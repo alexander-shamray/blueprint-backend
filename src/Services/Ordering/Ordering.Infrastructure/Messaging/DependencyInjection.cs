@@ -82,7 +82,7 @@ public static class DependencyInjection
 
         services.AddMassTransit(x =>
         {
-            // MassTransit 8.5 reports anonymous usage data to a vendor
+            // MassTransit reports anonymous usage data to a vendor
             // endpoint after the bus starts, enabled by default. §13.2 owns
             // this platform's telemetry, and none of it leaves silently.
             x.DisableUsageTelemetry();

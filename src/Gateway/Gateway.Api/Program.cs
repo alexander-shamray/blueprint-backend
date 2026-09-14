@@ -273,10 +273,9 @@ app.UseCorrelationId();           // §10.4 — assigns or replaces the client's
 app.UseResponseCompression();     // §10.1, ADR-020
 
 // §10.5's promise for the statuses no handler produces: a challenge and a
-// forbid are written by the auth middleware below with no body, and since
-// .NET 8 this middleware hands them to the writer AddProblemDetails
-// registered. Above the auth pair, because it converts what they write on the
-// way back out.
+// forbid are written by the auth middleware below with no body, and this
+// middleware hands them to the writer AddProblemDetails registered. Above
+// the auth pair, because it converts what they write on the way back out.
 app.UseStatusCodePages();         // §10.5 — 401 and 403 as problem+json
 
 // Before everything that reads the client address, and after the two that do

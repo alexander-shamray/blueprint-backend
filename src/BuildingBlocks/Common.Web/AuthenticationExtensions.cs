@@ -121,9 +121,9 @@ public static class AuthenticationExtensions
                 options.Authority = authority;
                 options.Audience = Audience;
 
-                // Metadata over plain HTTP is a development affordance only —
-                // §14.1's Keycloak is http://keycloak:8080. Anywhere else this
-                // stops the signing keys being fetched over a channel an
+                // Metadata over plain HTTP is a development affordance only,
+                // because §14.1's Keycloak is served without TLS. Anywhere else
+                // this stops the signing keys being fetched over a channel an
                 // attacker can rewrite.
                 options.RequireHttpsMetadata = !builder.Environment.IsDevelopment();
 

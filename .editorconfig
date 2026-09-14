@@ -1,8 +1,9 @@
 root = true
 
-# House style for .NET 10 and C# 14, one dialect for the samples under
-# docs/backend-architecture/ and the solution under src/ and tests/.
-# docs/style-guide.md carries the prose version and the settled choices.
+# House style for the targets Directory.Build.props pins, one dialect for
+# the samples under docs/backend-architecture/ and the solution under src/
+# and tests/. docs/style-guide.md carries the prose version and the settled
+# choices.
 #
 # EnforceCodeStyleInBuild (ADR-019) makes this file a build input for rules at
 # `warning` or above. Three are: IDE0055, IDE0065 and IDE0161, each stated
