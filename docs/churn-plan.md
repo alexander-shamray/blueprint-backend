@@ -201,9 +201,13 @@ Stated once each, and cited from here:
 ## 4. The work, in order
 
 Each step is one pull request unless it says otherwise. Steps marked ∥ run
-in parallel once step 0 has merged. A sweep changes comment lines and blank
-lines only; `git diff -w` on a sweep shows no code, and the exit test is the
-grep in step 1 over the tree the step names.
+in parallel once step 0 has merged. A sweep changes comment lines only, and
+the proof is not `git diff -w`, which also hides whitespace inside strings:
+it is the two sides of every file compared with their comments stripped —
+`//` and `///` in C#, `#` lines and docstrings in Python, `#` in shell and
+`.editorconfig`, `<!-- -->` in MSBuild — which must be byte-identical. The
+exit test is the grep in step 1 over the tree the step names, with that
+tree's comment syntax in place of `//`.
 
 ### Step 0 — the rule, and the first sweep
 
@@ -335,9 +339,10 @@ lines, with a README that says what it reads and a suite whose subject is
 what the gate is looking at — a file it must find, a pattern it must match,
 a line it must not judge because the line is code. Added lines only, so the
 corpus is brought under the rule by the sweeps and not by the gate refusing
-every pull request until they land. Class D, and it is the step that makes
-the *Comments* section a build failure rather than a review comment, which
-the primer's lesson about gates says is the only kind of rule that holds.
+every pull request until they land. Class D. It makes the mechanical half
+of the *Comments* section — the patterns and the block length — a build
+failure; citing the owner and not copying an argument stay with the
+reviewer, as the guide says.
 
 ### Step 10 — the subject line
 

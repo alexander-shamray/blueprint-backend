@@ -152,10 +152,11 @@ public static class AuthenticationExtensions
                 // host lagging the issuer reads a fresh token as having more
                 // than the lifetime left and would refuse what a correct realm
                 // issues; the skew is therefore spent twice, once here and once
-                // by ValidateLifetime after `exp`, and a conforming realm never
-                // reaches this check. Refused, not logged, the posture the
-                // authority guard above takes: a platform that accepts what it
-                // says it does not accept has a decorative guarantee.
+                // by ValidateLifetime after `exp`, and a conforming token passes
+                // because its remaining life is within that ceiling. Refused,
+                // not logged, the posture the authority guard above takes: a
+                // platform that accepts what it says it does not accept has a
+                // decorative guarantee.
                 options.Events = new JwtBearerEvents
                 {
                     OnTokenValidated = context =>
