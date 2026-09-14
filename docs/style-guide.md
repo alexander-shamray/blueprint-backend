@@ -177,7 +177,7 @@ the churn it produces is the same, and it was measured in
   briefly as it can; a `<summary>` or a docstring's first line is a sentence
   or two. A comment that needs a second argument is a decision, and a
   decision is an ADR: write the ADR with `/new-adr` and cite it.
-- **No emphasis.** No `**bold**`, `<b>`, capitals for stress or `!` in a
+- **No emphasis.** No `**bold**`, `<b>`, capitals or `!` for stress in a
   comment. It is read once, beside the code, by someone who is not skimming.
 - **A finding against a comment is closed by cutting.** When a review says a
   comment is stale or wrong, shorten or delete it. Never append the

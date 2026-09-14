@@ -482,8 +482,8 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
             "        services.AddSingleton<JsonConverter, MoneyJsonConverter>();\n"
             "        services.AddSingleton<OutboxJson>();\n",
             "        // The payload format (§9.4). The first value object this service puts\n"
-            "        // on a domain event needs a converter registered here: a type with a\n"
-            "        // private constructor deserialises to its default rather than failing,\n"
+            "        // on a domain event needs a converter registered here: a readonly\n"
+            "        // record struct deserialises to its default rather than failing,\n"
             "        // and §12.4's round-trip assertion is what catches that.\n"
             "        services.AddSingleton<OutboxJson>();\n",
         ),

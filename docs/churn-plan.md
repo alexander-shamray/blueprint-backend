@@ -246,7 +246,7 @@ section 1 counted, and the counts are the baseline:
 ```bash
 rg -n -e '#[0-9]{2,}\b' -e 'PR-[0-9]+' -e 'Copilot|Grok|CodeQL' \
    -e 'used to|went stale|this (line|sentence|comment) (said|carried)' \
-   -e '\*\*' --glob '*.cs' <tree> | rg '^\S+:\d+:\s*//'
+   -e '\*\*[^*]+\*\*' --glob '*.cs' <tree> | rg '^\S+:\d+:\s*//'
 ```
 
 and no `//` block in the tree runs to more than ten lines:

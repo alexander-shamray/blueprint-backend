@@ -60,8 +60,8 @@ csharp_preserve_single_line_statements = false
 csharp_preserve_single_line_blocks = true
 
 # Reaches a local declaration statement — `int a      = 1;` — and nothing
-# else; a padded `{`, `=` or `=>` on a member is IDE0055's. Left at ignore
-# because no local declaration in the corpus pads an `=` either way.
+# else; a padded `{`, `=` or `=>` on a member is IDE0055's. Left at ignore,
+# as the header says of every rule whose form is stated in prose.
 csharp_space_around_declaration_statements = ignore
 
 # Members of a multi-line initialiser get one line each — the list rule, in the

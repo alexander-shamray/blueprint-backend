@@ -319,12 +319,11 @@ public sealed class RetentionPurgeTests(ServiceFixture fixture) : IAsyncLifetime
     [Fact]
     public async Task A_batch_spanning_more_than_one_delete_chunk_is_deleted_whole()
     {
-        // The chunked delete, which nothing else here reaches: each row costs
-        // two parameters against SQL Server's 2,100, so the delete is chunked
-        // at `RetentionPurgeService.RowsPerDelete` and every other marker case
-        // deletes inside one chunk. The figure here has to exceed that
-        // constant, or the boundary is never crossed and the test covers
-        // nothing.
+        // The chunked delete: each row costs two parameters against SQL
+        // Server's 2,100, so the delete is chunked at
+        // `RetentionPurgeService.RowsPerDelete`, and the figure here has to
+        // exceed that constant or the boundary is never crossed and the test
+        // covers nothing.
         const int candidates = 1_001;
 
         IdempotencyMarker[] rows =
@@ -344,10 +343,9 @@ public sealed class RetentionPurgeTests(ServiceFixture fixture) : IAsyncLifetime
     [Fact]
     public async Task A_skewed_clock_purges_the_outbox_and_the_inbox_and_leaves_the_marker()
     {
-        // Every other test here stages rows against DateTimeOffset.UtcNow
-        // while the test host's clock and the container's agree, so a marker
+        // With the host's clock and the container's in agreement, a marker
         // statement that had regressed to the application-supplied `@Before`
-        // would pass all of them. Two clocks, one age, opposite outcomes: the
+        // would pass unnoticed. Two clocks, one age, opposite outcomes: the
         // outbox's and inbox's cutoffs are `now - window` on the skewed clock,
         // the marker's is DATEADD over SYSDATETIMEOFFSET() on the server
         // (ADR-038). The window is read because RetentionPolicy refuses one
