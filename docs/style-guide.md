@@ -146,7 +146,8 @@ time.
 
 ## Comments — every language
 
-The rule reaches `//` and `///` in C#, `#` and docstrings in Python, `#` in
+The rule reaches `//` and `///` in C# — the only comment forms written here,
+so a `/* */` block is itself a finding — `#` and docstrings in Python, `#` in
 shell, and the comment syntax of YAML, MSBuild and `.editorconfig`. No
 analyser enforces any of it; the reviewer does, and the review commands
 reach it through the contract's §2, which they already cite.

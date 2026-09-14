@@ -64,9 +64,7 @@ public sealed class RetentionPurgeService : BackgroundService
     // would fail on the batch. Chunking here keeps BatchSize meaning rows
     // considered per batch rather than capping it at another layer's limit.
     // 900 rather than 1,000 leaves room under the ceiling. Private because it
-    // is not a knob, and a test stages a batch wider than one chunk to reach
-    // the second; raise this past that batch and the test covers nothing, so
-    // move both in the same change.
+    // is not a knob.
     private const int RowsPerDelete = 900;
 
     private readonly IServiceScopeFactory _scopes;

@@ -64,9 +64,10 @@ doc, a docstring or a configuration comment is a document:
   [`docs/churn-plan.md`](churn-plan.md) is the measurement of what the
   copies cost.
 
-A measurement is not a restatement. A commit body, a PR body, an issue, or
-[`change-locality-plan.md`](change-locality-plan.md) may state a count or a
-value **as of a named date or commit**, because a record of what was true
+A measurement is not a restatement. A commit body, a PR body, an issue,
+[`change-locality-plan.md`](change-locality-plan.md) or
+[`churn-plan.md`](churn-plan.md) may state a count or a value **as of a
+named date or commit**, because a record of what was true
 when it was taken is not a claim that it is true now, and nothing has to
 keep it current. The prohibition is on a document stating a fact in the
 present tense in a second place.
