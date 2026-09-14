@@ -130,39 +130,32 @@ public static class AuthenticationExtensions
                 // The framework default, written out because §11.4's subject
                 // rule rests on it: Keycloak issues `sub`, ICurrentUser.Id
                 // reads ClaimTypes.NameIdentifier, and this is the only thing
-                // that turns one into the other. False, every authenticated
-                // request throws on a valid token — a failure no test over an
-                // injected principal can see.
+                // that turns one into the other. Set to false, every
+                // authenticated request throws on a valid token — a failure
+                // no test over an injected principal can see.
                 options.MapInboundClaims = true;
 
                 // ADR-033's bound, enforced rather than stated (ADR-040). The
                 // settings behind it live in a realm every chart points at
                 // externally, and a token is the one place the realm's answer
                 // is observable at a host without a credential. This contains
-                // a non-conforming realm rather than detecting it — a
-                // five-hour token is refused until its last 330 seconds — and
-                // detection is ADR-042's gate, which asks the realm.
-                //
-                // Remaining life against this host's clock, not `exp - iat`:
-                // `iat` is optional in RFC 7519, so an issuer omitting it would
-                // switch the control off, and reading it means naming a token
-                // type from a package this assembly does not pin. `ValidTo` is
-                // on SecurityToken itself, and `exp` is mandatory here because
-                // ValidateLifetime below refuses a token without one.
-                //
-                // The ceiling is the bound — lifetime plus skew — and not the
-                // lifetime, because a host lagging the issuer reads a fresh
-                // 300-second token as having more than 300 left, and capping
-                // at AccessTokenLifetime would refuse every token a correct
-                // realm issues. The skew is therefore spent twice: a token
-                // admitted at the ceiling is then accepted by ValidateLifetime
-                // until `exp` plus another 30, so the longest window admitted
-                // is 360 seconds. A conforming realm never reaches this check;
-                // what the 360 bounds is a non-conforming token.
-                //
-                // Refused, not logged, the posture the authority guard above
-                // takes: a platform that accepts what it says it does not
-                // accept has a decorative guarantee.
+                // a non-conforming realm rather than detecting it: a token
+                // above the bound is refused until its remaining life is
+                // inside it, and detection is ADR-042's gate, which asks the
+                // realm. Remaining life against this host's clock rather than
+                // `exp - iat`, because `iat` is optional in RFC 7519 and reading
+                // it means naming a token type from a package this assembly
+                // does not pin; `ValidTo` is on SecurityToken itself, and `exp`
+                // is mandatory here because ValidateLifetime refuses a token
+                // without one. The ceiling is AccessTokenLifetime plus
+                // AllowedClockSkew rather than the lifetime alone, because a
+                // host lagging the issuer reads a fresh token as having more
+                // than the lifetime left and would refuse what a correct realm
+                // issues; the skew is therefore spent twice, once here and once
+                // by ValidateLifetime after `exp`, and a conforming realm never
+                // reaches this check. Refused, not logged, the posture the
+                // authority guard above takes: a platform that accepts what it
+                // says it does not accept has a decorative guarantee.
                 options.Events = new JwtBearerEvents
                 {
                     OnTokenValidated = context =>

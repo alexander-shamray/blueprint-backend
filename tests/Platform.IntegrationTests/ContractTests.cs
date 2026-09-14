@@ -486,8 +486,8 @@ public class ContractTests
     /// <remarks>
     /// The subject rule is a deny-list, so <c>OwnerId</c> walks past it. This
     /// buys a forced decision rather than a verdict: a new member cannot be
-    /// added silently, and the somebody who approves it is a reviewer looking
-    /// at a red build.
+    /// added silently, and approving one is a reviewer's decision at a red
+    /// build.
     /// </remarks>
     private static readonly (Type Contract, string Member)[] ApprovedCommandMembers =
     [
