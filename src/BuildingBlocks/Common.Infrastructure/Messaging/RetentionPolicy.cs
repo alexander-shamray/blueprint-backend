@@ -7,38 +7,25 @@ namespace Common.Infrastructure.Messaging;
 /// How long processed outbox rows, handled inbox rows and §8.5's committed
 /// idempotency markers are kept, and how the purge that deletes them is paced
 /// (§9.4, §9.5, §8.5). Two of those windows are housekeeping and the third is
-/// a correctness setting — see <see cref="IdempotencyWindow"/>, which is the
-/// only one here with a floor. A registered value for
-/// <see cref="Outbox.OutboxTable"/>'s reason one indirection over: the numbers
-/// are a service's to choose, and a <c>const</c> in common code is a choice made
-/// once for everybody.
+/// a correctness setting — see <see cref="IdempotencyWindow"/>, the only one
+/// with a floor. A registered value for <see cref="Outbox.OutboxTable"/>'s
+/// reason: the numbers are a service's to choose, and a <c>const</c> in common
+/// code is a choice made once for everybody.
 /// </summary>
 /// <remarks>
-/// <b>The inbox window is a real constraint, not a round number.</b> §9.5 states
-/// it: the window must exceed the broker's longest possible redelivery delay,
-/// including time a message spends in the error queue before being replayed.
-/// Pruning sooner lets a late redelivery through as if it were new — exactly the
-/// duplicate the table exists to stop. Seven days is a starting point to check
-/// against RabbitMQ's configured limits, and a number a chapter tells the reader
-/// to check is a number the code has to let them change.
+/// The inbox window is a constraint, not a round number: §9.5 requires it to
+/// exceed the broker's longest possible redelivery delay, error queue
+/// included, because pruning sooner lets a late redelivery through as new.
+/// The outbox window is softer — processed rows are kept for debugging (§9.4)
+/// — but its predicate is not, and it lives in
+/// <see cref="RetentionPurgeService"/>.
 /// <para>
-/// The outbox window is the softer of the two — processed rows are kept for
-/// debugging (§9.4) — but its <em>predicate</em> is not soft at all, and lives
-/// in <see cref="RetentionPurgeService"/> rather than here.
-/// </para>
-/// <para>
-/// <b>Every member is validated, and this is <see cref="Outbox.OutboxTable"/>'s
-/// principle applied to the other registered value.</b> The numbers are
-/// caller-supplied by design, and what is caller-supplied has to be a value the
-/// type refuses to hold wrongly. Each is refused rather than clamped because
-/// each fails somewhere the reader is not looking: a negative window puts the
-/// cutoff in the <em>future</em> and deletes rows written a second ago — the
-/// inbox one silently disabling deduplication; a non-positive
-/// <see cref="BatchSize"/> or <see cref="MaxBatchesPerPass"/> turns every pass
-/// into a no-op, so retention stops with the tables growing and nothing to see;
-/// and the two upper bounds exist because a value their consumers reject throws
-/// on a background thread or inside a swallowed pass rather than at the
-/// registration that set it.
+/// Every member is refused rather than clamped, because each fails somewhere
+/// the reader is not looking: a negative window puts the cutoff in the future
+/// and deletes rows written a second ago; a non-positive count makes every
+/// pass a no-op with the tables growing; and a value past the upper bounds
+/// throws on a background thread or inside a swallowed pass rather than at
+/// the registration that set it.
 /// </para>
 /// </remarks>
 public sealed record RetentionPolicy
@@ -66,79 +53,29 @@ public sealed record RetentionPolicy
 
     /// <summary>
     /// Idempotency markers committed longer ago than this are deleted, and
-    /// this window <em>is</em> §8.5's guarantee rather than a housekeeping
-    /// setting.
+    /// this window is §8.5's guarantee rather than a housekeeping setting.
     /// </summary>
     /// <remarks>
-    /// <b>It has a floor the other two do not, and the floor is
-    /// <see cref="IdempotencyRetention.MarkerFloor"/> — the claim's own
-    /// window.</b> The marker is what refuses a retry of a
-    /// command that committed, and the order the two expire in is the whole of
-    /// the constraint. While the Redis claim is alive the key is not claimable
-    /// at all, so a purged marker costs nothing yet; the gap opens when that
-    /// claim expires with the marker already gone, and the next retry then
-    /// claims a free key and runs the command a second time — the duplicate
-    /// write §8.5 exists to prevent, arriving at a boundary set by a retention
-    /// number, which is the least visible place a correctness property could be
-    /// lost.
+    /// The floor is <see cref="IdempotencyRetention.MarkerFloor"/>, the
+    /// claim's own window. While the claim is alive the key is not claimable
+    /// at all, so a purged marker costs nothing yet; the gap would open when
+    /// the claim expires with the marker already gone, and the next retry
+    /// claims a free key and runs a committed command a second time. Equal is
+    /// admitted because the claim is taken before the marker is stamped, on
+    /// the same thread inside the same dispatch.
     /// <para>
-    /// <b>Matching the claim exactly is admitted, and it was refused until the
-    /// two things that reordered the expiries were closed.</b> The windows did
-    /// not start at the same event — <c>CommittedAt</c> is stamped inside the
-    /// transaction while the claim was re-armed after it committed — and they
-    /// were not counted by the same clock, the marker's age being the purging
-    /// pod's against a timestamp the writing pod stamped, across three
-    /// replicas. A five-minute <c>MarkerLeadAllowance</c> bounded their sum
-    /// rather than removing either. §8.5's completion now preserves the claim's
-    /// remaining life (#168) and the marker is stamped and aged on the database
-    /// clock (#167), so <b>the claim is taken before the marker is stamped —
-    /// unconditionally, the same thread inside the same dispatch</b> — and
-    /// equal is then admitted, and is the smallest window that is.
-    /// </para>
-    /// <para>
-    /// <b>"Then" was doing work there, and it was two assumptions rather than a
-    /// connective.</b> The claim expiring before the marker is purged did not
-    /// follow from the order the two were written in: the windows had to be
-    /// counted at the same rate, and the marker had to reach the database
-    /// inside the claim's window.
-    /// <see cref="IdempotencyRetention.MarkerFloor"/> argues both in full.
-    /// </para>
-    /// <para>
-    /// <b>The first is gone, and it went by removing the comparison rather than
-    /// by widening this number.</b> The two windows were counted by two
-    /// servers' clocks, so a forward step of the database's relative to Redis's
-    /// carried the purge past a live claim with only the handler's runtime to
-    /// absorb it at this floor. <see cref="RetentionPurgeService"/> now selects
-    /// markers by age and then asks <c>IIdempotencyStore.UnheldAsync</c> which
-    /// of those keys the claim store has already let go of, so no window is
-    /// compared against any other
-    /// (<see href="https://github.com/alexander-shamray/dotnet-ddd-blueprint/issues/171">#171</see>,
-    /// ADR-039).
-    /// </para>
-    /// <para>
-    /// <b>The second remains and is not a clock.</b> A handler outrunning that
-    /// same claim is stamped after it has already expired, which is §8.5's
-    /// long-handler residual
-    /// (<see href="https://github.com/alexander-shamray/dotnet-ddd-blueprint/issues/127">#127</see>)
-    /// reaching this floor from the other end. It is not a reason to raise the
-    /// floor: a number here bounds a runtime not at all.
-    /// </para>
-    /// <para>
-    /// <b>So what this setting chooses is the length of §8.5's guarantee and
-    /// not its truth</b> — and it chooses it as a target rather than a
-    /// duration. The purge deletes only once the claim behind the key is gone,
-    /// so a marker survives <em>at least</em> as long as its claim whatever
-    /// this value says; that part is unconditional and is why no setting here
-    /// opens a gap. **Raising it does not buy the difference outright**: the
-    /// candidate half is still an age against the database's clock, so a
-    /// forward step of that clock makes the row eligible early and it is then
-    /// deleted at claim expiry. The larger value is what an operator gets while
-    /// that clock behaves, and <see cref="IdempotencyRetention.Window"/> is what
-    /// they get when it does not.
+    /// What this chooses is the length of §8.5's guarantee, not its truth, and
+    /// as a target rather than a duration: the purge deletes only once
+    /// <see cref="RetentionPurgeService"/> has asked the claim store that the
+    /// claim behind the key is gone (ADR-039), so a marker survives at least
+    /// as long as its claim whatever this says, while the candidate half is
+    /// still an age against the database's clock, which a forward step makes
+    /// early. §8.5's long-handler residual is no reason to raise the floor: a
+    /// number here bounds a runtime not at all.
     /// </para>
     /// <para>
     /// Read rather than restated, for the reason
-    /// <see cref="IdempotencyRetention"/> exists: two 24s in two files agree
+    /// <see cref="IdempotencyRetention"/> exists: two values in two files agree
     /// until one of them is edited.
     /// </para>
     /// </remarks>
@@ -149,13 +86,10 @@ public sealed record RetentionPolicy
     }
 
     /// <summary>
-    /// Rows per statement. §9.5 asks for the purge to be batched "so neither
-    /// holds a long lock", and 5000 is the figure §9.4's and §9.5's arithmetic
+    /// Rows per statement. §9.5 asks for the purge to be batched so neither
+    /// holds a long lock, and 5000 is the figure §9.4's and §9.5's arithmetic
     /// about the dispatcher's rate is written against — see
-    /// <see cref="MaxBatchesPerPass"/>. Those chapters' <c>DELETE</c> samples
-    /// printed the literal until they were corrected to the <c>@BatchSize</c>
-    /// this parameterises, which is why the citation names the arithmetic
-    /// rather than the sample.
+    /// <see cref="MaxBatchesPerPass"/>.
     /// </summary>
     public int BatchSize
     {
@@ -182,17 +116,14 @@ public sealed record RetentionPolicy
     /// each pass is bounded.
     /// </summary>
     /// <remarks>
-    /// <b>The bound is real and it is below the dispatcher's, which is the
-    /// opposite of what it looks like.</b> Twenty batches of 5,000 an hour is
-    /// 100,000 rows per table — about 28 a second — where <c>OutboxDispatcher</c>
-    /// claims up to 100 rows twice a second, so a service sustaining its full
-    /// delivery rate produces processed rows some seven times faster than this
-    /// reclaims them. That is not a competition at ordinary load, because a row
-    /// is only purgeable a week after it was processed and a week of backlog is
-    /// what <see cref="OutboxWindow"/> is for; it is one at sustained peak, and
-    /// the answer there is a shorter <see cref="Interval"/> or a larger ceiling
-    /// rather than a different design — §13.6's outbox-growth alert is what
-    /// makes the need visible before the table does.
+    /// The bound is below the dispatcher's, which is the opposite of what it
+    /// looks like: twenty batches of 5,000 an hour is about 28 rows a second,
+    /// where <c>OutboxDispatcher</c> claims up to 100 rows twice a second. That
+    /// is not a competition at ordinary load, because a row is only purgeable
+    /// a week after it was processed and a week of backlog is what
+    /// <see cref="OutboxWindow"/> is for; at sustained peak the answer is a
+    /// shorter <see cref="Interval"/> or a larger ceiling, and §13.6's
+    /// outbox-growth alert is what makes the need visible.
     /// </remarks>
     public int MaxBatchesPerPass
     {
@@ -205,30 +136,23 @@ public sealed record RetentionPolicy
     /// <see cref="Interval"/> is actually spent.
     /// </summary>
     /// <remarks>
-    /// Observed rather than read off the documentation:
-    /// <c>TimeSpan.FromMilliseconds(uint.MaxValue - 1)</c> constructs a timer
-    /// and <c>uint.MaxValue</c> milliseconds throws — about 49.7 days either
-    /// way. Anything larger is refused here rather than by the constructor in
-    /// <c>ExecuteAsync</c>, where it would throw on a background thread inside
-    /// a host that had already reported ready.
+    /// <c>uint.MaxValue</c> milliseconds throws and one less constructs — about
+    /// 49.7 days either way. Anything larger is refused here rather than by the
+    /// constructor in <c>ExecuteAsync</c>, where it would throw on a background
+    /// thread inside a host that had already reported ready.
     /// </remarks>
     private static readonly TimeSpan MaxInterval = TimeSpan.FromMilliseconds(uint.MaxValue - 1);
 
     /// <summary>Ten years, which is a configuration error rather than a policy.</summary>
     /// <remarks>
-    /// A bound is needed at all because the outbox's and the inbox's cutoffs
-    /// are <c>now - window</c> and
-    /// <c>DateTimeOffset</c> subtraction throws when the result is not
-    /// representable — verified with <c>TimeSpan.MaxValue</c>. The marker's
-    /// cutoff is computed in SQL and so has a different ceiling, and this one
-    /// clears it: ten years is 315,360,000 seconds, and <c>DATEADD</c>'s
-    /// argument is an <c>int</c>. That throw
-    /// lands inside <c>PurgeAsync</c>, whose caller logs and swallows, so an
-    /// unbounded window buys a purge that never runs and says so once an hour
-    /// in a log nobody reads. Ten years rather than the representable maximum
-    /// because the two failures are different: past a decade the value is a
-    /// mistake, and refusing it at the registration is worth more than
-    /// tolerating it until the arithmetic gives out.
+    /// A bound is needed because the outbox's and the inbox's cutoffs are
+    /// <c>now - window</c>, and <c>DateTimeOffset</c> subtraction throws when
+    /// the result is not representable — inside <c>PurgeAsync</c>, whose caller
+    /// logs and swallows, so an unbounded window buys a purge that never runs.
+    /// The marker's cutoff is computed in SQL, and ten years clears that
+    /// ceiling too: 315,360,000 seconds fits <c>DATEADD</c>'s <c>int</c>. Ten
+    /// years rather than the representable maximum because past a decade the
+    /// value is a mistake, worth refusing at the registration.
     /// </remarks>
     private static readonly TimeSpan MaxWindow = TimeSpan.FromDays(3650);
 
