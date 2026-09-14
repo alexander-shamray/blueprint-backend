@@ -31,17 +31,9 @@ builder.AddCommonWebDefaults();                 // §13.2
 // ValidationExceptionHandler and ConcurrencyExceptionHandler.
 builder.WebHost.ConfigureKestrel(o => o.Limits.MaxRequestBodySize = GatewayLimits.MaxRequestBodyBytes);
 
-// §10.1's response compression. EnableForHttps is true against BREACH; the
-// argument is ADR-020's, from content rather than from the scheme. It has to
-// be set at all because TLS terminates at the ingress (§10.1):
-// UseForwardedHeaders rewrites Request.Scheme to https, and this middleware
-// decides at the first write, below the whole pipeline, so it reads the
-// rewritten scheme and would otherwise compress nothing, silently.
-//
-// The providers and the MIME list are the framework's defaults on purpose. The
-// default list omits application/problem+json, so §10.5's error bodies — the
-// one place a client-supplied value (§10.4) is reflected — travel uncompressed;
-// that omission is relied on here and pinned from the wire.
+// §10.1's response compression. EnableForHttps is true against BREACH
+// (ADR-020), and the providers and the MIME list are the framework's
+// defaults because that ADR relies on the default list.
 builder.Services.AddResponseCompression(o => o.EnableForHttps = true);
 
 // RFC 9111's no-transform, which ASP.NET Core does not implement and a reverse

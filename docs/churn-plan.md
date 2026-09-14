@@ -207,14 +207,17 @@ it is the two sides of every file compared with their comments stripped —
 `//` and `///` in C#, `#` lines and docstrings in Python, `#` in shell and
 `.editorconfig`, `<!-- -->` in MSBuild — which must be byte-identical. The
 exit test is the grep in step 1 over the tree the step names, with that
-tree's comment syntax in place of `//`.
+tree's comment syntax in place of `//`. The scaffold is the exception: its
+templates are string literals, so its proof is the service it renders,
+compared before and after with C#'s comments stripped, and its own suite.
 
 ### Step 0 — the rule, and the first sweep
 
 The pull request this file arrives in. It adds the *Comments* section to the
-style guide, names comments in the contract's §2, adds one line to the
-primer, and sweeps the files section 1 measured: the saga and its suite, the
-gateway's composition root, the retention purge and its policy, the
+style guide, names comments in the contract's §2, states the rule in the
+primer's *Style* and *Commit messages* bullets, and sweeps the files section
+1 measured: the saga and its suite, the gateway's composition root, the
+retention purge and its policy, the
 authentication extensions, the idempotency behaviour, each service's
 `DependencyInjection.cs` files, the suites of the same mechanisms, the
 Python gates, the Helm smoke script, `.editorconfig` and
@@ -234,7 +237,7 @@ test change.
 `Common.Domain` and `Common.Contracts` together, then `Common.Application`,
 `Common.Infrastructure`, `Common.Web`, `Catalog`, `Ordering`, `Gateway.Api`,
 `Web.Bff`. Class A or B by the tree. Catalog's PR runs the scaffold's suite
-and the four-command dogfood in `repo-map.md`, because the scaffold reads
+and the dogfood sequence in `repo-map.md`, because the scaffold reads
 those files at run time and asserts on the comments it renders.
 
 Done for a tree when these are empty over it — the patterns are the ones
