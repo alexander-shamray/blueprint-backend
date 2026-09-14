@@ -7,64 +7,17 @@ namespace Common.Web.Tests;
 
 /// <summary>
 /// The shipped Keycloak realm, read against the constants this assembly
-/// validates tokens with. §11.5's point exactly: the audience gap "is realm
-/// configuration, not code, which is exactly why it earns a test rather than a
-/// paragraph — nothing in the solution compiles differently when the audience
-/// mapper is missing."
-/// <para>
-/// <b>The realm this reads is §14.1's Compose realm, and there is no other in
-/// this repository.</b> Every chart points at an externally provisioned
-/// authority, which this repository still holds no configuration for — so a
-/// green run here says the local realm holds the shape and never that the
-/// platform does. ADR-033 and ADR-034 carry that division; it is the same one
-/// §15.4 draws for every Secret.
-/// </para>
-/// <para>
-/// <b>Since ADR-042 a second instrument judges a deployed realm, and this one
-/// is not it.</b> <c>deploy/keycloak/realm_check.py</c> asserts the subset of
-/// the properties below that must hold of <em>any</em> realm, and
-/// <c>deploy.yml</c>'s rollout job runs it against the realm a deployment
-/// points at before anything touches the cluster (#157). This file keeps
-/// everything that subset leaves out — the audience mapper, the permission
-/// vocabulary, the two development logins — and it keeps the lifetime
-/// assertions too, because two instruments over one realm is what makes the
-/// local one the gate's proving subject.
-/// <b>One assertion below is deliberately the opposite of that gate's.</b>
-/// <c>directAccessGrantsEnabled</c> is asserted <em>true</em> here, because
-/// §14.1's documented login is a password grant; the deploy-time check asserts
-/// it <em>false</em>, because §11.2 says a deployed realm turns it off. Both
-/// are right about their own realm, which is why that gate takes the realm's
-/// kind as a required argument.
-/// </para>
-/// <para>
-/// <b>One of them is bounded at run time as well, and the split is worth
-/// carrying because it is not tidy.</b> Every host refuses a token with more
-/// than <see cref="AuthenticationExtensions.RevocationBound"/> of life left in
-/// it, whatever realm issued it (ADR-040) — so the lifetime assertions below
-/// restate a number the platform also holds inbound tokens to, which is why
-/// this file reads the constant rather than its own literal.
-/// <b>That is containment and not verification</b>: the guard gates a token's
-/// <em>remaining</em> life, so a realm set to five hours has its tokens
-/// refused for most of each one and admitted in the last window. It is still
-/// load-bearing after ADR-042 and for a reason that is easy to miss — the
-/// realm is read at a rollout, so a realm edited between rollouts is
-/// unobserved until the next one (#176), and this is what bounds that window.
-/// </para>
+/// validates tokens with — §11.5's audience gap is realm configuration, not
+/// code, so nothing compiles differently when the mapper is missing.
 /// </summary>
 /// <remarks>
-/// Here rather than in a service's suite because both halves of the agreement
-/// are here: <c>AuthenticationExtensions.Audience</c> and
-/// <c>PermissionClaim.Type</c> are what a token has to satisfy, and this is
-/// the only assembly that can read them without inventing a project reference.
-///
-/// A file test rather than a live Keycloak, deliberately. §11.5 assigns the
-/// container-backed suite to the client-credentials question, which needs the
-/// BFF and arrives with it; what this catches is the whole of what a realm can
-/// get wrong statically, and it costs no container. The realm shipped here was
-/// verified behaviourally when it was written — imported into a fresh Keycloak
-/// 26.0, with a token fetched and its claims asserted — and the last test below
-/// is the residue of that run, because it is the one defect a reading of the
-/// file would never suggest.
+/// The realm is §14.1's Compose realm and there is no other in this
+/// repository; a deployed realm is judged at rollout by
+/// <c>deploy/keycloak/realm_check.py</c> (ADR-042), so a green run here says
+/// the local realm holds the shape and never that the platform does (ADR-033,
+/// ADR-034). A file test rather than a live Keycloak, because §11.5 assigns
+/// the container-backed suite to the client-credentials question and
+/// everything a realm can get wrong statically costs no container.
 /// </remarks>
 public class RealmImportTests
 {
@@ -72,10 +25,7 @@ public class RealmImportTests
 
     /// <summary>
     /// The client the compose README's login names, and the only one in the
-    /// realm that mints a token a person uses. The realm holds nine: this one,
-    /// the <c>commerce-api</c> resource client that owns the permission roles,
-    /// PR-19's <c>web-bff</c> service account, and Keycloak's own six.
-    /// Assertions about "a usable token" are about this client's.
+    /// realm that mints a token a person uses.
     /// </summary>
     private const string TokenClient = "web-app";
 
@@ -104,11 +54,9 @@ public class RealmImportTests
     [Fact]
     public void Every_part_of_the_token_path_speaks_openid_connect()
     {
-        // The client the README logs in through, the scope that carries the
-        // audience and the permissions, and the two mappers that write them.
-        // Nothing else in this suite reads `protocol` at all, so this is the
-        // one assertion standing between a realm that issues JWTs and one that
-        // issues something no part of this platform can validate.
+        // Nothing else in this suite reads `protocol`, so this is the one
+        // assertion between a realm that issues JWTs and one that issues
+        // something no part of this platform can validate.
         JsonElement tokenClient = Root.GetProperty("clients").EnumerateArray()
             .Single(c => c.GetProperty("clientId").GetString() == TokenClient);
 
@@ -166,11 +114,10 @@ public class RealmImportTests
         config.GetProperty("multivalued").GetString()
             .ShouldBe("true", "a single-valued claim silently keeps one permission and drops the rest");
 
-        // Client roles, scoped to the API client — not realm roles. Measured
-        // rather than assumed: a realm-role mapper also emits offline_access,
-        // uma_authorization and default-roles-commerce into this claim, which
-        // makes the permission vocabulary open-ended and puts Keycloak's own
-        // internals inside it.
+        // Client roles scoped to the API client, not realm roles: a realm-role
+        // mapper also emits offline_access, uma_authorization and
+        // default-roles-commerce into this claim, which puts Keycloak's own
+        // internals inside the vocabulary.
         mapper.GetProperty("protocolMapper").GetString().ShouldBe("oidc-usermodel-client-role-mapper");
         config.GetProperty("usermodel.clientRoleMapping.clientId").GetString().ShouldBe(Audience);
     }
@@ -196,10 +143,8 @@ public class RealmImportTests
 
         // Not vacuous: with no client holding it at all, the loop above passes
         // and no token in the realm ever gets an audience. Named rather than
-        // counted, because "some client has it" is satisfied by any of the six
-        // built-in ones — account, broker, realm-management — none of which
-        // mints a token anybody uses. web-app is the client the README's login
-        // names, so it is the one whose tokens have to carry the audience.
+        // counted, because Keycloak's built-in clients hold scopes and mint
+        // tokens nobody uses.
         JsonElement tokenClient = Root.GetProperty("clients").EnumerateArray()
             .Single(c => c.GetProperty("clientId").GetString() == TokenClient);
 
@@ -217,9 +162,7 @@ public class RealmImportTests
         // The audience assertion above says the token would be usable; this
         // says one can be obtained at all. The compose README's recipe is a
         // password grant against web-app, which needs the direct access grant
-        // enabled and a public client — turn either off and every other test
-        // in this file stays green while the documented flow returns 401 from
-        // Keycloak before the platform is even reached.
+        // and a public client.
         JsonElement tokenClient = Root.GetProperty("clients").EnumerateArray()
             .Single(c => c.GetProperty("clientId").GetString() == TokenClient);
 
@@ -234,51 +177,24 @@ public class RealmImportTests
     [Fact]
     public void The_access_token_lifetime_is_the_one_the_chapter_states()
     {
-        // §11.3 states the lifetime normatively, and this file is what makes
-        // it a fact rather than a preference: Common.Web sets no lifetime at
-        // all — its AddJwtBearer validates the `exp` Keycloak wrote — so the
-        // chapter's number and the realm's are two statements with nothing
-        // between them. This carried a literal for exactly that reason: a
-        // constant nothing reads would be a registration standing in for a
-        // control, which is the shape ADR-033 was written to withdraw.
-        //
-        // SOMETHING READS IT NOW, so the literal is gone and the condition
-        // that justified it is the thing that changed rather than the taste
-        // that produced it. AddJwtAuthentication refuses a token carrying more
-        // than AuthenticationExtensions.RevocationBound of remaining life —
-        // the lifetime plus the skew — so the number below is enforced against
-        // every token every host accepts and not only asserted against the one
-        // realm this repository ships (#157, ADR-040). Reading the constant is
-        // what stops the control and this assertion drifting apart; a 300 in
-        // both files agrees until one of them is edited.
-        //
-        // This is most of the exposure and not a tuning knob. There is no
-        // denylist consumer and no introspection call (ADR-033), so a token
-        // stolen, or a user disabled at Keycloak, keeps working for up to its
-        // remaining lifetime — anywhere from nearly zero to the whole of it,
-        // which is a bound rather than a duration. Lengthen it here and
-        // §11.3's stated window is silently wrong everywhere it is quoted.
-        //
-        // Most, not all: a lifetime check accepts a token until `exp` PLUS
-        // AuthenticationExtensions' 30-second ClockSkew, so ADR-033's
-        // revocation bound is 330 seconds and this value is the larger of the
-        // two terms rather than the whole sum. The skew is pinned where it is
-        // set — JwtAuthenticationTests asserts ClockSkew is thirty seconds —
-        // so asserting it here as well would put one number in two suites and
-        // give it two places to drift from.
+        // §11.3 states the lifetime normatively and this realm is what sets it:
+        // Common.Web validates the `exp` Keycloak wrote and sets no lifetime of
+        // its own. Read from AuthenticationExtensions rather than as a literal,
+        // because every host also refuses a token with more than
+        // RevocationBound of remaining life (ADR-040), and one number in two
+        // files agrees until one is edited. There is no denylist consumer and
+        // no introspection call (ADR-033), so this bound is most of the
+        // revocation exposure.
         int statedLifetimeSeconds = (int)AuthenticationExtensions.AccessTokenLifetime.TotalSeconds;
 
         Root.GetProperty("accessTokenLifespan").GetInt32().ShouldBe(
             statedLifetimeSeconds,
             "§11.3 states the access-token lifetime and this realm is what sets it");
 
-        // The realm carries a SECOND lifetime — accessTokenLifespanForImplicitFlow,
-        // 900 — and the assertion above says nothing about it. It is unreachable
-        // only because no client enables the implicit flow, which is a premise
-        // §11.3's stated window rests on and which nothing else here checks.
-        // Enabling implicit flow on one client would triple the exposure with
-        // every number in this file still reading 300, so the premise is
-        // asserted rather than assumed.
+        // The realm carries a second lifetime, accessTokenLifespanForImplicitFlow,
+        // that is unreachable only because no client enables the implicit flow
+        // — a premise §11.3's window rests on, so it is asserted rather than
+        // assumed.
         foreach (JsonElement client in Root.GetProperty("clients").EnumerateArray())
         {
             string id = client.GetProperty("clientId").GetString()!;
@@ -288,11 +204,7 @@ public class RealmImportTests
                 "accessTokenLifespanForImplicitFlow and not for the lifetime §11.3 states");
 
             // A client attribute beats the realm setting, so the realm value
-            // alone does not pin the window. Measured against Keycloak 26.0
-            // with this realm: adding access.token.lifespan "900" to web-app
-            // returns expires_in 900 while the realm still reads 300 — and
-            // every other assertion in this file stays green, which is what
-            // makes it worth a check rather than a sentence.
+            // alone does not pin the window.
             if (client.TryGetProperty("attributes", out JsonElement attributes) &&
                 attributes.TryGetProperty("access.token.lifespan", out JsonElement over))
             {
@@ -310,29 +222,17 @@ public class RealmImportTests
     {
         // §11.2's flow ends at the browser, so anything web-app is issued is
         // reachable by any script on the origin. A refresh token there turns
-        // one XSS into account takeover that outlives the session and survives
-        // a password change; with none issued, the exposure is bounded by the
-        // access-token lifetime pinned above.
-        //
-        // Measured both ways against Keycloak 26.0 — the version §14.1 pins —
-        // with this realm and the `demo` login: without this attribute the
-        // token response carries a `refresh_token` and `refresh_expires_in`
-        // 1800, with it there is no `refresh_token` key at all and
-        // `refresh_expires_in` is 0. Nothing in the solution compiles
-        // differently either way, which is what earns it a test rather than a
-        // paragraph.
+        // one XSS into an account takeover that outlives the session; with
+        // none issued, the exposure is bounded by the access-token lifetime
+        // pinned above.
         JsonElement tokenClient = Root
             .GetProperty("clients")
             .EnumerateArray()
             .Single(c => c.GetProperty("clientId").GetString() == TokenClient);
 
-        // The positive half, and it is what stops the assertion below being
-        // satisfied by a client that issues the browser nothing at all. With
-        // standardFlowEnabled off there is no authorization-code flow, so
-        // there is no refresh token and no access token either — §11.2's flow
-        // would not exist, and "no refresh token reaches the browser" would be
-        // true for the wrong reason. A negative assertion about a flow is also
-        // an assertion that the flow is there.
+        // The positive half: with standardFlowEnabled off there is no
+        // authorization-code flow, so "no refresh token reaches the browser"
+        // would be true for the wrong reason.
         tokenClient.GetProperty("standardFlowEnabled").GetBoolean().ShouldBeTrue(
             $"'{TokenClient}' is §11.2's authorization-code client, and the refresh-token " +
             "assertion below says nothing about a client that runs no such flow");
@@ -368,11 +268,9 @@ public class RealmImportTests
                 .OfType<string>()
         ];
 
-        // demo gains Ordering's two endpoint permissions with PR-18, so the
-        // inner loop the compose README documents actually works — the
-        // catalog:write parallel, one service over. It does NOT gain
-        // orders:admin: that role is grantable and held by nobody, so the
-        // ownership 404 stays demonstrable with the logins this realm ships.
+        // demo holds Ordering's endpoint permissions and not orders:admin: that
+        // role is grantable and held by nobody, so the ownership 404 stays
+        // demonstrable with the logins this realm ships.
         Permissions("demo").ShouldBe(
             ["catalog:write", "orders:write", "orders:cancel"],
             ignoreOrder: true);
@@ -383,13 +281,11 @@ public class RealmImportTests
         browser.TryGetProperty("clientRoles", out JsonElement granted)
             .ShouldBeFalse("'browser' exists to prove a refusal, so it must hold no client role at all");
 
-        // And that both can log in at all, with the password the README prints.
-        // A user disabled, a credential Keycloak marks temporary — which forces
-        // a password reset the README's non-interactive grant cannot perform —
-        // or simply a different password: each fails the documented commands
-        // with a 401 while every role assertion above stays green. The value is
-        // pinned rather than merely present, because §11.6's carve-out is for
-        // *documented* local defaults, and one nobody can guess is not one.
+        // A user disabled, a credential Keycloak marks temporary, or a
+        // different password each fails the README's non-interactive grant
+        // with a 401 while every role assertion above stays green. The value
+        // is pinned because §11.6's carve-out is for documented local
+        // defaults, and one nobody can guess is not one.
         foreach (string username in (string[])["demo", "browser"])
         {
             JsonElement user = users.EnumerateArray()
@@ -412,17 +308,9 @@ public class RealmImportTests
     [Fact]
     public void No_role_description_exceeds_what_keycloak_can_store()
     {
-        // Keycloak's ROLE.DESCRIPTION is VARCHAR(255), and an over-long value
-        // does not truncate — the import throws, the container exits 1, and
-        // `up --wait` fails with "dependency failed to start" naming Keycloak
-        // and nothing about the column. PR-18 shipped a 380-character
-        // description and the compose smoke was the only thing that noticed,
-        // three review rounds after the realm was edited.
-        //
-        // This file is prose-heavy by house style, which is exactly why the
-        // limit needs a test rather than a habit: the reasoning belongs in the
-        // configuration and the tests that read it, and the realm gets the
-        // sentence that fits.
+        // Keycloak's ROLE.DESCRIPTION is VARCHAR(255) and an over-long value
+        // does not truncate: the import throws, the container exits 1, and
+        // `up --wait` names Keycloak and nothing about the column.
         const int keycloakDescriptionLimit = 255;
 
         (string Name, string Description)[] roles =
@@ -447,15 +335,10 @@ public class RealmImportTests
     [Fact]
     public void The_permission_vocabulary_is_a_closed_set_of_client_roles()
     {
-        // The permissions a policy can require have to exist somewhere a person
-        // can grant them. catalog:write is Catalog's one policy (§11.4);
-        // inventory:admin is the gateway's, and it is here for a reason worth
-        // knowing: the permission a ROUTE requires (§10.2) obeys the same rule
-        // as one an endpoint requires, and PR-17 registered the policy without
-        // the role — so /api/v1/inventory was 403 for every principal this
-        // realm can issue, permanently. Grantable is the bar, not granted:
-        // neither development login holds it, because the route it guards has
-        // no service behind it yet.
+        // The permissions a policy can require have to exist somewhere a
+        // person can grant them, and the permission a route requires (§10.2)
+        // obeys the same rule as one an endpoint requires (§11.4). Grantable
+        // is the bar, not granted.
         string[] roles =
         [
             .. Root.GetProperty("roles").GetProperty("client").GetProperty(Audience).EnumerateArray()
@@ -463,17 +346,11 @@ public class RealmImportTests
                 .OfType<string>()
         ];
 
-        // The whole set, not a containment check — the test is named for a
-        // closed vocabulary and ShouldContain would permit any number of
-        // undeclared permissions to be grantable in Keycloak. A service's
-        // permissions join this list in the PR that registers the policy
-        // requiring them, which is the same rule §11.4 states for the
-        // constants.
-        // Ordering's three joined with PR-18. Two are policies its endpoints
-        // require; orders:admin is a claim CancelOrderHandler reads and no
-        // endpoint names, and it is here on inventory:admin's terms — without
-        // the role, no token this realm can issue could carry the claim, and
-        // the handler's admin branch would be unreachable code rather than an
+        // The whole set, not a containment check: ShouldContain would permit
+        // any number of undeclared permissions to be grantable. orders:admin
+        // is a claim CancelOrderHandler reads and no endpoint names; without
+        // the role no token this realm can issue could carry it, and the
+        // handler's admin branch would be unreachable code rather than an
         // override somebody can be granted.
         roles.ShouldBe(
             [
@@ -489,20 +366,11 @@ public class RealmImportTests
     [Fact]
     public void The_builtin_client_scopes_are_all_present()
     {
-        // The one defect a reading of this file would never suggest, and the
-        // reason the realm is a full export rather than the readable dozen
-        // lines that were written first. Keycloak's realm import treats a
-        // `clientScopes` array as the COMPLETE set: supply only commerce-api
-        // and the built-ins are never created. Nothing fails — the realm comes
-        // up, the login succeeds, and the token silently loses `sub`,
-        // `preferred_username`, `email` and `realm_access`.
-        //
-        // `basic` is the one that hurts: it carries `sub`, so ICurrentUser.Id
-        // would throw on every authenticated request in the platform.
-        //
-        // Verified by importing exactly that trimmed file into a fresh
-        // Keycloak 26.0 and reading the resulting token, which is the only way
-        // this is observable at all.
+        // Keycloak's realm import treats a `clientScopes` array as the complete
+        // set: supply only commerce-api and the built-ins are never created.
+        // Nothing fails — the token silently loses `sub`, which
+        // ICurrentUser.Id reads, and `preferred_username`, `email` and
+        // `realm_access` with it.
         string[] builtins = ["basic", "profile", "email", "roles", "web-origins", "acr"];
         string[] names = [.. ClientScopes.Select(s => s.GetProperty("name").GetString()).OfType<string>()];
 
@@ -535,13 +403,9 @@ public class RealmImportTests
                 "what that scope carries");
         }
 
-        // And present and assigned is still not carrying: `basic` matters only
-        // because of the mapper inside it. Deleting that mapper, or turning off
-        // its access.token.claim, leaves the scope declared and assigned while
-        // every token loses `sub` — which is the exact failure the whole test
-        // is named for, reached by the one route the two checks above do not
-        // cover. ICurrentUser.Id reads that claim and would throw on every
-        // authenticated request in the platform.
+        // Present and assigned is still not carrying: deleting the mapper
+        // inside `basic`, or turning off its access.token.claim, leaves the
+        // scope declared and assigned while every token loses `sub`.
         JsonElement basic = ClientScopes.Single(s => s.GetProperty("name").GetString() == "basic");
 
         JsonElement subject = MappersOf(basic).Single(
@@ -556,19 +420,11 @@ public class RealmImportTests
     /// (§11.5), and the documented local-development value it agrees on.
     /// </summary>
     /// <remarks>
-    /// PR-19's carve-out, and the premise it falsified is worth naming: this
-    /// test used to say <i>no</i> client ships a secret, which was true while
-    /// no client used the client-credentials grant. The BFF is the first that
-    /// does, and a client-credentials flow is precisely two parties holding
-    /// the same string — one of which is a committed Compose file. Letting
-    /// Keycloak generate the secret would leave the realm and the deployment
-    /// disagreeing, and the BFF refused at the token endpoint on every call.
-    /// <para>
-    /// So the rule narrows rather than lapses, and narrowing makes it
-    /// stronger: the value is pinned, so a randomly generated secret — a
-    /// credential nobody chose, that looks real enough to be reused where it
-    /// would matter — still fails here, and so does a real one.
-    /// </para>
+    /// A client-credentials flow is two parties holding the same string, one
+    /// of which is a committed Compose file, so a Keycloak-generated secret
+    /// would leave the realm and the deployment disagreeing. Pinning the value
+    /// keeps the rule strong: a generated secret fails here, and so does a
+    /// real one.
     /// </remarks>
     private const string CredentialClient = "web-bff";
     private const string DocumentedLocalSecret = "local-dev-secret";
@@ -596,11 +452,8 @@ public class RealmImportTests
                 "the deployment have to hold the same value (§11.5)");
 
             // The documented default and nothing else. The matching half lives
-            // in deploy/compose/services/web-bff.yml as
-            // ${BFF_CLIENT_SECRET:-local-dev-secret}, and Web.Bff.Tests'
-            // RealmClientTests asserts the two files agree — which is the
-            // assertion this one cannot make, being a building block's suite
-            // that may not read a host's deployment.
+            // in deploy/compose/services/web-bff.yml, which a building block's
+            // suite may not read.
             secret.GetString().ShouldBe(
                 DocumentedLocalSecret,
                 "a secret in a committed realm must be the documented local default, " +
@@ -611,15 +464,12 @@ public class RealmImportTests
     [Fact]
     public void The_resource_client_can_mint_no_token_of_its_own()
     {
-        // Why the absent secret above is safe rather than merely tidy: Keycloak
-        // generates one on import, so `commerce-api` has a working credential
-        // in every running realm. What makes that harmless is that it has no
-        // flow to spend it on — the client exists to own the permission
-        // vocabulary and to name an audience, and nothing else.
-        //
-        // Enable any one of these four and the regenerated secret becomes a
-        // way to obtain tokens carrying every permission in the platform, with
-        // the secret test above still green because the file still ships none.
+        // Why the absent secret above is safe rather than merely tidy:
+        // Keycloak generates one on import, so `commerce-api` has a working
+        // credential in every running realm. What makes that harmless is that
+        // it has no flow to spend it on; enable any of these and the
+        // regenerated secret mints tokens carrying every permission in the
+        // platform.
         JsonElement resource = Root.GetProperty("clients").EnumerateArray()
             .Single(c => c.GetProperty("clientId").GetString() == Audience);
 
@@ -641,17 +491,10 @@ public class RealmImportTests
     {
         // `browser` proving a refusal rests on it holding no permission, and
         // the test above checks the direct grant only. Every user also holds
-        // `default-roles-commerce`, which is a composite — so a permission
-        // added to that composite, or to any realm role it includes, reaches
-        // the token through the same client-role mapper while `browser` still
-        // has no `clientRoles` property of its own and every other assertion
-        // here stays green. The documented 403 becomes a 200 and nothing says
-        // so.
-        //
-        // This is the realm-role hazard §11.5 already names from the other
-        // direction: a realm-role mapper would have put Keycloak's internals
-        // into the permission claim. Composition is the same leak by
-        // inheritance rather than by mapper.
+        // `default-roles-commerce`, a composite, so a permission added to it
+        // reaches the token through the same client-role mapper while
+        // `browser` still has no `clientRoles` of its own — §11.5's realm-role
+        // hazard by inheritance rather than by mapper.
         foreach (JsonElement role in Root.GetProperty("roles").GetProperty("realm").EnumerateArray())
         {
             if (!role.TryGetProperty("composites", out JsonElement composites) ||

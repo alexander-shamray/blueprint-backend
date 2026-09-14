@@ -13,11 +13,9 @@ namespace Ordering.Api.Tests;
 /// <summary>
 /// §9.4's, §9.5's and §8.5's retention purges, driven a pass at a time against
 /// the real tables. The predicate that separates them is the whole subject: the
-/// outbox deletes on <c>ProcessedAt IS NOT NULL</c> <em>and</em> age, the inbox
-/// on age alone, and the marker on age <em>and</em> the claim store having let
-/// its key go — age selects there and no longer decides (ADR-039). Getting the
-/// outbox's wrong is silent, permanent data loss; getting the marker's wrong is
-/// a duplicate write.
+/// outbox deletes on <c>ProcessedAt IS NOT NULL</c> and age, the inbox on age
+/// alone, and the marker on age and the claim store having let its key go
+/// (ADR-039).
 /// </summary>
 [Collection(nameof(IntegrationCollection))]
 public sealed class RetentionPurgeTests(ServiceFixture fixture) : IAsyncLifetime
@@ -63,16 +61,11 @@ public sealed class RetentionPurgeTests(ServiceFixture fixture) : IAsyncLifetime
         await fixture.StageOutboxAsync(poison);
         await fixture.SetOutboxAttemptsAsync(poison.MessageId, 10);
 
-        // OccurredAt, deliberately — and NOT the column the purge reads, which
-        // is the whole point. `ProcessedAt` is null on an abandoned row by
-        // definition, so the predicate can never match it and no ageing of that
-        // column is possible. What this line does is make the row old by the
-        // one measure a *wrong* purge would use: written `WHERE OccurredAt <
-        // @Before`, the age-alone form §9.4 warns about, this row is thirty days
-        // past the window and would be deleted. That is the mutation the
-        // assertion below has to be able to fail on, and without this line it
-        // could not — the row would be inside every window and survive a
-        // correct purge and an incorrect one alike.
+        // OccurredAt, not the column the purge reads: `ProcessedAt` is null on
+        // an abandoned row by definition, so the predicate can never match it.
+        // This makes the row old by the one measure the age-alone purge §9.4
+        // warns about would use, which is the mutation the assertion below
+        // has to be able to fail on.
         await fixture.ExecuteAsync(
             "UPDATE ordering.OutboxMessages SET OccurredAt = {0} WHERE MessageId = {1};",
             LongAgo,
@@ -103,23 +96,18 @@ public sealed class RetentionPurgeTests(ServiceFixture fixture) : IAsyncLifetime
     [Fact]
     public async Task Two_endpoints_differing_only_by_case_are_two_rows()
     {
-        // The composite key is only once-per-endpoint if the database agrees
-        // with the broker about what two endpoints are. SQL Server's default
-        // collation is case-insensitive and a queue name is not, so `orders`
-        // and `Orders` would collide — and the second endpoint's message would
-        // be dropped as a duplicate of a delivery it never received. The
-        // column is `Latin1_General_BIN2` for exactly this.
-        //
-        // Written here rather than through the filter because what is under
-        // test is the key's comparison semantics: two inserts that differ in
-        // one character's case must both survive.
+        // SQL Server's default collation is case-insensitive and a queue name
+        // is not, so `orders` and `Orders` would collide and the second
+        // endpoint's message be dropped as a duplicate of a delivery it never
+        // received; the column is `Latin1_General_BIN2` for this. Written here
+        // rather than through the filter because what is under test is the
+        // key's comparison semantics.
         var messageId = Guid.CreateVersion7();
 
-        // Two calls, so two contexts. One would put both rows in a single
-        // change tracker, and EF's in-memory identity map answers a different
-        // question from the one under test — what the *database* considers a
-        // duplicate key is what decides whether a second endpoint's message
-        // survives, and the filter only ever adds one row per consume anyway.
+        // Two calls, so two contexts: one change tracker would answer EF's
+        // identity map's question rather than the database's, and the
+        // database is what decides whether a second endpoint's message
+        // survives.
         await fixture.StageInboxAsync(new InboxMessage(messageId, "ordering-orders", Recently));
         await fixture.StageInboxAsync(new InboxMessage(messageId, "ordering-Orders", Recently));
 
@@ -131,26 +119,12 @@ public sealed class RetentionPurgeTests(ServiceFixture fixture) : IAsyncLifetime
     [Fact]
     public async Task Two_endpoints_differing_outside_the_code_page_are_two_rows()
     {
-        // The other half of the same guarantee, and the half a binary collation
-        // cannot give: the collation decides how stored values compare, and this
-        // is about what gets stored at all. AMQP 0-9-1 allows 255 bytes of UTF-8
-        // in a queue name, so the column has to be nvarchar — under varchar,
-        // every character outside the code page becomes `?`, and two endpoints
-        // that differ only there arrive as the same key.
-        //
-        // Cyrillic, and the choice is not decoration — it is what makes this
-        // test fail for the right reason. The first draft used `ő` and `ū`,
-        // reasoning that anything outside the code page becomes `?`; SQL Server
-        // does not do that. It **best-fit folds** what it can, so those two
-        // arrived as `ordering-o` and `ordering-u`: two distinct rows, silently
-        // wrong, and the count assertion below stayed green over the defect it
-        // was written to catch. `ж` and `д` have no Latin form to fold to, so
-        // both become `ordering-?` and the second insert is a key violation.
-        //
-        // Both assertions are kept because the two failures are different.
-        // Folding corrupts the value without colliding; a character with no
-        // fallback collides. Either one loses a message, and only one of them
-        // moves the count.
+        // The half a binary collation cannot give: AMQP 0-9-1 allows 255 bytes
+        // of UTF-8 in a queue name, so the column has to be nvarchar. Cyrillic
+        // rather than accented Latin, because SQL Server best-fit folds `ő` to
+        // `o` under varchar — two distinct rows, silently wrong — while `ж`
+        // and `д` have no Latin form and both become `?`, so the second insert
+        // is a key violation.
         var messageId = Guid.CreateVersion7();
 
         await fixture.StageInboxAsync(new InboxMessage(messageId, "ordering-ж", Recently));
@@ -191,17 +165,11 @@ public sealed class RetentionPurgeTests(ServiceFixture fixture) : IAsyncLifetime
     [Fact]
     public async Task An_unclaimed_marker_past_its_window_is_purged_and_a_recent_one_is_not()
     {
-        // The window half of the predicate, isolated. Neither key here was ever
-        // claimed, so the store reports both unheld and what separates them is
-        // age alone — which is a statement about this test's staging, not about
-        // the pass: since ADR-039 a marker goes only when it is past its window
-        // AND its claim is gone. The two tests below supply that other half.
-        //
-        // Two rows rather than one, which is the whole point. The combined pass
-        // below stages a single already-old marker, so a DELETE with no WHERE —
-        // or one that ignored CommittedAt — would satisfy it: every row it is
-        // given is purgeable. This is the test that fails when the window drops
-        // out of the predicate, and the recent row is what makes it one.
+        // The window half of the predicate, isolated: neither key was ever
+        // claimed, so the store reports both unheld and age alone separates
+        // them. Two rows rather than one, because a DELETE that ignored
+        // CommittedAt would satisfy a single already-old marker; the recent
+        // row is what makes this a test.
         await fixture.StageIdempotencyMarkersAsync(
             new IdempotencyMarker(Key(), LongAgo),
             new IdempotencyMarker(Key(), Recently));
@@ -215,17 +183,11 @@ public sealed class RetentionPurgeTests(ServiceFixture fixture) : IAsyncLifetime
     [Fact]
     public async Task A_marker_whose_claim_is_still_held_survives_however_old_the_row_is()
     {
-        // #171, staged from the only side a test can reach it. The failure was
-        // a forward step of the DATABASE's clock relative to Redis's, and no
-        // test here owns the container's clock — but the step's whole effect is
-        // that a row reads as past its window while the claim behind it is
-        // still live, and a row staged thirty days old under a live claim is
-        // that state arrived at from the other end.
-        //
-        // The window is not what keeps this row: the control test above stages
-        // the same LongAgo under keys nothing ever claimed and watches them go.
-        // What keeps this one is the pass asking the store that owns the claim,
-        // and finding it still held (ADR-039).
+        // A forward step of the database's clock relative to Redis's reads as
+        // a row past its window while the claim behind it is still live, and
+        // no test owns the container's clock — so the same state is staged
+        // from the other end. The window is not what keeps this row; the pass
+        // asking the store that owns the claim is (ADR-039).
         string key = Key();
 
         await fixture.StageIdempotencyMarkersAsync(new IdempotencyMarker(key, LongAgo));
@@ -249,13 +211,10 @@ public sealed class RetentionPurgeTests(ServiceFixture fixture) : IAsyncLifetime
     [Fact]
     public async Task The_same_row_goes_once_the_claim_behind_it_has_been_released()
     {
-        // The companion, and what makes the test above about the claim rather
-        // than about anything else that might keep a row. Same row, same age,
-        // same pass; the one thing that differs is whether the store still
-        // holds the key. Without it, a pass that had simply stopped deleting
-        // markers would satisfy the assertion above and nothing would notice —
-        // a gate that stops covering what it claims to, which is this
-        // repository's most-repeated failure.
+        // The companion: same row, same age, same pass, and the one thing that
+        // differs is whether the store still holds the key. Without it a pass
+        // that had simply stopped deleting markers would satisfy the assertion
+        // above.
         string key = Key();
 
         await fixture.StageIdempotencyMarkersAsync(new IdempotencyMarker(key, LongAgo));
@@ -280,28 +239,13 @@ public sealed class RetentionPurgeTests(ServiceFixture fixture) : IAsyncLifetime
     [Fact]
     public async Task A_marker_replaced_between_the_select_and_the_delete_is_not_the_row_that_goes()
     {
-        // #173, and the ABA the split opened, staged at the one instant it is
-        // dangerous. A key names a COMMAND: past §8.5's guarantee a retry can
-        // claim it again, commit, and write a fresh marker under the key this
-        // pass has already selected. The delete that follows must not remove
-        // that replacement — it is inside its window with a live claim behind
-        // it, and deleting it lets the next retry run a committed command a
-        // third time.
-        //
-        // The replacement here keeps the ORIGINAL CommittedAt, which is what
-        // makes this a test of #173 rather than of ADR-039. The old
-        // (Key, CommittedAt) join distinguished the two rows by construction
-        // and nothing enforced it: a timestamp collision is exactly the
-        // coincidence that pair could not survive, and it is the state this
-        // test hands the delete. Against a delete keyed on that pair this
-        // assertion fails; against one keyed on the rowversion it holds,
-        // because SQL Server stamps the replacement with a value the SELECT
-        // never saw (ADR-041).
-        //
-        // Interposed on UnheldAsync rather than on a clock or a second thread,
-        // because that call IS the window: the pass selects, asks, then
-        // deletes, so a store that mutates the table while answering lands the
-        // replacement between the two statements deterministically.
+        // The ABA between the select and the delete: a key names a command, so
+        // past §8.5's guarantee a retry can claim it again, commit, and write
+        // a fresh marker under a key this pass has already selected. The
+        // replacement keeps the original CommittedAt, which a delete keyed on
+        // (Key, CommittedAt) cannot tell apart; the rowversion is stamped with
+        // a value the SELECT never saw (ADR-041). Interposed on UnheldAsync
+        // because that call is the window.
         string key = Key();
 
         await fixture.StageIdempotencyMarkersAsync(new IdempotencyMarker(key, LongAgo));
@@ -336,19 +280,11 @@ public sealed class RetentionPurgeTests(ServiceFixture fixture) : IAsyncLifetime
     [Fact]
     public async Task A_held_key_costs_its_own_batch_and_not_the_rest_of_the_pass()
     {
-        // The pass stops on NO PROGRESS, not on an incomplete batch, and the
-        // difference is most of a pass's capacity. `deleted < candidates.Length`
-        // was the earlier rule, on the premise that a batch the store would not
-        // release entirely comes back unchanged — which is false: TOP refills
-        // the deleted slots with the next-oldest rows, so one held key at the
-        // head ended the pass after roughly one batch.
-        //
-        // Five rows, batches of two, and the middle one held. Under the old
-        // rule the pass deletes the first two, meets a partial second batch and
-        // stops at three. Under this one it keeps going while it is making
-        // progress and stops when a batch deletes nothing — four, every row but
-        // the held one. The two numbers differ, which is what makes this a test
-        // rather than a restatement.
+        // The pass stops on no progress, not on an incomplete batch: TOP
+        // refills the deleted slots with the next-oldest rows, so a partial
+        // batch does not mean the store would release nothing more. Five rows
+        // in batches of two with the middle one held: stopping on a partial
+        // batch ends at three, stopping on no progress at four.
         string held = Key();
 
         await fixture.StageIdempotencyMarkersAsync(
@@ -383,22 +319,12 @@ public sealed class RetentionPurgeTests(ServiceFixture fixture) : IAsyncLifetime
     [Fact]
     public async Task A_batch_spanning_more_than_one_delete_chunk_is_deleted_whole()
     {
-        // The chunked delete, which nothing else here reaches. `BatchSize`
-        // defaults to 5,000 and the delete is chunked at 900 rows — each costs
-        // two parameters, its key and its version, against SQL Server's 2,100
-        // — so every other marker case in this file deletes inside a single
-        // chunk and the second one never runs. An early `break`, an off-by-one
-        // on the chunk boundary, or a `Take` where a `Skip` belonged would
-        // leave all of them green and surface first against a production
-        // backlog.
-        //
-        // MORE THAN ONE CHUNK, because the boundary is the defect: a batch
-        // inside one chunk proves nothing. The figure is coupled to
-        // `RetentionPurgeService.RowsPerDelete`, which is private because it is
-        // not a knob — so raising that constant to 1,001 or beyond makes this
-        // test pass while covering nothing, and its comment there says to move
-        // this one with it. That is a rule in two places, stated rather than
-        // arrived at.
+        // The chunked delete, which nothing else here reaches: each row costs
+        // two parameters against SQL Server's 2,100, so the delete is chunked
+        // at `RetentionPurgeService.RowsPerDelete` and every other marker case
+        // deletes inside one chunk. The figure here has to exceed that
+        // constant, or the boundary is never crossed and the test covers
+        // nothing.
         const int candidates = 1_001;
 
         IdempotencyMarker[] rows =
@@ -418,28 +344,15 @@ public sealed class RetentionPurgeTests(ServiceFixture fixture) : IAsyncLifetime
     [Fact]
     public async Task A_skewed_clock_purges_the_outbox_and_the_inbox_and_leaves_the_marker()
     {
-        // The property #167 exists to establish, and the one thing the rest of
-        // this suite cannot see. Every other test here stages rows against
-        // DateTimeOffset.UtcNow while the test host's clock and the container's
-        // agree, so all three statements read what is effectively one clock —
-        // and a marker statement that had regressed to the application-supplied
-        // `@Before` the other two still use would pass every one of them
-        // unchanged. Nothing would go red, and ADR-038's whole decision would be
-        // untested.
-        //
-        // So: two clocks, one age, opposite outcomes. The registered
-        // TimeProvider runs two days fast, the window is one day, and three rows
-        // of the same real age go into the three tables. The outbox's and the
-        // inbox's cutoffs are `now - window` on that skewed clock, so their rows
-        // are a day past a window they are seconds into and both are deleted.
-        // The marker's cutoff is DATEADD over SYSDATETIMEOFFSET() on the server,
-        // which nothing substituted in this process can reach, so it survives.
-        //
-        // The window is read rather than restated: RetentionPolicy refuses an
-        // idempotency window below §8.5's claim, so this is the smallest one the
-        // test may ask for — and the skew is twice it rather than some margin
-        // over it, so the outbox and inbox rows clear their windows by a whole
-        // window and nothing here sits near a boundary.
+        // Every other test here stages rows against DateTimeOffset.UtcNow
+        // while the test host's clock and the container's agree, so a marker
+        // statement that had regressed to the application-supplied `@Before`
+        // would pass all of them. Two clocks, one age, opposite outcomes: the
+        // outbox's and inbox's cutoffs are `now - window` on the skewed clock,
+        // the marker's is DATEADD over SYSDATETIMEOFFSET() on the server
+        // (ADR-038). The window is read because RetentionPolicy refuses one
+        // below §8.5's claim, and the skew is twice it so nothing sits near a
+        // boundary.
         TimeSpan window = IdempotencyRetention.MarkerFloor;
 
         RetentionPolicy oneDay = new()
@@ -481,15 +394,11 @@ public sealed class RetentionPurgeTests(ServiceFixture fixture) : IAsyncLifetime
     [Fact]
     public async Task A_backlog_larger_than_one_batch_drains_over_batches_and_stops_at_the_ceiling()
     {
-        // Two claims the single-row tests above could not make, because one row
-        // never reaches a second batch: that the loop continues while a batch
-        // comes back full, and that it stops at MaxBatchesPerPass rather than
-        // running until the table is empty. The plan for this PR asked for the
-        // first and the review noticed neither was covered.
-        //
-        // A policy of its own rather than the registered one: five rows against
-        // a batch of two makes both edges observable in a test that stays fast,
-        // where the real 5,000 would need 10,001 rows to show the same thing.
+        // Two claims a single row cannot make: the loop continues while a
+        // batch comes back full, and it stops at MaxBatchesPerPass rather than
+        // running until the table is empty. A policy of its own, because five
+        // rows against a batch of two show both edges where the real 5,000
+        // would need 10,001 rows.
         for (int row = 0; row < 5; row++)
         {
             OutboxMessage processed = OutboxRows.Healthy(fixture);
@@ -518,11 +427,8 @@ public sealed class RetentionPurgeTests(ServiceFixture fixture) : IAsyncLifetime
     public async Task A_pass_purges_every_table()
     {
         // §9.5 asks for one hosted service covering all of them, and the
-        // alternative is a schedule each with one of them being the one nobody
-        // notices has stopped. Asserting the set in one pass is what that
-        // costs — and the third table joined it with §8.5's durable marker,
-        // whose rows are the only ones here that carry a correctness property
-        // rather than a debugging record.
+        // alternative is a schedule each with one being the one nobody notices
+        // has stopped.
         OutboxMessage row = OutboxRows.Healthy(fixture);
         await fixture.StageOutboxAsync(row);
         await fixture.SetOutboxProcessedAtAsync(row.MessageId, LongAgo);
@@ -541,12 +447,10 @@ public sealed class RetentionPurgeTests(ServiceFixture fixture) : IAsyncLifetime
     /// pass asks it which keys are unheld.
     /// </summary>
     /// <remarks>
-    /// <b>Every answer is the real store's.</b> The decoration is <em>when</em>,
-    /// not <em>what</em> — <c>UnheldAsync</c> delegates like the other four, and
-    /// substituting the verdict would make the test assert its own idea of the
-    /// claim against a pass that reads Redis. <see cref="Asked"/> exists
-    /// because a seam nothing reached would leave the test green having
-    /// exercised none of it, which is this repository's most-repeated failure.
+    /// Every answer is the real store's; the decoration is when, not what,
+    /// because substituting the verdict would make the test assert its own
+    /// idea of the claim against a pass that reads Redis. <see cref="Asked"/>
+    /// is what stops a seam nothing reached leaving the test green.
     /// </remarks>
     private sealed class ReplacingClaims(IIdempotencyStore inner, Func<Task> onAsked) : IIdempotencyStore
     {

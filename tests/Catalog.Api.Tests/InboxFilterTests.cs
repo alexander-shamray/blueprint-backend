@@ -21,10 +21,8 @@ namespace Catalog.Api.Tests;
 /// <remarks>
 /// Catalog binds no receive endpoint of its own (§3.2 gives it one Consumes
 /// cell, owned by a service that does not exist), so this suite declares the
-/// endpoints it needs. That is the same reason PR-14's <c>Local</c> lane was
-/// proven by handlers in <c>Catalog.TestSupport</c>: the mechanism lands before
-/// the first service that uses it, and inventing a consumer for Catalog would
-/// be inventing a subscription §3.2 does not give it.
+/// endpoints it needs rather than inventing a subscription §3.2 does not give
+/// it.
 /// </remarks>
 [Collection(nameof(IntegrationCollection))]
 public sealed class InboxFilterTests(ServiceFixture fixture) : IAsyncLifetime
@@ -76,20 +74,15 @@ public sealed class InboxFilterTests(ServiceFixture fixture) : IAsyncLifetime
 
     /// <summary>
     /// Clears the change tracker on the service's context, which is the first
-    /// thing <c>EfUnitOfWork.ExecuteAsync</c> does on every attempt (§7.5,
-    /// PR-09) — and therefore the first thing every message-borne command does,
-    /// since §6.3's <c>TransactionBehavior</c> wraps each handler in that call.
+    /// thing <c>EfUnitOfWork.ExecuteAsync</c> does on every attempt (§7.5) and
+    /// so the first thing every message-borne command does under §6.3's
+    /// <c>TransactionBehavior</c>.
     /// </summary>
     /// <remarks>
-    /// <b>The line rather than the type, and the reason is access rather than
-    /// preference.</b> <c>EfUnitOfWork</c> is internal to
-    /// <c>Catalog.Infrastructure</c> — nothing outside resolves it by type,
-    /// only through <c>IUnitOfWork</c>, and registering it here would need an
-    /// <c>InternalsVisibleTo</c> for one call. What has to be reproduced is the
-    /// interaction, not the wrapper: a tracked entity added before the consumer
-    /// runs does not survive a consumer that clears the tracker, and this is
-    /// the shortest consumer that does that on the same context the filter
-    /// writes through.
+    /// The line rather than the type, because <c>EfUnitOfWork</c> is internal
+    /// to <c>Catalog.Infrastructure</c> and registering it here would need an
+    /// <c>InternalsVisibleTo</c> for one call. What has to be reproduced is
+    /// the interaction, on the same context the filter writes through.
     /// </remarks>
     public sealed class ClearsTheChangeTrackerConsumer(DbContext db) : IConsumer<ProbeMessage>
     {
@@ -132,11 +125,10 @@ public sealed class InboxFilterTests(ServiceFixture fixture) : IAsyncLifetime
         // expired the moment it is written.
         services.AddSingleton(TimeProvider.System);
 
-        // The filter's two observability dependencies (#64). A suppressed
-        // message is counted and logged rather than dropped in silence, so
-        // this host supplies the meter factory and the logger a real one does
-        // — and `validateScopes: true` below means a missing registration is a
-        // resolution failure at the first delivery rather than a wrong answer.
+        // The filter's observability dependencies: a suppressed message is
+        // counted and logged rather than dropped in silence (§13), and
+        // `validateScopes: true` below makes a missing registration a
+        // resolution failure rather than a wrong answer.
         services.AddMetrics();
         services.AddLogging();
         services.AddSingleton<MessagingMetrics>();
@@ -181,21 +173,12 @@ public sealed class InboxFilterTests(ServiceFixture fixture) : IAsyncLifetime
         var id = Guid.CreateVersion7();
         var messageId = Guid.CreateVersion7();
 
-        // The same transport id twice, which is what a redelivery is. §9.1's
-        // single-identity rule is what makes this the id the inbox keys on:
-        // body, row, header and inbox key are one GUID.
-        //
-        // Sequenced, not published back to back, and the sequencing is the
-        // claim rather than a convenience. A redelivery follows a failure or a
-        // broker retry — it arrives *after* the first attempt finished, which
-        // is the only case the filter suppresses. Two deliveries genuinely in
-        // flight at once both pass the AnyAsync check before either row is
-        // committed, so both run; the composite primary key then fails the
-        // second SaveChanges and the message is retried into the suppression
-        // this test is about. That is §9.5's own "duplicate suppression, not
-        // an atomic guarantee — the common duplicate, not every duplicate",
-        // and asserting otherwise here would be asserting something the
-        // chapter does not claim.
+        // The same transport id twice, which is what a redelivery is: §9.1's
+        // single-identity rule makes body, row, header and inbox key one GUID.
+        // Sequenced rather than published back to back, because a redelivery
+        // arrives after the first attempt finished, which is the only case the
+        // filter suppresses — §9.5 claims duplicate suppression, not an atomic
+        // guarantee.
         await harness.Bus.Publish(
             new ProbeMessage(id),
             c => c.MessageId = messageId,
@@ -213,18 +196,12 @@ public sealed class InboxFilterTests(ServiceFixture fixture) : IAsyncLifetime
             c => c.MessageId = messageId,
             TestContext.Current.CancellationToken);
 
-        // Waiting for BOTH deliveries to be recorded, not for "a" delivery.
-        // `Consumed.Any<ProbeMessage>()` matches the first one the moment it
-        // lands, so a wait on it after the second publish returns immediately
-        // and the assertions below run while the redelivery is still in the
-        // pipe — the test would then pass whether the filter suppressed the
-        // duplicate or simply had not seen it yet, which is the wrong way
-        // round for a duplicate-suppression test to fail.
-        //
-        // The filter runs ahead of the consumer, so a suppressed message is
-        // consumed-and-dropped rather than never consumed: both deliveries
-        // reach `Consumed` and only one reaches FirstConsumer, which is what
-        // makes counting them the right signal.
+        // Both deliveries recorded, not "a" delivery:
+        // `Consumed.Any<ProbeMessage>()` matches the first the moment it lands,
+        // so the assertions below would run while the redelivery was still in
+        // the pipe. The filter runs ahead of the consumer, so a suppressed
+        // message is consumed-and-dropped rather than never consumed, which is
+        // what makes counting them the right signal.
         await Eventually(
             () => Task.FromResult<IReadOnlyList<object>>(
                 [.. harness.Consumed.Select<ProbeMessage>()]),
@@ -232,15 +209,11 @@ public sealed class InboxFilterTests(ServiceFixture fixture) : IAsyncLifetime
 
         FirstConsumer.Consumed.ShouldBe([id], "the filter must drop the second delivery");
 
-        // Scoped to this message (#166, raised against Ordering's copy of this
-        // suite). The unscoped read made this line two claims at once — that
-        // the duplicate wrote no second row, and that no other row exists
-        // anywhere in the schema — and only the first is the filter's. The
-        // second is test isolation: this collection runs its classes in
-        // sequence over one fixture, so a message an earlier class published
-        // and a consumer handled after this class's ResetAsync is a row this
-        // assertion had no business counting. The endpoint is what is left to
-        // assert once the id is in the query rather than in the assertion.
+        // Scoped to this message, because an unscoped read is two claims at
+        // once — that the duplicate wrote no second row, and that no other row
+        // exists in the schema — and only the first is the filter's. The
+        // collection runs its classes in sequence over one fixture, so a row
+        // an earlier class left is not this assertion's business.
         (await fixture.InboxAsync(messageId))
             .ShouldHaveSingleItem("one delivery of this message reached the consumer, so one row")
             .Endpoint.ShouldBe(FirstEndpoint);
@@ -268,29 +241,23 @@ public sealed class InboxFilterTests(ServiceFixture fixture) : IAsyncLifetime
 
         // Both endpoints, one message: two rows sharing a MessageId and
         // differing only in Endpoint, which is the shape the key exists for.
-        // Scoping by message id still expects two — that is the point of the
-        // key, and it is what makes this the one call site where the count
-        // survives the change unaltered. Unscoped, the same wait would return
-        // on one row of this message and one of somebody else's.
+        // Unscoped, the same wait would return on one row of this message and
+        // one of somebody else's.
         IReadOnlyList<InboxMessage> rows =
             await Eventually(() => fixture.InboxAsync(messageId), expected: 2);
 
-        // The endpoints are the whole claim now. `ShouldAllBe(r => r.MessageId
-        // == messageId)` stood here and cannot fail against a read that
-        // filters on exactly that — an assertion no arrangement can break is
-        // this repository's named failure, so the claim moved into the query
-        // rather than being restated after it.
+        // The endpoints are the whole claim; the message id is in the query,
+        // and an assertion on it here could not fail.
         rows.Select(r => r.Endpoint).OrderBy(e => e).ShouldBe([FirstEndpoint, SecondEndpoint]);
     }
 
     [Fact]
     public async Task No_row_is_written_when_the_consumer_throws()
     {
-        // The ordering inside the filter, and the one thing in it that must not
-        // be rearranged: the consumer runs FIRST and the row is committed only
-        // if it succeeded. Recording before would mark a message handled that
-        // never was — and a suppressed redelivery is not retried, it is
-        // dropped, so the loss is permanent.
+        // The ordering inside the filter: the consumer runs first and the row
+        // is committed only if it succeeded. Recording before would mark a
+        // message handled that never was, and a suppressed redelivery is
+        // dropped rather than retried, so the loss is permanent.
         await using ServiceProvider provider = BuildHost<ThrowingConsumer>();
         ITestHarness harness = provider.GetRequiredService<ITestHarness>();
         await harness.Start();
@@ -304,17 +271,12 @@ public sealed class InboxFilterTests(ServiceFixture fixture) : IAsyncLifetime
             c => c.MessageId = messageId,
             TestContext.Current.CancellationToken);
 
-        // The completed record, not `Consumed.Any`. That predicate is satisfied
-        // when the harness observes the consume *attempt*, which can be before
-        // the throwing pipeline has unwound — so the negative assertion below
-        // could run while the attempt was still in flight and pass over a row
-        // written a moment later. A negative assertion that can be satisfied by
-        // "not yet" is the fail-open shape this suite has already been caught
-        // by once, in the redelivery test.
-        //
-        // Waiting on the exception is what makes it the finished attempt: the
-        // filter's SaveChangesAsync is downstream of `next.Send` throwing, so
-        // by the time the fault is recorded there is nothing left to write.
+        // The completed record, not `Consumed.Any`: that predicate is satisfied
+        // when the harness observes the consume attempt, which can be before
+        // the throwing pipeline has unwound, so the negative assertion below
+        // could pass over a row written a moment later. The filter's
+        // SaveChangesAsync is downstream of `next.Send` throwing, so once the
+        // fault is recorded there is nothing left to write.
         IReceivedMessage<ProbeMessage> received = await harness.Consumed
             .SelectAsync<ProbeMessage>(TestContext.Current.CancellationToken)
             .FirstOrDefault();
@@ -322,32 +284,21 @@ public sealed class InboxFilterTests(ServiceFixture fixture) : IAsyncLifetime
         received.ShouldNotBeNull();
         received.Exception.ShouldBeOfType<InvalidOperationException>();
 
-        // "This message wrote no row", not "the table is empty". The second is
+        // "This message wrote no row", not "the table is empty": the second is
         // a claim about every other class in the collection, and a stray row
-        // from one of them would fail a test about a consumer that throws —
-        // which is the wrong test to fail and tells the reader nothing. The
-        // scoped read still fails the moment the filter commits a row for a
-        // consumer that faulted, which is the whole subject here.
+        // from one of them would fail the wrong test.
         (await fixture.InboxAsync(messageId)).ShouldBeEmpty();
     }
 
     [Fact]
     public async Task A_consumer_that_clears_the_change_tracker_still_gets_its_inbox_row()
     {
-        // The regression test for the defect this suite did not have. Every
-        // message-borne command reaches §6.3's TransactionBehavior, which runs
-        // the handler inside EfUnitOfWork.ExecuteAsync — and that opens each
-        // attempt with db.ChangeTracker.Clear(), so PR-09's retry can never
-        // re-commit the previous attempt's mutations.
-        //
-        // With the inbox row staged BEFORE next.Send, that clear discarded it:
-        // SaveChangesAsync then wrote nothing, no command was ever recorded,
-        // and every redelivery of every command was reprocessed. Nothing threw
-        // and nothing logged — the table simply stayed empty. Two mechanisms
-        // already in this blueprint, in tension, and invisible until a consumer
-        // exercised both.
-        //
-        // The other suites here could not see it: their consumers do no work.
+        // Every message-borne command runs inside EfUnitOfWork.ExecuteAsync,
+        // which opens each attempt with db.ChangeTracker.Clear() (§7.5). An
+        // inbox row staged before next.Send is discarded by that clear:
+        // SaveChangesAsync writes nothing, no command is ever recorded, and
+        // every redelivery is reprocessed with nothing thrown and nothing
+        // logged.
         await using ServiceProvider provider = BuildHost<ClearsTheChangeTrackerConsumer>();
         ITestHarness harness = provider.GetRequiredService<ITestHarness>();
         await harness.Start();
@@ -365,10 +316,8 @@ public sealed class InboxFilterTests(ServiceFixture fixture) : IAsyncLifetime
             await Eventually(() => fixture.InboxAsync(messageId), expected: 1);
 
         // Scoped, so the wait cannot be satisfied by a row this consumer did
-        // not write — which for a test whose defect was "the table simply
-        // stayed empty" is the difference between the regression test and a
-        // test of the collection's tidiness. The endpoint is what the
-        // assertion has left to say, the id having moved into the query.
+        // not write, which for a defect whose symptom is an empty table is the
+        // whole test.
         rows.ShouldHaveSingleItem(
             "the row is staged after the consumer returns precisely so the unit of work's " +
             "ChangeTracker.Clear() cannot take it").Endpoint.ShouldBe(FirstEndpoint);
@@ -378,14 +327,10 @@ public sealed class InboxFilterTests(ServiceFixture fixture) : IAsyncLifetime
     public async Task The_filters_context_is_the_services_own_instance()
     {
         // AddScoped<DbContext, CatalogDbContext>() compiles, resolves and is
-        // wrong: it builds a SECOND context in the same scope, so the inbox row
+        // wrong: it builds a second context in the same scope, so the inbox row
         // commits in its own transaction and §9.5's atomic row silently becomes
-        // its non-atomic one. Nothing fails — the guarantee just stops holding,
-        // which is why it is asserted rather than reviewed.
-        //
-        // Read from the real host, not from this suite's, so the assertion is
-        // about AddCatalogInfrastructure's registration and not about a line
-        // BuildHost copied from it.
+        // a non-atomic one. Read from the real host rather than this suite's,
+        // so the assertion is about AddCatalogInfrastructure's registration.
         await using AsyncServiceScope scope = fixture.Factory.Services.CreateAsyncScope();
 
         DbContext resolved = scope.ServiceProvider.GetRequiredService<DbContext>();
@@ -397,30 +342,14 @@ public sealed class InboxFilterTests(ServiceFixture fixture) : IAsyncLifetime
     [Fact]
     public async Task The_scoped_inbox_read_returns_only_the_message_it_was_asked_for()
     {
-        // The subject is the fixture's reader rather than the filter, and it is
-        // owed for the reason every gate here is owed: a scoped read that
-        // matched everything would make every assertion above pass vacuously,
-        // on a green run, for as long as nobody looked. #166 measured what an
-        // unscoped read costs; this is what shows the scoped one is looking at
-        // anything at all.
-        //
-        // Duplicated into both suites on purpose, which is the opposite of the
-        // argument that homes the suppression counter in Ordering's copy alone.
-        // That property belongs to `InboxFilter<T>` — one assembly both
-        // services reference, so one suite can hold it. The scoped read is not
-        // common code: it is a fixture helper written once per service, and a
-        // test over Ordering's copy cannot go red on Catalog's predicate. Two
-        // implementations are two subjects.
-        //
-        // This is also the copy that travels. §4.5's scaffold renders a new
-        // service from tests/Catalog.Api.Tests and tests/Catalog.TestSupport,
-        // so a Catalog suite without this test hands every service scaffolded
-        // from it the same helper with nothing that would fail if its `Where`
-        // were dropped.
-        //
-        // Staged rather than consumed, because no endpoint has to run: what
-        // must differ between the two rows is the MessageId, and the filter
-        // only ever writes the one it was handed.
+        // The subject is the fixture's reader rather than the filter: a scoped
+        // read that ignored its argument would make every assertion above pass
+        // vacuously, because each runs after a ResetAsync that leaves its own
+        // rows the only ones in the table. A second message staged here is
+        // what stops that being true. Carried per service rather than homed in
+        // one suite, because `InboxAsync(Guid)` is a fixture helper written
+        // once per service, and this is the copy §4.5's scaffold renders a new
+        // service from.
         var mine = Guid.CreateVersion7();
         var anotherMessage = Guid.CreateVersion7();
 
@@ -430,12 +359,10 @@ public sealed class InboxFilterTests(ServiceFixture fixture) : IAsyncLifetime
 
         (await fixture.InboxAsync(mine)).ShouldHaveSingleItem().MessageId.ShouldBe(mine);
 
-        // Both ids, not a count. Asserting the table holds exactly two rows
-        // would be the very claim about the whole schema #166 removed — and it
-        // would leave this test flaking on the leak that change was made to
-        // survive. What has to be true is that the unscoped read saw the row
-        // the scoped one filtered out, which is what distinguishes "the filter
-        // works" from "there was only ever one row".
+        // Both ids, not a count: a count is a claim about the whole schema, and
+        // it would flake on the leak the scoped read exists to survive. What
+        // has to be true is that the unscoped read saw the row the scoped one
+        // filtered out.
         IReadOnlyList<Guid> all = [.. (await fixture.InboxAsync()).Select(r => r.MessageId)];
 
         all.ShouldContain(mine);
@@ -444,7 +371,7 @@ public sealed class InboxFilterTests(ServiceFixture fixture) : IAsyncLifetime
 
     /// <summary>
     /// Polls until the expected row count appears. The harness confirms the
-    /// message was consumed on <em>an</em> endpoint; with two endpoints running
+    /// message was consumed on one endpoint; with two endpoints running
     /// concurrently the second one's <c>SaveChangesAsync</c> may still be in
     /// flight, and a fixed wait would be a sleep §12.8 forbids.
     /// </summary>
