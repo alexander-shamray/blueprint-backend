@@ -919,8 +919,8 @@ section 'The Service forwards to a port something is listening on'
 # The routing gate above compares caller URLs with rendered Service ports and
 # never looks at the process behind `targetPort`. Catalog declares its two
 # Kestrel endpoints in its own appsettings.json (§9.7: a cleartext port cannot
-# serve HTTP/1.1 and h2c at once), so moving the h2c listener off 8081 there
-# would deploy a Service forwarding to a closed port.
+# serve HTTP/1.1 and h2c at once), so moving the h2c listener there would
+# deploy a Service forwarding to a closed port.
 grep -ohE 'http://0\.0\.0\.0:[0-9]+' "$ROOT/src/Services/Catalog/Catalog.Api/appsettings.json" |
     sed -E 's|.*:([0-9]+)|\1|' | sort -u >"$OUT/listeners.txt"
 

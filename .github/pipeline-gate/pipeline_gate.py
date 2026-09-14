@@ -4,7 +4,7 @@ can be quietly wrong, one subcommand each.
 
 `filters` is §15.1's own instruction — every immediate child of `src/` and of
 `src/Services/` appears in at least one path filter, because a deployable
-nothing filters is a deployable CI never rebuilds. `images` is the same
+that nothing filters is a deployable CI never rebuilds. `images` is the same
 inventory one artefact over: every Dockerfile under `src/` is built by some
 matrix entry, every entry names a Dockerfile that exists, and every entry reads
 a filter the `changes` job defines and exports. `stages` is what
