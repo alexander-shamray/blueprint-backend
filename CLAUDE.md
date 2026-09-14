@@ -10,6 +10,7 @@ anything — is owned elsewhere and cited from here by name, never restated.
 |---|---|
 | [`docs/change-locality.md`](docs/change-locality.md) | The operating contract: the trust order, the one rule, the change classes and their touch sets |
 | [`docs/change-locality-plan.md`](docs/change-locality-plan.md) | The PRs that make the contract fully true |
+| [`docs/churn-plan.md`](docs/churn-plan.md) | Where the corpus churns, measured on a named commit, and the refactor sequence that reduces it |
 | [`docs/pr-decision-log.md`](docs/pr-decision-log.md) | What each PR in its range decided — closed; the record since is commit bodies and PR bodies |
 | [`docs/lessons.md`](docs/lessons.md) | Lessons that generalise past the PR that found them — closed |
 | [`docs/harness-boundaries.md`](docs/harness-boundaries.md) | What the harness grants these commands, and refuses |
@@ -146,6 +147,11 @@ here because they have to be true before anyone opens the guide:
   of them** — IDE0055 makes a padded column a failed build.
 - **No `#pragma` suppressions and no real credentials**, in a sample or in
   source; §14.1's local-development defaults are the one stated exception.
+- **A comment says why and cites the owner** — no history, no counts, no
+  review, PR or test named, no copy of an ADR's argument. The guide's
+  *Comments* section is the rule, it reaches XML docs, docstrings and
+  configuration comments alike, and a finding against a comment is closed by
+  cutting it, never by appending the correction.
 
 ## Working in this repo
 
@@ -155,7 +161,9 @@ The contract's §6 lists what locality leaves in force; these are the rest.
   stated more than once. `Program.cs` in each `*.Api` is the only
   composition root (§4.2).
 - **Commit messages** are semantic and present-tense — `docs:`,
-  `feat(<scope>):`, `fix:`, `chore:` — and the body argues the change. A
+  `feat(<scope>):`, `fix:`, `chore:` — and the body argues the change. The
+  subject names what changed in words a reviewer would search for — a file,
+  a symbol, a behaviour — and leaves the aphorism to the body. A
   `Closes #n` in a commit body fires on merge whatever the description says,
   so the description is reconciled to the commits and never the reverse.
 - **The issue vocabulary is wider than the label helper**: kind is `security`,
