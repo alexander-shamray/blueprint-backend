@@ -1,24 +1,14 @@
 root = true
 
-# House style for .NET 10 and C# 14. This governs both the C# samples in
-# docs/backend-architecture/ and the solution that will be built in src/ and
-# tests/ — one dialect, so a sample and its implementation read identically.
-# docs/style-guide.md carries the prose version, including the settled choices
-# a reviewer might otherwise try to "correct".
+# House style for .NET 10 and C# 14, one dialect for the samples under
+# docs/backend-architecture/ and the solution under src/ and tests/.
+# docs/style-guide.md carries the prose version and the settled choices.
 #
-# This is the .editorconfig delivery-plan PR-01 ships. Treat it as source.
-#
-# PR-01 also sets EnforceCodeStyleInBuild (ADR-019), which promotes this file
-# from an editor convenience to a build input — but only for rules configured
-# at `warning` or above. A rule left at `suggestion` or `silent` is documented
-# here and enforced by nothing.
-#
-# Three are at warning: IDE0055 (formatting), IDE0065 (using placement) and
-# IDE0161 (file-scoped namespaces). Each is stated without exception in
-# docs/style-guide.md, so a violation is always a defect. Everything else
-# stays a suggestion on purpose — the `var` rules below carry a documented
-# exception Roslyn cannot express, and a rule whose carve-out lives in prose
-# must not fail a build it cannot evaluate.
+# EnforceCodeStyleInBuild (ADR-019) makes this file a build input for rules at
+# `warning` or above. Three are: IDE0055, IDE0065 and IDE0161, each stated
+# without exception in docs/style-guide.md. Everything else stays a suggestion,
+# because a rule whose carve-out lives in prose must not fail a build it cannot
+# evaluate.
 
 [*]
 charset = utf-8
@@ -30,19 +20,15 @@ indent_size = 4
 
 [*.md]
 indent_size = 2
-# No max_line_length: prose wraps at 80 (see docs/style-guide.md), but
-# tables, links and fenced code legitimately run past it — hundreds of lines
-# in the blueprint do,
-# and a hard limit here would flag every one of them.
+# No max_line_length: prose wraps at 80 (docs/style-guide.md), but tables,
+# links and fenced code legitimately run past it.
 
 [*.{json,yml,yaml}]
 indent_size = 2
 
-# The one file type that overrides end_of_line above, and it is not a
-# preference. The licence gate (.github/licence-gate/) runs on a Linux runner,
-# and a CRLF shebang makes the kernel look for an interpreter named
-# `python3\r` — "bad interpreter", on a line that looks correct in every editor.
-# Python itself reads CRLF source happily; it is the execute bit that does not.
+# The one override of end_of_line above. The Python gates run on a Linux
+# runner, and a CRLF shebang makes the kernel look for an interpreter named
+# `python3\r`.
 [*.py]
 end_of_line = lf
 indent_size = 4
@@ -51,132 +37,56 @@ indent_size = 4
 indent_size = 4
 tab_width = 4
 
-# The budget a list has before it must break. Unlike [*.md] above, a number is
-# worth setting here: it is the threshold the wrapping rule turns on, so an
-# editor ruler at 120 shows the same boundary the rule is written against.
-#
-# Roslyn will not enforce the rule. There is no wrapping engine — no setting
-# reflows a list to fit, or breaks one that does not, so `dotnet format` leaves
-# both alone. Like csharp_prefer_braces below, this value is a declaration and
-# docs/style-guide.md carries the rule itself.
-#
-# csharp_new_line_before_open_brace is deliberately NOT set, and leaving it
-# unset is what enforces the rule rather than a gap in it. The C# default is
-# `all` — every `{` on a line of its own — which is exactly the house rule
-# for braces, so naming the categories would restate the default and add a
-# second place for it to drift.
-#
-# Short forms survive it. csharp_preserve_single_line_blocks below keeps
-# `{ get; init; }`, `o => { /* §11.3 */ }` and `new { OrderId = … }` on one
-# line, so `all` does not explode them. That was measured, not assumed: a build
-# with these settings reports IDE0055 on `new Options {` and leaves
-# `new Options { Limit = 1 }` alone.
-#
-# The consequence is worth stating plainly, because it does not hold for the
-# bracket rule below: with IDE0055 at warning and ADR-019's
-# TreatWarningsAsErrors, a trailing `{` FAILS THE BUILD. Brace placement is
-# never a review matter here.
+# The threshold the wrapping rule turns on, so an editor ruler shows the
+# boundary the rule is written against. Roslyn has no wrapping engine, so this
+# value is a declaration and docs/style-guide.md carries the rule.
+# csharp_new_line_before_open_brace is deliberately unset: the default, `all`,
+# is the house rule for braces, and csharp_preserve_single_line_blocks below
+# keeps `{ get; init; }` and `o => { /* §11.3 */ }` on one line under it.
 max_line_length = 120
 
 # --- Wrapping: what a formatter must not undo ---
-# The rules above are declarative, but three of `dotnet format`'s defaults would
-# actively rewrite code that already follows them. These three are not
-# preferences; they are the settings that keep a format run idempotent.
+# The settings that keep a `dotnet format` run idempotent against code that
+# already follows docs/style-guide.md.
 
-# The braceless body goes on the line AFTER its condition, never beside it —
-# the rule that makes csharp_prefer_braces = false readable. No site count
-# here: docs/style-guide.md owns it, and the figure this file carried (53) is
-# the one that file records as never having reconciled.
-# Left at the default (true), a formatter would pull `app.UseCors();` back up
-# onto its `if (corsEnabled)` line and undo the distinction.
+# The braceless body goes on the line after its condition, never beside it —
+# the rule that makes csharp_prefer_braces = false readable. At the default a
+# formatter would pull `app.UseCors();` back up onto its `if (corsEnabled)`.
 csharp_preserve_single_line_statements = false
 
-# ...but a one-line BLOCK stays one line: `{ get; init; }` on 85 members, and
+# ...but a one-line block stays one line: `{ get; init; }`, and
 # `o => { /* §11.3 */ }` where the elision is the point.
 csharp_preserve_single_line_blocks = true
 
-# This setting reaches a LOCAL declaration statement — `int a      = 1;` in a
-# method body — and nothing else. Measured with a probe compiled against
-# Common.Domain: a padded `{` on a member, a padded `=` in an object
-# initialiser and a padded `=>` all produce error IDE0055 with this set to
-# ignore, so it does not protect them and never did.
-#
-# It used to say "78 declarations and initialiser members line their values
-# up in a column (§8.2's HybridCache options, §6.6's anonymous parameter
-# objects)". Those sites are SQL inside raw string literals, which no
-# analyser reads whatever this is set to — so the count described the wrong
-# language and the setting was credited with protecting something it cannot
-# see. Left at ignore because no local declaration in the corpus pads an `=`
-# either way, and flipping a setting nothing exercises is churn.
+# Reaches a local declaration statement — `int a      = 1;` — and nothing
+# else; a padded `{`, `=` or `=>` on a member is IDE0055's. Left at ignore
+# because no local declaration in the corpus pads an `=` either way.
 csharp_space_around_declaration_statements = ignore
 
 # Members of a multi-line initialiser get one line each — the list rule, in the
-# one place Roslyn can state it. Stated rather than inherited, because
-# csharp_preserve_single_line_blocks above is what keeps `new { q.ProductId }`
-# and `new { MaxAttempts }` from being exploded by it, and the two are only
-# legible as a pair.
+# one place Roslyn can state it. Stated beside
+# csharp_preserve_single_line_blocks because that is what keeps
+# `new { q.ProductId }` from being exploded by it.
 csharp_new_line_before_members_in_object_initializers = true
 csharp_new_line_before_members_in_anonymous_types = true
 
-# No setting expresses these; docs/style-guide.md carries them and a reviewer
-# should not go looking for a key that does not exist:
-#   - `=>` trails the signature of an expression-bodied member, with the body
-#     at the DECLARATION's indent + 4 (not the `=>` line's).
-#   - A broken fluent chain puts every call on its own line, first one included.
-#   - An argument list holding a lambda has two shapes and no carve-out: one
-#     line if it fits in 120, otherwise one argument per line with the lambda
-#     among them, braces and all. A braced body earns no exemption — that
-#     carve-out existed and was removed, because whether a leading argument
-#     could stay up depended on the last argument's body kind AND on whether
-#     anything followed it, and a rule needing two lookaheads is a rule
-#     reviewers get wrong. A SINGLE-argument call is untouched: there is no
-#     leading argument to strand. docs/style-guide.md carries the worked shapes.
-#     Checked rather than assumed: `dotnet format` neither introduces the
-#     ragged form nor undoes the corrected one, so nothing has to be pinned
-#     to keep a run idempotent.
-#   - A break goes at the outermost bracket, never a nested one.
-#   - A wrapped condition takes braces on its body.
-#   - `[` opens a line of its own at its construct's column, as `{` does and
-#     `(` does not. The brace half is enforced (see
-#     csharp_new_line_before_open_brace above); the bracket half is not, and
-#     there is no `csharp_new_line_before_open_bracket` to reach for — that
-#     setting governs braces only, and the bracket twin is a key nobody will
-#     find. Checked against the tools rather than assumed: `dotnet format`
-#     normalises NEITHER bracket form and IDE0055 reports neither, so a format
-#     run will not introduce this and will not undo it. Unlike the three
-#     settings above, nothing has to be pinned to keep the run idempotent —
-#     this one is carried by review and docs/style-guide.md alone.
-#   - The whitespace between a type and its identifier — `Counter<long>   _placed`,
-#     `long   start` — which IDE0055 does NOT report, though it reports every
-#     other alignment (see the note beside its severity below). The corpus
-#     collapses it anyway so that one dialect governs the whole file; that half,
-#     like the bracket rule above, is review's.
-# dotnet_style_operator_placement_when_wrapping (below, in [*.cs]) is the
-# closest thing to enforcement, and it governs binary operators only — not `=>`.
+# No setting expresses the remaining wrapping rules — `=>` placement, broken
+# fluent chains, argument lists holding a lambda, the outermost-bracket break,
+# a leading `[`, and the whitespace between a type and its identifier — and
+# `dotnet format` neither introduces nor undoes them, so nothing has to be
+# pinned. docs/style-guide.md carries them; the closest enforcement is
+# dotnet_style_operator_placement_when_wrapping in [*.cs], which governs
+# binary operators only.
 
-# There is deliberately NO [*.sql] section, and adding one would be a mistake
-# rather than an omission. §7.4 is normative: hand-written DDL ships inside a
-# migration's `migrationBuilder.Sql("""…""")`, and "there is no second
-# mechanism" — so the solution has no .sql files for a section to match.
-#
-# That puts every statement inside a C# raw string literal, which no formatter
-# reads or rewrites. The SQL conventions in docs/style-guide.md are therefore
-# both unenforceable and unbreakable by tooling: `dotnet format` will not fix a
-# keyword river and will not introduce one. They are a review rule, and the
-# only one in this file's remit that is.
+# There is deliberately no [*.sql] section: §7.4 ships hand-written DDL inside
+# a migration's `migrationBuilder.Sql("""…""")` and nothing else, so every
+# statement sits in a C# raw string literal no formatter reads. The SQL
+# conventions in docs/style-guide.md are a review rule for that reason.
 
 # --- .NET / C# style ---
-# At warning, which is the level EnforceCodeStyleInBuild acts on — and it is
-# TreatWarningsAsErrors that turns the resulting warning into a failed build.
-# The two are one policy and not one switch; `Directory.Build.props` states
-# the split, and this line used to credit the wrong half. docs/style-guide.md
-# states this one without exception and notes it binds source only. The
-# samples carry exactly two `using` lines, both `using static` (§9.6's saga
-# imports Endpoints, §12.4's subject suite imports Principals), and both sit
-# outside the namespace as this setting requires — so the rule and the corpus
-# agree rather than there being nothing to argue with. This comment said the
-# samples carry none at all, which the guide it now points at disproves on
-# its own page.
+# At warning: docs/style-guide.md states this one without exception, and
+# EnforceCodeStyleInBuild with ADR-019's TreatWarningsAsErrors makes it a
+# failed build. It binds source only.
 csharp_using_directive_placement = outside_namespace:warning
 csharp_space_around_binary_operators = before_and_after
 csharp_indent_labels = one_less_than_current
@@ -192,44 +102,28 @@ csharp_style_inlined_variable_declaration = true:suggestion
 csharp_style_unused_value_assignment_preference = discard_variable:suggestion
 csharp_preferred_modifier_order = public, private, protected, internal, file, new, static, abstract, virtual, sealed, readonly, override, extern, unsafe, volatile, async, required:suggestion
 
-# Explicit types, except where the right-hand side already names the type.
-# `var order = new Order(...)` is fine; `var rows = await conn.QueryAsync(...)`
-# is not — a reader of a fenced code block has no hover to fall back on.
-#
-# docs/style-guide.md lists four cases that keep `var`. Three need nothing
-# here: an apparent type is `when_type_is_apparent` below, deconstruction is
-# `deconstructed_variable_declaration`, and anonymous types make `var`
-# mandatory in the language. The fourth is the Aspire AppHost of §14.2, where
-# eleven of thirteen locals are an IResourceBuilder<T> — a wrapper whose name
-# repeats what the Add* call already said. Explicit types are possible there and
-# simply read worse, so the block stays uniform. That preference cannot be
-# expressed as a setting, which is why these stay at suggestion, not warning.
+# Explicit types, except where the right-hand side already names the type —
+# a reader of a fenced code block has no hover to fall back on.
+# docs/style-guide.md lists the four cases that keep `var`; the fourth, a
+# fluent resource DSL, cannot be expressed as a setting, which is why these
+# stay at suggestion rather than warning.
 csharp_style_var_for_built_in_types = false:suggestion
 csharp_style_var_when_type_is_apparent = true:suggestion
 csharp_style_var_elsewhere = false:suggestion
 csharp_style_deconstructed_variable_declaration = true:suggestion
 
 # --- Settled choices ---
-# House style a reviewer might read as an oversight and "correct". They bind the
-# solution as much as the samples; changing one is a decision about the whole
-# corpus. docs/style-guide.md tabulates four — the three expressible ones
-# below, plus the .NET 10 / C# 14 target, which is a csproj concern rather
-# than a style setting.
+# House style a reviewer might read as an oversight; docs/style-guide.md
+# tabulates them, and changing one is a decision about the whole corpus.
 
-# A single statement may omit braces, and the blueprint does so throughout.
-# Roslyn cannot express "one statement, wrapped or not", so this value is
-# declarative only — hence silent, with docs/style-guide.md carrying the real
-# rule and the only count of the sites.
+# A single statement may omit braces. Roslyn cannot express "one statement,
+# wrapped or not", so this is declarative and docs/style-guide.md carries the
+# rule.
 csharp_prefer_braces = false:silent
 
-# At warning for the same reason: "file-scoped, never block-scoped" is one of
-# the four settled choices, with no case in the corpus going the other way.
-#
-# The blank line docs/style-guide.md requires after `namespace X;` has no
-# setting of its own and needs none: IDE0055 already reports a type written
-# straight under the semicolon as a formatting violation, and ADR-019 makes
-# that an error. Noted here because this is the line a reader comes to
-# looking for it.
+# At warning: file-scoped, never block-scoped, is a settled choice with no
+# exception. The blank line the guide requires after `namespace X;` needs no
+# setting, because IDE0055 already reports a type written straight under it.
 csharp_style_namespace_declarations = file_scoped:warning
 
 # Expression bodies for one-line members but not constructors. Stated as one
@@ -241,24 +135,12 @@ csharp_style_expression_bodied_accessors = true:silent
 csharp_style_expression_bodied_lambdas = true:silent
 
 [*.cs]
-# The formatting rule, and the third of the three at warning. IDE0055 is an
-# aggregate: it reports every formatting option in this file that a source file
-# disagrees with, which is what turns the indent, spacing and single-line
-# settings above into build failures rather than editor hints.
-#
-# It reaches only as far as Roslyn's formatter does. The wrapping rules have no
-# engine behind them (see the note above max_line_length), so IDE0055 will not
-# break an over-wide list and will not join a ragged one. Those stay a review
-# rule; this covers everything else.
-#
-# The one it covers that is worth naming, because the corpus was written the
-# other way for months: COLUMN ALIGNMENT. Padding a token out to line up with
-# the one above it — `TotalAmount  { get; init; }`, `Expiration     = …`,
-# `ErrorType.Rule        => …` — is a formatting violation and therefore a
-# build error. A trailing `//` comment is untouched by the rule and may sit in
-# any column, and `dotnet format` normalises the code padding while leaving the
-# comment column alone, so the run is idempotent either way. Both halves
-# verified against the tools, not inferred.
+# The formatting rule. IDE0055 is an aggregate: it reports every formatting
+# option in this file a source file disagrees with, which is what turns the
+# settings above into build failures. It reaches only as far as Roslyn's
+# formatter does — the wrapping rules stay review's — and column alignment
+# (`TotalAmount  { get; init; }`) is a violation it does report; a trailing
+# `//` comment may sit in any column.
 dotnet_diagnostic.IDE0055.severity = warning
 
 # Trailing, not leading. A wrapped condition reads as a sequence of lines each
@@ -272,16 +154,11 @@ dotnet_style_prefer_is_null_check_over_reference_equality_method = true:suggesti
 dotnet_style_prefer_auto_properties = true:silent
 dotnet_style_object_initializer = true:suggestion
 dotnet_style_collection_initializer = true:suggestion
-# IDE0305 — the analyser behind docs/style-guide.md's "materialise with a
-# spread, not a terminal .ToArray()". Left at suggestion with the other style
-# preferences rather than raised to warning. **The rule does have an
-# exception and the corpus does hold a `.ToArray()`**: the guide exempts a
+# IDE0305 is the analyser behind docs/style-guide.md's "materialise with a
+# spread, not a terminal .ToArray()". Left at suggestion: the guide exempts a
 # stream accessor, because `MemoryStream` implements no `IEnumerable` and
-# `[.. buffer]` does not compile (CS9212), and `StubDestination.cs` calls it.
-# The rule is about the terminal LINQ operator. Raising this would make a
-# fourth
-# enforced rule, and the enforced set is a deliberate three that ADR-019 names;
-# growing it is a decision about the policy, not about this line.
+# `[.. buffer]` does not compile (CS9212), and growing ADR-019's enforced set
+# is a decision about the policy, not about this line.
 dotnet_style_prefer_collection_expression = when_types_loosely_match:suggestion
 dotnet_style_prefer_simplified_boolean_expressions = true:suggestion
 dotnet_style_prefer_compound_assignment = true:suggestion

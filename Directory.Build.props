@@ -1,10 +1,8 @@
 <Project>
 
   <!--
-    Shared MSBuild settings for every project in the repository (§4.1). The
-    target framework lives here rather than in each csproj because it is a
-    platform-wide decision: .NET 10 (LTS) and C# 14, settled in CLAUDE.md and
-    not a per-project choice.
+    Shared MSBuild settings for every project (§4.1). The target framework is
+    a platform-wide decision, so it is set once here and not per project.
   -->
   <PropertyGroup Label="Target">
     <TargetFramework>net10.0</TargetFramework>
@@ -14,52 +12,14 @@
   </PropertyGroup>
 
   <!--
-    Build output leaves the source trees. Without this the SDK writes `bin/` and
-    `obj/` beside every `.csproj`, so `src/` and `tests/` hold two things at
-    once: the files a reader is looking for, and everything a build put there.
-    One `artifacts/` directory at the repository root holds all of it instead,
-    in the shape §4.1 draws, and `src/` is then what its name says: code,
-    project files and the prose beside them.
-
-    `UseArtifactsOutput` has to be set here rather than in a project, and the
-    build says so rather than shrugging. The SDK computes the output paths
-    before a project's own properties are imported, so the same two lines in a
-    `.csproj` arrive too late to move the intermediate output — and rather than
-    ignore them it fails the build with **NETSDK1199**, on the argument that a
-    path silently depending on whether a `Directory.Build.props` happened to
-    exist would be worse than an error. `Directory.Build.props` and the command
-    line are the two places early enough, which is why they are here and why a
-    new project needs no line at all.
-
-    `ArtifactsPath` is spelled out rather than left to its default. The default
-    derives from whichever `Directory.Build.props` set `UseArtifactsOutput`,
-    which is this one, so the value is the same; saying it makes the location a
-    decision in the file that owns it rather than a fact a reader has to know
-    the SDK's search order to predict. `MSBuildThisFileDirectory` carries its
-    own trailing separator, so `artifacts` appends directly.
-
-    Two lines and no third, and the third is the one worth writing down.
-    `UseArtifactsOutput` moves `MSBuildProjectExtensionsPath` as well as the
-    intermediate output — measured, not inferred from the name — so
-    `project.assets.json` and the generated `.nuget.g.props` land under
-    `artifacts/obj/<Project>/` too and a restore leaves nothing beside a
-    `.csproj` either. Setting that property here would restate a path the SDK
-    already derives, in a second place that can disagree with the first: NuGet
-    resolves it at restore time and again at build time, and a mismatch fails
-    the build on an assets file it cannot find.
-
-    What it would NOT do is make the outcome any more certain, which is the
-    whole of the argument. The property is the SDK's default and not this
-    file's decision, so the thing to hold is the result rather than the
-    setting: `.github/output-gate/` fails CI on the day a build writes into
-    `src/` or `tests/` again, whichever default moved underneath it.
-
-    Consumers outside MSBuild depend on this path, and each argues its own case
-    in the file that holds it: `.gitignore` and `.dockerignore` exclude
-    `artifacts/`, and `.github/secret-scan/secret_scan.py` declines to walk it.
-    Naming them here is a pointer to where the reasons live, not a second copy
-    of them — a list that is a copy goes stale on the next consumer, and a
-    reader who trusts it never opens the file that is right.
+    Build output leaves the source trees: one `artifacts/` directory at the
+    root holds every `bin/` and `obj/`, in the shape §4.1 draws, and
+    `.github/output-gate/` fails CI on the day a build writes into `src/` or
+    `tests/` again. `UseArtifactsOutput` has to be set here rather than in a
+    project, because the SDK computes output paths before a project's own
+    properties are imported and fails with NETSDK1199 when it is set too late.
+    `ArtifactsPath` is spelled out so the location is a decision this file
+    owns; `MSBuildThisFileDirectory` carries its own trailing separator.
   -->
   <PropertyGroup Label="Output">
     <UseArtifactsOutput>true</UseArtifactsOutput>
@@ -67,21 +27,14 @@
   </PropertyGroup>
 
   <!--
-    The analyser policy of ADR-019. TreatWarningsAsErrors is what makes the
-    other two lines mean anything: without it a violation is a message in a
-    build log nobody reads, and the log is longest on the pull request that
-    introduced the most of them.
-
-    EnforceCodeStyleInBuild promotes the .editorconfig from an editor
-    convenience to a build input — but only for rules configured at warning or
-    above. Three are, and .editorconfig says which and why. The rest stay
-    suggestions deliberately; a style rule with a documented exception it cannot
-    express is a rule that must not fail a build.
-
-    latest-Recommended rather than latest-All: the All mode turns on every
-    CAxxxx analyser including the documentation and globalisation categories,
-    which produce hundreds of diagnostics on a codebase that has made no
-    commitment to either.
+    ADR-019's analyser policy. TreatWarningsAsErrors is what makes the other
+    lines mean anything; EnforceCodeStyleInBuild reaches only the rules
+    .editorconfig configures at warning, and the rest stay suggestions because
+    a style rule with an exception it cannot express must not fail a build.
+    latest-Recommended rather than latest-All, because All turns on the
+    documentation and globalisation categories this platform has not adopted.
+    This file is the one place ADR-019 permits a suppression, `#pragma` being
+    forbidden, and each argues its case beside its own NoWarn line.
   -->
   <PropertyGroup Label="Analysis">
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
@@ -90,57 +43,30 @@
     <AnalysisLevel>latest-Recommended</AnalysisLevel>
 
     <!--
-      CA1716 flags a type or member whose name is a reserved word in another
-      .NET language, so that a VB or F# consumer does not have to escape it. It
-      fires on `Error` (§10.5), and would fire again on any of the short,
-      obvious names a domain model reaches for.
-
-      The rule protects a scenario this platform does not have. Nothing here is
-      a published library: every project is consumed by C# inside this
-      repository, and §4.3 permits exactly one assembly to cross a service
-      boundary at all. Renaming `Error` to satisfy a VB caller that will never
-      exist would cost the one name the whole error catalogue is written
-      around.
+      CA1716 flags a name that is a reserved word in another .NET language, and
+      fires on `Error` (§10.5). It protects a VB or F# consumer of a published
+      library, and there is none: every project is consumed by C# inside this
+      repository, and §4.3 permits one assembly to cross a service boundary.
     -->
     <NoWarn>$(NoWarn);CA1716</NoWarn>
 
     <!--
-      CA1711 bans a reserved suffix on a type name, so that a consumer is not
-      misled about what the type derives from. It fires on `NextDelegate`
-      (§6.2), where the suffix is not incorrect at all: the type is a delegate,
-      and saying so is the whole of the name.
-
-      This is the CA1716 argument again, and it is admitted on the same terms.
-      Both rules protect a consumer of a published library from a name they
-      cannot change, and there is no such consumer here — every project is
-      referenced by C# inside this repository, and §4.3 permits exactly one
-      assembly to cross a service boundary.
-
-      What it costs is real and worth writing down: the rule is off everywhere,
-      so a later `OrderCollection` that is not a collection stops being caught.
-      That is the trade this file is the right place to make, because it is a
-      decision about the whole corpus rather than about one type.
+      CA1711 bans a reserved suffix on a type name and fires on `NextDelegate`
+      (§6.2), which is a delegate. It protects the same absent consumer as
+      CA1716 above, and the cost — a later `OrderCollection` that is not a
+      collection goes uncaught — is a decision about the whole corpus, which
+      is why it is made here.
     -->
     <NoWarn>$(NoWarn);CA1711</NoWarn>
   </PropertyGroup>
 
   <!--
-    This file is the only place ADR-019 permits a suppression at all, `#pragma`
-    being forbidden; each one's argument sits beside its own `NoWarn` line
-    rather than being counted from here. CA1707 bans underscores in member
-    names, and every test name in §12 is a sentence written with them —
-    `Cannot_cancel_an_order_that_has_shipped`. The two rules are in direct
-    conflict and one of them has to give.
-
-    It is the analyser that gives, because the convention is load-bearing: a
-    test name is read in a failure report by someone who is not looking at the
-    code, and `CannotCancelAnOrderThatHasShipped` is worse at that job. Scoped
-    to test projects by name, so a `_`-laden member in production code still
-    fails the build.
-
-    EndsWith('Tests') rather than '.Tests': Platform.IntegrationTests (§12.6)
-    ends with the word and not the dotted suffix, and would otherwise be the one
-    test project the carve-out missed.
+    CA1707 bans underscores in member names, and every test name in §12 is a
+    sentence written with them, because a test name is read in a failure report
+    by someone not looking at the code. Scoped to test projects by name, so a
+    `_`-laden member in production code still fails the build; EndsWith('Tests')
+    rather than '.Tests' because Platform.IntegrationTests (§12.6) ends with
+    the word and not the dotted suffix.
   -->
   <PropertyGroup Label="Test analysis" Condition="$(MSBuildProjectName.EndsWith('Tests'))">
     <NoWarn>$(NoWarn);CA1707</NoWarn>
@@ -148,9 +74,9 @@
 
   <!--
     Deterministic builds everywhere; path normalisation only on CI, because
-    ContinuousIntegrationBuild rewrites source paths in the PDB to be
-    repository-relative and that breaks local step-through debugging. The CI
-    environment variable is set by GitHub Actions on every runner.
+    ContinuousIntegrationBuild rewrites PDB source paths to be
+    repository-relative and that breaks local step-through debugging. GitHub
+    Actions sets CI on every runner.
   -->
   <PropertyGroup Label="Build">
     <Deterministic>true</Deterministic>
