@@ -24,8 +24,8 @@ public class RealmImportTests
     private const string Audience = AuthenticationExtensions.Audience;
 
     /// <summary>
-    /// The client the compose README's login names, and the only one in the
-    /// realm that mints a token a person uses.
+    /// The browser client the compose README's login names, whose tokens the
+    /// assertions below read.
     /// </summary>
     private const string TokenClient = "web-app";
 

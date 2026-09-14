@@ -2,8 +2,9 @@
 """Every realm this platform is pointed at holds §11's token obligations.
 
 §11.3 states the access-token lifetime, ADR-033 composes the revocation bound
-out of it, and ADR-034 issues the browser no refresh token. All three are
-realm settings, and every chart points at a deployed realm no file in this
+out of it and the host's clock skew, and ADR-034 issues the browser no
+refresh token. The lifetime and the refresh-token rule are realm settings,
+and every chart points at a deployed realm no file in this
 repository holds — so the obligations are asserted against §14.1's Compose
 export in CI and against a live realm at deploy time by one predicate, because
 an export and the admin API's `RealmRepresentation` are the same document.

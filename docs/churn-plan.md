@@ -232,7 +232,7 @@ request, and its suite reads text without compiling it, so only the
 rendered build (`docs/testing.md`, *The scaffold's suite*) proves a Catalog
 test change.
 
-### Step 1 — sweep `src/` ∥ (one PR per project)
+### Step 1 — sweep `src/` ∥ (one PR per listed slice)
 
 `Common.Domain` and `Common.Contracts` together, then `Common.Application`,
 `Common.Infrastructure`, `Common.Web`, `Catalog`, `Ordering`, `Gateway.Api`,
