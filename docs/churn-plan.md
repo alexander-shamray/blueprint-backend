@@ -211,15 +211,19 @@ The pull request this file arrives in. It adds the *Comments* section to the
 style guide, names comments in the contract's §2, adds one line to the
 primer, and sweeps the files section 1 measured: the saga and its suite, the
 gateway's composition root, the retention purge and its policy, the
-authentication extensions, the idempotency behaviour, the four
-`DependencyInjection.cs` files, seven test suites, two Python gates, the Helm
-smoke script, `.editorconfig` and `Directory.Build.props`. Class D for the
-documents, A and B for the trees, named in the touch-set row.
+authentication extensions, the idempotency behaviour, each service's
+`DependencyInjection.cs` files, the suites of the same mechanisms, the
+Python gates, the Helm smoke script, `.editorconfig` and
+`Directory.Build.props`. Class D for the documents, A and B for the trees,
+named in the touch-set row.
 
-Done when the solution builds, the unit suites and the two gates' suites are
-green, and the scaffold's suite is green: Catalog is its template, and the
-scaffold anchors its rewrites on Catalog's comments, so an anchor a sweep
-moves is re-anchored in the same pull request.
+Done when the solution builds, the unit suites and the gates' suites are
+green, the scaffold's suite is green and the service it renders builds:
+Catalog is its template, the scaffold anchors its rewrites on Catalog's
+comments, so an anchor a sweep moves is re-anchored in the same pull
+request, and its suite reads text without compiling it, so only the
+rendered build (`docs/testing.md`, *The scaffold's suite*) proves a Catalog
+test change.
 
 ### Step 1 — sweep `src/` ∥ (one PR per project)
 
@@ -233,7 +237,7 @@ Done for a tree when these are empty over it — the patterns are the ones
 section 1 counted, and the counts are the baseline:
 
 ```bash
-rg -n -e '#[0-9]{2,3}\b' -e 'PR-[0-9]+' -e 'Copilot|Grok|CodeQL' \
+rg -n -e '#[0-9]{2,}\b' -e 'PR-[0-9]+' -e 'Copilot|Grok|CodeQL' \
    -e 'used to|went stale|this (line|sentence|comment) (said|carried)' \
    -e '\*\*' --glob '*.cs' <tree> | rg '^\S+:\d+:\s*//'
 ```
@@ -241,8 +245,11 @@ rg -n -e '#[0-9]{2,3}\b' -e 'PR-[0-9]+' -e 'Copilot|Grok|CodeQL' \
 and no `//` block in the tree runs to more than ten lines:
 
 ```bash
-awk 'FNR==1{run=0} /^\s*\/\/\/?/ {run++; next} {if (run>10) print FILENAME": "FNR-run; run=0}' \
-   $(git ls-files '<tree>/*.cs')
+awk 'function flush(f, l) { if (run > 10) print f ": " l - run; run = 0 }
+     FNR == 1 { flush(pf, pl) }
+     /^[[:space:]]*\/\/\/?/ { run++; pf = FILENAME; pl = FNR + 1; next }
+     { flush(FILENAME, FNR) }
+     END { flush(pf, pl) }' $(git ls-files '<tree>/*.cs')
 ```
 
 ### Step 2 — sweep `tests/` ∥ (one PR per suite)

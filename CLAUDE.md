@@ -147,8 +147,8 @@ here because they have to be true before anyone opens the guide:
   of them** — IDE0055 makes a padded column a failed build.
 - **No `#pragma` suppressions and no real credentials**, in a sample or in
   source; §14.1's local-development defaults are the one stated exception.
-- **A comment says why and cites the owner** — no history, no counts, no
-  review, PR or test named, no copy of an ADR's argument. The guide's
+- **A comment says why and cites the owner** — no history, no inventory,
+  no review, PR or test named, no copy of an ADR's argument. The guide's
   *Comments* section is the rule, it reaches XML docs, docstrings and
   configuration comments alike, and a finding against a comment is closed by
   cutting it, never by appending the correction.

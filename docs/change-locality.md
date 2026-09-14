@@ -252,8 +252,8 @@ the same PR. It waives nothing else. In particular:
 [ ] No present-tense count, version or raw value written outside its owner;
     no "since PR-NN"
 [ ] No comment added or rewritten that copies an ADR, names a review, a PR
-    or a test, or carries a count; a finding against one was cut, not
-    appended to
+    or a test, or counts what lives elsewhere; a finding against one was
+    cut, not appended to
 [ ] Appendix D, decision log, lessons, repo map, style guide, testing.md,
     roadmap and CLAUDE.md untouched unless the class names one
 [ ] Mutex surfaces this PR needs are named in the issue, or in the touch-set

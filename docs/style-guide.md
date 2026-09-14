@@ -167,14 +167,16 @@ the churn it produces is the same, and it was measured in
   to say; no pull request, issue, round or reviewer named; no "measured by
   deleting the line". The commit body is the record of how a line came to be,
   and `git log -L` finds it from the line.
-- **No counts, no test names.** A count in a comment is a count nobody
-  recomputes. A test cites the code it covers; the code does not cite the
-  test, because a renamed test leaves the comment pointing at nothing and
-  `rg` on the symbol finds the test anyway.
-- **One paragraph.** A `//` block or a `<remarks>` argues one thing in one
-  paragraph; a `<summary>` or a docstring's first line is a sentence or two.
-  A comment that needs more is a decision, and a decision is an ADR: write
-  the ADR with `/new-adr` and cite it.
+- **No inventories, no test names.** A count of things that live elsewhere
+  — tests, callers, files, occurrences — is a count nobody recomputes; the
+  arithmetic that explains a constant is that constant's why and stays. A
+  test cites the code it covers; the code does not cite the test, because
+  a renamed test leaves the comment pointing at nothing and `rg` on the
+  symbol finds the test anyway.
+- **One argument.** A `//` block or a `<remarks>` argues one thing, as
+  briefly as it can; a `<summary>` or a docstring's first line is a sentence
+  or two. A comment that needs a second argument is a decision, and a
+  decision is an ADR: write the ADR with `/new-adr` and cite it.
 - **No emphasis.** No `**bold**`, `<b>`, capitals for stress or `!` in a
   comment. It is read once, beside the code, by someone who is not skimming.
 - **A finding against a comment is closed by cutting.** When a review says a
