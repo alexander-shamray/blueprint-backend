@@ -215,9 +215,9 @@ compared before and after with C#'s comments stripped, and its own suite.
 
 The pull request this file arrives in. It adds the *Comments* section to the
 style guide, names comments in the contract's §2, states the rule in the
-primer's *Style* and *Commit messages* bullets, and sweeps the files section
-1 measured: the saga and its suite, the gateway's composition root, the
-retention purge and its policy, the
+primer's *Style* and *Commit messages* bullets, and sweeps a first set of
+the files section 1 measured: the saga and its suite, the gateway's
+composition root, the retention purge and its policy, the
 authentication extensions, the idempotency behaviour, each service's
 `DependencyInjection.cs` files, the suites of the same mechanisms, the
 Python gates, the Helm smoke script, `.editorconfig` and
@@ -268,8 +268,9 @@ suites, B for a building block's.
 
 ### Step 3 — sweep the Python and shell ∥
 
-`tools/new-service`, `deploy/`, `.github/` — docstrings included, one tree
-per pull request, Class D. The scaffold is the hard one: its tests assert on
+`tools/new-service`, `deploy/`, the gate directories under `.github/` —
+docstrings included, one tree per pull request, Class D; the workflows are
+step 5's. The scaffold is the hard one: its tests assert on
 comments it renders into a new service, and the assertion is a claim about
 what a generated comment may say. Those assertions stay and are the exit
 test for that tree; the comments they read are rewritten to the rule and the

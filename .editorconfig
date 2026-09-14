@@ -6,10 +6,10 @@ root = true
 # choices.
 #
 # EnforceCodeStyleInBuild (ADR-019) makes this file a build input for rules at
-# `warning` or above. Three are: IDE0055, IDE0065 and IDE0161, each stated
-# without exception in docs/style-guide.md. Everything else stays a suggestion,
-# because a rule whose carve-out lives in prose must not fail a build it cannot
-# evaluate.
+# `warning` or above; each rule at that level is stated without exception in
+# docs/style-guide.md and says why beside its entry. Everything else stays a
+# suggestion, because a rule whose carve-out lives in prose must not fail a
+# build it cannot evaluate.
 
 [*]
 charset = utf-8
@@ -105,9 +105,9 @@ csharp_preferred_modifier_order = public, private, protected, internal, file, ne
 
 # Explicit types, except where the right-hand side already names the type —
 # a reader of a fenced code block has no hover to fall back on.
-# docs/style-guide.md lists the four cases that keep `var`; the fourth, a
-# fluent resource DSL, cannot be expressed as a setting, which is why these
-# stay at suggestion rather than warning.
+# docs/style-guide.md lists the cases that keep `var`; one of them, a fluent
+# resource DSL, cannot be expressed as a setting, which is why these stay at
+# suggestion rather than warning.
 csharp_style_var_for_built_in_types = false:suggestion
 csharp_style_var_when_type_is_apparent = true:suggestion
 csharp_style_var_elsewhere = false:suggestion
