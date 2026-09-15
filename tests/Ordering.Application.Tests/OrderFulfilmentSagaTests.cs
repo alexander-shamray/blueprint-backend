@@ -117,10 +117,10 @@ public class OrderFulfilmentSagaTests
                     context.CorrelationId = integrationEvent.CorrelationId;
                 }
 
-                // A scheduled expiry is not a contract and has no envelope (the
-                // remarks on StockReservationExpired say why), so the send
-                // context is the one handle both kinds carry, and the wait
-                // reads it.
+                // A scheduled expiry is not a contract and has no envelope:
+                // §3.2 lists it in no column and §4.3 keeps it private to the
+                // saga. The send context is the one handle both kinds carry,
+                // and the wait reads it.
                 messageId = context.MessageId;
             },
             TestContext.Current.CancellationToken);
