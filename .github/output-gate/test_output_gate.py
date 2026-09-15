@@ -1,17 +1,12 @@
 #!/usr/bin/env python3
 """What the gate is looking at, and what it does when it finds nothing.
 
-The gate's own argument is that a build wrote nothing into `src/`. The failure
-that argument cannot survive is a walk that reads no tree: every assertion the
-gate makes is satisfied by an empty set, and an empty set is exactly what a
-renamed source root, a moved solution file or a typo in `SOURCE_ROOTS`
-produces. So most of what follows is about the subject rather than the verdict
-— a green result has to be a claim about the projects this repository holds
-and not about none of them.
-
-The last class of test reads the real repository instead of a fixture, because
-the subject is the one thing a fixture cannot check: a tree this gate does not
-walk is invisible to every test that builds its own tree.
+Every output check the gate makes is satisfied by an empty set, which is what
+a renamed source root, a moved solution file or a typo in `SOURCE_ROOTS`
+produces. Only the subject check refuses one, so most of what follows is about
+that check rather than the verdict. The last class reads the real repository,
+because a tree this gate does not walk is invisible to every test that builds
+its own.
 
     py -3.12 -m unittest discover -s .github/output-gate
 """
@@ -183,13 +178,7 @@ class Subject(TemporaryRepository):
     """The half that stops a green result from being about nothing."""
 
     def test_an_empty_walk_is_a_failure_rather_than_a_pass(self) -> None:
-        """The one this suite exists for.
-
-        No projects on disk and none in the solution satisfies every other
-        assertion the gate makes. Reported as a finding, it is a gate saying it
-        has lost its subject; reported as success, it is the silent stop this
-        repository keeps paying for.
-        """
+        """An empty tree and solution satisfy every other assertion."""
         tree(self.root, {})
 
         code, output = run(self.root)
@@ -224,10 +213,9 @@ class Subject(TemporaryRepository):
     def test_a_project_outside_the_walked_roots_is_not_called_missing(self) -> None:
         """On disk, and outside this walk — two different things to be told.
 
-        A solution entry under a root `SOURCE_ROOTS` does not name is still a
-        subject failure, and it is the one the checkout-reading tests below
-        exist for. What it is not is a missing file, and a diagnostic saying so
-        sends whoever reads it to look in the wrong place.
+        A solution entry under a root that `SOURCE_ROOTS` does not name is a
+        subject failure, not a missing file, and a diagnostic saying otherwise
+        sends a reader to the wrong place.
         """
         tree(self.root, {"Catalog.Domain": "src/Services/Catalog/Catalog.Domain"})
         outside = self.root / "samples/Catalog.Sample"
@@ -314,12 +302,10 @@ class DuplicateNames(TemporaryRepository):
         self.assertIn("src/Services/Payments/Catalog.Domain/Catalog.Domain.csproj", output)
 
     def test_two_stems_differing_only_in_case_fail(self) -> None:
-        """The pair a case-sensitive check passes in CI and nowhere else.
+        """This pair passes a case-sensitive check and collides in `artifacts/`.
 
-        `artifacts/obj/Catalog.Domain` and `artifacts/obj/catalog.domain` are
-        two directories on the Linux runner and one on Windows or a default
-        macOS install, so comparing stems exactly would have let the collision
-        through the gate and left it for a local build to discover.
+        On a case-insensitive filesystem the two stems share one
+        `artifacts/obj/` and `artifacts/bin/` entry.
         """
         tree(self.root, {"Catalog.Domain": "src/Services/Catalog/Catalog.Domain"})
         second = self.root / "src/Services/Payments/catalog.domain"
@@ -375,13 +361,7 @@ class BuildRan(TemporaryRepository):
         self.assertIn("no restore has run here", output)
 
     def test_a_restored_but_uncompiled_tree_fails(self) -> None:
-        """The finding this check was rewritten for.
-
-        `dotnet restore Platform.slnx` creates every `artifacts/obj/<Project>/`
-        and no `artifacts/bin/` entry at all — measured on this repository — so
-        a gate asking only about `obj` reports a fully built solution to anyone
-        who has restored and stopped there.
-        """
+        """A restore alone creates `artifacts/obj/` and no `artifacts/bin/`."""
         tree(self.root, {"Catalog.Domain": "src/Services/Catalog/Catalog.Domain",
                          "Catalog.Domain.Tests": "tests/Catalog.Domain.Tests"},
              built=[])
@@ -459,33 +439,15 @@ class ThisRepository(unittest.TestCase):
     def test_git_really_ignores_what_this_gate_refuses(self) -> None:
         """Asked of git, rather than of `.gitignore`'s text.
 
-        The gate reports residue and `.gitignore` is why it is never
-        committed, so the two have to keep agreeing: if git stopped ignoring
-        `obj/`, the residue this gate fails on would arrive in a commit first
-        and the gate would be reporting a defect a review had already merged.
+        `.gitignore` keeps residue out of an ordinary `git add`, so the rule
+        this gate relies on has to be active. A substring check on its text
+        survives the rule being commented out or negated, so git is asked
+        instead, about files inside the directories because `--no-index`
+        cannot tell a bare `.../obj` is a directory.
 
-        Reading the file for the substring `[Oo]bj/` looked like that check
-        and was not. The substring survives being commented out, and a later
-        negation overrides the rule while leaving it in place — both leave a
-        text assertion green with git tracking build output. `git check-ignore`
-        answers the question the invariant is about.
-
-        **The source file is the control, and it is what makes the other two
-        mean anything.** A `.gitignore` of `*` ignores every path offered to
-        it, so a test that only asks about paths it wants ignored passes on
-        the one rule that would ignore the whole repository.
-
-        The paths are given as files inside the directories rather than as the
-        directories themselves: `--no-index` leaves git unable to tell a bare
-        `.../obj` is a directory, so a trailing-slash rule does not match it.
-        Measured, and the reason each path below names a file.
-
-        **And the matching rule is asserted, not merely the verdict**, because
-        `.gitignore` also carries `[Dd]ebug/` and `[Rr]elease/` — so a path
-        under `obj/Debug/` comes back ignored with `[Oo]bj/` commented out,
-        and a test reading only the exit code would have reported an invariant
-        its neighbour was holding up. Found by commenting the rule out, which
-        is the only way that confound shows itself.
+        The matching rule is asserted as well as the verdict, because another
+        rule such as `[Dd]ebug/` can ignore the same path. The source file is
+        the control: a `.gitignore` of `*` would pass the other two.
         """
         for path, rule in (
                 ("src/Services/Catalog/Catalog.Domain/obj/project.assets.json", "[Oo]bj/"),

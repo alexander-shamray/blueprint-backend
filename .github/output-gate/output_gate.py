@@ -2,52 +2,36 @@
 """Fail the build when it has left output directories beside the source.
 
 Section 4.1 states the invariant as a property of the tree: `src/` and
-`tests/` hold source, and nothing a build wrote. **This gate checks the half
-of that sentence which is true of any working tree** — that no `bin/` or
-`obj/` exists under either root, which is the residue the `artifacts/`
-redirect is about and the only kind this repository has ever grown. The other
-half, that the trees are otherwise untouched, needs a *before* to compare
-against and is therefore asserted in `ci.yml` beside this gate's own step,
-where `actions/checkout` supplies one. Run here it would fail on whatever the
-developer has in flight, which is a gate nobody would keep.
+`tests/` hold source, and nothing a build wrote. This gate checks the half
+that is true of any working tree, that no `bin/` or `obj/` exists under either
+root. The other half, that the trees are otherwise untouched, needs a before
+to compare against, so `ci.yml` asserts it beside this gate's step where
+`actions/checkout` supplies one; run here it would fail on whatever a
+developer has in flight.
 
-**Saying so is the point rather than a disclaimer.** A gate whose name claims
-more than it checks is the failure this repository keeps paying for, and the
-honest split is one portable check that holds everywhere plus one stronger
-check where its precondition is real.
+`Directory.Build.props` makes the invariant true, and its `Output` comment
+argues how. This gate keeps the outcome true and carries none of that
+reasoning (`docs/change-locality.md` section 2).
 
-`Directory.Build.props` is what makes the invariant true, and its `Output`
-comment is where it is argued — which SDK default the outcome actually rests
-on, and why pinning that property here would have been the worse trade. This
-gate keeps the outcome true and deliberately carries none of that reasoning:
-a second copy is a second thing to reconcile when the SDK moves, and citing
-the owner instead is `docs/change-locality.md` section 2's whole point.
+The check has three parts.
 
-What belongs to this file is the shape of the check, and it has three parts.
+It proves a restore and a build both ran before reporting that neither wrote
+here, because a checkout nobody has touched has no `obj/` under `src/` either.
+Every project must be found under `artifacts/obj/` and under `artifacts/bin/`:
+a restore alone creates the first and not the second, so `obj` answers whether
+the restore's output landed in `artifacts/` and `bin` whether anything
+compiled.
 
-**It proves a restore and a build both ran before reporting that neither wrote
-here.** "No `obj/` under `src/`" is satisfied by a checkout nobody has
-touched, which is the single state a pass must not cover — so every project
-must also be found under `artifacts/obj/` *and* under `artifacts/bin/`. The
-two are one assertion only by accident: a restore alone creates every
-`artifacts/obj/<Project>/` and no `artifacts/bin/` at all, measured on this
-repository, so `obj` answers *did the restore's output land in `artifacts/`*
-and `bin` answers *did anything compile*. Asking only the first would print
-that every project was built after a bare `dotnet restore`.
+The subject is checked rather than assumed. A walk that finds no project
+satisfies every assertion above, so the projects found under `src/` and
+`tests/` are reconciled with the ones `Platform.slnx` lists, in both
+directions.
 
-**The subject is checked rather than assumed.** A walk that finds no project
-satisfies every assertion above, and a gate that quietly stops looking at the
-newest tree is this repository's most-repeated failure. So the projects found
-on disk under `src/` and `tests/` are reconciled with the ones
-`Platform.slnx` lists, in both directions.
-
-**Reconciled by path, because the artefacts layout keys on the name.**
-`UseArtifactsOutput` pivots a project's output on `MSBuildProjectName`, which
-is the `.csproj` stem — so two projects whose files share a stem share one
-`artifacts/obj/` entry, and a gate keying its two views on the stem as well
-would let the listed project stand in for an unlisted one and report a subject
-it never looked at. Paths reconcile; a duplicate stem is refused on its own
-terms, before anything is looked up by name.
+The two are reconciled by path, because `UseArtifactsOutput` pivots a
+project's output on `MSBuildProjectName`, the `.csproj` stem. Two projects
+sharing a stem share one `artifacts/obj/` entry, and keying on the stem would
+let a listed project stand in for an unlisted one, so a duplicate stem is
+refused before anything is looked up by name.
 
     python .github/output-gate/output_gate.py
 """
@@ -122,19 +106,11 @@ def compare_subject(walked: list[Path], listed: list[Path]) -> list[str]:
     an independent inventory, so the reconciliation itself no longer
     establishes anything.
 
-    **Not that CI never compiles it**, which is what this said and is false:
-    MSBuild builds the `ProjectReference` closure, so a listed project
-    referencing an unlisted one compiles it and leaves it an `artifacts/`
-    entry like any other. That case reaches the checks below and passes them,
-    which is exactly why the diagnostic must not send a reader looking for a
-    skipped build.
-
-    **The first says the walk did not find it rather than that it is not on
-    disk**, because those are different and only one of them is knowable from
-    here. A project listed at a path outside `SOURCE_ROOTS` is on disk and
-    absent from this walk, and a diagnostic asserting the file is missing sends
-    whoever reads it to look in the wrong place — while the case that matters,
-    a gate no longer covering a tree, is the same either way.
+    Neither says CI skipped a build: MSBuild builds the `ProjectReference`
+    closure, so an unlisted project a listed one references still compiles.
+    The first says the walk did not find the project rather than that it is
+    not on disk, because a project listed outside `SOURCE_ROOTS` is on disk and
+    absent from this walk.
     """
     if not walked and not listed:
         roots = " and ".join(f"{name}/" for name in SOURCE_ROOTS)
@@ -174,13 +150,11 @@ def find_duplicate_names(walked: list[Path]) -> list[str]:
     project up by name, and a name that means two projects makes those lookups
     answer for whichever one it happens to find.
 
-    **Compared case-insensitively, because the collision is the filesystem's
-    rather than MSBuild's.** `Catalog.Domain` and `catalog.domain` are two
-    directories under `artifacts/obj/` on the Linux runner and one directory on
-    Windows and on a default macOS install — so a case-sensitive check passes
-    in CI on exactly the pair that collides on the machines this repository is
-    developed on, which is the worst direction for this to fail in. `casefold`
-    rather than `lower`, since it is the comparison the language asks for.
+    Stems are compared with `casefold()`, because the collision is the
+    filesystem's: two stems differing only in case are two directories on the
+    Linux runner and one on Windows and a default macOS install, so a
+    case-sensitive check would pass in CI on the pair that collides where the
+    repository is developed.
     """
     counted = Counter(path.stem.casefold() for path in walked)
 

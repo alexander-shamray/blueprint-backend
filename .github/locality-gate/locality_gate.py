@@ -3,69 +3,51 @@
 the touch set it declares.
 
 `docs/change-locality.md` asks every PR body to carry two rows, `| Class |`
-and `| Touch set |`, and section 3 gives each class a tree set. Until this
-gate the pair was read by `.claude/scripts/pr-locality.sh` for the review
-commands and enforced by nothing: a Class A change that also edited
-`CLAUDE.md` was a finding for `/review-branch` if the reviewer happened to
-run it, and a merge otherwise.
+and `| Touch set |`, and section 3 gives each class a tree set.
 
-**Two checks, and the second is the one that earns its place.** The class ->
-tree-set map in `classes.yml` beside this file says what a class may reach in
-this repository. It cannot say "one service": a Catalog change that also
-edits Ordering is inside Class A's map. So every changed path is judged
-twice -- against the class's map, and against the touch set the author
-declared -- and a path outside either fails the PR, named. A `+`-joined
-class is the union of its members' maps, so `C+E` is one lookup per member
-and no duplicate entry in the file.
+Every changed path is judged twice, and a path outside either set fails the
+PR and is named in the verdict. The class -> tree-set map in `classes.yml`
+beside this file says what a class may reach in this repository, but it cannot
+say "one service": a Catalog change that also edits Ordering is inside Class
+A's map, which is why the declared touch set is the second check. A `+`-joined
+class is the union of its members' maps.
 
-**The body carries exactly one row of each, or the run is refused rather than
-judged.** No rows is not a pass: half the metadata makes half the gate
-impossible, and a PR opened without the rows is a PR the contract's section 5
-did not reach. One row without the other, two of either, a class letter
-outside A-E, a repeated member, prose where a path list should be -- each is
-a refusal with exit 2 and a message naming the row, never its content.
+The body carries exactly one row of each, or the run is refused with exit 2
+rather than judged. Half the metadata makes half the gate impossible, so a
+missing row, a repeated one, a class letter outside A-E, a repeated member or
+prose where a path list should be is a refusal naming the row, never its
+content.
 
-**The map is read by a parser that accepts one shape.** There is no stdlib
-YAML parser, and a gate that needs a `pip install` is a gate that gets
-skipped -- `pipeline_gate.py` and `deploy/observability/check.py` make the
-same choice one tree over. The shape is small enough to state in full in the
-map file's header, and a line outside it refuses the whole map, because a
-half-read map is a class with fewer paths than the file says, which passes
-nothing it should not but is a gate reading a file other than the one a
-reader sees. A missing class, a repeated class and a class with no items are
-refused for the same reason.
+The map is read by a parser that accepts the one shape its header states,
+because there is no stdlib YAML parser and a gate that needs a `pip install`
+gets skipped. A line outside that shape, a missing class, a repeated class or
+a class with no items refuses the whole map: a half-read map is a gate reading
+a file other than the one a reader sees.
 
-**The glob dialect and the row grammar are `pr-locality.sh`'s.** `**` crosses
+The glob dialect and the row grammar are `pr-locality.sh`'s. `**` crosses
 directories, `*` and `?` do not, `{a,b}` is an alternation, a token also
 covers everything beneath the directory it names, and every token is
 repository-relative: no leading `/`, no `./`, no `..` segment, brace
-alternatives included. Two implementations of one grammar, in bash for the
-harness and in Python for CI, is a real cost; the harness helper cannot hold
-a Python interpreter under its grant and CI cannot hold `gh pr view`'s field
-set under the helper's, so the pair is the honest shape for now and the two
-suites pin the same cases.
+alternatives included. The harness helper cannot run Python under its grant,
+and CI fetches its own payload, `changedFiles` and the files endpoint included,
+rather than the helper's field set, so the grammar has two implementations,
+which must accept and refuse the same tokens.
 
-**The touch-set cell is never printed.** A PR author is not a trusted party,
-and a verdict names the diff's own path and this gate's own word for it. A
-changed path is the author's text too -- git permits a newline inside a name
--- so each is required to be a plain path before it is judged, and a name
-that is not refuses the run rather than being skipped, because a verdict list
-with one line withheld is a list a reader would read as complete.
+The touch-set cell is never printed, because a PR author is not a trusted
+party. A changed path is the author's text too, since git permits a newline
+inside a name, so each must be a plain path and one that is not refuses the
+run: a verdict list with a line withheld reads as complete.
 
-**The file list can be short in two ways the diff's own paths do not show,
-and both are refused rather than judged.** The files endpoint returns at
-most 3,000 entries however it is paginated, so a longer pull request hands
-this gate a non-empty prefix that looks exactly like a complete list; the
-payload therefore carries GitHub's own `changedFiles` count and a list
-shorter than it is refused. And a renamed file arrives as one entry with the
-destination in `filename` and the source in `previous_filename`, so a Class D
-change that moved `src/X.cs` to `docs/X.cs` would pass on the destination
-alone; both ends of a rename are judged.
+The file list can be short in two ways that its own paths do not show. The
+files endpoint returns a bounded number of entries however it is paginated, so
+the payload carries GitHub's `changedFiles` count and a shorter list is
+refused. A rename arrives as one entry with the source in `previous_filename`,
+so both ends of a rename are judged.
 
-Stdlib only, on the licence gate's terms, and the network is not in here:
-the deciding takes JSON on stdin and the fetching is two `gh` calls in the
-workflow. That is `deploy/canary/canary.py`'s split, for its reason. A file
-entry is a plain path or the endpoint's own `{filename, previous_filename}`.
+Stdlib only, on the licence gate's terms. The deciding takes JSON on stdin and
+the fetching is two `gh` calls in the workflow, `deploy/canary/canary.py`'s
+split. A file entry is a plain path or the endpoint's own
+`{filename, previous_filename}`.
 
     {"number": 190, "body": "<the PR body>", "changedFiles": 2,
      "files": [{"filename": "<path>", "previous_filename": null}, ...]}

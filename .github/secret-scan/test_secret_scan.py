@@ -34,10 +34,9 @@ def found(rule_id: str, text: str) -> list[str]:
 
 
 # Every synthetic entry in this file names `a.txt`, so that is what these
-# fixtures declare — and a declaration without a trailing slash names one exact
-# path rather than a tree, which is precisely the shape wanted here. The
-# alternative would be a fixture covering everything, which is the one thing
-# the directive exists to make unwritable.
+# fixtures declare: without a trailing slash it names one exact path rather
+# than a tree, and a fixture covering everything is what the directive exists
+# to make unwritable.
 COVERS = "a.txt"
 
 
@@ -67,7 +66,7 @@ def parse_with(*lines: str, covers: str | None = COVERS
 def run(root: Path, *allowed: str) -> tuple[int, str, str]:
     """The whole gate over one tree, with both streams captured.
 
-    The allow-list is written OUTSIDE `root`, because the file counts as a file
+    The allow-list is written outside `root`, because the file counts as a file
     and a walk that included it would make every count in these tests one out.
     """
     with tempfile.TemporaryDirectory() as directory:
@@ -79,9 +78,9 @@ def run(root: Path, *allowed: str) -> tuple[int, str, str]:
 
 
 # Fixtures assembled to the published length of each provider's key. They are
-# invented values of the right SHAPE, which is the only thing under test — and
-# they are the reason this file has entries under allowed/, since a
-# positive control has to be the literal a real one would be.
+# invented values of the right shape, which is the only thing under test, and
+# the reason this file has entries under allowed/: a positive control has to be
+# the literal value a real credential would have.
 AWS_ID = "AKIAIOSFODNN7EXAMPLE"
 AWS_SECRET = "wJalrXUtnFEMIK7MDENGbPxRfiCYEXAMPLEKEY12"
 GITHUB = "ghp_1234567890abcdefghijklmnopqrstuvwxyzAB"
@@ -103,8 +102,8 @@ class Detects(unittest.TestCase):
     def test_connection_string_password(self):
         line = 'Server=sql,1433;Database=Catalog;User Id=sa;Password=Tr0ub4dor;Encrypt=False'
         self.assertEqual(found("connection-string-password", line), ["Tr0ub4dor"])
-        # The parser this mirrors tolerates spaces around the separator and does
-        # not care about case, and §13.4 already had to learn both.
+        # The parser this mirrors tolerates spaces around the separator and
+        # ignores case (§13.4).
         self.assertEqual(found("connection-string-password", "Pwd = Tr0ub4dor"), ["Tr0ub4dor"])
         self.assertEqual(found("connection-string-password", "PASSWORD=Tr0ub4dor"), ["Tr0ub4dor"])
 
@@ -120,17 +119,10 @@ class Detects(unittest.TestCase):
         self.assertEqual(len(found("github-token", GITHUB.replace("ghp_", "ghs_"))), 1)
 
     def test_slack_token(self):
-        # Assembled from two halves rather than written out, and the reason is
-        # a measurement rather than a preference: GitHub's own push protection
-        # refuses a push carrying this literal, fabricated or not, and it
-        # scans every commit in the push rather than the tip. A scanner's
-        # positive control cannot be a string that stops the branch reaching
-        # the remote.
-        #
-        # The rule sees the same value either way -- it is handed the joined
-        # string below -- so what the split costs is that this fixture is no
-        # longer a finding in THIS file, which is why it has no allowed-secrets
-        # entry where its neighbours do.
+        # Assembled from two halves because GitHub's push protection refuses a
+        # push carrying this literal, fabricated or not, in any commit of the
+        # push. The rule sees the joined value; the cost is that this fixture is
+        # not a finding in this file, so it has no allow-list entry.
         token = "xox" + "b-2468013579-abcdefghijklmno"
         self.assertEqual(found("slack-token", f"slack: {token}"), [token])
 
@@ -179,15 +171,14 @@ class NearMisses(unittest.TestCase):
             found("connection-string-password", "Password=${SQL_PASSWORD};Encrypt=False"), [])
         self.assertEqual(found("connection-string-password", "password={Pwd} was used"), [])
         self.assertEqual(found("connection-string-password", "Password=<your-password>"), [])
-        # A name that merely ENDS in the keyword is an assignment, not a
+        # A name that merely ends in the keyword is an assignment, not a
         # connection-string segment, and belongs to the two name rules. The
-        # lookbehind is what draws that line, and it needs its own case because
-        # nothing else here would notice it disappearing.
+        # lookbehind draws that line, and nothing else here would notice it
+        # disappearing.
         self.assertEqual(found("connection-string-password", "SQL_PASSWORD=Tr0ub4dor"), [])
-        # And a name reached through a member access is C#, not a connection
-        # string — `;` or the start of the string is what precedes the keyword
-        # in one of those. The dot in the lookbehind is what says so, and it
-        # was added after this exact line reported itself.
+        # A name reached through a member access is C#, not a connection string,
+        # where `;` or the start of the string precedes the keyword. The dot in
+        # the lookbehind says so.
         self.assertEqual(found("connection-string-password", "        this.password = pw"), [])
 
     def test_aws_access_key_id(self):
@@ -237,14 +228,14 @@ class NearMisses(unittest.TestCase):
         self.assertEqual(found("credential-assignment", 'if (token == "abcdefgh")'), [])
         self.assertEqual(found("credential-assignment", 'public string Token => "abcdefgh";'), [])
         self.assertEqual(found("credential-assignment", 'secret: "${VAULT_SECRET}"'), [])
-        # Keycloak's realm export carries a dozen `webAuthnPolicyPasswordless*`
+        # Keycloak's realm export carries `webAuthnPolicyPasswordless*`
         # keys. The word inside them is the opposite of a credential.
         self.assertEqual(
             found("credential-assignment", '"webAuthnPolicyPasswordlessRpId": "keycloak"'), [])
 
     def test_env_assignment(self):
         # A constructor storing its parameter. This is the one false positive
-        # the bare-word constraint could not remove, because `secret` IS a bare
+        # the bare-word constraint could not remove, because `secret` is a bare
         # word — what removes it is that the name already contains the value.
         self.assertEqual(found("env-assignment", "        self.secret = secret"), [])
         self.assertEqual(found("env-assignment", "        this.password = password"), [])
@@ -258,10 +249,8 @@ class NearMisses(unittest.TestCase):
 class Coverage(unittest.TestCase):
     """The gate's own subject: what the tests are looking at, not what they found.
 
-    CLAUDE.md names a gate that silently stops covering the newest surface as
-    this repository's most-repeated failure, and a rule shipped without a
-    positive control is that failure in its earliest form — nobody has
-    established the pattern matches anything at all.
+    A rule shipped without a positive control is a pattern nobody has shown
+    matches anything at all.
     """
 
     def test_every_rule_has_a_positive_and_a_near_miss_case(self):
@@ -277,9 +266,7 @@ class Coverage(unittest.TestCase):
 
     def test_every_fixture_is_the_length_its_rule_requires(self):
         # A fixture one character out turns a positive control into a near miss
-        # that happens to pass, which is a pattern matching nothing wearing a
-        # test's clothes. Measured, not assumed: two of these were wrong when
-        # they were first written, and only running them said so.
+        # that happens to pass.
         self.assertEqual(len(AWS_ID), 20)
         self.assertEqual(len(AWS_SECRET), 40)
         self.assertEqual(len(GOOGLE), 39)
@@ -303,7 +290,7 @@ class Values(unittest.TestCase):
             self.assertEqual(secret_scan.literal(reference), "", reference)
 
     def test_a_defaulted_reference_is_judged_on_its_default(self):
-        # §14.1's seam keeps the value out of a DEPLOYMENT. It does not keep it
+        # §14.1's seam keeps the value out of a deployment. It does not keep it
         # out of the tree, so the default is what gets judged — and then
         # accepted by name in the allow-list rather than by the pattern.
         self.assertEqual(secret_scan.literal("${SQL_PASSWORD:-Tr0ub4dor}"), "Tr0ub4dor")
@@ -333,7 +320,7 @@ class Redaction(unittest.TestCase):
         self.assertEqual(len(secret_scan.digest("Tr0ub4dor")), 12)
 
     def test_neither_stream_carries_the_secret_it_found(self):
-        """Load-bearing, and asserted on BOTH streams.
+        """Asserted on both streams.
 
         A gate that prints what it found has copied the credential into the log
         of every run that failed — where it is retained longer, and read by more
@@ -357,9 +344,7 @@ class TheClosingAdvice(unittest.TestCase):
     """Where the message sends a reader has to be somewhere.
 
     `--allowed` takes the directory or one file out of it, and the suite's own
-    `run` uses the second — so the wording every test here provokes is the
-    single-file one, and a message that always spelt a directory named
-    `one-tree.txt/` in it.
+    `run` uses the second, so both wordings are asserted here.
     """
 
     def leak(self, root: Path) -> Path:
@@ -392,7 +377,7 @@ class AsciiOutput(unittest.TestCase):
 
     The messages are written in ASCII, which says nothing about the output: two
     of the three things a finding line carries come from the tree — the path and
-    the redacted prefix of the value. So the subject here is a file whose NAME
+    the redacted prefix of the value. So the subject here is a file whose name
     and whose credential are both outside ASCII.
     """
 
@@ -426,9 +411,7 @@ class AllowList(unittest.TestCase):
         self.assertIn("expected", problems[0])
 
     def test_rejects_a_glob_path(self):
-        # A glob is how a suppression arrives for a file nobody has written yet,
-        # and a file that arrives pre-suppressed is the failure this gate exists
-        # to avoid, with the paperwork already filled in.
+        # A glob is how a suppression arrives for a file nobody has written yet.
         for path in ("tests/*.cs", "tests/Common.Web.Tests/?.cs"):
             _, problems = parse(f"{path} | credential-assignment | abc123def456 | A real reason.")
             self.assertEqual(len(problems), 1, path)
@@ -477,10 +460,8 @@ class AllowList(unittest.TestCase):
         self.assertEqual({"one.txt", "two.txt"}, {entry.source for entry in entries})
 
     def test_reports_a_directory_with_no_allow_list_in_it(self):
-        # An empty directory and a missing one are the same to a reader of the
-        # result — no entries — and opposite to the build. Reported as missing
-        # rather than as a clean empty list, which would clear every accepted
-        # finding in the repository at once.
+        # Reported as missing rather than as a clean empty list, which would
+        # drop every accepted finding at once.
         with tempfile.TemporaryDirectory() as directory:
             _, problems = secret_scan.read_allowed(Path(directory))
         self.assertEqual(len(problems), 1)
@@ -503,11 +484,8 @@ class AllowList(unittest.TestCase):
         self.assertIn("declares no `# covers:", problems[0])
 
     def test_rejects_a_file_that_declares_no_tree_even_with_no_entries(self):
-        # An empty or comment-only `.txt` has no entry to complain about, so
-        # judging the rule per entry let it through in silence — while the
-        # grammar says every file declares exactly one tree. An ownerless file
-        # is one somebody meant to fill in, and the moment they do it inherits
-        # whatever the reader assumed it covered.
+        # An empty or comment-only `.txt` has no entry to complain about, and
+        # the grammar still says every file declares exactly one tree.
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "ownerless.txt"
             path.write_text("# a header and nothing else\n", encoding="utf-8")
@@ -519,7 +497,7 @@ class AllowList(unittest.TestCase):
 
     def test_an_ownerless_file_is_one_complaint_and_not_one_per_entry(self):
         # The same refusal, from the other side: three entries in a file that
-        # declares nothing is one thing wrong with the FILE.
+        # declares nothing is one thing wrong with the file.
         entry = "a.txt | credential-assignment | abc123def456 | A perfectly good reason."
         entries, problems = parse_with(entry, entry, entry, covers=None)
         self.assertEqual([], entries)
@@ -554,12 +532,8 @@ class AllowList(unittest.TestCase):
         self.assertIn("a second `covers:` directive", problems[0])
 
     def test_rejects_an_entry_the_parent_file_kept_from_a_child_tree(self):
-        # Identical prefixes are refused next door, and that is enough only
-        # while every prefix is disjoint. Split a tree later — `deploy/` into
-        # `deploy/compose/` — and an entry for `deploy/compose/x` satisfies
-        # BOTH files' own prefix check, so it could sit in either and the
-        # parent could keep suppressions the child owns. Placement would stop
-        # being mechanical, which is the whole property a directory buys.
+        # An entry under nested prefixes satisfies both files' own prefix
+        # check, so the longest prefix owns it and placement stays mechanical.
         with tempfile.TemporaryDirectory() as directory:
             allowed = Path(directory)
             allow_file(
@@ -599,9 +573,8 @@ class AllowList(unittest.TestCase):
 
     def test_a_prefix_without_a_slash_is_one_path_and_not_a_tree(self):
         # `startswith` has no path boundary, so `# covers: d` would own entries
-        # from BOTH `docs/` and `deploy/` — one file spanning two trees while
-        # satisfying every other check, which is the invariant the whole split
-        # rests on. A prefix that does not end in `/` is one path.
+        # from both `docs/` and `deploy/`. A prefix that does not end in `/` is
+        # one path.
         _, problems = parse_with(
             "docs/x.md | credential-assignment | abc123def456 | "
             "Two trees under one letter.",
@@ -664,15 +637,14 @@ class Audit(unittest.TestCase):
             f"a.txt | github-token | {secret_scan.digest(AWS_ID)} | "
             f"The right value under the wrong rule.")
         problems = secret_scan.audit([self.finding()], entries)
-        # Two ways round: the finding is unexplained AND the entry is stale.
+        # Two ways round: the finding is unexplained and the entry is stale.
         self.assertEqual(len(problems), 2)
 
     def test_a_stale_entry_fails_the_gate(self):
         """The half that keeps the other half honest.
 
         A suppression whose finding has gone is a decision nobody has re-read,
-        and this repository already wrote down what to do about a list of known
-        exceptions: gate it, so the day one clears, the build says which.
+        so when a finding clears, the build says which entry covered it.
         """
         entries, _ = parse(
             "a.txt | aws-access-key-id | 0123456789ab | The value this entry named has moved.")
@@ -684,11 +656,8 @@ class Audit(unittest.TestCase):
 class EmptySubject(unittest.TestCase):
     """A clean report over a subject nobody read is the failure, not the pass.
 
-    `ci.yml` states it as house policy at the pipeline gate: no check trusts its
-    own parser, and each fails on an empty subject rather than reporting a
-    complete list it never read. A scan of no files and a scan with no rules
-    both print the sentence a clean tree prints, and that sentence is the whole
-    product.
+    Unguarded, a scan of no files and a scan with no rules would print the
+    sentence a clean tree prints.
     """
 
     def test_a_scan_of_no_files_fails(self):
@@ -735,10 +704,8 @@ class Walking(unittest.TestCase):
         """The subject is the walk's reach, not one directory name.
 
         §4.1 puts build output under `artifacts/`, and the subdirectories it
-        draws are not all called `obj` or `bin`. A test that planted one file in
-        one `obj/` would pass on a list that had silently stopped covering
-        `publish` and `package` — so each real path is planted separately and
-        the file count is what says the walk declined it.
+        draws are not all called `obj` or `bin`, so each real path is planted
+        separately and the file count says the walk declined it.
         """
         for relative in ("artifacts/obj/Catalog.Api/debug",
                          "artifacts/bin/Catalog.Api/debug",
@@ -758,10 +725,8 @@ class Walking(unittest.TestCase):
         """The subject is the depth the exclusion reaches, not the name it uses.
 
         `artifacts` means build output at the repository root and nowhere else,
-        so a basename match — which is what every other entry in the skip list
-        is — would take any source directory somebody happened to call that out
-        of the gate's reach, silently. The planted secret is the assertion: a
-        gate that declines to read it reports a clean tree it never walked.
+        so a basename match would silently take a source directory of that name
+        out of the gate's reach. The planted secret is the assertion.
         """
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -776,12 +741,10 @@ class Walking(unittest.TestCase):
 
 class RealRepository(unittest.TestCase):
     def test_the_repository_passes_its_own_gate(self):
-        """The case that makes the allow-list work get done honestly.
+        """The suite's positive control over the real tree.
 
-        It is also this suite's positive control over the real tree: the summary
-        it asserts on names a non-zero count of ACCEPTED findings, so a scanner
-        that had silently stopped matching would fail here rather than print a
-        clean sentence about a tree it never read.
+        The summary names a non-zero count of accepted findings, so a scanner
+        that had silently stopped matching fails here.
         """
         out = io.StringIO()
         with contextlib.redirect_stdout(out):

@@ -1,11 +1,9 @@
 #!/usr/bin/env python3
 """The merge's arithmetic, which is the part that can be quietly wrong.
 
-The reporter had no suite until PR-25, and the argument for that is still on
-the file: it gates nothing and asserts nothing about the repository. What
-changed is that it now merges. Every failure below moves the printed number
-without raising, and a coverage figure that is wrong but plausible is worse
-than none, because it is the one people read.
+The reporter gates nothing, but it merges, and every failure below moves the
+printed number without raising. A coverage figure that is wrong but plausible
+is worse than none, because it is the one people read.
 
     py -3.12 -m unittest discover -s .github/coverage
 """
@@ -59,12 +57,10 @@ class MergeTests(unittest.TestCase):
         return path
 
     def test_counts_method_lines_and_ignores_class_lines(self) -> None:
-        """The claim measured against a real artefact, pinned as a test.
+        """Only the method-level lines reproduce the collector's `lines-valid`.
 
-        On this repository the two blocks give 308 and 247, and only the first
-        reproduces the collector's own `lines-valid`. The fixture's class-level
-        line 999 is never covered, so a reader that counted it would report a
-        lower rate over a larger denominator - plausible, and wrong.
+        The fixture's class-level line 999 is never covered, so a reader that
+        counted it would report a lower rate over a larger denominator.
         """
         path = self.write("one", report(("Catalog.Domain", "C", "M", [("1", 1), ("2", 0)])))
         hits = domain_coverage.merge([path])
@@ -77,12 +73,7 @@ class MergeTests(unittest.TestCase):
         )
 
     def test_union_covers_a_line_only_one_stage_reached(self) -> None:
-        """The whole reason PR-25 merges rather than picking a stage.
-
-        Measured on this repository: the unit stage covers 253 lines and the
-        integration stage 192, and the union is 257 - four lines that only a
-        test needing a container reaches.
-        """
+        """Some lines are reached only by a test that needs a container."""
         unit = self.write("unit", report(("Ordering.Domain", "C", "M", [("1", 3), ("2", 0)])))
         integration = self.write(
             "integration", report(("Ordering.Domain", "C", "M", [("1", 0), ("2", 5)]))
@@ -93,9 +84,9 @@ class MergeTests(unittest.TestCase):
         self.assertEqual(sum(1 for count in hits.values() if count > 0), 2)
 
     def test_reading_the_same_report_twice_changes_nothing(self) -> None:
-        """The property that makes the layout safe rather than merely tolerated.
+        """The property that makes the layout safe.
 
-        `--logger trx` leaves the run's merged attachment AND the per-project
+        `--logger trx` leaves the run's merged attachment and the per-project
         partials that fed it, so the same line arrives more than once by
         construction. Under `max` that is idempotent; under `+` the figure
         would grow with the number of test projects.
@@ -114,7 +105,7 @@ class MergeTests(unittest.TestCase):
         Two overloads of one method occupy different source lines; keyed
         without the signature they would collide, and the denominator would
         shrink by however many overloads the domain has. That moves the rate
-        UP, which is the direction nobody investigates.
+        up, which is the direction nobody investigates.
         """
         path = self.root / "overloads.cobertura.xml"
         path.write_text(
@@ -206,9 +197,7 @@ class RenderTests(unittest.TestCase):
     def test_it_still_says_it_does_not_gate(self) -> None:
         """§12.9's decision, asserted rather than trusted to a comment.
 
-        PR-25 is the pull request that was entitled to add a threshold and
-        declined; a later change that quietly turns this into a gate should
-        have to delete a test that says so.
+        A change that turns this into a gate has to delete a test that says so.
         """
         summary = domain_coverage.render({("P", "C", "M", "()", "1"): 1}, [Path("a")])
 

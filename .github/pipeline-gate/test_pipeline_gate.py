@@ -1,16 +1,13 @@
 #!/usr/bin/env python3
 """What the gates would catch, which running them against this repository does not say.
 
-Every check here is a negative case. `pipeline_gate.py filters` and
-`pipeline_gate.py images` pass against the checkout, and a gate that has only
-ever been observed green is a gate nobody has established is looking at
-anything — CLAUDE.md names that as this repository's most-repeated failure, and
-the licence gate's suite exists for the same reason one directory over.
+Most checks here are negative cases, because a gate only ever observed green
+has not been shown to look at anything; the positive controls say what a clean
+input looks like.
 
-Three of the tests below have no defect in them at all. Their subject is the
-gate's own parser: an empty pattern list, an empty matrix, an empty stage. Each
-one is a state in which every other check passes while reporting a complete
-inventory it never read.
+Some tests have no defect in them at all. Their subject is the gate's own
+parser: an empty pattern list, an empty matrix, an empty stage, each a state in
+which every other check passes over an inventory it never read.
 
     py -3.12 -m unittest discover -s .github/pipeline-gate
 """
@@ -160,7 +157,7 @@ class FilterTests(Fixture):
     def test_a_file_level_pattern_satisfies_the_check(self) -> None:
         """The reach's cost, pinned so it is visible rather than discovered.
 
-        This gate proves every deployable is REACHABLE by some filter, not that
+        This gate proves every deployable is reachable by some filter, not that
         any filter is complete. Closing it would mean rejecting the prefix
         match the test above requires, so the residual is stated in `covers`
         and asserted here rather than left to be found later and read as a bug.
@@ -331,9 +328,7 @@ class StageTests(unittest.TestCase):
         )
 
     def test_a_clean_run_passes(self) -> None:
-        """All THREE stages, because that is what a clean run is. This fixture
-        passed two until the missing-stage check landed, which is the same
-        mistake the check exists to catch, made in the suite."""
+        """Every stage that `STAGE_FLOORS` names runs, as in a clean run."""
         architecture = self.stage(
             "architecture", trx(18, "Catalog.Domain.Tests", ["arch"])
         )
@@ -348,7 +343,7 @@ class StageTests(unittest.TestCase):
         )
 
     def test_an_empty_stage_is_caught(self) -> None:
-        """§12.1's oldest trap: `dotnet test` exits ZERO on a filter that
+        """§12.1's trap: `dotnet test` exits zero on a filter that
         selects nothing, so the step is green and the stage does not exist."""
         unit = self.stage("unit", trx(0, "Catalog.Domain.Tests", []))
         integration = self.stage("integration", trx(160, "Platform.IntegrationTests", ["c"]))

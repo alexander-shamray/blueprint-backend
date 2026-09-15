@@ -23,15 +23,15 @@ ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW = ROOT / ".github" / "workflows" / "ci.yml"
 SOLUTION = ROOT / "Platform.slnx"
 
-# Floors, set well under the measured totals on purpose: a floor at the
-# measurement is a ratchet that goes red when somebody legitimately deletes a
-# test class, and what this is groping for is an order-of-magnitude miss — a
-# filter that selected nothing, or a tenth of what it should. The structural
-# checks in `check_stages` catch the small stuff and have no number to age.
+# Floors, set well under each stage's real total on purpose: a floor at the
+# total is a ratchet that goes red when somebody legitimately deletes a test
+# class, and what this catches is an order-of-magnitude miss, a filter that
+# selected nothing or a tenth of what it should. The structural checks in
+# `check_stages` catch the small stuff and have no number to age.
 STAGE_FLOORS = {
-    "architecture": 15,     # measured 18
-    "unit": 550,            # measured 671
-    "integration": 150,     # measured 188
+    "architecture": 15,
+    "unit": 550,
+    "integration": 150,
 }
 
 
