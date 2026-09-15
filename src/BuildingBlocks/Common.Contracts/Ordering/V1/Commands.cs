@@ -6,7 +6,8 @@ namespace Common.Contracts.Ordering.V1;
 /// </summary>
 /// <remarks>
 /// A command implements no <see cref="IIntegrationEvent"/> and carries no
-/// envelope; <c>CommandConsumer</c> routes it (§9.1, §9.4). <c>Reason</c> is a
+/// envelope in its body; its identity is the transport's, which
+/// <c>CommandConsumer</c> reads (§9.1, §9.4). <c>Reason</c> is a
 /// <see cref="CancelReasons"/> code, and Ordering's command mapper fails loudly
 /// on an unknown one, before any handler runs, rather than defaulting.
 /// </remarks>
@@ -116,11 +117,11 @@ public static class ReviewReasons
     /// An authorisation landed while the saga was already compensating.
     /// </summary>
     /// <remarks>
-    /// Raised on a <c>PaymentAuthorised</c> in <c>Compensating</c>, which a
-    /// cancellation, a decline or a timeout enters, so no <c>OrderCancelled</c>
-    /// need exist yet; or in <c>AwaitingPayment</c> once a cancellation was
-    /// observed (§9.6). No despatch is left to stop, and whether Payments
-    /// voided the authorisation is not knowable here (§9.4).
+    /// Raised on a <c>PaymentAuthorised</c> in <c>Compensating</c>, entered by
+    /// an <c>OrderCancelled</c> or by a decline or timeout before any exists;
+    /// or in <c>AwaitingPayment</c> once a cancellation was observed (§9.6).
+    /// No despatch is left to stop, and whether Payments voided the
+    /// authorisation is not knowable here (§9.4).
     /// </remarks>
     public const string PaymentAuthorisedDuringCompensation = "payment_authorised_during_compensation";
 

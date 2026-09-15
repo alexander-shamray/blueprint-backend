@@ -36,8 +36,9 @@ public static class OrderLimits
     /// <remarks>
     /// <c>ProjectedPriceReader</c> binds one SQL parameter per product id plus
     /// <c>@Currency</c>, and SQL Server stops at 2,100, so without a ceiling a
-    /// well-formed request is a 500. A hundred is a business bound well inside
-    /// that; raising it towards the limit is the moment to batch the query.
+    /// large enough well-formed request is a 500. A hundred is a business bound
+    /// well inside that; raising it towards the limit is the moment to batch
+    /// the query.
     /// </remarks>
     public const int MaxLines = 100;
 }
