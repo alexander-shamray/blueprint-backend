@@ -6,8 +6,9 @@ namespace Common.Contracts.Ordering.V1;
 /// free-text personal data (ADR-035).
 /// </summary>
 /// <remarks>
-/// An address on the wire reaches the broker, an outbox row kept for §9.4's
-/// retention window and whatever a consumer persists, beyond §11.7's erasure.
+/// It carries no address because one on the wire would reach the broker, an
+/// outbox row kept for §9.4's retention window and whatever a consumer
+/// persists, beyond §11.7's erasure.
 /// <c>CustomerId</c> stays; how Shipping obtains an address is Shipping's call.
 /// </remarks>
 public sealed record OrderConfirmed : IIntegrationEvent

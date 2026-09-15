@@ -6,8 +6,8 @@ namespace Common.Contracts.Ordering.V1;
 /// </summary>
 /// <remarks>
 /// A command implements no <see cref="IIntegrationEvent"/> and carries no
-/// envelope in its body; its identity is the transport's, which
-/// <c>CommandConsumer</c> reads (§9.1, §9.4). <c>Reason</c> is a
+/// envelope in its body (§9.1); <c>InboxFilter</c> dedupes on the transport's
+/// id (§9.5) and <c>CommandConsumer</c> routes it (§9.4). <c>Reason</c> is a
 /// <see cref="CancelReasons"/> code, and Ordering's command mapper fails loudly
 /// on an unknown one, before any handler runs, rather than defaulting.
 /// </remarks>

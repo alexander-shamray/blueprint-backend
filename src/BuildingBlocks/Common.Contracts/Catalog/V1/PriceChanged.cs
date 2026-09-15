@@ -8,7 +8,7 @@ namespace Common.Contracts.Catalog.V1;
 /// <remarks>
 /// <c>Amount</c> and <c>Currency</c> rather than a <c>Money</c>: a contract
 /// carries primitives (§9.1), and the currency travels beside the amount for
-/// the reason §9.6 gives <c>AuthorisePayment</c>.
+/// the same reason §9.6 gives for <c>AuthorisePayment</c> carrying one.
 /// </remarks>
 public sealed record PriceChanged : IIntegrationEvent
 {
