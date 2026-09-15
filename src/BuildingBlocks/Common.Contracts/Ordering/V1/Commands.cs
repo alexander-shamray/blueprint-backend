@@ -2,20 +2,13 @@ namespace Common.Contracts.Ordering.V1;
 
 /// <summary>
 /// Cancel an order (§3.2's Accepts column). Sent by the fulfilment saga, never
-/// published — a command has exactly one owner, and publishing it would deliver
-/// to every subscriber that happened to bind the type (§9.6).
+/// published: a command has exactly one owner (§9.6).
 /// </summary>
 /// <remarks>
-/// <b>No envelope, and that is the rule rather than an omission.</b> Commands
-/// deliberately do not implement <see cref="IIntegrationEvent"/> (§9.1): they
-/// are routed by <c>CommandConsumer</c> (§9.4), they carry no envelope in the
-/// body, and their <c>MessageId</c> is the transport's.
-/// <para>
-/// <c>Reason</c> is a string code from <see cref="CancelReasons"/>, for the
-/// reason <see cref="OrderCancelled"/> states. Ordering's handler parses it
-/// back into <c>CancellationReason</c>, and an unknown code fails loudly rather
-/// than defaulting.
-/// </para>
+/// A command implements no <see cref="IIntegrationEvent"/> and carries no
+/// envelope; <c>CommandConsumer</c> routes it (§9.1, §9.4). <c>Reason</c> is a
+/// <see cref="CancelReasons"/> code, and Ordering's handler fails loudly on an
+/// unknown one rather than defaulting.
 /// </remarks>
 public sealed record CancelOrder(Guid OrderId, string Reason);
 
@@ -41,49 +34,14 @@ public sealed record ConfirmOrder(Guid OrderId, string PaymentReference);
 public sealed record MarkOrderShipped(Guid OrderId, string TrackingNumber);
 
 /// <summary>
-/// Escalate an order to a human (§9.6) — the path for anything the workflow
-/// cannot resolve itself. <b><c>not_despatched</c>, <c>stock_not_released</c>
-/// and <c>not_confirmed</c> are a wait with no automatic compensation;
-/// <c>cancelled_after_confirmation</c> and
-/// <c>payment_authorised_during_compensation</c> are not</b>, and this summary
-/// said only the first group until the second arrived. <b>Named rather than
-/// counted</b>: it read "two of four" while <see cref="ReviewReasons"/> had
-/// five.
-/// <para>
-/// The shared condition of the other two is <b>authorised money in a workflow
-/// whose outcome is cancellation</b> — deliberately not "a cancellation landing
-/// after an authorisation", which this used to say and which describes only
-/// <see cref="ReviewReasons.CancelledAfterConfirmation"/>. On
-/// <see cref="ReviewReasons.PaymentAuthorisedDuringCompensation"/> the authorisation is the
-/// <i>later</i> event, and on two of that code's four doors — a decline and a
-/// payment timeout — no cancellation exists at all when it is raised.
-/// </para>
-/// <para>
-/// §3.2 gives <i>Ordering</i> no refund command to answer that with, which is
-/// not the same as no automatic refund: §3.2 has Payments consume
-/// <c>OrderCancelled</c> and void an authorisation already taken. <b>Which of
-/// the two codes gets that refund is not predictable</b>, and this summary
-/// carried the claim that it is until §9.4's ordering was read — so
-/// <see cref="ReviewReasons"/> distinguishes them by the state each is raised
-/// from, and the runbook checks for a refund on both.
-/// </para>
+/// Escalate an order to a human (§9.6), for anything the workflow cannot
+/// resolve itself.
 /// </summary>
 /// <remarks>
-/// This does <b>not</b> touch the <c>Order</c> aggregate, and the reason is
-/// that "a human should look at this" is a fact about operations rather than
-/// about the order — <b>not</b> that the order is unchanged, and not that it
-/// changed either. An earlier revision of this paragraph claimed the second
-/// for the two cancellation codes and it does not hold for
-/// <c>payment_authorised_during_compensation</c>: the saga is in
-/// <c>Compensating</c> and <c>CancelOrder</c> goes on that state's stock
-/// exits, so whether the order is cancelled by the time this row is written
-/// depends on whether the stock half has settled yet — and since #124 that
-/// exit no longer ends the instance, so both orderings are reachable.
-/// <b>The row does not say which, and nothing here should be read as
-/// promising one</b>: an earlier revision claimed the order is still
-/// uncancelled, which was true only while a stock answer finalised the saga.
-/// The aggregate's state is simply not what decides where the row lives.
-/// It lands in an operations table either way.
+/// It does not touch the <c>Order</c> aggregate: a human needing to look is a
+/// fact about operations, and the row lands in an operations table whatever
+/// the order's state. <see cref="ReviewReasons"/> says what each code means,
+/// and which of them leave authorised money behind.
 /// </remarks>
 public sealed record FlagOrderForReview(Guid OrderId, string Reason);
 
@@ -122,12 +80,9 @@ public static class CancelReasons
 /// a cancellation, which <see cref="CancelReasons"/> deliberately does not say.
 /// </summary>
 /// <remarks>
-/// <b>Two members and no third, because the question is a partition rather
-/// than a list.</b> §9.6's saga asks one thing of this field — did this
-/// workflow cause the cancellation — so every origin that is not
-/// <see cref="Workflow"/> answers the same way, and adding a member for each
-/// new ingress would invite a consumer to switch on it and forget one. A
-/// finer vocabulary belongs on a field that is read for a finer purpose.
+/// A partition, not a list: §9.6's saga asks only whether it caused the
+/// cancellation, so a member per ingress would invite a switch that forgets
+/// one.
 /// </remarks>
 public static class CancelOrigins
 {
@@ -136,11 +91,8 @@ public static class CancelOrigins
     /// operator holding <c>orders:admin</c>.
     /// </summary>
     /// <remarks>
-    /// <b>An absent <see cref="OrderCancelled.Origin"/> does NOT read as this.</b>
-    /// It means the event was published before the field existed, and a
-    /// consumer holds whatever it did then — see that type's remarks. Reading
-    /// absent as a user origin is the direction that faults every ordinary
-    /// cancellation for the length of a rolling deploy.
+    /// An absent <see cref="OrderCancelled.Origin"/> does not mean this; that
+    /// property says what it does mean.
     /// </remarks>
     public const string User = "user";
 
@@ -164,165 +116,35 @@ public static class ReviewReasons
     /// An authorisation landed while the saga was already compensating.
     /// </summary>
     /// <remarks>
-    /// <b>Not "a customer cancelled", which is what this summary said.</b>
-    /// §9.6 reaches <c>Compensating</c> three ways — a customer's
-    /// <c>OrderCancelled</c>, a <c>PaymentDeclined</c>, and a
-    /// <c>PaymentTimeout</c> — and the escalation fires from all of them,
-    /// because its condition is the money arriving, not the reason
-    /// compensation started. The timeout case is the one that matters
-    /// operationally: a PSP slower than fifteen minutes that then
-    /// authorises produces this row with no customer involved at all, so a
-    /// spike is a dependency signal and not a product one.
-    /// </remarks>
-    /// <remarks>
-    /// <b>The authorisation the saga cannot compensate, raised from
-    /// <c>Compensating</c>.</b> The authorisation, not the cancellation — on
-    /// the decline and payment-timeout doors there is no cancellation yet, and
-    /// leading with one is the reading the rename exists to stop. It was the
-    /// only one until
-    /// <see cref="CancelledAfterConfirmation"/> was split out of it, and that
-    /// one is the same money problem from <c>Confirmed</c> — so neither is
-    /// unique in what it cannot undo, and the state each is raised from is the
-    /// whole of the difference — and the difference is bigger than "which
-    /// state", because it decides whether the automatic refund could have
-    /// applied. Undoing an authorisation is a refund, and §3.2 closes
-    /// <i>Ordering's</i> outbound options at <c>AuthorisePayment</c>: there is
-    /// no refund command. Payments none the less refunds off
-    /// <c>OrderCancelled</c>, which it consumes (§3.2) and which the event's
-    /// own contract says voids an authorisation already taken.
-    /// <para>
-    /// <b>Whether that void has happened is not knowable from the code, and
-    /// two revisions of this paragraph guessed in opposite directions.</b> The
-    /// first called both codes "the same money problem"; the second said this
-    /// one is beyond the automatic path while
-    /// <see cref="CancelledAfterConfirmation"/> has its refund on the way.
-    /// Neither holds. §9.4 orders nothing between two independent consumers, so
-    /// this saga's view of a cancellation says nothing about Payments' — and on
-    /// the decline and payment-timeout doors <b>no <c>OrderCancelled</c> exists
-    /// yet</b> when this row is raised, since <c>CancelOrder</c> goes on
-    /// <c>Compensating</c>'s exit. The cancellation, and the void after it, are
-    /// still to come. So the money is what the two codes have in common and
-    /// <b>Shipping</b> is what tells them apart: the sibling is raised from a
-    /// state that may still despatch and this one is not. The runbook checks
-    /// for a refund on both and predicts the answer on neither.
-    /// </para>
-    /// This is a <see cref="ReviewReasons"/> code and not a
-    /// <see cref="CancelReasons"/> one because what needs a person is the
-    /// money — <b>not</b> because the order is already cancelled, which this
-    /// line used to say and which does not hold on every door. From a decline
-    /// or a payment timeout into <c>Compensating</c> the <c>CancelOrder</c> is
-    /// still owed at that state's exit, so this row can precede the
-    /// cancellation entirely. On the <c>AwaitingPayment</c> door #143 added it
-    /// does hold — the flag is set by a release derived from an
-    /// <c>OrderCancelled</c> already committed — which is why the claim is
-    /// about the door and never about the code.
-    /// <para>
-    /// <b>It was <c>cancelled_after_payment</c>, and the name asserted that
-    /// order.</b> True on the two cancellation doors, false on the other two,
-    /// and the prose around it spent several revisions saying so — which is
-    /// the tell that the label rather than the paragraph was wrong. Renamed
-    /// while <c>ordering.OrderReviews</c> had never held a row with it: a
-    /// persisted vocabulary has exactly one cheap moment, the same rule this
-    /// repository already states about a contract with no consumers, and the
-    /// same edit after the first row is a migration. <b>A code named for one
-    /// of its causes survives review precisely because it reads as an
-    /// explanation.</b>
-    /// </para>
-    /// <para>
-    /// <see cref="CancelledAfterConfirmation"/> keeps its name deliberately:
-    /// every door onto it is downstream of a confirmation, so the order the
-    /// name asserts holds on all of them. <b>"Its one path" is what this said,
-    /// and it has not been one path since #126</b> gave <c>Compensating</c> a
-    /// raising on a late <c>OrderConfirmed</c>; #143 added the two despatch
-    /// branches, where a cancellation was observed before the parcel was
-    /// reported. Named by what they share rather than counted, for the reason
-    /// the summary above gives.
-    /// </para>
+    /// §9.6 reaches <c>Compensating</c> on a cancellation, a decline or a
+    /// payment timeout, so no <c>OrderCancelled</c> may exist yet when this is
+    /// raised, and there is no despatch left to stop. Whether Payments has
+    /// voided the authorisation is not knowable here (§9.4); the runbook checks
+    /// for a refund on this and on <see cref="CancelledAfterConfirmation"/>.
     /// </remarks>
     public const string PaymentAuthorisedDuringCompensation = "payment_authorised_during_compensation";
 
     /// <summary>
-    /// A customer cancelled an order the saga had confirmed and was waiting
-    /// on Shipping for.
+    /// A cancellation met an order the aggregate had confirmed.
     /// </summary>
     /// <remarks>
-    /// <b>"The saga had confirmed" used to be weaker than "the order is
-    /// confirmed", and closing that gap is what #126 was.</b> §9.6 entered
-    /// <c>Confirmed</c> the moment it SENT <c>ConfirmOrder</c>, not when that
-    /// command committed — so a cancellation could beat it to the aggregate,
-    /// and this code was then raised for an order that was never confirmed and
-    /// that Shipping was never told about. The machine now waits in
-    /// <c>AwaitingConfirmation</c> for the <c>OrderConfirmed</c> the aggregate
-    /// publishes, so every path that raises this code has observed that event
-    /// and the name is true by construction rather than by intention.
-    /// <para>
-    /// <b>Two states raise it, and the second is the interesting one.</b> An
-    /// <c>OrderCancelled</c> arriving in <c>Confirmed</c> is the plain case.
-    /// The other is an <c>OrderConfirmed</c> arriving in <c>Compensating</c>:
-    /// both events are Ordering's own outbox rows, §9.4 orders nothing between
-    /// them, so a cancellation can reach the saga first and start a release for
-    /// an order the aggregate had already confirmed. The confirmation landing
-    /// afterwards is the only evidence that happened, which is exactly what
-    /// this code is for — the despatch is live and the release is already in
-    /// flight, so a human has both loose ends.
-    /// </para>
-    /// </remarks>
-    /// <remarks>
-    /// <b>Distinct from <see cref="PaymentAuthorisedDuringCompensation"/> because the
-    /// procedure is different, and the row is the only thing an operator
-    /// has.</b> Both are raised by §9.6's saga with an authorisation standing
-    /// and the workflow ending in cancellation — <b>not</b> both "on a
-    /// cancellation arriving after an authorisation", which this said and
-    /// which describes only this code. <see cref="PaymentAuthorisedDuringCompensation"/> is
-    /// the authorisation arriving after compensation began, and on its decline
-    /// and payment-timeout doors no cancellation has been sent at all. Two
-    /// state-and-event pairs, one shared condition — and
-    /// <c>ordering.OrderReviews</c> persists <c>(OrderId, Reason, RaisedAt)</c>
-    /// and nothing else, so a single code makes the two indistinguishable by
-    /// the time anyone reads the queue. The saga has usually finalised by then;
-    /// its state is gone.
-    /// <para>
-    /// What separates them: this one means the order reached <c>Confirmed</c>,
-    /// so <b>Shipping may still despatch it</b> and stopping that is the first
-    /// step. <see cref="PaymentAuthorisedDuringCompensation"/> means compensation was already
-    /// under way — there is no despatch to stop and a <c>ReleaseStock</c> is in
-    /// flight. The runbook has always described these as two procedures; until
-    /// this code existed it keyed them on a saga state nothing recorded.
-    /// </para>
+    /// Raised on an <c>OrderCancelled</c> in <c>Confirmed</c>, or on an
+    /// <c>OrderConfirmed</c> in <c>Compensating</c>, since §9.4 orders nothing
+    /// between them. Distinct from
+    /// <see cref="PaymentAuthorisedDuringCompensation"/> because Shipping may
+    /// still despatch, and a review row keeps nothing but the code.
     /// </remarks>
     public const string CancelledAfterConfirmation = "cancelled_after_confirmation";
 
     /// <summary>
     /// Payment was authorised and the order never acknowledged the
-    /// <c>ConfirmOrder</c> that followed (#126).
+    /// <c>ConfirmOrder</c> that followed.
     /// </summary>
     /// <remarks>
-    /// <b>The escalation for the state #126 added.</b> §9.6 waits in
-    /// <c>AwaitingConfirmation</c> for the aggregate's own
-    /// <c>OrderConfirmed</c>; if that never arrives the money is taken, the
-    /// stock is held, and Shipping has been told nothing — so the wait needs a
-    /// bound and the bound needs somewhere to land. It escalates rather than
-    /// compensating for <see cref="NotDespatched"/>'s reason: a card has been
-    /// charged and §3.2 gives Ordering no refund command, so there is no
-    /// automatic action left to take and a human owns what follows.
-    /// <para>
-    /// <b>Read it as "the acknowledgement is missing", not "the order was
-    /// refused".</b> A <c>ConfirmOrder</c> the aggregate <em>rejects</em> —
-    /// because the order was cancelled underneath it — is a
-    /// <c>Rule</c> failure that <c>CommandConsumer</c> acks and counts (§9.8),
-    /// and the cancellation that caused it reaches the saga on its own event.
-    /// This code is what is left over: no acknowledgement, no cancellation, and
-    /// nothing further the machine can do.
-    /// </para>
-    /// <para>
-    /// <b>Not to be confused with Ordering's <c>order.not_confirmed</c> error
-    /// code</b>, which <c>MarkOrderShippedHandler</c> returns when a shipment
-    /// is reported for an order the aggregate has not confirmed. That one is
-    /// broker-only — §9.6's saga is its sole caller and no HTTP route reaches
-    /// it — so the two never appear in the same place. Two vocabularies and
-    /// one adjective; the collision is named here so a reader who meets both
-    /// does not reconcile them into one.
-    /// </para>
+    /// The bound on §9.6's <c>AwaitingConfirmation</c>, escalating because a
+    /// card is charged and Ordering has no refund command (§3.2). A rejected
+    /// <c>ConfirmOrder</c> is a <c>Rule</c> failure instead (§9.8); Ordering's
+    /// <c>order.not_confirmed</c> error is an unrelated code.
     /// </remarks>
     public const string NotConfirmed = "not_confirmed";
 }

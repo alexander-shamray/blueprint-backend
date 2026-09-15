@@ -31,14 +31,9 @@ public sealed record PaymentAuthorised : IIntegrationEvent
 /// and the order is cancelled with <c>CancelReasons.PaymentDeclined</c> (§9.6).
 /// </summary>
 /// <remarks>
-/// <b><see cref="Reason"/> is the provider's, and it is deliberately not a
-/// closed vocabulary.</b> The cancellation codes are this platform's and are
-/// enumerated (<c>CancelReasons</c>); a decline reason comes from a PSP whose
-/// set neither Payments nor this document controls, so pinning one here would
-/// be a contract that a provider's release can break. It is carried for a human
-/// reading the payment, never branched on — and never used as a metric
-/// dimension, which is the tag-explosion rule §9.8 states for
-/// <c>command.domain_rejected</c>.
+/// <see cref="Reason"/> is the provider's and deliberately not a closed
+/// vocabulary: a PSP's release could break one pinned here. It is for a human,
+/// never branched on and never a metric dimension (§9.8).
 /// </remarks>
 public sealed record PaymentDeclined : IIntegrationEvent
 {

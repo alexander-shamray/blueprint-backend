@@ -2,15 +2,13 @@ namespace Common.Contracts.Catalog.V1;
 
 /// <summary>
 /// A product's price moved (§3.2). Ordering projects it into
-/// <c>ordering.ProductPrices</c> and reads it on the <em>write</em> path
-/// (§6.4), which is why the amount travels rather than an instruction to go
-/// and fetch one.
+/// <c>ordering.ProductPrices</c> and reads that on the write path (§6.4), which
+/// is why the amount travels rather than an instruction to fetch one.
 /// </summary>
 /// <remarks>
 /// <c>Amount</c> and <c>Currency</c> rather than a <c>Money</c>: a contract
 /// carries primitives (§9.1), and the currency travels beside the amount for
-/// the reason §9.6's <c>AuthorisePayment</c> gives — a bare decimal is a charge
-/// waiting to be made in the wrong denomination.
+/// the reason §9.6 gives <c>AuthorisePayment</c>.
 /// </remarks>
 public sealed record PriceChanged : IIntegrationEvent
 {

@@ -5,7 +5,7 @@ namespace Common.Contracts.Catalog.V1;
 /// nothing else.
 /// </summary>
 /// <remarks>
-/// <b>No reason code, deliberately.</b> §6.6's projection flips
+/// No reason code, deliberately. §6.6's projection flips
 /// <c>IsAvailable</c> either way, so a reason would be a member every consumer
 /// must version around and none reads — and the first consumer that did read it
 /// would branch on a vocabulary Catalog had never committed to.

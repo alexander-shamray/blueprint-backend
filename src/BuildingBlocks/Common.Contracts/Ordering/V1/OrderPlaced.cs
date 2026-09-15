@@ -32,7 +32,7 @@ public sealed record OrderPlaced : IIntegrationEvent
 /// A line as <see cref="OrderPlaced"/> carries it.
 /// </summary>
 /// <remarks>
-/// <b>Each contract owns its line type.</b> This and <see cref="ConfirmedLine"/>
+/// Each contract owns its line type. This and <see cref="ConfirmedLine"/>
 /// have identical shapes today and sharing one record would be the obvious
 /// economy. It is the wrong one: a field added to <c>OrderConfirmed</c>'s lines
 /// would silently change this payload, and the two contracts would have to
