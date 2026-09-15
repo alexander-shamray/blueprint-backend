@@ -223,7 +223,7 @@ class Directions(unittest.TestCase):
         )), [])
 
     def test_a_description_closure_no_commit_repeats_passes(self):
-        """NoCommitRepeatsIt: a closure no commit repeats is the ordinary case.
+        """NoCommitRepeatsIt: a closure made only in the description is allowed.
 
         A `linked - from_commits` check would make a commit keyword mandatory
         and fail this.
