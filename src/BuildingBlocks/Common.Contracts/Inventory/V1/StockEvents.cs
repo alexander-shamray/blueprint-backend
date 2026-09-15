@@ -64,8 +64,8 @@ public sealed record StockReleased : IIntegrationEvent
 /// </summary>
 /// <remarks>
 /// <see cref="QuantityAvailable"/> is a level, not a delta: a redelivered level
-/// does not double-count, which is the out-of-order guard §6.6 asks every
-/// projection for.
+/// does not double-count. An older level arriving late is §6.6's other problem,
+/// and a projection of it needs its own watermark on <c>OccurredAt</c>.
 /// </remarks>
 public sealed record StockLevelChanged : IIntegrationEvent
 {

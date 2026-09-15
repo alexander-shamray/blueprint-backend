@@ -7,8 +7,8 @@ namespace Common.Contracts.Ordering.V1;
 /// <remarks>
 /// A command implements no <see cref="IIntegrationEvent"/> and carries no
 /// envelope; <c>CommandConsumer</c> routes it (§9.1, §9.4). <c>Reason</c> is a
-/// <see cref="CancelReasons"/> code, and Ordering's handler fails loudly on an
-/// unknown one rather than defaulting.
+/// <see cref="CancelReasons"/> code, and Ordering's command mapper fails loudly
+/// on an unknown one, before any handler runs, rather than defaulting.
 /// </remarks>
 public sealed record CancelOrder(Guid OrderId, string Reason);
 
