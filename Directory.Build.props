@@ -29,8 +29,9 @@
   <!--
     ADR-019's analyser policy. TreatWarningsAsErrors is what makes the other
     lines mean anything; EnforceCodeStyleInBuild reaches only the rules
-    .editorconfig configures at warning, and the rest stay suggestions because
-    a style rule with an exception it cannot express must not fail a build.
+    .editorconfig configures at warning, and the rest stay below warning
+    because a style rule with an exception it cannot express must not fail a
+    build.
     latest-Recommended rather than latest-All, because All turns on the
     documentation and globalisation categories this platform has not adopted.
     This file is the one place ADR-019 permits a suppression, `#pragma` being

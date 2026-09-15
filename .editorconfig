@@ -7,9 +7,9 @@ root = true
 #
 # EnforceCodeStyleInBuild (ADR-019) makes this file a build input for rules at
 # `warning` or above; each rule at that level is stated without exception in
-# docs/style-guide.md and says why beside its entry. Everything else stays a
-# suggestion, because a rule whose carve-out lives in prose must not fail a
-# build it cannot evaluate.
+# docs/style-guide.md and says why beside its entry. Everything else stays
+# below warning, because a rule whose carve-out lives in prose must not fail
+# a build it cannot evaluate.
 
 [*]
 charset = utf-8
