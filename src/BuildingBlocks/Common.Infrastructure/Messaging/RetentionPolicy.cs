@@ -60,10 +60,11 @@ public sealed record RetentionPolicy
     /// The floor is <see cref="IdempotencyRetention.MarkerFloor"/>, the
     /// claim's own window, read rather than restated so the two cannot
     /// disagree; equal is admitted because the claim precedes the marker
-    /// (ADR-038). What this chooses is the length of §8.5's guarantee, not
-    /// its truth: <see cref="RetentionPurgeService"/> deletes a marker only
-    /// once its claim is gone (ADR-039), so a marker outlives its claim
-    /// whatever this says.
+    /// (ADR-038). Above the floor this is a target, not a guarantee: the
+    /// candidate half is an age against the database's clock, which a
+    /// forward step makes early, and <see cref="RetentionPurgeService"/>
+    /// deletes a marker only once its claim is gone (ADR-039), so the floor
+    /// is what holds whatever this says.
     /// </remarks>
     public TimeSpan IdempotencyWindow
     {

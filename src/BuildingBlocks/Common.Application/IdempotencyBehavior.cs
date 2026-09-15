@@ -153,10 +153,9 @@ public sealed class IdempotencyBehavior<TCommand, TResult>(
             return result;
         }
 
-        // No retention here, on purpose: re-arming the entry at the commit,
-        // after §6.3 stamped its marker inside the transaction, would let the
-        // claim outlive the marker by the commit's tail. The store keeps what
-        // the claim had left, so the outcome is replayable for the remainder
+        // No retention here, on purpose: the claim's window runs from the
+        // claim and not from the commit (ADR-038), so the store keeps what
+        // the claim had left and the outcome is replayable for the remainder
         // of that window rather than for a fresh one.
         await store.CompleteAsync(key, claim, Capture(result), CancellationToken.None);
         return result;

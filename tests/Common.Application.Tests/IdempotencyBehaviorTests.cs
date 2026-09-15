@@ -210,9 +210,11 @@ public class IdempotencyBehaviorTests
     [Fact]
     public async Task A_store_failure_after_the_handler_holds_the_claim_rather_than_releasing_it()
     {
-        // The §8.5 release table's third row. The work is durable by now, so
-        // releasing would permit the duplicate outright; holding postpones it
-        // to the retention. The assertion is the absence of a release.
+        // The §8.5 release table's third row. The work is durable and §6.3's
+        // marker refuses a retry either way; holding keeps the claim, so a
+        // retry meets ConcurrentRequestException while the outcome is unknown
+        // rather than a refusal of a commit it never saw. The assertion is
+        // the absence of a release.
         RecordingIdempotencyStore store = new()
         {
             CompleteFault = new TimeoutException("redis went away")
@@ -331,7 +333,8 @@ public class IdempotencyBehaviorTests
         // §8.5's rule: the handler has committed by this line, so a completion
         // that honoured a cancelled caller would leave the key claimed with the
         // work durable — a retry meets ConcurrentRequestException until the
-        // retention expires, and runs a second time after it.
+        // retention expires and the marker's refusal after it. What is lost
+        // is the replayable outcome, never the single commit.
         RecordingIdempotencyStore store = new();
         using CancellationTokenSource cancelled = new();
         await cancelled.CancelAsync();
