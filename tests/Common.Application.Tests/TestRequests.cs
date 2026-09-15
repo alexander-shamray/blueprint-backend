@@ -148,8 +148,8 @@ public sealed class PingValidator : AbstractValidator<Ping>
 /// to come back carrying both rules and not the first one to notice.
 /// </summary>
 /// <remarks>
-/// A <c>Must</c> with its own error code, so each failure names the validator
-/// that raised it.
+/// A <c>Must</c> with its own error code, so the two rules' failures can be
+/// told apart.
 /// </remarks>
 public sealed class PingLengthValidator : AbstractValidator<Ping>
 {

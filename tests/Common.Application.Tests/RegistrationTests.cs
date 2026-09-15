@@ -104,8 +104,8 @@ public class RegistrationTests
     [Fact]
     public void Handlers_are_registered_with_a_scoped_lifetime()
     {
-        // Scoped, not singleton: a handler holds the unit of work and the
-        // repositories of one request (§4.2).
+        // Scoped, not singleton, so a handler that depends on the unit of work
+        // or a repository gets the request's own (§4.2).
         using ServiceProvider provider = TestContainer.Build();
         using IServiceScope first = provider.CreateScope();
         using IServiceScope second = provider.CreateScope();

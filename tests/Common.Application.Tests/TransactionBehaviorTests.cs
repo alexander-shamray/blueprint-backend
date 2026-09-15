@@ -208,8 +208,7 @@ public class TransactionBehaviorTests
     public async Task A_command_refused_by_the_aggregate_guard_leaves_no_marker_behind()
     {
         // The other refusal: §2.3's guard throws and the transaction is disposed
-        // uncommitted, so the marker must not be written before it or outside
-        // that transaction.
+        // uncommitted, taking with it any marker staged inside.
         using ServiceProvider provider = BuildProvider();
         using IServiceScope scope = provider.CreateScope();
         Claim(scope);

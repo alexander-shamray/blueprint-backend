@@ -29,7 +29,7 @@ public sealed class LogSink
 /// An <see cref="ILogger{T}"/> over <see cref="LogSink"/>, registered as an
 /// open generic. Common.Application references the logging abstractions and
 /// nothing else (§4.2), so there is no <c>ILoggerFactory</c> implementation in
-/// reach, and writing one is cheaper than taking a package to get one.
+/// reach, and a recording logger is cheaper to write than a package to take.
 /// </summary>
 public sealed class RecordingLogger<T>(LogSink sink) : ILogger<T>
 {

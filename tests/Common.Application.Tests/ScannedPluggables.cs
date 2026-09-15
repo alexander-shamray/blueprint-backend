@@ -6,10 +6,6 @@ namespace Common.Application.Tests;
 /// exercised for every interface rather than for the ones a handler happens to
 /// implement.
 /// </summary>
-/// <remarks>
-/// A guard that asks <c>PluggableInterfaces.All</c> what to look for cannot
-/// fail for an entry deleted from it; naming each closed type in source can.
-/// </remarks>
 public sealed record ScannedEvent(Guid Id);
 
 public sealed class ScannedEventHandler : IIntegrationEventHandler<ScannedEvent>
