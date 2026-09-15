@@ -1,18 +1,11 @@
 #!/usr/bin/env python3
-"""The pipeline asserting things about itself: the ways §15.1's staged pipeline
-can be quietly wrong, one subcommand each.
-
-`filters` is §15.1's own instruction — every immediate child of `src/` and of
-`src/Services/` appears in at least one path filter, because a deployable
-that nothing filters is a deployable CI never rebuilds. `images` is the same
-inventory one artefact over: every Dockerfile under `src/` is built by some
-matrix entry, every entry names a Dockerfile that exists, and every entry reads
-a filter the `changes` job defines and exports. `stages` is what
-docs/testing.md's gate-run section is written around: `dotnet test` exits zero
-on a filter that selects nothing (§12.1), so each stage's count is checked
-rather than its exit code, and the structural half — every test project in
-`Platform.slnx` runs in some stage, none is empty, none overlaps — holds
-whatever the counts become. Stdlib only, on the licence gate's terms.
+"""The pipeline asserting things about itself, one subcommand per way §15.1's
+staged pipeline can be quietly wrong. `filters`: every deployable under `src/`
+has a path filter, because one nothing filters is one CI never rebuilds.
+`images`: every Dockerfile is built by a matrix entry reading a defined
+filter. `stages`: each stage's test count, not its exit code, because
+`dotnet test` exits zero on an empty filter (§12.1), and every project in
+`Platform.slnx` runs in exactly one stage. Stdlib only (licence gate's terms).
 
     py -3.12 .github/pipeline-gate/pipeline_gate.py filters
     py -3.12 .github/pipeline-gate/pipeline_gate.py stages TestResults/architecture TestResults/unit TestResults/integration

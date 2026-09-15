@@ -135,9 +135,9 @@ public static class DependencyInjection
         services.AddSingleton<MessagingMetrics>();
 
         // §13.6's per-lane outbox gauges, and the stats type behind them. Both
-        // singletons: the gauges are callbacks the Meter holds. OrderMetrics
-        // and RequestMetrics are Application types AddOrderingApplication
-        // registers; a second AddSingleton here would not fail, the container
+        // singletons: the gauges are callbacks the Meter holds. RequestMetrics
+        // is an Application type AddOrderingApplication registers; a second
+        // AddSingleton here would not fail, the container
         // would keep both, and two instances would mean two sets of
         // instruments on one meter.
         //
