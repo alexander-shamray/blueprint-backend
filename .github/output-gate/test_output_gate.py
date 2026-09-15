@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """What the gate is looking at, and what it does when it finds nothing.
 
-Every assertion the gate makes is satisfied by an empty set, which is what a
-renamed source root, a moved solution file or a typo in `SOURCE_ROOTS`
-produces, so most of what follows is about the subject rather than the verdict.
+Every output check the gate makes is satisfied by an empty set, which is what
+a renamed source root, a moved solution file or a typo in `SOURCE_ROOTS`
+produces. Only the subject check refuses one, so most of what follows is about
+that check rather than the verdict.
 The last class reads the real repository, because a tree this gate does not
 walk is invisible to every test that builds its own.
 

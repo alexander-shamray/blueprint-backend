@@ -16,9 +16,9 @@ What this does not do, stated here rather than inferred from a green run:
   * It is a pattern scanner, not an entropy oracle. It recognises shapes: a PEM
     block, a provider's key prefix, a password inside a connection string, a
     credential-shaped name assigned a literal. A high-entropy string under a
-    name nobody predicted passes, on the line Section 13.4's redactor draws: an
-    entropy test flags an id as readily as a secret, and a gate that cries wolf
-    gets turned off.
+    name nobody predicted passes. Section 13.4's redactor draws the same line,
+    because an entropy test flags an id as readily as a secret, and a gate
+    that cries wolf gets turned off.
   * It knows nothing about whether a value is live. `not-a-real-password` and a
     production password are the same shape, which is why the accepted ones are
     enumerated under allowed/ rather than guessed at by the patterns.
@@ -314,9 +314,10 @@ def digest(secret: str) -> str:
     """A stable, short fingerprint of one credential.
 
     Twelve hex characters of SHA-256. This is what an allow-list entry names,
-    and it names a hash rather than the value not for confidentiality, since the
-    value is already in the tree, but so the suppression file is not a second
-    place the credential is written: a copy that outlives the first's rotation.
+    and it names a hash rather than the value. The reason is not to keep the
+    value confidential, since it is already in the tree, but to keep the
+    suppression file from being a second place the credential is written, a
+    copy that outlives the first's rotation.
     """
     return hashlib.sha256(secret.encode("utf-8")).hexdigest()[:12]
 

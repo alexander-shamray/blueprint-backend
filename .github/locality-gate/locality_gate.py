@@ -5,8 +5,8 @@ the touch set it declares.
 `docs/change-locality.md` asks every PR body to carry two rows, `| Class |`
 and `| Touch set |`, and section 3 gives each class a tree set.
 
-Every changed path is judged twice, and a path outside either fails the PR,
-named. The class -> tree-set map in `classes.yml` beside this file says what a
+Every changed path is judged twice, and a path outside either set fails the
+PR and is named in the verdict. The class -> tree-set map in `classes.yml` beside this file says what a
 class may reach in this repository, but it cannot say "one service": a
 Catalog change that also edits Ordering is inside Class A's map, which is why
 the declared touch set is the second check. A `+`-joined class is the union
@@ -37,9 +37,10 @@ party. A changed path is the author's text too, since git permits a newline
 inside a name, so each must be a plain path and one that is not refuses the
 run: a verdict list with a line withheld reads as complete.
 
-The file list can be short in two ways its own paths do not show. The files
-endpoint returns a bounded number of entries however it is paginated, so the
-payload carries GitHub's `changedFiles` count and a shorter list is refused.
+The file list can be short in two ways that its own paths do not show. The
+files endpoint returns a bounded number of entries however it is paginated, so
+the payload carries GitHub's `changedFiles` count and a shorter list is
+refused.
 A rename arrives as one entry with the source in `previous_filename`, so both
 ends of a rename are judged.
 

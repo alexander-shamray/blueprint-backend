@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """What the gates would catch, which running them against this repository does not say.
 
-Every check here is a negative case, because a gate only ever observed green
-has not been shown to look at anything.
+Most checks here are negative cases, because a gate only ever observed green
+has not been shown to look at anything; the positive controls say what a clean
+input looks like.
 
 Some tests have no defect in them at all. Their subject is the gate's own
 parser: an empty pattern list, an empty matrix, an empty stage, each a state in
