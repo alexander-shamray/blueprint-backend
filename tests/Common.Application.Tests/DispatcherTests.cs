@@ -46,10 +46,9 @@ public class DispatcherTests
     [Fact]
     public void The_dispatcher_cannot_be_resolved_from_the_root_provider()
     {
-        // Handlers are scoped, so the dispatcher has to be (§6.2). Registered
-        // as a singleton it would capture the root provider and every request
-        // would share one handler instance, and with it any DbContext a service
-        // puts behind one (§7.2).
+        // Handlers are scoped, so the dispatcher has to be (§6.2): registered
+        // as a singleton it would resolve them from the root provider, which
+        // ValidateScopes refuses.
         using ServiceProvider provider = TestContainer.Build();
 
         Should.Throw<InvalidOperationException>(() =>

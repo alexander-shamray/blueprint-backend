@@ -8,8 +8,8 @@ namespace Common.Application.Tests;
 /// the assertion surface.
 /// </summary>
 /// <remarks>
-/// Token-checked like the real store: a complete or release under a token the
-/// entry is not held by changes nothing. <c>SET NX</c>'s atomicity is the Redis
+/// Token-checked like the real store: a complete or release whose token does
+/// not own the entry changes nothing. <c>SET NX</c>'s atomicity is the Redis
 /// suite's to prove, against a container.
 /// </remarks>
 internal sealed class RecordingIdempotencyStore : IIdempotencyStore
