@@ -98,27 +98,23 @@ class KeywordParser(unittest.TestCase):
         self.assert_finds("Closes #13.", {13})
 
     def test_backticks_do_not_hide_a_keyword(self):
-        # Commit adbdb8a2 on PR #116 argues *about* a closing keyword in
-        # backticks. GitHub's linker does not read markdown, so this is a live
-        # closure and the gate has to say so.
+        # GitHub's linker does not read markdown, so a keyword in backticks is
+        # a live closure and the gate has to say so.
         self.assert_finds("the body says **`Closes #14`** and it means it", {14})
 
     def test_a_full_issue_url_counts(self):
         self.assert_finds(f"Closes https://github.com/{REPO}/issues/15", {15})
 
     def test_prose_after_a_keyword_is_not_a_reference(self):
-        # From CLAUDE.md, verbatim: "It closes the naive spelling and nothing
-        # more." A gate that read this as a closure would fire on half the
+        # A gate that read ordinary prose as a closure would fire on half the
         # corpus.
         self.assert_finds("It closes the naive spelling and nothing more.", set())
 
     def test_a_reference_in_unknown_markup_is_reported_not_dropped(self):
         """`~` is not in WRAPPERS, so the strip leaves a token nothing reads.
 
-        It resolves to no issue and it is not prose. Before this it matched
-        neither branch and vanished — a keyword-reference pair GitHub may well
-        honour, gone from the commit set with nothing said. Fail-open, in the
-        one file whose subject is not having that.
+        It resolves to no issue and it is not prose, and GitHub may still honour
+        it, so dropping it from the commit set would fail open.
         """
         numbers, unreadable = closing_references("Closes ~~#21~~", REPO)
         self.assertEqual(numbers, set())
@@ -183,13 +179,7 @@ class Repository(unittest.TestCase):
 
 class Directions(unittest.TestCase):
     def test_over_closing_is_caught(self):
-        """PR #116, reduced to its two sets.
-
-        Its commits carried {30, 31, 32, 55, 56} and its
-        `closingIssuesReferences` reported {31, 32, 55}. #30 and #56 were
-        closed by the merge against a body that said they stayed open, and
-        were reopened by hand.
-        """
+        """A commit keyword the description omits still closes on merge."""
         problems = check(payload(
             body="| Closes | #31, #32, #55 |\n\nCloses #31\nCloses #32\nCloses #55\n",
             commit_messages=(
@@ -206,7 +196,7 @@ class Directions(unittest.TestCase):
         self.assertTrue(any("#56" in problem for problem in problems), problems)
 
     def test_under_closing_is_caught(self):
-        """PR #112: the keywords lived in the table cell and nowhere else."""
+        """Keywords in the table cell alone link nothing."""
         problems = check(payload(
             body="| | |\n|---|---|\n| Closes | #84, #70, #40 |\n",
             commit_messages=("docs: a", "docs: b"),
@@ -233,13 +223,10 @@ class Directions(unittest.TestCase):
         )), [])
 
     def test_a_description_closure_no_commit_repeats_passes(self):
-        """NoCommitRepeatsIt — the fourth comparison must not be added.
+        """NoCommitRepeatsIt: a closure no commit repeats is the ordinary case.
 
-        An issue the description closes and no commit mentions is the
-        ordinary case: the bare `Closes #n` line under the table is what
-        fires. A `linked - from_commits` check would make a commit keyword
-        mandatory and fail this, which is why the docstring says the
-        omission is the design rather than a gap.
+        A `linked - from_commits` check would make a commit keyword mandatory
+        and fail this.
         """
         self.assertEqual(check(payload(
             body="| | |\n|---|---|\n| Closes | #77 |\n\nCloses #77\n",
@@ -259,12 +246,10 @@ class FailsClosed(unittest.TestCase):
     """The gate must never report a pass over a subject it did not read."""
 
     def test_every_required_field_is_reported_when_absent(self):
-        """One case per field, because `REQUIRED_FIELDS` is an inventory.
+        """One case per field, spelled out here.
 
-        Asserted field by field rather than by looping over the list the gate
-        is built from: a loop over `REQUIRED_FIELDS` passes whatever that list
-        happens to contain, including a list an edit shortened. Dropping
-        `headRefOid` from it left every other test green until this arrived.
+        A loop over `REQUIRED_FIELDS` would pass whatever that list contains,
+        including a list an edit shortened.
         """
         for field in ("number", "url", "body", "commits",
                       "closingIssuesReferences", "headRefOid"):
@@ -278,11 +263,8 @@ class FailsClosed(unittest.TestCase):
     def test_a_commit_list_missing_the_head_is_refused(self):
         """A read taken before GitHub has indexed the newest push.
 
-        Observed on PR #133, not reasoned about: seconds after a push that
-        added a closing keyword, `gh pr view` returned the commit list WITHOUT
-        that commit and the gate reported a pass; the same command a moment
-        later reported the problem. A stale list is an unread subject with a
-        clock attached, and it fails in the silent direction.
+        The list lacks the commit that may carry a keyword, which fails in the
+        silent direction.
         """
         stale = payload(commit_messages=("fix: a\n\nCloses #7",), head_ref_oid=oid(9))
         problems = check(stale)
@@ -315,16 +297,11 @@ class FailsClosed(unittest.TestCase):
         )), [])
 
     def test_a_linked_list_at_the_page_size_is_judged_not_refused(self):
-        """NoLinkedGuard — the commit guard must not gain a twin here.
+        """The commit guard must not gain a twin here.
 
-        `gh` preloads `closingIssuesReferences`: cli/cli's
-        `pkg/cmd/pr/shared/finder.go` dispatches to
-        `preloadPrClosingIssuesReferences`, which loops on
-        `PageInfo.HasNextPage` until the collection is exhausted. Commits are
-        not in that preload set, which is why they are guarded and this is
-        not. A guard here would refuse every pull request with a hundred or
-        more linked issues, and telling its author to paginate would be
-        unfollowable advice about an already-paginated fetch.
+        `gh` preloads `closingIssuesReferences` through every page
+        (`preloadPrClosingIssuesReferences` in cli/cli's
+        `pkg/cmd/pr/shared/finder.go`), so a list this long is complete.
         """
         numbers = tuple(range(1, 101))
         cell = " ".join(f"#{n}" for n in numbers)

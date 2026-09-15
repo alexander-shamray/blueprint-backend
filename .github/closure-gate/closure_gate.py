@@ -1,106 +1,45 @@
 #!/usr/bin/env python3
 """What a pull request says it closes must match what merging it will close.
 
-It says it three times, and the three are honoured by different machinery,
-which is why they can disagree without anybody noticing:
+It says it three times, through machinery that does not compare them:
 
-1. **The `| Closes |` row** in the house body form — a human-readable summary,
-   read by people and by nothing else.
-2. **`closingIssuesReferences`** — GitHub's own answer to "what will merging
-   this close", parsed out of the pull request *body*.
-3. **A closing keyword in a commit body** — honoured on merge regardless of
-   what the description says, and unlike the description it cannot be edited.
+1. The `| Closes |` row in the house body form, read by people only.
+2. `closingIssuesReferences`, GitHub's parse of the pull request body.
+3. A closing keyword in a commit body, honoured on merge whatever the
+   description says, and not editable.
 
-Both directions have fired on this repository:
+A table pipe between `Closes` and the reference leaves GitHub no
+keyword-reference pair, so a row alone closes nothing; and `gh pr view --json
+closingIssuesReferences` reports the body only, so a commit keyword the
+description omits closes an issue from a place no reviewer looks.
 
-* **Under-closing, PR #112.** Its keywords lived only in the table cell.
-  `closingIssuesReferences` reads `[]` to this day; #84, #70 and #40 stayed
-  open after the merge and were closed by hand. A cell boundary sits between
-  `Closes` and `#88` in `| Closes | #88 |`, so it is not a keyword-reference
-  pair at all — GitHub is not declining to read a table, it is being handed
-  two cells.
-* **Over-closing, PR #116.** The review loop narrowed two claims and the body
-  was rewritten to say "#56 stays open". The merge closed #30 and #56 anyway,
-  out of commits written before the loop ran. Measured, not recalled: that
-  PR's commits carry `{30, 31, 32, 55, 56}` and its
-  `closingIssuesReferences` reports `{31, 32, 55}`. The set difference is
-  precisely the pair that had to be reopened by hand.
+What must agree is what the merge does, `closingIssuesReferences` with the
+commit keywords, and what the pull request says, in the table and the
+description. An issue the description closes and no commit repeats is the
+ordinary case, not a disagreement: comparing that direction would make a commit
+keyword mandatory, a rule nothing in this repository states.
 
-The second is the one no amount of care in the description reaches, because
-`gh pr view --json closingIssuesReferences` reports the body only — so the
-discrepancy is invisible from the one place a reviewer would look.
+The commit half is this file's regex, so a regex that matches too little is a
+fail-open: a dropped keyword the description also omits agrees with nothing
+missing. The parser is therefore literal, matching inside backticks and quoted
+prose as GitHub's linker does, and a keyword-shaped token it cannot resolve is
+a problem rather than a skip.
 
-**One direction is deliberately not compared, and the first line above reads
-as though it were.** An issue the description closes and no commit body
-mentions is the ordinary case, not a disagreement: the bare `Closes #n` line
-under the table is what fires, and a commit is not obliged to repeat it.
-Adding the symmetric `linked - from_commits` check would make a commit
-keyword *mandatory* — a rule nothing in this repository states, and one that
-would fail a correct pull request. What has to agree is what the merge
-**does** — `closingIssuesReferences` together with the commit keywords — and
-what the pull request **says** it does, in the table and in the description.
-A silent commit contradicts neither. The `NoCommitRepeatsIt` case in
-`test_closure_gate.py` pins it, so the fourth comparison cannot be added by
-someone reading the three statements above as three pairs that have to
-match. This file's opening sentence *was* that reading — it said the three
-statements must agree — and it was flagged from three separate sites before
-being rewritten rather than annotated.
+`gh pr view --json commits` returns one page and a prefix looks complete, so a
+list at or above `GH_PAGE_SIZE` is refused rather than judged.
+`closingIssuesReferences` gets no such guard because `gh` preloads it through
+every page, and a guard there would refuse a correct pull request.
 
-**Half of this comparison is GitHub's own parse and half is the regex below,
-and that asymmetry decides the failure mode.** A regex that matches too much
-makes the gate disagree with GitHub and fail loudly, which is recoverable. A
-regex that matches too *little* drops a commit keyword out of the commit set;
-if the description omits it too, the sets agree and the gate passes while the
-merge closes an issue nobody declared. That is fail-open, and it is this
-repository's most-repeated failure wearing a new hat. So the parser is
-deliberately literal — it matches inside backticks and inside quoted prose,
-exactly as GitHub's linker does — and anything keyword-shaped it cannot
-resolve to a number is reported as a problem rather than skipped.
-
-**The commit half arrives one page at a time, and a short list looks exactly
-like a complete one.** `gh pr view --json commits` returns a single page, so a
-pull request longer than that page hands this gate a prefix of its own
-history — and a closing keyword in a commit past the cut is absent from the
-commit set for a reason that has nothing to do with what the pull request
-says. If the description omits it too, the sets agree and the merge closes an
-issue nobody declared: the fail-open shape this file exists to close, reached
-by a route the parser cannot see. So `GH_PAGE_SIZE` makes it fail closed — a
-list at or above the page size is **refused rather than judged**, and the
-message says to fetch through a paginated endpoint.
-
-**`closingIssuesReferences` is NOT exposed to that, and a guard for it was
-added here and then removed.** `gh` preloads the collection: `finder.go`
-dispatches to `preloadPrClosingIssuesReferences`, which loops on
-`PageInfo.HasNextPage` issuing `closingIssuesReferences(first: 100, after:
-$endCursor)` until it is exhausted. Commits get no such treatment — the
-preload set is reviews, comments, closing issues and checks, and nothing
-else — which is exactly why one of these two collections needs a guard and
-the other must not have one. A guard there would refuse every pull request
-with a hundred or more linked issues, and its own advice would be
-unfollowable, because that fetch is already paginated.
-
-**Measured against cli/cli at v2.92.0, not assumed.** An earlier revision of
-this docstring said the page size was "GitHub's documented default and has
-not been measured here" and guarded both collections on that guess. Half of
-it was right, and the wrong half was a false-refusal generator sitting in a
-gate whose whole subject is not trusting an unchecked claim. The guard
-triggers at or above the size rather than on equality for the reason that
-still holds: a prefix of exactly one page and a complete list of exactly one
-page are indistinguishable from in here. `NoLinkedGuard` in the suite pins
-the removal, so the symmetric guard cannot come back on the symmetry
-argument that produced it.
-
-Stdlib only, on the licence gate's terms, and the network is not in here: the
-deciding takes JSON on stdin and the fetching is one `gh` call in the
-workflow. That is `deploy/canary/canary.py`'s split, for its reason.
+Stdlib only, on the licence gate's terms. The deciding takes JSON on stdin and
+the fetching is one `gh` call in the workflow, `deploy/canary/canary.py`'s
+split:
 
     gh pr view <n> --json number,url,body,commits,closingIssuesReferences,headRefOid |
         py -3.12 .github/closure-gate/closure_gate.py
 
-**Cross-repository closing is out of scope and is refused rather than
-ignored.** Every issue this repository tracks lives in this repository, so a
-`Closes owner/other#12` is either a mistake or a case nobody has thought
-about; either way the gate names it instead of dropping it.
+A cross-repository `Closes owner/other#<n>` is refused by name: every issue this
+repository tracks lives in it, so that form is a mistake or an unconsidered
+case.
 """
 
 from __future__ import annotations
@@ -134,16 +73,12 @@ REFERENCE = re.compile(
 # writes it in backticks, and GitHub links it anyway.
 WRAPPERS = "`\"'([{*_<"
 
-# A token this matches is issue-shaped whether or not the strip above knew
-# the markup around it. `Closes ~~#21~~` leaves `~~#21~~`: `~` is not a
-# wrapper here, `REFERENCE` refuses it, and a `startswith` test then reads it
-# as ordinary prose and drops it. Silently — which is the one outcome the
-# paragraph about this parser says it does not have. Any unresolved token
-# carrying a `#` before a digit is reported instead, so a spelling nobody
-# anticipated fails the gate rather than leaving the commit set.
+# A token this matches is issue-shaped whatever markup wraps it, so an
+# unresolved one struck through with `~~` is reported rather than read as
+# prose and dropped from the commit set.
 ISSUE_SHAPED = re.compile(r"#\d")
 
-# The house form's metadata row: `| Closes | #88 (high), #81 (high) |`.
+# The house form's metadata row: `| Closes | <issue> (high), <issue> (high) |`.
 TABLE_ROW = re.compile(
     rf"^[ \t]*\|[ \t]*{_KEYWORD}[ \t]*\|(?P<cell>[^|]*)\|",
     re.IGNORECASE | re.MULTILINE,
@@ -155,8 +90,8 @@ REQUIRED_FIELDS = ("number", "url", "body", "commits", "closingIssuesReferences"
 
 # One page of `gh pr view`. The commit list is not preloaded, so a list this
 # long may be a prefix and a prefix is indistinguishable from the whole thing
-# from in here. `closingIssuesReferences` IS preloaded and is deliberately
-# not measured against this — see the docstring.
+# from in here. `closingIssuesReferences` is preloaded through every page and
+# is not held to this.
 GH_PAGE_SIZE = 100
 
 PULL_URL = re.compile(r"^https?://github\.com/(?P<repo>[\w.-]+/[\w.-]+)/pull/\d+", re.IGNORECASE)
@@ -184,17 +119,11 @@ def closing_references(text: str, repository: str) -> tuple[set[int], list[str]]
         token = match.group("token").lstrip(WRAPPERS)
         reference = REFERENCE.match(token)
         if reference is None:
-            # Prose. `Closes the door` is English, not a link.
-            # CodeQL raises py/incomplete-url-substring-sanitization on the
-            # substring test below and it is dismissed as a false positive,
-            # recorded here rather than only in a GitHub field. THE TEST IS NOT
-            # A SANITISER AND GRANTS NOTHING: it runs only after REFERENCE has
-            # already failed to parse the token, and a match adds the token to
-            # `unreadable` — so a token carrying `github.com/` at any position
-            # is treated with MORE suspicion, not less. The trust decision is
-            # the REFERENCE regex and the repository comparison below it, and
-            # both are exact. The query's threat model is a substring check
-            # used to authorise; this one is used to widen a rejection.
+            # Prose. `Closes the door` is English, not a link. The substring
+            # test below is not a sanitiser: it runs only after REFERENCE has
+            # refused the token, and a match widens a rejection rather than
+            # granting anything. The trust decision is REFERENCE and the
+            # repository comparison below, and both are exact.
             if (token.startswith("#")
                     or ISSUE_SHAPED.search(token)
                     or "github.com/" in token.lower()):
@@ -244,14 +173,9 @@ def check(payload: dict) -> list[str]:
         ]
 
     # A read taken before GitHub has indexed the newest push returns the
-    # commit list WITHOUT it, and a missing commit is a missing keyword.
-    # OBSERVED HERE, not reasoned about: run seconds after a push that added a
-    # `Closes` line, this gate reported a pass on PR #133, and the same command
-    # a moment later reported the problem. Every guard in this file is about
-    # not judging a subject it did not fully read, and a stale list is that
-    # with a clock attached. `headRefOid` is what the pull request's head
-    # actually is, so a list not containing it is a list that is behind — which
-    # also catches a truncated page whose cut dropped the newest commit.
+    # commit list without it, and a missing commit is a missing keyword. A
+    # list not containing `headRefOid` is behind or truncated, so it is
+    # refused rather than judged.
     oids = {(commit.get("oid") or "") for commit in commits}
     if payload["headRefOid"] not in oids:
         return [
