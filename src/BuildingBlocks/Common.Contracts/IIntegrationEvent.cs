@@ -6,8 +6,9 @@ namespace Common.Contracts;
 /// </summary>
 /// <remarks>
 /// <see cref="MessageId"/> is the only message id: body, outbox row (§9.4),
-/// transport header and inbox key (§9.5) carry one GUID, so an id minted again
-/// in <c>OutboxMessage.Stage</c> would leave a logged id absent from the inbox.
+/// transport header and the inbox key's id half (§9.5) carry one GUID, so an id
+/// minted again in <c>OutboxMessage.Stage</c> would leave a logged id absent
+/// from the inbox.
 /// <see cref="CorrelationId"/> is the mapper's to decide (§9.3).
 /// </remarks>
 public interface IIntegrationEvent
