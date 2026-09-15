@@ -241,11 +241,13 @@ test change.
 and the dogfood sequence in `repo-map.md`, because the scaffold reads
 those files at run time and asserts on the comments it renders.
 
-Done for a tree when these are empty over it — the patterns are the ones
-section 1 counted, and the counts are the baseline:
+Done for a tree when these are empty over it. The grep is the mechanical
+subset of section 1's patterns — "measured" and "round" have innocent
+uses and stay with the reviewer — and it reads whole-line comments, which
+is a sweep's shape; the gate in step 9 reads every comment token:
 
 ```bash
-rg -n -e '#[0-9]+\b' -e 'PR-[0-9]+' -e 'Copilot|Grok|CodeQL' \
+rg -n -e '#[0-9]+\b' -e 'PR-[0-9]+' -e 'Copilot|Grok|CodeQL|found in review' \
    -e 'used to|went stale|this (line|sentence|comment) (said|carried)' \
    -e '\*\*[^*]+\*\*' --glob '*.cs' <tree> | rg '^\S+:\d+:\s*//'
 ```
@@ -340,9 +342,12 @@ it, unchanged.
 
 `.github/comment-gate/`: a Python gate over the pull request's *added* lines
 that fails on the patterns in step 1's grep and on a comment block over ten
-lines, with a README that says what it reads and a suite whose subject is
-what the gate is looking at — a file it must find, a pattern it must match,
-a line it must not judge because the line is code. Added lines only, so the
+lines. It reads every comment token, a trailing one included, and never
+the inside of a string literal, so `Call(); // PR-1` is judged and a
+comment-shaped literal is not, with a README that says what it reads and
+a suite whose subject is what the gate is looking at — a file it must
+find, a pattern it must match, a literal it must not judge because it is
+code. Added lines only, so the
 corpus is brought under the rule by the sweeps and not by the gate refusing
 every pull request until they land. Class D. It makes the mechanical half
 of the *Comments* section — the patterns and the block length — a build
