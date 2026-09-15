@@ -24,9 +24,9 @@ public static class OrderLimits
     /// which the basket is a wholesale order.
     /// </summary>
     /// <remarks>
-    /// Of a product, not of a line: a repeated product merges, so both
-    /// validators sum by product before comparing, or two full lines would
-    /// order twice this (ADR-045).
+    /// Of a product, not of a line: a repeated product merges, so a validator
+    /// sums by product before comparing, or two full lines would order twice
+    /// this (ADR-045).
     /// </remarks>
     public const int MaxQuantity = 999;
 

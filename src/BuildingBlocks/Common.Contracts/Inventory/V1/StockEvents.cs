@@ -60,8 +60,7 @@ public sealed record StockReleased : IIntegrationEvent
 }
 
 /// <summary>
-/// The available quantity for a product moved (§3.2), and Catalog's one
-/// subscription.
+/// The available quantity for a product moved (§3.2); Catalog consumes it.
 /// </summary>
 /// <remarks>
 /// <see cref="QuantityAvailable"/> is a level, not a delta: a redelivered level

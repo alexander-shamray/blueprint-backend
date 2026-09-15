@@ -116,10 +116,11 @@ public static class ReviewReasons
     /// An authorisation landed while the saga was already compensating.
     /// </summary>
     /// <remarks>
-    /// Raised on a <c>PaymentAuthorised</c> in <c>Compensating</c>, where no
-    /// <c>OrderCancelled</c> need exist yet, or in <c>AwaitingPayment</c> once
-    /// a cancellation was observed (§9.6). No despatch is left to stop, and
-    /// whether Payments voided the authorisation is not knowable here (§9.4).
+    /// Raised on a <c>PaymentAuthorised</c> in <c>Compensating</c>, which a
+    /// cancellation, a decline or a timeout enters, so no <c>OrderCancelled</c>
+    /// need exist yet; or in <c>AwaitingPayment</c> once a cancellation was
+    /// observed (§9.6). No despatch is left to stop, and whether Payments
+    /// voided the authorisation is not knowable here (§9.4).
     /// </remarks>
     public const string PaymentAuthorisedDuringCompensation = "payment_authorised_during_compensation";
 
