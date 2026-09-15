@@ -11,17 +11,13 @@ public interface IDomainEvent
 }
 
 /// <summary>
-/// Non-generic marker. Infrastructure filters EF's change tracker by it —
-/// <c>Entries&lt;IHasDomainEvents&gt;()</c> in §7.5 — and the tracker holds
-/// objects, not <c>AggregateRoot&lt;TId&gt;</c> for a known TId. Without a
-/// non-generic interface to test against, those queries would have to know
-/// every key type in the model.
+/// Non-generic marker: EF's change tracker holds objects, and §7.5 filters it
+/// with <c>Entries&lt;IHasDomainEvents&gt;()</c> without knowing any key type.
 /// </summary>
 /// <remarks>
-/// Missing from the base class, this fails silently and completely: the query
-/// matches nothing, the collector returns empty, the dispatcher exits early,
-/// and the command commits having staged no outbox rows at all — no projection,
-/// no integration event, no saga start (§5.5).
+/// Missing from the base class, the query matches nothing and a command commits
+/// having staged no outbox rows — no projection, integration event or saga
+/// start (§5.5).
 /// </remarks>
 public interface IHasDomainEvents
 {
