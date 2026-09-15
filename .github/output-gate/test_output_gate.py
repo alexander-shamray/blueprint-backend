@@ -4,9 +4,9 @@
 Every output check the gate makes is satisfied by an empty set, which is what
 a renamed source root, a moved solution file or a typo in `SOURCE_ROOTS`
 produces. Only the subject check refuses one, so most of what follows is about
-that check rather than the verdict.
-The last class reads the real repository, because a tree this gate does not
-walk is invisible to every test that builds its own.
+that check rather than the verdict. The last class reads the real repository,
+because a tree this gate does not walk is invisible to every test that builds
+its own.
 
     py -3.12 -m unittest discover -s .github/output-gate
 """
@@ -302,9 +302,10 @@ class DuplicateNames(TemporaryRepository):
         self.assertIn("src/Services/Payments/Catalog.Domain/Catalog.Domain.csproj", output)
 
     def test_two_stems_differing_only_in_case_fail(self) -> None:
-        """This pair passes a case-sensitive check and collides on disk.
+        """This pair passes a case-sensitive check and collides in `artifacts/`.
 
-        A case-insensitive filesystem holds the two stems as one directory.
+        On a case-insensitive filesystem the two stems share one
+        `artifacts/obj/` and `artifacts/bin/` entry.
         """
         tree(self.root, {"Catalog.Domain": "src/Services/Catalog/Catalog.Domain"})
         second = self.root / "src/Services/Payments/catalog.domain"

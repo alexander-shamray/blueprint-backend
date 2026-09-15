@@ -80,7 +80,7 @@ def run(root: Path, *allowed: str) -> tuple[int, str, str]:
 # Fixtures assembled to the published length of each provider's key. They are
 # invented values of the right shape, which is the only thing under test, and
 # the reason this file has entries under allowed/: a positive control has to be
-# the literal a real one would be.
+# the literal value a real credential would have.
 AWS_ID = "AKIAIOSFODNN7EXAMPLE"
 AWS_SECRET = "wJalrXUtnFEMIK7MDENGbPxRfiCYEXAMPLEKEY12"
 GITHUB = "ghp_1234567890abcdefghijklmnopqrstuvwxyzAB"

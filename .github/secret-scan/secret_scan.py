@@ -150,10 +150,10 @@ CREDENTIAL_WORDS = (
 # conclusion from the other end and matches by substring for the same reason.
 CREDENTIAL_NAME = rf"[A-Za-z0-9_.\-]*(?:{CREDENTIAL_WORDS})[A-Za-z0-9_.\-]*"
 
-# The shortest value worth reporting under a name-based rule. Below eight
-# characters the name is doing all the work and an ordinary codebase supplies
-# endless `Token = "n/a"`; a prefix-based rule has no such floor because the
-# prefix is the evidence.
+# The shortest value worth reporting under a name-based rule. Below it the
+# name is doing all the work and an ordinary codebase supplies endless
+# `Token = "n/a"`; a prefix-based rule has no such floor because the prefix is
+# the evidence.
 MIN_NAME_RULE_VALUE = 8
 
 
