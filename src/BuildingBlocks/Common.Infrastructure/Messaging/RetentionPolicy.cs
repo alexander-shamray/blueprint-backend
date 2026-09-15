@@ -105,8 +105,8 @@ public sealed record RetentionPolicy
     /// looks like: twenty batches of 5,000 an hour is about 28 rows a second,
     /// where <c>OutboxDispatcher</c> claims up to 100 rows twice a second. That
     /// is not a competition at ordinary load, because a row is only purgeable
-    /// a week after it was processed and a week of backlog is what
-    /// <see cref="OutboxWindow"/> is for; at sustained peak the answer is a
+    /// once <see cref="OutboxWindow"/> has passed and that much backlog is
+    /// what the window is for; at sustained peak the answer is a
     /// shorter <see cref="Interval"/> or a larger ceiling, and §13.6's
     /// outbox-growth alert is what makes the need visible.
     /// </remarks>
