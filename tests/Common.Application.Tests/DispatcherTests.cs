@@ -114,8 +114,8 @@ public class DispatcherTests
         // The quieter half of the same defect, and the one worth the test. Both
         // invokers derive from Invoker<string>, so a shared cache entry casts
         // cleanly and nothing throws — the query just runs the command handler,
-        // through the command's behaviours, which in a service include the
-        // TransactionBehavior §6.3 constrains to commands.
+        // through the command's behaviours. In a service those include
+        // TransactionBehavior, which §6.3 constrains to commands.
         using ServiceProvider provider = TestContainer.Build();
         using IServiceScope scope = provider.CreateScope();
         IDispatcher dispatcher = scope.ServiceProvider.GetRequiredService<IDispatcher>();
