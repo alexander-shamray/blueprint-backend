@@ -213,9 +213,9 @@ class Subject(TemporaryRepository):
     def test_a_project_outside_the_walked_roots_is_not_called_missing(self) -> None:
         """On disk, and outside this walk — two different things to be told.
 
-        A solution entry under a root `SOURCE_ROOTS` does not name is a subject
-        failure, not a missing file, and a diagnostic saying otherwise sends a
-        reader to the wrong place.
+        A solution entry under a root that `SOURCE_ROOTS` does not name is a
+        subject failure, not a missing file, and a diagnostic saying otherwise
+        sends a reader to the wrong place.
         """
         tree(self.root, {"Catalog.Domain": "src/Services/Catalog/Catalog.Domain"})
         outside = self.root / "samples/Catalog.Sample"
@@ -302,7 +302,7 @@ class DuplicateNames(TemporaryRepository):
         self.assertIn("src/Services/Payments/Catalog.Domain/Catalog.Domain.csproj", output)
 
     def test_two_stems_differing_only_in_case_fail(self) -> None:
-        """A pair a case-sensitive check passes and that collides on disk.
+        """This pair passes a case-sensitive check and collides on disk.
 
         A case-insensitive filesystem holds the two stems as one directory.
         """
