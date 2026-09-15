@@ -19,8 +19,9 @@ public sealed record StockReserved : IIntegrationEvent
 /// Stock could not be held for an order (§3.2). The saga cancels on it (§9.6).
 /// </summary>
 /// <remarks>
-/// <see cref="UnavailableProductIds"/> is carried because the saga finalises on
-/// this event, so its instance is gone before anyone asks which lines failed.
+/// <see cref="UnavailableProductIds"/> is carried because a saga awaiting stock
+/// finalises on this event, so its instance is gone before anyone asks which
+/// lines failed; a late one in <c>Compensating</c> is ignored.
 /// Ids rather than a message: a consumer wanting names has a product read
 /// model, and a sentence on a contract is one every consumer must parse.
 /// </remarks>

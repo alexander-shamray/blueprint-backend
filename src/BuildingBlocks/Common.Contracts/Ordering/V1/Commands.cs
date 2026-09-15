@@ -131,7 +131,8 @@ public static class ReviewReasons
     /// <c>OrderConfirmed</c> or a despatch, and has observed a cancellation, in
     /// either order; §9.4 orders nothing between them. Distinct from
     /// <see cref="PaymentAuthorisedDuringCompensation"/> because a despatch may
-    /// be live, and a review row keeps nothing but the code.
+    /// be live, and a review row keeps the order, the code and the time but no
+    /// saga state, so the code alone must name the procedure.
     /// </remarks>
     public const string CancelledAfterConfirmation = "cancelled_after_confirmation";
 
