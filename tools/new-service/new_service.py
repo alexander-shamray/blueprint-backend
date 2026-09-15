@@ -454,14 +454,6 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
         # service naming a type it could not see.
         ("using Catalog.Domain.Products;\n", "using Catalog.Domain;\n"),
         (
-            "/// <c>typeof</c> anchor. The <c>IConfiguration</c> parameter arrives with PR-08\n"
-            "/// because PR-08 is the first thing that reads one — an unused parameter is the\n"
-            "/// same untruth as an unused <c>using</c>.\n",
-            "/// <c>typeof</c> anchor. The <c>IConfiguration</c> parameter is here because\n"
-            "/// this layer reads one — an unused parameter would be the same untruth as an\n"
-            "/// unused <c>using</c>.\n",
-        ),
-        (
             "        services.AddScoped<IUnitOfWork, EfUnitOfWork>();                     // §6.3\n"
             "        services.AddScoped<IProductRepository, ProductRepository>();         // §5.6\n",
             "        services.AddScoped<IUnitOfWork, EfUnitOfWork>();                     // §6.3\n"
@@ -483,18 +475,16 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
         (
             "        // The payload format (§9.4), and the converters that make this\n"
             "        // service's value objects part of it. MoneyJsonConverter is the same\n"
-            "        // decision as ProductConfiguration's ComplexProperty one file over —\n"
-            "        // Money is persisted twice, as two columns and as two JSON members,\n"
-            "        // and knows about neither. Its absence is silent: a Money round-trips\n"
-            "        // to zero and a null currency rather than throwing.\n"
+            "        // decision as ProductConfiguration's ComplexProperty: Money is\n"
+            "        // persisted twice, as two columns and as two JSON members, and knows\n"
+            "        // about neither. Its absence is silent — a Money round-trips to zero\n"
+            "        // and a null currency rather than throwing.\n"
             "        services.AddSingleton<JsonConverter, MoneyJsonConverter>();\n"
             "        services.AddSingleton<OutboxJson>();\n",
-            "        // The payload format (§9.4). No converters yet, and the first value\n"
-            "        // object this service puts on a domain event needs one registered\n"
-            "        // here — a type with a private constructor and get-only properties\n"
-            "        // does not fail loudly on the Local lane, it deserialises to its\n"
-            "        // default. §12.4's round-trip assertion is what catches that, and it\n"
-            "        // arrives with the first domain event for the same reason.\n"
+            "        // The payload format (§9.4). The first value object this service puts\n"
+            "        // on a domain event needs a converter registered here: a readonly\n"
+            "        // record struct deserialises to its default rather than failing,\n"
+            "        // and §12.4's round-trip assertion is what catches that.\n"
             "        services.AddSingleton<OutboxJson>();\n",
         ),
         ("using System.Text.Json.Serialization;\n", ""),
@@ -1150,14 +1140,11 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
         (
             "/// Catalog binds no receive endpoint of its own (§3.2 gives it one Consumes\n"
             "/// cell, owned by a service that does not exist), so this suite declares the\n"
-            "/// endpoints it needs. That is the same reason PR-14's <c>Local</c> lane was\n"
-            "/// proven by handlers in <c>Catalog.TestSupport</c>: the mechanism lands before\n"
-            "/// the first service that uses it, and inventing a consumer for Catalog would\n"
-            "/// be inventing a subscription §3.2 does not give it.\n",
+            "/// endpoints it needs rather than inventing a subscription §3.2 does not give\n"
+            "/// it.\n",
             "/// This service binds no receive endpoint of its own yet, so this suite\n"
-            "/// declares the endpoints it needs. The mechanism lands before the first\n"
-            "/// consumer that uses it, and binding one here to make a test easier would be\n"
-            "/// inventing a subscription §3.2 does not give this service.\n",
+            "/// declares the endpoints it needs rather than inventing a subscription §3.2\n"
+            "/// does not give it.\n",
         ),
     ),
     # §8.5's marker suite travels, and its anti-vacuity floor is INVERTED for

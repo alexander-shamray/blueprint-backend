@@ -5,11 +5,9 @@ using Xunit;
 namespace Common.Application.Tests;
 
 /// <summary>
-/// §8.5's behaviour, driven directly rather than through the container. What is
-/// under test is which store call happens on which path, and a pipeline around
-/// it would only add ways for a failure to be attributed to the wrong
-/// behaviour. The one test that does build a container is the fail-open gate at
-/// the bottom, where the container's own selection <em>is</em> the subject.
+/// §8.5's behaviour, driven directly rather than through the container, so a
+/// failure cannot be attributed to the wrong behaviour. Only the fail-open case
+/// builds a container, because the container's own selection is its subject.
 /// </summary>
 public class IdempotencyBehaviorTests
 {
@@ -48,12 +46,10 @@ public class IdempotencyBehaviorTests
     [Fact]
     public async Task The_outcome_is_recorded_under_the_token_the_claim_returned()
     {
-        // #127: the store can only refuse a write from an attempt that has
-        // lost its claim if the behaviour carries the token that claim minted.
-        // Nothing else in this suite would notice the behaviour inventing one
-        // — the double would refuse the write, the entry would be left in
-        // progress, and every assertion above is about the CALL rather than
-        // about what it wrote.
+        // The store can only refuse a write from an attempt that has lost its
+        // claim if the behaviour carries the token that claim minted; a
+        // behaviour inventing one would leave the entry in progress with every
+        // call-shaped assertion green.
         RecordingIdempotencyStore store = new();
 
         await Behaviour(store).HandleAsync(
@@ -214,10 +210,11 @@ public class IdempotencyBehaviorTests
     [Fact]
     public async Task A_store_failure_after_the_handler_holds_the_claim_rather_than_releasing_it()
     {
-        // The §8.5 release table's third row. The work is durable by now, so
-        // releasing would permit the duplicate outright; holding postpones it
-        // to the retention. The assertion is the ABSENCE of a release — which
-        // is exactly the regression #70 was.
+        // The §8.5 release table's third row. The work is durable and §6.3's
+        // marker refuses a retry either way; holding keeps the claim, so a
+        // retry meets ConcurrentRequestException while the outcome is unknown
+        // rather than a refusal of a commit it never saw. The assertion is
+        // the absence of a release.
         RecordingIdempotencyStore store = new()
         {
             CompleteFault = new TimeoutException("redis went away")
@@ -250,9 +247,9 @@ public class IdempotencyBehaviorTests
     [Fact]
     public async Task Two_subjects_sending_one_CommandId_do_not_collide()
     {
-        // #40's scenario, as a test rather than a paragraph. CommandId is
-        // client-generated, so A can name B's value; without the subject
-        // segment A would be handed B's order id by the replay branch.
+        // CommandId is client-generated, so A can name B's value; without the
+        // subject segment A would be handed B's order id by the replay branch
+        // (§8.5).
         RecordingIdempotencyStore store = new();
         Guid mine = Guid.CreateVersion7();
         Guid theirs = Guid.CreateVersion7();
@@ -293,12 +290,11 @@ public class IdempotencyBehaviorTests
     [Fact]
     public void The_operation_segment_is_declared_and_is_not_the_type_name()
     {
-        // #114. A key built from typeof(TCommand).Name changes under an
-        // ordinary rename, and a rolling deployment then serves both
-        // spellings — so one CommandId is protected by neither claim. The
-        // assertion is not that the string is any particular value but that it
-        // is NOT the CLR name, which is the value a later reader is most
-        // likely to "simplify" it back to.
+        // A key built from typeof(TCommand).Name changes under an ordinary
+        // rename, and a rolling deployment then serves both spellings, so one
+        // CommandId is protected by neither claim. The assertion is that the
+        // value is not the CLR name, which is what a later reader is most
+        // likely to simplify it back to.
         ProtectedCommand.OperationName.ShouldNotBe(nameof(ProtectedCommand));
         ProtectedCommand.OperationName.ShouldNotBeNullOrWhiteSpace();
     }
@@ -306,12 +302,11 @@ public class IdempotencyBehaviorTests
     [Fact]
     public async Task A_command_that_does_not_opt_in_runs_unprotected_and_says_nothing()
     {
-        // The fail-open route, pinned rather than lamented. The container
-        // omits an open-generic registration whose constraints the closed type
-        // does not satisfy — silently, with no diagnostic — so a command that
-        // forgets IIdempotentCommand is dispatched with no claim at all. This
-        // is why each service carries a reflection gate over the SHAPE of its
-        // commands; this test is what establishes that the gate is needed.
+        // The fail-open route, pinned: the container omits an open-generic
+        // registration whose constraints the closed type does not satisfy,
+        // silently, so a command that forgets IIdempotentCommand is dispatched
+        // with no claim at all. This is why each service carries a reflection
+        // gate over the shape of its commands.
         RecordingIdempotencyStore store = new();
 
         using ServiceProvider provider = TestContainer.Build(services =>
@@ -335,11 +330,11 @@ public class IdempotencyBehaviorTests
     [Fact]
     public async Task The_completion_is_made_with_None_rather_than_the_callers_token()
     {
-        // §8.5's rule, and the one the suite could not see. The handler has
-        // committed by this line, so a completion that honoured a cancelled
-        // caller would leave the key claimed with the work durable — a retry
-        // then meets ConcurrentRequestException until the retention expires,
-        // and runs a second time after it.
+        // §8.5's rule: the handler has committed by this line, so a completion
+        // that honoured a cancelled caller would leave the key claimed with the
+        // work durable — a retry meets ConcurrentRequestException until the
+        // retention expires and the marker's refusal after it. What is lost
+        // is the replayable outcome, never the single commit.
         RecordingIdempotencyStore store = new();
         using CancellationTokenSource cancelled = new();
         await cancelled.CancelAsync();
@@ -349,12 +344,10 @@ public class IdempotencyBehaviorTests
             () => Task.FromResult(Result.Success(Guid.CreateVersion7())),
             cancelled.Token);
 
-        // The claim is the positive control, and NOT against an absent entry:
-        // Dictionary's indexer throws on a missing key, so a call that was
-        // never recorded fails here rather than reading back as default. What
-        // it guards is the double recording the same token everywhere — write
-        // None into every slot and all three of these assertions pass while
-        // observing nothing.
+        // The claim is the positive control: Dictionary's indexer throws on a
+        // missing key, so a call never recorded fails here rather than reading
+        // back as default, and a double recording the same token everywhere
+        // cannot pass.
         store.Tokens["claim"].ShouldBe(cancelled.Token);
         store.Tokens["complete"].ShouldBe(CancellationToken.None);
     }
@@ -378,10 +371,9 @@ public class IdempotencyBehaviorTests
     [Fact]
     public async Task The_release_after_a_thrown_handler_is_made_with_None_rather_than_the_callers_token()
     {
-        // The sharpest of the three: the commonest reason to be releasing at
-        // all is the caller's own cancellation, so honouring the token here
-        // would abandon the release exactly when it is most needed and leak
-        // the claim for a day.
+        // The commonest reason to be releasing at all is the caller's own
+        // cancellation, so honouring the token here would abandon the release
+        // exactly when it is most needed and leak the claim for a day.
         RecordingIdempotencyStore store = new();
         using CancellationTokenSource cancelled = new();
         await cancelled.CancelAsync();
@@ -403,11 +395,8 @@ public class IdempotencyBehaviorTests
         // §6.3 writes the durable marker and cannot build this key: the subject
         // comes from a principal this behaviour binds and the operation from a
         // static abstract member reachable only through the IIdempotentCommand
-        // constraint. Carrying it is what keeps one key shape rather than two.
-        // Read from INSIDE next(), because that is the only moment it is true:
-        // §6.3 opens its transaction there, and the key is cleared on the way
-        // out so it cannot outlive the dispatch. Asserting after HandleAsync
-        // returns would be asserting the leak the finally exists to prevent.
+        // constraint. Read from inside next(), because §6.3 opens its
+        // transaction there and the key is cleared on the way out.
         RecordingIdempotencyStore store = new();
         IdempotencyContext idempotency = new();
         string? seen = null;
@@ -430,19 +419,12 @@ public class IdempotencyBehaviorTests
     [InlineData(nameof(Outcome.Throws))]
     public async Task The_key_does_not_outlive_the_dispatch_that_claimed_it(string outcome)
     {
-        // A DI scope is not promised to serve one command — an endpoint or an
-        // integration-event handler may dispatch twice — and a key left
-        // standing is captured by the NEXT command's transaction. That command
-        // then meets this command's marker and is refused with
-        // CommandAlreadyCommittedException having never been protected by
-        // anything; where this attempt FAILED, it is worse, because the next
-        // command commits and writes a marker naming this command's work.
-        //
-        // All three exits, because the clear is in a finally and a finally is
-        // exactly the construct whose absence is invisible on the path the
-        // author was thinking about. Nothing in this platform dispatches twice
-        // per scope today, which is what makes this the premise a later caller
-        // falsifies rather than a bug anybody would hit first.
+        // A DI scope is not promised to serve one command, and a key left
+        // standing is captured by the next command's transaction: that command
+        // meets this one's marker and is refused with
+        // CommandAlreadyCommittedException, or, where this attempt failed,
+        // commits and writes a marker naming this command's work. Every exit,
+        // because the clear is in a finally.
         RecordingIdempotencyStore store = new();
         IdempotencyContext idempotency = new();
 
@@ -465,7 +447,7 @@ public class IdempotencyBehaviorTests
         idempotency.Key.ShouldBeNull();
     }
 
-    /// <summary>The three ways out of a dispatch, named so the theory reads.</summary>
+    /// <summary>The ways out of a dispatch, named so the theory reads.</summary>
     private enum Outcome
     {
         Success,
@@ -542,11 +524,10 @@ public sealed record VoidProtectedCommand(Guid CommandId) : ICommand<Result>, II
 }
 
 /// <summary>
-/// Returns a <see cref="Result"/> and does <b>not</b> declare
-/// <see cref="IIdempotentCommand"/>. It satisfies the behaviour's second
-/// constraint and fails the first, which is what makes it the right subject for
-/// the fail-open test: the omission under test is the opt-in, not the shape of
-/// the result.
+/// Returns a <see cref="Result"/> and does not declare
+/// <see cref="IIdempotentCommand"/>: it satisfies the behaviour's second
+/// constraint and fails the first, so the omission under test is the opt-in
+/// and not the shape of the result.
 /// </summary>
 public sealed record UnprotectedCommand : ICommand<Result>;
 

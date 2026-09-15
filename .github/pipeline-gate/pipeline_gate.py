@@ -1,43 +1,11 @@
 #!/usr/bin/env python3
-"""PR-25's quality gates: the pipeline asserting things about itself.
-
-Three subcommands, and they answer the three ways §15.1's staged pipeline can
-be quietly wrong: a deployable nothing filters, an image nothing builds, and a
-stage nothing ran.
-
-`filters` is §15.1's own instruction — "assert that every immediate child of
-`src/`, and every immediate child of `src/Services/`, appears in at least one
-filter — and fail on the one that does not". A path filter is a deployable
-inventory, and an inventory drifts: a missing top-level entry is what left
-`src/Gateway/**` and `src/BFF/**` unbuilt, and a missing entry under
-`Services/` is quieter still, because the parent is spoken for by its siblings
-and the list looks complete right up until one service stops being deployed.
-
-`images` is the same inventory one artefact over, and §15.1's per-service image
-build is what makes it one: every Dockerfile under `src/` must be built by some
-matrix entry, and every entry must name a Dockerfile that exists. Its third
-check is the one neither direction can see — a matrix entry reading
-`needs.changes.outputs[matrix.filter]` on a name no filter defines evaluates to
-the empty string rather than erroring, so the step is skipped and the job
-reports success having built nothing.
-
-`stages` is the one docs/testing.md's gate-run section is written around: a
-check on each stage's count rather than trust in a green exit. The trap it
-closes is §12.1's oldest one wearing different clothes — a missing
-test adapter makes `dotnet test` report no tests and exit **zero**, and a
-mistyped `--filter` does exactly the same. Splitting one run into three is
-three new ways to select nothing and be congratulated for it.
-
-**A floor is the weaker half of that check and it is here because the chapter
-asks for it.** A number in a file drifts, and this repository has a section
-about numbers that drift; what carries the weight instead is the structural
-half, which has no number in it at all: every test project in `Platform.slnx`
-must appear in some stage, no stage may be empty, and no test may run in two.
-Those hold whatever the counts become, and they fail on exactly the defect a
-floor is groping for.
-
-Stdlib only, on the licence gate's terms. `filters` needs nothing but the
-checkout and runs before any build; `stages` reads what the test steps wrote.
+"""The pipeline asserting things about itself, one subcommand per way §15.1's
+staged pipeline can be quietly wrong. `filters`: every deployable under `src/`
+has a path filter, because one nothing filters is one CI never rebuilds.
+`images`: every Dockerfile is built by a matrix entry reading a defined
+filter. `stages`: each stage's test count, not its exit code, because
+`dotnet test` exits zero on an empty filter (§12.1), and every project in
+`Platform.slnx` runs in exactly one stage. Stdlib only (licence gate's terms).
 
     py -3.12 .github/pipeline-gate/pipeline_gate.py filters
     py -3.12 .github/pipeline-gate/pipeline_gate.py stages TestResults/architecture TestResults/unit TestResults/integration
@@ -55,35 +23,11 @@ ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW = ROOT / ".github" / "workflows" / "ci.yml"
 SOLUTION = ROOT / "Platform.slnx"
 
-# The floors, with the run that produced them.
-#
-# MEASURED, not guessed: `dotnet test Platform.slnx --no-build -c Release` under
-# each stage's filter on this repository, summed over the thirteen per-project
-# totals — 18 + 671 + 188 = 877 when PR-25 set these floors.
-#
-# The integration figure read 187 until it was checked against CI rather than
-# against the previous copy of itself: 18 + 649 + 187 IS 854, and 854 is not
-# the 855 the suites actually summed to. A restated number is a claim to
-# reconcile — and this comment spent that whole time saying the sum "does not
-# make" a figure it makes exactly, which is the arithmetic error the sentence
-# was written to warn about.
-#
-# **So this comment restates no live total**, and the removal is the point
-# rather than tidying. It used to, and the sentence went stale the first time
-# a PR added a test — silently, because nothing here reads a document and no
-# floor moves when a count changes. A cross-reference a gate cannot check is a
-# third copy of a number, which is what the paragraph above is about. The
-# suite's live totals are a run's to state and no file's; what this comment
-# owes is the run these floors were derived from, and that run is in the past
-# and stays where it is.
-#
-# THE NUMBERS BELOW ARE NOT THOSE COUNTS, and the gap is deliberate. A floor
-# set at the measurement is a ratchet: it fails on the day somebody legitimately
-# deletes a test class, which is a green change made red by bookkeeping. What
-# this is groping for is an order-of-magnitude miss — a filter that selected
-# nothing, or a tenth of what it should — and a round number well under the
-# measurement catches that without firing on ordinary churn. The structural
-# checks below are what catch the small stuff, and they have no number to age.
+# Floors, set well under the measured totals on purpose: a floor at the
+# measurement is a ratchet that goes red when somebody legitimately deletes a
+# test class, and what this is groping for is an order-of-magnitude miss — a
+# filter that selected nothing, or a tenth of what it should. The structural
+# checks in `check_stages` catch the small stuff and have no number to age.
 STAGE_FLOORS = {
     "architecture": 15,     # measured 18
     "unit": 550,            # measured 671
@@ -112,9 +56,6 @@ def read_filters(workflow_text: str) -> list[str]:
     `pip install` is a gate that gets skipped. The block is a YAML string
     inside a YAML document either way, so a parser would hand back the same
     text to be parsed a second time.
-
-    The anchor is `filters: |` and the block ends at the first line that is
-    neither blank, a comment, nor indented past it.
     """
     lines = workflow_text.splitlines()
     for index, line in enumerate(lines):
@@ -140,24 +81,14 @@ def read_filters(workflow_text: str) -> list[str]:
 def covers(pattern: str, directory: str) -> bool:
     """Whether one filter pattern reaches anything under a directory.
 
-    Prefix matching, and that is §15.1's own model rather than a loose reading
-    of it. `src/Services` is a child of `src` and NO filter names it: it is
-    "spoken for by its siblings' filters", which is exactly why that section
-    requires the children of `src/Services` to be checked separately. A rule
-    demanding `src/Services/**` would fail on the correct workflow.
-
-    **The reach and its cost, stated rather than implied.** A pattern naming
-    one path INSIDE a deployable satisfies this — `src/Gateway/Program.cs`
-    would mark `src/Gateway` covered. So what this proves is that every
-    deployable is reachable by some filter, not that any filter is complete;
-    the second is §15.1's "if changing a file can change what a service ships,
-    that file belongs in that service's filter", and no check here reaches it.
-    The escape needs somebody to have written a file-level pattern where every
-    existing one is a `/**`, which is visible in review in a way a missing
-    entry never was.
-
-    A negation covers nothing: `!deploy/compose/**` is there to carve out, and
-    reading it as coverage would let an exclusion satisfy the inventory.
+    Prefix matching is §15.1's own model: `src/Services` is spoken for by its
+    siblings' filters, which is why the section checks its children
+    separately, and a rule demanding `src/Services/**` would fail the correct
+    workflow. What this proves is that every deployable is reachable by some
+    filter, not that any filter is complete — §15.1's "if changing a file can
+    change what a service ships, that file belongs in that service's filter"
+    is review's. A negation covers nothing, or an exclusion could satisfy the
+    inventory.
     """
     if pattern.startswith("!"):
         return False
@@ -174,11 +105,8 @@ def check_filters(root: Path = ROOT) -> list[str]:
 
     patterns = read_filters(text)
 
-    # The gate's own subject, first. Every check below is "is this directory in
-    # that list", so an empty list passes all of them and reports a clean
-    # inventory — which CLAUDE.md names as this repository's most-repeated
-    # failure. A parser that extracted nothing is the parser being broken, not
-    # the workflow being complete.
+    # An empty list passes every check below vacuously, so it is the parser
+    # that is broken, not the workflow that is complete.
     if not patterns:
         return [
             "found no path patterns under `filters: |` in ci.yml. Every check "
@@ -187,11 +115,9 @@ def check_filters(root: Path = ROOT) -> list[str]:
             "failing, not the inventory being complete"
         ]
 
-    # §15.1: "Without this, negated patterns are silently ignored: the default
-    # quantifier ('some') never evaluates the exclusion below." The `deploy`
-    # filter excludes deploy/compose/** on the stated grounds that a
-    # compose-only change reaches no cluster and must not roll one. Without the
-    # quantifier that exclusion is decoration, and nothing else would say so.
+    # §15.1: without `some-with-excludes` the default quantifier never
+    # evaluates a negated pattern, and the `deploy` filter's exclusion of the
+    # compose tree would be decoration.
     if "some-with-excludes" not in text:
         problems.append(
             "the paths-filter step does not set predicate-quantifier: "
@@ -255,18 +181,12 @@ def read_image_matrix(workflow_text: str) -> list[tuple[str, str]]:
 def check_images(root: Path = ROOT) -> list[str]:
     """Every image is built, and everything built is an image.
 
-    Both directions, on `deploy/observability/check.py`'s reasoning about
-    alerts and runbooks: a Dockerfile in no matrix is an image CI never builds,
-    and a matrix entry naming no Dockerfile is a step that fails on the day it
-    is first selected — which, being path-filtered, may be months after the
-    rename that caused it.
-
-    The third check is the one neither direction can make. A matrix entry's
-    `filter` is read back as `needs.changes.outputs[matrix.filter]`, and an
-    expression indexing a name no filter defines evaluates to the empty string
-    rather than erroring — so the `if` is false, the step is skipped, and the
-    job reports success having built nothing. A misspelling there is invisible
-    from both sides of the inventory.
+    Both directions, because a Dockerfile in no matrix is an image CI never
+    builds and a matrix entry naming no Dockerfile fails on the day it is
+    first selected. The third check is the one neither direction can make: a
+    `filter` no filter defines makes `needs.changes.outputs[matrix.filter]`
+    the empty string rather than an error, so the step is skipped and the job
+    reports success having built nothing.
     """
     problems: list[str] = []
 
@@ -326,16 +246,10 @@ def check_images(root: Path = ROOT) -> list[str]:
             "always false and the job reports success having built nothing"
         )
 
-    # ...and the `changes` job has to EXPORT it, which defining the filter does
-    # not do.
-    #
-    # `needs.changes.outputs.gateway` reads a job output, and a job output
-    # exists only because an `outputs:` entry maps it from the step. Delete
-    # that one line and the filter still exists, this gate still passes, and a
-    # gateway-only change makes the images job's own `if` false — every gateway
-    # build skipped, with the inventory intact and the name defined. The
-    # unconditional guard step inside the job catches this for a leg that runs;
-    # it cannot catch a job that never starts.
+    # ...and the `changes` job has to export it, which defining it does not do:
+    # `needs.changes.outputs.gateway` reads a job output, and deleting the one
+    # `outputs:` line leaves the filter defined, the checks above green, and
+    # the images job's `if` false on every gateway-only change.
     exported = read_job_outputs(text, "changes")
     if not exported:
         problems.append(
@@ -351,14 +265,9 @@ def check_images(root: Path = ROOT) -> list[str]:
                 "and every image under that filter is silently skipped"
             )
 
-    # ...and it has to be the RIGHT one, which the check above cannot see.
-    #
-    # Pairing `src/Gateway/Gateway.Api/Dockerfile` with `filter: catalog` names
-    # a filter that exists, builds a Dockerfile that exists, and passes both
-    # directions of the inventory — while a gateway-only change builds no
-    # gateway image and a Catalog change builds one nobody asked for. The
-    # entry is well-formed and wired to the wrong thing, which is the failure
-    # neither an existence check nor a name check can reach.
+    # ...and it has to be the right one. An entry pairing the gateway's
+    # Dockerfile with `filter: catalog` passes both directions of the inventory
+    # and the name check, and rebuilds the wrong image.
     for filter_name, dockerfile in sorted(matrix):
         patterns = by_filter.get(filter_name)
         if patterns is None:
@@ -411,7 +320,7 @@ def read_filters_by_name(workflow_text: str) -> dict[str, list[str]]:
     """The paths-filter block as {filter: [its own patterns]}.
 
     `read_filters` flattens, which is all the `filters` check needs — it asks
-    whether a directory is reachable by ANY filter. Pairing needs to know
+    whether a directory is reachable by any filter. Pairing needs to know
     which, so this keeps them apart. A `*shared` alias line carries no quoted
     pattern and is skipped, and that costs nothing here: every Dockerfile lives
     under its own service's tree, never under `shared`.
@@ -487,11 +396,9 @@ def read_stage(directory: Path) -> tuple[int, set[str], set[str]]:
             if tag == "Counters":
                 total += int(element.get("total", "0"))
             elif tag == "TestMethod":
-                # The assembly is part of the identity, not just of the
-                # inventory. Two projects may hold a class of the same name —
-                # `ArchitectureTests` is very nearly that already — and an
-                # identity without it would report an overlap that is not
-                # there, which is a red build with no defect behind it.
+                # The assembly is part of the identity: two projects may hold a
+                # class of the same name, and an identity without it would
+                # report an overlap that is not there.
                 code_base = element.get("codeBase", "")
                 assembly = Path(code_base.replace("\\", "/")).stem if code_base else ""
                 if assembly:
@@ -558,14 +465,10 @@ def check_stages(directories: list[Path], solution: Path = SOLUTION) -> list[str
             "no stage was read, so every check here passed vacuously"
         ]
 
-    # EVERY DECLARED STAGE HAS TO HAVE BEEN READ, not merely every read stage
-    # declared. The loop above rejects a directory nobody declared and had
-    # nothing to say about a declared stage nobody passed: drop the
-    # architecture invocation and its argument, let those tests fall into the
-    # unit filter, and the project-coverage, floor and overlap checks all pass
-    # while the gate reports "2 stages ran". A gate cannot fail on a file that
-    # is not there — which is the shape `deploy/helm/smoke.sh` recorded when an
-    # assertion credited a values key the chart never consulted.
+    # Every declared stage has to have been read, not merely every read stage
+    # declared: drop the architecture invocation and its argument, let those
+    # tests fall into the unit filter, and every check above passes while the
+    # gate reports two stages ran.
     for stage in sorted(set(STAGE_FLOORS) - set(seen)):
         problems.append(
             f"the {stage} stage was never read: no results directory was passed "
@@ -587,12 +490,9 @@ def check_stages(directories: list[Path], solution: Path = SOLUTION) -> list[str
             "going red"
         )
 
-    # Structural half 2: and they do not overlap.
-    #
-    # ci.yml claims the filters are "exhaustive and disjoint by construction".
-    # This is what makes the second half of that a check: an overlap is the
-    # slow half of the suite paid for twice, and on the integration stage that
-    # is a container set.
+    # Structural half 2: and they do not overlap. ci.yml claims the filters are
+    # disjoint by construction, and an overlap is the slow half of the suite
+    # paid for twice.
     stages = sorted(seen)
     for index, first in enumerate(stages):
         for second in stages[index + 1:]:

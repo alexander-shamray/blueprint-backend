@@ -58,6 +58,9 @@ docs/change-locality.md      the operating contract — the trust order, the
                              one rule, the change classes; the paths each
                              class may reach live in classes.yml, cited
 docs/change-locality-plan.md the PRs that make the contract fully true
+docs/churn-plan.md           where the corpus churns, measured on a named
+                             commit, and the refactor sequence that reduces
+                             it
 docs/repo-map.md             this file — what every entry here is and why
                              it is shaped that way. It lists itself because
                              the locator in `CLAUDE.md` does, and a map

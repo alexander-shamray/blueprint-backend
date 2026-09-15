@@ -5,15 +5,10 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Catalog.Infrastructure.Messaging;
 
 /// <summary>
-/// The bus registration of §9, in the folder-scoped shape
-/// <c>Common.Infrastructure/Redis</c> established. Per-service rather than
-/// common, because this is where a service's consumers, sagas and receive
-/// endpoints are configured (§9.6 registers Ordering's saga inside its
-/// <c>AddMassTransitMessaging</c>). Common code does name a MassTransit type
-/// since PR-14 — <c>IPublishEndpoint</c>, on the Broker half of the outbox
-/// dispatcher — and that changed nothing here: what keeps this per-service is
-/// the transport, not the reference. <c>UsingRabbitMq</c>, the consumers and
-/// the receive endpoints are each service's own.
+/// The bus registration of §9, per-service rather than common because this is
+/// where a service's consumers, sagas and receive endpoints are configured
+/// (§9.6): <c>UsingRabbitMq</c>, the consumers and the receive endpoints are
+/// each service's own.
 /// </summary>
 public static class DependencyInjection
 {
@@ -21,14 +16,12 @@ public static class DependencyInjection
         this IServiceCollection services,
         IConfiguration configuration)
     {
-        // Eager, like AddSqlServer's throw one file over: a host with no
-        // broker configured must not start. Read inside UsingRabbitMq's
-        // callback instead, the missing key would surface at bus start —
-        // after the host is up, past ValidateOnBuild, in a background
-        // service's log. IsNullOrWhiteSpace, not a null check, on the Redis
-        // helper's argument: an empty environment variable configures an
-        // empty string, and letting it through defers the failure to the
-        // same place the eager read exists to avoid.
+        // Eager: a host with no broker configured must not start. Read inside
+        // UsingRabbitMq's callback, the missing key would surface at bus start
+        // — after the host is up, past ValidateOnBuild, in a background
+        // service's log. IsNullOrWhiteSpace, not a null check: an empty
+        // environment variable configures an empty string, and letting it
+        // through defers the failure to the same place.
         string? connectionString = configuration.GetConnectionString("RabbitMq");
         if (string.IsNullOrWhiteSpace(connectionString))
         {
@@ -47,24 +40,14 @@ public static class DependencyInjection
             {
                 cfg.Host(new Uri(connectionString));
 
-                // Nothing further. This service binds no receive endpoint,
-                // so there is no retry policy either: §9.8 configures retry
-                // per receive endpoint, and there are none.
-                //
-                // There is deliberately no ConfigureEndpoints(context) call.
-                // It is inert while no consumer is registered, and what it
-                // does once one is is manufacture a queue named after the
-                // consumer type — carrying NEITHER the inbox filter NOR the
-                // retry policy, both being per-endpoint configuration that an
-                // invented endpoint never receives. §9.8 admits no exception
-                // to the inbox — every receive endpoint applies InboxFilter<>,
-                // and the one departure that section does record is the saga's
-                // OUTBOX, which is a different filter and a different argument
-                // (ADR-032). So an invented queue is not an opt-out anyone is
-                // entitled to take; it is an endpoint the rule cannot reach.
-                // A consumer added here needs an explicit ReceiveEndpoint with
-                // its own policy, which is what the absence of this line
-                // forces.
+                // No receive endpoint, so no retry policy either: §9.8
+                // configures retry per endpoint. No ConfigureEndpoints(context)
+                // either, deliberately: for a registered consumer with no
+                // explicit binding it manufactures a queue named after the
+                // consumer type, with neither the inbox filter nor the retry
+                // policy, and §9.8 admits no endpoint without InboxFilter<>. A
+                // consumer added here needs an explicit ReceiveEndpoint with
+                // its own policy, which is what this absence forces.
             });
         });
 

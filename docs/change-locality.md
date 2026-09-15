@@ -48,7 +48,8 @@ restatement while doing something else, leave it: removing restatements is
 the plan's job, one chapter per PR, and fixing one in passing widens your
 touch set for no gain.
 
-Never write, in any document:
+Never write, in any document — and for this rule a code comment, an XML
+doc, a docstring or a configuration comment is a document:
 
 - a number of tests, projects, ADRs, chapters, or lines;
 - a package version outside `Directory.Packages.props`, except in Appendix
@@ -56,14 +57,20 @@ Never write, in any document:
 - a timeout, retry count, port, TTL or window as a raw integer in a second
   place;
 - "since PR-NN", "this used to say", or the history of how a rule was
-  corrected. The ADR trail is the history.
+  corrected. The ADR trail is the history;
+- a copy of an argument an ADR or a chapter already makes, where one
+  clause and a citation would do. [`docs/style-guide.md`](style-guide.md)'s
+  *Comments* section is this rule at the code's side, and
+  [`docs/churn-plan.md`](churn-plan.md) is the measurement of what the
+  copies cost.
 
-A measurement is not a restatement. A commit body, a PR body, an issue, or
-[`change-locality-plan.md`](change-locality-plan.md) may state a count or a
-value **as of a named date or commit**, because a record of what was true
-when it was taken is not a claim that it is true now, and nothing has to
-keep it current. The prohibition is on a document stating a fact in the
-present tense in a second place.
+A measurement is not a restatement. A commit body, a PR body, an issue,
+[`change-locality-plan.md`](change-locality-plan.md) or
+[`churn-plan.md`](churn-plan.md) may state a count or a value, or quote
+what the corpus said, **as of a named date or commit**, because a record
+of what was true when it was taken is not a claim that it is true now,
+and nothing has to keep it current. The prohibition is on a document
+stating a fact in the present tense in a second place.
 
 ## 3. Change classes
 
@@ -207,6 +214,8 @@ What an agent does instead of touring the corpus:
 9. In the review loops, a finding that asks for a restated count, a
    "since PR-NN" sentence, or a corpus-wide rename of something whose owner
    site is already correct is answered by citing this file, not by editing.
+   A finding against a comment is closed by shortening or deleting the
+   comment, never by appending the correction to it.
 10. Stop. Do not open `CLAUDE.md` looking for a sentence that still names the
     old type.
 
@@ -219,6 +228,8 @@ the same PR. It waives nothing else. In particular:
 - exact pins in `Directory.Packages.props`, never `Version=` on a reference;
 - the dialect in [`docs/style-guide.md`](style-guide.md): British prose,
   identifiers keep their real spelling, 80-column prose, 120-column code;
+- the guide's *Comments* section: a comment says why and cites the owner,
+  in code exactly as a chapter would;
 - ADRs appended, never rewritten;
 - `main` stays green;
 - when a change closes an issue, `Closes #n` as a bare line, not only
@@ -241,6 +252,9 @@ the same PR. It waives nothing else. In particular:
 [ ] ADR appended only if a rule moved; nothing in it rewritten
 [ ] No present-tense count, version or raw value written outside its owner;
     no "since PR-NN"
+[ ] No comment added or rewritten that copies an ADR, names a review, a PR
+    or a test, or counts what lives elsewhere; a finding against one was
+    cut, not appended to
 [ ] Appendix D, decision log, lessons, repo map, style guide, testing.md,
     roadmap and CLAUDE.md untouched unless the class names one
 [ ] Mutex surfaces this PR needs are named in the issue, or in the touch-set

@@ -1,15 +1,10 @@
 #!/usr/bin/env bash
 #
-# Renders every chart under deploy/helm and asserts the claims §15.3, §15.4 and
-# §7.4 make about what comes out. It is the Helm analogue of the Compose smoke
-# (§15.1) and it is run the same way — by CI, on a path filter, and by a person
-# before pushing a chart change.
-#
-# WHAT IT IS NOT: it deploys nothing and reaches no cluster. `helm template`
-# renders locally, so this proves the charts produce the manifests the chapters
-# describe and says nothing about whether a cluster would accept them. Schema
-# validation against a live API server is a deploy-time gate (§15.1) and is
-# named here as not covered rather than implied.
+# Renders every chart under deploy/helm and asserts what §15.3, §15.4 and
+# §7.4 say comes out — the Helm analogue of the Compose smoke (§15.1), run
+# by CI on a path filter and by a person before pushing a chart change. It
+# deploys nothing and reaches no cluster: `helm template` renders locally, and
+# schema validation against a live API server is a deploy-time gate (§15.1).
 #
 #   HELM=/path/to/helm bash deploy/helm/smoke.sh
 #
@@ -22,18 +17,15 @@ CHARTS_DIR="$ROOT/deploy/helm"
 OUT="$(mktemp -d)"
 trap 'rm -rf "$OUT"' EXIT
 
-# Any tag will do — the point of supplying one is that `required` lets the
-# render through. What happens WITHOUT one is asserted below, and is the more
-# interesting half.
+# Any tag will do — supplying one is what lets `required` let the render
+# through; what happens without one is asserted below.
 TAG="0000000000000000000000000000000000000000"
 
 # The gateway's chart ships `ingress.trustedNetworks: []` on purpose: a
-# plausible CIDR is an active security decision taken on behalf of a cluster
-# nobody has seen (§15.3). Every render here therefore plays the part of the
-# environment overlay, and each of the negative tests below supplies it too —
-# so that a test asserting "no tag is refused" fails on the tag and not on
-# something else it forgot to set. An assertion that passes for the wrong
-# reason is the failure this file keeps finding in itself.
+# plausible CIDR is a security decision taken on behalf of a cluster nobody
+# has seen (§15.3). Every render here plays the environment overlay, and each
+# negative test below supplies it too, so a test asserting "no tag is refused"
+# fails on the tag and not on something else.
 CIDR='{10.42.0.0/16}'
 GATEWAY_OVERLAY="--set ingress.trustedNetworks=$CIDR"
 PLATFORM_OVERLAY="--set gateway.ingress.trustedNetworks=$CIDR"
@@ -42,18 +34,10 @@ SERVICE_CHARTS="catalog ordering gateway web-bff"
 MIGRATOR_CHARTS="catalog ordering"
 DATABASELESS_CHARTS="gateway web-bff"
 
-# EVERY PATH OUTSIDE deploy/helm THAT THIS SCRIPT READS, declared once.
-#
-# The workflow's path filter must cover each of them, or a change to one is a
-# green pull request that skips the gate watching it. That list has now gone
-# stale THREE times — the routing files, then HealthCheckExtensions.cs, then
-# these service trees — and every time for the same reason: a read was added
-# here and the filter updated somewhere else, or not at all.
-#
-# So it is declared here, beside the reads, and the agreement is asserted
-# below. A list maintained in two places by hand is a list that drifts; this
-# branch has spent six findings learning that about counts and inventories, and
-# this is the same lesson applied to the gate's own inputs.
+# Every path outside deploy/helm that this script reads, declared once beside
+# the reads: the workflow's path filter must cover each of them, or a change to
+# one is a green pull request that skips the gate watching it, and the
+# agreement is asserted below.
 SOURCE_INPUTS="
 src/Gateway/Gateway.Api
 src/BFF/Web.Bff
@@ -64,16 +48,10 @@ src/BuildingBlocks/Common.Web/HealthCheckExtensions.cs
 deploy/canary/canary.json
 "
 
-# The lists above are classifications and stay written down — which chart owns
-# a database is a fact about the platform, not something to infer. What must
-# NOT be written down is the membership, and until Copilot said so it was: a
-# fifth chart directory could be added and every check in this file would skip
-# it silently while the run still said "all assertions passed".
-#
-# That is this repository's most-repeated failure and this branch's own lesson
-# for the fourth time — a gate that quietly stops covering the newest surface.
-# So the directory is the authority and the lists are reconciled against it
-# below, before anything is rendered.
+# The lists above are classifications — which chart owns a database is a fact
+# about the platform — and the membership is not written down: the directory
+# is the authority, and the lists are reconciled against it before anything is
+# rendered, so a new chart directory cannot be skipped silently.
 discovered_charts() {
     for d in "$CHARTS_DIR"/*/; do
         name="$(basename "$d")"
@@ -113,8 +91,7 @@ section() { printf '\n%s\n' "$1"; }
 section 'The gate covers every chart on disk'
 # --------------------------------------------------------------------------
 # First, because every section below iterates SERVICE_CHARTS: a chart missing
-# from that list is not a weaker run, it is an unrun one that still reports
-# success.
+# from that list is not a weaker run, it is an unrun one that reports success.
 found="$(discovered_charts | tr '\n' ' ' | sed 's/ *$//')"
 listed="$(printf '%s\n' $SERVICE_CHARTS | sort | tr '\n' ' ' | sed 's/ *$//')"
 if [ "$found" = "$listed" ]; then
@@ -133,58 +110,26 @@ else
     fail "MIGRATOR_CHARTS + DATABASELESS_CHARTS ($both) do not partition SERVICE_CHARTS ($listed)"
 fi
 
-# Read from the values files rather than from a render, and asserted HERE for
-# that reason: a second chart setting it renders nothing at all — it has no
-# clientId, scope or secret ref — so under `set -e` the run aborts in the
-# render section and this never reports. The gate is red either way; it is only
-# legible if the file check runs first.
-#
-# ADR-017's budget is one synchronous hop, so it is one chart (§11.5).
+# Read from the values files rather than from a render, and asserted here: a
+# second chart setting it renders nothing at all, so under `set -e` the run
+# would abort in the render section before this reported. ADR-017's budget is
+# one synchronous hop, so it is one chart (§11.5).
 credentialed="$(grep -l 'clientCredentials: true' "$CHARTS_DIR"/*/values.yaml | wc -l | tr -d ' ')"
 check "exactly one chart declares client credentials (found $credentialed)" \
     test "$credentialed" -eq 1
 
-# EACH CHART MUST DECLARE WHAT ITS CODE REQUIRES, read from src/ rather than
-# trusted. The render-time coherence guards refuse a HALF override — disabling
-# a capability whose settings are still present — and Copilot is right that a
-# whole one slips through: clearing `broker.enabled` AND `broker.secretRef`
-# together omits RabbitMQ from a host that always registers MassTransit.
+# Each chart must declare what its code requires, read from src/ rather than
+# trusted: the render-time guards refuse a half override, and a whole one —
+# `broker.enabled` and `broker.secretRef` cleared together — has to be
+# committed to reach anyone, and then fails here. An ad-hoc `--set` at deploy
+# time is outside a render-time gate's reach, and deploy/helm/README.md says so.
 #
-# Nothing in a template can close that, because both halves are values. What
-# can is this: the committed chart is checked against the code it deploys, so a
-# whole override has to be committed to reach anyone, and then it fails here.
-# An ad-hoc `--set` at deploy time remains outside a render-time gate's reach,
-# and `deploy/helm/README.md` says so rather than implying otherwise.
-#
-# The real fix is a `chart:` capability block — one key per capability, named
-# for what it is — and it is deferred to its own change rather than taken at
-# round nine of a review loop.
-# SCOPED TO ITS OWN BLOCK, and the first version was not — `^ +enabled: true`
-# matched whichever block came first (there are five in Catalog's values), so
-# clearing the broker entirely left this gate green while claiming to check it.
-# A vacuous assertion in the file whose whole subject is vacuous assertions.
-# The invocation form of §8.2's helper, as opposed to any mention of its name.
-# Declared here so the self-test below can be written against the same string
-# the gate uses — two copies of a pattern is one of them going stale.
-# ANCHORED TO A STATEMENT, not merely to a line that does not begin with a
-# slash. The first form here was a bare mention, which three comments per
-# service satisfied; the second required a non-slash first character, which
-# a `//` comment cannot satisfy but plenty of prose can — a `*` continuation
-# inside a block comment, or a line beginning with a quote. A regression gate
-# that a deleted registration can leave green by way of a leftover mention is
-# not a gate, and neither of the first two forms was tested against prose
-# that had a non-slash lead.
-#
-# So the line must OPEN with an identifier and reach the call through a dot:
-# `services.AddRedisConnections(` and `builder.Services.AddRedisConnections(`
-# match, and every comment, string and block-comment continuation is refused
-# by the first character alone.
-#
-# It fails CLOSED on one legitimate shape and that is the safe direction: a
-# chain broken under the house style, `services` on its own line and
-# `.AddRedisConnections(configuration)` beneath it, is not matched — so the
-# gate would demand a chart with no redis and fail loudly against one that
-# has it, rather than passing a service whose registration is gone.
+# The invocation form of §8.2's helper, not a mention of its name: the line
+# must open with an identifier and reach the call through a dot, so every
+# comment, string and block-comment continuation is refused by its first
+# character. It fails closed on a chain broken under the house style, which is
+# the safe direction. Declared here so the self-test below runs against the
+# same string the gate uses.
 CALLS_REDIS='^[[:space:]]*[A-Za-z_][A-Za-z0-9_.]*\.AddRedisConnections\('
 
 declares() {
@@ -201,17 +146,9 @@ declares() {
 # its argument through "$@", which cannot carry a shell keyword.
 lacks() { ! declares "$1" "$2"; }
 
-# THE MAPPING IS DATA, because two of the four trees are not under
-# src/Services at all and no capitalisation rule reaches them.
-#
-# This loop ran over MIGRATOR_CHARTS and derived the path by capitalising
-# the chart name, which silently excluded the gateway and the BFF from
-# every agreement below. Their charts were asserted to declare no redis and
-# nothing ever compared that to their source, so the day either edge host
-# started calling AddRedisConnections the checks stayed green and the pod
-# resolved a key its chart never mounted. A gate cannot fail on a
-# comparison it never makes — the same shape as a gate that cannot fail on
-# a file that is not there.
+# The mapping is data, because the gateway and the BFF are not under
+# src/Services and no capitalisation rule reaches them — and an edge host left
+# out of it is one whose chart is never compared to its source.
 src_of() {
     case "$1" in
         gateway) echo "$ROOT/src/Gateway/Gateway.Api" ;;
@@ -231,26 +168,12 @@ for chart in $SERVICE_CHARTS; do
             check "$chart resolves a connection string in src/, so its chart names one" \
                 grep -qE '^  connectionName: ' "$CHARTS_DIR/$chart/values.yaml"
         fi
-        # §8.1's two connections, read from src/ like the broker above. A
+        # §8.1's two connections, read from src/ like the broker above: a
         # service whose Infrastructure calls AddRedisConnections resolves both
         # keys eagerly at startup, so a chart that does not declare redis
-        # renders cleanly and produces a pod that will not start.
-        #
-        # THE PATTERN MATCHES AN INVOCATION, NOT A MENTION, and the difference
-        # is the whole gate. A bare 'AddRedisConnections' is satisfied by the
-        # comments that explain the call — there are three such lines per
-        # service beside the one call, some of them added by the very PR that
-        # wired Redis up — so deleting the registration left this check green
-        # and the chart's redis block unjustified. $CALLS_REDIS requires the
-        # first non-space character on the line to be something other than a
-        # slash, which is what a `//` comment can never satisfy.
-        #
-        # ASSERTED IN BOTH DIRECTIONS, because one direction is a gate that
-        # stops looking. Tightening the pattern above means a deleted
-        # registration no longer satisfies the `if`, so the check is SKIPPED
-        # rather than failed — and a chart left declaring redis for a service
-        # that reads nothing mounts a Secret reference no pod needs. The
-        # agreement is what has to hold, and it fails from either side.
+        # renders cleanly and produces a pod that will not start. Asserted in
+        # both directions, because a deleted registration that merely skips
+        # the check leaves a chart mounting a Secret reference no pod needs.
         if grep -rqE "$CALLS_REDIS" "$src"; then
             check "$chart calls AddRedisConnections in src/, so its chart declares redis" \
                 declares "$chart" redis
@@ -269,11 +192,9 @@ check 'the BFF binds ServiceIdentityOptions in src/, so its chart declares crede
 # --------------------------------------------------------------------------
 section 'The source-detection patterns select code, not prose'
 # --------------------------------------------------------------------------
-# The gate above went green on a service whose registration had been deleted,
-# because three comments per service name the helper it calls. A pattern is a
-# claim about what it selects, and the only way to establish that claim is to
-# hand it something it must REFUSE — every other run of this script feeds it a
-# tree where the answer is yes either way.
+# A pattern is a claim about what it selects, and the only way to establish it
+# is to hand it something it must refuse — every other run of this script
+# feeds it a tree where the answer is yes either way.
 check 'CALLS_REDIS refuses a comment that names the helper' \
     sh -c 'printf "        // AddRedisConnections and nothing called it\n" |
         grep -qvE "$0"' "$CALLS_REDIS"
@@ -319,57 +240,27 @@ awk '/^  pull_request:/ { p = 1 } p && /^      - / { print } /^  push:/ { p = 0 
 awk '/^  push:/ { p = 1 } p && /^      - / { print }' \
     "$ROOT/.github/workflows/helm.yml" >"$OUT/push-paths.txt"
 
-# THE WORKFLOW'S OWN PATH AND THIS GATE'S OWN TREE ARE BOTH ON THIS LIST, and
-# each was missing in turn. Without the workflow, removing it from both trigger
-# lists means a change to those very lists no longer runs the gate validating
-# them. Without `deploy/helm`, removing THAT means a chart edit — or an edit to
-# this script — does not run the gate either: the tree holding the thing being
-# checked, gone from the triggers, with every assertion still green.
-#
-# `deploy/observability/check.py` has required both since it was written; this
-# copy inherited the pattern one piece at a time.
+# The workflow's own path and this gate's own tree are both on the list:
+# without the first, a change to the trigger lists does not run the gate
+# validating them; without the second, a chart edit does not run it either.
 for input in $SOURCE_INPUTS deploy/helm .github/workflows/helm.yml; do
     check "the pull_request filter covers $input" covered "$input" "$OUT/pr-paths.txt"
     check "the push filter covers $input" covered "$input" "$OUT/push-paths.txt"
 done
 
-# AND THE OTHER DIRECTION, which is the half that stays green when the list is
-# SHORT rather than wrong.
-#
-# The loop above can only ask the workflow about entries SOURCE_INPUTS already
-# contains, so a path this script reads and nobody declared is invisible from
-# both sides. `deploy/canary/canary.py` shipped exactly that — two entries
-# declared, three paths opened, trigger assertion green throughout — and
-# docs/lessons.md states the fix as owed by every copy of this pattern rather
-# than by the copy that was caught. This is that debt paid here.
-#
-# The subject is this script's own source: every `$ROOT/…` path it names must
-# be covered by a declared entry — matched as the WHOLE entry or as a directory
-# prefix of it, never as an arbitrary substring, because the entries here are
-# deeper than a top-level segment.
-#
-# BOTH KINDS ARE DECLARED and the example here named only the first. A file
-# entry (`src/BuildingBlocks/Common.Web/HealthCheckExtensions.cs`) is matched
-# whole; a tree entry (`src/Gateway/Gateway.Api`, `src/BFF/Web.Bff`) also
-# covers the paths beneath it, which is what lets the source-agreement loop
-# grep a whole service directory against one declared input. The gateway was
-# the file example until that loop widened to every service chart and the
-# entry became a tree; the sentence describing it did not move with it.
-#
-# Two kinds of match are skipped, and neither hides a gap:
-#
-#   * anything ending in `/` is an interpolation prefix rather than a path —
-#     `$ROOT/src/Services/$chart` is built per chart, and the concrete forms it
-#     builds (`src/Services/Catalog`, `src/Services/Ordering`) are declared;
-#   * `deploy/helm` is this script's OWN tree, and SOURCE_INPUTS is by
-#     definition the paths outside it. The workflow file is check 7's subject
-#     rather than an input to it.
+# And the other direction, which stays green when the list is short rather
+# than wrong: the loop above can only ask the workflow about entries
+# SOURCE_INPUTS already contains, so every `$ROOT/…` path this script names
+# must be covered by a declared entry — matched whole or as a directory
+# prefix, never as a substring. Two kinds of match are skipped, and neither
+# hides a gap: anything ending in `/` is an interpolation prefix whose
+# concrete forms are declared, and `deploy/helm` is this script's own tree,
+# which SOURCE_INPUTS by definition excludes.
 grep -oE '\$ROOT/[A-Za-z0-9_./-]+' "$0" | sed -E 's|^\$ROOT/||' | sort -u >"$OUT/reads.txt"
 
 if [ ! -s "$OUT/reads.txt" ]; then
-    # Subject first: a scan that found nothing would pass the loop below
-    # against any list at all, which is this gate's own most-repeated failure
-    # turned on itself.
+    # A scan that found nothing would pass the loop below against any list at
+    # all.
     fail 'found no $ROOT-relative reads in smoke.sh — the scan is broken, not the list'
 else
     while read -r path; do
@@ -455,12 +346,9 @@ for chart in $SERVICE_CHARTS; do
     done
 done
 
-# THE PATHS COME FROM THE SOURCE THAT MAPS THEM, not from literals repeated
-# here. `HealthEndpointTests` says in its own comment that the kubelet's probe
-# "holds its own copy of /health/startup in a manifest no compiler reads" — and
-# this PR shipped that manifest. A gate holding a fourth copy would close
-# nothing: rename the route and the suite stays green, the chart stays green,
-# and a slow-starting pod 404s and is killed mid-boot.
+# The paths come from the source that maps them, not from literals repeated
+# here: a copy in the gate would close nothing, since a renamed route leaves
+# the chart green and a slow-starting pod 404s and is killed mid-boot.
 grep -ohE 'MapHealthChecks\("/health/[a-z]+"' "$ROOT/src/BuildingBlocks/Common.Web/HealthCheckExtensions.cs" |
     sed -E 's|.*"(/health/[a-z]+)"|\1|' | sort -u >"$OUT/mapped-probes.txt"
 
@@ -565,14 +453,12 @@ for chart in $MIGRATOR_CHARTS; do
     check "$chart mounts the MIGRATOR connection string, not the runtime one" \
         grep -qE '^ *- name: ConnectionStrings__[A-Za-z]+Migrator$' "$OUT/$chart.yaml"
 
-    # The migrator must not be selectable BY THE SERVICE IT MIGRATES. Its pod
-    # template carried the same labels the Service selects on, so for the length
-    # of every pre-upgrade hook a pod with a database connection and no HTTP
-    # listener was an endpoint of a live service — and inside its PDB.
-    #
-    # Compares the Service's selector name with the Job pod template's, which
-    # is the pair that decides endpoint membership; the Job OBJECT's labels are
-    # not part of that and deliberately still carry the ordinary identity.
+    # The migrator must not be selectable by the Service it migrates: for the
+    # length of every pre-upgrade hook a pod with a database connection and no
+    # HTTP listener would otherwise be an endpoint of a live service, and
+    # inside its PDB. The Service's selector name is compared with the Job pod
+    # template's, which is the pair that decides endpoint membership; the Job
+    # object's labels still carry the ordinary identity.
     svc_name="$(awk '/^kind: Service$/ { s = 1 } s && /^    app.kubernetes.io\/name: / { sub(/.*: /, ""); print; exit }' "$OUT/$chart.yaml")"
     job_pod_name="$(awk '/^kind: Job$/ { j = 1 } j && /^  template:/ { t = 1 } t && /^        app.kubernetes.io\/name: / { sub(/.*: /, ""); print; exit }' "$OUT/$chart.yaml")"
     check "$chart's migrator pod is not an endpoint of its own Service ($job_pod_name vs $svc_name)" \
@@ -582,18 +468,10 @@ for chart in $MIGRATOR_CHARTS; do
 done
 
 # The gateway and the BFF own no database (§10.1, §4.2), so the hook has
-# nothing to run for them.
-#
-# THE OUTPUT ASSERTION ALONE IS VACUOUS, and it was, until a deliberate
-# `image.migrator: gateway-migrator` passed the whole suite green. Those two
-# charts carry no migration template at all — §15.3's argument that the
-# gateway's chart is not a service chart with the database parts deleted — so
-# nothing was ever consulting the values key the comment beside it credits.
-#
-# So the subject is the agreement between the two halves: a chart has a
-# migration template exactly when its values name a migrator image. Broken from
-# either side it fires, where the render check could only ever be broken from
-# one.
+# nothing to run for them. The output assertion alone is vacuous — those
+# charts carry no migration template at all (§15.3) — so the subject is the
+# agreement between the two halves: a chart has a migration template exactly
+# when its values name a migrator image, and it fires broken from either side.
 for chart in $DATABASELESS_CHARTS; do
     check "$chart renders no migration Job" test "$(count '^kind: Job$' "$OUT/$chart.yaml")" -eq 0
     check "$chart mounts no connection string at all" \
@@ -609,30 +487,18 @@ for chart in $SERVICE_CHARTS; do
         test "$has_template" = "$has_image"
 done
 
-# DRIVEN FROM THE CHART'S OWN redis BLOCK, over every service chart — and it
-# used to iterate MIGRATOR_CHARTS and demand two keys unconditionally, which
-# is a rule about DATABASES applied to a question about REDIS.
-#
-# Tightening the source-detection gate above is what exposed it: that gate now
-# permits a database-backed chart whose code calls no AddRedisConnections, and
-# requires it to declare no redis — while this loop still demanded two Redis
-# variables from every migrator chart. The next such service could satisfy
-# neither gate, and the gateway and BFF were never compared to their source at
-# all. Two gates disagreeing about the same fact is worse than one gate.
-#
-# So the expected count is 0 or 2, read from `declares`, over SERVICE_CHARTS.
-# Never 1: the two connections are provisioned together and a chart carrying
-# one is a pod that resolves the other to null at startup.
+# Driven from the chart's own redis block, over every service chart, because
+# redis is not a fact about databases. The expected count is 0 or 2 and never
+# 1: the two connections are provisioned together, and a chart carrying one is
+# a pod that resolves the other to null at startup.
 for chart in $SERVICE_CHARTS; do
     if declares "$chart" redis; then expected=2; else expected=0; fi
     check "$chart declares redis=$(declares "$chart" redis && echo yes || echo no), so it mounts $expected of §8.1's connections" \
         test "$(count '^ *- name: ConnectionStrings__Redis' "$OUT/$chart.yaml")" -eq "$expected"
-    # THE TWO KEYS MUST DIFFER, and this is the assertion that would have
-    # caught the likeliest wiring mistake. Both instances are provisioned
-    # together and named alike, so one Secret key copied onto both rows renders
-    # cleanly, passes the count above, and points §8.5's idempotency claims at
-    # the allkeys-lru instance §8.1 exists to keep them off. Counting the rows
-    # cannot see that; comparing the keys can.
+    # The two keys must differ: both instances are provisioned together and
+    # named alike, so one Secret key copied onto both rows renders cleanly,
+    # passes the count above, and points §8.5's idempotency claims at the
+    # allkeys-lru instance §8.1 exists to keep them off.
     if [ "$expected" -eq 2 ]; then
         check "$chart: the cache and coordination connections read different Secret keys" \
             test "$(awk '/- name: ConnectionStrings__Redis/ { want = 1; next }
@@ -697,9 +563,8 @@ section 'Every ConfigMap an envFrom names is rendered by the same release'
 # --------------------------------------------------------------------------
 # The gateway mounts a second ConfigMap it renders itself, and the name is
 # derived in two places — values.yaml's extraConfigMaps suffix and
-# edge-config.yaml's
-# metadata. This is the assertion that they agree; without it a rename in one
-# is a pod stuck in CreateContainerConfigError.
+# edge-config.yaml's metadata. Without this a rename in one is a pod stuck in
+# CreateContainerConfigError.
 awk '/configMapRef:/ { want = 1; next } want && /name:/ { sub(/^ *name: /, ""); print; want = 0 }' \
     "$OUT/platform.yaml" | sort -u >"$OUT/mounted.txt"
 awk '/^kind: ConfigMap$/ { want = 1 } want && /^  name: / { sub(/^  name: /, ""); print; want = 0 }' \
@@ -707,10 +572,9 @@ awk '/^kind: ConfigMap$/ { want = 1 } want && /^  name: / { sub(/^  name: /, "")
 check 'every mounted ConfigMap exists in the render' \
     test -z "$(comm -23 "$OUT/mounted.txt" "$OUT/rendered.txt")"
 
-# ...and a change to ANY of them rolls the pods. This is the assertion the
-# narrower version of that annotation failed: hashing only the ConfigMap the
-# library renders left the gateway's own `gateway-edge` out, so editing
-# `cors.origins` rewrote a mounted ConfigMap and left the pod template
+# ...and a change to any of them rolls the pods: a checksum over only the
+# ConfigMap the library renders leaves `gateway-edge` out, so editing
+# `cors.origins` rewrites a mounted ConfigMap and leaves the pod template
 # byte-identical — a deploy that reports success and changes nothing.
 gateway_checksum() {
     "$HELM" template gateway "$CHARTS_DIR/gateway" --set-string "image.tag=$TAG" \
@@ -724,21 +588,13 @@ check 'editing an edge-only value rolls the gateway pods' test "$before" != "$af
 # --------------------------------------------------------------------------
 section 'Service names are routing configuration (§10.2, §9.7)'
 # --------------------------------------------------------------------------
-# The gateway's route file and PricingHop.cs dial these hosts as LITERALS in
-# source, and PricingHop argues on the record that the value does not vary
-# because "the host is the Kubernetes Service name". This is the assertion that
-# keeps that sentence true.
-#
-# One direction only, and deliberately: every Service this platform renders
-# must be a name something in src/ dials, plus the gateway — which is dialled
-# by the Ingress rather than by a peer. The other direction is NOT asserted,
-# because §10.2's route file deliberately names inventory ahead of the service
-# that will answer it, and a gate demanding a chart per destination would fail
-# on a route the blueprint means to be there.
-# The host AND the port, because both are literals and both are dialled. An
-# earlier version stripped the port here and then hard-coded Catalog's two
-# below, which asserted one destination of three and read as though it covered
-# them all.
+# The gateway's route file and PricingHop.cs dial these hosts as literals, on
+# the premise that the host is the Kubernetes Service name; this keeps that
+# true. One direction only: every Service this platform renders must be a name
+# something in src/ dials, plus the gateway, which the Ingress dials. The other
+# direction is not asserted, because §10.2's route file deliberately names
+# inventory ahead of the service that will answer it. Host and port both,
+# because both are literals and both are dialled.
 grep -ohE 'http://[a-z0-9-]+:[0-9]+' \
     "$ROOT/src/Gateway/Gateway.Api/appsettings.json" \
     "$ROOT/src/BFF/Web.Bff/PricingHop.cs" |
@@ -757,10 +613,9 @@ else
     fail "Service(s) nothing in src/ dials: $(echo "$undialled" | tr '\n' ' ')"
 fi
 
-# ...and the other direction, which is the one an overlay can break. A chart
-# whose workload name is dialled from src/ MUST render a Service: turning it off
-# leaves a healthy release in which every routed request fails, and
-# `service.enabled` was a free value until Copilot pointed at it.
+# ...and the other direction, which an overlay can break: a chart whose
+# workload name is dialled from src/ must render a Service, or a healthy
+# release answers every routed request with a failure.
 for chart in $SERVICE_CHARTS; do
     name="$(awk '/^workload:/ { w = 1 } w && /^  name: / { sub(/^  name: /, ""); print; exit }' \
         "$CHARTS_DIR/$chart/values.yaml")"
@@ -773,18 +628,10 @@ for chart in $SERVICE_CHARTS; do
 done
 
 # The ports are literals in the same two files, so they are asserted the same
-# way rather than trusted — which means the SERVICE port, not the container
-# port. `PricingHop.cs` dials `http://catalog-api:8081`, and what answers that
-# is `spec.ports[].port` on the Service; `containerPort` is the Deployment's
-# and is not what the BFF resolves.
-#
-# TWO ROUNDS OF THE SAME HOLE, and the second is why this is a loop. Round 3
-# found the check reading `containerPort`, so a `_service.tpl` publishing only
-# the `http` port would pass while the hop 502'd. Round 5 found the fix
-# hard-coded to `catalog-api`: `_service.tpl` takes `port` from PER-CHART
-# values, so an `ordering/values.yaml` renumbering its port failed nothing —
-# one destination of three asserted, by a comment that read as though it
-# covered them all. Every pair the name gate parses is now a row.
+# way — and it is the Service port, not the container port: `PricingHop.cs`
+# dials `http://catalog-api:8081`, and what answers is `spec.ports[].port`.
+# Every pair the name gate parses is a row, because `_service.tpl` takes `port`
+# from per-chart values.
 service_port() {
     # <file> <service name> <port> -> exit 0 when that Service publishes it
     awk -v want="$2" -v port="$3" '
@@ -825,13 +672,10 @@ done
 section 'Branches no chart takes yet, exercised anyway'
 # --------------------------------------------------------------------------
 # §15.3 specifies `service.enabled: false` for Shipping and Notifications, and
-# neither exists yet — so without this the branch would ship untested and the
-# key would be decorative in every chart that sets it. Rendering one chart with
-# the value flipped is what makes the key mean something today.
-# Rendered under a name NOTHING dials, which is the difference between
-# exercising the worker branch and asserting that Ordering may drop its Service.
-# Ordering is a routed destination; the check above now forbids exactly that,
-# and this test used to establish it as valid one section earlier.
+# neither exists yet, so rendering one chart with the value flipped is what
+# keeps the key from being decorative. Rendered under a name nothing dials,
+# which is the difference between exercising the worker branch and asserting
+# that Ordering, a routed destination, may drop its Service.
 "$HELM" template shipping "$CHARTS_DIR/ordering" --set-string "image.tag=$TAG" \
     --set-string "workload.name=shipping" \
     --set service.enabled=false >"$OUT/worker.yaml"
@@ -839,9 +683,8 @@ check 'service.enabled=false renders no Service' \
     test "$(count '^kind: Service$' "$OUT/worker.yaml")" -eq 0
 check 'and the workload survives' \
     test "$(count '^kind: Deployment$' "$OUT/worker.yaml")" -eq 1
-# Named separately rather than folded into the line above, which used to say
-# "and its migration hook survive" while counting Deployments alone. A
-# description is a claim about what the command looks at.
+# Named separately, because a description is a claim about what the command
+# looks at and the line above counts Deployments alone.
 check 'and so does its migration hook' \
     test "$(count '^kind: Job$' "$OUT/worker.yaml")" -eq 1
 check 'and the probes still address the container port directly' \
@@ -866,12 +709,9 @@ else
         grep -q 'cors.origins must hold at least one origin' "$OUT/uncorsed.txt"
 fi
 
-# BLANK COUNTS AS MISSING, and an emptiness check does not see it. A list
-# holding `" "` is truthy in a template, so both guards above passed it
-# through, the value was rendered blank, and the host threw at startup — after
-# the rollout had begun. This repository learned that against
-# `Identity__Authority` and again against `Cors__Origins`; these two are the
-# assertions that keep it learned.
+# Blank counts as missing, and an emptiness check does not see it: a list
+# holding `" "` is truthy in a template, so the value renders blank and the
+# host throws at startup, after the rollout has begun.
 refuses() {
     # refuses <label> <needle> <helm args...>
     local label="$1" needle="$2"
@@ -907,27 +747,22 @@ refuses 'an Ingress with no TLS fails the render' 'ingress.tls is required' \
 # --------------------------------------------------------------------------
 section 'Defaults that must stay absent'
 # --------------------------------------------------------------------------
-# Every guard above is a property of the RENDER, and this one cannot be: a
-# chart shipping a plausible `trustedNetworks` renders perfectly well, which is
-# precisely why the value is dangerous. Restoring the default was the one
-# deliberate defect of this round that no assertion caught, so the assertion is
-# about the values file itself.
-#
-# Wrong low, the real ingress is untrusted and §10.3's per-client rate limit
-# collapses into one global bucket. Wrong high, any pod in the range picks its
-# own partition and its own client IP in the logs. Neither shows up in a
-# rollout, so the only safe default is none.
+# Every guard above is a property of the render, and this one cannot be: a
+# chart shipping a plausible `trustedNetworks` renders perfectly well. Wrong
+# low, the real ingress is untrusted and §10.3's per-client rate limit
+# collapses into one global bucket; wrong high, any pod in the range picks its
+# own partition. Neither shows up in a rollout, so the only safe default is
+# none.
 check 'the gateway ships no default trusted network' \
     grep -qE '^  trustedNetworks: \[\]' "$CHARTS_DIR/gateway/values.yaml"
 
 # --------------------------------------------------------------------------
 section 'Blank is not present, whatever `required` thinks'
 # --------------------------------------------------------------------------
-# Helm's `required` fails on nil and on "" and passes `" "`. The hosts disagree
-# — AddJwtAuthentication guards with IsNullOrWhiteSpace — so a whitespace-only
-# overlay rendered cleanly, began a rollout, and died in the new pod. Every
-# required scalar now goes through `commerce.require`, which trims first; these
-# assert the two that reach a host eagerly.
+# Helm's `required` fails on nil and on "" and passes `" "`; the hosts guard
+# with IsNullOrWhiteSpace, so a whitespace-only overlay renders cleanly and
+# dies in the new pod. Every required scalar goes through `commerce.require`,
+# which trims first; these assert the ones that reach a host eagerly.
 refuses 'a whitespace-only authority fails the render' 'identity.authority is required' \
     $GATEWAY_OVERLAY --set-string 'identity.authority= '
 refuses 'a whitespace-only OTLP endpoint fails the render' 'observability.otlpEndpoint is required' \
@@ -947,10 +782,9 @@ refuses 'an origin with a leading-zero port fails the render' 'non-canonically' 
     $GATEWAY_OVERLAY --set cors.enabled=true --set 'cors.origins={https://shop.example.com:08080}'
 
 # A capability is a fact about the code, not an environment setting. Each of
-# these renders cleanly and produces a pod that will not start — and each has to
-# be aimed at a chart that HAS the capability, or the test is vacuous. `refuses`
-# above renders the gateway, which owns no database and no migrator, so the
-# first two of these were meaningless against it until this helper existed.
+# these renders cleanly and produces a pod that will not start, and each has to
+# be aimed at a chart that has the capability — `refuses` above renders the
+# gateway, which owns no database and no migrator.
 refuses_chart() {
     # refuses_chart <chart> <label> <needle> <helm args...>
     local chart="$1" label="$2" needle="$3"
@@ -971,12 +805,10 @@ refuses_chart catalog 'disabling redis the chart is configured for fails the ren
     'redis.enabled is false' --set redis.enabled=false
 refuses_chart catalog 'clearing the coordination Secret key fails the render' \
     'redis.secretRef.coordinationKey is required' --set-string 'redis.secretRef.coordinationKey='
-# The two keys being PRESENT is not the same claim as their being DIFFERENT,
-# and only the first had a test. This repository's own values differ, so every
-# render was green while a production overlay pointing both connections at the
-# allkeys-lru instance would have rendered green too — and an evicted
-# idempotency claim leaves no trace of having existed, so the failure is the
-# kind nobody reproduces afterwards.
+# The two keys being present is not the same claim as their being different:
+# a production overlay pointing both connections at the allkeys-lru instance
+# renders green, and an evicted idempotency claim leaves no trace of having
+# existed.
 refuses_chart catalog 'pointing both Redis connections at one Secret key fails the render' \
     'are the same key' --set-string 'redis.secretRef.coordinationKey=cache-connection-string'
 
@@ -985,11 +817,9 @@ refuses_chart catalog 'clearing the migrator image fails the render' \
 
 # A tag is three things with three alphabets: an image reference, a Job name
 # (DNS-1123 subdomain) and a label value. `Release_1` is legal for a registry
-# and illegal for Kubernetes, and the SHA-only cases above never saw it.
-# One regex over the whole string was not enough: `release_1`, `release..1` and
-# `release.-1` all passed it and are all refused by the API server after the
-# upgrade has started. A DNS-1123 subdomain is dot-separated LABELS, so the
-# check is per segment and so are these cases.
+# and refused by the API server after the upgrade has started. A DNS-1123
+# subdomain is dot-separated labels, so the check is per segment and so are
+# these cases.
 for bad in Release_1 release_1 release..1 release.-1 -release release-; do
     if "$HELM" template catalog "$CHARTS_DIR/catalog" --set-string "image.tag=$bad" \
         >"$OUT/badtag.txt" 2>&1; then
@@ -1005,9 +835,9 @@ for good in 1.2.3 0000000000000000000000000000000000000000 v1-2-3; do
         "$HELM" template catalog "$CHARTS_DIR/catalog" --set-string "image.tag=$good"
 done
 
-# The name budget, which the per-segment check cannot see. `trunc 63` used to
-# stand here and was a defect of its own: 42 `a`s then `.b` cut immediately
-# after the dot, and trimming a trailing hyphen never touched a trailing dot.
+# The name budget, which the per-segment check cannot see: a plain `trunc 63`
+# can cut immediately after a dot, and trimming a trailing hyphen never
+# touches a trailing dot.
 long_tag="$(printf 'a%.0s' $(seq 1 42)).b"
 if "$HELM" template catalog "$CHARTS_DIR/catalog" --set-string "image.tag=$long_tag" \
     >"$OUT/longtag.txt" 2>&1; then
@@ -1017,8 +847,7 @@ else
         grep -q 'may not exceed 63' "$OUT/longtag.txt"
 fi
 
-# And the image reference's other two components, which were plain
-# interpolations while the tag was guarded.
+# And the image reference's other two components, guarded like the tag.
 refuses_chart catalog 'clearing image.registry fails the render' \
     'image.registry is required' --set-string 'image.registry='
 refuses_chart catalog 'clearing image.api fails the render' \
@@ -1027,38 +856,35 @@ refuses 'an origin with a non-numeric port fails the render' 'is not a browser o
     $GATEWAY_OVERLAY --set cors.enabled=true --set 'cors.origins={https://shop.example.com:notaport}'
 # Case, which the shape test cannot see: the canonical origin lowercases scheme
 # and host and WithOrigins compares ordinally, so `https://SPA.example` is
-# refused by the host — `ConditionalBlockTests` covers that exact value.
+# refused by the host.
 refuses 'a non-lowercase origin fails the render' 'is not lowercase' \
     $GATEWAY_OVERLAY --set cors.enabled=true --set 'cors.origins={https://SPA.example}'
 
-# And the CIDR list, where blank was only the emptiest way to be wrong.
-# `not-a-network` rendered and threw out of IPNetwork.Parse at startup — again
-# a case the host's own suite covers.
+# And the CIDR list, where blank was only the emptiest way to be wrong:
+# `not-a-network` renders and throws out of IPNetwork.Parse at startup.
 refuses 'a malformed trusted network fails the render' 'is not an IPv4 CIDR' \
     --set 'ingress.trustedNetworks={not-a-network}'
 refuses 'a trusted network with a bad octet fails the render' 'octet above 255' \
     --set 'ingress.trustedNetworks={10.0.300.0/8}'
 refuses 'a trusted network with a bad prefix fails the render' 'prefix length above 32' \
     --set 'ingress.trustedNetworks={10.0.0.0/64}'
-# The security case rather than a tidiness one, and measured on .NET 10:
-# IPNetwork.Parse("010.0.0.0/8") returns 8.0.0.0/8, because a leading zero is
-# read as octal. The operator writes one network and the gateway trusts
-# another, with nothing in the render or the rollout saying so.
+# The security case rather than a tidiness one: IPNetwork.Parse("010.0.0.0/8")
+# returns 8.0.0.0/8, because a leading zero is read as octal, so the operator
+# writes one network and the gateway trusts another.
 refuses 'a trusted network with an octal octet fails the render' 'non-canonically' \
     --set 'ingress.trustedNetworks={010.0.0.0/8}'
 
-# The guard checked `$o` and the ConfigMap emitted `$origin`, so a trailing
-# space passed every test above and then failed the host's exact text
-# comparison at startup — a validator that checks one string and ships another.
+# The rendered value has to be the validated one: a guard that checks one
+# string and ships another passes every test above and fails the host's exact
+# text comparison at startup.
 "$HELM" template gateway "$CHARTS_DIR/gateway" --set-string "image.tag=$TAG" \
     $GATEWAY_OVERLAY --set cors.enabled=true \
     --set 'cors.origins={https://shop.example.com }' >"$OUT/spaced.txt" 2>&1 || true
 check 'the rendered origin is the validated one, not the raw value' \
     grep -q 'Cors__Origins__0: "https://shop.example.com"' "$OUT/spaced.txt"
 
-# Clearing clientId used to drop all three keys silently. Web.Bff binds
-# ServiceIdentityOptions unconditionally, so that rendered a release whose pod
-# refuses to start — an opt-out that is not one.
+# Web.Bff binds ServiceIdentityOptions unconditionally, so clearing clientId
+# is not an opt-out: it renders a release whose pod refuses to start.
 refuses_bff() {
     local label="$1" needle="$2"
     shift 2
@@ -1090,14 +916,11 @@ check 'every pod template disables the service-account token' \
 # --------------------------------------------------------------------------
 section 'The Service forwards to a port something is listening on'
 # --------------------------------------------------------------------------
-# The routing gate above compares CALLER urls with rendered Service ports, and
-# stops there — so it never looks at the process behind `targetPort`. Catalog
-# declares its two Kestrel endpoints in its own appsettings.json (§9.7: a
-# cleartext port cannot serve HTTP/1.1 and h2c at once), and moving the h2c
-# listener off 8081 there would satisfy every assertion in this file while
-# deploying a Service that forwards to a closed port.
-#
-# Three files, one number, and until now the gate held two of them together.
+# The routing gate above compares caller URLs with rendered Service ports and
+# never looks at the process behind `targetPort`. Catalog declares its two
+# Kestrel endpoints in its own appsettings.json (§9.7: a cleartext port cannot
+# serve HTTP/1.1 and h2c at once), so moving the h2c listener there would
+# deploy a Service forwarding to a closed port.
 grep -ohE 'http://0\.0\.0\.0:[0-9]+' "$ROOT/src/Services/Catalog/Catalog.Api/appsettings.json" |
     sed -E 's|.*:([0-9]+)|\1|' | sort -u >"$OUT/listeners.txt"
 
@@ -1123,12 +946,8 @@ fi
 # --------------------------------------------------------------------------
 section 'The canary track (§15.5, ADR-022)'
 # --------------------------------------------------------------------------
-# The newest surface in this tree, and therefore the one most in need of
-# assertions: a gate that quietly stops covering what was added last is this
-# repository's most-repeated failure, and the canary render is reached by
-# nothing above.
-#
-# EVERY service chart, not a representative one. The mechanism lives in the
+# The canary render is reached by nothing above, and every service chart is
+# rendered rather than a representative one: the mechanism lives in the
 # library, so a chart that failed to pick it up would be a service with no
 # canary and a rollout that promoted it without ever splitting traffic.
 for chart in $SERVICE_CHARTS; do
@@ -1140,12 +959,11 @@ for chart in $SERVICE_CHARTS; do
     name="$(awk '/^workload:/ { w = 1 } w && /^  name: / { sub(/^  name: /, ""); print; exit }' \
         "$CHARTS_DIR/$chart/values.yaml")"
 
-    # THE ONE THAT MAKES IT A CANARY. Traffic reaches these pods because the
-    # stable release's Service selects them, and it selects on the workload
-    # name alone — so the canary's pod label has to be the SAME string the
-    # stable Service matches on. A `-canary` suffix leaking into this label is
-    # a canary that runs, reports healthy, serves nothing, and is promoted on
-    # an analysis of no traffic.
+    # The one that makes it a canary: traffic reaches these pods because the
+    # stable release's Service selects them on the workload name alone, so the
+    # canary's pod label has to be the same string. A `-canary` suffix leaking
+    # into it is a canary that runs, reports healthy, serves nothing, and is
+    # promoted on an analysis of no traffic.
     check "$chart: canary pods answer to the stable Service's selector" \
         awk -v want="$name" '
             /^kind: Deployment$/ { in_dep = 1 }
@@ -1156,16 +974,10 @@ for chart in $SERVICE_CHARTS; do
             END { exit found ? 0 : 1 }
         ' "$OUT/$chart-canary.yaml"
 
-    # And the two Deployments must NOT select each other's pods, or each scales
-    # the other away. The track label is what separates them, and it has to be
-    # in the Deployment's SELECTOR — not merely somewhere in the manifest.
-    #
-    # THESE WERE PLAIN GREPS AND THAT MADE THEM VACUOUS. The same label is on
-    # the Deployment's metadata and on the pod template, so deleting it from
-    # `spec.selector.matchLabels` — the one place it does any work — left both
-    # assertions green while the two Deployments began selecting each other's
-    # pods, which is the exact failure this pair exists to catch. A gate that
-    # greps the document cannot assert something about one field of it.
+    # And the two Deployments must not select each other's pods, or each
+    # scales the other away. The track label has to be in the Deployment's
+    # selector, and the same label is also on the metadata and the pod
+    # template, so a grep over the document cannot assert it.
     selects_track() {
         # selects_track <file> <track> -> exit 0 when the Deployment's
         # matchLabels carries that track
@@ -1198,21 +1010,17 @@ for chart in $SERVICE_CHARTS; do
     check "$chart: the canary Deployment is named $name-canary" \
         grep -q "^  name: $name-canary\$" "$OUT/$chart-canary.yaml"
 
-    # THE REPLICA COUNT HAS TO REACH THE SPEC, and nothing else here would
-    # notice if it did not. `_deployment.tpl` omits `replicas` whenever
-    # `autoscaling.enabled` is true, so a canary installed from the stable
-    # release's values without `--set autoscaling.enabled=false` renders no
-    # replica count and the API server defaults it to one — every rung of the
-    # ladder a single pod, reported as the weight `plan` computed. The render
-    # above passes the flag exactly as the rollout does; this asserts the flag
-    # is what it is passed for.
+    # The replica count has to reach the spec: `_deployment.tpl` omits
+    # `replicas` whenever `autoscaling.enabled` is true, so a canary installed
+    # without `--set autoscaling.enabled=false` is defaulted to one pod on
+    # every rung of the ladder. The render above passes the flag as the rollout
+    # does; this asserts it is what it is passed for.
     check "$chart: the canary Deployment carries a replica count" \
         grep -q '^  replicas: ' "$OUT/$chart-canary.yaml"
 
-    # The ConfigMap too — same rule, and the mount has to follow the rename or
-    # the pod sits in CreateContainerConfigError. Asserted as agreement between
-    # the two halves rather than against a literal, which is the shape PR-23
-    # learned when a gate credited a values key nothing consulted.
+    # The ConfigMap too — the mount has to follow the rename or the pod sits
+    # in CreateContainerConfigError, asserted as agreement between the two
+    # halves rather than against a literal.
     awk '/configMapRef:/ { want = 1; next } want && /name:/ { sub(/^ *name: /, ""); print; want = 0 }' \
         "$OUT/$chart-canary.yaml" | sort -u >"$OUT/$chart-canary-mounted.txt"
     awk '/^kind: ConfigMap$/ { want = 1 } want && /^  name: / { sub(/^  name: /, ""); print; want = 0 }' \
@@ -1231,20 +1039,12 @@ for chart in $SERVICE_CHARTS; do
         grep -q 'OTEL_RESOURCE_ATTRIBUTES: "deployment.track=stable"' "$OUT/$chart.yaml"
 done
 
-# ADR-022's load-bearing consequence, and nothing above asserts it.
-#
-# The ADR says the canary release runs §7.4's hook, because it is the first
-# thing carrying the new image — and therefore that a rollback removes the pods
-# and LEAVES THE SCHEMA MIGRATED, which is what makes §15.5's
-# backward-compatibility requirement sharper rather than softer. The templates
-# do that today only because `_migration-job.tpl` has no canary guard. A later
-# `if not canary` would render nothing, break the ADR, and pass every
-# assertion in the section above — the gate-coverage failure this repository
-# names as its most-repeated, on the newest surface in this tree.
-#
-# Both directions, on the same reasoning as the migration-template check
-# further up: a chart with a migrator runs the hook on both tracks, and a
-# chart without one runs it on neither.
+# ADR-022's load-bearing consequence: the canary release runs §7.4's hook,
+# because it is the first thing carrying the new image, so a rollback removes
+# the pods and leaves the schema migrated. The templates do that only because
+# `_migration-job.tpl` has no canary guard, and a later `if not canary` would
+# pass every assertion above. Both directions, as for the migration-template
+# check further up.
 for chart in $MIGRATOR_CHARTS; do
     check "$chart: the canary runs the migration hook (ADR-022)" \
         test "$(count '^kind: Job$' "$OUT/$chart-canary.yaml")" -eq 1

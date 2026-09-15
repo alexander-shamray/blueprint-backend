@@ -144,6 +144,54 @@ time.
 - **Tables carry the summary data**; prose carries the argument. A two-column
   borderless table (`| | |`) is the established form for metadata blocks.
 
+## Comments — every language
+
+The rule reaches `//` and `///` in C# — `/* */` appears only as the one-line
+elision inside a sample block, never as a comment, so a block comment is
+itself a finding — `#` and docstrings in Python, `#` in shell, and the
+comment syntax of YAML, MSBuild and `.editorconfig`. No
+analyser enforces any of it; the reviewer does, and the review commands
+reach it through the contract's §2, which they already cite.
+[`docs/change-locality.md`](change-locality.md) §2 is the same rule for
+documents, and a comment is a document that happens to sit beside code:
+the churn it produces is the same, and it was measured in
+[`docs/churn-plan.md`](churn-plan.md).
+
+- **A comment answers what the code cannot.** Why this and not the obvious
+  alternative; the invariant a line relies on that nothing checks; the
+  owner — a section, an ADR, a symbol — that states the rule. A comment that
+  says what the next line does is deleted, because the line says it.
+- **Cite, never copy.** An argument an ADR or a chapter makes is cited in one
+  clause — `// EnableForHttps is true against BREACH (ADR-020).` A paragraph
+  that restates it is a second copy of a fact with an owner, and the second
+  copy is the one that goes stale.
+- **No history.** Nothing about what the comment, the code or a review used
+  to say; no pull request, issue, round or reviewer named; no "measured by
+  deleting the line". The commit body is the record of how a line came to be,
+  and `git log -L` finds it from the line.
+- **No inventories, no test names.** A count of things that live elsewhere
+  — tests, callers, files, occurrences — is a count nobody recomputes; the
+  arithmetic that explains a constant is that constant's why and stays. A
+  test cites the code it covers; the code does not cite the test, because
+  a renamed test leaves the comment pointing at nothing and `rg` on the
+  symbol finds the test anyway.
+- **One argument.** A `//` block or a `<remarks>` argues one thing, as
+  briefly as it can; a `<summary>` or a docstring's first line is a sentence
+  or two. A comment that needs a second argument is a decision, and a
+  decision is an ADR: write the ADR with `/new-adr` and cite it.
+- **No emphasis.** No `**bold**`, `<b>`, capitals or `!` for stress in a
+  comment. It is read once, beside the code, by someone who is not skimming.
+- **A finding against a comment is closed by cutting.** When a review says a
+  comment is stale or wrong, shorten or delete it. Never append the
+  correction, and never explain in the comment why the previous wording was
+  wrong — that is the sentence the next review finds stale.
+
+What this leaves is short: `Program.cs` says `// §13.2` beside the call that
+implements it, a timeout says in one line why it is longer than its
+neighbour, and a registration that relies on the container omitting an
+unsatisfied open generic says so in the sentence that a reader would
+otherwise have to discover by deleting the line.
+
 ## C# style — samples now, source later
 
 **One dialect, both phases.** The rules below govern the fenced samples and the
