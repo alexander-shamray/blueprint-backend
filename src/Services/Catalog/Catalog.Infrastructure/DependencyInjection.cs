@@ -43,9 +43,9 @@ public static class DependencyInjection
         // would silently stop holding. Both resolutions must be one instance.
         services.AddScoped<DbContext>(sp => sp.GetRequiredService<CatalogDbContext>());
 
-        // Each layer scans itself (§6.2): projections, cache invalidators and
-        // command mappers live here, and scanning only Application would skip
-        // them all.
+        // Each layer scans itself (§6.2): this layer's projections, cache
+        // invalidators and command mappers belong here, and scanning only
+        // Application would skip them.
         services.AddPluggableFrom(typeof(DependencyInjection).Assembly);
 
         services.AddScoped<IUnitOfWork, EfUnitOfWork>();                     // §6.3

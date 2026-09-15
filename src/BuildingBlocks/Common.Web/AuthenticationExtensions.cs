@@ -177,7 +177,7 @@ public static class AuthenticationExtensions
                     }
                 };
 
-                // Assigned whole, with the four Validate* flags written out at
+                // Assigned whole, with the Validate* flags written out at
                 // their defaults, because this block is the checklist a reader
                 // audits and a default is not a visible decision. The
                 // post-configure step still fills ValidAudience from Audience
