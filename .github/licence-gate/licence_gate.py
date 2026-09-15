@@ -142,12 +142,10 @@ def read_pins(path: Path) -> set[str]:
             continue
 
         # `Include` is how central management names a package, and it is the
-        # only identity this gate reads. An element without one is refused with
-        # a message naming the file and the element, rather than a KeyError
-        # naming neither — and, worse than either, rather than being skipped:
-        # `Update` sets a version on an item defined elsewhere, so silently
-        # passing over it would restore a package no register row was asked
-        # about, which is the whole defect #50 closed one spelling at a time.
+        # only identity this gate reads. An element without one is refused
+        # rather than skipped: `Update` sets a version on an item defined
+        # elsewhere, so passing over it would restore a package no register row
+        # was asked about.
         identity = element.attrib.get("Include")
 
         if identity is None:
@@ -169,16 +167,9 @@ def find_projects(root: Path) -> list[Path]:
     """Every MSBuild file the scan below will read, in path order.
 
     Exposed so a test can take the scan itself as its subject. A glob that
-    matched nothing would satisfy every negative case in the suite by finding
-    no fault in a set it never read.
-
-    Not `.csproj` alone, and the difference is this gate's own defect one file
-    over. A `PackageReference` carrying a `Version` is legal in
-    `Directory.Build.props` and in any imported `.targets`, where it reaches
-    every project at once - so a scan of the projects would have closed the
-    spelling and left the wider spelling of the same thing open. Nothing in
-    this repository writes one today; the point is that nothing would have
-    said so.
+    matched nothing would satisfy every negative case by finding no fault in a
+    set it never read. Not `.csproj` alone, for the reason `PROJECT_SUFFIXES`
+    gives.
     """
     projects: list[Path] = []
     for suffix in PROJECT_SUFFIXES:
@@ -199,9 +190,8 @@ def scan_projects(root: Path) -> list[str]:
     `ManagePackageVersionsCentrally` to anything but `true` takes itself out of
     that file's reach entirely.
 
-    Parsed rather than grepped. `Web.Bff.csproj` already carries multi-line
-    `PackageReference` elements with children, so a line pattern would read the
-    child-element shape as two unrelated lines and see nothing.
+    Parsed rather than grepped: a multi-line `PackageReference` with child
+    elements reads to a line pattern as unrelated lines.
 
     An empty subject is a finding, not a clean result: a glob matching nothing
     reports exactly what a repository with no fault reports, and from inside the
@@ -304,10 +294,8 @@ def compare_sample(props_text: str, sample: str) -> list[str]:
 def read_allowed(path: Path) -> set[str]:
     """The allow-list, one SPDX identifier per line.
 
-    The stripped line is computed once and both decisions are taken on it. The
-    two halves used to disagree — a raw line tested for a leading `#` and a
-    stripped one stored — so an indented comment became an allow-list entry
-    spelled `# GPL-3.0`.
+    The stripped line is computed once and both decisions are taken on it, so
+    an indented comment cannot become an entry.
     """
     allowed: set[str] = set()
     for line in path.read_text(encoding="utf-8").splitlines():
@@ -333,25 +321,15 @@ def spdx(licence_cell: str) -> list[str]:
 def audit(pins: set[str], rows: list[tuple[list[str], str]], allowed: set[str]) -> list[str]:
     """Every disagreement between the pins and the register, worst first.
 
-    **Every** part of a licence cell has to be allowed, and this reverses a
-    documented decision. Clearing a row because one half of it was allowed
-    treated `/` as the consumer's choice — but the gate cannot read a `/`, so
-    under that rule a forbidden licence clears itself by arriving in the company
-    of an allowed one. Where a package really is offered under either, the
-    register row names the half this repository takes, which is the decision the
-    gate exists to force rather than absorb.
+    Every part of a licence cell has to be allowed. The gate cannot read a `/`
+    as a choice, so clearing a row on one allowed half would let a forbidden
+    licence clear itself beside an allowed one; where a package is offered under
+    either, the register row names the half this repository takes.
 
-    A part the map cannot name fails on its own terms and with its own message.
-    "Outside the allow-list" is a licence read and refused; a part this gate
-    cannot name was never read at all, and adding a line to the allow-list
-    would be the wrong repair for it — that file is keyed on identifiers the
-    map emits, so a name it does not emit could not be matched there anyway.
-
-    Not "a spelling with no identifier behind it", which is how this read until
-    the message below was corrected, and which is the premise that correction
-    refutes: `ISC` and `BSD-2-Clause` are real identifiers falling through a
-    deliberately closed map. So the finding covers a misspelt register cell and
-    an untaught real name alike, and those are repaired in different files.
+    A part the map cannot name fails with its own message. It was never read,
+    so the allow-list, keyed on identifiers the map emits, is the wrong repair:
+    the cause is a misspelt register cell or a real name the closed map has not
+    been taught, and those are repaired in different files.
     """
     registered: dict[str, list[str]] = {}
     for identities, licence_cell in rows:

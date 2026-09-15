@@ -105,10 +105,8 @@ class ReadPins(unittest.TestCase):
     def test_refuses_a_pin_element_carrying_no_include(self):
         # `Update` sets a version on an item declared elsewhere, so this is a
         # legal MSBuild spelling that names a package this gate cannot read.
-        # It used to raise KeyError from deep inside a set comprehension,
-        # naming neither the file nor the element — and skipping it instead
-        # would be the fail-open direction, restoring a package no register row
-        # was ever asked about.
+        # Skipping it would fail open, and a KeyError would name neither the
+        # file nor the element.
         document = pins_doc(
             '    <PackageVersion Update="Dapper" Version="2.1.66" />\n')
 
@@ -118,10 +116,8 @@ class ReadPins(unittest.TestCase):
         self.assertIn("no Include attribute", str(refusal.exception))
         self.assertIn("PackageVersion", str(refusal.exception))
         self.assertIn("Update", str(refusal.exception))
-        # The file too, and this half is asserted because it is the half that
-        # can be deleted without the rest noticing. The defect being repaired
-        # was a message naming NEITHER the file nor the element; a suite that
-        # pins only the element would stay green against half a repair.
+        # The file too, because a message naming only the element would pass
+        # a suite that pinned only the element.
         self.assertIn("Directory.Packages.props", str(refusal.exception))
 
 
@@ -184,9 +180,8 @@ class ScanProjects(unittest.TestCase):
         self.assertIn("VersionOverride attribute", findings[0])
 
     def test_fails_a_package_reference_carrying_a_version_child_element(self):
-        # Web.Bff.csproj already carries multi-line PackageReference elements
-        # with children, so this shape is not hypothetical — and a line pattern
-        # reads it as two unrelated lines and sees nothing.
+        # A multi-line PackageReference with children reads to a line pattern
+        # as unrelated lines.
         body = ('  <ItemGroup>\n'
                 '    <PackageReference Include="Evil">\n'
                 '      <Version>1.0.0</Version>\n'
@@ -344,10 +339,8 @@ class ReadAllowed(unittest.TestCase):
         self.assertEqual(self.allowed("# A comment\nMIT\n"), {"MIT"})
 
     def test_skips_an_indented_comment(self):
-        # The two halves used to read different strings: a raw line tested for
-        # a leading `#`, a stripped one stored. An indented comment became an
-        # allow-list entry spelled `# GPL-3.0` — matching no licence today, and
-        # one reindented line away from admitting one.
+        # Testing the raw line for `#` and storing the stripped one would admit
+        # an entry spelled `# GPL-3.0`.
         self.assertEqual(self.allowed("MIT\n    # GPL-3.0\n"), {"MIT"})
 
 
