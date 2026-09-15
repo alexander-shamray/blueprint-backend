@@ -1,12 +1,12 @@
 namespace Common.Domain;
 
 /// <summary>
-/// An object whose identity persists through change (§5.1): equal by
+/// An object whose identity persists through change (§5.1): equal by type and
 /// <see cref="Id"/>, where a value object is equal by its values.
 /// </summary>
 /// <remarks>
 /// <typeparamref name="TId"/> is a struct because §5.2's identifiers are
-/// readonly record structs, which keeps a raw <c>Guid</c> or <c>string</c> out.
+/// readonly record structs; the constraint excludes reference types only.
 /// </remarks>
 public abstract class Entity<TId> : IEquatable<Entity<TId>>
     where TId : struct

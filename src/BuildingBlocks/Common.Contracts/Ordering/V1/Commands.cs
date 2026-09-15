@@ -116,11 +116,10 @@ public static class ReviewReasons
     /// An authorisation landed while the saga was already compensating.
     /// </summary>
     /// <remarks>
-    /// §9.6 reaches <c>Compensating</c> on a cancellation, a decline or a
-    /// payment timeout, so no <c>OrderCancelled</c> may exist yet when this is
-    /// raised, and there is no despatch left to stop. Whether Payments has
-    /// voided the authorisation is not knowable here (§9.4); the runbook checks
-    /// for a refund on this and on <see cref="CancelledAfterConfirmation"/>.
+    /// Raised on a <c>PaymentAuthorised</c> in <c>Compensating</c>, where no
+    /// <c>OrderCancelled</c> need exist yet, or in <c>AwaitingPayment</c> once
+    /// a cancellation was observed (§9.6). No despatch is left to stop, and
+    /// whether Payments voided the authorisation is not knowable here (§9.4).
     /// </remarks>
     public const string PaymentAuthorisedDuringCompensation = "payment_authorised_during_compensation";
 
@@ -128,11 +127,11 @@ public static class ReviewReasons
     /// A cancellation met an order the aggregate had confirmed.
     /// </summary>
     /// <remarks>
-    /// Raised on an <c>OrderCancelled</c> in <c>Confirmed</c>, or on an
-    /// <c>OrderConfirmed</c> in <c>Compensating</c>, since §9.4 orders nothing
-    /// between them. Distinct from
-    /// <see cref="PaymentAuthorisedDuringCompensation"/> because Shipping may
-    /// still despatch, and a review row keeps nothing but the code.
+    /// Raised once §9.6's saga knows the order was confirmed, from its
+    /// <c>OrderConfirmed</c> or a despatch, and has observed a cancellation, in
+    /// either order; §9.4 orders nothing between them. Distinct from
+    /// <see cref="PaymentAuthorisedDuringCompensation"/> because a despatch may
+    /// be live, and a review row keeps nothing but the code.
     /// </remarks>
     public const string CancelledAfterConfirmation = "cancelled_after_confirmation";
 

@@ -2,13 +2,13 @@ namespace Common.Contracts.Ordering.V1;
 
 /// <summary>
 /// An order was confirmed — payment authorised, stock held (§3.2). Shipping
-/// consumes it, and it carries identifiers, not personal data (ADR-035).
+/// consumes it: identifiers and order facts, with no directly identifying or
+/// free-text personal data (ADR-035).
 /// </summary>
 /// <remarks>
 /// An address on the wire reaches the broker, the outbox rows §9.4's purge
-/// spares and whatever a consumer persists, none of which §11.7's erasure
-/// reaches. <c>CustomerId</c> is still personal data, and how Shipping obtains
-/// an address is Shipping's to decide.
+/// spares and whatever a consumer persists, beyond §11.7's erasure.
+/// <c>CustomerId</c> stays; how Shipping obtains an address is Shipping's call.
 /// </remarks>
 public sealed record OrderConfirmed : IIntegrationEvent
 {
