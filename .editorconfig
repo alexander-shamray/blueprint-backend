@@ -71,11 +71,9 @@ csharp_space_around_declaration_statements = ignore
 csharp_new_line_before_members_in_object_initializers = true
 csharp_new_line_before_members_in_anonymous_types = true
 
-# No setting expresses the remaining wrapping rules — `=>` placement, broken
-# fluent chains, argument lists holding a lambda, the outermost-bracket break,
-# a leading `[`, and the whitespace between a type and its identifier — and
-# `dotnet format` neither introduces nor undoes them, so nothing has to be
-# pinned. docs/style-guide.md carries them; the closest enforcement is
+# No setting expresses the remaining wrapping rules docs/style-guide.md
+# carries, and `dotnet format` neither introduces nor undoes them, so nothing
+# has to be pinned; the closest enforcement is
 # dotnet_style_operator_placement_when_wrapping in [*.cs], which governs
 # binary operators only.
 

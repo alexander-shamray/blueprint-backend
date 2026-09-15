@@ -189,8 +189,8 @@ total is no longer written there and then keeps two other counts current.
 
 Stated once each, and cited from here:
 
-- a comment says why, cites the owner, and carries no history, count, test
-  name or copy of an argument — the style guide's *Comments* section;
+- a comment says why, cites the owner, and carries no history, inventory,
+  test name or copy of an argument — the style guide's *Comments* section;
 - the contract's §2 now names comments, XML docs, docstrings and
   configuration comments as documents for its purposes;
 - a finding against a comment is closed by shortening or deleting it — the

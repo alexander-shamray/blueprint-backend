@@ -8,9 +8,9 @@ namespace Common.Infrastructure.Messaging;
 /// idempotency markers are kept, and how the purge that deletes them is paced
 /// (§9.4, §9.5, §8.5). Two of those windows are housekeeping and the third is
 /// a correctness setting — see <see cref="IdempotencyWindow"/>, the only one
-/// with a floor. A registered value for <see cref="Outbox.OutboxTable"/>'s
-/// reason: the numbers are a service's to choose, and a <c>const</c> in common
-/// code is a choice made once for everybody.
+/// with a floor. Registered rather than a <c>const</c>, for the reason
+/// <see cref="Outbox.OutboxTable"/> is: the numbers are a service's to choose,
+/// and a constant in common code is a choice made once for everybody.
 /// </summary>
 /// <remarks>
 /// The inbox window is a constraint, not a round number: §9.5 requires it to
