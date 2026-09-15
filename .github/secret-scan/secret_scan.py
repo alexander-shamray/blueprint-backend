@@ -11,8 +11,7 @@ What this does not do, stated here rather than inferred from a green run:
 
   * It reads the working tree, not history. A credential committed and then
     deleted is still in the pack and still compromised; `docs/secrets.md`
-    states the rule that leaves standing, rotate first and rewrite history
-    second.
+    states what applies then: rotate first, and rewrite history second.
   * It is a pattern scanner, not an entropy oracle. It recognises shapes: a PEM
     block, a provider's key prefix, a password inside a connection string, a
     credential-shaped name assigned a literal. A high-entropy string under a

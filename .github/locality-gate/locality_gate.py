@@ -30,8 +30,8 @@ covers everything beneath the directory it names, and every token is
 repository-relative: no leading `/`, no `./`, no `..` segment, brace
 alternatives included. The harness helper cannot run Python under its grant,
 and CI fetches its own payload, `changedFiles` and the files endpoint included,
-rather than the helper's field set, so the grammar has two implementations and
-the two suites pin the same cases.
+rather than the helper's field set, so the grammar has two implementations,
+which must accept and refuse the same tokens.
 
 The touch-set cell is never printed, because a PR author is not a trusted
 party. A changed path is the author's text too, since git permits a newline

@@ -22,8 +22,8 @@ ordinary case, not a disagreement: comparing that direction would make a commit
 keyword mandatory, a rule nothing in this repository states.
 
 The commit half is this file's regex, so a regex that matches too little is a
-fail-open: a dropped keyword the description also omits agrees with nothing
-missing. The parser is therefore literal, matching inside backticks and quoted
+fail-open: a keyword it drops from the commits, and that the description also
+omits, is missing from both sides, so the comparison agrees. The parser is therefore literal, matching inside backticks and quoted
 prose as GitHub's linker does, and a keyword-shaped token it cannot resolve is
 a problem rather than a skip.
 

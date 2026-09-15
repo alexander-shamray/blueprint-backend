@@ -302,7 +302,10 @@ class DuplicateNames(TemporaryRepository):
         self.assertIn("src/Services/Payments/Catalog.Domain/Catalog.Domain.csproj", output)
 
     def test_two_stems_differing_only_in_case_fail(self) -> None:
-        """The pair a case-sensitive check passes in CI and nowhere else."""
+        """A pair a case-sensitive check passes and that collides on disk.
+
+        A case-insensitive filesystem holds the two stems as one directory.
+        """
         tree(self.root, {"Catalog.Domain": "src/Services/Catalog/Catalog.Domain"})
         second = self.root / "src/Services/Payments/catalog.domain"
         second.mkdir(parents=True)

@@ -328,7 +328,7 @@ class StageTests(unittest.TestCase):
         )
 
     def test_a_clean_run_passes(self) -> None:
-        """All three stages, because that is what a clean run is."""
+        """Every stage `STAGE_FLOORS` names, because that is a clean run."""
         architecture = self.stage(
             "architecture", trx(18, "Catalog.Domain.Tests", ["arch"])
         )

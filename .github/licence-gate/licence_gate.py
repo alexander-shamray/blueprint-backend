@@ -166,9 +166,8 @@ def read_pins(path: Path) -> set[str]:
 def find_projects(root: Path) -> list[Path]:
     """Every MSBuild file the scan below will read, in path order.
 
-    Exposed so a test can take the scan itself as its subject. A glob that
-    matched nothing would satisfy every negative case by finding no fault in a
-    set it never read. Every suffix in `PROJECT_SUFFIXES` is walked, not
+    Separate from the scan so its reach can be checked on its own: a glob that
+    matched nothing would report no fault in a set it never read. Every suffix in `PROJECT_SUFFIXES` is walked, not
     `.csproj` alone, because a props or targets file reaches every project
     that imports it.
     """
