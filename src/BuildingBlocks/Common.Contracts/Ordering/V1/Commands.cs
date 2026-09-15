@@ -114,7 +114,8 @@ public static class ReviewReasons
     public const string StockNotReleased = "stock_not_released";
 
     /// <summary>
-    /// An authorisation landed while the saga was already compensating.
+    /// An authorisation landed after the saga had observed a cancellation or
+    /// begun compensating.
     /// </summary>
     /// <remarks>
     /// Raised on a <c>PaymentAuthorised</c> in <c>Compensating</c>, entered by
