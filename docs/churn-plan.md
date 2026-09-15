@@ -343,20 +343,20 @@ it, unchanged.
 
 `.github/comment-gate/`: a Python gate over the pull request's *added* lines
 that fails on the patterns in step 1's grep and on a comment block over ten
-lines. It reads every comment token, a trailing one included, and never
-the inside of a string literal, so `Call(); // PR-1` is judged and a
-comment-shaped literal is not, with a README that says what it reads and
-a suite whose subject is what the gate is looking at — a file it must
-find, a pattern it must match, a literal it must not judge because it is
-code. Added lines only, so the
-corpus is brought under the rule by the sweeps and not by the gate refusing
-every pull request until they land; for the block-length rule an added
-comment token is judged as its whole containing block in the file after
-the change, because one added line can push an old block past the limit.
-Class D. It makes the mechanical half
-of the *Comments* section — the patterns and the block length — a build
-failure; citing the owner and not copying an argument stay with the
-reviewer, as the guide says.
+lines. It reads every comment token, a trailing one included, and a Python
+docstring, and never the inside of any other literal, so `Call(); // PR-1`
+is judged and a comment-shaped literal is not; the scaffold's templates are
+literals too, so the gate judges the service the scaffold renders rather
+than the strings it renders from. A README says what it reads and a suite's
+subject is what the gate is looking at — a file it must find, a pattern it
+must match, a literal it must not judge because it is code. Added lines
+only, so the corpus is brought under the rule by the sweeps and not by the
+gate refusing every pull request until they land; for the block-length rule
+an added comment token is judged as its whole containing block in the file
+after the change, because one added line can push an old block past the
+limit. Class D. It makes the mechanical half of the *Comments* section — the
+patterns and the block length — a build failure; citing the owner and not
+copying an argument stay with the reviewer, as the guide says.
 
 ### Step 10 — the subject line
 

@@ -13,20 +13,12 @@ namespace Common.Infrastructure.Messaging;
 /// and a constant in common code is a choice made once for everybody.
 /// </summary>
 /// <remarks>
-/// The inbox window is a constraint, not a round number: §9.5 requires it to
-/// exceed the broker's longest possible redelivery delay, error queue
-/// included, because pruning sooner lets a late redelivery through as new.
-/// The outbox window is softer — processed rows are kept for debugging (§9.4)
-/// — but its predicate is not, and it lives in
-/// <see cref="RetentionPurgeService"/>.
-/// <para>
 /// Every member is refused rather than clamped, because each fails somewhere
 /// the reader is not looking: a negative window puts the cutoff in the future
 /// and deletes rows written a second ago; a non-positive count makes every
 /// pass a no-op with the tables growing; and a value past the upper bounds
 /// throws on a background thread or inside a swallowed pass rather than at
 /// the registration that set it.
-/// </para>
 /// </remarks>
 public sealed record RetentionPolicy
 {
@@ -37,14 +29,23 @@ public sealed record RetentionPolicy
     private readonly int _batchSize = 5000;
     private readonly int _maxBatchesPerPass = 20;
 
-    /// <summary>Processed outbox rows older than this are deleted.</summary>
+    /// <summary>
+    /// Processed outbox rows older than this are deleted. A soft window,
+    /// because processed rows are kept for debugging (§9.4); the predicate is
+    /// <see cref="RetentionPurgeService"/>'s.
+    /// </summary>
     public TimeSpan OutboxWindow
     {
         get => _outboxWindow;
         init => _outboxWindow = InRange(value, MaxWindow);
     }
 
-    /// <summary>Inbox rows handled longer ago than this are deleted.</summary>
+    /// <summary>
+    /// Inbox rows handled longer ago than this are deleted. A constraint rather
+    /// than a round number: §9.5 requires it to exceed the broker's longest
+    /// redelivery delay, error queue included, because pruning sooner lets a
+    /// late redelivery through as new.
+    /// </summary>
     public TimeSpan InboxWindow
     {
         get => _inboxWindow;
