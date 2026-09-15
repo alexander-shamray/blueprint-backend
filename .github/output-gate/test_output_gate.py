@@ -434,9 +434,10 @@ class ThisRepository(unittest.TestCase):
     def test_git_really_ignores_what_this_gate_refuses(self) -> None:
         """Asked of git, rather than of `.gitignore`'s text.
 
-        `.gitignore` is why residue is never committed. A substring check on
-        its text survives the rule being commented out or negated, so git is
-        asked instead, about files inside the directories because `--no-index`
+        `.gitignore` keeps residue out of an ordinary `git add`, so the rule
+        this gate relies on has to be active. A substring check on its text
+        survives the rule being commented out or negated, so git is asked
+        instead, about files inside the directories because `--no-index`
         cannot tell a bare `.../obj` is a directory.
 
         The matching rule is asserted as well as the verdict, because another

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """What a pull request says it closes must match what merging it will close.
 
-It says it three times, and GitHub honours the three separately without
-comparing them, which is this gate's job:
+It says it three times, each handled separately and none compared with the
+others except by this gate:
 
 1. The `| Closes |` row in the house body form, which GitHub's linker does not
    read.
