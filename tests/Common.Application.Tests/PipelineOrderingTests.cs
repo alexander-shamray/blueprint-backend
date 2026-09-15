@@ -5,9 +5,9 @@ using Xunit;
 namespace Common.Application.Tests;
 
 /// <summary>
-/// The point of PR-04 rather than a garnish on it. Unregistered or misordered,
-/// the pipeline fails silently and completely (§6.3) — the dispatcher invokes
-/// the handler alone and the request returns 200 having written nothing.
+/// Unregistered or misordered, the pipeline fails silently and completely
+/// (§6.3) — the dispatcher invokes the handler alone and the request returns
+/// 200 having written nothing.
 /// </summary>
 public class PipelineOrderingTests
 {

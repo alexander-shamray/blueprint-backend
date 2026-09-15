@@ -21,8 +21,6 @@ public class RegistrationTests
 
         // The same list the scan reads — a new interface is covered the moment
         // it is added to PluggableInterfaces, with no second place to remember.
-        // The previous version of §6.2 kept two copies of this list, and both
-        // drifted together or not at all.
         IEnumerable<(Type Implementation, Type Service)> implementations =
             typeof(Ping).Assembly
                 .GetTypes()
@@ -44,15 +42,10 @@ public class RegistrationTests
     [Fact]
     public void The_scan_registers_an_implementation_of_every_pluggable_interface()
     {
-        // The positive control the test above cannot be, and the reason is its
-        // first line: it derives what to look for from PluggableInterfaces.All,
-        // so deleting an entry takes the interface out of the production scan
-        // AND out of its own guard. Both stay green over a handler nothing will
-        // ever invoke — the exact trap that class says it exists to prevent,
-        // reached through the guard rather than around it.
-        //
-        // Every closed type below is named in source. That is the whole point:
-        // a deletion from the list fails here rather than being followed.
+        // A guard that derives what to look for from PluggableInterfaces.All
+        // loses an interface in the same deletion that drops it from the scan.
+        // Every closed type below is named in source, so a deletion from the
+        // list fails here rather than being followed.
         using ServiceProvider provider = TestContainer.Build();
         using IServiceScope scope = provider.CreateScope();
 
@@ -113,8 +106,8 @@ public class RegistrationTests
     {
         // Scoped, not singleton: a handler holds the unit of work and the
         // repositories of one request (§4.2). A singleton handler would share
-        // one DbContext across every request the moment PR-08 puts one behind
-        // it, and nothing about the registration would look wrong.
+        // one DbContext across every request, and nothing about the
+        // registration would look wrong.
         using ServiceProvider provider = TestContainer.Build();
         using IServiceScope first = provider.CreateScope();
         using IServiceScope second = provider.CreateScope();

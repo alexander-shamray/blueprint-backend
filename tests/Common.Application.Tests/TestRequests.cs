@@ -123,10 +123,8 @@ public sealed class ApproveHandler : ICommandHandler<Approve, Result>
 /// transaction is still open.
 /// </summary>
 /// <remarks>
-/// It exists to make §6.3's capture observable. Reading the context after
-/// <c>next()</c> rather than before it is a one-line change that no other test
-/// in this suite notices, and the row it would write carries the wrong
-/// command's key against the right command's rows.
+/// It makes §6.3's capture observable: a behaviour reading the context after
+/// <c>next()</c> would mark the wrong command's key against these rows.
 /// </remarks>
 public sealed record Reclaim(string Key) : ICommand<Result>;
 
@@ -151,9 +149,8 @@ public sealed class PingValidator : AbstractValidator<Ping>
 /// </summary>
 /// <remarks>
 /// A <c>Must</c> with an explicit code rather than <c>MinimumLength</c>, which
-/// reports two failures for one empty string. The test below counts which
-/// validators contributed, and a rule that speaks twice would make it agree
-/// with itself for the wrong reason.
+/// reports two failures for one empty string and would let one validator look
+/// like two.
 /// </remarks>
 public sealed class PingLengthValidator : AbstractValidator<Ping>
 {

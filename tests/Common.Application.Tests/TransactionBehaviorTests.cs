@@ -225,10 +225,10 @@ public class TransactionBehaviorTests
     public async Task A_nested_dispatch_writes_no_marker_of_its_own()
     {
         // §6.3 opens no transaction when one is active, so it must not write a
-        // marker either: the row would land in the OUTER command's transaction
-        // under the INNER command's key. Nothing here dispatches a command from
-        // a command handler and a gate per service says so — this is what the
-        // day that gate fails would otherwise cost.
+        // marker either: the row would land in the outer command's transaction
+        // under the inner command's key. Each service gates against dispatching
+        // a command from a command handler; this is what that gate failing
+        // would otherwise cost.
         using ServiceProvider provider = BuildProvider();
         using IServiceScope scope = provider.CreateScope();
         Claim(scope);
@@ -280,10 +280,9 @@ public class TransactionBehaviorTests
 
     /// <summary>
     /// Puts a key on the scope's context, which is what §8.5's behaviour does
-    /// after a successful claim. Most tests here run without one, and that is
-    /// the ordinary case rather than a shortcut: a command that did not opt in
-    /// has no key, and §6.3 must then behave exactly as it did before the
-    /// marker existed.
+    /// after a successful claim. Running without one is the ordinary case rather
+    /// than a shortcut: a command that did not opt in has no key, and §6.3 then
+    /// neither reads nor writes a marker.
     /// </summary>
     private static string Claim(IServiceScope scope, string key = Key)
     {

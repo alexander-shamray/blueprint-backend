@@ -1,18 +1,14 @@
 namespace Common.Application.Tests;
 
 /// <summary>
-/// A recording <see cref="IIdempotencyMarkerStore"/>. It writes into the same
-/// <see cref="PipelineLog"/> as <see cref="FakeUnitOfWork"/> and
-/// <see cref="FakeDomainEventDispatcher"/>, for the reason that file gives: the
-/// behaviour's whole contract is a sequence, and the marker's two calls have to
-/// be placed in it rather than merely counted.
+/// A recording <see cref="IIdempotencyMarkerStore"/> on the shared
+/// <see cref="PipelineLog"/>, so its two calls are placed in §6.3's sequence
+/// rather than merely counted.
 /// </summary>
 /// <remarks>
-/// <b>Where each call lands is the assertion, not that it happened.</b> A read
-/// after the handler would answer the wrong question — the work would already
-/// have run — and a write before the aggregate-count guard would leave a marker
-/// behind for a command §6.3 is about to refuse, which is a permanent refusal
-/// of every retry of a command that never committed.
+/// A read after the handler comes too late to stop the work, and a write before
+/// the aggregate-count guard leaves a marker for a command §6.3 is about to
+/// refuse, refusing every retry of work that never committed.
 /// </remarks>
 public sealed class RecordingMarkerStore(PipelineLog log) : IIdempotencyMarkerStore
 {

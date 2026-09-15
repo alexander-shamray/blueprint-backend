@@ -3,24 +3,14 @@ using System.Collections.Concurrent;
 namespace Common.Application.Tests;
 
 /// <summary>
-/// An in-memory <see cref="IIdempotencyStore"/> that records what it was asked
-/// to do. §8.5's decisions are almost entirely about <em>which</em> store call
-/// happens on which path, so the call log is the assertion surface and the
-/// stored state is secondary.
+/// An in-memory <see cref="IIdempotencyStore"/> that records its calls: §8.5
+/// decides <em>which</em> store call happens on which path, so the call log is
+/// the assertion surface.
 /// </summary>
 /// <remarks>
-/// <b>Not a Redis substitute, and the difference matters for one test.</b>
-/// <see cref="TryClaimAsync"/> is atomic here only because
-/// <see cref="ConcurrentDictionary{TKey,TValue}.TryAdd"/> is; nothing about
-/// this double proves the real store's <c>SET NX</c> is. That claim belongs to
-/// the Redis suite, against a container.
-/// <para>
-/// <b>It is token-checked, and that is not decoration.</b> A double that
-/// completed and released unconditionally would be the shipped defect of #127
-/// wearing a test's clothes: every behaviour test would pass whether or not
-/// the behaviour bothered to carry its claim token through. Comparing here is
-/// what makes those tests able to notice.
-/// </para>
+/// Token-checked like the real store, or every behaviour test would pass
+/// whether the behaviour carried its claim token or not. <c>SET NX</c>'s
+/// atomicity is the Redis suite's to prove, against a container.
 /// </remarks>
 internal sealed class RecordingIdempotencyStore : IIdempotencyStore
 {
@@ -33,14 +23,10 @@ internal sealed class RecordingIdempotencyStore : IIdempotencyStore
     /// The <see cref="CancellationToken"/> each call was handed, by call name.
     /// </summary>
     /// <remarks>
-    /// <b>The call name rather than the position, because a positional pointer
-    /// goes stale.</b> §8.5 requires three of the store's calls to be made with
-    /// <see cref="CancellationToken.None"/> — the release after a thrown
-    /// handler, the release after a refusal, and the completion — and without
-    /// recording the argument, an implementation forwarding the caller's
-    /// <c>ct</c> to all three passes every other test in this suite. Measured,
-    /// not asserted: with the three sites changed to forward <c>ct</c>, all 84
-    /// tests here passed.
+    /// §8.5 requires the completion and both releases to be made with
+    /// <see cref="CancellationToken.None"/>, and nothing else a test can
+    /// observe distinguishes a store call that forwarded the caller's
+    /// <c>ct</c>.
     /// </remarks>
     public Dictionary<string, CancellationToken> Tokens { get; } = [];
 

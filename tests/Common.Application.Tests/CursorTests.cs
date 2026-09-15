@@ -69,7 +69,7 @@ public class CursorTests
         // Distinct from the overflow row above, which long.TryParse already
         // refuses: these ticks parse and the id is valid, so only the range
         // guard itself stands between them and a DateTimeOffset constructor
-        // throw — delete the guard and this is the test that goes red.
+        // throw.
         string payload = string.Create(
             CultureInfo.InvariantCulture, $"{DateTime.MaxValue.Ticks + 1}:{Guid.Empty:N}");
         string cursor = Base64Url.EncodeToString(Encoding.UTF8.GetBytes(payload));

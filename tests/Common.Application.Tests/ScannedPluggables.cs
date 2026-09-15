@@ -7,18 +7,8 @@ namespace Common.Application.Tests;
 /// implement.
 /// </summary>
 /// <remarks>
-/// <b>These exist because the registration test could not fail for a missing
-/// entry.</b> It derives the implementations it expects by asking
-/// <c>PluggableInterfaces.All</c> what to look for — so deleting an entry
-/// removed the interface from the production scan <em>and</em> from the test
-/// that guards it, and every test stayed green over a handler nothing would
-/// ever invoke. That is the exact trap <c>PluggableInterfaces</c>' own comment
-/// says the class was built to prevent, reachable through the guard rather than
-/// around it.
-/// <para>
-/// The control that uses them names each closed type in source, so it fails on
-/// the deletion rather than following it.
-/// </para>
+/// A guard that asks <c>PluggableInterfaces.All</c> what to look for cannot
+/// fail for an entry deleted from it; naming each closed type in source can.
 /// </remarks>
 public sealed record ScannedEvent(Guid Id);
 
@@ -38,7 +28,7 @@ public sealed class ScannedCommandMapper : ICommandMessageMapper<ScannedMessage,
     public ScannedCommand Map(ScannedMessage message) => new(message.Id);
 }
 
-/// <summary>A projection handler, for the third of the five.</summary>
+/// <summary>A projection handler over the same event.</summary>
 public sealed class ScannedProjection : IProjectionHandler<ScannedEvent>
 {
     public Task HandleAsync(ScannedEvent domainEvent, CancellationToken ct) => Task.CompletedTask;
