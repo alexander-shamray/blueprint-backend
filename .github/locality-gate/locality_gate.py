@@ -9,8 +9,8 @@ Every changed path is judged twice, and a path outside either set fails the
 PR and is named in the verdict. The class -> tree-set map in `classes.yml`
 beside this file says what a class may reach in this repository, but it cannot
 say "one service": a Catalog change that also edits Ordering is inside Class
-A's map, which is why the declared touch set is the second check. A `+`-joined class is the union
-of its members' maps.
+A's map, which is why the declared touch set is the second check. A `+`-joined
+class is the union of its members' maps.
 
 The body carries exactly one row of each, or the run is refused with exit 2
 rather than judged. Half the metadata makes half the gate impossible, so a
