@@ -221,8 +221,9 @@ composition root, the retention purge and its policy, the
 authentication extensions, the idempotency behaviour, each service's
 `DependencyInjection.cs` files, the suites of the same mechanisms, the
 Python gates, the Helm smoke script, `.editorconfig` and
-`Directory.Build.props`. Class D for the documents, A and B for the trees,
-named in the touch-set row.
+`Directory.Build.props`. Class D for the documents and B for the trees,
+because a sweep across several slices and the building blocks is B's tree
+set, named in the touch-set row.
 
 Done when the solution builds, the unit suites and the gates' suites are
 green, the scaffold's suite is green and the service it renders builds:
@@ -244,7 +245,7 @@ Done for a tree when these are empty over it — the patterns are the ones
 section 1 counted, and the counts are the baseline:
 
 ```bash
-rg -n -e '#[0-9]{2,}\b' -e 'PR-[0-9]+' -e 'Copilot|Grok|CodeQL' \
+rg -n -e '#[0-9]+\b' -e 'PR-[0-9]+' -e 'Copilot|Grok|CodeQL' \
    -e 'used to|went stale|this (line|sentence|comment) (said|carried)' \
    -e '\*\*[^*]+\*\*' --glob '*.cs' <tree> | rg '^\S+:\d+:\s*//'
 ```

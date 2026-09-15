@@ -90,9 +90,9 @@ builder.Services.AddRateLimiter(options =>
 
     // Through IProblemDetailsService rather than WriteAsJsonAsync, so a 429
     // is the same shape as every other error the platform returns (§10.5):
-    // application/problem+json, with the correlationId and traceId members
-    // AddCommonProblemDetails adds. Writing the body directly produces
-    // application/json and none of the three.
+    // application/problem+json, with the members AddCommonProblemDetails
+    // adds. Writing the body directly produces application/json and none
+    // of them.
     options.OnRejected = async (context, _) =>
     {
         // RetryAfterHeader.Seconds, not a cast: it rounds up, and that file
