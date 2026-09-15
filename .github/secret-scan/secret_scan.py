@@ -3,27 +3,25 @@
 
 Section 15.1 puts "SCA + secret scan" at the head of the pipeline and argues the
 position: neither half needs a build, and a scan downstream of one is a scan
-that a build failure skips. The licence half landed with PR-01. This is the
-other half, on the same terms — stdlib Python over text, no restore, no SDK, no
-network — so it runs in the same job, ahead of everything.
+that a build failure skips. This is the secret half, on the licence gate's
+terms — stdlib Python over text, no restore, no SDK, no network — so it runs
+in the same job, ahead of everything.
 
-WHAT THIS DOES NOT DO, stated here rather than inferred from a green run.
+What this does not do, stated here rather than inferred from a green run:
 
-  * It reads the WORKING TREE, not git history. A credential committed and then
-    deleted is still in the pack and is still compromised; nothing here looks
-    at a single earlier revision. `docs/secrets.md` already states the rule this
-    leaves standing — rotate first, rewrite history second — and this gate does
-    not change it.
-  * It is a PATTERN scanner, not an entropy oracle. It recognises shapes it has
-    been shown: a PEM block, a provider's key prefix, a password inside a
-    connection string, a credential-shaped name assigned a literal. A
-    high-entropy string under a name nobody predicted passes. That is the same
-    line Section 13.4's redactor draws for the same reason — an entropy test
-    flags an id as readily as a secret, and a gate that cries wolf is a gate
-    somebody turns off.
+  * It reads the working tree, not history. A credential committed and then
+    deleted is still in the pack and still compromised; `docs/secrets.md`
+    states the rule that leaves standing, rotate first and rewrite history
+    second.
+  * It is a pattern scanner, not an entropy oracle. It recognises shapes: a PEM
+    block, a provider's key prefix, a password inside a connection string, a
+    credential-shaped name assigned a literal. A high-entropy string under a
+    name nobody predicted passes, on the line Section 13.4's redactor draws: an
+    entropy test flags an id as readily as a secret, and a gate that cries wolf
+    gets turned off.
   * It knows nothing about whether a value is live. `not-a-real-password` and a
     production password are the same shape, which is why the accepted ones are
-    ENUMERATED under allowed/ rather than guessed at by the patterns.
+    enumerated under allowed/ rather than guessed at by the patterns.
 
 So the honest claim is narrow: a credential of a recognised shape cannot reach
 `main` through a pull request without somebody writing down why it is there.
@@ -64,16 +62,12 @@ SKIP_DIRS = frozenset({
     "TestResults",
 })
 
-# Declined at the repository root and nowhere else, which is the distinction the
-# set above cannot express. §4.1 puts build output in one `artifacts/` directory
-# at the top of the tree, so that is the only path where the name means output —
-# `obj` and `bin` match two of the directories under it and the rest match
-# neither, so without this entry a `dotnet publish` or `dotnet pack` run before
-# the gate would put a rendered appsettings in front of a scanner that has no
-# business reading one. Anywhere else the name means whatever somebody called
-# their code, and a basename match would take a source tree out of this gate's
-# reach without saying so: exactly the silent narrowing CLAUDE.md names as this
-# repository's most-repeated failure, arriving through the fix for it.
+# Declined at the repository root and nowhere else, which the set above cannot
+# express. §4.1 puts build output in one `artifacts/` directory at the top of
+# the tree, where a publish or pack output would put a rendered appsettings in
+# front of the scanner. Anywhere else the name means whatever somebody called
+# their code, and a basename match would silently take a source tree out of
+# this gate's reach.
 SKIP_ROOT_DIRS = frozenset({
     "artifacts",
 })
@@ -86,7 +80,7 @@ PROBE_BYTES = 8192
 
 # ------------------------------------------------------------------ values --
 
-# A value that is a REFERENCE rather than a literal. `${SQL_PASSWORD}`,
+# A value that is a reference rather than a literal. `${SQL_PASSWORD}`,
 # `$PGPASSWORD`, `%SQL_PASSWORD%`, `{{ .Values.db.password }}` and
 # `<your-password-here>` all name a secret without carrying one.
 REFERENCE = re.compile(
@@ -100,13 +94,11 @@ REFERENCE = re.compile(
     r"|<[^>]*>"                          # <your-password-here>
     r")$")
 
-# `${VAR:-default}` is NOT a reference. The default is a literal, committed to
-# the tree, and the seam `docs/secrets.md` argues for — the variable in front of
-# it — is a seam against DEPLOYING the value, not against writing it down. So
-# the wrapper is peeled and the default is judged. Section 14.1's accepted
-# local-development defaults then reach the allow-list as decisions with
-# reasons, which is where this repository has already said they belong, rather
-# than disappearing into a pattern nobody re-reads.
+# `${VAR:-default}` is not a reference. The default is a literal committed to
+# the tree, and the seam `docs/secrets.md` argues for is against deploying the
+# value, not against writing it down. So the wrapper is peeled and the default
+# judged, and Section 14.1's local-development defaults reach the allow-list as
+# decisions with reasons.
 DEFAULTED_REFERENCE = re.compile(r"^\$\{[A-Za-z_][A-Za-z0-9_]*:[-=]?(.*)\}$", re.S)
 
 # Characters a mask is made of. A value composed only of these carries nothing.
@@ -116,11 +108,9 @@ MASK_CHARS = "*xX#.…_- \t"
 def literal(value: str) -> str:
     """The literal a reader of this line would actually see, or "" for none.
 
-    Structure only. This function decides whether a value CAN be a secret; it
-    never decides whether a particular secret is acceptable — that is the
-    allow-list's job and it is deliberately the only place such a decision can
-    be made. CLAUDE.md's argument against `#pragma` is the same argument: a
-    suppression written where the code is, is a suppression nobody re-reads.
+    Structure only. This function decides whether a value can be a secret; it
+    never decides whether a particular secret is acceptable, which is the
+    allow-list's job and deliberately the only place that decision is made.
     """
     value = value.strip()
 
@@ -139,11 +129,8 @@ def literal(value: str) -> str:
         return ""
 
     # A value with no alphanumeric character at all is punctuation the pattern
-    # ran into, not a credential — a stray backtick in prose, a bare `-`, a row
-    # of asterisks somebody typed for a screenshot. This is the boundary at the
-    # SHORT end of every value rule here; the long end is each rule's own
-    # terminator. Both ends in the same change, because a constraint on one side
-    # of a pattern is not a constraint.
+    # ran into, not a credential. This is the boundary at the short end of every
+    # value rule here; the long end is each rule's own terminator.
     if not any(character.isalnum() for character in value):
         return ""
     return value
@@ -158,13 +145,13 @@ CREDENTIAL_WORDS = (
     r"passwd|password(?!less)|pwd|secret|token|api[_\-]?key|apikey|"
     r"client[_\-]?secret|connection[_\-]?string|conn[_\-]?str")
 
-# A name CONTAINING one of those words, not equal to it. The field that leaks is
+# A name containing one of those words, not equal to it. The field that leaks is
 # never called `password` — it is `SQL_PASSWORD`, `ClientSecret`,
 # `ConnectionStrings__Catalog`. Section 13.4's redactor reached the same
 # conclusion from the other end and matches by substring for the same reason.
 CREDENTIAL_NAME = rf"[A-Za-z0-9_.\-]*(?:{CREDENTIAL_WORDS})[A-Za-z0-9_.\-]*"
 
-# The shortest value worth reporting under a NAME-based rule. Below eight
+# The shortest value worth reporting under a name-based rule. Below eight
 # characters the name is doing all the work and an ordinary codebase supplies
 # endless `Token = "n/a"`; a prefix-based rule has no such floor because the
 # prefix is the evidence.
@@ -176,8 +163,7 @@ class Rule:
 
     One rule per shape, never one regex for all of them. A single pattern would
     report every class under one id, so a suppression for the boring class would
-    silence the interesting one — which is the shape of this repository's
-    most-repeated failure, a gate that quietly stops covering a surface.
+    silence the interesting one.
     """
 
     def __init__(self, identifier: str, sentence: str, pattern: str, group: int | str = 1,
@@ -206,9 +192,9 @@ IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 def names_itself(match: re.Match[str]) -> bool:
     """`self.secret = secret` — a constructor storing a parameter, not a value.
 
-    The one false positive the bare-word rule below could not be narrowed out of
-    by its value alone, because `secret` IS a bare word. What distinguishes it
-    is that the value is an identifier the NAME already contains, which is what
+    The one false positive the bare-word rule below cannot narrow out by its
+    value alone, because `secret` is a bare word. What distinguishes it is that
+    the value is an identifier the name already contains, which is what
     a parameter assigned to the field it backs looks like in every language here
     — and what a password never looks like, since a credential equal to the name
     of the field holding it is not a credential.
@@ -227,22 +213,12 @@ RULES: list[Rule] = [
         "a PEM private key block: the key material itself, not a reference to it",
         r"(-----BEGIN (?:RSA |DSA |EC |OPENSSH |PGP |ENCRYPTED )?PRIVATE KEY-----)"),
 
-    # §14.1 normalises this exact shape with local defaults, which is precisely
-    # why a real one would be pasted in unnoticed: the diff looks like every
-    # other line around it. The value runs to the next `;` or quote, because
-    # that is where a connection string's segment ends.
-    #
-    # WHITESPACE, PARENTHESES AND A BACKTICK END THE VALUE, and each end of
-    # that was measured rather than guessed. The keyword occurs in this
-    # repository's prose and in its own redactor's comments more often than it
-    # occurs in a connection string, and there what follows is a sentence — 12
-    # of the first 47 findings were English. A C# local of the same name
-    # assigned the result of a method call is the same shape one language over,
-    # which is what the parenthesis ends. The backtick is markdown's code
-    # delimiter, which is what ends the value inside a chapter.
-    #
-    # A connection string's password may legally contain a space; that is the
-    # stated cost, and it buys a rule people will still be reading in a year.
+    # §14.1 uses this shape with local defaults, which is why a real one would
+    # be pasted in unnoticed. The value runs to the next `;` or quote, where a
+    # connection string's segment ends. Whitespace also ends it, because the
+    # keyword occurs in prose followed by a sentence; a parenthesis, because a
+    # C# local of that name is often assigned a call; and a backtick, markdown's
+    # code delimiter. A password containing a space is the stated cost.
     Rule(
         "connection-string-password",
         "a connection string carries an inline password",
@@ -257,7 +233,7 @@ RULES: list[Rule] = [
         "an AWS access key id",
         r"(?<![A-Za-z0-9])(AKIA[0-9A-Z]{16})(?![A-Za-z0-9])"),
 
-    # The secret half carries no prefix, so the NAME is the only evidence there
+    # The secret half carries no prefix, so the name is the only evidence there
     # is. Forty characters of base64 is the published length.
     Rule(
         "aws-secret-access-key",
@@ -291,21 +267,17 @@ RULES: list[Rule] = [
         r"(?<![A-Za-z0-9_\-])(AIza[0-9A-Za-z_\-]{35})(?![0-9A-Za-z_\-])"),
 
     # A compact JWT: three base64url segments, the first starting `eyJ` because
-    # that is `{"` encoded. Matched BARE rather than only in an assignment. The
-    # brief asked for the assignment form and this is wider on purpose: a bearer
-    # token pasted into a YAML list, a curl example or a test fixture is the way
-    # one actually arrives, and `eyJ` plus two dotted segments is unambiguous
-    # enough that the assignment adds nothing but a way to miss it.
+    # that is `{"` encoded. Matched bare rather than only in an assignment: a
+    # bearer token pasted into a YAML list, a curl example or a test fixture is
+    # how one arrives, and `eyJ` plus two dotted segments is unambiguous enough
+    # that requiring an assignment adds only a way to miss it.
     Rule(
         "json-web-token",
         "a JSON Web Token in compact serialisation",
         r"(?<![A-Za-z0-9_\-])(eyJ[A-Za-z0-9_\-]{10,}\.[A-Za-z0-9_\-]{10,}"
         r"\.[A-Za-z0-9_\-]{10,})"),
 
-    # This repository's own tooling holds one of each: `.claude/sandbox` builds
-    # a reviewer around an xAI key, and the harness runs on an Anthropic one. A
-    # gate that scans for everyone else's provider and not its own is a gate
-    # written from a checklist.
+    # The providers this repository's own tooling authenticates against.
     Rule(
         "model-provider-api-key",
         "an xAI or Anthropic API key",
@@ -322,17 +294,11 @@ RULES: list[Rule] = [
         group="value",
         flags=re.IGNORECASE),
 
-    # The one shape the rule above structurally cannot see: a `.env` file, where
-    # the value is NOT quoted. `SQL_PASSWORD=…` on its own line is a credential
-    # written in the open and no other rule here reaches it.
-    #
-    # THE VALUE HAS TO BE A BARE WORD, and that constraint is the whole rule.
-    # Without it this fires on every module-level assignment in every Python and
-    # C# file in the tree — measured, 27 findings of which 21 were an expression
-    # rather than a literal. Whitespace, brackets, quotes and a trailing `;` or
-    # `,` all disqualify, which is a description of an expression and not of a
-    # password. The quoted form is deliberately left to the rule above rather
-    # than reported twice by both.
+    # The one shape the rule above cannot see: a `.env` file, where the value
+    # is not quoted. The value has to be a bare word, or this fires on every
+    # module-level assignment in Python and C#: whitespace, brackets, quotes and
+    # a trailing `;` or `,` describe an expression, not a password. The quoted
+    # form is left to the rule above rather than reported twice.
     Rule(
         "env-assignment",
         "an environment-style assignment gives a credential-shaped name a value",
@@ -348,12 +314,9 @@ def digest(secret: str) -> str:
     """A stable, short fingerprint of one credential.
 
     Twelve hex characters of SHA-256. This is what an allow-list entry names,
-    and the reason it names a hash rather than the value is not confidentiality
-    — these values are already in the tree in plain sight. It is that the
-    suppression file must not become a SECOND place the credential is written.
-    A second copy is a copy that outlives the rotation of the first, and the
-    whole argument for this gate is that a credential in two places is a
-    credential nobody can retire.
+    and it names a hash rather than the value not for confidentiality, since the
+    value is already in the tree, but so the suppression file is not a second
+    place the credential is written: a copy that outlives the first's rotation.
     """
     return hashlib.sha256(secret.encode("utf-8")).hexdigest()[:12]
 
@@ -376,10 +339,8 @@ class Suppression:
     """One accepted finding: a path, a rule, a fingerprint and a reason.
 
     `source` is the allow-list file it was read from, and it is required
-    rather than defaulted: there is more than one file, so a line number on its
-    own would send a reader to line 84 of whichever they opened first. A
-    default would be a filename this class guesses, printed in a diagnostic
-    about an entry it did not read.
+    rather than defaulted: there is more than one file, so a line number alone
+    names no place, and a default would be a guessed filename in a diagnostic.
     """
 
     def __init__(self, path: str, rule: str, fingerprint: str, reason: str, line: int,
@@ -417,17 +378,13 @@ COVERS = re.compile(r"^#\s*covers:\s*(\S+)\s*$")
 def covers_path(prefix: str, path: str) -> bool:
     """Does a `covers:` declaration own this path?
 
-    **A trailing slash is what makes a prefix a tree**, and without that rule
-    `str.startswith` has no path boundary at all: `# covers: d` would own
-    entries from `docs/` AND `deploy/`, so one file could span two trees while
-    satisfying every check — the exact invariant this split exists to hold. A
-    prefix that does not end in `/` is therefore one path and not a tree, which
-    is also the narrowest and safest reading of a declaration somebody typed
-    without the slash.
+    A trailing slash is what makes a prefix a tree. Without it `str.startswith`
+    has no path boundary, and `# covers: d` would own entries from `docs/` and
+    `deploy/` alike. A prefix not ending in `/` is one path, the narrowest
+    reading of a declaration typed without the slash.
 
-    `tools/new-service` asks this question too, and asks it here rather than
-    reimplementing it: the gate decides which file owns an entry, and a second
-    predicate would be a second answer that drifts.
+    `tools/new-service` calls this rather than reimplementing it, so ownership
+    has one predicate.
     """
     return path.startswith(prefix) if prefix.endswith("/") else path == prefix
 
@@ -439,11 +396,9 @@ def read_allowed(path: Path, known: set[str] | None = None) -> tuple[list[Suppre
     accepted too, and reads exactly the same way, which is what keeps
     `--allowed` usable against one file while debugging.
 
-    **An empty directory is a missing allow-list and not an empty one.** The
-    two are the same to a reader of this function's result — no entries — and
-    opposite to the build: an allow-list that is not there is a gate that
-    cannot judge what it may ignore, and reporting it as a clean empty list
-    would clear every accepted finding in the repository at once.
+    An empty directory is a missing allow-list, not an empty one: a gate
+    without its allow-list cannot judge what it may ignore, and reporting it as
+    a clean empty list would drop every accepted finding at once.
     """
     if not path.exists():
         return [], [f"{path.name} is missing: the gate cannot judge what it may ignore"]
@@ -473,17 +428,11 @@ def read_allowed(path: Path, known: set[str] | None = None) -> tuple[list[Suppre
         entries.extend(found)
         problems.extend(said)
 
-    # **The longest declared prefix owns the entry, and no other file may hold
-    # it.** Identical prefixes are refused above, which is enough only while
-    # every prefix is disjoint: split `deploy/` into `deploy/compose/` later and
-    # an entry for `deploy/compose/x` satisfies BOTH files' own check, so it
-    # could sit in either and the parent file could keep suppressions the child
-    # tree owns. Placement would stop being mechanical — the one property that
-    # makes a directory readable — and this file's own rule would be false.
-    #
-    # It is settled here rather than per file because no file can see the
-    # others' declarations, which is the same reason the duplicate check is
-    # here.
+    # The longest declared prefix owns the entry, and no other file may hold
+    # it. With nested prefixes such as `deploy/` and `deploy/compose/`, an entry
+    # under the child satisfies both files' own check, so placement stays
+    # mechanical only if the longest prefix wins. Settled here because no file
+    # can see the others' declarations.
     for entry in entries:
         owner = max(
             (prefix for prefix in declared if covers_path(prefix, entry.path)),
@@ -509,9 +458,7 @@ def read_allowed_file(
     """One tree's entries, the tree it declares, and its own complaints.
 
     Four pipe-separated fields. Exact repository-relative paths, never globs:
-    a glob is how a suppression arrives for a file nobody has written yet, and
-    a file that arrives pre-suppressed is this repository's most-repeated
-    failure with the paperwork already filled in.
+    a glob is how a suppression arrives for a file nobody has written yet.
     """
     entries: list[Suppression] = []
     problems: list[str] = []
@@ -520,12 +467,9 @@ def read_allowed_file(
     first_entry: int | None = None
     lines = path.read_text(encoding="utf-8").splitlines()
 
-    # **The directive gets its own pass, and a file without one is refused as a
-    # FILE.** Judging it per entry let an empty or comment-only `.txt` through
-    # in silence — no entries, so nothing to complain about — while the grammar
-    # says every allow-list file declares exactly one tree. An ownerless file
-    # sitting in the directory is a file somebody meant to fill in, and the
-    # moment they do it inherits whatever the reader assumed.
+    # The directive gets its own pass, and a file without one is refused as a
+    # file: judged per entry, an empty or comment-only `.txt` would pass with
+    # nothing to complain about, though every allow-list file declares one tree.
     for number, raw in enumerate(lines, start=1):
         line = raw.strip()
         if not line:
@@ -694,11 +638,9 @@ def scan_tree(root: Path, rules: list[Rule]) -> tuple[list[Finding], int]:
 def audit(findings: list[Finding], entries: list[Suppression]) -> list[str]:
     """Findings the allow-list does not cover, then entries that covered nothing.
 
-    The second half is the part that keeps the first honest. A suppression whose
-    finding has gone is a decision nobody has re-read, and this repository has
-    already written down what to do about a list of known exceptions: gate it,
-    so the day one clears, the build says so. `deploy/observability` does the
-    same thing to its unloaded alerts and for the same reason.
+    The second half keeps the first honest. A suppression whose finding has
+    gone is a decision nobody has re-read, so the day one clears, the build
+    says so.
     """
     by_key: dict[tuple[str, str, str], Suppression] = {}
     problems: list[str] = []
@@ -732,17 +674,12 @@ def audit(findings: list[Finding], entries: list[Suppression]) -> list[str]:
 def say(message: str, stream=None) -> None:
     """Print one line, with anything outside ASCII replaced.
 
-    Every line this gate emits passes through here, and it is not decoration.
-    Two of the three things a finding line carries come from the tree rather
-    than from this file — the path and the redacted prefix of the value — so
-    "the messages are written in ASCII" is a claim about source that says
-    nothing about output. Runner stdout encoding is not ours to assume, and a
-    gate whose job is to report a failure must not be the thing that fails.
+    Every line this gate emits passes through here. A finding's path and value
+    prefix come from the tree, so ASCII source says nothing about output, and a
+    gate reporting a failure must not fail on the runner's stdout encoding.
 
-    The stream is resolved on the call rather than defaulted in the signature.
-    A default argument binds `sys.stdout` once, at import, and a caller that has
-    redirected the stream afterwards then writes past the redirection into the
-    real console -- which is exactly what a test capturing this output does.
+    The stream is resolved on the call: a default argument binds `sys.stdout`
+    at import, past any redirection a caller makes afterwards.
     """
     print(message.encode("ascii", "replace").decode("ascii"),
           file=sys.stdout if stream is None else stream)
@@ -756,13 +693,9 @@ def main(argv: list[str] | None = None) -> int:
 
     entries, findings = read_allowed(args.allowed, {rule.id for rule in RULES})
 
-    # THE GATE'S OWN SUBJECT, before anything that rests on it. `ci.yml` states
-    # this as house policy at the pipeline gate: neither check trusts its own
-    # parser, and each fails on an empty subject rather than reporting a
-    # complete list it never read. A scan of no files and a scan with no rules
-    # both print the same reassuring sentence as a clean tree, and that sentence
-    # is the whole product — so the two ways of producing it dishonestly are
-    # refused here rather than left to be noticed.
+    # The gate's own subject, before anything that rests on it. A scan of no
+    # files and a scan with no rules would both print the sentence a clean tree
+    # prints, so both are refused.
     if not RULES:
         findings.append("no rules are defined: the gate would clear any tree at all")
 
@@ -779,10 +712,8 @@ def main(argv: list[str] | None = None) -> int:
         say(f"Secret scan: {len(findings)} finding(s) across {scanned} file(s).\n", sys.stderr)
         for finding in findings:
             say(f"  {finding}", sys.stderr)
-        # Named in the shape the caller actually passed. `--allowed` takes the
-        # directory or one file out of it, and a message that always spells a
-        # directory sends the single-file caller — the documented debugging
-        # mode — to `one-tree.txt/`, which is not a place.
+        # Named in the shape the caller passed: `--allowed` takes the directory
+        # or one file out of it.
         where = (
             f"the {args.allowed.name}/ file covering its tree"
             if args.allowed.is_dir()
