@@ -1,65 +1,37 @@
 #!/usr/bin/env python3
 """Print the domain layer's coverage from every Cobertura report of a run.
 
-Section 12.9 calls coverage a diagnostic rather than a target, so this reports and
-never gates: no threshold, and no non-zero exit on a low figure.  **PR-25 took
-that decision rather than inheriting it** — the same section says a threshold
-that fails a build stops being read and starts being satisfied, and PR-25's
-quality gate is the stage-count floor in `.github/pipeline-gate/` instead, whose
+Section 12.9 calls coverage a diagnostic rather than a target, so this reports
+and never gates: no threshold, and no non-zero exit on a low figure. The
+quality gate is the stage-count floor in `.github/pipeline-gate/`, whose
 subject is whether a suite ran at all.
 
-It does exit non-zero on a **missing or unreadable** report, which is a
-different claim: a coverage step that shrugs at no data prints nothing on the
-day the collector stops running, and nothing reads exactly like a clean result.
+It does exit non-zero on a missing or unreadable report, which is a different
+claim: a coverage step that shrugs at no data prints nothing on the day the
+collector stops running, and nothing reads like a clean result.
 
-**It merges, and PR-25 is why.**  Section 15.1's pipeline runs the unit and
-integration stages separately (docs/testing.md), so there is no longer one run
-to read: the domain assemblies are exercised on both sides of
-`Category=Integration`, and section 12.9 asks for the figure "over the whole
-run" rather than over whichever half was instrumented last.  Measured on this
-repository, the unit stage covers 253 of 308 method lines and the integration
-stage 192; the union is 257, so four lines are reached only by tests that need
-a container and a per-stage figure would under-report the thing it is named
-after.
+It merges every stage. Section 15.1's pipeline runs the unit and integration
+stages separately (docs/testing.md), the domain assemblies are exercised on
+both sides of `Category=Integration`, and section 12.9 asks for the figure over
+the whole run, so a per-stage figure under-reports lines only a container test
+reaches.
 
-Two facts about the artefacts, both measured rather than assumed, decide how
-the merge is written:
+Two properties of the artefacts decide how the merge is written:
 
 * `lines-valid` and `lines-covered` count the lines under
-  `class/methods/method/lines`, NOT the ones under `class/lines`.  On this
-  repository the first is 308 and the second 247, and only the first reproduces
-  the collector's own totals exactly.  A merge keyed on the wrong one would
-  print a plausible number that no single-stage run agrees with.
-* `--logger trx` changes the layout.  Without it the collector leaves one
-  merged attachment per run, which is what the single-file reader this replaces
-  relied on; with it, each test project also writes its own partial attachment
-  under the TRX result directory — eight files for one stage here, three of
-  them empty.  The stage-count gate needs those TRX files, so the reporter had
-  to stop assuming.
+  `class/methods/method/lines`, not the ones under `class/lines`, so the merge
+  keys on the first.
+* `--logger trx` makes each test project write its own partial attachment
+  beside the run's merged one, so the same line arrives more than once.
 
-**The union is what makes both of those safe.**  Hits are merged with `max`
-over an injective key, so reading the same attachment twice — which the layout
-above guarantees, since the merged file and the per-project ones overlap —
-cannot inflate the figure.  Summing hits would have.
+Hits are therefore merged with `max` over an injective key, and reading an
+attachment twice cannot inflate the figure.
 
-Stdlib only, like the licence gate one directory over, though **not** for the
-licence gate's reason: that one runs ahead of the build, and this one cannot —
-it reads what the test run produced, so restore and build are behind it either
-way.  What it inherits is only the preference for adding no dependency.  That
-rules out `defusedxml`, which is the usual answer to `ElementTree`'s
-entity-expansion exposure; what makes the stdlib parser acceptable here is the
-input rather than the parser.  This reads
-artefacts that `Microsoft.CodeCoverage` wrote, on the runner, minutes earlier,
-under paths this step names — there is no untrusted document on that path, and
-a repository that could plant one could plant the script instead.
-
-**It has a test suite now, and the reason it did not is what changed.**  The
-old argument was that it asserts nothing about the repository and its one real
-failure mode — no report — is checked at run time.  Both halves still hold.
-What arrived with the merge is arithmetic: a key that collides, a `max` that
-should have been a sum, a partial attachment counted as a whole.  None of those
-fails loudly, and all of them move the number.  A figure that is quietly wrong
-is worse than no figure, because it is read.
+Stdlib only, for the preference for adding no dependency; this runs after the
+build, so the licence gate's reason does not apply. That rules out
+`defusedxml`, and the stdlib parser is acceptable because of the input: these
+are artefacts `Microsoft.CodeCoverage` wrote on the runner, under paths this
+step names, and a repository that could plant one could plant the script.
 
     python .github/coverage/domain_coverage.py TestResults/unit TestResults/integration
 """
@@ -71,10 +43,9 @@ from pathlib import Path
 # One method line, identified the way the collector identifies it.
 #
 # The signature is in the key because overloads share a name, and the class is
-# because a partial class's members are spread across files — both measured to
-# collide without it on this repository's own report.  With all five parts the
-# key is injective: 308 keys for 308 lines, checked against the collector's own
-# `lines-valid` rather than assumed.
+# because a partial class's members are spread across files. With all five
+# parts the key is injective, one key per line the collector's `lines-valid`
+# counts.
 LineKey = tuple[str, str, str, str, str]
 
 
@@ -101,11 +72,11 @@ def find_reports(roots: list[Path]) -> list[Path]:
 def merge(reports: list[Path]) -> dict[LineKey, int]:
     """Union the reports, keeping the highest hit count seen for each line.
 
-    `max` rather than `+` is the whole of the de-duplication story.  The
-    layout puts the same line in more than one file by construction — the
-    run's merged attachment and the per-project one that fed it — so summing
-    would count a line twice for having been reported twice, and the figure
-    would grow with the number of test projects rather than with the tests.
+    `max` rather than `+` is the de-duplication. The layout puts the same line
+    in more than one file by construction — the run's merged attachment and
+    the per-project one that fed it — so summing would count a line twice for
+    having been reported twice, and the figure would grow with the number of
+    test projects rather than with the tests.
     """
     hits: dict[LineKey, int] = {}
     for report in reports:
