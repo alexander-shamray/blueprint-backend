@@ -1,9 +1,10 @@
 namespace Common.Contracts.Ordering.V1;
 
 /// <summary>
-/// An order was cancelled (§3.2). Inventory releases stock, Payments voids an
-/// authorisation, and Ordering's own saga stops: §11.4's endpoint cancels the
-/// aggregate, and this event is how that reaches the workflow.
+/// An order was cancelled (§3.2). Inventory releases stock that was held,
+/// Payments voids an authorisation that was taken, and Ordering's own saga
+/// stops: §11.4's endpoint cancels the aggregate, and this event is how that
+/// reaches the workflow.
 /// </summary>
 /// <remarks>
 /// <see cref="Reason"/> is a <see cref="CancelReasons"/> code rather than

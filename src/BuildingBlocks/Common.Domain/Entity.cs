@@ -6,7 +6,7 @@ namespace Common.Domain;
 /// </summary>
 /// <remarks>
 /// <typeparamref name="TId"/> is a struct because §5.2's identifiers are
-/// readonly record structs; the constraint excludes reference types only.
+/// readonly record structs; the constraint admits any non-nullable value type.
 /// </remarks>
 public abstract class Entity<TId> : IEquatable<Entity<TId>>
     where TId : struct

@@ -132,7 +132,7 @@ public static class ReviewReasons
     /// either order; §9.4 orders nothing between them. Distinct from
     /// <see cref="PaymentAuthorisedDuringCompensation"/> because a despatch may
     /// be live, and a review row keeps the order, the code and the time but no
-    /// saga state, so the code alone must name the procedure.
+    /// saga state.
     /// </remarks>
     public const string CancelledAfterConfirmation = "cancelled_after_confirmation";
 
@@ -142,9 +142,10 @@ public static class ReviewReasons
     /// </summary>
     /// <remarks>
     /// The bound on §9.6's <c>AwaitingConfirmation</c>, escalating because a
-    /// card is charged and Ordering has no refund command (§3.2). A rejected
-    /// <c>ConfirmOrder</c> is a <c>Rule</c> failure instead (§9.8); Ordering's
-    /// <c>order.not_confirmed</c> error is an unrelated code.
+    /// card is charged and Ordering has no refund command (§3.2). A
+    /// <c>ConfirmOrder</c> the aggregate rejects is a <c>Rule</c> failure
+    /// instead (§9.8); Ordering's <c>order.not_confirmed</c> error is an
+    /// unrelated code.
     /// </remarks>
     public const string NotConfirmed = "not_confirmed";
 }
