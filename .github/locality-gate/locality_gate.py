@@ -28,9 +28,10 @@ The glob dialect and the row grammar are `pr-locality.sh`'s. `**` crosses
 directories, `*` and `?` do not, `{a,b}` is an alternation, a token also
 covers everything beneath the directory it names, and every token is
 repository-relative: no leading `/`, no `./`, no `..` segment, brace
-alternatives included. The harness helper cannot run Python under its grant
-and CI cannot run the helper's `gh pr view`, so the grammar has two
-implementations and the two suites pin the same cases.
+alternatives included. The harness helper cannot run Python under its grant,
+and CI fetches its own payload, `changedFiles` and the files endpoint included,
+rather than the helper's field set, so the grammar has two implementations and
+the two suites pin the same cases.
 
 The touch-set cell is never printed, because a PR author is not a trusted
 party. A changed path is the author's text too, since git permits a newline

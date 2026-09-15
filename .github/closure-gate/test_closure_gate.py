@@ -106,8 +106,8 @@ class KeywordParser(unittest.TestCase):
         self.assert_finds(f"Closes https://github.com/{REPO}/issues/15", {15})
 
     def test_prose_after_a_keyword_is_not_a_reference(self):
-        # A gate that read ordinary prose as a closure would fire on half the
-        # corpus.
+        # A keyword followed by prose is English, and reading it as a closure
+        # would fail pull requests that close nothing.
         self.assert_finds("It closes the naive spelling and nothing more.", set())
 
     def test_a_reference_in_unknown_markup_is_reported_not_dropped(self):

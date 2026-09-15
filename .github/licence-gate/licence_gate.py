@@ -169,7 +169,8 @@ def find_projects(root: Path) -> list[Path]:
     Exposed so a test can take the scan itself as its subject. A glob that
     matched nothing would satisfy every negative case by finding no fault in a
     set it never read. Every suffix in `PROJECT_SUFFIXES` is walked, not
-    `.csproj` alone, because a props or targets file reaches every project.
+    `.csproj` alone, because a props or targets file reaches every project
+    that imports it.
     """
     projects: list[Path] = []
     for suffix in PROJECT_SUFFIXES:

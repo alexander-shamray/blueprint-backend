@@ -150,10 +150,11 @@ def find_duplicate_names(walked: list[Path]) -> list[str]:
     project up by name, and a name that means two projects makes those lookups
     answer for whichever one it happens to find.
 
-    Compared with `casefold`, because the collision is the filesystem's: two
-    stems differing only in case are two directories on the Linux runner and
-    one on Windows and a default macOS install, so a case-sensitive check would
-    pass in CI on the pair that collides where the repository is developed.
+    Stems are compared with `casefold()`, because the collision is the
+    filesystem's: two stems differing only in case are two directories on the
+    Linux runner and one on Windows and a default macOS install, so a
+    case-sensitive check would pass in CI on the pair that collides where the
+    repository is developed.
     """
     counted = Counter(path.stem.casefold() for path in walked)
 
