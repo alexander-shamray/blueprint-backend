@@ -350,7 +350,9 @@ a suite whose subject is what the gate is looking at — a file it must
 find, a pattern it must match, a literal it must not judge because it is
 code. Added lines only, so the
 corpus is brought under the rule by the sweeps and not by the gate refusing
-every pull request until they land. Class D. It makes the mechanical half
+every pull request until they land; for the block-length rule an added
+comment token is judged as its whole containing block in the file after
+the change, because one added line can push an old block past the limit. Class D. It makes the mechanical half
 of the *Comments* section — the patterns and the block length — a build
 failure; citing the owner and not copying an argument stay with the
 reviewer, as the guide says.
