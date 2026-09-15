@@ -9,8 +9,8 @@ namespace Common.Application.Tests;
 /// </summary>
 /// <remarks>
 /// Token-checked like the real store: a complete or release whose token does
-/// not own the entry changes nothing. <c>SET NX</c>'s atomicity is the Redis
-/// suite's to prove, against a container.
+/// not own the entry changes nothing. It proves nothing about atomicity, which
+/// the real store takes from <c>SET NX</c> (§8.5).
 /// </remarks>
 internal sealed class RecordingIdempotencyStore : IIdempotencyStore
 {
