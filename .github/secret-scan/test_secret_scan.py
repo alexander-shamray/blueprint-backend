@@ -644,7 +644,7 @@ class Audit(unittest.TestCase):
         """The half that keeps the other half honest.
 
         A suppression whose finding has gone is a decision nobody has re-read,
-        so the day one clears, the build says which.
+        so when a finding clears, the build says which entry covered it.
         """
         entries, _ = parse(
             "a.txt | aws-access-key-id | 0123456789ab | The value this entry named has moved.")
@@ -656,8 +656,8 @@ class Audit(unittest.TestCase):
 class EmptySubject(unittest.TestCase):
     """A clean report over a subject nobody read is the failure, not the pass.
 
-    A scan of no files and a scan with no rules both print the sentence a clean
-    tree prints.
+    Unguarded, a scan of no files and a scan with no rules would print the
+    sentence a clean tree prints.
     """
 
     def test_a_scan_of_no_files_fails(self):

@@ -639,7 +639,7 @@ def audit(findings: list[Finding], entries: list[Suppression]) -> list[str]:
     """Findings the allow-list does not cover, then entries that covered nothing.
 
     The second half keeps the first honest. A suppression whose finding has
-    gone is a decision nobody has re-read, so the day one clears, the build
+    gone is a decision nobody has re-read, so when a finding clears, the build
     says so.
     """
     by_key: dict[tuple[str, str, str], Suppression] = {}

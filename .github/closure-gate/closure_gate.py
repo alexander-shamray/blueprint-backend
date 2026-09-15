@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """What a pull request says it closes must match what merging it will close.
 
-It says it three times, through machinery that does not compare them:
+It says it three times, and GitHub honours the three separately without
+comparing them, which is this gate's job:
 
-1. The `| Closes |` row in the house body form, read by people only.
+1. The `| Closes |` row in the house body form, which GitHub's linker does not
+   read.
 2. `closingIssuesReferences`, GitHub's parse of the pull request body.
 3. A closing keyword in a commit body, honoured on merge whatever the
    description says, and not editable.

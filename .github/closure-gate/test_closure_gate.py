@@ -299,9 +299,8 @@ class FailsClosed(unittest.TestCase):
     def test_a_linked_list_at_the_page_size_is_judged_not_refused(self):
         """The commit guard must not gain a twin here.
 
-        `gh` preloads `closingIssuesReferences` through every page
-        (`preloadPrClosingIssuesReferences` in cli/cli's
-        `pkg/cmd/pr/shared/finder.go`), so a list this long is complete.
+        `gh` preloads `closingIssuesReferences` through every page, so a list
+        this long is complete.
         """
         numbers = tuple(range(1, 101))
         cell = " ".join(f"#{n}" for n in numbers)
