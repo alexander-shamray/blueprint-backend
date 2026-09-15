@@ -9,8 +9,7 @@ namespace Common.Application.Tests;
 /// </summary>
 /// <remarks>
 /// Token-checked like the real store: a complete or release whose token does
-/// not own the entry changes nothing. It proves nothing about atomicity, which
-/// the real store takes from <c>SET NX</c> (§8.5).
+/// not own the entry changes nothing.
 /// </remarks>
 internal sealed class RecordingIdempotencyStore : IIdempotencyStore
 {
