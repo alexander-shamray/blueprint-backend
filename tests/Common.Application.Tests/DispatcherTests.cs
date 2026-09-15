@@ -46,10 +46,9 @@ public class DispatcherTests
     [Fact]
     public void The_dispatcher_cannot_be_resolved_from_the_root_provider()
     {
-        // Handlers are scoped, so the dispatcher has to be (§6.2). Registered
-        // as a singleton it would capture the root provider and every request
-        // would share one handler instance — and one DbContext, once PR-08
-        // puts one behind it.
+        // Handlers are scoped, so the dispatcher has to be (§6.2): registered
+        // as a singleton it would resolve them from the root provider, which
+        // ValidateScopes refuses.
         using ServiceProvider provider = TestContainer.Build();
 
         Should.Throw<InvalidOperationException>(() =>
@@ -115,8 +114,8 @@ public class DispatcherTests
         // The quieter half of the same defect, and the one worth the test. Both
         // invokers derive from Invoker<string>, so a shared cache entry casts
         // cleanly and nothing throws — the query just runs the command handler,
-        // through the command's behaviours. From PR-09 that means a read opens
-        // a transaction, which is exactly what §6.3 constrains against.
+        // through the command's behaviours. In a service those include
+        // TransactionBehavior, which §6.3 constrains to commands.
         using ServiceProvider provider = TestContainer.Build();
         using IServiceScope scope = provider.CreateScope();
         IDispatcher dispatcher = scope.ServiceProvider.GetRequiredService<IDispatcher>();
