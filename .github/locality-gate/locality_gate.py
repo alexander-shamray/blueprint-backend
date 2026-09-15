@@ -41,9 +41,8 @@ run: a verdict list with a line withheld reads as complete.
 The file list can be short in two ways that its own paths do not show. The
 files endpoint returns a bounded number of entries however it is paginated, so
 the payload carries GitHub's `changedFiles` count and a shorter list is
-refused.
-A rename arrives as one entry with the source in `previous_filename`, so both
-ends of a rename are judged.
+refused. A rename arrives as one entry with the source in `previous_filename`,
+so both ends of a rename are judged.
 
 Stdlib only, on the licence gate's terms. The deciding takes JSON on stdin and
 the fetching is two `gh` calls in the workflow, `deploy/canary/canary.py`'s
