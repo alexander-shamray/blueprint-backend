@@ -8,9 +8,9 @@ namespace Common.Application.Tests;
 /// the assertion surface.
 /// </summary>
 /// <remarks>
-/// Token-checked like the real store, or every behaviour test would pass
-/// whether the behaviour carried its claim token or not. <c>SET NX</c>'s
-/// atomicity is the Redis suite's to prove, against a container.
+/// Token-checked like the real store: a complete or release under a token the
+/// entry is not held by changes nothing. <c>SET NX</c>'s atomicity is the Redis
+/// suite's to prove, against a container.
 /// </remarks>
 internal sealed class RecordingIdempotencyStore : IIdempotencyStore
 {

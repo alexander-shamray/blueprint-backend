@@ -48,7 +48,8 @@ public class DispatcherTests
     {
         // Handlers are scoped, so the dispatcher has to be (§6.2). Registered
         // as a singleton it would capture the root provider and every request
-        // would share one handler instance, and with it one DbContext.
+        // would share one handler instance, and with it any DbContext a service
+        // puts behind one (§7.2).
         using ServiceProvider provider = TestContainer.Build();
 
         Should.Throw<InvalidOperationException>(() =>

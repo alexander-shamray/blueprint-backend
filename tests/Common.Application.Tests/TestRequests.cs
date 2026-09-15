@@ -148,9 +148,8 @@ public sealed class PingValidator : AbstractValidator<Ping>
 /// to come back carrying both rules and not the first one to notice.
 /// </summary>
 /// <remarks>
-/// A <c>Must</c> with an explicit code rather than <c>MinimumLength</c>, which
-/// reports two failures for one empty string and would let one validator look
-/// like two.
+/// A <c>Must</c> with its own error code, so each failure names the validator
+/// that raised it.
 /// </remarks>
 public sealed class PingLengthValidator : AbstractValidator<Ping>
 {

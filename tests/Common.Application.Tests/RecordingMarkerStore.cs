@@ -6,9 +6,9 @@ namespace Common.Application.Tests;
 /// rather than merely counted.
 /// </summary>
 /// <remarks>
-/// A read after the handler comes too late to stop the work, and a write before
-/// the aggregate-count guard leaves a marker for a command §6.3 is about to
-/// refuse, refusing every retry of work that never committed.
+/// A read after the handler comes too late to stop the work, and a write
+/// outside the transaction survives a refusal, refusing every retry of work
+/// that never committed.
 /// </remarks>
 public sealed class RecordingMarkerStore(PipelineLog log) : IIdempotencyMarkerStore
 {

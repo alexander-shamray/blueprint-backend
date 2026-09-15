@@ -106,8 +106,8 @@ public class RegistrationTests
     {
         // Scoped, not singleton: a handler holds the unit of work and the
         // repositories of one request (§4.2). A singleton handler would share
-        // one DbContext across every request, and nothing about the
-        // registration would look wrong.
+        // any DbContext a service puts behind it (§7.2) across every request,
+        // and nothing about the registration would look wrong.
         using ServiceProvider provider = TestContainer.Build();
         using IServiceScope first = provider.CreateScope();
         using IServiceScope second = provider.CreateScope();
