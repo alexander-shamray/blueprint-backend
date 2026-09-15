@@ -1,59 +1,15 @@
 namespace Common.Contracts.Ordering.V1;
 
 /// <summary>
-/// An order was cancelled (§3.2). <b>Three services consume it</b> — Inventory
-/// releases stock that was held, Payments voids an authorisation that was
-/// taken, and Ordering's own fulfilment saga stops.
-/// <para>
-/// <b>Ordering consuming its own event is the entry that reads like a mistake
-/// and is not.</b> §11.4's customer endpoint cancels the <c>Order</c>
-/// AGGREGATE, and until §9.6's machine bound this event the saga went on
-/// reserving stock and authorising a card for an order the customer had
-/// already cancelled — the endpoint is the only way a customer's cancellation
-/// reaches the workflow. A copy arriving after the saga has finalised
-/// correlates to no instance, and what happens then depends on
-/// <see cref="Origin"/>: the workflow's own echo is discarded in silence,
-/// and anything else faults onto §13.6's pager rather than vanishing.
-/// </para>
-/// <para>
-/// <b>This summary named two consumers until a review counted three.</b> §3.2
-/// and <c>appendix-d-type-inventory.md</c> had both already recorded the
-/// third; the type's own documentation — the one a consumer reads first — was
-/// the site the reconciliation missed.
-/// </para>
+/// An order was cancelled (§3.2). Inventory releases stock that was held,
+/// Payments voids an authorisation that was taken, and Ordering's own saga
+/// stops: §11.4's endpoint cancels the aggregate, and this event is how that
+/// reaches the workflow.
 /// </summary>
 /// <remarks>
-/// <b><see cref="Reason"/> is a string code from <see cref="CancelReasons"/>,
-/// never Ordering's <c>CancellationReason</c> enum.</b> An enum looks like a
-/// primitive and is not: it would drag <c>Ordering.Domain</c> into every
-/// consumer (§9.1) and pin its member names as wire format, so renaming one
-/// becomes a breaking change to everybody. This is the same decision
-/// <see cref="CancelOrder"/> takes on the way in, and the two vocabularies are
-/// deliberately one — a cancellation caused by a timeout is reported with the
-/// code the saga sent.
-/// <para>
-/// <b><see cref="Reason"/> does not identify the origin, which is what
-/// <see cref="Origin"/> is for.</b> §11.4's endpoint parses the whole
-/// <c>CancellationReasons</c> map, so a caller may send <c>payment_declined</c>
-/// as readily as <c>customer_request</c>: the reason is what somebody
-/// asserted, not where the request came from. §9.6's saga has to tell its own
-/// echo from a cancellation it did not cause, and read <see cref="Reason"/>
-/// for that until a review established the two are independent.
-/// </para>
-/// <para>
-/// <b><see cref="Origin"/> is optional, and absent means "published before
-/// this field existed" rather than "unknown origin".</b> §9.2 makes a new
-/// optional field additive, so this is not a V2; ADR-026's ordering still
-/// applies inside the one service, because a rolling deploy has instances
-/// publishing this event before they populate it. A consumer must therefore
-/// hold whatever it did before the field — §9.6's saga discards on absent for
-/// exactly that reason — and it holds it <b>permanently</b> rather than for
-/// the length of a deploy. A payload predating the field has no bound on how
-/// long it can survive: the error queue keeps a message until somebody
-/// handles it, and a replay can reintroduce one at any time. Making this
-/// member <c>required</c> later would fail deserialisation before any
-/// consumer branch ran, which is a breaking change §9.2 sends to a V2.
-/// </para>
+/// <see cref="Reason"/> is a <see cref="CancelReasons"/> code rather than
+/// Ordering's enum, which would put its domain in every consumer (§9.1), and it
+/// says what was asserted rather than who asked, which is <see cref="Origin"/>.
 /// </remarks>
 public sealed record OrderCancelled : IIntegrationEvent
 {
@@ -70,10 +26,13 @@ public sealed record OrderCancelled : IIntegrationEvent
     public required string Reason { get; init; }
 
     /// <summary>
-    /// Who asked — a <see cref="CancelOrigins"/> code. Not
-    /// <c>required</c>, because an instance running the release before this
-    /// field was populated publishes without it; see the remarks on this type
-    /// for what a consumer owes the absent case.
+    /// Who asked — a <see cref="CancelOrigins"/> code.
     /// </summary>
+    /// <remarks>
+    /// Optional, so additive under §9.2. Absent means published
+    /// before the field existed, and a consumer keeps its earlier behaviour for
+    /// good: an error queue or a replay can deliver such a payload at any time,
+    /// and making it <c>required</c> would be a V2.
+    /// </remarks>
     public string? Origin { get; init; }
 }

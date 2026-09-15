@@ -1,16 +1,12 @@
 namespace Common.Domain;
 
 /// <summary>
-/// An object whose identity persists through change (§5.1). Two entities of the
-/// same type with the same <see cref="Id"/> are the same thing however much
-/// else differs between them, which is the whole distinction from a value
-/// object — those are equal when their values are.
+/// An object whose identity persists through change (§5.1): equal by type and
+/// <see cref="Id"/>, where a value object is equal by its values.
 /// </summary>
 /// <remarks>
-/// <typeparamref name="TId"/> is constrained to a struct because §5.2's
-/// identifiers are readonly record structs. The constraint is what stops a
-/// <c>string</c> or a raw <c>Guid</c> being threaded through here and undoing
-/// the pattern from the inside.
+/// <typeparamref name="TId"/> is a struct because §5.2's identifiers are
+/// readonly record structs; the constraint admits any non-nullable value type.
 /// </remarks>
 public abstract class Entity<TId> : IEquatable<Entity<TId>>
     where TId : struct
