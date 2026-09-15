@@ -189,10 +189,10 @@ public static class AuthenticationExtensions
                     ValidateLifetime = true,
                     ValidateIssuerSigningKey = true,
 
-                    // The default is five minutes, which keeps an expired token
-                    // working for five minutes past its own exp; thirty seconds
-                    // absorbs real drift between NTP-synced hosts and nothing
-                    // else (§11.3). It says nothing about revocation: a token
+                    // Below the framework's default, which keeps an expired
+                    // token working well past its own exp; the field absorbs
+                    // real drift between NTP-synced hosts and nothing else
+                    // (§11.3). It says nothing about revocation: a token
                     // revoked at the provider stays valid here until it
                     // expires. The field rather than a literal, because
                     // RevocationBound above is a sum of it.

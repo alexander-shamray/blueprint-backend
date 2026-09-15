@@ -143,11 +143,12 @@ public static class DependencyInjection
         //
         // OutboxStats gets its own connection factory with a bounded connect
         // timeout because it runs inside observable gauge callbacks, and a
-        // command timeout bounds only the statement: SqlClient's default
-        // Connect Timeout is fifteen seconds, so against a database that hangs
-        // rather than refuses, every callback would block before the command
-        // timer started and stall the metric reader for unrelated telemetry
-        // too. The runtime key, because it reads the same data plane (§7.1);
+        // command timeout bounds only the statement: at SqlClient's default
+        // Connect Timeout, which OutboxStats.ConnectTimeoutSeconds is argued
+        // against, a database that hangs rather than refuses would block every
+        // callback before the command timer started and stall the metric
+        // reader for unrelated telemetry too. The runtime key, because it
+        // reads the same data plane (§7.1);
         // only the timeout differs, so no query path inherits it.
         string metricsConnectionString =
             new SqlConnectionStringBuilder(configuration.GetConnectionString("Ordering"))

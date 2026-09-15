@@ -298,14 +298,15 @@ corrected. Class D.
 ### Step 6 — one owner per gate ∥
 
 Each `.github/<gate>/README.md` owns what its gate reads and what it claims.
-`repo-map.md` keeps one line per entry and cites the README; `testing.md`
+`repo-map.md` keeps its entry and cites the README; `testing.md`
 keeps the invocation and nothing about the claim; §4.1 keeps the rule the
 gate enforces, in one sentence, and names the gate. `CLAUDE.md`'s
 workflow line lists the gates and says nothing else about any of them.
 
 Done when a pull request adding a gate touches its own directory, `ci.yml`,
-one line of `repo-map.md` and, if the gate enforces a chapter's rule, one
-sentence of that chapter — and the locality gate's Class D row says so.
+its entry in `repo-map.md` and, if the gate enforces a chapter's rule, the
+sentence of that chapter that states the rule — and the locality gate's
+Class D row says so.
 
 ### Step 7 — the plans stop recording status ∥
 
