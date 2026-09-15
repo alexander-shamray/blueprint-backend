@@ -18,27 +18,12 @@ namespace Common.Infrastructure.Messaging;
 /// markers accumulate one row per protected command, for ever.
 /// </summary>
 /// <remarks>
-/// One service covering every table, which is §9.5's shape: the alternative is
-/// a hosted service per table and one of them being the one nobody notices has
-/// stopped, which is §9.3's argument against a second outbox mechanism.
-/// <para>
-/// The third table is not like the other two. A purged outbox row loses a
-/// debugging record and a purged inbox row a duplicate suppression the broker
-/// will not exercise again; a purged idempotency marker loses a correctness
-/// property, because it is what refuses a retry of a command that already
-/// committed. That is why <see cref="RetentionPolicy.IdempotencyWindow"/> has
-/// a floor and why its pass is the only one that asks something before
-/// deleting.
-/// </para>
-/// <para>
-/// Age is necessary there and not sufficient: the marker's pass compares a
-/// column against a cutoff to find candidates, asks
-/// <see cref="Common.Application.IIdempotencyStore"/> which of them it has let
-/// go of (ADR-039), and then deletes each row by identity — its key and the
-/// <c>rowversion</c> the select returned — because a key names a command
-/// rather than a row, and a retry can commit a fresh marker under one this
-/// pass already chose (ADR-041).
-/// </para>
+/// One service for every table, which is §9.5's shape and §9.3's argument
+/// against a second mechanism nobody watches. The marker's pass differs from
+/// the other two because a purged marker loses a correctness property rather
+/// than a record: it asks <see cref="Common.Application.IIdempotencyStore"/>
+/// which candidates it has let go of (ADR-039) and deletes by key and
+/// <c>rowversion</c> (ADR-041).
 /// </remarks>
 public sealed class RetentionPurgeService : BackgroundService
 {

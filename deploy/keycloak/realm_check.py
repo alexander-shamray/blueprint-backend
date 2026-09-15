@@ -34,8 +34,8 @@ ROOT = Path(__file__).resolve().parents[2]
 
 LIFETIME_SOURCE = "src/BuildingBlocks/Common.Web/AuthenticationExtensions.cs"
 
-# The default subject, and the only realm this repository owns. A constant
-# rather than CI's argv, so that the reads-direction self-check below can see
+# The default subject, §14.1's Compose realm. A constant rather than CI's
+# argv, so that the reads-direction self-check below can see
 # it; the deploy path always passes `--realm`, because the realm it checks is
 # one nothing here holds a copy of.
 COMPOSE_REALM = "deploy/compose/keycloak/realm-export.json"

@@ -11,9 +11,8 @@ namespace Common.Web.Tests;
 /// code, so nothing compiles differently when the mapper is missing.
 /// </summary>
 /// <remarks>
-/// The realm is §14.1's Compose realm and there is no other in this
-/// repository; a deployed realm is judged at rollout by
-/// <c>deploy/keycloak/realm_check.py</c> (ADR-042), so a green run here says
+/// The realm is §14.1's Compose realm; a deployed realm is judged at rollout
+/// by <c>deploy/keycloak/realm_check.py</c> (ADR-042), so a green run here says
 /// the local realm holds the shape and never that the platform does (ADR-033,
 /// ADR-034). A file test rather than a live Keycloak, because §11.5 assigns
 /// the container-backed suite to the client-credentials question and

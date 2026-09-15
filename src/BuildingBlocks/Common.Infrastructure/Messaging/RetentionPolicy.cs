@@ -57,27 +57,12 @@ public sealed record RetentionPolicy
     /// </summary>
     /// <remarks>
     /// The floor is <see cref="IdempotencyRetention.MarkerFloor"/>, the
-    /// claim's own window. While the claim is alive the key is not claimable
-    /// at all, so a purged marker costs nothing yet; the gap would open when
-    /// the claim expires with the marker already gone, and the next retry
-    /// claims a free key and runs a committed command a second time. Equal is
-    /// admitted because the claim is taken before the marker is stamped, on
-    /// the same thread inside the same dispatch.
-    /// <para>
-    /// What this chooses is the length of §8.5's guarantee, not its truth, and
-    /// as a target rather than a duration: the purge deletes only once
-    /// <see cref="RetentionPurgeService"/> has asked the claim store that the
-    /// claim behind the key is gone (ADR-039), so a marker survives at least
-    /// as long as its claim whatever this says, while the candidate half is
-    /// still an age against the database's clock, which a forward step makes
-    /// early. §8.5's long-handler residual is no reason to raise the floor: a
-    /// number here bounds a runtime not at all.
-    /// </para>
-    /// <para>
-    /// Read rather than restated, for the reason
-    /// <see cref="IdempotencyRetention"/> exists: two values in two files agree
-    /// until one of them is edited.
-    /// </para>
+    /// claim's own window, read rather than restated so the two cannot
+    /// disagree; equal is admitted because the claim precedes the marker
+    /// (ADR-038). What this chooses is the length of §8.5's guarantee, not
+    /// its truth: <see cref="RetentionPurgeService"/> deletes a marker only
+    /// once its claim is gone (ADR-039), so a marker outlives its claim
+    /// whatever this says.
     /// </remarks>
     public TimeSpan IdempotencyWindow
     {
