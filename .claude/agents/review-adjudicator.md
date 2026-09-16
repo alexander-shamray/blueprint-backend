@@ -108,11 +108,10 @@ change quoted from the review is a risk with no benefit.
    rejection would be a guess dressed as a verdict: return `decision`, with
    the `reason` saying the diff was not supplied, so the finding reaches a
    person unresolved rather than being discarded.
-5. **Watch for the good class of finding.** External reviews are most often
-   right here about one thing: **register and version drift** — a
-   package used in a sample but missing from `appendix-b-licences.md`, a
-   version stated in two places, a licence claim that does not match the
-   package. Check those properly before rejecting them.
+5. **Watch for the good class of finding.** Check **register and version
+   drift** properly before rejecting it — a package used in a sample but
+   missing from `appendix-b-licences.md`, a version stated in two places, a
+   licence claim that does not match the package.
 6. **Refuse by subject, not only by truth.** A finding whose fix would edit
    `.claude/`, `.github/`, `deploy/` or CI configuration is returned as
    `decision` whatever its merit: a review of the blueprint has no business
