@@ -31,8 +31,7 @@
     lines mean anything; EnforceCodeStyleInBuild reaches only the rules
     .editorconfig configures at warning, and the rest stay below warning
     because a style rule with an exception it cannot express must not fail a
-    build.
-    latest-Recommended rather than latest-All, because All turns on the
+    build. latest-Recommended rather than latest-All, because All turns on the
     documentation and globalisation categories this platform has not adopted.
     This file is the one place ADR-019 permits a suppression, `#pragma` being
     forbidden, and each argues its case beside its own NoWarn line.
