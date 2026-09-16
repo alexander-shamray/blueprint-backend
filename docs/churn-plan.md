@@ -293,7 +293,8 @@ already is. Class D.
 workflows under `.github/workflows/`. A setting keeps one paragraph saying
 why it is set the way it is; a suppression keeps its argument, because the
 primer requires one; nothing keeps the history of how its comment was
-corrected. Class D.
+corrected. Class D+E, because `Directory.Packages.props` is Class E's in
+`.github/locality-gate/classes.yml` and every other file here is Class D's.
 
 ### Step 6 — one owner per gate ∥
 
