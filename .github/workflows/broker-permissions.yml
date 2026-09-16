@@ -40,17 +40,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # The floor every Python job here pins. The local default is newer and
-      # accepts APIs this one does not, so an unpinned run goes green on code
-      # the runner cannot execute.
+      # The floor every Python job here pins, for the reason CLAUDE.md gives:
+      # an unpinned run goes green on code the runner cannot execute.
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
 
       # The suite runs before the gate — CLAUDE.md's "tested and then run".
-      # Every case is a mutation that must go red: a gate observed only green
-      # is one nobody has established is looking at anything, and this one
-      # guards an authorisation boundary.
+      # Its negatives are mutations that must go red, each with a positive
+      # control beside it: a gate observed only green is one nobody has
+      # established is looking at anything, and this one guards an
+      # authorisation boundary.
       - name: The gate's negatives
         run: python -m unittest discover -s deploy/compose/rabbitmq
 

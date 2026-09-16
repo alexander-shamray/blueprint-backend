@@ -1,8 +1,8 @@
 name: Closure gate
 
-# A pull request states what it closes three times — the `| Closes |` row, the
-# keywords GitHub's linker reads out of the body, and the keywords in the
-# commit bodies — and the three are honoured by different machinery. What has
+# A pull request can state what it closes in three places — the `| Closes |`
+# row, the keywords GitHub's linker reads out of the body, and the keywords in
+# the commit bodies — each honoured by different machinery. What has
 # to agree is what the merge does and what the pull request says it does: a
 # closure the commits carry has to appear in the description, and the table has
 # to match what GitHub linked, in both directions. A description closure no
@@ -68,7 +68,8 @@ jobs:
       # request proposes, so a proposal that fails its own suite belongs red
       # here. Running it at all is the licence gate's terms — a gate observed
       # only against a well-formed input says nothing about what it would
-      # catch — and every test in that suite is a negative case.
+      # catch — and that suite is negative cases with positive controls
+      # beside them.
       - name: Test the proposed gate
         working-directory: .github/closure-gate
         run: python -m unittest

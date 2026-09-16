@@ -333,10 +333,10 @@ jobs:
         with:
           global-json-file: global.json
 
-      # The reporters at the end of this job are stdlib Python, so they
-      # take the same pin the licence-gate, pipeline-gate and scaffold jobs do.
-      # The runner does ship a Python, and relying on it would make this the
-      # one job whose interpreter nobody chose.
+      # The reporters at the end of this job are stdlib Python, so they take
+      # the same pin every other Python job here does. The runner ships a
+      # Python, and relying on it would make this the one job whose interpreter
+      # nobody chose.
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
