@@ -107,11 +107,11 @@ jobs:
       # The file list comes from the REST files endpoint with `--paginate`
       # rather than `gh pr view --json files`, because the latter is one page
       # and a prefix of a long diff looks exactly like a complete one.
-      # Paginated, the endpoint still stops at 3,000 entries, so `changedFiles`
-      # travels with the body and the gate refuses a list shorter than it. Each
-      # entry arrives as one JSON object on its own line, `filename` and
-      # `previous_filename` together, so a rename is judged at both ends and a
-      # newline inside a path cannot be a second path; `jq -s` collects them.
+      # Paginated it is still capped, so `changedFiles` travels with the body
+      # and the gate refuses a list shorter than it. Each entry arrives as one
+      # JSON object on its own line, `filename` and `previous_filename`
+      # together, so a rename is judged at both ends and a newline inside a
+      # path cannot be a second path; `jq -s` collects them.
 
       # `shell: bash` rather than the default: the default `run` shell is
       # `bash -e` with no pipefail, so a failing `gh` would be masked by
