@@ -1,23 +1,15 @@
 #!/usr/bin/env bash
 # Fork the sibling worktree /branch step 5 creates, and nothing else.
 #
-# The whole command is fixed here: `git worktree add --no-track -b <branch>
-# <path> origin/main`. A `Bash(git worktree add:*)` grant would buy that and
-# also `-B`, which does not create a branch but **resets** an existing one to
-# the start point — the operation `.claude/settings.json` denies as
-# `git branch --force` and `git branch -M`. A grant that reaches around the
-# deny list is worth more than the deny list, and a prefix rule cannot exclude
-# a flag: see git-switch-existing.sh, where the flags were shown to combine.
+# The whole command is fixed: `git worktree add --no-track -b <branch> <path>
+# origin/main`. A prefix grant on `git worktree add` also buys `-B`, which
+# resets an existing branch to the start point past the `git branch --force`
+# and `git branch -M` denies, and a prefix rule cannot exclude a flag.
 #
-# `--no-track` is part of the fixed command rather than a caller's choice. The
-# start point is a remote-tracking ref, so without it the new branch's upstream
-# becomes origin/main and /pr never sets the right one. Checked at the pin:
-# `git worktree add -h` lists `--[no-]track`, and a real add with it produced a
-# branch with no upstream.
-#
-# origin/main is fixed for the same reason. Step 5 forks only from the fetched
-# base, and a caller-supplied start point would be one more thing to validate
-# for the sake of a case this command does not have.
+# `--no-track` is fixed because the start point is a remote-tracking ref, so
+# without it the new branch's upstream becomes origin/main and /pr never sets
+# the right one. origin/main is fixed because step 5 forks only from the
+# fetched base.
 set -euo pipefail
 [ "$#" -eq 2 ] || { echo "usage: git-worktree-fork.sh <path> <branch>" >&2; exit 2; }
 path="$1"
@@ -35,9 +27,9 @@ case "$branch" in
 esac
 [[ "$branch" =~ ^[A-Za-z0-9][A-Za-z0-9._/()-]*$ ]] ||
   { echo "not a branch name this helper will take: $branch" >&2; exit 2; }
-# It must NOT exist: this helper only ever creates. Refusing here is what makes
-# the missing -B harmless rather than merely unavailable — a caller who wanted
-# to reset a branch cannot get there by passing its name.
+# It must not exist: refusing here is what makes the missing -B harmless
+# rather than merely unavailable, since a caller cannot reset a branch by
+# passing its name.
 ! git show-ref --verify --quiet "refs/heads/$branch" ||
   { echo "branch already exists: $branch" >&2; exit 3; }
 git show-ref --verify --quiet refs/remotes/origin/main ||

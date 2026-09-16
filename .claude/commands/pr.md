@@ -105,19 +105,15 @@ reason beside it, or a different class — never a row widened silently.
 **A closing keyword inside a table cell links nothing.** The metadata row —
 `| Closes | #88 (high), #81 (high) |` — is a summary for a reader and that is
 all it is: a cell boundary sits between `Closes` and `#88`, so GitHub is never
-handed a keyword-reference pair. This is not GitHub declining to read a table.
-PR #112's row was the only place its keywords appeared,
-`closingIssuesReferences` reads `[]` to this day, and #84, #70 and #40 were
-closed by hand once somebody noticed.
+handed a keyword-reference pair, and `closingIssuesReferences` for a body
+whose only keywords sit in that row reads `[]`.
 
 So the body carries **both**: the row as the human-readable summary, and a
 bare `Closes #n` line for each issue below it.
 
 **A `Closes #n` in a commit body fires on merge whatever the description
-says.** That is the opposite failure and it has fired too. PR #116's review
-loop narrowed two of its claims and the body was rewritten to say *"#56 stays
-open"*; the merge closed #30 and #56 anyway, out of commits written before the
-loop ran. Both were reopened by hand with the reason recorded.
+says.** That is the opposite failure: a description rewritten to say an issue
+stays open does not stop a commit written earlier from closing it.
 
 **The commits are the half that cannot be taken back, so the description is
 reconciled to them** — never the other way round. A description is editable
@@ -137,8 +133,7 @@ rather than remembered. It does **not** ask a commit to repeat a closure the
 description makes — a bare `Closes` line under the table is enough on its own.
 
 Run it yourself as soon as the pull request exists, if you want the answer
-before the workflow reports it — **not before opening, which is what this
-said**:
+before the workflow reports it — not before opening:
 `pr-closure-input.sh` needs a pull request to read, and
 `closingIssuesReferences` is GitHub's parse of a body it has not been given
 yet, so there is nothing to ask about until the PR is open:

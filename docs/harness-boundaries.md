@@ -35,40 +35,9 @@ paragraphs and it stays that way — inventing headings would mean deciding wher
 the topic boundaries are, which is an edit to the argument wearing a
 navigation aid's clothes. Grep the bold lead-ins; they are the index.
 
-**`/ship` and both sweeps cite `CLAUDE.md` as where the sandbox boundary and
-its residuals are recorded, and those citations were deliberately left
-alone.** `CLAUDE.md` keeps a *What cuts across them* section that forwards
-here, so a command's reference lands one hop from what it names — where
-rewriting every one of those citations to point at a new path would be a
-chance to get each of them wrong, in files the harness denies this session an
-edit to anyway. **A new residual is stated here**, and `CLAUDE.md` carries the
+**`/ship` and both sweeps cite this file for the sandbox boundary and its
+residuals.** **A new residual is stated here**, and `CLAUDE.md` carries the
 pointer rather than a second copy.
-
-**The files are named rather than counted, and two drafts of this paragraph are
-why.** The first said "nine command files" — wrong on both halves, since the
-files are `ship.md`, `security-sweep.md` and `bug-sweep.md`, and they carry
-several mentions each of which only some are the sandbox residual. The second
-tried to repair that with a command a reader could run,
-`grep -l 'CLAUDE.md' .claude/commands/` — which returns **eleven** files,
-because most commands mention `CLAUDE.md` for reasons that have nothing to do
-with this residual. **A check offered as the fix for a miscount, that counts
-something else, is the miscount with a shell prompt in front of it.** Both were
-caught by review. What a reader can check is the three names above; naming a
-small fixed set is not a total, and it cannot go stale without one of those
-files being deleted.
-
-**One of those citations is named rather than left to the general clause,
-because it claims more than the others do.** `ship.md`'s grants callout says
-`CLAUDE.md` "keeps the count and the inventory" — a possessive claim, where the
-others only say a thing is *recorded* there. The inventory half resolves in
-one hop like the rest: `CLAUDE.md` forwards, and the numbered inventory is
-below. **The count half was already stale before this branch touched
-anything** — the headline figure was deliberately dropped after it read "six"
-and #56 closed the fourth, and the paragraph below says so — so a reader
-following that word finds nothing, and found nothing on `main` either. It is
-recorded here rather than fixed in place for the reason the clause above
-gives, and named here rather than covered silently: **a residual that does not
-mention the sentence it is covering is the same shape as an unstated one.**
 
 > **A grant is not a whitelist, and that is the trap under everything below.**
 > If you read one paragraph here, read the one beginning *A grant is not a
@@ -218,12 +187,9 @@ that would have copied the host's session into a container — so the first
 real review behind it is that measurement, and the proxy logs a `deny` line
 naming any host it refuses.
 
-Stated here as well as in the script because `/ship` and both
-sweeps cite `CLAUDE.md` as where the boundary and its residuals are recorded,
-and it forwards here — the residual this file's header argues, not a second
-claim about it. The
-reviewer also has **no .NET SDK**, so `dotnet test` is this host's gate and
-never the review's.
+Stated here as well as in the script because `/ship` and both sweeps cite
+this file for the boundary and its residuals. The reviewer also has **no .NET
+SDK**, so `dotnet test` is this host's gate and never the review's.
 
 **A grant is not a whitelist, and this is the trap under every row below.**
 `allowed-tools` is an **auto-approval list**: the harness documents that it

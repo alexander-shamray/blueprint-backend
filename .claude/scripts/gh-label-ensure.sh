@@ -1,31 +1,22 @@
 #!/usr/bin/env bash
-# Ensure one of the sweeps' six labels exists on THIS repository, and nothing
+# Ensure one of the sweeps' labels exists on this repository, and nothing
 # else: /security-sweep and /bug-sweep each need a kind label and a severity
-# label, and both are created once if absent and never touched again.
+# label, created once if absent and never touched again.
 #
-# A `Bash(gh label create:*)` grant is a prefix, so it bought more than the
-# operation it was added for — which is the shape every helper in this directory
-# exists to close. Two things in particular, both read out of `gh label create
-# --help` rather than reasoned about:
+# A prefix grant on `gh label create` reaches two things this refuses:
 #
-#   --force   "Update the label color and description if label already exists."
-#             So `create` is create-or-OVERWRITE, and a grant on it can rewrite
-#             `bug`'s colour and description as readily as add a missing one.
-#   -R/--repo unpinned, so the write lands wherever the argument names — and the
-#             argument reaches this stage from an audited tree that is
-#             prompt-injection input.
+#   --force   updates an existing label's colour and description, so `create`
+#             is create-or-overwrite
+#   -R/--repo unpinned, so the write lands wherever an argument from an
+#             audited, prompt-injectable tree names
 #
-# Both were held as prose in each command ("always `--repo`, never `--force`"),
-# which is a rule a reader enforces and a finding can talk past. Here there is
-# no free parameter left to steer: the name comes out of a fixed case, the
-# colour and description come with it, `--force` is never spelled, and the
-# repository is the one `gh repo view` resolves from the checkout this script
-# is running in — not one a caller names.
+# Here the name comes out of a fixed case with its colour and description,
+# `--force` is never spelled, and the repository is the one `gh repo view`
+# resolves from the checkout.
 #
-# Idempotent by asking first. `gh label create` on an existing label exits
-# non-zero without --force, which is the right refusal and the wrong report: a
-# sweep that has run before would stop on a label that is already correct. The
-# list read is scoped to this repository too.
+# Idempotent by asking first: `gh label create` on an existing label exits
+# non-zero without `--force`, which would stop a sweep on a label that is
+# already correct.
 set -euo pipefail
 
 [ "$#" -eq 1 ] ||
@@ -64,16 +55,11 @@ if grep -qx -- "$label" <<<"$existing"; then
   exit 0
 fi
 
-# Check-then-create is not atomic, and two sweeps can run at once. If one wins
-# the race, the loser's `gh label create` exits non-zero — correctly, since
-# `--force` is the flag this file exists not to use — and `set -e` would abort a
-# sweep over a label that is now exactly what it asked for.
-#
-# So a failed create is AMBIGUOUS on its own and is resolved by re-reading
-# rather than by assuming either answer. Present afterwards means the request is
-# satisfied, whoever satisfied it; absent means the create genuinely failed and
-# the caller has to hear so. Assuming success would be the fail-open, and
-# assuming failure aborts a sweep that had nothing wrong with it.
+# Check-then-create is not atomic, and two sweeps can run at once: the loser's
+# create exits non-zero, since `--force` is never used, over a label that is
+# now exactly what it asked for. So a failed create is resolved by re-reading —
+# present means satisfied, absent means the caller hears the failure — because
+# assuming success fails open and assuming failure aborts a sound sweep.
 if ! gh label create "$label" \
   --repo "$repo" \
   --color "$colour" \

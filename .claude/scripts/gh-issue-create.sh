@@ -1,97 +1,37 @@
 #!/usr/bin/env bash
-# File one issue on THIS repository, from a sweep or by hand, and nothing
-# else: the kind, severity and route from fixed vocabularies on the command
-# line, the title and the body from stdin, and the repository from the
-# checkout this script is standing in. The route decides which provenance
-# line the body must end with, and #184 is why it is a parameter rather than
-# a constant.
+# File one issue on this repository, from a sweep or by hand: kind, severity
+# and route from closed vocabularies on the command line, title and body on
+# stdin, and the repository from the checkout this script stands in.
 #
-# `Bash(gh issue create:*)` was a prefix grant, so it bought more than the
-# operation it was added for — the shape every helper in this directory exists
-# to close (#75 item 5). Two free parameters reached it from an audited tree
-# that is prompt-injection input:
+# A prefix grant on `gh issue create` leaves `--repo` and `--label` free to a
+# caller reading an audited tree, which is prompt-injection input. Here the
+# repository is resolved, the labels are two words out of a closed set, and
+# title and body are bytes on stdin, because an inline `--body` mangles the
+# wrapping and a temp file would need the `Write` grant the sweeps withhold.
 #
-#   -R/--repo  unpinned, so the issue lands wherever the argument names. Both
-#              sweeps held "always `--repo` for this repository" as prose,
-#              which a finding can talk past.
-#   --label    unpinned, so any label in any spelling, and `gh` creates none
-#              of them — a misspelt label fails the filing after the body has
-#              been composed.
+# The title is on stdin because a sweep composes it from a verdict record a
+# crafted tree can steer: as an argument, `"$(…)"` expands in the parent's
+# shell before any check here runs, while a quoted heredoc expands nothing.
+# The first line of stdin is the title, the second is blank, and the rest is
+# the body.
 #
-# Here the repository is what `gh repo view` resolves, the labels are two words
-# out of a closed set, and the title and body are bytes on stdin — the form
-# both sweeps already used for the body, because an inline `--body` mangles
-# the wrapping and a temp file would need the `Write` grant the sweeps
-# withhold.
+# The body's last line is a detector, not a guard. A repository line equal to
+# the heredoc's delimiter closes it early and hands the rest of the payload to
+# the parent's shell, which nothing here can prevent — the sweeps check the
+# delimiter against the payload for that. What this script refuses is the
+# truncated body such a close leaves, because it has lost its trailer.
 #
-# THE TITLE IS ON STDIN, NOT THE COMMAND LINE, and the reason is where it
-# comes from. A sweep's title is composed from a verdict record, and a record
-# is text a crafted tree can steer. As an argument it crossed the parent's
-# shell before this script saw it: `bash gh-issue-create.sh "$(…)" …` runs the
-# substitution in the parent, and no check here can run first. Inside a quoted
-# heredoc nothing is expanded, so the title travels the same channel as the
-# body and arrives as the bytes the parent wrote. The first line of stdin is
-# the title, the second is blank, and the rest is the body.
+# MSYS argument conversion rewrites an argument that looks like an absolute
+# POSIX path before a native `gh.exe` sees it, so a title beginning with `/`
+# files as a Windows path. An env-prefixed command no longer matches a
+# `gh issue create` prefix grant; a script sets MSYS2_ARG_CONV_EXCL for its
+# own child.
 #
-# THE LAST LINE IS FIXED, AND IT IS A DETECTOR RATHER THAN A GUARD. A quoted
-# heredoc has one thing the payload can still steer: its terminator. The body
-# quotes repository lines, so a repository line equal to the delimiter closes
-# the heredoc early and hands the rest of the payload to the parent's shell as
-# commands. Nothing in this script can stop that — it runs after the parent
-# has parsed — so the guard is the sweeps' rule that the delimiter is a token
-# checked against every line of the payload before the command is composed.
-# What this script can do is refuse to file what an early close leaves behind:
-# the body must end with the trailer line below, exactly, and a body cut short
-# has lost it. A truncated filing is then a loud exit 2 rather than a
-# half-issue with its second half executed.
-#
-# THE MSYS TITLE HAZARD CLOSES HERE TOO, and this is the one thing a helper
-# can do that a grant could not. MSYS argument conversion rewrites an argument
-# that looks like an absolute POSIX path before a native `gh.exe` sees it, so a
-# title beginning with `/` filed four times as `C:/Program Files/Git/...`
-# (#55, #56, #68). The commands could not set MSYS2_ARG_CONV_EXCL, because an
-# env-prefixed command no longer begins with `gh issue create` and the grant is
-# a prefix match. A script sets it for its own child and the grant on the
-# script is unchanged.
-#
-# THE FIXED LINE IS SELECTED, NOT CONSTANT, and #184 is why. A detector needs
-# a last line the caller cannot lose by accident; it does not need that line to
-# be the SAME line for everybody. What stood here was one sentence asserting
-# provenance — that a sweep filed the issue, and that a second read-only
-# auditor confirmed it before filing — required of every body this helper
-# takes. Both sweeps deny raw `gh issue create` by name, so for them this is
-# the only route, and an issue filed by hand out of a review triage or a
-# measurement taken mid-PR was made to claim a provenance it did not have the
-# moment it came through here. Measured: #183 was filed that way and carried
-# the sentence until it was edited afterwards.
-#
-# THE HELPER IS THE SWEEPS' ONLY ROUTE, NOT THE ONLY ROUTE THERE IS, and the
-# distinction decides what the `hand` spelling is for. Nothing denies a
-# session's raw `gh issue create` — measured, `.claude/settings.json` carries
-# no `gh` rule of any kind — so `hand` is what a filer gets by CHOOSING this
-# helper: label creation, the resolved repository, the MSYS title fix and the
-# truncation detector. It is not a claim that hand filings must come through
-# here.
-#
-# That is also the answer to `documentation`, which the kind case below
-# refuses. `CLAUDE.md` names three kinds and says in the same breath that
-# **the vocabulary is wider than the helper** — `gh-label-ensure.sh` creates
-# six labels and `documentation` is not among them, because it is one of
-# GitHub's own defaults and was already in use. A documentation issue is
-# therefore filed the way the eleven that carry that label already were, and
-# widening this vocabulary would mean widening the label helper's six for a
-# label it must not create. Raised in review on the pull request that added
-# the `hand` route, on the reading that this helper had become the only hand
-# route; the sentence that said so was this file's, and it is corrected above.
-#
-# A claim every issue makes is a claim that distinguishes nothing, which is the
-# one thing this sentence was for: a sweep's issue says the finding was
-# confirmed by a second read-only agent, and that is worth knowing when
-# triaging something nobody has reproduced. The same shape as a severity stated
-# in prose that nothing can filter on. So the route is a parameter, out of a
-# closed set like the other two, and each spelling ends the body with the
-# sentence that is true of it. The detector is unchanged — the line is still
-# fixed, still exact, and a body cut short has still lost it.
+# The trailer is chosen by route rather than constant, because a provenance
+# sentence every issue carries distinguishes nothing, and a sweep's sentence
+# on a hand filing is false. The sweeps deny raw `gh issue create`, so this is
+# their only route; nothing denies it to a session, so `hand` is what a filer
+# gets by choosing this helper, not a rule that hand filings come here.
 set -euo pipefail
 
 [ "$#" -eq 3 ] || {
@@ -101,9 +41,10 @@ set -euo pipefail
 }
 kind="$1"; severity="$2"; route="$3"
 
-# The whole vocabulary a sweep files under. A word outside it is refused rather
-# than passed on — that refusal is the point of the file — and `documentation`
-# is deliberately absent: neither sweep files one.
+# A word outside the vocabulary is refused rather than passed on.
+# `documentation` is absent because neither sweep files one, and it is a
+# GitHub default label `gh-label-ensure.sh` must not create; CLAUDE.md states
+# that the issue vocabulary is wider than the label helper.
 case "$kind" in
   security|bug) ;;
   *) echo "not a kind this helper will file under: $kind" >&2; exit 2 ;;
@@ -114,9 +55,8 @@ case "$severity" in
 esac
 # The route decides the fixed last line, and it is the same closed-set test as
 # the other two: a spelling outside the set is refused rather than defaulted,
-# because a default is how the unconditional claim would come back. There is
-# deliberately no third spelling for "filed by a sweep whose auditor did not
-# run" — a sweep that cannot verify a finding does not file it.
+# because a default is an unconditional claim. There is no spelling for a
+# sweep whose auditor did not run, because such a sweep does not file.
 case "$route" in
   sweep) trailer='Filed by an authorised sweep and verified at filing by a second read-only auditor.' ;;
   hand) trailer='Filed by hand rather than by a sweep: no second auditor verified it at filing.' ;;

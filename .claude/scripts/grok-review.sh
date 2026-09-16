@@ -2,65 +2,40 @@
 # Run Grok's /review-branch inside a container, so the external reviewer gets
 # the repository and nothing else.
 #
-# The disposable worktree this script used to build isolated the reviewer's
-# EDITS and never anything else: the process still held this host's filesystem,
-# its network and its credentials. `gh` is authenticated here, so a reviewer
-# with a terminal could push to a remote that the session which spawned it is
-# denied — a deny list bounds the session, never the subprocess it starts.
-# Copilot raised exactly that against PR-15 and was right.
+# A worktree would isolate only the reviewer's edits: the process would still
+# hold this host's filesystem, network and credentials, and a deny list bounds
+# the session, never the subprocess it starts. The boundary is
+# .claude/sandbox/Dockerfile — no gh token, no SSH keys, no host filesystem
+# beyond the clone below, non-root inside — so bypassPermissions is passed and
+# its blast radius is the container.
 #
-# The boundary is now .claude/sandbox/Dockerfile: no gh token, no SSH keys, no
-# host filesystem beyond the clone below, non-root inside. bypassPermissions is
-# still passed and is no longer the risk it was — the blast radius is the
-# container, which is the whole reason to have one.
+# Egress is confined to api.x.ai and auth.x.ai, and it takes two containers,
+# because Docker alone offers all or none. The reviewer runs on a network
+# created with --internal, which Docker gives no gateway: a member routes to
+# the other members and to nothing else, and the embedded resolver answers
+# SERVFAIL for any name outside it. The one member with a second leg on the
+# bridge is egress-proxy.py, a CONNECT-only tunnel with a host allow-list,
+# which the reviewer reaches through HTTPS_PROXY.
 #
-# Egress is CONFINED to api.x.ai and auth.x.ai, and it takes two containers.
-# The reviewer runs on a network created with --internal, which Docker gives no
-# gateway: a member routes to the other members and to nothing else, and the
-# embedded resolver answers SERVFAIL for any name outside it. The one member
-# with a second leg on the bridge is a proxy — egress-proxy.py, beside the
-# Dockerfile, a CONNECT-only tunnel with a host allow-list — and the reviewer
-# reaches it through HTTPS_PROXY, which grok honours (measured: without it the
-# same call hangs on the internal network; with it api.x.ai answers).
-# Docker alone offers "all" or "none"; the proxy is the third option (#17).
+# The credential half is narrowed, not closed. The OAuth fallback below copies
+# ~/.grok/auth.json in, and it carries a refresh-token-bearing session for the
+# x.ai account that anything inside can read; confined egress means it can be
+# sent only to the hosts the session is for, and the session's own blast
+# radius against x.ai remains. XAI_API_KEY is the documented posture —
+# scoped, revocable, and no file crosses — and the ordering below tries it
+# first.
 #
-# **The credential half is NARROWED, not closed, and this header said "closed"
-# for months (#58).** No gh token, no SSH keys and no host filesystem beyond the
-# clone — all three genuinely absent. But the fallback path below copies
-# ~/.grok/auth.json in, and that file carries a REFRESH-TOKEN-BEARING OAuth
-# session for the x.ai account: anything inside can read it. What it can no
-# longer do is post it anywhere — the only hosts a byte can reach are the two
-# the session is for — which is why the egress half was the one to close: it
-# was what made the crossing credential exploitable. What remains is the
-# session's own blast radius against x.ai, which no boundary here can shrink;
-# a scoped, revocable XAI_API_KEY still crosses no file at all.
-#
-# XAI_API_KEY is the documented posture: scoped, revocable, and no file crosses
-# at all. The OAuth mount is a fallback, and the ordering below is that posture
-# rather than an implementation convenience.
-#
-# This helper also OWNS the ledger slot it spends. ship.md used to specify the
-# accounting as prose — "reserve, then invoke the review helper" — over two
-# separately granted commands, so a run that skipped the first spent a check
-# that left no record, a resumed run read a lower count, and the PR ran past
-# twelve against a paid API. A bound whose two halves are two commands is a
-# bound any ordering mistake lifts. Invocation and accounting are one operation
-# now: this script takes the slot, RESOLVES the pull request from the branch it
-# is about to clone, posts the reservation itself immediately before the model
-# call it accounts for, and .claude/settings.json denies the `reserve` and
-# `release` spellings to the session that invokes it.
+# This helper owns the ledger slot it spends: it takes the slot, resolves the
+# pull request from the branch it is about to clone, and posts the reservation
+# itself immediately before the model call it accounts for, so invoking a
+# review and spending a slot are one operation no ordering mistake can
+# separate. .claude/settings.json denies the `reserve` and `release` spellings
+# to the session that invokes it.
 set -euo pipefail
 
-# The ledger, resolved early because the ceiling below is READ out of it rather
-# than restated here. #140 was exactly this number living in two files at two
-# values — ship.md said six, both helpers accepted twelve — and a second literal
-# in this file would be that defect again with a smaller gap. Declared once,
-# beside the code that enforces it, which is the SOURCE_INPUTS discipline the
-# deploy/** gates arrived at, applied to a scalar.
-#
-# **Fails closed.** An unreadable ceiling refuses every slot rather than
-# admitting all of them: the failure mode of a cap is the direction that must
-# never be the quiet one.
+# The ceiling is read out of the ledger rather than restated, so the bound has
+# one literal. An unreadable ceiling refuses every slot rather than admitting
+# all of them, because a cap must fail closed.
 ledger="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/grok-ledger.sh"
 ceiling=$(sed -n 's/^CEILING=\([1-9][0-9]*\)$/\1/p' "$ledger" | head -1)
 [[ "$ceiling" =~ ^[1-9][0-9]*$ ]] ||
@@ -70,15 +45,10 @@ ceiling=$(sed -n 's/^CEILING=\([1-9][0-9]*\)$/\1/p' "$ledger" | head -1)
 # ledger's own vocabulary rather than passed through, because a slot outside
 # 1..$ceiling is a claim about a cap that does not exist.
 #
-# **The PR is NOT an argument, and it was one in the first version of this
-# change.** A caller-supplied number is a free parameter aimed at the one thing
-# this script writes to the outside world: any numeric typo — or an instruction
-# that substituted another open pull request — posted the reservation *there*
-# while cloning and reviewing THIS branch, so this branch's cap stayed re-armed
-# and somebody else's slot was spent. That is the same defect the change was
-# written to close, one level up: accounting that can be pointed somewhere other
-# than the thing it accounts for. Resolved below from the branch instead, which
-# makes the slot and the review provably the same subject.
+# The PR is not an argument: a caller-supplied number — a typo, or an
+# instruction substituting another open pull request — would post the
+# reservation there while this branch is cloned and reviewed. It is resolved
+# below from the branch instead, so the slot and the review are one subject.
 [ "$#" -eq 2 ] ||
   { echo "usage: grok-review.sh <slot 1-$ceiling> <full|recheck>" >&2; exit 2; }
 slot="$1"
@@ -91,72 +61,30 @@ case "$mode" in
 esac
 
 # Two patterns, declared together and away from the code that applies them, so
-# the suite beside this file has ONE subject to read. That is the SOURCE_INPUTS
-# discipline the deploy/** gates arrived at: a value a test asserts about has to
-# be declared once, where the test can find it, or the test ends up asserting
-# about its own second copy. test_grok_helpers.py extracts both by name and
-# exercises them with real payloads.
+# each has one declaration for the suite beside this file to read by name.
 
-# What a usage limit looks like, and every spelling here was paid for. The
-# preflight below exists to SKIP such a round rather than fail it, and it missed
-# an exhausted prepaid balance entirely: `API error (status 402 Payment
-# Required): Grok Build usage balance exhausted` is not `429`, not `quota`, and
-# not `(no|any) credits`, so PR #117 round 6 took the failure path and burned a
-# ledger slot on a review that never started.
+# What a usage limit looks like. The preflight below skips such a round rather
+# than failing it, and an exhausted prepaid balance answers `API error (status
+# 402 Payment Required): Grok Build usage balance exhausted`, which is not
+# `429`, not `quota` and not `(no|any) credits`.
 #
-# **A status code needs a status CONTEXT, not a word boundary.** This pattern is
-# matched against the whole text of a probe run, so a bare `402` would also match
-# a token count or a request id — and a false positive here is the expensive
-# direction: it reports a working reviewer as out of limits and skips every round
-# silently, which is a review loop that has stopped reviewing.
-#
-# `\b402\b` was the first attempt at that and is not enough, which a reviewer
-# caught and the suite did not. It excludes `47402` and `4021` — both of which
-# were negative cases here — and matches `"input_tokens": 402` exactly, because
-# a quote and a space are word boundaries too. The negatives tested digits
-# AROUND the number and never the number on its own, so they agreed with the
-# comment beside them while the pattern did not.
-#
-# So the number has to arrive as a status: after the word `status` or `code`
-# within a few non-digits (which covers `(status 402 …)`, `status: 429` and
-# `"http_status": 402`), or in the provider's own phrase. `429` also reaches the
-# prose alternative `too many requests` on its own, and the observed 402 reaches
-# `usage balance` and `balance exhausted` as well — the code alternatives are
-# the belt to that pair's braces, since the prose is what a provider change
-# rewords and the code is what stays.
-#
-# **And it needs a boundary on BOTH sides**, which the first status-anchored
-# version had only on the left: `status 4021` and `http_status: 4290` matched,
-# because nothing stopped the code alternative at the third digit. That is the
-# same false positive the anchor was introduced to remove, moved from the front
-# of the number to the back — the third correction to this one pattern, each
-# round finding the side the previous fix had not covered. `([^0-9]|$)` closes
-# it, and the suite carries a contextual larger-number negative for each side.
+# A status code needs a status context and a boundary on both sides. The
+# pattern is matched against the whole text of a probe run, and a false
+# positive is the expensive direction: it reports a working reviewer as out of
+# limits and skips every round silently. A word-bounded `402` still matches
+# `"input_tokens": 402`, so the number must follow `status` or `code` within a
+# few non-digits, and `([^0-9]|$)` stops `status 4021` matching. The prose
+# alternatives catch the same responses; the codes stay because a provider
+# rewords its prose and keeps its codes.
 limit_re='rate.?limit|quota|usage limit|usage balance|balance exhausted|too many requests|(no|any) credits|402 payment required|(status|code)[^0-9]{0,3}(402|429)([^0-9]|$)'
 
-# **What a FINISHED turn looks like is PARSED, not matched**, and the journey to
-# that is the whole argument. It began as a deny-list of three — refuse
-# `cancelled|refusal|error*`, pass everything else — which let a reviewer that
-# exhausted its output or turn budget exit 0, write JSON, leave no
-# suggestions.md, and have that absence read as a clean verdict. grok's
-# documented vocabulary for the field is `end_turn`, `max_tokens`,
-# `max_turn_requests`, `refusal` and `cancelled`, so two of the five passed. No
-# attacker is needed: a long branch is the ordinary way there, and a long branch
-# is when review matters most.
-#
-# Inverting it to an allow-list of `end_turn` fixed that and left a subtler hole,
-# which a reviewer found: a regex cannot tell a ROOT field from a nested one.
-# `{"modelUsage":{"stopReason":"end_turn"}}` produced exactly one match, matched
-# `end_turn`, and was accepted — a document whose turn never ended, passing the
-# check that exists to notice. Nor can grep establish that the output is JSON at
-# all, so a truncated write could be read as a verdict.
-#
-# **A regex over a serialised structure answers a different question from the
-# one being asked.** The check below asks jq for the root `stopReason` and
-# compares it, which settles the shape, the nesting and the well-formedness in
-# one step. The accepted value stays pinned the way the client version is in
-# .claude/sandbox/Dockerfile: a grok bump must re-verify it. Verified against
-# grok 1.0.5's `--output-format json` and its own headless-mode documentation.
+# What a finished turn looks like, parsed rather than matched. A reviewer that
+# exhausts its output or turn budget (`max_tokens`, `max_turn_requests`) exits
+# 0, writes JSON and leaves no suggestions.md, an absence that reads as a clean
+# verdict — so the root `stopReason` must be exactly this value. A regex cannot
+# tell a root field from a nested one, nor establish that the output is JSON,
+# so the check below asks jq. The value is pinned the way the client version is
+# in .claude/sandbox/Dockerfile: a grok bump re-verifies it.
 stop_ok=end_turn
 
 # Docker on Windows wants a Windows path in --volume; elsewhere the path is
@@ -167,30 +95,20 @@ host_path() {
 
 branch=$(git branch --show-current)
 [ -n "$branch" ] || { echo "not on a branch" >&2; exit 2; }
-# The pull request the ledger row lands on, resolved from the branch this script
-# is about to clone — so the two cannot be different subjects. See the argument
-# block above for what a caller-supplied number bought.
+# The pull request the ledger row lands on, resolved from the branch this
+# script is about to clone, so the two cannot be different subjects.
 #
-# **`--head` filters on the branch NAME and nothing else**, which is not the
-# question being asked. It matches across forks, so an open pull request from
-# someone's fork carrying the same branch name is a candidate here — and
-# selecting it would reserve a slot on THAT pull request while cloning and
-# reviewing this local branch, which is precisely the mismatch this block
-# replaced an argument to prevent. A fix that closes a hole by name and leaves
-# it open by provenance has moved the defect rather than removed it.
-#
-# So the head repository is compared against the one this checkout is, and only
-# pull requests from it survive. `gh repo view` reads the checkout, so both
-# sides of that comparison are properties of the filesystem rather than of
-# anything a caller or a finding supplied.
+# `--head` filters on the branch name alone and matches across forks, so a
+# fork's open pull request on the same branch name is a candidate, and would
+# take the reservation while this branch is reviewed. So the head repository
+# must be this checkout's; `gh repo view` reads the checkout, so both sides of
+# the comparison are properties of the filesystem.
 repo=$(gh repo view --json nameWithOwner --jq .nameWithOwner) ||
   { echo "cannot resolve this checkout's repository" >&2; exit 2; }
-# **Blank counts as missing, and `||` does not see it.** `gh` printing an empty
-# string exits 0, so the guard above passes and `$repo` is "" — and the
-# comparison below then matches every row whose head repository is absent,
-# which `// ""` renders as "" too. A deleted fork reports exactly that. So the
-# filter would admit a stranger's pull request precisely when it could not
-# establish whose it was, which is the fail-open direction.
+# Blank counts as missing, and `||` does not see it: `gh` printing an empty
+# string exits 0, and the comparison below would then match every row whose
+# head repository is absent, as a deleted fork's is, admitting a stranger's
+# pull request precisely when its owner cannot be established.
 [ -n "$repo" ] ||
   { echo "this checkout's repository resolved to nothing" >&2; exit 2; }
 # Tab-separated and filtered in awk rather than inside --jq, because gh's --jq
@@ -200,11 +118,9 @@ pr=$(gh pr list --head "$branch" --state open --json number,headRepository \
        --jq '.[] | "\(.headRepository.nameWithOwner // "")\t\(.number)"' |
      awk -F'\t' -v r="$repo" '$1 == r { print $2 }') ||
   { echo "cannot ask GitHub which pull request $branch has" >&2; exit 2; }
-# Exactly one, and both other counts are refusals rather than something to guess
-# past. None means there is no ledger to write to and therefore no cap to
-# enforce, which is a state to stop in, not to review through. More than one is
-# ambiguous, and picking either would be inventing the answer to the question
-# these lines exist to ask.
+# Exactly one, and anything else is refused rather than guessed past: none
+# means no ledger to write to and so no cap to enforce, and more than one is
+# ambiguous.
 [ "$(grep -c . <<<"$pr")" -eq 1 ] ||
   { echo "expected exactly one open pull request for $branch in $repo, found: ${pr:-none}" >&2; exit 2; }
 # suggestions.md is the one file allowed to differ — it is the review's own
@@ -213,14 +129,13 @@ pr=$(gh pr list --head "$branch" --state open --json number,headRepository \
 status=$(git status --porcelain)
 [ -z "$(grep -v '^?? suggestions.md$' <<<"$status" || true)" ] ||
   { echo "tree has uncommitted changes; commit before the review, or the reviewer reads a state the PR does not carry" >&2; exit 3; }
-# The daemon, not just the CLI. `command -v docker` passes on a machine whose
-# Docker Desktop is installed and stopped — which is the common case, not an
-# exotic one — and the build then fails with Docker's own generic status
-# instead of the exit 7 this script documents. Probe what is actually needed.
+# The daemon, not just the CLI: `command -v docker` passes on a machine whose
+# Docker Desktop is installed and stopped, and the build then fails with
+# Docker's own generic status instead of exit 7.
 docker info >/dev/null 2>&1 ||
   { echo "docker is required and its daemon must be running: the reviewer runs in a container (.claude/sandbox/Dockerfile)" >&2; exit 7; }
 # jq, because the verdict below is a JSON document and the question asked of it
-# — what is the ROOT stopReason — is not one a regex can answer. Probed here
+# — what is the root stopReason — is not one a regex can answer. Probed here
 # rather than discovered at the end of a review, on the same argument as the
 # daemon check above: a missing tool should cost a second, not a round.
 command -v jq >/dev/null 2>&1 ||
@@ -251,7 +166,7 @@ chmod 700 "$auth"
 # origin/* refs, which is all /review-branch reads.
 git clone --quiet --no-hardlinks . "$work/repo"
 git -C "$work/repo" checkout --quiet "$branch"
-# The clone's origin/main is built from this checkout's LOCAL main, not from its
+# The clone's origin/main is built from this checkout's local main, not from its
 # origin/main, and those are routinely different: /branch branches from
 # origin/main without ever advancing local main, so local main here is whatever
 # it was when it was last pulled. Left alone, the reviewer diffs the branch
@@ -271,19 +186,12 @@ fi
 # The recheck contract: an existing suggestions.md is the file the review
 # re-verifies, so it crosses into the copy; nothing else does.
 #
-# Never through a symlink, in either direction. suggestions.md is untracked and
-# the container can replace it with a link — point it at /proc/self/environ and
-# a following `cp` reads the environment of whichever process dereferences it,
-# carrying this host's credentials into the container on the way in, or host
-# content into the imported file on the way out. `cp` follows links by default,
-# so the guard has to be explicit and it has to be on both crossings: this is
-# the one path through the boundary, which makes it the only one worth
-# attacking.
-# A regular file or nothing — a symlink is not the only shape that hurts. A
-# FIFO or a socket named suggestions.md is reported by git as `?? suggestions.md`
-# and so passes the dirty-tree allow-list above, then fails `-f` here and is
-# silently skipped, turning an intended recheck into a full review. Anything
-# that is not a plain file is refused rather than ignored.
+# A regular file or nothing, on both crossings. suggestions.md is untracked and
+# the container can replace it with a link to /proc/self/environ, and `cp`
+# follows links by default, so a following copy reads the environment of
+# whichever process dereferences it. A FIFO or socket of that name passes the
+# dirty-tree allow-list above as `?? suggestions.md`, then fails `-f` and would
+# be skipped, silently turning a recheck into a full review.
 if [ -L suggestions.md ] || { [ -e suggestions.md ] && [ ! -f suggestions.md ]; }; then
   echo "suggestions.md is a symlink or not a regular file; refusing to import it" >&2
   exit 9
@@ -334,7 +242,7 @@ image=$(docker build --quiet "${build_args[@]}" \
 # `--internal` is the mechanism: Docker gives the network no gateway, so a
 # member has a route to the other members and to nothing else, and the
 # embedded resolver refuses to forward a name outside it. The proxy is a member
-# with a second leg on the default bridge, running THIS image with no clone and
+# with a second leg on the default bridge, running this image with no clone and
 # no credential mounted — it already carries python3 for the licence gate, so
 # the proxy is one stdlib script on PATH and no second image to pin.
 # `--network-alias proxy` is what the reviewer's HTTPS_PROXY names, and it is
@@ -370,8 +278,7 @@ for _ in 1 2 3 4 5 6 7 8 9 10; do
 done
 [ "$ready" -eq 1 ] ||
   { echo "the egress proxy did not start listening; the review did not run" >&2; exit 15; }
-# HTTPS_PROXY is the variable grok reads for its API calls — measured: with
-# HTTP_PROXY alone the call hangs on the internal network. HTTP_PROXY is set
+# HTTPS_PROXY is the variable grok reads for its API calls. HTTP_PROXY is set
 # beside it so a plain-http attempt is refused by the proxy at once rather than
 # timing out on a route that does not exist.
 net_args=(--network "$net"
@@ -383,12 +290,10 @@ net_args=(--network "$net"
 # has none. It carries no refresh token and none of the account holder's
 # details, so it is tried first — mint one at console.x.ai.
 #
-# But "set" is not "usable". A key belonging to a team without credits answers
-# every call with `403 permission-denied`, and one was set here while the OAuth
-# session beside it worked perfectly — so preferring the key blindly broke a
-# loop that had been working. The preflight below is a trivial prompt that costs
-# a second; learning the same thing from a failed review costs the review, and
-# reports it as a reviewer that did not run.
+# A set key is not a usable one: a key whose team has no credits answers every
+# call with `403 permission-denied` while the OAuth session may work, so the
+# key is probed with a trivial prompt before it is preferred.
+#
 # --env NAME, never --env NAME=VALUE. The second spelling puts the key in
 # docker's argv, where every `ps` on this machine can read it for the life of
 # the container; the first forwards the value this process already holds.
@@ -425,20 +330,13 @@ else
   cp "$HOME/.grok/auth.json" "$auth/auth.json"
   chmod 600 "$auth/auth.json"
   mounts+=(--volume "$(host_path "$auth/auth.json"):/home/reviewer/.grok/auth.json:Z")
-  # agent_id and config.toml as well, and neither is optional. The session names
-  # a team, but a container missing this machine's agent identity and its
-  # settled configuration does not use it: grok takes itself to be a first run,
-  # registers a *new* team, and every call returns
-  # `403 permission-denied: your newly created team doesn't have any credits`
-  # while the host keeps working against the very same auth.json. Found the only
-  # way it could be — by adding one file at a time until the review completed.
-  #
-  # Three files, all copies, all discarded afterwards. None of them is a
-  # credential for anything but grok: no gh token, no SSH key, no cloud profile.
-  # Required, not optional, and failing here rather than skipping is the whole
-  # point: a run missing either of these does not degrade, it dies at the model
-  # call with a 403 about a team nobody created on purpose. Saying so now costs
-  # a second; discovering it costs the review.
+  # agent_id and config.toml are required as well: a container without this
+  # machine's agent identity and settled configuration takes itself to be a
+  # first run, registers a new team, and every call returns
+  # `403 permission-denied: your newly created team doesn't have any credits`.
+  # All three files are copies, discarded afterwards, and none is a credential
+  # for anything but grok. Failing here costs a second; discovering it at the
+  # model call costs the review.
   for extra in agent_id config.toml; do
     [ -f "$HOME/.grok/$extra" ] ||
       { echo "$HOME/.grok/$extra is missing; the OAuth session cannot resolve its team without it" >&2; exit 8; }
@@ -448,16 +346,12 @@ else
   done
 fi
 
-# Usage-limit preflight — SKIP, never fail. Authentication being good is not the
-# same as the team being inside its window: a rate limit or an exhausted quota
+# Usage-limit preflight — skip, never fail. A rate limit or an exhausted quota
 # answers the model call, not the handshake, so the credential probe above
-# passes and the review then dies mid-run and reports as "did not run" (exit 4).
-# A review the limits will not currently allow is not a defect in the branch and
-# must not halt the loop as one — the caller skips this round and moves on. The
-# exit is distinct (12) precisely so ship.md can tell a skip from a failure: a
-# failure stops the loop, a skip does not. One extra probe against the auth that
-# was actually selected, so the OAuth path (which the block above never probes)
-# is covered too.
+# passes and the review would die mid-run as "did not run" (exit 4). A review
+# the limits will not allow is not a defect in the branch, so exit 12 is
+# distinct and ship.md skips the round rather than stopping the loop. Probed
+# against the auth actually selected, so the OAuth path is covered too.
 probe_rc=0
 limit_probe=$(docker run --rm "${net_args[@]}" "${mounts[@]}" "$image" grok -p "ok" 2>&1) || probe_rc=$?
 if grep -qiE "$limit_re" <<<"$limit_probe"; then
@@ -477,48 +371,27 @@ if [ "$probe_rc" -ne 0 ] && [ -n "${XAI_API_KEY:-}" ] &&
   exit 12
 fi
 
-# The reservation, and its POSITION is the accounting rule rather than an
-# implementation detail: **every path that can refuse before this line spends
-# nothing** — a dirty tree, no daemon, a missing credential, a bad
-# suggestions.md shape, and all three of the usage-limit skips above. That is
-# why exit 12 has no release to post and why the release verb has no caller left
-# in this repository.
-#
-# Stated as an ordering rather than as "spent if and only if the model call was
-# launched", which is what this comment used to say and is not true of the
-# failed-read case argued below. One file must not define two contracts. ship.md's argument for writing before the call is interruption
-# safety, and the window this leaves is the microseconds between posting and
-# `docker run`; written after, an interrupted run spends a check and leaves no
-# record, and the resumed run spends a thirteenth.
+# The reservation, and its position is the accounting rule: every path that
+# can refuse before this line spends nothing — a dirty tree, no daemon, a
+# missing credential, a bad suggestions.md shape, and the usage-limit skips
+# above — which is why exit 12 has no release to post. It is written before
+# the call for interruption safety (ship.md): written after, an interrupted
+# run spends a check and leaves no record.
 #
 # The write is also an election. Two resumed /ship runs can read the same count
 # and claim the same slot, and the ledger settles it after posting: a loser
 # exits 4, which arrives here as exit 13 and means a concurrent run is mid-check
-# on this PR. Stop the loop rather than take the next slot — two Grok runs share
-# one root suggestions.md, and the later finisher would overwrite the earlier's
-# findings or pass off its rival's clean pass as its own convergence.
+# on this PR. The loop stops rather than taking the next slot, because two Grok
+# runs share one root suggestions.md. An unreachable ledger takes the same exit,
+# because the caller does the same with each: not count this round, and stop.
 #
-# One exit code for both a lost election and an unreachable ledger, because the
-# caller does the same thing with each: do not count this round, and stop.
+# A slot is spent if the review's model call was launched, and also when the
+# ledger posts its reservation but fails the trust check on the read that
+# settles the election. That is conservative on purpose: releasing on a lookup
+# that did not complete would fail open, and the cost is at most one check out
+# of $ceiling.
 #
-# **"If and only if" has one exception, and it is deliberate rather than
-# overlooked.** The ledger posts its comment and *then* reads the rows to settle
-# the election, so a trust-check failure on that read leaves the reservation
-# standing while this helper exits 13 before `docker run` — a slot spent on a
-# model call that was never launched. Conservative on purpose: after a failed
-# read the state is exactly what is not known, and releasing on it would hand a
-# slot back on the strength of a lookup that did not complete, which is the
-# fail-open this file spent a branch closing. The cost is at most one wasted
-# check out of $ceiling, and it is bounded; guessing the other way is not.
-#
-# So the contract is: a slot is spent if the review's model call was launched,
-# and may also be spent when the ledger could not finish settling its own
-# election. A lost election does *not* add a spend — `count` folds duplicate
-# rows for a slot into one — so this exception is the failed-read case alone.
-#
-# `$ledger` was resolved at the head of this file, where the ceiling is read out
-# of it. It is deliberately not recomputed here: two spellings of one path is
-# the same class of duplication as two spellings of one bound.
+# `$ledger` is the path resolved at the head of this file, not recomputed.
 ledger_rc=0
 bash "$ledger" "$pr" reserve "$slot" "$mode" >&2 || ledger_rc=$?
 [ "$ledger_rc" -eq 0 ] ||
@@ -543,7 +416,7 @@ set -e
   { echo "grok exited $grok_status; the review did not run" >&2; exit 4; }
 [ -s "$result" ] ||
   { echo "grok produced no output; the review did not run" >&2; exit 5; }
-# The allow-list declared at the head of this file, applied to the ROOT of the
+# The allow-list declared at the head of this file, applied to the root of the
 # document. Three failures collapse into one question, which is the point of
 # parsing rather than matching: output that is not JSON, output whose root
 # carries no stopReason, and output whose root carries the wrong one.
@@ -564,52 +437,33 @@ stop=$(jq -r 'if type == "object" then (.stopReason // "<absent>") else "<not-an
          "$result" 2>/dev/null) ||
   { echo "grok's output is not valid JSON; the review did not run and suggestions.md is left as it was" >&2; exit 6; }
 if [ "$stop" != "$stop_ok" ]; then
-  # **The rejected path crossed the boundary the accepted path does not (#52).**
   # `$stop` and `.cancellationCategory` are fields of a document the reviewer
-  # wrote, and both were echoed verbatim — so a run that produced no clean
-  # verdict handed /ship reviewer-authored prose anyway, complete with any
-  # newlines it chose. Removing `cat "$result"` closed the success path and
-  # left this one open, which is what a fix aimed at a line rather than at a
-  # property looks like.
-  #
-  # Both are now reduced to a token alphabet before they are printed. A real
-  # stopReason or cancellation category is a bare identifier, so nothing
-  # diagnostic is lost; anything else arrives as the characters of it that
-  # could not carry an instruction.
+  # wrote, so echoed verbatim they would hand /ship reviewer prose, newlines
+  # included, on the path with no clean verdict. Both are reduced to a token
+  # alphabet: a real value is a bare identifier, so nothing diagnostic is lost.
   category_raw=$(jq -r '.cancellationCategory // empty' "$result" 2>/dev/null)
   category=$(safe_token "$category_raw")
   [ -z "$category" ] || echo "grok reported cancellation category: $category" >&2
   echo "grok did not finish its turn — the root stopReason is \"$(safe_token "$stop")\", not \"$stop_ok\"; the review did not run and suggestions.md is left as it was" >&2
   exit 6
 fi
-# **The verdict is extracted; the transcript is not printed (#52).** Every byte
-# of $result is reviewer-authored, and `cat`ting it put that text into the
-# caller's context as prose — where /review-grok reads it holding `Edit` and
-# `Write`, and /ship runs that triage unattended in a loop. Nothing ever read
-# this stdout: ship.md's step 5 branches on the exit code and on whether
-# suggestions.md exists, review-grok.md names no stdout at all, and
-# test_grok_helpers.py asserts nothing about it. So the transcript was a second,
-# unguarded crossing that bought no caller anything.
-#
-# The findings still cross, deliberately and by ONE route: suggestions.md,
-# imported below under the shape guards. One reviewer-controlled artefact, named
-# and checked, beats the same text arriving twice with only one arrival guarded.
+# The verdict is extracted; the transcript is not printed. Every byte of
+# $result is reviewer-authored, and printed it would reach the caller's context
+# as prose, where /review-grok holds `Edit` and `Write` and /ship runs that
+# triage unattended — for no reader, since ship.md branches on the exit code
+# and on whether suggestions.md exists. The findings cross by one route,
+# suggestions.md, imported below under the shape guards.
 echo "grok finished its turn (stopReason \"$stop\") — findings, if any, are in suggestions.md" >&2
 # Import the one artefact the review owns. Its absence is the clean verdict —
 # trustworthy only because the checks above have ruled out a cancelled run.
 #
-# The symlink guard again, and this is the crossing that matters most: the file
-# is now reviewer-controlled, so a link planted inside the container would be
-# dereferenced here, in a host process, against host paths. Rejected rather than
-# resolved, and the destination is removed first so a pre-existing link on this
-# side cannot be written through either.
-#
-# Every non-regular shape is refused, not only symlinks, and the check happens
-# BEFORE the host's copy is removed. Ordered the other way this is a fail-open
-# straight across the boundary: a FIFO, socket or directory left behind by the
-# reviewer would delete the findings already on this side, fail `-f`, copy
-# nothing, and let the run report itself clean — which is the precise failure
-# this loop's verdict checks exist to make impossible.
+# The file is reviewer-controlled here, so a link planted inside the container
+# would be dereferenced in a host process, against host paths. Every
+# non-regular shape is refused, and before the host's copy is removed: a FIFO,
+# socket or directory left by the reviewer would otherwise delete the findings
+# on this side, fail `-f`, copy nothing, and report the run clean. The
+# destination is removed first so a pre-existing link on this side cannot be
+# written through.
 out="$work/repo/suggestions.md"
 if [ -L "$out" ] || { [ -e "$out" ] && [ ! -f "$out" ]; }; then
   echo "the review left suggestions.md as a symlink or not a regular file; refusing to import it" >&2

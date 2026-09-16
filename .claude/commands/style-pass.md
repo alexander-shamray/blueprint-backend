@@ -37,16 +37,16 @@ string literal, or prose, because the rules differ per context, and that
 tracking is done by reading the file rather than by a script this command can
 run unattended.
 
-**This command holds no interpreter grant, and the absence is deliberate.** It
-used to carry `Bash(python:*)`, which is a prefix grant on a general-purpose
-interpreter: `python -c "<anything>"` was auto-approved, and one `open(…,'w')`
+**This command holds no interpreter grant, and the absence is deliberate.**
+`Bash(python:*)` would be a prefix grant on a general-purpose interpreter:
+`python -c "<anything>"` would be auto-approved, and one `open(…,'w')`
 reaches every path the `Edit(…)` denies cover — `.claude/scripts/**`,
 `.claude/sandbox/**`, `.claude/commands/**`, `.claude/agents/**`,
 `.claude/settings.json`, `.claude/settings.local.json` and `.remember/**` —
 while one `subprocess.run` reaches every `git push --force` and `git switch -fC`
 the deny list and the `git-*.sh` helpers exist to keep out. A rule that
 matches `python -c` cannot see what the interpreter then does, so the whole
-control structure this repository documents sat downstream of one line of
+control structure this repository documents would sit downstream of one line of
 frontmatter. That matters here more than in most commands because the input is
 attacker-influenced twice over: `$ARGUMENTS` is a pasted code form, and the
 sweep reads `docs/**` and `src/**`, which a PR author controls.
@@ -55,12 +55,12 @@ A throwaway script is still the right tool for a genuinely structural sweep.
 Write it into the scratchpad and run it — under the default permission mode the
 run prompts, and one approval per pass is the whole cost.
 
-**The prompt is not the boundary, and this paragraph should not be read as
-claiming it is.** Dropping the grant removes *command-level auto-approval*;
-what an unlisted tool then does is the active permission mode's decision, and
-under a bypassing mode it runs silently — the same premise `CLAUDE.md` states
-for the sweeps' denies. So what this change buys is that the interpreter is no
-longer pre-approved by this command, not that a human sees every run. A command
+**The prompt is not the boundary.** Withholding the grant removes
+*command-level auto-approval*; what an unlisted tool then does is the active
+permission mode's decision, and under a bypassing mode it runs silently — the
+same premise the sweeps state for their denies. So what the absence buys is
+that the interpreter is not pre-approved by this command, not that a human
+sees every run. A command
 that needed the stronger property would have to refuse those modes, and none
 here does.
 
@@ -84,12 +84,11 @@ the change has to reach both in this pass — a rule in two places that moves
 in one of them is the drift the split was accepted in order to buy.
 
 Update any count the change invalidates. `docs/style-guide.md` cites site
-counts as evidence and a stale one is a defect (it has said 42 braceless
-bodies when there were 53).
+counts as evidence and a stale one is a defect.
 
 ## 4. Reconcile `.editorconfig`
 
-**Every time. Without being asked.** It is the file PR-01 ships, not a
+**Every time. Without being asked.** It is a build input, not a
 documentation convenience.
 
 Three outcomes, and the third is as important as the others:
@@ -109,8 +108,8 @@ no `.sql` files (§7.4).
 
 ## 5. Verify
 
-Re-scan for the invariants the corpus holds. Every one of these has caught a
-real regression introduced by a previous pass:
+Re-scan for the invariants the corpus holds. Each is a regression a pass can
+introduce:
 
 - no line over 120 columns inside a code fence
 - no leading `&&`, `||`, `??` or `=>` on a continuation line

@@ -11,9 +11,9 @@ $ARGUMENTS — if empty, each step derives its own.
 
 `/branch`, `/commit` and `/pr` hold the branch-naming table, the
 commit-splitting test and the PR body form. **Load each and follow it. Do not
-restate them here** — a fourth copy of the naming table is exactly the drift
-this repo exists to close, and a chainer that paraphrases the steps it calls is
-the worst place for that copy to live.
+restate them here** — a chainer that paraphrases the steps it calls is the
+worst place for a second copy of a rule to live, because it is the copy that
+drifts.
 
 **The two ends are different, and this file is the only place they are
 written.** Step 0's workspace hygiene and step 7's merge and teardown belong to
@@ -21,12 +21,6 @@ no other command — there is nothing to delegate to and nothing to restate — 
 they are argued here in full. Between them, this command adds only the
 handoffs: which steps are still owed, and where the sequence is allowed to
 stop.
-
-This heading used to read *This command owns no rules*, which was true while
-the chain began at `/branch` and ended at an open PR. It stopped being true in
-the same change that added the two ends, and it is corrected here rather than
-in a later sweep because a section title is exactly the kind of summary this
-branch keeps catching a round late.
 
 ## It runs to the end, and the end is a merged PR
 
@@ -37,19 +31,18 @@ branch and `/review-grok` triages what it found, then Copilot reads the PR and
 finished — the PR is merged, the session returns to the main checkout and the
 worktree is removed.
 
-**Nothing in this chain stops to ask.** Where an earlier version handed a
-finding back — step 2's checks, a `Needs a decision` row from the Grok triage,
-an open `Ask` thread from the Copilot one — the run now takes the recommended
+**Nothing in this chain stops to ask.** Where a finding would otherwise be
+handed back — step 2's checks, a `Needs a decision` row from the Grok triage,
+an open `Ask` thread from the Copilot one — the run takes the recommended
 option itself and keeps going. That is the caller's standing instruction and
 not a judgement about the findings.
 
-**Deciding is not the same as going quiet, and this is the part that makes the
-change survivable.** A decision taken here is written down where the person who
-would have been asked can find it: an `Ask` thread gets the answer posted on
-the thread and is then resolved, a `Needs a decision` row is answered in the
-resolution record, and both appear in the report with the option taken and the
-one rejected. A silent decision is the failure mode this rule creates; a stated
-one is the thing it trades an interruption for.
+**Deciding is not the same as going quiet.** A decision taken here is written
+down where the person who would have been asked can find it: an `Ask` thread
+gets the answer posted on the thread and is then resolved, a `Needs a decision`
+row is answered in the resolution record, and both appear in the report with
+the option taken and the one rejected. A silent decision is the failure mode
+this rule creates; a stated one is the thing it trades an interruption for.
 
 **Resolving `Ask` threads is load-bearing rather than tidy.** Step 6's
 all-resolved state is defined over *no unresolved threads*, so a thread left
@@ -75,28 +68,24 @@ them. Two of the four are somebody's decision this chain would otherwise
 undo in silence — commits placed on `main`, and a PR deliberately closed —
 which is a sharper reason to stop than not knowing what to do.
 
-**The second row is Copilot's analogue of a Grok helper exiting non-zero, and
-it needed saying because it is the one failure with no exit code.** Grok's
-failures are enumerated — 12 skips to step 6, anything else stops — while a
-Copilot request that will not register produces no error at all, just silence.
-Step 6 already says never to call a branch clean because asking failed; this
-row is where that becomes a chain outcome rather than a loop one, so step 7
-cannot be reached with a loop that never finished. It is **not** *skipped on
-limits*: that exit is about quota, where this is a round that did not happen.
+**The unregistered-review row is Copilot's analogue of a Grok helper exiting
+non-zero, and it is the one failure with no exit code.** Grok's failures are
+enumerated — 12 skips to step 6, anything else stops — while a Copilot request
+that will not register produces no error at all, just silence. Step 6 already
+says never to call a branch clean because asking failed; this row is where
+that becomes a chain outcome rather than a loop one, so step 7 cannot be
+reached with a loop that never finished. It is **not** *skipped on limits*:
+that exit is about quota, where this is a round that did not happen.
 
-**A review loop hitting its ceiling is not on that list, and putting it there
-was a real confusion rather than a wording slip.** A ceiling ends a *loop* —
-the loop reports itself unconverged and step 7 merges anyway, because a budget
-running out is not a verdict. Reading it as a chain stop would hold every PR
-whose reviewer had more to say, which is the opposite of what step 7 decides.
+**A review loop hitting its ceiling is not on that list.** A ceiling ends a
+*loop* — the loop reports itself unconverged and step 7 merges anyway, because
+a budget running out is not a verdict. Reading it as a chain stop would hold
+every PR whose reviewer had more to say, which is the opposite of what step 7
+decides.
 
-**The checks carry the weight the stops used to, and they now carry more of
-it.** Under the old blanket `Bash(git push:*)` deny this command could not
-finish at all: it stopped before the push, and that stop was the last cheap
-moment to change the work. Then the narrow denies let it reach an open PR, and
-a human still saw the PR before it landed. Now it merges. Step 2 is the only
-thing left between a bad edit and `main` that is not a review bot, so
-**skipping it is no longer a minute saved — it is the last gate**.
+**The checks carry the weight a stop would.** This command merges, so step 2
+is the only thing between a bad edit and `main` that is not a review bot, and
+**skipping it is not a minute saved — it is the last gate**.
 
 ## Resume, don't restart
 
@@ -114,7 +103,7 @@ that reaches a merge — so the rows below say what is owed *between* them:
 | On a branch, tree clean and pushed | `/pr`, then the review loops |
 | On a branch with an open PR | The review loops (steps 5–6), Grok before Copilot — and, if the tree is dirty, checks, `/commit` **scoped to the implementation paths** and a push first, so the reviewers read what the PR will actually carry. Never unscoped while `suggestions.md` is on disk: that file is Grok's working state, and the unscoped form sweeps untracked files into the commit |
 | On a branch whose PR was **closed unmerged** | **Stop.** Somebody decided this branch does not land, and the open-PR read cannot see that: with no open PR the *clean and pushed* row would send the run to `/pr`, which refuses only an **open** one — so the chain would open a replacement and merge it, overriding a deliberate closure with no human in the loop. Report the closed PR and its number |
-   | On a branch whose PR is **already merged** | **Step 0 alone, and then the run is over.** `pr-state.sh` reporting `MERGED` is the check, and it comes before the review loops rather than after them — re-requesting a review on a merged PR spends a round of somebody's budget on a branch nobody can change. With nothing left in the workspace, step 0's teardown is a complete one (switch, pull, remove, prune); with a dirty tree or commits made after the merge the branch is **not** finished, step 0 stays put and tears nothing down, and the run still ends here. Either way step 7 has nothing left to do: there is no PR to merge |
+| On a branch whose PR is **already merged** | **Step 0 alone, and then the run is over.** `pr-state.sh` reporting `MERGED` is the check, and it comes before the review loops rather than after them — re-requesting a review on a merged PR spends a round of somebody's budget on a branch nobody can change. With nothing left in the workspace, step 0's teardown is a complete one (switch, pull, remove, prune); with a dirty tree or commits made after the merge the branch is **not** finished, step 0 stays put and tears nothing down, and the run still ends here. Either way step 7 has nothing left to do: there is no PR to merge |
 
 **Step 0's teardown targets a worktree that is already finished; step 7's
 targets the one this run just merged. Exactly one of them owns any given
@@ -122,7 +111,7 @@ directory.** A resumed run that starts inside its own unfinished worktree stays
 there — step 0's table says so in its second row, and that row is what keeps
 this step from stranding the branch it was meant to tidy up around.
 
-**The row above is the case where the two could collide, which is why it ends
+**The merged row is the case where the two could collide, which is why it ends
 the run at step 0.** A session standing in a worktree whose PR is already
 merged is finished by step 0's first row *and* would be "this run's" by step
 7's. Both tearing it down means the second `git worktree remove` runs against a
@@ -143,8 +132,8 @@ tree and a writable parent, per step 1's two exceptions.
 re-enters step 5 rather than inferring it ran: `suggestions.md` is absent
 before the first review and after a clean one, and the two states are
 indistinguishable. Re-entering is safe because that loop is idempotent against
-a clean branch — a Grok full review of nothing writes nothing — and that re-run
-is the proof, where the inference was a guess.
+a clean branch — a Grok full review of nothing writes nothing — and a re-run is
+proof where an inference would be a guess.
 
 **The Copilot loop is the opposite, and deliberately so**: its clean state is
 not a missing file but a landed review, which is durable, on the PR, and
@@ -155,9 +144,9 @@ head, **and no `review_requested` event newer than it**, is **all-resolved** —
 step 6 is not owed, and re-requesting would be asking a question already
 answered on the record. Anything pushed after that review un-marks it, because
 the oid no longer matches and the clean verdict is then about a state the PR no
-longer carries. That pinning is what makes the inference safe here where it was
-a guess for Grok: the artefact says which commit it read, and `suggestions.md`
-never could.
+longer carries. That pinning is what makes the inference safe here where it
+would be a guess for Grok: the artefact says which commit it read, and
+`suggestions.md` never could.
 
 **The newer-request clause is not redundant with the oid**, and leaving it out
 is how a resume ships past a review it never read. A run interrupted between
@@ -170,21 +159,20 @@ review it has not seen is in flight.
 this command can actually run, and a timestamp is not:
 `copilot-request-count.sh` returns an integer and nothing else, and there is
 deliberately no raw `gh api` grant here to fetch anything richer. It needs
-none. The helper counts
-`review_requested` events for Copilot, this loop makes exactly one per round,
-and each lands exactly one review — so **a request is outstanding when that
-count exceeds the number of landed Copilot reviews**, and both numbers are
-readable with what is already granted (`pr-review-bodies.sh <n>` supplies
-the second). When one is outstanding, wait for its review rather than
-inheriting the verdict of the one before it. A request that never produces a
-review is the timeout case this step already covers, reported as the loop not
-having finished rather than clean — so the comparison fails closed, which is
-the direction it must fail in.
+none. The helper counts `review_requested` events for Copilot, this loop makes
+exactly one per round, and each lands exactly one review — so **a request is
+outstanding when that count exceeds the number of landed Copilot reviews**, and
+both numbers are readable with what is already granted
+(`pr-review-bodies.sh <n>` supplies the second). When one is outstanding, wait
+for its review rather than inheriting the verdict of the one before it. A
+request that never produces a review is the timeout case this step already
+covers, reported as the loop not having finished rather than clean — so the
+comparison fails closed, which is the direction it must fail in.
 
 `git status -sb`, `git branch --show-current`, the `rev-parse` pair above,
 one PR read, and a look for `suggestions.md` (it decides recheck versus full
-review inside step 5, not whether step 5 runs) answer all seven rows and the
-Grok half. Read them before doing anything.
+review inside step 5, not whether step 5 runs) answer every row and the Grok
+half. Read them before doing anything.
 
 ```bash
 bash .claude/scripts/pr-for-branch.sh <branch>
@@ -193,29 +181,14 @@ bash .claude/scripts/pr-for-branch.sh <branch>
 **One call, four outcomes, and it exits 0 for every one of them.** Empty means
 no PR has ever existed for this branch; otherwise the newest row reads `OPEN`,
 `CLOSED` or `MERGED`, and those are precisely the four cases the table above
-distinguishes — including the two that used to need a second call and the one
-that used to need a failed one.
+distinguishes.
 
 **`pr-state.sh` cannot be that read, and the reason is an exit
 code rather than a preference.** With no PR for the current branch it exits
 non-zero, and *forked but never PR'd* is what step 1 produces on every run —
-so the commonest state in the table would have been classified through a
-failed command, in a chain whose first stop rule is that a non-zero exit means
-the step did not run. Step 0's predicate had the identical defect and fixed it
-one round earlier; this list kept it, which is what a rule fixed at one site
-and not at its neighbour looks like.
-
-> **A prior review disputed `gh pr view`'s behaviour here and was wrong on the
-> facts, and the fix arrived anyway from the other direction.** Run with no
-> argument on a branch whose PR is merged it answered `{"state":"MERGED"}` and
-> exited 0 — gh 2.92.0, this repository,
-> `feat(gateway)/response-compression-and-size-limits` — where the review had
-> cited a `cli/cli` issue claiming *no pull requests found* and exit 1. That
-> measurement stands and was worth taking. What it never covered is the case
-> that actually bites: a branch with **no** PR at all, which is a different
-> command path from a branch with a merged one. **A measurement rebuts the
-> claim it was taken against and nothing else** — and the swap the review
-> recommended turned out to be right for a reason it never gave.
+so the commonest state in the table would be classified through a failed
+command, in a chain whose first stop rule is that a non-zero exit means the
+step did not run.
 
 **All-resolved needs three reads, not one**, because no single call carries the
 three signals it is defined over. `pr-review-bodies.sh <n>` gives the
@@ -234,19 +207,15 @@ bash .claude/scripts/pr-review-threads.sh <n>      # <thread-id> <isResolved> �
 All three are read-only with fixed endpoints, which is why they can be granted
 to a step that only wants to look.
 
-**Two of them filter by author as of #56, and this step reports their counts
-like `/review-copilot` does.** `pr-review-bodies.sh` and
-`pr-review-comments.sh` admit Copilot's three logins plus the repository
-owner's, drop everything else before stdout, and print an admitted/dropped
-count to stderr. This step used to filter the same two feeds in prose, on two
-*different* logins — inline comments on `Copilot`, review bodies on
-`copilot-pull-request-reviewer` — which is exactly the split that let a
-two-string allow-list look complete. One list, declared once in
-`copilot-authors.sh`, now serves both. `pr-review-threads.sh` is unfiltered by
+**Two of them filter by author, and this step reports their counts like
+`/review-copilot` does.** `pr-review-bodies.sh` and `pr-review-comments.sh`
+admit Copilot's three logins plus the repository owner's, drop everything else
+before stdout, and print an admitted/dropped count to stderr. One list,
+declared once in `copilot-authors.sh`, serves both feeds, so the two cannot
+filter on different logins. `pr-review-threads.sh` is unfiltered by
 construction and needs no filter: it returns thread ids and resolution state,
-never a body. An unresolved thread from an earlier round is
-exactly the state a fresh clean review never repeats, and it is the one the
-oid cannot see.
+never a body. An unresolved thread from an earlier round is exactly the state a
+fresh clean review never repeats, and it is the one the oid cannot see.
 
 **The reads are scoped differently, and getting that backwards fails in
 both directions.** `pr-review-comments.sh` returns every **admitted** inline
@@ -254,10 +223,9 @@ comment the PR has ever carried, replies included — every round's, not this
 round's, and the author filter narrows *who* it returns rather than *when* — so
 on any PR whose earlier rounds found something, its output is non-empty forever
 and a resume reading it whole would never see a clean review again. It has to
-be joined to the candidate review.
-**Threads are the opposite and stay global**: an unresolved thread from round
-three is still owed at round nine, which is the entire reason that signal
-exists.
+be joined to the candidate review. **Threads are the opposite and stay
+global**: an unresolved thread from an early round is still owed at a late
+one, which is the entire reason that signal exists.
 
 **Join on the timestamp, not on a review id — the two sides do not share
 one.** `pr-review-bodies.sh` reports a GraphQL node id
@@ -283,37 +251,38 @@ by `grok-review.sh` itself, immediately before the review's model call, so
 that spending a slot and running a review are one operation rather than two an
 ordering mistake can separate — and a resumed run recovers the count as the
 highest N reserved and not released; an unreleased reservation counts as
-spent, and no ledger comment means a fresh PR with nothing spent. **A release
-is a historical row rather than a step 5 outcome**: because the reservation is
-posted after every skip path, an exit-12 skip has no slot to give back, and
-`count` folds a released row only out of a PR ledgered before that was true.
-The ledger
-carries convergence as well as spend, because spend alone cannot tell a loop
-that converged on its last allowed check from one the ceiling cut off. The
-`converged` marker settles only that question — the report at the ceiling —
-and never excuses re-entry: the rule above stands, a resumed run re-enters
-step 5, and the marker is not pinned to a commit, so commits landing
+spent, and no ledger comment means a fresh PR with nothing spent. **No step 5
+outcome posts a release**: the reservation is posted after every skip path, so
+an exit-12 skip has no slot to give back, and `count` folds a released row only
+out of older ledger history.
+
+The ledger carries convergence as well as spend, because spend alone cannot
+tell a loop that converged on its last allowed check from one the ceiling cut
+off. The `converged` marker settles only that question — the report at the
+ceiling — and never excuses re-entry: the rule above stands, a resumed run
+re-enters step 5, and the marker is not pinned to a commit, so commits landing
 after it still get their re-review from the re-entry, budget allowing. That
 last clause is exactly what step 6's oid gives it and this marker cannot, and
-it is why only one of the two loops can be skipped on a resume. Any
-later reservation supersedes the marker, and it is read with
+it is why only one of the two loops can be skipped on a resume. Any later
+reservation supersedes the marker, and it is read with
 `bash .claude/scripts/grok-ledger.sh <n> status` — the same author
 verification as the count, because a raw-comment read would take the
-marker from anyone. Step 6 needs no marker for the same
-question — its outcomes are already on the PR, so a resumed run reads the
-last landed review (comments and suppressed block alike), the commit it read
-and the unresolved-thread list before declaring that loop owed, all-resolved
-or exhausted. The
-count read goes through the same helper —
+marker from anyone. Step 6 needs no marker for the same question — its
+outcomes are already on the PR, so a resumed run reads the last landed review
+(comments and suppressed block alike), the commit it read and the
+unresolved-thread list before declaring that loop owed, all-resolved or
+exhausted.
+
+The count read goes through the same helper —
 `bash .claude/scripts/grok-ledger.sh <n> count` — because PR comments are
 unauthenticated state: on a public PR anyone can post a line that imitates
 the ledger, so only the helper's exact shapes count as state, and only from
 authors whose repository permission the helper verifies as write or better —
 PR-local, not account-local, so a resume under another authorised login
-reads the same count. The last event per N wins.
-A ledger read or write that fails stops the chain rather than
-guessing — a cap that resets when its state goes missing is no cap, the
-same argument as never calling a branch clean because asking failed.
+reads the same count. The last event per N wins. A ledger read or write that
+fails stops the chain rather than guessing — a cap that resets when its state
+goes missing is no cap, the same argument as never calling a branch clean
+because asking failed.
 
 ## Steps
 
@@ -359,23 +328,19 @@ same argument as never calling a branch clean because asking failed.
    ```
 
    **Every read exits 0 whatever it finds, and that is deliberate.**
-   `pr-state.sh` on a branch with no PR exits non-zero, and
-   *forked but never PR'd* is not exotic — it is what step 1 produces on every
-   run. Classifying the ordinary case through a failed command, in a chain
-   whose first stop rule is that a non-zero exit means the step did not run,
-   is a contradiction rather than a nicety. `pr-for-branch.sh` answers with a
-   row or with `[]`, measured both ways on this repository.
+   `pr-state.sh` on a branch with no PR exits non-zero, and *forked but never
+   PR'd* is what step 1 produces on every run, so it cannot be one of these
+   reads (*Resume, don't restart*). `pr-for-branch.sh` answers with a row or
+   with `[]`.
 
    **It is not filtered to merged, and the read above must do that itself.**
-   The call it replaced was `gh pr list --state merged --head <branch>`, where
-   emptiness *was* the answer; the helper fixes `--state all`, because the
-   resume table one section up needs the other states from the same call. So
-   **look for a row whose `state` is `MERGED`** — a non-empty result means a
-   pull request exists, which is true of an OPEN one too, and treating that as
-   "it landed" would classify an unmerged branch as finished and tear the
-   workspace down.
-   `pr-state.sh` keeps its job one section up, in the resume
-   table, where the question is *which* state and there is a PR to ask about.
+   The helper fixes `--state all`, because the resume table one section up
+   needs the other states from the same call. So **look for a row whose
+   `state` is `MERGED`** — a non-empty result means a pull request exists,
+   which is true of an OPEN one too, and treating that as "it landed" would
+   classify an unmerged branch as finished and tear the workspace down.
+   `pr-state.sh` keeps its job one section up, in the resume table, where the
+   question is *which* state and there is a PR to ask about.
 
    **The merge read is not redundant with `origin/main..HEAD`, and the
    difference is the whole of the next paragraph.** Merging does empty that
@@ -404,62 +369,41 @@ same argument as never calling a branch clean because asking failed.
    merely tolerated, and note that `/branch` step 4 stops on an occupied slug
    anyway, so it cannot silently collide with a later branch.
 
-   **This is round 2's finding resolved from the other end.** That review said
-   a teardown keyed on `merged` contradicted a predicate that called a clean
-   no-PR branch finished — true, and the fix taken then was to widen the
-   teardown. Round 6 showed the same disagreement from the side where widening
-   does damage. Narrowing the predicate settles both: the teardown asks for
-   merged, the predicate asks for merged, and nothing calls an unused
-   workspace finished in the first place.
+   **The tree check is the one that bites earliest.** A worktree forked
+   minutes ago and edited is level with `origin/main` and has no PR. Without
+   the tree read step 0 would leave it, `git worktree remove` would refuse the
+   dirty tree and so the directory survives, and the session would be on
+   `main` with step 1 about to refuse a branch that already exists. The guard
+   that saves the files is not the guard that saves the run.
 
-   **The tree check is the fourth shape of the same stranding, and it is the
-   one that bites earliest.** A worktree forked minutes ago and edited was
-   Finished on the two reads that existed then. Step 0 would leave it,
-   `git worktree remove` would refuse the dirty tree and so the directory
-   survives, and the session would be on `main` with step 1 about to refuse a
-   branch that already exists. The
-   guard that saves the files is not the guard that saves the run.
-
-   **The fifth and sixth shapes are both the same defect — a read given to one
-   limb of a two-limbed predicate — and that is why the limbs are gone.** It
-   used to read *a merged PR, **or** a clean tree with no PR and nothing ahead
-   of `origin/main`*, and each of the two reads on the right-hand limb was
-   missing from the left. A merged PR with **uncommitted edits** beside it
-   passed (fifth); so did a merged PR with **clean commits made after the
-   merge** (sixth). Both end identically: step 0 exits the worktree, the resume
+   **The three reads are a conjunction, and a merged PR exempts a workspace
+   from none of them.** A merged PR with **uncommitted edits** beside it, or
+   with **clean commits made after the merge**, is not finished. Read as
+   finished, either ends identically: step 0 exits the worktree, the resume
    table's merged-PR row ends the run, and the work is left where nothing will
    look at it again — the edits in a directory nobody is in, or the commits on
-   a branch no later run will name.
-
-   **A conjunction cannot carry this defect and a disjunction kept generating
-   it**, which is worth more than either fix. All three reads ask one question
-   about one thing — *is there work here* — and nothing about a PR's state
-   exempts a workspace from being asked. Two shapes arrived one review round
-   apart, in the same file, the second landing in the commit that fixed the
-   first; the shape is what produced them, so the shape is what changed.
+   a branch no later run will name. All three reads ask one question about one
+   thing — *is there work here* — and nothing about a PR's state exempts a
+   workspace from being asked.
 
    **So a merged PR with work beside it is unfinished, the second row keeps
    the session in it, and that is a run with nothing owed rather than the start
    of one.** There is nothing to ship — the PR has landed, and the uncommitted
    edits or the later commits belong to whatever comes next. Nor may either be
    adopted onto this branch, tempting as step 1's already-on-a-branch override
-   makes it: a second PR cut
-   from a merged branch leaves `pr-state.sh` answering `MERGED`
-   from the *first* one on every later resume, so the branch becomes unreadable
-   to this command permanently. Report what the workspace still holds and the
-   directory holding it, and end there. **That is not one of the six stops** —
-   nothing failed and nothing is being asked; it is a run that found nothing to
-   do, and saying so is the whole of what it owes.
+   makes it: a second PR cut from a merged branch leaves `pr-state.sh`
+   answering `MERGED` from the *first* one on every later resume, so the branch
+   becomes unreadable to this command permanently. Report what the workspace
+   still holds and the directory holding it, and end there. **That is not one
+   of the six stops** — nothing failed and nothing is being asked; it is a run
+   that found nothing to do, and saying so is the whole of what it owes.
 
-   **The word to avoid here is "unpushed", and avoiding it is the whole of this
-   fix.** The resume table above uses it in git's ordinary sense — commits not
-   yet on `origin/<branch>` — and its rows need that reading. Spelling the
-   Finished predicate as "nothing unpushed" imported the other meaning: a clean
-   branch, fully pushed, with no PR yet is *nothing unpushed* and is exactly
-   the state that owes `/pr`. Step 0 would have left it, and step 1 would have
-   refused a name that already exists — the same stranding this chain has now
-   closed in three shapes rather than two, and the third arrived through a word
-   rather than through a missing row.
+   **Do not spell Finished as "nothing unpushed".** The resume table above
+   uses *unpushed* in git's ordinary sense — commits not yet on
+   `origin/<branch>` — and its rows need that reading. A clean branch, fully
+   pushed, with no PR yet is *nothing unpushed* and is exactly the state that
+   owes `/pr`: step 0 would leave it, and step 1 would refuse a name that
+   already exists — the same stranding as the others.
 
    **Two rows say Stay, and they are one rule in two shapes: never walk away
    from a workspace this run could use.** Leaving an unfinished *worktree*
@@ -472,7 +416,7 @@ same argument as never calling a branch clean because asking failed.
    The second shape is easy to miss because the in-place branch is the
    *exception* in step 1 rather than the ordinary case — and it is exactly what
    `/branch` produces every time `main` was dirty, which is every time a change
-   is already half-written when the chain starts. The two commands above answer
+   is already half-written when the chain starts. The reads above answer
    which row applies, and they are needed **together**: the PR state alone
    cannot see a branch that never opened one, and the commit count alone cannot
    see one whose PR is merged.
@@ -482,20 +426,11 @@ same argument as never calling a branch clean because asking failed.
    creates the directory with `git-worktree-fork.sh` and then enters it with
    `EnterWorktree({path})`, and entering an existing worktree does not confer
    ownership: `remove` answers *this session is not the owner*, which is
-   another stop with nothing behind it. Leave, then tear down with git, which
-   is also the form that refuses a dirty tree.
-
-   **Measured on this repository's own forked path, because a review disputed
-   it.** The claim under review was that `/branch`'s `EnterWorktree` makes the
-   session the owner and `remove` would therefore succeed; run against
-   `ashamray-bff` it refused. It offered two candidate reasons rather than one
-   — a `{path}` entry, or another session holding the liveness lock — and only
-   the first applied, which is enough to settle the outcome and worth quoting
-   precisely rather than tidying into a single cause. The
-   review was right about the mechanism and wrong about the outcome — it is the
-   `{name}`/`{path}` distinction rather than which helper made the directory,
-   and this file said the latter. A resumed session is the same answer by a
-   third route: it never called `EnterWorktree` at all.
+   another stop with nothing behind it. It is the `{name}`/`{path}`
+   distinction that decides, not which helper made the directory, and a
+   resumed session is the same answer by another route: it never called
+   `EnterWorktree` at all. Leave, then tear down with git, which is also the
+   form that refuses a dirty tree.
 
    Then the teardown. **"Then" is a sequence, not a destination — a Stay row
    does not travel to the main checkout to run these:**
@@ -513,16 +448,16 @@ same argument as never calling a branch clean because asking failed.
    that reads HEAD, and on either Stay row a bare `git pull --ff-only` would
    update the feature branch instead.
 
-   **`main` is a workspace too, and the last row used to exempt it from the
-   only predicate this step has.** Two states break the unconditional pull, and
-   they break it in opposite directions. A **dirty** `main` is the state
-   `/branch` handles by branching in place and carrying the work — and
-   `git pull --ff-only` refuses when the fast-forward would touch a modified
-   file, so the pull fails first and takes the documented path down with it, on
-   a raw git error rather than on anything this file names. A `main` **ahead of
-   `origin/main`** is worse for being quiet: the pull succeeds or reports
-   nothing to do, step 1 forks from `origin/main`, and the local commits stay
-   on `main` outside the PR with nothing saying so.
+   **`main` is a workspace too, and the predicate applies to it.** Two states
+   break an unconditional pull, and they break it in opposite directions. A
+   **dirty** `main` is the state `/branch` handles by branching in place and
+   carrying the work — and `git pull --ff-only` refuses when the fast-forward
+   would touch a modified file, so the pull fails first and takes the
+   documented path down with it, on a raw git error rather than on anything
+   this file names. A `main` **ahead of `origin/main`** is worse for being
+   quiet: the pull succeeds or reports nothing to do, step 1 forks from
+   `origin/main`, and the local commits stay on `main` outside the PR with
+   nothing saying so.
 
    So the pull is guarded on both reads, and the two states are then reported
    rather than acted on:
@@ -533,13 +468,9 @@ same argument as never calling a branch clean because asking failed.
    - **Ahead.** **Stop, before step 1.** Report the commits — subject lines
      and count — and say that `main` carries work `origin/main` does not.
 
-   The dirty case is one line in the report; the ahead case ends the run, and
-   the reasoning that first said otherwise is worth keeping because it was
-   wrong in an instructive way.
-
-   **The first answer was *skip the pull, name the commits, carry on*, and it
-   held only as long as nobody followed it past step 1.** Two things happen
-   downstream, and each is worse than the state that produced it:
+   The dirty case is one line in the report; the ahead case ends the run,
+   because skipping the pull and carrying on fails further down in both of its
+   shapes:
 
    - **Clean and ahead.** Step 1 forks from `origin/main`, the PR merges, and
      step 7's `git pull --ff-only` meets a local `main` that has diverged —
@@ -548,17 +479,13 @@ same argument as never calling a branch clean because asking failed.
      stop: the branch is on `main`, the workspace is half torn down, and the
      failure is a raw git error rather than anything reported as an outcome.
    - **Dirty and ahead.** `/branch` branches in place **from `HEAD`**, which
-     silently adopts the very commits the paragraph above said this chain
-     leaves alone. A rule and the path that ignores it, in one file.
+     silently carries those commits into an unrelated PR.
 
-   **So the rejected alternative was right about the danger and wrong about
-   the remedy.** Branching from `HEAD` really would carry the commits into an
-   unrelated PR; not branching from `HEAD` does not make them safe, it makes
-   them a divergence waiting at the far end of the run. What the two have in
-   common is that neither is *this chain's* decision: commits sitting on
-   `main` want pushing, moving to a branch, or dropping, and picking one of
-   those is the caller's call in exactly the sense a merge conflict is. It
-   joins the stop table for that reason and not because the run gave up.
+   **Neither branching from `HEAD` nor forking past the commits makes them
+   safe, and neither is this chain's decision.** Commits sitting on `main`
+   want pushing, moving to a branch, or dropping, and picking one of those is
+   the caller's call in exactly the sense a merge conflict is. It is in the
+   stop table for that reason and not because the run gave up.
 
    **It is also the one stop that fires before anything has happened**, which
    is the cheapest place a stop can be. Nothing is branched, committed,
@@ -583,12 +510,10 @@ same argument as never calling a branch clean because asking failed.
    ```
 
    **One definition, read at both sites, and it is the predicate above rather
-   than a second spelling of it.** This line said `merged and clean` while the
-   predicate said something wider, then said `finished` while the predicate
-   was still wider — two rounds of the same disagreement, in both directions.
-   The predicate now asks for a merged PR itself, so the two cannot part: the
-   only worktree this removes is one whose work is on `main`, and an unused or
-   abandoned one is kept by the Stay row before this line is ever reached.
+   than a second spelling of it.** The predicate asks for a merged PR itself,
+   so the only worktree this removes is one whose work is on `main`, and an
+   unused or abandoned one is kept by the Stay row before this line is ever
+   reached.
 
    Without `-f` that command **refuses a worktree holding uncommitted or
    untracked files**, which is the guard rather than an inconvenience — the
@@ -597,33 +522,29 @@ same argument as never calling a branch clean because asking failed.
    which is the one spelling that discards somebody's work.
 
    > **Some grants in this file are wider than the operations they buy, and
-   > every one is a known residual rather than an oversight.** `CLAUDE.md`
-   > keeps the count and the inventory; this callout keeps the argument for the
-   > two that bite hardest here, and deliberately states no total of its own —
-   > a second tally is the drift this repository has closed three times
-   > already, and it went stale in exactly that way when a later branch pinned
-   > this file's fetch grant.
+   > every one is a known residual rather than an oversight.**
+   > `docs/harness-boundaries.md` keeps the inventory; this callout keeps the
+   > argument for the two that bite hardest here, and states no total of its
+   > own.
    >
-   > An **allow** rule cannot exclude
-   > a *trailing* flag — the argument the push rules already make, and true of
-   > the allow side only: a deny takes `*` at any position, which is how
-   > `--output` was closed. Both grants below are allows, so —
-   > `Bash(git worktree remove:*)` admits the `-f` this file forbids, and
-   > `Bash(gh pr merge --merge:*)` admits a trailing `--admin`, which merges
-   > past the failing checks step 7 treats as a hard stop. Pinning `--merge` at
-   > the front does close the *method* — `gh` refuses two of `--merge`,
-   > `--squash` and `--rebase` together — so that half is real; the bypass half
-   > is not.
+   > An **allow** rule cannot exclude a *trailing* flag — true of the allow
+   > side only: a deny takes `*` at any position. Both grants below are
+   > allows, so — `Bash(git worktree remove:*)` admits the `-f` this file
+   > forbids, and `Bash(gh pr merge --merge:*)` admits a trailing `--admin`,
+   > which merges past the failing checks step 7 treats as a hard stop.
+   > Pinning `--merge` at the front does close the *method* — `gh` refuses two
+   > of `--merge`, `--squash` and `--rebase` together — so that half is real;
+   > the bypass half is not.
    >
    > Every comparable case in this repository is fixed by a helper that spells
    > its own flags, and the two that exist (`git-worktree-detach.sh`,
    > `git-worktree-drop.sh`) bind the path to `secsweep-` plus six characters
    > directly under the temp root, and therefore refuse a PR worktree by
    > design — the detach helper by *creating* the only path it hands to git,
-   > which is stronger than checking one a caller supplied. Two more
-   > are owed here; until someone with the `Edit(.claude/scripts/**)` deny
-   > lifted writes them, both rules are carried by this file, like the `[`
-   > placement rule in `docs/style-guide.md`.
+   > which is stronger than checking one a caller supplied. Two more are owed
+   > here; until someone with the `Edit(.claude/scripts/**)` deny lifted writes
+   > them, both rules are carried by this file, like the `[` placement rule in
+   > `docs/style-guide.md`.
    >
    > **The deny is why they cannot simply be written now, and it is the same
    > control that makes a helper worth having.** A session that could add
@@ -634,8 +555,8 @@ same argument as never calling a branch clean because asking failed.
    > **What stands in the meantime is visibility, not prevention, and calling
    > it anything else would be the overclaim.** Step 7 reports the **literal**
    > `gh pr merge` and `git worktree remove` invocations it ran, flags
-   > included. That is the same substitute this chain already accepts for the
-   > human gate it removed — a decision taken here is written where the person
+   > included. That is the same substitute this chain accepts for the human
+   > gate it does without — a decision taken here is written where the person
    > who would have been asked can find it — applied to the two commands that
    > can bypass a gate rather than merely take a judgement.
 
@@ -684,19 +605,17 @@ same argument as never calling a branch clean because asking failed.
    **Before `/commit`, not after.** A defect found after the commit costs a
    second commit or a rewrite; found here it is an edit. This is also the step a
    chained workflow silently drops, which is why it is a step rather than a
-   footnote: `/pr` requires the body to state whether these ran, so skipping
-   them quietly makes the PR body untrue.
+   footnote.
 
-   **Fix what they find, then run them again.** This step used to stop and hand
-   the finding back; it no longer does, and it is the step that changed most in
-   losing that. A blueprint contradiction has one correct resolution far more
-   often than it has two — reconcile to whichever side the rest of the system
-   depends on, exactly as `/validate-blueprint` already instructs, and record
-   the direction in the commit body.
+   **Fix what they find, then run them again.** A blueprint contradiction has
+   one correct resolution far more often than it has two — reconcile to
+   whichever side the rest of the system depends on, exactly as
+   `/validate-blueprint` already instructs, and record the direction in the
+   commit body.
 
    Where a finding genuinely has two defensible answers, take the one the
    surrounding argument supports, say which you rejected, and put both in the
-   report. That is what this chain now does everywhere; the difference here is
+   report. That is what this chain does everywhere; the difference here is
    only that nothing downstream will catch a wrong choice, because the reviewers
    read the branch and not the specification.
 
@@ -715,10 +634,10 @@ same argument as never calling a branch clean because asking failed.
    pushes only what is owed, then opens the PR, deriving its own title from the
    commits. $ARGUMENTS described the branch, not the PR.
 
-   The push is called out here rather than left inside step 4's prose because
-   it is the only action in the whole sequence that another person can see.
-   A chain that reaches the remote silently is a chain nobody audits, so it
-   gets a line in the report whether or not it did anything.
+   The push is called out because it is the only action in the whole sequence
+   that another person can see. A chain that reaches the remote silently is a
+   chain nobody audits, so it gets a line in the report whether or not it did
+   anything.
 
    `/pr` stops on one thing: an open PR already exists from this branch.
    Updating it is a decision, not a default — and inside this chain, step 5
@@ -748,29 +667,23 @@ same argument as never calling a branch clean because asking failed.
       bash .claude/scripts/grok-review.sh <N> <full|recheck>
       ```
 
-      **The helper spends the ledger slot itself, and that is why it takes the
-      slot.** This block used to read `bash .claude/scripts/grok-review.sh` with
-      the reservation posted beside it as a separate command, and nothing made
-      the pair happen in that order or happen at all: a run that invoked the
-      review without reserving spent a check that left no record, a resumed run
-      read a lower count, and the PR ran past twelve against a paid API. A bound
-      whose two halves are two commands is a bound any ordering mistake lifts.
-      So do not post a reservation here — `.claude/settings.json` denies the
-      verb — and pass the slot instead.
+      **The helper spends the ledger slot itself, which is why it takes the
+      slot.** A reservation and a review run as two commands are a bound any
+      ordering mistake lifts: a review invoked without reserving spends a
+      check that leaves no record, and a resumed run then reads a lower
+      count. So do not post a reservation here — `.claude/settings.json`
+      denies the verb — and pass the slot instead.
 
-      **You do not pass the PR number, and it was an argument for exactly one
-      review round.** A caller-supplied number is a free parameter aimed at the
-      one thing the helper writes to the outside world: a numeric typo, or an
-      instruction substituting another open pull request, posted the reservation
-      *there* while cloning and reviewing this branch — so this branch's cap
-      stayed re-armed and someone else's slot was spent. That is this very
-      change's own defect one level up, accounting pointed somewhere other than
-      the thing it accounts for. The helper resolves the PR from the branch it
-      is about to clone, so the slot and the review cannot be different
-      subjects, and refuses a branch with no open pull request or more than one
-      rather than guessing. It validates the slot and the mode against the
-      ledger's own vocabulary and refuses anything else, the old
-      three-argument form included.
+      **You do not pass the PR number.** A caller-supplied number is a free
+      parameter aimed at the one thing the helper writes to the outside
+      world: a numeric typo, or an instruction substituting another open pull
+      request, would post the reservation *there* while cloning and reviewing
+      this branch — so this branch's cap stays re-armed and someone else's
+      slot is spent. The helper resolves the PR from the branch it is about to
+      clone, so the slot and the review cannot be different subjects, and
+      refuses a branch with no open pull request or more than one rather than
+      guessing. It validates the slot and the mode against the ledger's own
+      vocabulary and refuses anything else.
 
       **Exit 13 is the reservation refused**, and it means stop the Grok loop
       rather than take the next slot. Two causes reach it and the response is
@@ -785,11 +698,11 @@ same argument as never calling a branch clean because asking failed.
       back is `suggestions.md` — never through a symlink, in either
       direction, because that file is the one path across the boundary and
       therefore the only one worth attacking. Isolation by construction,
-      where the earlier post-run `git status` check could be passed by a
-      payload that executed and then reverted itself. It also refuses a
-      dirty tree (everything but `suggestions.md` must be committed),
-      because the clone holds only commits and a reviewer reading less than
-      the PR carries is a review of something else.
+      where a post-run `git status` check could be passed by a payload that
+      executed and then reverted itself. It also refuses a dirty tree
+      (everything but `suggestions.md` must be committed), because the clone
+      holds only commits and a reviewer reading less than the PR carries is a
+      review of something else.
 
       A clone rather than a worktree because a worktree's `.git` points back
       into this checkout — the one path the container must not mount. **Docker
@@ -798,10 +711,9 @@ same argument as never calling a branch clean because asking failed.
 
       That is about the copy the container reads, not about where this run
       lives: since step 1, `/ship` normally runs **inside** a worktree, and
-      cloning out of one works — checked, not assumed, and the clone comes out
-      on the branch. The two uses of the word sit close enough together to
-      trip over, so it is worth reading twice before concluding the helper
-      cannot run here.
+      cloning out of one works — the clone comes out on the branch. The two
+      uses of the word sit close enough together to trip over, so read them
+      twice before concluding the helper cannot run here.
 
       **Exit 12 is out of usage limits, and it means skip — not fail.** The
       helper preflights the selected auth against Grok's limits before the
@@ -814,14 +726,12 @@ same argument as never calling a branch clean because asking failed.
       it — **exit 15 among them**, the egress proxy or its network failing to
       come up, which sits above the reservation and spends no slot.
 
-      **The skip is final, and it used to owe a re-entry.** That debt was
-      payable while the chain ended at an open PR: a later `/ship` re-entered
-      step 5 and Grok reviewed the branch before a human merged it. Step 7
-      merges, and the resume table ends a merged PR's run at step 0 — so no
-      later run can re-review it, and a re-entry "owed" is one that can never
-      be paid. Say in the report that **this PR was reviewed by one reviewer
-      rather than two, permanently**, which is the true statement, rather than
-      recording a debt against a branch nobody will read again.
+      **The skip is final.** Step 7 merges, and the resume table ends a merged
+      PR's run at step 0 — so no later run can re-review it, and a re-entry
+      "owed" is one that can never be paid. Say in the report that **this PR
+      was reviewed by one reviewer rather than two, permanently**, which is the
+      true statement, rather than recording a debt against a branch nobody will
+      read again.
 
       A skip can land mid-cycle: when a recheck is owed after a triage,
       `suggestions.md` is still on disk, and exit 12 there skips the recheck,
@@ -833,37 +743,32 @@ same argument as never calling a branch clean because asking failed.
       exactly as the resume table requires.
 
       **The report says the recheck was skipped and the file cleaned up, not
-      that one is owed** — the same correction the paragraph above makes for
-      the whole-loop case, missed here when that one was written. Step 7
-      removes `suggestions.md` and merges, so a recheck booked as outstanding
-      is work no later run can perform and no branch will carry. Name the
-      verification that did not happen; do not record it as a debt.
+      that one is owed.** Step 7 removes `suggestions.md` and merges, so a
+      recheck booked as outstanding is work no later run can perform and no
+      branch will carry. Name the verification that did not happen; do not
+      record it as a debt.
 
-      **Egress is confined since #17**: the reviewer runs on an internal
-      network and reaches `api.x.ai` and `auth.x.ai` through a CONNECT-only
-      proxy the script brings up beside it, and nothing else. The script and
+      **Egress is confined**: the reviewer runs on an internal network and
+      reaches `api.x.ai` and `auth.x.ai` through a CONNECT-only proxy the
+      script brings up beside it, and nothing else. The script and
       `docs/harness-boundaries.md` carry the mechanism; what stands is the
-      credential residual below, narrower than it was.
+      credential residual below.
 
-      **One credential does cross, and this paragraph used to say none did
-      (#58).** No `gh` token, no SSH keys and no host filesystem beyond the
-      clone — all three genuinely absent — but when `XAI_API_KEY` is unset or
-      unusable the script copies `~/.grok/auth.json`, `agent_id` and
-      `config.toml` in, and `auth.json` carries a **refresh-token-bearing OAuth
-      session for the x.ai account**. Anything running in the container can read
-      it, and can now post it to the two hosts the session is for and nowhere
-      else. **The two halves of the residual were never independent**: the
-      open egress half was exactly what made the credential that crosses
-      exploitable, which is why it was the half to close, and a reader who
-      stopped at "the credential half is closed" stopped one file short of
-      the mount.
+      **One credential does cross.** No `gh` token, no SSH keys and no host
+      filesystem beyond the clone — all three genuinely absent — but when
+      `XAI_API_KEY` is unset or unusable the script copies
+      `~/.grok/auth.json`, `agent_id` and `config.toml` in, and `auth.json`
+      carries a **refresh-token-bearing OAuth session for the x.ai account**.
+      Anything running in the container can read it, and can post it to the
+      two hosts the session is for and nowhere else. **The two halves of the
+      residual are not independent**: open egress is what would make the
+      credential that crosses exploitable, which is why egress is the half
+      that is closed.
 
       **Prefer `XAI_API_KEY`** — scoped and revocable — and treat the OAuth
       mount as the fallback it is rather than an equivalent path. The script
       already tries the key first; that ordering is the posture, not an
-      implementation detail. On this host the key authenticates against a team
-      with no credits, so the OAuth path is the one that actually runs, which
-      is the case worth knowing rather than the case worth assuming.
+      implementation detail.
 
       The reviewer also has **no .NET SDK**, so `dotnet test` is the
       host's gate, not the review's; the licence gate is stdlib Python and
@@ -898,15 +803,14 @@ same argument as never calling a branch clean because asking failed.
       commit the review record itself. Push the branch by name so the next
       Grok pass (and the PR) reads the fixed state, and go back to (1).
 
-   One exit short of clean, reported rather than looped past — and one row
-   that used to be a second:
+   How the loop ends, reported rather than looped past:
 
-   - **A `Needs a decision` row** from `/review-grok` no longer stops
-     anything. That status exists because the finding is a judgement, and this
-     chain now makes the judgement: take the option the surrounding argument
-     supports, **write the answer into the resolution record beside the row**
-     so the reasoning outlives the run, and continue to the recheck. The row
-     is reported with the option taken and the option rejected. What must not
+   - **A `Needs a decision` row** from `/review-grok` does not stop anything.
+     That status exists because the finding is a judgement, and this chain
+     makes the judgement: take the option the surrounding argument supports,
+     **write the answer into the resolution record beside the row** so the
+     reasoning outlives the run, and continue to the recheck. The row is
+     reported with the option taken and the option rejected. What must not
      happen is the quiet version — a row silently reclassified as `Fixed`,
      which loses both the question and the answer.
    - **Two consecutive clean rounds end it; `CEILING` is the ceiling.**
@@ -915,11 +819,11 @@ same argument as never calling a branch clean because asking failed.
      with nothing to write, or a recheck that removes the file; step 6 states
      its own clean in its own vocabulary and ends on one of them, by decision,
      with the cost named where the rule is. One clean round is not
-     convergence: PR-11's Copilot round eight was clean and every round after
-     it found more, so a rule ending on the first clean pass would have
-     stopped at exactly the round that proves it should not. Requiring two
-     also subsumes "never end on a round that produced a fix", since a round
-     with findings is not clean and resets the count.
+     convergence: a clean round can be followed by rounds that find more, so
+     a rule ending on the first clean pass stops at exactly the round that
+     should not end it. Requiring two also subsumes "never end on a round
+     that produced a fix", since a round with findings is not clean and
+     resets the count.
 
      Failing that, stop when `grok-ledger.sh <n> count` reaches `CEILING`
      and hand over what survives — saying plainly that the loop ended on its
@@ -927,54 +831,43 @@ same argument as never calling a branch clean because asking failed.
      and only one of them is evidence.
 
      **Step 5's ceiling is a count of Grok checks per PR, not per session**,
-     and the two loops no longer share a number: this one carries `CEILING`
+     and the two loops do not share a number: this one carries `CEILING`
      from `grok-ledger.sh`, step 6 carries its own. Every
      `grok-review.sh` invocation is one check — a full review and a recheck
      count the same — and this loop's ceiling is **no more of them against one
      PR than the ledger declares**, carried across resumed `/ship` runs rather
-     than reset
-     each time the chain re-enters. A skip on limits (exit 12) is not a check
-     and does not count; a review that ran and reported does.
+     than reset each time the chain re-enters. A skip on limits (exit 12) is
+     not a check and does not count; a review that ran and reported does.
 
-     **The reservation is `grok-review.sh`'s, not yours, and that is the
-     correction rather than a detail of where a line moved.** This paragraph
-     used to specify the discipline as prose — write the ledger before the
-     model call, then invoke the review helper — over two separately granted
-     commands, and neither half was enforced: `grok-review.sh` never touched
-     the ledger, and `release` was accepted for any slot at any time without
-     any skip having occurred. So a run that invoked the review without
-     reserving spent a check that left no record, and an agent that misread a
-     failed round as a skip could hand spent budget back. **A stated bound that
-     any ordering mistake lifts is not a bound.** Invocation and accounting are
-     one operation now: the helper posts the reservation itself, and
+     **The reservation is `grok-review.sh`'s, not yours** — invocation and
+     accounting are one operation, for the reason (1) gives — and
      `.claude/settings.json` denies the `reserve` and `release` spellings to
      this session, leaving `count`, `status` and `converge` as the only ledger
-     verbs you invoke.
+     verbs you invoke. Denying `release` is what stops a failed round misread
+     as a skip from handing spent budget back. **A stated bound that any
+     ordering mistake lifts is not a bound.**
 
      A reservation is an election, not just a write: two resumed runs can read
      the same count and claim the same slot, so the ledger settles it after
      posting — **the first reservation posted after that slot's most recent
-     release wins**, and a losing claim spends nothing. Not "the earliest
-     comment", which is what this said and is the rule the fold was rewritten
-     to discard: first-ever would refuse a legitimately re-spendable slot
-     forever while `count` kept naming it as next. The two readings coincide
-     for a never-released slot, which is the case this paragraph is otherwise
-     about — so the wrong one *reads* correctly here, and anyone reconciling
-     the ledger to this file would have restored the defect. That arrives here as the helper's **exit 13**, and it
-     means a concurrent `/ship` is mid-check on this PR, so stop the loop and
-     say so — never take the next slot instead: two Grok runs share one root
-     `suggestions.md`, and the later finisher would overwrite the earlier's
-     findings or pass off its rival's clean pass as its own convergence.
+     release wins**, and a losing claim spends nothing. Not the earliest
+     comment ever: that would refuse a legitimately re-spendable slot forever
+     while `count` kept naming it as next. That arrives here as the helper's
+     **exit 13**, and it means a concurrent `/ship` is mid-check on this PR,
+     so stop the loop and say so — never take the next slot instead: two Grok
+     runs share one root `suggestions.md`, and the later finisher would
+     overwrite the earlier's findings or pass off its rival's clean pass as
+     its own convergence.
 
      **The two orders fail in opposite directions and only one is safe** —
      written after, an interrupted run has spent the check and left no record,
-     and the resumed run spends a thirteenth; written before, the worst case is
-     a reservation for a check that never ran, which wastes one slot and
-     never exceeds the ceiling. The helper writes it immediately before the
-     review's own `docker run`, which is what makes the accounting tight:
-     **every path that can refuse before that line spends nothing** — a dirty
-     tree, no daemon, a missing credential, a bad `suggestions.md` shape, and
-     all three usage-limit skips.
+     and the resumed run spends one more than the ceiling; written before, the
+     worst case is a reservation for a check that never ran, which wastes one
+     slot and never exceeds the ceiling. The helper writes it immediately
+     before the review's own `docker run`, which is what makes the accounting
+     tight: **every path that can refuse before that line spends nothing** — a
+     dirty tree, no daemon, a missing credential, a bad `suggestions.md`
+     shape, and all three usage-limit skips.
 
      **Tight rather than exact, and the difference is one deliberate case.** The
      ledger posts its comment and then reads to settle the election, so a
@@ -982,115 +875,68 @@ same argument as never calling a branch clean because asking failed.
      helper exits 13 before the model call. That stays: after a failed read the
      state is precisely what is not known, and releasing on it would return a
      slot on the strength of a lookup that did not complete. The cost is bounded
-     at one check; guessing the other way is not bounded at all. So **exit 12 no
-     longer posts a release**, because it has no
-     reservation to give one back for; the verb survives for a human
-     reconciling a slot spent wrongly, and for `count`, which must still fold a
-     released row out of a PR's existing history.
+     at one check; guessing the other way is not bounded at all. **Exit 12
+     posts no release**, because it has no reservation to give back; the verb
+     survives for a human reconciling a slot spent wrongly, and for `count`,
+     which must still fold a released row out of a PR's existing history.
 
      A resumed run reads the count with `grok-ledger.sh <n> count`, which
      accepts only the ledger's line shapes from write-verified authors and
-     counts an unreleased reservation as spent. **That read had its own
-     fail-open and no longer has it**: the trust check's `exit 3` fired inside
-     a subshell, so the `awk` on the other side of the pipe saw EOF, ran its
-     END block and printed `0` — "nothing spent", which re-arms the very cap
-     the helper enforces — and only then did the non-zero status arrive. The
-     read is buffered now and publishes nothing on its error path, but the
-     rule for the caller is unchanged and is the one that would have caught it
-     anyway: **a ledger read or write that fails stops the chain, and its
-     stdout is not an answer.** The ledger goes through its own fixed
-     helper for the same reason the Copilot request does: a
-     `Bash(gh pr comment:*)` grant would also license `--edit-last`,
-     `--delete-last` and `--repo` —
-     editing history and writing across repositories — where the helper can
-     post exactly the lines above to a PR of this repository, and is
-     edit-denied to the session that invokes it. Keep the running count in
-     the report as well — the report line is for the reader, the ledger is
-     for the machine — and when the last slot is spent, stop and say the PR
-     reached its Grok ceiling. When the loop ends clean instead, say so on
-     the ledger — `grok-ledger.sh <n> converge <N>` — because a resumed run
-     reading bare spend at the ceiling cannot tell convergence from
-     exhaustion, and the difference is whether it reports the Grok half
-     finished or blocked.
+     counts an unreleased reservation as spent. **A ledger read or write that
+     fails stops the chain, and its stdout is not an answer**: a failed read
+     that printed a count would print "nothing spent", which re-arms the very
+     cap the helper enforces. The ledger goes through its own fixed helper for
+     the same reason the Copilot request does: a `Bash(gh pr comment:*)` grant
+     would also license `--edit-last`, `--delete-last` and `--repo` — editing
+     history and writing across repositories — where the helper can post
+     exactly the lines above to a PR of this repository, and is edit-denied to
+     the session that invokes it. Keep the running count in the report as
+     well — the report line is for the reader, the ledger is for the
+     machine — and when the last slot is spent, stop and say the PR reached its
+     Grok ceiling. When the loop ends clean instead, say so on the ledger —
+     `grok-ledger.sh <n> converge <N>` — because a resumed run reading bare
+     spend at the ceiling cannot tell convergence from exhaustion, and the
+     difference is whether it reports the Grok half finished or blocked.
 
-     The ceiling — then one number shared by both loops, where the two now
-     differ — was three, and three was wrong. By its seventh Copilot round
-     PR-11's findings had gone 10 → 4 → 3 → 1 → 1 → 3 → 1, every one accepted,
-     and rounds four through seven caught a documented-but-unenforced
-     constraint, an assertion that could not fail in one direction, and a
-     fail-open in the script's own manifest check — three defects three rounds
-     would have shipped. The loop then ran past twelve and kept finding things,
-     including a *clean* round eight after which every further round found
-     more.
+     **The ceiling's size and what happens at it are two questions.** A loop
+     still finding real things has not converged, and a small ceiling ships
+     what later rounds would have caught — that is the argument against a
+     small `CEILING`. What it cannot say is *keep going*: a budget that yields
+     whenever the rate is still flat is not a budget, so step 7 merges at the
+     ceiling.
 
-     **That argument is about the ceiling's size, not about what happens when
-     it is reached, and the two used to be run together.** It says twelve
-     rather than three, because a loop that is still finding real things has
-     not converged and a small number ships defects. What it cannot say is
-     *keep going*: a budget that yields whenever the rate is still flat is not
-     a budget. So the number is high and step 7 merges at it, and the sentence
-     that used to close this paragraph — a ceiling is for a reviewer and a
-     triager disagreeing, never for a loop still finding real things — is
-     gone, because it read as an instruction and the instruction it implied
-     contradicted step 7.
+     **What that costs, stated plainly.** Merging at a flat ceiling ships a
+     branch its reviewer had more to say about, and the report says so with
+     the per-round numbers behind it. That is the trade this chain takes when
+     it stops asking a person: bounded review, honestly measured, rather than
+     an unbounded loop nobody is waiting on.
 
-     **What survives is the cost, stated plainly.** Merging at a flat ceiling
-     ships a branch its reviewer had more to say about, and the report says so
-     with the per-round numbers behind it. That is the trade this chain takes
-     when it stops asking a person: bounded review, honestly measured, rather
-     than an unbounded loop nobody is waiting on.
+     **The ceiling is whatever `CEILING` declares, and the caller owns the
+     budget.** What a small one means in practice is that **the
+     two-clean-passes rule will more often lose to the ceiling**, since a
+     recheck and a full pass each spend a slot — so a branch with findings in
+     round one has few chances to converge before the budget is gone. Report
+     which of the two ended the loop, and never round a ceiling up into
+     convergence.
 
-     **The ceiling is whatever `CEILING` declares — the caller set it, and the
-     paragraphs above are the argument against a small one.** They are left
-     standing rather than rewritten: PR-11's rounds four through seven each
-     caught a real defect, and its round eight was clean with every later round
-     finding more — so the recorded evidence said a small ceiling ships
-     defects, and that the figure the caller asked for was nearer three than
-     twelve. That is the cost of the change, not a reason the change is wrong;
-     the caller owns the budget. What it means in
-     practice is that **the two-clean-passes rule will more often lose to the
-     ceiling**, since a recheck and a full pass each spend a slot — so at
-     the ceiling the caller chose, a branch with findings in round one has
-     very few chances to converge before the budget is gone. Report which of
-     the two ended the loop, and never round a ceiling up into convergence.
+     **The helpers enforce it, and this file does not.** `grok-ledger.sh`
+     declares `CEILING` once and refuses a reservation above it;
+     `grok-review.sh` **reads that declaration** rather than restating it, so
+     there is no second literal to drift. A slot above it is refused by both,
+     before anything is asked of GitHub. **Do not restate the number here**:
+     a second copy of the bound is the defect a single declaration exists to
+     prevent. The loop's stop condition is whatever
+     `grok-ledger.sh <n> count` returns against `CEILING` — read them, do not
+     carry them.
 
-     **The enforcement half binds it now (#140), and this file is no longer
-     the thing that does.** `grok-ledger.sh` declares `CEILING` once and
-     refuses a reservation above it; `grok-review.sh` **reads that
-     declaration** rather than restating it, so there is no second literal to
-     drift. A slot above it is refused by both, before anything is asked of
-     GitHub. This paragraph used to say the opposite and is the record of the
-     gap closing, not of it standing.
-
-     **Do not restate the number here.** The one thing this file must not
-     become again is a second copy of the bound — that *was* #140, one figure
-     here against another there, and the fix was to give the value one home.
-
-     **This paragraph quoted it anyway, in the sentence forbidding the quote.**
-     It read ``declares `CEILING=6` once``, and the operational lines around it
-     counted in sixes — "this one carries six", "when the sixth is spent",
-     "six for Grok". Raised in review, and it is the restated-total failure
-     this repository keeps recording, arriving inside the rule against it. The
-     enforcement is `CEILING`, and the loop's stop condition is whatever
-     `grok-ledger.sh <n> count` returns against it — read them, do not carry
-     them.
-
-     **The migration is why reading and writing are not symmetric, and a later
-     change to the ceiling has to keep it that way.** `/12` is part of the
-     ledger's *comment format*, not merely a bound, so narrowing the read to
-     the new value orphans every row already posted — `count` matches none of
-     them, reads zero, and re-arms the cap on a pull request that has spent it,
-     which is the fail-open the ledger exists to refuse arriving through its own
-     fix. So `LEDGER_DENOMINATORS` keeps **every** denominator this ledger has
-     ever written and only the write moves. `test_grok_helpers.py`'s
-     `TheCeilingBindsAndTheReadStaysWider` covers a ledger holding both shapes,
-     and it was observed red against a deliberately narrowed filter — four of
-     its cases, not the one that a pattern assertion alone would have caught.
-
-     **Reverting this file to twelve was the other way to make the two halves
-     agree, and it was not taken.** The caller asked for six; a reviewer's
-     preference for a consistent pair does not outrank that, and the direction
-     of the disagreement was the safe one while it stood.
+     **Reading and writing are not symmetric, and a change to the ceiling has
+     to keep it that way.** The denominator is part of the ledger's *comment
+     format*, not merely a bound, so narrowing the read to a new value orphans
+     every row already posted — `count` matches none of them, reads zero, and
+     re-arms the cap on a pull request that has spent it, which is the
+     fail-open the ledger exists to refuse. So `LEDGER_DENOMINATORS` keeps
+     **every** denominator this ledger has ever written and only the write
+     moves.
 
    A grok invocation that fails outright — not installed, not authenticated,
    the command not found — is reported as the loop not having run, never
@@ -1109,14 +955,9 @@ same argument as never calling a branch clean because asking failed.
    | Skipped on limits | Quota, not a verdict; reported as skipped, and final |
    | Unconverged at the ceiling | A budget ran out, which is not a reason to withhold the second reviewer |
 
-   **The third row was missing and step 7 asserted it anyway.** That step opens
-   by saying both loops have finished — *clean, all-resolved, skipped on
-   limits, or unconverged at a ceiling* — while this step admitted only the
-   first two, so a Grok loop that spent its last check reached an assertion
-   nothing could satisfy and the chain simply had no next instruction. Step 7
-   already argues that a ceiling is a budget running out rather than a
-   verdict, and that argument applies here first: a branch Grok had more to
-   say about is the last one to skip a second reviewer over.
+   Step 7 argues that a ceiling is a budget running out rather than a verdict,
+   and that argument applies here first: a branch Grok had more to say about is
+   the last one to skip a second reviewer over.
 
    1. **Request GitHub's Copilot review** on the PR:
 
@@ -1126,15 +967,14 @@ same argument as never calling a branch clean because asking failed.
 
       The helper removes the reviewer, then re-adds it — after a landed
       review a plain POST enters a stale-reviewer state where the API
-      returns the PR object and registers nothing, observed live four times
-      in a row, while delete-then-post registered immediately. Its endpoint,
-      method and body are fixed and its one parameter is shape-checked,
-      which is why the frontmatter grants the *helper* and not `gh api`: a
-      `Bash` rule matches a command prefix, so any raw-`gh api` grant —
-      however narrow the path looks — still licenses method flags and
-      payloads the deny rules never contemplated. The scripts under
-      `.claude/scripts/` are the whole API surface this loop can touch, and
-      they are **edit-denied to the session that runs them** —
+      returns the PR object and registers nothing, while delete-then-post
+      registers immediately. Its endpoint, method and body are fixed and its
+      one parameter is shape-checked, which is why the frontmatter grants the
+      *helper* and not `gh api`: a `Bash` rule matches a command prefix, so
+      any raw-`gh api` grant — however narrow the path looks — still licenses
+      method flags and payloads the deny rules never contemplated. The scripts
+      under `.claude/scripts/` are the whole API surface this loop can touch,
+      and they are **edit-denied to the session that runs them** —
       `.claude/settings.json` denies `Edit(.claude/scripts/**)`, so a
       granted name means the helper as reviewed, and widening one is a
       human's edit to a reviewed file, made with the deny lifted. (The deny
@@ -1166,10 +1006,9 @@ same argument as never calling a branch clean because asking failed.
       what it got.** The effort level is a repository admin setting —
       Settings → Copilot → Code review → **Review effort level**, two tiers,
       rendered in the timeline as "lite" and "balanced" — and no API field
-      carries it: the REST event and the GraphQL types were introspected
-      live and hold nothing. Left unset, GitHub routes by content, and the
-      routing was observed doing exactly what its changelog implies: a
-      27-file C# PR drew balanced, a six-file docs PR drew lite.
+      carries it, in the REST event or the GraphQL types. Left unset, GitHub
+      routes by content, so a small change can draw lite where a large one
+      draws balanced.
 
       So each round, read the tier from the PR timeline's own wording
       ("requested a *lite* review") and put it in the report. **A clean
@@ -1191,8 +1030,8 @@ same argument as never calling a branch clean because asking failed.
    3. **Count the new findings — suppressed ones included.** A review that
       "generated no new comments" can still carry a `Suppressed comments`
       block, and `/review-copilot` reads those on the same bar as inline
-      threads; every real finding against this command's own machinery
-      arrived suppressed. **Zero findings in the review is necessary, not
+      threads; findings against this command's own machinery arrive
+      suppressed. **Zero findings in the review is necessary, not
       sufficient**: a resumed run can carry an `Ask` thread from an earlier
       round that a fresh clean review never repeats, so before declaring the
       loop done, list the PR's unresolved review threads with
@@ -1218,14 +1057,12 @@ same argument as never calling a branch clean because asking failed.
       for it and judge on that review, rather than declaring the state from
       the round before.
 
-      **All of that weight now sits on the definition of clean, so read it
-      strictly.** Clean is three things at once: no inline comments, an empty
-      or absent suppressed block, and no unresolved threads. The last two are
-      the ones that get skipped, and both have been — PR-11 posted "generated
-      no new comments" above a suppressed finding worth fixing on rounds four,
-      five and six, and under this rule each of those rounds would have ended
-      the loop had the block gone unread. A second round used to be the net
-      under that mistake and no longer is.
+      **One clean round ends this loop, so read clean strictly.** Clean is
+      three things at once: no inline comments, an empty or absent suppressed
+      block, and no unresolved threads. The last two are the ones that get
+      skipped: a review can read "generated no new comments" above a
+      suppressed finding worth fixing, and no second round is there to catch
+      a block that went unread.
 
       **Anything short of all three is a round with findings.** Run
       `/review-copilot` **paused at its marker step**: let it
@@ -1240,11 +1077,11 @@ same argument as never calling a branch clean because asking failed.
       request reviews the fixed state, and go back to (1).
 
    **This loop does not share step 5's stopping condition, and the asymmetry
-   is the point rather than an oversight.** It ends on the **first** clean
-   round, marked all-resolved, where step 5 still wants two.
+   is deliberate.** It ends on the **first** clean round, marked all-resolved,
+   where step 5 still wants two.
 
-   **An `Ask` thread is answered here rather than left open**, which is a
-   change to what `/review-copilot` does on its own. That command leaves one
+   **An `Ask` thread is answered here rather than left open**, which departs
+   from what `/review-copilot` does on its own. That command leaves one
    open by design, because an unresolved thread is how a genuine ambiguity
    reaches a person; this chain has nobody to reach, so it decides, posts the
    decision and the rejected alternative **as a reply on the thread**, marks it
@@ -1256,37 +1093,31 @@ same argument as never calling a branch clean because asking failed.
    default.** `/review-copilot` defines it as claiming the fix is committed, so
    an `Ask` answered by taking the no-change option is marked **`rejected`**,
    after the reply that argues why. Marking that thread `done` writes a commit
-   into the record that does not exist — and this repository already says a
-   marker running ahead of its fix is worse than no marker, because it is the
-   line a reviewer trusts instead of checking. Deciding an `Ask` does not make
-   every `Ask` an acceptance.
+   into the record that does not exist — and a marker running ahead of its fix
+   is worse than no marker, because it is the line a reviewer trusts instead
+   of checking. Deciding an `Ask` does not make every `Ask` an acceptance.
 
-   The mechanical reason is worth knowing too: all-resolved is defined over
-   *no unresolved threads*, so an `Ask` left open by round three is still open
-   at round eleven. Left alone it does not stop this loop once — it stops it
-   every subsequent round, and the loop runs to its ceiling with nothing new
-   to fix. The ceiling is unchanged:
-   twelve requested-review rounds per PR, counted from the timeline's
-   `review_requested` events, the ones `copilot-request-count.sh` already
-   proves each request by, so a resumed run recovers the count with no ledger
-   at all. The outcomes are recoverable the same way — the landed reviews
-   carry their comments and suppressed blocks and the thread list its
-   unresolved threads — so a run that finds itself at the ceiling reads the
-   last landed review before declaring the loop unconverged; the count alone
-   cannot say which it was. A request that registers no review inside a
-   reasonable wait is reported as the loop not having finished, never marked
-   clean by timeout.
+   Left open, an `Ask` stops this loop not once but every subsequent round
+   (*It runs to the end*). The ceiling is twelve requested-review rounds per
+   PR, counted from the timeline's `review_requested` events, the ones
+   `copilot-request-count.sh` already proves each request by, so a resumed run
+   recovers the count with no ledger at all. The outcomes are recoverable the
+   same way — the landed reviews carry their comments and suppressed blocks and
+   the thread list its unresolved threads — so a run that finds itself at the
+   ceiling reads the last landed review before declaring the loop unconverged;
+   the count alone cannot say which it was. A request that registers no review
+   inside a reasonable wait is reported as the loop not having finished, never
+   marked clean by timeout.
 
-   **The cost of stopping at one is on the record, and it is Copilot's own.**
-   This loop's findings arrive in the suppressed block long after the inline
-   ones dry up, and they do not taper the way a disagreement does: PR-11's
-   round eight came back clean and every round after it found more, which is
-   the case a second round was there to catch and this rule gives up. What
-   carries the weight instead is the strict definition of clean above — inline,
-   suppressed and threads, all three — and the ceiling behind it. So the loop
-   is now fast where it was thorough, and the one way to make that a bad trade
-   is to read "generated no new comments" as the verdict rather than opening
-   the block underneath it.
+   **The cost of stopping at one is Copilot's own.** This loop's findings
+   arrive in the suppressed block long after the inline ones dry up, and they
+   do not taper the way a disagreement does: a clean round can be followed by
+   rounds that find more, which is the case a second round would catch and
+   this rule gives up. What carries the weight instead is the strict
+   definition of clean above — inline, suppressed and threads, all three — and
+   the ceiling behind it. So the loop is fast rather than thorough, and the one
+   way to make that a bad trade is to read "generated no new comments" as the
+   verdict rather than opening the block underneath it.
 
    Two rounds is still available and costs one line: request another before
    declaring all-resolved on a branch that wanted scrutiny — a lite-tier
@@ -1304,37 +1135,32 @@ same argument as never calling a branch clean because asking failed.
    Report the state plainly — findings per round and whether the rate was
    still flat when the budget ran out is the useful signal — and merge.
 
-   **`suggestions.md` goes first, before the gates**, and where it used to go
-   is the whole of round 10's second finding:
+   **`suggestions.md` goes first, before the gates:**
 
    ```bash
    rm -f suggestions.md
    ```
 
-   **`-f` is doing the load-bearing work, and without it this line stopped the
-   chain on the *common* path.** A Grok loop that converged deleted the file
-   itself, so the ordinary run reaches here with nothing to remove, `rm` exits
-   non-zero, and the helper-failure rule ends the run one gate short of the
-   merge — a clean review producing a worse outcome than an unconverged one.
-   The flag is narrow enough to grant exactly: the path is a fixed literal, so
-   `-f` buys only the missing-file case and no recursion, no glob and no
-   second argument.
+   **`-f` is load-bearing.** A Grok loop that converged deleted the file
+   itself, so the ordinary run reaches here with nothing to remove; a bare
+   `rm` would exit non-zero, and the helper-failure rule would end the run one
+   gate short of the merge — a clean review producing a worse outcome than an
+   unconverged one. The flag is narrow enough to grant exactly: the path is a
+   fixed literal, so `-f` buys only the missing-file case and no recursion, no
+   glob and no second argument.
 
-   **Removing it after the merge made the workspace gate unsatisfiable.** A
-   Grok loop that ended unconverged or was skipped mid-cycle leaves that file
-   on disk deliberately; the gate below reads `git status --short` and wants
-   it empty; and the retry path is a **scoped** commit, which by construction
-   never takes untracked scratch. So the run would have gone round for ever —
-   gate dirty, re-enter exhausted loops, gate dirty — and never reached the
-   line that removes it. A live loop, introduced one round earlier by the fix
-   that added the gate.
+   **Removing it before the gates is what keeps the workspace gate
+   satisfiable.** A Grok loop that ended unconverged or was skipped mid-cycle
+   leaves that file on disk deliberately; the gate below reads
+   `git status --short` and wants it empty; and the retry path is a **scoped**
+   commit, which by construction never takes untracked scratch. Removed any
+   later, the run would go round for ever — gate dirty, re-enter exhausted
+   loops, gate dirty — and never reach the line that removes it.
 
-   **Excluding it from the gate was the other option and this is the better
-   one, because it removes a state instead of a symptom.** With the file gone
-   first, a merged PR always has a clean workspace — so the interruption
-   window that used to leave *merged plus one untracked file* cannot arise,
-   and step 0 needs no special case for it. One carve-out avoided in the gate,
-   one dead branch avoided in step 0.
+   **Removing it beats excluding it from the gate, because it removes a state
+   instead of a symptom.** With the file gone first, a merged PR always has a
+   clean workspace — so an interruption cannot leave *merged plus one
+   untracked file*, and step 0 needs no special case for it.
 
    **This is the one place the file may be deleted from here, and only because
    the loop is over.** Step 5 forbids writing or deleting it while
@@ -1352,15 +1178,13 @@ same argument as never calling a branch clean because asking failed.
    git log <headRefOid>..HEAD      # empty: this workspace holds nothing extra
    ```
 
-   **The first two read the remote and the last two read the workspace, and
-   until round 9 only the remote half existed.** `headRefOid`, the checks and
-   `--match-head-commit` all agree happily about a head this checkout has
-   since moved past: a commit made after the last review, or an edit made
-   while the loops ran, satisfies none of them and is invisible to all three.
-   The merge then succeeds for the older head and the teardown removes the
+   **The first two read the remote and the last two read the workspace.**
+   `headRefOid`, the checks and `--match-head-commit` all agree happily about
+   a head this checkout has since moved past: a commit made after the last
+   review, or an edit made while the loops ran, is invisible to all three.
+   The merge would then succeed for the older head and the teardown remove the
    worktree, stranding the newer work on a merged branch — step 0's whole
-   argument, arriving at the other end of the run because the step that
-   destroys a workspace was not reading it.
+   argument, arriving at the other end of the run.
 
    **`git log <headRefOid>..HEAD` is the read rather than an equality**, and
    the asymmetry is deliberate: a HEAD carrying anything the remote lacks is
@@ -1368,24 +1192,21 @@ same argument as never calling a branch clean because asking failed.
    something the merge will not take rather than whether the two match.
 
    **That read needs the oid to exist here, which is why the branch is
-   fetched.** Nothing in this chain ever fetched the feature branch, so a
-   checkout another session had pushed to held neither the commits nor the
-   SHA — and `git log <headRefOid>..HEAD` fails outright on an object it has
-   never seen. The gate would have stopped on a missing revision rather than
-   answered.
+   fetched.** A checkout another session has pushed to holds neither the
+   commits nor the SHA, and `git log <headRefOid>..HEAD` fails outright on an
+   object it has never seen — the gate would stop on a missing revision rather
+   than answer.
 
    ```bash
    git fetch origin <branch>
    ```
 
-   **Being behind is not harmless, and calling it that was the mistake this
-   paragraph made.** It is true that a behind HEAD strands nothing. It is also
-   true that both review loops read the working tree — `grok-review.sh` clones
-   it — so a stale checkout means Grok reviewed commits the PR no longer has
-   and reported on a branch that does not exist upstream. The fetch and a
-   `git pull --ff-only` therefore belong **before step 5**, not only here:
-   reviewing the wrong tree is a wasted round of somebody's budget, and the
-   budget is small.
+   **Being behind strands nothing, but it is not harmless.** Both review loops
+   read the working tree — `grok-review.sh` clones it — so a stale checkout
+   means Grok reviewed commits the PR no longer has and reported on a branch
+   that does not exist upstream. That is why the fetch and a
+   `git pull --ff-only` also run **before step 5**: reviewing the wrong tree
+   is a wasted round of somebody's budget, and the budget is small.
 
    **A fast-forward that will not fast-forward is divergence**, which is
    another session's history against this one's, and it stops the chain for
@@ -1409,9 +1230,9 @@ same argument as never calling a branch clean because asking failed.
    while any is pending — so on the ordinary path, a push followed
    immediately by this gate reads pending, the chain treats a non-zero exit as
    a step that did not run, and it stops one line short of the merge it exists
-   to perform. The rule above says to wait for the run on the pushed head;
-   `--watch` is the spelling that actually does, and `--fail-fast` returns the
-   moment one check fails rather than sitting out the rest.
+   to perform. The rule is to wait for the run on the pushed head; `--watch`
+   is the spelling that actually does, and `--fail-fast` returns the moment
+   one check fails rather than sitting out the rest.
 
    **`headRefOid` is read here, before the checks and before the merge**, and
    it is the `<oid>` the merge below matches on. Reading it afterwards would
@@ -1424,16 +1245,14 @@ same argument as never calling a branch clean because asking failed.
    question about the caller's tree that this chain cannot answer. Either one
    stops here and is reported as what it is.
 
-   **Read `state` on every pass of the poll, before `mergeable`.** The two
-   arrive in the same call and only one of them was being used. A PR closed or
-   merged elsewhere while the review loops ran — and those loops are the long
-   part of this chain — may stop having its mergeability computed at all, so a
-   poll that waits for `MERGEABLE` and never asks what the PR *is* waits for
-   ever. The two states have handling already, three hundred lines up, and the
-   poll would have sat below both of them:
+   **Read `state` on every pass of the poll, before `mergeable`.** A PR closed
+   or merged elsewhere while the review loops ran — and those loops are the
+   long part of this chain — may stop having its mergeability computed at all,
+   so a poll that waits for `MERGEABLE` and never asks what the PR *is* waits
+   for ever. Both states already have handling:
 
-   - **`CLOSED`** is the sixth stop, for the reason the resume table gives:
-     somebody decided this branch does not land.
+   - **`CLOSED`** is the closed-unmerged stop, for the reason the resume table
+     gives: somebody decided this branch does not land.
    - **`MERGED`** means another route got there first. Skip the merge — there
      is nothing left to merge — verify it the way the teardown does, from
      `state` and `mergeCommit`, and go straight to the workspace half of this
@@ -1449,9 +1268,9 @@ same argument as never calling a branch clean because asking failed.
    the answer still being worked out. Poll while it reads `UNKNOWN`, and take
    `headRefOid` from the **same read that finally answered**, not from the
    first: a run that captured the oid up front and then waited would bind the
-   merge to a head that a push during the wait had already replaced, which is
-   the guard from two paragraphs down defeated by the loop above it. Only a
-   *known* non-mergeable result stops the chain.
+   merge to a head that a push during the wait had already replaced, and the
+   merge would fail on a branch that was fine. Only a *known* non-mergeable
+   result stops the chain.
 
    **CI runs on the head commit, not on the PR**, so check the oid: a review
    round that pushed a fix invalidates the previous run, and `gh pr checks`
@@ -1480,27 +1299,21 @@ same argument as never calling a branch clean because asking failed.
    the only guard in this step that fails closed**, and it costs one argument.
 
    **The oid comes from the `pr-state.sh` read that returned a *known*
-   mergeability** — the last one of the poll above, not the first. This
-   sentence used to say "captured before polling", which was unambiguous when
-   the only wait in this step was the one on checks and became a
-   contradiction the moment mergeability grew a poll of its own: taken before
-   that wait, the oid could name a head a push during the wait had already
-   replaced, and the merge would fail on a branch that was fine.
-
-   **A push during the *checks* wait is a different matter, and there the
-   failure is the intended one.** That oid is deliberately not refreshed: the
-   whole point is that the checks were watched for one particular commit, so
-   anything arriving afterwards must not ride in on their verdict. The rule is
-   the same in both cases — the oid names the head the gates were satisfied
-   *for* — and the two waits differ only in whether they run before or after
-   the gate that produced it.
+   mergeability** — the last one of the poll above, not the first. **A push
+   during the *checks* wait is a different matter, and there the failure is
+   the intended one.** That oid is deliberately not refreshed: the whole point
+   is that the checks were watched for one particular commit, so anything
+   arriving afterwards must not ride in on their verdict. The rule is the same
+   in both cases — the oid names the head the gates were satisfied *for* — and
+   the two waits differ only in whether they run before or after the gate that
+   produced it.
 
    **The flag comes before the number, and that is about the grant rather than
    about `gh`.** The frontmatter permits `Bash(gh pr merge --merge:*)`, and a
    permission rule is a prefix match — `gh pr merge <n> --merge` does not start
    with it and is simply denied. `gh` itself accepts either order (cobra
-   intersperses flags and positionals, checked rather than assumed), so writing
-   it flag-first costs nothing and keeps the narrow grant usable.
+   intersperses flags and positionals), so writing it flag-first costs nothing
+   and keeps the narrow grant usable.
 
    `--squash` and `--rebase` are not alternatives to choose between here. The
    commits are the argument — `/commit` splits them so a reviewer can accept
@@ -1513,11 +1326,9 @@ same argument as never calling a branch clean because asking failed.
    chain that satisfied the goal by pushing to `main` would have defeated the
    rule rather than complied with it.
 
-   `suggestions.md` is already gone — removed above the gates rather than
-   here, which is what keeps `git worktree remove` from refusing an untracked
-   file on the forked path and keeps the in-place path from carrying it onto
-   `main`. Both of those were this line's original job; the gate finding moved
-   it earlier and it does that job better from there.
+   `suggestions.md` is already gone — removed above the gates, which also
+   keeps `git worktree remove` from refusing an untracked file on the forked
+   path and keeps the in-place path from carrying it onto `main`.
 
    Now put the workspace back the way step 0 wants to find it. **The order is
    the instruction**, and three of the seven lines depend on which outcome
@@ -1583,39 +1394,37 @@ including the push, which reports which of its three states it found even when
 that state was "nothing to do". Each review loop reports one line per round —
 findings raised, findings fixed, and what each round pushed — its running
 check count against its own ceiling, each read from where that ceiling is
-declared rather than restated here (the
-PR carries the durable copy: step 5's
+declared rather than restated here (the PR carries the durable copy: step 5's
 ledger comments, step 6's timeline events; the report line is the
 human-readable echo), and how it ended, in that loop's own vocabulary: step 5
 clean, skipped on limits (final — one reviewer, not two), or stopped
-unconverged; step 6
-**all-resolved, naming the review and the `commit` oid it read**, or stopped
-unconverged. Neither list has an ending that means "a finding stopped us" any
-more — a decided row and an answered `Ask` belong in the decisions section
-below, and filing one as a stop is the silent-decision failure this report
-exists to prevent. The oid is not
-decoration — it is the whole of step 6's marker, and a later `/ship` compares
-it against the pushed head to decide whether that loop is owed at all.
+unconverged; step 6 **all-resolved, naming the review and the `commit` oid it
+read**, or stopped unconverged. Neither list has an ending that means "a
+finding stopped us" — a decided row and an answered `Ask` belong in the
+decisions section below, and filing one as a stop is the silent-decision
+failure this report exists to prevent. The oid is not decoration — it is the
+whole of step 6's marker, and a later `/ship` compares it against the pushed
+head to decide whether that loop is owed at all.
 
-**Then the decisions.** Every place this chain answered a question that used to
-stop it gets a line: the check finding it reconciled and which side won, the
-`Needs a decision` row and the option rejected, the `Ask` thread and what was
-posted on it. This is the section that replaces the interruption, so a run that
-took decisions and lists none of them has not reported — it has hidden. A run
-that took none says so in one line.
+**Then the decisions.** Every place this chain answered a question that would
+otherwise have stopped it gets a line: the check finding it reconciled and
+which side won, the `Needs a decision` row and the option rejected, the `Ask`
+thread and what was posted on it. This is the section that replaces the
+interruption, so a run that took decisions and lists none of them has not
+reported — it has hidden. A run that took none says so in one line.
 
 **Then the merge and the workspace.** Whether the PR merged and its merge oid,
 the literal `gh pr merge` and `git worktree remove` lines that ran, flags and
 all, because those two grants admit a flag this file forbids and a report is
-the only place the forbidding is checkable;
-or which of the two gates stopped it; that `main` was pulled, the HEAD it is
-now at, and that that HEAD contains the merge oid — containment rather than
-equality, because a PR merging in between leaves `main` at a later descendant
-and nothing is wrong; the worktree removed, or the one left behind and why git
-refused it; and the merged branch still sitting in `git branch`.
+the only place the forbidding is checkable; or which of the two gates stopped
+it; that `main` was pulled, the HEAD it is now at, and that that HEAD contains
+the merge oid — containment rather than equality, because a PR merging in
+between leaves `main` at a later descendant and nothing is wrong; the worktree
+removed, or the one left behind and why git refused it; and the merged branch
+still sitting in `git branch`.
 
 A step skipped on an assumption gets its assumption restated here rather than
 left in the middle of the run, and a check that did not run is named. The whole
 value of chaining these commands is that the summary is still honest about each
-one — and now that nothing stops for a person, the report is the only place a
+one — and because nothing stops for a person, the report is the only place a
 person finds out what was decided on their behalf.

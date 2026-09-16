@@ -140,8 +140,8 @@ this branch did not touch, where the owner site is already correct.
      `bash .claude/scripts/dotnet-test.sh [all|fast]`
 
    **In the sandbox the second one is not available**, and that is deliberate
-   rather than an oversight: `dotnet test` has needed a Docker daemon since
-   PR-08's Testcontainers suite, so running it inside a container built to take
+   rather than an oversight: `dotnet test` needs a Docker daemon for its
+   Testcontainers suites, so running it inside a container built to take
    capability away would mean Docker-in-Docker. The licence gate is stdlib
    Python and does run there. So whether the suite is green is the **host's**
    to verify — report it as unverified rather than asserting it, and never
@@ -205,20 +205,16 @@ Always end with:
 Do not fix the findings in this command unless the user explicitly asks to
 apply them after the review.
 
-**That is enforced now, and used to be prose alone (#60).** This command
-declared "do not fix" while holding `Write` and `Edit` over every path
-`.claude/settings.json` did not deny — a read-only claim resting on prose while
-the grant permits writing everywhere, which for a review command is the worse
+**That is enforced, not prose alone.** A "do not fix" claim resting on prose
+while the grant holds `Write` and `Edit` over every path
+`.claude/settings.json` does not deny is, for a review command, the worse
 failure. The frontmatter's `disallowed-tools` path-scopes `Edit` away from
 every tracked tree, `docs/` included, **and from every tracked file at the
-repository root**.
-
-**The root files were the hole in the first version of this**, raised in review
-and worth stating rather than quietly patching: denying directories alone left
-`CLAUDE.md`, `global.json`, `Directory.Build.props` and `Platform.slnx`
-writable, which is a boundary with a gap exactly where this repository keeps
-its build inputs. A command promising not to fix findings could still apply one
-to root configuration.
+repository root** — denying directories alone would leave `CLAUDE.md`,
+`global.json`, `Directory.Build.props` and `Platform.slnx` writable, a
+boundary with a gap exactly where this repository keeps its build inputs, so
+a command promising not to fix findings could still apply one to root
+configuration.
 
 They are **enumerated** rather than denied wholesale, and `suggestions.md` is
 why: it lives at the root, it is this command's one legitimate output, and it
@@ -243,27 +239,23 @@ adds it. `test_grok_helpers.py` asserts the list covers every tracked
 top-level tree, which is what makes that a red build instead of a quiet
 widening.
 
-**That test can never see the case that mattered, and the reason is
-structural.** It reads `git ls-files`, so it enumerates what EXISTS; the
-dangerous file is one that does not. MSBuild imports `Directory.Build.targets`
-into every build of every project beneath it, and this command was granted
-`Write` and `dotnet build` at once — so creating a root file the enumeration
-could not contain, and then running the build the command already had, was host
-code execution. Measured: an `Exec` in an auto-imported `.targets` runs, and
-`dotnet build` reports success. Raised in review against the list as shipped.
+**That test cannot see a file that does not exist yet, and that is the
+dangerous one.** It reads `git ls-files`, so it enumerates what EXISTS. MSBuild
+imports `Directory.Build.targets` into every build of every project beneath
+it — an `Exec` in an auto-imported `.targets` runs, and `dotnet build` reports
+success — so `Write` beside a build grant is host code execution.
 
-Two changes close it, and they close different halves. The executor is now
-`dotnet-test.sh`, which fixes the solution and the flags — `dotnet build` was a
-grant this command never used, and `dotnet test:*` admitted both an arbitrary
-project path and `/p:CustomBeforeMicrosoftCommonTargets=<file>`, which imports
-whatever it is pointed at, `suggestions.md` included. And the auto-import
-surface itself is denied: every name MSBuild reads without being asked, in the
-exact spelling this file already uses, plus `**/*.targets`, `**/*.props`,
-`**/*.rsp`, `**/*.csproj`, `**/*.sln` and `**/*.slnx` for the class.
+Two changes close it, and they close different halves. The executor is
+`dotnet-test.sh`, which fixes the solution and the flags — a raw
+`dotnet test:*` grant admits both an arbitrary project path and
+`/p:CustomBeforeMicrosoftCommonTargets=<file>`, which imports whatever it is
+pointed at, `suggestions.md` included. And the auto-import surface itself is
+denied: every name MSBuild reads without being asked, in the exact spelling
+this file already uses, plus `**/*.targets`, `**/*.props`, `**/*.rsp`,
+`**/*.csproj`, `**/*.sln` and `**/*.slnx` for the class.
 
-**Which half is measured is worth saying.** The exact-filename form is the one
-this file has always used and the one the suite reads. The `**/` globs are the
-documented gitignore-style syntax and are **not** measured here — they are
-belt to the exact names' braces, so if that syntax turned out inert in a
-`disallowed-tools` value the demonstrated vector would still be closed. Do not
-read them as the control; read the names as the control.
+**The exact names are the control.** The exact-filename form is the one the
+suite reads. The `**/` globs are the documented gitignore-style syntax and are
+**not** verified here — they are belt to the exact names' braces, so if that
+syntax turned out inert in a `disallowed-tools` value the exact names would
+still close the vector. Do not read the globs as the control.

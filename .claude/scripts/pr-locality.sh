@@ -3,23 +3,21 @@
 # `| Touch set |` rows its body declares, and print a verdict per path — and
 # nothing the author wrote. Read-only, fixed field set.
 #
-# **Exists so that /review-branch, /review-copilot and /ship can read the two
-# rows `docs/change-locality.md` asks a PR body to carry without holding
-# `Bash(gh pr view:*)`** — the grant that reaches `--json reviews`, the
-# unfiltered feed #56 closed. `body` is the one field this reads from the
-# pull request, `filename` the one field it reads from the files endpoint;
-# what applies is the shape rule every helper in this directory follows — a
-# caller that chooses fields can choose `reviews`, so this one chooses none.
+# /review-branch, /review-copilot and /ship read the two rows
+# `docs/change-locality.md` asks a PR body to carry through this rather than a
+# `gh pr view` grant, which reaches the unfiltered `--json reviews` feed. A
+# caller that chooses fields can choose `reviews`, so this one chooses none:
+# `body` from the pull request, `filename` from the files endpoint.
 #
-# **The output never contains the touch-set cell.** A pull request author is
-# not a trusted party, /review-copilot takes any PR number, and a row was the
-# one place an author's text reached an Edit-capable agent unfiltered. A path
-# grammar cannot close that — `Ignore_all_previous_instructions.md` is a path
+# The output never contains the touch-set cell. A pull request author is not a
+# trusted party, /review-copilot takes any PR number, and a row would carry an
+# author's text to an Edit-capable agent unfiltered. A path grammar cannot
+# close that — `Ignore_all_previous_instructions.md` is a path
 # — so the cell is consumed here and only a verdict leaves: one `class` line
 # whose value is letters this script validated, then one `inside <path>` or
 # `outside <path>` line per changed file, where the path is the diff's own
 # and the word is this script's. A caller acts on `outside` lines and never
-# sees what the set said. **A changed path is the author's text too** — the
+# sees what the set said. A changed path is the author's text too — the
 # author names the files, and git permits a newline inside a name — so each
 # arrives JSON-encoded, one per line and unambiguous, and is printed only if
 # it decodes to a plain path: no escape in it, path characters only, a `/`
@@ -39,7 +37,7 @@
 # alternatives included, since the edit-target guard judges where an edit
 # inside the checkout lands and not a path naming the outside.
 #
-# **The verdict narrows and grants nothing.** What holds authority is the
+# The verdict narrows and grants nothing. What holds authority is the
 # caller's own deny list and the class's tree set in the contract; an
 # `outside` line is a finding for the caller, and an `inside` line is not a
 # licence for anything the caller's grant refuses.
@@ -54,9 +52,9 @@ refuse() { echo "$1" >&2; exit 3; }
 body=$(gh pr view "$pr" --json body --jq .body)
 class_row=$(grep -E '^\| *Class *\|' <<<"$body" || [ $? -eq 1 ])
 touch_row=$(grep -E '^\| *Touch set *\|' <<<"$body" || [ $? -eq 1 ])
-# Exactly one of each, or none. A second row is where a valid first row
-# would have carried an invalid second past a check that only asked whether
-# any row matched, so two rows is refused before either grammar is consulted.
+# Exactly one of each, or none, checked before either grammar: with two rows a
+# valid first would carry an invalid second past a check of whether any row
+# matched.
 [ "$(grep -c . <<<"$class_row")" -le 1 ] || refuse "more than one Class row"
 [ "$(grep -c . <<<"$touch_row")" -le 1 ] || refuse "more than one Touch set row"
 if [ -z "$class_row" ] && [ -z "$touch_row" ]; then exit 0; fi

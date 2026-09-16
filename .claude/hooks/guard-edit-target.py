@@ -1,76 +1,42 @@
 #!/usr/bin/env python3
 """Judge an edit target by the file it resolves to, not by the path it spells.
 
-**A permission rule matches a SPELLING and an edit lands on a FILE**, and the
-gap between those two is #181. `.claude/settings.json` denies
-`Edit(.claude/scripts/**)`, and `/review-grok`'s frontmatter denies
-`Edit(.claude/**)`, `Edit(.github/**)`, `Edit(deploy/**)` and `Edit(.git/**)`
-beside the `src/`, `tests/` and `docs/` the command exists to write. Every one
-of those is compared against the path a caller typed. A symbolic link — or, on
-Windows, a junction — inside an allowed tree is a spelling no deny matches
-while the write lands wherever the link points: inside a denied tree, or out of
-the checkout altogether.
+A permission rule matches a spelling and an edit lands on a file.
+`.claude/settings.json` and `/review-grok`'s frontmatter deny edits by the path
+a caller typed, and a symbolic link — or, on Windows, a junction — inside an
+allowed tree is a spelling no deny matches while the write lands wherever the
+link points: inside a denied tree, or out of the checkout altogether. A branch
+under review can introduce such a link before CI has judged it.
 
-**What stood there before was a premise rather than a check.** The helper suite
-fails on any tracked mode `120000` in `git ls-files -s`, so `main` carries no
-tracked link on any push, and an invocation whose only writers are `Write` and
-`Edit` cannot add one. Both halves are true and neither covers the case that
-matters: `/review-grok` runs over the *branch* under review, locally, before CI
-has said anything about it, and a branch is what introduces files. The premise
-is a statement about `main`; the exposure is on the branch.
+So the rule is one predicate that names no tree: an edit target must be the
+file its path spells. Resolve the target, re-anchor it on the resolved checkout
+root, and refuse it if the two disagree. This file holds no copy of any deny
+list, so it cannot go stale as one changes, and an edit spelled at the file it
+actually is passes here and is then judged by the rules that already exist.
 
-**So the rule here is one predicate and it names no tree: an edit target must
-be the file its path spells.** Resolve the target, re-anchor it on the resolved
-checkout root, and refuse it if the two disagree. That refuses a link into the
-machinery trees, a link out of the checkout, and every future deny the same
-way — this file holds no copy of any deny list, so it cannot go stale as one
-changes, and it cannot lock the repository out of its own control surface
-either: an edit spelled at the file it actually is passes here and is then
-judged by the rules that already exist.
+The anchoring has three consequences that are not bugs. The checkout root is
+itself resolved, so a worktree under a linked temp root — `/tmp` on macOS, an
+8.3 or `subst` path on Windows — is judged against its own real spelling. An
+anchor is a checkout root and every anchor containing the target must agree,
+because an anchor excuses the one link traversal on its own prefix. And the
+comparison folds case and Unicode normalisation where the filesystem does,
+asked of the mount rather than read off the platform.
 
-**Three things follow from the anchoring that are worth stating before someone
-reads a false positive as a bug.** The checkout root is itself resolved, so a
-worktree under a temp root that is a link — `/tmp` on macOS, an 8.3 or `subst`
-path on Windows — is judged against its own real spelling rather than refused
-wholesale. An anchor is a checkout **root** and every anchor containing the
-target must agree, because an anchor excuses one link traversal — its own root
-prefix — so an anchor at a linked directory inside the tree excuses precisely
-what this file refuses. And the comparison folds case where the **filesystem**
-does, asked of the filesystem by `case_insensitive` rather than read off the
-platform: Windows' `realpath` returns the on-disk case, so `DOCS/x` would
-otherwise differ from `docs/x` and be refused for a difference that is not one
-— and macOS mounts APFS case-insensitively by default, where a platform test
-folds nothing and a differently-cased checkout prefix matches no anchor at
-all, which is the branch that admits. A case-insensitive mount on Linux is the
-same case again, which is why the question is asked of the mount.
+The residual: a path no anchor can place is admitted only when it also resolves
+outside every anchor — an absolute path into a scratch directory, or into the
+user's own `~/.claude`, which the harness writes its own state through. A
+spelling no anchor recognises that lands inside a checkout is refused.
+`/review-grok`'s site contract admits only plain repository-relative paths, so
+the exposure this closes cannot spell an out-of-tree target; which out-of-tree
+paths are legitimate is a different file's argument.
 
-**The residual, stated rather than left to be found — and it is narrower than
-it reads.** A path this file cannot place under any anchor is admitted **only
-when it also resolves outside every one of them**: an absolute path into a
-scratch directory, or into the user's own `~/.claude`, which the harness writes
-its own state through and refusing would take the session's memory and
-scratchpad with it. A spelling no anchor recognises that nevertheless *lands
-inside* a checkout is refused instead, whatever alphabet it is in, because the
-matcher then judged a string that is not this file. Nothing in the exposure
-this closes can spell either: `/review-grok`'s site contract admits one plain
-repository-relative path per row, with no leading slash, no drive letter and no
-`..` segment, and the adjudicator drops a row that is not. A guard for the
-out-of-tree half would have to be a rule about which out-of-tree paths are
-legitimate, which is a different file's argument.
-
-**And one whole grammar is refused rather than judged**, which is the exception
-to "this file holds no list": on Windows a spelling beginning `\\` — the
-extended-length prefix, the device prefix, a UNC share — skips the very
-normalisation a permission rule's matcher depends on, so the matcher never sees
-the target at all. Measured, both forms wrote into a denied directory. The one
-exemption is an anchor in that same grammar containing the target, which is a
-repository genuinely on a network share.
+One grammar is refused rather than judged: on Windows a spelling beginning `\\`
+skips the normalisation a permission rule's matcher depends on
+(`alternate_alphabet`), unless a checkout named in that grammar contains it.
 
 Protocol: PreToolUse, matcher `Edit|Write|NotebookEdit|MultiEdit`. Exit 0 and
-print nothing to allow; print the deny JSON to refuse. The JSON form carries a
-reason the caller can read, and a guard that refuses without saying why is one
-that gets worked around rather than fixed — `guard-git-argv.py` argues the same
-choice and this file follows it.
+print nothing to allow; print the deny JSON to refuse, because a guard that
+refuses without saying why gets worked around rather than fixed.
 """
 
 import json
@@ -80,10 +46,8 @@ import unicodedata
 
 # The tools that write a file. `MultiEdit` is listed although this repository's
 # harness does not surface it: the matcher in `.claude/settings.json` is a
-# regular expression over the tool name, so a tool that is registered later
-# arrives here judged rather than unjudged, and a name this file does not know
-# is refused by the `EDITING_TOOLS` test below only after the matcher has
-# already let it through.
+# regular expression over the tool name, so a tool registered later arrives
+# here judged rather than unjudged.
 EDITING_TOOLS = ("Edit", "Write", "NotebookEdit", "MultiEdit")
 
 # Where each of those carries its target. `Edit` and `Write` use `file_path`;
@@ -92,28 +56,19 @@ EDITING_TOOLS = ("Edit", "Write", "NotebookEdit", "MultiEdit")
 # this file cannot see is one it has established nothing about.
 PATH_KEYS = ("file_path", "notebook_path")
 
-# **Windows names the same file in more than one alphabet, and a permission
-# rule reads only one of them.** Every spelling beginning `\\` is the other
-# one: the extended-length prefix `\\?\` and the device prefix `\\.\`, which
-# exist precisely to SKIP the normalisation a matcher depends on, and the UNC
-# form `\\server\share\...`, which reaches the local disk through the
-# administrative shares. **Both were measured in this checkout with
-# `.claude/sandbox/**` denied, and both were CREATED**: a `Write` to
-# `\\?\C:\dev\ashamray\.claude\sandbox\probe-unc.txt` and one to
-# `\\localhost\C$\dev\ashamray\.claude\sandbox\probe-share.txt`. The plain
-# spelling of either file is refused. Both probe files were deleted.
+# Windows names the same file in more than one alphabet, and a permission rule
+# reads only one of them. Every spelling beginning `\\` is the other: the
+# extended-length prefix `\\?\` and the device prefix `\\.\`, which skip the
+# normalisation a matcher depends on, and the UNC form `\\server\share\...`,
+# which reaches the local disk through the administrative shares — so a write
+# spelled either way lands in a directory whose plain spelling is denied.
 #
-# So the whole family is refused rather than the two prefixes that were found
-# first — enumerating spellings is the deny-list shape this repository has
-# rejected twice, and the UNC form is what a list of prefixes would have
-# missed. Refused rather than resolved, because a hook can only allow or deny:
-# it cannot hand the matcher the plain spelling it would have judged.
-#
-# **Unless a checkout is itself named that way**, which is the one legitimate
-# case — a repository on a network share. Then the anchors are `\\`-spelled
-# too, the matcher's strings and the guard's agree, and nothing here fires.
-# Scoped to Windows because no other platform has a second alphabet: `//x` on
-# POSIX is an ordinary path, and refusing it would be a rule about nothing.
+# The whole family is refused rather than a list of prefixes, which would miss
+# a spelling, and refused rather than resolved, because a hook can only allow
+# or deny: it cannot hand the matcher the plain spelling. A repository on a
+# network share is the one legitimate case, and the caller exempts a target
+# such a checkout contains. Scoped to Windows because `//x` on POSIX is an
+# ordinary path.
 def alternate_alphabet(path):
     """Whether `path` is spelled in Windows' non-drive path grammar."""
     return os.name == "nt" and path[:2].replace("/", "\\") == "\\\\"
@@ -122,27 +77,18 @@ def alternate_alphabet(path):
 def case_insensitive(path):
     """Whether `path`'s filesystem resolves a differently-cased spelling to it.
 
-    **`os.path.normcase` folds case on Windows and nowhere else**, and that is
-    a statement about the PLATFORM where what matters is the FILESYSTEM. macOS
-    mounts APFS case-insensitively by default, so `/Users/x/Repo` and
-    `/users/x/repo` are one directory there while `normcase` leaves them
-    different strings — and a comparison built on it decides the target is
-    under no anchor at all, which is the branch that admits. Raised by Copilot;
-    the same is true of a case-insensitive mount on Linux.
+    `os.path.normcase` folds case on Windows alone, which is a statement about
+    the platform where what matters is the filesystem: macOS mounts APFS
+    case-insensitively by default, and a Linux mount can be too, so a
+    comparison built on `normcase` would place a differently-cased target under
+    no anchor — the branch that admits.
 
-    Asked of the filesystem rather than read off `sys.platform`: a component of
-    the path is case-flipped and both spellings are `stat`ed, and one file with
-    one device and inode under two spellings is the answer.
-
-    **Which component is not a detail, and picking the basename alone was a
-    gap.** A checkout at `/Users/me/123` has nothing to flip in its last
-    component, so the probe fell to the platform default — `False` on macOS,
-    where the mount folds — and a linked target spelled `/users/me/123/...`
-    matched no anchor and fell through unjudged. Raised by Copilot. Every
-    component is tried, deepest first, and the first one that changes under
-    `swapcase` carries the probe; a path with no cased component anywhere is
-    the only case left to the platform default, and it cannot arise under a
-    root that holds a `.git`.
+    A component is case-flipped and both spellings are `stat`ed; one device
+    and inode under two spellings is the answer. Every component is tried,
+    deepest first, because a last component with nothing to flip
+    (`/Users/me/123`) would leave the answer to the platform default. A path
+    with no cased component anywhere cannot arise under a root that holds a
+    `.git`.
     """
     normalised = os.path.normpath(path)
     parts = normalised.split(os.sep)
@@ -163,17 +109,12 @@ def case_insensitive(path):
 def form_insensitive(path):
     """Whether the filesystem resolves NFC and NFD spellings to one file.
 
-    **The twin of `case_insensitive`, and it exists because composing
-    unconditionally was wrong.** This file argued that composing "can never
-    make two paths look like one" — and on a normalisation-SENSITIVE
-    filesystem, ext4 among them, `/tmp/caf\u00e9` and its decomposed sibling are
-    two directories that can coexist. Folding them into one key let a link
-    resolving into the sibling compare equal to a path inside the checkout, so
-    the argument for skipping the probe was the bypass. Raised by Copilot.
-
-    Asked the same way as case, and for the same reason. Where no component has
-    a distinct alternate form the answer is `False` **by construction rather
-    than as a fallback**: a path that re-normalises to itself has no
+    The twin of `case_insensitive`: on a normalisation-sensitive filesystem,
+    ext4 among them, a composed name and its decomposed sibling are two
+    directories that can coexist, so composing unconditionally would let a link
+    into the sibling compare equal to a path inside the checkout. Where no
+    component has a distinct alternate form the answer is `False` by
+    construction: a path that re-normalises to itself has no
     differently-normalised spelling to be confused with.
     """
     normalised = os.path.normpath(path)
@@ -202,12 +143,10 @@ def traits_of(path):
 def key(path, traits):
     """One comparable spelling of `path`, under its filesystem's equivalences.
 
-    **Both halves are asked of the mount rather than assumed**, and each was a
-    bypass in one direction before it was: folding nothing on a
-    case-insensitive APFS volume let a differently-cased prefix match no anchor
-    at all, and folding normalisation everywhere let two coexisting names on
-    ext4 collapse into one. A comparison is only as good as the equivalence the
-    filesystem actually holds.
+    Both halves are asked of the mount rather than assumed, because folding
+    nothing on a case-insensitive volume lets a differently-cased prefix match
+    no anchor, and folding normalisation everywhere collapses two coexisting
+    names into one.
     """
     folded, composed = traits
     spelling = os.path.normcase(os.path.normpath(path))
@@ -235,20 +174,15 @@ def under(child, parent, traits):
 def checkout_root(path):
     """The nearest ancestor of `path` holding a `.git`, or `None`.
 
-    **An anchor has to be a checkout ROOT rather than any directory the session
-    happens to stand in**, and the difference is a bypass rather than a
-    nicety. An anchor excuses exactly one link traversal — the one on its own
-    root prefix — so an anchor at `<checkout>/docs/tree`, where `tree` links
-    into `.claude/scripts`, excuses precisely the traversal this file exists
-    to refuse: the target's spelling is `docs/tree/helper.sh`, its resolution
-    is `.claude/scripts/helper.sh`, and re-anchoring on that directory makes
-    the two agree. Raised by Copilot against the first form, which took the
-    event's `cwd` as an anchor whatever it pointed at.
+    An anchor has to be a checkout root rather than any directory the session
+    stands in, because an anchor excuses the one link traversal on its own
+    prefix: an anchor at `<checkout>/docs/tree`, where `tree` links into
+    `.claude/scripts`, would make the spelling `docs/tree/helper.sh` and its
+    resolution `.claude/scripts/helper.sh` agree.
 
-    Walked lexically from the spelling, which is what makes it the right root
-    for the case above: `<checkout>/docs/tree` walks to `<checkout>/docs` and
-    then to `<checkout>`, where the `.git` is. A worktree's `.git` is a file
-    rather than a directory, so this asks whether the entry exists at all.
+    Walked lexically from the spelling, so `<checkout>/docs/tree` walks up to
+    `<checkout>`, where the `.git` is. A worktree's `.git` is a file rather
+    than a directory, so this asks whether the entry exists at all.
     """
     current = os.path.abspath(path)
     while True:
@@ -261,32 +195,22 @@ def checkout_root(path):
 
 
 def anchors(event):
-    """The checkouts this guard is standing in, as (spelled, resolved) pairs.
+    """The checkouts this guard is standing in: spelling, resolution, traits.
 
-    **Three sources, because no one of them is right in every session.**
-    `CLAUDE_PROJECT_DIR` is what the harness sets and what
-    `.claude/settings.json` interpolates into this hook's own command line; the
-    event's `cwd` is where the session actually is, which differs the moment
-    `/branch` moves it into a sibling worktree; and this file's own location is
-    the checkout that owns the guard, which is true even if the other two are
-    absent or wrong.
+    Three sources, because no one of them is right in every session:
+    `CLAUDE_PROJECT_DIR` is what the harness sets; the event's `cwd` is where
+    the session is, which differs once `/branch` moves it into a sibling
+    worktree; and this file's own location is the checkout that owns the
+    guard. The first and last are roots by construction; `cwd` is walked up to
+    its checkout root and dropped when it has none (`checkout_root`).
 
-    The first and the last are roots by construction — the harness sets one to
-    a project root and the other is this file's own tree — so they are taken as
-    given. `cwd` is not: it is wherever the session stands, so it is walked up
-    to its checkout root and **dropped** when it has none, because a directory
-    that belongs to no checkout is not a root and excusing a traversal at it is
-    the bypass `checkout_root` documents.
+    Each keeps its spelling and its resolution, because the judgement below
+    compares the two, and an anchor reached through a link would otherwise make
+    every edit under it look like the thing this file refuses.
 
-    Each is kept as the pair it is — the spelling and its resolution — because
-    the whole judgement below is a comparison between those two, and an anchor
-    reached through a link would otherwise make every edit under it look like
-    the thing this file refuses.
-
-    **Adding an anchor can only narrow this guard, never widen it**, because
-    the caller requires every anchor containing the target to agree. That is
-    what makes an environment-supplied `CLAUDE_PROJECT_DIR` safe to trust here:
-    a wrong one cannot excuse a traversal that this file's own tree refuses.
+    Adding an anchor can only narrow this guard, because every anchor
+    containing the target must agree; that is what makes an
+    environment-supplied `CLAUDE_PROJECT_DIR` safe to trust.
     """
     here = os.path.dirname(os.path.dirname(os.path.dirname(
         os.path.abspath(__file__))))
@@ -314,15 +238,9 @@ def offence(event):
     if tool not in EDITING_TOOLS:
         return None
 
-    # A `tool_input` that is not an object goes to the same refusal as one
-    # carrying no path, and the two used to differ: the shape check returned
-    # `None` — admit — while the missing key refused. They are the same
-    # statement about the same call, which is that this file cannot see where
-    # the write lands, and only one of the two answers is the one that fails
-    # closed.
-    # `name` rather than `key`, which is a function in this module: nothing
-    # here calls it after the loop, so the shadow was harmless and the next
-    # edit is what it would have cost.
+    # A `tool_input` that is not an object is refused like one carrying no
+    # path: either way this file cannot see where the write lands. The loop
+    # variable is `name`, not `key`, which is a function in this module.
     tool_input = event.get("tool_input")
     spelled = None
     if isinstance(tool_input, dict):
@@ -343,14 +261,10 @@ def offence(event):
         cwd = os.getcwd()
 
     checkouts = anchors(event)
-    # **The exemption is per anchor and per target, and it was session-wide.**
-    # A checkout on a network share is `\\`-spelled, and the first form read
-    # that as licence for any alternate-alphabet target anywhere: once one
-    # anchor was UNC, `\\?\UNC\server\share\repo\…` was exempt too, and since
-    # it is not lexically under `\\server\share\repo` the anchor loop skipped
-    # it and the fall-through admitted it. So the exemption now requires an
-    # anchor that is BOTH in that alphabet and containing this target, which
-    # is the case it was written for and no other. Raised by Copilot.
+    # The exemption is per anchor and per target: a `\\`-spelled checkout
+    # licenses only a target it contains, because `\\?\UNC\server\share\repo\…`
+    # is not lexically under `\\server\share\repo`, so the anchor loop would
+    # skip it and the fall-through would admit it.
     if alternate_alphabet(spelled):
         joined = (spelled if os.path.isabs(spelled)
                   else os.path.join(cwd, spelled))
@@ -368,36 +282,22 @@ def offence(event):
                 "those ways. Name the file the way the rules are written."
             )
 
-    # `realpath` is taken of the ORIGINAL spelling and `normpath` of the joined
-    # one, and the order matters: `normpath` collapses `..` lexically, which is
-    # the wrong answer for a `..` that follows a link, so the lexical form is
-    # used only to locate the target under an anchor. Where the two disagree
-    # the call is refused, which is the direction this has to fail in.
+    # `realpath` is taken of the original spelling and `normpath` of the joined
+    # one, because `normpath` collapses `..` lexically, which is wrong for a
+    # `..` that follows a link; the lexical form only locates the target under
+    # an anchor, and where the two disagree the call is refused.
     #
-    # **A `..` that traverses no link is admitted here, and that is a decision
-    # backed by a measurement rather than an oversight.** The argument for
-    # refusing it is that `docs/../.claude/hooks/x` carries no `.claude/**`
-    # spelling, so a matcher reading the string would not deny it — and the
-    # harness does not read the string. Measured in this checkout, with
-    # `.claude/sandbox/**` denied: a `Write` to
-    # `docs/../.claude/sandbox/probe-tmp.txt` was refused with the harness's own
-    # "denied by your permission settings", while `docs/../docs/probe-tmp.txt`
-    # was created — so the path is normalised and then matched, and `..` is not
-    # what was rejected. Refusing every `..` here would therefore buy nothing
-    # against the deny list and would refuse the second of those two, which is
-    # innocent traffic. Raised by Copilot; the premise is what failed.
+    # A `..` that traverses no link is admitted: the harness normalises a path
+    # before matching it, so `docs/../.claude/sandbox/x` is denied by a
+    # `.claude/sandbox/**` rule, and refusing every `..` here would buy nothing
+    # against the deny list while refusing innocent traffic.
     joined = spelled if os.path.isabs(spelled) else os.path.join(cwd, spelled)
     lexical = os.path.normpath(os.path.abspath(joined))
     resolved = os.path.realpath(joined)
 
-    # **Every anchor containing the target must agree, and the first form said
-    # ANY.** One agreeing anchor was enough to admit the write, so a second
-    # anchor could excuse what the first refused — and that is not hypothetical
-    # arithmetic: with `cwd` taken as an anchor whatever it pointed at, a
-    # session standing in a linked directory admitted the exact write this file
-    # exists to refuse. Requiring agreement is what makes an extra anchor
-    # incapable of widening the guard, which is the property `anchors` rests
-    # its trust in `CLAUDE_PROJECT_DIR` on. Raised by Copilot.
+    # Every anchor containing the target must agree, so an extra anchor cannot
+    # excuse what another refuses — the property `anchors` rests its trust in
+    # `CLAUDE_PROJECT_DIR` on.
     judged = False
     for spelled_root, real_root, traits in checkouts:
         if under(lexical, spelled_root, traits):
@@ -411,22 +311,15 @@ def offence(event):
         expected = os.path.normpath(
             os.path.join(real_root, os.path.relpath(lexical, base)))
 
-        # **The traits are measured at the root and a child can disagree**,
-        # which makes an equivalence applied there a claim about a directory
-        # nobody asked. Windows sets case sensitivity per directory
-        # (`fsutil file setCaseSensitiveInfo`), and a mount below the root can
-        # differ outright — so `docs/Sub/x.md`, a junction beside a real
-        # `docs/sub/`, is two distinct files that the anchor's folding calls
-        # one. Measured in a case-sensitive directory here: admitted before
-        # this check, refused after. Raised by Copilot.
-        #
-        # Where the two agree only BECAUSE of an equivalence, the filesystem
-        # is asked directly. `samefile` is safe in this position and not in the
-        # anchor test: it compares two concrete paths rather than deciding what
-        # counts as a root, which is the distinction that makes identity the
-        # wrong tool one paragraph up and the right one here. When either path
-        # does not exist yet — the ordinary case for `Write` — there is nothing
-        # to compare and the folded verdict stands, which is the residual.
+        # The traits are measured at the root and a child can disagree: Windows
+        # sets case sensitivity per directory (`fsutil file
+        # setCaseSensitiveInfo`), and a mount below the root can differ
+        # outright, so `docs/Sub/x.md`, a junction beside a real `docs/sub/`, is
+        # two files the anchor's folding calls one. Where the two agree only
+        # because of an equivalence, `samefile` asks the filesystem, which is
+        # safe here because it compares two concrete paths rather than deciding
+        # what counts as a root. When either does not exist yet — the ordinary
+        # case for `Write` — the folded verdict stands, which is the residual.
         if (same(resolved, expected, traits)
                 and os.path.normpath(resolved) != os.path.normpath(expected)):
             try:
@@ -453,24 +346,13 @@ def offence(event):
                 "there (#181, docs/harness-boundaries.md)."
             )
 
-    # **A spelling no anchor recognises, naming a file inside one, is the
-    # general form of three separate findings and it is refused here.** The
-    # loop above judges a target it can place; everything else fell through to
-    # the residual, and the residual is meant for a file that is genuinely
-    # outside every checkout — not for one inside a checkout under a name the
-    # anchors do not match. That difference is measurable: on a Windows runner
-    # `GetShortPathNameW` shortens the whole prefix, so
-    # `C:\Users\RUNNER~1\...\GUARD-~1\DOCUME~1\a.md` matched no anchor while
-    # resolving squarely inside one, and the case written to pin the 8.3 alias
-    # went red on CI having passed locally, where only the leaf was aliased.
-    #
-    # The same shape produced the case-folding finding and the Unicode one, and
-    # both were closed by teaching the comparison a new equivalence. This
-    # closes the class instead: whatever the spelling, if it RESOLVES into a
+    # A spelling no anchor recognises, naming a file inside one, is refused: the
+    # residual is for a file genuinely outside every checkout, not for one
+    # inside a checkout under a name the anchors do not match, such as an 8.3
+    # alias of the whole prefix. Whatever the spelling, if it resolves into a
     # checkout that did not recognise it, the matcher judged a string that is
-    # not this file and the write is refused. The residual is untouched — a
-    # target resolving outside every anchor still falls through, which is what
-    # keeps the session's own memory and scratch writes working.
+    # not this file. A target resolving outside every anchor still falls
+    # through, which keeps the session's own memory and scratch writes working.
     if not judged:
         for _, real_root, traits in checkouts:
             if under(resolved, real_root, traits):
@@ -483,9 +365,8 @@ def offence(event):
                 )
 
     # Reached when every anchor containing the target agreed, or when the
-    # target is outside every one of them — which is not this guard's subject,
-    # and the module docstring argues why. A test pins that residual so the
-    # next reader does not have to take the paragraph's word for it.
+    # target is outside every one of them — the residual the module docstring
+    # states.
     return None
 
 
@@ -493,10 +374,10 @@ def main():
     try:
         event = json.loads(sys.stdin.buffer.read().decode("utf-8"))
     except (json.JSONDecodeError, ValueError, UnicodeDecodeError):
-        # The one deliberate fail-OPEN, and it is the argv guard's argument
-        # rather than a second decision: a hook that cannot read its own input
-        # has established nothing, and refusing every write on a malformed
-        # event would turn a defect in this file into a dead session.
+        # The one deliberate fail-open, as in guard-git-argv.py: a hook that
+        # cannot read its own input has established nothing, and refusing every
+        # write on a malformed event would turn a defect here into a dead
+        # session.
         print("guard-edit-target: unreadable hook event; not judging",
               file=sys.stderr)
         return 0
