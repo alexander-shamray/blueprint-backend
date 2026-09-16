@@ -14,7 +14,7 @@ import unittest
 
 from closure_gate import check, closing_references, declared_in_table, repository_of
 
-REPO = "alexander-shamray/dotnet-ddd-blueprint"
+REPO = "alexander-shamray/blueprint-backend"
 
 
 def payload(

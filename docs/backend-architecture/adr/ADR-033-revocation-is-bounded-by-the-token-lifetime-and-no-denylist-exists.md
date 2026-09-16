@@ -73,7 +73,7 @@ the lifetime alone leaves the skew where it is.
 > `access.token.lifespan` override**; it owes no `ClockSkew`, which is not a
 > realm setting at all and is why telling an operator to configure one would
 > send them looking for something that does not exist.
-> [#157](https://github.com/alexander-shamray/dotnet-ddd-blueprint/issues/157)
+> [#157](https://github.com/alexander-shamray/blueprint-backend/issues/157)
 > carries that gap and the three shapes a fix could take, because a gap this
 > record merely described would be the TODO nothing re-checks.
 

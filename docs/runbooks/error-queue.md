@@ -221,8 +221,8 @@ and says nothing about what a handler did outside the database.
 **Some arrivals here are neither a bug nor a broken dependency.** §9.6's saga
 faults deliberately on `PaymentAuthorised`, and on an `OrderCancelled` this
 service cannot account for
-([#124](https://github.com/alexander-shamray/dotnet-ddd-blueprint/issues/124),
-[#123](https://github.com/alexander-shamray/dotnet-ddd-blueprint/issues/123)),
+([#124](https://github.com/alexander-shamray/blueprint-backend/issues/124),
+[#123](https://github.com/alexander-shamray/blueprint-backend/issues/123)),
 rather than letting MassTransit's default consume either silently — because
 the alternative is money moving, or a customer's cancellation vanishing, with
 nothing raised anywhere.

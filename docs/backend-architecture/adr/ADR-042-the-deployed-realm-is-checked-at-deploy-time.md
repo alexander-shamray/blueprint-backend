@@ -11,7 +11,7 @@ values` answers the `identity.authority` the release is running with, and
 `realm_check.py authority` splits it into the server root and the realm name.
 A realm that disagrees fails the rollout rather than being rolled onto. What
 is asserted is the table
-[#157](https://github.com/alexander-shamray/dotnet-ddd-blueprint/issues/157)
+[#157](https://github.com/alexander-shamray/blueprint-backend/issues/157)
 drew: `accessTokenLifespan` equal to the `AccessTokenLifetime`
 [ADR-040](ADR-040-no-host-accepts-a-token-with-more-life-left-than-the-revocation-bound.md)
 made `Common.Web`'s one declaration of 300, no client-level
@@ -111,7 +111,7 @@ read decorative, which is the shape ADR-033 was written to withdraw.
 - **A rollout is the only moment a deployed realm is read, and a realm edited
   between rollouts is unobserved until the next one.** That is a narrower gap
   than the one this record closes and it is a real one:
-  [#176](https://github.com/alexander-shamray/dotnet-ddd-blueprint/issues/176)
+  [#176](https://github.com/alexander-shamray/blueprint-backend/issues/176)
   carries it, because an accepted gap here gets an issue rather than a
   paragraph. Closing it means a scheduled run against an environment, which is
   a decision about operating this platform rather than about building it.

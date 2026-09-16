@@ -82,7 +82,7 @@ standing in for one.
   identity, deleting the replacement where it must delete nothing.
 - **The residual this leaves is none.** ADR-039 ended with one open item
   besides this — the claim expiring under a running handler
-  ([#127](https://github.com/alexander-shamray/dotnet-ddd-blueprint/issues/127))
+  ([#127](https://github.com/alexander-shamray/blueprint-backend/issues/127))
   — and it is §8.5's, unchanged, and still the only one.
 
 ---

@@ -23,11 +23,11 @@ the five reasons are a wait that ran out — `not_despatched`,
 say they were.** The split is `cancelled_after_confirmation` where Shipping was
 told and a despatch may be moving, `payment_authorised_during_compensation`
 where it was not. That used to map one-to-one onto `Confirmed` and
-`Compensating`; since [#126](https://github.com/alexander-shamray/dotnet-ddd-blueprint/issues/126)
+`Compensating`; since [#126](https://github.com/alexander-shamray/blueprint-backend/issues/126)
 it does not, because `cancelled_after_confirmation` is raised from
 `Compensating` as well — whenever an `OrderConfirmed` lands there, which is
 precisely the evidence that Shipping was told. **And
-[#143](https://github.com/alexander-shamray/dotnet-ddd-blueprint/issues/143)
+[#143](https://github.com/alexander-shamray/blueprint-backend/issues/143)
 widened both codes again**: a despatch arriving at an instance that has already
 observed a cancellation raises `cancelled_after_confirmation` from
 `AwaitingConfirmation` or `Confirmed`, and an authorisation arriving at one
@@ -48,10 +48,10 @@ page assumed it was:
 | Reason | State of the saga |
 |---|---|
 | `not_despatched` | Finalised. The state row is gone and this row is the only trace |
-| `stock_not_released` | **Finalised on the release timeout only if Payments owed nothing.** That exit sends `CancelOrder`, raises this row, and then finalises conditionally, so an order cancelled while an authorisation was in flight keeps its instance until the verdict lands or the payment wait expires ([#124](https://github.com/alexander-shamray/dotnet-ddd-blueprint/issues/124)). Query the state table |
+| `stock_not_released` | **Finalised on the release timeout only if Payments owed nothing.** That exit sends `CancelOrder`, raises this row, and then finalises conditionally, so an order cancelled while an authorisation was in flight keeps its instance until the verdict lands or the payment wait expires ([#124](https://github.com/alexander-shamray/blueprint-backend/issues/124)). Query the state table |
 | `not_confirmed` | Finalised, on the ten-minute confirmation timeout |
-| `cancelled_after_confirmation` | **Depends on which state raised it, and the row does not say.** From `Confirmed` it is finalised — the branch cancels nothing and finalises. From `Compensating` it is raised **mid-wait** and the instance stays until the stock half settles — `StockReleased`, or the ten-minute `ReleaseTimeout`. No payment verdict can be outstanding on that path: the only door onto it runs through `AwaitingConfirmation`, which the saga enters on a `PaymentAuthorised`. And [#143](https://github.com/alexander-shamray/dotnet-ddd-blueprint/issues/143) added two more raisings that differ from each other as much as from the pair above. The **despatch** branches in `AwaitingConfirmation` and `Confirmed` raise it when a cancellation had already been observed: both send `MarkOrderShipped` and finalise, so the instance is gone **and a parcel has left**. The **confirmation** branch in `AwaitingConfirmation` raises it when an `OrderConfirmed` arrives after a cancellation was observed, and then transitions to `Confirmed` — so the instance is **alive**, no parcel has necessarily left, and it can sit there for the three-day despatch wait. That is the one raising whose row can outlive this alert's hour by days. Query the state table; the procedures differ at step 2 |
-| `payment_authorised_during_compensation` | Raised mid-wait, when an authorisation lands after compensation has BEGUN — which is not the same as after a cancellation: `Compensating` is also reached from `PaymentDeclined` and the fifteen-minute payment timeout, where no `OrderCancelled` exists yet. The branch that raises this row is also the one that answers the payment half, so the stock half is all that is left: the instance stays until `StockReleased` or the ten-minute `ReleaseTimeout`, both well inside the hour this alerts on, and by the time you read the row it has normally finalised. Check, and branch. A `stock_not_released` row may join it. **Since [#143](https://github.com/alexander-shamray/dotnet-ddd-blueprint/issues/143) `AwaitingPayment` raises it as well, without entering `Compensating` at all**: an early `StockReleased` recorded the cancellation, the authorisation was escalated onto this row instead of confirming the order, and the instance **stays in `AwaitingPayment`** waiting for its own copy of the `OrderCancelled`, with `PaymentTimeout` still armed behind it |
+| `cancelled_after_confirmation` | **Depends on which state raised it, and the row does not say.** From `Confirmed` it is finalised — the branch cancels nothing and finalises. From `Compensating` it is raised **mid-wait** and the instance stays until the stock half settles — `StockReleased`, or the ten-minute `ReleaseTimeout`. No payment verdict can be outstanding on that path: the only door onto it runs through `AwaitingConfirmation`, which the saga enters on a `PaymentAuthorised`. And [#143](https://github.com/alexander-shamray/blueprint-backend/issues/143) added two more raisings that differ from each other as much as from the pair above. The **despatch** branches in `AwaitingConfirmation` and `Confirmed` raise it when a cancellation had already been observed: both send `MarkOrderShipped` and finalise, so the instance is gone **and a parcel has left**. The **confirmation** branch in `AwaitingConfirmation` raises it when an `OrderConfirmed` arrives after a cancellation was observed, and then transitions to `Confirmed` — so the instance is **alive**, no parcel has necessarily left, and it can sit there for the three-day despatch wait. That is the one raising whose row can outlive this alert's hour by days. Query the state table; the procedures differ at step 2 |
+| `payment_authorised_during_compensation` | Raised mid-wait, when an authorisation lands after compensation has BEGUN — which is not the same as after a cancellation: `Compensating` is also reached from `PaymentDeclined` and the fifteen-minute payment timeout, where no `OrderCancelled` exists yet. The branch that raises this row is also the one that answers the payment half, so the stock half is all that is left: the instance stays until `StockReleased` or the ten-minute `ReleaseTimeout`, both well inside the hour this alerts on, and by the time you read the row it has normally finalised. Check, and branch. A `stock_not_released` row may join it. **Since [#143](https://github.com/alexander-shamray/blueprint-backend/issues/143) `AwaitingPayment` raises it as well, without entering `Compensating` at all**: an early `StockReleased` recorded the cancellation, the authorisation was escalated onto this row instead of confirming the order, and the instance **stays in `AwaitingPayment`** waiting for its own copy of the `OrderCancelled`, with `PaymentTimeout` still armed behind it |
 
 For the finalised cases [`stuck-saga.md`](stuck-saga.md) will not catch this,
 which is why §13.6 gives it a row of its own rather than folding it into the
@@ -70,7 +70,7 @@ outlived its own timeout, and then they are the same incident.
 `payment_authorised_during_compensation`, and no count belongs in that sentence
 at all.** The rule is that a row raised by a `Compensating` branch which does
 not finalise leaves an instance behind — and since
-[#124](https://github.com/alexander-shamray/dotnet-ddd-blueprint/issues/124)
+[#124](https://github.com/alexander-shamray/blueprint-backend/issues/124)
 even the branches that *do* finalise finalise conditionally, because that state
 joins on Inventory and on Payments and settles one half at a time. So "has the
 saga finished" is a question about the **branch** that raised the row and about
@@ -300,7 +300,7 @@ tells them apart.
 
 **That is a distinction between the codes and no longer between the states,
 and it is the change this page most needs its reader to know
-([#126](https://github.com/alexander-shamray/dotnet-ddd-blueprint/issues/126)).**
+([#126](https://github.com/alexander-shamray/blueprint-backend/issues/126)).**
 Until then `cancelled_after_confirmation` came only from `Confirmed`, so the
 code and the state were the same fact and this page navigated on either. Now
 `Compensating` raises it too — on an `OrderConfirmed` arriving after that
@@ -502,7 +502,7 @@ left `AwaitingConfirmation` without ever entering `Confirmed`.
    which is what a customer is told if they try one:
    `order.already_shipped` now reads "an order that has already shipped cannot
    be cancelled; raise a return instead"
-   ([#109](https://github.com/alexander-shamray/dotnet-ddd-blueprint/issues/109)).
+   ([#109](https://github.com/alexander-shamray/blueprint-backend/issues/109)).
    **The order's own state used to settle this and no longer does.** §5.4 still
    refuses to cancel a `Shipped` order, so a row here means the aggregate was
    cancelled before despatch — but on the despatch raising the parcel left
@@ -627,7 +627,7 @@ instruction, and `CurrentState` is half of it**:
      directions, which is why the mechanism is written out rather than the
      conclusion. It first said a gone instance proved the cancellation was
      sent.
-     [#128](https://github.com/alexander-shamray/dotnet-ddd-blueprint/issues/128)
+     [#128](https://github.com/alexander-shamray/blueprint-backend/issues/128)
      made that false in the strongest way: `SetCompletedWhenFinalized`
      deletes the row inside the transaction that commits the exit, while
      `UseInMemoryOutbox` flushed the buffered `CancelOrder` only after the
@@ -772,7 +772,7 @@ it, but the rows still need deleting — nothing removes them automatically.
 where "upstream" is this service.** The wait it comes from bounds Ordering
 consuming its own `ConfirmOrder`, so a spike means the outbox stopped, the
 `ordering-commands` queue is not being drained, or a rollout is stranding
-acknowledgements ([#131](https://github.com/alexander-shamray/dotnet-ddd-blueprint/issues/131)).
+acknowledgements ([#131](https://github.com/alexander-shamray/blueprint-backend/issues/131)).
 Every one of those is a single fault producing a row per paid order, and every
 one is fixable here rather than by another team. Check the queue depth before
 the rows.

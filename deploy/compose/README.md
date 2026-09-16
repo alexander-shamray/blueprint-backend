@@ -39,7 +39,7 @@ before this landed.
 Neither service account carries a tag, so **nothing here can log into
 http://localhost:15672**, and that is the design rather than an oversight —
 `administrator` on a shared account is what
-[#44](https://github.com/alexander-shamray/dotnet-ddd-blueprint/issues/44) was
+[#44](https://github.com/alexander-shamray/blueprint-backend/issues/44) was
 about. Inspect the local broker through the container instead, which needs no
 account at all:
 

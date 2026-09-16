@@ -1,4 +1,4 @@
-# dotnet-ddd-blueprint
+# blueprint-backend
 
 A reference architecture for ASP.NET Core microservices using DDD, CQRS and TDD.
 

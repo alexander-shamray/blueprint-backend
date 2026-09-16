@@ -7,7 +7,7 @@ not become the only trigger. The saga's `Confirmed` branch continues to send no
 release, and that restraint is now documented for what it is: it withholds a
 **second** instruction, not the first.
 
-**Why.** [#141](https://github.com/alexander-shamray/dotnet-ddd-blueprint/issues/141)
+**Why.** [#141](https://github.com/alexander-shamray/blueprint-backend/issues/141)
 asked whether Inventory should decline to release for an order it knows reached
 `Confirmed`, and named three sketches. Making `ReleaseStock` the only trigger
 was called the cleanest and largest. It is neither, once two things beside it
@@ -23,7 +23,7 @@ diagram and pays for it with a single point of failure on the one obligation
 the customer can see.
 
 **And it is the only evidence a cancellation gives the saga.**
-[#143](https://github.com/alexander-shamray/dotnet-ddd-blueprint/issues/143)
+[#143](https://github.com/alexander-shamray/blueprint-backend/issues/143)
 turns on a `StockReleased` arriving in a state that sent no release: that
 arrival *proves* a cancellation reached Inventory, and it is what four states
 now record on the instance — `CancellationObserved`, which is

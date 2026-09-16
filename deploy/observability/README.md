@@ -51,7 +51,7 @@ Those two pair `alerts/*.yaml` with `docs/runbooks` and never open
 `13-observability.md`, so the prose the rule files were written *from* was the
 one inventory here nothing read — and it drifted: a thirteenth condition landed
 and five prose sites went on saying twelve, with this gate green throughout
-because it has never counted anything ([#155](https://github.com/alexander-shamray/dotnet-ddd-blueprint/issues/155)).
+because it has never counted anything ([#155](https://github.com/alexander-shamray/blueprint-backend/issues/155)).
 
 **Counting is still not the fix, and the numerals were dropped rather than
 corrected.** A total in front of a table only records how stale the sentence

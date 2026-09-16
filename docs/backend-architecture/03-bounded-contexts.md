@@ -106,7 +106,7 @@ the aggregate, and the aggregate's own event is the only evidence it
 committed — so without this subscription the saga could only assume, which is
 exactly what it used to do. A state named for a command's intent rather than
 for its effect is what that assumption looked like in the machine
-([#126](https://github.com/alexander-shamray/dotnet-ddd-blueprint/issues/126));
+([#126](https://github.com/alexander-shamray/blueprint-backend/issues/126));
 `AwaitingConfirmation` and this cell entry are one change.
 
 **A round trip whose two ends are the same service is still a round trip**, and

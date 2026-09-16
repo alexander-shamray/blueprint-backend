@@ -99,9 +99,9 @@ deletes it is a retention window this repository chooses.
   pod's clock against the writing pod's timestamp, across three replicas, so
   skew moves it again. Five minutes bounds their sum rather than removing
   either, and the two need different fixes —
-  [#167](https://github.com/alexander-shamray/dotnet-ddd-blueprint/issues/167)
+  [#167](https://github.com/alexander-shamray/blueprint-backend/issues/167)
   for the clocks and
-  [#168](https://github.com/alexander-shamray/dotnet-ddd-blueprint/issues/168)
+  [#168](https://github.com/alexander-shamray/blueprint-backend/issues/168)
   for the lag.
 - **The uniqueness of the key is a backstop and not the mechanism.** Two
   attempts that reach the write concurrently produce a constraint violation

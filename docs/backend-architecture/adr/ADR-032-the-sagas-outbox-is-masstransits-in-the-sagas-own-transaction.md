@@ -16,7 +16,7 @@ exception is this endpoint and no other; the platform's other three receive
 endpoints keep the in-memory outbox, and every application-level integration
 event still goes through §9.4's `ordering.OutboxMessages` and its dispatcher.
 
-**Why.** [#128](https://github.com/alexander-shamray/dotnet-ddd-blueprint/issues/128)
+**Why.** [#128](https://github.com/alexander-shamray/blueprint-backend/issues/128)
 is a dual write. `EntityFrameworkRepository` persists the saga instance and
 `UseInMemoryOutbox` buffers the messages that transition sends, and the buffer
 flushes **after** the repository has committed. A crash in that window leaves
@@ -37,8 +37,8 @@ raises, §9.8's five retries are spent, and the message lands in the error queue
 §13.6 pages on.
 
 > **So the window was observable, and an earlier draft of this ADR said it was
-> silent.** That draft followed [#128](https://github.com/alexander-shamray/dotnet-ddd-blueprint/issues/128)'s
-> own text, which describes [#117](https://github.com/alexander-shamray/dotnet-ddd-blueprint/issues/117)
+> silent.** That draft followed [#128](https://github.com/alexander-shamray/blueprint-backend/issues/128)'s
+> own text, which describes [#117](https://github.com/alexander-shamray/blueprint-backend/issues/117)
 > as having replaced the fault with an `Ignore()` and a log line. #117 did try
 > that and then **removed** it; what shipped keeps MassTransit's default and
 > enumerates the legitimate arrivals individually. Reading the issue instead of

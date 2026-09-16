@@ -431,7 +431,7 @@ because the table is not what a reader of the gate has open.
 - **The window between rollouts, and it is filed.** A realm is read when a
   deployment reads it, so an edit made after a rollout is unobserved until the
   next one — on a stabilised service, indefinitely
-  ([#176](https://github.com/alexander-shamray/dotnet-ddd-blueprint/issues/176)).
+  ([#176](https://github.com/alexander-shamray/blueprint-backend/issues/176)).
   Closing it needs a `schedule:` trigger, an environment to point it at, and a
   decision about what a red scheduled run *does*, which is an operating
   decision rather than a build one.
@@ -553,7 +553,7 @@ one of them is edited.
 
 - **Nothing, on this mechanism.** ADR-039 ended with one open item besides
   this — the claim expiring under a running handler
-  ([#127](https://github.com/alexander-shamray/dotnet-ddd-blueprint/issues/127))
+  ([#127](https://github.com/alexander-shamray/blueprint-backend/issues/127))
   — it is §8.5's, it is unchanged, and it is now the only one. Three
   consecutive rows have each closed the residual the row above named; this is
   the first with none to hand on.
@@ -768,7 +768,7 @@ constant without saying which would read as the reverse.
   key names the command, the timestamp names the write, and a replacement is a
   different write — **by construction rather than by constraint**, which is the
   qualification the twelfth round added and the ninth had already filed as
-  [#173](https://github.com/alexander-shamray/dotnet-ddd-blueprint/issues/173).
+  [#173](https://github.com/alexander-shamray/blueprint-backend/issues/173).
   Nothing enforces uniqueness on a `datetimeoffset(7)`, so a replacement
   stamped at the selected row's exact tick would match; that needs a clock set
   to an exact historical instant rather than drifted by a magnitude, and a
@@ -939,7 +939,7 @@ same indent, and a flat set matched all of them.
   rejected — five minutes never bounded a clock step either, so a number there
   repeats in a third term the mistake this PR removes from two — and the fix is
   one time source for both deadlines, filed as
-  [#171](https://github.com/alexander-shamray/dotnet-ddd-blueprint/issues/171).
+  [#171](https://github.com/alexander-shamray/blueprint-backend/issues/171).
 - **A second assumption came out of the review, and it has nothing to do with
   clocks.** The expiry ordering also wants the marker to reach the database
   inside the claim's own window — and the deadline is later than "the handler
@@ -1302,9 +1302,9 @@ against a MassTransit bump renaming either type.
 
 **The window was observable, and a draft of this branch's ADR said it was
 silent.**
-[#128](https://github.com/alexander-shamray/dotnet-ddd-blueprint/issues/128)'s
+[#128](https://github.com/alexander-shamray/blueprint-backend/issues/128)'s
 own body describes
-[#117](https://github.com/alexander-shamray/dotnet-ddd-blueprint/issues/117) as
+[#117](https://github.com/alexander-shamray/blueprint-backend/issues/117) as
 having replaced the fault with an `Ignore()` and a log line. #117 tried that and
 then **removed** it: what shipped keeps MassTransit's default and enumerates the
 legitimate arrivals one at a time, and `Ignore(StockReserved)` is declared
@@ -2769,7 +2769,7 @@ rather than counted, on this file's usual terms; the second is a tree listing
 where the number is the point, so it moved to thirteen.
 
 **The second half of that sentence was true of one site and read as true of
-the file, and [#155](https://github.com/alexander-shamray/dotnet-ddd-blueprint/issues/155)
+the file, and [#155](https://github.com/alexander-shamray/blueprint-backend/issues/155)
 is what it cost.** CLAUDE.md said twelve runbooks in *three* places; the edit
 reached the tree listing and left the PR-24 narrative saying twelve twice
 over, so this entry recorded a reconciliation that had covered a third of its
@@ -2893,7 +2893,7 @@ which is the arithmetic this file names for exactly this case.
 ## The release that answers for the order (#125, #129, #130)
 
 **A specification gap closed three issues, and only one of them was a
-specification issue.** [#130](https://github.com/alexander-shamray/dotnet-ddd-blueprint/issues/130)
+specification issue.** [#130](https://github.com/alexander-shamray/blueprint-backend/issues/130)
 asked whether a `ReleaseStock` for a reservation that was never held publishes
 `StockReleased`. Nothing said. §3.2 gave Inventory the command and the event
 and stopped there; §9 sends the command from every compensating transition it
@@ -3839,9 +3839,9 @@ and the review round that established this corrected a sentence here that
 recommended exactly that. Two things put the claim's expiry after the marker's
 and neither is visible from the two numbers: the marker is stamped inside the
 transaction while the claim is re-armed after it commits, so the claim's window
-starts later by the commit's tail ([#168](https://github.com/alexander-shamray/dotnet-ddd-blueprint/issues/168));
+starts later by the commit's tail ([#168](https://github.com/alexander-shamray/blueprint-backend/issues/168));
 and the marker's age is the purging pod's clock against the writing pod's
-timestamp, across three replicas ([#167](https://github.com/alexander-shamray/dotnet-ddd-blueprint/issues/167)).
+timestamp, across three replicas ([#167](https://github.com/alexander-shamray/blueprint-backend/issues/167)).
 Matching the claim leaves no margin for either, and a duplicate write arrives at
 a boundary set by a retention setting. The default declines the narrowing
 anyway, because the question the marker answers is "did this already commit" and
