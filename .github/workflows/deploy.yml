@@ -1,21 +1,16 @@
 name: Deploy
 
-# §15.5's canary, and §15.1's production leg of the pipeline.
-#
-# THIS WORKFLOW HAS NEVER REACHED A CLUSTER, and that is stated here rather
-# than discovered from a failed run. There is no dev, staging or production
-# environment for this repository, no kubeconfig and no registry; PR-23 shipped
-# charts that nothing installs and PR-24 alert rules that no Prometheus loads,
-# and this is the third artefact of that kind. What is asserted about it is
-# asserted by `deploy/canary/canary.py`, whose suite runs on every change to
-# this tree, and by the `check` job below, which reads this file.
-#
-# `workflow_dispatch` ONLY, and the reason is `main` staying green. A canary on
+# §15.5's canary, and §15.1's production leg of the pipeline. It reaches no
+# cluster: there is no environment for this repository, no kubeconfig and no
+# registry. What is asserted about it is asserted by `deploy/canary/canary.py`,
+# whose suite runs on every change to this tree, and by the `check` job below,
+# which reads this file.
+
+# `workflow_dispatch` only, and the reason is `main` staying green: a canary on
 # `push` would fail on every merge for want of a cluster, which trains everyone
-# to ignore a red pipeline -- the exact failure §15.1 spends a paragraph on
-# about gates nobody has defined. When an environment exists, the trigger to
-# add is `workflow_run` on a green CI over `main`, plus §15.1's manual approval
-# gate between staging and production; the steps below do not change.
+# to ignore a red pipeline. When an environment exists, the trigger to add is
+# `workflow_run` on a green CI over `main`, plus §15.1's manual approval gate;
+# the steps below do not change.
 on:
   workflow_dispatch:
     inputs:
@@ -29,9 +24,9 @@ on:
         required: true
         type: string
   # The gate runs on its own inputs, so a change to the plan, the script or
-  # this file is checked without a deploy. `canary.py` declares SOURCE_INPUTS
-  # beside the reads and asserts BOTH lists below cover every entry -- the Helm
-  # tree's lesson, adopted rather than re-learned.
+  # this file is checked without a deploy. The paths below are not maintained
+  # here: `canary.py` declares them as SOURCE_INPUTS beside the reads that need
+  # them, and asserts that both lists cover every entry.
   pull_request:
     paths:
       - 'deploy/canary/**'
@@ -52,18 +47,17 @@ permissions:
   contents: read
 
 concurrency:
-  # NOT cancel-in-progress. Cancelling a rollout mid-ladder leaves a canary
+  # Not cancel-in-progress: cancelling a rollout mid-ladder leaves a canary
   # Deployment serving traffic with nothing left to promote or retire it, which
-  # is the one state this whole file exists to avoid. A second run queues.
-  #
-  # KEYED BY WORKLOAD, NOT BY REF, and the ref is what it used to be. Two
-  # manual dispatches of the same workload from different branches are two runs
-  # against ONE stable release, one HPA floor and one `<workload>-canary` — and
-  # under a ref-scoped key they proceed in parallel, each restoring a floor the
-  # other moved and each uninstalling the other's canary. The thing that must
-  # serialise is the cluster object, and the branch a dispatch was launched
-  # from says nothing about which one that is. `workflow_dispatch` is the only
-  # trigger that reaches this job, so `inputs.workload` is always present.
+  # is the one state this file exists to avoid. A second run queues.
+
+  # Keyed by workload rather than by ref. Two manual dispatches of the same
+  # workload from different branches are two runs against one stable release,
+  # one HPA floor and one `<workload>-canary`; under a ref-scoped key they
+  # proceed in parallel, each restoring a floor the other moved and each
+  # uninstalling the other's canary. What must serialise is the cluster object,
+  # and the branch a dispatch was launched from says nothing about which one
+  # that is.
   group: deploy-${{ inputs.workload }}
   cancel-in-progress: false
 
@@ -91,14 +85,13 @@ jobs:
     needs: check
     if: ${{ github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
-    # ARITHMETIC, not a round number, and 60 was less than the rollout's own
-    # declared maximum. §15.5's ladder dwells ten minutes on each of three
-    # rungs (30), and each of the three canary upgrades plus the promotion may
-    # take the 20 minutes §15.1's callout requires for a migration hook (80) —
-    # 110 in total, before the cleanup step. A 60-minute cap cancelled a valid
-    # slow migration mid-rollout without any per-command timeout being hit,
-    # which is the one way to leave a canary serving with no step left to
-    # remove it.
+    # Arithmetic rather than a round number. §15.5's ladder dwells ten minutes
+    # on each of three rungs (30), and each of the three canary upgrades plus
+    # the promotion may take the 20 minutes §15.1's callout requires for a
+    # migration hook (80) — 110 in total, before the cleanup step. A cap below
+    # that cancels a valid slow migration mid-rollout with no per-command
+    # timeout hit, which is the one way to leave a canary serving with no step
+    # left to remove it.
     timeout-minutes: 150
     environment: production
     env:
@@ -108,29 +101,20 @@ jobs:
       # here explicitly rather than assumed to arrive.
       PROMETHEUS_URL: ${{ vars.PROMETHEUS_URL }}
     steps:
-      # PRODUCTION ROLLS FROM `main` AND NOTHING ELSE.
-      #
-      # `workflow_dispatch` lets the caller choose any branch or tag, and
-      # `actions/checkout` then loads the charts, the rollout script AND the
-      # validation from that ref — so an unmerged branch could deploy itself
-      # using its own weakened copy of the tag preflight and the analysis
-      # thresholds. Every gate in this file is code from the same ref it is
-      # gating, which is only safe when that ref is the protected one.
-      #
-      # A step rather than a job-level `if`, deliberately: a skipped job says
-      # nothing, and somebody who dispatched this on purpose should be told
-      # why it did not run. The header above already names green CI over
-      # `main` as the intended source.
-      #
-      # THIS STEP IS A GUARD AGAINST ACCIDENT AND NOT THE BOUNDARY, and the
-      # sentence it replaced said the opposite. It runs from the dispatched
-      # ref, so a branch can delete it before dispatching. What holds the
-      # boundary is the `production` Environment's own deployment-branch
-      # restriction -- `main` and nothing else -- provisioned with the
-      # Environment and stated as an obligation in docs/secrets.md. Under
-      # that restriction a dispatch from a branch never reaches this job at
-      # all; this step is for the repository where the Environment has not
-      # been provisioned yet, and for the person who needs to be told.
+      # Production rolls from `main` and nothing else. `workflow_dispatch` lets
+      # the caller choose any branch or tag, and `actions/checkout` then loads
+      # the charts, the rollout script and the validation from that ref — so an
+      # unmerged branch could deploy itself using its own weakened copy of the
+      # tag preflight and the analysis thresholds. Every gate in this file is
+      # code from the same ref it is gating, which is only safe when that ref
+      # is the protected one.
+
+      # A step rather than a job-level `if`: a skipped job says nothing, and
+      # somebody who dispatched this on purpose should be told why it did not
+      # run. It is a guard against accident and not the boundary, because it
+      # runs from the dispatched ref too. What holds the boundary is the
+      # `production` Environment's deployment-branch restriction — `main` and
+      # nothing else — stated as an obligation in docs/secrets.md.
       - name: Production rolls from main
         run: |
           if [ "$GITHUB_REF" != "refs/heads/main" ]; then
@@ -144,39 +128,31 @@ jobs:
         with:
           python-version: '3.12'
 
-      # THE STEP THAT AUTHENTICATES TO A CLUSTER IS MISSING, and naming it is
-      # better than a comment implying it is handled. `ubuntu-latest` is a
-      # fresh hosted runner with no kubeconfig, and a GitHub Environment scopes
-      # secrets without materialising one — so the first `kubectl` below has no
-      # context and this job cannot be dispatched as it stands. What it is
-      # owed, in this order: a checkout of the cluster credential (an OIDC
-      # login for the provider, or `azure/k8s-set-context`-style step), and
-      # `helm` on the runner, which `ubuntu-latest` does ship but no line here
-      # pins.
-      #
-      # It is not written speculatively because there is no cluster to write it
-      # against, and a login step for a provider nobody has chosen would be a
-      # fiction with credentials in it. `PROMETHEUS_URL` IS bound, in the job's
-      # `env` above, because that one needs no provider to be correct.
-      #
-      # Everything below is here because the decision it encodes is the
-      # deliverable, and burying it in a runbook would make it prose.
-      # BEFORE ANY HELM COMMAND SEES IT. `--set-string image.tag="$TAG"` is not
-      # one assignment: Helm parses the value with `strvals`, where a comma
-      # separates assignments — so a dispatch of
-      # `deadbeef,image.registry=attacker.example` sets a valid `image.tag`
-      # AND overrides the registry, for the canary and the promotion alike.
-      # The chart's own validation passes, because by then the tag really is
-      # `deadbeef` and the injected key rode in beside it.
-      #
-      # The rule is `commerce.tag`'s, so the two cannot disagree, and it is
-      # tested — a regex inline here would be the one part of this file nothing
-      # could exercise.
-      #
+      # No step authenticates to a cluster, and naming that is better than a
+      # comment implying it is handled. `ubuntu-latest` is a fresh hosted
+      # runner with no kubeconfig, and a GitHub Environment scopes secrets
+      # without materialising one, so the first `kubectl` below has no context
+      # and this job cannot be dispatched as it stands. It is owed a checkout
+      # of the cluster credential, and `helm` on the runner, which
+      # `ubuntu-latest` ships but no line here pins. A login step for a
+      # provider nobody has chosen would be a fiction with credentials in it.
+      # `PROMETHEUS_URL` is bound in the job's `env` above, because that one
+      # needs no provider to be correct.
+
+      # The tag is validated before any Helm command sees it.
+      # `--set-string image.tag="$TAG"` is not one assignment: Helm parses the
+      # value with `strvals`, where a comma separates assignments, so a
+      # dispatch of `deadbeef,image.registry=attacker.example` sets a valid
+      # `image.tag` and overrides the registry, for the canary and the
+      # promotion alike. The chart's own validation passes, because by then the
+      # tag really is `deadbeef`. The rule is `commerce.tag`'s, so the two
+      # cannot disagree, and it is tested — a regex inline here would be the
+      # one part of this file nothing could exercise.
+
       # `--workload` because the budget is not the same for every chart: a
       # workload with a migrator derives `<workload>-migrate-<tag>`, which
       # Kubernetes stamps onto every pod as a label and refuses past 63. The
-      # chart already checks it — at RENDER time, which on this path is after
+      # chart already checks it, at render time, which on this path is after
       # the stable track has been scaled to nineteen.
       - name: The tag has to be a tag
         run: python deploy/canary/canary.py validate-tag --value "$TAG" --workload "$WORKLOAD"
@@ -184,55 +160,29 @@ jobs:
           TAG: ${{ inputs.tag }}
           WORKLOAD: ${{ inputs.workload }}
 
-      # THE REALM IS CHECKED BEFORE THE ROLLOUT CHANGES ANYTHING, and this is
-      # the step #157 asked for. ADR-033's 330-second revocation bound and
-      # ADR-034's no-refresh-token rule are realm settings, and until ADR-042
-      # the only realm anything read was the Compose export -- so both were
-      # verified locally and merely stated for the realm every chart actually
-      # points at.
-      #
-      # "Before the rollout changes anything" and not "before the cluster is
-      # touched", because the first of these three steps READS the cluster.
-      # The first step that CHANGES it is the HPA patch below, and the
-      # difference is worth the extra words: a read is what makes the check
-      # honest, and a claim that nothing has been contacted would be false.
-      #
-      # ADR-040 declined a pipeline check on the grounds that one "needs admin
-      # credentials in CI", and that objection is answered by WHERE this sits
-      # rather than by having found credentials. CI holds none and still holds
-      # none; this job runs under the `production` GitHub Environment, which is
-      # what scopes a deploy-time credential to the deploy. The realm-check
-      # client is a service account of the realm being checked, with realm-read
-      # rights and nothing else -- docs/secrets.md carries how it is
-      # provisioned and rotated.
-      #
-      # THE REALM IS DERIVED AND THE ORIGIN IS PINNED, and mixing those up is a
-      # hole either way. Two environment variables naming a realm, beside a
-      # chart value naming another, is a gate that passes on a compliant
-      # unrelated realm while every host it deploys is pointed at the
-      # non-compliant one -- which would have closed #157 in the description
-      # and nowhere else. So the realm comes out of `helm get values`, which
-      # answers what the release is running with and what `-f
-      # stable-values.yaml` below reinstalls.
-      #
-      # DERIVING THE ORIGIN TOO WOULD BE WORSE THAN THE HOLE IT CLOSED. The
-      # next step posts this deployment's client secret to that host's token
-      # endpoint, so an `identity.authority` of `https://attacker.example/...`
-      # -- a value held in the cluster, editable by anyone who can edit a
-      # release -- would exfiltrate the credential. `KEYCLOAK_TRUSTED_ORIGIN`
-      # is the identity provider this deployment is willing to authenticate to,
-      # it comes from the Environment and not from the cluster, and
-      # `realm_check.py authority` refuses a release whose authority names
-      # anything else. A rollout onto an untrusted identity provider stops.
-      #
+      # The realm is checked before the rollout changes anything: ADR-033's
+      # revocation bound and ADR-034's no-refresh-token rule are realm
+      # settings. "Before the rollout changes anything" and not "before the
+      # cluster is touched", because the steps that follow read the cluster;
+      # the first that changes it is the HPA patch below.
+
+      # The credential is the `production` Environment's rather than CI's,
+      # which is what answers ADR-040; docs/secrets.md carries its rights, its
+      # provisioning and its rotation.
+
+      # The realm is derived from the release and the origin is pinned from the
+      # Environment, and docs/secrets.md argues why each has to come from where
+      # it does. What this step adds is the order: the realm comes out of
+      # `helm get values`, which answers what the release is running with and
+      # what `-f stable-values.yaml` reinstalls, so the realm judged is the
+      # realm installed.
+
       # It fails closed in every direction: an absent variable, an authority
       # this gate cannot split, a realm that cannot be read, a realm that
-      # disagrees. A rollout that cannot see its own realm stops, on the same
-      # rule the Prometheus read below follows.
-      #
-      # The suite runs first here as well as in `realm.yml`, and the repetition
-      # is the point: this job runs the gate from the dispatched ref, so the
-      # copy that decides is the copy that must have been observed red.
+      # disagrees. The suite runs first here as well as in `realm.yml`, and the
+      # repetition is the point: this job runs the gate from the dispatched
+      # ref, so the copy that decides is the copy that must have been observed
+      # red.
       - name: The realm gate's negatives
         run: python -m unittest discover -s deploy/keycloak
 
@@ -243,16 +193,15 @@ jobs:
       - name: The realm to read is the realm this rollout installs
         run: |
           set -euo pipefail
-          # `--all`, and its absence would have stopped every rollout. Without
-          # it `helm get values` emits only the overrides the caller supplied
-          # and omits the chart's own defaults -- and `identity.authority` HAS
-          # a default in all four charts, so a release that never overrode it
+          # `--all`, and its absence would stop every rollout. Without it
+          # `helm get values` emits only the overrides the caller supplied and
+          # omits the chart's own defaults, and `identity.authority` has a
+          # default in every chart, so a release that never overrode it
           # answers a document with no `identity` key at all. `--all` is the
-          # computed values, which is what the release is running with and what
-          # the question is. The sibling `helm get values ... -o yaml` below
-          # deliberately does NOT take it: that one produces the `-f` file for
-          # the upgrade, where re-supplying defaults as explicit overrides is
-          # exactly what must not happen.
+          # computed values, which is what the question is. The sibling
+          # `helm get values ... -o yaml` below deliberately omits it: that one
+          # produces the `-f` file for the upgrade, where re-supplying defaults
+          # as explicit overrides is exactly what must not happen.
           helm get values "$WORKLOAD" -n "$NAMESPACE" --all -o json \
             > "$RUNNER_TEMP/installed.json"
           python deploy/keycloak/realm_check.py authority \
@@ -265,10 +214,10 @@ jobs:
       - name: Read the deployed realm
         run: python deploy/keycloak/read_admin.py --out "$RUNNER_TEMP/realm.json"
         env:
-          # KEYCLOAK_BASE_URL and KEYCLOAK_REALM are NOT here. They arrive
-          # through GITHUB_ENV from the step above, derived from the chart
-          # value, and declaring them here would let an Environment variable
-          # override the realm this rollout is actually installing.
+          # KEYCLOAK_BASE_URL and KEYCLOAK_REALM are deliberately absent. They
+          # arrive through GITHUB_ENV from the step above, derived from the
+          # chart value, and declaring them here would let an Environment
+          # variable override the realm this rollout is installing.
           KEYCLOAK_CHECK_CLIENT_ID: ${{ vars.KEYCLOAK_CHECK_CLIENT_ID }}
           KEYCLOAK_CHECK_CLIENT_SECRET: ${{ secrets.KEYCLOAK_CHECK_CLIENT_SECRET }}
 
@@ -277,20 +226,15 @@ jobs:
           python deploy/keycloak/realm_check.py check
           --realm "$RUNNER_TEMP/realm.json" --kind deployed
 
-      # AND THE AUTHORITY THAT WAS CHECKED IS THE ONE EVERY HELM CALL BELOW
-      # INSTALLS. Reading it from the running release and then upgrading to a
+      # The authority that was checked is the one every Helm call below
+      # installs. Reading it from the running release and then upgrading to a
       # checked-out chart is not the same question: `-f stable-values.yaml`
-      # carries the caller's OVERRIDES, so an authority that came from the old
-      # chart's default is replaced by the new chart's default, and the realm
-      # checked a step ago is not the realm the workload ends up pointed at.
-      #
-      # Pinning it as an explicit override closes that by construction. It is
-      # set once here and every `helm upgrade` in this job takes it, so there
-      # is no invocation that could take a different one -- and `--set-string`
-      # is safe for this value because `realm_check.py authority` has already
-      # refused whitespace, a query, a fragment and a second path segment. The
-      # remaining `strvals` character is a comma, which cannot occur in a URL
-      # that passed those refusals and reached a `/realms/<name>` split.
+      # carries the caller's overrides, so an authority that came from the old
+      # chart's default is replaced by the new chart's default. Pinning it as
+      # an explicit override closes that by construction — it is set once here
+      # and every `helm upgrade` in this job takes it — and `--set-string` is
+      # safe for this value because `realm_check.py authority` has already
+      # refused whitespace, a query, a fragment and a second path segment.
       - name: The checked authority is the one that gets installed
         run: |
           set -euo pipefail
@@ -303,57 +247,48 @@ jobs:
           NEEDED=$(python deploy/canary/canary.py required --step 0)
           echo "The first step needs $NEEDED stable replicas (ADR-022)."
           # §15.5's 5% is one pod in twenty, so a three-replica service cannot
-          # express it: one canary already serves 25%. Scaling up is what makes
-          # the requested weight the served weight, and it is deliberate rather
-          # than implicit -- `canary.py plan` refuses instead of rounding.
-          #
-          # §15.3's autoscaling.maxReplicas is 20 on the three service charts,
-          # exactly this 19 plus one canary — chosen independently, and worth
-          # knowing. It is NOT platform-wide: the gateway's is 30, so there the
-          # 19 is what the weight costs rather than all the chart allows.
-          #
-          # **THE HPA'S FLOOR MOVES FIRST, and a `kubectl scale` alone would
-          # not have held.** These charts enable an autoscaler on the stable
-          # track with `minReplicas: 3`, and _deployment.tpl says in its own
-          # comment that `replicas` is a managed field — "the HPA writes it
-          # back". So a scale to 19 decays toward 3 across the ten-minute
-          # dwells, and `plan` is then computing 5% against a replica count
-          # the cluster no longer has. On a busy service the HPA may already
-          # be near 19 and the scale is a no-op, which hides the hole rather
-          # than closing it.
-          #
-          # Raising the floor is what makes the number stick, and restoring it
-          # is owed FROM THE MOMENT IT IS RAISED. The floor is recorded in
-          # GITHUB_ENV before the patch, and the `if: always()` step at the end
-          # of this job is what puts it back — see the argument there.
-          # `--ignore-not-found`, NOT `2>/dev/null || echo ""`. That form
-          # turned every failure into "there is no HPA" — an expired
+          # express it: one canary already serves 25%. Scaling up is what
+          # makes the requested weight the served weight, and `canary.py plan`
+          # refuses rather than rounding. §15.3's autoscaling.maxReplicas is
+          # exactly this 19 plus one canary on the service charts, and higher
+          # on the gateway, where the 19 is what the weight costs rather than
+          # all the chart allows.
+
+          # The HPA's floor moves first, and a `kubectl scale` alone would not
+          # hold. These charts enable an autoscaler on the stable track, and
+          # _deployment.tpl says `replicas` is a managed field the HPA writes
+          # back, so a raised count decays toward the autoscaler's floor across
+          # the dwells and `plan` then computes its share against a replica
+          # count the cluster no longer has. Raising the floor is what makes
+          # the number stick; restoring it is owed from the moment it is
+          # raised, which the `if: always()` step at the end of this job does.
+
+          # `--ignore-not-found` rather than a redirect into an empty string.
+          # That form turns every failure into "there is no HPA" — an expired
           # credential, a network blip, an API server saying 403 — and the
           # rollout would then scale the Deployment without raising a floor
           # that does exist, so the autoscaler pulls the stable count back down
           # and every weight the ladder computes is against a number the
           # cluster does not have. Only a genuinely absent HPA may yield an
-          # empty string here; anything else has to stop the rollout.
+          # empty string here.
           FLOOR=$(kubectl get hpa "$WORKLOAD" -n "$NAMESPACE" \
             --ignore-not-found -o jsonpath='{.spec.minReplicas}')
           echo "HPA_FLOOR=$FLOOR" >> "$GITHUB_ENV"
 
-          # THE TARGET IS A MAXIMUM, because this step may only ever scale UP.
+          # The target is a maximum, because this step may only scale up.
           # `$NEEDED` is what the first rung's weight requires, not what the
           # service is currently running: a workload the autoscaler has taken
-          # to 20 under load would have been forced DOWN to 19, and an HPA
-          # floor already above 19 would have been LOWERED to it. Reducing
-          # production capacity to start a canary is the opposite of what a
-          # canary is for, and it happens at the busiest moment, since a high
-          # replica count is what load looks like.
-          #
-          # Taking the maximum keeps the weight honest too — more stable pods
-          # only make the canary's share smaller than the rung asked for, and
-          # `plan` treats the requested weight as a ceiling.
-          # ONE read of the replica count, used for both the maximum above and
-          # the value the cleanup restores. Two reads of one number is how a
-          # message ends up naming a figure the check beside it would reject,
-          # which this branch has already paid for once.
+          # to 20 under load would be forced down to 19, and an HPA floor
+          # already above 19 would be lowered to it. Reducing production
+          # capacity to start a canary is the opposite of what a canary is for,
+          # and it happens at the busiest moment. Taking the maximum keeps the
+          # weight honest too — more stable pods only make the canary's share
+          # smaller than the rung asked for, and `plan` treats the requested
+          # weight as a ceiling.
+
+          # One read of the replica count, used both for the maximum above and
+          # for the value the cleanup restores. Two reads of one number is how
+          # a message ends up naming a figure the check beside it would reject.
           CURRENT=$(kubectl get deployment "$WORKLOAD" -n "$NAMESPACE" \
             -o jsonpath='{.spec.replicas}')
           echo "STABLE_REPLICAS_BEFORE=$CURRENT" >> "$GITHUB_ENV"
@@ -366,25 +301,21 @@ jobs:
           echo "Scaling the stable track to $NEEDED (never below what it runs now)."
 
           # The Deployment's own replica count, recorded whether or not there
-          # is an HPA — and it is the ONLY thing to restore when there is not.
-          # `autoscaling.enabled: false` is a supported chart configuration
-          # (§15.3), and under it the cleanup below had nothing to put back
-          # while this step had still scaled production to 19. A rollback then
-          # left the service permanently over-scaled, which is the same defect
-          # as leaving minReplicas at 19 and is invisible for longer.
+          # is an HPA. `autoscaling.enabled: false` is a supported chart
+          # configuration (§15.3), and under it there is no floor for the
+          # cleanup to restore, so this is the value it scales back to.
           if [ -n "$FLOOR" ]; then
             kubectl patch hpa "$WORKLOAD" -n "$NAMESPACE" \
               --type=merge -p "{\"spec\":{\"minReplicas\":$NEEDED}}"
           fi
 
           kubectl scale deployment "$WORKLOAD" --replicas="$NEEDED" -n "$NAMESPACE"
-          # BOUNDED, because an unbounded wait here does not fail — it consumes
-          # the job. A scale-up that cannot schedule 19 ready pods would block
-          # until the 150-minute cap, and a job cancelled on its timeout is not
-          # the same as a step that failed: the `if: always()` cleanup is not
-          # reliably reached, so the raised HPA floor stays raised with nothing
-          # left to run. A bounded failure reaches the cleanup; an unbounded
-          # one is how the floor survives the rollout.
+          # Bounded, because an unbounded wait here does not fail — it
+          # consumes the job. A scale-up that cannot schedule the replicas it
+          # asked for would block until the job's cap, and a job cancelled on
+          # its timeout is not the same as a step that failed: the
+          # `if: always()` cleanup is not reliably reached, so the raised HPA
+          # floor stays raised with nothing left to run.
           kubectl rollout status deployment "$WORKLOAD" -n "$NAMESPACE" --timeout=10m
         env:
           WORKLOAD: ${{ inputs.workload }}
@@ -397,80 +328,71 @@ jobs:
           STABLE=$(kubectl get deployment "$WORKLOAD" -n "$NAMESPACE" -o jsonpath='{.spec.replicas}')
 
           # `deploy/helm/*/charts/` is gitignored, and every service chart
-          # depends on `file://../common`. Without this, the install below is
-          # `found in Chart.yaml, but missing in charts/ directory:
-          # commerce-common` and the canary never reaches a pod. `smoke.sh`
-          # re-resolves on every run and the README's first setup command is
-          # this one; the workflow was the copy that did not.
+          # depends on `file://../common`. Without this, the install below
+          # reports `commerce-common` missing in charts/ and the canary never
+          # reaches a pod.
           CHART_DIR="deploy/helm/$(python deploy/canary/canary.py chart --workload "$WORKLOAD")"
           helm dependency update "$CHART_DIR"
 
-          # ONCE, before the ladder, and used by BOTH the canary installs and
+          # Once, before the ladder, and used by both the canary installs and
           # the promotion. `helm get values` returns the release's own
-          # overrides — not the coalesced set — so applying it over the new
-          # chart picks up new defaults while keeping what the environment
+          # overrides rather than the coalesced set, so applying it over the
+          # new chart picks up new defaults while keeping what the environment
           # chose. Nothing in this loop touches the stable release, so one
           # fetch is the same answer every rung.
           helm get values "$WORKLOAD" -n "$NAMESPACE" -o yaml > stable-values.yaml
 
           for STEP in $(seq 0 $((STEPS - 1))); do
-            # `plan` prints CANARY_* assignments rather than JSON so this stays
-            # a shell script instead of five inline `python -c` invocations,
-            # each of them a quoting bug in the one file nothing here can test.
-            # It EXITS NON-ZERO when the requested weight is not expressible at
-            # the current replica count, and `set -e` is what makes that a
-            # stopped rollout rather than a stale plan reused.
-            # ASSIGN, THEN EVAL. `eval "$(cmd)"` swallows a failed cmd: the
-            # substitution yields an empty string, `eval ""` returns success,
-            # and `set -e` never fires — so `plan` REFUSING a weight it cannot
-            # express, which is the mechanism this whole rollout is built
-            # around, would have been silently ignored and the loop would have
-            # carried the previous rung's CANARY_* values into this one. A
-            # plain assignment propagates the substitution's status, so the
-            # refusal stops the rollout as it was always meant to.
+            # `plan` prints CANARY_* assignments rather than JSON so this
+            # stays a shell script instead of five inline `python -c`
+            # invocations, each of them a quoting bug in the one file nothing
+            # here can test. It exits non-zero when the requested weight is
+            # not expressible at the current replica count, and `set -e` is
+            # what makes that a stopped rollout rather than a stale plan
+            # reused.
+
+            # Assign, then eval. `eval "$(cmd)"` swallows a failed cmd: the
+            # substitution yields an empty string, `eval ""` returns success
+            # and `set -e` never fires, so a refused weight would be ignored
+            # and the loop would carry the previous rung's CANARY_* values
+            # into this one. A plain assignment propagates the substitution's
+            # status.
             PLAN=$(python deploy/canary/canary.py plan \
               --workload "$WORKLOAD" --stable "$STABLE" --step "$STEP")
             eval "$PLAN"
 
-            # THE LAST RUNG IS HANDLED BEFORE THE CANARY IS TOUCHED, because
-            # 100% is not a weight — `plan` says so in its own docstring and
-            # returns `final`, with `stableReplicas: 0`, rather than a share.
-            #
-            # Run in rung order this branch sat AFTER the upgrade below, and
-            # every part of that was wrong: the canary was already at this
-            # replica count from the 50% step, so the upgrade was a no-op that
-            # re-ran §7.4's migration hook for nothing; and the step announced
-            # "100.0% served" while the stable track was still up, so the
-            # cluster was at 50% and the log said otherwise. Promotion is a
+            # The last rung is handled before the canary is touched, because
+            # 100% is not a weight: `plan` returns `final`, with
+            # `stableReplicas: 0`, rather than a share. Promotion is a
             # different operation from a rung, and it belongs before the code
-            # that performs one.
+            # that performs one — run in rung order it would re-run §7.4's
+            # migration hook for nothing and announce a share the cluster was
+            # not serving.
             if [ "$CANARY_FINAL" = "True" ]; then
               echo "The canary is the release; promoting the tag onto the stable release."
-              # THE CHART ARGUMENT IS REQUIRED. `helm upgrade` is
+              # The chart argument is required: `helm upgrade` is
               # `[RELEASE] [CHART]`, and `--reuse-values` reuses the values,
-              # not the chart — without it this is
-              # `Error: "helm upgrade" requires 2 arguments`, at cutover, with
-              # the canary still serving.
-              #
-              # `--atomic` because this is the ONE command in the file that
+              # not the chart, so without it this fails at cutover with the
+              # canary still serving.
+
+              # `--atomic` because this is the one command in the file that
               # mutates the stable release. Without it a failed hook, rollout
               # or wait leaves production partially upgraded, and uninstalling
               # the canary afterwards cannot put the previous revision back —
-              # the rollback this whole mechanism advertises would be gone at
-              # precisely the moment it is needed. `--atomic` rolls the stable
-              # release back itself before the cleanup step runs. It is
-              # deliberately NOT on the canary installs: there a failure is
-              # handled by removing the canary, and rolling it back to an
-              # earlier canary revision is not a state anybody wants.
-              # `-f stable-values.yaml`, NOT `--reuse-values`. The latter
-              # carries forward the values coalesced from the PREVIOUS chart
-              # and ignores defaults the new one introduces — so the canary,
-              # installed from the new chart plus the stable release's own
-              # overrides, and the promotion, installed from the old coalesced
-              # set, could render different configuration at cutover, or the
-              # promotion could fail on a value the new chart added. Both ends
-              # now apply the same overrides over the same chart, which is the
-              # only way the thing promoted is the thing that was measured.
+              # the rollback this mechanism advertises would be gone at
+              # precisely the moment it is needed. It is deliberately absent
+              # from the canary installs: there a failure is handled by
+              # removing the canary, and rolling back to an earlier canary
+              # revision is not a state anybody wants.
+
+              # `-f stable-values.yaml` rather than `--reuse-values`. The
+              # latter carries forward the values coalesced from the previous
+              # chart and ignores defaults the new one introduces, so the
+              # canary and the promotion could render different configuration
+              # at cutover, or the promotion could fail on a value the new
+              # chart added. Both ends now apply the same overrides over the
+              # same chart, which is the only way the thing promoted is the
+              # thing that was measured.
               helm upgrade "$WORKLOAD" "deploy/helm/$CANARY_CHART" \
                 -n "$NAMESPACE" \
                 -f stable-values.yaml --set-string image.tag="$TAG" \
@@ -482,42 +404,36 @@ jobs:
 
             echo "step $STEP: $CANARY_CANARY_REPLICAS canary pod(s), ${CANARY_ACHIEVED}% served"
 
-            # The canary is a SECOND release of the same chart, differing only
+            # The canary is a second release of the same chart, differing only
             # in `canary.enabled`, its replica count and the image tag. The
             # stable release is not touched anywhere in this loop, which is
             # what makes the rollback below cost the canary's own pods and
             # nothing else (ADR-022).
-            #
-            # **IT INHERITS THE STABLE RELEASE'S VALUES, and `--install` is
-            # exactly why it has to.** A new release inherits nothing: without
-            # `-f`, every environment value falls through to the chart's own
-            # default, so the canary would come up against
-            # `identity.example.com`, the default OTLP endpoint and the default
-            # database — a pod that is not a canary of anything. The gateway is
-            # the one where this fails LOUDLY rather than silently, because
-            # `edge-config.yaml` refuses an empty `ingress.trustedNetworks`;
-            # the other three would have installed and been wrong. Measured:
-            # `helm template` with the flags below and no `-f` fails at
-            # edge-config.yaml:194.
-            #
-            # autoscaling off on the canary because an HPA would move the
-            # weight underneath the analysis: the served share is a replica
-            # ratio, so a canary that scales itself is a canary whose blast
-            # radius nobody chose.
-            # `--timeout 20m` because §15.1's callout, deploy/helm/README.md
-            # and docs/runbooks/migration-failure.md all state the same rule:
-            # Helm blocks on a hook whatever `--wait` says, its default is five
-            # minutes, and MigrationJobFailed needs sixteen — so 20m > 16m is
-            # the constraint. ADR-022 makes the CANARY release the one that
-            # runs §7.4's hook, which is precisely why this command is the one
-            # that must not inherit the default.
-            #
-            # `--set autoscaling.enabled=false` is NOT belt and braces: see
+
+            # It inherits the stable release's values, and `--install` is why
+            # it has to: a new release inherits nothing, so without `-f` every
+            # environment value falls through to the chart's own default and
+            # the canary comes up against the default identity provider, OTLP
+            # endpoint and database — a pod that is not a canary of anything.
+            # The gateway fails loudly, because `edge-config.yaml` refuses an
+            # empty `ingress.trustedNetworks`; the rest would install and be
+            # wrong.
+
+            # `--timeout` because Helm blocks on a hook whatever `--wait` says,
+            # and its default is shorter than the migration budget §15.1,
+            # deploy/helm/README.md and docs/runbooks/migration-failure.md
+            # agree on. ADR-022 makes the canary release the one that runs
+            # §7.4's hook, which is why this command is the one that must not
+            # inherit the default.
+
+            # `--set autoscaling.enabled=false` is not belt and braces: see
             # _autoscaling.tpl. The values inherited from the stable release
             # have the HPA on, and `_deployment.tpl` omits `replicas` whenever
-            # it is — so without this flag the canary Deployment carries no
+            # it is, so without this flag the canary Deployment carries no
             # replica count and the API server defaults it to one, making
-            # every rung of the ladder a single pod.
+            # every rung of the ladder a single pod. Autoscaling stays off on
+            # the canary because an HPA would move the weight underneath the
+            # analysis: the served share is a replica ratio.
             helm upgrade --install "$WORKLOAD-canary" "deploy/helm/$CANARY_CHART" \
               --set-string identity.authority="$CHECKED_AUTHORITY" \
               -n "$NAMESPACE" \
@@ -528,8 +444,8 @@ jobs:
               --set-string image.tag="$TAG" \
               --wait --timeout 20m
 
-            # The window equals the dwell: a rate over ten minutes, read at the
-            # end of ten minutes, IS §15.5's "watch for ten minutes".
+            # The window equals the dwell, which is what makes the reading
+            # §15.5's "watch": a rate over the dwell, read at the end of it.
             sleep "$((CANARY_DWELL_MINUTES * 60))"
             python deploy/canary/read_prometheus.py \
               --service "$CANARY_SERVICE_NAME" \
@@ -546,29 +462,19 @@ jobs:
           WORKLOAD: ${{ inputs.workload }}
           TAG: ${{ inputs.tag }}
 
-      # ONE mechanism, at the end, for every path — and that is the third
-      # attempt at this.
-      #
-      # Calling a restore at each of the two outcomes covered promote and
-      # rollback and missed `set -e`. Moving it onto a `trap EXIT` covered
-      # everything the climb step could do and missed the step BEFORE it: the
-      # scale-up is where the floor is raised, and a `kubectl` that fails there
-      # skips the climb step entirely, because Actions defaults every step to
-      # `if: success()`. Each fix was correct about the case it named and
-      # scoped to the wrong unit.
-      #
-      # `if: always()` is scoped to the JOB, which is the unit every one of
-      # these is undone for. It runs after a promote, after a rollback, after a
-      # failure in any step, and after a cancellation.
-      #
-      # THREE things are undone here, and the canary is the one that was
-      # missing. A failure between the install and either exit — a Prometheus
-      # that cannot be reached, a Helm timeout, the analyse step erroring
-      # rather than returning a verdict — bypasses both explicit
-      # `helm uninstall` calls under `set -e`, and a step that restores only
-      # the autoscaler leaves a canary of an unproven build serving a share of
-      # production indefinitely. That is a worse outcome than the over-scaling
-      # this step was written for.
+      # One mechanism, at the end, for every path. `if: always()` is scoped to
+      # the job, which is the unit every one of these is undone for: it runs
+      # after a promote, after a rollback, after a failure in any step, and
+      # after a cancellation. A restore called at each outcome misses `set -e`,
+      # and a `trap EXIT` in the climb step misses the scale-up step before it,
+      # where the floor is raised.
+
+      # The canary is what matters most of what is undone here. A failure
+      # between the install and either exit — an unreachable Prometheus, a Helm
+      # timeout, the analyse step erroring rather than returning a verdict —
+      # bypasses the explicit `helm uninstall` calls under `set -e`, and a step
+      # that restores only the autoscaler leaves a canary of an unproven build
+      # serving a share of production indefinitely.
       - name: Undo everything the rollout raised
         if: always()
         run: |
@@ -576,13 +482,12 @@ jobs:
 
           # The canary first: it is the one serving traffic.
           #
-          # `--ignore-not-found` on the uninstall, NOT a `helm status` guard.
-          # The guard was the HPA's `2>/dev/null` fail-open in another costume:
-          # `helm status` exits non-zero for an absent release AND for an
+          # `--ignore-not-found` on the uninstall rather than a `helm status`
+          # guard. That guard exits non-zero for an absent release and for an
           # expired credential, a network failure or an API server saying no,
-          # so every one of those skipped the canary entirely — silently, in
-          # the step whose whole job is to make sure it is gone. The flag makes
-          # absence the only ignored outcome and leaves the rest visible.
+          # so every one of those would skip the canary silently, in the step
+          # whose whole job is to make sure it is gone. The flag makes absence
+          # the only ignored outcome.
           echo "Removing the canary release if the rollout left one."
           helm uninstall "$WORKLOAD-canary" -n "$NAMESPACE" --ignore-not-found || failed=1
 
@@ -595,11 +500,11 @@ jobs:
               --replicas="$STABLE_REPLICAS_BEFORE" -n "$NAMESPACE" || failed=1
           fi
 
-          # NOT `|| true` swallowing the lot. A cleanup that fails is a cluster
-          # left in the state this step exists to prevent, and reporting
-          # success would hide exactly that — the failure the `|| true` here
-          # used to cause. Each command is allowed to fail without skipping the
-          # ones after it, and then the step fails.
+          # Not `|| true` swallowing the lot. A cleanup that fails is a
+          # cluster left in the state this step exists to prevent, and
+          # reporting success would hide exactly that. Each command is allowed
+          # to fail without skipping the ones after it, and then the step
+          # fails.
           exit "$failed"
         env:
           WORKLOAD: ${{ inputs.workload }}

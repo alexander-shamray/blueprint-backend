@@ -16,21 +16,17 @@ concurrency:
 jobs:
   # Ahead of the build, not after it (§15.1). The gate reads
   # Directory.Packages.props, Appendix B and every .csproj, .props and .targets
-  # as text, so it needs neither a restore nor an SDK — which is exactly why it
-  # can run here. The project files are in the subject since #50: central
-  # pinning is a convention, and three legal spellings restore a package
+  # as text, so it needs neither a restore nor an SDK — which is why it can run
+  # here. The project files are in the subject because central pinning is a
+  # convention, and a project file can still restore a package
   # Directory.Packages.props never mentions. Scanning that sits downstream of a
   # build is scanning that a build failure skips.
-  #
-  # This is §15.1's "SCA + secret scan" node, and since #61 it is both halves
-  # rather than the licence one. They share a job because they share every
-  # property the job is arranged around: stdlib Python over text, no restore,
-  # no SDK, no network — and because §15.1 draws them as one node.
-  #
-  # NO PATH FILTER, and that is the design rather than an omission. A
-  # credential can arrive in any file in the repository, so a filter could
-  # only make this skippable — the argument `closure-gate.yml` makes about
-  # itself, one workflow over.
+
+  # This is §15.1's "SCA + secret scan" node, both halves. They share a job
+  # because they share every property it is arranged around: stdlib Python over
+  # text, no restore, no SDK, no network. There is no path filter, and that is
+  # the design: a credential can arrive in any file in the repository, so a
+  # filter could only make this skippable.
   licence-gate:
     runs-on: ubuntu-latest
     steps:
@@ -40,16 +36,13 @@ jobs:
         with:
           python-version: '3.12'
 
-      # The secret scan runs FIRST, ahead of the licence steps. Both are cheap
-      # and neither gates the other, so the order is about what each failure
-      # costs: a credential in the tree is compromised from the moment the
-      # branch is pushed, and no later step tells you anything you would rather
-      # know first. A licence problem is a decision to take, not a rotation to
-      # perform.
-      #
-      # Its own tests before it, on the pattern every gate here follows: a
-      # green run against this repository says the tree is clean, which says
-      # nothing about what the scanner would catch.
+      # The secret scan runs ahead of the licence steps. Both are cheap and
+      # neither gates the other, so the order is about what each failure costs:
+      # a credential in the tree is compromised from the moment the branch is
+      # pushed, where a licence problem is a decision to take rather than a
+      # rotation to perform. Its own tests come first, on the pattern every
+      # gate here follows — a green run against this repository says the tree
+      # is clean, which says nothing about what the scanner would catch.
       - name: Test the secret scan
         working-directory: .github/secret-scan
         run: python -m unittest
@@ -71,60 +64,10 @@ jobs:
         working-directory: .github/licence-gate
         run: python licence_gate.py
 
-  # The review loop's own helpers — the only suite whose subject is `.claude/`.
-  #
-  # Nothing in CI *runs* these scripts, which is exactly why the suite belongs
-  # here: a test nobody runs rots, and the judgements it covers are the ones
-  # /ship and the two sweeps rest on — what counts as a usage limit, what counts
-  # as a review that finished, whether the check ledger can publish an answer on
-  # its own error path, whether every usage-limit skip happens before a slot is
-  # reserved, whether the sweeps' worktree guard is the direct-child
-  # check it claims, and whether the label helper leaves a free parameter a
-  # finding could steer. Five of those six shipped wrong; the sixth is a grant
-  # that was closed by moving it into a helper, and the suite is what keeps it
-  # closed. Issues have added subjects since: #56, what a Copilot feed helper
-  # admits, what it reports about what it dropped, and that no command can
-  # reach those feeds outside the fixed helpers; #33, which paths the harness
-  # denies itself and that the worktree root is not among them; #52, that the
-  # reviewer's transcript reaches no stream and that the one bounded read of it
-  # cannot be widened; #57, that both sweeps still state who may suppress a
-  # finding and that neither has drifted back to the unconditional rule; #140,
-  # that the Grok ceiling is one declared number both helpers enforce and that a
-  # row posted under the old ceiling is still read as spent; #60, that the two
-  # commands stating editing boundaries path-scope Edit away from every tracked
-  # tree while each keeps its own subject editable; #30 and #23, the argv guard
-  # — the --output write primitive in every spelling including the quoted one,
-  # ext::, command substitution, and a push ALLOW-list that refuses anything
-  # but one remote, one refspec naming a destination, and a fixed option set;
-  # #150, that what suppresses a sweep finding is decided by a helper rather
-  # than by a reader; #75 again, that the issue helper leaves `gh issue
-  # create` no free parameter and that the conversion exclusion reaches its
-  # own child rather than only its source; and #17, that every
-  # credential-bearing `docker run` in the reviewer joins the internal
-  # network and only the proxy reaches the bridge, and — in a second module
-  # the same discover picks up — that the proxy itself answers a socket the
-  # way its file says, on loopback and with no network. A THIRD module the
-  # same discover picks up carries #181, the edit-target guard: that a link
-  # inside an allowed tree is refused whatever it points at, that a denied
-  # tree spelled as ITSELF is admitted there rather than judged twice, and
-  # that a checkout reached through a link is not refused wholesale. It needs
-  # a real link on disk, and takes a junction where Windows refuses a
-  # symbolic one rather than skipping a property it never tested.
-  #
-  # Two of those take their counterfactual somewhere other than the previous
-  # commit: #140's read-side cases are green against main and have to be, since
-  # main reads the old comment shape natively, so their counterfactual is the
-  # NAIVE MIGRATION — a deliberately narrowed filter, which four of them fail
-  # against — and #60's is a tree removed from the deny list.
-  #
-  # **No count opens this paragraph.** A number restated in several files
-  # goes stale in all of them at once; what a reviewer can actually check is
-  # whether the ENUMERATION here matches the suite's own docstring in
-  # `.claude/scripts/test_grok_helpers.py`, and that check does not need a
-  # numeral in front of it. Those two are the holders: `docs/testing.md`
-  # points at this workflow for what runs and at the docstring for what the
-  # suite covers, and carries no copy of either.
-  #
+  # The review loop's own helpers. Nothing in CI runs these scripts, which is
+  # why the suite belongs here: a test nobody runs rots, and the judgements it
+  # covers are the ones /ship and the sweeps rest on.
+
   # Beside the licence gate rather than inside `build`, on its argument: stdlib
   # Python over text and a few `bash` fragments, so it needs no restore, no
   # Docker and no network — the `gh` the ledger calls is a stub on PATH.
@@ -140,31 +83,21 @@ jobs:
       - name: Test the review helpers
         run: python -m unittest discover -s .claude/scripts
 
-  # **The edit-target guard has branches no Linux runner can reach**, and the
-  # job above is `ubuntu-latest`, so every one of them could regress with every
-  # required check green. Three are Windows' own: the junction fallback, which
-  # is the only link primitive an unprivileged Windows session gets; `..` after
-  # a link, which Windows collapses before the filesystem sees it where POSIX
-  # resolves it against the link's target; and the on-disk case `realpath`
-  # answers with. The fourth is macOS': APFS mounts case-insensitively by
-  # default, so a checkout prefix spelled in another case is the SAME directory
-  # there and is a different string on Linux — the guard asks the filesystem
-  # rather than the platform, and this is the only runner where that question
-  # has the interesting answer on a POSIX path.
-  #
-  # Both platforms were raised by Copilot, one round apart, and each fix found
-  # a defect the review had not: the suite read the `..` semantics off which
-  # link primitive existed, which is right only while symbolic links and POSIX
-  # coincide, and the case comparison folded on `os.name` where the filesystem
-  # is what decides.
-  #
-  # **One module rather than the whole `discover`**, and that is a property of
-  # the module rather than a preference: `test_edit_target_guard.py` needs
-  # nothing but Python and a filesystem, where the suite beside it needs
-  # `bash`, `grep`, `git` and `jq` on PATH (its `gh` is a stub it writes
-  # itself). Widening this job
-  # to the directory would be adopting that whole toolchain on two more
-  # platforms to reach four branches.
+  # The edit-target guard has branches no Linux runner can reach, and the job
+  # above is `ubuntu-latest`, so they could regress with every required check
+  # green. Windows has the junction fallback, the only link primitive an
+  # unprivileged session gets; `..` after a link, which Windows collapses
+  # before the filesystem sees it where POSIX resolves it against the link's
+  # target; and the on-disk case `realpath` answers with. macOS has APFS
+  # mounting case-insensitively by default, so a checkout prefix spelled in
+  # another case is the same directory there and a different string on Linux —
+  # the guard asks the filesystem rather than the platform.
+
+  # One module rather than the whole `discover`, and that is a property of the
+  # module rather than a preference: the guard's own suite needs nothing but
+  # Python and a filesystem, where the suite beside it needs `bash`, `grep`,
+  # `git` and `jq` on PATH. Widening this job to the directory would adopt that
+  # whole toolchain on every platform in the matrix.
   edit-target-guard:
     strategy:
       fail-fast: false
@@ -185,9 +118,9 @@ jobs:
       - name: Test the edit-target guard
         run: python -m unittest discover -s .claude/scripts -p "test_edit_target_guard.py" -v
 
-  # PR-25's inventory gates, and they sit beside the licence gate rather than
-  # inside `build` for the same reason it does: stdlib Python over text, so
-  # they need no restore and cannot be skipped by a build failure.
+  # The inventory gates, beside the licence gate rather than inside `build` for
+  # the same reason it is: stdlib Python over text, so they need no restore and
+  # cannot be skipped by a build failure.
   #
   # Both are §15.1's own instruction rather than a convention invented here.
   # The path filter is a deployable inventory and the image matrix is another,
@@ -208,14 +141,12 @@ jobs:
         working-directory: .github/pipeline-gate
         run: python -m unittest
 
-      # The coverage reporter's suite runs HERE rather than beside the
-      # reporter, and the reason is the one licence-gate and canary already
-      # follow: test the tool, then run it. It gained a suite because a wrong
-      # merge is silent — a colliding key or a `max` that should have been a
-      # sum prints a plausible figure and nothing goes red — so running the
-      # reporter without its suite is the one arrangement that defeats the
-      # argument for having written it. Stdlib, no restore, so it belongs in
-      # the fast job rather than behind the build.
+      # The coverage reporter's suite runs here rather than beside the
+      # reporter, on the rule licence-gate and canary already follow: test the
+      # tool, then run it. The suite exists because a wrong merge is silent —
+      # a colliding key or a `max` that should have been a sum prints a
+      # plausible figure and nothing goes red. Stdlib, no restore, so it
+      # belongs in the fast job rather than behind the build.
       - name: Test the coverage reporter
         working-directory: .github/coverage
         run: python -m unittest
@@ -260,21 +191,18 @@ jobs:
         working-directory: tools/new-service
         run: python -m unittest
 
-  # #72: the job above renders a service and reads the TEXT of it. It never
-  # compiles one, and a whole class of breakage is invisible to a text check —
-  # anything the scaffold REMOVES. A Catalog test using a helper the scaffold
-  # strips renders into a service that does not build, with every one of those
-  # tests green; PR-14 shipped exactly that (`OutboxRows.Broker`) and nothing
-  # said a word.
-  #
-  # A SEPARATE job, not a step added to `scaffold`, and that is the whole
+  # The job above renders a service and reads the text of it. It never compiles
+  # one, and a whole class of breakage is invisible to a text check: anything
+  # the scaffold removes. A Catalog test using a helper the scaffold strips
+  # renders into a service that does not build, with every one of those tests
+  # green.
+
+  # A separate job rather than a step added to `scaffold`, and that is the
   # design. The scaffold job's value is that it needs no restore and no SDK —
-  # the same property §15.1 relies on to put the licence gate ahead of the
-  # build — and adding .NET to it would spend that on every run. This one runs
-  # in parallel with `build` and leaves the seven-second text suite alone.
-  #
-  # It gates nothing, for the reason the job above gives: a broken scaffold
-  # does not make the solution wrong.
+  # the property §15.1 relies on to put the licence gate ahead of the build —
+  # and adding .NET to it would spend that on every run. This one runs in
+  # parallel with `build`. It gates nothing, for the reason the job above
+  # gives: a broken scaffold does not make the solution wrong.
   scaffold-build:
     runs-on: ubuntu-latest
     steps:
@@ -288,43 +216,34 @@ jobs:
         with:
           python-version: '3.12'
 
-      # `Yankee` at 5199, which is the probe `CLAUDE.md` documents and the
-      # scaffold's own suite already uses — never a real service's name. It
-      # used to be `Ordering`, and PR-18 made Ordering real: the create then
-      # refuses the taken name and port, and the cleanup that follows deletes
-      # the service. A probe cannot quietly become a service later.
+      # `Yankee` is the probe CLAUDE.md documents and the scaffold's own suite
+      # already uses — never a real service's name, because the create refuses
+      # a name or a port a real service already holds.
       - name: Render a service
         run: python tools/new-service/new_service.py Yankee --port 5199
 
-      # BUILD, do not run. The failure class is compile-time, and the rendered
+      # Build, do not run. The failure class is compile-time, and the rendered
       # tests need SQL and RabbitMQ containers to execute — minutes for very
-      # little extra signal. If they are ever run in CI that belongs with
-      # PR-22's Testcontainers categories, not here.
+      # little extra signal.
       #
       # The test project rather than the service: it references the whole
-      # rendered service transitively, so building it compiles both halves,
-      # and the half a text check cannot see is in the tests.
+      # rendered service transitively, so building it compiles both halves, and
+      # the half a text check cannot see is in the tests.
       - name: Compile what it rendered
         run: dotnet build tests/Yankee.Api.Tests/Yankee.Api.Tests.csproj
 
-      # No cleanup step. The scaffold edits tracked files as well as creating
-      # its own — `tools/new-service/README.md` names them, and the count is
-      # deliberately not restated here because it has already moved twice — so
-      # a local run needs `git checkout` afterwards (CLAUDE.md documents it);
-      # here the checkout is discarded with the runner and cleaning it would
-      # only be tidying something nobody reads.
+      # No cleanup step. The scaffold both creates untracked files and edits
+      # tracked ones, so undoing it locally takes the commands
+      # `tools/new-service/README.md` gives; here the checkout is discarded
+      # with the runner.
 
-  # §15.1's fork: only services whose files changed are built and deployed.
-  #
-  # A job of its own so that everything downstream can read one answer. The
+  # §15.1's fork: only services whose files changed are built and deployed. A
+  # job of its own so that everything downstream can read one answer. The
   # filter is §15.1's, verbatim — including the shared anchor, which is the
   # part most easily lost: a version bump in Directory.Packages.props changes
   # every binary the pipeline produces and matches no service path, so without
   # those lines the one change the pin file exists to control is the one change
-  # CI never rebuilds.
-  #
-  # `pipeline-gate` asserts the list below is complete. It is not enough for
-  # this to be right today.
+  # CI never rebuilds. `pipeline-gate` asserts the list below is complete.
   changes:
     runs-on: ubuntu-latest
     outputs:
@@ -356,15 +275,15 @@ jobs:
               # `dotnet build`, and without this line a change to it rebuilds
               # no image at all.
               - '.dockerignore'
-              # Copied into the publish stage by all six application
-              # Dockerfiles, and ADR-019 makes it a build INPUT rather than an
+              # Copied into the publish stage by every application
+              # Dockerfile, and ADR-019 makes it a build input rather than an
               # editor hint: a change to it alters what every image compiles
               # with, and the solution build cannot see the Docker context.
               - '.editorconfig'
               - 'src/BuildingBlocks/**'
-              # The contract suite (§12.6) guards compatibility BETWEEN
-              # services, so it belongs to all of them. Owned by none, it would
-              # run for none.
+              # The contract suite (§12.6) guards compatibility between
+              # services, so it belongs to all of them. Owned by none, it
+              # would run for none.
               - 'tests/Platform.*/**'
             catalog:
               - *shared
@@ -384,30 +303,20 @@ jobs:
             gateway:
               - *shared
               - 'src/Gateway/**'
-            # The BFF is a deployable too, with its own image, chart and the
-            # platform's only client secret.
-            #
-            # AND CATALOG'S PROTO, which is the one place in this list where a
-            # service's filter reaches into another service's tree. Web.Bff
-            # compiles `pricing.proto` as a LINKED source file (§9.7) and its
-            # Dockerfile copies that path, so a proto-only change alters what
-            # the BFF ships while matching only `catalog`. §15.1's own rule is
-            # that if changing a file can change what a service ships, it
-            # belongs in that service's filter — and `pipeline-gate filters`
-            # structurally cannot see this, because it asks whether a
-            # deployable is reachable rather than whether a filter is complete.
+            # The BFF is a deployable too, and §15.1 argues why its filter
+            # reaches into Catalog's tree for the proto Web.Bff compiles.
+            # `pipeline-gate filters` cannot see that case, because it asks
+            # whether a deployable is reachable rather than whether a filter is
+            # complete.
             bff:
               - *shared
               - 'src/BFF/**'
               - 'src/Services/Catalog/Catalog.Api/Protos/**'
             # A chart or values change produces no new image and must still
             # reach the cluster (§15.1's "a config-only deploy needs a tag it
-            # did not build").
-            #
-            # deploy/compose/** is excluded because it reaches NO cluster, and
-            # that is the whole of the reason — deploy/helm/** has a workflow
-            # of its own and is NOT excluded, because a chart change has to
-            # roll.
+            # did not build"). deploy/compose/** is excluded because it reaches
+            # no cluster; deploy/helm/** has a workflow of its own and is not
+            # excluded, because a chart change has to roll.
             deploy:
               - 'deploy/**'
               - '!deploy/compose/**'
@@ -424,10 +333,10 @@ jobs:
         with:
           global-json-file: global.json
 
-      # The two reporters at the end of this job are stdlib Python, so they
-      # take the same 3.12 pin the licence-gate, pipeline-gate and scaffold
-      # jobs do. The runner does ship a Python, and relying on it would make
-      # this the one job whose interpreter nobody chose.
+      # The reporters at the end of this job are stdlib Python, so they take
+      # the same pin every other Python job here does. The runner ships a
+      # Python, and relying on it would make this the one job whose interpreter
+      # nobody chose.
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -436,40 +345,37 @@ jobs:
 
       - run: dotnet build Platform.slnx --no-restore -c Release
 
-      # §4.1's "src/ and tests/ hold source, and nothing a build wrote", turned
-      # from a property somebody measured once into one CI re-measures. It runs
-      # HERE — behind both the restore and the build, ahead of the three test
-      # stages — because it reads what the two of them left: the restore writes
-      # one half of what would otherwise land beside a `.csproj` and the build
-      # the other, so this is the first moment the question has an answer and
-      # the last one before anything else touches the tree. It is also why the
-      # gate wants both steps above it rather than just the second.
-      #
+      # §4.1's "src/ and tests/ hold source, and nothing a build wrote", as a
+      # property CI re-measures. It runs behind both the restore and the build
+      # and ahead of the test stages, because it reads what the two of them
+      # left: the restore writes one half of what would otherwise land beside a
+      # `.csproj` and the build the other, so this is the first moment the
+      # question has an answer and the last before anything else touches the
+      # tree.
+
       # What the outcome rests on, and why it is held by a gate rather than by
       # a second MSBuild property, is argued in `Directory.Build.props`' Output
-      # comment, which owns that decision. None of it is repeated here.
+      # comment, which owns that decision.
       - name: No build output landed beside the source
         run: python .github/output-gate/output_gate.py
 
       # The other half of §4.1, and the half only CI can check. The gate above
       # is portable: it refuses `bin/` and `obj/` anywhere under the source
-      # trees, which is the residue the redirect is about, and it holds on any
-      # working tree whatever else the developer has in flight. §4.1's sentence
-      # is wider than that — *nothing* a build wrote — and the wider claim needs
-      # a before as well as an after.
-      #
-      # Here there is one. `actions/checkout` left these trees byte-identical to
-      # the commit and nothing between it and this line may touch them, so
-      # anything git can see is something the restore or the build put there: a
-      # generated source file, an output directory under a name the gate does
-      # not know, or a tracked file rewritten in place. `--ignored` because
-      # build output is ignored by construction, and the case that hides is the
-      # one worth catching.
-      #
+      # trees, and it holds on any working tree whatever else the developer has
+      # in flight. §4.1's sentence is wider than that — nothing a build wrote —
+      # and the wider claim needs a before as well as an after.
+
+      # Here there is one. `actions/checkout` left these trees byte-identical
+      # to the commit and nothing between it and this line may touch them, so
+      # anything these trees now hold that the commit did not is something the
+      # restore or the build put there. `--ignored` because build output is
+      # ignored by construction, and the case that hides is the one worth
+      # catching.
+
       # A step rather than part of the gate, because the gate cannot know what
       # the tree looked like first. Run locally this check would fail on the
-      # developer's own work in progress, which is a gate nobody would keep —
-      # so it lives where the precondition is true and nowhere else.
+      # developer's own work in progress, so it lives where the precondition is
+      # true and nowhere else.
       - name: The build left src/ and tests/ byte-identical
         run: |
           wrote="$(git status --porcelain --ignored -- src tests)"
@@ -479,48 +385,40 @@ jobs:
             exit 1
           fi
 
-      # THREE STAGES, and PR-25 is what made them three (§15.1's UT → IT).
-      #
-      # The whole solution is built once and the stages select from it. Per
-      # service, the filter above decides what to IMAGE and what to DEPLOY; it
-      # deliberately does not decide what to build or test, because §4.2's
-      # architecture gates read the whole dependency graph and §12.9's coverage
-      # figure is over the whole run. A per-service `dotnet build` would make
-      # both of those about a subset while still printing one number.
-      #
-      # The first seam is instrumentation rather than category, and it predates
-      # PR-25. §4.2's architecture gates read GetReferencedAssemblies on the
-      # Domain assemblies; coverage.runsettings instruments exactly those and
-      # nothing else; and on this runner an instrumented Domain assembly
-      # reports a `netstandard` reference its source cannot have. Both Domain
-      # gates went red on the run that first collected coverage here — and pass
-      # on Windows, where the same collector leaves the file byte-identical.
-      #
-      # So the gates run first and uninstrumented, where the question they ask
-      # is about the compiler's output. Weakening the allow-list to admit
-      # `netstandard` was the one-line alternative and is the wrong one: it
-      # would relax an architecture rule everywhere, for ever, and in every
-      # service the scaffold renders, to accommodate a test-tool artefact.
-      #
+      # Three stages (§15.1's UT to IT). The whole solution is built once and
+      # the stages select from it. Per service, the filter above decides what
+      # to image and what to deploy; it deliberately does not decide what to
+      # build or test, because §4.2's architecture gates read the whole
+      # dependency graph and §12.9's coverage figure is over the whole run.
+
+      # The first seam is instrumentation rather than category. §4.2's
+      # architecture gates read GetReferencedAssemblies on the Domain
+      # assemblies; coverage.runsettings instruments exactly those; and on this
+      # runner an instrumented Domain assembly reports a `netstandard`
+      # reference its source cannot have, where the same collector on Windows
+      # leaves the file byte-identical. So the gates run first and
+      # uninstrumented, where the question they ask is about the compiler's
+      # output. Weakening the allow-list to admit `netstandard` was the
+      # one-line alternative and is the wrong one: it would relax an
+      # architecture rule everywhere and in every service the scaffold renders.
+
       # The second seam is the category (§12.4, docs/testing.md): the fast half
       # starts no container — proved with `docker events`, not inferred — and
-      # the slow half needs a daemon for five projects' worth of collections.
-      # Separate STEPS rather than separate JOBS, because a job boundary means
-      # shipping the build output between runners to keep `--no-build` honest,
-      # and because the coverage figure is the union of the two (§12.9) and
-      # wants one place to be merged.
-      #
-      # The three filters are exhaustive and disjoint by construction, so the
-      # counts sum to the whole suite — and the stage gate below is what turns
-      # that from a claim into a check, in both directions: every test project
-      # ran in some stage, and no test ran in two. `docs/testing.md`,
-      # `pipeline_gate.py` and its suite all quote this sentence as this file's,
-      # which it stopped being when PR-25 rewrote the block around it.
-      #
+      # the slow half needs a daemon for the projects that carry integration
+      # collections. Separate steps rather than separate jobs, because a job
+      # boundary means shipping the build output between runners to keep
+      # `--no-build` honest, and because the coverage figure is the union of
+      # the two (§12.9) and wants one place to be merged.
+
+      # The filters are exhaustive and disjoint by construction, so the
+      # counts sum to the whole suite, and the stage gate below is what turns
+      # that from a claim into a check in both directions: every test project
+      # ran in some stage, and no test ran in two.
+
       # `--logger trx` is what the stage gate counts from, and it is not free:
-      # it changes where the collector writes, so each stage now leaves the
-      # run's merged attachment AND one partial per test project. The reporter
-      # merges rather than assuming a single file, and its suite pins that.
+      # it changes where the collector writes, so each stage leaves the run's
+      # merged attachment and one partial per test project. The reporter merges
+      # rather than assuming a single file, and its suite pins that.
       - name: Architecture gates
         run: >
           dotnet test Platform.slnx --no-build -c Release
@@ -552,11 +450,11 @@ jobs:
           --logger trx
           --results-directory ./TestResults/integration
 
-      # PR-25's quality gate, and the reason it exists is that the three steps
-      # above are three new ways to select nothing: `dotnet test` exits ZERO on
-      # a filter that matches no test (§12.1), so every one of them can be
-      # green and empty. This asserts a floor on each stage, that every test
-      # project in Platform.slnx ran in one of them, and that none ran in two.
+      # The quality gate exists because every filtered step above is a new way
+      # to select nothing: `dotnet test` exits zero on a filter that matches no
+      # test (§12.1), so each of them can be green and empty.
+      # This asserts a floor on each stage, that every test project in
+      # Platform.slnx ran in one of them, and that none ran in two.
       #
       # Not `if: always()`. After a failed stage there is nothing to count, and
       # a second red step would say the gate broke when the suite did.
@@ -567,20 +465,15 @@ jobs:
 
       # Reported, never gated. §12.9 calls coverage a diagnostic rather than a
       # target and argues that a diagnostic wired to a build failure stops
-      # being read and starts being satisfied — so PR-25, which was the pull
-      # request entitled to add a threshold, declined and put its quality gate
-      # on the step above instead. That gate's subject is whether a suite ran
-      # at all, which is a fact rather than a target.
-      #
-      # It CAN fail on a missing or unreadable report, and should: a coverage
-      # step that shrugs at no data is a step that reports nothing on the day
-      # the collector stops running, which reads exactly like a clean result.
-      #
-      # BOTH stages, because the domain assemblies are exercised on both sides
-      # of the category and §12.9 asks for the figure over the whole run.
-      # Measured here: 253 of 308 lines from the unit stage, 192 from the
-      # integration stage, and 257 from the union — four lines that only a
-      # test needing a container reaches.
+      # being read and starts being satisfied, so the quality gate sits on the
+      # step above instead: its subject is whether a suite ran at all, which is
+      # a fact rather than a target.
+
+      # It can still fail on a missing or unreadable report, and should: a
+      # coverage step that shrugs at no data reports nothing on the day the
+      # collector stops running, which reads exactly like a clean result. Both
+      # stages, because the domain assemblies are exercised on both sides of
+      # the category and §12.9 asks for the figure over the whole run.
       - name: Report domain-layer coverage
         run: >
           python .github/coverage/domain_coverage.py
@@ -588,16 +481,15 @@ jobs:
 
   # §15.1's per-service image build, and the gap it closes is named in
   # compose.yml: that smoke is filtered to deploy/compose/**, so a Dockerfile
-  # broken by a source change surfaced on the next compose pull request rather
-  # than on the offending one. Here it surfaces on the offending one.
-  #
+  # broken by a source change surfaces on the next compose pull request rather
+  # than on the offending one. Here it surfaces on the offending one, after
+  # `build`, because an image of code that does not compile is a slow way to
+  # learn it does not compile.
+
   # Built and not pushed. §15.1's node reads "Build + sign images", and signing
-  # needs a registry and a key this repository has neither of — so what runs is
-  # the half that can run, and the other half is named rather than faked.
-  # `pipeline-gate images` asserts every Dockerfile under src/ appears below.
-  #
-  # After `build`, because an image of code that does not compile is a slow way
-  # to learn it does not compile.
+  # needs a registry and a key this repository has neither of, so what runs is
+  # the half that can run. `pipeline-gate images` asserts every Dockerfile
+  # under src/ appears below.
   images:
     needs: [changes, build]
     if: ${{ needs.changes.outputs.catalog == 'true' || needs.changes.outputs.ordering == 'true' || needs.changes.outputs.gateway == 'true' || needs.changes.outputs.bff == 'true' }}
@@ -628,14 +520,13 @@ jobs:
             image: web-bff
             dockerfile: src/BFF/Web.Bff/Dockerfile
     steps:
-      # THE INDEX HAS TO RESOLVE, and nothing else here would say if it did
+      # The index has to resolve, and nothing else here would say if it did
       # not. `needs.changes.outputs[matrix.filter]` on a name no filter defines
       # is the empty string rather than an error, so every `if` below would be
       # false and this job would report success having built nothing — the
-      # failure `pipeline-gate images` catches at the *name* level and cannot
+      # failure `pipeline-gate images` catches at the name level and cannot
       # catch at the expression level. This step has no `if`, so it runs for
-      # every matrix leg including the skipped ones, and it is the only thing
-      # standing between a typo and a silent no-op.
+      # every matrix leg including the skipped ones.
       - name: The filter this leg reads resolves to a decision
         run: |
           case "${{ needs.changes.outputs[matrix.filter] }}" in

@@ -17,11 +17,9 @@
          Microsoft.CodeAnalysis.Workspaces.MSBuild — and both floors resolve to
          9.0.0, which carries eight advisories. NU1903 turns that into a failed
          restore, so this pin is what makes the line above restorable at all.
-
-         PrivateAssets on the Design reference means it never ships in an image.
-         The restore fails anyway, and rightly: a design-time supply chain is
-         still a supply chain, and this one runs on a developer's machine with
-         their credentials. -->
+         PrivateAssets on the Design reference means it never ships in an image;
+         the restore fails anyway, and rightly, because a design-time supply
+         chain runs on a developer's machine with their credentials. -->
     <PackageVersion Include="System.Security.Cryptography.Xml" Version="10.0.10" />
     <PackageVersion Include="Microsoft.Extensions.Caching.Hybrid" Version="10.0.0" />
     <!-- HybridCache's L2 (§8.2): AddStackExchangeRedisCache and
@@ -70,14 +68,10 @@
     <PackageVersion Include="Microsoft.Data.SqlClient" Version="6.1.1" />
     <!-- Exact major. v9 is commercially licensed — see ADR-003. The core
          package is a transitive of the transport one, pinned separately
-         because five projects reference it directly: Common.Infrastructure
-         since PR-14, for the IPublishEndpoint the outbox dispatcher publishes
-         the Broker lane through (§9.4), and four test projects that drive the
-         in-memory harness — core API, which a test project using no transport
-         must not claim one for. Appendix B names them; this comment does not,
-         because a list in two places is the drift that made it say "two"
-         while five were true. Same version as the transport: they ship as one
-         release. -->
+         because projects reference it directly for the IPublishEndpoint the
+         outbox dispatcher publishes the Broker lane through (§9.4) and for the
+         in-memory harness; Appendix B names which. Same version as the
+         transport: they ship as one release. -->
     <PackageVersion Include="MassTransit" Version="8.5.3" />
     <PackageVersion Include="MassTransit.RabbitMQ" Version="8.5.3" />
     <!-- §9.6's saga repository — EntityFrameworkRepository and
@@ -85,18 +79,10 @@
          AddEntityFrameworkOutbox, UseEntityFrameworkOutbox and
          AddTransactionalOutboxEntities, on the same DbContext the repository
          already holds, which is what makes the saga's sends commit with its
-         instance. Same version and same release as the two
-         rows above — the transport, the core and the persistence integration
-         ship together, and a saga repository a minor behind the state machine
-         it stores is not a combination anyone tests. Referenced by
-         Ordering.Infrastructure, the only project with a saga; by
-         Ordering.Api.Tests, for EntityFrameworkOutboxOptions<OrderingDbContext>
-         and that type alone, which the Serializable assertion resolves; and by
-         Ordering.TestSupport, for the InboxCleanupService<OrderingDbContext>
-         OrderingApiFactory removes from the test host. Enumerated rather than
-         counted, on Appendix B's terms. Both test projects are carried
-         transitively by their project references and name the reference anyway,
-         which is the honesty rule rather than a restore requirement. -->
+         instance. Same version and same release as the transport and the core
+         package: a saga repository a minor behind the state machine it stores
+         is not a combination anyone tests. Appendix B names the projects that
+         reference it. -->
     <PackageVersion Include="MassTransit.EntityFrameworkCore" Version="8.5.3" />
     <PackageVersion Include="StackExchange.Redis" Version="2.9.11" />
     <PackageVersion Include="FluentValidation" Version="12.0.0" />
@@ -135,7 +121,7 @@
          package DOWNGRADE that fails the restore. The same shape Google.Protobuf
          carries above. -->
     <PackageVersion Include="System.IdentityModel.Tokens.Jwt" Version="8.19.2" />
-    <!-- PR-07's OpenAPI deliverable (Appendix C): the framework's own document
+    <!-- Appendix C's OpenAPI deliverable: the framework's own document
          generator — AddOpenApi/MapOpenApi, document only, no UI. -->
     <PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="10.0.10" />
     <!-- Transitive, pinned deliberately: every patch of the package above
@@ -154,10 +140,8 @@
     <PackageVersion Include="OpenTelemetry.Instrumentation.EntityFrameworkCore" Version="1.17.0-beta.1" />
     <PackageVersion Include="OpenTelemetry.Instrumentation.StackExchangeRedis" Version="1.17.0-beta.1" />
     <!-- No AspNetCore.HealthChecks.Rabbitmq beside these two, and the absence
-         is a decision (PR-13): its parameterless AddRabbitMQ resolves an
-         IConnection nothing registers — MassTransit does not expose one — and
-         the bus health check AddMassTransit registers itself answers the
-         question better, endpoints included. -->
+         is a decision §13.5 argues: the bus health check AddMassTransit
+         registers itself answers the question better. -->
     <PackageVersion Include="AspNetCore.HealthChecks.SqlServer" Version="9.0.0" />
     <PackageVersion Include="AspNetCore.HealthChecks.Redis" Version="9.0.0" />
   </ItemGroup>
@@ -219,9 +203,10 @@
          than substitute the contract — the same argument as the container
          row above, one abstraction over. -->
     <PackageVersion Include="Microsoft.Extensions.Configuration" Version="10.0.0" />
-    <!-- The architecture gates of §4.2, which PR-07 turns from a review
-         comment into a build failure. A major bump can change which rules
-         exist, so it fails loudly rather than quietly stopping to enforce. -->
+    <!-- The library §4.2's architecture gates are written against; what makes
+         those rules a build failure is the gates themselves. A major bump can
+         change which rules exist, so it fails loudly rather than quietly
+         stopping to enforce. -->
     <PackageVersion Include="NetArchTest.Rules" Version="1.3.2" />
     <!-- The in-memory reader the observability tests read back through:
          §13.4's redaction tests, which that chapter prints one of, the

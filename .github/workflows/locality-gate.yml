@@ -1,29 +1,15 @@
 name: Locality gate
 
-# A pull request declares a class and a touch set in its body, and its diff
-# has to sit inside both — docs/change-locality.md section 3's rule, which
-# until this workflow was read by `.claude/scripts/pr-locality.sh` for the
-# review commands and enforced by nothing. The gate under
+# A pull request declares a class and a touch set in its body, and its diff has
+# to sit inside both — docs/change-locality.md section 3. The gate under
 # .github/locality-gate/ judges every changed path twice: against the class's
-# tree set in classes.yml, and against the touch set the author declared. The
-# Catalog change that also edits Ordering is inside Class A's tree set and
-# outside its own row, and the second check is what catches it.
+# tree set in classes.yml, and against the declared touch set. A Catalog change
+# that also edits Ordering is inside Class A's tree set and outside its own row.
 #
-# A workflow of its own rather than a job in ci.yml, on closure-gate.yml's
-# argument and not on path filtering — this one has no paths at all:
-#
-#   - what it judges is a property of every pull request rather than of a
-#     tree, so a filter could only ever make it skippable. The one thing it
-#     reads out of the checkout is classes.yml, which is its own;
-#
-#   - `edited` is in the trigger list, because half of what it judges is the
-#     PR body, and a body is edited without a push. ci.yml's default
-#     `pull_request` types are `opened`, `synchronize` and `reopened`, and
-#     adding `edited` there would rebuild and retest the solution every time
-#     somebody fixed a typo in a description. docs/change-locality-plan.md's
-#     step 5 said "in ci.yml, on pull_request including edited"; those two
-#     halves cannot both be had, and the closure gate had already paid to
-#     find out which to keep.
+# Its own workflow rather than a job in ci.yml because it judges a property of
+# every pull request rather than of a tree, and because `edited` has to be a
+# trigger — a body is edited without a push, and ci.yml on `edited` would
+# rebuild the solution for every typo in a description.
 on:
   pull_request:
     types: [opened, synchronize, reopened, edited]
@@ -38,31 +24,23 @@ concurrency:
   group: locality-gate-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
-# **Proposal and enforcement are two executions here**, on the closure gate's
-# design: the SUITE runs the head copy, because testing a proposed gate is the
-# point of that step, and the ENFORCING copy is read out of the base commit,
-# so a pull request may change the gate freely without changing what judges
-# it. The map travels with the gate — a pull request that widens Class D to
-# reach src/** is judged by the base's map, not its own.
-#
-# **One departure from the closure gate, and it is the bootstrap.** That
-# workflow fails when the base commit carries no gate, because `main` already
-# had one and the only way to reach that branch was a stale base. This gate
-# has to land once, and on the pull request landing it the base has no copy
-# by definition — so a base with NO .github/locality-gate/ directory at all
-# is judged by the head copy, with a warning annotation saying so. Once
-# `main` carries the gate that branch is reachable only from a base older
-# than the merge, which is a rebase somebody performs knowingly, and the
-# warning is what stops it being silent. A base that has the directory but a
-# broken or empty gate still fails, as the closure gate's does: that is not
-# a bootstrap, it is a base nobody should be building on.
-#
-# **THIS FILE IS STILL THE BRANCH'S OWN COPY**, and the residual is the
-# closure gate's: `pull_request` runs the workflow definition from the head
-# ref, so a pull request can edit or delete the enforcing step. Only a
-# required status check on `main` closes that, and `main` is not protected
-# today. Stated here, beside the identical statement in closure-gate.yml,
-# because a residual nobody can grep is a residual nobody re-checks.
+# Proposal and enforcement are two executions, on the closure gate's design:
+# the suite runs the head copy, because testing a proposed gate is the point of
+# that step, and the enforcing copy is read out of the base commit, so a pull
+# request may change the gate freely without changing what judges it. The map
+# travels with the gate, so a pull request that widens Class D to reach src/**
+# is judged by the base's map and not its own.
+
+# The bootstrap is the one departure from the closure gate, which fails when
+# the base carries no gate. This one has to land once, and on the pull request
+# landing it the base has no copy by definition, so a base with no
+# .github/locality-gate/ directory is judged by the head copy under a warning
+# annotation. A base that has the directory but a broken or empty gate still
+# fails: that is a base nobody should be building on.
+
+# The workflow definition comes from the head ref, so a pull request can edit
+# or delete the enforcing step. What closes that is a required status check on
+# `main`.
 jobs:
   locality-gate:
     runs-on: ubuntu-latest
@@ -77,17 +55,17 @@ jobs:
         with:
           python-version: '3.12'
 
-      # The HEAD copy, deliberately: this step's subject is the gate this
-      # pull request PROPOSES. The suite is negative cases with the positive
-      # controls beside them — a clean diff that must pass, a matcher that
-      # must match — plus reads of the shipped map, so a proposal that fails
-      # its own suite belongs red here.
+      # The head copy, deliberately: this step's subject is the gate this pull
+      # request proposes. The suite is negative cases with the positive
+      # controls beside them — a clean diff that must pass, a matcher that must
+      # match — plus reads of the shipped map, so a proposal that fails its own
+      # suite belongs red here.
       - name: Test the proposed gate
         working-directory: .github/locality-gate
         run: python -m unittest
 
-      # The BASE copy — gate and map together — for the reason at the top of
-      # this file, with the one bootstrap branch argued there.
+      # The base copy — gate and map together — for the reason above, with the
+      # one bootstrap branch argued there.
       - name: Take the enforcing gate and map from the base commit
         shell: bash
         env:
@@ -124,23 +102,20 @@ jobs:
 
       # Two `gh` calls, and they are the only network in the check. The
       # deciding takes JSON on stdin and is pure — deploy/canary/canary.py's
-      # split, for its reason: what is tested is the judgement, and what is
-      # not tested is the fetch.
-      #
+      # split, for its reason: what is tested is the judgement, not the fetch.
+
       # The file list comes from the REST files endpoint with `--paginate`
-      # rather than from `gh pr view --json files`, because the latter is one
-      # page and a prefix of a long diff looks exactly like a complete one —
-      # the shape closure_gate.py refuses for commits. Paginated, the endpoint
-      # still stops at 3,000 entries, so `changedFiles` — GitHub's own count
-      # of the same list — travels with the body and the gate refuses a list
-      # shorter than it. Each entry arrives as one JSON object on its own
-      # line, `filename` and `previous_filename` together, so a rename is
-      # judged at both ends and a newline inside a path cannot be a second
-      # path; `jq -s` collects them.
-      #
-      # `shell: bash` rather than the default, and it is not cosmetic: the
-      # default `run` shell is `bash -e` with NO pipefail, so a `gh` that
-      # failed would be masked by whatever the right-hand side exited with.
+      # rather than `gh pr view --json files`, because the latter is one page
+      # and a prefix of a long diff looks exactly like a complete one.
+      # Paginated it is still capped, so `changedFiles` travels with the body
+      # and the gate refuses a list shorter than it. Each entry arrives as one
+      # JSON object on its own line, `filename` and `previous_filename`
+      # together, so a rename is judged at both ends and a newline inside a
+      # path cannot be a second path; `jq -s` collects them.
+
+      # `shell: bash` rather than the default: the default `run` shell is
+      # `bash -e` with no pipefail, so a failing `gh` would be masked by
+      # whatever the right-hand side exited with.
       - name: Every changed path is inside the declared class and touch set
         shell: bash
         env:
