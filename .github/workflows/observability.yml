@@ -45,8 +45,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # 3.12 is a floor, not a preference: a newer interpreter accepts APIs
-      # 3.12 does not, so a suite green locally can be unrunnable here.
+      # The pin is a floor rather than a preference: a newer interpreter
+      # accepts APIs this one does not, so a suite green locally can be
+      # unrunnable here.
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'

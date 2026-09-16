@@ -26,11 +26,10 @@ on:
       - 'deploy/canary/**'
       - '.github/workflows/realm.yml'
   # Hourly, and off the hour. The window is the time between a realm edit and
-  # the next rollout, and a schedule bounds it to its own cadence: a run costs
-  # two admin-API reads per release and one runner minute. Minute 17 rather
-  # than 0 because GitHub sheds top-of-the-hour schedules under load, and a
-  # dropped run is a silence rather than a red one -- the failure §13.6 spends
-  # a callout on.
+  # the next rollout, and a schedule bounds it to its own cadence at the cost
+  # of a few reads and a runner minute. Minute 17 rather than 0 because GitHub
+  # sheds top-of-the-hour schedules under load, and a dropped run is a silence
+  # rather than a red one -- the failure §13.6 spends a callout on.
 
   # GitHub suspends a schedule after a stretch without a commit, and without a
   # red run: a stabilised service is exactly the one with no commits. What
@@ -107,13 +106,12 @@ jobs:
     # failure as absence, and this guard reads a configuration.
     if: ${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && vars.REALM_CHECK_SCHEDULED == 'enabled' }}
     runs-on: ubuntu-latest
-    # This job reads and never waits on a hook, a rung or a dwell: a token
-    # request and two admin reads per release, and nothing to sit out. What
-    # stops a hung read is the judge step's own shorter timeout below, because
-    # a job cancelled on its timeout runs no `failure()` step, so the one
-    # failure this budget exists for would be the one that filed nothing. The
-    # job's cap is the headroom the filing step needs after the judge step has
-    # been stopped.
+    # This job reads and never waits on a hook, a rung or a dwell, so its cap
+    # is not what stops a hung read: the judge step's own shorter timeout below
+    # is, because a job cancelled on its timeout runs no `failure()` step and
+    # the one failure this budget exists for would be the one that filed
+    # nothing. The job's cap is the headroom the filing step needs after the
+    # judge step has been stopped.
     timeout-minutes: 10
     environment: production
     permissions:

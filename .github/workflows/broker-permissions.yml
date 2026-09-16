@@ -40,9 +40,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # 3.12 is the floor every Python job here pins. The local default is
-      # newer and accepts APIs this one does not, so an unpinned run goes green
-      # on code the runner cannot execute.
+      # The floor every Python job here pins. The local default is newer and
+      # accepts APIs this one does not, so an unpinned run goes green on code
+      # the runner cannot execute.
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'

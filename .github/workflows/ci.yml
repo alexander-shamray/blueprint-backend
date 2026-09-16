@@ -303,16 +303,11 @@ jobs:
             gateway:
               - *shared
               - 'src/Gateway/**'
-            # The BFF is a deployable too, with its own image, chart and the
-            # platform's only client secret. Catalog's proto is the one place
-            # in this list where a service's filter reaches into another
-            # service's tree: Web.Bff compiles `pricing.proto` as a linked
-            # source file (§9.7) and its Dockerfile copies that path, so a
-            # proto-only change alters what the BFF ships while matching only
-            # `catalog`. §15.1's rule is that if changing a file can change
-            # what a service ships, it belongs in that service's filter, and
-            # `pipeline-gate filters` cannot see this because it asks whether a
-            # deployable is reachable rather than whether a filter is complete.
+            # The BFF is a deployable too, and §15.1 argues why its filter
+            # reaches into Catalog's tree for the proto Web.Bff compiles.
+            # `pipeline-gate filters` cannot see that case, because it asks
+            # whether a deployable is reachable rather than whether a filter is
+            # complete.
             bff:
               - *shared
               - 'src/BFF/**'
@@ -339,9 +334,9 @@ jobs:
           global-json-file: global.json
 
       # The two reporters at the end of this job are stdlib Python, so they
-      # take the same 3.12 pin the licence-gate, pipeline-gate and scaffold
-      # jobs do. The runner does ship a Python, and relying on it would make
-      # this the one job whose interpreter nobody chose.
+      # take the same pin the licence-gate, pipeline-gate and scaffold jobs do.
+      # The runner does ship a Python, and relying on it would make this the
+      # one job whose interpreter nobody chose.
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
