@@ -5,6 +5,16 @@ name: Realm
 # ADR-043 owns that second scope. ADR-033's revocation bound and ADR-034's
 # no-refresh-token rule are both realm settings, which is what gives a realm
 # something to be judged against.
+
+# A separate workflow rather than a job in `compose.yml`, on
+# `broker-permissions.yml`'s reasoning: path filtering is per-workflow, so
+# sharing one would either drag that smoke onto every identity change or leave
+# this gate blind to the realm it reads.
+
+# The paths below are not maintained here: `realm_check.py` declares them as
+# SOURCE_INPUTS beside the reads that need them, and `realm_check.py inputs`
+# asserts that both of this workflow's path-filtered triggers cover every
+# entry, and that no path this gate reads is missing from the list.
 on:
   pull_request:
     paths:
