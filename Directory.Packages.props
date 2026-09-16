@@ -140,10 +140,8 @@
     <PackageVersion Include="OpenTelemetry.Instrumentation.EntityFrameworkCore" Version="1.17.0-beta.1" />
     <PackageVersion Include="OpenTelemetry.Instrumentation.StackExchangeRedis" Version="1.17.0-beta.1" />
     <!-- No AspNetCore.HealthChecks.Rabbitmq beside these two, and the absence
-         is a decision: its parameterless AddRabbitMQ resolves an IConnection
-         nothing registers — MassTransit does not expose one — and the bus
-         health check AddMassTransit registers itself answers the question
-         better, endpoints included. -->
+         is a decision §13.5 argues: the bus health check AddMassTransit
+         registers itself answers the question better. -->
     <PackageVersion Include="AspNetCore.HealthChecks.SqlServer" Version="9.0.0" />
     <PackageVersion Include="AspNetCore.HealthChecks.Redis" Version="9.0.0" />
   </ItemGroup>

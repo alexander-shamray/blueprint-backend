@@ -18,7 +18,7 @@ jobs:
   # Directory.Packages.props, Appendix B and every .csproj, .props and .targets
   # as text, so it needs neither a restore nor an SDK — which is why it can run
   # here. The project files are in the subject because central pinning is a
-  # convention, and three legal spellings restore a package
+  # convention, and a project file can still restore a package
   # Directory.Packages.props never mentions. Scanning that sits downstream of a
   # build is scanning that a build failure skips.
 
@@ -232,10 +232,10 @@ jobs:
       - name: Compile what it rendered
         run: dotnet build tests/Yankee.Api.Tests/Yankee.Api.Tests.csproj
 
-      # No cleanup step. The scaffold edits tracked files as well as creating
-      # its own, which `tools/new-service/README.md` names, so a local run
-      # needs a checkout afterwards; here the checkout is discarded with the
-      # runner.
+      # No cleanup step. The scaffold both creates untracked files and edits
+      # tracked ones, so undoing it locally takes the two commands
+      # `tools/new-service/README.md` gives; here the checkout is discarded
+      # with the runner.
 
   # §15.1's fork: only services whose files changed are built and deployed. A
   # job of its own so that everything downstream can read one answer. The

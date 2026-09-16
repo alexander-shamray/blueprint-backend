@@ -39,8 +39,8 @@ concurrency:
 # fails: that is a base nobody should be building on.
 
 # The workflow definition comes from the head ref, so a pull request can edit
-# or delete the enforcing step. Only a required status check on `main` closes
-# that, and `main` is not protected today.
+# or delete the enforcing step. What closes that is a required status check on
+# `main`.
 jobs:
   locality-gate:
     runs-on: ubuntu-latest

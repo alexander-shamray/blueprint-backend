@@ -85,7 +85,7 @@ jobs:
       # Every negative is a mutation that must go red, each paired with a
       # positive control, because a negative that passes when the pattern
       # matches nothing is indistinguishable from one that works. This gate
-      # guards a security guarantee two ADRs state platform-wide.
+      # guards what ADR-033 and ADR-034 state platform-wide.
       - name: The gate's negatives
         run: python -m unittest discover -s deploy/keycloak
 
@@ -238,13 +238,13 @@ jobs:
       # a page nobody can act on, so it files an issue, or comments on the open
       # one, and `deploy/keycloak/README.md` is the procedure it points at.
 
-      # An issue and not a runbook, because `docs/runbooks/` is one file per
-      # Prometheus alert and `deploy/observability/check.py` fails the build on
-      # a runbook with no alert behind it. Nothing in §13.6 fires this. And an
-      # issue rather than a notification because a notification is read once
-      # and an issue is open until somebody closes it: the next run comments
-      # rather than filing again, so the tracker holds one issue per drift and
-      # not one per hour.
+      # An issue and not a runbook, because `docs/runbooks/` holds the
+      # procedures Prometheus alerts claim and `deploy/observability/check.py`
+      # fails the build on one with no alert behind it. Nothing in §13.6 fires
+      # this. And an issue rather than a notification because a notification is
+      # read once and an issue is open until somebody closes it: the next run
+      # comments rather than filing again, so the tracker holds one issue per
+      # drift and not one per hour.
 
       # `security` and `critical`, and the second is decided rather than
       # hedged. This step cannot tell a realm that drifted from a realm that

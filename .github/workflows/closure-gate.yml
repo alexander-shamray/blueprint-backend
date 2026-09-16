@@ -46,10 +46,9 @@ concurrency:
 # The residual: `pull_request` runs the workflow definition from the head ref,
 # so a pull request can edit or delete the enforcing step and the run that
 # judges it is the edited one. Base-sourcing the gate narrows the accidental
-# case and leaves the deliberate one. Closing it takes a required status check
+# case and leaves the deliberate one. What closes it is a required status check
 # on `main`, which fails a pull request whose `closure-gate` check never
-# reports; `main` is not protected today, so a pull request deleting this
-# workflow removes the check with nothing to notice.
+# reports.
 jobs:
   closure-gate:
     runs-on: ubuntu-latest
