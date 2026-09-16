@@ -68,11 +68,10 @@
     <PackageVersion Include="Microsoft.Data.SqlClient" Version="6.1.1" />
     <!-- Exact major. v9 is commercially licensed — see ADR-003. The core
          package is a transitive of the transport one, pinned separately
-         because several projects reference it directly: Common.Infrastructure,
-         for the IPublishEndpoint the outbox dispatcher publishes the Broker
-         lane through (§9.4), and the test projects that drive the in-memory
-         harness. Appendix B names them. Same version as the transport: they
-         ship as one release. -->
+         because projects reference it directly for the IPublishEndpoint the
+         outbox dispatcher publishes the Broker lane through (§9.4) and for the
+         in-memory harness; Appendix B names which. Same version as the
+         transport: they ship as one release. -->
     <PackageVersion Include="MassTransit" Version="8.5.3" />
     <PackageVersion Include="MassTransit.RabbitMQ" Version="8.5.3" />
     <!-- §9.6's saga repository — EntityFrameworkRepository and

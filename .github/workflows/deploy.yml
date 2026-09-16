@@ -160,16 +160,15 @@ jobs:
           TAG: ${{ inputs.tag }}
           WORKLOAD: ${{ inputs.workload }}
 
-      # The realm is checked before the rollout changes anything. ADR-033's
-      # 330-second revocation bound and ADR-034's no-refresh-token rule are
-      # realm settings, and until ADR-042 the only realm anything read was the
-      # Compose export. "Before the rollout changes anything" and not "before
-      # the cluster is touched", because the first of these three steps reads
-      # the cluster; the first that changes it is the HPA patch below.
+      # The realm is checked before the rollout changes anything: ADR-033's
+      # revocation bound and ADR-034's no-refresh-token rule are realm
+      # settings. "Before the rollout changes anything" and not "before the
+      # cluster is touched", because the first of these three steps reads the
+      # cluster; the first that changes it is the HPA patch below.
 
-      # ADR-040 declined a pipeline check on the grounds that one needs admin
-      # credentials in CI. CI holds none and still holds none: this job runs
-      # under the `production` Environment, which is what scopes a deploy-time
+      # ADR-040 declined a pipeline check for want of admin credentials in CI,
+      # and this job answers that by where it sits rather than by having found
+      # any: the `production` Environment is what scopes a deploy-time
       # credential to the deploy, and the realm-check client is a service
       # account of the realm being checked with realm-read rights and nothing
       # else. docs/secrets.md carries how it is provisioned and rotated.
@@ -210,7 +209,7 @@ jobs:
           # `--all`, and its absence would stop every rollout. Without it
           # `helm get values` emits only the overrides the caller supplied and
           # omits the chart's own defaults, and `identity.authority` has a
-          # default in all four charts, so a release that never overrode it
+          # default in every chart, so a release that never overrode it
           # answers a document with no `identity` key at all. `--all` is the
           # computed values, which is what the question is. The sibling
           # `helm get values ... -o yaml` below deliberately omits it: that one
@@ -263,10 +262,10 @@ jobs:
           # §15.5's 5% is one pod in twenty, so a three-replica service cannot
           # express it: one canary already serves 25%. Scaling up is what
           # makes the requested weight the served weight, and `canary.py plan`
-          # refuses rather than rounding. §15.3's autoscaling.maxReplicas is 20
-          # on the three service charts, exactly this 19 plus one canary; the
-          # gateway's is 30, so there the 19 is what the weight costs rather
-          # than all the chart allows.
+          # refuses rather than rounding. §15.3's autoscaling.maxReplicas is
+          # exactly this 19 plus one canary on the service charts, and higher
+          # on the gateway, where the 19 is what the weight costs rather than
+          # all the chart allows.
 
           # The HPA's floor moves first, and a `kubectl scale` alone would not
           # hold. These charts enable an autoscaler on the stable track with
@@ -460,8 +459,8 @@ jobs:
               --set-string image.tag="$TAG" \
               --wait --timeout 20m
 
-            # The window equals the dwell: a rate over ten minutes, read at
-            # the end of ten minutes, is §15.5's "watch for ten minutes".
+            # The window equals the dwell, which is what makes the reading
+            # §15.5's "watch": a rate over the dwell, read at the end of it.
             sleep "$((CANARY_DWELL_MINUTES * 60))"
             python deploy/canary/read_prometheus.py \
               --service "$CANARY_SERVICE_NAME" \

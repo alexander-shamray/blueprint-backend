@@ -2,33 +2,9 @@ name: Realm
 
 # §11.3's token obligations, against the one realm this repository owns and,
 # since ADR-043, against the realm every deployed release points at, between
-# rollouts. ADR-033 composes a 330-second revocation bound out of a 300-second
-# realm setting and a 30-second ClockSkew, and ADR-034 states that the browser
-# holds no refresh token; both are realm settings, and until ADR-042 the only
-# instrument that read one was `RealmImportTests` over §14.1's Compose export.
-
-# The `check` job runs the predicate against the local realm, which is what
-# establishes the instrument works at all: a deploy-time check nothing has ever
-# executed is a check nobody has established is looking at anything. What
-# judges a deployed realm is the same predicate in `deploy.yml`'s rollout job,
-# where a credential exists.
-
-# The `deployed` job is the moment the rollout cannot be. A rollout reads the
-# realm once, and a realm edited afterwards -- `accessTokenLifespan` raised, a
-# client-level override added, `use.refresh.tokens` flipped, the password grant
-# turned back on -- is unobserved until somebody deploys again, which on a
-# stabilised service is never. It runs the rollout's own derive-fetch-judge
-# steps on a schedule, over every release the canary plan names.
-
-# A separate workflow rather than a job in `compose.yml`, on
-# `broker-permissions.yml`'s reasoning: path filtering is per-workflow, so
-# sharing one would either drag that smoke's ~2 GB of pulls onto every identity
-# change or leave this gate blind to the realm it reads.
-
-# The paths below are not maintained here: `realm_check.py` declares them as
-# SOURCE_INPUTS beside the reads that need them, and `realm_check.py inputs`
-# asserts that both of this workflow's path-filtered triggers cover every
-# entry, and that no path this gate reads is missing from the list.
+# rollouts. ADR-033's revocation bound and ADR-034's no-refresh-token rule are
+# both realm settings, which is what gives a realm something to be judged
+# against.
 on:
   pull_request:
     paths:
@@ -56,11 +32,11 @@ on:
   # dropped run is a silence rather than a red one -- the failure §13.6 spends
   # a callout on.
 
-  # GitHub suspends a schedule after sixty days without a commit, and without a
+  # GitHub suspends a schedule after a stretch without a commit, and without a
   # red run: a stabilised service is exactly the one with no commits. What
   # closes that residual is a monitor outside GitHub asking whether this
-  # workflow ran in the last day, which deploy/keycloak/README.md states as an
-  # operating decision.
+  # workflow has run recently, at the cadence deploy/keycloak/README.md sets as
+  # an operating decision.
   schedule:
     - cron: '17 * * * *'
   # A dispatch is how an operator re-runs the judgement after correcting a

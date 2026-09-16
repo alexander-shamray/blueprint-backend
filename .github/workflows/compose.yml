@@ -47,14 +47,14 @@ jobs:
         run: docker compose -f deploy/compose/docker-compose.yml config -q
 
       # --wait exits non-zero if a healthcheck never passes, or if a container
-      # exits before the wait completes, so the five healthchecks are asserted
-      # directly — Keycloak's among them, which makes realm readiness part of
-      # what `up --wait` proves rather than something the first token request
-      # discovers. A service without a healthcheck is only asserted to start.
-      # One-shots are the carve-out: a service another gates on with
-      # `service_completed_successfully` satisfies --wait by exiting 0 and
-      # fails it by exiting non-zero, so the migrator's exit code is part of
-      # what this smoke asserts.
+      # exits before the wait completes, so every healthcheck the model
+      # declares is asserted directly — Keycloak's among them, which makes
+      # realm readiness part of what `up --wait` proves rather than something
+      # the first token request discovers. A service without a healthcheck is
+      # only asserted to start. One-shots are the carve-out: a service another
+      # gates on with `service_completed_successfully` satisfies --wait by
+      # exiting 0 and fails it by exiting non-zero, so the migrator's exit code
+      # is part of what this smoke asserts.
       - name: Start and wait for healthy
         run: docker compose -f deploy/compose/docker-compose.yml up -d --wait --quiet-pull
 

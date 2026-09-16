@@ -221,10 +221,10 @@ jobs:
         with:
           python-version: '3.12'
 
-      # `Yankee` at 5199 is the probe CLAUDE.md documents and the scaffold's
-      # own suite already uses — never a real service's name, because the
-      # create refuses a taken name and port, and the cleanup that follows
-      # deletes the service.
+      # `Yankee` is the probe CLAUDE.md documents and the scaffold's own suite
+      # already uses — never a real service's name, because the create refuses
+      # a taken name and port, and the cleanup that follows deletes the
+      # service.
       - name: Render a service
         run: python tools/new-service/new_service.py Yankee --port 5199
 
@@ -281,8 +281,8 @@ jobs:
               # `dotnet build`, and without this line a change to it rebuilds
               # no image at all.
               - '.dockerignore'
-              # Copied into the publish stage by all six application
-              # Dockerfiles, and ADR-019 makes it a build input rather than an
+              # Copied into the publish stage by every application
+              # Dockerfile, and ADR-019 makes it a build input rather than an
               # editor hint: a change to it alters what every image compiles
               # with, and the solution build cannot see the Docker context.
               - '.editorconfig'
@@ -414,11 +414,11 @@ jobs:
 
       # The second seam is the category (§12.4, docs/testing.md): the fast half
       # starts no container — proved with `docker events`, not inferred — and
-      # the slow half needs a daemon for five projects' worth of collections.
-      # Separate steps rather than separate jobs, because a job boundary means
-      # shipping the build output between runners to keep `--no-build` honest,
-      # and because the coverage figure is the union of the two (§12.9) and
-      # wants one place to be merged.
+      # the slow half needs a daemon for the projects that carry integration
+      # collections. Separate steps rather than separate jobs, because a job
+      # boundary means shipping the build output between runners to keep
+      # `--no-build` honest, and because the coverage figure is the union of
+      # the two (§12.9) and wants one place to be merged.
 
       # The three filters are exhaustive and disjoint by construction, so the
       # counts sum to the whole suite, and the stage gate below is what turns

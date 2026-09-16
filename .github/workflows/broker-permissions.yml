@@ -2,8 +2,8 @@ name: Broker permissions
 
 # Split from `compose.yml` rather than added to it because path filtering is
 # per-workflow: that smoke deliberately excludes `src/**`, so a job sharing
-# its filter would either drag a 45-minute smoke onto every messaging change
-# or stop watching the code it checks. This gate reads text and needs no
+# its filter would either drag a long image-pulling smoke onto every messaging
+# change or stop watching the code it checks. This gate reads text and needs no
 # Docker, no broker and no restore.
 #
 # The paths below are not maintained here: check_permissions.py declares them
