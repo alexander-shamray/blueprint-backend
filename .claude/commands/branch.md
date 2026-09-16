@@ -34,12 +34,12 @@ C:/dev/ashamray-groklimit           feat/grok-usage-limit-guard
 C:/dev/ashamray-masstransit         feat(template)/masstransit-registration
 ```
 
-`../<checkout-name>-<slug>` is the shape, and `ashamray-groklimit` is already on
-disk in it. **Outside the repository tree is the load-bearing half**, not the
-naming: a worktree under `.claude/worktrees/` would sit inside the checkout,
-show up as untracked in every `git status` the chain reads, and put
-`grok-review.sh`'s clean-tree refusal in its blast radius. Nothing has to be
-added to `.gitignore` for a sibling, because there is nothing to ignore.
+`../<checkout-name>-<slug>` is the shape. **Outside the repository tree is the
+load-bearing half**, not the naming: a worktree under `.claude/worktrees/` would
+sit inside the checkout, show up as untracked in every `git status` the chain
+reads, and put `grok-review.sh`'s clean-tree refusal in its blast radius.
+Nothing has to be added to `.gitignore` for a sibling, because there is nothing
+to ignore.
 
 **The sweeps take the opposite path deliberately, and the difference is the
 worktree's job.** `/security-sweep` and `/bug-sweep` each fork a *detached*
@@ -293,12 +293,12 @@ not content.
 
    **`--no-track` inside it is load-bearing, not tidiness.** The start point is
    a remote-tracking ref, so without it git sets the new branch's upstream to
-   `origin/main` — "branch '<name>' set up to track 'origin/main'", checked
-   rather than assumed. `/pr` then reads `git status -sb`, finds an upstream,
-   classifies the branch as *tracking, ahead*, and pushes without `-u`, leaving
-   the PR branch pointed at `origin/main` for every later status and resume
-   read. With `--no-track` there is no upstream, `/pr` takes its **no upstream**
-   row, and `git push -u origin <branch>` sets the right one.
+   `origin/main` — "branch '<name>' set up to track 'origin/main'". `/pr` then
+   reads `git status -sb`, finds an upstream, classifies the branch as
+   *tracking, ahead*, and pushes without `-u`, leaving the PR branch pointed at
+   `origin/main` for every later status and resume read. With `--no-track` there
+   is no upstream, `/pr` takes its **no upstream** row, and
+   `git push -u origin <branch>` sets the right one.
 
    `origin/main` is the base rather than `HEAD`, for the reason step 1 fetched:
    local `main` here is whatever it was when it was last pulled, and
@@ -339,10 +339,10 @@ not content.
 
    **Then check whether the branch survived, because it usually does.**
    `git worktree add -b` creates the branch *before* it creates the directory,
-   so a failure at the directory leaves the branch behind — verified by
-   running it against an unwritable parent, which printed
-   `branch '<name>' set up to track …` and then `fatal: could not create
-   leading directories`, leaving the branch in `git branch --list`. A blind
+   so a failure at the directory leaves the branch behind — against an
+   unwritable parent it prints `branch '<name>' set up to track …` and then
+   `fatal: could not create leading directories`, and the branch stays in
+   `git branch --list`. A blind
    create there fails with *branch already exists* — `git-branch-create.sh`
    refuses it on purpose — which would turn a handled fallback into a stop.
    Both post-failure states are ordinary and each has one command:
@@ -352,20 +352,19 @@ not content.
    | `git branch --list <name>` prints it | `bash .claude/scripts/git-switch-existing.sh <name>` — it is already cut from `origin/main` and untracked, which is what the fork asked for |
    | It prints nothing | `bash .claude/scripts/git-branch-create.sh <name> origin/main` |
 
-   **All three git operations in this command go through helpers, and the
-   reason is the one this repository keeps rediscovering.** A
+   **All three git operations in this command go through helpers, because a
+   prefix grant buys more than its operation.** A
    `Bash(git switch:*)` grant buys the one
    operation above and also licenses `--discard-changes` and `-C` — discarding
    work and force-moving a branch, both of which `.claude/settings.json` denies
    in their other spellings. Deny rules cannot claw that back, because the
-   flags **combine**: `git switch -fC <name> <start>` was run against a
-   throwaway clone and switched, so a `Bash(git switch -C:*)` rule matches
-   none of it. That is the refspec argument `/pr` already makes about pushes,
-   one command over. The helper takes one shape-checked argument, requires the
-   branch to exist, and passes no flags to git at all.
+   flags **combine**: `git switch -fC <name> <start>` switches, and a
+   `Bash(git switch -C:*)` rule matches none of it. That is the refspec argument
+   `/pr` already makes about pushes, one command over. The helper takes one
+   shape-checked argument, requires the branch to exist, and passes no flags to
+   git at all.
 
-   The other two are the same finding in different clothes, and each was
-   confirmed by running it rather than reasoning about it:
+   The other two are the same finding in different clothes:
    `git worktree add -B` resets an existing branch, and
    `git checkout -b <name> -f origin/main` is accepted with the flag *after*
    the name, discarding tracked modifications on the one path whose whole

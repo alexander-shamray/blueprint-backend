@@ -55,8 +55,8 @@ change quoted from the review is a risk with no benefit.
   adjudicating a style finding, and reject those by naming the row.
 - **The locality contract**, by pointer: `docs/change-locality.md` §2 is
   the owner of what a document may and may not restate, and this profile
-  does not copy its list — a copy here had already dropped one of its
-  exceptions. Read that section before adjudicating a finding about a
+  does not copy its list, because a copy is the one that loses an exception.
+  Read that section before adjudicating a finding about a
   number, a version, or a phrase that appears more than once, and cite it
   by section in the `reason`.
 - **The branch's diff**, optionally, as an absolute path to a file holding
@@ -108,8 +108,8 @@ change quoted from the review is a risk with no benefit.
    rejection would be a guess dressed as a verdict: return `decision`, with
    the `reason` saying the diff was not supplied, so the finding reaches a
    person unresolved rather than being discarded.
-5. **Watch for the good class of finding.** External reviews have been right
-   here about one thing repeatedly: **register and version drift** — a
+5. **Watch for the good class of finding.** External reviews are most often
+   right here about one thing: **register and version drift** — a
    package used in a sample but missing from `appendix-b-licences.md`, a
    version stated in two places, a licence claim that does not match the
    package. Check those properly before rejecting them.
@@ -165,7 +165,7 @@ them the way it checks a block, so a row whose path is not plain, or whose
 quote is not at its line, is dropped by it rather than opened. A defect you
 cannot quote from the file is not a row.
 
-That block has historically been the more valuable half of a triage. Keep it
+That block is often the more valuable half of a triage. Keep it
 separate; do not fold its rows into the numbered ones.
 
 **A review you could not read is not an empty review.** `unreadable-review`,

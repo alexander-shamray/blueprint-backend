@@ -40,17 +40,15 @@ bash .claude/scripts/git-worktree-detach.sh "$pinned" # creates the directory AN
 git worktree list --porcelain                        # AFTER — the new `worktree ` line, prefix stripped, IS $work
 ```
 
-**The helper makes the directory, and this command no longer holds
-`Bash(mktemp:*)`.** It used to run its own `mktemp -d` and hand the path over,
-which meant the grant was a *filesystem-write primitive*: `mktemp` takes an
-arbitrary template, so it could create an empty directory or file anywhere this
-session can write, the checkout included. It could not write content and could
-not clobber — the template forces a fresh unique name — so no source file was
-ever alterable through it, but "the only mutations are the issues it files and
-the worktree" was false. A prefix rule cannot constrain a template, which is why
-this needed a helper rather than a narrower grant. The helper's shape check is
-now a tautology, which is the point: the only path git is ever handed is one
-the helper just created.
+**The helper makes the directory, and this command holds no
+`Bash(mktemp:*)`.** That grant would be a *filesystem-write primitive*:
+`mktemp` takes an arbitrary template, so it could create an empty directory or
+file anywhere this session can write, the checkout included. It could not write
+content or clobber — the template forces a fresh unique name — but it would
+still be a mutation beyond the issues and the worktree, and a prefix rule
+cannot constrain a template, which is why this is a helper rather than a
+narrower grant. The helper's shape check is a tautology, which is the point:
+the only path git is ever handed is one the helper just created.
 
 **`$work` is the host-native spelling and `$posix` is the shell's — two strings
 for one directory, and on some hosts two directories.** Under MSYS or Git Bash a
@@ -62,20 +60,20 @@ script, so git receives the path through MSYS conversion and the `secsweep-`
 shape check runs on the spelling it was written for — while every `Read`,
 `Grep`, `Glob` and Agent prompt below takes `$work`.
 
-**The helper's stdout is exactly the path and nothing else**, which took a fix:
+**The helper's stdout is exactly the path and nothing else.**
 `git worktree add` writes "Preparing worktree" to stderr but `HEAD is now at
-<sha> <subject>` to *stdout*, so the first capture of it returned a commit
-subject followed by a path, and the teardown then failed with a `not an existing
-directory` naming a whole commit message. Its output is redirected now.
+<sha> <subject>` to *stdout*, so the helper redirects it; left in, the capture
+would be a commit subject followed by a path, and the teardown would fail with
+a `not an existing directory` naming a whole commit message.
 
 **`$work` comes from `git worktree list`, and that is the whole translation
 step.** Git prints its own worktrees in the host's native spelling with forward
 slashes — `D:/tmp/alexa/secsweep-nlPuf1` for a root the shell called
-`/tmp/secsweep-nlPuf1`, measured on this repository rather than assumed — and
-the readers resolve that. **The record to read is the one that was not there a
-moment ago** — hence two listings, and the difference between them. Then check
-that its path ends in the `secsweep-` basename the helper just printed, which
-turns a single selector into an agreement between two.
+`/tmp/secsweep-nlPuf1` — and the readers resolve that. **The record to read is
+the one that was not there a moment ago** — hence two listings, and the
+difference between them. Then check that its path ends in the `secsweep-`
+basename the helper just printed, which turns a single selector into an
+agreement between two.
 
 **Porcelain is a labelled record, so `$work` is the path field and not the
 line.** The format is three lines per worktree —
@@ -96,9 +94,8 @@ everything else.
 
 **`--porcelain`, and it is the difference between a set and a table.** The
 default output is column-aligned for a human, so adding a longer path *repads
-every existing row* — this repository produced exactly that while the fix was
-being written, `C:/dev/ashamray             611d97e` becoming
-`C:/dev/ashamray               611d97e` when a `D:/tmp/...` row arrived. A
+every existing row* — `C:/dev/ashamray             611d97e` becomes
+`C:/dev/ashamray               611d97e` when a `D:/tmp/...` row arrives. A
 textual difference over those lines reports **every** row as new, so the
 selector that was supposed to yield one answer yields all of them. Porcelain
 emits one `worktree <path>` record per line with no padding and no alignment,
@@ -117,45 +114,41 @@ does not resolve, reported under *Never fail open*.
 
 **`-z` is the machine answer and is deliberately not taken here.** It emits
 verbatim pathnames, which is exactly right — and it emits them NUL-separated in
-a single line, measured rather than assumed:
+a single line:
 `worktree C:/dev/ashamray^@HEAD 611d97e…^@branch refs/heads/main^@^@`. A
 terminal capture strips the separators, so the records run together and the
 path abuts the `HEAD` line with nothing between them; the fix would cost more
 than the defect. Stopping on a quoted path is fail-closed and needs no parsing,
 where the alternative is a parse this consumer cannot reliably perform.
 
-**Neither half is sufficient alone, and both weaker versions were written
-before this one.** Detachment is not a cross-check: a worktree an earlier sweep
-abandoned is also detached, and so is the caller's own checkout when the sweep
-runs from a detached HEAD, so it fails in exactly the case it was offered for.
-Nor is the basename: `mktemp` guarantees its six characters are unused **in the
-temp directory it chose**, not across every worktree this repository has
-registered, so an abandoned sweep under a different temp root can collide. That
-one is worth spelling out because of where it lands — the stale checkout
-contains `Platform.slnx` too, so the readable-root proof below passes against
-it and the auditors read a commit nobody pinned. A wrong snapshot, silently,
-which is the failure this whole section exists to prevent.
+**Neither half is sufficient alone.** Detachment is not a cross-check: a
+worktree an earlier sweep abandoned is also detached, and so is the caller's own
+checkout when the sweep runs from a detached HEAD, so it fails in exactly the
+case it was offered for. Nor is the basename: `mktemp` guarantees its six
+characters are unused **in the temp directory it chose**, not across every
+worktree this repository has registered, so an abandoned sweep under a different
+temp root can collide. That one is worth spelling out because of where it lands
+— the stale checkout contains `Platform.slnx` too, so the readable-root proof
+below passes against it and the auditors read a commit nobody pinned. A wrong
+snapshot, silently, which is the failure this whole section exists to prevent.
 
 The set difference is what makes the answer positive rather than merely
 plausible: exactly one `worktree ` line appears between the two listings, and it
 is the one the helper just created.
 
-**No `cygpath`, deliberately, and the reason is this repository's most-repeated
-grant lesson.** `cygpath -m` is the obvious translation and it was the first
-version of this fix. But a permission rule is a prefix match, so
-`Bash(cygpath:*)` also buys `cygpath -f <file>`, which reads pathnames from an
-arbitrary file and prints them — `printf 'hunter2' > f; cygpath -f f` prints
-`hunter2`, measured, not reasoned. That is a **shell reader**, and it lands in
-a command whose own binding rule says shell readers were deliberately excluded
-because none of them can be pointed at `$work` under the grant. The grant would
-have contradicted **Binding the reads to `$work`** below — named rather than
-counted, because a positional pointer is falsified by the next insertion above
-it, and this one was already short when it was written.
+**No `cygpath`, deliberately.** `cygpath -m` is the obvious translation, but a
+permission rule is a prefix match, so `Bash(cygpath:*)` also buys
+`cygpath -f <file>`, which reads pathnames from an arbitrary file and prints
+them — `printf 'hunter2' > f; cygpath -f f` prints `hunter2`. That is a
+**shell reader**, and it lands in a command whose own binding rule says shell
+readers are deliberately excluded because none of them can be pointed at
+`$work` under the grant. The grant would contradict **Binding the reads to
+`$work`** below.
 
 `git worktree list` is already in the grant and reads nothing but git's own
 metadata. Its **entire** flag surface is `--porcelain`, `-v`, `-z` and
-`--expire <date>` — output formatting and one annotation filter, checked with
-`git worktree list -h` rather than assumed. Not one of them takes a path or
+`--expire <date>` — output formatting and one annotation filter, per
+`git worktree list -h`. Not one of them takes a path or
 opens a file, so the prefix grant `Bash(git worktree list:*)` buys no reader,
 which is the property `cygpath` could not offer. It also removes a conditional:
 there is no host where this line is skipped, because git always knows how to
@@ -180,9 +173,9 @@ so the summary names the commit the sweep actually read.
 caller's tree, which would silently forfeit the stable-snapshot property this
 section buys. A failed `git worktree add` is a round that could not run,
 reported like any other tool error under *Never fail open* below. **The round
-writes nothing to disk** — issue bodies are piped to `gh-issue-create.sh` on stdin
-(the File step), not written to files — so `$work` stays clean on its own and
-the teardown below removes it without `--force`.
+writes nothing to disk** — issue bodies are piped to `gh-issue-create.sh` on
+stdin (the File step), not written to files — so `$work` stays clean on its own
+and the teardown below removes it without `--force`.
 
 **Prove the root is readable before the fan-out, rather than trusting the add.**
 `Glob` a file the pinned commit is known to carry — `$work/Platform.slnx`, as an
@@ -201,8 +194,8 @@ detached checkout pins the commit, but nothing about it forces a reader to look
 there — `Read`, `Grep`, `Glob` and an Agent default to the caller's workspace.
 So **every read is an absolute path under `$work`** — every `Read`, `Grep` and
 `Glob` argument, and every Agent prompt's stated root. There are deliberately no
-shell readers in the grant to bind: `grep`, `git grep` and `git log` were
-removed, because a shell reader's target is its working directory and the only
+shell readers in the grant to bind: `grep`, `git grep` and `git log` are
+excluded, because a shell reader's target is its working directory and the only
 ways to point one at `$work` — `cd "$work" && …` or `git -C "$work" …` — start
 with a verb the grant does not name, so the rule would have been unsatisfiable.
 The built-in readers take an explicit path and need no such trick. Reading
@@ -267,9 +260,6 @@ or above.** Three gates, and each drops candidates the round must not file:
   accepted-risk record meeting the same test. **An issue meeting neither
   condition is not tracking and blocks nothing**; the paragraph below says
   why.
-  This sentence is qualified rather than left general because the sweep reads
-  this file as its instructions, and a summary that states the old rule
-  unconditionally is a rule rather than a summary.
   **Verify the accepted-risk claim rather than trusting the prose**, since a
   `closed by PR-NN` remark in the audited tree is only as true as the code
   around it still makes it. A closed issue that was *fixed* is the one
@@ -284,7 +274,7 @@ or above.** Three gates, and each drops candidates the round must not file:
   caveat under *Where it stops* is a different set — issues still **open** are a
   live-risk signal, not the de-duplication test.)
 
-**Who wrote the suppressing issue decides whether it suppresses (#57).** This
+**Who wrote the suppressing issue decides whether it suppresses.** This
 repository is public, so **anyone with a GitHub account can open an issue**,
 and a gate that treats *any* open issue as tracked is a gate a stranger can
 close a finding through — file "{topic} is being tracked" against the area a
@@ -294,7 +284,7 @@ round clean. That is worse than a missed filing, because a clean round is what
 convergence.
 
 So enumerate the candidates here, and put the suppression **decision** behind a
-helper rather than taking it in passing (#150):
+helper rather than taking it in passing:
 
 ```bash
 bash .claude/scripts/gh-issue-list.sh
@@ -309,19 +299,19 @@ issue number and nothing else, and prints which condition matched, so a
 suppression is auditable rather than asserted.
 
 **`author` is deliberately absent from that field set, and the absence is the
-control.** This rule was prose in two files until #150 — a rule a reader
-follows, not one anything applies — and leaving the field in the listing leaves
-the decision takeable here, which is the state the helper exists to end. The
-helper prints the near-miss login on its exit-1 path, so the round summary can
-still name `#NN by <login>` without this step ever holding the field.
+control.** A rule a reader follows is not one anything applies, and a field
+left in the listing leaves the decision takeable here, which is the state the
+helper exists to end. The helper prints the near-miss login on its exit-1
+path, so the round summary can still name `#NN by <login>` without this step
+ever holding the field.
 
 An issue may suppress a candidate only if its `author.login` is the
 repository owner's login, resolved from the checkout by the helper —
 never typed from memory, for `gh-label-ensure.sh`'s reason: a login taken as a
 parameter is a login a finding gets to choose.
 
-**A label is deliberately NOT a second sufficient condition, and it was one
-until a review round asked what a label proves.** A non-collaborator cannot
+**A label is deliberately NOT a second sufficient condition.** A
+non-collaborator cannot
 set one at creation, so a label does look like a maintainer's touch — but it
 is applied to an issue, not to an issue's *contents*, and the author can edit
 the title and body afterwards while the label stays. So the signal a sweep
@@ -330,35 +320,29 @@ number", which is not the claim the gate needs. Authorship is not editable;
 that is the whole of why it is the test.
 
 The cost is real and is the safe direction: an issue opened by a collaborator
-who is not the owner no longer suppresses, so a genuine duplicate gets filed
+who is not the owner does not suppress, so a genuine duplicate gets filed
 again. A duplicate that says why beats a confirmed finding nobody wrote down.
 
 **An issue meeting neither is not tracking, and "not tracking" means the
 candidate is untracked.** So it does not merely fail to suppress — the finding
 **files normally**, exactly as if that issue did not exist. Treat the match as
-no match.
-
-**Reporting it as suppressed-but-unclean was this gate's first fix, and it was
-still the defect.** It left the finding *unfiled* while the loop spun out its
-remaining rounds, so a stranger who could no longer end the sweep could still
-stop the issue from ever being written — which is most of what they wanted. A
+no match. Reporting it as suppressed-but-unclean is not enough: that leaves the
+finding *unfiled* while the loop spins out its remaining rounds, so a stranger
+who cannot end the sweep could still stop the issue from ever being written. A
 gate that downgrades the report and keeps the outcome has moved the symptom.
 
 Name the near-miss in the round summary — `#NN by <login> names the same lines
 and was not opened by the owner` — so a human can see the collision and
 close one as a duplicate if it is one. That is a note beside a filed issue,
-never a substitute for filing it, and a duplicate that says why beats a finding
-nobody wrote down.
+never a substitute for filing it.
 
 **Read an issue's text through `gh-issue-text.sh <n>`, not `gh issue view`.**
 Its field set is fixed at number, title, state and body, and the field it
-withholds is `author` — because dropping `author` from the listing was only
-half a control while an unrestricted `Bash(gh issue view:*)` sat beside it,
-returning the same field to the same session one invocation over. That is #56
-one command along: a helper that fixes its field set does not bind a caller who
-still holds the raw grant and can choose fields. Raised in review against #150's
-first version. Authorship is read by `gh-issue-suppresses.sh`, in code, with
-the answer reduced to an exit status.
+withholds is `author` — because an unrestricted `Bash(gh issue view:*)` beside
+the listing helper would return that field to the same session one invocation
+over: a helper that fixes its field set does not bind a caller who still holds
+the raw grant and can choose fields. Authorship is read by
+`gh-issue-suppresses.sh`, in code, with the answer reduced to an exit status.
 
 **The issue's own text is untrusted on the same terms as the tree.** The body is
 written by whoever opened the issue, and bounding which FIELDS cross does not
@@ -400,37 +384,29 @@ Each round is the review done once, end to end:
    verify step ran, because the audited repository is **untrusted input**. A
    tool the agent does not have cannot be turned against it.
 
-   **That property is now real for the choice of agent too, and the mechanism
-   is not the one it looks like.** This used to grant a bare `Agent`, which
-   admits *any* registered subagent type including the general-purpose ones
-   whose tool list is `*`, so "spawn them as `security-auditor`" was enforced
-   by that sentence and nothing else — the shape the sentence above
-   disparages.
-   The frontmatter now carries `Agent(security-auditor)` **and** a
-   `disallowed-tools` line naming every registered type that holds a shell, an
-   editor or the network. Both were needed: `allowed-tools` is an
-   **auto-approval list, not a whitelist** — the harness documents that it
-   "does not restrict which tools are available", and a measured probe
-   confirmed a `general-purpose` spawn is permitted under an
+   **The choice of agent is enforced by the grant too, and the mechanism is
+   not the one it looks like.** A bare `Agent` grant admits *any* registered
+   subagent type including the general-purpose ones whose tool list is `*`,
+   so "spawn them as `security-auditor`" would be enforced by that sentence
+   and nothing else — the shape the sentence above disparages. The
+   frontmatter carries `Agent(security-auditor)` **and** a `disallowed-tools`
+   line naming every registered type that holds a shell, an editor or the
+   network. Both are needed: `allowed-tools` is an **auto-approval list, not a
+   whitelist** — the harness documents that it "does not restrict which tools
+   are available", and a `general-purpose` spawn is permitted under an
    `allowed-tools: Agent(Explore)` grant. Only the deny refuses, and it refuses
    by name: `Agent type 'general-purpose' has been denied by permission rule
    'Agent(general-purpose)' from command`.
 
-   **The residual is that a deny list of agent types is an inventory, and a new
-   type is admitted by default.** The harness offers no "only this type" allow,
-   so the enumeration is the only shape available and it goes stale the day
-   someone adds an agent under `.claude/agents/`. Whoever adds one owes this
-   line and `bug-sweep.md`'s an entry.
-
-   **It was stale on the day it was written, which is the sharper version of the
-   same point.** Both project-local agents — `security-auditor` and
-   `bug-auditor` — were registered under `.claude/agents/` and neither list
-   denied either, so each sweep could select the other's auditor. `bug-auditor`
-   is a defect auditor reporting bugs rather than security findings, so a sweep
-   run through it can return a clean *security* round having looked for
-   something else. Copilot raised it, and the lesson is that "a new type is
-   admitted by default" understated it: an inventory written by listing the
-   types you thought of omits the ones you did not, whether or not they are new.
+   **The residual is that a deny list of agent types is an inventory, and a
+   type it does not name is admitted by default.** The harness offers no "only
+   this type" allow, so the enumeration is the only shape available. It goes
+   stale the day someone adds an agent under `.claude/agents/`, and it is
+   incomplete whenever it lists only the types someone thought of: the other
+   read-only profiles belong on it too, because `bug-auditor` reports bugs
+   rather than security findings, so a sweep run through it can return a clean
+   *security* round having looked for something else. Whoever adds an agent
+   owes this line and `bug-sweep.md`'s an entry.
 
    The natural cut is CI/tooling, the application source, and the
    deploy/infrastructure surface, but let the scope hint narrow it. Give each
@@ -458,16 +434,14 @@ Each round is the review done once, end to end:
    `security-auditor` with that candidate alone** — the root, the file, the
    line, the claim and the scenario as the fan-out returned them — under the
    verdict contract in `.claude/agents/security-auditor.md`, and take its
-   verdict record. **This step does not open `$work` itself, and that is the
-   change (#75 item 5).** It used to, deliberately, so that an unverified
-   agent claim never became an issue; the property that bought is kept — two
-   independent read-only readings, neither able to mutate, must agree — and
-   what it cost is given up: the audited tree no longer enters the one
-   invocation that holds `gh-issue-create.sh`. A verdict of `refuted` or
-   `outside-root` drops the candidate; a record that is not in the declared
-   shape is dropped as malformed and counted; and **a record whose `file` and
-   `line` are not the candidate's as dispatched is dropped the same way**,
-   whatever its verdict says — two readings that disagree on where the
+   verdict record. **This step does not open `$work` itself.** An unverified
+   agent claim still never becomes an issue — two independent read-only
+   readings, neither able to mutate, must agree — and the audited tree never
+   enters the one invocation that holds `gh-issue-create.sh`. A verdict of
+   `refuted` or `outside-root` drops the candidate; a record that is not in the
+   declared shape is dropped as malformed and counted; and **a record whose
+   `file` and `line` are not the candidate's as dispatched is dropped the same
+   way**, whatever its verdict says — two readings that disagree on where the
    defect is have not agreed, and a `confirmed` at another location is a
    redirect, not a confirmation. Drop what does not survive.
 3. **De-duplicate.** Check each survivor against the tracked set and the
@@ -498,10 +472,10 @@ Each round is the review done once, end to end:
 
    **The third argument is the route, and `sweep` is the one this command
    passes.** The line above is the sentence that route requires; the helper
-   refuses it under `hand`, and refuses `hand`'s sentence here. That is
-   #184: the fixed last line is still the detector for a heredoc that closed
-   early, but it is no longer a provenance claim every issue makes whether or
-   not it is true of them.
+   refuses it under `hand`, and refuses `hand`'s sentence here. The fixed last
+   line is the detector for a heredoc that closed early, and the route keeps
+   it from being a provenance claim every issue makes whether or not it is
+   true of them.
 
    **The delimiter is the one thing a quoted heredoc leaves the payload to
    steer, and the rule for it is yours to keep, not the helper's.** The body
@@ -518,16 +492,14 @@ Each round is the review done once, end to end:
    issue — after the tail has run, which is why the rule and not the trailer
    is the guard.
 
-   **A title must never begin with `/`, and this is a defect that already
-   shipped four times.** MSYS argument conversion rewrites an argument that
-   looks like an absolute POSIX path before the native `gh.exe` sees it, so
-   `--title "/health/ready returns 200 …"` files as
-   `"C:/Program Files/Git/health/ready returns 200 …"`. Issues #55, #56 and #68
-   carried it for two weeks and nobody reading the tracker could tell what the
-   subject was. The body is safe — it arrives on stdin, which is bytes rather
-   than an argument — so **only `--title` is exposed** inside the helper, and
-   only at position one: measured here, a leading backtick or a leading space
-   both suppress the conversion and a bare `/` does not.
+   **A title must never begin with `/`.** MSYS argument conversion rewrites an
+   argument that looks like an absolute POSIX path before the native `gh.exe`
+   sees it, so `--title "/health/ready returns 200 …"` files as
+   `"C:/Program Files/Git/health/ready returns 200 …"`, and nobody reading the
+   tracker can tell what the subject is. The body is safe — it arrives on
+   stdin, which is bytes rather than an argument — so **only `--title` is
+   exposed** inside the helper, and only at position one: a leading backtick
+   or a leading space both suppress the conversion and a bare `/` does not.
 
    **The helper closes it, and it is the one thing a helper can do that the
    grant could not.** `gh-issue-create.sh` sets `MSYS2_ARG_CONV_EXCL` for its
@@ -541,19 +513,18 @@ Each round is the review done once, end to end:
    at each gate and why, and the lows/infos recorded but not filed.
 
 **Residual — the parent's context still receives the verdict, and a verdict is
-text.** Step 2 no longer opens `$work` in the invocation that files (#75 item
-5): the fan-out contains the auditor, the verify dispatch contains the
-verifier, and the parent composes from a record with declared fields. What it
-still holds is `gh-issue-create.sh`, whose repository is resolved from the
-checkout and whose labels are a closed set, so nothing a finding says can
-choose *where* an issue lands; what an issue *says* is the record's fields,
-and a crafted tree that steers both read-only invocations into the same
-wrong record produces a wrong issue in this repository. That is the class a
-container closes and a record narrows. `Write` and `Edit` are **denied**,
-which closes the editing tools and not the class — `Bash` remains granted,
-and a redirection through it writes what `Edit(...)` refuses, argued in full
-below. **The branch is denied by name**, since the `Bash(...)` form of
-`disallowed-tools` was measured — argued in full below.
+text.** Step 2 does not open `$work` in the invocation that files: the fan-out
+contains the auditor, the verify dispatch contains the verifier, and the parent
+composes from a record with declared fields. What it still holds is
+`gh-issue-create.sh`, whose repository is resolved from the checkout and whose
+labels are a closed set, so nothing a finding says can choose *where* an issue
+lands; what an issue *says* is the record's fields, and a crafted tree that
+steers both read-only invocations into the same wrong record produces a wrong
+issue in this repository. That is the class a container closes and a record
+narrows. `Write` and `Edit` are **denied**, which closes the editing tools and
+not the class — `Bash` remains granted, and a redirection through it writes what
+`Edit(...)` refuses, argued in full below. **`git push origin` is denied by
+name** — argued in full below.
 
 **Residual — the auditor reads the host, not only `$work`.** `Read`, `Grep` and
 `Glob` are not confined to the pinned worktree; the "root every path under
@@ -562,7 +533,8 @@ both are enforcement by discipline, not by a sandbox. Since the audited tree is
 prompt-injection input, a crafted file could still steer an agent to read a host
 path outside `$work` — this repo already records the same limit for the Grok
 reviewer, which is why that one runs in a **container** exposing only a
-disposable clone, not merely a worktree (`CLAUDE.md`, the Grok sandbox). Closing
+disposable clone, not merely a worktree (`docs/harness-boundaries.md`, the
+external review's container). Closing
 it here the same way — running the fan-out in a container that mounts only
 `$work` — is a real capability decision, not a command edit, and needs the
 `.claude/sandbox/` and `.claude/scripts/` infrastructure a command session is
@@ -576,17 +548,15 @@ verification, sat below the threshold, or was already tracked. The loop stops
 on a clean round or at the seventh, whichever comes first.
 
 **"Already tracked" means tracked by the gate's test, not merely matched by an
-open issue (#57).** A candidate matched only by an issue that is not the
+open issue.** A candidate matched only by an issue that is not the
 owner's is **filed**, so such a round is unclean for the ordinary
 reason — it filed something — and needs no special case here. That is the point
 of deciding it at the gate: a stranger's issue can neither suppress the filing
 nor end the sweep, because it never counted as tracking in the first place.
 
 **One clean round is weaker evidence than it looks, and the ceiling is why it
-is safe to stop on it anyway.** This repo has watched a review loop go clean and
-then find more — PR-11's Copilot round eight came back clean and every round
-after it surfaced findings, which is the whole reason its review ceiling moved
-from three to twelve. A security sweep differs from `/ship`'s **Grok** loop —
+is safe to stop on it anyway.** A review loop can go clean and then find more.
+A security sweep differs from `/ship`'s **Grok** loop —
 which still wants two consecutive clean passes — in the way that makes a single
 clean round the right stop here: each round's
 fan-out is **stateless** — it re-reads the tree from scratch, not a reviewer
@@ -610,8 +580,8 @@ files and does not fix. So:
 that failed, an auditor reporting `unreadable-root` or `empty-scope`, a
 worktree path git had to quote — is not a clean round.
 Report the error and let the user decide; do not count a review that did not
-happen as a review that found nothing. This is the same rule that made the Grok
-loop trust the verdict check over the exit code: a review that never ran cannot
+happen as a review that found nothing. This is the same rule by which the Grok
+loop trusts the verdict check over the exit code: a review that never ran cannot
 report as clean.
 
 **`unreadable-root` and `empty-scope` are the ones that arrive looking like
@@ -638,16 +608,16 @@ enforcing half is `disallowed-tools`, not the absence of an entry in
 auto-approval list, and the harness documents in as many words that it "does
 not restrict which tools are available: every tool remains callable, and your
 permission settings still govern tools that are not listed". So *omitting*
-`Write` and `Edit` never withheld them; it only meant they would have gone to
-whatever the session's permission mode does with an unlisted tool, which under
-an auto or bypassing mode is silently yes. They are now **named in
-`disallowed-tools`**, which removes them from the pool outright — so no file's
-**contents** can be altered *by a tool whose job is editing*.
+`Write` and `Edit` would not withhold them; they would go to whatever the
+session's permission mode does with an unlisted tool, which under an auto or
+bypassing mode is silently yes. They are **named in `disallowed-tools`**, which
+removes them from the pool outright — so no file's **contents** can be altered
+*by a tool whose job is editing*.
 
 **That is narrower than "read-only", and the gap is `Bash`.** Both commands
-grant `Bash(...)` forms, and `CLAUDE.md` records the consequence a hundred
-lines from where these denies were written: the `Edit` deny list is defence in
-depth because **`Bash` redirection can still write a file**. A `>` in an
+grant `Bash(...)` forms, and `docs/harness-boundaries.md` records the
+consequence: the `Edit` deny list is defence in depth because **`Bash`
+redirection can still write a file**. A `>` in an
 allowed command, or an interpreter reached through one, alters source that
 `Edit(...)` refuses — and under a bypassing permission mode an *unlisted* tool
 is silently available too, which is the premise stated at the top of this
@@ -660,101 +630,74 @@ the cited-path one. A capability boundary that refuses arbitrary `Bash` is what
 "no file's contents can be altered" would need, and no grant here expresses
 one.
 
-**`git push` is a different case and this paragraph used to get it wrong.** It
-is not in `disallowed-tools`, and omitting it withholds nothing — which is the
-very rule the sentence above just established. It is worse than unlisted:
-`.claude/settings.json` **allows** `Bash(git push origin:*)` and
+**`git push` is a different case.** Omitting it from `allowed-tools` withholds
+nothing — the very rule the sentence above establishes — and it is worse than
+unlisted: `.claude/settings.json` **allows** `Bash(git push origin:*)` and
 `Bash(git push -u origin:*)` globally, so a push of the current branch does not
 even prompt. Force-pushes and pushes to `main` are denied by name; an ordinary
-push is not. So "no branch can move" was false, and it was false in exactly the
-way this section exists to warn about — reading an absence as a control.
+push is not. Reading that absence as "no branch can move" is exactly the
+mistake this section exists to warn about.
 
-**Naming `git push` in `disallowed-tools` is the fix, and it is taken here
-because the form was measured first.** No command in this repository had ever
-put a `Bash(...)` pattern in that key, and an earlier nested `claude -p` probe
-could not separate "the harness rejects the pattern" from "the probe failed to
-load" — so this paragraph refused the deny rather than write one it could not
-distinguish from a no-op, on the `git reset` grant's lesson. The measurement
-that settled it was a throwaway command in a detached worktree carrying
-`Bash(git diff:*)` in both keys: the diff was refused with the harness's own
-"has been denied" text while a `Bash(wc:*)` in the same session ran, so the
-key matches a `Bash(...)` pattern and the refusal is the harness's. Both
-sweeps now deny `git push origin`, its `-u` form and the raw `gh issue
-create` by name. **The global allow still exists and still prompts
-nowhere**; the deny is what wins, because precedence is deny first. A
-`Write` grant for issue bodies was tried and removed precisely because it would
-have re-opened source editing — a read-only claim resting on prose while the
-grant permits writing every undenied path is unenforced, which for a security
-command is the worse failure. Bodies go through `gh-issue-create.sh` on stdin for
-exactly this reason.
+**So `git push` is named in `disallowed-tools`, and the harness honours the
+`Bash(...)` form in that key.** A command carrying `Bash(git diff:*)` in both
+keys has the diff refused with the harness's own "has been denied" text while
+a `Bash(wc:*)` in the same session runs, so the key matches a `Bash(...)`
+pattern and the refusal is the harness's. Both sweeps deny `git push origin`,
+its `-u` form and the raw `gh issue create` by name. **The global allow still
+exists and still prompts nowhere**; the deny is what wins, because precedence
+is deny first. A `Write` grant for issue bodies is refused because it would
+re-open source editing — a read-only claim resting on prose while the grant
+permits writing every undenied path is unenforced, which for a security
+command is the worse failure. Bodies go through `gh-issue-create.sh` on stdin
+for exactly this reason.
 
-**No mutation is scoped by discipline any more, and the last one went the way
-the other two did.** This paragraph has been wrong in both directions: it
-first claimed one when three were open, and then went on saying three were open
-after two of them had been moved into helpers by the change immediately below.
-The count is the part that rots, so it is stated once here and the entries carry
-their own status.
+**No mutation is scoped by discipline: every grant that could steer one is a
+helper.** Each is recorded because the reasoning generalises:
 
-- **`Bash(gh issue create:*)` pinned no repository, and is gone.** It was a
-  prefix grant, so "always `--repo` for this repository" was prose.
-  `gh-issue-create.sh` resolves the repository from the checkout, closes the
-  label vocabulary, takes the title and the body on stdin so neither crosses
-  this shell's command line, and sets `MSYS2_ARG_CONV_EXCL` for its own child
-  — the title defect the commands could not close under a prefix match.
-**The label grant and the mktemp grant are gone, and both went the way every
-other grant here went — into a helper.** They are recorded because the reasoning
-generalises, not because they are still open.
+- **`gh-issue-create.sh`, not `Bash(gh issue create:*)`.** A prefix grant pins
+  no repository, so "always `--repo` for this repository" would be prose. The
+  helper resolves the repository from the checkout, closes the label
+  vocabulary, takes the title and the body on stdin so neither crosses this
+  shell's command line, and sets `MSYS2_ARG_CONV_EXCL` for its own child — the
+  title defect a prefix match cannot close.
+- **`gh-label-ensure.sh`, not `Bash(gh label create:*)`, because "create"
+  understates what that grant reaches.** `gh label create <existing> --force`
+  *updates* an existing label's colour and description — `gh`'s own help reads
+  "Create a new label on GitHub, or update an existing one with `--force`" — so
+  the grant could rewrite any label in any repository `-R` names, and two prose
+  rules, always `--repo` and never `--force`, are rules a finding can talk past.
+  The helper leaves no free parameter to steer: the name comes out of a fixed
+  case, the colour and description come with it, `--force` is never spelled,
+  and the repository is the one `gh repo view` resolves from this checkout
+  rather than one a caller names.
+- **`git-worktree-detach.sh`, not `Bash(mktemp:*)`**, for the
+  filesystem-write reason argued under *Run in a throwaway worktree*: no source
+  file's contents are alterable through `mktemp`, which is why the sentence
+  above is phrased about contents, but an empty directory or file anywhere the
+  session can write is a mutation all the same.
+- **`git-worktree-detach.sh` and `git-worktree-drop.sh`, not
+  `Bash(git worktree add:*)` and `Bash(git worktree remove:*)`**, because the
+  prefix buys more than the operation: `git worktree add -B` resets an
+  existing branch, and `git worktree remove -f` defeats the refusal this
+  command's own teardown relies on as its guard.
 
-- **`Bash(gh label create:*)` pinned no repository, and "create" understated
-  what it reached.** `gh label create <existing> --force` *updates* an existing
-  label's colour and description — `gh`'s own help reads "Create a new label on
-  GitHub, or update an existing one with `--force`" — so the grant could rewrite
-  any label in any repository `-R` names, not merely add a missing `security`
-  one. It was held as two prose rules, always `--repo` and never `--force`,
-  which is a rule a reader enforces and a finding can talk past.
-  `gh-label-ensure.sh` leaves no free parameter to steer: the name comes out of
-  a fixed six-entry case, the colour and description come with it, `--force` is
-  never spelled, and the repository is the one `gh repo view` resolves from this
-  checkout rather than one a caller names.
-- **`Bash(mktemp:*)` was a filesystem write primitive.** mktemp takes an
-  arbitrary template, so the grant permitted creating an empty directory or file
-  anywhere this session can write, the checkout included. It could not write
-  content and could not clobber an existing path — the template forces a fresh
-  unique name — so no source file was ever alterable through it, which is why
-  the sentence above is phrased about contents. `git-worktree-detach.sh` makes
-  the directory itself now and prints it.
+**The root cause is worth more than any one fix.** A grant documented by *the
+operation it was added for* rather than by *what its prefix admits* is
+under-described, and the tool's own `--help` is where the difference shows. A
+grant is not a description of your intent.
 
-**The root cause the two shared is worth more than either fix.** Each was
-documented by *the operation it was added for* rather than by *what its prefix
-admits*, and reading the tool's own `--help` found something every time it was
-done. A grant is not a description of your intent.
-
-**The worktree half of that residual is closed.** It used to read the same way,
-with `Bash(git worktree remove:*)` trusted to take only `$work`. Both worktree
-grants now go through fixed helpers — `git-worktree-detach.sh` and
-`git-worktree-drop.sh` — because the prefix bought more than the operation:
-`git worktree add -B` resets an existing branch, and `git worktree remove -f`
-defeats the refusal this command's own teardown relies on as its guard. The
-helpers bind the path as well as the flags, and the path half is the one that
-matters here: **both refuse anything that is not `secsweep-` plus six
-characters under the canonical temp root**, which is the shape
-`git-worktree-detach.sh` produces. **Directly under it — and for a while it was
-not, though the comments said so:** a bash `case` pattern does no pathname
-expansion, so `?` matches `/` too, and `"$tmproot"/secsweep-??????` accepted
-`$tmproot/secsweep-a/bbbb` as well as `$tmproot/secsweep-abc123` — checked by
-running both through a `case`, against controls of the wrong length, the wrong
-prefix and the wrong root, all correctly refused. Prefix and length held;
-direct-childness did not. Both helpers now compare `dirname "$resolved"` against
-`$tmproot` and match the basename alone, which cannot be talked past because a
-basename contains no `/`, and `test_grok_helpers.py` runs the nested paths
-through the real helper as negative cases.
-Registration was not enough on its
-own — every sibling PR worktree is registered too, and a poisoned finding
-naming one would otherwise have been able to delete it. What each refuses
-beyond that differs and is worth naming rather than averaging:
-`git-worktree-drop.sh` passes no flags at all and additionally refuses the main
-worktree and any worktree outside this repository, while
-`git-worktree-detach.sh` embeds `--detach`
-by design, takes a resolved 40-character sha and nothing else, and makes the
-directory itself.
-`git worktree list` stays a raw grant; it reads.
+The worktree helpers bind the path as well as the flags, and the path half is
+the one that matters here: **both refuse anything that is not `secsweep-` plus
+six characters directly under the canonical temp root**, which is the shape
+`git-worktree-detach.sh` produces. They compare `dirname "$resolved"` against
+`$tmproot` and match the basename alone, because a bash `case` pattern does no
+pathname expansion, so `?` matches `/` too, and `"$tmproot"/secsweep-??????`
+would accept `$tmproot/secsweep-a/bbbb` as well as `$tmproot/secsweep-abc123`; a
+basename contains no `/`, so that cannot be talked past. Registration is not
+enough on its own — every sibling PR worktree is registered too, and a poisoned
+finding naming one could otherwise delete it. What each refuses beyond that
+differs and is worth naming rather than averaging: `git-worktree-drop.sh` passes
+no flags at all and additionally refuses the main worktree and any worktree
+outside this repository, while `git-worktree-detach.sh` embeds `--detach` by
+design, takes a resolved 40-character sha and nothing else, and makes the
+directory itself. `git worktree list` stays a raw grant; it reads.
