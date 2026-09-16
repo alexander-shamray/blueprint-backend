@@ -166,12 +166,12 @@ jobs:
       # cluster is touched", because the first of these three steps reads the
       # cluster; the first that changes it is the HPA patch below.
 
-      # ADR-040 declined a pipeline check for want of admin credentials in CI,
-      # and this job answers that by where it sits rather than by having found
-      # any: the `production` Environment is what scopes a deploy-time
+      # The credential this needs is scoped by where the job sits rather than
+      # held by CI: the `production` Environment scopes a deploy-time
       # credential to the deploy, and the realm-check client is a service
-      # account of the realm being checked with realm-read rights and nothing
-      # else. docs/secrets.md carries how it is provisioned and rotated.
+      # account of the realm being checked, with realm-read rights and nothing
+      # else (ADR-040). docs/secrets.md carries how it is provisioned and
+      # rotated.
 
       # The realm is derived and the origin is pinned, and mixing those up is a
       # hole either way. Two environment variables naming a realm, beside a
@@ -324,12 +324,12 @@ jobs:
           fi
 
           kubectl scale deployment "$WORKLOAD" --replicas="$NEEDED" -n "$NAMESPACE"
-          # Bounded, because an unbounded wait here does not fail — it consumes
-          # the job. A scale-up that cannot schedule 19 ready pods would block
-          # until the 150-minute cap, and a job cancelled on its timeout is not
-          # the same as a step that failed: the `if: always()` cleanup is not
-          # reliably reached, so the raised HPA floor stays raised with nothing
-          # left to run.
+          # Bounded, because an unbounded wait here does not fail — it
+          # consumes the job. A scale-up that cannot schedule the replicas it
+          # asked for would block until the job's cap, and a job cancelled on
+          # its timeout is not the same as a step that failed: the
+          # `if: always()` cleanup is not reliably reached, so the raised HPA
+          # floor stays raised with nothing left to run.
           kubectl rollout status deployment "$WORKLOAD" -n "$NAMESPACE" --timeout=10m
         env:
           WORKLOAD: ${{ inputs.workload }}
@@ -429,17 +429,16 @@ jobs:
             # environment value falls through to the chart's own default and
             # the canary comes up against the default identity provider, OTLP
             # endpoint and database — a pod that is not a canary of anything.
-            # The gateway is the one where this fails loudly, because
-            # `edge-config.yaml` refuses an empty `ingress.trustedNetworks`;
-            # the other three would install and be wrong.
+            # The gateway fails loudly, because `edge-config.yaml` refuses an
+            # empty `ingress.trustedNetworks`; the rest would install and be
+            # wrong.
 
-            # `--timeout 20m` because §15.1's callout, deploy/helm/README.md
-            # and docs/runbooks/migration-failure.md state the same rule: Helm
-            # blocks on a hook whatever `--wait` says, its default is five
-            # minutes, and MigrationJobFailed needs sixteen, so 20m > 16m is
-            # the constraint. ADR-022 makes the canary release the one that
-            # runs §7.4's hook, which is why this command is the one that must
-            # not inherit the default.
+            # `--timeout` because Helm blocks on a hook whatever `--wait` says,
+            # and its default is shorter than the migration budget §15.1,
+            # deploy/helm/README.md and docs/runbooks/migration-failure.md
+            # agree on. ADR-022 makes the canary release the one that runs
+            # §7.4's hook, which is why this command is the one that must not
+            # inherit the default.
 
             # `--set autoscaling.enabled=false` is not belt and braces: see
             # _autoscaling.tpl. The values inherited from the stable release

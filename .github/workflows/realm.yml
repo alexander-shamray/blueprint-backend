@@ -112,9 +112,9 @@ jobs:
     # and a realm that disagrees are all red, on the rollout's own rule.
 
     # A repository variable and not an Environment one, because a job-level
-    # `if` is evaluated before the job's Environment is entered. The three
-    # values the job uses are Environment-scoped, exactly as they are for the
-    # rollout; only the opt-in sits one level up.
+    # `if` is evaluated before the job's Environment is entered. The values the
+    # job uses are Environment-scoped, exactly as they are for the rollout;
+    # only the opt-in sits one level up.
     if: ${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && vars.REALM_CHECK_SCHEDULED == 'enabled' }}
     runs-on: ubuntu-latest
     # This job reads and never waits on a hook, a rung or a dwell: a token
@@ -199,7 +199,7 @@ jobs:
         # A step timeout, so a hung Helm or admin API is a failed step rather
         # than a cancelled job: `failure()` below fires on the first and not
         # on the second, and the gap between this and the job's cap is what
-        # the filing step runs in. Six is generous for eight reads.
+        # the filing step runs in.
         timeout-minutes: 6
         run: |
           set -euo pipefail
@@ -263,11 +263,9 @@ jobs:
 
       # `security` and `critical`, and the second is decided rather than
       # hedged. This step cannot tell a realm that drifted from a realm that
-      # could not be read, and the rule that decides is the rollout's: a realm
-      # nobody can see holds no guarantee anybody can state. The procedure asks
-      # first which of the two it was, and an issue relabelled down after a
-      # read of the log costs less than a five-hour token lifetime in
-      # production filed as something to look at next week.
+      # could not be read, and the rule that decides is ADR-043's: a realm
+      # nobody can see holds no guarantee anybody can state. The procedure
+      # asks first which of the two it was.
 
       # `github.token` and not a personal token, scoped by the job's
       # `issues: write` above. Only the `judge` step's failure files: a
