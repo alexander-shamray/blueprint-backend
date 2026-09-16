@@ -21,7 +21,7 @@ command arriving over the broker has no principal to bind from. That exclusion
 was recorded as an open question rather than a decision, and it left
 `AuthorisePayment` naming the customer whose instrument Payments would charge
 in a field nothing on the receiving side could check
-([#63](https://github.com/alexander-shamray/dotnet-ddd-blueprint/issues/63)).
+([#63](https://github.com/alexander-shamray/blueprint-backend/issues/63)).
 
 The rule that closes it is not "bind on the message path" — there is nothing to
 bind from — but **re-derive**, and what makes re-derivation available is that
@@ -33,7 +33,7 @@ rather than from a sender that merely asserted one.
 **That is a statement about the legitimate path and not about the event's
 provenance**, and the difference is the residual this ADR closes with: nothing
 authenticates an `OrderPlaced`, so the shared broker principal
-([#44](https://github.com/alexander-shamray/dotnet-ddd-blueprint/issues/44))
+([#44](https://github.com/alexander-shamray/blueprint-backend/issues/44))
 can forge one and seed a payer of its choosing. What this decision buys is that
 the **command** no longer offers a payer-selection field — a narrowing whose
 exact reach is argued below. Calling the event-backed value *trustworthy* would
@@ -133,7 +133,7 @@ compensates on that timeout rather than paging well before it.
 
 **This narrows the broker exposure and does not close it.** One shared
 RabbitMQ principal still writes every queue
-([#44](https://github.com/alexander-shamray/dotnet-ddd-blueprint/issues/44)),
+([#44](https://github.com/alexander-shamray/blueprint-backend/issues/44)),
 so anyone reaching the bus can still send an `AuthorisePayment`. What they can
 no longer do with **that command alone** is choose who it charges: a forged
 command naming a real order re-triggers that order's own authorisation rather
@@ -154,7 +154,7 @@ than redirecting one at a customer of the sender's choosing.
 > write model has no row for, and Notifications sends a customer a message
 > about an order they never placed. The single forged command left no such
 > trace. What removes the capability is per-service broker identity
-> ([#44](https://github.com/alexander-shamray/dotnet-ddd-blueprint/issues/44))
+> ([#44](https://github.com/alexander-shamray/blueprint-backend/issues/44))
 > or verifiable event provenance; nothing in this ADR does.
 
 > **Nothing in this platform absorbs that duplicate today, and naming a control

@@ -89,7 +89,7 @@ and is the whole diagnosis in the states that can carry it.**
 ([ADR-029](../backend-architecture/adr/ADR-029-inventory-releases-on-the-cancellation-not-on-the-sagas-word.md)),
 so a `StockReleased` arriving in a state that sent no `ReleaseStock` proves a
 cancellation reached Inventory before this saga consumed its own copy — and
-since [#143](https://github.com/alexander-shamray/dotnet-ddd-blueprint/issues/143)
+since [#143](https://github.com/alexander-shamray/blueprint-backend/issues/143)
 the machine records that on the instance instead of absorbing it. A `1`
 therefore reads as **a cancellation is in flight and this instance knows**. It
 is never cleared, so it says nothing about how long ago that was.
@@ -309,7 +309,7 @@ about: read the library's schema before drawing a conclusion from a column.
 What is settled here is *which* table to open. **Before ADR-032 there
 was no table to look in at all**, which is what made a lost command
 indistinguishable from a command nobody sent — the defect
-[#128](https://github.com/alexander-shamray/dotnet-ddd-blueprint/issues/128)
+[#128](https://github.com/alexander-shamray/blueprint-backend/issues/128)
 closed.
 
 **For a saga in `AwaitingConfirmation` this is the first query rather than the
@@ -385,7 +385,7 @@ Payments produces it and it can therefore never be Ordering's own echo
 arriving after the workflow ended — an authorisation with no instance means
 money moved on an order this saga cancelled. `OrderCancelled` is answered by a
 branch rather than by a default
-([#123](https://github.com/alexander-shamray/dotnet-ddd-blueprint/issues/123)):
+([#123](https://github.com/alexander-shamray/blueprint-backend/issues/123)):
 the saga's own echo — an `Origin` of `workflow` — is discarded, and so is an
 absent `Origin`, which is a rolling deploy publishing from before the field
 existed. **Every other origin faults**, and `user` is the one that matters: a

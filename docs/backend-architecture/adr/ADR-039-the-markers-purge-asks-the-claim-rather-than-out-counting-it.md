@@ -42,7 +42,7 @@ synchronising them — there is no quantity left to be counted at a rate — and
 is exact where the arithmetic was approximate. It costs one lookup per
 candidate on a pass that runs hourly, batched into one pipelined round trip.
 
-**Shape 1 from [#171](https://github.com/alexander-shamray/dotnet-ddd-blueprint/issues/171)
+**Shape 1 from [#171](https://github.com/alexander-shamray/blueprint-backend/issues/171)
 was to give the claim a database deadline, and it was not taken.** The claim
 could carry an absolute deadline read from `SYSDATETIMEOFFSET()` instead of a
 Redis TTL, which would make the whole comparison one clock's arithmetic end to
@@ -131,7 +131,7 @@ This decision keeps the TTL and moves the question instead.
   same 100-nanosecond tick as a row at least `IdempotencyWindow` old. That is
   not a smaller probability of the same fault; it is a different fault.
 - **A `rowversion` closes it and is owed rather than declined**
-  ([#173](https://github.com/alexander-shamray/dotnet-ddd-blueprint/issues/173)).
+  ([#173](https://github.com/alexander-shamray/blueprint-backend/issues/173)).
   It is unique and monotonic per database and reads no clock at all, so it is
   the identity this join wants. It costs a column, a migration for each
   service, a sixth template migration in §4.5's scaffold and an Appendix D row
@@ -181,7 +181,7 @@ This decision keeps the TTL and moves the question instead.
 - **What this does not close is the claim expiring under a running handler.**
   Past `Window` a successor may claim the key and both attempts run, and what
   keeps the loser from corrupting the winner's entry is still the claim token
-  ([#127](https://github.com/alexander-shamray/dotnet-ddd-blueprint/issues/127)).
+  ([#127](https://github.com/alexander-shamray/blueprint-backend/issues/127)).
   That residual is §8.5's, it is unchanged, and it is now the only one — where
   ADR-038 left two and ADR-037 left three.
 - **The test that proves it cannot be written from the clock's side, and the

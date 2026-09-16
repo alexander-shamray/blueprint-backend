@@ -59,7 +59,7 @@ than leaving to a realm-file description.
 > Keycloak and never reaches a service, so `use.refresh.tokens`,
 > `standardFlowEnabled` and `directAccessGrantsEnabled` remain obligations on
 > whoever provisions a deployed realm, exactly as the callout above states.
-> [#157](https://github.com/alexander-shamray/dotnet-ddd-blueprint/issues/157)
+> [#157](https://github.com/alexander-shamray/blueprint-backend/issues/157)
 > stays open for this half. A reader who has just seen ADR-033's amendment
 > should not carry it across to this record, which is why the two notes are
 > written the opposite way round.
@@ -86,10 +86,10 @@ than leaving to a realm-file description.
 > reason.** A reader who has seen ADR-033's amendment should still not carry it
 > across; what they may carry across is the *later* record, which reaches this
 > obligation and ADR-033's alike because both are settings in one document.
-> [#157](https://github.com/alexander-shamray/dotnet-ddd-blueprint/issues/157)
+> [#157](https://github.com/alexander-shamray/blueprint-backend/issues/157)
 > closes for this half as well, and what is left is narrower and filed:
 > a realm edited between rollouts is unobserved until the next one
-> ([#176](https://github.com/alexander-shamray/dotnet-ddd-blueprint/issues/176)).
+> ([#176](https://github.com/alexander-shamray/blueprint-backend/issues/176)).
 > That one is closed in turn by
 > [ADR-043](ADR-043-the-deployed-realm-is-checked-between-rollouts.md), which
 > reads the deployed realm on a schedule as well, so the edit is seen at the

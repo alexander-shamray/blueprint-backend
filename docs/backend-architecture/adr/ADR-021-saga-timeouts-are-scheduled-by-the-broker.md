@@ -112,7 +112,7 @@ a cancelling scheduler would leave — four on an order that ships.
 
 **That number is not fixed by this decision and has already moved once.** It
 was three until §9.6 gained `AwaitingConfirmation`
-([#126](https://github.com/alexander-shamray/dotnet-ddd-blueprint/issues/126)),
+([#126](https://github.com/alexander-shamray/blueprint-backend/issues/126)),
 which is worth recording here because the *volume* is this ADR's stated
 supersession trigger: a state added to the machine raises the standing Mnesia
 population by one message per order, and nothing in the state machine's own

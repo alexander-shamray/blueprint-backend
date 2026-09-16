@@ -47,7 +47,7 @@ the other reading — a release of nothing has nothing to report — every no-op
 release leaves through the timeout.
 
 > **This paragraph said "`Compensating` has exactly two exits" and the state
-> outgrew it.** [#124](https://github.com/alexander-shamray/dotnet-ddd-blueprint/issues/124)
+> outgrew it.** [#124](https://github.com/alexander-shamray/blueprint-backend/issues/124)
 > made that state a join: it can also be waiting on a payment verdict, so
 > `Finalize` is conditional and a stock answer no longer ends the instance by
 > itself. Nothing in this ADR turns on that. What the argument needs is that
@@ -65,7 +65,7 @@ first alone, a release handled before its reserve is a no-op that publishes,
 the saga finalises on it, and the `StockReserved` that follows correlates to no
 instance and is discarded — a reservation held for an order that is cancelled,
 with nothing raised anywhere
-([#125](https://github.com/alexander-shamray/dotnet-ddd-blueprint/issues/125)).
+([#125](https://github.com/alexander-shamray/blueprint-backend/issues/125)).
 The saga cannot close that from its side: by the time the late `StockReserved`
 exists the instance is gone, so any transition written for it is a transition
 nothing can reach. The tombstone moves the reconciliation to the only place

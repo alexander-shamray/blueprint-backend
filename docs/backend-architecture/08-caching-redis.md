@@ -394,7 +394,7 @@ this section carries as a residual at *A claim carries a token* further down.
 > — carried the cutoff past a marker whose claim was still live. What absorbed
 > it was the handler's runtime plus whatever the window exceeded the floor by:
 > six days on the shipped defaults, and nothing at all at the floor itself
-> ([#171](https://github.com/alexander-shamray/dotnet-ddd-blueprint/issues/171)).
+> ([#171](https://github.com/alexander-shamray/blueprint-backend/issues/171)).
 >
 > **The purge stopped counting, so there are no two rates left to couple.** Age
 > still selects the rows past the window; what deletes one is
@@ -794,7 +794,7 @@ public sealed class IdempotencyBehavior<TCommand, TResult>(
 >   nothing binds a broker identity into `ICurrentUser`. **A cause that is
 >   fixed while its effect survives is the most misleading kind of stale
 >   sentence**, and this one also pointed at
->   [#44](https://github.com/alexander-shamray/dotnet-ddd-blueprint/issues/44)
+>   [#44](https://github.com/alexander-shamray/blueprint-backend/issues/44)
 >   in the future tense for a split that issue landed without performing.
 >   Splitting the bucket means binding the consumer's authenticated identity
 >   into the port §11.4 implements, which no chapter specifies today.
@@ -1355,7 +1355,7 @@ INNER JOIN (VALUES (@k0, @v0), (@k1, @v1), ...) AS selected([Key], RowVersion)
 > four above: each of those needs a drift of sufficient magnitude in a
 > direction, and this one needs an exact coincidence, which no margin can be
 > set against because there is no quantity to bound. It was filed as
-> [#173](https://github.com/alexander-shamray/dotnet-ddd-blueprint/issues/173)
+> [#173](https://github.com/alexander-shamray/blueprint-backend/issues/173)
 > rather than out-predicated, and closed by the schema saying what the clock
 > had been standing in for
 > ([ADR-041](adr/ADR-041-the-markers-delete-identifies-a-row-by-a-rowversion-not-a-timestamp.md)).
@@ -1412,7 +1412,7 @@ INNER JOIN (VALUES (@k0, @v0), (@k1, @v1), ...) AS selected([Key], RowVersion)
 > arithmetic needed their rates to agree — and the purge no longer does the
 > arithmetic: it deletes a marker only once the claim store has let its claim
 > go, which is a fact rather than a comparison
-> ([#171](https://github.com/alexander-shamray/dotnet-ddd-blueprint/issues/171),
+> ([#171](https://github.com/alexander-shamray/blueprint-backend/issues/171),
 > ADR-039). **The other is unchanged and is now the only one**: a handler
 > outrunning `Window` reaches the stamp after `t0 + Window` has already passed,
 > leaving a stretch covered by neither — the overrun above, whose damage the
@@ -1430,8 +1430,8 @@ INNER JOIN (VALUES (@k0, @v0), (@k1, @v1), ...) AS selected([Key], RowVersion)
 > carrying the ordering as well. A margin left standing
 > for terms that no longer exist would be unexplained slack, which is the shape
 > a later reader deletes for the wrong reason
-> ([#167](https://github.com/alexander-shamray/dotnet-ddd-blueprint/issues/167),
-> [#168](https://github.com/alexander-shamray/dotnet-ddd-blueprint/issues/168),
+> ([#167](https://github.com/alexander-shamray/blueprint-backend/issues/167),
+> [#168](https://github.com/alexander-shamray/blueprint-backend/issues/168),
 > ADR-038).
 
 > **The uniqueness of the key is a backstop and not the mechanism.** Two

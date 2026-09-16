@@ -310,7 +310,7 @@ credential; never "fix" a red deploy or a red scheduled run by deleting the
 check.
 Deleting it converts a rollout that could not see its own realm into one that
 never looked, which is the state
-[#157](https://github.com/alexander-shamray/dotnet-ddd-blueprint/issues/157) was
+[#157](https://github.com/alexander-shamray/blueprint-backend/issues/157) was
 filed about — and disabling the schedule to quiet the issue is the same
 conversion, arranged by hand.
 

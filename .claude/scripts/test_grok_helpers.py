@@ -515,7 +515,7 @@ class ReviewArgumentValidation(unittest.TestCase):
         # over a listing that contains a fork's pull request on an identically
         # named branch.
         listing = (
-            "someone-else/dotnet-ddd-blueprint\t999\n"
+            "someone-else/blueprint-backend\t999\n"
             "acme/widgets\t134\n"
             "\t7\n"  # a deleted fork: nameWithOwner is null, `// ""` makes it empty
         )

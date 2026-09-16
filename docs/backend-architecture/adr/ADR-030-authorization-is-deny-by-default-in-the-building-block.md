@@ -9,7 +9,7 @@ probes `MapCommonHealthEndpoints` maps in every host, and Catalog's product
 listing.
 Every host composing that call inherits the policy, including the gateway.
 
-**Why.** [#41](https://github.com/alexander-shamray/dotnet-ddd-blueprint/issues/41)
+**Why.** [#41](https://github.com/alexander-shamray/blueprint-backend/issues/41)
 observed that `UseAuthorization` with no fallback evaluates **nothing** on an
 endpoint with no policy metadata, so authorization was opt-in: it applied
 exactly where somebody had written `RequireAuthorization()`. Every endpoint

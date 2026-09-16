@@ -20,7 +20,7 @@ anything — is owned elsewhere and cited from here by name, never restated.
 
 ## What this repo is
 
-`dotnet-ddd-blueprint` is a monorepo for an ASP.NET Core microservices platform
+`blueprint-backend` is a monorepo for an ASP.NET Core microservices platform
 built with DDD, CQRS and TDD: two artefacts with one specification, the
 blueprint under `docs/backend-architecture/` and the C# solution it specifies.
 **The blueprint is the specification for the solution** — every chapter is a

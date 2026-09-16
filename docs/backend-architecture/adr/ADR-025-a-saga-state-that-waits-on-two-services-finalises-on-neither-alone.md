@@ -30,7 +30,7 @@ deleted the instance and the authorisation still in flight correlated to
 nothing. It was consumed cleanly: no transition, no fault, and no
 `payment_authorised_during_compensation` row, which is the escalation §9.6
 provides for precisely that case. The money moved and nobody was told
-([#124](https://github.com/alexander-shamray/dotnet-ddd-blueprint/issues/124)).
+([#124](https://github.com/alexander-shamray/blueprint-backend/issues/124)).
 
 **The state could not answer the question and that is the general fault.**
 `Compensating` is entered five ways and whether a verdict is owed differs by
@@ -89,7 +89,7 @@ change than this one and is not taken here.
 > paragraph is left as written.** It reads that event as Ordering's own echo
 > without qualification, which was true of every arrival when this ADR was
 > taken and is true of only some of them now:
-> [#123](https://github.com/alexander-shamray/dotnet-ddd-blueprint/issues/123)
+> [#123](https://github.com/alexander-shamray/blueprint-backend/issues/123)
 > gave the contract an `Origin` field, so §9.6 asks rather than assuming and
 > faults for anything it cannot account for. The distinction this ADR draws —
 > **provenance, not timing** — is what survived and is what the field makes

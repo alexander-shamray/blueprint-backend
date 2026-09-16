@@ -26,7 +26,7 @@ afterwards — `accessTokenLifespan` raised, a client-level override added,
 `use.refresh.tokens` flipped, the password grant turned back on — is
 unobserved until somebody deploys again, which on a weekly service is a week
 and on a stabilised one is unbounded
-([#176](https://github.com/alexander-shamray/dotnet-ddd-blueprint/issues/176)).
+([#176](https://github.com/alexander-shamray/blueprint-backend/issues/176)).
 The settings this platform's security guarantees rest on are exactly the ones
 an operator reaches for under pressure, and the reach that would matter most
 was the one nothing here would see.

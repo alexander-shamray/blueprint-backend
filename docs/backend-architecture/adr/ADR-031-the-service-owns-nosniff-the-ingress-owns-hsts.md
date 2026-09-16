@@ -6,7 +6,7 @@ one header: `X-Content-Type-Options: nosniff`. `Strict-Transport-Security`,
 `X-Frame-Options` and `Content-Security-Policy` are deliberately not set by any
 host.
 
-**Why.** [#39](https://github.com/alexander-shamray/dotnet-ddd-blueprint/issues/39)
+**Why.** [#39](https://github.com/alexander-shamray/blueprint-backend/issues/39)
 asked, among other things, for an explicit owner for the response security
 headers. There was none — the blueprint did not discuss them as done, as
 deferred, or as out of scope, which is the state a decision is meant to end.

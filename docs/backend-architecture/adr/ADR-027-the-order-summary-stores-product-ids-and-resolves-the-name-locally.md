@@ -21,7 +21,7 @@ handler runs would find its summary row patched. Narrow, and it is why this
 reads *in the ordinary flow* rather than *always*. **Every summary carried
 empty names in the normal flow** — which is the payload §6.6 exists to deliver,
 filed as
-[#121](https://github.com/alexander-shamray/dotnet-ddd-blueprint/issues/121).
+[#121](https://github.com/alexander-shamray/blueprint-backend/issues/121).
 
 The obvious repair — read the names at insert time instead — closes that door
 and leaves a second one open. `ProductPriceProjection`'s upsert inserts on its

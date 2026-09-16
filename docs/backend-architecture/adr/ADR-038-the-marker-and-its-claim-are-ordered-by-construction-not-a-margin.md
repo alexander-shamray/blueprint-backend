@@ -17,7 +17,7 @@ is admitted.
 from that ordering, and this record does not decide it.** It needs the two
 windows counted at the same rate, and they are counted by two servers — Redis
 for the claim, SQL Server for the marker — which is
-[#171](https://github.com/alexander-shamray/dotnet-ddd-blueprint/issues/171);
+[#171](https://github.com/alexander-shamray/blueprint-backend/issues/171);
 and it needs the marker to reach the database inside the claim's window,
 which nothing here bounds. Both are stated under *Consequences* rather than
 folded into the
@@ -123,7 +123,7 @@ clock is a service that needs a different seam, not a different column.
   the cutoff past the marker while the claim is still live, and what absorbs it
   is the handler's runtime plus whatever the window exceeds the floor by: six
   days on the shipped defaults, and nothing at all at the floor
-  ([#171](https://github.com/alexander-shamray/dotnet-ddd-blueprint/issues/171)).
+  ([#171](https://github.com/alexander-shamray/blueprint-backend/issues/171)).
 - **Reinstating an allowance is not the answer to that, which is why the floor
   is still `Window`.** Five minutes never bounded a clock step either, and a
   step is not bounded by anything this repository can assert — so a number there

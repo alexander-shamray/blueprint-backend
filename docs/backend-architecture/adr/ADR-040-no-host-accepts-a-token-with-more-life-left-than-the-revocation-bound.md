@@ -11,7 +11,7 @@ in `Common.Web` because something now reads it, and
 **This gates remaining life and does not enforce the issued lifetime, which is
 the whole of what the title says and the reason it says it.** A five-hour token
 is refused for four hours and fifty-four minutes and then admitted for its last
-330 seconds — contained, not detected. So **[#157](https://github.com/alexander-shamray/dotnet-ddd-blueprint/issues/157)
+330 seconds — contained, not detected. So **[#157](https://github.com/alexander-shamray/blueprint-backend/issues/157)
 stays open in full**: a deployed realm still owes `accessTokenLifespan` 300 and
 no client-level override, and nothing here establishes that it has them. What
 this record buys is that a realm which ignores that obligation can no longer
@@ -27,7 +27,7 @@ this repository holds no configuration for and runs no deploy-time check
 against. So a deployed realm could issue five-hour access tokens while every
 sentence in §11.2, §11.3, ADR-033 and ADR-034 still read as a platform
 guarantee and the suite stayed green
-([#157](https://github.com/alexander-shamray/dotnet-ddd-blueprint/issues/157)).
+([#157](https://github.com/alexander-shamray/blueprint-backend/issues/157)).
 
 **A token is where the realm's answer is observable without credentials this
 repository does not have.** The three shapes #157 named all wanted something

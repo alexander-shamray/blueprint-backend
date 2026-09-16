@@ -95,14 +95,14 @@ Validation is cheap; assume the network is hostile.
 > whoever provisions the deployed realm — a repository cannot make somebody
 > else's realm correct — but a realm that fails to hold them now fails the
 > rollout instead of passing unnoticed
-> ([#157](https://github.com/alexander-shamray/dotnet-ddd-blueprint/issues/157)).
+> ([#157](https://github.com/alexander-shamray/blueprint-backend/issues/157)).
 > What was left was the window between rollouts, and since
 > [ADR-043](adr/ADR-043-the-deployed-realm-is-checked-between-rollouts.md)
 > the same predicate reads the deployed realm on a schedule as well, so a realm
 > edited after a rollout is seen at the next scheduled run — nominally within
 > the hour, and only as reliably as GitHub runs a schedule — rather than at
 > the next deploy
-> ([#176](https://github.com/alexander-shamray/dotnet-ddd-blueprint/issues/176),
+> ([#176](https://github.com/alexander-shamray/blueprint-backend/issues/176),
 > closed).
 >
 > **Continuity is a silent renewal against the authorization endpoint**, bounded
@@ -158,7 +158,7 @@ Validation is cheap; assume the network is hostile.
 > [ADR-040](adr/ADR-040-no-host-accepts-a-token-with-more-life-left-than-the-revocation-bound.md)
 > reaches is the lifetime alone, and only as a ceiling on remaining life. So the
 > configuration is where all three are legible, and reading it is what closed
-> [#157](https://github.com/alexander-shamray/dotnet-ddd-blueprint/issues/157)
+> [#157](https://github.com/alexander-shamray/blueprint-backend/issues/157)
 > rather than a change covering only the lifetime. **The moment was the last
 > thing true only locally, and it no longer is**: a realm used to be read when a
 > deployment read it, so an edit made between rollouts was unobserved until the
@@ -168,7 +168,7 @@ Validation is cheap; assume the network is hostile.
 > nominally hourly, over every deployed workload — so the window an edit is
 > unobserved in is bounded by the schedule rather than by the next rollout,
 > and only as far as GitHub runs the schedule, and
-> [#176](https://github.com/alexander-shamray/dotnet-ddd-blueprint/issues/176)
+> [#176](https://github.com/alexander-shamray/blueprint-backend/issues/176)
 > is closed rather than carried.
 
 > **A native client is different, and the difference is where the token would
@@ -546,7 +546,7 @@ listing of a token denylist among Redis's contents.
 > [ADR-043](adr/ADR-043-the-deployed-realm-is-checked-between-rollouts.md),
 > nominally once an hour between them — so the two cover different moments
 > rather than one superseding the other. The gap between rollouts was what
-> [#176](https://github.com/alexander-shamray/dotnet-ddd-blueprint/issues/176)
+> [#176](https://github.com/alexander-shamray/blueprint-backend/issues/176)
 > carried, and the schedule is what closed it: the window a drift is live in is
 > bounded by the schedule's cadence rather than by the next deployment — an
 > hour only as reliably as GitHub runs a schedule — and by this guard for the
@@ -558,7 +558,7 @@ listing of a token denylist among Redis's contents.
 > has its tokens refused for four hours and fifty-four minutes and then
 > admitted for the last 330 seconds. That is a large reduction in what a stolen
 > token is worth and it is **not** the deploy-time check
-> [#157](https://github.com/alexander-shamray/dotnet-ddd-blueprint/issues/157)
+> [#157](https://github.com/alexander-shamray/blueprint-backend/issues/157)
 > asked for; that check is ADR-042's, and this paragraph is why one was owed. A
 > realm edited to 400 fails `RealmImportTests` — which reads the constant the
 > control is built from — and, if it were the realm a rollout pointed at, fails
@@ -1207,7 +1207,7 @@ vocabulary either way.
 >
 > **This narrowed the exposure, and the residual it named has since been
 > closed.** The broker had one shared principal
-> ([#44](https://github.com/alexander-shamray/dotnet-ddd-blueprint/issues/44),
+> ([#44](https://github.com/alexander-shamray/blueprint-backend/issues/44),
 > §9.4's callout), so anyone able to publish could send an
 > `AuthorisePayment`. What that command **alone** no longer does is carry the
 > payer: a forged one naming a real order re-triggers that order's own

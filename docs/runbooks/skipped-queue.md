@@ -109,7 +109,7 @@ insufficient.
 > so once the consumer exists they succeed. A `PaymentAuthorised` whose saga
 > instance is gone is the opposite: it faults every time it is replayed,
 > because a deleted instance does not come back. A faulted `OrderCancelled`
-> ([#123](https://github.com/alexander-shamray/dotnet-ddd-blueprint/issues/123))
+> ([#123](https://github.com/alexander-shamray/blueprint-backend/issues/123))
 > sits between them — replaying it works only once the `OrderPlaced` that
 > creates the instance has landed, which is why
 > [`error-queue.md`](error-queue.md) reads the outbox before deciding.
