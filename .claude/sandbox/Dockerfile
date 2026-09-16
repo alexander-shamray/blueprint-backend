@@ -123,11 +123,10 @@ ENV PATH="/home/reviewer/.grok/bin:${PATH}"
 # the binary before any later check, so a malicious binary could use that
 # execution to put the expected bytes where the check reads them.
 #
-# The digests were taken by fetching each artefact and hashing it: trust on
-# first use, after which a change to what x.ai serves for a pinned version
-# fails the build, and moving the pin is a reviewed diff — the property
-# Directory.Packages.props and global.json are here for. An architecture with
-# no recorded digest fails rather than building unverified.
+# The recorded digest is trust on first use: a change to what x.ai serves for
+# a pinned version fails the build, and moving the pin is a reviewed diff —
+# the property Directory.Packages.props and global.json are here for. An
+# architecture with no recorded digest fails rather than building unverified.
 #
 # What replaces the installer is the steps it performs on Linux: the binary in
 # `downloads/`, `chmod +x`, relative symlinks for `grok` and `agent` in `bin/`

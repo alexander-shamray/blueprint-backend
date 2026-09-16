@@ -61,9 +61,9 @@ copilot_admitted_json() {
 # Printable-ASCII coercion and truncation for every field the dropped report
 # prints, so a caller passing the wrong label expression gets a mangled label
 # rather than a working injection. The class is the literal range
-# space-to-tilde because a `\u` escape does not survive a bash
-# single-quoted string into jq: the doubled backslash builds a class of
-# literal characters, which still looks as though it sanitises.
+# space-to-tilde rather than a `\u` escape: a doubled backslash reaches jq as
+# a literal backslash instead of a Unicode escape, building a class of literal
+# characters that still looks as though it sanitises.
 CLEAN_DEF='def clean: tostring | gsub("[^ -~]"; "?") | .[0:200];'
 
 copilot_partition() {

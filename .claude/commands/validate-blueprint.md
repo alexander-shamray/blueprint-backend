@@ -148,7 +148,7 @@ read claim-by-claim.
 the operative procedure.** An agent works from this section, so a file admitted
 above and absent from this list is a file nobody greps — and the claims that
 live only in `docs/testing.md`, not in §12, are exactly the ones a
-chapters-only sweep cannot see.
+chapter-only sweep cannot see.
 
 For each candidate:
 

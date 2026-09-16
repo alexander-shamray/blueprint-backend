@@ -13,8 +13,8 @@ platform that grants no primitive fails this module.
 
 `..` after a link, case folding and the link primitives are asserted as the
 platform's or filesystem's own answer, because the guard follows each rather
-than picking one; CI runs this module on Linux, Windows and macOS for that
-reason.
+than picking one, so the module's verdict is the host's rather than a
+hard-coded expectation.
 """
 
 import importlib.util

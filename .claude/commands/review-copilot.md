@@ -64,12 +64,11 @@ decided by the API the feed came from rather than by the reviewer:**
 | Inline comments | `pr-review-comments.sh <n>` → `/pulls/{n}/comments` | REST | `Copilot` | **Measured** |
 | Issue comments | `pr-issue-comments.sh <n>` → `gh pr view --json comments` | GraphQL | `copilot-pull-request-reviewer` **expected** | **Never observed** — see below |
 
-**The third row is an inference and is labelled as one.** No PR checked carries
-a Copilot-authored issue comment, so the login is what `gh pr view`'s shared
-GraphQL exporter must report if Copilot ever posts to that feed, and nothing
-here has seen it do so. `gh pr view` loads `reviews` and `comments` through
-that one exporter, so the first and third rows must agree; a REST spelling in
-the third would be wrong on its face.
+**The third row is an inference and is labelled as one.** That login is
+unverified: it is what `gh pr view`'s shared GraphQL exporter must report if
+Copilot ever posts to that feed. `gh pr view` loads `reviews` and `comments`
+through that one exporter, so the first and third rows must agree; a REST
+spelling in the third would be wrong on its face.
 
 Keep the row and keep the login admitted: the cost of admitting a spelling that
 never arrives is nothing, and the cost of dropping the feed is a finding nobody

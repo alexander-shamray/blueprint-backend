@@ -60,8 +60,9 @@ PATH_KEYS = ("file_path", "notebook_path")
 # reads only one of them. Every spelling beginning `\\` is the other: the
 # extended-length prefix `\\?\` and the device prefix `\\.\`, which skip the
 # normalisation a matcher depends on, and the UNC form `\\server\share\...`,
-# which reaches the local disk through the administrative shares — so a write
-# spelled either way lands in a directory whose plain spelling is denied.
+# which can reach the local disk through an administrative share such as
+# `\\localhost\C$` — so a write spelled either way can land in a directory
+# whose plain spelling is denied.
 #
 # The whole family is refused rather than a list of prefixes, which would miss
 # a spelling, and refused rather than resolved, because a hook can only allow
