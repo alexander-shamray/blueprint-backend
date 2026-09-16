@@ -101,20 +101,10 @@ jobs:
         run: python deploy/keycloak/realm_check.py check --kind local
 
   deployed:
-    # Opted in by a repository variable, and that is not the skip this
-    # repository refuses. `deploy.yml` runs on `workflow_dispatch` alone
-    # because a rollout on `push` would fail on every merge for want of a
-    # cluster; an hourly job that went red in a repository with no environment
-    # would train everyone to ignore a red pipeline twenty-four times a day.
-    # The refused skip is the one that reads a runtime failure as absence; this
-    # guard reads a configuration. Once `REALM_CHECK_SCHEDULED` is `enabled`,
-    # nothing below is optional -- an absent credential, an unreadable release
-    # and a realm that disagrees are all red, on the rollout's own rule.
-
-    # A repository variable and not an Environment one, because a job-level
-    # `if` is evaluated before the job's Environment is entered. The values the
-    # job uses are Environment-scoped, exactly as they are for the rollout;
-    # only the opt-in sits one level up.
+    # Opted in by `REALM_CHECK_SCHEDULED`, whose scope and whose
+    # once-enabled-nothing-is-optional rule are docs/secrets.md's. That is not
+    # the skip this repository refuses: the refused skip reads a runtime
+    # failure as absence, and this guard reads a configuration.
     if: ${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && vars.REALM_CHECK_SCHEDULED == 'enabled' }}
     runs-on: ubuntu-latest
     # This job reads and never waits on a hook, a rung or a dwell: a token
@@ -142,12 +132,10 @@ jobs:
       # carries. An unmerged branch could read the realm with its own weakened
       # predicate and report it compliant.
 
-      # This step is a guard against accident and not the boundary, because it
-      # runs from the dispatched ref too. What holds the boundary is the
-      # `production` Environment's deployment-branch restriction -- `main` and
-      # nothing else -- stated as an obligation in docs/secrets.md beside the
-      # credential it protects. This step is what tells somebody who dispatched
-      # from a branch why nothing ran, in a repository where the Environment
+      # A guard against accident rather than the boundary, because it runs
+      # from the dispatched ref too; docs/secrets.md names what does hold the
+      # boundary. What this step adds is a reason on the screen for somebody
+      # who dispatched from a branch, in a repository where the Environment
       # has not been provisioned yet.
       - name: The realm is judged from main
         run: |
@@ -179,13 +167,10 @@ jobs:
       # at a realm that has drifted, and the set of workloads is the canary
       # plan's rather than a list restated here.
 
-      # The same three calls the rollout makes, in the same order, and the
-      # suite asserts that of both files. The realm is derived from the
-      # release's own `identity.authority` and the origin is pinned from the
-      # Environment, for the reasons `deploy.yml` argues beside its copy: a
-      # realm named beside the chart is a check that passes on a realm nobody
-      # deployed to, and an origin taken from the cluster hands whoever can
-      # edit a release the address this job posts a client secret to.
+      # The same calls the rollout makes, in the same order, and the suite
+      # asserts that of both files. The realm is derived from the release's own
+      # `identity.authority` and the origin is pinned from the Environment, for
+      # the reasons docs/secrets.md gives.
 
       # Assigned, then read -- never `eval`, and never a process substitution,
       # both of which swallow a failed command. The derivation is captured into

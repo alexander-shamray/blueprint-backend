@@ -166,29 +166,16 @@ jobs:
       # cluster is touched", because the first of these three steps reads the
       # cluster; the first that changes it is the HPA patch below.
 
-      # The credential this needs is scoped by where the job sits rather than
-      # held by CI: the `production` Environment scopes a deploy-time
-      # credential to the deploy, and the realm-check client is a service
-      # account of the realm being checked, with realm-read rights and nothing
-      # else (ADR-040). docs/secrets.md carries how it is provisioned and
-      # rotated.
+      # The credential is the `production` Environment's rather than CI's,
+      # which is what answers ADR-040; docs/secrets.md carries its rights, its
+      # provisioning and its rotation.
 
-      # The realm is derived and the origin is pinned, and mixing those up is a
-      # hole either way. Two environment variables naming a realm, beside a
-      # chart value naming another, is a gate that passes on a compliant
-      # unrelated realm while every host it deploys points at the non-compliant
-      # one. So the realm comes out of `helm get values`, which answers what
-      # the release is running with and what `-f stable-values.yaml` reinstalls.
-
-      # Deriving the origin too would be worse than the hole it closed. The
-      # next step posts this deployment's client secret to that host's token
-      # endpoint, so an `identity.authority` naming an attacker's host — a
-      # value held in the cluster, editable by anyone who can edit a release —
-      # would exfiltrate the credential. `KEYCLOAK_TRUSTED_ORIGIN` is the
-      # identity provider this deployment is willing to authenticate to, it
-      # comes from the Environment and not from the cluster, and
-      # `realm_check.py authority` refuses a release whose authority names
-      # anything else.
+      # The realm is derived from the release and the origin is pinned from the
+      # Environment, and docs/secrets.md argues why each has to come from where
+      # it does. What this step adds is the order: the realm comes out of
+      # `helm get values`, which answers what the release is running with and
+      # what `-f stable-values.yaml` reinstalls, so the realm judged is the
+      # realm installed.
 
       # It fails closed in every direction: an absent variable, an authority
       # this gate cannot split, a realm that cannot be read, a realm that
