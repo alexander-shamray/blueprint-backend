@@ -233,7 +233,7 @@ jobs:
         run: dotnet build tests/Yankee.Api.Tests/Yankee.Api.Tests.csproj
 
       # No cleanup step. The scaffold both creates untracked files and edits
-      # tracked ones, so undoing it locally takes the two commands
+      # tracked ones, so undoing it locally takes the commands
       # `tools/new-service/README.md` gives; here the checkout is discarded
       # with the runner.
 

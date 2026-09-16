@@ -301,10 +301,9 @@ jobs:
           echo "Scaling the stable track to $NEEDED (never below what it runs now)."
 
           # The Deployment's own replica count, recorded whether or not there
-          # is an HPA, and the only thing to restore when there is not.
-          # `autoscaling.enabled: false` is a supported chart configuration
-          # (§15.3), and under it the cleanup below has nothing to put back
-          # while this step has still scaled production to 19.
+          # is an HPA. `autoscaling.enabled: false` is a supported chart
+          # configuration (§15.3), and under it there is no floor for the
+          # cleanup to restore, so this is the value it scales back to.
           if [ -n "$FLOOR" ]; then
             kubectl patch hpa "$WORKLOAD" -n "$NAMESPACE" \
               --type=merge -p "{\"spec\":{\"minReplicas\":$NEEDED}}"
