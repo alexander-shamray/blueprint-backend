@@ -1,16 +1,12 @@
 """The egress proxy, tested at the socket rather than by reading its file.
 
 `.claude/sandbox/egress-proxy.py` is the enforcement boundary for the reviewer's
-egress (#17): the reviewer container has no route to anything but this process,
-and this process forwards exactly one thing. `test_grok_helpers.py` holds the
-confinement's **width** — every credential-bearing `docker run` joins the
-internal network, and the proxy is the one member on the bridge — as a subject
-test over `grok-review.sh`'s text, because nothing in CI can run a review. What
-that cannot hold is the proxy's own behaviour: whether a CONNECT to a listed host
-relays, whether an unlisted one is refused, whether a plain `GET` through it
-fetches anything. Those were measured by hand from a container when the proxy
-was written, and a measurement in a frozen plan does not fail when the code
-under it regresses. These cases do.
+egress (`docs/harness-boundaries.md`): the reviewer container has no route to
+anything but this process, and this process forwards exactly one thing. The
+confinement's width is a subject test over `grok-review.sh`'s text, because
+nothing in CI can run a review; what that cannot hold is the proxy's own
+behaviour, whether a CONNECT to a listed host relays, whether an unlisted one
+is refused, whether a plain `GET` through it fetches anything.
 
 They run the proxy in-process on a loopback port, stand up a fake upstream on
 another, and drive a client socket at the proxy. The allow-list and the
@@ -123,11 +119,12 @@ class ProxyCase(unittest.TestCase):
 
 
 class TheShippedDefaultsAreWhatTheReviewerIsConfinedTo(unittest.TestCase):
-    """The socket cases below patch the allow-list and the upstream port to reach
-    loopback, so none of them would notice the production defaults widening.
-    This class reads the module as the image runs it — with neither variable in
-    the environment — and pins what it answers, so a fourth host or a second
-    port is a red case here before it is a wider hole in the sandbox.
+    """The defaults, read as the image runs the module, with neither variable set.
+
+    The socket cases patch the allow-list and the upstream port to reach
+    loopback, so none of them would notice the production defaults widening;
+    another host or port is a red case here before it is a wider hole in the
+    sandbox.
     """
 
     @staticmethod

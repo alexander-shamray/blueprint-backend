@@ -1,32 +1,20 @@
 """What `.claude/hooks/guard-edit-target.py` refuses, and what it must not.
 
-**The gate-coverage lesson is the reason this file is shaped the way it is.**
-Every case below judges the hook directly, which says nothing about whether the
-harness ever calls it — so the last class here has the registration itself as
-its subject, and it is the one that fails if the matcher stops naming a tool
-that writes.
+Every case judges the hook directly, which says nothing about whether the
+harness calls it, so the last class has the registration itself as its subject
+— the gate-coverage lesson in `CLAUDE.md`.
 
-**The link cases run against a real link, and against EVERY primitive the
-platform grants rather than the first one found.** A symbolic link where the
-session may make one; a directory junction on Windows, which is all an
-unprivileged process gets there — measured, `WinError 1314` — and which is the
-same property one component up: a path whose spelling is inside an allowed tree
-and whose resolution is not. Taking the first would have left the junction
-fallback unexercised on the one platform that needs it, since the GitHub
-Windows runner turns out to hold `SeCreateSymbolicLinkPrivilege` and reports
-`symlink, junction`.
+The link cases run against a real link, and against every primitive the
+platform grants: a symbolic link where the session may make one, and a
+directory junction on Windows, which is all an unprivileged process gets there.
+Both are a path whose spelling is inside an allowed tree and whose resolution
+is not. Neither is a skip: a skip on a missing capability reports a pass, so a
+platform that grants no primitive fails this module.
 
-**Neither is a skip.** A skip on a missing capability reports a pass, which is
-the fail-open this repository refused when `dotnet test` was made to need a
-real Docker daemon; where a platform grants no primitive at all this module
-fails rather than passing quietly.
-
-**Three platform properties are asserted as the platform's own**, because the
-guard follows each rather than picking one: `..` after a link, which POSIX
-resolves against the link's target and Windows collapses first; case folding,
-which is the *filesystem's* answer rather than the platform's; and which link
-primitives exist. CI runs this module on Linux, Windows and macOS for exactly
-that reason.
+`..` after a link, case folding and the link primitives are asserted as the
+platform's or filesystem's own answer, because the guard follows each rather
+than picking one; CI runs this module on Linux, Windows and macOS for that
+reason.
 """
 
 import importlib.util
@@ -52,17 +40,13 @@ JUNCTIONS = None
 def setUpModule():
     """Find every link primitive this platform grants, not the first one.
 
-    **Every case below runs against all of them**, and taking the first was a
-    defect rather than a simplification: a Windows runner whose account holds
-    `SeCreateSymbolicLinkPrivilege` gets symbolic links, so the junction
-    fallback — the only primitive an unprivileged Windows session has — would
-    have gone unexercised on the one platform that needs it. Raised by Copilot
-    against the CI coverage; found by the fix.
+    Every case runs against all of them: a Windows account holding
+    `SeCreateSymbolicLinkPrivilege` gets symbolic links, and the junction
+    fallback an unprivileged Windows session depends on would otherwise go
+    unexercised.
     """
     global SYMLINKS, JUNCTIONS
-    # Removed at the end of this function rather than left behind: every run,
-    # local or CI, was leaving one populated tree in the temp directory.
-    # Raised by Copilot, beside the same defect in the per-case fixtures.
+    # Removed at the end of this function, so a run leaves no tree behind.
     probe = tempfile.mkdtemp()
     target = os.path.join(probe, "target")
     os.mkdir(target)
@@ -89,11 +73,9 @@ def setUpModule():
     if not HOOK.exists():
         raise AssertionError(f"the hook is missing: {HOOK}")
 
-    # **Say what was exercised, because a green run does not.** `unittest`
-    # prints a subtest's name only when it fails, so a Windows job that had
-    # symbolic links and never reached the junction fallback is indexed
-    # identically to one that ran both — and which of the two happened is the
-    # whole reason that job exists. One line in the log answers it.
+    # Say what was exercised, because a green run does not: `unittest` names a
+    # subtest only when it fails, so a job that never reached the junction
+    # fallback reads the same as one that ran both.
     print(f"link primitives exercised: {', '.join(linkers())}", file=sys.stderr)
     shutil.rmtree(probe, ignore_errors=True)
 
@@ -108,12 +90,10 @@ def linkers():
     return names
 
 
-# **The two platforms disagree about `..` after a link, and the discriminator
-# is the PLATFORM rather than the primitive.** POSIX resolves `..` against the
-# link's target; Windows' path parser collapses it before the filesystem is
-# consulted, through a junction and through a symbolic link alike. Reading that
-# off `SYMLINKS` — as the first version did — is right only while symbolic
-# links and POSIX coincide, which a privileged Windows runner breaks.
+# The platforms disagree about `..` after a link, and the discriminator is the
+# platform rather than the primitive: POSIX resolves `..` against the link's
+# target, and Windows' path parser collapses it first, through a junction and a
+# symbolic link alike. A privileged Windows runner has symbolic links too.
 DOTDOT_IS_LEXICAL = os.name == "nt"
 
 
@@ -123,17 +103,13 @@ class GuardCase(unittest.TestCase):
     def setUp(self):
         self.root = tempfile.mkdtemp(prefix="guard-root-")
         self.outside = tempfile.mkdtemp(prefix="guard-outside-")
-        # **Both fixtures are removed, and the order is load-bearing.** Every
-        # case here makes links from the checkout into `outside`, so the
-        # checkout goes first: `addCleanup` runs last-registered-first, which
-        # is why `outside` is registered before it. `ignore_errors` because a
-        # link left dangling by the other order is not a test failure worth
-        # reporting, and a link that `rmtree` declines to follow is the
-        # behaviour we want rather than an error. Raised by Copilot, against a
-        # suite that had been leaving two directories per case behind.
+        # The checkout links into `outside`, so it is removed first:
+        # `addCleanup` runs last-registered-first. `ignore_errors` because a
+        # link `rmtree` declines to follow is the behaviour wanted, not an
+        # error.
         self.addCleanup(shutil.rmtree, self.outside, ignore_errors=True)
         self.addCleanup(shutil.rmtree, self.root, ignore_errors=True)
-        # **The fixture is a real checkout, and the `.git` is load-bearing.**
+        # The fixture is a real checkout, and the `.git` is load-bearing.
         # An anchor is a checkout root, so a scratch tree without one has no
         # root to derive from `cwd` — and the case below that stands the
         # session inside a linked directory would then pass because the anchor
@@ -154,14 +130,10 @@ class GuardCase(unittest.TestCase):
     def link_to(self, name, real_target, linker):
         """A path spelled under `docs/` whose resolution is `real_target`.
 
-        With symbolic links the link IS the target's spelling. With junctions —
-        which is all Windows grants an unprivileged process, and which take a
-        directory only — the link is the target's *directory* and the file is
+        With symbolic links the link is the target's spelling. Junctions take a
+        directory only, so the link is the target's directory and the file is
         named beneath it. Both produce a path inside an allowed tree that
-        resolves outside it, which is the property every case here is about;
-        neither is a weaker form of the other, and running every case against
-        each primitive the platform grants is what keeps the Windows run from
-        being a different suite.
+        resolves outside it, which is the property every case is about.
         """
         linkpath = os.path.join(self.root, "docs", f"{name}-{linker}")
         if linker == "symlink":
@@ -228,10 +200,10 @@ class GuardCase(unittest.TestCase):
 class ALinkIsNotTheFileItIsSpelledAs(GuardCase):
 
     def test_a_link_into_a_denied_tree_is_refused(self):
-        # #181 exactly: `/review-grok` holds `Edit` for `docs/` and denies
-        # `.claude/**`, and both denies are matched on the spelling. A link
-        # under `docs/` pointing into the machinery is a path the deny never
-        # sees and a write the machinery receives.
+        # `/review-grok` holds `Edit` for `docs/` and denies `.claude/**`, and
+        # the deny is matched on the spelling. A link under `docs/` pointing
+        # into the machinery is a path the deny never sees and a write the
+        # machinery receives.
         target = os.path.join(self.root, ".claude", "scripts", "helper.sh")
         for linker in linkers():
             with self.subTest(link=linker):
@@ -241,8 +213,7 @@ class ALinkIsNotTheFileItIsSpelledAs(GuardCase):
                 self.assertIn("helper.sh", reason)
 
     def test_a_link_out_of_the_checkout_is_refused(self):
-        # The other half of the issue's sentence, and the one a tree deny could
-        # never have covered: no repository-relative pattern says anything
+        # No tree deny covers this: a repository-relative pattern says nothing
         # about a path that stops being repository-relative on resolution.
         loot = os.path.join(self.outside, "loot.txt")
         for linker in linkers():
@@ -265,24 +236,14 @@ class ALinkIsNotTheFileItIsSpelledAs(GuardCase):
                 self.assertIn("resolves elsewhere in it", reason)
 
     def test_a_dotdot_after_a_link_is_judged_the_way_the_kernel_resolves_it(self):
-        # **The two platforms genuinely disagree here, and the guard follows
-        # each rather than picking one.** POSIX resolves `..` against the
-        # link's TARGET, so `docs/tree/../settings.json` through a link into
-        # `.claude/scripts` lands on `.claude/settings.json` — a lexical reader
-        # of that path would say `docs/`, and the hook resolves the original
-        # spelling for exactly this case. Windows' path parser collapses `..`
-        # BEFORE the filesystem sees it, so the same spelling really does write
-        # `docs/settings.json`. Measured, not reasoned about: writing through
-        # the junctioned form created the file under `docs/` and left
-        # `.claude/` untouched.
-        #
-        # So the assertion is the platform's own semantics, and a guard that
-        # refused on Windows would be refusing a write that is exactly what it
-        # says it is. **The discriminator is `os.name` and not which primitive
-        # exists**: the first version read it off `SYMLINKS`, which is the same
-        # answer only while symbolic links and POSIX coincide — a privileged
-        # Windows runner has both and would have failed this case for a
-        # difference that is the platform's rather than the guard's.
+        # The guard follows each platform. POSIX resolves `..` against the
+        # link's target, so `docs/tree/../settings.json` through a link into
+        # `.claude/scripts` lands on `.claude/settings.json`, where a lexical
+        # reader would say `docs/`. Windows' path parser collapses `..` before
+        # the filesystem sees it, so the same spelling writes
+        # `docs/settings.json`, and refusing it there would refuse a write that
+        # is what it says. `DOTDOT_IS_LEXICAL` says why the discriminator is
+        # `os.name`.
         real = os.path.join(self.root, ".claude", "scripts")
         for linker in linkers():
             with self.subTest(link=linker):
@@ -295,18 +256,11 @@ class ALinkIsNotTheFileItIsSpelledAs(GuardCase):
                                   self.assertRefused(spelled))
 
     def test_a_cwd_inside_a_link_does_not_excuse_that_link(self):
-        # **The bypass an anchor becomes when it is not a checkout root.** An
-        # anchor excuses exactly one link traversal — the one on its own root
-        # prefix — so an anchor at `docs/tree`, where `tree` links into
-        # `.claude/scripts`, excuses precisely the traversal this guard exists
-        # to refuse: re-anchoring `docs/tree/helper.sh` on that directory makes
-        # the spelling and the resolution agree. The first form took the
-        # event's `cwd` as an anchor whatever it pointed at, and admitted this.
-        # Raised by Copilot.
-        #
-        # Two changes close it and the case is written to fail if either is
-        # reverted: `cwd` is walked up to its checkout root, and every anchor
-        # containing the target must agree rather than any one of them.
+        # An anchor excuses the link traversal on its own root prefix, so an
+        # anchor at `docs/tree`, where `tree` links into `.claude/scripts`,
+        # would excuse the traversal this guard exists to refuse. The case
+        # fails unless `cwd` is walked up to its checkout root and every anchor
+        # containing the target agrees.
         real = os.path.join(self.root, ".claude", "scripts")
         for linker in linkers():
             with self.subTest(link=linker):
@@ -316,23 +270,11 @@ class ALinkIsNotTheFileItIsSpelledAs(GuardCase):
                 self.assertIn("resolves elsewhere in it", reason)
 
     def test_a_device_prefixed_spelling_is_refused(self):
-        # **Windows' extended-length and device prefixes exist to SKIP the path
-        # normalisation a permission matcher depends on**, which makes them a
-        # spelling that names a denied target and is judged by nothing.
-        # Measured in the real checkout with `.claude/sandbox/**` denied: a
-        # `Write` to the extended-length spelling of a file under it was
-        # CREATED, where the plain spelling of the same file is refused.
-        #
-        # Refused rather than resolved, because a hook can only allow or deny —
-        # it cannot hand the matcher the plain spelling it would have judged.
-        # Asserted on every platform because the check is textual: a POSIX file
-        # whose name begins with those characters is not a real caller.
-        # **The whole family, not the two prefixes that were found first.** The
-        # UNC form reaches the same disk through an administrative share, and
-        # it was measured the same way: a `Write` to
-        # `\\localhost\C$\...\.claude\sandbox\probe-share.txt` was created in a
-        # denied directory. A list of prefixes would have missed it, which is
-        # the deny-list shape this repository has rejected twice.
+        # Windows' extended-length, device and UNC spellings skip the path
+        # normalisation a permission matcher depends on, so a denied target
+        # spelled that way is judged by nothing. The whole grammar is refused
+        # rather than a list of prefixes, and refused rather than resolved,
+        # because a hook can only allow or deny.
         guard = self.guard_module()
         plain = os.path.join(self.root, "docs", "chapter.md")
         spellings = ["\\\\?\\" + plain, "\\\\.\\" + plain, "//?/" + plain,
@@ -366,9 +308,7 @@ class ALinkIsNotTheFileItIsSpelledAs(GuardCase):
         #
         # 8.3 alias creation can be disabled per volume, so the case reports
         # when the platform gave it nothing to test rather than pretending to
-        # have tested it. Measured in the real checkout, where it is enabled:
-        # `.claude` has the alias `CLAUDE~1`, and the guard refuses a write
-        # through it.
+        # have tested it.
         if os.name != "nt":
             return
         import ctypes
@@ -382,44 +322,28 @@ class ALinkIsNotTheFileItIsSpelledAs(GuardCase):
             print("8.3 aliases are disabled on this volume; case has no "
                   "subject", file=sys.stderr)
             return
-        # **Which refusal fires depends on how much of the path the volume
-        # aliases, and the case asserts the outcome rather than the wording.**
-        # Where only the leaf is shortened the prefix still matches an anchor
-        # and the ordinary spelling-versus-resolution test refuses it; where
-        # `GetShortPathNameW` shortens the whole path — which is what the CI
-        # runner does — no anchor recognises the spelling and the refusal comes
-        # from the rule for a name that lands inside a checkout it cannot be
-        # placed in. Pinning one message made this case red on the runner for a
-        # difference that is the volume's.
+        # Which refusal fires depends on how much of the path the volume
+        # aliases, so the case asserts the outcome rather than the wording:
+        # a shortened leaf fails the spelling-versus-resolution test, and a
+        # shortened prefix matches no anchor and lands inside a checkout.
         reason = self.assertRefused(os.path.join(short, "a.md"))
         self.assertIn(os.path.basename(long_name), reason)
 
     def test_a_directory_may_fold_differently_from_its_root(self):
         """Windows sets case sensitivity per directory, and the traits do not.
 
-        **The finding was that a child can disagree with the root; what the
-        measurement shows is that the disagreement is benign for a link.** A
-        case-sensitive `docs/` really does keep `Sub` and `sub` apart — checked
-        here with `fsutil file setCaseSensitiveInfo`, which needs no
-        privilege — so the anchor's folded key calls two spellings one where
-        that directory does not. For the guard to be fooled by it, a link's
-        resolution would have to differ from its own path only in case, and a
-        link's resolution IS its target: writing through `docs/Sub/x.md` lands
-        on exactly the file that path names. `samefile` says so, and this case
-        asserts it rather than asserting a bypass that does not exist.
-
-        The guard carries the identity check anyway, for the shape this
-        argument does not cover — a sub-mount whose equivalences differ from
-        the root's — and it costs one `stat` on paths that agree only after
-        folding.
+        A case-sensitive child keeps `Sub` and `sub` apart where the anchor's
+        folded key calls them one, but the disagreement is benign for a link:
+        a link's resolution is its target, so writing through `docs/Sub/x.md`
+        lands on the file that path names. The case asserts that rather than a
+        bypass that does not exist.
         """
         if os.name != "nt":
             print("per-directory case sensitivity is Windows'; case has no "
                   "subject here", file=sys.stderr)
             return
-        # A fresh, EMPTY directory: the flag will not take on one that already
-        # holds entries, and `docs/` in this fixture does. Found by the flag
-        # silently not applying — `BETA` and `beta` stayed one directory.
+        # A fresh, empty directory: the flag silently does not take on one that
+        # already holds entries, and `docs/` in this fixture does.
         docs = os.path.join(self.root, "mixed")
         os.makedirs(docs, exist_ok=True)
         made = subprocess.run(
@@ -433,7 +357,7 @@ class ALinkIsNotTheFileItIsSpelledAs(GuardCase):
                   "has no subject here", file=sys.stderr)
             return
 
-        # **The pair has to differ ONLY in case**, or the guard refuses it for
+        # The pair has to differ only in case, or the guard refuses it for
         # the ordinary reason and the case says nothing about folding. One pair
         # per primitive, since two links cannot share a name.
         names = {"symlink": "alpha", "junction": "beta"}
@@ -474,21 +398,16 @@ class TheOrdinaryWriteIsNotDisturbed(GuardCase):
     def test_a_file_that_does_not_exist_yet_is_admitted(self):
         # `Write` creates, so the commonest target of all is a path with no
         # file behind it. `realpath` resolves the existing prefix and appends
-        # the rest, which is what makes this work — asserted rather than
-        # assumed, because a guard that refused every new file would be found
-        # by its first user rather than by this suite.
+        # the rest, which is what makes this work.
         self.assertAdmitted(os.path.join(self.root, "docs", "new-chapter.md"))
         self.assertAdmitted(os.path.join(self.root, "docs", "sub", "deep.md"))
 
     def test_a_denied_tree_spelled_as_itself_is_admitted_here(self):
-        # **The control that keeps this file from becoming a second deny
-        # list.** `.claude/scripts/**` is denied by `.claude/settings.json` and
-        # by two commands' frontmatter, and it is denied there on the spelling
-        # — which is correct when the spelling is true of the file. If this
-        # hook refused it as well it would hold a copy of a list it cannot see
-        # changing, and it would lock the repository out of its own control
-        # surface: the PR that lifts a deny to edit a helper would be refused
-        # by the guard instead.
+        # The control that keeps this hook from becoming a second deny list.
+        # `.claude/scripts/**` is denied on the spelling elsewhere, which is
+        # correct when the spelling is true of the file; a copy here would go
+        # stale, and a change that lifts the deny would be refused by the
+        # guard instead.
         self.assertAdmitted(
             os.path.join(self.root, ".claude", "scripts", "helper.sh"))
 
@@ -497,24 +416,11 @@ class TheOrdinaryWriteIsNotDisturbed(GuardCase):
             os.path.join(self.root, "docs", "..", "docs", "chapter.md"))
 
     def test_a_dotdot_into_a_denied_tree_is_the_deny_lists_subject_not_this_one(self):
-        # **Stated as a passing case because the argument for the other verdict
-        # is a good one and rests on a premise this harness does not have.**
-        # `docs/../.claude/scripts/helper.sh` carries no `.claude/**` spelling,
-        # so a matcher reading the string would not deny it — and the harness
-        # does not read the string. Measured in the real checkout, with
-        # `.claude/sandbox/**` denied: a `Write` to
-        # `docs/../.claude/sandbox/probe-tmp.txt` was refused with the
-        # harness's own "denied by your permission settings", while
-        # `docs/../docs/probe-tmp.txt` was created — the path is normalised and
-        # then matched, and `..` is not what was rejected.
-        #
-        # So this guard admits it, because the file it lands on is the file the
-        # path names once the shell of `..` is gone, and no link was traversed.
-        # Refusing every `..` would buy nothing against the deny list and would
-        # refuse the second of those two spellings, which is innocent traffic.
-        # Raised by Copilot; if the harness ever stops normalising, this case
-        # is the one to invert and the paragraph in the hook is the one to
-        # rewrite.
+        # The harness normalises a path before matching it against the deny
+        # list, so `docs/../.claude/...` is denied there, and no link is
+        # traversed here. Refusing every `..` would buy nothing against the
+        # deny list and would refuse innocent traffic; if the harness stops
+        # normalising, this case is the one to invert.
         self.assertAdmitted(os.path.join(
             self.root, "docs", "..", ".claude", "scripts", "helper.sh"))
 
@@ -525,13 +431,11 @@ class TheOrdinaryWriteIsNotDisturbed(GuardCase):
         self.assertAdmitted(os.path.join("docs", "chapter.md"))
 
     def test_a_checkout_reached_through_a_link_is_not_refused_wholesale(self):
-        # **The false positive that would have taken the delivery chain
-        # down.** `/tmp` is a link to `/private/tmp` on macOS and a worktree
-        # path on Windows can arrive 8.3-shortened or through `subst`, so the
-        # session's own root resolves to a different spelling — and a guard
-        # comparing the raw resolution against the raw spelling would refuse
-        # every edit in it. The anchor is resolved too, which is what makes
-        # this pass.
+        # `/tmp` is a link to `/private/tmp` on macOS and a worktree path on
+        # Windows can arrive 8.3-shortened or through `subst`, so the session's
+        # own root resolves to a different spelling, and a guard comparing the
+        # raw resolution against the raw spelling would refuse every edit in
+        # it. The anchor is resolved too, which is what makes this pass.
         for linker in linkers():
             with self.subTest(link=linker):
                 alias = os.path.join(self.outside, f"checkout-{linker}")
@@ -559,20 +463,12 @@ class TheOrdinaryWriteIsNotDisturbed(GuardCase):
         self.assertEqual(measured, guard.case_insensitive(self.root))
 
     def test_a_spelling_no_anchor_recognises_is_refused_if_it_lands_inside(self):
-        # **The general form of three separate findings**, and the case that
-        # went red on CI having passed locally: a Windows runner's
-        # `GetShortPathNameW` shortens the whole prefix, so
-        # `C:\Users\RUNNER~1\...\GUARD-~1\DOCUME~1\a.md` matched no anchor and
-        # fell through to the residual while resolving squarely inside a
-        # checkout. Case folding and Unicode composition each closed one
-        # spelling by teaching the comparison an equivalence; this closes the
-        # class, because the residual is for a file genuinely outside every
-        # checkout and not for one inside under a name the anchors cannot
-        # place.
-        #
-        # Measured against the commit that shipped it: admitted there, refused
-        # here. The alias below stands in for the short prefix, which cannot be
-        # produced on a volume with 8.3 creation disabled.
+        # The residual is for a file outside every checkout, not for one
+        # inside under a name no anchor can place — such as a prefix
+        # `GetShortPathNameW` shortened whole. This closes the class that case
+        # folding and Unicode composition each close one spelling of. The alias
+        # stands in for the short prefix, which a volume with 8.3 creation
+        # disabled cannot produce.
         for linker in linkers():
             with self.subTest(link=linker):
                 alias = os.path.join(self.outside, f"alias-{linker}")
@@ -585,17 +481,17 @@ class TheOrdinaryWriteIsNotDisturbed(GuardCase):
                               self.assertRefused(through))
 
                 # The control, and it is the worktree case rather than a
-                # loophole: a session STANDING in that alias makes it a
+                # loophole: a session standing in that alias makes it a
                 # checkout root of its own, and then the spelling is one the
                 # anchors recognise.
                 self.assertAdmitted(through, cwd=alias)
 
     def test_a_composed_and_a_decomposed_spelling_are_one_key(self):
-        # **A case-insensitive APFS volume is also insensitive to Unicode
-        # normalisation**, so `é` composed and `e` followed by a combining
+        # A case-insensitive APFS volume is also insensitive to Unicode
+        # normalisation, so `é` composed and `e` followed by a combining
         # accent name one directory there while they are two strings in
-        # Python. A checkout prefix spelled in the other form therefore matched
-        # no anchor and reached the branch that admits. Raised by Copilot.
+        # Python, and a checkout prefix spelled in the other form would match
+        # no anchor.
         #
         # `key` composes where the anchor's traits say the mount does, so the
         # predicate is assertable on every platform by passing the traits
@@ -608,11 +504,10 @@ class TheOrdinaryWriteIsNotDisturbed(GuardCase):
         decomposed = os.path.join(self.root, unicodedata.normalize("NFD", name))
         self.assertNotEqual(composed, decomposed)
 
-        # **Composed only where the mount composes**, which is the half that
-        # arrived a round late: composing everywhere folds two names that can
-        # COEXIST on ext4 into one key, so a link resolving into the sibling
-        # compares equal to a path inside the checkout. Both directions are
-        # asserted here because each was a bypass in its turn.
+        # Composed only where the mount composes: composing everywhere folds
+        # two names that can coexist on ext4 into one key, so a link resolving
+        # into the sibling compares equal to a path inside the checkout. Both
+        # directions are a bypass, so both are asserted.
         for folded in (False, True):
             with self.subTest(folded=folded):
                 self.assertEqual(guard.key(composed, (folded, True)),
@@ -642,19 +537,12 @@ class TheOrdinaryWriteIsNotDisturbed(GuardCase):
                 self.assertRefused(through)
 
     def test_two_names_that_can_coexist_are_not_folded_into_one(self):
-        # **The other direction of the same question, and the argument that
-        # skipped it was the bypass.** This file once composed to NFC
-        # unconditionally on the reasoning that composing "can never make two
-        # paths look like one". On a normalisation-SENSITIVE filesystem — NTFS
-        # and ext4 among them — a composed and a decomposed name are two
-        # directories that coexist, so a link inside the checkout resolving to
-        # the SAME relative path under the sibling compared equal to a path
-        # inside it, and the escape was admitted. Raised by Copilot.
-        #
-        # Measured against the commit that shipped it, on NTFS: admitted there,
-        # refused here. Where the mount equates the two names the sibling
-        # cannot exist, and the case says so rather than pretending to have
-        # tested it.
+        # On a normalisation-sensitive filesystem, NTFS and ext4 among them, a
+        # composed and a decomposed name are two directories that coexist, so
+        # composing unconditionally would let a link resolving to the same
+        # relative path under the sibling compare equal to a path inside the
+        # checkout. Where the mount equates the two names the sibling cannot
+        # exist, and the case says so rather than pretending to have tested it.
         name = "caf\u00e9"
         checkout = os.path.join(self.outside,
                                 unicodedata.normalize("NFC", name))
@@ -685,12 +573,11 @@ class TheOrdinaryWriteIsNotDisturbed(GuardCase):
                                    cwd=checkout, project=checkout)
 
     def test_a_checkout_whose_name_has_no_letters_is_still_asked(self):
-        # **The probe has to flip something, and the basename is not always
-        # flippable.** A checkout at `/Users/me/123` has no cased character in
+        # The probe has to flip something, and the basename is not always
+        # flippable: a checkout at `/Users/me/123` has no cased character in
         # its last component, so a probe that only flips the basename falls to
-        # the platform default — `False` on macOS, where the mount folds — and
-        # a linked target spelled `/users/me/123/...` matches no anchor and
-        # falls through unjudged. Raised by Copilot.
+        # the platform default, `False` on macOS where the mount folds, and a
+        # linked target spelled `/users/me/123/...` matches no anchor.
         #
         # The assertion ties the numeric root to a lettered one on the same
         # filesystem rather than to a platform: whatever the mount answers for
@@ -706,15 +593,12 @@ class TheOrdinaryWriteIsNotDisturbed(GuardCase):
                          guard.case_insensitive(os.path.join(numeric, "docs")))
 
     def test_a_differently_cased_checkout_prefix_is_still_judged(self):
-        # **The branch that admits is the one a case difference reaches.** On a
-        # folding filesystem `/Users/x/Repo` and `/users/x/repo` are one
+        # On a folding filesystem `/Users/x/Repo` and `/users/x/repo` are one
         # directory, so a target spelled with the other case is inside the
-        # checkout — and a comparison that folds only on Windows finds it under
-        # no anchor at all and falls through to `None`. A link edit spelled
-        # that way would have bypassed the guard on a default macOS checkout.
-        # Raised by Copilot.
+        # checkout, and a comparison that folds only on Windows finds it under
+        # no anchor and admits it.
         #
-        # Where the filesystem does NOT fold, the same spelling names a path
+        # Where the filesystem does not fold, the same spelling names a path
         # that does not exist and is not this guard's subject, so the assertion
         # is the filesystem's answer rather than one platform's.
         guard = self.guard_module()
@@ -749,13 +633,9 @@ class WhatThisGuardIsNotTheSubjectOf(GuardCase):
     """The residuals, written as passing cases so nobody assumes they closed."""
 
     def test_a_path_outside_every_checkout_is_not_judged(self):
-        # **Stated in the hook's docstring and pinned here.** The harness
-        # writes the session's own memory and scratchpad by absolute path
-        # outside the repository, and refusing those would take them with it.
-        # Nothing in the exposure this closes can spell one: a review row is
-        # one plain repository-relative path, and the adjudicator drops a row
-        # that is not. If this starts being refused, the docstring's residual
-        # paragraph is what needs rewriting.
+        # The residual the hook's docstring argues: the harness writes the
+        # session's memory and scratchpad by absolute path outside the
+        # repository, and refusing those would take them with it.
         self.assertAdmitted(os.path.join(self.outside, "loot.txt"))
 
     def test_a_tool_that_does_not_write_is_not_judged(self):
@@ -768,17 +648,15 @@ class WhatThisGuardIsNotTheSubjectOf(GuardCase):
 
     def test_a_write_with_no_path_to_judge_is_refused(self):
         # The other direction from the fail-open below, and deliberately so: an
-        # unreadable EVENT establishes nothing about the session, where a
+        # unreadable event establishes nothing about the session, where a
         # matched tool carrying no path establishes nothing about a write that
         # is about to happen.
         reason = self.assertRefused(None)
         self.assertIn("no file path", reason)
 
     def test_a_tool_input_that_is_not_an_object_is_refused_the_same_way(self):
-        # The same statement about the same call — this file cannot see where
-        # the write lands — and it used to get the opposite answer: a
-        # `tool_input` of the wrong shape was admitted while a missing key was
-        # refused. One of those two fails closed.
+        # The same statement as a missing key, that this hook cannot see where
+        # the write lands, so it gets the same answer.
         for payload in ([], "file_path", 7):
             with self.subTest(payload=payload):
                 event = {
@@ -797,8 +675,8 @@ class WhatThisGuardIsNotTheSubjectOf(GuardCase):
                 self.assertIn("no file path", verdict["permissionDecisionReason"])
 
     def test_a_malformed_event_does_not_take_the_session_down(self):
-        # The one deliberate fail-OPEN, argued in the hook and pinned here the
-        # way the argv guard's is: refusing every write because this file
+        # The one deliberate fail-open, argued in the hook: refusing every
+        # write because this file
         # cannot read its own input would turn a defect in it into a session
         # that can no longer edit anything.
         for payload in ("not json at all", "[1, 2, 3]", ""):
@@ -830,15 +708,8 @@ class TheWiringWithoutWhichNoneOfTheAboveRuns(unittest.TestCase):
         # against a hook the harness never calls, and a matcher naming `Edit`
         # alone would leave `Write` — the tool that creates the file — unjudged.
         #
-        # **The asserted set is read from the hook rather than written out
-        # here**, and the first version of this case wrote out three of the
-        # four. `MultiEdit` was in the matcher and in `EDITING_TOOLS` and in no
-        # assertion, so dropping it from the matcher would have left that tool
-        # unguarded with this test still green — the gate-coverage failure
-        # `CLAUDE.md` calls this repository's most-repeated, inside the test
-        # written to catch it. Raised by Copilot against the first push.
-        # Deriving the set is what makes a tool added to the hook a red test
-        # rather than a silent gap.
+        # The asserted set is read from the hook rather than written out here,
+        # so a tool added to the hook is a red test rather than a silent gap.
         matchers = [
             (entry.get("matcher") or "", entry.get("hooks") or [])
             for entry in self.registered()
@@ -850,8 +721,7 @@ class TheWiringWithoutWhichNoneOfTheAboveRuns(unittest.TestCase):
         self.assertTrue(mine, f"{HOOK.name} is registered for nothing")
         tools = self.guard_module().EDITING_TOOLS
         # The positive control: an empty or shrunken list would satisfy the
-        # loop below by having nothing to check, which is the vacuous pass this
-        # repository keeps finding in its own gates.
+        # loop below by having nothing to check.
         self.assertGreaterEqual(len(tools), 4, f"EDITING_TOOLS shrank: {tools}")
         for tool in tools:
             with self.subTest(tool=tool):
