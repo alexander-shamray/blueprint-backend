@@ -3,37 +3,18 @@ name: Closure gate
 # A pull request states what it closes three times — the `| Closes |` row, the
 # keywords GitHub's linker reads out of the body, and the keywords in the
 # commit bodies — and the three are honoured by different machinery. What has
-# to agree is what the merge DOES and what the pull request SAYS it does: a
-# closure the commits carry has to appear in the description, and the table
-# has to match what GitHub linked, in both directions.
-#
-# This comment used to end "all three must agree", which is a fourth
-# comparison the gate must not make. A description closure that no commit
-# repeats is the ordinary case — the bare closing line under the table is what
-# fires, and a commit is under no obligation to say it again — so checking it
-# would make a commit keyword mandatory and fail a correct pull request. The
-# gate's `NoCommitRepeatsIt` test guards the absence; this header was the
-# second site of the overclaim and the docstring's fix did not reach it.
-#
-# Both ways of disagreeing have already fired here: PR #112 closed
-# nothing it claimed, PR #116 closed two issues its own body said stayed open.
-#
-# A workflow of its own rather than a job in ci.yml, and for once NOT because
-# of path filtering — this one has no paths at all. Two reasons, and the
-# second is the load-bearing one:
-#
-#   - the defect is a property of every pull request rather than of a tree, so
-#     a filter could only ever make it skippable. Nothing here is derived from
-#     the checkout beyond the gate itself, so there is no inputs list to
-#     declare and none to drift — the SOURCE_INPUTS family of bugs that the
-#     helm, observability and canary gates each paid for cannot arise;
-#
-#   - `edited` is in the trigger list, and ci.yml's default `pull_request`
-#     types are `opened`, `synchronize` and `reopened` only. PR #116's defect
-#     was introduced by an EDIT to the description that withdrew a closure the
-#     commits had already made permanent, and no push followed it. Adding
-#     `edited` to ci.yml instead would rebuild and retest the solution every
-#     time somebody fixed a typo in a PR body.
+# to agree is what the merge does and what the pull request says it does: a
+# closure the commits carry has to appear in the description, and the table has
+# to match what GitHub linked, in both directions. A description closure no
+# commit repeats is the ordinary case and is not compared, because requiring it
+# would make a commit keyword mandatory and fail a correct pull request.
+
+# Its own workflow rather than a job in ci.yml because it judges a property of
+# every pull request rather than of a tree, so nothing here is derived from the
+# checkout and there is no inputs list to drift. `edited` has to be a trigger:
+# a description can withdraw a closure the commits already made permanent with
+# no push following, and adding `edited` to ci.yml would rebuild and retest the
+# solution for every typo in a body.
 on:
   pull_request:
     types: [opened, synchronize, reopened, edited]
@@ -49,41 +30,26 @@ concurrency:
   group: closure-gate-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
-# **Proposal and enforcement are two executions here, and that split is the
-# whole design of this job.** Until #132 they were one: a bare checkout on
-# `pull_request` gives the merge ref, so the gate judging a branch was the
-# gate that branch shipped. Not a privilege problem — the token is read-only
-# and nothing is posted — but a policy one, and the version worth worrying
-# about is accidental rather than malicious: a refactor that makes `check()`
-# return `[]` on a path nobody considered, with the suite edited in the same
-# change to match, was green. That is this repository's most-repeated failure
-# with the instrument meant to catch it inside the blast radius.
-#
-# So the SUITE runs the head copy — testing a proposed gate is the point of
-# that step — and the ENFORCING copy is read out of the base commit. A pull
-# request may now change the gate freely without changing what judges it, and
-# a change that neuters it goes red on the pull request proposing it rather
-# than on the one after.
-#
-# `pull_request_target` is the other documented answer and is worse: a
-# writable token against a base checkout, buying a much larger hazard to
-# solve a read-only problem.
-#
-# **THIS FILE IS STILL THE BRANCH'S OWN COPY, and that residual is not closed
-# by anything above.** `pull_request` runs the workflow definition from the
-# HEAD ref, so a pull request can edit or delete the enforcing step and the
-# run that judges it is the edited one. Base-sourcing the gate narrows the
-# accidental case — the refactor that neuters `check()` — and leaves the
-# deliberate one, and only `pull_request_target` reads the base definition,
-# at the price this file has already refused.
-#
-# **What would actually close it is a repository setting rather than a file:**
-# a required status check on `main`, which fails a pull request whose
-# `closure-gate` check never reports. `main` is NOT protected today —
-# `gh api repos/.../branches/main/protection` answers 404 — so a pull request
-# deleting this workflow currently removes the check with nothing to notice.
-# Stated here rather than in a commit message because a residual nobody can
-# grep is a residual nobody re-checks.
+# Proposal and enforcement are two executions, and that split is the design of
+# this job. A bare checkout on `pull_request` gives the merge ref, so the gate
+# judging a branch would be the gate that branch ships. The version worth
+# worrying about is accidental rather than malicious: a refactor making
+# `check()` return `[]` on a path nobody considered, with the suite edited in
+# the same change to match, is green. So the suite runs the head copy — testing
+# a proposed gate is the point of that step — and the enforcing copy is read
+# out of the base commit.
+
+# `pull_request_target` is the other documented answer and is worse: a writable
+# token against a base checkout, buying a much larger hazard to solve a
+# read-only problem.
+
+# The residual: `pull_request` runs the workflow definition from the head ref,
+# so a pull request can edit or delete the enforcing step and the run that
+# judges it is the edited one. Base-sourcing the gate narrows the accidental
+# case and leaves the deliberate one. Closing it takes a required status check
+# on `main`, which fails a pull request whose `closure-gate` check never
+# reports; `main` is not protected today, so a pull request deleting this
+# workflow removes the check with nothing to notice.
 jobs:
   closure-gate:
     runs-on: ubuntu-latest
@@ -99,24 +65,22 @@ jobs:
         with:
           python-version: '3.12'
 
-      # The HEAD copy, deliberately: this step's subject is the gate this
-      # pull request PROPOSES, so a proposal that fails its own suite belongs
-      # red here. Running it at all is the licence gate's terms — a gate
-      # observed only against a well-formed input says nothing about what it
-      # would catch. Every test in that suite is a negative case, and nine
-      # deliberate mutations of the gate were each observed red against it.
+      # The head copy, deliberately: this step's subject is the gate this pull
+      # request proposes, so a proposal that fails its own suite belongs red
+      # here. Running it at all is the licence gate's terms — a gate observed
+      # only against a well-formed input says nothing about what it would
+      # catch — and every test in that suite is a negative case.
       - name: Test the proposed gate
         working-directory: .github/closure-gate
         run: python -m unittest
 
-      # The BASE copy, deliberately, for the reason at the top of this file.
+      # The base copy, deliberately, for the reason at the top of this file.
       #
-      # A base that carries no gate FAILS rather than falling back to the head
-      # copy. Falling back is the silent-pass shape this whole file exists to
-      # refuse: it would restore the property #132 reported, on exactly the
-      # pull requests where nobody was watching for it. `main` carries the
-      # gate as of 1af772b, so the only way to reach this branch now is a base
-      # older than that — which is a rebase somebody should perform knowingly.
+      # A base that carries no gate fails rather than falling back to the head
+      # copy. Falling back is the silent-pass shape this file exists to refuse,
+      # on exactly the pull requests where nobody is watching for it. `main`
+      # carries the gate, so the only way to reach that branch is a base older
+      # than it, which is a rebase somebody performs knowingly.
       - name: Take the enforcing gate from the base commit
         shell: bash
         env:
@@ -140,9 +104,8 @@ jobs:
             echo "::error::$GATE at $BASE_SHA is empty"
             exit 1
           fi
-          # The workflow is in this comparison as well as the gate, and it is
-          # the half a reader is least likely to think of: see the residual at
-          # the top of this file.
+          # The workflow is in this comparison as well as the gate: see the
+          # residual at the top of this file.
           if ! git diff --quiet "$BASE_SHA" -- .github/closure-gate/ .github/workflows/closure-gate.yml; then
             echo "::notice::this pull request modifies the closure gate or its workflow; the gate below is the copy at $BASE_SHA"
           fi
@@ -150,18 +113,16 @@ jobs:
 
       # One `gh` call, and it is the only network in the check. The deciding
       # takes JSON on stdin and is pure — deploy/canary/canary.py's split, for
-      # its reason: what is tested is the judgement, and what is not tested is
-      # the fetch.
-      #
-      # `closingIssuesReferences` is GitHub's OWN parse of the body, which is
+      # its reason: what is tested is the judgement, not the fetch.
+      # `closingIssuesReferences` is GitHub's own parse of the body, which is
       # what makes this a comparison rather than a second implementation of a
       # linker nobody here has the spec for.
-      #
-      # `shell: bash` rather than the default, and it is not cosmetic: the
-      # default `run` shell is `bash -e` with NO pipefail, so a `gh` that
-      # failed would be masked by whatever the right-hand side exited with.
-      # Here the gate would exit 2 on the empty input anyway — but relying on
-      # that is relying on a second bug to cover the first.
+
+      # `shell: bash` rather than the default: the default `run` shell is
+      # `bash -e` with no pipefail, so a failing `gh` would be masked by
+      # whatever the right-hand side exited with. The gate would exit 2 on the
+      # empty input anyway, but relying on that is relying on a second bug to
+      # cover the first.
       - name: What the PR says it closes matches what merging it closes
         shell: bash
         env:

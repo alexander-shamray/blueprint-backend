@@ -1,36 +1,17 @@
 name: Observability
 
-# The third `deploy/**` artefact CI exercises directly rather than deploying
-# (§15.1), after the Compose file and the Helm tree. Like both of those it is a
-# separate workflow rather than a job in ci.yml, because path filtering is
+# A separate workflow rather than a job in ci.yml because path filtering is
 # per-workflow and this proves a tree most pull requests never touch.
-#
-# It reaches no Prometheus, no Grafana and no cluster. What it asserts is that
-# §13.6's alerts and §13.9's runbooks agree in BOTH directions, and that every
-# metric a loaded rule or a dashboard panel reads is one this platform actually
-# publishes — §13.6's third leg, "an alert has three parts: a condition, a
-# signal and a procedure". Whether a rules file is syntactically valid to
-# Prometheus is a different question and is NOT covered here; `promtool` would
-# be the tool, and adding it is a decision no chapter has taken.
-#
-# The filter reaches outside deploy/observability on purpose, and the list is
-# NOT maintained here: check.py declares it as SOURCE_INPUTS beside the reads,
-# and asserts that both of this workflow's triggers cover every entry. That is
-# deploy/helm/smoke.sh's lesson applied at the first opportunity rather than
-# after the list has drifted three times — a copy of a list drifts exactly as a
-# copy of a number does.
-#
-#   - src/** because the gate reads every C# instrument declaration to decide
-#     whether an alert's signal exists. A new metrics type changes that answer,
-#     and the awaiting-signal file is meant to go red when it does;
-#   - docs/runbooks/** because a deleted or renamed runbook is an alert with no
-#     procedure behind it, and nothing else would catch it;
-#   - docs/backend-architecture/13-observability.md because §13.6's and §13.9's
-#     tables are a THIRD copy of the runbook inventory, in prose, and check 9
-#     is what makes them disagree loudly. The one chapter and not its
-#     directory: `docs/backend-architecture` would trigger this workflow on all
-#     twenty blueprint files, which is the same "too wide" check.py's own
-#     SOURCE_INPUTS comment rejects for `docs`.
+
+# It reaches no Prometheus, no Grafana and no cluster. It asserts that §13.6's
+# alerts and §13.9's runbooks agree in both directions, and that every metric a
+# loaded rule or a dashboard panel reads is one this platform publishes —
+# §13.6's third leg. Whether a rules file is valid to Prometheus is a different
+# question, and adopting `promtool` is a decision no chapter has taken.
+
+# The paths below are not maintained here: check.py declares them as
+# SOURCE_INPUTS beside the reads that need them, and asserts that both of this
+# workflow's triggers cover every entry.
 on:
   pull_request:
     paths:
@@ -64,9 +45,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # 3.12, like every other Python job in this repository. The floor is the
-      # point: a newer interpreter accepts APIs 3.12 does not, so a suite that
-      # is green locally on 3.14 can still be unrunnable here.
+      # 3.12 is a floor, not a preference: a newer interpreter accepts APIs
+      # 3.12 does not, so a suite green locally can be unrunnable here.
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'

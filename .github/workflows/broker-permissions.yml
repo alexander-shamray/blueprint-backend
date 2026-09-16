@@ -1,38 +1,14 @@
 name: Broker permissions
 
-# The fourth `deploy/**` gate CI runs without deploying anything, after the
-# Compose smoke, the Helm tree and the observability rules — and it is split
-# from `compose.yml` rather than added to it for a reason that workflow states
-# about itself: that smoke pulls ~2 GB and builds seven images, so its filter
-# deliberately does NOT include `src/**`, and a change under `src/` alone is
-# not worth re-running it for.
+# Split from `compose.yml` rather than added to it because path filtering is
+# per-workflow: that smoke deliberately excludes `src/**`, so a job sharing
+# its filter would either drag a 45-minute smoke onto every messaging change
+# or stop watching the code it checks. This gate reads text and needs no
+# Docker, no broker and no restore.
 #
-# This gate reads text and needs no Docker, no broker and no restore. Putting
-# it in that workflow would either drag the 45-minute smoke onto every change
-# to Ordering's messaging or leave the gate unable to watch the code it checks,
-# because path filtering is per-workflow and not per-job. So it gets its own.
-#
-# The filter reaches outside deploy/compose on purpose, and the list is NOT
-# maintained here: check_permissions.py declares it as SOURCE_INPUTS beside the
-# reads and asserts that both of this workflow's triggers cover every entry.
-# docs/lessons.md records that a fourth copy of that pattern arrives owing a
-# test whose subject is the READS rather than the workflow, because a list can
-# only be compared for entries it already contains — that is check 7 in the
-# script.
-#
-#   - src/Services/**, because every service's `Messaging` directory decides
-#     what its own account must be allowed to do: `Endpoints.cs` names the peer
-#     queues it sends to, `DependencyInjection.cs` the receive endpoints it
-#     runs. The whole tree and not one service's directory, because §4.5's
-#     scaffold renders new ones and a filter naming today's services is a gate
-#     that stops covering the newest surface;
-#   - Common.Contracts, because each bounded context's namespace is an exchange
-#     prefix, and a sixth context is a resource nobody has granted yet;
-#   - Catalog.TestSupport, because that fixture maps the broker's two config
-#     files onto the STOCK image rather than building §14.1's, so the paths
-#     it maps them to are a second copy of the Dockerfile's COPY targets.
-#     A drifted mapping boots a broker with no accounts, which seeds `guest`
-#     and passes.
+# The paths below are not maintained here: check_permissions.py declares them
+# as SOURCE_INPUTS beside the reads that need them, and asserts that both of
+# this workflow's triggers cover every entry.
 on:
   pull_request:
     paths:
@@ -71,10 +47,10 @@ jobs:
         with:
           python-version: '3.12'
 
-      # The gate's own suite, BEFORE the gate — `CLAUDE.md`'s "each of them is
-      # tested and then run". Every case is a mutation that must go red: a gate
-      # observed only green is one nobody has established is looking at
-      # anything, and this one guards an authorisation boundary.
+      # The suite runs before the gate — CLAUDE.md's "tested and then run".
+      # Every case is a mutation that must go red: a gate observed only green
+      # is one nobody has established is looking at anything, and this one
+      # guards an authorisation boundary.
       - name: The gate's negatives
         run: python -m unittest discover -s deploy/compose/rabbitmq
 

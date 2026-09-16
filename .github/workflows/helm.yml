@@ -1,44 +1,18 @@
 name: Helm
 
-# A separate workflow rather than a job in ci.yml, for the reason compose.yml
-# is one: path filtering is per-workflow, and this proves a tree most PRs never
-# touch. It is the second `deploy/**` artefact CI exercises directly rather
-# than deploying (§15.1) — the Compose file was the first, and the sentence in
-# that chapter naming one was amended by this PR rather than left to drift.
-#
-# It does NOT reach a cluster. `helm template` renders locally, so what this
-# asserts is that the charts produce the manifests §15.3, §15.4 and §7.4
-# describe. Whether an API server would accept them is a deploy-time question
-# (§15.1) and is named in smoke.sh as not covered.
-#
-# The filter reaches outside deploy/helm/ on purpose, and none of it is
-# decoration — each path is an input the gate actually reads:
-#
-#   - the gateway TREE, not just its route file: smoke.sh compares every
-#     service chart against its source, and the gateway's half of that read
-#     the whole directory while this filter named one file. appsettings.json
-#     and PricingHop.cs hold the host:port literals smoke.sh asserts every
-#     rendered Service against, so renaming a YARP destination would
-#     otherwise be a green PR that breaks the next deploy — and a gateway
-#     that started calling AddRedisConnections in any other file was
-#     invisible to both the filter and the gate;
-#   - Catalog's appsettings.json declares the Kestrel endpoints those Services
-#     forward to, so moving the h2c listener off 8081 would leave a Service
-#     pointing at a closed port with every assertion still passing;
-#   - HealthCheckExtensions.cs maps the three probe paths, and the charts are
-#     the manifest HealthEndpointTests warns about by name: "the kubelet's
-#     startupProbe holds its own copy of /health/startup in a manifest no
-#     compiler reads". The gate reads the routes from that file rather than
-#     repeating them, so renaming one turns the charts red instead of killing
-#     slow-starting pods;
-#   - .gitattributes pins this tree to LF, and without it a CRLF template
-#     renders a CR onto every line and the anchored greps below match nothing
-#     on a Linux runner. A change removing that rule must run this gate;
-#   - deploy/canary/canary.json names a chart per workload, and smoke.sh
-#     asserts every service chart appears in it. A rollout pointing at a chart
-#     that cannot render a canary track is a deploy that fails after the
-#     scale-up, so the two halves are asserted against each other here rather
-#     than discovered there (§15.5, PR-25).
+# A separate workflow rather than a job in ci.yml because path filtering is
+# per-workflow, and this proves a tree most pull requests never touch. It is
+# one of the `deploy/**` artefacts CI exercises directly rather than deploying
+# (§15.1).
+
+# It reaches no cluster. `helm template` renders locally, so what this asserts
+# is that the charts produce the manifests §15.3, §15.4 and §7.4 describe;
+# whether an API server would accept them is a deploy-time question (§15.1),
+# named in smoke.sh as not covered.
+
+# The paths below are not maintained here: smoke.sh declares them as
+# SOURCE_INPUTS beside the reads that need them, and asserts that every path it
+# reads is declared.
 on:
   pull_request:
     paths:
@@ -74,9 +48,8 @@ concurrency:
 jobs:
   smoke:
     runs-on: ubuntu-latest
-    # No images, no containers, no restore: this renders text. The whole run is
-    # seconds, which is why there is nothing to path-filter it away from beyond
-    # the paths above.
+    # No images, no containers, no restore: this renders text, so the whole run
+    # is seconds.
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4

@@ -1,18 +1,15 @@
 name: Compose
 
 # A separate workflow rather than a job in ci.yml because path filtering is
-# per-workflow: the smoke pulls ~2 GB of images and proves a file most PRs
-# never touch, so it runs only when that file (or this one) changes. The
-# filter also contains §14.1's two :latest pins — a broken upstream latest
-# can fail only a compose PR, never the main build.
+# per-workflow: the smoke pulls ~2 GB of images and proves a file most pull
+# requests never touch. The filter also carries §14.1's two :latest pins, so a
+# broken upstream latest can fail only a compose pull request.
 #
-# Since PR-10 the model carries application blocks with build: stanzas, so
-# `up` also BUILDS those images — the smoke now compiles the solution inside
-# Docker, which is what the timeout below is sized for. Note what the filter
-# implies: a change under src/ alone does not re-run this workflow, so a
-# Dockerfile broken by a source change surfaces on the next compose PR, not
-# the offending one. Per-service image builds in CI proper are PR-25's
-# deliverable (§15.1), not this smoke's.
+# The model's application blocks carry build: stanzas, so `up` compiles the
+# solution inside Docker — what the timeout below is sized for. src/ is not in
+# the filter, so a Dockerfile broken by a source change surfaces on the next
+# compose pull request rather than the offending one; per-service image builds
+# in CI proper are §15.1's, not this smoke's.
 on:
   pull_request:
     paths:
@@ -34,31 +31,12 @@ concurrency:
 jobs:
   smoke:
     runs-on: ubuntu-latest
-    # 15 covered pulls alone; SIX .NET image builds ride on top — Catalog's
-    # two, PR-17's gateway, PR-18's ordering pair and PR-19's BFF, each a
-    # restore plus a publish with no layer cache on a fresh runner. The base
-    # images are shared, the restores are not.
-    #
-    # 45, up from 40: PR-19 adds one image, so it is +5. 15 + 6 × 5 gives the
-    # same 45 from the other direction, and the two arithmetics agreeing is
-    # the check — PR-18's raise went out wrong precisely because only one of
-    # them was performed.
-    #
-    # PR-21 makes it seven builds and does NOT raise this, which is the first
-    # time that has been the right answer. The seventh is the broker's
-    # (deploy/compose/rabbitmq), and it is not a .NET build at all: a pulled
-    # base image, a 42 KB plugin download and one `rabbitmq-plugins enable`,
-    # measured at ~1 s locally. Both arithmetics above count *restores*, so
-    # multiplying by seven would be applying a per-build cost to a build that
-    # does not carry it — the guard is the multiplication, not the count.
-    #
-    # It went out at 35 — the recount was performed against the *previous*
-    # raise instead of against the number of images, which is the arithmetic
-    # the comment above states and the count it names exists to force. So the
-    # mechanism meant to catch a stale timeout produced a wrong one, and the
-    # sentence describing that mechanism was itself the thing that read as
-    # already-checked. A count in a comment is only a guard while somebody
-    # multiplies by it.
+    # 15 image pulls, plus six .NET builds each carrying a restore and a
+    # publish with no layer cache on a fresh runner: the base images are
+    # shared, the restores are not. 15 + 6 × 5 gives 45. The broker image is a
+    # seventh build and carries no restore — a pulled base, a plugin download
+    # and one `rabbitmq-plugins enable` — so it stays out of the
+    # multiplication, which is the guard rather than the count.
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
@@ -68,15 +46,14 @@ jobs:
       - name: Validate the file
         run: docker compose -f deploy/compose/docker-compose.yml config -q
 
-      # --wait exits non-zero if a healthcheck never passes, or a container
-      # exits before the wait completes — the five healthchecks are asserted
-      # directly, Keycloak's among them since PR-16, so realm readiness is part
-      # of what `up --wait` proves rather than something the first token
-      # request discovers. A service without one is only asserted to start.
-      # One-shots are the carve-out, verified empirically
-      # on PR-10: a service another gates on with
-      # `service_completed_successfully` satisfies --wait by exiting 0, and
-      # fails it by exiting non-zero — so the migrator's exit code is part of
+      # --wait exits non-zero if a healthcheck never passes, or if a container
+      # exits before the wait completes, so the five healthchecks are asserted
+      # directly — Keycloak's among them, which makes realm readiness part of
+      # what `up --wait` proves rather than something the first token request
+      # discovers. A service without a healthcheck is only asserted to start.
+      # One-shots are the carve-out: a service another gates on with
+      # `service_completed_successfully` satisfies --wait by exiting 0 and
+      # fails it by exiting non-zero, so the migrator's exit code is part of
       # what this smoke asserts.
       - name: Start and wait for healthy
         run: docker compose -f deploy/compose/docker-compose.yml up -d --wait --quiet-pull
