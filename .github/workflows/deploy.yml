@@ -1,10 +1,10 @@
 name: Deploy
 
-# §15.5's canary, and §15.1's production leg of the pipeline. It has never
-# reached a cluster: there is no environment for this repository, no kubeconfig
-# and no registry. What is asserted about it is asserted by
-# `deploy/canary/canary.py`, whose suite runs on every change to this tree, and
-# by the `check` job below, which reads this file.
+# §15.5's canary, and §15.1's production leg of the pipeline. It reaches no
+# cluster: there is no environment for this repository, no kubeconfig and no
+# registry. What is asserted about it is asserted by `deploy/canary/canary.py`,
+# whose suite runs on every change to this tree, and by the `check` job below,
+# which reads this file.
 
 # `workflow_dispatch` only, and the reason is `main` staying green: a canary on
 # `push` would fail on every merge for want of a cluster, which trains everyone

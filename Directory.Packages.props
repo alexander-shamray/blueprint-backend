@@ -79,10 +79,10 @@
          AddEntityFrameworkOutbox, UseEntityFrameworkOutbox and
          AddTransactionalOutboxEntities, on the same DbContext the repository
          already holds, which is what makes the saga's sends commit with its
-         instance. Same version and same release as the two rows above: a saga
-         repository a minor behind the state machine it stores is not a
-         combination anyone tests. Appendix B names the projects that reference
-         it. -->
+         instance. Same version and same release as the transport and the core
+         package: a saga repository a minor behind the state machine it stores
+         is not a combination anyone tests. Appendix B names the projects that
+         reference it. -->
     <PackageVersion Include="MassTransit.EntityFrameworkCore" Version="8.5.3" />
     <PackageVersion Include="StackExchange.Redis" Version="2.9.11" />
     <PackageVersion Include="FluentValidation" Version="12.0.0" />
@@ -205,9 +205,10 @@
          than substitute the contract — the same argument as the container
          row above, one abstraction over. -->
     <PackageVersion Include="Microsoft.Extensions.Configuration" Version="10.0.0" />
-    <!-- The architecture gates of §4.2, which this pin turns from a review
-         comment into a build failure. A major bump can change which rules
-         exist, so it fails loudly rather than quietly stopping to enforce. -->
+    <!-- The library §4.2's architecture gates are written against; what makes
+         those rules a build failure is the gates themselves. A major bump can
+         change which rules exist, so it fails loudly rather than quietly
+         stopping to enforce. -->
     <PackageVersion Include="NetArchTest.Rules" Version="1.3.2" />
     <!-- The in-memory reader the observability tests read back through:
          §13.4's redaction tests, which that chapter prints one of, the

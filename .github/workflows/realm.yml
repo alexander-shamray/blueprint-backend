@@ -117,20 +117,19 @@ jobs:
     # rollout; only the opt-in sits one level up.
     if: ${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && vars.REALM_CHECK_SCHEDULED == 'enabled' }}
     runs-on: ubuntu-latest
-    # Ten, where the rollout has 150: this job reads and never waits on a hook,
-    # a rung or a dwell -- four `helm get values`, four token requests and
-    # eight admin reads on a good hour. What stops a hung read is the judge
-    # step's own shorter timeout below, because a job cancelled on its timeout
-    # runs no `failure()` step, so the one failure this budget exists for would
-    # be the one that filed nothing. The job's cap is the headroom the filing
-    # step needs after the judge step has been stopped.
+    # This job reads and never waits on a hook, a rung or a dwell: a token
+    # request and two admin reads per release, and nothing to sit out. What
+    # stops a hung read is the judge step's own shorter timeout below, because
+    # a job cancelled on its timeout runs no `failure()` step, so the one
+    # failure this budget exists for would be the one that filed nothing. The
+    # job's cap is the headroom the filing step needs after the judge step has
+    # been stopped.
     timeout-minutes: 10
     environment: production
     permissions:
       contents: read
       # `issues: write` is what a red run does, below. It is job-scoped
-      # because the `check` job has no business filing anything, and it is the
-      # only write permission any workflow here holds.
+      # because the `check` job has no business filing anything.
       issues: write
     env:
       NAMESPACE: commerce
