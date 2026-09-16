@@ -1,10 +1,10 @@
 name: Realm
 
-# §11.3's token obligations, against the one realm this repository owns and,
-# since ADR-043, against the realm every deployed release points at, between
-# rollouts. ADR-033's revocation bound and ADR-034's no-refresh-token rule are
-# both realm settings, which is what gives a realm something to be judged
-# against.
+# §11.3's token obligations, judged against the one realm this repository owns
+# and against the realm every deployed release points at between rollouts —
+# ADR-043 owns that second scope. ADR-033's revocation bound and ADR-034's
+# no-refresh-token rule are both realm settings, which is what gives a realm
+# something to be judged against.
 on:
   pull_request:
     paths:

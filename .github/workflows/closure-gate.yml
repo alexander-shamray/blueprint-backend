@@ -10,11 +10,11 @@ name: Closure gate
 # would make a commit keyword mandatory and fail a correct pull request.
 
 # Its own workflow rather than a job in ci.yml because it judges a property of
-# every pull request rather than of a tree, so nothing here is derived from the
-# checkout and there is no inputs list to drift. `edited` has to be a trigger:
-# a description can withdraw a closure the commits already made permanent with
-# no push following, and adding `edited` to ci.yml would rebuild and retest the
-# solution for every typo in a body.
+# every pull request rather than of a tree, so nothing but the gate itself is
+# derived from the checkout and there is no inputs list to drift. `edited` has
+# to be a trigger: a description can withdraw a closure the commits already
+# made permanent with no push following, and adding `edited` to ci.yml would
+# rebuild and retest the solution for every typo in a body.
 on:
   pull_request:
     types: [opened, synchronize, reopened, edited]

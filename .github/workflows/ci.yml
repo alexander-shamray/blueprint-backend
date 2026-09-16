@@ -66,9 +66,7 @@ jobs:
 
   # The review loop's own helpers. Nothing in CI runs these scripts, which is
   # why the suite belongs here: a test nobody runs rots, and the judgements it
-  # covers are the ones /ship and the sweeps rest on. The suite's own docstring
-  # says what it covers; docs/testing.md points at this workflow for what runs
-  # and at that docstring for what is covered, and carries no copy of either.
+  # covers are the ones /ship and the sweeps rest on.
 
   # Beside the licence gate rather than inside `build`, on its argument: stdlib
   # Python over text and a few `bash` fragments, so it needs no restore, no
@@ -374,9 +372,10 @@ jobs:
 
       # Here there is one. `actions/checkout` left these trees byte-identical
       # to the commit and nothing between it and this line may touch them, so
-      # anything the index can see is something the restore or the build put
-      # there. `--ignored` because build output is ignored by construction, and
-      # the case that hides is the one worth catching.
+      # anything these trees now hold that the commit did not is something the
+      # restore or the build put there. `--ignored` because build output is
+      # ignored by construction, and the case that hides is the one worth
+      # catching.
 
       # A step rather than part of the gate, because the gate cannot know what
       # the tree looked like first. Run locally this check would fail on the

@@ -255,10 +255,10 @@ jobs:
           # all the chart allows.
 
           # The HPA's floor moves first, and a `kubectl scale` alone would not
-          # hold. These charts enable an autoscaler on the stable track with
-          # `minReplicas: 3`, and _deployment.tpl says `replicas` is a managed
-          # field the HPA writes back, so a scale to 19 decays toward 3 across
-          # the ten-minute dwells and `plan` then computes 5% against a replica
+          # hold. These charts enable an autoscaler on the stable track, and
+          # _deployment.tpl says `replicas` is a managed field the HPA writes
+          # back, so a raised count decays toward the autoscaler's floor across
+          # the dwells and `plan` then computes its share against a replica
           # count the cluster no longer has. Raising the floor is what makes
           # the number stick; restoring it is owed from the moment it is
           # raised, which the `if: always()` step at the end of this job does.

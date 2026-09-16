@@ -2,14 +2,14 @@ name: Compose
 
 # A separate workflow rather than a job in ci.yml because path filtering is
 # per-workflow: the smoke pulls every image the model names and proves a file
-# most pull requests never touch. The filter also carries §14.1's :latest pins,
-# so a broken upstream latest can fail only a compose pull request.
+# most pull requests never touch, so it runs only when that file or this one
+# changes. The filter also carries §14.1's :latest pins, so a broken upstream
+# latest fails here rather than in the solution build.
 
 # The model's application blocks carry build: stanzas, so `up` compiles the
-# solution inside Docker — what the timeout below is sized for. src/ is not in
-# the filter, so a Dockerfile broken by a source change surfaces on the next
-# compose pull request rather than the offending one; per-service image builds
-# in CI proper are §15.1's, not this smoke's.
+# solution inside Docker — what the timeout below is sized for. Proving a
+# Dockerfile against a source change is not this smoke's job: ci.yml's image
+# matrix does that, on the pull request that made the change.
 on:
   pull_request:
     paths:
