@@ -333,7 +333,7 @@ jobs:
         with:
           global-json-file: global.json
 
-      # The two reporters at the end of this job are stdlib Python, so they
+      # The reporters at the end of this job are stdlib Python, so they
       # take the same pin the licence-gate, pipeline-gate and scaffold jobs do.
       # The runner does ship a Python, and relying on it would make this the
       # one job whose interpreter nobody chose.
@@ -410,7 +410,7 @@ jobs:
       # `--no-build` honest, and because the coverage figure is the union of
       # the two (§12.9) and wants one place to be merged.
 
-      # The three filters are exhaustive and disjoint by construction, so the
+      # The filters are exhaustive and disjoint by construction, so the
       # counts sum to the whole suite, and the stage gate below is what turns
       # that from a claim into a check in both directions: every test project
       # ran in some stage, and no test ran in two.
@@ -450,9 +450,9 @@ jobs:
           --logger trx
           --results-directory ./TestResults/integration
 
-      # The quality gate exists because the three steps above are three new
-      # ways to select nothing: `dotnet test` exits zero on a filter that
-      # matches no test (§12.1), so every one of them can be green and empty.
+      # The quality gate exists because every filtered step above is a new way
+      # to select nothing: `dotnet test` exits zero on a filter that matches no
+      # test (§12.1), so each of them can be green and empty.
       # This asserts a floor on each stage, that every test project in
       # Platform.slnx ran in one of them, and that none ran in two.
       #

@@ -163,8 +163,8 @@ jobs:
       # The realm is checked before the rollout changes anything: ADR-033's
       # revocation bound and ADR-034's no-refresh-token rule are realm
       # settings. "Before the rollout changes anything" and not "before the
-      # cluster is touched", because the first of these three steps reads the
-      # cluster; the first that changes it is the HPA patch below.
+      # cluster is touched", because the steps that follow read the cluster;
+      # the first that changes it is the HPA patch below.
 
       # The credential is the `production` Environment's rather than CI's,
       # which is what answers ADR-040; docs/secrets.md carries its rights, its
@@ -469,13 +469,12 @@ jobs:
       # and a `trap EXIT` in the climb step misses the scale-up step before it,
       # where the floor is raised.
 
-      # Three things are undone here, and the canary is the one that matters
-      # most. A failure between the install and either exit — an unreachable
-      # Prometheus, a Helm timeout, the analyse step erroring rather than
-      # returning a verdict — bypasses both explicit `helm uninstall` calls
-      # under `set -e`, and a step that restores only the autoscaler leaves a
-      # canary of an unproven build serving a share of production
-      # indefinitely.
+      # The canary is what matters most of what is undone here. A failure
+      # between the install and either exit — an unreachable Prometheus, a Helm
+      # timeout, the analyse step erroring rather than returning a verdict —
+      # bypasses the explicit `helm uninstall` calls under `set -e`, and a step
+      # that restores only the autoscaler leaves a canary of an unproven build
+      # serving a share of production indefinitely.
       - name: Undo everything the rollout raised
         if: always()
         run: |
