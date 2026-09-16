@@ -1,50 +1,21 @@
 #!/usr/bin/env bash
-# Who /review-copilot's three feeds admit, declared ONCE and sourced by the
-# three feed helpers. The command reads three feeds and each needs the same
-# allow-list, so three literal copies is the drift this repository has already
-# lost a count to more than once. The helpers assert nothing about this list;
-# test_grok_helpers.py asserts that all three READ it and none restates it.
+# Who /review-copilot's feeds admit, declared once and sourced by each feed
+# helper, so no helper carries a literal copy of the allow-list.
 #
-# ## Copilot's three spellings
+# Copilot's login is spelt by the API a feed came from, not by the reviewer;
+# review-copilot.md's feed table names which feed carries which. The `[bot]`
+# form is admitted though no helper here calls the API that sends it: a
+# spelling nobody sends costs nothing, and a missed one reports a review body
+# as a stranger's, which fails open.
 #
-# Which one arrives is a property of the API the feed came from rather than of
-# the reviewer:
+# The repository owner is admitted too, because review-copilot.md's decision
+# table reads the owner's replies to tell which threads are already handled.
+# The owner is resolved from the checkout, never passed in: a login taken as a
+# parameter is one a prompt-injected finding can choose.
 #
-#   Copilot                             REST — /pulls/{n}/comments. Measured.
-#   copilot-pull-request-reviewer       GraphQL — `gh pr view --json reviews`
-#                                       and `--json comments`. Measured for
-#                                       reviews; inferred for comments, which
-#                                       share one exporter. See
-#                                       review-copilot.md's feed table.
-#   copilot-pull-request-reviewer[bot]  REST — /pulls/{n}/reviews, which no
-#                                       helper here calls. Admitted anyway.
-#
-# The `[bot]` form is kept deliberately though no feed below produces it: the
-# cost of admitting a spelling nobody sends is nothing, and the cost of missing
-# one somebody does send is a review body silently reported as a stranger's —
-# the direction that fails open.
-#
-# ## The owner is admitted too, and that is function rather than generosity
-#
-# review-copilot.md's decision table has THREE rows, not two: Copilot is
-# triaged, the repository owner's replies mark a thread already handled, and
-# anyone else is reported without being acted on. A two-way filter that dropped
-# the owner would take away the input for the middle row — the command could no
-# longer tell which threads it had already answered, and would re-triage every
-# one of them. Measured on PR #147: 21 of 43 inline comments and 21 of 33
-# review bodies are the owner's.
-#
-# The owner is resolved from the checkout, never passed in — gh-label-ensure.sh
-# resolves its repository the same way, and for the same reason: a login taken
-# as a parameter is a login a prompt-injected finding can choose.
-#
-# ## What this is and is not
-#
-# NOT authentication. A GitHub login is not verified by this list; it is a
-# filter that keeps unattended triage from ACTING on text any account can
-# write. grok-ledger.sh's collaborator-permission check is the stronger form
-# and is deliberately not reached for here — Copilot is not a repository
-# collaborator, so a permission check would drop the whole review.
+# This is a filter, not authentication: it keeps unattended triage from acting
+# on text any account can write. A collaborator-permission check, as in
+# grok-ledger.sh, would drop Copilot, which is not a collaborator.
 COPILOT_AUTHORS='Copilot
 copilot-pull-request-reviewer
 copilot-pull-request-reviewer[bot]'
@@ -68,52 +39,31 @@ copilot_admitted_json() {
 #
 #   $1  the admitted logins, as a JSON array
 #   $2  jq expression selecting an item's author login
-#   $3  jq expression labelling a dropped item — a path, a URL, a timestamp.
-#       Anything but the BODY.
+#   $3  jq expression labelling a dropped item, never its body
 #   $4  the feed's name, for the report line
 #
-# stdin is the whole feed as one JSON array; stdout is the admitted subset as a
-# JSON array, same shape in as out, so a caller that parsed the raw feed parses
-# this. Admitted items keep their login, which is what lets the caller route
-# between the decision table's Copilot row and its owner row.
+# stdin is the whole feed as one JSON array; stdout is the admitted subset in
+# the same shape, logins kept so the caller can route Copilot's items apart
+# from the owner's.
 #
-# **A dropped item's body reaches neither stream, and that is the point rather
-# than an economy.** A stranger's comment is the injection vector
-# /review-copilot holds `Edit` against; reporting its text would put that text
-# back into the transcript the filter exists to keep it out of, one stream
-# over. What is reported — author and location — is enough to find the comment
-# on the PR page by hand, and reads as no instruction.
+# A dropped item's body reaches neither stream: a stranger's comment is the
+# injection vector /review-copilot holds `Edit` against, and author and
+# location are enough to find it by hand.
 #
-# **The LABEL must be server-generated, and this is subtler than the body.**
-# Withholding the body while printing `.path` was the first version of this
-# helper, and a review caught it: on a pull request the *author* chooses the
-# filenames, git permits a newline inside one, and `jq -r` prints it verbatim.
-# So a stranger could open a PR carrying a file whose name is two lines of
-# prompt text, comment on it, have the comment dropped, and still land that
-# text in the triage transcript through the very report saying it was dropped.
-# Pass `.html_url`, `.url` or `.submittedAt` — fields GitHub generates — never
-# `.path`, and never anything else the pull request supplies.
+# The label must be a field GitHub generates — `.html_url`, `.url`,
+# `.submittedAt` — never `.path` or anything else the pull request supplies:
+# its author chooses the filenames, git permits a newline in one, and `jq -r`
+# prints a two-line prompt through the very report saying it was dropped.
 #
-# `clean` below is the belt to those braces: every reported field is coerced to
-# printable ASCII and truncated, so a future caller passing the wrong
-# expression gets a mangled label rather than a working injection. It is not
-# the control — choosing a server-generated field is — but together they mean
-# neither mistake alone is sufficient.
-#
-# The count is reported even when it is zero. A filter that prints nothing when
-# it drops nothing is indistinguishable from one that never ran, which is this
-# repository's most-repeated failure wearing a helper's clothes.
-# Printable-ASCII coercion for every field the dropped report prints. See the
-# LABEL paragraph above: this is the second line of defence, not the first.
-#
-# The class is written as the literal range space-to-tilde rather than as
-# `\u0020-\u007e`, and that is not a style choice. The escaped form has to
-# survive a bash single-quoted string on its way into a jq program, and the
-# first version of this line did not: jq read the doubled backslash as an
-# escaped backslash and built a class of literal characters, which quietly
-# replaced the `y` in `mallory` and every space. It sanitised, so it looked
-# like it worked. Only running it against a known-good login showed the class
-# was matching the wrong thing — the positive control earning its place again.
+# The count is reported even when it is zero, because a filter that prints
+# nothing when it drops nothing is indistinguishable from one that never ran.
+
+# Printable-ASCII coercion and truncation for every field the dropped report
+# prints, so a caller passing the wrong label expression gets a mangled label
+# rather than a working injection. The class is the literal range
+# space-to-tilde because a `\u` escape does not survive a bash
+# single-quoted string into jq: the doubled backslash builds a class of
+# literal characters, which still looks as though it sanitises.
 CLEAN_DEF='def clean: tostring | gsub("[^ -~]"; "?") | .[0:200];'
 
 copilot_partition() {

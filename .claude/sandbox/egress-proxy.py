@@ -3,7 +3,7 @@
 
 The reviewer container sits on a Docker network created with --internal, which
 has no route to anything but the containers on it. This process is the one
-container on that network which is ALSO on a network with egress, and it
+container on that network which is also on a network with egress, and it
 forwards exactly one thing: a TLS tunnel (HTTP CONNECT) to port 443 of a host
 on the allow-list. Everything else is answered with 403 and closed.
 

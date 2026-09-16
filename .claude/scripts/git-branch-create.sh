@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Create the branch /branch makes when it is NOT forking a worktree, and
-# nothing else. Two bases, spelled as literals, because step 5's table has
-# exactly two:
+# Create the branch /branch makes when it is not forking a worktree, and
+# nothing else. Two bases, spelled as literals, one per kind of row in step 5's
+# table:
 #
 #   origin/main   the clean-`main` rows — already in a linked worktree, or the
 #                 parent is not writable. --no-track travels with it, since the
@@ -10,12 +10,10 @@
 #   HEAD          the dirty and detached rows, whose whole point is carrying
 #                 what is already in this tree.
 #
-# A `Bash(git checkout -b:*)` grant buys those and also the trailing flag:
-# `git checkout -b <name> -f origin/main` was run against a throwaway clone and
-# was accepted, so the grant licenses discarding tracked modifications — on the
-# very path whose purpose is to carry them, and past the `git reset --hard` and
-# `git clean` denies. Prefix rules cannot exclude a flag, which is the same
-# conclusion git-switch-existing.sh and git-worktree-fork.sh reached.
+# A prefix grant on `git checkout -b` also buys a trailing flag:
+# `git checkout -b <name> -f origin/main` discards tracked modifications, on
+# the very path whose purpose is to carry them, and past the `git reset --hard`
+# and `git clean` denies. A prefix rule cannot exclude a flag.
 set -euo pipefail
 [ "$#" -eq 2 ] || { echo "usage: git-branch-create.sh <branch> <origin/main|HEAD>" >&2; exit 2; }
 branch="$1"

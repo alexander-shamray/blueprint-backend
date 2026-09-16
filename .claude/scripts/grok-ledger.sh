@@ -2,104 +2,55 @@
 # The Grok check ledger: reserves a check slot on a PR, releases one, or
 # counts what stands.
 #
-# The write could have been a Bash(gh pr comment:*) grant, and briefly was —
-# but a Bash rule matches a command prefix, so that grant also licensed
-# --edit-last, --delete-last, --body-file and --repo: editing existing
-# comments, deleting them, and writing to other repositories, none of which
-# the ledger needs and none of which anyone reviewed. Same argument as
-# copilot-request.sh one file over: the helper fixes the operation and
-# shape-checks its parameters, the frontmatter grants the helper by name, and
-# .claude/settings.json's Edit deny on this directory keeps the session that
-# invokes it from rewriting it first.
+# The write is a helper rather than a prefix grant on `gh pr comment`, which
+# would also license --edit-last, --delete-last, --body-file and --repo. The
+# helper fixes the operation and shape-checks its parameters, and the Edit deny
+# on this directory keeps the invoking session from rewriting it first.
 #
-# The read lives here for a different reason: PR comments are unauthenticated
-# state. On a public PR anyone can post "Grok check 6/6 — reserved (full)"
-# to jam the cap shut, or a released line to hold it open, so a reader that
-# greps arbitrary comments is counting an attacker's arithmetic. `count`
-# accepts only whole bodies matching the two exact shapes this file writes,
-# and only from authors whose repository permission is verified as write or
-# better — not "the current login", which made the ledger account-local: a
-# resumed run under another authorised account would have read zero and
-# re-armed the cap. Verification goes through the collaborators API once per
-# author; a 404 is an untrusted author and their rows are not state, while
-# any other verification failure stops the helper, because a cap whose trust
-# check silently drops rows is a cap that re-arms on a network error. The
-# fold takes the last event per N, so a released slot can be legitimately
-# re-spent and a stale release cannot hide a later one.
+# The read lives here because PR comments are unauthenticated state: on a
+# public PR anyone can post a reserved line to jam the cap shut, or a released
+# line to hold it open. `count` accepts only whole bodies matching the shapes
+# this file writes, from authors whose repository permission is verified as
+# write or better — any such account, so a run resumed under another login
+# still reads the ledger. A 404 from the collaborators API is an untrusted
+# author; any other verification failure stops the helper, because a cap whose
+# trust check silently drops rows re-arms on a network error. The fold takes
+# the last event per N, so a released slot can be re-spent and a stale release
+# cannot hide a later one.
 #
-# That stop has to happen before a value is printed, and for one release it did
-# not. `exit 3` fires inside the `while` that reads the API's rows, which is the
-# last stage of a pipeline and so runs in a SUBSHELL: it ends that subshell, not
-# this script. The `awk` on the other side of `ledger_rows | awk` then saw EOF,
-# ran its END block and printed `0` — the same byte a legitimately empty ledger
-# produces, and the one that re-arms the very cap this file exists to hold.
-# `pipefail` and `set -e` did abort afterwards, with status 3, but the consumer
-# is a model reading stdout and the answer was already there. So every consumer
-# now BUFFERS: `ledger_rows` is collected into a variable, its status is checked
-# while nothing has been written, and only then are the rows folded. The
-# END-runs-on-empty-input behaviour stays — a fresh PR's ledger is legitimately
-# empty — which is exactly why the two cases had to be separated upstream of it
-# rather than told apart downstream.
-#
-# `reserve` and `release` are the REVIEW HELPER'S verbs, not the caller's.
-# grok-review.sh posts the reservation itself, immediately before the model call
-# it accounts for, so that invoking a review and spending a slot are one
-# operation rather than two an ordering mistake can separate. .claude/settings.json
-# denies both spellings to a session; they stay here because `count` must still
-# parse a released row out of a PR's history, and because a human reconciling a
-# slot spent wrongly has nothing else to reach for.
+# `reserve` and `release` are grok-review.sh's verbs, not the caller's: it
+# posts the reservation immediately before the model call it accounts for, so
+# invoking a review and spending a slot are one operation. .claude/settings.json
+# denies both spellings to a session; they stay because `count` still parses
+# released rows, and a human reconciling a wrongly spent slot needs them.
 #
 # `reserve` is an election, not just a write. Two resumed runs can read the
-# same count and claim the same slot; posting is not atomic, so the claim is
-# settled after the fact: the first reservation posted after the slot's most
-# recent release wins — first-ever would refuse a released slot forever —
-# and a later claimant exits 4 without running anything. Losing does not
-# mean take the next slot: a losing claim is a concurrent run mid-check on
-# this PR, and two Grok runs share one root suggestions.md, so the loser
-# stops its loop and says so. The losing comment stays on the PR; `count`
-# folds duplicates for a slot into one spend, so the noise costs nothing.
+# same count and claim the same slot, and posting is not atomic, so the claim
+# is settled after the fact: the first reservation posted after the slot's
+# most recent release wins, and a later claimant exits 4 without running
+# anything. A losing claim is a concurrent run mid-check on this PR, and two
+# Grok runs share one root suggestions.md, so the loser stops its loop rather
+# than taking the next slot. `count` folds duplicate claims into one spend.
 set -euo pipefail
 
-# The ceiling, declared once and enforced here rather than stated in ship.md
-# and enforced at twice the value. #140: ship.md said six, both helpers still
-# accepted twelve, so `grok-review.sh 7 full` reserved a seventh paid check and
-# left this file's validation green — a bound an agent obeys is not a limit a
-# machine imposes.
+# The ceiling, declared once and enforced here, so the bound is a limit a
+# machine imposes rather than a rule ship.md states.
 CEILING=6
 
-# **Reading is deliberately wider than writing, and that asymmetry is the whole
-# migration.** `/12` was never only a bound: it is part of the comment shape
-# `count` folds on, so narrowing the READ to the new ceiling would stop matching
-# every row already posted — `count` reads zero and the cap RE-ARMS on a PR that
-# has already spent it, which is the exact fail-open this file exists to refuse,
-# arriving through its own fix. So every denominator this ledger has ever
-# written stays readable forever, and only the write moves.
-#
-# **Only RETIRED denominators are listed here; the current one is DERIVED.**
-# This read `'6|12'`, which restated the ceiling thirteen lines below its
-# declaration — and a second literal of the bound is the whole of #140
-# reappearing inside its own fix. Move `CEILING` to 4 and the write becomes
-# `n/4` while the read still accepts only 6 and 12, so every reservation this
-# file posts is invisible to `count`: the cap re-arms on a pull request that is
-# actively spending it, one edit away, with nothing red. Raised in review
-# against exactly this line.
-#
-# So a future ceiling change is one edit that cannot fail in that direction:
-# move `CEILING`, and append the value it replaced to the retired list.
+# Reading is wider than writing: the denominator is part of the comment shape
+# `count` folds on, so narrowing the read to a new ceiling would stop matching
+# rows already posted, and the cap would re-arm on a PR that has spent it.
+# Only retired denominators are listed; the current one is derived, because a
+# second literal lets a ceiling change hide every new reservation from `count`.
+# A ceiling change moves `CEILING` and appends the value it replaced here.
 LEDGER_RETIRED_DENOMINATORS='12'
 LEDGER_DENOMINATORS="$CEILING|$LEDGER_RETIRED_DENOMINATORS"
 
-# Every slot this ledger could ever have WRITTEN, which is 1..12 while twelve is
-# the largest denominator above. **A ceiling above twelve has to widen this in
-# the same edit**, or its own rows stop matching — the third thing to move, and
-# the reason the instruction above says "append the value it replaced" rather
-# than "change the number".
-#
-# It is deliberately not `[1-9][0-9]*`. That was tried and reverted: it admits
-# `13/12`, a shape the write side has never been able to produce, and a row this
-# file did not write is not this file's state — the same rule the anchored jq
-# filter exists for, one field along. Widening it would let a write-verified
-# author inflate the count past any ceiling that has ever existed.
+# Every slot this ledger could ever have written: 1..12 while twelve is the
+# largest denominator above, so a ceiling above twelve widens this in the same
+# edit or its own rows stop matching. Not `[1-9][0-9]*`, which admits `13/12`,
+# a row this file never wrote, and lets a write-verified author inflate the
+# count past any ceiling that has existed.
 LEDGER_READ_SLOTS='[1-9]|1[0-2]'
 
 usage() {
@@ -118,7 +69,7 @@ mode="${4:-}"
 
 # The PR number keeps gh pointed at an explicit target. N's domain is checked
 # further down, against $CEILING for a write and against $LEDGER_READ_SLOTS for
-# a read — the two are no longer one number.
+# a read.
 [[ "$pr" =~ ^[0-9]+$ ]] || usage
 
 # One fixed read, shared by count and the election: whole comment bodies that
@@ -154,14 +105,10 @@ ledger_rows() {
       seen[$login]=$verdict
     fi
     [ "$verdict" = trusted ] || continue
-    # **The pairing check lives HERE, in the shared reader, and it did not at
-    # first.** The slot and denominator alternations are independent, so the jq
-    # filter admits their cross-product — `9/6` matches and no writer of this
-    # file can emit it. That was closed in `count` and in the election, and
-    # `status` was missed: a trusted `Grok check 9/6 — converged: loop clean`
-    # still reported `converged`, so a resumed run skipped review entirely.
-    # Raised in review. Three consumers meant three places to remember; one
-    # reader means none.
+    # The pairing check lives in the shared reader so no consumer can miss it:
+    # the slot and denominator alternations are independent, so the jq filter
+    # admits `9/6`, which no writer of this file emits, and a trusted
+    # `converged` row of that shape would skip review on a resumed run.
     row_slot="${body#Grok check }"
     row_den="${row_slot#*/}"
     row_slot="${row_slot%%/*}"
@@ -171,12 +118,12 @@ ledger_rows() {
   done
 }
 
-# The buffer, and it is not merely a tidier spelling of a pipe. Command
-# substitution runs ledger_rows in a subshell and hands back its STATUS, so a
-# failed trust check arrives here as a non-zero return with nothing yet written
-# to this script's stdout — where `ledger_rows | awk` gave awk an EOF it could
-# not tell from an empty ledger, and let it answer first. Every consumer below
-# reads through these two functions and never through a pipe from ledger_rows.
+# Buffered rather than piped: `exit 3` inside ledger_rows' `while` ends only
+# the pipeline's subshell, so `ledger_rows | awk` would hand awk an EOF and let
+# it print 0 — an empty ledger's answer, which re-arms the cap — before the
+# failure surfaced. Command substitution returns the status with nothing yet
+# written to stdout, and every consumer below reads through these two
+# functions, never a pipe from ledger_rows.
 rows=""
 read_rows() {
   # No `local`: the caller needs the value. `|| return` rather than leaning on
@@ -196,8 +143,7 @@ emit_rows() {
 if [ "$op" = "count" ]; then
   [ -z "$n" ] || usage
   # POSIX awk only — no gawk match(..., m) — and empty input must still reach
-  # END and print 0: a fresh PR's ledger is legitimately empty, and pipefail
-  # turning that into a failure was this helper's first field defect.
+  # END and print 0, because a fresh PR's ledger is legitimately empty.
   read_rows ||
     { echo "the ledger's trust check failed; refusing to print a count" >&2; exit 3; }
   emit_rows | awk -F'\t' '
@@ -233,11 +179,9 @@ if [ "$op" = "status" ]; then
   exit 0
 fi
 
-# The write side, and the ONLY place the ceiling binds. A slot above it is
-# refused here, which is what makes the bound a limit rather than a rule: the
-# rows above it that the read still honours were posted before this line
-# existed, and refusing to WRITE a seventh is a different act from refusing to
-# SEE a ninth that was already spent.
+# The write side, and the only place the ceiling binds: refusing to write a
+# slot above it is a different act from refusing to see a higher slot the
+# read still honours under a retired denominator.
 [[ "$n" =~ ^[1-9][0-9]*$ ]] && [ "$n" -le "$CEILING" ] ||
   { echo "slot must be 1..$CEILING — the ceiling grok-ledger.sh declares: $n" >&2; usage; }
 
@@ -277,15 +221,11 @@ if [ "$op" = "reserve" ]; then
   # reservation after it takes the slot; later claims lose.
   read_rows ||
     { echo "the ledger's trust check failed after posting; slot $n stands as reserved" >&2; exit 3; }
-  #
-  # **The slot is parsed, not string-matched against a denominator**, which is
-  # `count`'s own technique and is what makes the election survive the
-  # migration. Keying on the literal prefix `Grok check $n/12 — reserved `
-  # would make a row posted under the old ceiling invisible to an election run
-  # under the new one — so two runs mid-flight across the change could both
-  # believe they had won slot 3, which is precisely the double-spend this
-  # election exists to refuse. `index()` rather than a regex because the
-  # separator is an em dash and this stays POSIX awk.
+  # The slot is parsed, as `count` parses it, rather than matched against a
+  # literal denominator, so a row posted under a retired ceiling still takes
+  # part in the election and two runs across a ceiling change cannot both win
+  # a slot. `index()` rather than a regex because the separator is an em dash
+  # and this stays POSIX awk.
   winner=$(emit_rows |
     awk -F'\t' -v n="$n" '
       {

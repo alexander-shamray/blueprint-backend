@@ -1,20 +1,20 @@
 #!/usr/bin/env bash
-# List a PR's inline review comments as raw JSON — /review-copilot's intake.
+# List a PR's inline review comments as JSON — /review-copilot's intake.
 # Read-only, fixed endpoint.
 #
-# **Filtered by author since #56.** This feed is open to any GitHub account on
-# a public PR, and /review-copilot reaches it holding `Edit` while /ship runs
-# that command unattended in a loop. The filter is here rather than in the
-# command's prose because prose is what #56 was filed about: a triage that
-# skipped the author rule was indistinguishable from one that ran it.
+# Filtered by author: this feed is open to any GitHub account on a public PR,
+# and /review-copilot reaches it holding `Edit` while /ship runs that command
+# unattended in a loop. The filter is code rather than the command's prose,
+# because a triage that skipped a prose rule is indistinguishable from one
+# that ran it.
 #
-# stdout is the admitted subset, same JSON array shape as the unfiltered feed,
-# so a caller that parsed the old output parses this. The dropped count and the
-# dropped authors' LOCATIONS go to stderr; their bodies go nowhere.
+# stdout is the admitted subset, in the same JSON array shape as the
+# unfiltered feed. The dropped count and the dropped items' locations go to
+# stderr; their bodies go nowhere.
 #
-# Pages are slurped before filtering. With --paginate, gh emits one array per
+# Pages are slurped before filtering: with --paginate, gh emits one array per
 # page, and a per-page filter would hand the caller several arrays where it
-# expects one — copilot-request-count.sh documents the same hazard.
+# expects one.
 set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/copilot-authors.sh"
 pr="${1:?usage: pr-review-comments.sh <pr-number>}"

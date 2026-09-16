@@ -1,36 +1,23 @@
 #!/usr/bin/env bash
-# Does this issue suppress a sweep finding? (#150)
+# Does this issue suppress a sweep finding?
 #
-# Both sweeps state the rule and neither enforced it: an open issue suppresses a
-# candidate only if the REPOSITORY OWNER opened it, and an issue meeting that
-# condition is "tracking" while everything else is untracked — so the finding
-# files normally rather than being reported as suppressed-but-unclean. That was
-# prose in two files, which is a rule a reader follows rather than a control.
-# `BothSweepsAgreeOnWhatSuppresses` pinned that both files still SAY it; nothing
-# established that a sweep ever applied it to an issue.
+# The sweeps' rule, enforced in code rather than followed as prose: an open
+# issue suppresses a candidate only if the repository owner opened it, and
+# anything else is untracked, so the finding files normally.
 #
-# **The rule here is authorship alone, and #150 proposed a second condition this
-# helper deliberately does not implement.** That issue was written when a
-# maintainer's label was also sufficient; a later review round asked what a
-# label proves and retired it. A non-collaborator cannot set one at creation, so
-# it looks like a maintainer's touch — but it is applied to an issue, not to an
-# issue's *contents*, and the author can rewrite the title and body afterwards
-# while the label stays. The signal would be "a maintainer once looked at
-# something that lived at this number", which is not the claim the gate needs.
-# Authorship is not editable. That is the whole of why it is the test, and
-# implementing the issue as filed would have reopened what the review closed.
+# The test is authorship alone, not a maintainer's label: a label is applied
+# to an issue, not to its contents, and the author can rewrite the title and
+# body while the label stays. Authorship is not editable.
 #
-# **The owner is RESOLVED, never accepted.** `gh-label-ensure.sh`'s rule: a login
-# taken as a parameter is a login a prompt-injected finding gets to choose, and
-# the one thing this helper decides is whether to believe an issue. So the only
-# argument is the issue number, shape-checked, and the repository comes from the
-# checkout the sweep is actually looking at.
+# The owner is resolved, never accepted: a login taken as a parameter is one a
+# prompt-injected finding chooses, and this helper decides whether to believe
+# an issue. The only argument is the issue number, and the repository is the
+# checkout the sweep is looking at.
 #
-# **Fail direction.** Suppressing is the dangerous answer — one suppressed
-# candidate ends the sweep and reports convergence — so anything this helper
-# cannot establish is NOT tracking. A lookup that fails exits 3 rather than 1,
-# because "this issue is not the owner's" and "I could not find out" are
-# different states and the caller must be able to say which in its summary.
+# Suppressing is the dangerous answer — one suppressed candidate ends the sweep
+# and reports convergence — so anything this helper cannot establish is not
+# tracking, and a failed lookup exits 3 rather than 1 so the caller can say
+# that it could not find out.
 #
 # Exit codes, which are the whole interface:
 #   0  tracking      — the owner opened it; the candidate may be suppressed
