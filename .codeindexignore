@@ -1,0 +1,9 @@
+artifacts/
+TestResults/
+**/bin/
+**/obj/
+**/*.dll
+**/*.pdb
+tools/new-service/__pycache__/
+deploy/**/__pycache__/
+.claude/cache/

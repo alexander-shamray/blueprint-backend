@@ -3,12 +3,10 @@
 # Claude Code — shared config is committed, per-developer overrides are not.
 .claude/settings.local.json
 
-# codebase-index is machine-local (pip install + init). Shared Claude config
-# under .claude/ stays tracked; only the indexer install is ignored.
+# Index SQLite is machine-local. The skill, .mcp.json and .codeindexignore
+# are shared so Claude in this clone uses the same map.
 .claude/cache/codebase-index/
-.claude/skills/codebase-index/
-.codeindexignore
-.mcp.json
+.claude/skills/codebase-index/.skill_version
 
 # .NET — the solution described in docs/backend-architecture/ lands here.
 #

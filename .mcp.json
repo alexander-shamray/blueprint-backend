@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "codebase-index": {
+      "type": "stdio",
+      "command": "codebase-index",
+      "args": [
+        "mcp",
+        "--root",
+        "."
+      ],
+      "env": {}
+    }
+  }
+}
