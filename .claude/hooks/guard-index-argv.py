@@ -257,19 +257,19 @@ def offence(command, git):
     writes = _file_write_redirects(prepared, git)
     resolved = git.strip_redirections(prepared)
     runs = []
-    untokenisable = False
+    unparseable = False
     for fragment in _run_fragments(resolved, git):
         try:
             tokens = _tokenise(fragment)
         except ValueError:
-            untokenisable = True
+            unparseable = True
             tokens = fragment.split()
         if tokens:
             runs.append(tokens)
     index_runs = [run for run in runs if _run_is_index(run)]
     if not index_runs:
         return None
-    if untokenisable:
+    if unparseable:
         if has_sub:
             return (
                 "command substitution in an index invocation is refused: the "
