@@ -145,9 +145,11 @@ def _descriptor_prefix_length(span):
 def _span_opens_a_file_for_write(span, git):
     """True when `span` truncates, appends, or runs a process substitution.
 
-    Descriptor duplications (`2>&1`, `>&2`) are not file writes. Heredocs,
-    here-strings and input redirects from a path are not. `<(…)` / `>(…)`
-    as a target still run a command the prefix grant would auto-approve.
+    Descriptor duplications (`2>&1`, `>&2`, `>&-`) are not file writes.
+    A digit-prefixed name (`>&2file`) is: bash only duplicates when the
+    whole target is digits or `-`. Heredocs, here-strings and input
+    redirects from a path are not writes. `<(…)` / `>(…)` as a target
+    still run a command the prefix grant would auto-approve.
     """
     if span.startswith("<<"):
         return False
@@ -167,7 +169,7 @@ def _span_opens_a_file_for_write(span, git):
     if operator in ("<", "<&"):
         return False
     if operator == ">&":
-        if target == "-" or (target[:1].isdigit()):
+        if target == "-" or target.isdigit():
             return False
         return True
     return True
@@ -196,6 +198,52 @@ def _has_substitutions(command, git):
     return False
 
 
+def _ordinary(command, git):
+    """True at each index that is unquoted, uncommented, and unescaped."""
+    ordinary = [False] * len(command)
+    escaped = None
+    for index, in_quotes, in_comment in git.shell_positions(command):
+        if index == escaped:
+            escaped = None
+            continue
+        if command[index] == "\\" and not in_quotes and not in_comment:
+            escaped = index + 1
+            continue
+        ordinary[index] = not in_quotes and not in_comment
+    return ordinary
+
+
+def _run_fragments(command, git):
+    """Non-empty slices of `command` split on unquoted run separators.
+
+    posix shlex drops quotes, so `cbx search ";" --json` becomes a `;`
+    token that `command_runs` treats as a boundary. Bash does not: a
+    quoted `;` is an argument. Split the source first, then tokenise
+    each run.
+    """
+    ordinary = _ordinary(command, git)
+    separators = set("".join(git.SEPARATORS))
+    start = 0
+    index = 0
+    while index < len(command):
+        if ordinary[index] and command[index] in separators:
+            piece = command[start:index].strip()
+            if piece:
+                yield piece
+            start = index + 1
+        index += 1
+    piece = command[start:].strip()
+    if piece:
+        yield piece
+
+
+def _tokenise(fragment):
+    lexer = shlex.shlex(fragment, posix=True, punctuation_chars=True)
+    lexer.commenters = ""
+    lexer.whitespace_split = True
+    return list(lexer)
+
+
 def offence(command, git):
     has_sub = _has_substitutions(command, git)
     # `strip_redirections` is outermost, as in guard-git-argv.py: `>`/`2>` is
@@ -208,14 +256,20 @@ def offence(command, git):
             git.strip_comments(git.strip_heredocs(command))))
     writes = _file_write_redirects(prepared, git)
     resolved = git.strip_redirections(prepared)
-    try:
-        lexer = shlex.shlex(resolved, posix=True, punctuation_chars=True)
-        lexer.commenters = ""
-        lexer.whitespace_split = True
-        tokens = list(lexer)
-    except ValueError:
-        if not _run_is_index(command.split()):
-            return None
+    runs = []
+    untokenisable = False
+    for fragment in _run_fragments(resolved, git):
+        try:
+            tokens = _tokenise(fragment)
+        except ValueError:
+            untokenisable = True
+            tokens = fragment.split()
+        if tokens:
+            runs.append(tokens)
+    index_runs = [run for run in runs if _run_is_index(run)]
+    if not index_runs:
+        return None
+    if untokenisable:
         if has_sub:
             return (
                 "command substitution in an index invocation is refused: the "
@@ -236,11 +290,6 @@ def offence(command, git):
             "commands cannot be ruled out; refusing rather than "
             "admitting what could not be read."
         )
-
-    runs = [run for run in git.command_runs(tokens) if run]
-    index_runs = [run for run in runs if _run_is_index(run)]
-    if not index_runs:
-        return None
     if has_sub:
         return (
             "command substitution in an index invocation is refused: the "

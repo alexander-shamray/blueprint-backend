@@ -97,6 +97,34 @@ class GuardIndexArgv(unittest.TestCase):
     def test_a_descriptor_duplication_is_admitted(self):
         self.assertIsNone(self.judge(
             "bash .claude/skills/codebase-index/scripts/cbx search x 2>&1"))
+        self.assertIsNone(self.judge(
+            "bash .claude/skills/codebase-index/scripts/cbx search x >&2"))
+        self.assertIsNone(self.judge(
+            "bash .claude/skills/codebase-index/scripts/cbx search x >&-"))
+
+    def test_a_digit_prefixed_write_target_is_refused(self):
+        # `>&` duplicates a descriptor only when the whole target is digits
+        # or `-`. Bash treats `>&2file` as `>2file 2>&1`.
+        reason = self.judge(
+            "bash .claude/skills/codebase-index/scripts/cbx search x >&2file")
+        self.assertIsNotNone(reason)
+        self.assertIn("write redirection", reason)
+
+    def test_a_quoted_punctuation_query_is_not_a_second_command(self):
+        # posix shlex drops quotes, so a query that is only `;` looks like a
+        # run boundary if the split happens after tokenising. Bash does not
+        # treat a quoted `;` as a separator.
+        self.assertIsNone(self.judge(
+            'bash .claude/skills/codebase-index/scripts/cbx search ";" '
+            '--json'))
+        self.assertIsNone(self.judge(
+            'bash .claude/skills/codebase-index/scripts/cbx search "|" '
+            '--json'))
+        reason = self.judge(
+            "bash .claude/skills/codebase-index/scripts/cbx search x; "
+            "echo pwned")
+        self.assertIsNotNone(reason)
+        self.assertIn("share the line", reason)
 
     def test_an_input_redirection_is_not_a_second_command(self):
         self.assertIsNone(self.judge(
