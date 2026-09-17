@@ -3,7 +3,8 @@
 CI discovers this directory, not `.claude/skills/**`, so the wrappers' own
 safety boundary is asserted here with stubbed executables. The PowerShell
 wrapper is invoked, not only scanned: refused subcommands, PATH preference,
-the py and python fallbacks, and the empty-PATH 127 path run through pwsh.
+the py and python fallbacks, the empty-PATH 127 path, and a checkout-local
+`codebase_index.py` that must not be imported, run through pwsh.
 """
 
 import os
@@ -38,11 +39,11 @@ def _powershell():
     raise unittest.SkipTest("PowerShell is not on PATH")
 
 
-def _ps_invoke(script, *args, env=None):
+def _ps_invoke(script, *args, env=None, cwd=None):
     return subprocess.run(
         [_powershell(), "-NoProfile", "-ExecutionPolicy", "Bypass",
          "-File", str(script), *args],
-        capture_output=True, text=True, env=env,
+        capture_output=True, text=True, env=env, cwd=cwd,
     )
 
 
@@ -84,6 +85,22 @@ _PY_STUB = (
 )
 
 
+def _checkout_module(directory):
+    """A CWD `codebase_index.py` that records it was imported.
+
+    `python -c` / `python -m` prepend the working directory, so this is
+    what an auto-approved fallback would execute without `-P`.
+    """
+    path = Path(directory) / "codebase_index.py"
+    path.write_text(
+        "from pathlib import Path\n"
+        "Path(__file__).with_name('TOUCHED').write_text('1')\n"
+        "print('CHECKOUT')\n"
+        "raise SystemExit(0)\n",
+        encoding="utf-8")
+    return path
+
+
 def _write_ps_stub(directory, name, body):
     """A PATH launcher PowerShell's Get-Command will find.
 
@@ -120,6 +137,22 @@ class CbxWrapper(unittest.TestCase):
         self.assertIn(
             '$env:CBX_NO_SKILL_AUTO_UPDATE = "1"', self.uncommented(CBX_PS1))
 
+    def test_python_fallbacks_keep_the_checkout_off_sys_path(self):
+        bash = self.uncommented(CBX)
+        ps1 = self.uncommented(CBX_PS1)
+        self.assertIn("export PYTHONSAFEPATH=1", bash)
+        self.assertIn('$env:PYTHONSAFEPATH = "1"', ps1)
+        self.assertIn("py -3.12 -P -c", bash)
+        self.assertIn("py -3.12 -P -m", bash)
+        self.assertIn("python3 -P -c", bash)
+        self.assertIn("python3 -P -m", bash)
+        self.assertIn("python -P -c", bash)
+        self.assertIn("python -P -m", bash)
+        self.assertIn("-3.12 -P -c", ps1)
+        self.assertIn("-3.12 -P -m", ps1)
+        self.assertIn("-P -c", ps1)
+        self.assertIn("-P -m", ps1)
+
     def test_destructive_subcommands_are_refused(self):
         for sub in ("clean", "init", "watch", "graph"):
             with self.subTest(sub=sub):
@@ -149,6 +182,7 @@ class CbxWrapper(unittest.TestCase):
             py = Path(fake) / "python3"
             py.write_text(
                 "#!/bin/sh\n"
+                "if [ \"$1\" = \"-P\" ]; then shift; fi\n"
                 "if [ \"$1\" = \"-c\" ]; then exit 0; fi\n"
                 "if [ \"$1\" = \"-m\" ] && [ \"$2\" = \"codebase_index\" ]; then\n"
                 "  shift 2\n"
@@ -243,6 +277,38 @@ class CbxWrapper(unittest.TestCase):
             out = _ps_invoke(CBX_PS1, "search", "X", env=env)
             self.assertEqual(0, out.returncode, out.stderr)
             self.assertIn("MODULE search X", out.stdout)
+
+    def test_python_fallback_does_not_import_a_checkout_module(self):
+        with tempfile.TemporaryDirectory(prefix="cbx-cwd-") as fake:
+            _checkout_module(fake)
+            py_dir = str(Path(sys.executable).resolve().parent)
+            env = {
+                **os.environ,
+                "PATH": py_dir + os.pathsep + _path_without_launchers(
+                    "codebase-index", "py", "python3"),
+            }
+            out = subprocess.run(
+                [_bash(), str(CBX), "search", "X"],
+                capture_output=True, text=True, env=env, cwd=fake)
+            self.assertFalse(
+                (Path(fake) / "TOUCHED").exists(), out.stdout + out.stderr)
+            self.assertNotIn("CHECKOUT", out.stdout)
+            self.assertNotIn("CHECKOUT", out.stderr)
+
+    def test_powershell_fallback_does_not_import_a_checkout_module(self):
+        with tempfile.TemporaryDirectory(prefix="cbx-ps-cwd-") as fake:
+            _checkout_module(fake)
+            py_dir = str(Path(sys.executable).resolve().parent)
+            env = {
+                **os.environ,
+                "PATH": py_dir + os.pathsep + _path_without_launchers(
+                    "codebase-index", "py", "python3"),
+            }
+            out = _ps_invoke(CBX_PS1, "search", "X", env=env, cwd=fake)
+            self.assertFalse(
+                (Path(fake) / "TOUCHED").exists(), out.stdout + out.stderr)
+            self.assertNotIn("CHECKOUT", out.stdout)
+            self.assertNotIn("CHECKOUT", out.stderr)
 
     def test_powershell_exits_127_when_nothing_can_run_it(self):
         with tempfile.TemporaryDirectory(prefix="cbx-ps-empty-") as fake:
