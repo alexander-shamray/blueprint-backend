@@ -50,37 +50,40 @@ class CbxWrapper(unittest.TestCase):
                 self.assertIn("refusing subcommand", out.stderr)
 
     def test_path_cli_is_preferred(self):
-        fake = tempfile.mkdtemp(prefix="cbx-path-")
-        stub = Path(fake) / "codebase-index"
-        stub.write_text("#!/bin/sh\necho PATH_CLI \"$@\"\n", encoding="utf-8")
-        stub.chmod(stub.stat().st_mode | stat.S_IEXEC)
-        env = {**os.environ, "PATH": fake + os.pathsep + os.environ.get("PATH", "")}
-        out = subprocess.run(
-            [_bash(), str(CBX), "search", "X"],
-            capture_output=True, text=True, env=env)
-        self.assertEqual(0, out.returncode, out.stderr)
-        self.assertIn("PATH_CLI search X", out.stdout)
+        with tempfile.TemporaryDirectory(prefix="cbx-path-") as fake:
+            stub = Path(fake) / "codebase-index"
+            stub.write_text("#!/bin/sh\necho PATH_CLI \"$@\"\n", encoding="utf-8")
+            stub.chmod(stub.stat().st_mode | stat.S_IEXEC)
+            env = {
+                **os.environ,
+                "PATH": fake + os.pathsep + os.environ.get("PATH", ""),
+            }
+            out = subprocess.run(
+                [_bash(), str(CBX), "search", "X"],
+                capture_output=True, text=True, env=env)
+            self.assertEqual(0, out.returncode, out.stderr)
+            self.assertIn("PATH_CLI search X", out.stdout)
 
     def test_python312_fallback_when_cli_is_absent(self):
-        fake = tempfile.mkdtemp(prefix="cbx-py-")
-        py = Path(fake) / "python3"
-        py.write_text(
-            "#!/bin/sh\n"
-            "if [ \"$1\" = \"-c\" ]; then exit 0; fi\n"
-            "if [ \"$1\" = \"-m\" ] && [ \"$2\" = \"codebase_index\" ]; then\n"
-            "  shift 2\n"
-            "  echo MODULE \"$@\"\n"
-            "  exit 0\n"
-            "fi\n"
-            "exit 1\n",
-            encoding="utf-8")
-        py.chmod(py.stat().st_mode | stat.S_IEXEC)
-        env = {**os.environ, "PATH": fake}
-        out = subprocess.run(
-            [_bash(), str(CBX), "search", "X"],
-            capture_output=True, text=True, env=env)
-        self.assertEqual(0, out.returncode, out.stderr)
-        self.assertIn("MODULE search X", out.stdout)
+        with tempfile.TemporaryDirectory(prefix="cbx-py-") as fake:
+            py = Path(fake) / "python3"
+            py.write_text(
+                "#!/bin/sh\n"
+                "if [ \"$1\" = \"-c\" ]; then exit 0; fi\n"
+                "if [ \"$1\" = \"-m\" ] && [ \"$2\" = \"codebase_index\" ]; then\n"
+                "  shift 2\n"
+                "  echo MODULE \"$@\"\n"
+                "  exit 0\n"
+                "fi\n"
+                "exit 1\n",
+                encoding="utf-8")
+            py.chmod(py.stat().st_mode | stat.S_IEXEC)
+            env = {**os.environ, "PATH": fake}
+            out = subprocess.run(
+                [_bash(), str(CBX), "search", "X"],
+                capture_output=True, text=True, env=env)
+            self.assertEqual(0, out.returncode, out.stderr)
+            self.assertIn("MODULE search X", out.stdout)
 
     def test_powershell_wrapper_names_the_same_allow_list(self):
         text = self.uncommented(CBX_PS1)
@@ -100,6 +103,16 @@ class CbxWrapper(unittest.TestCase):
         self.assertIn(
             "Bash(bash .claude/skills/codebase-index/scripts/cbx search:*)",
             fm)
+
+    def test_skill_does_not_instruct_a_cbx_graph_invocation(self):
+        skill = (SCRIPTS.parent / "skills" / "codebase-index" / "SKILL.md").read_text(
+            encoding="utf-8")
+        commands = (
+            SCRIPTS.parent / "skills" / "codebase-index" / "references"
+            / "commands.md"
+        ).read_text(encoding="utf-8")
+        self.assertNotIn("cbx graph", skill)
+        self.assertNotIn("cbx graph", commands)
 
 
 if __name__ == "__main__":

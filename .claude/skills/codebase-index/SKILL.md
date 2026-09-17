@@ -37,7 +37,6 @@ do not put `$(…)` or a second command on the same line —
 | How are X and Y connected? | `bash .claude/skills/codebase-index/scripts/cbx path "X" "Y" --json` |
 | Describe X and its neighbourhood | `bash .claude/skills/codebase-index/scripts/cbx describe "X" --json` |
 | Is what I read earlier still true? | `bash .claude/skills/codebase-index/scripts/cbx verify --session <tag> --json` |
-| Produce a human graph | `bash .claude/skills/codebase-index/scripts/cbx graph "X" --output <path>` — **not auto-approved**; take the prompt |
 
 Use `search --mode symbol` for exact symbol work, `--mode fts` for text and
 error messages, and the default `hybrid` mode for mixed questions. Use pure

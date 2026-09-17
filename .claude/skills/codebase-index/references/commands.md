@@ -43,14 +43,10 @@ bash .claude/skills/codebase-index/scripts/cbx describe "<file-or-symbol>" --jso
 - `path` returns the shortest known dependency/call chain.
 - `describe` returns a node card with callers, callees, module, and centrality.
 
-Use `graph` only for a visualization intended for a person:
-
-```bash
-bash .claude/skills/codebase-index/scripts/cbx graph "<target>" --direction both --depth 2 --output graph.html
-```
-
-For headless work, use `--output`; do not use `--open`. Exports also support
-`--format graphml|dot|neo4j`.
+`graph` is refused by the wrappers and by `.claude/hooks/guard-index-argv.py`
+because it writes a file. It is not a prompt-only operation: there is no
+invocation this skill can run. Use `architecture`, `refs`, `path`, and
+`describe` for machine-readable neighbourhoods.
 
 ## Evidence
 

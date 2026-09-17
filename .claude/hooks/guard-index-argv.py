@@ -42,41 +42,40 @@ def _base_name(token):
     return name.lower()
 
 
-def _run_is_index(run):
+def _index_argv(run):
+    """Tokens after the index executable, or None if this run is not one.
+
+    Only the executable position counts: `rg codebase-index` is grep, not
+    an index invocation. `python -m codebase_index` is the module form.
+    """
     if not run:
-        return False
-    if _base_name(run[0]) in INDEX_NAMES:
-        return True
-    if _base_name(run[0]) in ("bash", "sh") and len(run) > 1:
-        if _base_name(run[1]) in INDEX_NAMES:
-            return True
-    joined = " ".join(run[:8])
-    return "codebase_index" in joined or "codebase-index" in joined
+        return None
+    words = list(run)
+    if _base_name(words[0]) in ("bash", "sh"):
+        words = words[1:]
+    if not words:
+        return None
+    if _base_name(words[0]) in INDEX_NAMES:
+        return words[1:]
+    for i, tok in enumerate(words):
+        if tok == "-m" and i + 1 < len(words) and words[i + 1] == "codebase_index":
+            return words[i + 2:]
+    return None
+
+
+def _run_is_index(run):
+    return _index_argv(run) is not None
 
 
 def _subcommand(run):
-    words = list(run)
-    if words and _base_name(words[0]) in ("bash", "sh"):
-        words = words[1:]
-    if words and _base_name(words[0]) in INDEX_NAMES:
-        words = words[1:]
-    if not words:
+    rest = _index_argv(run)
+    if not rest:
         return ""
-    if words[0] == "-m" and len(words) > 1 and words[1] == "codebase_index":
-        return words[2] if len(words) > 2 else ""
-    return words[0].lstrip("-") if words else ""
+    return rest[0].lstrip("-")
 
 
 def offence(command, git):
-    if git.substitutions(command):
-        if not _mentions_index(command):
-            return None
-        return (
-            "command substitution in an index invocation is refused: the "
-            "prefix grant matches the typed string while the shell still "
-            "runs `$(…)` and backticks. Pass the query as a quoted word, "
-            "not as a substitution."
-        )
+    has_sub = git.substitutions(command)
     resolved = git.separate_lines(
         git.join_continuations(git.strip_comments(git.strip_heredocs(command))))
     try:
@@ -85,18 +84,32 @@ def offence(command, git):
         lexer.whitespace_split = True
         tokens = list(lexer)
     except ValueError:
-        if _mentions_index(command):
+        if not _run_is_index(command.split()):
+            return None
+        if has_sub:
             return (
-                "an index invocation could not be tokenised, so extra "
-                "commands cannot be ruled out; refusing rather than "
-                "admitting what could not be read."
+                "command substitution in an index invocation is refused: the "
+                "prefix grant matches the typed string while the shell still "
+                "runs `$(…)` and backticks. Pass the query as a quoted word, "
+                "not as a substitution."
             )
-        return None
+        return (
+            "an index invocation could not be tokenised, so extra "
+            "commands cannot be ruled out; refusing rather than "
+            "admitting what could not be read."
+        )
 
     runs = [run for run in git.command_runs(tokens) if run]
     index_runs = [run for run in runs if _run_is_index(run)]
     if not index_runs:
         return None
+    if has_sub:
+        return (
+            "command substitution in an index invocation is refused: the "
+            "prefix grant matches the typed string while the shell still "
+            "runs `$(…)` and backticks. Pass the query as a quoted word, "
+            "not as a substitution."
+        )
     if len(runs) > 1:
         return (
             "an index invocation may not share the line with another "
@@ -112,13 +125,6 @@ def offence(command, git):
     return None
 
 
-def _mentions_index(command):
-    return "codebase-index" in command or "codebase_index" in command or (
-        "/cbx" in command.replace("\\", "/") or command.split()[:1] == ["cbx"]
-        or " cbx " in f" {command} "
-    )
-
-
 def main():
     try:
         event = json.load(sys.stdin)
@@ -127,9 +133,17 @@ def main():
               file=sys.stderr)
         return 0
 
+    if not isinstance(event, dict):
+        print("guard-index-argv: malformed hook event; not judging",
+              file=sys.stderr)
+        return 0
+
     if event.get("tool_name") != "Bash":
         return 0
-    command = (event.get("tool_input") or {}).get("command")
+    tool_input = event.get("tool_input")
+    if not isinstance(tool_input, dict):
+        return 0
+    command = tool_input.get("command")
     if not isinstance(command, str):
         return 0
 

@@ -69,6 +69,40 @@ class GuardIndexArgv(unittest.TestCase):
     def test_unrelated_bash_is_admitted(self):
         self.assertIsNone(self.judge("git status -sb"))
 
+    def test_rg_with_the_cli_name_in_the_query_is_admitted(self):
+        self.assertIsNone(self.judge("rg codebase-index src"))
+
+    def test_echo_of_the_cli_name_is_admitted(self):
+        self.assertIsNone(self.judge("echo codebase-index"))
+
+    def test_substitution_in_an_unrelated_command_is_admitted(self):
+        self.assertIsNone(self.judge('rg codebase-index "$(printf x)"'))
+
+    def test_python_module_graph_is_refused(self):
+        reason = self.judge(
+            "python -m codebase_index graph X --output x.html")
+        self.assertIsNotNone(reason)
+        self.assertIn("graph", reason)
+
+    def test_a_list_event_fails_open(self):
+        result = subprocess.run(
+            [sys.executable, str(HOOK)],
+            input="[]", capture_output=True, text=True)
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual("", result.stdout.strip())
+
+    def test_a_non_object_tool_input_fails_open(self):
+        event = {
+            "hook_event_name": "PreToolUse",
+            "tool_name": "Bash",
+            "tool_input": ["command"],
+        }
+        result = subprocess.run(
+            [sys.executable, str(HOOK)],
+            input=json.dumps(event), capture_output=True, text=True)
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual("", result.stdout.strip())
+
     def test_the_hook_is_registered_for_bash(self):
         settings = json.loads(SETTINGS.read_text(encoding="utf-8"))
         entries = settings.get("hooks", {}).get("PreToolUse", [])
