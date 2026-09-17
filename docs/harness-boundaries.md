@@ -86,12 +86,13 @@ check a permission claim against the harness before acting on it.**
 `.claude/agents/**`, `.claude/hooks/**`, `.claude/skills/**`,
 `.claude/settings.json` and `.claude/settings.local.json`.
 Read the list in `.claude/settings.json`, do not count it here — it has
-already grown twice, once inside the pull request that introduced it. The review loops grant those
-helpers by name, so a session that could rewrite one before invoking it would
-make every fixed endpoint a fiction. The sandbox `Dockerfile` is on the list
-for the same reason at one remove: it is a *build input to the security
-boundary*, so a session able to edit it could add an entrypoint reading the
-credentials the following `docker run` mounts in.
+already grown twice, once inside the pull request that introduced it. The
+review loops grant those helpers by name, so a session that could rewrite
+one before invoking it would make every fixed endpoint a fiction. The
+sandbox `Dockerfile` is on the list for the same reason at one remove: it
+is a *build input to the security boundary*, so a session able to edit it
+could add an entrypoint reading the credentials the following `docker run`
+mounts in.
 
 **The last three arrived with #33, and the argument for them is the first two's
 applied one level up.** `commands/`, `agents/` and `settings.json` are the
