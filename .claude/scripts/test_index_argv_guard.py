@@ -84,6 +84,23 @@ class GuardIndexArgv(unittest.TestCase):
         self.assertIsNotNone(reason)
         self.assertIn("graph", reason)
 
+    def test_echo_dash_m_codebase_index_is_admitted(self):
+        self.assertIsNone(self.judge("echo -m codebase_index graph"))
+
+    def test_python_script_args_are_not_a_module_invocation(self):
+        self.assertIsNone(self.judge(
+            "python script.py -m codebase_index graph"))
+
+    def test_python_interpreter_flags_before_the_module_still_count(self):
+        reason = self.judge("python -u -W ignore -m codebase_index graph X")
+        self.assertIsNotNone(reason)
+        self.assertIn("graph", reason)
+
+    def test_py_launcher_module_graph_is_refused(self):
+        reason = self.judge("py -3.12 -m codebase_index graph X")
+        self.assertIsNotNone(reason)
+        self.assertIn("graph", reason)
+
     def test_a_list_event_fails_open(self):
         result = subprocess.run(
             [sys.executable, str(HOOK)],

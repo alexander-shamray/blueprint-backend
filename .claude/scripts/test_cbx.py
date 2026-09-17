@@ -1,13 +1,16 @@
 """The skill wrappers refuse destructive subcommands and prefer PATH.
 
 CI discovers this directory, not `.claude/skills/**`, so the wrappers' own
-safety boundary is asserted here with stubbed executables.
+safety boundary is asserted here with stubbed executables. The PowerShell
+wrapper is invoked, not only scanned: refused subcommands, PATH preference,
+the py and python fallbacks, and the empty-PATH 127 path run through pwsh.
 """
 
 import os
 import shutil
 import stat
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -25,6 +28,83 @@ def _bash():
     if not found:
         raise unittest.SkipTest("bash is not on PATH")
     return found
+
+
+def _powershell():
+    for name in ("pwsh", "powershell"):
+        found = shutil.which(name)
+        if found:
+            return found
+    raise unittest.SkipTest("PowerShell is not on PATH")
+
+
+def _ps_invoke(script, *args, env=None):
+    return subprocess.run(
+        [_powershell(), "-NoProfile", "-ExecutionPolicy", "Bypass",
+         "-File", str(script), *args],
+        capture_output=True, text=True, env=env,
+    )
+
+
+def _path_without_launchers(*names):
+    """PATH entries that do not contain a named launcher.
+
+    The 127 and Python-fallback cases have to hide `python`/`py`/
+    `codebase-index` without dropping `dotnet`, which the Windows `pwsh`
+    shim needs on PATH to start at all.
+    """
+    suffixes = ("", ".exe", ".cmd", ".bat", ".com")
+    kept = []
+    for part in os.environ.get("PATH", "").split(os.pathsep):
+        if not part:
+            continue
+        root = Path(part)
+        hidden = False
+        for name in names:
+            if any((root / f"{name}{suffix}").exists() for suffix in suffixes):
+                hidden = True
+                break
+        if not hidden:
+            kept.append(part)
+    return os.pathsep.join(kept)
+
+
+_PS_HIDDEN = ("python", "python3", "py", "codebase-index")
+_PY_STUB = (
+    "import sys\n"
+    "args = sys.argv[1:]\n"
+    "if '-c' in args[:3]:\n"
+    "    raise SystemExit(0)\n"
+    "if '-m' in args:\n"
+    "    i = args.index('-m')\n"
+    "    if i + 1 < len(args) and args[i + 1] == 'codebase_index':\n"
+    "        print('MODULE', *args[i + 2:])\n"
+    "        raise SystemExit(0)\n"
+    "raise SystemExit(1)\n"
+)
+
+
+def _write_ps_stub(directory, name, body):
+    """A PATH launcher PowerShell's Get-Command will find.
+
+    Windows looks at PATHEXT (`.cmd`); POSIX pwsh looks for an executable
+    with no suffix.
+    """
+    stub_py = Path(directory) / f"{name}-stub.py"
+    stub_py.write_text(body, encoding="utf-8")
+    quoted = str(stub_py).replace("'", "'\\''")
+    if os.name == "nt":
+        launcher = Path(directory) / f"{name}.cmd"
+        launcher.write_text(
+            f"@echo off\r\n\"{sys.executable}\" \"{stub_py}\" %*\r\n",
+            encoding="utf-8")
+        return launcher
+    launcher = Path(directory) / name
+    launcher.write_text(
+        f"#!/bin/sh\nexec '{sys.executable}' '{quoted}' \"$@\"\n",
+        encoding="utf-8")
+    launcher.chmod(launcher.stat().st_mode | stat.S_IEXEC)
+    return launcher
 
 
 class CbxWrapper(unittest.TestCase):
@@ -113,6 +193,66 @@ class CbxWrapper(unittest.TestCase):
         ).read_text(encoding="utf-8")
         self.assertNotIn("cbx graph", skill)
         self.assertNotIn("cbx graph", commands)
+
+    def test_powershell_refuses_destructive_subcommands(self):
+        for sub in ("clean", "init", "watch", "graph"):
+            with self.subTest(sub=sub):
+                out = _ps_invoke(CBX_PS1, sub)
+                self.assertEqual(2, out.returncode, out.stderr)
+                self.assertIn("refusing subcommand", out.stderr)
+
+    def test_powershell_path_cli_is_preferred(self):
+        with tempfile.TemporaryDirectory(prefix="cbx-ps-path-") as fake:
+            if os.name == "nt":
+                stub = Path(fake) / "codebase-index.cmd"
+                stub.write_text(
+                    "@echo off\r\necho PATH_CLI %*\r\n", encoding="utf-8")
+            else:
+                stub = Path(fake) / "codebase-index"
+                stub.write_text(
+                    "#!/bin/sh\necho PATH_CLI \"$@\"\n", encoding="utf-8")
+                stub.chmod(stub.stat().st_mode | stat.S_IEXEC)
+            env = {
+                **os.environ,
+                "PATH": fake + os.pathsep + os.environ.get("PATH", ""),
+            }
+            out = _ps_invoke(CBX_PS1, "search", "X", env=env)
+            self.assertEqual(0, out.returncode, out.stderr)
+            self.assertIn("PATH_CLI", out.stdout)
+            self.assertIn("search", out.stdout)
+            self.assertIn("X", out.stdout)
+
+    def test_powershell_py_fallback_when_cli_is_absent(self):
+        with tempfile.TemporaryDirectory(prefix="cbx-ps-py-") as fake:
+            _write_ps_stub(fake, "py", _PY_STUB)
+            env = {
+                **os.environ,
+                "PATH": fake + os.pathsep + _path_without_launchers(*_PS_HIDDEN),
+            }
+            out = _ps_invoke(CBX_PS1, "search", "X", env=env)
+            self.assertEqual(0, out.returncode, out.stderr)
+            self.assertIn("MODULE search X", out.stdout)
+
+    def test_powershell_python_fallback_when_py_is_absent(self):
+        with tempfile.TemporaryDirectory(prefix="cbx-ps-python-") as fake:
+            _write_ps_stub(fake, "python", _PY_STUB)
+            env = {
+                **os.environ,
+                "PATH": fake + os.pathsep + _path_without_launchers(*_PS_HIDDEN),
+            }
+            out = _ps_invoke(CBX_PS1, "search", "X", env=env)
+            self.assertEqual(0, out.returncode, out.stderr)
+            self.assertIn("MODULE search X", out.stdout)
+
+    def test_powershell_exits_127_when_nothing_can_run_it(self):
+        with tempfile.TemporaryDirectory(prefix="cbx-ps-empty-") as fake:
+            env = {
+                **os.environ,
+                "PATH": fake + os.pathsep + _path_without_launchers(*_PS_HIDDEN),
+            }
+            out = _ps_invoke(CBX_PS1, "search", "X", env=env)
+            self.assertEqual(127, out.returncode, out.stderr)
+            self.assertIn("not on PATH", out.stderr)
 
 
 if __name__ == "__main__":

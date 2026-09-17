@@ -28,6 +28,9 @@ ALLOWED = (
     "update", "index",
 )
 INDEX_NAMES = ("codebase-index", "cbx", "codebase-index.exe", "cbx.exe")
+# Interpreter flags that consume the next token. Clustered forms (`-Wignore`)
+# are one token and do not belong here.
+_PYTHON_VALUE_FLAGS = ("-W", "-X", "-Q", "--check-hash-based-pycs")
 
 
 def _git_guard():
@@ -42,11 +45,55 @@ def _base_name(token):
     return name.lower()
 
 
+def _is_python_launcher(token):
+    name = _base_name(token)
+    if name.endswith(".exe"):
+        name = name[:-4]
+    if name in ("python", "python3", "py"):
+        return True
+    return name.startswith("python3.") or name.startswith("python2.")
+
+
+def _python_module_argv(words):
+    """Tokens after `python [opts] -m codebase_index`, else None.
+
+    Only a Python/py launcher, and only while its interpreter options are
+    still open: `echo -m codebase_index` is echo, and
+    `python script.py -m codebase_index` is a script argument.
+    """
+    i = 1
+    name = _base_name(words[0])
+    if name.endswith(".exe"):
+        name = name[:-4]
+    if name == "py" and i < len(words):
+        sel = words[i]
+        if sel.startswith("-") and len(sel) > 1 and sel[1].isdigit():
+            i += 1
+    while i < len(words):
+        tok = words[i]
+        if tok == "-m":
+            if i + 1 < len(words) and words[i + 1] == "codebase_index":
+                return words[i + 2:]
+            return None
+        if tok in _PYTHON_VALUE_FLAGS:
+            i += 2
+            continue
+        if (
+            not tok.startswith("-")
+            or tok in ("-", "--")
+            or tok.startswith("-c")
+        ):
+            return None
+        i += 1
+    return None
+
+
 def _index_argv(run):
     """Tokens after the index executable, or None if this run is not one.
 
     Only the executable position counts: `rg codebase-index` is grep, not
-    an index invocation. `python -m codebase_index` is the module form.
+    an index invocation. `python -m codebase_index` is the module form,
+    and only when the executable is a Python/py launcher.
     """
     if not run:
         return None
@@ -57,9 +104,8 @@ def _index_argv(run):
         return None
     if _base_name(words[0]) in INDEX_NAMES:
         return words[1:]
-    for i, tok in enumerate(words):
-        if tok == "-m" and i + 1 < len(words) and words[i + 1] == "codebase_index":
-            return words[i + 2:]
+    if _is_python_launcher(words[0]):
+        return _python_module_argv(words)
     return None
 
 
