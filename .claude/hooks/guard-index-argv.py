@@ -2,12 +2,14 @@
 """Refuse a codebase-index / cbx invocation that is more than one command.
 
 Prefix grants auto-approve `Bash(… search:*)`, so
-`codebase-index search x; rm -rf /` and `codebase-index search "$(evil)"`
-keep the approved prefix. Matching is against the typed string; the shell
-still executes operators and substitutions. This hook sees the typed string
-and refuses substitutions, extra command runs, and subcommands the wrapper
-itself refuses (`graph`, `clean`, `init`, `watch`). Honest traffic is a
-single `cbx` / `codebase-index` invocation.
+`codebase-index search x; rm -rf /`, `codebase-index search "$(evil)"`
+and `codebase-index search x > src/Foo.cs` keep the approved prefix.
+Matching is against the typed string; the shell still executes operators,
+substitutions and redirections. This hook sees the typed string and
+refuses substitutions, extra command runs, write redirections, and
+subcommands the wrapper itself refuses (`graph`, `clean`, `init`,
+`watch`). Honest traffic is a single `cbx` / `codebase-index`
+invocation with no write redirect.
 
 Protocol: PreToolUse, matcher `Bash`. Exit 0 and print nothing to allow;
 print the deny JSON to refuse. A malformed event is allowed, as
@@ -120,16 +122,77 @@ def _subcommand(run):
     return rest[0].lstrip("-")
 
 
+def _descriptor_prefix_length(span):
+    """How much of `span` is a glued file descriptor (`2`, `{fd}`), else 0."""
+    if not span:
+        return 0
+    if span[0] == "{":
+        close = 1
+        if close < len(span) and (span[close].isalpha() or span[close] == "_"):
+            close += 1
+            while close < len(span) and (
+                    span[close].isalnum() or span[close] == "_"):
+                close += 1
+            if close < len(span) and span[close] == "}":
+                return close + 1
+        return 0
+    digits = 0
+    while digits < len(span) and span[digits].isdigit():
+        digits += 1
+    return digits
+
+
+def _span_opens_a_file_for_write(span, git):
+    """True when `span` truncates, appends, or runs a process substitution.
+
+    Descriptor duplications (`2>&1`, `>&2`) are not file writes. Heredocs,
+    here-strings and input redirects from a path are not. `<(…)` / `>(…)`
+    as a target still run a command the prefix grant would auto-approve.
+    """
+    if span.startswith("<<"):
+        return False
+    rest = span[_descriptor_prefix_length(span):]
+    if rest.startswith("<<"):
+        return False
+    operator = None
+    for candidate in git.REDIRECTION_OPERATORS:
+        if rest.startswith(candidate):
+            operator = candidate
+            break
+    if operator is None:
+        return False
+    target = rest[len(operator):].lstrip()
+    if target.startswith(">(") or target.startswith("<("):
+        return True
+    if operator in ("<", "<&"):
+        return False
+    if operator == ">&":
+        if target == "-" or (target[:1].isdigit()):
+            return False
+        return True
+    return True
+
+
+def _file_write_redirects(command, git):
+    return [
+        command[start:end]
+        for start, end in git.redirection_spans(command)
+        if _span_opens_a_file_for_write(command[start:end], git)
+    ]
+
+
 def offence(command, git):
     has_sub = git.substitutions(command)
     # `strip_redirections` is outermost, as in guard-git-argv.py: `>`/`2>` is
     # punctuation to shlex, so `command_runs` would treat the target as a
     # second command. A redirection inside a heredoc body or a comment is
-    # not one bash performs, so those are stripped first.
-    resolved = git.strip_redirections(
-        git.separate_lines(
-            git.join_continuations(
-                git.strip_comments(git.strip_heredocs(command)))))
+    # not one bash performs, so those are stripped first. Write redirects
+    # are judged on this prepared string, before they disappear.
+    prepared = git.separate_lines(
+        git.join_continuations(
+            git.strip_comments(git.strip_heredocs(command))))
+    writes = _file_write_redirects(prepared, git)
+    resolved = git.strip_redirections(prepared)
     try:
         lexer = shlex.shlex(resolved, posix=True, punctuation_chars=True)
         lexer.commenters = ""
@@ -144,6 +207,14 @@ def offence(command, git):
                 "prefix grant matches the typed string while the shell still "
                 "runs `$(…)` and backticks. Pass the query as a quoted word, "
                 "not as a substitution."
+            )
+        if writes:
+            return (
+                "a write redirection on an index invocation is refused: the "
+                "prefix grant matches the typed string while the shell still "
+                "truncates the target. A Bash redirection writes what a tree "
+                "deny refuses (`docs/harness-boundaries.md`). Run the query "
+                "alone and read stdout."
             )
         return (
             "an index invocation could not be tokenised, so extra "
@@ -167,6 +238,14 @@ def offence(command, git):
             "an index invocation may not share the line with another "
             "command: the prefix grant would auto-approve `search x; …`. "
             "Run it alone."
+        )
+    if writes:
+        return (
+            "a write redirection on an index invocation is refused: the "
+            "prefix grant matches the typed string while the shell still "
+            "truncates the target. A Bash redirection writes what a tree "
+            "deny refuses (`docs/harness-boundaries.md`). Run the query "
+            "alone and read stdout."
         )
     sub = _subcommand(index_runs[0])
     if sub and sub not in ALLOWED:

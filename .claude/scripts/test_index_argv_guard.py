@@ -60,15 +60,32 @@ class GuardIndexArgv(unittest.TestCase):
         self.assertIsNotNone(reason)
         self.assertIn("share the line", reason)
 
-    def test_a_redirection_is_not_a_second_command(self):
+    def test_a_write_redirection_is_refused(self):
         for command in (
+            "bash .claude/skills/codebase-index/scripts/cbx search x "
+            "> src/Foo.cs",
             "bash .claude/skills/codebase-index/scripts/cbx search x "
             "> /tmp/result.json",
             "bash .claude/skills/codebase-index/scripts/cbx search x "
             "2> /tmp/err",
+            "bash .claude/skills/codebase-index/scripts/cbx search x "
+            ">> /tmp/out",
+            "bash .claude/skills/codebase-index/scripts/cbx search x "
+            "&> /tmp/both",
         ):
             with self.subTest(command=command):
-                self.assertIsNone(self.judge(command))
+                reason = self.judge(command)
+                self.assertIsNotNone(reason)
+                self.assertIn("write redirection", reason)
+
+    def test_a_descriptor_duplication_is_admitted(self):
+        self.assertIsNone(self.judge(
+            "bash .claude/skills/codebase-index/scripts/cbx search x 2>&1"))
+
+    def test_an_input_redirection_is_not_a_second_command(self):
+        self.assertIsNone(self.judge(
+            "bash .claude/skills/codebase-index/scripts/cbx search x "
+            "< /tmp/in"))
 
     def test_a_redirection_does_not_hide_a_second_command(self):
         reason = self.judge(
