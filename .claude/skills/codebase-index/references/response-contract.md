@@ -63,8 +63,8 @@ Avoid a full-repository scan unless targeted fallback also fails.
 If several queries are weak:
 
 ```bash
-codebase-index stats --json
-codebase-index doctor
+bash .claude/skills/codebase-index/scripts/cbx stats --json
+bash .claude/skills/codebase-index/scripts/cbx doctor
 ```
 
 Report the limitation instead of inventing certainty.

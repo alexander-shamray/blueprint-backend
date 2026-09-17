@@ -8,6 +8,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+$env:CBX_NO_SKILL_AUTO_UPDATE = "1"
 $allowed = @(
     "search", "explain", "architecture", "symbol", "refs", "impact", "diff-impact",
     "path", "describe", "verify", "stats", "doctor", "update", "index"

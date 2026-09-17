@@ -1,7 +1,7 @@
 ---
 name: codebase-index
 description: Use before answering repository questions about architecture, implementation, symbols, references, dependencies, refactoring impact, data flow, or bugs. Query the local hybrid index first so the agent reads only evidence-bearing file:line ranges instead of scanning the repository, and verify evidence gathered earlier before relying on it.
-allowed-tools: Bash(codebase-index search:*), Bash(codebase-index explain:*), Bash(codebase-index architecture:*), Bash(codebase-index symbol:*), Bash(codebase-index refs:*), Bash(codebase-index impact:*), Bash(codebase-index diff-impact:*), Bash(codebase-index path:*), Bash(codebase-index describe:*), Bash(codebase-index verify:*), Bash(codebase-index stats:*), Bash(codebase-index doctor:*), Bash(codebase-index update:*), Bash(codebase-index index:*), Read, Grep, Glob
+allowed-tools: Bash(bash .claude/skills/codebase-index/scripts/cbx search:*), Bash(bash .claude/skills/codebase-index/scripts/cbx explain:*), Bash(bash .claude/skills/codebase-index/scripts/cbx architecture:*), Bash(bash .claude/skills/codebase-index/scripts/cbx symbol:*), Bash(bash .claude/skills/codebase-index/scripts/cbx refs:*), Bash(bash .claude/skills/codebase-index/scripts/cbx impact:*), Bash(bash .claude/skills/codebase-index/scripts/cbx diff-impact:*), Bash(bash .claude/skills/codebase-index/scripts/cbx path:*), Bash(bash .claude/skills/codebase-index/scripts/cbx describe:*), Bash(bash .claude/skills/codebase-index/scripts/cbx verify:*), Bash(bash .claude/skills/codebase-index/scripts/cbx stats:*), Bash(bash .claude/skills/codebase-index/scripts/cbx doctor:*), Bash(bash .claude/skills/codebase-index/scripts/cbx update:*), Bash(bash .claude/skills/codebase-index/scripts/cbx index:*), Read, Grep, Glob
 ---
 
 # Codebase Index
@@ -17,19 +17,27 @@ The operating principle is **Find → Trace → Verify → Predict**:
 
 ## Route the question
 
+Run every command as
+`bash .claude/skills/codebase-index/scripts/cbx <subcommand> …`.
+That wrapper exports `CBX_NO_SKILL_AUTO_UPDATE=1` and refuses `graph`,
+`clean`, `init` and `watch`. Prefix grants still match the typed string, so
+do not put `$(…)` or a second command on the same line —
+`.claude/hooks/guard-index-argv.py` refuses those. The package is named
+`codebase-index`; do not invoke that console script directly.
+
 | Intent | Command |
 |---|---|
-| Where is X implemented? | `codebase-index search "X" --session <tag> --json` |
-| How does X work? | `codebase-index explain "X" --session <tag> --json` |
-| What is this codebase? | `codebase-index architecture --json` |
-| Find a named symbol | `codebase-index symbol "X" --json` |
-| Who calls or references X? | `codebase-index refs "X" --json` |
-| What changes if X changes? | `codebase-index impact "X" --json` |
-| What does my current diff affect? | `codebase-index diff-impact --json` |
-| How are X and Y connected? | `codebase-index path "X" "Y" --json` |
-| Describe X and its neighbourhood | `codebase-index describe "X" --json` |
-| Is what I read earlier still true? | `codebase-index verify --session <tag> --json` |
-| Produce a human graph | `codebase-index graph "X" --output <path>` — **not auto-approved**; take the prompt |
+| Where is X implemented? | `bash .claude/skills/codebase-index/scripts/cbx search "X" --session <tag> --json` |
+| How does X work? | `bash .claude/skills/codebase-index/scripts/cbx explain "X" --session <tag> --json` |
+| What is this codebase? | `bash .claude/skills/codebase-index/scripts/cbx architecture --json` |
+| Find a named symbol | `bash .claude/skills/codebase-index/scripts/cbx symbol "X" --json` |
+| Who calls or references X? | `bash .claude/skills/codebase-index/scripts/cbx refs "X" --json` |
+| What changes if X changes? | `bash .claude/skills/codebase-index/scripts/cbx impact "X" --json` |
+| What does my current diff affect? | `bash .claude/skills/codebase-index/scripts/cbx diff-impact --json` |
+| How are X and Y connected? | `bash .claude/skills/codebase-index/scripts/cbx path "X" "Y" --json` |
+| Describe X and its neighbourhood | `bash .claude/skills/codebase-index/scripts/cbx describe "X" --json` |
+| Is what I read earlier still true? | `bash .claude/skills/codebase-index/scripts/cbx verify --session <tag> --json` |
+| Produce a human graph | `bash .claude/skills/codebase-index/scripts/cbx graph "X" --output <path>` — **not auto-approved**; take the prompt |
 
 Use `search --mode symbol` for exact symbol work, `--mode fts` for text and
 error messages, and the default `hybrid` mode for mixed questions. Use pure
@@ -44,15 +52,15 @@ or routing remain unclear.
    pass `--session <tag>` to every `search` and `explain`.
 2. Run the best-matching command with `--json`.
 3. Check `index` before trusting the payload:
-   - missing → run `codebase-index index`, then repeat;
-   - stale with fewer than 20 changed files → run `codebase-index update`;
-   - stale with 20 or more changed files → run `codebase-index index`;
+   - missing → run `bash .claude/skills/codebase-index/scripts/cbx index`, then repeat;
+   - stale with fewer than 20 changed files → run `bash .claude/skills/codebase-index/scripts/cbx update`;
+   - stale with 20 or more changed files → run `bash .claude/skills/codebase-index/scripts/cbx index`;
    - fresh → continue.
 4. Start with ranks 1–3. Read only `recommended_reads` line ranges.
 5. Trace one additional hop only when the question requires behaviour,
    ownership, or impact.
 6. Before answering or editing from evidence gathered earlier in the task, run
-   `codebase-index verify --session <tag> --json` and reread anything whose
+   `bash .claude/skills/codebase-index/scripts/cbx verify --session <tag> --json` and reread anything whose
    state is not `valid` or `relocated`.
 7. Answer with `file:line` evidence and state uncertainty explicitly.
 
@@ -67,7 +75,7 @@ unrelated body lines; read the supplied range when the missing body matters.
   longer see it, Read the range.
 - `memory.invalidated` — evidence this session received has changed since.
   Treat your earlier copy as wrong and reread before relying on it.
-- `stale: true` — the index is older than the file. Run `codebase-index update`
+- `stale: true` — the index is older than the file. Run `bash .claude/skills/codebase-index/scripts/cbx update`
   or Read the range.
 - A tag belongs to one context. Never give it to a subagent or another
   conversation. Start a new tag after the context is cleared or compacted, or

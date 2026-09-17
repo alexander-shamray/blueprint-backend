@@ -75,6 +75,11 @@
             "type": "command",
             "command": "py -3.12 \"${CLAUDE_PROJECT_DIR}/.claude/hooks/guard-git-argv.py\"",
             "statusMessage": "checking git argv"
+          },
+          {
+            "type": "command",
+            "command": "py -3.12 \"${CLAUDE_PROJECT_DIR}/.claude/hooks/guard-index-argv.py\"",
+            "statusMessage": "checking index argv"
           }
         ]
       },

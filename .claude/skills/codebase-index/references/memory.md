@@ -31,7 +31,7 @@ memory stores no source text.
 
 ## Citing evidence across conversations
 
-`codebase-index verify --session <tag> --json` lists everything the session
+`bash .claude/skills/codebase-index/scripts/cbx verify --session <tag> --json` lists everything the session
 received as `path:start-end@hash` references. Keep the references next to the
 conclusions they support in notes or handoffs:
 
@@ -42,7 +42,7 @@ Refunds are capped at the invoice total [billing/refund.py:3-4@3f9a2c1b7d4e8a90]
 Later, from any agent, check them before trusting the note:
 
 ```bash
-codebase-index verify "billing/refund.py:3-4@3f9a2c1b7d4e8a90" --json
+bash .claude/skills/codebase-index/scripts/cbx verify "billing/refund.py:3-4@3f9a2c1b7d4e8a90" --json
 ```
 
 `all_valid: true` means every cited span still holds exactly. Otherwise reread
