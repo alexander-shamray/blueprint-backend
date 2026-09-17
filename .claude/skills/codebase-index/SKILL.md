@@ -27,7 +27,7 @@ The operating principle is **Find → Trace → Verify → Predict**:
 | What changes if X changes? | `codebase-index impact "X" --json` |
 | What does my current diff affect? | `codebase-index diff-impact --json` |
 | How are X and Y connected? | `codebase-index path "X" "Y" --json` |
-| Describe X and its neighborhood | `codebase-index describe "X" --json` |
+| Describe X and its neighbourhood | `codebase-index describe "X" --json` |
 | Is what I read earlier still true? | `codebase-index verify --session <tag> --json` |
 | Produce a human graph | `codebase-index graph "X" --output <path>` — **not auto-approved**; take the prompt |
 

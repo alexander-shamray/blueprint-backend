@@ -2958,7 +2958,7 @@ class HarnessControlSurfaceIsDenied(unittest.TestCase):
         # session able to rewrite one could delete its own guard and then act.
         for path in (".claude/scripts/**", ".claude/sandbox/**",
                      ".claude/commands/**", ".claude/agents/**",
-                     ".claude/hooks/**",
+                     ".claude/hooks/**", ".claude/skills/**",
                      ".claude/settings.json", ".claude/settings.local.json"):
             for prefix in ("", "./"):
                 with self.subTest(path=path, prefix=prefix):

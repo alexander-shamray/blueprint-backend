@@ -102,6 +102,12 @@ design, so a single applied edit could append a grant to a command's
 its `Read, Grep, Glob` tool list, as `/security-sweep` says outright: read-only
 there "is a property of the agent's tool grant, not a word in its prompt".
 
+**`.claude/skills/**` is the same argument one directory over.** A skill's
+`allowed-tools` is auto-approval, so a session that can rewrite `SKILL.md`
+widens the next invocation's Bash surface. The deny list in
+`.claude/settings.json` is the owner of the paths; this paragraph is the
+reason `skills/` is on it.
+
 **`settings.json`'s own entry self-locks, and that is a working constraint, not
 a curiosity.** Once it denies itself, the session cannot edit it again —
 including to undo the edit. So a change to it is one edit that lands complete,
