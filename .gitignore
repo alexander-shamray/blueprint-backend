@@ -3,9 +3,11 @@
 # Claude Code — shared config is committed, per-developer overrides are not.
 .claude/settings.local.json
 
-# Index SQLite is machine-local. The skill is shared. .mcp.json and
-# .codeindexignore are listed in Class D's map in this PR but cannot land
-# until that map is on main: locality-gate judges against the base copy.
+# Index SQLite is machine-local. The skill is shared. The two root files
+# below stay ignored so a local init cannot sneak them into this PR:
+# locality-gate judges the base `classes.yml`, which cannot see those
+# paths yet. A follow-up after the map is on main drops these two lines
+# and adds the files.
 .claude/cache/codebase-index/
 .claude/skills/codebase-index/.skill_version
 .mcp.json

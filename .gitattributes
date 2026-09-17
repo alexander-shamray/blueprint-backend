@@ -20,6 +20,8 @@
 # Git Bash on Windows, where the same `\r` breaks bash mid-line.
 *.py text eol=lf
 *.sh text eol=lf
+# `cbx` is the same shebang with no `.sh` suffix, so `*.sh` does not cover it.
+.claude/skills/codebase-index/scripts/cbx text eol=lf
 
 # The Helm tree is the same failure one artefact over, and it is worth stating
 # how it was found. Go's template engine copies a template's bytes through, so
