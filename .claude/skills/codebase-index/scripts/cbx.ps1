@@ -23,15 +23,26 @@ if ($bin) {
     & $bin.Source $Subcommand @Rest
     exit $LASTEXITCODE
 }
+$saved = $ErrorActionPreference
+$ErrorActionPreference = "Continue"
 $pyLauncher = Get-Command py -ErrorAction SilentlyContinue
 if ($pyLauncher) {
-    & $pyLauncher.Source -3.12 -m codebase_index $Subcommand @Rest
-    exit $LASTEXITCODE
+    & $pyLauncher.Source -3.12 -c "import codebase_index" 2>$null
+    if ($LASTEXITCODE -eq 0) {
+        $ErrorActionPreference = $saved
+        & $pyLauncher.Source -3.12 -m codebase_index $Subcommand @Rest
+        exit $LASTEXITCODE
+    }
 }
 $py = Get-Command python -ErrorAction SilentlyContinue
 if ($py) {
-    & $py.Source -m codebase_index $Subcommand @Rest
-    exit $LASTEXITCODE
+    & $py.Source -c "import codebase_index" 2>$null
+    if ($LASTEXITCODE -eq 0) {
+        $ErrorActionPreference = $saved
+        & $py.Source -m codebase_index $Subcommand @Rest
+        exit $LASTEXITCODE
+    }
 }
+$ErrorActionPreference = $saved
 [Console]::Error.WriteLine("cbx: neither codebase-index nor python found on PATH")
 exit 127
