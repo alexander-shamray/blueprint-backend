@@ -83,9 +83,10 @@ check a permission claim against the harness before acting on it.**
 
 **The `Edit` denies bind the agent's own tooling**, in both spellings each:
 `.claude/scripts/**`, `.claude/sandbox/**`, `.claude/commands/**`,
-`.claude/agents/**`, `.claude/settings.json` and `.claude/settings.local.json`.
-Read the list, do not count it here — it has already grown twice, once inside
-the pull request that introduced it. The review loops grant those
+`.claude/agents/**`, `.claude/hooks/**`, `.claude/skills/**`,
+`.claude/settings.json` and `.claude/settings.local.json`.
+Read the list in `.claude/settings.json`, do not count it here — it has
+already grown twice, once inside the pull request that introduced it. The review loops grant those
 helpers by name, so a session that could rewrite one before invoking it would
 make every fixed endpoint a fiction. The sandbox `Dockerfile` is on the list
 for the same reason at one remove: it is a *build input to the security
