@@ -3,8 +3,12 @@
 # Claude Code — shared config is committed, per-developer overrides are not.
 .claude/settings.local.json
 
-# codebase-index cache (machine-local; do not commit)
+# codebase-index is machine-local (pip install + init). Shared Claude config
+# under .claude/ stays tracked; only the indexer install is ignored.
 .claude/cache/codebase-index/
+.claude/skills/codebase-index/
+.codeindexignore
+.mcp.json
 
 # .NET — the solution described in docs/backend-architecture/ lands here.
 #
