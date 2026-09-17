@@ -3,6 +3,9 @@
 # Claude Code — shared config is committed, per-developer overrides are not.
 .claude/settings.local.json
 
+# codebase-index cache (machine-local; do not commit)
+.claude/cache/codebase-index/
+
 # .NET — the solution described in docs/backend-architecture/ lands here.
 #
 # artifacts/ is where every build writes, per Directory.Build.props's Output
