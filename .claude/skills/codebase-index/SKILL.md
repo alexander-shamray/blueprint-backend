@@ -1,7 +1,7 @@
 ---
 name: codebase-index
 description: Use before answering repository questions about architecture, implementation, symbols, references, dependencies, refactoring impact, data flow, or bugs. Query the local hybrid index first so the agent reads only evidence-bearing file:line ranges instead of scanning the repository, and verify evidence gathered earlier before relying on it.
-allowed-tools: Bash(codebase-index search:*), Bash(codebase-index explain:*), Bash(codebase-index architecture:*), Bash(codebase-index symbol:*), Bash(codebase-index refs:*), Bash(codebase-index impact:*), Bash(codebase-index diff-impact:*), Bash(codebase-index path:*), Bash(codebase-index describe:*), Bash(codebase-index verify:*), Bash(codebase-index graph:*), Bash(codebase-index stats:*), Bash(codebase-index doctor:*), Bash(codebase-index update:*), Bash(codebase-index index:*), Bash(cbx:*), Read, Grep, Glob
+allowed-tools: Bash(codebase-index search:*), Bash(codebase-index explain:*), Bash(codebase-index architecture:*), Bash(codebase-index symbol:*), Bash(codebase-index refs:*), Bash(codebase-index impact:*), Bash(codebase-index diff-impact:*), Bash(codebase-index path:*), Bash(codebase-index describe:*), Bash(codebase-index verify:*), Bash(codebase-index stats:*), Bash(codebase-index doctor:*), Bash(codebase-index update:*), Bash(codebase-index index:*), Bash(cbx:*), Read, Grep, Glob
 ---
 
 # Codebase Index

@@ -18,11 +18,15 @@ if ($allowed -notcontains $Subcommand) {
     exit 2
 }
 
-& python -c "import codebase_index" 2>$null
-if ($LASTEXITCODE -eq 0) {
-    & python -m codebase_index $Subcommand @Rest
+$bin = Get-Command codebase-index -ErrorAction SilentlyContinue
+if ($bin) {
+    & $bin.Source $Subcommand @Rest
     exit $LASTEXITCODE
 }
-$bin = Get-Command codebase-index -ErrorAction SilentlyContinue
-if ($bin) { & $bin.Source $Subcommand @Rest }
-exit $LASTEXITCODE
+$py = Get-Command python, py -ErrorAction SilentlyContinue | Select-Object -First 1
+if ($py) {
+    & $py.Source -m codebase_index $Subcommand @Rest
+    exit $LASTEXITCODE
+}
+Write-Error "cbx: neither codebase-index nor python found on PATH"
+exit 127
