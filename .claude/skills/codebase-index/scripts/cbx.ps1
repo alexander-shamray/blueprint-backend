@@ -44,5 +44,5 @@ if ($py) {
     }
 }
 $ErrorActionPreference = $saved
-[Console]::Error.WriteLine("cbx: neither codebase-index nor python found on PATH")
+[Console]::Error.WriteLine("cbx: codebase-index CLI not on PATH and no Python environment can import codebase_index")
 exit 127
