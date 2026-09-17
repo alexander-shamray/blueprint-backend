@@ -1,13 +1,12 @@
 """The skill wrappers refuse destructive subcommands and prefer PATH.
 
 CI discovers this directory, not `.claude/skills/**`, so the wrappers' own
-safety boundary is asserted here with stubbed executables. The PowerShell
-wrapper is invoked, not only scanned: refused subcommands, PATH preference,
-the py and python fallbacks, the empty-PATH 127 path, and a checkout-local
-`codebase_index.py` that must not be imported, run through pwsh.
+safety boundary is asserted here with stubbed executables.
 """
 
+import importlib.util
 import os
+import re
 import shutil
 import stat
 import subprocess
@@ -199,12 +198,32 @@ class CbxWrapper(unittest.TestCase):
             self.assertEqual(0, out.returncode, out.stderr)
             self.assertIn("MODULE search X", out.stdout)
 
-    def test_powershell_wrapper_names_the_same_allow_list(self):
-        text = self.uncommented(CBX_PS1)
-        for sub in ("search", "index", "verify"):
-            self.assertIn(f'"{sub}"', text)
-        self.assertNotIn('"graph"', text)
-        self.assertNotIn('"clean"', text)
+    def test_wrappers_guard_and_skill_share_one_allow_list(self):
+        bash = re.search(
+            r'(?m)^ALLOWED="([^"]+)"', self.uncommented(CBX))
+        self.assertIsNotNone(bash)
+        bash_set = frozenset(bash.group(1).split())
+        ps = re.search(
+            r"\$allowed\s*=\s*@\((.*?)\)",
+            self.uncommented(CBX_PS1), re.S)
+        self.assertIsNotNone(ps)
+        ps_set = frozenset(re.findall(r'"([^"]+)"', ps.group(1)))
+        spec = importlib.util.spec_from_file_location(
+            "guard_index_argv",
+            SCRIPTS.parent / "hooks" / "guard-index-argv.py")
+        guard = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(guard)
+        skill = (SCRIPTS.parent / "skills" / "codebase-index" / "SKILL.md"
+                 ).read_text(encoding="utf-8")
+        grants = frozenset(re.findall(
+            r"Bash\(bash \.claude/skills/codebase-index/scripts/cbx "
+            r"([^:)]+):\*\)",
+            skill.split("---")[1]))
+        self.assertEqual(bash_set, ps_set)
+        self.assertEqual(bash_set, frozenset(guard.ALLOWED))
+        self.assertEqual(bash_set, grants)
+        self.assertTrue(
+            bash_set.isdisjoint({"graph", "clean", "init", "watch"}))
 
     def test_skill_frontmatter_grants_cbx_per_subcommand_not_the_cli(self):
         text = (SCRIPTS.parent / "skills" / "codebase-index" / "SKILL.md").read_text(
