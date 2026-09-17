@@ -11,7 +11,7 @@ Use the local index before reading repository files.
 The operating principle is **Find → Trace → Verify → Predict**:
 
 - **Find** the implementation with ranked retrieval.
-- **Trace** behavior through definitions, callers, dependencies, and paths.
+- **Trace** behaviour through definitions, callers, dependencies, and paths.
 - **Verify** that evidence you already hold is still true before relying on it.
 - **Predict** change impact while preserving an explicit evidence trail.
 
@@ -49,7 +49,7 @@ or routing remain unclear.
    - stale with 20 or more changed files → run `codebase-index index`;
    - fresh → continue.
 4. Start with ranks 1–3. Read only `recommended_reads` line ranges.
-5. Trace one additional hop only when the question requires behavior,
+5. Trace one additional hop only when the question requires behaviour,
    ownership, or impact.
 6. Before answering or editing from evidence gathered earlier in the task, run
    `codebase-index verify --session <tag> --json` and reread anything whose

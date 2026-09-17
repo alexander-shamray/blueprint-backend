@@ -10,7 +10,7 @@ param(
 $ErrorActionPreference = "Stop"
 $allowed = @(
     "search", "explain", "architecture", "symbol", "refs", "impact", "diff-impact",
-    "path", "describe", "verify", "graph", "stats", "doctor", "update", "index"
+    "path", "describe", "verify", "stats", "doctor", "update", "index"
 )
 
 if ($allowed -notcontains $Subcommand) {
@@ -36,7 +36,7 @@ if ($pyLauncher) {
 }
 $py = Get-Command python -ErrorAction SilentlyContinue
 if ($py) {
-    & $py.Source -c "import codebase_index" 2>$null
+    & $py.Source -c "import sys, codebase_index; raise SystemExit(0 if sys.version_info[:2] == (3, 12) else 1)" 2>$null
     if ($LASTEXITCODE -eq 0) {
         $ErrorActionPreference = $saved
         & $py.Source -m codebase_index $Subcommand @Rest
@@ -44,5 +44,5 @@ if ($py) {
     }
 }
 $ErrorActionPreference = $saved
-[Console]::Error.WriteLine("cbx: codebase-index CLI not on PATH and no Python environment can import codebase_index")
+[Console]::Error.WriteLine("cbx: codebase-index CLI not on PATH and no Python 3.12 environment can import codebase_index")
 exit 127
