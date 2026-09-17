@@ -14,7 +14,7 @@ $allowed = @(
 )
 
 if ($allowed -notcontains $Subcommand) {
-    Write-Error "cbx: refusing subcommand '$Subcommand'. Allowed: $($allowed -join ', ')"
+    [Console]::Error.WriteLine("cbx: refusing subcommand '$Subcommand'. Allowed: $($allowed -join ', ')")
     exit 2
 }
 
@@ -28,5 +28,5 @@ if ($py) {
     & $py.Source -m codebase_index $Subcommand @Rest
     exit $LASTEXITCODE
 }
-Write-Error "cbx: neither codebase-index nor python found on PATH"
+[Console]::Error.WriteLine("cbx: neither codebase-index nor python found on PATH")
 exit 127
