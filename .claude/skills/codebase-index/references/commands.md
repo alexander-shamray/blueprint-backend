@@ -5,8 +5,8 @@ Load this reference only when the intent table in `SKILL.md` is insufficient.
 ## Retrieval
 
 ```bash
-codebase-index search "<query>" --json
-codebase-index explain "<topic or flow>" --json
+codebase-index search "<query>" --session <tag> --json
+codebase-index explain "<topic or flow>" --session <tag> --json
 ```
 
 Useful search options:
@@ -79,10 +79,10 @@ Low symbol counts or partial graph coverage can explain weak results.
 ## Query examples
 
 ```bash
-codebase-index search "auth token refresh" --json
-codebase-index search "AuthService class" --mode symbol --json
-codebase-index search "connection reset by peer" --mode fts --json
-codebase-index explain "checkout flow" --json
+codebase-index search "auth token refresh" --session <tag> --json
+codebase-index search "AuthService class" --mode symbol --session <tag> --json
+codebase-index search "connection reset by peer" --mode fts --session <tag> --json
+codebase-index explain "checkout flow" --session <tag> --json
 codebase-index impact "User" --direction up --depth 2 --json
 codebase-index path "ApiController" "Database" --json
 ```

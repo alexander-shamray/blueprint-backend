@@ -548,9 +548,9 @@ class TheShippedMap(unittest.TestCase):
     def test_this_gate_is_a_class_d_change(self) -> None:
         files = [".github/locality-gate/classes.yml", ".github/locality-gate/locality_gate.py",
                  ".github/workflows/locality-gate.yml", "docs/change-locality.md", "CLAUDE.md",
-                 ".gitattributes"]
+                 ".gitattributes", ".mcp.json", ".codeindexignore"]
         touch = ("`.github/locality-gate/**`, `.github/workflows/locality-gate.yml`, `docs/**`, "
-                 "`CLAUDE.md`, `.gitattributes`")
+                 "`CLAUDE.md`, `.gitattributes`, `.mcp.json`, `.codeindexignore`")
         self.assertEqual(check(payload(files, class_cell="D", touch_cell=touch), self.map), [])
 
     def test_the_contract_cites_this_file_rather_than_restating_it(self) -> None:

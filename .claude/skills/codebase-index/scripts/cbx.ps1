@@ -1,5 +1,5 @@
 # Windows PowerShell wrapper around the installed `codebase-index` CLI.
-# Mirrors scripts/cbx: whitelists safe subcommands, falls back to `python -m codebase_index`.
+# Mirrors scripts/cbx: whitelist, then PATH CLI, then py -3.12, then python -m.
 param(
     [Parameter(Mandatory = $true, Position = 0)]
     [string]$Subcommand,
