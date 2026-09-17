@@ -70,16 +70,43 @@ def _path_without_launchers(*names):
 
 
 _PS_HIDDEN = ("python", "python3", "py", "codebase-index")
-_PY_STUB = (
-    "import sys\n"
-    "args = sys.argv[1:]\n"
-    "if '-c' in args[:3]:\n"
-    "    raise SystemExit(0)\n"
+_PY_MODULE = (
     "if '-m' in args:\n"
     "    i = args.index('-m')\n"
     "    if i + 1 < len(args) and args[i + 1] == 'codebase_index':\n"
     "        print('MODULE', *args[i + 2:])\n"
     "        raise SystemExit(0)\n"
+    "raise SystemExit(1)\n"
+)
+# `py -3.12` pins the version on the launcher flag; the -c probe is only
+# `import codebase_index`.
+_PY_LAUNCHER_STUB = (
+    "import sys\n"
+    "args = sys.argv[1:]\n"
+    "if '-c' in args[:3]:\n"
+    "    raise SystemExit(0)\n"
+    + _PY_MODULE
+)
+# `python` / `python3` select only when the -c payload is the 3.12 check.
+# Succeeding every -c would admit a 3.11 interpreter.
+_PY_INTERPRETER_STUB = (
+    "import sys\n"
+    "args = sys.argv[1:]\n"
+    "if '-c' in args[:3]:\n"
+    "    i = args.index('-c')\n"
+    "    payload = args[i + 1] if i + 1 < len(args) else ''\n"
+    "    raise SystemExit(\n"
+    "        0 if 'version_info[:2] == (3, 12)' in payload else 1)\n"
+    + _PY_MODULE
+)
+_PY_WRONG_VERSION_STUB = (
+    "import sys\n"
+    "args = sys.argv[1:]\n"
+    "if '-c' in args[:3]:\n"
+    "    raise SystemExit(1)\n"
+    "if '-m' in args:\n"
+    "    print('MODULE')\n"
+    "    raise SystemExit(0)\n"
     "raise SystemExit(1)\n"
 )
 
@@ -182,7 +209,12 @@ class CbxWrapper(unittest.TestCase):
             py.write_text(
                 "#!/bin/sh\n"
                 "if [ \"$1\" = \"-P\" ]; then shift; fi\n"
-                "if [ \"$1\" = \"-c\" ]; then exit 0; fi\n"
+                "if [ \"$1\" = \"-c\" ]; then\n"
+                "  case \"$2\" in\n"
+                "    *'version_info[:2] == (3, 12)'*) exit 0 ;;\n"
+                "  esac\n"
+                "  exit 1\n"
+                "fi\n"
                 "if [ \"$1\" = \"-m\" ] && [ \"$2\" = \"codebase_index\" ]; then\n"
                 "  shift 2\n"
                 "  echo MODULE \"$@\"\n"
@@ -197,6 +229,25 @@ class CbxWrapper(unittest.TestCase):
                 capture_output=True, text=True, env=env)
             self.assertEqual(0, out.returncode, out.stderr)
             self.assertIn("MODULE search X", out.stdout)
+
+    def test_python_fallback_rejects_a_non_312_interpreter(self):
+        with tempfile.TemporaryDirectory(prefix="cbx-py311-") as fake:
+            py = Path(fake) / "python3"
+            py.write_text(
+                "#!/bin/sh\n"
+                "if [ \"$1\" = \"-P\" ]; then shift; fi\n"
+                "if [ \"$1\" = \"-c\" ]; then exit 1; fi\n"
+                "if [ \"$1\" = \"-m\" ]; then echo MODULE; exit 0; fi\n"
+                "exit 1\n",
+                encoding="utf-8")
+            py.chmod(py.stat().st_mode | stat.S_IEXEC)
+            env = {**os.environ, "PATH": fake}
+            out = subprocess.run(
+                [_bash(), str(CBX), "search", "X"],
+                capture_output=True, text=True, env=env)
+            self.assertEqual(127, out.returncode, out.stderr)
+            self.assertIn("not on PATH", out.stderr)
+            self.assertNotIn("MODULE", out.stdout)
 
     def test_wrappers_guard_and_skill_share_one_allow_list(self):
         bash = re.search(
@@ -277,7 +328,7 @@ class CbxWrapper(unittest.TestCase):
 
     def test_powershell_py_fallback_when_cli_is_absent(self):
         with tempfile.TemporaryDirectory(prefix="cbx-ps-py-") as fake:
-            _write_ps_stub(fake, "py", _PY_STUB)
+            _write_ps_stub(fake, "py", _PY_LAUNCHER_STUB)
             env = {
                 **os.environ,
                 "PATH": fake + os.pathsep + _path_without_launchers(*_PS_HIDDEN),
@@ -288,7 +339,7 @@ class CbxWrapper(unittest.TestCase):
 
     def test_powershell_python_fallback_when_py_is_absent(self):
         with tempfile.TemporaryDirectory(prefix="cbx-ps-python-") as fake:
-            _write_ps_stub(fake, "python", _PY_STUB)
+            _write_ps_stub(fake, "python", _PY_INTERPRETER_STUB)
             env = {
                 **os.environ,
                 "PATH": fake + os.pathsep + _path_without_launchers(*_PS_HIDDEN),
@@ -296,6 +347,18 @@ class CbxWrapper(unittest.TestCase):
             out = _ps_invoke(CBX_PS1, "search", "X", env=env)
             self.assertEqual(0, out.returncode, out.stderr)
             self.assertIn("MODULE search X", out.stdout)
+
+    def test_powershell_python_fallback_rejects_a_non_312_interpreter(self):
+        with tempfile.TemporaryDirectory(prefix="cbx-ps-py311-") as fake:
+            _write_ps_stub(fake, "python", _PY_WRONG_VERSION_STUB)
+            env = {
+                **os.environ,
+                "PATH": fake + os.pathsep + _path_without_launchers(*_PS_HIDDEN),
+            }
+            out = _ps_invoke(CBX_PS1, "search", "X", env=env)
+            self.assertEqual(127, out.returncode, out.stderr)
+            self.assertIn("not on PATH", out.stderr)
+            self.assertNotIn("MODULE", out.stdout)
 
     def test_python_fallback_does_not_import_a_checkout_module(self):
         with tempfile.TemporaryDirectory(prefix="cbx-cwd-") as fake:
