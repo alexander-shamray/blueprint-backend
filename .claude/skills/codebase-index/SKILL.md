@@ -21,9 +21,9 @@ Run every command as
 `bash .claude/skills/codebase-index/scripts/cbx <subcommand> …`.
 That wrapper exports `CBX_NO_SKILL_AUTO_UPDATE=1` and refuses `graph`,
 `clean`, `init` and `watch`. Prefix grants still match the typed string, so
-do not put `$(…)` or a second command on the same line —
-`.claude/hooks/guard-index-argv.py` refuses those. The package is named
-`codebase-index`; do not invoke that console script directly.
+do not put `$(…)`, a second command, or a write redirection on the same
+line — `.claude/hooks/guard-index-argv.py` refuses those. The package is
+named `codebase-index`; do not invoke that console script directly.
 
 | Intent | Command |
 |---|---|
