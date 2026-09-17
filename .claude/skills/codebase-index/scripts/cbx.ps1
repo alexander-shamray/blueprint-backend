@@ -23,7 +23,12 @@ if ($bin) {
     & $bin.Source $Subcommand @Rest
     exit $LASTEXITCODE
 }
-$py = Get-Command python, py -ErrorAction SilentlyContinue | Select-Object -First 1
+$pyLauncher = Get-Command py -ErrorAction SilentlyContinue
+if ($pyLauncher) {
+    & $pyLauncher.Source -3.12 -m codebase_index $Subcommand @Rest
+    exit $LASTEXITCODE
+}
+$py = Get-Command python -ErrorAction SilentlyContinue
 if ($py) {
     & $py.Source -m codebase_index $Subcommand @Rest
     exit $LASTEXITCODE
