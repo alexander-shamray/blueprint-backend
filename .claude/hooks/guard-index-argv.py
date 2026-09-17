@@ -122,8 +122,14 @@ def _subcommand(run):
 
 def offence(command, git):
     has_sub = git.substitutions(command)
-    resolved = git.separate_lines(
-        git.join_continuations(git.strip_comments(git.strip_heredocs(command))))
+    # `strip_redirections` is outermost, as in guard-git-argv.py: `>`/`2>` is
+    # punctuation to shlex, so `command_runs` would treat the target as a
+    # second command. A redirection inside a heredoc body or a comment is
+    # not one bash performs, so those are stripped first.
+    resolved = git.strip_redirections(
+        git.separate_lines(
+            git.join_continuations(
+                git.strip_comments(git.strip_heredocs(command)))))
     try:
         lexer = shlex.shlex(resolved, posix=True, punctuation_chars=True)
         lexer.commenters = ""

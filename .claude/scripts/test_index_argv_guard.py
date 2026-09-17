@@ -60,6 +60,23 @@ class GuardIndexArgv(unittest.TestCase):
         self.assertIsNotNone(reason)
         self.assertIn("share the line", reason)
 
+    def test_a_redirection_is_not_a_second_command(self):
+        for command in (
+            "bash .claude/skills/codebase-index/scripts/cbx search x "
+            "> /tmp/result.json",
+            "bash .claude/skills/codebase-index/scripts/cbx search x "
+            "2> /tmp/err",
+        ):
+            with self.subTest(command=command):
+                self.assertIsNone(self.judge(command))
+
+    def test_a_redirection_does_not_hide_a_second_command(self):
+        reason = self.judge(
+            "bash .claude/skills/codebase-index/scripts/cbx search x "
+            "> /tmp/out; rm -rf /")
+        self.assertIsNotNone(reason)
+        self.assertIn("share the line", reason)
+
     def test_graph_is_refused(self):
         reason = self.judge(
             "bash .claude/skills/codebase-index/scripts/cbx graph X --output x.html")
