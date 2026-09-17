@@ -29,7 +29,7 @@ The operating principle is **Find → Trace → Verify → Predict**:
 | How are X and Y connected? | `codebase-index path "X" "Y" --json` |
 | Describe X and its neighborhood | `codebase-index describe "X" --json` |
 | Is what I read earlier still true? | `codebase-index verify --session <tag> --json` |
-| Produce a human graph | `codebase-index graph "X" --output <path>` |
+| Produce a human graph | `codebase-index graph "X" --output <path>` — **not auto-approved**; take the prompt |
 
 Use `search --mode symbol` for exact symbol work, `--mode fts` for text and
 error messages, and the default `hybrid` mode for mixed questions. Use pure

@@ -17,9 +17,13 @@ esac
 
 if command -v codebase-index >/dev/null 2>&1; then
   exec codebase-index "$@"
-elif python -c "import codebase_index" >/dev/null 2>&1; then
+elif command -v py >/dev/null 2>&1 && py -3.12 -c "import codebase_index" >/dev/null 2>&1; then
+  exec py -3.12 -m codebase_index "$@"
+elif command -v python3 >/dev/null 2>&1 && python3 -c "import codebase_index" >/dev/null 2>&1; then
+  exec python3 -m codebase_index "$@"
+elif command -v python >/dev/null 2>&1 && python -c "import codebase_index" >/dev/null 2>&1; then
   exec python -m codebase_index "$@"
 else
-  echo "cbx: codebase-index is not on PATH and codebase_index is not importable" >&2
+  echo "cbx: codebase-index is not on PATH and no Python 3.12+ can import it" >&2
   exit 127
 fi
