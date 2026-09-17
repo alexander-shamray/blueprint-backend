@@ -84,6 +84,8 @@ D:
   - '.dockerignore'
   - 'Directory.Build.props'
   - 'coverage.runsettings'
+  - '.mcp.json'
+  - '.codeindexignore'
 
 # E -- dependency graph. The exact pin, the project file that references it,
 # Appendix B for identity and licence, the SDK and tool pins, the solution

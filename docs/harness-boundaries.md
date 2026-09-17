@@ -83,14 +83,16 @@ check a permission claim against the harness before acting on it.**
 
 **The `Edit` denies bind the agent's own tooling**, in both spellings each:
 `.claude/scripts/**`, `.claude/sandbox/**`, `.claude/commands/**`,
-`.claude/agents/**`, `.claude/settings.json` and `.claude/settings.local.json`.
-Read the list, do not count it here — it has already grown twice, once inside
-the pull request that introduced it. The review loops grant those
-helpers by name, so a session that could rewrite one before invoking it would
-make every fixed endpoint a fiction. The sandbox `Dockerfile` is on the list
-for the same reason at one remove: it is a *build input to the security
-boundary*, so a session able to edit it could add an entrypoint reading the
-credentials the following `docker run` mounts in.
+`.claude/agents/**`, `.claude/hooks/**`, `.claude/skills/**`,
+`.claude/settings.json` and `.claude/settings.local.json`.
+Read the list in `.claude/settings.json`, do not count it here — it has
+already grown twice, once inside the pull request that introduced it. The
+review loops grant those helpers by name, so a session that could rewrite
+one before invoking it would make every fixed endpoint a fiction. The
+sandbox `Dockerfile` is on the list for the same reason at one remove: it
+is a *build input to the security boundary*, so a session able to edit it
+could add an entrypoint reading the credentials the following `docker run`
+mounts in.
 
 **The last three arrived with #33, and the argument for them is the first two's
 applied one level up.** `commands/`, `agents/` and `settings.json` are the
@@ -101,6 +103,21 @@ design, so a single applied edit could append a grant to a command's
 `.claude/agents/security-auditor.md` — whose read-only guarantee is precisely
 its `Read, Grep, Glob` tool list, as `/security-sweep` says outright: read-only
 there "is a property of the agent's tool grant, not a word in its prompt".
+
+**`.claude/skills/**` is the same argument one directory over.** A skill's
+`allowed-tools` is auto-approval, so a session that can rewrite `SKILL.md`
+widens the next invocation's Bash surface. The deny list in
+`.claude/settings.json` is the owner of the paths; this paragraph is the
+reason `skills/` is on it.
+
+**The index skill's prefix grants are the same speed bump as `git *--output*`.**
+`Bash(bash .claude/skills/codebase-index/scripts/cbx search:*)` matches the
+typed string; the shell still runs `$(…)` and a second command on that line.
+`.claude/hooks/guard-index-argv.py` is the argv-level guard: substitutions,
+extra command runs, write redirections, and `graph` / `clean` / `init` /
+`watch` are refused.
+The `cbx` wrapper is the other half — whitelist and
+`CBX_NO_SKILL_AUTO_UPDATE=1` — and is not a substitute for the hook.
 
 **`settings.json`'s own entry self-locks, and that is a working constraint, not
 a curiosity.** Once it denies itself, the session cannot edit it again —

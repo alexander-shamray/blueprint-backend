@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# Thin, safe wrapper around the installed `codebase-index` CLI.
+# - Resolves the binary (prefers one on PATH; falls back to `python -m codebase_index`).
+# - Python fallbacks pass -P / PYTHONSAFEPATH so a checkout codebase_index.py
+#   is not imported. The wrappers are auto-approved.
+# - Whitelists subcommands so the skill can never invoke destructive ones (clean/init/watch).
+set -euo pipefail
+export CBX_NO_SKILL_AUTO_UPDATE=1
+export PYTHONSAFEPATH=1
+
+ALLOWED="search explain architecture symbol refs impact diff-impact path describe verify stats doctor update index"
+
+sub="${1:-}"
+case " $ALLOWED " in
+  *" ${sub} "*) : ;;
+  *)
+    echo "cbx: refusing subcommand '${sub}'. Allowed: ${ALLOWED}" >&2
+    exit 2
+    ;;
+esac
+
+if command -v codebase-index >/dev/null 2>&1; then
+  exec codebase-index "$@"
+elif command -v py >/dev/null 2>&1 && py -3.12 -P -c "import codebase_index" >/dev/null 2>&1; then
+  exec py -3.12 -P -m codebase_index "$@"
+elif command -v python3 >/dev/null 2>&1 && python3 -P -c "import sys, codebase_index; raise SystemExit(0 if sys.version_info[:2] == (3, 12) else 1)" >/dev/null 2>&1; then
+  exec python3 -P -m codebase_index "$@"
+elif command -v python >/dev/null 2>&1 && python -P -c "import sys, codebase_index; raise SystemExit(0 if sys.version_info[:2] == (3, 12) else 1)" >/dev/null 2>&1; then
+  exec python -P -m codebase_index "$@"
+else
+  echo "cbx: codebase-index CLI not on PATH and no Python 3.12 environment can import codebase_index" >&2
+  exit 127
+fi

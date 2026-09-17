@@ -17,6 +17,7 @@ anything — is owned elsewhere and cited from here by name, never restated.
 | [`docs/repo-map.md`](docs/repo-map.md) | What each entry in the tree is, and why it is shaped that way |
 | [`docs/style-guide.md`](docs/style-guide.md) | The prose, C# and SQL dialect, and which rules the build enforces |
 | [`docs/testing.md`](docs/testing.md) | What a checkout needs that the solution and the workflows cannot say: Docker, the Python floor, a gate run on its own, the coverage filter |
+| [`.claude/skills/codebase-index/`](.claude/skills/codebase-index/) | Query the local index before reading whole files |
 
 ## What this repo is
 
