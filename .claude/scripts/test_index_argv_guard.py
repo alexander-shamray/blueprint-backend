@@ -55,6 +55,22 @@ class GuardIndexArgv(unittest.TestCase):
         self.assertIsNotNone(reason)
         self.assertIn("substitution", reason)
 
+    def test_a_continuation_cannot_smuggle_a_substitution_past_the_scan(self):
+        # Bash removes `\<newline>` inside double quotes too, so
+        # `cbx search "$\<newline>(…)"` is a live `$(`. Scanning the raw
+        # string never sees it.
+        reason = self.judge(
+            'bash .claude/skills/codebase-index/scripts/cbx search '
+            '"$\\\n(whoami)"')
+        self.assertIsNotNone(reason)
+        self.assertIn("substitution", reason)
+        reason = self.judge(
+            'codebase-index search "`printf x \\\n--json`"')
+        self.assertIsNotNone(reason)
+        self.assertIn("substitution", reason)
+        self.assertIsNone(self.judge(
+            'codebase-index search "hello\\\nworld" --json'))
+
     def test_a_second_command_is_refused(self):
         reason = self.judge("codebase-index search x; rm -rf /")
         self.assertIsNotNone(reason)

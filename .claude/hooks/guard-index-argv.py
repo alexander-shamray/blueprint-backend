@@ -181,8 +181,23 @@ def _file_write_redirects(command, git):
     ]
 
 
+def _has_substitutions(command, git):
+    """True when bash would run a `$(…)`, backtick, or process substitution.
+
+    Continuations are joined per expandable region first, as
+    `guard-git-argv.py` does: bash removes `\\<newline>` inside double quotes
+    too, so `"$\\<newline>(…)"` is a live `$(`. Scanning the raw string
+    never sees the opener.
+    """
+    for text, quotes in git.expandable_regions(command):
+        joined = git.join_continuations(text, quotes=quotes)
+        if git.substitutions(joined, quotes=quotes):
+            return True
+    return False
+
+
 def offence(command, git):
-    has_sub = git.substitutions(command)
+    has_sub = _has_substitutions(command, git)
     # `strip_redirections` is outermost, as in guard-git-argv.py: `>`/`2>` is
     # punctuation to shlex, so `command_runs` would treat the target as a
     # second command. A redirection inside a heredoc body or a comment is
