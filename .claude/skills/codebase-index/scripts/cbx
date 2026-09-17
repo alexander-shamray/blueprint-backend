@@ -15,11 +15,11 @@ case " $ALLOWED " in
     ;;
 esac
 
-if python -c "import codebase_index" >/dev/null 2>&1; then
-  exec python -m codebase_index "$@"
-elif command -v codebase-index >/dev/null 2>&1; then
+if command -v codebase-index >/dev/null 2>&1; then
   exec codebase-index "$@"
+elif python -c "import codebase_index" >/dev/null 2>&1; then
+  exec python -m codebase_index "$@"
 else
-  echo "cbx: codebase_index is not importable and codebase-index is not on PATH" >&2
+  echo "cbx: codebase-index is not on PATH and codebase_index is not importable" >&2
   exit 127
 fi
