@@ -305,14 +305,20 @@ The mappings are proved by Task 3's tests, which load this directory.
 
 **Files:**
 - Modify: `src/Services/Payments/Payments.Infrastructure/Payments.Infrastructure.csproj`
-  — `<PackageReference Include="Microsoft.Extensions.Http.Resilience" />`
+  — `<PackageReference Include="Microsoft.Extensions.Http.Resilience" />`, and
+  `<PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />`
+  for the `IHostEnvironment` the registration now takes, as
+  `Common.Infrastructure` references it
 - Create: `src/Services/Payments/Payments.Infrastructure/Provider/ProviderHop.cs`
 - Create: `src/Services/Payments/Payments.Infrastructure/Provider/ProviderOptions.cs`
 - Create: `src/Services/Payments/Payments.Infrastructure/Provider/HttpPaymentProvider.cs`
 - Create: `src/Services/Payments/Payments.Infrastructure/Provider/ProviderAttemptCounter.cs`
 - Create: `src/Services/Payments/Payments.Infrastructure/Provider/ProviderMetrics.cs`
 - Create: `src/Services/Payments/Payments.Infrastructure/Provider/DependencyInjection.cs`
-- Modify: `Payments.Infrastructure/DependencyInjection.cs` (`services.AddPaymentProvider(configuration);`)
+- Modify: `src/Services/Payments/Payments.Api/Program.cs`
+  (`builder.Services.AddPaymentProvider(builder.Configuration, builder.Environment);`
+  — in the composition root, because the scheme rule needs the environment,
+  which `AddPaymentsInfrastructure` is not given)
 - Modify: `tests/Payments.Api.Tests/Payments.Api.Tests.csproj` —
   `<PackageReference Include="WireMock.Net" />`
 - Modify: `tests/Payments.TestSupport/PaymentsApiFactory.cs` — a third
@@ -541,6 +547,24 @@ public sealed class HttpPaymentProviderTests : IDisposable
         result.ShouldBe(new AuthorisationResult.Authorised("psp_p"));
     }
 
+    [Theory]
+    [InlineData("http://psp.example/", false)]
+    [InlineData("https://psp.example/", true)]
+    public void Outside_development_only_an_https_provider_is_accepted(string address, bool starts)
+    {
+        using PaymentsApiFactory factory = new(
+            "Server=sql.invalid;Database=Payments;User Id=x;Password=x;TrustServerCertificate=true",
+            "amqp://payments-svc:x@rabbit.invalid:5672",
+            address);
+        using WebApplicationFactory<Program> production = factory.WithWebHostBuilder(b => b.UseEnvironment("Production"));
+
+        if (starts)
+            production.Services.GetRequiredService<IPaymentProvider>().ShouldNotBeNull();
+        else
+            Should.Throw<InvalidOperationException>(() => production.Services)
+                .Message.ShouldContain("plain HTTP outside Development");
+    }
+
     [Fact]
     public void A_missing_base_url_stops_the_host()
     {
@@ -632,6 +656,9 @@ public sealed class HttpPaymentProviderTests : IDisposable
 
 The helper is `Authorisation(...)` rather than `Request(...)`: a method of
 that name would shadow WireMock's `Request.Create()` builder in the 409 test.
+The environment test needs `Microsoft.AspNetCore.Mvc.Testing` for
+`WebApplicationFactory<Program>` and `Microsoft.AspNetCore.Hosting` for
+`UseEnvironment`; the scaffolded test project already references the first.
 
 - [ ] **Step 2: Run to see them fail**
 
@@ -907,6 +934,7 @@ internal sealed class HttpPaymentProvider(HttpClient http) : IPaymentProvider
 ```csharp
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Http.Resilience;
 using Payments.Application.Provider;
 using Polly;
@@ -921,14 +949,38 @@ public static class DependencyInjection
     public const string BaseUrlKey = $"{Section}:BaseUrl";
     public const string ApiKeyKey = $"{Section}:ApiKey";
 
-    public static IServiceCollection AddPaymentProvider(this IServiceCollection services, IConfiguration configuration)
+    public static IServiceCollection AddPaymentProvider(
+        this IServiceCollection services,
+        IConfiguration configuration,
+        IHostEnvironment environment)
     {
         // Eager, as the broker's key is: a host that cannot name its provider
         // does not start, rather than failing its first authorisation. An empty
         // value is the chart's default, so a deploy that forgot it stops here.
-        string? baseUrl = configuration[BaseUrlKey];
-        if (string.IsNullOrWhiteSpace(baseUrl))
+        string? configured = configuration[BaseUrlKey];
+        if (string.IsNullOrWhiteSpace(configured))
             throw new InvalidOperationException($"{BaseUrlKey} is not configured. Payments cannot reach a provider.");
+
+        if (!Uri.TryCreate(configured, UriKind.Absolute, out Uri? parsed)
+            || (parsed.Scheme != Uri.UriSchemeHttps && parsed.Scheme != Uri.UriSchemeHttp))
+        {
+            throw new InvalidOperationException($"{BaseUrlKey} is '{configured}', which is not an absolute HTTP(S) address.");
+        }
+
+        // HTTPS everywhere but Development, the rule AuthenticationExtensions
+        // applies to the identity provider: the key below is a bearer
+        // credential, and plain HTTP hands it to anyone on the path. The local
+        // simulator is Development's, and the one plain-HTTP provider there is.
+        if (!environment.IsDevelopment() && parsed.Scheme != Uri.UriSchemeHttps)
+        {
+            throw new InvalidOperationException(
+                $"{BaseUrlKey} is '{configured}', which is plain HTTP outside Development; the provider key would travel in the clear.");
+        }
+
+        // A trailing slash, always: without one a relative request replaces
+        // the base address's last segment, so a provider at …/api would be
+        // called at …/v1/authorisations.
+        Uri baseAddress = parsed.AbsoluteUri.EndsWith('/') ? parsed : new Uri(parsed.AbsoluteUri + "/");
 
         // Required for the same reason, and §15.4 says so: a host must not
         // start and then call a provider unauthenticated.
@@ -941,10 +993,7 @@ public static class DependencyInjection
 
         IHttpClientBuilder client = services.AddHttpClient<IPaymentProvider, HttpPaymentProvider>(http =>
         {
-            // A trailing slash, always: without one a relative request replaces
-            // the base address's last segment, so a provider at …/api would be
-            // called at …/v1/authorisations.
-            http.BaseAddress = new Uri(baseUrl.EndsWith('/') ? baseUrl : baseUrl + "/");
+            http.BaseAddress = baseAddress;
             http.DefaultRequestHeaders.Authorization = new("Bearer", apiKey);
         });
 
@@ -985,9 +1034,12 @@ public static class DependencyInjection
 The standard handler retries `POST` by default; that is what the keys allow,
 and it is argued in `ProviderHop`'s summary rather than switched off.
 
-In `Payments.Infrastructure/DependencyInjection.cs`, after the bus
-registration: `services.AddPaymentProvider(configuration);` with the comment
-"§3.2's anti-corruption layer; its base address is read eagerly."
+In `Payments.Api/Program.cs`, beside the infrastructure registration:
+`builder.Services.AddPaymentProvider(builder.Configuration, builder.Environment);`
+with the comment "§3.2's anti-corruption layer; its address is read, and its
+scheme checked, eagerly." `WebApplicationFactory` runs the host as
+Development by default, which is what lets every test reach the in-process
+server over plain HTTP.
 
 `HostSmokeTests` and every other rendered test that builds the factory keep
 compiling because the third parameter defaults to `UnreachableProvider`.

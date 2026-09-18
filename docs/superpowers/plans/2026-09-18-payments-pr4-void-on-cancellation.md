@@ -235,6 +235,7 @@ writes.
 ```csharp
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using Payments.Application;
 using Payments.Application.Provider;
 using Payments.Domain.Orders;
 using Payments.Domain.Refunds;
@@ -257,7 +258,7 @@ internal sealed class RefundConfiguration : IEntityTypeConfiguration<Refund>
         // The intent's width, from the same constant: a refund carries the
         // intent's reference, so the two columns cannot be allowed to differ.
         builder.Property(r => r.Reference).HasMaxLength(ProviderLimits.MaxReferenceLength).IsRequired();
-        builder.Property(r => r.Amount).HasPrecision(18, 2);
+        builder.Property(r => r.Amount).HasPrecision(PaymentAmounts.Precision, PaymentAmounts.Scale);
         builder.Property(r => r.Currency).HasMaxLength(3).IsFixedLength().IsUnicode(false);
         builder.Property(r => r.VoidedAt).IsRequired();
 

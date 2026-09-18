@@ -255,7 +255,7 @@ git commit -m "feat(payments): PaymentIntent, created in the provider's verdict"
 
 **Interfaces:**
 - Produces: table `payments.PaymentIntents(OrderId uniqueidentifier PK, Status
-  nvarchar(16), Amount decimal(18,2), Currency char(3), Reference
+  nvarchar(16), Amount decimal(19,4), Currency char(3), Reference
   nvarchar(100) NULL, DeclineReason nvarchar(100) NULL, CreatedAt
   datetimeoffset, RowVersion rowversion)`; the mapper's two entries, each with
   `CorrelationId = OrderId`.
@@ -342,6 +342,7 @@ Expected: the smoke test counts 0; the mapper tests find no entry.
 ```csharp
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using Payments.Application;
 using Payments.Application.Provider;
 using Payments.Domain.Intents;
 using Payments.Domain.Orders;
@@ -364,7 +365,7 @@ internal sealed class PaymentIntentConfiguration : IEntityTypeConfiguration<Paym
         // §7.2: an enum a reader of the database should be able to name.
         builder.Property(i => i.Status).HasConversion<string>().HasMaxLength(16);
 
-        builder.Property(i => i.Amount).HasPrecision(18, 2);
+        builder.Property(i => i.Amount).HasPrecision(PaymentAmounts.Precision, PaymentAmounts.Scale);
         builder.Property(i => i.Currency).HasMaxLength(3).IsFixedLength().IsUnicode(false);
 
         // ProviderLimits, which the adapter enforces before a verdict exists,
@@ -785,6 +786,8 @@ public class AuthorisePaymentMapperTests
 {
     [Theory]
     [InlineData(-1, "EUR")]
+    [InlineData(1.001, "EUR")]
+    [InlineData(1e15, "EUR")]
     [InlineData(1, "")]
     [InlineData(1, "EU")]
     [InlineData(1, "eur")]
@@ -1050,6 +1053,16 @@ public sealed class AuthorisePaymentMapper : ICommandMessageMapper<AuthorisePaym
         // Catalog and Ordering — and goes to the provider, whose answer decides.
         if (message.Amount < 0)
             throw new ContractMappingException($"A negative amount on {nameof(AuthorisePayment)}.");
+
+        // Refused here, before any branch writes it: the cancelled-order path
+        // records the amount without ever converting it to minor units, so a
+        // bound checked only in the adapter would be a bound one branch skips.
+        if (message.Amount >= PaymentAmounts.Ceiling
+            || decimal.Round(message.Amount, PaymentAmounts.MinorUnitPlaces) != message.Amount)
+        {
+            throw new ContractMappingException(
+                $"An amount beyond what Payments can record or send on {nameof(AuthorisePayment)}.");
+        }
 
         if (message.Currency is not { Length: 3 } || !message.Currency.All(char.IsAsciiLetterUpper))
             throw new ContractMappingException($"A currency that is not three upper-case letters on {nameof(AuthorisePayment)}.");

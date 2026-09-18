@@ -252,11 +252,20 @@ marker tables:
 
 | Table | Key | Columns |
 |---|---|---|
-| `PaymentOrders` | `OrderId` | `CustomerId uniqueidentifier NULL`, `TotalAmount decimal(18,2) NULL`, `Currency char(3) NULL`, `PlacedAt datetimeoffset NULL`, `CancelledAt datetimeoffset NULL` |
-| `PaymentIntents` | `OrderId` | `Status`, `Amount decimal(18,2)`, `Currency char(3)`, `Reference NULL`, `DeclineReason NULL`, `CreatedAt`, `RowVersion rowversion` |
-| `Refunds` | `OrderId` | `Reference`, `Amount decimal(18,2)`, `Currency char(3)`, `VoidedAt` |
+| `PaymentOrders` | `OrderId` | `CustomerId uniqueidentifier NULL`, `TotalAmount decimal(19,4) NULL`, `Currency char(3) NULL`, `PlacedAt datetimeoffset NULL`, `CancelledAt datetimeoffset NULL` |
+| `PaymentIntents` | `OrderId` | `Status`, `Amount decimal(19,4)`, `Currency char(3)`, `Reference NULL`, `DeclineReason NULL`, `CreatedAt`, `RowVersion rowversion` |
+| `Refunds` | `OrderId` | `Reference`, `Amount decimal(19,4)`, `Currency char(3)`, `VoidedAt` |
 
 `PaymentOrders`' columns are nullable because either event may arrive first.
+Money is `decimal(19,4)`, Ordering's own money precision — its saga's `Total`
+and every line price — so any total Ordering can store, Payments can; and a
+contract amount at or above that column's ceiling, or with more places than
+the provider's minor units, is refused by the mapper as malformed.
+`PaymentAmounts` in `Payments.Application` owns those three numbers, and the
+three configurations and the mapper read them. What does not follow is a
+ceiling at the source: Ordering bounds no order's total when it is placed, so
+an order beyond its own column fails first in Ordering's saga, and that is
+Ordering's defect to close, not this service's — #222.
 `Status` is stored as a string, §7.2's convention. The migrations are named
 for their tables and emitted by `dotnet ef migrations add` from the
 configuration that owns each: `AddPaymentOrders` in PR-1, `AddPaymentIntents`

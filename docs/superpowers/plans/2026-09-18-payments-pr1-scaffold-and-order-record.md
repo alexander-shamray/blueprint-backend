@@ -282,6 +282,7 @@ git commit -m "docs: §2 says Payments reaches neither Redis instance"
 - Create: `src/Services/Payments/Payments.Domain/Orders/OrderId.cs`
 - Create: `src/Services/Payments/Payments.Application/Orders/PaymentOrderRecord.cs`
 - Create: `src/Services/Payments/Payments.Application/Orders/IPaymentOrderStore.cs`
+- Create: `src/Services/Payments/Payments.Application/PaymentAmounts.cs`
 - Create: `src/Services/Payments/Payments.Infrastructure/Persistence/PaymentOrderRow.cs`
 - Create: `src/Services/Payments/Payments.Infrastructure/Persistence/PaymentOrderRowConfiguration.cs`
 - Create: `src/Services/Payments/Payments.Infrastructure/Persistence/SqlPaymentOrderStore.cs`
@@ -319,7 +320,7 @@ public interface IPaymentOrderStore
 ```
 
 - Table `payments.PaymentOrders(OrderId uniqueidentifier PK, CustomerId
-  uniqueidentifier NULL, TotalAmount decimal(18,2) NULL, Currency char(3) NULL,
+  uniqueidentifier NULL, TotalAmount decimal(19,4) NULL, Currency char(3) NULL,
   PlacedAt datetimeoffset NULL, CancelledAt datetimeoffset NULL)`.
 
 - [ ] **Step 1: Write the failing store tests**
@@ -478,6 +479,28 @@ The interface's summary:
 /// </summary>
 ```
 
+`PaymentAmounts.cs`:
+
+```csharp
+namespace Payments.Application;
+
+/// <summary>
+/// The money this service records and sends. Ordering's money precision
+/// (§7.2's decimal(19,4), its saga's <c>Total</c> and every line price), so
+/// any total Ordering stores fits here; and two places, the minor units the
+/// provider is sent.
+/// </summary>
+public static class PaymentAmounts
+{
+    public const int Precision = 19;
+    public const int Scale = 4;
+    public const int MinorUnitPlaces = 2;
+
+    /// <summary>The first amount a decimal(19,4) column cannot hold.</summary>
+    public const decimal Ceiling = 1_000_000_000_000_000m;
+}
+```
+
 `PaymentOrderRow.cs`:
 
 ```csharp
@@ -504,6 +527,7 @@ internal sealed class PaymentOrderRow
 ```csharp
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using Payments.Application;
 
 namespace Payments.Infrastructure.Persistence;
 
@@ -521,7 +545,7 @@ internal sealed class PaymentOrderRowConfiguration : IEntityTypeConfiguration<Pa
         builder.HasKey(r => r.OrderId);
         builder.Property(r => r.OrderId).ValueGeneratedNever();
 
-        builder.Property(r => r.TotalAmount).HasPrecision(18, 2);
+        builder.Property(r => r.TotalAmount).HasPrecision(PaymentAmounts.Precision, PaymentAmounts.Scale);
 
         // Three ASCII letters by contract; IsFixedLength plus IsUnicode(false)
         // is what emits char(3) rather than nvarchar(3).
@@ -662,7 +686,7 @@ dotnet ef migrations add AddPaymentOrders \
 ```
 
 Open it: exactly `payments.PaymentOrders` with the six columns in Interfaces,
-`Currency` as `char(3)`, `TotalAmount` as `decimal(18,2)`, and nothing else.
+`Currency` as `char(3)`, `TotalAmount` as `decimal(19,4)`, and nothing else.
 
 - [ ] **Step 5: Run the store tests and the suite**
 
