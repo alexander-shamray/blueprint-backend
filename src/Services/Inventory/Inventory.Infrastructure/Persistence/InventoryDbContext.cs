@@ -1,6 +1,7 @@
 using Common.Infrastructure.Idempotency;
 using Common.Infrastructure.Inbox;
 using Common.Infrastructure.Outbox;
+using Inventory.Domain.Reservations;
 using Inventory.Domain.Stock;
 using Microsoft.EntityFrameworkCore;
 
@@ -25,6 +26,9 @@ public sealed class InventoryDbContext(DbContextOptions<InventoryDbContext> opti
 {
     /// <summary>§5's first aggregate (§7.3).</summary>
     public DbSet<StockItem> StockItems => Set<StockItem>();
+
+    /// <summary>§5's second aggregate, one row per order (§3.2, §7.3).</summary>
+    public DbSet<Reservation> Reservations => Set<Reservation>();
 
     /// <summary>
     /// §9.4's outbox, and the first <c>DbSet</c> here that is not an aggregate
