@@ -417,7 +417,7 @@
         {
           "id": "5c1d6f0e-9a24-4b3f-8e77-2f0c6a4d1b93",
           "name": "inventory:admin",
-          "description": "Administer inventory through the gateway's inventory-admin route (§10.2). Grantable and granted to nobody: the route it guards has no service behind it yet, and the role exists so the permission a policy requires is one a person can grant.",
+          "description": "Administer inventory through the gateway's inventory-admin route (§10.2): set a product's on-hand stock and inspect, release or reinstate a reservation. Granted to demo locally because stock exists only through this API (§14.1).",
           "composite": false,
           "clientRole": true,
           "containerId": "e55a8854-8088-495c-8db4-331d4b5eb68e",
@@ -2674,7 +2674,8 @@
         "commerce-api": [
           "catalog:write",
           "orders:write",
-          "orders:cancel"
+          "orders:cancel",
+          "inventory:admin"
         ]
       },
       "realmRoles": [

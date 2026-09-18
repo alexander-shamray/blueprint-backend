@@ -146,6 +146,9 @@ OUTBOX_METRICS_EXEMPT = {
         "means lifting the type into common code and teaching §4.5's scaffold to "
         "emit it — a design decision PR-24 does not own. Named here so it is a "
         "known gap rather than an empty panel.",
+    "Inventory":
+        "Rendered from Catalog and inherits its gap; removed when Inventory "
+        "registers OutboxMetrics.",
 }
 
 # PromQL keywords that survive the stripping below and are not metric names.

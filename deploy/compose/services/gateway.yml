@@ -34,13 +34,10 @@ services:
     ports: [ "127.0.0.1:5000:8080" ]
     depends_on:
       keycloak: { condition: service_healthy }
-      # The destinations in §10.2's route file that exist today. The one
-      # remaining route — inventory — 502s until its service lands, which is a
-      # true statement about the platform rather than a defect in this file: a
-      # route costs nothing at startup, where a Compose dependency on a service
-      # Compose cannot see fails the whole `up`. So a destination joins this
-      # list with the PR that builds it: ordering-api with PR-18, web-bff with
-      # PR-19.
+      # The destinations in §10.2's route file, each waited on once its
+      # service exists: a route costs nothing at startup, where a Compose
+      # dependency on a service Compose cannot see fails the whole `up`.
       catalog-api: { condition: service_started }
+      inventory-api: { condition: service_started }
       ordering-api: { condition: service_started }
       web-bff: { condition: service_started }

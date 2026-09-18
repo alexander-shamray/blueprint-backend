@@ -269,9 +269,11 @@ public class RealmImportTests
 
         // demo holds Ordering's endpoint permissions and not orders:admin: that
         // role is grantable and held by nobody, so the ownership 404 stays
-        // demonstrable with the logins this realm ships.
+        // demonstrable with the logins this realm ships. demo holds
+        // inventory:admin because stock exists only through the API it
+        // guards, and the compose README's inner loop needs a way in.
         Permissions("demo").ShouldBe(
-            ["catalog:write", "orders:write", "orders:cancel"],
+            ["catalog:write", "orders:write", "orders:cancel", "inventory:admin"],
             ignoreOrder: true);
 
         JsonElement browser = users.EnumerateArray()
