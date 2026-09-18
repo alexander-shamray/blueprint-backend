@@ -267,7 +267,7 @@ to skip it.
 | `GET stock/{productId}` | `GetStockQuery`, Dapper over the write table | `{ available, reserved, updatedAt }`; `404` |
 | `GET reservations/{orderId}` | `GetReservationQuery` | status and lines; `404` — the runbook's step one |
 | `POST reservations/{orderId}/release` | `ReleaseStockCommand` with `CommandOrigin.User` | `204` always, because the command always establishes its postcondition — the runbook's step two |
-| `POST reservations/{orderId}/reinstate` | `ReinstateReservationCommand` | `204`; `422` when the row is not `Released`, has no lines, or has already met a despatch (section 5), each under its own error code; `422` naming the unavailable ids when stock is short. No `409`: §10.5 reserves it for concurrency and idempotency, and `ErrorType` stays at its three members |
+| `POST reservations/{orderId}/reinstate` | `ReinstateReservationCommand` | `204`; `422` `reservation.not_reinstatable` when the row is not `Released`, has no lines, or has already met a despatch (section 5) — one code, because all three mean there is nothing to restore and the description says which; `422` `reservation.unavailable` naming the unavailable ids when stock is short. No `409`: §10.5 reserves it for concurrency and idempotency, and `ErrorType` stays at its three members |
 
 **Reinstate is the runbook's promise, kept.** `order-review.md` already says
 an operator reinstates a picked reservation by hand, and ADR-024's tombstone

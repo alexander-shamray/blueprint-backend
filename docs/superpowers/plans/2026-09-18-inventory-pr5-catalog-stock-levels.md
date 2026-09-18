@@ -14,8 +14,8 @@ guarded by `AsOf < @OccurredAt`. `GetProductsHandler` left-joins the new
 table. No cache exists in Catalog, so no invalidator is written.
 
 **Tech Stack:** MassTransit receive endpoint with the inbox filter, Dapper,
-a hand-written migration for the read-model table (§7.4), xUnit with
-Testcontainers.
+an EF-generated migration for the read model mapped on §7.4's `ProductPrices`
+terms, xUnit with Testcontainers.
 
 **Spec:** `docs/superpowers/specs/2026-09-18-inventory-service-design.md`,
 sections 9 (the Catalog bullet) and 14.

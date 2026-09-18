@@ -60,10 +60,11 @@ sections 5 (the despatch table), 8, 9 and 13.
   `DateTimeOffset? DespatchedUnreservedAt { get; }`.
   `Reinstate` gains one guard: a row with `DespatchedUnreservedAt` set
   throws `DomainException`, because the parcel has gone and there is nothing
-  to reinstate stock for; PR-2's `ReinstateReservationHandler` maps that to
-  `ReservationErrors.NotReinstatable` already, since it catches nothing and
-  checks status and lines first — so the handler gains the same condition
-  beside those two.
+  to reinstate stock for; PR-2's `ReinstateReservationHandler` checks status
+  and lines and answers `ReservationErrors.NotReinstatable`, so the handler
+  gains the same condition beside those two, and the error's description
+  becomes "Only a released reservation with lines, not yet despatched, can be
+  reinstated." — the same code, one more reason in the text.
 
 - [ ] **Step 1: Write the failing tests**
 

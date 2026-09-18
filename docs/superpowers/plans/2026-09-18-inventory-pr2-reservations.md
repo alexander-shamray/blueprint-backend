@@ -9,9 +9,9 @@ admin endpoints the order-review runbook already promises.
 
 **Architecture:** `Reservation` is the one aggregate root any message-driven
 command modifies; `StockItems` moves underneath it by §7.3's statement through
-`IUnitOfWork.ExecuteRawAsync`, per line in `ProductId` order under a T-SQL
-savepoint, so a failed reserve commits a `Failed` row and an outbox row and no
-stock change. Every release path publishes `StockReleased`; a release for an
+`IStockLedger`, a port of its own on the unit of work's transaction, per line
+in `ProductId` order under a T-SQL savepoint, so a failed reserve commits a
+`Failed` row and an outbox row and no stock change. Every release path publishes `StockReleased`; a release for an
 unknown order writes the tombstone row that refuses the reserve that follows.
 
 **Tech Stack:** EF Core with a rowversion on `Reservations`, Dapper through the
@@ -30,7 +30,11 @@ three reservation endpoints), 7, 8 and 10 (the §3.2 sentence).
   B half).
 - `ErrorType` stays at its three members. §10.5 reserves 409 for concurrency
   and idempotency exceptions, so every domain refusal here is `Error.Rule`
-  and answers 422, each under its own error code.
+  and answers 422: `reservation.not_reinstatable` for every state with
+  nothing to restore, `reservation.unavailable` for a shortage.
+- §7.3's statements run through `IStockLedger`, on the unit of work's own
+  connection and transaction, never through `ExecuteRawAsync`, which returns
+  no rows where the statement's `OUTPUT` is the level (spec, section 3).
 - Depends on PR-1 having merged: `StockItem`, `StockItems`,
   `InventoryPermissions.Admin` and the stock endpoints exist.
 - §7.3's statement is used **as printed**: `UPDATE inventory.StockItems SET
