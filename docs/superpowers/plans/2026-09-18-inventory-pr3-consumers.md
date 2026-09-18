@@ -425,9 +425,9 @@ public sealed class FulfilReservationHandler(
     ILogger<FulfilReservationHandler> log)
     : ICommandHandler<FulfilReservationCommand, Result>
 {
-    private static readonly Action<ILogger, Guid, Exception?> NoReservation =
-        LoggerMessage.Define<Guid>(LogLevel.Warning, new EventId(1, nameof(NoReservation)),
-            "ShipmentDispatched for order {OrderId} met no reservation.");
+    private static readonly Action<ILogger, Guid, string, Exception?> NothingHeld =
+        LoggerMessage.Define<Guid, string>(LogLevel.Warning, new EventId(1, nameof(NothingHeld)),
+            "ShipmentDispatched for order {OrderId} met no held reservation: {State}.");
 
     private static readonly Action<ILogger, Guid, Exception?> Unreserved =
         LoggerMessage.Define<Guid>(LogLevel.Warning, new EventId(2, nameof(Unreserved)),
@@ -442,12 +442,15 @@ public sealed class FulfilReservationHandler(
         switch (reservation?.Status)
         {
             case null:
+                NothingHeld(log, command.OrderId, "no reservation", null);
+                return Result.Success();
+
             case ReservationStatus.Failed:
-                NoReservation(log, command.OrderId, null);
+                NothingHeld(log, command.OrderId, "the reserve failed", null);
                 return Result.Success();
 
             case ReservationStatus.Released when reservation.Lines.Count == 0:
-                NoReservation(log, command.OrderId, null);
+                NothingHeld(log, command.OrderId, "a tombstone", null);
                 return Result.Success();
 
             case ReservationStatus.Released:
@@ -811,6 +814,11 @@ git commit -m "feat(inventory): the inventory-events endpoint"
 - Modify: `deploy/observability/check.py` (the `"Inventory"` exemption is
   deleted)
 - Test: `tests/Inventory.Api.Tests/UnreservedDespatchProjectionTests.cs`
+- Test: `tests/Inventory.Application.Tests/OutboxSerialisationTests.cs`
+  (extend) — a registered `IProjectionHandler` makes
+  `DespatchedUnreservedDomainEvent` a Local-lane stageable type, so
+  `DomainEventSamples` gains its sample and the exact stageable-set
+  assertion grows to five; write that first and see it fail
 - Test: `tests/Inventory.Api.Tests/OutboxStatsTests.cs` and
   `MetricsRegistrationTests.cs` — Ordering's, with the namespace and meter
   name changed

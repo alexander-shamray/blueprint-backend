@@ -176,12 +176,20 @@ inside the unit of work, through the ledger port section 3 names:
    `inserted.Available, inserted.UpdatedAt`, and records either the returned
    level or the product id of a line that affected no row. Every line runs,
    so the unavailable list is complete rather than the first shortfall.
-   **The level event's `OccurredAt` is the row's `UpdatedAt`, which the
-   statement assigns under the row lock, and never a clock read in the
-   handler.** Two reserves for one product serialise on that lock, so their
-   timestamps order as their updates did; a clock read before the ledger
-   call could order them the other way, and Catalog's watermark would then
-   keep the older level as the newer one.
+   **The level event's `OccurredAt` is the row's `UpdatedAt`, and
+   `UpdatedAt` is a per-product monotonic stamp, never a clock read in the
+   handler.** The statement sets it to `SYSDATETIMEOFFSET()` when that is
+   later than the row's current value and to the current value plus one
+   tick otherwise, so every stamp on one row is strictly greater than the
+   one before, whatever the server clock does between two serialised
+   writers. The admin path keeps the same invariant from the other side:
+   `StockItem.SetOnHand` stamps `max(loaded UpdatedAt + 1 tick, now)`, and
+   the rowversion refuses the update if any statement stamped the row after
+   the load. A level is therefore wall-clock time when the clocks agree and
+   one tick past its predecessor when they do not, and Catalog's strict
+   watermark on `OccurredAt` — the rule the contract's own remark states —
+   is sufficient without a new member on the contract. Two clocks that
+   cannot be ordered against each other never both stamp the same row.
 4. If any line failed, `ROLLBACK TRANSACTION Reserve`. Every decrement is
    undone atomically; the transaction stays open; the `Reservation` is
    committed as `Failed` with its lines and raises the failure event.

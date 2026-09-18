@@ -213,6 +213,18 @@ public class StockItemTests
     }
 
     [Fact]
+    public void SetOnHand_never_stamps_earlier_than_the_row_already_is()
+    {
+        StockItem item = StockItem.Rehydrate(ProductId.New(), available: 1, reserved: 0, updatedAt: Now.AddHours(1));
+
+        item.SetOnHand(2, Now);
+
+        item.UpdatedAt.ShouldBe(Now.AddHours(1).AddTicks(1), "a clock behind the row moves the stamp one tick, never back");
+        item.DomainEvents.ShouldHaveSingleItem().ShouldBeOfType<StockLevelChangedDomainEvent>()
+            .OccurredAt.ShouldBe(item.UpdatedAt);
+    }
+
+    [Fact]
     public void SetOnHand_refuses_a_negative_count()
     {
         Should.Throw<DomainException>(() => StockItem.Rehydrate(ProductId.New(), 0, 0).SetOnHand(-1, Now));
@@ -292,8 +304,12 @@ public sealed class StockItem : AggregateRoot<ProductId>
         UpdatedAt = now;
     }
 
-    internal static StockItem Rehydrate(ProductId product, int available, int reserved) =>
-        new(product, available, reserved, DateTimeOffset.MinValue);
+    internal static StockItem Rehydrate(
+        ProductId product,
+        int available,
+        int reserved,
+        DateTimeOffset? updatedAt = null) =>
+        new(product, available, reserved, updatedAt ?? DateTimeOffset.MinValue);
 
     public void SetOnHand(int onHand, DateTimeOffset now)
     {
@@ -305,8 +321,15 @@ public sealed class StockItem : AggregateRoot<ProductId>
             throw new DomainException("On-hand stock cannot be below what is reserved.");
 
         Available = onHand - Reserved;
-        UpdatedAt = now;
-        Raise(new StockLevelChangedDomainEvent(Id, Available, now));
+
+        // Monotonic per product, from this side as the ledger's statement is
+        // from its side: the level's instant is the clock when the clock is
+        // ahead of the row and one tick past the row otherwise, so Catalog's
+        // watermark never keeps an older level for a newer stamp whatever the
+        // two clocks do. The rowversion refuses this update if the ledger
+        // stamped the row after it was loaded.
+        UpdatedAt = now > UpdatedAt ? now : UpdatedAt.AddTicks(1);
+        Raise(new StockLevelChangedDomainEvent(Id, Available, UpdatedAt));
     }
 }
 ```
@@ -529,7 +552,8 @@ git commit -m "feat(inventory): map StockItems and add its migration"
   Ordering's does.
 
 **Interfaces:**
-- Produces: `record SetOnHandCommand(Guid ProductId, int OnHand) : ICommand<Result>`;
+- Produces: `record SetOnHandCommand(Guid ProductId, int? OnHand) : ICommand<Result>`
+  (nullable so an omitted count is a 400 rather than a reset to zero);
   `record GetStockQuery(Guid ProductId) : IQuery<StockDto?>`;
   `record StockDto(Guid ProductId, int Available, int Reserved, DateTimeOffset UpdatedAt)`;
   `StockErrors.BelowReserved` (`Error.Rule`); the mapper registry with
@@ -567,6 +591,13 @@ public class SetOnHandValidatorTests
     {
         _validator.TestValidate(new SetOnHandCommand(Guid.CreateVersion7(), 0))
             .ShouldNotHaveAnyValidationErrors();
+    }
+
+    [Fact]
+    public void An_omitted_count_is_refused_rather_than_read_as_zero()
+    {
+        _validator.TestValidate(new SetOnHandCommand(Guid.CreateVersion7(), null))
+            .ShouldHaveValidationErrorFor(c => c.OnHand);
     }
 }
 ```
@@ -634,7 +665,12 @@ using Common.Application;
 
 namespace Inventory.Application.Stock.SetOnHand;
 
-public sealed record SetOnHandCommand(Guid ProductId, int OnHand) : ICommand<Result>;
+// Nullable because a bare int cannot say "absent": an omitted count would
+// bind as 0 and reset the stock indistinguishably from a deliberate stock-take
+// of nothing. The validator's NotNull turns the omission into the field-keyed
+// 400 every other bad field gets — the same reason Catalog's price is a
+// decimal? on PublishProductCommand.
+public sealed record SetOnHandCommand(Guid ProductId, int? OnHand) : ICommand<Result>;
 ```
 
 `SetOnHandValidator.cs`:
@@ -649,7 +685,7 @@ public sealed class SetOnHandValidator : AbstractValidator<SetOnHandCommand>
     public SetOnHandValidator()
     {
         RuleFor(c => c.ProductId).NotEmpty();
-        RuleFor(c => c.OnHand).GreaterThanOrEqualTo(0);
+        RuleFor(c => c.OnHand).NotNull().GreaterThanOrEqualTo(0);
     }
 }
 ```
@@ -685,21 +721,18 @@ public sealed class SetOnHandHandler(IStockItemRepository items, TimeProvider cl
         var product = new ProductId(command.ProductId);
 
         // Ensure, then load, then set: the row exists before it is read, so a
-        // first write and a stock-take are one code path, and two first writes
-        // meet on the rowversion (409, retried) rather than on the key (500).
+        // first write and a stock-take are one code path. Two first writes
+        // serialise on the key-range lock EnsureAsync holds to the commit —
+        // the second waits, then loads the first's committed row — and the
+        // rowversion guards only the update against a ledger write that
+        // lands between this load and this commit.
         await items.EnsureAsync(product, clock.GetUtcNow(), ct);
         StockItem item = await items.GetAsync(product, ct)
             ?? throw new InvalidOperationException($"StockItems has no row for {product} after EnsureAsync.");
 
-        // The clock is read AFTER the row, so the level's OccurredAt is later
-        // than any ledger write the load saw; a ledger write after the load
-        // changes the rowversion and this update fails rather than publishing
-        // an older timestamp over a newer level (spec, section 4).
-        DateTimeOffset now = clock.GetUtcNow();
-
         try
         {
-            item.SetOnHand(command.OnHand, now);
+            item.SetOnHand(command.OnHand!.Value, clock.GetUtcNow());
         }
         catch (DomainException)
         {
@@ -873,6 +906,21 @@ public sealed class StockEndpointsTests(ServiceFixture fixture) : IAsyncLifetime
     }
 
     [Fact]
+    public async Task An_empty_body_is_400_and_resets_nothing()
+    {
+        using HttpClient client = Admin();
+        var product = Guid.CreateVersion7();
+        await client.PutAsJsonAsync($"/v1/inventory/stock/{product}", new { onHand = 4 }, TestContext.Current.CancellationToken);
+
+        HttpResponseMessage put = await client.PutAsJsonAsync(
+            $"/v1/inventory/stock/{product}", new { }, TestContext.Current.CancellationToken);
+
+        put.StatusCode.ShouldBe(HttpStatusCode.BadRequest, "an omitted count binds null and NotNull refuses it");
+        (await client.GetFromJsonAsync<StockDto>($"/v1/inventory/stock/{product}", TestContext.Current.CancellationToken))!
+            .Available.ShouldBe(4);
+    }
+
+    [Fact]
     public async Task Two_first_writes_for_one_product_leave_one_row_and_no_500()
     {
         using HttpClient client = Admin();
@@ -882,9 +930,8 @@ public sealed class StockEndpointsTests(ServiceFixture fixture) : IAsyncLifetime
             client.PutAsJsonAsync($"/v1/inventory/stock/{product}", new { onHand = 5 }, TestContext.Current.CancellationToken),
             client.PutAsJsonAsync($"/v1/inventory/stock/{product}", new { onHand = 7 }, TestContext.Current.CancellationToken));
 
-        responses.ShouldAllBe(r => r.StatusCode is HttpStatusCode.NoContent or HttpStatusCode.Conflict,
-            "the loser meets the rowversion, never the primary key");
-        responses.Count(r => r.StatusCode == HttpStatusCode.NoContent).ShouldBeGreaterThanOrEqualTo(1);
+        responses.ShouldAllBe(r => r.StatusCode == HttpStatusCode.NoContent,
+            "the second waited on the first's key-range lock and loaded its committed row; neither met the key");
         (await fixture.ScalarAsync<int>("SELECT Value = COUNT(*) FROM inventory.StockItems WHERE ProductId = {0}", product))
             .ShouldBe(1);
     }
@@ -984,7 +1031,8 @@ public static class StockEndpoints
     }
 }
 
-public sealed record SetOnHandRequest(int OnHand);
+// int? for the reason SetOnHandCommand gives: `{}` must be a 400, not a reset.
+public sealed record SetOnHandRequest(int? OnHand);
 ```
 
 In `Program.cs`, replace the scaffold's commented policy line with

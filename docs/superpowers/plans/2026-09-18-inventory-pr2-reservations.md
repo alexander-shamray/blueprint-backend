@@ -69,8 +69,9 @@ three reservation endpoints), 7, 8 and 10 (the §3.2 sentence).
   - `readonly record struct OrderId(Guid Value)`.
   - `enum ReservationStatus { Reserved, Failed, Released, Fulfilled }`.
   - `sealed record ReservationLine(ProductId ProductId, int Quantity)`.
-  - `sealed record ReservedLevel(ProductId ProductId, int Available)` — what a
-    statement's `OUTPUT` returns, handed to the aggregate.
+  - `sealed record ReservedLevel(ProductId ProductId, int Available, DateTimeOffset UpdatedAt)`
+    — what a statement's `OUTPUT` returns, handed to the aggregate; the
+    third member is the level event's `OccurredAt`.
   - `Reservation.Reserve(OrderId, IReadOnlyList<ReservationLine>, IReadOnlyList<ReservedLevel>, DateTimeOffset)`
     → status `Reserved`, raises `StockReservedDomainEvent` and one
     `StockLevelChangedDomainEvent` per level.
@@ -89,7 +90,8 @@ three reservation endpoints), 7, 8 and 10 (the §3.2 sentence).
   - Events: `StockReservedDomainEvent(OrderId, DateTimeOffset)`,
     `StockReservationFailedDomainEvent(OrderId, IReadOnlyList<ProductId>, DateTimeOffset)`,
     `StockReleasedDomainEvent(OrderId, DateTimeOffset)`, all `IDomainEvent`.
-  - `IReservationRepository { Task<Reservation?> GetAsync(OrderId, CancellationToken); void Add(Reservation); }`.
+  - `IReservationRepository { Task<Reservation?> GetForUpdateAsync(OrderId, CancellationToken); void Add(Reservation); }`
+    — the one read locks; there is no plain `GetAsync` (Task 2).
 
 - [ ] **Step 1: Write the failing domain tests**
 
@@ -714,6 +716,21 @@ public sealed class StockLedgerTests(ServiceFixture fixture) : IAsyncLifetime
             .ShouldBe([(new ProductId(a), 3), (new ProductId(b), 0)], ignoreOrder: true);
         outcome.Levels.ShouldAllBe(l => l.UpdatedAt > DateTimeOffset.UtcNow.AddMinutes(-1),
             "the instant is the statement's, stamped under the row lock");
+    }
+
+    [Fact]
+    public async Task A_row_stamped_in_the_future_is_stamped_one_tick_later_and_never_earlier()
+    {
+        var a = Guid.CreateVersion7();
+        DateTimeOffset future = DateTimeOffset.UtcNow.AddHours(1);
+        await fixture.ExecuteAsync(
+            "INSERT INTO inventory.StockItems (ProductId, Available, Reserved, UpdatedAt) VALUES ({0}, 5, 0, {1})", a, future);
+
+        LedgerOutcome outcome = await InTransaction(l =>
+            l.TryTakeAsync([new(new ProductId(a), 1)], TestContext.Current.CancellationToken));
+
+        outcome.Levels.ShouldHaveSingleItem().UpdatedAt.ShouldBe(future.AddTicks(1),
+            "per-product monotonic: a clock behind the row's stamp does not move the stamp backwards");
         // Version-7 ids are not creation-ordered under Guid.CompareTo, so the
         // order is asserted against the comparer the ledger sorts with, not
         // against which id was made first.
@@ -814,24 +831,29 @@ internal sealed class SqlStockLedger(InventoryDbContext db) : IStockLedger
 {
     private const string Savepoint = "Reserve";
 
-    // §7.3's statement, as printed, with the OUTPUT widened to the instant the
-    // row was stamped: that instant is taken under the row lock, so two
-    // writers' levels carry timestamps in the order their updates ran.
+    // §7.3's statement, as printed, with two additions the spec's section 4
+    // argues: the OUTPUT returns the stamp, and the stamp is monotonic per
+    // row — the clock when it is ahead of the row, one tick past the row
+    // otherwise — so two serialised writers' levels carry strictly ordered
+    // OccurredAt values whatever the server clock does between them.
     // Zero rows affected is "not enough stock".
-    private const string TakeSql =
-        """
+    private const string Stamp =
+        "CASE WHEN SYSDATETIMEOFFSET() > UpdatedAt THEN SYSDATETIMEOFFSET() ELSE DATEADD(ns, 100, UpdatedAt) END";
+
+    private static readonly string TakeSql =
+        $"""
         UPDATE inventory.StockItems
-        SET Available = Available - @Quantity, Reserved = Reserved + @Quantity, UpdatedAt = SYSDATETIMEOFFSET()
+        SET Available = Available - @Quantity, Reserved = Reserved + @Quantity, UpdatedAt = {Stamp}
         OUTPUT inserted.Available, inserted.UpdatedAt
         WHERE ProductId = @ProductId
             AND Available >= @Quantity;
         """;
 
     // No guard: a release returns what was held, whatever the level is now.
-    private const string GiveBackSql =
-        """
+    private static readonly string GiveBackSql =
+        $"""
         UPDATE inventory.StockItems
-        SET Available = Available + @Quantity, Reserved = Reserved - @Quantity, UpdatedAt = SYSDATETIMEOFFSET()
+        SET Available = Available + @Quantity, Reserved = Reserved - @Quantity, UpdatedAt = {Stamp}
         OUTPUT inserted.Available, inserted.UpdatedAt
         WHERE ProductId = @ProductId;
         """;
@@ -948,6 +970,11 @@ git commit -m "feat(inventory): the stock ledger runs §7.3's statement per line
   (three more registry entries)
 - Test: `tests/Inventory.Application.Tests/ReserveStockValidatorTests.cs`
 - Test: `tests/Inventory.Application.Tests/InventoryIntegrationEventMapperTests.cs` (extend)
+- Test: `tests/Inventory.Application.Tests/OutboxSerialisationTests.cs`
+  (extend) — the three events become stageable the moment the mapper names
+  them, so `DomainEventSamples` gains a sample for each and the exact
+  stageable-set assertion PR-1 wrote grows to the four types; write that
+  first and see it fail on the three unsampled types.
 
 **Interfaces:**
 - Produces:
