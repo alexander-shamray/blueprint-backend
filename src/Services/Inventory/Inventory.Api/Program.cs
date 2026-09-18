@@ -1,3 +1,5 @@
+using Inventory.Api;
+using Inventory.Api.Endpoints;
 using Inventory.Application;
 using Inventory.Infrastructure;
 using Common.Web;
@@ -20,17 +22,12 @@ builder.Services.AddInventoryInfrastructure(builder.Configuration);   // §4.2, 
 // PR-07's OpenAPI deliverable (Appendix C): document only, no UI.
 builder.Services.AddOpenApi();
 
-// This service registers no permission policy, because it names no endpoint
-// that needs one. The first slice brings both together (§11.4):
-//
-//     builder.Services
-//         .AddAuthorizationBuilder()
-//         .AddPolicy(<Service>Permissions.Write, p => p.RequirePermission(…));
-//
-// A policy registered before an endpoint names it is an unused registration;
-// an endpoint naming one nobody registered throws on the first request that
-// reaches it, never at startup. Add AuthorizationPolicyTests with the slice —
-// it enumerates the endpoints and requires every policy they name to resolve.
+// RequirePermission rather than RequireClaim("permission", …): the claim type
+// is PermissionClaim.Type, and spelling the literal here would be a fourth
+// place that has to agree with it (§11.4).
+builder.Services
+    .AddAuthorizationBuilder()
+    .AddPolicy(InventoryPermissions.Admin, p => p.RequirePermission(InventoryPermissions.Admin));
 
 WebApplication app = builder.Build();
 
@@ -53,9 +50,7 @@ app.UseAuthorization();           // §11.4 — evaluates the permission policie
 app.MapCommonHealthEndpoints();   // §13.5 — anonymous; kubelet carries no token
 app.MapOpenApi();
 
-// This service maps no endpoint of its own yet. The first one goes here,
-// behind RequireAuthorization at the group (§11.4) — fail closed, and let
-// any deliberately public endpoint say AllowAnonymous out loud.
+app.MapStockEndpoints();          // §11.4 — the group fails closed
 
 app.Run();
 
