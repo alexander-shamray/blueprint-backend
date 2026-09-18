@@ -453,6 +453,24 @@ public sealed class HttpPaymentProviderTests : IDisposable
     }
 
     [Theory]
+    [InlineData(408)]
+    [InlineData(429)]
+    public async Task A_timeout_or_throttle_status_is_retried_then_thrown_as_unavailable(int status)
+    {
+        // Stubbed rather than scripted: the translation table names both, and
+        // the simulator scripts neither, so without this a branch that dropped
+        // either would leave the suite green.
+        _server.Given(Request.Create().WithPath("/v1/authorisations").UsingPost())
+            .AtPriority(0)
+            .RespondWith(Response.Create().WithStatusCode(status));
+
+        await Should.ThrowAsync<PaymentProviderUnavailableException>(() =>
+            Provider().AuthoriseAsync(Authorisation(42.10m), TestContext.Current.CancellationToken));
+
+        Calls("/v1/authorisations").ShouldBe(ProviderHop.MaxRetryAttempts + 1, "the pipeline retries both, as it does a 503");
+    }
+
+    [Theory]
     [InlineData(0.11)]
     [InlineData(0.21)]
     public async Task An_amount_ending_in_one_that_is_not_one_cent_is_approved(decimal amount)
@@ -923,11 +941,17 @@ internal sealed class HttpPaymentProvider(HttpClient http) : IPaymentProvider
         return response;
     }
 
-    // Two decimal places, the precision the record and the contract carry.
-    // A figure with more is not a payment this platform can state.
+    // The factor PaymentAmounts.MinorUnitPlaces implies, derived rather than
+    // written, so the mapper's refusal and this conversion cannot disagree
+    // about how many places a payment has.
+    private static readonly decimal MinorUnitFactor =
+        Enumerable.Repeat(10m, PaymentAmounts.MinorUnitPlaces).Aggregate(1m, (factor, ten) => factor * ten);
+
+    // A figure with more places than minor units is not a payment this
+    // platform can state.
     private static long ToMinor(decimal amount)
     {
-        decimal minor = amount * 100m;
+        decimal minor = amount * MinorUnitFactor;
 
         if (minor != decimal.Truncate(minor))
             throw new PaymentMismatchException($"An amount of {amount} has more precision than minor units.");
