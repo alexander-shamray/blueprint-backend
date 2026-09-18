@@ -22,9 +22,11 @@ sections 12 and 13.
 - The blueprint wins over the spec; the spec wins over this plan.
 - **Class D.** Touch set: `deploy/helm/**`, `deploy/canary/**`,
   `.github/workflows/deploy.yml`, `.github/workflows/helm.yml`.
-- Depends on PR-1 having merged (the images exist in CI's matrix) and on
-  PR-3 (the spec's order: a deployed Inventory that consumes no events holds
-  every reservation until a person notices).
+- Depends on PR-1 having merged (the images exist in CI's matrix), on PR-3
+  (a deployed Inventory that consumes no events holds every reservation
+  until a person notices) and on PR-5 (a level published while no Catalog
+  queue is bound is dropped and never replayed) — the spec's order,
+  1 → 2 → 3 → 5 → 4.
 - Every list touched has a check that reads it: `smoke.sh` for the chart
   lists, `canary.py`'s check 4 for the workload map, `deploy.yml`'s own
   `pull_request` run for the choice list.

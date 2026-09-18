@@ -456,9 +456,12 @@ another's exchange. `write` gains the queue and nothing else. Run it and its
 suite:
 
 ```bash
-py -3.12 deploy/compose/rabbitmq/check_permissions.py
 py -3.12 -m unittest discover -s deploy/compose/rabbitmq
+py -3.12 deploy/compose/rabbitmq/check_permissions.py
 ```
+
+Suite first, then gate, which is `docs/testing.md`'s order and the broker
+workflow's.
 
 The endpoint test publishes `StockLevelChanged` as `catalog-svc`, which
 that grant refuses by design. `Catalog.TestSupport/ServiceFixture.cs` gains
@@ -559,10 +562,11 @@ git commit -m "feat(catalog): the listing carries Inventory's level, null when u
   The script refuses a Catalog file in neither set, so leaving any one out
   fails the render before it writes. And one new anchored patch on
   the copied `Catalog.Infrastructure/Messaging/DependencyInjection.cs`,
-  removing the three Catalog-only lines Task 3 added — the `using`, the
+  removing the two Catalog-only lines Task 3 added — the
   `AddStockLevelConsumer()` call and the `ConfigureStockLevelEndpoint(context)`
-  call — each an anchor that must match exactly once, in the shape of the
-  script's existing slice patches. And the script's existing patch entry for
+  call; no `using` joins them, since `StockLevelConsumer` shares the file's
+  namespace — each an anchor that must match exactly once, in the shape of
+  the script's existing slice patches. And the script's existing patch entry for
   `tests/Catalog.Api.Tests/MessagingRegistrationTests.cs` is **deleted**:
   both of its anchors — the comment paragraph naming Inventory and the
   assertion message naming Catalog — leave that file in Task 3, so the
@@ -584,7 +588,7 @@ Expected: a failure naming the first unclassified file.
 
 Add the files to `OMITTED` beside the `Products` slice entries. Delete the
 `MessagingRegistrationTests.cs` patch entry and the test that exercised it. Add
-the three-line patch with its test, which renders the file and asserts the three
+the two-line patch with its test, which renders the file and asserts the two
 lines are gone and the rest of the registration is byte-for-byte Catalog's. Add
 the no-consumer assertion to the scaffold's suite. Re-run the suite green. The
 messaging registration is wiring the script already patches (the `RabbitMq`

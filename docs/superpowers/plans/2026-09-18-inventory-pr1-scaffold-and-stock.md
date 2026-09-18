@@ -102,11 +102,14 @@ Expected: every test green. The container half needs Docker; a failure on
 - [ ] **Step 5: Confirm the secret scan accepts the rendered tree**
 
 ```bash
+py -3.12 -m unittest discover -s .github/secret-scan
 py -3.12 .github/secret-scan/secret_scan.py
 ```
 
-Expected: exit 0. The scaffold wrote the allow-list entries itself; a finding
-here means one it did not.
+Expected: both exit 0. The suite runs first because a gate with a suite is
+tested and then run (`docs/testing.md`), and a green gate whose suite is red
+is a gate whose verdict means nothing. The scaffold wrote the allow-list
+entries itself; a finding here means one it did not.
 
 - [ ] **Step 6: Commit the scaffold output alone**
 
@@ -680,14 +683,19 @@ public sealed class SetOnHandHandler(IStockItemRepository items, TimeProvider cl
     public async Task<Result> HandleAsync(SetOnHandCommand command, CancellationToken ct)
     {
         var product = new ProductId(command.ProductId);
-        DateTimeOffset now = clock.GetUtcNow();
 
         // Ensure, then load, then set: the row exists before it is read, so a
         // first write and a stock-take are one code path, and two first writes
         // meet on the rowversion (409, retried) rather than on the key (500).
-        await items.EnsureAsync(product, now, ct);
+        await items.EnsureAsync(product, clock.GetUtcNow(), ct);
         StockItem item = await items.GetAsync(product, ct)
             ?? throw new InvalidOperationException($"StockItems has no row for {product} after EnsureAsync.");
+
+        // The clock is read AFTER the row, so the level's OccurredAt is later
+        // than any ledger write the load saw; a ledger write after the load
+        // changes the rowversion and this update fails rather than publishing
+        // an older timestamp over a newer level (spec, section 4).
+        DateTimeOffset now = clock.GetUtcNow();
 
         try
         {
@@ -1108,12 +1116,14 @@ API (§14.1)."
 - [ ] **Step 3: Run the realm gate and bring the platform up**
 
 ```bash
+py -3.12 -m unittest discover -s deploy/keycloak
 py -3.12 deploy/keycloak/realm_check.py --kind local deploy/compose/keycloak/realm-export.json
 docker compose -f deploy/compose/docker-compose.yml up --build --wait
 ```
 
-Expected: the gate exits 0; every service reports healthy including
-`inventory-api`. Then, with a token for `demo` per the README:
+Expected: the suite and then the gate exit 0 — suite first, as
+`docs/testing.md` orders it and `realm.yml` runs it; every service reports
+healthy including `inventory-api`. Then, with a token for `demo` per the README:
 
 ```bash
 curl -X PUT http://localhost:5000/api/v1/inventory/stock/00000000-0000-0000-0000-000000000001 \

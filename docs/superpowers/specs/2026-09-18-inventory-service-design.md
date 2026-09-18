@@ -75,7 +75,7 @@ event and the deploy tree is a class of its own. Each row names its
 |---|---|---|
 | 1 | `feat(inventory): third service from the scaffold` — the scaffold run, `StockItem` and its two admin endpoints, the Compose pair, the gateway's `depends_on`, `ci.yml`'s filter and image matrix, the realm's grant to `demo` and the building-block test that pins it, the observability gate's exemption, and the three sentences that say Inventory answers 502 | A+B+D+E — E because the scaffold adds projects to the solution |
 | 2 | `feat(inventory): reservations` — `Reservation`, `inventory-commands` and the broker grant that lets it be declared, ADR-024's guarantees, the four events, the three reservation admin endpoints, §3.2's despatch sentence | A+B+D |
-| 3 | `feat(inventory): consume OrderCancelled and ShipmentDispatched` — `inventory-events` and its two handlers, Inventory's outbox gauges and metrics initialiser, the two `AddMeter` lines in `Common.Web` that let section 13's meters be exported, and the deletion of PR-1's exemption | A+B+D |
+| 3 | `feat(inventory): consume OrderCancelled and ShipmentDispatched` — `inventory-events` and its two handlers, Inventory's outbox gauges and metrics initialiser with the one package reference they need, the two `AddMeter` lines in `Common.Web` that let section 13's meters be exported, and the deletion of PR-1's exemption | A+B+D+E |
 | 4 | `feat(deploy): Inventory's chart, deploy target and canary` — `deploy/helm/inventory`, the umbrella dependency, `smoke.sh`'s lists, `deploy.yml`'s option, the canary preflight | D |
 | 5 | `feat(catalog): consume StockLevelChanged` — Catalog's binding and the broker grant it needs, the level's projection and its column on the listing, the scaffold's patches for a template that now consumes, and the cut of the test that says Inventory does not exist | A+D |
 
@@ -93,9 +93,15 @@ token. PR-18 took the same first step for Ordering, and the argument is the
 same: a reservation model reviewed beside the scaffold's generated suite is one
 nobody reads.
 
-**Order.** 1 → 2 → 3, then 4 and 5 in either order. Nothing in 4 depends on
-3, but a deployed Inventory that consumes no events is a service that holds
-every reservation until a person notices, so 4 waits.
+**Order.** 1 → 2 → 3 → 5 → 4. Nothing in 4 depends on 3, but a deployed
+Inventory that consumes no events is a service that holds every reservation
+until a person notices, so 4 waits for 3. And 4 waits for 5 too: a
+`StockLevelChanged` published while no queue is bound to its exchange is
+dropped by the broker, and nothing here replays it, so an Inventory
+deployed before Catalog's consumer exists leaves Catalog's levels `null`
+until the next stock-take republishes them. Locally the same gap exists
+between PR-1 and PR-5 and costs one `PUT` per product after PR-5 lands; in
+a deployed environment the order is what closes it.
 
 ## 3. Domain
 
@@ -166,10 +172,16 @@ inside the unit of work, through the ledger port section 3 names:
    section says what an existing one means.
 2. Issues `SAVE TRANSACTION Reserve`.
 3. For each line **in `ProductId` order**, runs §7.3's statement exactly as
-   printed, with its `OUTPUT inserted.Available`, and records either the
-   returned level or the product id of a line that affected no row. Every
-   line runs, so the unavailable list is complete rather than the first
-   shortfall.
+   printed, with its `OUTPUT inserted.Available` widened to
+   `inserted.Available, inserted.UpdatedAt`, and records either the returned
+   level or the product id of a line that affected no row. Every line runs,
+   so the unavailable list is complete rather than the first shortfall.
+   **The level event's `OccurredAt` is the row's `UpdatedAt`, which the
+   statement assigns under the row lock, and never a clock read in the
+   handler.** Two reserves for one product serialise on that lock, so their
+   timestamps order as their updates did; a clock read before the ledger
+   call could order them the other way, and Catalog's watermark would then
+   keep the older level as the newer one.
 4. If any line failed, `ROLLBACK TRANSACTION Reserve`. Every decrement is
    undone atomically; the transaction stays open; the `Reservation` is
    committed as `Failed` with its lines and raises the failure event.
@@ -309,12 +321,26 @@ emitted by `dotnet ef migrations add` from the configuration that owns each,
 so the DDL is the model's and not a second copy of it: `AddStockItems` in
 PR-1, `AddReservations` in PR-2, `AddDespatchTracking` in PR-3.
 
-**A release and a fulfilment for the same order can arrive on two endpoints
-at once**, and the rowversion is what settles it: the loser throws
-`DbUpdateConcurrencyException` out of the consumer, MassTransit retries it
-under the endpoint's policy, and the retry loads the winner's row and takes
-the branch that row now calls for. That is a fault time fixes, which is
-§9.8's definition of what retry is for.
+**Every command loads its reservation under `UPDLOCK, HOLDLOCK`, for the
+transaction.** A rowversion protects an update and nothing else: two
+releases for an unknown order would both read nothing and both insert, the
+loser failing on the key rather than the version; and a reply derived from
+a row's state without changing it — the tombstone's refusal, a second
+release's `StockReleased`, `AnswerAgain` — carries no version check at
+all, so a reinstate committing beside it could leave a `Reserved` row and
+a `StockReleased` in one instant. So the repository's read is
+`SELECT … WITH (UPDLOCK, HOLDLOCK) WHERE OrderId = @OrderId` on the unit of
+work's connection, which locks the row where one exists and the key range
+where none does: the second of two creators blocks until the first commits
+and then finds the row, and every state-derived reply runs against a row
+nobody else can change until it commits. The rowversion stays as the guard
+on the EF update itself, and a loser there — a fulfilment and a release
+that both loaded before either locked, which the lock now prevents, or an
+admin write against a ledger write — throws `DbUpdateConcurrencyException`,
+which MassTransit retries under the endpoint's policy and the API answers
+with §10.5's `409`. That is a fault time fixes, which is §9.8's definition
+of what retry is for. Section 3's admin path takes the same shape for its
+first write, an insert-where-absent under the same lock.
 
 **Reservations are not purged in this sequence.** ADR-024 bounds the
 tombstone's life by the order's, and nothing in the platform states what an

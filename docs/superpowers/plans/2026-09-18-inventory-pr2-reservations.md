@@ -112,7 +112,7 @@ public class ReservationTests
 
     private static IReadOnlyList<ReservationLine> Lines() => [new(A, 2), new(B, 1)];
 
-    private static IReadOnlyList<ReservedLevel> Levels() => [new(A, 8), new(B, 0)];
+    private static IReadOnlyList<ReservedLevel> Levels() => [new(A, 8, Now), new(B, 0, Now.AddTicks(1))];
 
     [Fact]
     public void Reserve_holds_the_lines_and_raises_the_reservation_and_every_level()
@@ -124,8 +124,8 @@ public class ReservationTests
         reservation.Status.ShouldBe(ReservationStatus.Reserved);
         reservation.Lines.Count.ShouldBe(2);
         reservation.DomainEvents.OfType<StockReservedDomainEvent>().ShouldHaveSingleItem().OrderId.ShouldBe(order);
-        reservation.DomainEvents.OfType<StockLevelChangedDomainEvent>().Select(e => (e.ProductId, e.Available))
-            .ShouldBe([(A, 8), (B, 0)]);
+        reservation.DomainEvents.OfType<StockLevelChangedDomainEvent>().Select(e => (e.ProductId, e.Available, e.OccurredAt))
+            .ShouldBe([(A, 8, Now), (B, 0, Now.AddTicks(1))], "each level carries the row's instant, not the command's");
     }
 
     [Fact]
@@ -154,7 +154,7 @@ public class ReservationTests
         Reservation reservation = Reservation.Reserve(OrderId.New(), Lines(), Levels(), Now);
         reservation.ClearDomainEvents();
 
-        reservation.Release([new(A, 10), new(B, 1)], Now);
+        reservation.Release([new(A, 10, Now), new(B, 1, Now)], Now);
 
         reservation.Status.ShouldBe(ReservationStatus.Released);
         reservation.Lines.Count.ShouldBe(2, "the lines are kept for a later reinstatement");
@@ -215,7 +215,7 @@ public class ReservationTests
     {
         Should.Throw<DomainException>(() => Reservation.Reserve(OrderId.New(), [], [], Now));
         Should.Throw<DomainException>(() =>
-            Reservation.Reserve(OrderId.New(), [new(A, 1), new(A, 1)], [new(A, 1)], Now));
+            Reservation.Reserve(OrderId.New(), [new(A, 1), new(A, 1)], [new(A, 1, Now)], Now));
     }
 }
 ```
@@ -252,8 +252,13 @@ namespace Inventory.Domain.Reservations;
 
 public sealed record ReservationLine(ProductId ProductId, int Quantity);
 
-/// <summary>What §7.3's statement returns for one line: the level it left.</summary>
-public sealed record ReservedLevel(ProductId ProductId, int Available);
+/// <summary>
+/// What §7.3's statement returns for one line: the level it left and the
+/// instant it assigned under the row lock, which is the level event's
+/// OccurredAt — never a clock read before the statement, which two
+/// serialised writers could take in the other order.
+/// </summary>
+public sealed record ReservedLevel(ProductId ProductId, int Available, DateTimeOffset UpdatedAt);
 ```
 
 `Events/ReservationEvents.cs`:
@@ -403,8 +408,10 @@ public sealed class Reservation : AggregateRoot<OrderId>
 
     private void RaiseLevels(IReadOnlyList<ReservedLevel> levels, DateTimeOffset now)
     {
+        // The row's own timestamp, not `now`: `now` orders the reservation's
+        // events, the row's UpdatedAt orders the product's.
         foreach (ReservedLevel level in levels)
-            Raise(new StockLevelChangedDomainEvent(level.ProductId, level.Available, now));
+            Raise(new StockLevelChangedDomainEvent(level.ProductId, level.Available, level.UpdatedAt));
     }
 
     private static void CheckLines(IReadOnlyList<ReservationLine> lines)
@@ -426,11 +433,21 @@ namespace Inventory.Domain.Reservations;
 
 public interface IReservationRepository
 {
-    Task<Reservation?> GetAsync(OrderId id, CancellationToken ct);
+    /// <summary>
+    /// Loads the reservation under a lock held to the end of the unit of
+    /// work: the row where one exists, the key range where none does. Two
+    /// creators serialise here instead of meeting on the key, and a reply
+    /// derived from the row's state runs against a row nobody else can
+    /// change until this commits (spec, section 7).
+    /// </summary>
+    Task<Reservation?> GetForUpdateAsync(OrderId id, CancellationToken ct);
 
     void Add(Reservation reservation);
 }
 ```
+
+There is no plain `GetAsync`: every command that reads a reservation
+decides something on it, and a read that decides is a read that locks.
 
 PR-3 adds `Fulfil` to this class; nothing here anticipates it.
 `Rehydrate` is `internal` and compiles in the test assembly through the
@@ -557,14 +574,29 @@ namespace Inventory.Infrastructure.Persistence;
 
 internal sealed class ReservationRepository(InventoryDbContext db) : IReservationRepository
 {
-    public Task<Reservation?> GetAsync(OrderId id, CancellationToken ct) =>
-        db.Reservations.SingleOrDefaultAsync(r => r.Id == id, ct);
+    public async Task<Reservation?> GetForUpdateAsync(OrderId id, CancellationToken ct)
+    {
+        if (db.Database.CurrentTransaction is null)
+            throw new InvalidOperationException("A reservation is read only inside the unit of work's transaction (§6.3).");
+
+        // The lock probe runs first and on its own: UPDLOCK on the row, or a
+        // key-range lock on its absence, held until the transaction ends. EF's
+        // query below then reads what the probe locked.
+        await db.Database.ExecuteSqlAsync(
+            $"SELECT OrderId FROM inventory.Reservations WITH (UPDLOCK, HOLDLOCK) WHERE OrderId = {id.Value};",
+            ct);
+
+        return await db.Reservations.SingleOrDefaultAsync(r => r.Id == id, ct);
+    }
 
     public void Add(Reservation reservation) => db.Add(reservation);
 }
 ```
 
-`OwnsMany` loads the lines with the owner, so no `Include`. Add the `DbSet`
+`OwnsMany` loads the lines with the owner, so no `Include`. The probe is a
+statement rather than a query hint because EF Core has no `UPDLOCK` hint
+of its own, and `FromSqlInterpolated` with the hint would tie the owned
+lines' loading to a raw query. Add the `DbSet`
 and `services.AddScoped<IReservationRepository, ReservationRepository>();`.
 
 - [ ] **Step 4: Generate the migration and run the smoke test**
@@ -678,7 +710,10 @@ public sealed class StockLedgerTests(ServiceFixture fixture) : IAsyncLifetime
             l.TryTakeAsync([new(new ProductId(b), 1), new(new ProductId(a), 2)], TestContext.Current.CancellationToken));
 
         outcome.Unavailable.ShouldBeEmpty();
-        outcome.Levels.ShouldBe([new(new ProductId(a), 3), new(new ProductId(b), 0)], ignoreOrder: true);
+        outcome.Levels.Select(l => (l.ProductId, l.Available))
+            .ShouldBe([(new ProductId(a), 3), (new ProductId(b), 0)], ignoreOrder: true);
+        outcome.Levels.ShouldAllBe(l => l.UpdatedAt > DateTimeOffset.UtcNow.AddMinutes(-1),
+            "the instant is the statement's, stamped under the row lock");
         // Version-7 ids are not creation-ordered under Guid.CompareTo, so the
         // order is asserted against the comparer the ledger sorts with, not
         // against which id was made first.
@@ -779,12 +814,15 @@ internal sealed class SqlStockLedger(InventoryDbContext db) : IStockLedger
 {
     private const string Savepoint = "Reserve";
 
-    // §7.3's statement, as printed. Zero rows affected is "not enough stock".
+    // §7.3's statement, as printed, with the OUTPUT widened to the instant the
+    // row was stamped: that instant is taken under the row lock, so two
+    // writers' levels carry timestamps in the order their updates ran.
+    // Zero rows affected is "not enough stock".
     private const string TakeSql =
         """
         UPDATE inventory.StockItems
         SET Available = Available - @Quantity, Reserved = Reserved + @Quantity, UpdatedAt = SYSDATETIMEOFFSET()
-        OUTPUT inserted.Available
+        OUTPUT inserted.Available, inserted.UpdatedAt
         WHERE ProductId = @ProductId
             AND Available >= @Quantity;
         """;
@@ -794,9 +832,11 @@ internal sealed class SqlStockLedger(InventoryDbContext db) : IStockLedger
         """
         UPDATE inventory.StockItems
         SET Available = Available + @Quantity, Reserved = Reserved - @Quantity, UpdatedAt = SYSDATETIMEOFFSET()
-        OUTPUT inserted.Available
+        OUTPUT inserted.Available, inserted.UpdatedAt
         WHERE ProductId = @ProductId;
         """;
+
+    private sealed record LevelRow(int Available, DateTimeOffset UpdatedAt);
 
     public async Task<LedgerOutcome> TryTakeAsync(IReadOnlyList<ReservationLine> lines, CancellationToken ct)
     {
@@ -810,16 +850,16 @@ internal sealed class SqlStockLedger(InventoryDbContext db) : IStockLedger
 
         foreach (ReservationLine line in lines.OrderBy(l => l.ProductId.Value))
         {
-            int? level = await connection.QuerySingleOrDefaultAsync<int?>(new CommandDefinition(
+            LevelRow? row = await connection.QuerySingleOrDefaultAsync<LevelRow>(new CommandDefinition(
                 TakeSql,
                 new { ProductId = line.ProductId.Value, line.Quantity },
                 transaction: transaction,
                 cancellationToken: ct));
 
-            if (level is null)
+            if (row is null)
                 unavailable.Add(line.ProductId);
             else
-                levels.Add(new ReservedLevel(line.ProductId, level.Value));
+                levels.Add(new ReservedLevel(line.ProductId, row.Available, row.UpdatedAt));
         }
 
         if (unavailable.Count == 0)
@@ -840,14 +880,14 @@ internal sealed class SqlStockLedger(InventoryDbContext db) : IStockLedger
 
         foreach (ReservationLine line in lines.OrderBy(l => l.ProductId.Value))
         {
-            int? level = await connection.QuerySingleOrDefaultAsync<int?>(new CommandDefinition(
+            LevelRow? row = await connection.QuerySingleOrDefaultAsync<LevelRow>(new CommandDefinition(
                 GiveBackSql,
                 new { ProductId = line.ProductId.Value, line.Quantity },
                 transaction: transaction,
                 cancellationToken: ct));
 
-            if (level is not null)
-                levels.Add(new ReservedLevel(line.ProductId, level.Value));
+            if (row is not null)
+                levels.Add(new ReservedLevel(line.ProductId, row.Available, row.UpdatedAt));
         }
 
         return levels;
@@ -870,8 +910,10 @@ internal sealed class SqlStockLedger(InventoryDbContext db) : IStockLedger
 
 Register: `services.AddScoped<IStockLedger, SqlStockLedger>();`.
 
-`QuerySingleOrDefaultAsync<int?>` returns null on zero rows, which is the
-"not enough stock" branch. `SAVE TRANSACTION` and `ROLLBACK TRANSACTION
+`QuerySingleOrDefaultAsync<LevelRow>` returns null on zero rows, which is the
+"not enough stock" branch; on one row it carries the level and the instant the
+statement stamped, and the second is what orders two writers' levels for Catalog
+(spec, section 4). `SAVE TRANSACTION` and `ROLLBACK TRANSACTION
 <name>` leave `@@TRANCOUNT` unchanged, so EF's commit still commits.
 
 - [ ] **Step 4: Run the ledger tests**
@@ -1056,10 +1098,12 @@ public sealed class ReserveStockHandler(
     {
         var order = new OrderId(command.OrderId);
         DateTimeOffset now = clock.GetUtcNow();
-        Reservation? existing = await reservations.GetAsync(order, ct);
+        Reservation? existing = await reservations.GetForUpdateAsync(order, ct);
 
         // Section 4's outcome table: an existing row answers again rather
-        // than reserving twice, and a Released row is ADR-024's refusal.
+        // than reserving twice, and a Released row is ADR-024's refusal. The
+        // row, or its absence, is locked until this commits, so a second
+        // command for the same order waits here and then sees what this did.
         if (existing is not null)
         {
             existing.AnswerAgain(now);
@@ -1121,8 +1165,10 @@ public sealed class ReleaseStockHandler(
     {
         var order = new OrderId(command.OrderId);
         DateTimeOffset now = clock.GetUtcNow();
-        Reservation? reservation = await reservations.GetAsync(order, ct);
+        Reservation? reservation = await reservations.GetForUpdateAsync(order, ct);
 
+        // Two releases for an unknown order serialise on the key-range lock the
+        // read took: the second waits, then finds the tombstone the first wrote.
         if (reservation is null)
         {
             reservations.Add(Reservation.Tombstone(order, now));
@@ -1480,9 +1526,12 @@ rule `deploy/compose/rabbitmq/check_permissions.py` enforces; run it and its
 suite after the edit:
 
 ```bash
-py -3.12 deploy/compose/rabbitmq/check_permissions.py
 py -3.12 -m unittest discover -s deploy/compose/rabbitmq
+py -3.12 deploy/compose/rabbitmq/check_permissions.py
 ```
+
+Suite first, then gate, which is `docs/testing.md`'s order and the broker
+workflow's.
 
 The test fixture sends `ReserveStock` to `queue:inventory-commands` as
 `inventory-svc`, which the `inventory-` prefix admits, so this PR needs no
@@ -1630,6 +1679,46 @@ public async Task Reinstating_a_tombstone_and_reinstating_into_a_shortage_are_bo
 }
 
 [Fact]
+public async Task Two_releases_for_one_unknown_order_at_once_leave_one_tombstone_and_no_500()
+{
+    var order = Guid.CreateVersion7();
+
+    HttpResponseMessage[] responses = await Task.WhenAll(
+        Admin().PostAsync($"/v1/inventory/reservations/{order}/release", null, TestContext.Current.CancellationToken),
+        Admin().PostAsync($"/v1/inventory/reservations/{order}/release", null, TestContext.Current.CancellationToken));
+
+    responses.ShouldAllBe(r => r.StatusCode == HttpStatusCode.NoContent,
+        "the second creator waited on the first's key-range lock and found the tombstone");
+    (await fixture.ScalarAsync<int>("SELECT Value = COUNT(*) FROM inventory.Reservations WHERE OrderId = {0}", order))
+        .ShouldBe(1);
+    (await fixture.OutboxAsync()).Count(r => r.MessageType.Contains("StockReleased", StringComparison.Ordinal))
+        .ShouldBe(2, "ADR-024: both releases answered");
+}
+
+[Fact]
+public async Task A_release_and_a_reinstate_at_once_end_in_exactly_one_state()
+{
+    var product = Guid.CreateVersion7();
+    await SeedStock(product, 3);
+    var order = Guid.CreateVersion7();
+    await SendAsync(new ReserveStock(order, [new StockLine(product, 2)]));
+    await EventuallyStatus(order, "Reserved");
+    await SendAsync(new ReleaseStock(order));
+    await EventuallyStatus(order, "Released");
+
+    HttpResponseMessage[] responses = await Task.WhenAll(
+        Admin().PostAsync($"/v1/inventory/reservations/{order}/reinstate", null, TestContext.Current.CancellationToken),
+        Admin().PostAsync($"/v1/inventory/reservations/{order}/release", null, TestContext.Current.CancellationToken));
+
+    responses.ShouldAllBe(r => r.StatusCode is HttpStatusCode.NoContent or HttpStatusCode.Conflict);
+    string status = await StatusAsync(order);
+    int available = await Available(product);
+    (status, available).ShouldBeOneOf(
+        ("Reserved", 1),   // the reinstate ran second and re-took the lines
+        ("Released", 3));  // the release ran second and gave them back, or the reinstate lost
+}
+
+[Fact]
 public async Task Every_reservation_endpoint_requires_the_admin_permission()
 {
     HttpClient client = fixture.Factory.CreateClient();
@@ -1732,7 +1821,7 @@ public sealed class ReinstateReservationHandler(
 {
     public async Task<Result> HandleAsync(ReinstateReservationCommand command, CancellationToken ct)
     {
-        Reservation? reservation = await reservations.GetAsync(new OrderId(command.OrderId), ct);
+        Reservation? reservation = await reservations.GetForUpdateAsync(new OrderId(command.OrderId), ct);
         if (reservation is null)
             return Result.Failure(ReservationErrors.NotFound);
         if (reservation.Status != ReservationStatus.Released || reservation.Lines.Count == 0)

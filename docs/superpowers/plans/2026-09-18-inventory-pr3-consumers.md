@@ -437,7 +437,7 @@ public sealed class FulfilReservationHandler(
     {
         var order = new OrderId(command.OrderId);
         DateTimeOffset now = clock.GetUtcNow();
-        Reservation? reservation = await reservations.GetAsync(order, ct);
+        Reservation? reservation = await reservations.GetForUpdateAsync(order, ct);
 
         switch (reservation?.Status)
         {
