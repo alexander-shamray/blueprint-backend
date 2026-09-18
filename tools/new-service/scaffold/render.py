@@ -155,6 +155,9 @@ OMITTED = frozenset(
         "src/Services/Catalog/Catalog.Infrastructure/Persistence/MoneyJsonConverter.cs",
         "src/Services/Catalog/Catalog.Infrastructure/Persistence/ProductConfiguration.cs",
         "src/Services/Catalog/Catalog.Infrastructure/Persistence/ProductRepository.cs",
+        # §3.2 gives Catalog one Consumes cell, and the projection of it is the
+        # slice's: a rendered service consumes nothing and projects nothing.
+        "src/Services/Catalog/Catalog.Infrastructure/Persistence/StockLevelConfiguration.cs",
         "tests/Catalog.Domain.Tests/MoneyTests.cs",
         "tests/Catalog.Domain.Tests/ProductTests.cs",
         "tests/Catalog.Application.Tests/CatalogIntegrationEventMapperTests.cs",
@@ -206,6 +209,7 @@ OMITTED = frozenset(
         # entity cannot assert it, so it returns with the first real slice.
         "tests/Catalog.Api.Tests/UnitOfWorkRollbackTests.cs",
         "tests/Catalog.Api.Tests/ProductEndpointsTests.cs",
+        "tests/Catalog.Api.Tests/StockLevelsSchemaTests.cs",
         # Not slice, but container wiring with nothing left to wire: with the
         # handler tests gone, the collection has no member and the fixture no
         # consumer here. Both return with the service's first handler test,

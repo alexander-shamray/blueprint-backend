@@ -939,7 +939,7 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
             "        // apply every migration in sequence, and a count alone would pass on\n"
             "        // a shorter prefix of them applied twice.\n"
             "        string[] applied = await fixture.AppliedMigrationsAsync();\n"
-            "        applied.Length.ShouldBe(8);\n"
+            "        applied.Length.ShouldBe(9);\n"
             "        applied[0].ShouldEndWith(\"_InitialCreate\");\n"
             "        applied[1].ShouldEndWith(\"_AddProducts\");\n"
             "        applied[2].ShouldEndWith(\"_AddOutbox\");\n"
@@ -947,7 +947,8 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
             "        applied[4].ShouldEndWith(\"_AddOutboxRetentionIndex\");\n"
             "        applied[5].ShouldEndWith(\"_AddIdempotencyMarkers\");\n"
             "        applied[6].ShouldEndWith(\"_IdempotencyMarkerCommittedAtDefault\");\n"
-            "        applied[7].ShouldEndWith(\"_AddIdempotencyMarkerRowVersion\");\n",
+            "        applied[7].ShouldEndWith(\"_AddIdempotencyMarkerRowVersion\");\n"
+            "        applied[8].ShouldEndWith(\"_AddStockLevels\");\n",
             "        schema.ShouldBe(1, \"InitialCreate's hand-written EnsureSchema is what creates it\");\n"
             "\n"
             "        // Named and ordered, not merely counted: the migrator's job is to\n"
