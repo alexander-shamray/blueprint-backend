@@ -1,27 +1,31 @@
 # The licence gate
 
-**The claim: no package reaches a restore without a licence somebody
-cleared.** [§4.4](../../docs/backend-architecture/04-solution-structure.md)
-states the rule; this file owns what the gate reads to enforce it, what it
-refuses, and where its claim stops.
+**The claim: every package `Directory.Packages.props` pins has a licence
+somebody cleared, and no project restores a package past that file.**
+[§4.4](../../docs/backend-architecture/04-solution-structure.md) states the
+rule; this file owns what the gate reads to enforce it, what it refuses, and
+where its claim stops — which is narrower than "no package reaches a restore
+uncleared", for the reason under *What it does not claim*.
 
 ## What it reads
 
-- `Directory.Packages.props` — what CI will actually restore.
+- `Directory.Packages.props` — the pins, `PackageVersion` and
+  `GlobalPackageReference` alike, read from this file and no other.
 - [Appendix B](../../docs/backend-architecture/appendix-b-licences.md) — the
   register of what is cleared, matched on the backticked package identities
   its rows carry, never on the product a package is named after.
 - `allowed-licences.txt` beside this file — the licences the register may
   name.
-- Every `.csproj`, `.props` and `.targets` in the repository, because central
-  pinning is a convention rather than a constraint: a `PackageReference`
-  naming its own `Version`, a `VersionOverride`, a `GlobalPackageReference`
-  or `ManagePackageVersionsCentrally` set to anything but `true` each restore
-  a package no register row was asked about, and an imported `.props` does
-  it for every project at once.
+- Every other `.csproj`, `.props` and `.targets` outside the directories
+  `SKIPPED_DIRECTORIES` in `licence_gate.py` names, for the two ways a
+  project steps past central pinning: a `PackageReference` naming its own
+  `Version` or a `VersionOverride`, and `ManagePackageVersionsCentrally` set
+  to anything but `true`. An imported `.props` does either for every project
+  at once, which is why the scan reaches past the projects.
 - The fenced `Directory.Packages.props` sample in §4.4, which it compares
-  with the real file. The failure it reports is against the chapter, because
-  the file is what CI restores and the chapter is what a reader believes.
+  with the real file, identity and version both. The failure it reports is
+  against the chapter, because the file is what CI restores and the chapter
+  is what a reader believes.
 
 Everything it reads is text, so nothing needs restoring first, and that is
 what lets [§15.1](../../docs/backend-architecture/15-cicd-deployment.md) put
@@ -50,10 +54,15 @@ it ahead of the build.
 
 ## What it does not claim
 
-Every question it asks is about **identity and licence**. It never asks
-whether a version is current or safe — the only thing it asks about a
-`Version` is where one is written — so currency and vulnerability scanning
-are a separate obligation, and nothing here meets it.
+- **A pin written anywhere but the props file.** A `PackageVersion` or
+  `GlobalPackageReference` in another imported `.props` or `.targets` is not
+  read as a pin, so a package supplied that way passes unregistered. That is
+  a gap in the gate rather than a decision, and closing it is a change to
+  `licence_gate.py` and its suite.
+- **Whether a version is current or safe.** It asks where a `Version` is
+  written, and whether §4.4's sample prints the one the props file pins, and
+  nothing else about it — so currency and vulnerability scanning are a
+  separate obligation, and nothing here meets it.
 
 ## How it runs
 

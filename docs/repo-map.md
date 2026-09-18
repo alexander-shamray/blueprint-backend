@@ -184,13 +184,16 @@ coverage.runsettings         the report filtered to `.*\.Domain\.dll$` (§12.9)
                              deploy.yml; this is the moment between rollouts
 .github/<gate>/              one directory per gate — licence-gate,
                              secret-scan, closure-gate, locality-gate,
-                             pipeline-gate, coverage, output-gate — holding the
-                             gate, its suite and a README. The README is the
-                             ONE owner of what the gate reads and what it
-                             claims; this entry, docs/testing.md and the
-                             chapter whose rule a gate enforces cite it.
-                             secret-scan is also a library, imported by the
-                             scaffold, and coverage reports rather than gates
+                             pipeline-gate, output-gate — holding the gate,
+                             its suite and a README. The README is the ONE
+                             owner of what the gate reads and what it claims;
+                             this entry and the chapter whose rule a gate
+                             enforces cite it, and docs/testing.md carries the
+                             invocations only. secret-scan is also a library,
+                             imported by the scaffold
+.github/coverage/            the domain-coverage reporter, laid out like a
+                             gate — script, suite, README — and not one: it
+                             reports and never fails on a figure
 deploy/canary/               §15.5's rollout — the ladder as JSON, the weight
                              arithmetic and the promote/rollback verdict as
                              tested stdlib Python, and one file that reads
@@ -384,8 +387,8 @@ reason.
   reads and refuses.
 - **The secret scan** sits beside it under `.github/` on the same argument and
   runs in the same job, first — §15.1 draws "SCA + secret scan" as one node.
-  Its README owns what it can and cannot find, and `allowed/`'s owns what an
-  accepted finding may say.
+  Its README owns what it can and cannot find, and the README in `allowed/`
+  owns what an accepted finding may say.
 - **`docs/roadmap.md`** is a schedule, not a specification, and goes stale on a
   different clock. Nothing in it states a requirement. **Where it and Appendix C
   disagree, Appendix C wins**, always. Being outside the tree, no nav footer or

@@ -13,22 +13,9 @@ pin with no identity here fails the build before anything compiles
 [§4.4](04-solution-structure.md): the gate checks that the two agree, but it is
 the file CI restores that decides what a licence obligation is.
 
-**And not that file alone.** Central pinning is a convention the build follows,
-not a constraint it enforces, so the gate reads every `.csproj`, `.props` and
-`.targets` as well. A `PackageReference` carrying its own `Version` or a
-`VersionOverride`, and a project setting `ManagePackageVersionsCentrally` to
-anything but `true`, each restore a package this register was never asked
-about — all three ordinary MSBuild, and none of them writing a `PackageVersion`
-element anywhere. **A register cannot disagree with a pin it never sees**,
-which is why the gate's subject is the whole repository rather than one file in
-it.
-
-**The imported files are in that list for the reason the projects are, one
-scope wider.** A `PackageReference` written into `Directory.Build.props`
-reaches *every* project at once, so a scan that stopped at the projects would
-have closed the narrow spelling of this defect and left the wide one standing —
-the shape §4.2's gates keep being caught by, arriving in the check written to
-close it.
+**A register cannot disagree with a pin it never sees**, so what else the gate
+reads to find a package restored past the props file — and where that reach
+stops — is [its README](../../.github/licence-gate/README.md)'s.
 
 So a product named in prose and a package named in backticks are different
 claims: prose says what the thing is, backticks say what `restore` will resolve.

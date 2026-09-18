@@ -1511,8 +1511,8 @@ Appendix B says whether a licence is acceptable, this file says which version CI
 will actually resolve. A package in one and not the other is how a licence
 boundary gets crossed by a restore, so
 [`.github/licence-gate/`](../../.github/licence-gate/README.md) fails the build
-on a package nobody cleared, and its README owns what it reads to find one and
-what it refuses.
+on a pin nobody cleared, and its README owns what it reads to find one, what
+it refuses and where its reach stops.
 
 Appendix B is the wider list, though, and three kinds of row in it will never
 have a pin here. A check that does not know them reports false positives until

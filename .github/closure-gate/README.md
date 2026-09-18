@@ -38,8 +38,9 @@ issue this repository tracks lives in it.
 
 ## What it reads
 
-One JSON document on stdin — the pull request's number, body, commits,
-closing references and head — fetched by the workflow, so the deciding is
+One JSON document on stdin — the pull request's number, URL, body, commits,
+closing references and head, each one of `REQUIRED_FIELDS`; the repository
+is read from the URL — fetched by the workflow, so the deciding is
 testable without a network. `docs/testing.md` has the live invocation.
 
 ## How it runs
