@@ -1,5 +1,5 @@
-"""grok-review.sh: its preflight, its did-it-run verdict, its arguments, and what
-crosses back from the reviewer.
+"""grok-review.sh: its preflight, its did-it-run verdict, its arguments, and
+what crosses back from the reviewer.
 
 The shared harness and the reason it shells out rather than
 re-implementing are `review_helpers.py`'s.

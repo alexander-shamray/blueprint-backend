@@ -1,5 +1,5 @@
-"""copilot-authors.sh and the three Copilot feeds: who is admitted into a command
-holding `Edit`.
+"""copilot-authors.sh and the three Copilot feeds: who is admitted into a
+command holding `Edit`.
 
 The shared harness and the reason it shells out rather than
 re-implementing are `review_helpers.py`'s.
@@ -19,7 +19,6 @@ from review_helpers import (
     COMMANDS,
     BASH,
     setUpModule,
-    declared,
 )
 
 
