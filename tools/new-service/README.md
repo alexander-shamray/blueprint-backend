@@ -226,7 +226,7 @@ that Catalog moves under the script's anchors. Only rendering the tree that
 actually exists catches that.
 
 So a Catalog change that breaks the scaffold fails here, loudly, naming the
-file. If it does, reconcile `new_service.py` with the template in the same
+file. If it does, reconcile `scaffold/` with the template in the same
 change: a file added under `src/Services/Catalog` has to be classified as
 template or slice, and the script will not guess.
 
