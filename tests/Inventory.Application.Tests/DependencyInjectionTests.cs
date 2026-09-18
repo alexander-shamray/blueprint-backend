@@ -1,4 +1,7 @@
 using Common.Application;
+using Common.Contracts.Ordering.V1;
+using Common.Contracts.Shipping.V1;
+using Inventory.Application.Reservations.Fulfil;
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
 using Xunit;
@@ -159,10 +162,33 @@ public class DependencyInjectionTests
             "a singleton would carry one command's key into every other command in the process");
     }
 
-    // Two tests are missing here, and they come back separately rather
-    // than together. The first handler of either kind earns the one that
-    // asserts the §6.2 scan produced a registration; the first validator
-    // earns the one that asserts the validator scan found it. Both scans
-    // fail silently when lost, which is why neither is left implicit —
-    // and a query-only slice needs the first and not the second.
+    [Fact]
+    public void AddInventoryApplication_registers_the_scanned_handlers()
+    {
+        // The §6.2 scan fails silently when it stops finding things: nothing
+        // resolves an open generic at build time, so ValidateOnBuild says
+        // nothing and the dispatcher throws on the first request that needs
+        // the handler — in production, on the path that matters, exactly the
+        // shape of the incident Ordering's own version of this test records.
+        //
+        // FulfilReservationHandler, OrderCancelledHandler and
+        // ShipmentDispatchedHandler are this assembly's first handlers of
+        // either kind, so this is the first PR that can write the test at
+        // all — it earns it rather than merely using it.
+        ServiceCollection services = new();
+
+        services.AddInventoryApplication();
+
+        services.ShouldContain(d =>
+            d.ServiceType == typeof(ICommandHandler<FulfilReservationCommand, Result>));
+        services.ShouldContain(d =>
+            d.ServiceType == typeof(IIntegrationEventHandler<OrderCancelled>));
+        services.ShouldContain(d =>
+            d.ServiceType == typeof(IIntegrationEventHandler<ShipmentDispatched>));
+    }
+
+    // The other half of the pair this earned: the first validator to arrive
+    // still owes the test that asserts FluentValidation's own scan found it.
+    // Both scans fail silently when lost, which is why neither is left
+    // implicit.
 }
