@@ -255,10 +255,14 @@ public async Task Fulfilling_more_than_is_reserved_is_a_fault()
 - [ ] **Step 2: Run to see them fail; write the statement**
 
 ```csharp
-private const string FulfilSql =
-    """
+// The same Stamp expression as the two PR-2 statements: a fulfilment
+// publishes no level, but it moves UpdatedAt, and a stamp that went
+// backwards here would let the next SetOnHand carry an OccurredAt behind
+// Catalog's watermark.
+private static readonly string FulfilSql =
+    $"""
     UPDATE inventory.StockItems
-    SET Reserved = Reserved - @Quantity, UpdatedAt = SYSDATETIMEOFFSET()
+    SET Reserved = Reserved - @Quantity, UpdatedAt = {Stamp}
     WHERE ProductId = @ProductId
         AND Reserved >= @Quantity;
     """;
@@ -785,7 +789,7 @@ in `deploy/compose/rabbitmq/` does not move.
 
 ```bash
 dotnet test tests/Inventory.Api.Tests
-git add src/Services/Inventory/Inventory.Infrastructure tests/Inventory.Api.Tests
+git add src/Services/Inventory/Inventory.Infrastructure tests/Inventory.Api.Tests tests/Inventory.TestSupport
 git commit -m "feat(inventory): the inventory-events endpoint"
 ```
 
@@ -985,7 +989,7 @@ test's lines first and see them fail. That is the Class B half of this PR.
 ```bash
 dotnet test tests/Inventory.Api.Tests tests/Common.Web.Tests
 py -3.12 deploy/observability/check.py
-git add src/Services/Inventory tests/Inventory.Api.Tests src/BuildingBlocks/Common.Web tests/Common.Web.Tests deploy/observability/check.py
+git add src/Services/Inventory tests/Inventory.Api.Tests tests/Inventory.Application.Tests src/BuildingBlocks/Common.Web tests/Common.Web.Tests deploy/observability/check.py
 git commit -m "feat(inventory): outbox gauges, the metrics initialiser, and one claimed counter"
 ```
 

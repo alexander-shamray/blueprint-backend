@@ -161,8 +161,7 @@ public sealed class StockLevelProjectionTests(ServiceFixture fixture) : IAsyncLi
     {
         await using AsyncServiceScope scope = fixture.Factory.Services.CreateAsyncScope();
         // As its interface: AddPluggableFrom registers with AsImplementedInterfaces(),
-        // so the concrete type is not resolvable, the same as Ordering's
-        // ProductPriceProjectionTests resolve.
+        // so the concrete type is not resolvable.
         IIntegrationEventHandler<StockLevelChanged> projection =
             scope.ServiceProvider.GetRequiredService<IIntegrationEventHandler<StockLevelChanged>>();
         await projection.HandleAsync(
@@ -397,7 +396,8 @@ namespace Catalog.Infrastructure.Messaging;
 public static class StockLevelConsumer
 {
     // Public, as Ordering's queue constants are: §9.5's inbox keys each row on
-    // the endpoint name, and the tests that read those rows back name it.
+    // the endpoint name, so the name is part of what an inbox row means and
+    // not this assembly's private detail.
     public const string Queue = "catalog-inventory-events";
 
     public static void AddStockLevelConsumer(this IBusRegistrationConfigurator x) =>
