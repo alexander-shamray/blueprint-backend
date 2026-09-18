@@ -165,7 +165,7 @@ expires without anyone noticing, because nothing re-reads the condition when
 the fact changes. #30's argv guard made it false. A hook is the sharpest case
 on the list: it grants nothing, but it **runs on every Bash call**, so a session
 able to rewrite one could delete its own guard and then act. `settings.json`
-denies it, and a case in `test_grok_helpers.py` asserts the deny, so the next
+denies it, and a case in `test_harness_denies.py` asserts the deny, so the next
 hook arrives behind a control rather than behind a sentence that used to be
 true.
 
@@ -533,7 +533,7 @@ earlier, and the rule nobody re-read was not.
 
 **The set itself is deliberately not written here**, which is the fix rather
 than an omission — it is `GH_GRANTS_THAT_CANNOT_REACH_A_FEED` in
-`test_grok_helpers.py`, beside the assertion that reads it, and a copy in this
+`test_copilot_feeds.py`, beside the assertion that reads it, and a copy in this
 file is what went stale. This paragraph carries the argument for why a
 subcommand joins or leaves that set; the set carries the membership.
 
