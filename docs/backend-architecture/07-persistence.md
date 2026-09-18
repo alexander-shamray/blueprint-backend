@@ -262,8 +262,8 @@ degrade badly under that load. There, use a targeted pessimistic update:
 
 ```sql
 UPDATE inventory.StockItems
-SET Available = Available - @Quantity, Reserved = Reserved + @Quantity, UpdatedAt = SYSDATETIMEOFFSET()
-OUTPUT inserted.Available
+SET Available = Available - @Quantity, Reserved = Reserved + @Quantity, UpdatedAt = <stamp>
+OUTPUT inserted.Available, inserted.UpdatedAt
 WHERE ProductId = @ProductId
     AND Available >= @Quantity;
 ```
@@ -271,6 +271,17 @@ WHERE ProductId = @ProductId
 The `WHERE Available >= @Quantity` makes the check and the decrement a single
 atomic statement. If it affects zero rows, there was not enough stock — no read,
 no race, no retry loop.
+
+`SqlStockLedger` in `Inventory.Infrastructure/Persistence` owns the statement
+as it runs, and two of its terms are the ledger's rather than this section's.
+The stamp is monotonic per row rather than a bare clock read, so two serialised
+writers leave strictly ordered instants whatever the server clock does between
+them; and it is returned beside the level because it is the `OccurredAt` of the
+`StockLevelChanged` that write publishes ([§3.2](03-bounded-contexts.md)). A
+bare reading in both places is the version that fails — the second writer can
+take an earlier one than the first, and Catalog's projection then keeps the
+older level. The guard and the arithmetic above are this section's, and are
+what the ledger runs.
 
 ## 7.4 Migrations
 
