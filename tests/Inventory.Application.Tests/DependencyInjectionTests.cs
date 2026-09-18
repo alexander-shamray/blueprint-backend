@@ -1,7 +1,12 @@
 using Common.Application;
 using Common.Contracts.Ordering.V1;
 using Common.Contracts.Shipping.V1;
+using FluentValidation;
 using Inventory.Application.Reservations.Fulfil;
+using Inventory.Application.Reservations.Reinstate;
+using Inventory.Application.Reservations.ReleaseStock;
+using Inventory.Application.Reservations.ReserveStock;
+using Inventory.Application.Stock.SetOnHand;
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
 using Xunit;
@@ -171,10 +176,11 @@ public class DependencyInjectionTests
         // the handler — in production, on the path that matters, exactly the
         // shape of the incident Ordering's own version of this test records.
         //
-        // FulfilReservationHandler, OrderCancelledHandler and
-        // ShipmentDispatchedHandler are this assembly's first handlers of
-        // either kind, so this is the first PR that can write the test at
-        // all — it earns it rather than merely using it.
+        // OrderCancelledHandler and ShipmentDispatchedHandler are this
+        // assembly's first IIntegrationEventHandler implementations, and
+        // FulfilReservationHandler is the command handler this PR adds; the
+        // loop below also covers the four command handlers that predate it,
+        // so the scan's coverage here is the assembly's rather than one PR's.
         ServiceCollection services = new();
 
         services.AddInventoryApplication();
@@ -182,13 +188,26 @@ public class DependencyInjectionTests
         services.ShouldContain(d =>
             d.ServiceType == typeof(ICommandHandler<FulfilReservationCommand, Result>));
         services.ShouldContain(d =>
+            d.ServiceType == typeof(ICommandHandler<ReserveStockCommand, Result>));
+        services.ShouldContain(d =>
+            d.ServiceType == typeof(ICommandHandler<ReleaseStockCommand, Result>));
+        services.ShouldContain(d =>
+            d.ServiceType == typeof(ICommandHandler<ReinstateReservationCommand, Result>));
+        services.ShouldContain(d =>
+            d.ServiceType == typeof(ICommandHandler<SetOnHandCommand, Result>));
+        services.ShouldContain(d =>
             d.ServiceType == typeof(IIntegrationEventHandler<OrderCancelled>));
         services.ShouldContain(d =>
             d.ServiceType == typeof(IIntegrationEventHandler<ShipmentDispatched>));
     }
 
-    // The other half of the pair this earned: the first validator to arrive
-    // still owes the test that asserts FluentValidation's own scan found it.
-    // Both scans fail silently when lost, which is why neither is left
-    // implicit.
+    [Fact]
+    public void AddInventoryApplication_registers_ReserveStockValidator()
+    {
+        ServiceCollection services = new();
+
+        services.AddInventoryApplication();
+
+        services.ShouldContain(d => d.ServiceType == typeof(IValidator<ReserveStockCommand>));
+    }
 }

@@ -215,11 +215,12 @@ public class MessagingRegistrationTests
 
         services.AddMassTransitMessaging(Configuration());
 
-        foreach (Type consumer in new[]
-                 {
-                     typeof(IntegrationEventConsumer<OrderCancelled>),
-                     typeof(IntegrationEventConsumer<ShipmentDispatched>)
-                 })
+        Type[] consumers =
+        [
+            typeof(IntegrationEventConsumer<OrderCancelled>),
+            typeof(IntegrationEventConsumer<ShipmentDispatched>)
+        ];
+        foreach (Type consumer in consumers)
         {
             services.ShouldContain(
                 d => d.ImplementationType == consumer || d.ServiceType == consumer,

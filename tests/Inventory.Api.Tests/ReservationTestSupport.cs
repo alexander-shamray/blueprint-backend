@@ -29,10 +29,9 @@ internal static class ReservationTestSupport
     public static readonly TimeSpan DeliveryBudget = TimeSpan.FromSeconds(30);
 
     /// <summary>
-    /// A client carrying <see cref="InventoryPermissions.Admin"/>, which
-    /// <see cref="ReservationEndpointsTests"/>, <see cref="StockEndpointsTests"/>
-    /// and <see cref="InventoryEventEndpointTests"/> all now need — lifted
-    /// here rather than left as three copies.
+    /// A client carrying <see cref="InventoryPermissions.Admin"/>, for the
+    /// suites that need an admin client — lifted here rather than left as
+    /// separate copies.
     /// </summary>
     public static HttpClient Admin(ServiceFixture fixture)
     {

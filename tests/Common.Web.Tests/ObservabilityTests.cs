@@ -79,7 +79,8 @@ public class ObservabilityTests
     [Fact]
     public void The_one_instrument_the_repo_actually_has_is_collected()
     {
-        // The test above guards the strings above against the list below.
+        // The test above guards the strings above against the registration
+        // it cannot see.
         // Both copies are here in the test project; RequestMetrics holds a
         // third, unshared copy of "Commerce.Requests" over in
         // Common.Application. Rename that one and the test above stays green

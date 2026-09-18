@@ -139,10 +139,9 @@ public class MetricsRegistrationTests
         // instrument this listener has enabled — so matching `Meter.Name ==
         // "Inventory.Outbox"` also enables the gauges of any OutboxMetrics some
         // other test built, and those are wired to a REAL OutboxStats against a
-        // container that may be gone. CI found this as a SqlException thrown
-        // out of a test that constructs no database at all; it passed locally,
-        // because whether a host had started in the same process first is a
-        // matter of ordering. Same shape as Common.Web.Tests' process-wide
+        // container that may be gone, so its callback throws a SqlException
+        // whenever this listener's turn to run falls after that container is
+        // torn down. Same shape as Common.Web.Tests' process-wide
         // DiagnosticListener, which is why that project disables parallelism.
         listener.InstrumentPublished = (instrument, l) =>
         {
@@ -188,7 +187,9 @@ public class MetricsRegistrationTests
     }
 
     /// <summary>
-    /// The regression test for the defect CI found and this machine did not.
+    /// A process-wide <see cref="MeterListener"/> matched by name enables
+    /// another test's gauges, wired to a dead container, rather than only
+    /// the ones this test built.
     /// </summary>
     /// <remarks>
     /// A <see cref="MeterListener"/> is process-wide, and

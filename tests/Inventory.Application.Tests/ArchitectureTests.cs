@@ -71,7 +71,7 @@ public class ArchitectureTests
         // a failure, which is the same trade the Domain gate takes. What both
         // buy is that ADDING one is a decision somebody has to write down.
         //
-        // Microsoft.Extensions.Logging.Abstractions is the newest entry:
+        // Microsoft.Extensions.Logging.Abstractions is here because
         // FulfilReservationHandler's two LoggerMessage.Define delegates are
         // this layer's first ILogger use. It is the abstractions package
         // rather than a concrete provider, so no §4.2 row forbids it, and
