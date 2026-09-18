@@ -433,6 +433,8 @@ public interface IReservationRepository
 ```
 
 PR-3 adds `Fulfil` to this class; nothing here anticipates it.
+`Rehydrate` is `internal` and compiles in the test assembly through the
+`InternalsVisibleTo` PR-1 declared in `Inventory.Domain.csproj`.
 
 - [ ] **Step 4: Run the domain tests**
 
@@ -1518,9 +1520,10 @@ git commit -m "feat(inventory): the inventory-commands endpoint, and the broker 
   string Status, IReadOnlyList<ReservationLineDto> Lines, DateTimeOffset UpdatedAt)`
   or 404.
 - `POST /v1/inventory/reservations/{orderId}/release` → 204 always.
-- `POST /v1/inventory/reservations/{orderId}/reinstate` → 204; 422
-  `reservation.not_reinstatable` when the row is not `Released` or has no
-  lines; 422 `reservation.unavailable` naming the unavailable ids in its
+- `POST /v1/inventory/reservations/{orderId}/reinstate` → 204; 404 when no
+  reservation exists for the order, as the spec's table says beside `GET`;
+  422 `reservation.not_reinstatable` when the row is not `Released` or has
+  no lines; 422 `reservation.unavailable` naming the unavailable ids in its
   description, since `ResultExtensions` serialises the description and
   nothing else.
 - `ReservationErrors.NotFound` (`Error.NotFound`),

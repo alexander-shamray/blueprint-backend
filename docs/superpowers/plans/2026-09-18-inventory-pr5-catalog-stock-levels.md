@@ -366,10 +366,12 @@ public class StockLevelRegistrationTests
 - [ ] **Step 2: Write the failing endpoint test**
 
 Over containers, publishing `StockLevelChanged` through `IPublishEndpoint`
-with the transport id pinned to the contract's —
-`Publish(message, c => c.MessageId = message.MessageId, ct)`, as Ordering's
-tests do, because §9.5's inbox keys on `ConsumeContext.MessageId` and not
-on the body — and waiting on the inbox row for `StockLevelConsumer.Queue`,
+with both transport headers pinned to the contract's —
+`c.MessageId = message.MessageId; c.CorrelationId = message.CorrelationId;`
+in the publish callback, as Ordering's `CatalogEventEndpointTests.PublishAsync`
+does, because §9.5's inbox keys on `ConsumeContext.MessageId` and §9.1 keeps
+one correlation across body, row and transport — and waiting on the inbox
+row for `StockLevelConsumer.Queue`,
 then asserting the `catalog.StockLevels` row. A second publish with the
 same id must leave one inbox row and one level row; without the pinned
 transport id MassTransit would mint a second, and the test would prove

@@ -107,8 +107,13 @@ git commit -m "feat(deploy): Inventory's chart"
 - Modify: `.github/workflows/helm.yml` (both `paths:` lists gain
   `src/Services/Inventory/**`)
 - Modify: `deploy/helm/platform/Chart.yaml` (dependency after `ordering`)
-- Modify: `deploy/helm/README.md` (the tree fence and "four dependencies")
-- Modify: `deploy/canary/canary.json` (`"inventory-api": { "serviceName": "Inventory.Api", "chart": "inventory" }`)
+- Modify: `deploy/helm/platform/values.yaml` (the commented `helm upgrade`
+  example gains Inventory's tag)
+- Modify: `deploy/helm/README.md` (the tree fence, "four dependencies", and
+  the two command blocks)
+- Modify: `deploy/canary/canary.json` (`"inventory-api": { "serviceName": "Inventory.Api", "chart": "inventory" }`,
+  and its `$comment`'s chart count)
+- Modify: `deploy/canary/test_canary.py` (the docstring's chart count)
 - Modify: `.github/workflows/deploy.yml` (`options: [catalog-api, ordering-api, inventory-api, gateway, web-bff]`)
 
 - [ ] **Step 1: Run the smoke script to see it fail**
@@ -139,7 +144,11 @@ beside the four it has:
 
 Every chart refuses to render without a tag, and the umbrella passes one
 per subchart by name, so a subchart added to `Chart.yaml` and not to these
-two lists fails the umbrella's own validation on the first run.
+two lists fails the umbrella's own validation on the first run. The
+script's "Values that must agree across charts" section opens with a
+comment saying a platform-wide value is "written four times"; it becomes
+"written once per service chart", so the next service leaves no count
+behind.
 
 `SOURCE_INPUTS` gains `src/Services/Inventory` after `src/Services/Ordering`,
 because `smoke.sh` reads each service's source through `src_of` and asserts

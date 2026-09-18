@@ -127,6 +127,19 @@ the port.
 - Create: `src/Services/Inventory/Inventory.Domain/Stock/StockItem.cs`
 - Create: `src/Services/Inventory/Inventory.Domain/Stock/Events/StockEvents.cs`
 - Create: `src/Services/Inventory/Inventory.Domain/Stock/IStockItemRepository.cs`
+- Delete: `src/Services/Inventory/Inventory.Domain/AssemblyMarker.cs` — the
+  scaffold's README says the first aggregate replaces it and the
+  `ArchitectureTests` in `Inventory.Domain.Tests` and
+  `Inventory.Application.Tests` re-anchor on the aggregate; `StockItem` is
+  the anchor from here
+- Modify: `tests/Inventory.Domain.Tests/ArchitectureTests.cs` and
+  `tests/Inventory.Application.Tests/ArchitectureTests.cs` (the anchor type
+  becomes `StockItem`)
+- Modify: `src/Services/Inventory/Inventory.Domain/Inventory.Domain.csproj` —
+  `<InternalsVisibleTo Include="Inventory.Domain.Tests" />`, because
+  `Rehydrate` below is `internal` and no project in the repository declares
+  a friend assembly today; the declaration is this service's and PR-2's
+  `Reservation.Rehydrate` relies on it
 - Test: `tests/Inventory.Domain.Tests/StockItemTests.cs`
 
 **Interfaces:**
@@ -206,7 +219,8 @@ public class StockItemTests
 
 `Rehydrate` is the one way a test builds a `StockItem`, since production
 code never constructs one: rows are inserted by the repository (Task 3) and
-loaded by EF. It is `internal` with `InternalsVisibleTo` the test project.
+loaded by EF. It is `internal`, and the `InternalsVisibleTo` in the Files
+list is what lets the test assembly call it.
 
 - [ ] **Step 2: Run the tests to see them fail**
 
@@ -312,9 +326,10 @@ public interface IStockItemRepository
 }
 ```
 
-Add to `Inventory.Domain.csproj` an `InternalsVisibleTo` for
-`Inventory.Domain.Tests` if the scaffold did not carry one; check with
-`grep -n InternalsVisibleTo src/Services/Inventory/Inventory.Domain/*.csproj`.
+In `Inventory.Domain.csproj`, add an item group with
+`<InternalsVisibleTo Include="Inventory.Domain.Tests" />`; the scaffold
+carries none. Then delete `AssemblyMarker.cs` and point both
+`ArchitectureTests` at `typeof(StockItem)` where they named the marker.
 
 - [ ] **Step 4: Run the tests to see them pass**
 
@@ -324,7 +339,8 @@ Expected: green.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/Services/Inventory/Inventory.Domain tests/Inventory.Domain.Tests
+dotnet test tests/Inventory.Application.Tests --filter ArchitectureTests
+git add src/Services/Inventory/Inventory.Domain tests/Inventory.Domain.Tests tests/Inventory.Application.Tests
 git commit -m "feat(inventory): StockItem, the aggregate for the admin path"
 ```
 
@@ -1029,7 +1045,10 @@ Matrix, after the two `ordering` entries:
 ```
 
 Cut the comment that says the other services "repeat those three lines" only
-if it now lists Inventory by name; otherwise leave it.
+if it now lists Inventory by name; otherwise leave it. The `images` job's
+`fail-fast` comment says "which of six Dockerfiles broke": drop the number
+— "which Dockerfile broke is the useful signal" — because a count in a
+comment is a document that goes stale on the next service.
 
 - [ ] **Step 3: Run both gates again**
 

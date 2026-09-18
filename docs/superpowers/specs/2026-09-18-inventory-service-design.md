@@ -115,7 +115,7 @@ contended.
 
 The same row's counters are also written by the reservation path's raw
 statements, and `StockItem` is never loaded on that path. Two write paths to
-one table is the exception §7.3 prints, and the rule those statements follow
+one table are the exception §7.3 prints, and the rule those statements follow
 is `IUnitOfWork.ExecuteRawAsync`'s — raw SQL on the transaction's own
 connection, for a table with no aggregate behind it, refused when no
 transaction is open. They do not go through that member, because the
@@ -269,7 +269,7 @@ to skip it.
 | `GET stock/{productId}` | `GetStockQuery`, Dapper over the write table | `{ available, reserved, updatedAt }`; `404` |
 | `GET reservations/{orderId}` | `GetReservationQuery` | status and lines; `404` — the runbook's step one |
 | `POST reservations/{orderId}/release` | `ReleaseStockCommand` with `CommandOrigin.User` | `204` for every reservation state, because the command always establishes its postcondition — the runbook's step two. The one other answer is the framework's `409` when a rowversion race is lost, which §10.5's concurrency row owns |
-| `POST reservations/{orderId}/reinstate` | `ReinstateReservationCommand` | `204`; `422` `reservation.not_reinstatable` when the row is not `Released`, has no lines, or has already met a despatch (section 5) — one code, because all three mean there is nothing to restore and the description says which; `422` `reservation.unavailable` naming the unavailable ids when stock is short. No `409` from the domain: §10.5 reserves it for concurrency and idempotency, `ErrorType` stays at its three members, and a lost rowversion race answers the framework's `409` as on every endpoint |
+| `POST reservations/{orderId}/reinstate` | `ReinstateReservationCommand` | `204`; `404` when no reservation exists for the order, as `GET` answers; `422` `reservation.not_reinstatable` when the row is not `Released`, has no lines, or has already met a despatch (section 5) — one code, because all three mean there is nothing to restore and the description says which; `422` `reservation.unavailable` naming the unavailable ids when stock is short. No `409` from the domain: §10.5 reserves it for concurrency and idempotency, `ErrorType` stays at its three members, and a lost rowversion race answers the framework's `409` as on every endpoint |
 
 **Reinstate is the runbook's promise, kept.** `order-review.md` already says
 an operator reinstates a picked reservation by hand, and ADR-024's tombstone

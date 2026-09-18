@@ -26,13 +26,16 @@ sections 5 (the despatch table), 8, 9 and 13.
 ## Global Constraints
 
 - The blueprint wins over the spec; the spec wins over this plan.
-- **Class A+B+D.** Touch set: `src/Services/Inventory/**`, `tests/Inventory.*`,
-  `src/BuildingBlocks/Common.Web/ObservabilityExtensions.cs` and
-  `tests/Common.Web.Tests/ObservabilityTests.cs` — the B half is two
+- **Class A+B+D+E.** Touch set: `src/Services/Inventory/**`,
+  `tests/Inventory.*`, `src/BuildingBlocks/Common.Web/ObservabilityExtensions.cs`
+  and `tests/Common.Web.Tests/ObservabilityTests.cs` — the B half is two
   `AddMeter` lines, because §13.2's export lists meters by name and a meter
-  it does not name is collected by nobody — and
-  `deploy/observability/check.py`, the D half: this PR deletes the
-  exemption PR-1 added, and the gate refuses a stale one.
+  it does not name is collected by nobody — `deploy/observability/check.py`,
+  the D half: this PR deletes the exemption PR-1 added, and the gate refuses
+  a stale one — and `Inventory.Infrastructure.csproj`, the E half: one
+  package reference the copied `OutboxStats` needs (Task 5), with no
+  `Version=`, since the pin is `Directory.Packages.props`'s and the package
+  is already in it.
 - Depends on PR-2 having merged.
 - Every event in §3.2's Consumes column has both an `AddConsumer` and a
   `ConfigureConsumer`, and the registration test says so.
@@ -557,11 +560,26 @@ globally.
 
 Endpoint, over containers, in the shape of PR-2's command tests with a
 `PublishAsync<T>` helper that publishes through `IPublishEndpoint` and waits
-for the inbox row on `EventsQueue`. The helper sets the transport id from
-the contract, `Publish(message, c => c.MessageId = message.MessageId, ct)`,
-as Ordering's does: §9.5's inbox keys on `ConsumeContext.MessageId`, not on
-the body's property, so a helper that leaves the transport id to MassTransit
-polls a row that never appears and cannot prove duplicate suppression.
+for the inbox row on `EventsQueue`. The helper sets both transport headers
+from the contract, as Ordering's `CatalogEventEndpointTests.PublishAsync`
+does:
+
+```csharp
+await publisher.Publish(
+    message,
+    c =>
+    {
+        c.MessageId = message.MessageId;
+        c.CorrelationId = message.CorrelationId;
+    },
+    ct);
+```
+
+§9.5's inbox keys on `ConsumeContext.MessageId`, not on the body's property,
+so a helper that leaves the transport id to MassTransit polls a row that
+never appears and cannot prove duplicate suppression; and §9.1 makes the
+body, the row and the transport carry one correlation, so a test that pins
+only the first exercises a split identity no producer emits.
 
 ```csharp
 [Fact]
@@ -775,8 +793,27 @@ git commit -m "feat(inventory): the inventory-events endpoint"
 **Files:**
 - Create: `src/Services/Inventory/Inventory.Application/Reservations/InventoryMetrics.cs`
 - Create: `src/Services/Inventory/Inventory.Infrastructure/Projections/UnreservedDespatchProjection.cs`
+- Create: `src/Services/Inventory/Inventory.Infrastructure/Observability/OutboxMetrics.cs`,
+  `OutboxStats.cs`, `IOutboxStats.cs`, `MetricsInitialiser.cs` — Ordering's
+  four files under Inventory's namespace, the meter renamed `Inventory.Outbox`
 - Modify: `Inventory.Application/DependencyInjection.cs` (`AddSingleton<InventoryMetrics>()`)
+- Modify: `Inventory.Infrastructure/DependencyInjection.cs` (the outbox
+  stats, metrics and initialiser registrations, as Ordering's)
+- Modify: `Inventory.Infrastructure/Inventory.Infrastructure.csproj` —
+  `<PackageReference Include="Microsoft.Extensions.Caching.Memory" />`,
+  which the copied `OutboxStats` needs and Ordering's project declares
+  directly on the same terms
+- Modify: `src/BuildingBlocks/Common.Web/ObservabilityExtensions.cs` (two
+  `AddMeter` lines)
+- Modify: `tests/Common.Web.Tests/ObservabilityTests.cs` (the two names,
+  and its comment "guards seven strings against a list of seven strings"
+  loses both numbers: "guards the strings above against the list below")
+- Modify: `deploy/observability/check.py` (the `"Inventory"` exemption is
+  deleted)
 - Test: `tests/Inventory.Api.Tests/UnreservedDespatchProjectionTests.cs`
+- Test: `tests/Inventory.Api.Tests/OutboxStatsTests.cs` and
+  `MetricsRegistrationTests.cs` — Ordering's, with the namespace and meter
+  name changed
 
 **Interfaces:**
 - `InventoryMetrics(IMeterFactory)` with meter `Inventory.Reservations` and
@@ -951,7 +988,7 @@ git commit -m "feat(inventory): outbox gauges, the metrics initialiser, and one 
 - [ ] `dotnet build Platform.slnx` — 0 warnings.
 - [ ] `dotnet test Platform.slnx` — green.
 - [ ] Neither `/validate-blueprint` nor `/check-links` is owed: no chapter moved.
-- [ ] PR body: `| Class | A+B+D |`, touch set from Global Constraints.
+- [ ] PR body: `| Class | A+B+D+E |`, touch set from Global Constraints.
 
 ## Self-review
 
