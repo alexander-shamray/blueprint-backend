@@ -9,11 +9,12 @@ each test class there names the property it checks.
 Negatives are paired with positive controls, because a negative that passes
 while a pattern matches nothing is indistinguishable from one that works.
 
-The engine under test is the engine that ships: every pattern assertion shells
-out to the same `grep -E` or `jq` the scripts call, because re-implementing it
-in Python's `re` would be a second specification. And a declared pattern needs
-a test whose subject is where it is applied, so the pattern cases are paired
-with structural cases over the call sites.
+The engine under test is the engine that ships: every assertion about what a
+declared pattern matches shells out to the same `grep -E` or `jq` the scripts
+call, because re-implementing it in Python's `re` would be a second
+specification. And a declared pattern needs a test whose subject is where it
+is applied, so the pattern cases are paired with structural cases over the
+call sites, which read the scripts' text and may use `re` to do it.
 
 What the suite needs to run is `docs/testing.md`'s.
 """
