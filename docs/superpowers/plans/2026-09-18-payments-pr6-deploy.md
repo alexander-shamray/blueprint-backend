@@ -70,7 +70,12 @@ grep -q 'name: PaymentProvider__ApiKey' <<<"$PAYMENTS_RENDER" \
 if helm template payments deploy/helm/payments --set-string image.tag="$TAG" >/dev/null 2>&1; then
     fail 'payments: rendered with no paymentProvider.baseUrl; a deploy that forgot it must fail here, not at start'
 fi
-pass 'paymentProvider renders both keys and refuses an empty address'
+if helm template payments deploy/helm/payments --set-string image.tag="$TAG" \
+    --set paymentProvider.enabled=false --set paymentProvider.apiKeySecretRef=null \
+    --set-string paymentProvider.baseUrl=https://psp.example.invalid/ >/dev/null 2>&1; then
+    fail 'payments: rendered an address with the capability off; a setting nothing reads must be refused'
+fi
+pass 'paymentProvider renders both keys and refuses an empty address or an address while off'
 ```
 
 `section`, `pass`, `fail` and `$TAG` are the script's own helpers and
@@ -108,8 +113,8 @@ In `commerce.env`, after the `identity.clientCredentials` secret:
 In the coherence block, beside the `identity.clientId` guard:
 
 ```yaml
-{{- if and (.Values.paymentProvider).apiKeySecretRef (not (.Values.paymentProvider).enabled) }}
-{{- fail "paymentProvider.enabled is false but paymentProvider.apiKeySecretRef is set. Payments reads both provider keys eagerly (§15.4), so this renders cleanly and the host does not start. A capability is a fact about the code, not an environment setting." }}
+{{- if and (or (.Values.paymentProvider).apiKeySecretRef (.Values.paymentProvider).baseUrl) (not (.Values.paymentProvider).enabled) }}
+{{- fail "paymentProvider.enabled is false but a paymentProvider setting is set. Payments reads both provider keys eagerly (§15.4), so this renders cleanly and the host does not start. A capability is a fact about the code, not an environment setting." }}
 {{- end }}
 ```
 
@@ -156,8 +161,9 @@ Payments`; the database's two secret refs and the broker's `secretRef.name`
 renamed on Ordering's pattern (`payments-rabbitmq` for `payments-svc`);
 `service.enabled: true`. The `terminationGracePeriodSeconds` comment is
 rewritten for Payments' two receive endpoints, the outbox dispatcher and the
-provider call's twenty-second budget, which sits inside the host's thirty-second
-shutdown.
+provider call, citing `ProviderHop.TotalRequestTimeout` and
+`HostOptions.ShutdownTimeout` by name rather than their values, so a change
+to either cannot leave the chart's explanation stale.
 
 Replace the `redis:` block with:
 

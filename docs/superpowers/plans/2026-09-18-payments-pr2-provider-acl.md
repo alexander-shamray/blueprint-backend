@@ -57,6 +57,7 @@ sections 4, 9, 11 (the two provider keys) and 12 (the provider counter).
 - Create: `src/Services/Payments/Payments.Application/Provider/VoidRequest.cs`
 - Create: `src/Services/Payments/Payments.Application/Provider/PaymentProviderUnavailableException.cs`
 - Create: `src/Services/Payments/Payments.Application/PaymentMismatchException.cs`
+- Create: `src/Services/Payments/Payments.Application/Provider/ProviderLimits.cs`
 - Test: `tests/Payments.Application.Tests/AuthorisationResultTests.cs`
 
 **Interfaces:**
@@ -88,6 +89,15 @@ public interface IPaymentProvider
 }
 
 public sealed class PaymentProviderUnavailableException : Exception { /* the three standard constructors */ }
+
+/// What a verdict may carry and still be recorded. The reference is confirmed
+/// onto the order, so Ordering's PaymentReference.MaxLength is the bound it
+/// must fit; the adapter refuses a longer answer and the columns are this wide.
+public static class ProviderLimits
+{
+    public const int MaxReferenceLength = 100;
+    public const int MaxReasonLength = 100;
+}
 
 namespace Payments.Application;
 
@@ -216,7 +226,7 @@ output, which is what the adapter sends.
   "Request": {
     "Path": { "Matchers": [{ "Name": "ExactMatcher", "Pattern": "/v1/authorisations" }] },
     "Methods": ["POST"],
-    "Body": { "Matcher": { "Name": "RegexMatcher", "Pattern": "\"amountMinor\":\\d*01[,}]" } }
+    "Body": { "Matcher": { "Name": "RegexMatcher", "Pattern": "\"amountMinor\":(\\d*0)?1[,}]" } }
   },
   "Response": {
     "StatusCode": 402,
@@ -226,15 +236,19 @@ output, which is what the adapter sends.
 }
 ```
 
+The optional `(\d*0)?` is what makes a total of 0.01 — `amountMinor` 1, a
+single digit with no leading zero — decline as the spec's `.01` row says,
+while 11 and 21 still do not match.
+
 `authorise-insufficient-funds.json`: the same with Guid `…0002`, the pattern
-ending `02[,}]` and `code` `insufficient_funds`.
+ending `(\d*0)?2[,}]` and `code` `insufficient_funds`.
 
-`authorise-unavailable.json`: Guid `…0005`, pattern `05[,}]`, `StatusCode`
-503, `BodyAsJson` `{ "status": "unavailable" }`.
+`authorise-unavailable.json`: Guid `…0005`, pattern ending `(\d*0)?5[,}]`,
+`StatusCode` 503, `BodyAsJson` `{ "status": "unavailable" }`.
 
-`authorise-stalled.json`: Guid `…0009`, pattern `09[,}]`, `StatusCode` 201,
-`"Delay": 30000`, and the approval's templated body below — the answer would
-be an approval, and the adapter gives up before it arrives.
+`authorise-stalled.json`: Guid `…0009`, pattern ending `(\d*0)?9[,}]`,
+`StatusCode` 201, `"Delay": 30000`, and the approval's templated body below —
+the answer would be an approval, and the adapter gives up before it arrives.
 
 `authorise-approved.json`:
 
@@ -384,7 +398,9 @@ public sealed class HttpPaymentProviderTests : IDisposable
 
     [Theory]
     [InlineData(10.01, "card_declined")]
+    [InlineData(0.01, "card_declined")]
     [InlineData(10.02, "insufficient_funds")]
+    [InlineData(0.02, "insufficient_funds")]
     public async Task A_scripted_decline_is_a_decline_with_the_providers_code(decimal amount, string code)
     {
         AuthorisationResult result = await Provider().AuthoriseAsync(Authorisation(amount), TestContext.Current.CancellationToken);
@@ -413,6 +429,15 @@ public sealed class HttpPaymentProviderTests : IDisposable
 
         Calls("/v1/authorisations").ShouldBe(ProviderHop.MaxRetryAttempts + 1);
         Interlocked.Read(ref counted).ShouldBe(ProviderHop.MaxRetryAttempts + 1, "one per failing attempt, not one per call");
+    }
+
+    [Theory]
+    [InlineData(0.11)]
+    [InlineData(0.21)]
+    public async Task An_amount_ending_in_one_that_is_not_one_cent_is_approved(decimal amount)
+    {
+        (await Provider().AuthoriseAsync(Authorisation(amount), TestContext.Current.CancellationToken))
+            .ShouldBeOfType<AuthorisationResult.Authorised>("only a minor amount ending 01, or exactly 1, is scripted");
     }
 
     [Fact]
@@ -465,7 +490,7 @@ public sealed class HttpPaymentProviderTests : IDisposable
     }
 
     [Fact]
-    public async Task A_missing_base_url_stops_the_host()
+    public void A_missing_base_url_stops_the_host()
     {
         using PaymentsApiFactory factory = new(
             "Server=sql.invalid;Database=Payments;User Id=x;Password=x;TrustServerCertificate=true",
@@ -504,6 +529,26 @@ public sealed class HttpPaymentProviderTests : IDisposable
 
         await Should.ThrowAsync<PaymentProviderUnavailableException>(() =>
             Provider().AuthoriseAsync(Authorisation(42.10m), TestContext.Current.CancellationToken));
+    }
+
+    [Theory]
+    [InlineData(ProviderLimits.MaxReferenceLength, true)]
+    [InlineData(ProviderLimits.MaxReferenceLength + 1, false)]
+    public async Task A_reference_longer_than_the_column_is_refused_before_it_is_recorded(int length, bool accepted)
+    {
+        string reference = new('r', length);
+        _server.Given(Request.Create().WithPath("/v1/authorisations").UsingPost())
+            .AtPriority(0)
+            .RespondWith(Response.Create().WithStatusCode(201)
+                .WithBody($"{{\"status\":\"approved\",\"reference\":\"{reference}\"}}"));
+
+        Func<Task<AuthorisationResult>> call = () =>
+            Provider().AuthoriseAsync(Authorisation(42.10m), TestContext.Current.CancellationToken);
+
+        if (accepted)
+            (await call()).ShouldBe(new AuthorisationResult.Authorised(reference));
+        else
+            await Should.ThrowAsync<PaymentProviderUnavailableException>(call);
     }
 
     [Fact]
@@ -697,14 +742,17 @@ internal sealed class HttpPaymentProvider(HttpClient http) : IPaymentProvider
         // The body must agree with its status, and each verdict must carry what
         // it is a verdict about. A contradiction is a provider this adapter does
         // not understand — a fault, never an authorisation or a decline.
+        // Longer than ProviderLimits is refused here rather than at the insert:
+        // a verdict that cannot be recorded would leave money authorised with
+        // no PaymentAuthorised committed for it.
         if (response.StatusCode == HttpStatusCode.PaymentRequired)
         {
-            return answer is { Status: "declined", Code: { Length: > 0 } code }
+            return answer is { Status: "declined", Code: { Length: > 0 and <= ProviderLimits.MaxReasonLength } code }
                 ? new AuthorisationResult.Declined(code)
                 : throw new PaymentProviderUnavailableException("The provider declined with a body that is not a decline.");
         }
 
-        return answer is { Status: "approved", Reference: { Length: > 0 } reference }
+        return answer is { Status: "approved", Reference: { Length: > 0 and <= ProviderLimits.MaxReferenceLength } reference }
             ? new AuthorisationResult.Authorised(reference)
             : throw new PaymentProviderUnavailableException("The provider approved with a body that is not an approval.");
     }

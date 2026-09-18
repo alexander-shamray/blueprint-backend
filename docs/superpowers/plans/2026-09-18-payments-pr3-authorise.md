@@ -377,6 +377,7 @@ Expected: the smoke test counts 0; the mapper tests find no entry.
 ```csharp
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using Payments.Application.Provider;
 using Payments.Domain.Intents;
 using Payments.Domain.Orders;
 
@@ -401,10 +402,10 @@ internal sealed class PaymentIntentConfiguration : IEntityTypeConfiguration<Paym
         builder.Property(i => i.Amount).HasPrecision(18, 2);
         builder.Property(i => i.Currency).HasMaxLength(3).IsFixedLength().IsUnicode(false);
 
-        // Ordering's PaymentReference.MaxLength: the reference is confirmed
-        // onto the order, so a longer one here would be refused there.
-        builder.Property(i => i.Reference).HasMaxLength(100);
-        builder.Property(i => i.DeclineReason).HasMaxLength(100);
+        // ProviderLimits, which the adapter enforces before a verdict exists,
+        // so nothing this column refuses can reach it.
+        builder.Property(i => i.Reference).HasMaxLength(ProviderLimits.MaxReferenceLength);
+        builder.Property(i => i.DeclineReason).HasMaxLength(ProviderLimits.MaxReasonLength);
 
         builder.Property(i => i.Version).HasColumnName("RowVersion").IsRowVersion();
 
@@ -824,6 +825,13 @@ public class AuthorisePaymentMapperTests
     }
 
     [Fact]
+    public void An_empty_order_id_is_refused_rather_than_waited_for()
+    {
+        Should.Throw<ContractMappingException>(() =>
+            new AuthorisePaymentMapper().Map(new AuthorisePayment(Guid.Empty, 42.10m, "EUR")));
+    }
+
+    [Fact]
     public void A_well_formed_contract_maps_field_for_field()
     {
         Guid order = Guid.CreateVersion7();
@@ -1040,6 +1048,11 @@ public sealed class AuthorisePaymentMapper : ICommandMessageMapper<AuthorisePaym
 {
     public AuthorisePaymentCommand Map(AuthorisePayment message)
     {
+        // Refused here, not left to the handler: no record will ever exist for
+        // it, so it would ride the whole redelivery ladder to the error queue.
+        if (message.OrderId == Guid.Empty)
+            throw new ContractMappingException($"An empty order id on {nameof(AuthorisePayment)}.");
+
         if (message.Amount <= 0)
             throw new ContractMappingException($"A non-positive amount on {nameof(AuthorisePayment)}.");
 
@@ -1064,9 +1077,9 @@ namespace Payments.Infrastructure.Messaging;
 /// <remarks>
 /// Its total must reach the saga's payment timeout, so an order whose
 /// <c>OrderPlaced</c> never arrives compensates on that timeout rather than
-/// paging first. The timeout is Ordering's to set and §4.2 forbids this
-/// assembly to read it, so <c>Platform.IntegrationTests</c> holds the two
-/// together rather than a literal here restating it.
+/// paging first. The timeout is Ordering's to set (§9.6) and §4.2 forbids
+/// this assembly to read it, so the two are held together outside both
+/// services rather than by a literal here restating it.
 /// </remarks>
 public static class RedeliveryLadder
 {

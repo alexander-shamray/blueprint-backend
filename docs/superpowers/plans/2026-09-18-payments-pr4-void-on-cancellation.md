@@ -616,8 +616,11 @@ fail.
 Copy the four files from `src/Services/Ordering/Ordering.Infrastructure/Observability/`,
 change the namespace to `Payments.Infrastructure.Observability`, the meter to
 `Payments.Outbox`, and the schema-bound statements to `payments`. Add
-`ProviderMetrics metrics` to `MetricsInitialiser`'s constructor beside the
-outbox metrics. Register as Ordering does. Add the `AddMeter` line. Delete
+`ProviderMetrics provider` to `MetricsInitialiser`'s constructor beside the
+outbox metrics, with `ArgumentNullException.ThrowIfNull(provider);` beside
+the copied guards — an unread parameter is CS9113, an error under ADR-019,
+which is why the copied constructor guards every one. Register as Ordering
+does. Add the `AddMeter` line. Delete
 the exemption, then:
 
 ```bash
