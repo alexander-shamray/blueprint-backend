@@ -1,7 +1,8 @@
 # The licence gate
 
 **The claim: every package `Directory.Packages.props` pins has a licence
-somebody cleared, and no project restores a package past that file.**
+somebody cleared, and no project steps past that file by the
+`PackageReference` and central-management forms listed below.**
 [§4.4](../../docs/backend-architecture/04-solution-structure.md) states the
 rule; this file owns what the gate reads to enforce it, what it refuses, and
 where its claim stops — which is narrower than "no package reaches a restore
@@ -19,9 +20,10 @@ uncleared", for the reason under *What it does not claim*.
 - Every other `.csproj`, `.props` and `.targets` outside the directories
   `SKIPPED_DIRECTORIES` in `licence_gate.py` names, for the two ways a
   project steps past central pinning: a `PackageReference` naming its own
-  `Version` or a `VersionOverride`, and `ManagePackageVersionsCentrally` set
-  to anything but `true`. An imported `.props` does either for every project
-  at once, which is why the scan reaches past the projects.
+  version — a `Version` attribute, a `Version` child element or a
+  `VersionOverride` — and `ManagePackageVersionsCentrally` set to anything
+  but `true`. An imported `.props` does either for every project at once,
+  which is why the scan reaches past the projects.
 - The fenced `Directory.Packages.props` sample in §4.4, which it compares
   with the real file, identity and version both. The failure it reports is
   against the chapter, because the file is what CI restores and the chapter

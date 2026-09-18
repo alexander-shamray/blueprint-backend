@@ -164,8 +164,9 @@ dotnet build Platform.slnx
 py -3.12 .github/output-gate/output_gate.py
 ```
 
-`--no-restore` on the build is fine once a restore has happened. What the gate asserts, and why
-it needs both, is [its README](../.github/output-gate/README.md)'s.
+`--no-restore` on the build is fine once a restore has happened. What the
+gate asserts, and why it needs both, is
+[its README](../.github/output-gate/README.md)'s.
 
 **The closure gate and the locality gate need a pull request**, so their live
 runs take a number and a `gh` session that CI has and a checkout does not:
@@ -229,8 +230,6 @@ dotnet test Platform.slnx --filter "Category=Integration" \
     --results-directory ./TestResults/integration
 py -3.12 .github/coverage/domain_coverage.py ./TestResults/unit ./TestResults/integration
 ```
-
-**Both stages**, because the figure is a union across them — §12.9 says why.
 
 **`--results-directory` is not decoration either.** Without it the collector
 writes under each *test project's* own `TestResults/`, and the reporter,
