@@ -211,7 +211,7 @@ def load_scan_gate(repo_root: Path, tool_root: Path = TOOL_ROOT) -> ModuleType |
     manipulation anywhere in this repository and this does not add the first.
     `spec_from_file_location` is the form already in use here —
     `deploy/compose/rabbitmq/test_check_permissions.py` loads its subject that
-    way, and so does `.claude/scripts/test_grok_helpers.py`; what is new is
+    way, and so does `.claude/scripts/test_git_argv_guard.py`; what is new is
     only the directory being crossed.
 
     **This executes a file chosen by `--repo-root`, and it is checked against
