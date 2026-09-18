@@ -1,5 +1,7 @@
 using Common.Application;
+using Common.Contracts.Inventory.V1;
 using Common.Domain;
+using Inventory.Domain.Stock.Events;
 
 namespace Inventory.Application.Integration;
 
@@ -12,20 +14,13 @@ namespace Inventory.Application.Integration;
 /// </summary>
 internal sealed class InventoryIntegrationEventMapper : IIntegrationEventMapper
 {
-    // The allow-list, empty until this service publishes something. Every
-    // domain event it raises is local-only while this dictionary is empty,
-    // which is the correct state for a service with no contracts — and not
-    // a gap, because §9.3 makes translation opt-in precisely so that a new
-    // event is internal until somebody decides otherwise.
-    //
-    // An entry is one line and one private ToContract method beside it:
-    //
-    //     [typeof(OrderPlacedDomainEvent)] = e => ToContract((OrderPlacedDomainEvent)e)
-    //
-    // with the contract living in Common.Contracts under a versioned
-    // namespace (§9.2), carrying primitives only, and taking its MessageId
-    // and CorrelationId from the mapper rather than from Stage (§9.1).
-    private static readonly Dictionary<Type, Func<IDomainEvent, object>> Registry = [];
+    // The allow-list, one entry per fact §3.2 gives this service to publish.
+    // An entry with no domain event behind it would not compile, which is
+    // the property that keeps this list honest.
+    private static readonly Dictionary<Type, Func<IDomainEvent, object>> Registry = new()
+    {
+        [typeof(StockLevelChangedDomainEvent)] = e => ToContract((StockLevelChangedDomainEvent)e)
+    };
 
     public IReadOnlyList<object> Map(IReadOnlyList<IDomainEvent> domainEvents)
     {
@@ -41,4 +36,15 @@ internal sealed class InventoryIntegrationEventMapper : IIntegrationEventMapper
 
         return mapped;
     }
+
+    // The correlation is the PRODUCT: Catalog's projection keys on it, and a
+    // trace over one product's level history is what a support tool follows.
+    private static StockLevelChanged ToContract(StockLevelChangedDomainEvent e) => new()
+    {
+        MessageId = Guid.CreateVersion7(),
+        CorrelationId = e.ProductId.Value,
+        OccurredAt = e.OccurredAt,
+        ProductId = e.ProductId.Value,
+        QuantityAvailable = e.Available
+    };
 }

@@ -19,15 +19,25 @@
          abstractions package Inventory.Application compiles against has no
          container in it to build. -->
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <!-- ConfigurationBuilder and AddInMemoryCollection: AddInventoryInfrastructure
+         takes an IConfiguration, and OutboxSerialisationTests builds a real
+         one rather than substitute the contract. -->
+    <PackageReference Include="Microsoft.Extensions.Configuration" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Services\Inventory\Inventory.Application\Inventory.Application.csproj" />
-    <!-- No Inventory.TestSupport and no Inventory.Infrastructure yet, and no
-         Docker with them: §12.1 homes the handler tests here against real
-         containers, and this project has no handler to test. The fixture
-         reference, the DbContext reference and the provider package all
-         return with the first one. -->
+    <!-- Inventory.Infrastructure for AddInventoryInfrastructure, which
+         OutboxSerialisationTests resolves OutboxJson and MessageTypeMap out
+         of. §4.2's gate binds Inventory.Application, not its tests.
+
+         Still no Inventory.TestSupport and no Docker: §12.1 homes handler
+         tests here against real containers, and this project has no handler
+         under test against one yet — GetStockHandler's Dapper query is
+         exercised once a TestSupport-backed suite exists to run it against.
+         The fixture reference, the DbContext reference and the provider
+         package all return with that one. -->
+    <ProjectReference Include="..\..\src\Services\Inventory\Inventory.Infrastructure\Inventory.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>

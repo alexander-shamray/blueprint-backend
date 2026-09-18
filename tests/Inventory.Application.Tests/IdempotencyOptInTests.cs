@@ -39,17 +39,14 @@ public class IdempotencyOptInTests
     }
 
     [Fact]
-    public void This_service_has_no_commands_for_the_gate_above_to_look_at_yet()
+    public void The_gate_above_is_looking_at_this_service_s_commands()
     {
         // The gate-coverage rule: an empty offender list is the same green
         // whether every command opted in or the selector stopped matching
         // anything. This is the half that fails when ICommand<> moves,
         // Inventory's namespaces are reorganised, or the assembly anchor is
         // renamed — none of which the assertion above can see.
-        Commands().ShouldBeEmpty(
-            "This service declares no commands yet, so the gate above is vacuous. The day it "
-            + "gains its first command this test fails — replace it with the ShouldNotBeEmpty "
-            + "form, which is what keeps a vacuous gate from quietly becoming a permanent one.");
+        Commands().ShouldNotBeEmpty("Inventory declares commands; the selector above found none");
     }
 
     [Fact]
@@ -215,10 +212,8 @@ public class IdempotencyOptInTests
         // The fourth anti-vacuity floor in this file. ShouldBeEmpty above is
         // green when the selector found nothing, and this one depends on
         // ICommandHandler<,> keeping both its shape and its assembly.
-        CommandHandlers().ShouldBeEmpty(
-            "This service declares no command handlers yet, so the gate above is "
-            + "vacuous. The day it gains one this test fails — restore the ShouldNotBeEmpty "
-            + "form, which is what keeps a vacuous gate from quietly becoming a permanent one.");
+        CommandHandlers().ShouldNotBeEmpty(
+            "Inventory declares command handlers; the selector above found none");
     }
 
     private static Type[] CommandHandlers() =>
