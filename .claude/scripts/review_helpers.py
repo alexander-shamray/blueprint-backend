@@ -4,7 +4,7 @@ The scripts in this directory carry the judgements the /ship loop and both
 sweeps rest on, and the harness's grants and refusals are argued in
 `docs/harness-boundaries.md`. Each `test_*.py` module is named for its
 subject — one helper, a family of helpers, or the harness's deny list — and
-each class there names the property it checks.
+each test class there names the property it checks.
 
 Negatives are paired with positive controls, because a negative that passes
 while a pattern matches nothing is indistinguishable from one that works.
