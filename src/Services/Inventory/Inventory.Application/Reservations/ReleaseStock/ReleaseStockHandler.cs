@@ -1,0 +1,34 @@
+using Common.Application;
+using Inventory.Domain.Reservations;
+
+namespace Inventory.Application.Reservations.ReleaseStock;
+
+/// <summary>Both of ADR-024's guarantees, and the one place they are implemented.</summary>
+public sealed class ReleaseStockHandler(
+    IReservationRepository reservations,
+    IStockLedger ledger,
+    TimeProvider clock)
+    : ICommandHandler<ReleaseStockCommand, Result>
+{
+    public async Task<Result> HandleAsync(ReleaseStockCommand command, CancellationToken ct)
+    {
+        var order = new OrderId(command.OrderId);
+        DateTimeOffset now = clock.GetUtcNow();
+        Reservation? reservation = await reservations.GetForUpdateAsync(order, ct);
+
+        // Two releases for an unknown order serialise on the key-range lock the
+        // read took: the second waits, then finds the tombstone the first wrote.
+        if (reservation is null)
+        {
+            reservations.Add(Reservation.Tombstone(order, now));
+            return Result.Success();
+        }
+
+        IReadOnlyList<ReservedLevel> levels = reservation.Status == ReservationStatus.Reserved
+            ? await ledger.GiveBackAsync(reservation.Lines, ct)
+            : [];
+
+        reservation.Release(levels, now);
+        return Result.Success();
+    }
+}
