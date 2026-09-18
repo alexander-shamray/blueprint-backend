@@ -11,8 +11,6 @@ namespace Inventory.Api.Tests;
 /// </summary>
 /// <remarks>
 /// <para>
-/// <b>PR-17 invented this test because Ordering shipped without it and was
-/// wrong; every service PR since is one that could repeat the mistake.</b>
 /// §11.4 states the rule in both directions and this is the second one: a
 /// permission something requires and the realm cannot grant is a path
 /// nobody can reach — worth checking again here rather than trusted from

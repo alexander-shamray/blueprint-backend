@@ -18,13 +18,18 @@ public sealed class SetOnHandHandler(IStockItemRepository items, TimeProvider cl
         // row rather than race — the second waits, then sees the first's
         // commit. The rowversion is EF's own guard on the update and fires
         // for nothing this path can meet.
-        await items.EnsureAsync(product, clock.GetUtcNow(), ct);
+        DateTimeOffset now = clock.GetUtcNow();
+        await items.EnsureAsync(product, now, ct);
         StockItem item = await items.GetAsync(product, ct)
             ?? throw new InvalidOperationException($"StockItems has no row for {product} after EnsureAsync.");
 
+        int onHand = command.OnHand
+            ?? throw new InvalidOperationException(
+                "SetOnHandCommand reached the handler with no count; the validator refuses that (§6.4).");
+
         try
         {
-            item.SetOnHand(command.OnHand!.Value, clock.GetUtcNow());
+            item.SetOnHand(onHand, now);
         }
         catch (DomainException)
         {

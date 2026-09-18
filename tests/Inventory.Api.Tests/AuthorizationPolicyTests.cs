@@ -86,7 +86,11 @@ public class AuthorizationPolicyTests(HostSmokeTests.UnreachableInfrastructureFa
         // no listing to make anonymous by design. An AllowAnonymous anywhere
         // here defeats the one policy every path on this service carries.
         foreach (Endpoint endpoint in Endpoints.Where(e => Name(e) is "SetOnHand" or "GetStock"))
+        {
             endpoint.Metadata.GetMetadata<IAllowAnonymous>().ShouldBeNull(Name(endpoint));
+            endpoint.Metadata.GetOrderedMetadata<IAuthorizeData>().Select(a => a.Policy)
+                .ShouldContain(InventoryPermissions.Admin);
+        }
 
         // Not vacuous — the loop above passes over an empty set, which is what
         // a renamed endpoint would produce.

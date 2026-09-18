@@ -63,14 +63,15 @@ public sealed class StockEndpointsTests(ServiceFixture fixture) : IAsyncLifetime
     {
         using HttpClient client = Admin();
         var product = Guid.CreateVersion7();
-        await client.PutAsJsonAsync($"/v1/inventory/stock/{product}", new { onHand = 4 }, TestContext.Current.CancellationToken);
+        await client.PutAsJsonAsync(
+            $"/v1/inventory/stock/{product}", new { onHand = 4 }, TestContext.Current.CancellationToken);
 
         HttpResponseMessage put = await client.PutAsJsonAsync(
             $"/v1/inventory/stock/{product}", new { }, TestContext.Current.CancellationToken);
 
         put.StatusCode.ShouldBe(HttpStatusCode.BadRequest, "an omitted count binds null and NotNull refuses it");
-        (await client.GetFromJsonAsync<StockDto>($"/v1/inventory/stock/{product}", TestContext.Current.CancellationToken))!
-            .Available.ShouldBe(4);
+        (await client.GetFromJsonAsync<StockDto>(
+            $"/v1/inventory/stock/{product}", TestContext.Current.CancellationToken))!.Available.ShouldBe(4);
     }
 
     [Fact]
@@ -80,12 +81,15 @@ public sealed class StockEndpointsTests(ServiceFixture fixture) : IAsyncLifetime
         var product = Guid.CreateVersion7();
 
         HttpResponseMessage[] responses = await Task.WhenAll(
-            client.PutAsJsonAsync($"/v1/inventory/stock/{product}", new { onHand = 5 }, TestContext.Current.CancellationToken),
-            client.PutAsJsonAsync($"/v1/inventory/stock/{product}", new { onHand = 7 }, TestContext.Current.CancellationToken));
+            client.PutAsJsonAsync(
+                $"/v1/inventory/stock/{product}", new { onHand = 5 }, TestContext.Current.CancellationToken),
+            client.PutAsJsonAsync(
+                $"/v1/inventory/stock/{product}", new { onHand = 7 }, TestContext.Current.CancellationToken));
 
         responses.ShouldAllBe(r => r.StatusCode == HttpStatusCode.NoContent,
             "the second waited on the first's key-range lock and loaded its committed row; neither met the key");
-        (await fixture.ScalarAsync<int>("SELECT Value = COUNT(*) FROM inventory.StockItems WHERE ProductId = {0}", product))
+        (await fixture.ScalarAsync<int>(
+            "SELECT Value = COUNT(*) FROM inventory.StockItems WHERE ProductId = {0}", product))
             .ShouldBe(1);
     }
 
@@ -108,7 +112,8 @@ public sealed class StockEndpointsTests(ServiceFixture fixture) : IAsyncLifetime
 
         (await client.GetAsync($"/v1/inventory/stock/{Guid.CreateVersion7()}", TestContext.Current.CancellationToken))
             .StatusCode.ShouldBe(HttpStatusCode.Forbidden);
-        (await client.PutAsJsonAsync($"/v1/inventory/stock/{Guid.CreateVersion7()}", new { onHand = 1 }, TestContext.Current.CancellationToken))
+        (await client.PutAsJsonAsync(
+            $"/v1/inventory/stock/{Guid.CreateVersion7()}", new { onHand = 1 }, TestContext.Current.CancellationToken))
             .StatusCode.ShouldBe(HttpStatusCode.Forbidden);
     }
 }

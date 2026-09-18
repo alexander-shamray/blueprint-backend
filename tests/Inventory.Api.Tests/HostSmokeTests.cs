@@ -76,9 +76,8 @@ public class HostSmokeTests(HostSmokeTests.UnreachableInfrastructureFactory fact
         {
             // Deliberately empty. Not "not yet" — this host is the only one
             // that reads as a deployment rather than a fixture, and restoring
-            // the base call would silently take that with it. The forged-header
-            // suite that reads it arrives with the first endpoint to forge
-            // against.
+            // the base call would silently take that with it. The
+            // forged-header suite reads it.
         }
     }
 
