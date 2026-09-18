@@ -69,7 +69,8 @@ C:
 # D -- docs or harness. The docs/, .claude/, .github/, deploy/ or tools/
 # tree the issue names, CLAUDE.md, and the repository's own configuration
 # files at the root. Never src/**: that absence is the load-bearing half of
-# this class, and the gate enforces it by this list having no code entry.
+# this class, and the gate enforces it by this list having no code entry. A
+# new gate is Class D, and the contract's section 3 row says what it touches.
 D:
   - 'docs/**'
   - '.claude/**'
