@@ -550,7 +550,7 @@ file and a reviewer are the only things that do.
   this repository keeps its SQL — so a measurement over `.cs` files is a
   measurement over two languages unless it is told otherwise. **When a
   question is decidable by running something, a probe answers it**, and a
-  hedge is an unmeasured claim like the one it replaces.
+  hedge is an unmeasured claim.
 
   **Two places the analyser does not reach, and they are opposites.** Padding
   between a type and its identifier —
@@ -589,15 +589,15 @@ file and a reviewer are the only things that do.
 | | |
 |---|---|
 | Namespaces | File-scoped (`namespace X;`), never block-scoped |
-| Extension declarations | C# 14 `extension(T receiver)` blocks where a class groups several extensions on one receiver — `Common.Application.DependencyInjection` is the worked example. **The corpus is split**: every extension class in `Common.Web` still uses the classic `this`-parameter form. `ProblemDetailsExtensions` (`IServiceCollection`), `HealthCheckExtensions` (`IEndpointRouteBuilder`), `AuthorizationPolicyExtensions` (`AuthorizationPolicyBuilder`) and `ResultExtensions` (`Result`) each extend a receiver nothing else does, while some share one: `CorrelationIdExtensions` and `SecurityHeadersExtensions` on `IApplicationBuilder`, and `ObservabilityExtensions`, `AuthenticationExtensions` and the `CommonWebDefaultsExtensions` that composes them on `IHostApplicationBuilder`. Whether to group those three is open and deliberately unsettled — they are separate files because one composes the other two, and merging would put a caller-facing entry point in the same block as the pieces it calls. Converting anything is a decision about the whole corpus |
+| Extension declarations | C# 14 `extension(T receiver)` blocks where a class groups several extensions on one receiver — `Common.Application.DependencyInjection` is the worked example. **The corpus is split**: every extension class in `Common.Web` uses the classic `this`-parameter form. `ProblemDetailsExtensions` (`IServiceCollection`), `HealthCheckExtensions` (`IEndpointRouteBuilder`), `AuthorizationPolicyExtensions` (`AuthorizationPolicyBuilder`) and `ResultExtensions` (`Result`) each extend a receiver nothing else does, while some share one: `CorrelationIdExtensions` and `SecurityHeadersExtensions` on `IApplicationBuilder`, and `ObservabilityExtensions`, `AuthenticationExtensions` and the `CommonWebDefaultsExtensions` that composes them on `IHostApplicationBuilder`. Whether to group those three is open and deliberately unsettled — they are separate files because one composes the other two, and merging would put a caller-facing entry point in the same block as the pieces it calls. Converting anything is a decision about the whole corpus |
 | Expression-bodied members | Used for one-line members, not for constructors |
 | Braces | Optional for a single statement **that fits on its line**; required for two or more, and for one that wraps |
 | Target framework | .NET 10 (LTS), C# 14 |
 
 Each of these is a house style a reviewer might otherwise read as an oversight
-and "correct". They are consistent across the blueprint's C# samples, and the
-solution is written the same way. Changing one is a decision about the whole
-corpus, not about the file in front of you.
+and "correct". They bind the blueprint's C# samples and the solution alike.
+Changing one is a decision about the whole corpus, not about the file in front
+of you.
 
 **One more house non-finding is not this file's rule, and it is named here
 because the commands that consult this table send a reviewer for the whole
