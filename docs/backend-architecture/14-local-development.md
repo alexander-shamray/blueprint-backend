@@ -20,6 +20,7 @@ include:
   - services/gateway.yml
   - services/ordering.yml
   - services/web-bff.yml
+  - services/inventory.yml
 ```
 
 **`include` is what raises the floor, and it is the one prerequisite this
@@ -547,10 +548,10 @@ var coordination = builder
 // AppHost runs Ordering, so it does not have that excuse.
 var mq = builder.AddRabbitMQ("RabbitMq").WithManagementPlugin();
 
-// One database per service that this AppHost runs. Inventory, Payments,
-// Shipping and Notifications are omitted deliberately — adding a database
-// without the service and migrator that own it creates a schema nothing
-// maintains, which is the shape §4.1 rules out.
+// One database per service that this AppHost runs. The rest are omitted
+// deliberately — adding a database without the service and migrator
+// resources that own it creates a schema nothing maintains, which is the
+// shape §4.1 rules out.
 var orderingDb = sql.AddDatabase("Ordering");
 var catalogDb = sql.AddDatabase("Catalog");
 
