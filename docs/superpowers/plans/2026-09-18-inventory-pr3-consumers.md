@@ -656,6 +656,46 @@ public async Task A_despatch_against_a_released_reservation_moves_nothing_and_is
 `Admin()` is the helper PR-2's `ReservationEndpointsTests` defines; copy it
 into this file rather than sharing it across test classes.
 
+The race the rowversion settles, as a test rather than a sentence:
+
+```csharp
+[Fact]
+public async Task A_cancellation_and_a_despatch_for_one_order_arriving_together_end_in_exactly_one_state()
+{
+    var product = Guid.CreateVersion7();
+    await SeedStock(product, 3);
+    var order = Guid.CreateVersion7();
+    await SendAsync(new ReserveStock(order, [new StockLine(product, 2)]));
+    await EventuallyStatus(order, "Reserved");
+
+    await Task.WhenAll(
+        PublishAsync(OrderCancelledFor(order), drain: false),
+        PublishAsync(ShipmentDispatchedFor(order), drain: false));
+
+    await Eventually(
+        () => fixture.ScalarAsync<int>(
+            "SELECT Value = COUNT(*) FROM inventory.InboxMessages WHERE Endpoint = {0}", MessagingRegistration.EventsQueue),
+        expected: 2,
+        because: "both deliveries are consumed, the loser after a retry against the winner's row");
+    string status = await StatusAsync(order);
+    int available = await Available(product);
+    int reserved = await fixture.ScalarAsync<int>("SELECT Value = Reserved FROM inventory.StockItems WHERE ProductId = {0}", product);
+    (status, available, reserved).ShouldBeOneOf(
+        ("Released", 3, 0),
+        ("Fulfilled", 1, 0));
+    (await fixture.OutboxAsync()).Count(r => r.MessageType.Contains("StockReleased", StringComparison.Ordinal))
+        .ShouldBe(1, "whichever won, the cancellation published the postcondition exactly once");
+}
+```
+
+Both orderings are legitimate outcomes and the assertion admits exactly
+those two; what it refuses is the third — a row left `Reserved`, a counter
+moved twice, or `Available` at any other value — which is what a missing
+concurrency token or a swallowed `DbUpdateConcurrencyException` would
+produce. `drain: false` publishes without waiting for the inbox row, so
+the two deliveries genuinely overlap; the `Eventually` on two inbox rows is
+the wait.
+
 `OrderCancelledFor(order)` and `ShipmentDispatchedFor(order)` build the
 contracts with fresh `MessageId`s; take their member lists from
 `Common.Contracts`.
@@ -894,13 +934,10 @@ git commit -m "feat(inventory): count an unreserved despatch once, by claiming t
 
 - Spec coverage: section 5's despatch table → Tasks 1, 3, 4 (every row has a
   test); section 8's `inventory-events` and registration test → Task 4;
-  section 13's counter and claim → Task 5; section 9's rowversion race
-  (release vs fulfil) is exercised implicitly by the two-endpoint tests and
-  explicitly nowhere — add a test in Task 4 publishing `OrderCancelled` and
-  `ShipmentDispatched` for one order concurrently and asserting the row ends
-  in exactly one of `Released` or `Fulfilled` with `Available` consistent
-  with it, if the run's flakiness budget allows; otherwise note it in the PR
-  body as covered by the rowversion and MassTransit's retry.
+  section 13's counter and claim → Task 5; section 7's rowversion race
+  (release against fulfil) → Task 4's last test, which is mandatory.
+- `RetryPolicy.Standard` is PR-2's `Inventory.Infrastructure/Messaging/RetryPolicy.cs`,
+  which this plan depends on having merged.
 - Types: `Fulfil`, `RecordDespatchUnreserved`, `DespatchedUnreservedAt`,
   `DespatchedUnreservedDomainEvent`, `FulfilAsync`,
   `FulfilReservationCommand`, `EventsQueue`, `InventoryMetrics`,

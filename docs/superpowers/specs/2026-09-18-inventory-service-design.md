@@ -72,11 +72,11 @@ event and the deploy tree is a class of its own. Each row names its
 
 | PR | Subject | Class |
 |---|---|---|
-| 1 | `feat(inventory): third service from the scaffold` — the scaffold run, `StockItem` and its two admin endpoints, the Compose pair, the gateway's `depends_on`, `ci.yml`'s filter and image matrix, the realm's grant to `demo`, and the three sentences that say Inventory answers 502 | A+D |
-| 2 | `feat(inventory): reservations` — `Reservation`, `inventory-commands`, ADR-024's guarantees, the four events, the three reservation admin endpoints, §3.2's despatch sentence | A+B |
+| 1 | `feat(inventory): third service from the scaffold` — the scaffold run, `StockItem` and its two admin endpoints, the Compose pair, the gateway's `depends_on`, `ci.yml`'s filter and image matrix, the realm's grant to `demo` and the building-block test that pins it, and the three sentences that say Inventory answers 502 | A+B+D |
+| 2 | `feat(inventory): reservations` — `Reservation`, `inventory-commands` and the broker grant that lets it be declared, ADR-024's guarantees, the four events, the three reservation admin endpoints, §3.2's despatch sentence | A+B+D |
 | 3 | `feat(inventory): consume OrderCancelled and ShipmentDispatched` — `inventory-events` and its two handlers, and the one `AddMeter` line in `Common.Web` that lets section 13's counter be exported | A+B |
 | 4 | `feat(deploy): Inventory's chart, deploy target and canary` — `deploy/helm/inventory`, the umbrella dependency, `smoke.sh`'s lists, `deploy.yml`'s option, the canary preflight | D |
-| 5 | `feat(catalog): consume StockLevelChanged` — Catalog's binding, the level's projection and its column on the listing, and the cut of the test comment that says Inventory does not exist | A |
+| 5 | `feat(catalog): consume StockLevelChanged` — Catalog's binding and the broker grant it needs, the level's projection and its column on the listing, the scaffold's patches for a template that now consumes, and the cut of the test that says Inventory does not exist | A+D |
 
 **Why CI joins PR-1 and Helm does not.** The pipeline gate refuses an
 immediate child of `src/Services/` no path filter matches and a Dockerfile

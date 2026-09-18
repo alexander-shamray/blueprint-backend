@@ -139,8 +139,8 @@ Drive the handler directly from a scope, the way Ordering's
 `ProductPriceProjectionTests` do:
 
 ```csharp
-using Catalog.Infrastructure.Projections;
 using Catalog.TestSupport;
+using Common.Application;
 using Common.Contracts.Inventory.V1;
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
@@ -216,8 +216,9 @@ public sealed class StockLevelProjectionTests(ServiceFixture fixture) : IAsyncLi
 }
 ```
 
-Add `using Common.Application;` and `using Common.Contracts.Inventory.V1;`
-for the interface and the contract.
+`Common.Application` supplies `IIntegrationEventHandler<>` and is not a
+global using in this test project; the handler's concrete namespace is not
+imported because nothing resolves the concrete type.
 
 - [ ] **Step 2: Run to see them fail; write the handler**
 
@@ -279,6 +280,12 @@ git commit -m "feat(catalog): project Inventory's level under an OccurredAt wate
 **Files:**
 - Create: `src/Services/Catalog/Catalog.Infrastructure/Messaging/StockLevelConsumer.cs`
   — Catalog-only: the queue name and the two registration halves
+- Create: `src/Services/Catalog/Catalog.Infrastructure/Messaging/RetryPolicy.cs`
+  — Ordering's `RetryPolicy` is `internal` to `Ordering.Infrastructure`
+  and Catalog, having had no endpoint, has none; Ordering's file with the
+  namespace changed, for the reason PR-2 gives when Inventory takes the
+  same copy. Classified `COPIED` in Task 5: a rendered service's first
+  endpoint wants it, and it names nothing of Catalog's
 - Modify: `src/Services/Catalog/Catalog.Infrastructure/Messaging/DependencyInjection.cs`
   — two one-line calls into that file, and its `using`
 - Modify: `tests/Catalog.Api.Tests/MessagingRegistrationTests.cs` — the
@@ -516,22 +523,27 @@ git commit -m "feat(catalog): the listing carries Inventory's level, null when u
 ### Task 5: The scaffold still renders
 
 **Files:**
-- Modify: `tools/new-service/new_service.py` — the `OMITTED` set gains the
-  six Catalog-only files this PR creates:
+- Modify: `tools/new-service/new_service.py` — the `OMITTED` set gains
+  every Catalog-only file this PR creates:
   `src/Services/Catalog/Catalog.Infrastructure/Persistence/StockLevelConfiguration.cs`,
   `src/Services/Catalog/Catalog.Infrastructure/Projections/StockLevelProjection.cs`,
   `src/Services/Catalog/Catalog.Infrastructure/Messaging/StockLevelConsumer.cs`,
   `tests/Catalog.Api.Tests/StockLevelsSchemaTests.cs`,
   `tests/Catalog.Api.Tests/StockLevelProjectionTests.cs`,
   `tests/Catalog.Api.Tests/StockLevelRegistrationTests.cs`,
-  `tests/Catalog.Api.Tests/InventoryEventEndpointTests.cs`. The script
-  refuses a Catalog file in neither `COPIED` nor `OMITTED`, so leaving any
-  one out fails the render before it writes. And one new anchored patch on
+  `tests/Catalog.Api.Tests/InventoryEventEndpointTests.cs`; and `COPIED`
+  gains `src/Services/Catalog/Catalog.Infrastructure/Messaging/RetryPolicy.cs`.
+  The script refuses a Catalog file in neither set, so leaving any one out
+  fails the render before it writes. And one new anchored patch on
   the copied `Catalog.Infrastructure/Messaging/DependencyInjection.cs`,
   removing the three Catalog-only lines Task 3 added — the `using`, the
   `AddStockLevelConsumer()` call and the `ConfigureStockLevelEndpoint(context)`
   call — each an anchor that must match exactly once, in the shape of the
-  script's existing slice patches.
+  script's existing slice patches. And the script's existing patch entry for
+  `tests/Catalog.Api.Tests/MessagingRegistrationTests.cs` is **deleted**:
+  both of its anchors — the comment paragraph naming Inventory and the
+  assertion message naming Catalog — leave that file in Task 3, so the
+  patch would refuse the render on a missing anchor before writing.
 - Modify: `tools/new-service/test_new_service.py` — the rendered-text
   assertion that replaces the test Task 3 cut: the rendered
   `DependencyInjection.cs` contains no `AddConsumer`, no `ReceiveEndpoint`
@@ -547,13 +559,14 @@ Expected: a failure naming the first unclassified file.
 
 - [ ] **Step 2: Classify, patch and assert**
 
-Add the seven files to `OMITTED` beside the `Products` slice entries. Add
-the three-line patch with its test, which renders the file and asserts the
-three lines are gone and the rest of the registration is byte-for-byte
-Catalog's. Add the no-consumer assertion to the scaffold's suite. Re-run
-the suite green. The messaging registration is wiring the script already
-patches (the `RabbitMq` connection-string line), so check the existing
-anchor still matches exactly once beside the new one.
+Add the files to `OMITTED` beside the `Products` slice entries. Delete the
+`MessagingRegistrationTests.cs` patch entry and the test that exercised it. Add
+the three-line patch with its test, which renders the file and asserts the three
+lines are gone and the rest of the registration is byte-for-byte Catalog's. Add
+the no-consumer assertion to the scaffold's suite. Re-run the suite green. The
+messaging registration is wiring the script already patches (the `RabbitMq`
+connection-string line), so check the existing anchor still matches exactly once
+beside the new one.
 
 - [ ] **Step 3: Dogfood, on a clean tree only**
 

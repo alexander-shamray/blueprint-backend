@@ -151,9 +151,15 @@ and `smoke.sh`'s own check is what refuses that.
 after `ordering`, and change the comment's "Inventory, Payments, Shipping
 and Notifications join" to "Payments, Shipping and Notifications join".
 
-`README.md`: add `inventory/` to the bracketed group in the tree fence, and
-change "four dependencies" to "one dependency per service chart" and "renders
-all five" to "renders every chart and the umbrella".
+`README.md`: add `inventory/` to the bracketed group in the tree fence,
+change "four dependencies" to "one dependency per service chart" and
+"renders all five" to "renders every chart and the umbrella" — and the two
+command blocks that enumerate charts: the setup line's comment
+`# and ordering, gateway, web-bff` gains `inventory`, with `after the four
+above` becoming `after the service charts`, and the umbrella `helm upgrade`
+example gains `--set-string inventory.image.tag="$INVENTORY_SHA" \` beside
+its four, because that command as printed fails the chart's required-tag
+check the moment the umbrella has a fifth dependency.
 
 `canary.json`: add the entry after `ordering-api`. `canary.py` derives the
 Job prefix, so nothing else changes; check 4 will assert `Inventory.Api` is

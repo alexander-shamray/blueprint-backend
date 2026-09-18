@@ -1171,6 +1171,11 @@ git commit -m "feat(inventory): ReserveStock and ReleaseStock under ADR-024's gu
 
 **Files:**
 - Create: `src/Services/Inventory/Inventory.Infrastructure/Messaging/CommandMappers.cs`
+- Create: `src/Services/Inventory/Inventory.Infrastructure/Messaging/RetryPolicy.cs`
+  — Ordering's `RetryPolicy` is `internal` to `Ordering.Infrastructure` and
+  the scaffold, having no endpoint, carries none; this is Ordering's file
+  with the namespace changed, because §9.8 prints the ladder per service
+  and a building block would be a fourth thing to keep in step
 - Modify: `src/Services/Inventory/Inventory.Infrastructure/Messaging/DependencyInjection.cs`
 - Modify: `deploy/compose/rabbitmq/definitions.json` — `inventory-svc`'s
   three patterns, which the scaffold copied from `catalog-svc` and which
@@ -1284,6 +1289,45 @@ public async Task A_release_of_a_held_reservation_gives_the_stock_back()
 }
 
 [Fact]
+public async Task A_release_of_a_failed_reservation_publishes_the_postcondition_and_moves_nothing()
+{
+    var a = Guid.CreateVersion7();
+    await SeedStock(a, 0);
+    var order = Guid.CreateVersion7();
+    await SendAsync(new ReserveStock(order, [new StockLine(a, 1)]));
+    await EventuallyStatus(order, "Failed");
+
+    await SendAsync(new ReleaseStock(order));
+
+    await Eventually(
+        async () => (await fixture.OutboxAsync()).Count(r => r.MessageType.Contains("StockReleased", StringComparison.Ordinal)),
+        expected: 1,
+        because: "section 5's table: a Failed row still answers with the postcondition");
+    (await StatusAsync(order)).ShouldBe("Failed");
+    (await Available(a)).ShouldBe(0);
+}
+
+[Fact]
+public async Task A_second_release_of_a_released_reservation_publishes_again_and_returns_nothing_twice()
+{
+    var product = Guid.CreateVersion7();
+    await SeedStock(product, 3);
+    var order = Guid.CreateVersion7();
+    await SendAsync(new ReserveStock(order, [new StockLine(product, 2)]));
+    await EventuallyStatus(order, "Reserved");
+    await SendAsync(new ReleaseStock(order));
+    await EventuallyStatus(order, "Released");
+
+    await SendAsync(new ReleaseStock(order));
+
+    await Eventually(
+        async () => (await fixture.OutboxAsync()).Count(r => r.MessageType.Contains("StockReleased", StringComparison.Ordinal)),
+        expected: 2,
+        because: "ADR-024's first guarantee holds on the second release as on the first");
+    (await Available(product)).ShouldBe(3, "the lines were given back once, not twice");
+}
+
+[Fact]
 public async Task A_reserve_with_a_zero_quantity_is_a_contract_fault_and_is_not_retried()
 {
     var order = Guid.CreateVersion7();
@@ -1317,6 +1361,7 @@ Expected: registration test fails on missing consumers; endpoint tests time out.
 ```csharp
 using Common.Application;
 using Common.Contracts.Inventory.V1;
+using Inventory.Application;
 using Inventory.Application.Reservations.ReleaseStock;
 using Inventory.Application.Reservations.ReserveStock;
 using Inventory.Domain.Reservations;
@@ -1701,6 +1746,7 @@ public static class ReservationErrors
 ```csharp
 using Common.Application;
 using Common.Web;
+using Inventory.Application;
 using Inventory.Application.Reservations.GetReservation;
 using Inventory.Application.Reservations.Reinstate;
 using Inventory.Application.Reservations.ReleaseStock;
@@ -1814,7 +1860,7 @@ public async Task Two_orders_for_the_last_unit_leave_one_Reserved_and_one_Failed
 }
 ```
 
-- [ ] **Step 3: Run `/check-links` and the suite; commit**
+- [ ] **Step 3: Run `/validate-blueprint`, `/check-links` and the suite; commit**
 
 ```bash
 dotnet test tests/Inventory.Api.Tests
@@ -1828,7 +1874,9 @@ git commit -m "docs: state what consuming ShipmentDispatched does to a reservati
 
 - [ ] `dotnet build Platform.slnx` — 0 warnings.
 - [ ] `dotnet test Platform.slnx` — green.
-- [ ] `/validate-blueprint` is not owed (no rule moved; one derivation stated).
+- [ ] `/validate-blueprint` and `/check-links`, because §3.2 moved:
+  `docs/change-locality.md`'s procedure owes the audit after any chapter
+  edit. Run them in Task 7, before that commit.
 - [ ] PR body: `| Class | A+B+D |`, touch set from Global Constraints. Body
   files the reservation-purge issue.
 

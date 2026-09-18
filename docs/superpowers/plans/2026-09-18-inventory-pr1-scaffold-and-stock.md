@@ -1117,9 +1117,10 @@ what let it ship whole, ahead of three of them."
 
 - [ ] **Step 2: Run the link check**
 
-Run `/check-links` from the session, since two chapters moved; expect no
-findings. `/validate-blueprint` is not owed: no rule moved, and the edits
-are to sentences that described a state, not to a specification.
+Run `/check-links` and `/validate-blueprint` from the session: two chapters
+moved, and `docs/change-locality.md`'s procedure owes the audit after any
+edit to a chapter, whatever the edit says. Expect no findings from either;
+a finding is fixed here, before the commit.
 
 - [ ] **Step 3: Commit**
 
