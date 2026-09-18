@@ -1232,10 +1232,12 @@ public sealed class CancelOrderMapper : ICommandMessageMapper<CancelOrder, Cance
 > `read` on the exchange, and a RabbitMQ permission pattern cannot tell a queue
 > from an exchange — so granting the bind grants the consume.
 
-**A command reachable both ways has exactly two mappings of its origin**, and
-both are literals: `CommandOrigin.User` at the endpoint, `CommandOrigin.System`
-here. A third — an origin read from a message, a header or a request body —
-re-opens the failure §11.4 describes, because it moves the choice to the caller.
+**A command reachable both ways maps its origin only as a literal**, written
+where the command is constructed: `CommandOrigin.User` at the endpoint,
+`CommandOrigin.System` at every arrival the broker scopes — this mapper, and
+the handler for a consumed event that dispatches a command. An origin read
+from a message, a header or a request body is the case that re-opens the
+failure §11.4 describes, because it moves the choice to the caller.
 
 The command endpoint is declared in Ordering's `AddMassTransitMessaging`
 (`Ordering.Infrastructure/Messaging/DependencyInjection.cs`), which holds
@@ -3142,8 +3144,9 @@ lives.
 
 **The ladder is a `RetryPolicy` in each service's own
 `*.Infrastructure/Messaging`** — Ordering's for the four endpoints above and
-Inventory's for `inventory-commands` ([§3.2](03-bounded-contexts.md)) — which
-holds `RetryLimit`, `MinInterval`, `MaxInterval` and `IntervalDelta` and
+Inventory's for every endpoint its own `DependencyInjection` declares, one for
+[§3.2](03-bounded-contexts.md)'s Accepts column and one for its Consumes —
+which holds `RetryLimit`, `MinInterval`, `MaxInterval` and `IntervalDelta` and
 applies them through `Standard`. Declaring it once per service is what makes
 agreement between that service's endpoints structural: an endpoint that wants a
 different ladder has to say so, where a ladder written out per endpoint can

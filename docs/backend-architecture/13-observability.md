@@ -159,6 +159,8 @@ public static IHostApplicationBuilder AddObservability(this IHostApplicationBuil
             // silent, which is worse than having no alert at all.
             .AddMeter("Ordering.Orders")                       // §13.3, §13.6
             .AddMeter("Ordering.Outbox")                       // §13.6 per-lane
+            .AddMeter("Inventory.Reservations")                // §13.3
+            .AddMeter("Inventory.Outbox")                      // §13.6 per-lane
             // Shared names, not service-prefixed: every service emits the same
             // instruments and the service.name resource attribute separates
             // them. One dashboard query then works for all of them, and a new
@@ -428,7 +430,7 @@ ones a reader would otherwise go looking for in this section and fail to find:
 |---|---|---|
 | `RequestMetrics` | here, `Common.Application` | `request.duration` — the command and query p95 rows |
 | `MessagingMetrics` | here, `Common.Infrastructure` | `messaging.delivery.lag`, `projection.lag` |
-| `OutboxMetrics` | §13.6, `Ordering.Infrastructure` | `outbox.oldest.age`, read once per lane |
+| `OutboxMetrics` | §13.6, each publishing service's `*.Infrastructure` | `outbox.oldest.age`, read once per lane |
 | ASP.NET Core instrumentation | the framework, enabled in §13.2 | `http.server.request.duration` — the availability row |
 
 `RequestMetrics` is Application because `LoggingBehavior` injects it and the
@@ -2060,17 +2062,19 @@ move. Every runbook exists regardless, per §13.9.
 
 A fifth absence sits underneath all of this and is invisible to the checks
 above, because they are about metric *names*. **The four loaded outbox alerts
-group `by (service_name)`, and only Ordering publishes those gauges.** Catalog
-hosts §9.4's dispatcher and registers no `OutboxMetrics`, so a stalled Catalog
-lane is precisely the silent case this section exists to prevent — arriving
-through a service missing from a series rather than through a metric nobody
-declared.
+group `by (service_name)`, and a service that hosts §9.4's dispatcher and
+registers no `OutboxMetrics` is absent from every one of them.** Which
+services those are is `OUTBOX_METRICS_EXEMPT` in
+`deploy/observability/check.py`, and a stalled lane in one of them is
+precisely the silent case this section exists to prevent — arriving through a
+service missing from a series rather than through a metric nobody declared.
 
-It is not closed here because §13.3 places `OutboxMetrics` in
-`Ordering.Infrastructure`, and moving it is a decision about **the template**:
-Catalog is what §4.5's scaffold renders, so every new service inherits the gap
-until the type is common and the scaffold emits it. Ordering is the one-off
-that closed it for itself.
+It is not closed here because §13.3 places `OutboxMetrics` in each publishing
+service's `*.Infrastructure`, and lifting it into common code is a decision
+about **the template**: Catalog is what §4.5's scaffold renders, so every new
+service inherits the gap until the type is common and the scaffold emits it.
+A service closes the gap for itself by registering the type, and pays for it
+with a copy.
 
 What this pull request does instead is refuse to let the absence be quiet.
 `check.py` requires every service hosting the dispatcher to publish the gauges
