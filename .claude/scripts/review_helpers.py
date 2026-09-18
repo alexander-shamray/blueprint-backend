@@ -2,9 +2,9 @@
 
 The scripts in this directory carry the judgements the /ship loop and both
 sweeps rest on, and the harness's grants and refusals are argued in
-`docs/harness-boundaries.md`. Each helper is tested where it decides, in
-the `test_*.py` module named for it, and each class there names the
-property it checks.
+`docs/harness-boundaries.md`. Each `test_*.py` module is named for its
+subject — one helper, a family of helpers, or the harness's deny list — and
+each class there names the property it checks.
 
 Negatives are paired with positive controls, because a negative that passes
 while a pattern matches nothing is indistinguishable from one that works.
@@ -15,10 +15,7 @@ in Python's `re` would be a second specification. And a declared pattern needs
 a test whose subject is where it is applied, so the pattern cases are paired
 with structural cases over the call sites.
 
-Run: py -3.12 -m unittest discover -s .claude/scripts
-Needs bash, grep, git and jq on PATH; needs no network, no Docker, no gh
-and no SDK. `git` because one case drives a real worktree round trip, and
-`jq` because the did-it-run verdict is parsed rather than matched.
+What the suite needs to run is `docs/testing.md`'s.
 """
 
 import os
