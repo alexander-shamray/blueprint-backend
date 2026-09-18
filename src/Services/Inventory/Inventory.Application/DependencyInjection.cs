@@ -1,5 +1,6 @@
 using Inventory.Application.Integration;
 using Inventory.Application.Reservations;
+using Inventory.Application.Reservations.ReserveStock;
 using Common.Application;
 using FluentValidation;
 using Microsoft.Extensions.DependencyInjection;
@@ -74,16 +75,13 @@ public static class DependencyInjection
         // §4.2's sample line. IValidator<T> is not in PluggableInterfaces.All
         // because it is FluentValidation's contract, not one of ours — its own
         // scanner knows its own conventions (Include* filters, internal
-        // validators) and a second scan would drift from it.
-        // §4.2's line spelt over the assembly rather than over a type in
-        // it, because there is no validator yet to name — and this class,
-        // the obvious anchor, is static and cannot be a type argument.
-        // Move to AddValidatorsFromAssemblyContaining<TFirstValidator>()
-        // with the first one, and add the registration test that guards
-        // it: ValidationBehavior takes IEnumerable<IValidator<T>>, so a
-        // lost scan is a pipeline that validates nothing and says so to
-        // nobody.
-        services.AddValidatorsFromAssembly(typeof(DependencyInjection).Assembly);
+        // validators) and a second scan would drift from it. Anchored on
+        // ReserveStockValidator, the first validator this assembly gained,
+        // rather than on this static class, which cannot be a type argument;
+        // the registration test that guards it is what a lost scan needs,
+        // because ValidationBehavior takes IEnumerable<IValidator<T>> and asks
+        // nobody when that sequence comes back empty.
+        services.AddValidatorsFromAssemblyContaining<ReserveStockValidator>();
         return services;
     }
 }

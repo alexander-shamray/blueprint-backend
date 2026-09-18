@@ -26,16 +26,6 @@ namespace Inventory.Infrastructure.Observability;
 /// before cutover or a service whose traffic has simply stopped publishes
 /// nothing at all.
 /// </para>
-/// <para>
-/// <b><c>OrderMetrics</c> is absent because it does not exist yet, not because
-/// it is exempt.</b> §13.3 puts it in <c>Ordering.Application</c> with
-/// <c>OrderSummaryProjection</c> as its only call site, and §6.6's
-/// <c>OrderSummaries</c> projection has not been built — PR-20 deferred it by
-/// name. It joins this constructor in the PR that adds that projection, and
-/// nobody has to remember: the convention test reads the container's
-/// registrations rather than this list, so an unforced metrics type fails a
-/// build the day it is registered.
-/// </para>
 /// </remarks>
 public sealed class MetricsInitialiser : IHostedService
 {

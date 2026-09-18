@@ -81,6 +81,9 @@ public static class DependencyInjection
                     EventsQueue,
                     e =>
                     {
+                        // No exclusion, unlike CommandsQueue below: no mapper
+                        // runs on this queue, so no ContractMappingException
+                        // can arise for the retry policy to ignore.
                         e.UseMessageRetry(RetryPolicy.Standard);
 
                         // Inbox before the in-memory outbox, a correctness
@@ -121,7 +124,7 @@ public static class DependencyInjection
                         });
 
                         // Inbox before the in-memory outbox, for the reason
-                        // the events endpoint above states: the other order
+                        // EventsQueue's endpoint states: the other order
                         // commits the inbox row before the buffered sends
                         // have flushed.
                         e.UseConsumeFilter(typeof(InboxFilter<>), context);

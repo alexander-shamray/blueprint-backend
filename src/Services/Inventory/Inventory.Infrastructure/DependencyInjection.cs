@@ -121,9 +121,8 @@ public static class DependencyInjection
         // §13.6's per-lane outbox gauges, and the stats type behind them. Both
         // singletons: the gauges are callbacks the Meter holds. InventoryMetrics
         // is an Application type AddInventoryApplication registers; a second
-        // AddSingleton here would not fail, the container
-        // would keep both, and two instances would mean two sets of
-        // instruments on one meter.
+        // AddSingleton here would not fail, the container would keep both, and
+        // two instances would mean two sets of instruments on one meter.
         //
         // OutboxStats gets its own connection factory with a bounded connect
         // timeout because it runs inside observable gauge callbacks, and a
@@ -131,9 +130,9 @@ public static class DependencyInjection
         // Connect Timeout, which OutboxStats.ConnectTimeoutSeconds is argued
         // against, a database that hangs rather than refuses would block every
         // callback before the command timer started and stall the metric
-        // reader for unrelated telemetry too. The runtime key, because it
-        // reads the same data plane (§7.1);
-        // only the timeout differs, so no query path inherits it.
+        // reader for unrelated telemetry too. The runtime key, because it reads
+        // the same data plane (§7.1); only the timeout differs, so no query
+        // path inherits it.
         string metricsConnectionString =
             new SqlConnectionStringBuilder(configuration.GetConnectionString("Inventory"))
             {
