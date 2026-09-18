@@ -205,6 +205,31 @@ public sealed class InventoryCommandEndpointTests(ServiceFixture fixture) : IAsy
                 "refusal rather than to the validator's, which this alone cannot tell apart");
     }
 
+    [Fact]
+    public async Task Two_orders_for_the_last_unit_leave_one_Reserved_and_one_Failed()
+    {
+        var product = Guid.CreateVersion7();
+        await SeedStock(product, 1);
+        var first = Guid.CreateVersion7();
+        var second = Guid.CreateVersion7();
+
+        await Task.WhenAll(
+            SendAsync(new ReserveStock(first, [new StockLine(product, 1)])),
+            SendAsync(new ReserveStock(second, [new StockLine(product, 1)])));
+
+        await Eventually(
+            () => fixture.ScalarAsync<int>(
+                "SELECT Value = COUNT(*) FROM inventory.Reservations WHERE OrderId IN ({0}, {1})",
+                first,
+                second),
+            expected: 2,
+            because: "both commands are answered");
+        string[] statuses = [await StatusAsync(first), await StatusAsync(second)];
+        statuses.Count(s => s == "Reserved").ShouldBe(1);
+        statuses.Count(s => s == "Failed").ShouldBe(1);
+        (await Available(product)).ShouldBe(0);
+    }
+
     // Thin forwarders onto ReservationTestSupport, which both this class and
     // ReservationEndpointsTests need: the implementation lives once there,
     // and each class keeps its own name so its test bodies read unchanged.

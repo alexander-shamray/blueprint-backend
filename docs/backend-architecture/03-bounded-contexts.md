@@ -208,6 +208,11 @@ absorptions is the only thing between a cancelled confirmed order and a fault:
   postcondition, published whether or not a reservation was held. So one
   cancellation has **two** independent routes to the event, and §9.4 orders
   nothing between them.
+- **Consuming `ShipmentDispatched` fulfils the reservation and publishes
+  nothing.** Each line's reserved count falls by its quantity and the
+  available level stays where the reserve put it, so no `StockLevelChanged`
+  is owed; a later release for that order publishes `StockReleased` on the
+  terms above and returns nothing to the level, because the stock has left.
 
 > **The second producer is what the saga's absorption is for**, and citing this
 > section for it was a mis-citation until this bullet existed. Payments'
