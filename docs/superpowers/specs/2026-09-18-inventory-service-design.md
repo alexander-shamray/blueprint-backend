@@ -488,8 +488,10 @@ with a watermark on `OccurredAt` because §9.4 orders nothing.
 - **`GetProducts` gains `quantityAvailable`**, nullable: a product Inventory
   has never reported reads `null` rather than zero, because "unknown" and
   "none" are different facts to a screen and collapsing them is how a new
-  product lists as sold out. The BFF passes it through; what the listing
-  does with it is the frontend's.
+  product lists as sold out. The listing is served anonymously through the
+  gateway's `catalog-public` route and the BFF does not touch it, so
+  nothing in the BFF changes; what a screen does with the value is the
+  frontend's.
 - **The invalidator is not owed until a cached query exists.** The test's
   comment is cut rather than fulfilled, and the first Catalog handler to
   cache a product read brings §8.4's handler with it, beside this
