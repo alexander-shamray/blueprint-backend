@@ -47,8 +47,9 @@ sections 9 (the Catalog bullet) and 14.
 - `catalog.StockLevels(ProductId uniqueidentifier PK, QuantityAvailable int
   NOT NULL, AsOf datetimeoffset(7) NOT NULL)`. Mapped through an
   `IEntityTypeConfiguration<StockLevel>` on an internal `StockLevel` class
-  so `migrations add` emits it — §7.4's `ProductPrices` terms — and never
-  read through EF.
+  so `migrations add` emits it — the terms §7.4 states for `ProductPrices`
+  and the spec's section 14 names for this table — and never read through
+  EF.
 
 - [ ] **Step 1: Write the failing smoke test**
 
@@ -148,7 +149,11 @@ public sealed class StockLevelProjectionTests(ServiceFixture fixture) : IAsyncLi
     private async Task Apply(Guid product, int level, DateTimeOffset at)
     {
         await using AsyncServiceScope scope = fixture.Factory.Services.CreateAsyncScope();
-        StockLevelProjection projection = scope.ServiceProvider.GetRequiredService<StockLevelProjection>();
+        // As its interface: AddPluggableFrom registers with AsImplementedInterfaces(),
+        // so the concrete type is not resolvable, the same as Ordering's
+        // ProductPriceProjectionTests resolve.
+        IIntegrationEventHandler<StockLevelChanged> projection =
+            scope.ServiceProvider.GetRequiredService<IIntegrationEventHandler<StockLevelChanged>>();
         await projection.HandleAsync(
             new StockLevelChanged
             {
@@ -200,11 +205,8 @@ public sealed class StockLevelProjectionTests(ServiceFixture fixture) : IAsyncLi
 }
 ```
 
-`GetRequiredService<StockLevelProjection>()` needs the concrete type
-registered, which `AddPluggableFrom` does for `IIntegrationEventHandler<>`
-implementations as their interface; resolve
-`IIntegrationEventHandler<StockLevelChanged>` instead if the concrete type
-is not registered.
+Add `using Common.Application;` and `using Common.Contracts.Inventory.V1;`
+for the interface and the contract.
 
 - [ ] **Step 2: Run to see them fail; write the handler**
 
@@ -426,38 +428,47 @@ git commit -m "feat(catalog): the listing carries Inventory's level, null when u
 ### Task 5: The scaffold still renders
 
 **Files:**
-- Possibly modify: `tools/new-service/new_service.py` (the slice exclusion
-  list, if `Projections/StockLevelProjection.cs` and
-  `StockLevelConfiguration.cs` are Catalog-specific and must not be copied)
+- Modify: `tools/new-service/new_service.py` — the `OMITTED` set gains the
+  four Catalog-specific files this PR creates:
+  `src/Services/Catalog/Catalog.Infrastructure/Persistence/StockLevelConfiguration.cs`,
+  `src/Services/Catalog/Catalog.Infrastructure/Projections/StockLevelProjection.cs`,
+  `tests/Catalog.Api.Tests/StockLevelProjectionTests.cs`,
+  `tests/Catalog.Api.Tests/InventoryEventEndpointTests.cs`. The script
+  refuses a Catalog file in neither `COPIED` nor `OMITTED`, so leaving any
+  one out fails the render before it writes.
 
-- [ ] **Step 1: Run the scaffold's suite**
+- [ ] **Step 1: Run the scaffold's suite to see it fail**
 
 ```bash
 py -3.12 -m unittest discover -s tools/new-service
 ```
 
-Expected: green, or a failure naming a new Catalog file the render copied
-into a service that should not have it.
+Expected: a failure naming the first unclassified file.
 
-- [ ] **Step 2: If it failed, exclude the two files by path** in the script's
-  slice list, the way the `Products` slice is excluded, and re-run. The
-  messaging registration is wiring the script patches; if the anchor it
-  patches no longer matches because Task 3 changed
-  `AddMassTransitMessaging`, update the anchor and its test with the same
-  care the script's README asks for: an anchor must match exactly once.
+- [ ] **Step 2: Classify the four files as omitted**, beside the `Products`
+  slice entries, and re-run. The messaging registration is wiring the
+  script patches; because Task 3 changed `AddMassTransitMessaging`, check
+  that the anchor it patches still matches exactly once and update the
+  anchor and its test if not, with the care the script's README asks for.
 
-- [ ] **Step 3: Dogfood**
+- [ ] **Step 3: Dogfood, on a clean tree only**
 
 ```bash
+git status --short          # must print nothing; commit or stop otherwise
 py -3.12 tools/new-service/new_service.py Probe --port 5199
 dotnet build Platform.slnx
 rm -rf src/Services/Probe tests/Probe.* deploy/compose/services/probe.yml
 git checkout -- Platform.slnx deploy/compose/ .github/secret-scan/allowed/
 ```
 
+The first line is the guard: the undo restores whole tracked files, and on
+a tree carrying unrelated edits it would discard them, which the repository
+forbids. The scaffold README says the same — run it on a clean worktree —
+and a dirty tree here means commit the pending task first, never proceed.
+
 Expected: the rendered service builds. The PR body carries the evidence.
 
-- [ ] **Step 4: Commit if the script changed**
+- [ ] **Step 4: Commit**
 
 ```bash
 git add tools/new-service

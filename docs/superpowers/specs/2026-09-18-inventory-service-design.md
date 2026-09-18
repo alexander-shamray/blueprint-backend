@@ -5,25 +5,25 @@ PR-37 and says a gap the plan left is a pull request whose body says so, so
 this is dated and named for its subject, like the checkout-quote spec before
 it. Where this document and the blueprint disagree, the blueprint wins.
 
-**What is already decided, and where.** [§3.2](../../backend-architecture/03-bounded-contexts.md)
-gives Inventory its row: it owns `StockItem` and `Reservation`, publishes
-`StockReserved`, `StockReservationFailed`, `StockReleased` and
-`StockLevelChanged`, consumes `OrderCancelled` and `ShipmentDispatched`, and
-accepts `ReserveStock` and `ReleaseStock`. All six contracts exist in
-`Common.Contracts.Inventory.V1` since PR-15, with samples in
-`Platform.IntegrationTests`. [§7.3](../../backend-architecture/07-persistence.md)
-prints the reservation write as one atomic `UPDATE … WHERE Available >=
-@Quantity` and names Inventory the exception to optimistic concurrency.
+**What is already decided, and where.**
+[§3.2](../../backend-architecture/03-bounded-contexts.md) gives Inventory its
+row: it owns `StockItem` and `Reservation`, publishes `StockReserved`,
+`StockReservationFailed`, `StockReleased` and `StockLevelChanged`, consumes
+`OrderCancelled` and `ShipmentDispatched`, and accepts `ReserveStock` and
+`ReleaseStock`. All six contracts exist in `Common.Contracts.Inventory.V1` since
+PR-15, with samples in `Platform.IntegrationTests`.
+[§7.3](../../backend-architecture/07-persistence.md) prints the reservation
+write as one atomic `UPDATE … WHERE Available >= @Quantity` and names Inventory
+the exception to optimistic concurrency.
 [ADR-024](../../backend-architecture/adr/ADR-024-a-release-answers-for-the-order-not-for-the-reservation.md)
 owes the service two guarantees on `ReleaseStock`, and
 [ADR-029](../../backend-architecture/adr/ADR-029-inventory-releases-on-the-cancellation-not-on-the-sagas-word.md)
-keeps `OrderCancelled` in its Consumes column and leaves one gap open by
-name. [§9.5](../../backend-architecture/09-messaging.md) says
-`inventory-commands` is declared the way `ordering-commands` is. And four
-things are already waiting on it: the gateway's `inventory-admin` route and
-its `inventory:admin` policy ([§10.2](../../backend-architecture/10-api-gateway.md)),
-the realm's permission of the same name, `inventory-commands` in the broker's
-permission patterns, and
+keeps `OrderCancelled` in its Consumes column and leaves one gap open by name.
+[§9.5](../../backend-architecture/09-messaging.md) says `inventory-commands` is
+declared the way `ordering-commands` is. And four things are already waiting on
+it: the gateway's `inventory-admin` route and its `inventory:admin` policy
+([§10.2](../../backend-architecture/10-api-gateway.md)), the realm's permission
+of the same name, `inventory-commands` in the broker's permission patterns, and
 [`order-review.md`](../../runbooks/order-review.md), whose procedure checks
 and releases a reservation "through Inventory's own API so its invariants
 run".
@@ -74,7 +74,7 @@ event and the deploy tree is a class of its own. Each row names its
 |---|---|---|
 | 1 | `feat(inventory): third service from the scaffold` — the scaffold run, `StockItem` and its two admin endpoints, the Compose pair, the gateway's `depends_on`, `ci.yml`'s filter and image matrix, the realm's grant to `demo`, and the three sentences that say Inventory answers 502 | A+D |
 | 2 | `feat(inventory): reservations` — `Reservation`, `inventory-commands`, ADR-024's guarantees, the four events, the three reservation admin endpoints, §3.2's despatch sentence | A+B |
-| 3 | `feat(inventory): consume OrderCancelled and ShipmentDispatched` — `inventory-events` and its two handlers | A |
+| 3 | `feat(inventory): consume OrderCancelled and ShipmentDispatched` — `inventory-events` and its two handlers, and the one `AddMeter` line in `Common.Web` that lets section 13's counter be exported | A+B |
 | 4 | `feat(deploy): Inventory's chart, deploy target and canary` — `deploy/helm/inventory`, the umbrella dependency, `smoke.sh`'s lists, `deploy.yml`'s option, the canary preflight | D |
 | 5 | `feat(catalog): consume StockLevelChanged` — Catalog's binding, the level's projection and its column on the listing, and the cut of the test comment that says Inventory does not exist | A |
 
@@ -114,9 +114,15 @@ contended.
 
 The same row's counters are also written by the reservation path's raw
 statements, and `StockItem` is never loaded on that path. Two write paths to
-one table is the exception §7.3 prints, and `IUnitOfWork.ExecuteRawAsync`'s
-own contract — raw SQL on the transaction's connection, for a table with no
-aggregate behind it — is the port it goes through.
+one table is the exception §7.3 prints, and the rule those statements follow
+is `IUnitOfWork.ExecuteRawAsync`'s — raw SQL on the transaction's own
+connection, for a table with no aggregate behind it, refused when no
+transaction is open. They do not go through that member, because the
+printed statement returns the level it left and that member returns
+nothing; they go through a ledger port of their own, `IStockLedger`, whose
+Infrastructure half reads the unit of work's current transaction off the
+`DbContext` and refuses to run without one, the same refusal in the same
+place.
 
 **`Reservation`**, keyed by `OrderId`, has a `Status` of `Reserved`,
 `Failed`, `Released` or `Fulfilled`, and a list of `ReservationLine(ProductId,
@@ -152,12 +158,12 @@ has to commit, and `TransactionBehavior` rolls back everything on a failed
 **successful** command that commits a `Failed` row, an outbox row, and no
 change to stock.
 
-**A T-SQL savepoint, through the raw SQL port.** The handler, inside the
-unit of work:
+**A T-SQL savepoint, on the transaction's own connection.** The handler,
+inside the unit of work, through the ledger port section 3 names:
 
 1. Loads the `Reservation` for the order. The table at the end of this
    section says what an existing one means.
-2. Issues `SAVE TRANSACTION Reserve` through `ExecuteRawAsync`.
+2. Issues `SAVE TRANSACTION Reserve`.
 3. For each line **in `ProductId` order**, runs §7.3's statement exactly as
    printed, with its `OUTPUT inserted.Available`, and records either the
    returned level or the product id of a line that affected no row. Every
@@ -231,7 +237,7 @@ of this table rather than of any one branch.
 |---|---|---|
 | `Reserved` | for each line, `Reserved = Reserved - @Quantity WHERE … AND Reserved >= @Quantity`; status `Fulfilled` | nothing |
 | `Fulfilled` | nothing | nothing |
-| `Released` | nothing to stock; logs at warning; increments `inventory.fulfilment.unreserved` | nothing |
+| `Released` | nothing to stock; records `DespatchedUnreservedAt` on the row, which section 13 counts and which refuses a later reinstate, since the parcel has gone | nothing |
 | `Failed`, nothing | logs at warning; acks | nothing |
 
 **The `Released` row at despatch is ADR-029's open gap, met in data.** The
@@ -257,11 +263,11 @@ to skip it.
 
 | Endpoint | Command or query | Answers |
 |---|---|---|
-| `PUT stock/{productId}` with `{ onHand }` | `SetOnHandCommand` — upserts the `StockItem` | `204`; `409` when reserved exceeds on-hand, or on a stale rowversion |
+| `PUT stock/{productId}` with `{ onHand }` | `SetOnHandCommand` — upserts the `StockItem` | `204`; `422` when reserved exceeds on-hand, a domain rule; `409` only on a stale rowversion, which is §10.5's concurrency row and not this service's to map |
 | `GET stock/{productId}` | `GetStockQuery`, Dapper over the write table | `{ available, reserved, updatedAt }`; `404` |
 | `GET reservations/{orderId}` | `GetReservationQuery` | status and lines; `404` — the runbook's step one |
 | `POST reservations/{orderId}/release` | `ReleaseStockCommand` with `CommandOrigin.User` | `204` always, because the command always establishes its postcondition — the runbook's step two |
-| `POST reservations/{orderId}/reinstate` | `ReinstateReservationCommand` | `204`; `409` when the row is not `Released` or has no lines; `422` with the unavailable ids when stock is short |
+| `POST reservations/{orderId}/reinstate` | `ReinstateReservationCommand` | `204`; `422` when the row is not `Released`, has no lines, or has already met a despatch (section 5), each under its own error code; `422` naming the unavailable ids when stock is short. No `409`: §10.5 reserves it for concurrency and idempotency, and `ErrorType` stays at its three members |
 
 **Reinstate is the runbook's promise, kept.** `order-review.md` already says
 an operator reinstates a picked reservation by hand, and ADR-024's tombstone
@@ -275,7 +281,7 @@ a `ConfirmStock` on an order that is already confirmed.
 
 `PUT` is idempotent by shape and the two `POST`s by postcondition, so none
 opts into §8.5's key. A tombstone with no lines is refused by reinstate with
-`409`, because there is nothing recorded to restore.
+`422`, because there is nothing recorded to restore.
 
 ## 7. Persistence
 
@@ -286,7 +292,7 @@ scaffold's outbox, inbox and idempotency-marker tables:
 | Table | Key | Columns |
 |---|---|---|
 | `StockItems` | `ProductId` | `Available int`, `Reserved int`, `UpdatedAt datetimeoffset`, `RowVersion rowversion` |
-| `Reservations` | `OrderId` | `Status`, `CreatedAt`, `UpdatedAt`, `RowVersion rowversion` |
+| `Reservations` | `OrderId` | `Status`, `UnavailableProductIds nvarchar(max)` — the ids a failed reserve named, kept so the answer can be repeated (section 4); `CreatedAt`, `UpdatedAt`, `DespatchedUnreservedAt datetimeoffset NULL` and `UnreservedCounted bit` — section 13's fact and its claim; `RowVersion rowversion` |
 | `ReservationLines` | `(OrderId, ProductId)` | `Quantity int` |
 
 `Status` is stored as a string, §7.2's convention for an enum whose members
@@ -478,9 +484,11 @@ event instead is a **projection**, which is what §3.2's Consumes cell is
 for and what the contract's own remark anticipates — a level, not a delta,
 with a watermark on `OccurredAt` because §9.4 orders nothing.
 
-- **`catalog.StockLevels(ProductId, QuantityAvailable, AsOf)`**, hand-written
-  DDL as §7.4's read-model row requires, written by an
-  `IIntegrationEventHandler<StockLevelChanged>` on a
+- **`catalog.StockLevels(ProductId, QuantityAvailable, AsOf)`**, a read
+  model mapped through an `IEntityTypeConfiguration` on the terms §7.4
+  states for `ProductPrices` — `migrations add` emits it, the configuration
+  produces the printed types, and nothing reads it through EF — written by
+  an `IIntegrationEventHandler<StockLevelChanged>` on a
   `catalog-inventory-events` queue with one statement: upsert where the row
   is absent or `AsOf` is older than the event's `OccurredAt`, and no write
   otherwise. A stale level arriving late changes nothing, and a redelivered

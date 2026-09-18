@@ -26,7 +26,11 @@ sections 5 (the despatch table), 8, 9 and 13.
 ## Global Constraints
 
 - The blueprint wins over the spec; the spec wins over this plan.
-- **Class A.** Touch set: `src/Services/Inventory/**`, `tests/Inventory.*`.
+- **Class A+B.** Touch set: `src/Services/Inventory/**`, `tests/Inventory.*`,
+  `src/BuildingBlocks/Common.Web/ObservabilityExtensions.cs` and
+  `tests/Common.Web.Tests/ObservabilityTests.cs` — the B half is one
+  `AddMeter` line, because §13.2's export lists meters by name and a meter
+  it does not name is collected by nobody.
 - Depends on PR-2 having merged.
 - Every event in §3.2's Consumes column has both an `AddConsumer` and a
   `ConfigureConsumer`, and the registration test says so.
@@ -54,6 +58,12 @@ sections 5 (the despatch table), 8, 9 and 13.
   `DespatchedUnreservedDomainEvent(OrderId, DateTimeOffset)`; a second call
   is a no-op.
   `DateTimeOffset? DespatchedUnreservedAt { get; }`.
+  `Reinstate` gains one guard: a row with `DespatchedUnreservedAt` set
+  throws `DomainException`, because the parcel has gone and there is nothing
+  to reinstate stock for; PR-2's `ReinstateReservationHandler` maps that to
+  `ReservationErrors.NotReinstatable` already, since it catches nothing and
+  checks status and lines first — so the handler gains the same condition
+  beside those two.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -105,6 +115,15 @@ public void A_tombstone_cannot_record_a_despatch()
 {
     Should.Throw<DomainException>(() => Reservation.Tombstone(OrderId.New(), Now).RecordDespatchUnreserved(Now));
 }
+
+[Fact]
+public void A_reservation_whose_parcel_has_gone_cannot_be_reinstated()
+{
+    Reservation reservation = Reservation.Rehydrate(OrderId.New(), ReservationStatus.Released, Lines());
+    reservation.RecordDespatchUnreserved(Now);
+
+    Should.Throw<DomainException>(() => reservation.Reinstate(Levels(), Now));
+}
 ```
 
 - [ ] **Step 2: Run to see them fail**
@@ -153,6 +172,17 @@ public void RecordDespatchUnreserved(DateTimeOffset now)
     Raise(new DespatchedUnreservedDomainEvent(Id, now));
 }
 ```
+
+And in `Reinstate`, the existing guard becomes:
+
+```csharp
+if (Status != ReservationStatus.Released || _lines.Count == 0 || DespatchedUnreservedAt is not null)
+    throw new DomainException("Only a released reservation with lines, not yet despatched, can be reinstated.");
+```
+
+with the matching condition added to `ReinstateReservationHandler`'s
+`NotReinstatable` check in `Inventory.Application`, so the endpoint answers
+422 rather than letting the domain exception fault the request.
 
 - [ ] **Step 4: Run the domain tests; commit**
 
@@ -607,8 +637,16 @@ public async Task A_despatch_against_a_released_reservation_moves_nothing_and_is
     (await Available(product)).ShouldBe(3, "ADR-029's gap is left open, visibly");
     (await fixture.OutboxAsync()).ShouldContain(
         r => r.MessageType.Contains("DespatchedUnreservedDomainEvent", StringComparison.Ordinal) && r.Lane == OutboxLane.Local);
+
+    HttpResponseMessage reinstate = await Admin().PostAsync(
+        $"/v1/inventory/reservations/{order}/reinstate", null, TestContext.Current.CancellationToken);
+    reinstate.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity, "the parcel has gone; there is nothing to reinstate");
+    (await Available(product)).ShouldBe(3, "and no stock was re-taken for a shipped order");
 }
 ```
+
+`Admin()` is the helper PR-2's `ReservationEndpointsTests` defines; copy it
+into this file rather than sharing it across test classes.
 
 `OrderCancelledFor(order)` and `ShipmentDispatchedFor(order)` build the
 contracts with fresh `MessageId`s; take their member lists from
@@ -792,11 +830,21 @@ Also add the projection to `MetricsInitialiser`'s registration if the
 scaffold carries one that pre-touches meters, so the instrument exists
 before the first claim.
 
+**The meter is exported only if §13.2's registration names it.**
+`Common.Web/ObservabilityExtensions.cs` lists every meter the OTLP exporter
+collects — `Ordering.Orders`, `Ordering.Outbox`, the shared `Commerce.*`
+names — and a meter absent from that list is one the `MeterListener` test
+above sees while production collects nothing. So this task adds
+`.AddMeter("Inventory.Reservations")` beside `Ordering.Orders`, with the
+same one-line comment citing §13.3, and adds the name to the list
+`tests/Common.Web.Tests/ObservabilityTests.cs` asserts against — write the
+test's line first and see it fail. That is the Class B half of this PR.
+
 - [ ] **Step 3: Run the API suite; commit**
 
 ```bash
-dotnet test tests/Inventory.Api.Tests
-git add src/Services/Inventory tests/Inventory.Api.Tests
+dotnet test tests/Inventory.Api.Tests tests/Common.Web.Tests
+git add src/Services/Inventory tests/Inventory.Api.Tests src/BuildingBlocks/Common.Web tests/Common.Web.Tests
 git commit -m "feat(inventory): count an unreserved despatch once, by claiming the row"
 ```
 
@@ -807,7 +855,7 @@ git commit -m "feat(inventory): count an unreserved despatch once, by claiming t
 - [ ] `dotnet build Platform.slnx` — 0 warnings.
 - [ ] `dotnet test Platform.slnx` — green.
 - [ ] Neither `/validate-blueprint` nor `/check-links` is owed: no chapter moved.
-- [ ] PR body: `| Class | A |`, touch set `src/Services/Inventory/**`, `tests/Inventory.*`.
+- [ ] PR body: `| Class | A+B |`, touch set from Global Constraints.
 
 ## Self-review
 

@@ -26,10 +26,11 @@ three reservation endpoints), 7, 8 and 10 (the §3.2 sentence).
 
 - The blueprint wins over the spec; the spec wins over this plan.
 - **Class A+B.** Touch set: `src/Services/Inventory/**`, `tests/Inventory.*`,
-  `src/BuildingBlocks/Common.Application/Error.cs`,
-  `src/BuildingBlocks/Common.Web/ResultExtensions.cs`,
-  `tests/Common.Web.Tests/**`, and
-  `docs/backend-architecture/03-bounded-contexts.md` (one sentence).
+  and `docs/backend-architecture/03-bounded-contexts.md` (one sentence, the
+  B half).
+- `ErrorType` stays at its three members. §10.5 reserves 409 for concurrency
+  and idempotency exceptions, so every domain refusal here is `Error.Rule`
+  and answers 422, each under its own error code.
 - Depends on PR-1 having merged: `StockItem`, `StockItems`,
   `InventoryPermissions.Admin` and the stock endpoints exist.
 - §7.3's statement is used **as printed**: `UPDATE inventory.StockItems SET
@@ -603,15 +604,13 @@ public interface IStockLedger
 ```
 
 The port lives in Application because handlers call it; the SQL lives in
-Infrastructure because §4.2 keeps Dapper out of Application. It runs on the
-unit of work's transaction through `IUnitOfWork.ExecuteRawAsync`, which is
-why the implementation takes `IUnitOfWork` and not a connection — except that
-`ExecuteRawAsync` returns no rows and the statement's `OUTPUT` is the level.
-So `IUnitOfWork` in `Inventory.Application` gains nothing; instead
-`SqlStockLedger` takes the `InventoryDbContext` and runs Dapper on
-`db.Database.GetDbConnection()` with `db.Database.CurrentTransaction`, the
-same connection and transaction `EfUnitOfWork.ExecuteRawAsync` uses, and
-throws if no transaction is open — the same rule that member enforces.
+Infrastructure because §4.2 keeps Dapper out of Application. It follows
+`IUnitOfWork.ExecuteRawAsync`'s rule without going through that member,
+which returns no rows where the statement's `OUTPUT` is the level (spec,
+section 3): `SqlStockLedger` takes the `InventoryDbContext` and runs Dapper
+on `db.Database.GetDbConnection()` with `db.Database.CurrentTransaction`,
+the same connection and transaction `EfUnitOfWork.ExecuteRawAsync` uses,
+and throws if no transaction is open — the same refusal in the same place.
 
 - [ ] **Step 1: Write the failing ledger tests**
 
@@ -1382,18 +1381,14 @@ git commit -m "feat(inventory): the inventory-commands endpoint"
   string Status, IReadOnlyList<ReservationLineDto> Lines, DateTimeOffset UpdatedAt)`
   or 404.
 - `POST /v1/inventory/reservations/{orderId}/release` → 204 always.
-- `POST /v1/inventory/reservations/{orderId}/reinstate` → 204; 409 when the
-  row is not `Released` or has no lines; 422 with the unavailable ids.
+- `POST /v1/inventory/reservations/{orderId}/reinstate` → 204; 422
+  `reservation.not_reinstatable` when the row is not `Released` or has no
+  lines; 422 `reservation.unavailable` naming the unavailable ids in its
+  description, since `ResultExtensions` serialises the description and
+  nothing else.
 - `ReservationErrors.NotFound` (`Error.NotFound`),
-  `ReservationErrors.NotReinstatable` (`Error.Conflict`, which does not
-  exist yet: `ErrorType` in `Common.Application/Error.cs` is `NotFound`,
-  `Rule`, `Unavailable`, and `ResultExtensions.StatusFor` in `Common.Web`
-  maps exactly those three. This task adds the fourth member, its factory,
-  and `ErrorType.Conflict => StatusCodes.Status409Conflict`, with a test
-  in `Common.Web.Tests` beside the existing three mappings. That is the
-  Class B half of this PR's `A+B`, and §10.5's status table gains no row:
-  it already lists 409 for a stale write, which is what this is),
-  `ReservationErrors.Unavailable(ids)` (`Error.Rule`).
+  `ReservationErrors.NotReinstatable` (`Error.Rule`),
+  `ReservationErrors.Unavailable(ids)` (`Error.Rule`, ids in the text).
 
 - [ ] **Step 1: Write the failing endpoint tests**
 
@@ -1467,12 +1462,15 @@ public async Task Reinstating_a_released_reservation_takes_the_stock_again_and_p
 }
 
 [Fact]
-public async Task Reinstating_a_tombstone_is_409_and_reinstating_into_a_shortage_is_422()
+public async Task Reinstating_a_tombstone_and_reinstating_into_a_shortage_are_both_422_under_their_own_codes()
 {
     var order = Guid.CreateVersion7();
     await Admin().PostAsync($"/v1/inventory/reservations/{order}/release", null, TestContext.Current.CancellationToken);
-    (await Admin().PostAsync($"/v1/inventory/reservations/{order}/reinstate", null, TestContext.Current.CancellationToken))
-        .StatusCode.ShouldBe(HttpStatusCode.Conflict);
+    HttpResponseMessage tombstone = await Admin().PostAsync(
+        $"/v1/inventory/reservations/{order}/reinstate", null, TestContext.Current.CancellationToken);
+    tombstone.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
+    (await tombstone.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))
+        .ShouldContain("reservation.not_reinstatable");
 
     var product = Guid.CreateVersion7();
     await SeedStock(product, 2);
@@ -1483,8 +1481,11 @@ public async Task Reinstating_a_tombstone_is_409_and_reinstating_into_a_shortage
     await EventuallyStatus(held, "Released");
     await fixture.ExecuteAsync("UPDATE inventory.StockItems SET Available = 1 WHERE ProductId = {0}", product);
 
-    (await Admin().PostAsync($"/v1/inventory/reservations/{held}/reinstate", null, TestContext.Current.CancellationToken))
-        .StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
+    HttpResponseMessage shortage = await Admin().PostAsync(
+        $"/v1/inventory/reservations/{held}/reinstate", null, TestContext.Current.CancellationToken);
+    shortage.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
+    (await shortage.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))
+        .ShouldContain(product.ToString(), "the operator needs to know which product is short");
     (await StatusAsync(held)).ShouldBe("Released");
 }
 
@@ -1622,10 +1623,15 @@ public static class ReservationErrors
         Error.NotFound("reservation.not_found", "No reservation for that order.");
 
     public static readonly Error NotReinstatable =
-        Error.Conflict("reservation.not_reinstatable", "Only a released reservation with lines can be reinstated.");
+        Error.Rule("reservation.not_reinstatable", "Only a released reservation with lines can be reinstated.");
 
+    // The ids travel in the description because that is the one member
+    // ResultExtensions serialises, and an operator reinstating by hand needs
+    // to know which product to receive before trying again.
     public static Error Unavailable(IReadOnlyList<ProductId> products) =>
-        Error.Rule("reservation.unavailable", $"Not enough stock for {products.Count} product(s).");
+        Error.Rule(
+            "reservation.unavailable",
+            $"Not enough stock for: {string.Join(", ", products.Select(p => p.Value))}.");
 }
 ```
 
@@ -1687,17 +1693,12 @@ public static class ReservationEndpoints
 
 - [ ] **Step 4: Run the API suite**
 
-Expected: green, once `Conflict` is added to `ErrorType`, `Error.Conflict(code,
-description)` beside the three existing factories, and `ErrorType.Conflict =>
-StatusCodes.Status409Conflict` in `ResultExtensions.StatusFor`. Write the
-`Common.Web.Tests` mapping test first, in the file that holds the existing
-three, and see it fail on the `ArgumentOutOfRangeException` the switch throws
-today.
+Expected: green.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/Services/Inventory tests/Inventory.Api.Tests src/BuildingBlocks tests/Common.Web.Tests
+git add src/Services/Inventory tests/Inventory.Api.Tests
 git commit -m "feat(inventory): the reservation admin endpoints the runbook promises"
 ```
 
@@ -1783,5 +1784,5 @@ git commit -m "docs: state what consuming ShipmentDispatched does to a reservati
   `Reservation.Reserve/Fail/Tombstone/Release/Reinstate/AnswerAgain`,
   `ReserveStockCommand`, `ReleaseStockCommand`, `ReinstateReservationCommand`,
   `GetReservationQuery`, `ReservationDto` agree across tasks.
-- `Error.Conflict` is known not to exist and Task 6 adds it; the plan's
-  class and touch set already carry the building-block edit.
+- Every refusal is `Error.Rule` and 422; no building block moves, and the B
+  half of `A+B` is §3.2's sentence alone.

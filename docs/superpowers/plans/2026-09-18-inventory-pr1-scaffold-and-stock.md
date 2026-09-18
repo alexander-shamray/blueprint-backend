@@ -9,7 +9,7 @@ build, run and reach it locally: the Compose pair, the gateway's
 local login set stock.
 
 **Architecture:** `python tools/new-service/new_service.py Inventory --port
-5103` renders the five projects, the four test projects and the shared-file
+5103` renders the service and test projects §4.1 names and the shared-file
 edits; this PR adds the `StockItem` slice on top in Ordering's shapes — a
 typed id, an `AggregateRoot<ProductId>`, an `IEntityTypeConfiguration`, one
 command, one query, one endpoint file — and touches the tracked files the
