@@ -59,8 +59,8 @@ public class OutboxSerialisationTests
         // The loop above is vacuous if the map is empty, and it would be
         // vacuous quietly — a registration that stopped naming
         // Inventory.Domain would turn the assertion into a no-op and nothing
-        // else would say so. This service has two aggregates and four domain
-        // events today, so the set is exactly those four; a fifth event added
+        // else would say so. This service has two aggregates and five domain
+        // events today, so the set is exactly those five; a sixth event added
         // without a sample fails here rather than being skipped.
         using ServiceProvider provider = Registered();
 
@@ -69,7 +69,8 @@ public class OutboxSerialisationTests
                 typeof(StockLevelChangedDomainEvent),
                 typeof(StockReservedDomainEvent),
                 typeof(StockReservationFailedDomainEvent),
-                typeof(StockReleasedDomainEvent)
+                typeof(StockReleasedDomainEvent),
+                typeof(DespatchedUnreservedDomainEvent)
             ],
             ignoreOrder: true);
     }
@@ -116,7 +117,9 @@ public class OutboxSerialisationTests
             [typeof(StockReservationFailedDomainEvent)] =
                 new StockReservationFailedDomainEvent(OrderId.New(), [ProductId.New()], Raised),
             [typeof(StockReleasedDomainEvent)] =
-                new StockReleasedDomainEvent(OrderId.New(), Raised)
+                new StockReleasedDomainEvent(OrderId.New(), Raised),
+            [typeof(DespatchedUnreservedDomainEvent)] =
+                new DespatchedUnreservedDomainEvent(OrderId.New(), Raised)
         };
 
         public static object Create(Type type) =>

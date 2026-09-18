@@ -9,7 +9,9 @@ public static class ReservationErrors
         Error.NotFound("reservation.not_found", "No reservation for that order.");
 
     public static readonly Error NotReinstatable =
-        Error.Rule("reservation.not_reinstatable", "Only a released reservation with lines can be reinstated.");
+        Error.Rule(
+            "reservation.not_reinstatable",
+            "Only a released reservation with lines, not yet despatched, can be reinstated.");
 
     // The ids travel in the description because that is the one member
     // ResultExtensions serialises, and an operator reinstating by hand needs
