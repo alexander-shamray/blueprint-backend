@@ -29,10 +29,10 @@
 # nothing skips its touch-set check and says so, and does not infer a class.
 # One row without the other is refused, because each command reads the pair.
 # A row that fails its grammar is refused with exit 3 naming the row and not
-# its content: a class cell is one letter A–E or two distinct letters joined
-# by `+`; a touch-set cell is a comma-separated list of path tokens, bare or
-# in balanced backticks, of path and glob characters — `*`, `**`, `?` and a
-# brace alternation — each carrying a `/` or a `.`, and each
+# its content: a class cell is one letter A–E, two distinct letters joined
+# by `+`, or `A+D+E`; a touch-set cell is a comma-separated list of path
+# tokens, bare or in balanced backticks, of path and glob characters — `*`,
+# `**`, `?` and a brace alternation — each carrying a `/` or a `.`, and each
 # repository-relative: no leading `/`, no `./`, no `..` segment, brace
 # alternatives included, since the edit-target guard judges where an edit
 # inside the checkout lands and not a path naming the outside.
@@ -61,7 +61,7 @@ if [ -z "$class_row" ] && [ -z "$touch_row" ]; then exit 0; fi
 [ -n "$class_row" ] && [ -n "$touch_row" ] || refuse "one row without the other"
 # The class cell: the text between the second `|` and the closing one.
 class=$(sed -E 's/^\| *Class *\| *//; s/ *\| *$//' <<<"$class_row")
-grep -Eq '^[A-E](\+[A-E])?$' <<<"$class" || refuse "the Class row is not a class"
+grep -Eq '^([A-E](\+[A-E])?|A\+D\+E)$' <<<"$class" || refuse "the Class row is not a class"
 [ "${class:0:1}" != "${class:2:1}" ] || refuse "the Class row repeats a class"
 # The touch-set cell, then each comma-separated token on its own.
 cells=$(sed -E 's/^\| *Touch set *\| *//; s/ *\| *$//' <<<"$touch_row")

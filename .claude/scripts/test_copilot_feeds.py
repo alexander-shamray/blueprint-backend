@@ -584,15 +584,22 @@ class CopilotFeedHelpersAreTheOnlyIntake(unittest.TestCase):
                 self.assertEqual(3, r.returncode, r.stderr)
                 self.assertEqual("", r.stdout)
 
-    def test_a_class_is_one_letter_or_two_distinct_ones(self):
+    def test_a_class_is_one_letter_two_distinct_ones_or_a_d_e(self):
         # The gate unions every listed map, so a class grammar that admitted
-        # `A+A` or `A+B+C` would make a wide class a wide tree.
-        for cls in ("A+A", "A+B+C", "F", "a", "C+", "+E"):
+        # `A+A` or `A+B+C` would make a wide class a wide tree; `A+D+E` is
+        # the one three, in the one spelling the gate reads.
+        for cls in ("A+A", "A+B+C", "A+E+D", "D+A+E", "A+D+E+B", "F", "a", "C+", "+E"):
             with self.subTest(cls=cls):
                 body = f"| Class | {cls} |\n| Touch set | docs/x.md |\n"
                 r = self._run_locality_with_gh(self._gh_printing(body))
                 self.assertEqual(3, r.returncode, r.stderr)
                 self.assertEqual("", r.stdout)
+
+    def test_a_d_e_is_read_as_a_class(self):
+        body = "| Class | A+D+E |\n| Touch set | docs/x.md |\n"
+        r = self._run_locality_with_gh(self._gh_printing(body))
+        self.assertEqual(0, r.returncode, r.stderr)
+        self.assertEqual(["class A+D+E", "inside docs/x.md"], r.stdout.splitlines())
 
     def test_a_path_outside_the_repository_is_refused(self):
         # The row is the edit boundary /review-copilot searches inside, and
