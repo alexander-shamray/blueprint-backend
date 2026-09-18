@@ -15,8 +15,8 @@ namespace Inventory.Api.Tests;
 /// permission something requires and the realm cannot grant is a path
 /// nobody can reach — worth checking again here rather than trusted from
 /// Ordering's own pass, because <c>inventory:admin</c> is a role of its own
-/// in the realm's <c>commerce-api</c> client and nothing before this PR
-/// required it.
+/// in the realm's <c>commerce-api</c> client, and this service is the first
+/// to require it.
 /// </para>
 /// <para>
 /// <c>RealmImportTests</c> in <c>Common.Web.Tests</c> asserts the same realm's

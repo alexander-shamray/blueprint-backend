@@ -31,9 +31,9 @@ namespace Gateway.Api.Tests;
 /// Reading the shipped realm file rather than a live Keycloak, on
 /// <c>RealmImportTests</c>' terms: what is being asserted is a name in a
 /// document, and a container would prove the same thing an order of magnitude
-/// more slowly. Grantable is the bar, not granted — no development login holds
-/// <c>inventory:admin</c>, because the route it guards has no service behind
-/// it yet.
+/// more slowly. Grantable is the bar, not granted — which development login
+/// holds a permission is the realm's decision (§14.1), and
+/// <c>RealmImportTests</c> pins it.
 /// </para>
 /// </remarks>
 public sealed class GrantablePermissionTests
