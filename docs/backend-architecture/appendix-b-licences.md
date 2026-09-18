@@ -13,22 +13,9 @@ pin with no identity here fails the build before anything compiles
 [§4.4](04-solution-structure.md): the gate checks that the two agree, but it is
 the file CI restores that decides what a licence obligation is.
 
-**And not that file alone.** Central pinning is a convention the build follows,
-not a constraint it enforces, so the gate reads every `.csproj`, `.props` and
-`.targets` as well. A `PackageReference` carrying its own `Version` or a
-`VersionOverride`, and a project setting `ManagePackageVersionsCentrally` to
-anything but `true`, each restore a package this register was never asked
-about — all three ordinary MSBuild, and none of them writing a `PackageVersion`
-element anywhere. **A register cannot disagree with a pin it never sees**,
-which is why the gate's subject is the whole repository rather than one file in
-it.
-
-**The imported files are in that list for the reason the projects are, one
-scope wider.** A `PackageReference` written into `Directory.Build.props`
-reaches *every* project at once, so a scan that stopped at the projects would
-have closed the narrow spelling of this defect and left the wide one standing —
-the shape §4.2's gates keep being caught by, arriving in the check written to
-close it.
+**A register cannot disagree with a pin it never sees**, so what else the gate
+reads to find a package restored past the props file — and where that reach
+stops — is [its README](../../.github/licence-gate/README.md)'s.
 
 So a product named in prose and a package named in backticks are different
 claims: prose says what the thing is, backticks say what `restore` will resolve.
@@ -103,41 +90,11 @@ Adding a dependency means adding its identity here, not just its name.
 | Redis | Redis 7.4+ is under RSALv2/SSPLv1. Valkey (BSD) is a drop-in fork if the terms are a problem |
 | Grafana OTel-LGTM (`grafana/otel-lgtm` image) | AGPL 3.0 for Grafana, Loki, Tempo and Mimir (the Prometheus-compatible store inside the image). Development and CI only ([§14.1](14-local-development.md)); never deployed, so no distribution or network-service obligation arises |
 
-PR-01 ships the CI step that enforces the first table. `.github/licence-gate/`
-fails the build on each of the following. **No count opens that list on
-purpose** — it has grown once already, and the entry worth naming is the
-registered identity pinned nowhere, because it is the one that runs the other
-way:
-
-- a pin in `Directory.Packages.props` absent from this register;
-- a project that pins for itself rather than through that file — a
-  `PackageReference` with a `Version` attribute, a `Version` child element or a
-  `VersionOverride`, or a `ManagePackageVersionsCentrally` that is not `true`.
-  A package restored that way reaches this register by no route at all;
-- a registered licence outside its allow-list, where **every** part of a
-  multi-part cell has to be inside it. The gate reads a `/` and cannot tell a
-  disjunction from a conjunction, so a row cleared because one half was allowed
-  is a row that clears a forbidden licence for arriving in good company. Where
-  a package really is offered under either, the row names the half taken here —
-  which is the decision the gate exists to force rather than absorb;
-- a registered licence any part of which is not a spelling its map knows. That
-  is a different failure with a different repair, and it says so: a line added
-  to the allow-list admits a licence that was read and refused, never one that
-  was never read. **Not "cannot map to an SPDX identifier"**, which is how this
-  bullet and the gate's own message both used to read — the vocabulary is
-  closed on purpose, so a real identifier the map has never been shown is
-  refused too, and blaming SPDX sends the reader to correct a row that may
-  already be right. The two faults behind this finding are a misspelt cell,
-  repaired here, and a spelling nobody has taught the gate, repaired in
-  `licence_gate.py` — and teaching it is not clearing it, since a newly
-  nameable licence still needs an allow-list line;
-- a **registered identity that is pinned nowhere** — a dropped pin, or a row
-  that outlived its dependency. The carve-outs of [§4.4](04-solution-structure.md)
-  are encoded as exceptions to this one: the Aspire rows are deliberately
-  unpinned, and an either/or row expects only its chosen half to appear;
-- finding no MSBuild project file to read at all. A scan that matched nothing reports
-  exactly what a repository with no fault reports, and from inside the gate
-  those two are the same result.
+The first table is enforced by
+[`.github/licence-gate/`](../../.github/licence-gate/README.md), whose README
+owns what it refuses. Where one package is offered under either of two
+licences, its row names the licence taken here; the README says why the gate
+needs that.
 
 Discovering a licence obligation at renewal time is considerably more expensive
 than discovering it at build time.
