@@ -478,6 +478,13 @@ git commit -m "feat(payments): a cancellation voids an authorised payment and re
 ### Task 4: The void over containers, and the race
 
 **Files:**
+- Modify: `src/Services/Payments/Payments.Infrastructure/Messaging/DependencyInjection.cs`
+  — `payments-events` takes `RetryPolicy.Standard` bare since PR-1, when
+  neither of its handlers could raise a terminal fault; the void can, so the
+  endpoint's retry becomes
+  `e.UseMessageRetry(r => { r.Ignore<PaymentMismatchException>(); RetryPolicy.Standard(r); });`
+  with the comment "A provider's 409 on the void key is terminal: the same key
+  and different figures is a defect no retry fixes (§9.8)."
 - Test: `tests/Payments.Api.Tests/VoidOnCancellationTests.cs`
 
 The helpers are PR-3's command-endpoint helpers, copied: `SendAsync`,
@@ -615,11 +622,38 @@ public async Task A_void_whose_commit_fails_is_replayed_under_the_same_key_and_r
 }
 ```
 
+And the void's terminal fault reaches the error queue on one attempt:
+
+```csharp
+[Fact]
+public async Task A_void_the_provider_refuses_as_a_mismatch_is_not_retried()
+{
+    Guid order = Guid.CreateVersion7();
+    await PublishAsync(Placed(order, 42.10m));
+    await SendAsync(new AuthorisePayment(order, 42.10m, "EUR"));
+    fixture.Provider.Given(Request.Create().WithPath("/v1/authorisations/*/void").UsingPost())
+        .AtPriority(0)
+        .RespondWith(Response.Create().WithStatusCode(409));
+
+    await PublishAsync(Cancelled(order), drain: false);
+
+    await Eventually(
+        () => fixture.QueueDepthAsync($"{MessagingRegistration.EventsQueue}_error"),
+        expected: 1,
+        because: "a 409 on the void key is excluded from retry and faults straight to the error queue");
+    VoidCalls().ShouldBe(1, "one consumer attempt, and the provider was asked once");
+    (await RefundCount(order)).ShouldBe(0);
+}
+```
+
+The file's usings gain `WireMock.RequestBuilders` and
+`WireMock.ResponseBuilders`.
+
 - [ ] **Step 2: Run; commit**
 
 ```bash
 dotnet test tests/Payments.Api.Tests --filter VoidOnCancellationTests
-git add tests/Payments.Api.Tests
+git add src/Services/Payments/Payments.Infrastructure tests/Payments.Api.Tests
 git commit -m "test(payments): the void over the broker, and the race that must never leave money held"
 ```
 

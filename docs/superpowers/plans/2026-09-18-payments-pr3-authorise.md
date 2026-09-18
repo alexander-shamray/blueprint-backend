@@ -489,8 +489,11 @@ returning a configured `AuthorisationResult` and recording every request;
 and `FixedClock(DateTimeOffset now) : TimeProvider`, overriding `GetUtcNow()`
 to return `now` — one line, so no testing package is added for it.
 The file's usings include `Microsoft.Extensions.Logging.Abstractions` for
-`NullLogger<T>`; the logging abstractions reach the Application projects
-through `Common.Application`, whose `LoggingBehavior` takes a logger.
+`NullLogger<T>`, and `Payments.Application.Tests.csproj` gains
+`<PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />`,
+no `Version=` — in this repository a project that names a package's type
+references the package directly, as `Ordering.Application.Tests` does,
+rather than leaning on what `Common.Application` happens to carry.
 
 ```csharp
 public class AuthorisePaymentHandlerTests

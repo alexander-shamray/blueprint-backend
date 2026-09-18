@@ -497,13 +497,15 @@ public sealed class HttpPaymentProviderTests : IDisposable
     }
 
     [Theory]
-    [InlineData(202)]
-    [InlineData(204)]
-    public async Task A_void_answered_with_any_success_but_200_is_not_a_void(int status)
+    [InlineData(202, "{\"status\":\"voided\"}")]
+    [InlineData(204, "")]
+    [InlineData(200, "{\"status\":\"pending\"}")]
+    [InlineData(200, "not json")]
+    public async Task A_void_answered_with_anything_but_200_voided_is_not_a_void(int status, string body)
     {
         _server.Given(Request.Create().WithPath("/v1/authorisations/*/void").UsingPost())
             .AtPriority(0)
-            .RespondWith(Response.Create().WithStatusCode(status));
+            .RespondWith(Response.Create().WithStatusCode(status).WithBody(body));
 
         await Should.ThrowAsync<PaymentProviderUnavailableException>(() =>
             Provider().VoidAsync(new VoidRequest(OrderId.New(), "psp_ref"), TestContext.Current.CancellationToken));
@@ -519,6 +521,24 @@ public sealed class HttpPaymentProviderTests : IDisposable
         ILogEntry call = _server.LogEntries.ShouldHaveSingleItem();
         call.RequestMessage.Path.ShouldBe("/v1/authorisations/psp_ref/void");
         call.RequestMessage.Headers!["Idempotency-Key"].Single().ShouldBe($"void:{order.Value}");
+    }
+
+    [Fact]
+    public async Task A_base_url_with_a_path_and_no_trailing_slash_keeps_its_path()
+    {
+        using PaymentsApiFactory factory = new(
+            "Server=sql.invalid;Database=Payments;User Id=x;Password=x;TrustServerCertificate=true",
+            "amqp://payments-svc:x@rabbit.invalid:5672",
+            _server.Urls[0] + "/psp");
+        _server.Given(Request.Create().WithPath("/psp/v1/authorisations").UsingPost())
+            .AtPriority(0)
+            .RespondWith(Response.Create().WithStatusCode(201).WithBody("{\"status\":\"approved\",\"reference\":\"psp_p\"}"));
+
+        AuthorisationResult result = await factory.Services.CreateScope().ServiceProvider
+            .GetRequiredService<IPaymentProvider>()
+            .AuthoriseAsync(Authorisation(42.10m), TestContext.Current.CancellationToken);
+
+        result.ShouldBe(new AuthorisationResult.Authorised("psp_p"));
     }
 
     [Fact]
@@ -750,6 +770,8 @@ internal sealed class HttpPaymentProvider(HttpClient http) : IPaymentProvider
 
     private sealed record AuthoriseAnswer(string Status, string? Reference, string? Code);
 
+    private sealed record VoidAnswer(string Status);
+
     public async Task<AuthorisationResult> AuthoriseAsync(AuthorisationRequest request, CancellationToken ct)
     {
         using HttpRequestMessage message = new(HttpMethod.Post, "v1/authorisations")
@@ -810,14 +832,28 @@ internal sealed class HttpPaymentProvider(HttpClient http) : IPaymentProvider
 
         using HttpResponseMessage response = await SendAsync(message, ct);
 
-        // 200 and nothing else: the wire format defines it as the void having
-        // happened, and a 202 would be a void still pending — a Refund and a
-        // PaymentRefunded recorded before the money moved.
+        // 200 with "voided" and nothing else: the wire format defines that pair
+        // as the void having happened. A 202 is a void still pending, and a 200
+        // saying anything else is a provider this adapter does not understand;
+        // either would record a Refund and PaymentRefunded before money moved.
         if (response.StatusCode != HttpStatusCode.OK)
         {
             throw new PaymentProviderUnavailableException(
                 $"The provider answered a void with {(int)response.StatusCode}.");
         }
+
+        VoidAnswer? answer;
+        try
+        {
+            answer = await response.Content.ReadFromJsonAsync<VoidAnswer>(ct);
+        }
+        catch (JsonException e)
+        {
+            throw new PaymentProviderUnavailableException("The provider answered a void with no JSON body.", e);
+        }
+
+        if (answer is not { Status: "voided" })
+            throw new PaymentProviderUnavailableException("The provider answered a void with a body that is not a void.");
     }
 
     private async Task<HttpResponseMessage> SendAsync(HttpRequestMessage message, CancellationToken ct)
@@ -905,7 +941,10 @@ public static class DependencyInjection
 
         IHttpClientBuilder client = services.AddHttpClient<IPaymentProvider, HttpPaymentProvider>(http =>
         {
-            http.BaseAddress = new Uri(baseUrl);
+            // A trailing slash, always: without one a relative request replaces
+            // the base address's last segment, so a provider at …/api would be
+            // called at …/v1/authorisations.
+            http.BaseAddress = new Uri(baseUrl.EndsWith('/') ? baseUrl : baseUrl + "/");
             http.DefaultRequestHeaders.Authorization = new("Bearer", apiKey);
         });
 
