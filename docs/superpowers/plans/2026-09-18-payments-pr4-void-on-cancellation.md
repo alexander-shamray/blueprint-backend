@@ -233,6 +233,14 @@ writes.
 - [ ] **Step 2: Write the configuration, repository and entry**
 
 ```csharp
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using Payments.Application.Provider;
+using Payments.Domain.Orders;
+using Payments.Domain.Refunds;
+
+namespace Payments.Infrastructure.Persistence;
+
 internal sealed class RefundConfiguration : IEntityTypeConfiguration<Refund>
 {
     public void Configure(EntityTypeBuilder<Refund> builder)
@@ -246,7 +254,9 @@ internal sealed class RefundConfiguration : IEntityTypeConfiguration<Refund>
             .HasConversion(id => id.Value, value => new OrderId(value))
             .ValueGeneratedNever();
 
-        builder.Property(r => r.Reference).HasMaxLength(100).IsRequired();
+        // The intent's width, from the same constant: a refund carries the
+        // intent's reference, so the two columns cannot be allowed to differ.
+        builder.Property(r => r.Reference).HasMaxLength(ProviderLimits.MaxReferenceLength).IsRequired();
         builder.Property(r => r.Amount).HasPrecision(18, 2);
         builder.Property(r => r.Currency).HasMaxLength(3).IsFixedLength().IsUnicode(false);
         builder.Property(r => r.VoidedAt).IsRequired();

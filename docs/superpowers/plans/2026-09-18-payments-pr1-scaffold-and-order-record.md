@@ -169,7 +169,6 @@ rather than cut something the design did not name.
 using Microsoft.Extensions.DependencyInjection;
 using Payments.TestSupport;
 using Shouldly;
-using StackExchange.Redis;
 using Xunit;
 
 namespace Payments.Api.Tests;
@@ -189,17 +188,25 @@ public sealed class NoRedisTests
 
         IServiceProvider services = factory.Services;
 
-        services.GetService<IConnectionMultiplexer>().ShouldBeNull();
-        services.GetKeyedService<IConnectionMultiplexer>("RedisCache").ShouldBeNull();
-        services.GetKeyedService<IConnectionMultiplexer>("RedisCoordination").ShouldBeNull();
+        // By name, not by a package reference: a test proving the service has no
+        // Redis should not be the thing that gives its project one. The type is
+        // still loadable, because Common.Infrastructure carries the package.
+        Type multiplexer = Type.GetType("StackExchange.Redis.IConnectionMultiplexer, StackExchange.Redis")
+            ?? throw new InvalidOperationException("StackExchange.Redis did not load; the assertions below would prove nothing.");
+        IKeyedServiceProvider keyed = (IKeyedServiceProvider)services;
+
+        services.GetService(multiplexer).ShouldBeNull();
+        keyed.GetKeyedService(multiplexer, RedisConnections.Cache).ShouldBeNull();
+        keyed.GetKeyedService(multiplexer, RedisConnections.Coordination).ShouldBeNull();
     }
 }
 ```
 
-Use `RedisConnections.Cache` and `RedisConnections.Coordination` for the two
-keys if the `Common.Infrastructure.Redis` namespace is still visible to the
-test project through `Payments.Infrastructure`'s references; the literals
-above are their values and the constants are preferred where they compile.
+`RedisConnections` is `Common.Infrastructure.Redis`'s, reached through
+`Payments.Infrastructure`'s reference; add that `using`. The type is named as
+a string so the test project takes no `StackExchange.Redis` reference of its
+own, which the repository would otherwise require of any project naming a
+package's type.
 
 - [ ] **Step 3: Run it to see it fail**
 

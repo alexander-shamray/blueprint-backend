@@ -232,15 +232,17 @@ the consumer and is retried by §9.8's policy; the key is what makes that safe.
 | `Declined`, or no intent | stamps `CancelledAt`, creating the tombstone record when absent | nothing — no money was taken |
 
 **The race between the two is closed by a lock on the record.** An
-`AuthorisePayment` and an `OrderCancelled` for one order can run at once on
-two endpoints. Were authorise to read the record without a lock, it could see
-no cancellation, authorise at the provider, and commit after the cancellation
+`AuthorisePayment` and an `OrderCancelled` for one order can run at once on two
+endpoints. Were authorise to read the record without a lock, it could see no
+cancellation, authorise at the provider, and commit after the cancellation
 committed having found no intent to void — a charge on a cancelled order, the
 hole ADR-047 exists to close. So authorise reads the record `WITH (UPDLOCK,
-ROWLOCK)` for the life of its unit and the cancellation's stamp waits behind
-it; whichever commits second sees the first's row and takes that row's
-branch. The lock is held across the provider call, which is section 4's cost
-paid in the one place it buys something.
+HOLDLOCK)` for the life of its unit — `HOLDLOCK` because the row may not exist
+yet, and a key-range lock is what makes the cancellation's first insert wait as
+its update would — and the cancellation's stamp waits behind it; whichever
+commits second sees the first's row and takes that row's branch. The lock is
+held across the provider call, which is section 4's cost paid in the one place
+it buys something.
 
 ## 7. Persistence
 

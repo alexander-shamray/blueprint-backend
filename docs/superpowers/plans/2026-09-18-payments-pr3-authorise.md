@@ -781,7 +781,6 @@ git commit -m "feat(payments): AuthorisePayment charges the recorded payer, or d
 public class AuthorisePaymentMapperTests
 {
     [Theory]
-    [InlineData(0, "EUR")]
     [InlineData(-1, "EUR")]
     [InlineData(1, "")]
     [InlineData(1, "EU")]
@@ -790,6 +789,16 @@ public class AuthorisePaymentMapperTests
     {
         Should.Throw<ContractMappingException>(() =>
             new AuthorisePaymentMapper().Map(new AuthorisePayment(Guid.CreateVersion7(), amount, currency)));
+    }
+
+    [Fact]
+    public void A_zero_total_is_a_contract_an_order_can_produce()
+    {
+        Guid order = Guid.CreateVersion7();
+
+        new AuthorisePaymentMapper().Map(new AuthorisePayment(order, 0m, "EUR"))
+            .ShouldBe(new AuthorisePaymentCommand(order, 0m, "EUR"),
+                "Money.Zero is a valid total in Catalog and Ordering, and the saga forwards it");
     }
 
     [Fact]
@@ -1034,8 +1043,10 @@ public sealed class AuthorisePaymentMapper : ICommandMessageMapper<AuthorisePaym
         if (message.OrderId == Guid.Empty)
             throw new ContractMappingException($"An empty order id on {nameof(AuthorisePayment)}.");
 
-        if (message.Amount <= 0)
-            throw new ContractMappingException($"A non-positive amount on {nameof(AuthorisePayment)}.");
+        // Zero is an order's total like any other — Money.Zero is valid in
+        // Catalog and Ordering — and goes to the provider, whose answer decides.
+        if (message.Amount < 0)
+            throw new ContractMappingException($"A negative amount on {nameof(AuthorisePayment)}.");
 
         if (message.Currency is not { Length: 3 } || !message.Currency.All(char.IsAsciiLetterUpper))
             throw new ContractMappingException($"A currency that is not three upper-case letters on {nameof(AuthorisePayment)}.");

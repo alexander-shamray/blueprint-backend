@@ -496,6 +496,19 @@ public sealed class HttpPaymentProviderTests : IDisposable
         Calls("/v1/authorisations").ShouldBe(1);
     }
 
+    [Theory]
+    [InlineData(202)]
+    [InlineData(204)]
+    public async Task A_void_answered_with_any_success_but_200_is_not_a_void(int status)
+    {
+        _server.Given(Request.Create().WithPath("/v1/authorisations/*/void").UsingPost())
+            .AtPriority(0)
+            .RespondWith(Response.Create().WithStatusCode(status));
+
+        await Should.ThrowAsync<PaymentProviderUnavailableException>(() =>
+            Provider().VoidAsync(new VoidRequest(OrderId.New(), "psp_ref"), TestContext.Current.CancellationToken));
+    }
+
     [Fact]
     public async Task A_void_goes_to_the_references_path_under_the_void_key()
     {
@@ -797,7 +810,10 @@ internal sealed class HttpPaymentProvider(HttpClient http) : IPaymentProvider
 
         using HttpResponseMessage response = await SendAsync(message, ct);
 
-        if (!response.IsSuccessStatusCode)
+        // 200 and nothing else: the wire format defines it as the void having
+        // happened, and a 202 would be a void still pending — a Refund and a
+        // PaymentRefunded recorded before the money moved.
+        if (response.StatusCode != HttpStatusCode.OK)
         {
             throw new PaymentProviderUnavailableException(
                 $"The provider answered a void with {(int)response.StatusCode}.");
