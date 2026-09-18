@@ -1,12 +1,10 @@
 # Style guide
 
 **The dialect this repository's prose, C# and SQL are written in, and which
-rules the build enforces rather than a reviewer.** This was `CLAUDE.md`'s
-*Prose conventions*, *C# style — samples now, source later* and *SQL style*
-sections. **One dialect, both phases**: these rules govern the blueprint's
-fenced samples and the compiled solution alike, so a sample and its
-implementation read identically, and `.editorconfig` is the file PR-01 ships
-rather than a documentation convenience.
+rules the build enforces rather than a reviewer.** **One dialect, both
+phases**: these rules govern the blueprint's fenced samples and the compiled
+solution alike, so a sample and its implementation read identically, and
+`.editorconfig` is a build input rather than a documentation convenience.
 
 It is load-bearing whenever you write or review prose, C# or SQL — which is
 most changes, not every change, and *most* is what earns it a file. A rule you
@@ -14,42 +12,9 @@ are about to apply is a rule you can afford to open a file for; a rule you are
 about to break without knowing it is the case `CLAUDE.md`'s short list under
 *Style* exists for.
 
-**The content is verbatim in its arguments**, on
-[`pr-decision-log.md`](pr-decision-log.md)'s terms and for its reason — and
-this is the file where that failure has a name. **The rules marked
-review-carried are why it exists**: no analyser reaches them, so this file and
-a reviewer are the only things that do, and a summary of one is how it gets
-"corrected" back into the corpus. The headings kept their levels under this
-file's title, so nothing moved. And one **self-reference was rebased**: a
-sentence noting that `CLAUDE.md` makes the same argument about its own line
-count said "the top of this file", which was true in its old home and points at
-the wrong document here. Not one argument was shortened and no paragraph was
-dropped.
-
-**Claims were then corrected in the same pull request, by review rather than
-by the move**, and they are listed here because the sentence above would
-otherwise read as covering them:
-
-- the fence inventory was missing `promql`, which §13 had been using
-  throughout;
-- the whitespace rule went out and came back, and the round trip is listed
-  rather than tidied away because a rule relaxed on bad evidence and quietly
-  restored is indistinguishable from one that was never touched. It was given
-  a carve-out for an aligned `=` in an initialiser, on hits that turned out to
-  be SQL inside raw string literals; the carve-out went when the search was
-  redone with those literals excluded; the enforcement claim was then hedged
-  to "review-carried, nothing tests it", which was a second unmeasured claim
-  wearing the opposite sign; and a probe finally settled it. **The rule as
-  originally written was correct in every particular**, and the only thing
-  this file gained is the one real exception, a padded `=` in a local
-  declaration, which is what the `.editorconfig` setting actually reaches;
-- the *Settled choices* table said braces are optional for a single
-  statement, where the rule requires them for one that wraps.
-
-None is an argument shortened; each is a claim brought back to what is
-measurable. **A file that says "verbatim" earns the right to say it by
-listing what it is not** — and the list is a list rather than a number,
-because this paragraph opened with *two* on the day a third was added.
+**The rules marked review-carried are why it exists**: no analyser reaches
+them, so this file and a reviewer are the only things that do, and a summary
+of one is how it gets "corrected" back into the corpus.
 
 **A short list of these rules stays in `CLAUDE.md`**, under *Style*, because
 they have to be true of an edit made before anyone opens this file. **This file
@@ -83,8 +48,8 @@ time.
   section that only mentions the topic is a defect.
 - **Callouts are blockquotes whose opening sentence is bold**, no emoji, no
   admonition syntax. Two forms are named and recurring — `**Trap — …**`
-  (21) for a mistake worth naming, and `**Decision — …**` (10), which always
-  points at the ADR that records it:
+  for a mistake worth naming, and `**Decision — …**`, which always points at
+  the ADR that records it:
 
   ```markdown
   > **Trap — projecting everything by default.** Each projection is a second
@@ -97,37 +62,9 @@ time.
   `> **Unregistered, this fails silently and completely.** …`. That is the
   default; reach for `Trap` or `Decision` only when the callout genuinely is
   one. `**Decision.** / **Why.** / **Consequences.**` are the ADR body form,
-  not callouts.
-
-  **The total used to be written here and no longer is, which is the third
-  fix and the only one that holds.** It said 120 for eight PRs, then 161, then
-  186; PR-24 recounted it to 189 mid-branch and its own later commits made
-  that 194 before the pull request merged. **A number that goes stale twice
-  inside one PR is not a number that recounting fixes.**
-
-  What holds is the two named counts, and the branch that added a sixteenth
-  `Trap` was the first test of that; a seventeenth has since landed and was
-  reconciled the same way. This paragraph used to say *what never
-  drifted is 15 and 8*; `Trap` has now moved twice, and the lesson survives the
-  movement rather than being refuted by it — those are the figures a reader
-  checks, so the change was caught and reconciled inside the PR that caused it,
-  where the residual nobody looks at is the one that rots unnoticed. Keep them
-  current when a callout is added; do not bring the total back —
-  `deploy/observability/README.md` makes the same argument about its rule
-  counts.
-
-  If you do need the figure, it is `grep -h '^> \*\*' *.md | wc -l` over the
-  twenty blueprint files, minus the three definitional entries below — and
-  **not** `grep -c`, which over many files prints a count *per file* and has
-  to be summed, which is one more place to be wrong.
-
-  **Three callouts spell the dash outside the bold and are not counted above**:
-  §1.3's two glossary entries, which *define* `Trap` and `Decision` rather than
-  being instances of them, and one `**Decision** —` in §14. Counting a
-  definition as an instance is what made an earlier revision of this sentence
-  say 16 and 10 — an arithmetic that added to 120 only by including two entries
-  that fail the predicates beside them, since a glossary line is not "a mistake
-  worth naming" and does not "point at the ADR that records it".
+  not callouts. Neither form is counted here: a count moves whenever a
+  callout is added, and the contract's [§2](change-locality.md#2-the-rule)
+  keeps such counts out of every document.
 - **Em dashes** (`—`) for asides, **en dashes** (`–`) for ranges. Both are
   literal Unicode, not `--`.
 - **Every chapter ends with a rule and a nav footer**, in this exact shape:
@@ -196,8 +133,8 @@ otherwise have to discover by deleting the line.
 
 **One dialect, both phases.** The rules below govern the fenced samples and the
 compiled solution alike, so a sample and its implementation read identically.
-The repo `.editorconfig` is not a documentation convenience — it is the file
-PR-01 ships. Change it deliberately, and reconcile any change with the samples
+The repo `.editorconfig` is not a documentation convenience — it is a build
+input. Change it deliberately, and reconcile any change with the samples
 already written against it.
 
 Each rule below says whether the build enforces it. **The ones marked
@@ -226,14 +163,12 @@ file and a reviewer are the only things that do.
   `dotnet build` is silent even with `TreatWarningsAsErrors`, and so is
   `dotnet format style --diagnostics IDE0005` — both checked against a
   deliberately injected using. Turning it on costs a fourth entry in
-  `Directory.Build.props`, because it also enables CS1591 against **1,178**
-  public members with no XML comment, across `src/` and the test projects
-  alike. That figure said 62 until this branch measured it — `dotnet build
-  Platform.slnx -p:GenerateDocumentationFile=true -p:TreatWarningsAsErrors=false
-  --no-incremental`, counting unique diagnostic sites, run twice for the same
-  answer. It has grown roughly nineteenfold since it was written, which makes
-  the fourth-entry argument stronger rather than weaker. **`--no-incremental`
-  is load-bearing in that command**: an ordinary build recompiles nothing and
+  `Directory.Build.props`, because it also enables CS1591 against every
+  public member with no XML comment, across `src/` and the test projects
+  alike. Measure it as the unique diagnostic sites of `dotnet build
+  Platform.slnx -p:GenerateDocumentationFile=true
+  -p:TreatWarningsAsErrors=false --no-incremental`. **`--no-incremental` is
+  load-bearing in that command**: an ordinary build recompiles nothing and
   reports zero, which reads exactly like a clean result. The greyed-out using
   in the IDE is the only live signal there is.
 - **A blank line always follows the namespace declaration** (IDE0055,
@@ -267,12 +202,10 @@ file and a reviewer are the only things that do.
   }
   ```
 
-  **This rule tightened in PR-21 and cost a 49-site sweep**, because the
-  sentence used to end "and it may wrap". It is *review-carried*: no analyser
-  reaches it — IDE0055 governs the indentation of whatever shape is there and
-  has no opinion on which shape it is — so the corpus is the only enforcement,
-  and a new braceless wrapped body is a review comment rather than a failed
-  build.
+  It is *review-carried*: no analyser reaches it — IDE0055 governs the
+  indentation of whatever shape is there and has no opinion on which shape it
+  is — so the corpus is the only enforcement, and a new braceless wrapped body
+  is a review comment rather than a failed build.
 
   A single statement that fits on its line still omits them:
 
@@ -284,15 +217,9 @@ file and a reviewer are the only things that do.
       await publisher.StageAsync(domainEvent, OutboxLane.Local, ct);
   ```
 
-  This holds across all 49 braceless bodies in the blueprint, counted over
-  ` ```csharp ` fences after PR-21 braced the 18 that wrapped. **The figure it
-  replaces was 53 and does not reconcile**: the same count run before that sweep
-  gives 67, so 53 was neither the old value nor the new one under this
-  definition. Which definition produced it is not recoverable, and inventing one
-  would be worse than saying so — the number below is the one a rerun of
-  `count-braceless` reproduces.
-  `csharp_preserve_single_line_statements = false` keeps a format run from
-  pulling any of them back up onto the condition's line. The one exception is a
+  This holds across every braceless body in the blueprint's ` ```csharp `
+  fences. `csharp_preserve_single_line_statements = false` keeps a format run
+  from pulling any of them back up onto the condition's line. The one exception is a
   **wrapped** condition, which takes braces — see below.
 - **Explicit types for locals**, except where the right-hand side names the
   type. A reader of a fenced code block has no hover and no go-to-definition,
@@ -447,14 +374,14 @@ file and a reviewer are the only things that do.
       ct);
   ```
 
-  **There is no carve-out, and a braced body does not earn one.** One was tried
-  — leading arguments stayed up whenever the trailing lambda had a braced body —
-  and removed, because it made the rule undecidable from the call site: whether
-  a leading argument could stay depended on the *last* argument's body kind and
-  on whether anything followed it, and a reviewer performing only the first
-  lookahead got `Publish(payload, type, c => { … }, ct)` wrong. The cost is
-  real and accepted: every builder DSL in the blueprint now breaks across four
-  or five lines. It buys a rule with no lookahead.
+  **There is no carve-out, and a braced body does not earn one.** Keeping
+  leading arguments up whenever the trailing lambda has a braced body would
+  make the rule undecidable from the call site: whether a leading argument
+  could stay would depend on the *last* argument's body kind and on whether
+  anything followed it, and a reviewer performing only the first lookahead
+  gets `Publish(payload, type, c => { … }, ct)` wrong. The cost is real and
+  accepted: every builder DSL in the blueprint breaks across four or five
+  lines. It buys a rule with no lookahead.
 
   A **single**-argument call is untouched — `AddRateLimiter(options => { … })`
   keeps its shape. Nor is a lambda the only thing that can hang:
@@ -683,13 +610,13 @@ file and a reviewer are the only things that do.
 | | |
 |---|---|
 | Namespaces | File-scoped (`namespace X;`), never block-scoped |
-| Extension declarations | C# 14 `extension(T receiver)` blocks where a class groups several extensions on one receiver — `Common.Application.DependencyInjection` is the worked example. **The corpus is currently split**: every extension class in `Common.Web` still uses the classic `this`-parameter form. Four extend a receiver nothing else does — `ProblemDetailsExtensions` (`IServiceCollection`), `HealthCheckExtensions` (`IEndpointRouteBuilder`), `AuthorizationPolicyExtensions` (`AuthorizationPolicyBuilder`) and `ResultExtensions` (`Result`) — while two groups share one: `CorrelationIdExtensions` and `SecurityHeadersExtensions` on `IApplicationBuilder`, and `ObservabilityExtensions`, `AuthenticationExtensions` and the `CommonWebDefaultsExtensions` that composes them on `IHostApplicationBuilder`. Whether to group those three is open and deliberately unsettled — they are separate files because one composes the other two, and merging would put a caller-facing entry point in the same block as the pieces it calls. The receivers are listed rather than counted because a bare count is what went stale here — twice now: this cell said six and four from before PR-16 added `AuthenticationExtensions`, then eight and five until `SecurityHeadersExtensions` landed on a receiver `CorrelationIdExtensions` already had, which is the split that makes "extends a receiver nothing else does" the wrong shape for a tally. Converting anything is a decision about the whole corpus |
+| Extension declarations | C# 14 `extension(T receiver)` blocks where a class groups several extensions on one receiver — `Common.Application.DependencyInjection` is the worked example. **The corpus is split**: every extension class in `Common.Web` still uses the classic `this`-parameter form. Four extend a receiver nothing else does — `ProblemDetailsExtensions` (`IServiceCollection`), `HealthCheckExtensions` (`IEndpointRouteBuilder`), `AuthorizationPolicyExtensions` (`AuthorizationPolicyBuilder`) and `ResultExtensions` (`Result`) — while two groups share one: `CorrelationIdExtensions` and `SecurityHeadersExtensions` on `IApplicationBuilder`, and `ObservabilityExtensions`, `AuthenticationExtensions` and the `CommonWebDefaultsExtensions` that composes them on `IHostApplicationBuilder`. Whether to group those three is open and deliberately unsettled — they are separate files because one composes the other two, and merging would put a caller-facing entry point in the same block as the pieces it calls. Converting anything is a decision about the whole corpus |
 | Expression-bodied members | Used for one-line members, not for constructors |
-| Braces | Optional for a single statement **that fits on its line**; required for two or more, and for one that wraps. The row said only "optional for a single statement" until a review read it against the rule above: PR-21 tightened that rule and swept 49 sites, and this summary kept the pre-sweep form — so a reviewer consulting the table would have accepted the exact shape the sweep removed |
+| Braces | Optional for a single statement **that fits on its line**; required for two or more, and for one that wraps |
 | Target framework | .NET 10 (LTS), C# 14 |
 
 Each of these is a house style a reviewer might otherwise read as an oversight
-and "correct". They are consistent across all ~150 existing C# blocks, and the
+and "correct". They are consistent across the blueprint's C# samples, and the
 solution is written the same way. Changing one is a decision about the whole
 corpus, not about the file in front of you.
 
@@ -765,8 +692,7 @@ WHERE OrderId = @OrderId
     AND FulfilmentCounted = 0;
 ```
 
-One space means one, `WHERE` included — it used to be written `WHERE  ` and no
-longer is.
+One space means one, `WHERE` included.
 
 `UPDATE <table>` and `SET` are separate lines. The exception is `MERGE`'s
 `UPDATE SET`, which names no table and stays one token.
