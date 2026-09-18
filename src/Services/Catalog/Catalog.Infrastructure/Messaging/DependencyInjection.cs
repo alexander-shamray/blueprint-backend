@@ -46,12 +46,12 @@ public static class DependencyInjection
 
                 // §9.8 configures retry per endpoint, so the policy lives with
                 // each endpoint. No ConfigureEndpoints(context), deliberately:
-                // for a registered consumer with no
-                // explicit binding it manufactures a queue named after the
-                // consumer type, with neither the inbox filter nor the retry
-                // policy, and §9.8 admits no endpoint without InboxFilter<>. A
-                // consumer added here needs an explicit ReceiveEndpoint with
-                // its own policy, which is what this absence forces.
+                // for a registered consumer with no explicit binding it
+                // manufactures a queue named after the consumer type, with
+                // neither the inbox filter nor the retry policy, and §9.8
+                // admits no endpoint without InboxFilter<>. A consumer added
+                // here needs an explicit ReceiveEndpoint with its own policy,
+                // which is what this absence forces.
             });
         });
 

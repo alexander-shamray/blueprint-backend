@@ -38,6 +38,11 @@ class Names:
     def upper(self) -> str:
         return self.pascal.upper()
 
+    @property
+    def article(self) -> str:
+        """The indefinite article a rendered sentence puts before the name."""
+        return "an" if self.pascal[:1].lower() in "aeiou" else "a"
+
     def rename(self, text: str) -> str:
         """One pass over the three casings, never three passes.
 

@@ -288,6 +288,15 @@ class RendersTheTemplate(unittest.TestCase):
         # writing it that way first.
         self.assertNotIn("cfg.ConfigureEndpoints(", messaging)
 
+        # A rendered service subscribes to nothing: the two calls Catalog makes
+        # into its own StockLevelConsumer are stripped, and no consumer, endpoint
+        # or projection name survives in the copied registration.
+        # The CALLS, not the identifiers, for the reason the assertion above
+        # gives: the comment that explains the absence names ReceiveEndpoint.
+        self.assertNotIn(".AddConsumer<", messaging)
+        self.assertNotIn(".ReceiveEndpoint(", messaging)
+        self.assertNotIn("StockLevel", messaging)
+
         self.assertIn(
             "tests/Zulu.Api.Tests/MessagingRegistrationTests.cs", self.rendered.created
         )
@@ -1398,6 +1407,12 @@ class RefusesToRun(unittest.TestCase):
         # produced text the upper pass then matched.
         self.assertEqual("CATALOGSearch.Domain", Names("CATALOGSearch").rename("Catalog.Domain"))
         self.assertEqual("catalogsearch-api", Names("CATALOGSearch").rename("catalog-api"))
+
+    def test_the_article_follows_the_name(self):
+        # A rendered sentence puts an article before the service's name, and a
+        # hardcoded "a" rendered "a Inventory PR" into that service's unit file.
+        self.assertEqual("an", Names("Inventory").article)
+        self.assertEqual("a", Names("Zulu").article)
 
         rendered = render(name="CATALOGSearch")
         self.assertIn(

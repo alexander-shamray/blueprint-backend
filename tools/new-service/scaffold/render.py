@@ -1058,7 +1058,7 @@ def render_service_compose(repo_root: Path, names: Names, port: int) -> str:
         f"# {names.pascal}'s deployment (§14.1), included by {COMPOSE_INDEX}.\n"
         f"# Rendered by tools/new-service from the template service's unit file: the\n"
         f"# pair rule below belongs to the chapter, and the file boundary belongs to\n"
-        f"# docs/change-locality.md, so a {names.pascal} PR edits this file and never\n"
+        f"# docs/change-locality.md, so {names.article} {names.pascal} PR edits this file and never\n"
         f"# another service's.\n"
         f"#\n"
         f"# `include` resolves a relative path against the directory of the file that\n"
