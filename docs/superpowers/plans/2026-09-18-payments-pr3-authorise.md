@@ -786,6 +786,10 @@ git commit -m "feat(payments): AuthorisePayment charges the recorded payer, or d
   an in-process `WireMockServer` over `SimulatorMappings.Directory()`,
   exposing it as `Provider` and passing its URL as the factory's third
   argument
+- Modify: `tests/Payments.TestSupport/Payments.TestSupport.csproj` —
+  `<PackageReference Include="WireMock.Net" />`, no `Version=`: the fixture now
+  names `WireMockServer`, and PR-2's reference is on `Payments.Api.Tests`,
+  which consumes this project rather than supplying it
 - Test: `tests/Payments.Api.Tests/MessagingRegistrationTests.cs` (extend)
 - Test: `tests/Payments.Api.Tests/AuthorisePaymentMapperTests.cs`
 - Test: `tests/Payments.Api.Tests/PaymentsCommandEndpointTests.cs`
