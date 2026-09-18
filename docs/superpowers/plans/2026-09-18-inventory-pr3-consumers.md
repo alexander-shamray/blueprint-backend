@@ -213,7 +213,8 @@ git commit -m "feat(inventory): Reservation.Fulfil, and the unreserved despatch 
 **Interfaces:**
 - Produces: `Task FulfilAsync(IReadOnlyList<ReservationLine> lines, CancellationToken ct)`
   — per line in `ProductId` order:
-  `UPDATE inventory.StockItems SET Reserved = Reserved - @Quantity, UpdatedAt = SYSDATETIMEOFFSET() WHERE ProductId = @ProductId AND Reserved >= @Quantity;`
+  `UPDATE inventory.StockItems SET Reserved = Reserved - @Quantity, UpdatedAt = <Stamp> WHERE ProductId = @ProductId AND Reserved >= @Quantity;`
+  where `<Stamp>` is PR-2's monotonic expression, never a bare clock read.
   A zero-row line throws `InvalidOperationException` naming the product: a
   reserved count below what this reservation holds is a ledger fault, not a
   business outcome, and the transaction rolls back.

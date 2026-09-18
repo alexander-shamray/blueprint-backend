@@ -41,10 +41,14 @@ three reservation endpoints), 7, 8 and 10 (the §3.2 sentence).
   no rows where the statement's `OUTPUT` is the level (spec, section 3).
 - Depends on PR-1 having merged: `StockItem`, `StockItems`,
   `InventoryPermissions.Admin` and the stock endpoints exist.
-- §7.3's statement is used **as printed**: `UPDATE inventory.StockItems SET
-  Available = Available - @Quantity, Reserved = Reserved + @Quantity,
-  UpdatedAt = SYSDATETIMEOFFSET() OUTPUT inserted.Available WHERE ProductId =
-  @ProductId AND Available >= @Quantity;`
+- §7.3's statement keeps its guard and its counter arithmetic unchanged —
+  `WHERE ProductId = @ProductId AND Available >= @Quantity`,
+  `Available - @Quantity`, `Reserved + @Quantity`, one atomic statement per
+  row — and takes exactly two changes the spec's section 4 argues: the
+  `UpdatedAt` assignment is the per-product monotonic `Stamp` expression
+  rather than a bare `SYSDATETIMEOFFSET()`, and the `OUTPUT` returns
+  `inserted.Available, inserted.UpdatedAt`. Every statement in Task 3 and
+  PR-3's fulfilment statement stamp the same way.
 - Lines are processed in ascending `ProductId` order, always.
 - No purge of `Reservations`; the PR body files the issue naming the bound
   it would need (section 7 of the spec).
@@ -961,6 +965,11 @@ git commit -m "feat(inventory): the stock ledger runs §7.3's statement per line
 - Create: `.../ReserveStock/ReserveStockValidator.cs`
 - Create: `src/Services/Inventory/Inventory.Application/Reservations/ReleaseStock/ReleaseStockCommand.cs`
 - Create: `.../ReleaseStock/ReleaseStockHandler.cs`
+- Create: `.../ReleaseStock/ReleaseStockValidator.cs` — `RuleFor(c =>
+  c.OrderId).NotEmpty()`, because a release for `Guid.Empty` would
+  otherwise write a tombstone under an identity no order can have and
+  publish `StockReleased` for it; the reserve command already refuses the
+  same id
 - Create: `src/Services/Inventory/Inventory.Application/Reservations/ReservationErrors.cs`
 - Create: `src/Services/Inventory/Inventory.Application/CommandOrigin.cs` —
   Inventory's own two literals. Ordering declares its `CommandOrigin` inside
@@ -970,6 +979,8 @@ git commit -m "feat(inventory): the stock ledger runs §7.3's statement per line
 - Modify: `src/Services/Inventory/Inventory.Application/Integration/InventoryIntegrationEventMapper.cs`
   (three more registry entries)
 - Test: `tests/Inventory.Application.Tests/ReserveStockValidatorTests.cs`
+- Test: `tests/Inventory.Application.Tests/ReleaseStockValidatorTests.cs` —
+  one test: `Guid.Empty` has a validation error for `OrderId`
 - Test: `tests/Inventory.Application.Tests/InventoryIntegrationEventMapperTests.cs` (extend)
 - Test: `tests/Inventory.Application.Tests/OutboxSerialisationTests.cs`
   (extend) — the three events become stageable the moment the mapper names
@@ -1216,6 +1227,26 @@ public sealed class ReleaseStockHandler(
 `Origin` is carried for §9.5's two literals and read by nothing here; the
 endpoint passes `User`, the mapper `System`.
 
+`ReleaseStockValidator.cs`:
+
+```csharp
+using FluentValidation;
+
+namespace Inventory.Application.Reservations.ReleaseStock;
+
+public sealed class ReleaseStockValidator : AbstractValidator<ReleaseStockCommand>
+{
+    public ReleaseStockValidator()
+    {
+        RuleFor(c => c.OrderId).NotEmpty();
+    }
+}
+```
+
+The endpoint test in Task 6 posts a release for `Guid.Empty` and expects
+400 with no row written; the message path's equivalent is a domain
+rejection the consumer acks.
+
 Mapper registry additions and `ToContract` methods, correlation on the order:
 
 ```csharp
@@ -1426,13 +1457,15 @@ public async Task A_second_release_of_a_released_reservation_publishes_again_and
 }
 
 [Theory]
-[InlineData(0)]
-[InlineData(OrderLimits.MaxQuantity + 1)]
-public async Task A_reserve_with_a_quantity_outside_the_contract_is_a_fault_and_is_not_retried(int quantity)
+[InlineData(0, false)]
+[InlineData(OrderLimits.MaxQuantity + 1, false)]
+[InlineData(1, true)]
+public async Task A_malformed_reserve_is_a_contract_fault_and_is_not_retried(int quantity, bool emptyProduct)
 {
     var order = Guid.CreateVersion7();
+    Guid product = emptyProduct ? Guid.Empty : Guid.CreateVersion7();
 
-    await SendAsync(new ReserveStock(order, [new StockLine(Guid.CreateVersion7(), quantity)]));
+    await SendAsync(new ReserveStock(order, [new StockLine(product, quantity)]));
 
     await Eventually(
         () => fixture.ScalarAsync<int>("SELECT Value = COUNT(*) FROM inventory.Reservations WHERE OrderId = {0}", order),
@@ -1485,6 +1518,12 @@ public sealed class ReserveStockMapper : ICommandMessageMapper<ReserveStock, Res
 
         if (message.Lines.Any(l => l.Quantity < OrderLimits.MinQuantity || l.Quantity > OrderLimits.MaxQuantity))
             throw new ContractMappingException($"A quantity outside the contract's bounds on {nameof(ReserveStock)}.");
+
+        // An empty product id is a malformed payload, not an unknown product:
+        // let through, it would reach the ledger, affect no row, and be
+        // published as an out-of-stock decision about a product that is not one.
+        if (message.OrderId == Guid.Empty || message.Lines.Any(l => l.ProductId == Guid.Empty))
+            throw new ContractMappingException($"An empty identifier on {nameof(ReserveStock)}.");
 
         if (message.Lines.Select(l => l.ProductId).Distinct().Count() != message.Lines.Count)
             throw new ContractMappingException($"A repeated product on {nameof(ReserveStock)}.");
@@ -1642,6 +1681,17 @@ public async Task The_runbook_can_release_by_hand_and_the_release_answers_like_t
     response.StatusCode.ShouldBe(HttpStatusCode.NoContent);
     (await Available(product)).ShouldBe(3);
     (await fixture.OutboxAsync()).Count(r => r.MessageType.Contains("StockReleased", StringComparison.Ordinal)).ShouldBe(1);
+}
+
+[Fact]
+public async Task Releasing_the_empty_order_id_is_400_and_writes_nothing()
+{
+    HttpResponseMessage response = await Admin().PostAsync(
+        $"/v1/inventory/reservations/{Guid.Empty}/release", null, TestContext.Current.CancellationToken);
+
+    response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+    (await fixture.ScalarAsync<int>("SELECT Value = COUNT(*) FROM inventory.Reservations WHERE OrderId = {0}", Guid.Empty))
+        .ShouldBe(0, "no tombstone for an identity no order can have");
 }
 
 [Fact]

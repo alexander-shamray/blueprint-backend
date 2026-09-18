@@ -171,11 +171,16 @@ inside the unit of work, through the ledger port section 3 names:
 1. Loads the `Reservation` for the order. The table at the end of this
    section says what an existing one means.
 2. Issues `SAVE TRANSACTION Reserve`.
-3. For each line **in `ProductId` order**, runs §7.3's statement exactly as
-   printed, with its `OUTPUT inserted.Available` widened to
-   `inserted.Available, inserted.UpdatedAt`, and records either the returned
-   level or the product id of a line that affected no row. Every line runs,
-   so the unavailable list is complete rather than the first shortfall.
+3. For each line **in `ProductId` order**, runs §7.3's statement with its
+   guard and its counter arithmetic unchanged — `WHERE ProductId =
+   @ProductId AND Available >= @Quantity`, `Available - @Quantity`,
+   `Reserved + @Quantity`, one atomic statement per row — and two deliberate
+   changes: the `UpdatedAt` assignment becomes the monotonic stamp below in
+   place of a bare `SYSDATETIMEOFFSET()`, and the `OUTPUT` returns
+   `inserted.Available, inserted.UpdatedAt` rather than the level alone.
+   It records either the returned level or the product id of a line that
+   affected no row. Every line runs, so the unavailable list is complete
+   rather than the first shortfall.
    **The level event's `OccurredAt` is the row's `UpdatedAt`, and
    `UpdatedAt` is a per-product monotonic stamp, never a clock read in the
    handler.** The statement sets it to `SYSDATETIMEOFFSET()` when that is
