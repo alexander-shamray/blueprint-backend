@@ -32,7 +32,7 @@ against something written down.
 
 **What sits behind the anti-corruption layer.** §3.2 names Payments an ACL
 over a PSP and the repository has none. The answer is a **simulator over
-HTTP**: a stock WireMock image with JSON mappings, behind a typed `HttpClient`
+HTTP**: a WireMock.Net image with JSON mappings, behind a typed `HttpClient`
 adapter. The ACL is then real — a network, a timeout, a retry, a translation
 of a foreign vocabulary — and no credential and no external dependency enters
 CI or a local checkout. A real provider's sandbox is the same adapter pointed
@@ -107,10 +107,10 @@ operator surface crosses the gateway and the realm. Each row names its
 
 | PR | Subject | Class |
 |---|---|---|
-| 1 | `feat(payments): fourth service from the scaffold` — the scaffold run with `AddRedisConnections` stripped and §2's sentence amended; `PaymentOrders` and the `payments-events` queue consuming `OrderPlaced` and `OrderCancelled` into it; the Compose pair on port 5104; `ci.yml`'s filter and image matrix; the observability gate's outbox exemption | A+B+D+E — E because the scaffold adds projects to the solution |
-| 2 | `feat(payments): the PSP anti-corruption layer and its simulator` — `IPaymentProvider`, the typed `HttpClient` adapter and its resilience handler, the translation, `deploy/compose/psp-simulator/` and its Compose service, §15.4's two rows. Nothing calls it yet | A+D |
-| 3 | `feat(payments): authorise` — `PaymentIntent`, `payments-commands` with its delayed redelivery, the mismatch fault, `PaymentAuthorised` and `PaymentDeclined`, the broker grant that lets Payments declare its queue, ADR-047 and §3.2's sentence | A+B+D |
-| 4 | `feat(payments): void on cancellation` — `Refund`, the void on the `OrderCancelled` consumer, `PaymentRefunded`, Payments' outbox gauges and metrics initialiser, and the deletion of PR-1's exemption | A+B+D |
+| 1 | `feat(payments): fourth service from the scaffold` — the scaffold run with `AddRedisConnections` stripped and §2's sentence amended; `PaymentOrders` and the `payments-events` queue consuming `OrderPlaced` and `OrderCancelled` into it, with the broker grant a receive endpoint needs; the Compose pair on port 5104; `ci.yml`'s filter and image matrix; the observability gate's outbox exemption | A+B+D+E — E because the scaffold adds projects to the solution |
+| 2 | `feat(payments): the PSP anti-corruption layer and its simulator` — `IPaymentProvider`, the typed `HttpClient` adapter and its resilience handler, the translation, the provider counter and its `AddMeter` line, `deploy/compose/psp-simulator/` and its Compose service, §15.4's two rows. Nothing calls it yet | A+B+D+E — E for the test project's `WireMock.Net` reference |
+| 3 | `feat(payments): authorise` — `PaymentIntent`, `payments-commands` with its delayed redelivery, the mismatch fault, `PaymentAuthorised` and `PaymentDeclined`, ADR-047 and §3.2's sentence, and the ladder's cross-service assertion | A+B+E — E for `Platform.IntegrationTests`' two references |
+| 4 | `feat(payments): void on cancellation` — `Refund`, the void on the `OrderCancelled` consumer, `PaymentRefunded`, Payments' outbox gauges, metrics initialiser and `AddMeter` line, and the deletion of PR-1's exemption | A+B+D+E |
 | 5 | `feat(payments): operators read a payment` — the admin `GET`, `payments:admin` in the service, the gateway's `payments-admin` route and cluster, the realm's permission granted to `demo`, §10.2's route and `order-review.md`'s step 1 | A+D |
 | 6 | `feat(deploy): Payments' chart, deploy target and canary` — `deploy/helm/payments` with no Redis values, the umbrella dependency, `smoke.sh`'s lists, `deploy.yml`'s option, the canary map | D |
 
@@ -272,9 +272,11 @@ count.
 exactly it: three entries. `MessagingRegistrationTests` in `Payments.Api.Tests`
 asserts that every cell of the Consumes and Accepts columns has both an
 `AddConsumer` and a `ConfigureConsumer`. The scaffold adds the `payments-svc`
-broker account with the per-service patterns ADR-036 established; PR-3 grants
-it `configure` and `read` on `payments-commands`, beside Ordering's existing
-`write`, and `check_permissions.py`'s tests gain the row.
+broker account with Catalog's publisher-only patterns, which admit no queue.
+`payments-events` is a receive endpoint from PR-1, so PR-1 widens the entry to
+`ordering-svc`'s shape with a `payments-` prefix, and that prefix admits
+`payments-commands` too when PR-3 declares it. Ordering's existing `write` on
+the queue is untouched.
 
 ## 9. The anti-corruption layer
 
@@ -302,14 +304,19 @@ already pinned: a five-second attempt timeout, two retries, a twenty-second
 total. Retrying inside the client is safe only because every request carries
 its key; the endpoint's policy owns every retry after that, and the worst case
 stays inside the saga's payment wait. Configuration is
-`PaymentProvider__BaseUrl` and `PaymentProvider__ApiKey`; the simulator ignores the key, so the Compose
-unit's value is §14.1's stated local-development exception, and §15.4 gains
-both rows with the key as a secret.
+`PaymentProvider__BaseUrl` and `PaymentProvider__ApiKey`; the simulator
+ignores the key, so the Compose unit's value is §14.1's stated
+local-development exception, and §15.4 gains both rows with the key as a
+secret.
 
-**The simulator** is `deploy/compose/psp-simulator/`: a pinned
-`wiremock/wiremock` image, `mappings/*.json` and a README. It builds nothing,
-so no matrix entry is owed. The verdict is scripted by the amount's minor
-units:
+**The simulator** is `deploy/compose/psp-simulator/`: the WireMock.Net image
+at the tag `Directory.Packages.props` pins the package to, `mappings/*.json`
+and a README. WireMock.Net rather than Java WireMock because §12's table names
+it for a third-party API and Appendix B already carries it, and because the
+two read different mapping formats: with WireMock.Net on both sides, Compose's
+container and the tests' in-process server load the same files. It builds
+nothing, so no matrix entry is owed. The verdict is scripted by the amount's
+minor units:
 
 | Minor units | Answer |
 |---|---|
@@ -320,12 +327,15 @@ units:
 | any other | 201 `approved` |
 | a void | 200 |
 
-The reference is templated from the idempotency key, so the same key always
-answers the same reference and the simulator is idempotent while holding no
-state. A plain Compose checkout authorises everything but those amounts, which
-are how a person watches a decline, a retry and the saga's timeout. The
-container tests start the same image with the same directory mounted, so one
-file is what both read.
+The reference is `psp_` followed by the idempotency key, templated from the
+request, so the same key always answers the same reference and the simulator
+is idempotent while holding no state. The 409 row of the translation table is
+the adapter's and the simulator never answers it: a stateless stub cannot know
+a key was used before, so the adapter's test stubs that answer for itself. A
+plain Compose checkout authorises everything but those amounts, which are how a
+person watches a decline, a retry and the saga's timeout. The tests start
+WireMock.Net in process over the same `mappings` directory, so one set of files
+is what both read.
 
 ## 10. The admin read
 
@@ -373,8 +383,13 @@ PR-4 takes Ordering's `OutboxMetrics`, `OutboxStats` and
 `MetricsInitialiser` under Payments' namespace, names `Payments.Outbox` in
 §13.2's export and deletes the exemption.
 
-**One counter, `payments.provider.unavailable`,** incremented in the adapter
-on each attempt that ends in a transient fault. The error queue sees only
+**One counter, `payments.provider.unavailable`,** on a `Payments.Provider`
+meter, incremented in the adapter on each attempt that ends in a transient
+fault. It is a fact about the provider rather than about an order, so §13.3's
+claim rule does not reach it: a unit that rolls back still met a failing
+provider. §13.2's export names meters one by one, so PR-2 adds the
+`AddMeter` line in `Common.Web` and PR-4 adds `Payments.Outbox`'s. The error
+queue sees only
 the units that exhausted their retries, and a provider that is failing
 half its calls is visible here first. The HTTP client's own meter already
 records duration and status per host, so nothing else is hand-written; no
@@ -396,7 +411,8 @@ container tests are `Category=Integration` and never skipped.
 - **`Payments.Application.Tests`**: every row of section 6's two tables
   against a fake provider; the mapper registry against the three contracts;
   the command mapper; the architecture tests.
-- **`Payments.Api.Tests`**, over SQL Server, RabbitMQ and WireMock containers:
+- **`Payments.Api.Tests`**, over SQL Server and RabbitMQ containers and an
+  in-process WireMock.Net server:
   - the adapter against every row of section 9's simulator table;
   - **the race**: an authorise and a cancellation for one order started
     together end in a `Declined` `order_cancelled` intent, or in an
@@ -440,3 +456,6 @@ container tests are `Category=Integration` and never skipped.
   at the provider.
 - **No Redis.** Section 2.
 - **No purge of the three tables.** Section 7.
+- **No nightly contract test.** §12's table pairs WireMock.Net with one
+  against the provider's sandbox, and there is no provider; it is owed the
+  day section 1's real provider is chosen, beside the adapter pointed at it.
