@@ -23,10 +23,15 @@ sections 9 (the Catalog bullet) and 14.
 ## Global Constraints
 
 - The blueprint wins over the spec; the spec wins over this plan.
-- **Class A.** Touch set: `src/Services/Catalog/**`, `tests/Catalog.*`,
-  `tools/new-service/**` (Catalog is the scaffold's template and gains
-  files, so the scaffold's suite must still pass and its exclusion list may
-  need the new files named — see Task 5).
+- **Class A+D.** Touch set: `src/Services/Catalog/**`, `tests/Catalog.*`,
+  `tools/new-service/**` (Catalog is the scaffold's template, so every
+  Catalog-only file is classified and every Catalog-only line in a copied
+  file is patched out — see Task 5), and
+  `deploy/compose/rabbitmq/definitions.json` (the D half: `catalog-svc`'s
+  grant admits no queue and reads no other context's exchange today).
+- Catalog-only messaging code lives in Catalog-only files. The copied
+  `DependencyInjection.cs` carries two one-line calls into them and nothing
+  else, so the scaffold has two lines to strip rather than a block.
 - Depends on PR-2 having merged, so a real producer exists; nothing here
   compiles against Inventory.
 - `null` and `0` are different facts: a product Inventory has never reported
@@ -41,7 +46,10 @@ sections 9 (the Catalog bullet) and 14.
 **Files:**
 - Create: `src/Services/Catalog/Catalog.Infrastructure/Persistence/StockLevelConfiguration.cs`
 - Create: `src/Services/Catalog/Catalog.Infrastructure/Persistence/Migrations/<ts>_AddStockLevels.cs`
-- Test: `tests/Catalog.Api.Tests/DatabaseSmokeTests.cs` (extend)
+- Test: `tests/Catalog.Api.Tests/StockLevelsSchemaTests.cs` — a new
+  Catalog-only file, not an addition to `DatabaseSmokeTests.cs`, which the
+  scaffold copies into every service: an assertion about `catalog.StockLevels`
+  in a copied file is a failing test in every render.
 
 **Interfaces:**
 - `catalog.StockLevels(ProductId uniqueidentifier PK, QuantityAvailable int
@@ -51,7 +59,10 @@ sections 9 (the Catalog bullet) and 14.
   and the spec's section 14 names for this table — and never read through
   EF.
 
-- [ ] **Step 1: Write the failing smoke test**
+- [ ] **Step 1: Write the failing schema test**
+
+In `StockLevelsSchemaTests.cs`, a `[Collection(nameof(IntegrationCollection))]`
+class over `ServiceFixture` in `DatabaseSmokeTests`' shape:
 
 ```csharp
 [Fact]
@@ -106,7 +117,7 @@ dotnet ef migrations add AddStockLevels \
 - [ ] **Step 3: Run the smoke test; commit**
 
 ```bash
-dotnet test tests/Catalog.Api.Tests --filter DatabaseSmokeTests
+dotnet test tests/Catalog.Api.Tests --filter StockLevelsSchemaTests
 git add src/Services/Catalog/Catalog.Infrastructure tests/Catalog.Api.Tests
 git commit -m "feat(catalog): the StockLevels projection table"
 ```
@@ -266,70 +277,109 @@ git commit -m "feat(catalog): project Inventory's level under an OccurredAt wate
 ### Task 3: The receive endpoint, and the test that said there was none
 
 **Files:**
+- Create: `src/Services/Catalog/Catalog.Infrastructure/Messaging/StockLevelConsumer.cs`
+  — Catalog-only: the queue name and the two registration halves
 - Modify: `src/Services/Catalog/Catalog.Infrastructure/Messaging/DependencyInjection.cs`
-- Modify: `tests/Catalog.Api.Tests/MessagingRegistrationTests.cs`
-- Test: `tests/Catalog.Api.Tests/InventoryEventEndpointTests.cs`
+  — two one-line calls into that file, and its `using`
+- Modify: `tests/Catalog.Api.Tests/MessagingRegistrationTests.cs` — the
+  no-consumer test leaves this copied file (Task 5 says where it goes)
+- Create: `tests/Catalog.Api.Tests/StockLevelRegistrationTests.cs` —
+  Catalog-only: the one-consumer assertion
+- Create: `tests/Catalog.Api.Tests/InventoryEventEndpointTests.cs`
+- Modify: `tests/Catalog.TestSupport/ServiceFixture.cs` — the harness-only
+  broker widening
+- Modify: `deploy/compose/rabbitmq/definitions.json` — `catalog-svc`'s
+  patterns
 
 **Interfaces:**
-- `public const string InventoryEventsQueue = "catalog-inventory-events"`.
+- `StockLevelConsumer.Queue = "catalog-inventory-events"`;
+  `static void AddStockLevelConsumer(this IBusRegistrationConfigurator x)`;
+  `static void ConfigureStockLevelEndpoint(this IRabbitMqBusFactoryConfigurator cfg, IBusRegistrationContext context)`.
 
-- [ ] **Step 1: Rewrite the registration test**
+- [ ] **Step 1: Move the no-consumer test and write the one-consumer test**
 
-Replace `Catalog_binds_no_consumer_and_therefore_declares_no_receive_endpoint`
-with:
+`Catalog_binds_no_consumer_and_therefore_declares_no_receive_endpoint` is
+true of every rendered service and false of Catalog from this PR on, and it
+sits in a file the scaffold copies. Cut it from `MessagingRegistrationTests`
+along with the comment paragraph that says Inventory does not exist and
+that §8.4's invalidator needs a cached query; Task 5 puts the assertion
+where it now belongs. Keep `The_no_consumer_assertion_can_actually_fail`
+and `IsConsumerRegistration`, renaming the test
+`The_consumer_assertion_can_actually_see_a_consumer`, and make
+`IsConsumerRegistration` `internal static` so the new file can use it.
+
+`StockLevelRegistrationTests.cs`:
 
 ```csharp
-[Fact]
-public void Catalog_binds_exactly_the_one_consumer_in_its_consumes_column()
+using Catalog.Infrastructure.Messaging;
+using Common.Contracts.Inventory.V1;
+using Common.Infrastructure.Messaging;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Shouldly;
+using Xunit;
+
+namespace Catalog.Api.Tests;
+
+public class StockLevelRegistrationTests
 {
-    ServiceCollection services = new();
+    [Fact]
+    public void Catalog_binds_exactly_the_one_consumer_in_its_consumes_column()
+    {
+        ServiceCollection services = new();
 
-    services.AddMassTransitMessaging(Configuration());
+        services.AddMassTransitMessaging(
+            new ConfigurationBuilder()
+                .AddInMemoryCollection([new KeyValuePair<string, string?>("ConnectionStrings:RabbitMq", "amqp://guest:guest@catalog-rabbit.invalid:5672")])
+                .Build());
 
-    services
-        .Where(d => IsConsumerRegistration(d))
-        .Select(d => d.ImplementationType ?? d.ServiceType)
-        .Distinct()
-        .ShouldBe([typeof(IntegrationEventConsumer<StockLevelChanged>)],
-            "§3.2 gives Catalog one Consumes cell, StockLevelChanged, and a second consumer here is a " +
-            "subscription the table does not give it");
+        services
+            .Where(MessagingRegistrationTests.IsConsumerRegistration)
+            .Select(d => d.ImplementationType ?? d.ServiceType)
+            .Distinct()
+            .ShouldBe([typeof(IntegrationEventConsumer<StockLevelChanged>)],
+                "§3.2 gives Catalog one Consumes cell, StockLevelChanged, and a second consumer here is a " +
+                "subscription the table does not give it");
+    }
 }
 ```
-
-The file gains `using Common.Infrastructure.Messaging;` for
-`IntegrationEventConsumer<>` and `using Common.Contracts.Inventory.V1;` for
-the event; neither is imported globally.
-
-Keep `The_no_consumer_assertion_can_actually_fail` as the positive control,
-renamed to `The_consumer_assertion_can_actually_see_a_consumer`. Cut the
-comment paragraph that says Inventory does not exist and that §8.4's
-invalidator needs a cached query.
 
 - [ ] **Step 2: Write the failing endpoint test**
 
 Over containers, publishing `StockLevelChanged` through `IPublishEndpoint`
-and waiting on the inbox row for `InventoryEventsQueue`, then asserting the
-`catalog.StockLevels` row. A second publish with the same `MessageId` must
-leave one inbox row and one level row.
+and waiting on the inbox row for `StockLevelConsumer.Queue`, then asserting
+the `catalog.StockLevels` row. A second publish with the same `MessageId`
+must leave one inbox row and one level row.
 
-- [ ] **Step 3: Write the endpoint**
+- [ ] **Step 3: Write the consumer file and the two calls**
+
+`StockLevelConsumer.cs`:
 
 ```csharp
-public const string InventoryEventsQueue = "catalog-inventory-events";
+using Common.Contracts.Inventory.V1;
+using Common.Infrastructure.Inbox;
+using Common.Infrastructure.Messaging;
+using MassTransit;
 
-services.AddMassTransit(x =>
+namespace Catalog.Infrastructure.Messaging;
+
+/// <summary>
+/// §3.2's Consumes column for Catalog, and exactly it. Its own file because
+/// Catalog is the scaffold's template and a rendered service subscribes to
+/// nothing: the two calls into this file are what the scaffold strips.
+/// </summary>
+internal static class StockLevelConsumer
 {
-    x.DisableUsageTelemetry();
+    public const string Queue = "catalog-inventory-events";
 
-    // §3.2's Consumes column for Catalog, and exactly it.
-    x.AddConsumer<IntegrationEventConsumer<StockLevelChanged>>();
+    public static void AddStockLevelConsumer(this IBusRegistrationConfigurator x) =>
+        x.AddConsumer<IntegrationEventConsumer<StockLevelChanged>>();
 
-    x.UsingRabbitMq((context, cfg) =>
-    {
-        cfg.Host(new Uri(connectionString));
-
+    public static void ConfigureStockLevelEndpoint(
+        this IRabbitMqBusFactoryConfigurator cfg,
+        IBusRegistrationContext context) =>
         cfg.ReceiveEndpoint(
-            InventoryEventsQueue,
+            Queue,
             e =>
             {
                 e.UseMessageRetry(r => RetryPolicy.Standard(r));
@@ -338,27 +388,61 @@ services.AddMassTransit(x =>
 
                 e.ConfigureConsumer<IntegrationEventConsumer<StockLevelChanged>>(context);
             });
-    });
-});
+}
 ```
 
-Catalog's `AddMassTransitMessaging` gains `IConfiguration` already; confirm
-the inbox filter's dependencies (`InboxTable`, the `DbContext` alias) are
-registered by `AddCatalogInfrastructure`, which the scaffold README says
-they are.
+In `DependencyInjection.AddMassTransitMessaging`, one line in each half:
 
-The broker permission for `catalog-svc` must admit a `catalog-` queue and
-reading `Common.Contracts` exchanges; check
-`deploy/compose/rabbitmq/definitions.json`'s `catalog-svc` patterns and,
-if the read pattern does not cover `Common.Contracts.Inventory.V1:`, widen
-it in the same PR and name `deploy/compose/rabbitmq/definitions.json` in the
-touch set (Class D beside A, declared as `A+D`).
+```csharp
+x.AddStockLevelConsumer();
+```
 
-- [ ] **Step 4: Run the API suite; commit**
+inside `AddMassTransit` after `DisableUsageTelemetry()`, and
+
+```csharp
+cfg.ConfigureStockLevelEndpoint(context);
+```
+
+inside `UsingRabbitMq` after `cfg.Host(...)`. Confirm the inbox filter's
+dependencies (`InboxTable`, the `DbContext` alias) are registered by
+`AddCatalogInfrastructure`, which the scaffold README says they are.
+
+- [ ] **Step 4: The broker, in production and in the harness**
+
+`catalog-svc`'s patterns in `deploy/compose/rabbitmq/definitions.json`
+admit its own contract exchanges and MassTransit's and nothing else — a
+publisher's grant, and the read pattern names only
+`Common\.Contracts\.Catalog\.V1:`. A receive endpoint declares a queue and
+binds another context's exchange, so:
+
+```json
+"configure": "^(catalog-|Common\\.Contracts(\\.Catalog\\.V1:|:)|MassTransit:)",
+"write": "^(catalog-|Common\\.Contracts(\\.Catalog\\.V1:|:)|MassTransit:)",
+"read": "^(catalog-|Common\\.Contracts\\.Catalog\\.V1:|Common\\.Contracts\\.Inventory\\.V1:|MassTransit:)"
+```
+
+`write` gains the queue and nothing of Inventory's: `check_permissions.py`
+refuses a context writing another's exchange, and reading one is all a
+consumer needs. Run it and its suite:
+
+```bash
+py -3.12 deploy/compose/rabbitmq/check_permissions.py
+py -3.12 -m unittest discover -s deploy/compose/rabbitmq
+```
+
+The endpoint test publishes `StockLevelChanged` as `catalog-svc`, which
+that grant refuses by design. `Catalog.TestSupport/ServiceFixture.cs` gains
+Ordering's `WidenWriteForTheHarnessAsync` — a `rabbitmqctl set_permissions`
+against the test container alone, after it starts and before the factory is
+built — with `catalog-svc` and a scope of
+`^(catalog-|Common\.Contracts|MassTransit:)`. The production file does not
+move for the harness's sake.
+
+- [ ] **Step 5: Run the API suite; commit**
 
 ```bash
 dotnet test tests/Catalog.Api.Tests
-git add src/Services/Catalog tests/Catalog.Api.Tests deploy/compose/rabbitmq/definitions.json
+git add src/Services/Catalog tests/Catalog.Api.Tests tests/Catalog.TestSupport deploy/compose/rabbitmq/definitions.json
 git commit -m "feat(catalog): bind StockLevelChanged on catalog-inventory-events"
 ```
 
@@ -433,13 +517,25 @@ git commit -m "feat(catalog): the listing carries Inventory's level, null when u
 
 **Files:**
 - Modify: `tools/new-service/new_service.py` — the `OMITTED` set gains the
-  four Catalog-specific files this PR creates:
+  six Catalog-only files this PR creates:
   `src/Services/Catalog/Catalog.Infrastructure/Persistence/StockLevelConfiguration.cs`,
   `src/Services/Catalog/Catalog.Infrastructure/Projections/StockLevelProjection.cs`,
+  `src/Services/Catalog/Catalog.Infrastructure/Messaging/StockLevelConsumer.cs`,
+  `tests/Catalog.Api.Tests/StockLevelsSchemaTests.cs`,
   `tests/Catalog.Api.Tests/StockLevelProjectionTests.cs`,
+  `tests/Catalog.Api.Tests/StockLevelRegistrationTests.cs`,
   `tests/Catalog.Api.Tests/InventoryEventEndpointTests.cs`. The script
   refuses a Catalog file in neither `COPIED` nor `OMITTED`, so leaving any
-  one out fails the render before it writes.
+  one out fails the render before it writes. And one new anchored patch on
+  the copied `Catalog.Infrastructure/Messaging/DependencyInjection.cs`,
+  removing the three Catalog-only lines Task 3 added — the `using`, the
+  `AddStockLevelConsumer()` call and the `ConfigureStockLevelEndpoint(context)`
+  call — each an anchor that must match exactly once, in the shape of the
+  script's existing slice patches.
+- Modify: `tools/new-service/test_new_service.py` — the rendered-text
+  assertion that replaces the test Task 3 cut: the rendered
+  `DependencyInjection.cs` contains no `AddConsumer`, no `ReceiveEndpoint`
+  and no `StockLevel`, because a rendered service subscribes to nothing.
 
 - [ ] **Step 1: Run the scaffold's suite to see it fail**
 
@@ -449,11 +545,15 @@ py -3.12 -m unittest discover -s tools/new-service
 
 Expected: a failure naming the first unclassified file.
 
-- [ ] **Step 2: Classify the four files as omitted**, beside the `Products`
-  slice entries, and re-run. The messaging registration is wiring the
-  script patches; because Task 3 changed `AddMassTransitMessaging`, check
-  that the anchor it patches still matches exactly once and update the
-  anchor and its test if not, with the care the script's README asks for.
+- [ ] **Step 2: Classify, patch and assert**
+
+Add the seven files to `OMITTED` beside the `Products` slice entries. Add
+the three-line patch with its test, which renders the file and asserts the
+three lines are gone and the rest of the registration is byte-for-byte
+Catalog's. Add the no-consumer assertion to the scaffold's suite. Re-run
+the suite green. The messaging registration is wiring the script already
+patches (the `RabbitMq` connection-string line), so check the existing
+anchor still matches exactly once beside the new one.
 
 - [ ] **Step 3: Dogfood, on a clean tree only**
 
@@ -486,8 +586,7 @@ git commit -m "chore(tooling): the scaffold leaves Catalog's stock projection be
 - [ ] `dotnet build Platform.slnx` — 0 warnings.
 - [ ] `dotnet test Platform.slnx` — green.
 - [ ] Neither `/validate-blueprint` nor `/check-links` is owed.
-- [ ] PR body: `| Class | A |` (or `A+D` if Task 3 widened the broker
-  pattern), touch set from Global Constraints.
+- [ ] PR body: `| Class | A+D |`, touch set from Global Constraints.
 
 ## Self-review
 
@@ -495,7 +594,7 @@ git commit -m "chore(tooling): the scaffold leaves Catalog's stock projection be
   projection), 4 (the column, null semantics), 3 (the test comment cut and
   the invalidator explicitly not written); section 9's Catalog tests →
   Tasks 2, 3, 4.
-- Types: `StockLevelProjection`, `InventoryEventsQueue`,
+- Types: `StockLevelProjection`, `StockLevelConsumer.Queue`,
   `ProductSummaryDto.QuantityAvailable` agree across tasks.
-- The one thing the implementer must check before Task 3 is the broker
-  permission pattern; the plan says what to do in both cases.
+- The broker grant, the harness widening and the scaffold's patch are each
+  stated unconditionally, with the gate that refuses their absence named.

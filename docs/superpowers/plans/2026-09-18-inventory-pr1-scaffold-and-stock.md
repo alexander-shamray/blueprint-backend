@@ -26,10 +26,12 @@ sections 1, 2, 3 (the `StockItem` half), 6 (the two stock endpoints), 7,
 ## Global Constraints
 
 - The blueprint wins over the spec; the spec wins over this plan.
-- **Class A+D.** Touch set: `src/Services/Inventory/**`, `tests/Inventory.*`,
+- **Class A+B+D.** Touch set: `src/Services/Inventory/**`, `tests/Inventory.*`,
   `Platform.slnx`, `deploy/compose/**`, `.github/secret-scan/allowed/**`,
   `.github/workflows/ci.yml`, `deploy/compose/keycloak/realm-export.json`,
-  and the three prose sites in section 10 of the spec.
+  `tests/Common.Web.Tests/RealmImportTests.cs` (the B half: the building
+  block's test that pins the realm's grants), and the three prose sites in
+  section 10 of the spec.
 - No new package: no `Directory.Packages.props` change, no Appendix B row.
 - Comments say why and cite the owner. No history, no PR names.
 - Explicit local types, file-scoped namespaces, 120 columns.
@@ -125,13 +127,16 @@ the port.
 
 **Interfaces:**
 - Produces: `readonly record struct ProductId(Guid Value)`;
-  `StockItem.Create(ProductId, int onHand, DateTimeOffset now)`;
   `void StockItem.SetOnHand(int onHand, DateTimeOffset now)` throwing
-  `DomainException` when `onHand < Reserved`;
+  `DomainException` when `onHand < Reserved` or `onHand < 0`;
   `record StockLevelChangedDomainEvent(ProductId ProductId, int Available,
   DateTimeOffset OccurredAt) : IDomainEvent`;
-  `IStockItemRepository { Task<StockItem?> GetAsync(ProductId, CancellationToken);
-  void Add(StockItem); }`.
+  `IStockItemRepository { Task EnsureAsync(ProductId, DateTimeOffset now,
+  CancellationToken); Task<StockItem?> GetAsync(ProductId, CancellationToken); }`.
+  No `Create` factory and no `Add`: a row comes to exist through
+  `EnsureAsync`, an insert-where-absent under a key-range lock, so two first
+  writes for one product cannot both insert (Task 3), and the level event
+  is `SetOnHand`'s in every case.
 
 - [ ] **Step 1: Write the failing domain tests**
 
@@ -149,11 +154,12 @@ public class StockItemTests
     private static readonly DateTimeOffset Now = new(2026, 9, 18, 12, 0, 0, TimeSpan.Zero);
 
     [Fact]
-    public void Create_starts_with_everything_available_and_raises_the_level()
+    public void SetOnHand_on_an_empty_row_makes_everything_available_and_raises_the_level()
     {
         ProductId product = ProductId.New();
+        StockItem item = StockItem.Rehydrate(product, available: 0, reserved: 0);
 
-        StockItem item = StockItem.Create(product, 10, Now);
+        item.SetOnHand(10, Now);
 
         item.Available.ShouldBe(10);
         item.Reserved.ShouldBe(0);
@@ -187,16 +193,16 @@ public class StockItemTests
     }
 
     [Fact]
-    public void Create_refuses_a_negative_count()
+    public void SetOnHand_refuses_a_negative_count()
     {
-        Should.Throw<DomainException>(() => StockItem.Create(ProductId.New(), -1, Now));
+        Should.Throw<DomainException>(() => StockItem.Rehydrate(ProductId.New(), 0, 0).SetOnHand(-1, Now));
     }
 }
 ```
 
-`Rehydrate` is a test seam only in the sense that it sets both counters
-without an event; it is `internal` with `InternalsVisibleTo` the test
-project, exactly as Ordering exposes nothing it does not need to.
+`Rehydrate` is the one way a test builds a `StockItem`, since production
+code never constructs one: rows are inserted by the repository (Task 3) and
+loaded by EF. It is `internal` with `InternalsVisibleTo` the test project.
 
 - [ ] **Step 2: Run the tests to see them fail**
 
@@ -265,21 +271,14 @@ public sealed class StockItem : AggregateRoot<ProductId>
         UpdatedAt = now;
     }
 
-    public static StockItem Create(ProductId product, int onHand, DateTimeOffset now)
-    {
-        if (onHand < 0)
-            throw new DomainException("On-hand stock cannot be negative.");
-
-        var item = new StockItem(product, onHand, 0, now);
-        item.Raise(new StockLevelChangedDomainEvent(product, onHand, now));
-        return item;
-    }
-
     internal static StockItem Rehydrate(ProductId product, int available, int reserved) =>
         new(product, available, reserved, DateTimeOffset.MinValue);
 
     public void SetOnHand(int onHand, DateTimeOffset now)
     {
+        if (onHand < 0)
+            throw new DomainException("On-hand stock cannot be negative.");
+
         // A stock-take cannot make the warehouse hold less than it has promised.
         if (onHand < Reserved)
             throw new DomainException("On-hand stock cannot be below what is reserved.");
@@ -298,9 +297,14 @@ namespace Inventory.Domain.Stock;
 
 public interface IStockItemRepository
 {
-    Task<StockItem?> GetAsync(ProductId id, CancellationToken ct);
+    /// <summary>
+    /// Makes the row exist with nothing available and nothing reserved, under
+    /// a lock that lets two first writes for one product both return and
+    /// neither insert twice. On the unit of work's transaction.
+    /// </summary>
+    Task EnsureAsync(ProductId id, DateTimeOffset now, CancellationToken ct);
 
-    void Add(StockItem item);
+    Task<StockItem?> GetAsync(ProductId id, CancellationToken ct);
 }
 ```
 
@@ -408,12 +412,32 @@ namespace Inventory.Infrastructure.Persistence;
 
 internal sealed class StockItemRepository(InventoryDbContext db) : IStockItemRepository
 {
+    // HOLDLOCK on the probe: two first writes for one product both reach
+    // this statement, the second blocks on the first's key-range lock, and
+    // finds the row when it proceeds. Without it both insert and the loser
+    // fails on the key, which ConcurrencyExceptionHandler does not map.
+    public async Task EnsureAsync(ProductId id, DateTimeOffset now, CancellationToken ct)
+    {
+        if (db.Database.CurrentTransaction is null)
+            throw new InvalidOperationException("EnsureAsync runs only inside the unit of work's transaction (§6.3).");
+
+        await db.Database.ExecuteSqlAsync(
+            $"""
+            INSERT INTO inventory.StockItems (ProductId, Available, Reserved, UpdatedAt)
+            SELECT {id.Value}, 0, 0, {now}
+            WHERE NOT EXISTS (SELECT 1 FROM inventory.StockItems WITH (UPDLOCK, HOLDLOCK) WHERE ProductId = {id.Value});
+            """,
+            ct);
+    }
+
     public Task<StockItem?> GetAsync(ProductId id, CancellationToken ct) =>
         db.StockItems.SingleOrDefaultAsync(s => s.Id == id, ct);
-
-    public void Add(StockItem item) => db.Add(item);
 }
 ```
+
+`ExecuteSqlAsync` with an interpolated string parameterises every hole and
+runs on the context's current transaction, which is the one `EfUnitOfWork`
+opened.
 
 In `InventoryDbContext` add `public DbSet<StockItem> StockItems =>
 Set<StockItem>();`. In `DependencyInjection.AddInventoryInfrastructure` add
@@ -625,13 +649,13 @@ public sealed class SetOnHandHandler(IStockItemRepository items, TimeProvider cl
     {
         var product = new ProductId(command.ProductId);
         DateTimeOffset now = clock.GetUtcNow();
-        StockItem? item = await items.GetAsync(product, ct);
 
-        if (item is null)
-        {
-            items.Add(StockItem.Create(product, command.OnHand, now));
-            return Result.Success();
-        }
+        // Ensure, then load, then set: the row exists before it is read, so a
+        // first write and a stock-take are one code path, and two first writes
+        // meet on the rowversion (409, retried) rather than on the key (500).
+        await items.EnsureAsync(product, now, ct);
+        StockItem item = await items.GetAsync(product, ct)
+            ?? throw new InvalidOperationException($"StockItems has no row for {product} after EnsureAsync.");
 
         try
         {
@@ -806,6 +830,23 @@ public sealed class StockEndpointsTests(ServiceFixture fixture) : IAsyncLifetime
             $"/v1/inventory/stock/{product}", new { onHand = 3 }, TestContext.Current.CancellationToken);
 
         put.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
+    }
+
+    [Fact]
+    public async Task Two_first_writes_for_one_product_leave_one_row_and_no_500()
+    {
+        using HttpClient client = Admin();
+        var product = Guid.CreateVersion7();
+
+        HttpResponseMessage[] responses = await Task.WhenAll(
+            client.PutAsJsonAsync($"/v1/inventory/stock/{product}", new { onHand = 5 }, TestContext.Current.CancellationToken),
+            client.PutAsJsonAsync($"/v1/inventory/stock/{product}", new { onHand = 7 }, TestContext.Current.CancellationToken));
+
+        responses.ShouldAllBe(r => r.StatusCode is HttpStatusCode.NoContent or HttpStatusCode.Conflict,
+            "the loser meets the rowversion, never the primary key");
+        responses.Count(r => r.StatusCode == HttpStatusCode.NoContent).ShouldBeGreaterThanOrEqualTo(1);
+        (await fixture.ScalarAsync<int>("SELECT Value = COUNT(*) FROM inventory.StockItems WHERE ProductId = {0}", product))
+            .ShouldBe(1);
     }
 
     [Fact]
@@ -996,6 +1037,13 @@ git commit -m "ci: build and filter Inventory's two images"
 - Modify: `deploy/compose/keycloak/realm-export.json` (the `demo` user's
   `commerce-api` roles gain `"inventory:admin"`; the role's description is
   rewritten)
+- Modify: `tests/Common.Web.Tests/RealmImportTests.cs` — the assertion
+  `Permissions("demo").ShouldBe(["catalog:write", "orders:write",
+  "orders:cancel"], ignoreOrder: true)` gains `"inventory:admin"`, and the
+  comment above it, which explains `orders:admin`'s absence, gains one
+  sentence saying `inventory:admin` is held because stock exists only
+  through the API it guards. Write this change first and see the suite fail
+  on the realm before editing the realm.
 
 - [ ] **Step 1: Edit the gateway unit**
 
@@ -1032,7 +1080,8 @@ Expected: 204 through the gateway. Tear down with `docker compose down -v`.
 - [ ] **Step 4: Commit**
 
 ```bash
-git add deploy/compose/services/gateway.yml deploy/compose/keycloak/realm-export.json
+dotnet test tests/Common.Web.Tests --filter RealmImportTests
+git add deploy/compose/services/gateway.yml deploy/compose/keycloak/realm-export.json tests/Common.Web.Tests/RealmImportTests.cs
 git commit -m "feat(dev): the gateway waits for inventory-api, and demo may administer stock"
 ```
 
@@ -1106,7 +1155,7 @@ Expected: all exit 0.
 
 - [ ] **Step 3: Write the PR body's class row**
 
-`| Class | A+D |` and the touch set from the Global Constraints, then `/ship`.
+`| Class | A+B+D |` and the touch set from the Global Constraints, then `/ship`.
 
 ## Self-review
 
@@ -1117,7 +1166,7 @@ Expected: all exit 0.
   Task 8; the CI half of section 2 → Task 6.
 - Not in this PR by design: `Reservation`, the command queue, the three
   reservation endpoints (PR-2); consumers (PR-3); Helm (PR-4).
-- Types: `ProductId`, `StockItem.Create/SetOnHand`,
-  `StockLevelChangedDomainEvent`, `IStockItemRepository`, `SetOnHandCommand`,
+- Types: `ProductId`, `StockItem.SetOnHand`, `StockLevelChangedDomainEvent`,
+  `IStockItemRepository.EnsureAsync/GetAsync`, `SetOnHandCommand`,
   `GetStockQuery`, `StockDto`, `InventoryPermissions.Admin` are named
   identically across Tasks 2–5.

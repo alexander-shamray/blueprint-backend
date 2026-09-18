@@ -515,6 +515,8 @@ git commit -m "feat(inventory): fulfil on despatch, release on cancellation"
 
 **Files:**
 - Modify: `Inventory.Infrastructure/Messaging/DependencyInjection.cs`
+- Modify: `tests/Inventory.TestSupport/ServiceFixture.cs` (the harness-only
+  broker widening, below)
 - Test: `tests/Inventory.Api.Tests/MessagingRegistrationTests.cs` (extend)
 - Test: `tests/Inventory.Api.Tests/InventoryEventEndpointTests.cs`
 
@@ -690,6 +692,27 @@ cfg.ReceiveEndpoint(
 Match `RetryPolicy.Standard`'s signature to Ordering's usage on its event
 endpoints (`e.UseMessageRetry(r => RetryPolicy.Standard(r))` if it takes the
 configurator).
+
+**The broker grant PR-2 widened already covers this queue and these
+reads.** `inventory-` admits `inventory-events` for configure, write and
+read, and `Common\.Contracts` on the read pattern admits every context's
+contract exchange, which is what binding `OrderCancelled` and
+`ShipmentDispatched` needs. Confirm rather than assume:
+
+```bash
+py -3.12 deploy/compose/rabbitmq/check_permissions.py
+```
+
+**The test fixture is a different matter.** The tests below publish
+`OrderCancelled` and `ShipmentDispatched` through the harness as
+`inventory-svc`, and `write` on another context's exchange is exactly what the
+production grant refuses. Ordering's `ServiceFixture` solves this with
+`WidenWriteForTheHarnessAsync`, a `rabbitmqctl set_permissions` against the test
+container alone after it starts; `Inventory.TestSupport/ServiceFixture.cs` gains
+the same method with `inventory-svc` and a scope of
+`^(inventory-|Common\.Contracts|Inventory\.Infrastructure\.Messaging:|MassTransit:)`,
+called from `InitializeAsync` before the factory is built. The production file
+in `deploy/compose/rabbitmq/` does not move.
 
 - [ ] **Step 3: Run the API suite; commit**
 

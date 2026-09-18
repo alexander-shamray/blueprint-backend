@@ -21,7 +21,7 @@ sections 12 and 13.
 
 - The blueprint wins over the spec; the spec wins over this plan.
 - **Class D.** Touch set: `deploy/helm/**`, `deploy/canary/canary.json`,
-  `.github/workflows/deploy.yml`.
+  `.github/workflows/deploy.yml`, `.github/workflows/helm.yml`.
 - Depends on PR-1 having merged (the images exist in CI's matrix).
 - Every list touched has a check that reads it: `smoke.sh` for the chart
   lists, `canary.py`'s check 4 for the workload map, `deploy.yml`'s own
@@ -93,8 +93,10 @@ git commit -m "feat(deploy): Inventory's chart"
 ### Task 2: The lists
 
 **Files:**
-- Modify: `deploy/helm/smoke.sh` (`SERVICE_CHARTS`, `MIGRATOR_CHARTS`, and
-  the two per-subchart `image.tag` override lists)
+- Modify: `deploy/helm/smoke.sh` (`SERVICE_CHARTS`, `MIGRATOR_CHARTS`,
+  `SOURCE_INPUTS`, and the two per-subchart `image.tag` override lists)
+- Modify: `.github/workflows/helm.yml` (both `paths:` lists gain
+  `src/Services/Inventory/**`)
 - Modify: `deploy/helm/platform/Chart.yaml` (dependency after `ordering`)
 - Modify: `deploy/helm/README.md` (the tree fence and "four dependencies")
 - Modify: `deploy/canary/canary.json` (`"inventory-api": { "serviceName": "Inventory.Api", "chart": "inventory" }`)
@@ -129,6 +131,14 @@ beside the four it has:
 Every chart refuses to render without a tag, and the umbrella passes one
 per subchart by name, so a subchart added to `Chart.yaml` and not to these
 two lists fails the umbrella's own validation on the first run.
+
+`SOURCE_INPUTS` gains `src/Services/Inventory` after `src/Services/Ordering`,
+because `smoke.sh` reads each service's source through `src_of` and asserts
+that the workflow's path filter covers every input it reads; so
+`.github/workflows/helm.yml` gains `'src/Services/Inventory/**'` in both
+its `pull_request` and `push` `paths:` lists, after Ordering's line. Left
+out, an Inventory source change would skip the Helm gate that inspects it,
+and `smoke.sh`'s own check is what refuses that.
 
 `platform/Chart.yaml`: add
 
@@ -166,7 +176,7 @@ match the solution's entry assemblies and the chart directories.
 - [ ] **Step 4: Commit**
 
 ```bash
-git add deploy/helm/smoke.sh deploy/helm/platform/Chart.yaml deploy/helm/README.md deploy/canary/canary.json .github/workflows/deploy.yml
+git add deploy/helm/smoke.sh deploy/helm/platform/Chart.yaml deploy/helm/README.md deploy/canary/canary.json .github/workflows/deploy.yml .github/workflows/helm.yml
 git commit -m "feat(deploy): Inventory joins the umbrella, the smoke lists, the canary map and the deploy choice"
 ```
 

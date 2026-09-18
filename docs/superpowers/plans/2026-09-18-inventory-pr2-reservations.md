@@ -9,10 +9,11 @@ admin endpoints the order-review runbook already promises.
 
 **Architecture:** `Reservation` is the one aggregate root any message-driven
 command modifies; `StockItems` moves underneath it by §7.3's statement through
-`IStockLedger`, a port of its own on the unit of work's transaction, per line
-in `ProductId` order under a T-SQL savepoint, so a failed reserve commits a
-`Failed` row and an outbox row and no stock change. Every release path publishes `StockReleased`; a release for an
-unknown order writes the tombstone row that refuses the reserve that follows.
+`IStockLedger`, a port of its own on the unit of work's transaction, per line in
+`ProductId` order under a T-SQL savepoint, so a failed reserve commits a
+`Failed` row and an outbox row and no stock change. Every release path publishes
+`StockReleased`; a release for an unknown order writes the tombstone row that
+refuses the reserve that follows.
 
 **Tech Stack:** EF Core with a rowversion on `Reservations`, Dapper through the
 raw SQL port, MassTransit `CommandConsumer<,>` on a receive endpoint shaped
@@ -25,9 +26,12 @@ three reservation endpoints), 7, 8 and 10 (the §3.2 sentence).
 ## Global Constraints
 
 - The blueprint wins over the spec; the spec wins over this plan.
-- **Class A+B.** Touch set: `src/Services/Inventory/**`, `tests/Inventory.*`,
-  and `docs/backend-architecture/03-bounded-contexts.md` (one sentence, the
-  B half).
+- **Class A+B+D.** Touch set: `src/Services/Inventory/**`,
+  `tests/Inventory.*`, `docs/backend-architecture/03-bounded-contexts.md`
+  (one sentence, the B half), and `deploy/compose/rabbitmq/definitions.json`
+  (the D half: the scaffold copied Catalog's publisher-only broker grant, and
+  a service with a receive endpoint widens its own entry, as the scaffold's
+  README says).
 - `ErrorType` stays at its three members. §10.5 reserves 409 for concurrency
   and idempotency exceptions, so every domain refusal here is `Error.Rule`
   and answers 422: `reservation.not_reinstatable` for every state with
@@ -1168,6 +1172,9 @@ git commit -m "feat(inventory): ReserveStock and ReleaseStock under ADR-024's gu
 **Files:**
 - Create: `src/Services/Inventory/Inventory.Infrastructure/Messaging/CommandMappers.cs`
 - Modify: `src/Services/Inventory/Inventory.Infrastructure/Messaging/DependencyInjection.cs`
+- Modify: `deploy/compose/rabbitmq/definitions.json` — `inventory-svc`'s
+  three patterns, which the scaffold copied from `catalog-svc` and which
+  admit no queue
 - Test: `tests/Inventory.Api.Tests/MessagingRegistrationTests.cs` (extend)
 - Test: `tests/Inventory.Api.Tests/InventoryCommandEndpointTests.cs`
 
@@ -1373,8 +1380,36 @@ cfg.ReceiveEndpoint(
 ```
 
 The mappers are found by the Infrastructure `AddPluggableFrom` scan, as
-Ordering's are; confirm `ICommandMessageMapper<,>` is in
-`PluggableInterfaces` before relying on it.
+Ordering's are: `ICommandMessageMapper<,>` is one of `PluggableInterfaces`'
+five entries.
+
+**The broker has to let `inventory-svc` declare and read the queue.** The
+scaffold renamed `catalog-svc`'s patterns, which cover the service's own
+contract exchanges and MassTransit's and nothing else — a publisher's grant.
+A receive endpoint declares a queue and binds it, so the entry becomes
+`ordering-svc`'s shape with the names changed, in
+`deploy/compose/rabbitmq/definitions.json`:
+
+```json
+"configure": "^(inventory-|Common\\.Contracts|Inventory\\.Infrastructure\\.Messaging:|MassTransit:)",
+"write": "^(inventory-|Common\\.Contracts(\\.Inventory\\.V1:|:)|Inventory\\.Infrastructure\\.Messaging:|MassTransit:)",
+"read": "^(inventory-|Common\\.Contracts|Inventory\\.Infrastructure\\.Messaging:|MassTransit:)"
+```
+
+`write` admits Inventory's own contract exchanges and the bare
+`Common.Contracts:` fault exchange and no other context's, which is the
+rule `deploy/compose/rabbitmq/check_permissions.py` enforces; run it and its
+suite after the edit:
+
+```bash
+py -3.12 deploy/compose/rabbitmq/check_permissions.py
+py -3.12 -m unittest discover -s deploy/compose/rabbitmq
+```
+
+The test fixture sends `ReserveStock` to `queue:inventory-commands` as
+`inventory-svc`, which the `inventory-` prefix admits, so this PR needs no
+harness-only widening; PR-3, whose tests publish another context's events,
+does.
 
 - [ ] **Step 4: Run the API suite**
 
@@ -1384,8 +1419,8 @@ Expected: green.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/Services/Inventory/Inventory.Infrastructure tests/Inventory.Api.Tests
-git commit -m "feat(inventory): the inventory-commands endpoint"
+git add src/Services/Inventory/Inventory.Infrastructure tests/Inventory.Api.Tests deploy/compose/rabbitmq/definitions.json
+git commit -m "feat(inventory): the inventory-commands endpoint, and the broker grant it needs"
 ```
 
 ---
@@ -1794,7 +1829,7 @@ git commit -m "docs: state what consuming ShipmentDispatched does to a reservati
 - [ ] `dotnet build Platform.slnx` — 0 warnings.
 - [ ] `dotnet test Platform.slnx` — green.
 - [ ] `/validate-blueprint` is not owed (no rule moved; one derivation stated).
-- [ ] PR body: `| Class | A+B |`, touch set from Global Constraints. Body
+- [ ] PR body: `| Class | A+B+D |`, touch set from Global Constraints. Body
   files the reservation-purge issue.
 
 ## Self-review
