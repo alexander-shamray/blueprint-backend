@@ -83,11 +83,9 @@ one service will meet at.
 The model — the source-of-trust order, the rule, the change classes with
 their touch sets, the partitions and the mutex surfaces — is
 [`docs/change-locality.md`](change-locality.md), and this plan does not
-repeat it. A second copy here would be the first restatement written under
-a rule against them, and the first draft of this section was exactly that:
-its Class E row and its mutex list had both drifted from the contract's
-before the pull request introducing them was reviewed. What this section
-keeps is the reasoning the contract states without arguing.
+repeat it: a second copy here would be a restatement written under a rule
+against them. What this section keeps is the reasoning the contract states
+without arguing.
 
 **Why an owner per fact rather than a tour.** The old method kept a value
 consistent by copying it and visiting every copy; every copy was then a site
@@ -108,9 +106,10 @@ when both need the same one.
 **Why `.claude/**` is one agent.** `settings.json` self-locks and `ship.md`
 is one file.
 
-**Why two of the mutexes were temporary.** `CLAUDE.md` was a mutex until
-step 2 rewrote it and `appendix-a-adrs.md` until step 3 split it; the
-contract marked both while they stood, and lists neither now.
+**Why two mutexes are removed rather than listed.** A file every PR edits
+is a mutex for as long as it keeps that shape, so step 2 rewrites
+`CLAUDE.md` and step 3 splits `appendix-a-adrs.md` rather than naming either
+as a surface to queue on.
 
 ## 4. The work, in order
 
@@ -277,8 +276,7 @@ Per chapter, in this order by measured churn: §9, §12, §11, §15, §8, §13,
 - keeps every callout that states a rule or a decision.
 
 §9 first and alone, one agent, because it is the highest-churn chapter and
-its PR sets the pattern the rest copy — section 7's third answer, which
-this step used to contradict by starting every chapter at once. Then one
+its PR sets the pattern the rest copy — section 7's third answer. Then one
 agent per remaining chapter, in parallel. `/validate-blueprint` runs on
 each, scoped to that chapter's references, and `/check-links` after all of
 them.
@@ -303,28 +301,11 @@ Done when no deployable unit's Compose environment shares a file with
 another's, and no single file under `.github/secret-scan/` holds suppressions
 for two trees.
 
-**The criterion is about environments, and the shared files named below are not
-gaps in it.** Two earlier drafts of this line each asked a wider question and
-each was false of what shipped: "no file declares two services' environments"
-fails on `infrastructure.yml` and on §14.1's migrator-and-API pair, and "no file
-edited by two services' PRs" fails on the index and the `infra-only` override,
-which gain a line per service by design. What the split buys is narrower than
-either and worth stating exactly — the couple of hundred lines saying how a
-service runs are in a file that service's PR owns, and what every service PR
-still shares is one line apiece.
-
-**Both landed on 2026-09-10**, and the second half's check answered yes with a
-qualification worth keeping. The allow-list splits per tree — one `.txt` under
-`.github/secret-scan/allowed/`, each declaring the prefix it may suppress — but
-it does **not** split per service, because a suppression's value is that it
-travels away from the credential it accepts and a file per service would be the
-inline pragma the gate refuses, one directory further out. So a scaffolded
-service still meets another scaffolded service in `allowed/deploy.txt` and
-`allowed/tests.txt`, where it no longer meets one in its Compose environment.
-The Compose files that stay shared do so for reasons of their own: the index
-gains one `include:` line per service, the `infra-only` override merges over a
-resolved model and cannot be divided the way the model is, and
-`infrastructure.yml` is shared by construction.
+The criterion is about environments, not files: which Compose and
+allow-list files stay shared is the contract's
+[§4](change-locality.md#repo-wide-mutex-surfaces), and why the allow-list
+splits per tree rather than per service is
+[`.github/secret-scan/allowed/README.md`](../.github/secret-scan/allowed/README.md)'s.
 
 ## 5. Where this differs from `agent-locality.md`
 
@@ -352,8 +333,7 @@ partitions, the mutex list, and "never write a count". Three departures:
 
 ## 7. Questions for review
 
-**All three recommendations below were accepted on 2026-09-03**, and
-`docs/change-locality.md` is written on them.
+`docs/change-locality.md` is written on the three recommendations below.
 
 1. Class A forbids all Markdown. Should a runbook edit be Class A when the
    fix is in the alert that runbook covers, or stay Class D as written?
