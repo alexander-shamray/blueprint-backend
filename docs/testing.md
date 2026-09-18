@@ -150,20 +150,8 @@ py -3.12 .github/pipeline-gate/pipeline_gate.py stages \
 
 **The logger and the directories are not decoration.** The gate counts from
 TRX and looks for those three directory names, so a bare `dotnet test` runs
-the stages and leaves it nothing to read. The structural half of what it
-asserts has no number in it: every test project in `Platform.slnx` ran in
-some stage, no stage was empty, and no test ran in two — which is what turns
-"exhaustive and disjoint by construction" from a claim into a check, and on
-the integration stage an overlap is a container set paid for twice. The
-other half is a floor per stage, sitting well under any plausible total on
-purpose, because a floor is a number in a file and what it gropes for is an
-order-of-magnitude miss.
-
-> **A filter is a new way for a suite to not run, and that is
-> [§12.1](backend-architecture/12-test-strategy.md)'s oldest trap wearing
-> different clothes.** A missing test adapter makes `dotnet test` report no
-> tests and exit **zero**; a mistyped `--filter` does exactly the same. The
-> stage gate is what makes that visible.
+the stages and leaves it nothing to read. What it asserts over them is
+[its README](../.github/pipeline-gate/README.md)'s.
 
 **The output gate needs a build in front of it**, and its step does not say
 so because the build is the line above it in the same job. Run on its own it
@@ -176,24 +164,11 @@ dotnet build Platform.slnx
 py -3.12 .github/output-gate/output_gate.py
 ```
 
-Both lines are in the list rather than assumed, because the gate asks a
-separate question of each. The restore writes `project.assets.json` and the
-generated `.nuget.g.props`, which are what would otherwise put an `obj/` beside
-a `.csproj` with nothing compiled at all; the build writes everything else. So
-the gate looks for each project under `artifacts/obj/` *and* under
-`artifacts/bin/`: a restore alone creates every `obj` entry and no `bin` entry,
-so asking only the first would report a fully built solution to anyone who
-restored and stopped. `--no-restore` on the build is fine once a restore has
-happened; what is not fine is reading the result as a verdict on a tree nobody
-built, and the gate refuses that case by name rather than passing it.
-
-**What it does not cover is the rest of §4.1's sentence**, and that is
-deliberate. The gate refuses a `bin/` or `obj/` under either root, which holds
-on any working tree; "nothing a build wrote" is wider, and checking it needs a
-before to compare against. CI has one — the checkout — so a step beside the
-gate asks `git status --porcelain --ignored -- src tests` instead. There is no
-local equivalent, because run here it would report whatever you are in the
-middle of writing.
+Both lines, because the gate looks for every project under `artifacts/obj/`
+and `artifacts/bin/`, and a restore alone writes only the first.
+`--no-restore` on the build is fine once a restore has happened. What the
+gate asserts, and the half of §4.1's rule it leaves to a CI step, is
+[its README](../.github/output-gate/README.md)'s.
 
 **The closure gate and the locality gate need a pull request**, so their live
 runs take a number and a `gh` session that CI has and a checkout does not:
@@ -243,11 +218,10 @@ HELM=/path/to/helm bash deploy/helm/smoke.sh
 
 ## Coverage
 
-**Reported, not gated** — [§12.9](backend-architecture/12-test-strategy.md)
-calls coverage a diagnostic rather than a target, and a diagnostic wired to a
-build failure stops being read and starts being satisfied. The quality gate
-is the stage check above, whose subject is whether a suite ran at all. What
-ships here is the number, measured over the layer where it means something.
+**Reported, not gated** —
+[the reporter's README](../.github/coverage/README.md) says why, and what it
+reads. What this section carries is the invocation and what the figure is
+measured over.
 
 ```bash
 dotnet test Platform.slnx --filter "FullyQualifiedName!~ArchitectureTests&Category!=Integration" \
@@ -259,17 +233,9 @@ dotnet test Platform.slnx --filter "Category=Integration" \
 py -3.12 .github/coverage/domain_coverage.py ./TestResults/unit ./TestResults/integration
 ```
 
-**Both stages, because the figure is the union and not either half.** §12.9
-asks for the domain assemblies "over the whole run", and the domain is
-exercised on both sides of the category — some lines are reached only by a
-test that needs a container. The reporter merges rather than reading one
-file, and it has to: with `--logger trx`, which the stage gate counts from,
-each stage leaves the run's merged attachment **and** one partial per test
-project, so hits are merged with `max` over a key that reproduces the
-collector's own `lines-valid`, and reading the same attachment twice cannot
-inflate the figure. A run without the logger leaves a single
-`*.cobertura.xml` instead; the union is correct under either layout, which is
-why it is what ships. **Do not reason from the single-file layout.**
+**Both stages, because the figure is the union and not either half** — §12.9
+asks for the domain assemblies "over the whole run", and some lines are
+reached only by a test that needs a container.
 
 **`--results-directory` is not decoration either.** Without it the collector
 writes under each *test project's* own `TestResults/`, and the reporter,

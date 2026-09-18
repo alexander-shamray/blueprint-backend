@@ -1,0 +1,61 @@
+# The licence gate
+
+**The claim: no package reaches a restore without a licence somebody
+cleared.** [§4.4](../../docs/backend-architecture/04-solution-structure.md)
+states the rule; this file owns what the gate reads to enforce it, what it
+refuses, and where its claim stops.
+
+## What it reads
+
+- `Directory.Packages.props` — what CI will actually restore.
+- [Appendix B](../../docs/backend-architecture/appendix-b-licences.md) — the
+  register of what is cleared, matched on the backticked package identities
+  its rows carry, never on the product a package is named after.
+- `allowed-licences.txt` beside this file — the licences the register may
+  name.
+- Every `.csproj`, `.props` and `.targets` in the repository, because central
+  pinning is a convention rather than a constraint: a `PackageReference`
+  naming its own `Version`, a `VersionOverride`, a `GlobalPackageReference`
+  or `ManagePackageVersionsCentrally` set to anything but `true` each restore
+  a package no register row was asked about, and an imported `.props` does
+  it for every project at once.
+- The fenced `Directory.Packages.props` sample in §4.4, which it compares
+  with the real file. The failure it reports is against the chapter, because
+  the file is what CI restores and the chapter is what a reader believes.
+
+Everything it reads is text, so nothing needs restoring first, and that is
+what lets [§15.1](../../docs/backend-architecture/15-cicd-deployment.md) put
+it ahead of the build.
+
+## What it refuses
+
+- a pin the register does not name;
+- a registered identity pinned nowhere — a dropped pin, or a row that
+  outlived its dependency. §4.4's carve-outs are encoded as exceptions to this
+  one: the Aspire rows are deliberately unpinned, and an either/or row
+  expects only its chosen half;
+- a project that pins for itself rather than through the props file;
+- a registered licence any part of which is outside `allowed-licences.txt`.
+  **Every** part of a multi-part cell has to be inside it: the gate reads a
+  `/` and cannot tell a disjunction from a conjunction;
+- a licence spelling its map does not know. That is a separate finding from
+  the one above because it has a separate repair — a misspelt cell is fixed
+  in the register, a spelling nobody has taught the gate in
+  `licence_gate.py` — and teaching it is not clearing it, since a newly
+  nameable licence still needs an allow-list line. The vocabulary is closed
+  on purpose, so a real identifier the map has never been shown is refused
+  too;
+- no MSBuild project file found at all, because a scan that matched nothing
+  reports exactly what a repository with no fault reports.
+
+## What it does not claim
+
+Every question it asks is about **identity and licence**. It never asks
+whether a version is current or safe — the only thing it asks about a
+`Version` is where one is written — so currency and vulnerability scanning
+are a separate obligation, and nothing here meets it.
+
+## How it runs
+
+The `licence-gate` job in [`ci.yml`](../workflows/ci.yml) tests it and then
+runs it, after the secret scan and before the build.

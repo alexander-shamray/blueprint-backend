@@ -172,23 +172,9 @@ tree a gate reads are the same tree, and that a directory left out of a skip
 list is a gate reading too much rather than a gate reading a build.
 
 **That `src/` and `tests/` hold nothing a build wrote is checked rather than
-asserted**, behind the solution build in CI, and it takes two checks because
-the sentence has two halves. `.github/output-gate/` refuses a `bin/` or `obj/`
-anywhere under either root — the residue the redirect is about, and a claim
-true of any working tree, so the gate runs anywhere. That the trees are
-*otherwise* untouched needs a before to compare against, so it is a workflow
-step rather than part of the gate: the checkout supplies the before, and
-anything git can then see under `src/` or `tests/` is something the restore or
-the build put there.
-
-It needs checking at all because `Directory.Build.props` does not fully cause
-it: what the outcome rests on, and why it is held by a gate rather than by a
-second MSBuild property, is argued in that file's own Output comment. The gate
-asserts the positive half too, because the negative one is weaker than it
-looks: a tree with no `obj/` under `src/` is also what a checkout nobody has
-touched looks like, so every project must be found under `artifacts/obj/` and
-`artifacts/bin/` as well, the first written by a restore and the second only by
-a compile.
+asserted**, by [`.github/output-gate/`](../../.github/output-gate/README.md),
+whose README owns what it reads and which half of this sentence it leaves to
+a CI step.
 
 `.slnx` is the XML solution format, supported by the SDK from .NET 9 and by
 Visual Studio 2022 17.13 onward. The `global.json` pin below already puts every
@@ -1523,16 +1509,10 @@ the version numbers here came from, and the list is the same set [Appendix B](ap
 registers. The two files answer different questions about the same dependencies:
 Appendix B says whether a licence is acceptable, this file says which version CI
 will actually resolve. A package in one and not the other is how a licence
-boundary gets crossed by a restore, so PR-01 ships that check:
-`.github/licence-gate/` reads this file and [Appendix B](appendix-b-licences.md)
-as text, matches on the backticked package identities the register carries, and
-fails on a pin nobody cleared. It reads every `.csproj`, `.props` and
-`.targets` besides, because central pinning is a convention this file cannot
-enforce on its own: a project naming a `Version` of its own, overriding one, or
-opting out of central management restores a package neither of these two
-documents ever mentions — and an imported `.props` does all three for every
-project at once, which is why the scan reaches past the projects rather than
-stopping at them.
+boundary gets crossed by a restore, so
+[`.github/licence-gate/`](../../.github/licence-gate/README.md) fails the build
+on a package nobody cleared, and its README owns what it reads to find one and
+what it refuses.
 
 Appendix B is the wider list, though, and three kinds of row in it will never
 have a pin here. A check that does not know them reports false positives until
@@ -1557,10 +1537,9 @@ somebody stops reading its output:
   ignored.
 
 The versions are those current at the review date in the header. A blueprint
-cannot keep them accurate, and neither does the gate below — the only thing it
-ever asks about a `Version` is *where one is written*, never whether the number
-is current. Currency and vulnerability scanning are a
-separate obligation, and the tooling for them is not yet in this repository.
+cannot keep them accurate, and the licence gate does not try. Currency and
+vulnerability scanning are a separate obligation, and the tooling for them is
+not yet in this repository.
 
 > **Trap — pinning floors instead of versions.** Writing `Version="8.*"`, or
 > treating the file as a set of minimums to be "reviewed quarterly", means a
@@ -1569,38 +1548,13 @@ separate obligation, and the tooling for them is not yet in this repository.
 > example (Appendix B) — the obligation is acquired by a restore rather than by a
 > decision. Pin exact versions and upgrade deliberately.
 
-What the gate does enforce is narrower, and the line matters. It fails the build
-on a pin [Appendix B](appendix-b-licences.md) does not register, on a registered
-identity that is pinned nowhere, on a project that pins for itself rather than
-through this file, and on a registered licence any part of which is outside
-`.github/licence-gate/allowed-licences.txt` — or any part of which is not a
-spelling its map knows, which is a separate finding because it has a separate
-repair. **Not "not an SPDX identifier"**, which is what this sentence and the
-gate's own message used to say: the vocabulary is closed on purpose, so a real
-identifier the map has never been shown is refused too, and a message blaming
-SPDX sends the reader to fix a register row that is already correct. Every one of them is a question about **identity and licence**; none is
-a question about whether a version is current or safe.
-
 Licence drift is only caught reliably by tooling — a convention will not survive
-the twentieth dependency. The gate runs ahead of the build rather than after it
-([§15.1](15-cicd-deployment.md)), and what buys that is not central pinning but
-the fact that **everything it reads is text**: this file, Appendix B, and every
-`.csproj`, `.props` and `.targets` besides. Nothing needs restoring before the
-list can be read.
+the twentieth dependency.
 
-**This sentence used to say the gate could run early because "every dependency
-the repository has is declared in one place"**, which is the claim the
-paragraph above exists to refuse — a project may name a `Version` of its own,
-override one, or opt out of central management, and each restores a package
-this file never mentions (#50). The scan is early because it is a text scan;
-it would still be early if central pinning were abandoned tomorrow.
-
-> **Trap — the sample above is a copy.** The gate reads
-> `Directory.Packages.props`; the fenced block in this section is a second
-> transcription of it, and nothing about a passing build proves the two agree.
-> The gate closes that itself by comparing them — but the failure it reports is
-> against this chapter, not the props file, because the file is what CI
-> restores and the chapter is what a reader believes.
+> **Trap — the sample above is a copy.** The fenced block in this section is a
+> second transcription of `Directory.Packages.props`, and nothing about a
+> passing build proves the two agree. The licence gate compares them, and
+> reports a disagreement against this chapter.
 
 ## 4.5 Adding a service
 

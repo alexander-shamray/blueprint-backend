@@ -140,51 +140,16 @@ coverage.runsettings         the report filtered to `.*\.Domain\.dll$` (§12.9)
                              read it was never told about, so a test over
                              the reads is what keeps that list complete, not
                              a more careful list
-.github/workflows/closure-gate.yml  one of the two standalone PR-metadata
-                             gates, and neither declares a path filter —
-                             locality-gate.yml below is the other. That is the
-                             design rather than an omission: what each judges
-                             is a property of every pull request, so a filter
-                             could only make it skippable. This one reads
-                             nothing out of the checkout, so there is no
-                             SOURCE_INPUTS list to drift; the other reads its
-                             own gate and map from the base commit and
-                             nothing else. The same two are the only workflows
-                             taking `edited`, because what this one judges can
-                             be broken by an edit to a PR body with no push
-                             behind it, and half of what the other judges is
-                             the body. **Proposal and enforcement are two
-                             executions**: the suite runs the branch's gate,
-                             and the gate that JUDGES is read out of the base
-                             commit with `git show`, so a pull request cannot
-                             supply its own judge. A base carrying no gate
-                             fails rather than falling back — the fallback is
-                             the silent pass the split exists to refuse.
-                             **The workflow file itself is still the branch's
-                             copy**, because `pull_request` runs the head
-                             definition; only `pull_request_target` reads the
-                             base one, at a price this repo refuses. Closing
-                             that needs a required status check, and `main` is
-                             not protected today
-.github/workflows/locality-gate.yml  the other workflow with no path filter
-                             and with `edited` in its trigger list, on the
-                             closure gate's argument: what it judges is a
-                             property of every pull request, and half of it —
-                             the `| Class |` and `| Touch set |` rows — is the
-                             body, which is edited without a push. Its own
-                             rather than a job in ci.yml because `edited`
-                             there would rebuild the solution on every typo
-                             fix in a description. Proposal and enforcement
-                             are two executions here too, gate AND map read
-                             out of the base commit, with one bootstrap
-                             branch the closure gate does not have: a base
-                             with no gate directory at all is judged by the
-                             head copy under a warning, because the PR that
-                             lands the gate has no base copy by definition,
-                             and after that merge the branch is reachable
-                             only from a stale base. The residual is the same
-                             one: this file is the branch's own copy, and
-                             `main` is not protected
+.github/workflows/closure-gate.yml  the closure gate's run, and one of the two
+                             workflows with no path filter and with `edited`
+                             in its triggers — what each judges is a property
+                             of every pull request, and a filter could only
+                             make it skippable. Its README owns why the judge
+                             is read from the base commit
+.github/workflows/locality-gate.yml  the other, and its own workflow rather
+                             than a job in ci.yml because `edited` there would
+                             rebuild the solution on every typo fix in a
+                             description
 .github/workflows/broker-permissions.yml  ADR-036's broker ACL, reaching
                              outside its own tree: src/Services/**,
                              Common.Contracts and Catalog.TestSupport,
@@ -217,91 +182,15 @@ coverage.runsettings         the report filtered to `.*\.Domain\.dll$` (§12.9)
                              and filing a tracker issue when red. The realm a
                              rollout is about to land on is still judged from
                              deploy.yml; this is the moment between rollouts
-.github/licence-gate/        the gate, its allow-list and its tests
-.github/secret-scan/         §15.1's other half — named rules, an allow-list
-                             of fingerprints, and its tests. It has a second
-                             caller: §4.5's scaffold imports `secret_scan.py`,
-                             runs it over what it rendered, and appends the
-                             accepted-finding lines that render needs — so
-                             this gate is a library as well as a job, and its
-                             matching has exactly one implementation
-.github/closure-gate/        what a pull request SAYS it closes, against what
-                             merging it WILL close. Three statements — the
-                             `| Closes |` row, GitHub's own
-                             `closingIssuesReferences`, and the keywords in the
-                             commit bodies — and **two comparisons, not
-                             three**. The missing pairing is deliberate: an
-                             issue the description closes and no commit
-                             mentions is the ordinary case, so requiring the
-                             commit to repeat it would make a commit keyword
-                             mandatory, which no rule here states. A test pins
-                             that absence, because the symmetry argument is
-                             what produces the fourth comparison. Half of what
-                             is compared is GitHub's parse and half is a
-                             regex, so a too-narrow regex is the fail-open
-                             direction and the suite is mostly that parser. A
-                             commit list at or above `gh`'s page size is
-                             REFUSED rather than judged — a prefix of one page
-                             and a complete list of one page read alike from
-                             in there. `closingIssuesReferences` needs no such
-                             guard: `gh` preloads that collection to
-                             exhaustion and does not preload commits, which is
-                             why exactly one of the two is exposed
-.github/locality-gate/       where a pull request's diff lands, against the
-                             class and touch set its body declares — the
-                             contract's section 3, enforced. classes.yml is
-                             the ONE place the class → tree-set map lives;
-                             the contract's table states each class in words
-                             and cites the file. The gate judges every changed
-                             path twice, against the class's set and against
-                             the declared row, because the map cannot say
-                             "one service" and the row can: a Catalog change
-                             that also edits Ordering is inside Class A and
-                             outside its own row, and only the second check
-                             sees it. A body without exactly one of each row
-                             is refused, not passed. The map is read by a
-                             parser that accepts one shape and refuses the
-                             rest, on pipeline_gate.py's stdlib-only
-                             argument, and the glob dialect is
-                             pr-locality.sh's so a row reads the same in the
-                             harness and in CI. The suite is negative cases
-                             with their positive controls, plus reads of the
-                             shipped map, so the gate has been observed
-                             looking at the file CI hands it
-.github/pipeline-gate/       the pipeline's quality gates, and all three are
-                             inventories: every deployable under src/ is
-                             matched by a path filter, every Dockerfile is
-                             built by some matrix entry, and every test stage
-                             ran, ran enough, and ran ONCE. Tested, and every
-                             test is a negative case — a gate only ever
-                             observed green is one nobody has established is
-                             looking at anything
-.github/coverage/            the domain-coverage reporter. A report and not a
-                             gate, on §12.9's own argument that a diagnostic
-                             wired to a build failure stops being read. It
-                             has a suite all the same, because it MERGES
-                             across stages, and arithmetic that is quietly
-                             wrong is worse than no figure
-.github/output-gate/         §4.1's "src/ and tests/ hold source, and nothing
-                             a build wrote", checked behind the solution build
-                             in CI — not behind `scaffold-build`'s, which
-                             compiles a rendered service and takes no gate.
-                             The only one here whose subject is an SDK default
-                             rather than a file in this repository, and
-                             `Directory.Build.props`' Output comment is where
-                             that default and the alternative to gating it are
-                             argued. It asserts the output IS in `artifacts/`
-                             as well as absent from the source trees — obj for
-                             the restore, bin for the compile, because a
-                             restore alone writes every obj entry — since "no
-                             obj/ under src/" is also what a checkout nobody
-                             touched looks like. It covers `bin/` and `obj/`
-                             and says so: §4.1's wider "nothing a build wrote"
-                             needs a before to compare against, so the CI step
-                             beside this one asks git instead, which is sound
-                             there and nowhere else. Its suite runs in the
-                             fast job and the gate behind the build, the split
-                             the gate cannot avoid
+.github/<gate>/              one directory per gate — licence-gate,
+                             secret-scan, closure-gate, locality-gate,
+                             pipeline-gate, coverage, output-gate — holding the
+                             gate, its suite and a README. The README is the
+                             ONE owner of what the gate reads and what it
+                             claims; this entry, docs/testing.md and the
+                             chapter whose rule a gate enforces cite it.
+                             secret-scan is also a library, imported by the
+                             scaffold, and coverage reports rather than gates
 deploy/canary/               §15.5's rollout — the ladder as JSON, the weight
                              arithmetic and the promote/rollback verdict as
                              tested stdlib Python, and one file that reads
@@ -489,25 +378,14 @@ reason.
 ## Files outside the blueprint tree, and why
 
 - **The licence gate** lives under `.github/` rather than a `build/` directory
-  because it is CI-only and §4.1 draws no such tree. Stdlib Python, reads
-  `Directory.Packages.props`, every `.csproj`, `.props` and `.targets`, and
-  Appendix B, all as text, needs no restore — which is why §15.1 can put it
-  ahead of the build. **Adding a package means adding its backticked identity
-  to Appendix B in the same change**, or the gate fails the build before
-  anything compiles. It reads the project files because central pinning is a
-  convention rather than a constraint: a `PackageReference` naming its own
-  `Version`, a `VersionOverride`, a `GlobalPackageReference` or
-  `ManagePackageVersionsCentrally` set to `false` each restore a package no
-  register row was asked about.
+  because it is CI-only and §4.1 draws no such tree. **Adding a package means
+  adding its backticked identity to Appendix B in the same change**, or the
+  gate fails the build before anything compiles; its README says what else it
+  reads and refuses.
 - **The secret scan** sits beside it under `.github/` on the same argument and
   runs in the same job, first — §15.1 draws "SCA + secret scan" as one node.
-  Named rules, each with a positive case and a near miss; every exception is
-  a `path | rule | fingerprint | reason` line in the
-  `.github/secret-scan/allowed/` file covering its tree, never
-  a glob and never an inline pragma, and **an entry matching nothing fails
-  the build**. It reads the working tree and not the history, and it is a
-  pattern scanner: the list of rules is the list of things it can find. Both
-  limits are stated in `docs/secrets.md` rather than left to be discovered.
+  Its README owns what it can and cannot find, and `allowed/`'s owns what an
+  accepted finding may say.
 - **`docs/roadmap.md`** is a schedule, not a specification, and goes stale on a
   different clock. Nothing in it states a requirement. **Where it and Appendix C
   disagree, Appendix C wins**, always. Being outside the tree, no nav footer or
