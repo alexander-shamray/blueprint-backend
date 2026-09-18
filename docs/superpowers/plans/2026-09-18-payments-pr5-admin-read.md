@@ -23,7 +23,7 @@ section 10.
 ## Global Constraints
 
 - The blueprint wins over the spec; the spec wins over this plan.
-- **Class A+D.** Touch set: `src/Services/Payments/**`, `tests/Payments.*`,
+- **Class A+D+E.** Touch set: `src/Services/Payments/**`, `tests/Payments.*`,
   `Payments.Application.csproj` (the `Dapper` reference the first query
   brings back, no `Version=`), `src/Gateway/Gateway.Api/**`,
   `tests/Gateway.Api.Tests/**`, `deploy/compose/services/gateway.yml`,
@@ -31,6 +31,13 @@ section 10.
   `tests/Common.Web.Tests/RealmImportTests.cs`,
   `docs/backend-architecture/10-api-gateway.md` (§10.2's printed route file
   and its policy sentence), and `docs/runbooks/order-review.md` (step 1).
+- **Three classes, which the locality gate does not yet admit.** A service's
+  arrival spans its code (A), its projects (E) and its deployment or harness
+  tree (D); `docs/change-locality.md` names at most two and
+  `.github/locality-gate` refuses a third letter. This PR cannot merge until
+  the contract and the gate admit that case — a Class D change of its own,
+  owed before Payments' PR-1, and met first by Inventory's plans, which
+  declare the same shape.
 - Depends on PR-4 having merged, so the read has a refund to report, and on
   Inventory's PR-1, whose `inventory:admin` grant to `demo` this sits beside.
 - The response carries no `CustomerId`: an operator needs the money's state,
@@ -476,7 +483,7 @@ git commit -m "docs: §10.2 prints the payments-admin route, and the runbook's f
   place an order, cancel it, then
   `curl -H "Authorization: Bearer $TOKEN" http://localhost:5000/api/v1/payments/<orderId>`.
   Expected: 200 with a `refund`. Record the response in the PR body.
-- [ ] PR body: `| Class | A+D |`, touch set from the Global Constraints.
+- [ ] PR body: `| Class | A+D+E |`, touch set from the Global Constraints.
   Then `/ship`.
 
 ## Self-review

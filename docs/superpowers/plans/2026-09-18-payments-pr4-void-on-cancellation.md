@@ -24,11 +24,19 @@ sections 5 (`Refund`), 6 (the `OrderCancelled` table and the race), 7
 ## Global Constraints
 
 - The blueprint wins over the spec; the spec wins over this plan.
-- **Class A+B+D+E.** Touch set: `src/Services/Payments/**`, `tests/Payments.*`,
+- **Class A+D+E.** Touch set: `src/Services/Payments/**`, `tests/Payments.*`,
   `Payments.Infrastructure.csproj` (E: the package the copied `OutboxStats`
   needs, no `Version=`), `src/BuildingBlocks/Common.Web/ObservabilityExtensions.cs`
   and `tests/Common.Web.Tests/ObservabilityTests.cs` (B: one `AddMeter`
-  line), `deploy/observability/check.py` (D: the exemption deleted).
+  line, inside A's `src/BuildingBlocks/**`), `deploy/observability/check.py`
+  (D: the exemption deleted).
+- **Three classes, which the locality gate does not yet admit.** A service's
+  arrival spans its code (A), its projects (E) and its deployment or harness
+  tree (D); `docs/change-locality.md` names at most two and
+  `.github/locality-gate` refuses a third letter. This PR cannot merge until
+  the contract and the gate admit that case — a Class D change of its own,
+  owed before Payments' PR-1, and met first by Inventory's plans, which
+  declare the same shape.
 - Depends on PR-3 having merged.
 - `PaymentRefunded` is published only when the provider voided money. A
   cancellation of an order with no authorised intent publishes nothing
@@ -524,40 +532,48 @@ public async Task A_cancellation_of_a_declined_payment_publishes_nothing()
 }
 
 [Fact]
-public async Task An_authorisation_and_a_cancellation_arriving_together_never_leave_money_held()
+public async Task A_cancellation_arriving_mid_authorisation_waits_for_it_and_then_voids_it()
 {
     Guid order = Guid.CreateVersion7();
     await PublishAsync(Placed(order, 42.10m));
     Guid command = Guid.CreateVersion7();
     OrderCancelled cancelled = Cancelled(order);
+    using ProviderGate gate = fixture.PauseNextAuthorisation();
 
-    await Task.WhenAll(
-        SendAsync(new AuthorisePayment(order, 42.10m, "EUR"), drain: false, messageId: command),
-        PublishAsync(cancelled, drain: false));
+    await SendAsync(new AuthorisePayment(order, 42.10m, "EUR"), drain: false, messageId: command);
+    await gate.Reached.WaitAsync(DeliveryBudget, TestContext.Current.CancellationToken);
+    await PublishAsync(cancelled, drain: false);
+    await Task.Delay(TimeSpan.FromSeconds(2), TestContext.Current.CancellationToken);
 
+    (await fixture.InboxAsync(cancelled.MessageId)).ShouldBeEmpty(
+        "the cancellation's stamp waits on the record lock the paused authorisation holds");
+
+    gate.Release();
     await Eventually(
         async () => (await fixture.InboxAsync(command)).Count + (await fixture.InboxAsync(cancelled.MessageId)).Count,
         expected: 2,
-        because: "both deliveries are consumed, the second after the first's lock is released");
+        because: "both deliveries are consumed, the cancellation after the authorisation commits");
 
-    string status = (await StatusAsync(order))!;
-    string? reason = await fixture.ScalarAsync<string?>(
-        "SELECT Value = DeclineReason FROM payments.PaymentIntents WHERE OrderId = {0}", order);
-    int refunds = await RefundCount(order);
-
-    (status, reason, refunds, AuthoriseCalls(), VoidCalls()).ShouldBeOneOf(
-        ("Declined", "order_cancelled", 0, 0, 0),
-        ("Authorised", null, 1, 1, 1));
+    (await StatusAsync(order)).ShouldBe("Authorised");
+    (await RefundCount(order)).ShouldBe(1, "the cancellation saw the committed authorisation and voided it");
+    AuthoriseCalls().ShouldBe(1);
+    VoidCalls().ShouldBe(1);
 }
 ```
 
-Both outcomes are what the lock allows: the cancellation won and the
-authorisation declined without calling the provider, or the authorisation won
-and the cancellation voided it. What the assertion refuses is the third — an
-authorisation with no refund — which is the charge on a cancelled order ADR-047
-exists to prevent, and what an unlocked read would produce. Run the race test
-twenty times locally (`--filter ... ` in a loop) before committing; one failure
-in twenty is a real race, not flakiness.
+The gate makes the interleaving the test's rather than the scheduler's: the
+authorisation is held after the provider answered and before its unit
+commits, which is the window an unlocked read would let the cancellation
+through — it would find no intent, void nothing, and leave money held on a
+cancelled order. The other order, the cancellation committing first, is
+PR-3's `order_cancelled` test.
+
+`ServiceFixture.PauseNextAuthorisation()` joins PR-3's fault switch on the
+same test-only `IPaymentProvider` decorator: armed, the next `AuthoriseAsync`
+awaits the inner call, completes `ProviderGate.Reached`, then waits on the
+gate until `Release()` or disposal. `ProviderGate` exposes `Task Reached` and
+`void Release()`, and disposing it releases, so a failing test cannot leave
+a consumer parked.
 
 - [ ] **Step 2: Run; commit**
 
@@ -650,7 +666,7 @@ git commit -m "feat(payments): outbox gauges and the metrics initialiser, and th
   `http://localhost:5190/__admin/requests`: one authorisation, one void.
 - [ ] Neither `/validate-blueprint` nor `/check-links` is owed: no chapter
   moved.
-- [ ] PR body: `| Class | A+B+D+E |`, touch set from the Global Constraints.
+- [ ] PR body: `| Class | A+D+E |`, touch set from the Global Constraints.
   Then `/ship`.
 
 ## Self-review

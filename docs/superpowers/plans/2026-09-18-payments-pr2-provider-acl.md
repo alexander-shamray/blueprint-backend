@@ -25,7 +25,7 @@ sections 4, 9, 11 (the two provider keys) and 12 (the provider counter).
 ## Global Constraints
 
 - The blueprint wins over the spec; the spec wins over this plan.
-- **Class A+B+D+E.** Touch set: `src/Services/Payments/**`, `tests/Payments.*`,
+- **Class A+D+E.** Touch set: `src/Services/Payments/**`, `tests/Payments.*`,
   the two `*.csproj` package references (E: `Microsoft.Extensions.Http.Resilience`
   in `Payments.Infrastructure`, `WireMock.Net` in `Payments.Api.Tests`, no
   `Version=`), `src/BuildingBlocks/Common.Web/ObservabilityExtensions.cs` and
@@ -33,7 +33,16 @@ sections 4, 9, 11 (the two provider keys) and 12 (the provider counter).
   `deploy/compose/**` (D: the simulator), `.github/secret-scan/allowed/**`
   (D: the entry for the simulator key the Compose unit sets, which the scan
   flags — this plan's own text drew the same finding), and
-  `docs/backend-architecture/15-cicd-deployment.md` (B: §15.4's two rows).
+  `docs/backend-architecture/15-cicd-deployment.md` (§15.4's two rows,
+  inside D's `docs/**`); `Common.Web` and its test sit in A's
+  `src/BuildingBlocks/**` and `tests/**`.
+- **Three classes, which the locality gate does not yet admit.** A service's
+  arrival spans its code (A), its projects (E) and its deployment or harness
+  tree (D); `docs/change-locality.md` names at most two and
+  `.github/locality-gate` refuses a third letter. This PR cannot merge until
+  the contract and the gate admit that case — a Class D change of its own,
+  owed before Payments' PR-1, and met first by Inventory's plans, which
+  declare the same shape.
 - Depends on PR-1 having merged.
 - No `Directory.Packages.props` change and no Appendix B row: both packages
   are pinned and listed already.
@@ -464,6 +473,16 @@ public sealed class HttpPaymentProviderTests : IDisposable
     }
 
     [Fact]
+    public void Every_attempt_and_every_bounded_delay_fit_inside_the_total()
+    {
+        TimeSpan worst = ProviderHop.AttemptTimeout * (ProviderHop.MaxRetryAttempts + 1)
+                         + ProviderHop.MaxRetryDelay * ProviderHop.MaxRetryAttempts;
+
+        worst.ShouldBeLessThan(ProviderHop.TotalRequestTimeout,
+            "the Web.Bff's PricingHop argument: a total that cancels the last retry makes the retry count a fiction");
+    }
+
+    [Fact]
     public async Task A_409_is_a_mismatch_and_is_not_retried()
     {
         // Stubbed here, not in the mappings: a stateless simulator cannot know a
@@ -521,6 +540,8 @@ public sealed class HttpPaymentProviderTests : IDisposable
     [InlineData(402, "{\"status\":\"declined\"}")]
     [InlineData(402, "{\"status\":\"approved\",\"code\":\"card_declined\"}")]
     [InlineData(201, "not json")]
+    [InlineData(201, "{\"status\":\"approved\",\"reference\":\"   \"}")]
+    [InlineData(402, "{\"status\":\"declined\",\"code\":\" \"}")]
     public async Task A_body_that_contradicts_its_status_is_unavailable_never_a_verdict(int status, string body)
     {
         _server.Given(Request.Create().WithPath("/v1/authorisations").UsingPost())
@@ -605,6 +626,12 @@ internal static class ProviderHop
     public const int MaxRetryAttempts = 2;
 
     public static readonly TimeSpan RetryDelay = TimeSpan.FromMilliseconds(500);
+
+    /// <summary>
+    /// The cap on one jittered delay. With jitter on, <see cref="RetryDelay"/> is
+    /// a nominal and not a bound; this is what makes the budget arithmetic.
+    /// </summary>
+    public static readonly TimeSpan MaxRetryDelay = TimeSpan.FromSeconds(1);
 
     public static readonly TimeSpan TotalRequestTimeout = TimeSpan.FromSeconds(20);
 }
@@ -747,15 +774,20 @@ internal sealed class HttpPaymentProvider(HttpClient http) : IPaymentProvider
         // no PaymentAuthorised committed for it.
         if (response.StatusCode == HttpStatusCode.PaymentRequired)
         {
-            return answer is { Status: "declined", Code: { Length: > 0 and <= ProviderLimits.MaxReasonLength } code }
+            return answer is { Status: "declined", Code: { } code } && Recordable(code, ProviderLimits.MaxReasonLength)
                 ? new AuthorisationResult.Declined(code)
                 : throw new PaymentProviderUnavailableException("The provider declined with a body that is not a decline.");
         }
 
-        return answer is { Status: "approved", Reference: { Length: > 0 and <= ProviderLimits.MaxReferenceLength } reference }
+        return answer is { Status: "approved", Reference: { } reference } && Recordable(reference, ProviderLimits.MaxReferenceLength)
             ? new AuthorisationResult.Authorised(reference)
             : throw new PaymentProviderUnavailableException("The provider approved with a body that is not an approval.");
     }
+
+    // What PaymentIntent's factories accept: blank is refused there, after the
+    // money has moved, so it is refused here before a verdict exists.
+    private static bool Recordable(string value, int maxLength) =>
+        !string.IsNullOrWhiteSpace(value) && value.Length <= maxLength;
 
     public async Task VoidAsync(VoidRequest request, CancellationToken ct)
     {
@@ -873,6 +905,7 @@ public static class DependencyInjection
             options.Retry.BackoffType = DelayBackoffType.Exponential;
             options.Retry.UseJitter = true;
             options.Retry.Delay = ProviderHop.RetryDelay;
+            options.Retry.MaxDelay = ProviderHop.MaxRetryDelay;
 
             // The circuit breaker's sampling window must be at least twice the
             // attempt timeout, which the library validates at startup.
@@ -1022,7 +1055,7 @@ git commit -m "feat(payments): the simulator runs beside Payments, its meter is 
 - [ ] `dotnet test Platform.slnx` — green.
 - [ ] `py -3.12 -m unittest discover -s .github/secret-scan` then
   `py -3.12 .github/secret-scan/secret_scan.py` — both exit 0.
-- [ ] PR body: `| Class | A+B+D+E |`, touch set from the Global Constraints,
+- [ ] PR body: `| Class | A+D+E |`, touch set from the Global Constraints,
   and the two `curl` answers from Task 4 as evidence. Then `/ship`.
 
 ## Self-review

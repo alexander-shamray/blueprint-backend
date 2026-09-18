@@ -26,7 +26,10 @@ table), 7 (`PaymentIntents`), 8 (`payments-commands` and the ladder) and 14.
 ## Global Constraints
 
 - The blueprint wins over the spec; the spec wins over this plan.
-- **Class A+B+E.** Touch set: `src/Services/Payments/**`, `tests/Payments.*`,
+- **Class C+E.** C because the PR adds ADR-047 (`docs/change-locality.md`
+  §3). Touch set: `src/Services/Payments/**`, `tests/Payments.*`,
+  `src/BuildingBlocks/Common.Contracts/Payments/V1/PaymentEvents.cs` (the
+  `Reason` remark ADR-047 makes false),
   `tests/Platform.IntegrationTests/**` and its `*.csproj` (E: two project
   references), `docs/backend-architecture/03-bounded-contexts.md` (one
   sentence), `docs/backend-architecture/adr/ADR-047-*.md` and
@@ -85,7 +88,6 @@ public sealed class PaymentIntent : AggregateRoot<OrderId>
 
     public static PaymentIntent Authorise(OrderId id, decimal amount, string currency, string reference, DateTimeOffset now);
     public static PaymentIntent Decline(OrderId id, decimal amount, string currency, string reason, DateTimeOffset now);
-    public void AnswerAgain(DateTimeOffset now);
 }
 
 // Events
@@ -141,27 +143,6 @@ public class PaymentIntentTests
             .ShouldBe(new PaymentDeclinedDomainEvent(order, "card_declined", Now));
     }
 
-    [Theory]
-    [InlineData(PaymentIntentStatus.Authorised)]
-    [InlineData(PaymentIntentStatus.Declined)]
-    public void AnswerAgain_repeats_the_verdict_this_intent_holds(PaymentIntentStatus status)
-    {
-        OrderId order = OrderId.New();
-        PaymentIntent intent = status == PaymentIntentStatus.Authorised
-            ? PaymentIntent.Authorise(order, 1m, "EUR", "psp_1", Now)
-            : PaymentIntent.Decline(order, 1m, "EUR", "card_declined", Now);
-        intent.ClearDomainEvents();
-
-        intent.AnswerAgain(Now.AddMinutes(1));
-
-        IDomainEvent again = intent.DomainEvents.ShouldHaveSingleItem();
-        if (status == PaymentIntentStatus.Authorised)
-            again.ShouldBe(new PaymentAuthorisedDomainEvent(order, "psp_1", 1m, "EUR", Now.AddMinutes(1)));
-        else
-            again.ShouldBe(new PaymentDeclinedDomainEvent(order, "card_declined", Now.AddMinutes(1)));
-        intent.Status.ShouldBe(status, "a repeated answer changes nothing it answers about");
-    }
-
     [Fact]
     public void An_authorisation_needs_a_reference_and_a_decline_a_reason()
     {
@@ -170,9 +151,6 @@ public class PaymentIntentTests
     }
 }
 ```
-
-`ClearDomainEvents` is `AggregateRoot<TId>`'s public member, the one the
-collector calls after staging.
 
 - [ ] **Step 2: Run to see them fail**
 
@@ -219,7 +197,7 @@ public sealed class PaymentIntent : AggregateRoot<OrderId>
             throw new DomainException("An authorisation needs the provider's reference.");
 
         PaymentIntent intent = new(id, PaymentIntentStatus.Authorised, amount, currency, now) { Reference = reference };
-        intent.AnswerAgain(now);
+        intent.Raise(new PaymentAuthorisedDomainEvent(id, reference, amount, currency, now));
         return intent;
     }
 
@@ -229,21 +207,8 @@ public sealed class PaymentIntent : AggregateRoot<OrderId>
             throw new DomainException("A decline needs a reason.");
 
         PaymentIntent intent = new(id, PaymentIntentStatus.Declined, amount, currency, now) { DeclineReason = reason };
-        intent.AnswerAgain(now);
+        intent.Raise(new PaymentDeclinedDomainEvent(id, reason, now));
         return intent;
-    }
-
-    /// <summary>
-    /// A command that arrives again under a fresh message id is a sender's retry
-    /// after a lost acknowledgement, and is answered rather than ignored: the
-    /// saga's only alternative to an answer is its timeout (spec, section 6).
-    /// </summary>
-    public void AnswerAgain(DateTimeOffset now)
-    {
-        if (Status == PaymentIntentStatus.Authorised)
-            Raise(new PaymentAuthorisedDomainEvent(Id, Reference!, Amount, Currency, now));
-        else
-            Raise(new PaymentDeclinedDomainEvent(Id, DeclineReason!, now));
     }
 }
 ```
@@ -635,7 +600,7 @@ public class AuthorisePaymentHandlerTests
     }
 
     [Fact]
-    public async Task An_existing_intent_answers_again_even_after_a_cancellation()
+    public async Task An_existing_intent_is_acknowledged_without_a_second_verdict_even_after_a_cancellation()
     {
         OrderId order = OrderId.New();
         _orders.Record = Placed(order, cancelledAt: Now);
@@ -643,11 +608,12 @@ public class AuthorisePaymentHandlerTests
         existing.ClearDomainEvents();
         _intents.Seed(existing);
 
-        await Handler().HandleAsync(new AuthorisePaymentCommand(order.Value, 42.10m, "EUR"), default);
+        Result result = await Handler().HandleAsync(new AuthorisePaymentCommand(order.Value, 42.10m, "EUR"), default);
 
+        result.IsSuccess.ShouldBeTrue();
         _provider.Requests.ShouldBeEmpty();
         _intents.Added.ShouldBeEmpty();
-        existing.DomainEvents.ShouldHaveSingleItem().ShouldBeOfType<PaymentAuthorisedDomainEvent>();
+        existing.DomainEvents.ShouldBeEmpty("the first verdict is already staged, and a second is not idempotent downstream");
     }
 
     [Fact]
@@ -728,7 +694,9 @@ public sealed class AuthorisePaymentHandler(
             if (command.Amount != existing.Amount || !string.Equals(command.Currency, existing.Currency, StringComparison.Ordinal))
                 throw new PaymentMismatchException(Mismatch(order, command, existing.Amount, existing.Currency, "the recorded payment"));
 
-            existing.AnswerAgain(clock.GetUtcNow());
+            // Acknowledged, not answered again: the verdict was staged with the
+            // intent and reaches the saga regardless, and a second
+            // PaymentAuthorised is not idempotent there (spec, section 6).
             return Result.Success();
         }
 
@@ -975,7 +943,7 @@ public async Task A_mismatch_charges_nothing_and_is_not_retried()
 }
 
 [Fact]
-public async Task A_resend_under_a_fresh_id_answers_again_without_a_second_charge()
+public async Task A_resend_under_a_fresh_id_is_acknowledged_without_a_second_charge_or_verdict()
 {
     Guid order = Guid.CreateVersion7();
     await PublishAsync(Placed(order, 42.10m));
@@ -983,7 +951,7 @@ public async Task A_resend_under_a_fresh_id_answers_again_without_a_second_charg
 
     await SendAsync(new AuthorisePayment(order, 42.10m, "EUR"));
 
-    (await StagedAsync("PaymentAuthorised")).ShouldBe(2, "answered, not ignored");
+    (await StagedAsync("PaymentAuthorised")).ShouldBe(1, "the first verdict is the only one");
     ProviderCalls().ShouldBe(1, "one charge");
 }
 
@@ -1012,7 +980,8 @@ container through the same `ExecAsync` the harness widening uses, and returns
 the named queue's count, or zero when the queue does not exist yet — MassTransit
 declares `_error` on the first fault. The test polls it, because a fault's
 arrival there is the terminal outcome the spec names, and no other assertion
-distinguishes it from a message still queued or retrying. `MessagingRegistration.CommandsQueue` is the constant on
+distinguishes it from a message still queued or retrying.
+`MessagingRegistration.CommandsQueue` is the constant on
 `Payments.Infrastructure.Messaging.DependencyInjection`; alias the class as
 Inventory's plans do if its name collides with the root one.
 
@@ -1211,6 +1180,14 @@ restore; a test that cannot fail proves nothing.
   and its Appendix A row
 - Modify: `docs/backend-architecture/03-bounded-contexts.md` — one sentence
   after the callout that ends "rather than paging long before it."
+- Modify: `src/BuildingBlocks/Common.Contracts/Payments/V1/PaymentEvents.cs` —
+  `PaymentDeclined`'s remark says `Reason` is the provider's, which ADR-047
+  makes false for one value. It becomes: "<see cref="Reason"/> is the
+  provider's code, or Payments' own <c>order_cancelled</c> when a
+  cancellation it recorded refused the authorisation (ADR-047), and
+  deliberately not a closed vocabulary: a PSP's release could break one
+  pinned here. It is for a human, never branched on and never a metric
+  dimension (§9.8)." No member moves, so no consumer does
 
 - [ ] **Step 1: Write the ADR**
 
@@ -1269,7 +1246,7 @@ git commit -m "docs: ADR-047, a cancellation Payments has recorded declines the 
 - [ ] `dotnet build Platform.slnx` — 0 warnings.
 - [ ] `dotnet test Platform.slnx` — green.
 - [ ] `py -3.12 deploy/compose/rabbitmq/check_permissions.py` — exit 0.
-- [ ] PR body: `| Class | A+B+E |`, touch set from the Global Constraints.
+- [ ] PR body: `| Class | C+E |`, touch set from the Global Constraints.
   Then `/ship`.
 
 ## Self-review
@@ -1282,7 +1259,7 @@ git commit -m "docs: ADR-047, a cancellation Payments has recorded declines the 
 - The race between authorise and cancel is PR-4's to assert end to end, since
   its only safe outcome is an authorisation with a refund; this PR's lock is
   what that test proves.
-- Types: `PaymentIntent.Authorise/Decline/AnswerAgain`, `PaymentIntentStatus`,
+- Types: `PaymentIntent.Authorise/Decline`, `PaymentIntentStatus`,
   `DeclineReasons.OrderCancelled`, the two domain events,
   `IPaymentIntentRepository`, `AuthorisePaymentCommand`,
   `PaymentOrderNotYetKnownException`, `RedeliveryLadder`, `CommandsQueue` and

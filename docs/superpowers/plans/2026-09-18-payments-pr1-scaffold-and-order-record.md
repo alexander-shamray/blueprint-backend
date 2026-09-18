@@ -29,12 +29,19 @@ only), 7 (`PaymentOrders`), 8 (`payments-events` and the broker grant), 11 and
 ## Global Constraints
 
 - The blueprint wins over the spec; the spec wins over this plan.
-- **Class A+B+D+E.** Touch set: `src/Services/Payments/**`, `tests/Payments.*`,
+- **Class A+D+E.** Touch set: `src/Services/Payments/**`, `tests/Payments.*`,
   `Platform.slnx` and the rendered `*.csproj` files (E), `deploy/compose/**`,
   `.github/secret-scan/allowed/**`, `.github/workflows/ci.yml`,
   `deploy/observability/check.py`, and
-  `docs/backend-architecture/02-architecture-at-a-glance.md` (the B half: §2's
-  one sentence).
+  `docs/backend-architecture/02-architecture-at-a-glance.md` (§2's one
+  sentence, inside D's `docs/**`).
+- **Three classes, which the locality gate does not yet admit.** A service's
+  arrival spans its code (A), its projects (E) and its deployment or harness
+  tree (D); `docs/change-locality.md` names at most two and
+  `.github/locality-gate` refuses a third letter. This PR cannot merge until
+  the contract and the gate admit that case — a Class D change of its own,
+  owed before Payments' PR-1, and met first by Inventory's plans, which
+  declare the same shape.
 - Depends on Inventory's PR-1 having merged, so port 5103 is taken and the
   scaffold's own refusal proves 5104 free; nothing else of Inventory's.
 - No new package: no `Directory.Packages.props` change, no Appendix B row.
@@ -1231,14 +1238,17 @@ variable and no Redis dependency for it. Place an order as `demo` per
 `deploy/compose/README.md`, then:
 
 ```bash
-docker compose -f deploy/compose/docker-compose.yml exec sqlserver \
-    /opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P "$SA_PASSWORD" \
-    -Q "SELECT OrderId, PlacedAt FROM Payments.payments.PaymentOrders"
+docker compose -f deploy/compose/docker-compose.yml exec sql sh -c \
+    '/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P "$MSSQL_SA_PASSWORD" -Q "SELECT OrderId, PlacedAt FROM Payments.payments.PaymentOrders"'
 ```
 
-Expected: the order's row, with `PlacedAt` set. Use the SQL container's
-service name and password variable from `deploy/compose/services/` if they
-differ from these. Tear down with `docker compose down -v`.
+`sql` is the service `deploy/compose/infrastructure.yml` declares and
+`MSSQL_SA_PASSWORD` the variable it sets inside that container; the single
+quotes keep the host shell from expanding it. Expected: the order's row, with
+`PlacedAt` set. Tear down with
+`docker compose -f deploy/compose/docker-compose.yml down -v` — from the
+repository root Compose has no default file, so the `-f` is what makes the
+teardown reach the stack the `up` started.
 
 - [ ] **Step 2: Build and test everything**
 
@@ -1253,7 +1263,7 @@ Expected: 0 warnings; every suite green; both exit 0.
 
 - [ ] **Step 3: The PR body**
 
-`| Class | A+B+D+E |` and the touch set from the Global Constraints, the
+`| Class | A+D+E |` and the touch set from the Global Constraints, the
 dogfood evidence (the three rendered suites' counts before Task 2), then
 `/ship`.
 

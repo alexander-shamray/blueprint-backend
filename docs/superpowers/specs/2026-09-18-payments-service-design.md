@@ -107,12 +107,21 @@ operator surface crosses the gateway and the realm. Each row names its
 
 | PR | Subject | Class |
 |---|---|---|
-| 1 | `feat(payments): fourth service from the scaffold` — the scaffold run with `AddRedisConnections` stripped and §2's sentence amended; `PaymentOrders` and the `payments-events` queue consuming `OrderPlaced` and `OrderCancelled` into it, with the broker grant a receive endpoint needs; the Compose pair on port 5104; `ci.yml`'s filter and image matrix; the observability gate's outbox exemption | A+B+D+E — E because the scaffold adds projects to the solution |
-| 2 | `feat(payments): the PSP anti-corruption layer and its simulator` — `IPaymentProvider`, the typed `HttpClient` adapter and its resilience handler, the translation, the provider counter and its `AddMeter` line, `deploy/compose/psp-simulator/` and its Compose service, §15.4's two rows. Nothing calls it yet | A+B+D+E — E for the test project's `WireMock.Net` reference |
-| 3 | `feat(payments): authorise` — `PaymentIntent`, `payments-commands` with its delayed redelivery, the mismatch fault, `PaymentAuthorised` and `PaymentDeclined`, ADR-047 and §3.2's sentence, and the ladder's cross-service assertion | A+B+E — E for `Platform.IntegrationTests`' two references |
-| 4 | `feat(payments): void on cancellation` — `Refund`, the void on the `OrderCancelled` consumer, `PaymentRefunded`, Payments' outbox gauges, metrics initialiser and `AddMeter` line, and the deletion of PR-1's exemption | A+B+D+E |
-| 5 | `feat(payments): operators read a payment` — the admin `GET`, `payments:admin` in the service, the gateway's `payments-admin` route and cluster, the realm's permission granted to `demo`, §10.2's route and `order-review.md`'s step 1 | A+D |
-| 6 | `feat(deploy): Payments' chart, deploy target and canary` — `deploy/helm/payments` with `redis.enabled: false`, the library chart's `paymentProvider` capability, the umbrella dependency, `smoke.sh`'s lists, `deploy.yml`'s option, the canary map, and §15.3's sentence naming the charts with no Redis | B+D |
+| 1 | `feat(payments): fourth service from the scaffold` — the scaffold run with `AddRedisConnections` stripped and §2's sentence amended; `PaymentOrders` and the `payments-events` queue consuming `OrderPlaced` and `OrderCancelled` into it, with the broker grant a receive endpoint needs; the Compose pair on port 5104; `ci.yml`'s filter and image matrix; the observability gate's outbox exemption | A+D+E — E because the scaffold adds projects to the solution |
+| 2 | `feat(payments): the PSP anti-corruption layer and its simulator` — `IPaymentProvider`, the typed `HttpClient` adapter and its resilience handler, the translation, the provider counter and its `AddMeter` line, `deploy/compose/psp-simulator/` and its Compose service, §15.4's two rows. Nothing calls it yet | A+D+E — E for the test project's `WireMock.Net` reference |
+| 3 | `feat(payments): authorise` — `PaymentIntent`, `payments-commands` with its delayed redelivery, the mismatch fault, `PaymentAuthorised` and `PaymentDeclined`, ADR-047, §3.2's sentence and the `PaymentDeclined.Reason` remark, and the ladder's cross-service assertion | C+E — C for the ADR, E for `Platform.IntegrationTests`' two references |
+| 4 | `feat(payments): void on cancellation` — `Refund`, the void on the `OrderCancelled` consumer, `PaymentRefunded`, Payments' outbox gauges, metrics initialiser and `AddMeter` line, and the deletion of PR-1's exemption | A+D+E |
+| 5 | `feat(payments): operators read a payment` — the admin `GET`, `payments:admin` in the service, the gateway's `payments-admin` route and cluster, the realm's permission granted to `demo`, §10.2's route and `order-review.md`'s step 1 | A+D+E — E for the first query's `Dapper` reference |
+| 6 | `feat(deploy): Payments' chart, deploy target and canary` — `deploy/helm/payments` with `redis.enabled: false`, the library chart's `paymentProvider` capability, the umbrella dependency, `smoke.sh`'s lists, `deploy.yml`'s option, the canary map, and §15.3's sentence naming the charts with no Redis | D |
+
+**Four of the six need three classes, and the gate admits two.** A service's
+arrival spans its code, its projects and its deployment or harness tree, and
+`docs/change-locality.md` names at most two classes; `.github/locality-gate`
+refuses a third letter. The scaffold's own render already crosses all three,
+so this is not a sequencing choice that a different split would avoid.
+Payments' PR-1 cannot merge until the contract and the gate admit a service's
+arrival, which is a Class D change of its own and is owed first; Inventory's
+plans declare the same shape and meet it before Payments does.
 
 **Why the cancellation is recorded in PR-1 and voided in PR-4.** Both
 consumers write the same record, and PR-3's guard reads `CancelledAt`. Were
@@ -198,14 +207,21 @@ them; the adapter alone converts to minor units.
 | no record, or a record with neither `PlacedAt` nor `CancelledAt` | throws `PaymentOrderNotYetKnownException`; the endpoint's delayed redelivery (section 8) takes it | nothing yet |
 | `CancelledAt` set | no provider call; a `Declined` intent with reason `order_cancelled` (ADR-047) | `PaymentDeclined` |
 | amount or currency differs from the record | throws `PaymentMismatchException`, excluded from retry; error queue | nothing |
-| an intent already exists | nothing | its verdict again |
+| an intent for the same money | nothing — its verdict is already staged | nothing |
+| an intent, and the command's money differs from it | throws `PaymentMismatchException` | nothing |
 | otherwise | authorise at the provider under `authorise:{OrderId}`, the payer being the record's `CustomerId`; the intent in the provider's verdict | `PaymentAuthorised` or `PaymentDeclined` |
 
-An existing intent's verdict is repeated because an `AuthorisePayment` under a
-fresh message id is a sender's retry after a lost acknowledgement, and the
-saga's only alternative to an answer is its timeout. The inbox already drops a
-redelivery of the same id. A transient provider fault throws out of the
-consumer and is retried by §9.8's policy; the key is what makes that safe.
+An existing intent is acknowledged and not answered again. Its verdict was
+staged in the outbox in the transaction that created it, so it reaches the saga
+whatever happens to this delivery, and a second `PaymentAuthorised` under a
+fresh message id is not idempotent downstream: §9.6's saga escalates one
+arriving in `Compensating` and has no transition for one after it confirmed. The
+inbox drops a redelivery of the same id, and the saga sends `AuthorisePayment`
+once per instance through its own outbox, so a resend under a fresh id is not a
+path the sender takes. This is where Payments departs from ADR-024:
+`StockReleased` reports a postcondition the saga waits on, and the payment
+verdict is an act already on its way. A transient provider fault throws out of
+the consumer and is retried by §9.8's policy; the key is what makes that safe.
 
 **`OrderCancelled`**, by the intent's state:
 
@@ -443,10 +459,13 @@ container tests are `Category=Integration` and never skipped.
   cancellation recorded before the authorisation answers `PaymentDeclined`
   `order_cancelled`, and a void publishes only when money moved.
 - **ADR-047** and its Appendix A row, in PR-3.
+- **`PaymentDeclined.Reason`'s remark** in `Common.Contracts.Payments.V1`,
+  which says the reason is the provider's, gains ADR-047's one reason of
+  Payments' own, in PR-3. No schema moves.
 - **§15.4** gains the two provider rows, in PR-2.
 - **§10.2** gains the `payments-admin` route, in PR-5.
 - **`order-review.md`** step 1 cites the read, in PR-5.
-- **ADR-024 and ADR-028 do not move**, and no contract does.
+- **ADR-024 and ADR-028 do not move**, and no contract's shape does.
 - **Appendix C gains no row.** §4.1's tree already names Payments with the
   same five projects.
 

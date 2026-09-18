@@ -26,9 +26,10 @@ sections 11 and 12.
 ## Global Constraints
 
 - The blueprint wins over the spec; the spec wins over this plan.
-- **Class B+D.** Touch set: `deploy/helm/**`, `deploy/canary/**`,
+- **Class D.** Touch set: `deploy/helm/**`, `deploy/canary/**`,
   `.github/workflows/deploy.yml`, `.github/workflows/helm.yml`, and
-  `docs/backend-architecture/15-cicd-deployment.md` (B: §15.3's one sentence).
+  `docs/backend-architecture/15-cicd-deployment.md` (§15.3's one sentence,
+  inside D's `docs/**`).
 - Depends on PR-5 having merged (the gateway dials `payments-api`), and on
   Inventory's deploy PR, so every list below already names Inventory and
   Payments goes after it.
@@ -130,6 +131,9 @@ a missing map as empty where the dotted form fails the render.
 
 **Files:**
 - Create: `deploy/helm/payments/Chart.yaml`, `values.yaml`, `templates/*.yaml`
+- Create: `deploy/helm/payments/templates/capabilities.yaml` — the one guard
+  the library chart cannot make, because it does not know which chart's host
+  registers the provider unconditionally
 
 - [ ] **Step 1: Copy Ordering's chart and rename the workload**
 
@@ -191,6 +195,30 @@ paymentProvider:
 
 When done, `grep -n -i ordering deploy/helm/payments/values.yaml` prints
 nothing.
+
+`templates/capabilities.yaml` renders nothing and refuses one state:
+
+```yaml
+{{- /*
+Payments registers its provider unconditionally (AddPaymentProvider), so on
+this chart the capability is a fact about the code: switched off, with its
+settings cleared, the library chart's coherence guard has nothing to refuse
+and the pod does not start. So this chart refuses the switch itself.
+*/}}
+{{- if not (.Values.paymentProvider).enabled }}
+{{- fail "paymentProvider.enabled is false on the payments chart. Payments registers its provider unconditionally and does not start without both keys (§15.4)." }}
+{{- end }}
+```
+
+And `smoke.sh`'s capability section gains the fully-cleared override:
+
+```bash
+if helm template payments deploy/helm/payments --set-string image.tag="$TAG" \
+    --set paymentProvider.enabled=false --set paymentProvider.apiKeySecretRef=null \
+    --set-string paymentProvider.baseUrl= >/dev/null 2>&1; then
+    fail 'payments: rendered with the capability off and cleared; the host registers it unconditionally'
+fi
+```
 
 - [ ] **Step 2: Render it, then run the smoke script**
 
@@ -316,7 +344,7 @@ git commit -m "docs: §15.3 names Payments among the charts with no Redis"
   since PR-4.
 - [ ] `bash deploy/helm/smoke.sh` and the canary suite green;
   `helm.yml` and `deploy.yml` run on the PR and pass.
-- [ ] PR body: `| Class | B+D |`, touch set from the Global Constraints.
+- [ ] PR body: `| Class | D |`, touch set from the Global Constraints.
   Then `/ship`.
 
 ## Self-review
