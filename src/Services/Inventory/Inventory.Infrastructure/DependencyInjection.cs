@@ -1,3 +1,4 @@
+using Inventory.Application.Reservations;
 using Inventory.Domain.Reservations;
 using Inventory.Domain.Stock;
 using Inventory.Infrastructure.Messaging;
@@ -51,6 +52,7 @@ public static class DependencyInjection
         services.AddScoped<IUnitOfWork, EfUnitOfWork>();                     // §6.3
         services.AddScoped<IStockItemRepository, StockItemRepository>();     // §5.6
         services.AddScoped<IReservationRepository, ReservationRepository>(); // §5.6
+        services.AddScoped<IStockLedger, SqlStockLedger>();                  // §7.3
 
         // §8.5's durable half, beside the unit of work rather than in
         // AddRedisConnections with its Redis sibling: the two ports are backed
