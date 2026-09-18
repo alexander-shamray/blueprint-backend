@@ -409,6 +409,12 @@ public sealed class HttpPaymentProviderTests : IDisposable
         authorised.Reference.ShouldBe($"psp_authorise:{order.Value}");
         second.ShouldBe(first, "section 4: a unit retried after the provider answered receives the same answer");
         _server.LogEntries.ShouldAllBe(e => e.RequestMessage.Headers!["Idempotency-Key"].Single() == $"authorise:{order.Value}");
+
+        // The simulator ignores the credential, so only this line fails if the
+        // adapter stops sending it: compared with what the host configured, so
+        // the test prints no key of its own.
+        string configured = _factory.Services.GetRequiredService<IConfiguration>()[DependencyInjection.ApiKeyKey]!;
+        _server.LogEntries.ShouldAllBe(e => e.RequestMessage.Headers!["Authorization"].Single() == $"Bearer {configured}");
     }
 
     [Theory]
@@ -656,6 +662,8 @@ public sealed class HttpPaymentProviderTests : IDisposable
 
 The helper is `Authorisation(...)` rather than `Request(...)`: a method of
 that name would shadow WireMock's `Request.Create()` builder in the 409 test.
+`DependencyInjection` is `Payments.Infrastructure.Provider`'s, and
+`IConfiguration` needs `Microsoft.Extensions.Configuration`.
 The environment test needs `Microsoft.AspNetCore.Mvc.Testing` for
 `WebApplicationFactory<Program>` and `Microsoft.AspNetCore.Hosting` for
 `UseEnvironment`; the scaffolded test project already references the first.

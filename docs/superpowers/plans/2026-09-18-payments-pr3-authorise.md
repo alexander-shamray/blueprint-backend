@@ -226,7 +226,7 @@ one, so a green build is the proof the list was whole.
 ```bash
 dotnet test tests/Payments.Domain.Tests
 dotnet test tests/Payments.Application.Tests --filter ArchitectureTests
-git add src/Services/Payments/Payments.Domain tests/Payments.Domain.Tests tests/Payments.Application.Tests
+git add src/Services/Payments tests/Payments.*
 git commit -m "feat(payments): PaymentIntent, created in the provider's verdict"
 ```
 
@@ -477,9 +477,10 @@ git commit -m "feat(payments): map PaymentIntents and translate its two events"
   (three standard constructors).
 
 The order of the checks is the spec's table with one move, argued: **an
-existing intent answers first**. A command resent after a cancellation must
-repeat the verdict it already had, not try to create a second intent under
-the same key.
+existing intent is checked first**. A command resent after a cancellation is
+compared with that intent's money and then acknowledged without publishing —
+its verdict was staged with the intent — rather than trying to create a
+second intent under the same key.
 
 - [ ] **Step 1: Write the failing handler tests**
 
@@ -1274,7 +1275,7 @@ With the ADR's real file name. Wrap at 80 columns.
 Run `/check-links` and `/validate-blueprint`; fix any finding here.
 
 ```bash
-git add docs/backend-architecture
+git add docs/backend-architecture src/BuildingBlocks/Common.Contracts/Payments/V1/PaymentEvents.cs
 git commit -m "docs: ADR-047, a cancellation Payments has recorded declines the authorisation that follows"
 ```
 
