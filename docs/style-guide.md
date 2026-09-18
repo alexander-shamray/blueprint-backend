@@ -64,7 +64,7 @@ time.
   one. `**Decision.** / **Why.** / **Consequences.**` are the ADR body form,
   not callouts. Neither form is counted here: a count moves whenever a
   callout is added, and the contract's [§2](change-locality.md#2-the-rule)
-  keeps such counts out of every document.
+  admits one only as a dated measurement, never as a present-tense claim.
 - **Em dashes** (`—`) for asides, **en dashes** (`–`) for ranges. Both are
   literal Unicode, not `--`.
 - **Every chapter ends with a rule and a nav footer**, in this exact shape:
@@ -76,8 +76,8 @@ time.
   ```
 
   Separator is ` · ` (U+00B7). First chapter omits the `←` link, last appendix
-  omits the `→` link. One `---` only — a doubled rule before the footer is a
-  regression that has been fixed before.
+  omits the `→` link. One `---` only; a doubled rule before the footer is a
+  defect.
 - **Tables carry the summary data**; prose carries the argument. A two-column
   borderless table (`| | |`) is the established form for metadata blocks.
 
@@ -149,12 +149,11 @@ file and a reviewer are the only things that do.
 - **`using` directives outside the namespace**, no blank lines between
   consecutive usings (IDE0065, enforced). This binds source only — a sample is
   an excerpt rather than a compilable unit, so **do not "complete" one by
-  adding the block it would need to build.** The blueprint carries exactly two
-  `using` lines, both `using static` (§9.6's saga imports `Endpoints`, §12.4's
-  subject suite imports `Principals`), because an unqualified
-  `Authenticated(caller)` reads as a member of the type being shown unless
-  something says otherwise. A third is fine on those terms; a plain `using` is
-  not.
+  adding the block it would need to build.** A sample may carry a
+  `using static` — §9.6's saga imports `Endpoints`, §12.4's subject suite
+  imports `Principals` — because an unqualified `Authenticated(caller)` reads
+  as a member of the type being shown unless something says otherwise; a
+  plain `using` it may not.
 - **No unused `using` directives** — *review-carried*. A file that stops needing
   one drops it in the change that stopped needing it: a stale using is a claim
   that the file depends on something it does not, and the reader who trusts it
@@ -621,12 +620,10 @@ guessing, so the hole is filled with a direction and not with a second copy.**
 `dockerfile`, `xml`, `promql`, and bare ``` for trees and console output.
 Always tag a fence that contains a real language.
 
-  `promql` was missing from that list for as long as the list existed, and
-  §13's alert expressions have been fenced with it throughout — the inventory
-  was written from the languages somebody remembered rather than from the
-  corpus. The predicate is one command, so run it rather than trusting the
-  sentence: grep the blueprint for lines opening a fence with a language tag,
-  then `sort | uniq -c`. It returns exactly these nine.
+  The inventory is read from the corpus rather than from memory, and the
+  predicate is one command, so run it rather than trusting the sentence: grep
+  the blueprint for lines opening a fence with a language tag, then
+  `sort | uniq -c`.
 
   **That command is described rather than quoted, and the reason is a rule
   this file states elsewhere.** A fence marker cannot sit inside a
@@ -690,20 +687,12 @@ UPDATE SET
 
 The `=` signs line up in a column here, and that alignment is deliberate. It
 does **not** rest on parity with the C# initialisers, which keep no such
-column — the rule above forbids it, IDE0055 enforces it, and the corpus has
-none. SQL keeps the
+column — the rule above forbids it and IDE0055 enforces it. SQL keeps the
 column on its own merits: a statement inside a raw string literal is invisible
-to every analyser and formatter in the toolchain, so nothing will fight it, and
-one assignment per line with the names in a column is what makes `SET` read as
-the row shape it produces rather than as a wrapped list.
-
-**This sentence has been wrong in both directions inside one pull request.**
-It said IDE0055 forbids the C# form, which overclaims what the analyser does;
-it was then rewritten to say the C# initialisers keep a column of their own,
-which was worse, because they do not and the evidence for it was SQL. What
-the section needs from its neighbour is nothing at all: the raw string
-literal is invisible to the toolchain whatever the C# rule says, which is
-why that is the argument it makes.
+to every analyser and formatter in the toolchain, so nothing will fight it,
+whatever the C# rule says, and one assignment per line with the names in a
+column is what makes `SET` read as the row shape it produces rather than as a
+wrapped list.
 
 **A SQL list obeys the same rule as a C# one: one line, or one element per
 line, never a ragged middle.** That covers the column list after `INSERT`, the
