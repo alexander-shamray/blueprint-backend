@@ -18,9 +18,9 @@ namespace Inventory.Api.Tests;
 /// a database, or <see cref="IntegrationCollection"/>.
 /// </summary>
 /// <remarks>
-/// <b>This is the half <see cref="InventoryCommandEndpointTests"/> cannot be.</b>
-/// Three of that suite's four malformed-reserve cases and its
-/// <c>ReleaseStock</c> sibling are also refused by
+/// This is the half <see cref="InventoryCommandEndpointTests"/> cannot be.
+/// The malformed-reserve cases that suite's validators also refuse, and its
+/// <c>ReleaseStock</c> sibling, are refused there too by
 /// <c>ReserveStockValidator</c>/<c>ReleaseStockValidator</c> — a
 /// <c>ValidationException</c> from <c>ValidationBehavior</c> is a fault
 /// <c>CommandConsumer</c> retries and error-queues, and it writes no row

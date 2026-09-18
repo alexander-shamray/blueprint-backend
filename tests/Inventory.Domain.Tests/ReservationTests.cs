@@ -28,8 +28,11 @@ public class ReservationTests
         reservation.Status.ShouldBe(ReservationStatus.Reserved);
         reservation.Lines.Count.ShouldBe(2);
         reservation.DomainEvents.OfType<StockReservedDomainEvent>().ShouldHaveSingleItem().OrderId.ShouldBe(order);
-        reservation.DomainEvents.OfType<StockLevelChangedDomainEvent>().Select(e => (e.ProductId, e.Available, e.OccurredAt))
-            .ShouldBe([(A, 8, Now), (B, 0, Now.AddTicks(1))], "each level carries the row's instant, not the command's");
+        reservation.DomainEvents.OfType<StockLevelChangedDomainEvent>()
+            .Select(e => (e.ProductId, e.Available, e.OccurredAt))
+            .ShouldBe(
+                [(A, 8, Now), (B, 0, Now.AddTicks(1))],
+                "each level carries the row's instant, not the command's");
     }
 
     [Fact]

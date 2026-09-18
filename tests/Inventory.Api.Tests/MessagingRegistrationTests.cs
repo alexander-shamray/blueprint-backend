@@ -183,13 +183,12 @@ public class MessagingRegistrationTests
     {
         // §3.2's Accepts column now has two entries, and each needs both an
         // AddConsumer and a ConfigureConsumer naming it (asserted at the
-        // endpoint, over containers, in InventoryCommandEndpointTests) — this
-        // is the registration half, the one a unit test can see. Matching on
-        // ImplementationType or ServiceType rather than on IConsumer<> closed
-        // over the message type: AddConsumer<T> calls TryAddScoped<T>() at
-        // the 8.5.3 pin, registering the CONCRETE closed CommandConsumer<,>,
-        // not an open interface a reflection-based predicate would have to
-        // close itself.
+        // endpoint, over containers) — this is the registration half, the
+        // one a unit test can see. Matching on ImplementationType or
+        // ServiceType rather than on IConsumer<> closed over the message
+        // type: AddConsumer<T> calls TryAddScoped<T>(), registering the
+        // CONCRETE closed CommandConsumer<,>, not an open interface a
+        // reflection-based predicate would have to close itself.
         ServiceCollection services = new();
 
         services.AddMassTransitMessaging(Configuration());

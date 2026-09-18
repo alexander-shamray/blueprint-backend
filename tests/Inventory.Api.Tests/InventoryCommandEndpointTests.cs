@@ -41,6 +41,28 @@ public sealed class InventoryCommandEndpointTests(ServiceFixture fixture) : IAsy
     }
 
     [Fact]
+    public async Task A_second_reserve_for_a_Reserved_order_answers_again_and_moves_no_stock()
+    {
+        var product = Guid.CreateVersion7();
+        await SeedStock(product, 3);
+        var order = Guid.CreateVersion7();
+        await SendAsync(new ReserveStock(order, [new StockLine(product, 2)]));
+        await EventuallyStatus(order, "Reserved");
+
+        await SendAsync(new ReserveStock(order, [new StockLine(product, 2)]));
+
+        await Eventually(
+            async () => (await fixture.OutboxAsync())
+                .Count(r => r.MessageType.Contains("StockReserved", StringComparison.Ordinal)),
+            expected: 2,
+            because: "section 4's table: a Reserved row still answers again");
+        (await Available(product)).ShouldBe(1, "the second reserve took no lines");
+        (await fixture.OutboxAsync())
+            .Count(r => r.MessageType.Contains("StockLevelChanged", StringComparison.Ordinal))
+            .ShouldBe(1, "the second reserve staged no level");
+    }
+
+    [Fact]
     public async Task A_short_reserve_commits_Failed_and_moves_no_stock()
     {
         var a = Guid.CreateVersion7();
@@ -56,6 +78,35 @@ public sealed class InventoryCommandEndpointTests(ServiceFixture fixture) : IAsy
         (await fixture.OutboxAsync())
             .Count(r => r.MessageType.Contains("StockReservationFailed", StringComparison.Ordinal))
             .ShouldBe(1);
+        (await fixture.OutboxAsync())
+            .Count(r => r.MessageType.Contains("StockLevelChanged", StringComparison.Ordinal))
+            .ShouldBe(0, "the savepoint rolled the short line's decrement back before anything committed");
+    }
+
+    [Fact]
+    public async Task A_second_reserve_for_a_Failed_order_answers_again_with_the_same_ids()
+    {
+        var a = Guid.CreateVersion7();
+        var b = Guid.CreateVersion7();
+        await SeedStock(a, 5);
+        await SeedStock(b, 0);
+        var order = Guid.CreateVersion7();
+        await SendAsync(new ReserveStock(order, [new StockLine(a, 1), new StockLine(b, 1)]));
+        await EventuallyStatus(order, "Failed");
+
+        await SendAsync(new ReserveStock(order, [new StockLine(a, 1), new StockLine(b, 1)]));
+
+        await Eventually(
+            async () => (await fixture.OutboxAsync())
+                .Count(r => r.MessageType.Contains("StockReservationFailed", StringComparison.Ordinal)),
+            expected: 2,
+            because: "section 4's table: a Failed row still answers again");
+        (await Available(a)).ShouldBe(5, "the second reserve took no lines");
+        (await fixture.OutboxAsync())
+            .Where(r => r.MessageType.Contains("StockReservationFailed", StringComparison.Ordinal))
+            .ShouldAllBe(r => r.Payload.Contains(b.ToString(), StringComparison.Ordinal)
+                && !r.Payload.Contains(a.ToString(), StringComparison.Ordinal),
+                "both answers name the line that was short, and neither names the one that was not");
     }
 
     [Fact]
@@ -156,7 +207,7 @@ public sealed class InventoryCommandEndpointTests(ServiceFixture fixture) : IAsy
         // inbox filter and so leaves no row for the default drain to wait on.
         await SendAsync(new ReserveStock(order, lines), drain: false);
 
-        // **The sentinel bounds this wait; it does not prove delivery order.**
+        // The sentinel bounds this wait; it does not prove delivery order.
         // The endpoint sets no ConcurrentMessageLimit, so MassTransit's
         // prefetch lets both messages be in flight together and the sentinel
         // could finish first. What makes "no row" a practical verdict rather

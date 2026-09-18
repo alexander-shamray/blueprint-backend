@@ -23,7 +23,8 @@ public sealed class StockLedgerTests(ServiceFixture fixture) : IAsyncLifetime
         await using AsyncServiceScope scope = fixture.Factory.Services.CreateAsyncScope();
         InventoryDbContext db = scope.ServiceProvider.GetRequiredService<InventoryDbContext>();
         IStockLedger ledger = scope.ServiceProvider.GetRequiredService<IStockLedger>();
-        await using IDbContextTransaction tx = await db.Database.BeginTransactionAsync(TestContext.Current.CancellationToken);
+        await using IDbContextTransaction tx =
+            await db.Database.BeginTransactionAsync(TestContext.Current.CancellationToken);
         T result = await act(ledger);
         if (commit)
             await tx.CommitAsync(TestContext.Current.CancellationToken);
@@ -32,7 +33,8 @@ public sealed class StockLedgerTests(ServiceFixture fixture) : IAsyncLifetime
 
     private Task Seed(Guid product, int available, int reserved = 0) =>
         fixture.ExecuteAsync(
-            "INSERT INTO inventory.StockItems (ProductId, Available, Reserved, UpdatedAt) VALUES ({0}, {1}, {2}, SYSDATETIMEOFFSET())",
+            "INSERT INTO inventory.StockItems (ProductId, Available, Reserved, UpdatedAt) " +
+            "VALUES ({0}, {1}, {2}, SYSDATETIMEOFFSET())",
             product, available, reserved);
 
     private Task<int> Available(Guid product) =>
@@ -47,7 +49,9 @@ public sealed class StockLedgerTests(ServiceFixture fixture) : IAsyncLifetime
         await Seed(b, 1);
 
         LedgerOutcome outcome = await InTransaction(l =>
-            l.TryTakeAsync([new(new ProductId(b), 1), new(new ProductId(a), 2)], TestContext.Current.CancellationToken));
+            l.TryTakeAsync(
+                [new(new ProductId(b), 1), new(new ProductId(a), 2)],
+                TestContext.Current.CancellationToken));
 
         outcome.Unavailable.ShouldBeEmpty();
         outcome.Levels.Select(l => (l.ProductId, l.Available))
@@ -58,7 +62,9 @@ public sealed class StockLedgerTests(ServiceFixture fixture) : IAsyncLifetime
         // order is asserted against the comparer the ledger sorts with, not
         // against which id was made first.
         outcome.Levels.Select(l => l.ProductId.Value)
-            .ShouldBe(outcome.Levels.Select(l => l.ProductId.Value).OrderBy(g => g), "in ProductId order, whatever order the lines came in");
+            .ShouldBe(
+                outcome.Levels.Select(l => l.ProductId.Value).OrderBy(g => g),
+                "in ProductId order, whatever order the lines came in");
         (await Available(a)).ShouldBe(3);
         (await Available(b)).ShouldBe(0);
     }
@@ -69,7 +75,10 @@ public sealed class StockLedgerTests(ServiceFixture fixture) : IAsyncLifetime
         var a = Guid.CreateVersion7();
         DateTimeOffset future = DateTimeOffset.UtcNow.AddHours(1);
         await fixture.ExecuteAsync(
-            "INSERT INTO inventory.StockItems (ProductId, Available, Reserved, UpdatedAt) VALUES ({0}, 5, 0, {1})", a, future);
+            "INSERT INTO inventory.StockItems (ProductId, Available, Reserved, UpdatedAt) " +
+            "VALUES ({0}, 5, 0, {1})",
+            a,
+            future);
 
         LedgerOutcome outcome = await InTransaction(l =>
             l.TryTakeAsync([new(new ProductId(a), 1)], TestContext.Current.CancellationToken));
@@ -93,7 +102,7 @@ public sealed class StockLedgerTests(ServiceFixture fixture) : IAsyncLifetime
                 [new(new ProductId(a), 2), new(new ProductId(b), 1), new(new ProductId(c), 1)],
                 TestContext.Current.CancellationToken));
 
-        outcome.Unavailable.Select(p => p.Value).ShouldBe(new[] { b, c }.Order(), ignoreOrder: true);
+        outcome.Unavailable.Select(p => p.Value).ShouldBe(new[] { b, c }, ignoreOrder: true);
         outcome.Levels.ShouldBeEmpty();
         (await Available(a)).ShouldBe(5, "the savepoint undid the first line's decrement");
     }
@@ -130,8 +139,12 @@ public sealed class StockLedgerTests(ServiceFixture fixture) : IAsyncLifetime
     [Fact]
     public async Task Giving_back_a_line_whose_row_is_gone_is_a_fault_not_a_release()
     {
-        await Should.ThrowAsync<InvalidOperationException>(() => InTransaction(l =>
+        InvalidOperationException error = await Should.ThrowAsync<InvalidOperationException>(() => InTransaction(l =>
             l.GiveBackAsync([new(ProductId.New(), 1)], TestContext.Current.CancellationToken)));
+
+        // Pinned so an unrelated EF InvalidOperationException under
+        // EnableRetryOnFailure cannot satisfy this by type alone.
+        error.Message.ShouldContain("held line and no stock row");
     }
 
     [Fact]
@@ -140,7 +153,10 @@ public sealed class StockLedgerTests(ServiceFixture fixture) : IAsyncLifetime
         await using AsyncServiceScope scope = fixture.Factory.Services.CreateAsyncScope();
         IStockLedger ledger = scope.ServiceProvider.GetRequiredService<IStockLedger>();
 
-        await Should.ThrowAsync<InvalidOperationException>(() =>
+        InvalidOperationException error = await Should.ThrowAsync<InvalidOperationException>(() =>
             ledger.TryTakeAsync([new(ProductId.New(), 1)], TestContext.Current.CancellationToken));
+
+        // Pinned for the same reason as above.
+        error.Message.ShouldContain("inside the unit of work's transaction");
     }
 }

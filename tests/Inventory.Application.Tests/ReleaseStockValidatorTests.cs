@@ -1,5 +1,4 @@
 using FluentValidation.TestHelper;
-using Inventory.Application;
 using Inventory.Application.Reservations.ReleaseStock;
 using Xunit;
 
