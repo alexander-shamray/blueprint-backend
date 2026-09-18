@@ -847,38 +847,29 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
             "    for this project to exist.\n",
         ),
     ),
-    # Both of the entries below carry the same argument out of a copied file:
-    # *why* Catalog binds no receive endpoint is a fact about Catalog's row in
-    # §3.2, and a scaffolded service inherits the state without inheriting the
-    # reason. The generic replacement says the rule the reason produced.
-    "tests/Catalog.Api.Tests/MessagingRegistrationTests.cs": (
+    # Catalog binds §3.2's one Consumes cell through two one-line calls into
+    # StockLevelConsumer.cs, which is OMITTED: a rendered service subscribes to
+    # nothing, so the calls go and the registration is otherwise byte-for-byte
+    # the template's. Each anchor carries the line before it, so the blank line
+    # that separated the call leaves with it.
+    "src/Services/Catalog/Catalog.Infrastructure/Messaging/DependencyInjection.cs": (
         (
-            "        // Asserted rather than assumed, which is PR-14's shape one lane over:\n"
-            "        // that PR asserted Catalog stages no Local row rather than leaving the\n"
-            "        // absence to be inferred.\n"
-            "        //\n"
-            "        // §3.2 gives Catalog exactly one Consumes cell — StockLevelChanged,\n"
-            "        // owned by Inventory, which does not exist. Even with the contract now\n"
-            "        // present (PR-15), binding it would create an endpoint whose every\n"
-            "        // message reaches §9.4's throw: \"the endpoint binds this type, so\n"
-            "        // something should handle it\" is one of the two sites where an empty\n"
-            "        // handler list must fail, and §8.4's cache invalidator — the handler\n"
-            "        // that eventually arrives — needs a cached query to invalidate.\n",
-            "        // Asserted rather than assumed: an absence nobody states is an absence\n"
-            "        // nobody notices changing.\n"
-            "        //\n"
-            "        // A consumer belongs here once §3.2 gives this service something to\n"
-            "        // consume and an IIntegrationEventHandler exists for it. Binding a\n"
-            "        // type with no handler registered creates an endpoint whose every\n"
-            "        // message reaches §9.4's throw: \"the endpoint binds this type, so\n"
-            "        // something should handle it\" is one of the two sites where an empty\n"
-            "        // handler list must fail rather than proceed.\n",
+            "            x.DisableUsageTelemetry();\n"
+            "\n"
+            "            x.AddStockLevelConsumer();\n",
+            "            x.DisableUsageTelemetry();\n",
         ),
         (
-            "            \"a consumer here is a subscription §3.2 does not give Catalog — and one bound with no \" +\n",
-            "            \"a consumer here is a subscription §3.2 does not give this service — and one bound with no \" +\n",
+            "                cfg.Host(new Uri(connectionString));\n"
+            "\n"
+            "                cfg.ConfigureStockLevelEndpoint(context);\n",
+            "                cfg.Host(new Uri(connectionString));\n",
         ),
     ),
+    # The entry below carries an argument out of a copied file: *why* Catalog
+    # once bound no receive endpoint is a fact about Catalog's row in §3.2, and
+    # a scaffolded service inherits the state without inheriting the reason.
+    # The generic replacement says the rule the reason produced.
     "tests/Catalog.Api.Tests/InboxFilterTests.cs": (
         (
             "/// Catalog binds no receive endpoint of its own (§3.2 gives it one Consumes\n"

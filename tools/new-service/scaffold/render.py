@@ -55,6 +55,9 @@ COPIED = frozenset(
         "src/Services/Catalog/Catalog.Infrastructure/Catalog.Infrastructure.csproj",
         "src/Services/Catalog/Catalog.Infrastructure/DependencyInjection.cs",
         "src/Services/Catalog/Catalog.Infrastructure/Messaging/DependencyInjection.cs",
+        # §9.8's ladder, declared once per service: a rendered service's first
+        # endpoint wants it, and it names nothing of Catalog's.
+        "src/Services/Catalog/Catalog.Infrastructure/Messaging/RetryPolicy.cs",
         "src/Services/Catalog/Catalog.Infrastructure/SqlConnectionFactory.cs",
         "src/Services/Catalog/Catalog.Infrastructure/Persistence/CatalogDbContext.cs",
         "src/Services/Catalog/Catalog.Infrastructure/Persistence/EfDomainEventCollector.cs",
@@ -159,6 +162,7 @@ OMITTED = frozenset(
         # slice's: a rendered service consumes nothing and projects nothing.
         "src/Services/Catalog/Catalog.Infrastructure/Persistence/StockLevelConfiguration.cs",
         "src/Services/Catalog/Catalog.Infrastructure/Projections/StockLevelProjection.cs",
+        "src/Services/Catalog/Catalog.Infrastructure/Messaging/StockLevelConsumer.cs",
         "tests/Catalog.Domain.Tests/MoneyTests.cs",
         "tests/Catalog.Domain.Tests/ProductTests.cs",
         "tests/Catalog.Application.Tests/CatalogIntegrationEventMapperTests.cs",
@@ -212,6 +216,8 @@ OMITTED = frozenset(
         "tests/Catalog.Api.Tests/ProductEndpointsTests.cs",
         "tests/Catalog.Api.Tests/StockLevelsSchemaTests.cs",
         "tests/Catalog.Api.Tests/StockLevelProjectionTests.cs",
+        "tests/Catalog.Api.Tests/StockLevelRegistrationTests.cs",
+        "tests/Catalog.Api.Tests/InventoryEventEndpointTests.cs",
         # Not slice, but container wiring with nothing left to wire: with the
         # handler tests gone, the collection has no member and the fixture no
         # consumer here. Both return with the service's first handler test,

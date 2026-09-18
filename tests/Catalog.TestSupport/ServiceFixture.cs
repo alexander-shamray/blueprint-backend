@@ -11,6 +11,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using DotNet.Testcontainers.Containers;
 using Respawn;
 using Testcontainers.MsSql;
 using Testcontainers.RabbitMq;
@@ -129,6 +130,33 @@ public sealed class ServiceFixture : IAsyncLifetime
     }
 
     // ValueTask, not Task: xUnit v3 redefined IAsyncLifetime (§12.4).
+    /// <summary>
+    /// The harness publishes Inventory's <c>StockLevelChanged</c> as
+    /// <c>catalog-svc</c>, which the production grant refuses by design: a
+    /// consumer reads another context's exchange and never writes it
+    /// (<c>check_permissions.py</c> enforces exactly that). So the test
+    /// container alone is widened, after it starts and before the factory is
+    /// built; the production definitions file does not move for the
+    /// harness's sake.
+    /// </summary>
+    private async Task WidenWriteForTheHarnessAsync()
+    {
+        const string scope = "^(catalog-|Common\\.Contracts|MassTransit:)";
+
+        ExecResult result = await _rabbit!.ExecAsync(
+            ["rabbitmqctl", "set_permissions", "-p", "/", "catalog-svc", scope, scope, scope],
+            TestContext.Current.CancellationToken);
+
+        // A silent failure here would surface as every endpoint test retrying
+        // a refused publish until its budget ran out, naming a message rather
+        // than a permission.
+        if (result.ExitCode != 0)
+        {
+            throw new InvalidOperationException(
+                $"Could not widen catalog-svc's broker permissions for the harness "
+                + $"(exit {result.ExitCode}). stdout: {result.Stdout} stderr: {result.Stderr}");
+        }
+    }
     public async ValueTask InitializeAsync()
     {
         // §14.1's broker CONFIGURATION on the stock image, rather than
@@ -175,6 +203,8 @@ public sealed class ServiceFixture : IAsyncLifetime
             _rabbit.StartAsync(TestContext.Current.CancellationToken),
             _redisCache.StartAsync(TestContext.Current.CancellationToken),
             _redisCoordination.StartAsync(TestContext.Current.CancellationToken));
+
+        await WidenWriteForTheHarnessAsync();
 
         // The container hands out a connection to master; Catalog owns a
         // database of its own (§7.1), and MigrateAsync is what creates it.

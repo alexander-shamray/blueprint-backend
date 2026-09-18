@@ -36,13 +36,17 @@ public static class DependencyInjection
             // this platform's telemetry, and none of it leaves silently.
             x.DisableUsageTelemetry();
 
+            x.AddStockLevelConsumer();
+
             x.UsingRabbitMq((context, cfg) =>
             {
                 cfg.Host(new Uri(connectionString));
 
-                // No receive endpoint, so no retry policy either: §9.8
-                // configures retry per endpoint. No ConfigureEndpoints(context)
-                // either, deliberately: for a registered consumer with no
+                cfg.ConfigureStockLevelEndpoint(context);
+
+                // §9.8 configures retry per endpoint, so the policy lives with
+                // each endpoint. No ConfigureEndpoints(context), deliberately:
+                // for a registered consumer with no
                 // explicit binding it manufactures a queue named after the
                 // consumer type, with neither the inbox filter nor the retry
                 // policy, and §9.8 admits no endpoint without InboxFilter<>. A
