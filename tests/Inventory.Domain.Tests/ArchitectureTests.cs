@@ -1,3 +1,4 @@
+using Inventory.Domain.Stock;
 using Shouldly;
 using Xunit;
 
@@ -22,15 +23,15 @@ public class ArchitectureTests
         // extending this list is the decision the gate exists to force, and
         // System.Text.Json is the extension the table forbids by name.
         //
-        // Two entries, because two is what an empty domain references. The
-        // two that usually follow, and what earns each: System.Collections
-        // with the first domain event, whose generated record equality goes
-        // through EqualityComparer<T>, and System.Linq with the first value
-        // object doing enumerable logic over owned values — domain work,
-        // not an I/O dependency.
-        string[] allowed = ["Common.Domain", "System.Runtime"];
+        // Two entries is what an empty domain references. System.Collections
+        // is the third, earned by StockLevelChangedDomainEvent: the first
+        // domain event's generated record equality goes through
+        // EqualityComparer<T>. System.Linq would be the next one, earned by
+        // the first value object doing enumerable logic over owned values —
+        // domain work, not an I/O dependency.
+        string[] allowed = ["Common.Domain", "System.Runtime", "System.Collections"];
 
-        IEnumerable<string> referenced = typeof(AssemblyMarker).Assembly
+        IEnumerable<string> referenced = typeof(StockItem).Assembly
             .GetReferencedAssemblies()
             .Select(a => a.Name!);
 

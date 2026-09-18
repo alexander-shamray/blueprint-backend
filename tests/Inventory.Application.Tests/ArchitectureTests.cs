@@ -1,5 +1,5 @@
 using System.Reflection;
-using Inventory.Domain;
+using Inventory.Domain.Stock;
 using NetArchTest.Rules;
 using Shouldly;
 using Xunit;
@@ -130,7 +130,7 @@ public class ArchitectureTests
         // those until the consume transaction commits". It did not: the in-memory
         // buffer flushes AFTER the consumer returns, which is after the repository
         // has committed, and that gap was #128.
-        Assembly[] assemblies = [typeof(DependencyInjection).Assembly, typeof(AssemblyMarker).Assembly];
+        Assembly[] assemblies = [typeof(DependencyInjection).Assembly, typeof(StockItem).Assembly];
         foreach (Assembly assembly in assemblies)
         {
             Types
