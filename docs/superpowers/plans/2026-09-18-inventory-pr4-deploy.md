@@ -93,7 +93,8 @@ git commit -m "feat(deploy): Inventory's chart"
 ### Task 2: The lists
 
 **Files:**
-- Modify: `deploy/helm/smoke.sh` (`SERVICE_CHARTS`, `MIGRATOR_CHARTS`)
+- Modify: `deploy/helm/smoke.sh` (`SERVICE_CHARTS`, `MIGRATOR_CHARTS`, and
+  the two per-subchart `image.tag` override lists)
 - Modify: `deploy/helm/platform/Chart.yaml` (dependency after `ordering`)
 - Modify: `deploy/helm/README.md` (the tree fence and "four dependencies")
 - Modify: `deploy/canary/canary.json` (`"inventory-api": { "serviceName": "Inventory.Api", "chart": "inventory" }`)
@@ -116,6 +117,18 @@ directories on disk.
 SERVICE_CHARTS="catalog ordering inventory gateway web-bff"
 MIGRATOR_CHARTS="catalog ordering inventory"
 ```
+
+and, in both places the script overrides every subchart's tag for the
+umbrella — the `helm lint` loop and the `platform` render — one more line
+beside the four it has:
+
+```bash
+        --set-string "inventory.image.tag=$TAG" \
+```
+
+Every chart refuses to render without a tag, and the umbrella passes one
+per subchart by name, so a subchart added to `Chart.yaml` and not to these
+two lists fails the umbrella's own validation on the first run.
 
 `platform/Chart.yaml`: add
 

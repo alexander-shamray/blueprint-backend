@@ -884,6 +884,11 @@ git commit -m "feat(inventory): the stock ledger runs §7.3's statement per line
 - Create: `src/Services/Inventory/Inventory.Application/Reservations/ReleaseStock/ReleaseStockCommand.cs`
 - Create: `.../ReleaseStock/ReleaseStockHandler.cs`
 - Create: `src/Services/Inventory/Inventory.Application/Reservations/ReservationErrors.cs`
+- Create: `src/Services/Inventory/Inventory.Application/CommandOrigin.cs` —
+  Inventory's own two literals. Ordering declares its `CommandOrigin` inside
+  `Ordering.Application`, which §4.3 forbids another service to reference,
+  so this is not shared and is not moved to a building block either: §9.5's
+  rule is that each service maps its two origins as literals of its own.
 - Modify: `src/Services/Inventory/Inventory.Application/Integration/InventoryIntegrationEventMapper.cs`
   (three more registry entries)
 - Test: `tests/Inventory.Application.Tests/ReserveStockValidatorTests.cs`
@@ -1041,6 +1046,23 @@ public sealed class ReserveStockHandler(
 
         return Result.Success();
     }
+}
+```
+
+`CommandOrigin.cs`:
+
+```csharp
+namespace Inventory.Application;
+
+/// <summary>
+/// §9.5's two mappings of a command's origin, both literals: <c>User</c> at
+/// an endpoint, <c>System</c> in a message mapper. Inventory's own, because
+/// Ordering's is inside a service assembly §4.3 keeps to itself.
+/// </summary>
+public enum CommandOrigin
+{
+    User,
+    System
 }
 ```
 

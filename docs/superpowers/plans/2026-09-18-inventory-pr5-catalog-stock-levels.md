@@ -296,6 +296,10 @@ public void Catalog_binds_exactly_the_one_consumer_in_its_consumes_column()
 }
 ```
 
+The file gains `using Common.Infrastructure.Messaging;` for
+`IntegrationEventConsumer<>` and `using Common.Contracts.Inventory.V1;` for
+the event; neither is imported globally.
+
 Keep `The_no_consumer_assertion_can_actually_fail` as the positive control,
 renamed to `The_consumer_assertion_can_actually_see_a_consumer`. Cut the
 comment paragraph that says Inventory does not exist and that §8.4's

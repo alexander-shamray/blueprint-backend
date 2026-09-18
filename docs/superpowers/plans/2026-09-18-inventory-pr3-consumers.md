@@ -546,6 +546,11 @@ public void Every_event_in_the_consumes_column_is_registered()
 }
 ```
 
+The test file's usings gain `Common.Infrastructure.Messaging` for
+`IntegrationEventConsumer<>`, `Common.Contracts.Ordering.V1` and
+`Common.Contracts.Shipping.V1` for the two events; nothing imports them
+globally.
+
 Endpoint, over containers, in the shape of PR-2's command tests with a
 `PublishAsync<T>` helper that publishes through `IPublishEndpoint` and waits
 for the inbox row on `EventsQueue`:
@@ -753,7 +758,11 @@ public async Task Two_deliveries_of_one_unreserved_despatch_count_once()
 }
 ```
 
-If `OutboxMessage.Stage`'s signature differs from PR-15's
+The file's usings: `System.Diagnostics.Metrics` for the listener,
+`Common.Infrastructure.Outbox` for `OutboxMessage` and `OutboxLane`,
+`Inventory.Domain.Reservations` and `Inventory.Domain.Reservations.Events`
+for the event, and `Inventory.TestSupport` for the fixture. If
+`OutboxMessage.Stage`'s signature differs from PR-15's
 (`Stage(object, OutboxLane, Guid correlation, MessageTypeMap, OutboxJson)`),
 use the one `Ordering.TestSupport.Outbox.OutboxRows` uses.
 

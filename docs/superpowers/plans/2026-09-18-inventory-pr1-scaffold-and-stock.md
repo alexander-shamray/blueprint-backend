@@ -450,6 +450,13 @@ git commit -m "feat(inventory): map StockItems and add its migration"
 ### Task 4: `SetOnHandCommand` and `GetStockQuery`
 
 **Files:**
+- Modify: `src/Services/Inventory/Inventory.Application/Inventory.Application.csproj`
+  — the scaffold strips Catalog's `Common.Contracts` project reference and
+  its `Dapper` package reference from the Application project and leaves a
+  comment where each stood; this task restores both, cuts the two comments,
+  and adds no `Version=` (the pin is `Directory.Packages.props`'s). The
+  mapper below names `Common.Contracts.Inventory.V1` and the query handler
+  names Dapper, so the project does not compile without them.
 - Create: `src/Services/Inventory/Inventory.Application/Stock/SetOnHand/SetOnHandCommand.cs`
 - Create: `src/Services/Inventory/Inventory.Application/Stock/SetOnHand/SetOnHandHandler.cs`
 - Create: `src/Services/Inventory/Inventory.Application/Stock/SetOnHand/SetOnHandValidator.cs`
@@ -551,7 +558,15 @@ public class InventoryIntegrationEventMapperTests
 Run: `dotnet test tests/Inventory.Application.Tests`
 Expected: compile failure on the missing types.
 
-- [ ] **Step 3: Write the slice**
+- [ ] **Step 3: Restore the two references, then write the slice**
+
+In `Inventory.Application.csproj`, beside the `Common.Application` project
+reference and the `FluentValidation` package references respectively:
+
+```xml
+<ProjectReference Include="..\..\..\BuildingBlocks\Common.Contracts\Common.Contracts.csproj" />
+<PackageReference Include="Dapper" />
+```
 
 `SetOnHandCommand.cs`:
 
