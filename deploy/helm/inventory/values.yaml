@@ -1,0 +1,149 @@
+# Inventory, and the chart §15.3 prints. One port rather than Catalog's two:
+# Inventory serves no gRPC, because ADR-017 spends the platform's one
+# synchronous hop on the BFF's pricing call and nothing else.
+
+workload:
+  # §10.2's route file dials `http://inventory-api:8080/` as a literal, so
+  # this value is that string — _helpers.tpl argues why it is not
+  # release-derived.
+  name: inventory-api
+
+replicaCount: 3
+
+# §15.5's canary track, and OFF is what every ordinary release means.
+#
+# Turned on, this chart renders the SECOND of two Deployments that answer to the
+# one Service: its objects take a `-canary` suffix, its pods carry
+# `app.kubernetes.io/track: canary`, and the Service, Ingress, HPA and
+# PodDisruptionBudget are suppressed because the stable release owns those names
+# (ADR-022). The share of traffic it serves is its replica count over the total,
+# which is why `deploy/canary/canary.py` does the arithmetic and refuses the
+# weights a replica ratio cannot express.
+#
+# Set by the rollout, not by an operator: `deploy/canary/` drives it.
+canary:
+  enabled: false
+
+image:
+  # Registry namespace only. Each workload appends its own name, so the chart
+  # can reference both the API and the migrator (§7.4) from one tag.
+  registry: registry.example.com/commerce
+  api: inventory-api
+  migrator: inventory-migrator
+  # Supplied by CI, never "latest"; both images share it. Deliberately empty
+  # rather than a default: a deploy that cannot name its tag must fail, not
+  # roll something. A config-only deploy reads the running value back (§15.1)
+  # instead of falling through to this.
+  tag: ""
+  pullPolicy: IfNotPresent
+
+ports:
+  - name: http
+    containerPort: 8080
+
+resources:
+  requests: { cpu: 100m, memory: 256Mi }
+  limits:   { memory: 512Mi }          # No CPU limit — §15.3.
+
+migrationJob:
+  resources:
+    requests: { cpu: 50m, memory: 128Mi }
+    limits:   { memory: 256Mi }
+
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 20
+  targetCPUUtilizationPercentage: 70
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 2
+
+# Must exceed the host's own shutdown timeout, which is 30 s and measured
+# rather than assumed — _deployment.tpl carries the argument.
+terminationGracePeriodSeconds: 45
+
+probes:
+  probePort: http
+  liveness:  { path: /health/live,  initialDelaySeconds: 10, periodSeconds: 10 }
+  readiness: { path: /health/ready, initialDelaySeconds: 5,  periodSeconds: 5 }
+  startup:   { path: /health/startup, failureThreshold: 30,  periodSeconds: 2 }
+
+service:
+  # True: the gateway dials this workload by name. False is the worker case
+  # (§15.3), and it is the ONE key separating Shipping's chart from this one —
+  # the chapter said two until the charts were written, because it assumed a
+  # service behind the edge would carry an Ingress of its own.
+  enabled: true
+
+ingress:
+  # False, and written down rather than omitted (§15.3). Inventory is reached
+  # through the gateway (§10.2); an Ingress here would be a second door past
+  # the edge's rate limiting, CORS policy and forwarded-header handling.
+  enabled: false
+
+identity:
+  # The authority, to validate incoming JWTs (§11.2) — and nothing else.
+  # Identity:Client is what a host presents when it CALLS a peer (§11.5), and
+  # Inventory calls none: reservation and release travel over the broker
+  # (§9.4). No clientId here means no Keycloak client, no secret in the
+  # vault and nothing to rotate.
+  authority: https://id.example.com/realms/commerce
+  # False, and written down rather than absent: §15.4's
+  # required-for-some-hosts category is a claim a chart has to make, not one to
+  # infer from a missing key. Exactly one chart in the platform sets it true.
+  clientCredentials: false
+
+database:
+  enabled: true
+  # GetConnectionString("Inventory") at runtime, "InventoryMigrator" in the
+  # hook.
+  connectionName: Inventory
+  runtimeSecretRef:
+    name: inventory-database
+    key: connection-string
+  migratorSecretRef:
+    name: inventory-migrator-secret
+    key: connection-string
+
+# The bus (§9): each service names its own Secret, holding a distinct broker
+# account, because a shared principal makes queue arrival a boundary in name
+# only (§9.4).
+#
+# The Secret this names must carry a connection string for the
+# `inventory-svc` account, whose permissions
+# deploy/compose/rabbitmq/definitions.json declares and check_permissions.py
+# holds to the code. Provisioning those accounts on a deployed broker is an
+# obligation this repository states and does not check — the same division
+# §15.4 draws for every Secret, and the same one ADR-033 and ADR-034 draw for
+# the realm. ADR-040 narrows what an unchecked realm can cost without
+# discharging the obligation: no host accepts a token with more than the
+# revocation bound left to live, so a long-lived one is contained rather than
+# detected, and the realm still owes the setting. Nothing here does even that
+# much for a broker account.
+broker:
+  enabled: true
+  secretRef:
+    name: inventory-rabbitmq
+    key: connection-string
+
+# §8.1's two Redis connections. Required together: AddRedisConnections is one
+# call and reads both eagerly, so this service either has Redis or does not.
+# §8.5's IdempotencyBehavior is what reads a key today — it claims one on the
+# coordination instance before any protected command runs.
+redis:
+  enabled: true
+  # One Secret, two keys, because the two instances differ only in eviction
+  # policy and are provisioned together (§8.1). Separate keys rather than one
+  # value: pointing idempotency claims at the allkeys-lru instance is a
+  # duplicate write that only appears under memory pressure.
+  secretRef:
+    name: commerce-redis
+    cacheKey: cache-connection-string
+    coordinationKey: coordination-connection-string
+
+observability:
+  otlpEndpoint: http://otel-collector.observability:4317
+
+extraConfigMaps: []
