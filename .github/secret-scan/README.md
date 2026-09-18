@@ -11,10 +11,11 @@ fires.
 
 The working tree, as text — no restore, no SDK and no network, on the
 licence gate's terms, which is what lets it run first. Not all of it: it
-never descends into the directories `SKIP_DIRS` and `SKIP_ROOT_DIRS` in
-`secret_scan.py` name — build output, editor and vendored trees, and `.git`,
-because this gate is about the tree and not the history — and it skips a file
-it reads as binary. A credential written only there is outside its claim.
+never descends into a directory `SKIP_DIRS` in `secret_scan.py` names, at any
+depth — build output, editor and vendored trees, and `.git`, because this
+gate is about the tree and not the history — nor, at the repository root
+only, into one `SKIP_ROOT_DIRS` names; and it skips a file it reads as
+binary. A credential written only there is outside its claim.
 Against the rest it
 applies named rules, each with a positive case and a near miss in the suite,
 and it reads the accepted findings from [`allowed/`](allowed/), whose README

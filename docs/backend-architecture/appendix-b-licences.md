@@ -92,9 +92,9 @@ Adding a dependency means adding its identity here, not just its name.
 
 The first table is enforced by
 [`.github/licence-gate/`](../../.github/licence-gate/README.md), whose README
-owns what it refuses. Where a package really is offered under either of two
-licences, its row names the half taken here, because the gate cannot tell a
-disjunction from a conjunction.
+owns what it refuses. Where one package is offered under either of two
+licences, its row names the licence taken here; the README says why the gate
+needs that.
 
 Discovering a licence obligation at renewal time is considerably more expensive
 than discovering it at build time.

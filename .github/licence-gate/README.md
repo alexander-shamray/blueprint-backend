@@ -17,8 +17,9 @@ uncleared", for the reason under *What it does not claim*.
   its rows carry, never on the product a package is named after.
 - `allowed-licences.txt` beside this file — the licences the register may
   name.
-- Every other `.csproj`, `.props` and `.targets` outside the directories
-  `SKIPPED_DIRECTORIES` in `licence_gate.py` names, for the two ways a
+- Every `.csproj`, `.props` and `.targets` outside the directories
+  `SKIPPED_DIRECTORIES` in `licence_gate.py` names, the props file included,
+  for the two ways a
   project steps past central pinning: a `PackageReference` naming its own
   version — a `Version` attribute, a `Version` child element or a
   `VersionOverride` — and `ManagePackageVersionsCentrally` set to anything
@@ -43,7 +44,9 @@ it ahead of the build.
 - a project that pins for itself rather than through the props file;
 - a registered licence any part of which is outside `allowed-licences.txt`.
   **Every** part of a multi-part cell has to be inside it: the gate reads a
-  `/` and cannot tell a disjunction from a conjunction;
+  `/` and cannot tell a disjunction from a conjunction, so a row cleared
+  because one half was allowed would clear the other with it. A package
+  really offered under either names, in its row, the licence taken here;
 - a licence spelling its map does not know. That is a separate finding from
   the one above because it has a separate repair — a misspelt cell is fixed
   in the register, a spelling nobody has taught the gate in

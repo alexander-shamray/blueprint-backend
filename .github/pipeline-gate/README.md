@@ -8,7 +8,7 @@ pipeline can go green while covering less.
 | Subcommand | Refuses | Reads |
 |---|---|---|
 | `filters` | a deployable under `src/` that no path filter matches — one CI would never rebuild | `src/` and the path filters in `ci.yml` |
-| `images` | a Dockerfile under `src/` no matrix entry builds, and an entry whose Dockerfile is missing or whose filter is undefined, not exported by the `changes` job, or does not match that Dockerfile's path | the Dockerfiles and `ci.yml`'s image matrix |
+| `images` | a Dockerfile under `src/` no matrix entry builds, and an entry whose Dockerfile is missing or whose filter is undefined, not exported by the `changes` job, or does not match that Dockerfile's path | the Dockerfiles, and in `ci.yml` the image matrix, the path filters and the `changes` job's outputs |
 | `stages` | a test project in `Platform.slnx` that ran in no stage, a test that ran in two, an empty stage, and a stage under its floor | `Platform.slnx` and the TRX files in the three stage result directories |
 
 `stages` counts tests rather than trusting an exit code, because `dotnet
