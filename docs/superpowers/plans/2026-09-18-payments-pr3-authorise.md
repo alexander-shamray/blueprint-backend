@@ -622,6 +622,18 @@ public class AuthorisePaymentHandlerTests
     }
 
     [Fact]
+    public async Task A_resend_with_other_money_is_a_mismatch_even_when_an_intent_exists()
+    {
+        OrderId order = OrderId.New();
+        _orders.Record = Placed(order);
+        _intents.Seed(PaymentIntent.Authorise(order, 42.10m, "EUR", "psp_1", Now.AddMinutes(-1)));
+
+        await Should.ThrowAsync<PaymentMismatchException>(() =>
+            Handler().HandleAsync(new AuthorisePaymentCommand(order.Value, 99.99m, "EUR"), default));
+        _provider.Requests.ShouldBeEmpty();
+    }
+
+    [Fact]
     public async Task An_existing_intent_answers_again_even_after_a_cancellation()
     {
         OrderId order = OrderId.New();
@@ -710,6 +722,11 @@ public sealed class AuthorisePaymentHandler(
         PaymentIntent? existing = await intents.GetAsync(order, ct);
         if (existing is not null)
         {
+            // A resend is answered only when it asks for what was decided: a
+            // fresh command with other money must not inherit an authorisation.
+            if (command.Amount != existing.Amount || !string.Equals(command.Currency, existing.Currency, StringComparison.Ordinal))
+                throw new PaymentMismatchException(Mismatch(order, command, existing.Amount, existing.Currency, "the recorded payment"));
+
             existing.AnswerAgain(clock.GetUtcNow());
             return Result.Success();
         }
@@ -727,7 +744,7 @@ public sealed class AuthorisePaymentHandler(
             throw new PaymentOrderNotYetKnownException($"No OrderPlaced has reached Payments for {order}.");
 
         if (command.Amount != record.TotalAmount || !string.Equals(command.Currency, record.Currency, StringComparison.Ordinal))
-            throw new PaymentMismatchException($"AuthorisePayment for {order} disagrees with the placed order's total.");
+            throw new PaymentMismatchException(Mismatch(order, command, record.TotalAmount, record.Currency, "the placed order"));
 
         AuthorisationResult verdict = await provider.AuthoriseAsync(
             new AuthorisationRequest(order, record.CustomerId!.Value, command.Amount, command.Currency), ct);
@@ -745,6 +762,11 @@ public sealed class AuthorisePaymentHandler(
 
         return Result.Success();
     }
+
+    // Both fields, both sides: the error queue is read by a person deciding
+    // whether the sender or the record is wrong.
+    private static string Mismatch(OrderId order, AuthorisePaymentCommand command, decimal? amount, string? currency, string against) =>
+        $"AuthorisePayment for {order} asks for {command.Amount} {command.Currency}; {against} holds {amount} {currency}.";
 }
 ```
 
@@ -933,12 +955,15 @@ public async Task A_mismatch_charges_nothing_and_is_not_retried()
     await PublishAsync(Placed(order, 42.10m));
 
     await SendAsync(new AuthorisePayment(order, 99.99m, "EUR"), drain: false);
-    await Task.Delay(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
 
+    await Eventually(
+        () => fixture.QueueDepthAsync($"{MessagingRegistration.CommandsQueue}_error"),
+        expected: 1,
+        because: "a mismatch is excluded from retry and faults straight to the error queue §13.6 pages on");
     (await StatusAsync(order)).ShouldBeNull();
     ProviderCalls().ShouldBe(0);
     (await fixture.InboxAsync()).ShouldNotContain(m => m.Endpoint == MessagingRegistration.CommandsQueue,
-        "a fault is not consumed; it goes to payments-commands_error");
+        "a fault is not consumed, so no inbox row is written");
 }
 
 [Fact]
@@ -973,7 +998,13 @@ public async Task A_unit_retried_after_the_provider_answered_charges_once_and_st
 ```
 
 `Eventually` gains an optional `budget` parameter defaulting to
-`DeliveryBudget`. `MessagingRegistration.CommandsQueue` is the constant on
+`DeliveryBudget`. `ServiceFixture.QueueDepthAsync(string queue)` is added by
+this task: it runs `rabbitmqctl list_queues name messages` in the broker
+container through the same `ExecAsync` the harness widening uses, and returns
+the named queue's count, or zero when the queue does not exist yet — MassTransit
+declares `_error` on the first fault. The test polls it, because a fault's
+arrival there is the terminal outcome the spec names, and no other assertion
+distinguishes it from a message still queued or retrying. `MessagingRegistration.CommandsQueue` is the constant on
 `Payments.Infrastructure.Messaging.DependencyInjection`; alias the class as
 Inventory's plans do if its name collides with the root one.
 

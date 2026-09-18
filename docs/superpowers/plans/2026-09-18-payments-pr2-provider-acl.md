@@ -30,7 +30,9 @@ sections 4, 9, 11 (the two provider keys) and 12 (the provider counter).
   in `Payments.Infrastructure`, `WireMock.Net` in `Payments.Api.Tests`, no
   `Version=`), `src/BuildingBlocks/Common.Web/ObservabilityExtensions.cs` and
   `tests/Common.Web.Tests/ObservabilityTests.cs` (B: one `AddMeter` line),
-  `deploy/compose/**` (D: the simulator), and
+  `deploy/compose/**` (D: the simulator), `.github/secret-scan/allowed/**`
+  (D: the entry for the simulator key the Compose unit sets, which the scan
+  flags — this plan's own text drew the same finding), and
   `docs/backend-architecture/15-cicd-deployment.md` (B: §15.4's two rows).
 - Depends on PR-1 having merged.
 - No `Directory.Packages.props` change and no Appendix B row: both packages
@@ -292,8 +294,9 @@ The mappings are proved by Task 3's tests, which load this directory.
   `<PackageReference Include="WireMock.Net" />`
 - Modify: `tests/Payments.TestSupport/PaymentsApiFactory.cs` — a third
   parameter, `string providerBaseUrl = UnreachableProvider`, set as
-  `PaymentProvider:BaseUrl`, with `PaymentProvider:ApiKey` set to
-  `local-dev-psp`, and `public const string UnreachableProvider =
+  `PaymentProvider:BaseUrl`, and a fourth, `string? providerApiKey = null`,
+  set as `PaymentProvider:ApiKey` — the Compose unit's local default when
+  null, so every existing caller is unchanged — and `public const string UnreachableProvider =
   "http://psp.invalid/"`
 - Create: `tests/Payments.TestSupport/SimulatorMappings.cs`
 - Test: `tests/Payments.Api.Tests/HttpPaymentProviderTests.cs`
@@ -413,14 +416,26 @@ public sealed class HttpPaymentProviderTests : IDisposable
     }
 
     [Fact]
-    public async Task A_stalled_provider_is_unavailable_within_the_total_budget()
+    public async Task A_stalled_provider_is_unavailable_within_the_total_budget_and_its_timeouts_count()
     {
+        long counted = 0;
+        using MeterListener listener = new()
+        {
+            InstrumentPublished = (instrument, l) =>
+            {
+                if (instrument.Meter.Name == "Payments.Provider" && instrument.Name == "payments.provider.unavailable")
+                    l.EnableMeasurementEvents(instrument);
+            }
+        };
+        listener.SetMeasurementEventCallback<long>((_, value, _, _) => Interlocked.Add(ref counted, value));
+        listener.Start();
         DateTimeOffset started = DateTimeOffset.UtcNow;
 
         await Should.ThrowAsync<PaymentProviderUnavailableException>(() =>
             Provider().AuthoriseAsync(Authorisation(10.09m), TestContext.Current.CancellationToken));
 
         (DateTimeOffset.UtcNow - started).ShouldBeLessThan(ProviderHop.TotalRequestTimeout + TimeSpan.FromSeconds(2));
+        Interlocked.Read(ref counted).ShouldBeGreaterThanOrEqualTo(1, "an attempt timeout is the provider's, counted by OnTimeout");
     }
 
     [Fact]
@@ -459,6 +474,59 @@ public sealed class HttpPaymentProviderTests : IDisposable
 
         Should.Throw<InvalidOperationException>(() => factory.Services)
             .Message.ShouldContain("PaymentProvider:BaseUrl");
+    }
+
+    [Fact]
+    public void A_missing_provider_key_stops_the_host()
+    {
+        using PaymentsApiFactory factory = new(
+            "Server=sql.invalid;Database=Payments;User Id=x;Password=x;TrustServerCertificate=true",
+            "amqp://payments-svc:x@rabbit.invalid:5672",
+            _server.Urls[0] + "/",
+            providerApiKey: " ");
+
+        Should.Throw<InvalidOperationException>(() => factory.Services)
+            .Message.ShouldContain("PaymentProvider:ApiKey", Case.Sensitive,
+                "§15.4 marks the key required; a host must not call a provider unauthenticated");
+    }
+
+    [Theory]
+    [InlineData(201, "{\"status\":\"declined\",\"reference\":\"psp_x\"}")]
+    [InlineData(201, "{\"status\":\"approved\"}")]
+    [InlineData(402, "{\"status\":\"declined\"}")]
+    [InlineData(402, "{\"status\":\"approved\",\"code\":\"card_declined\"}")]
+    [InlineData(201, "not json")]
+    public async Task A_body_that_contradicts_its_status_is_unavailable_never_a_verdict(int status, string body)
+    {
+        _server.Given(Request.Create().WithPath("/v1/authorisations").UsingPost())
+            .AtPriority(0)
+            .RespondWith(Response.Create().WithStatusCode(status).WithBody(body));
+
+        await Should.ThrowAsync<PaymentProviderUnavailableException>(() =>
+            Provider().AuthoriseAsync(Authorisation(42.10m), TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task The_callers_own_cancellation_is_not_counted_against_the_provider()
+    {
+        long counted = 0;
+        using MeterListener listener = new()
+        {
+            InstrumentPublished = (instrument, l) =>
+            {
+                if (instrument.Meter.Name == "Payments.Provider" && instrument.Name == "payments.provider.unavailable")
+                    l.EnableMeasurementEvents(instrument);
+            }
+        };
+        listener.SetMeasurementEventCallback<long>((_, value, _, _) => Interlocked.Add(ref counted, value));
+        listener.Start();
+        using CancellationTokenSource cancelled = new();
+        await cancelled.CancelAsync();
+
+        await Should.ThrowAsync<OperationCanceledException>(() =>
+            Provider().AuthoriseAsync(Authorisation(42.10m), cancelled.Token));
+
+        Interlocked.Read(ref counted).ShouldBe(0, "a consume cancelled at shutdown is not a provider incident");
     }
 }
 ```
@@ -556,11 +624,12 @@ internal sealed class ProviderAttemptCounter(ProviderMetrics metrics) : Delegati
 
             return response;
         }
-        catch (Exception e) when (e is HttpRequestException or OperationCanceledException)
+        catch (HttpRequestException)
         {
-            // An attempt timeout cancels this attempt's token; the caller's own
-            // cancellation is not the provider's fault, but it cannot be told
-            // apart here, and a cancelled consume is rare enough not to skew it.
+            // A refused or broken connection is the provider's. A cancelled
+            // attempt is not counted here: an attempt timeout and the caller's
+            // own cancellation arrive as the same exception, so timeouts are
+            // counted where only they arrive, the pipeline's OnTimeout.
             metrics.Unavailable();
             throw;
         }
@@ -576,6 +645,7 @@ internal sealed class ProviderAttemptCounter(ProviderMetrics metrics) : Delegati
 ```csharp
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
 using Payments.Application;
 using Payments.Application.Provider;
 using Polly.CircuitBreaker;
@@ -614,14 +684,29 @@ internal sealed class HttpPaymentProvider(HttpClient http) : IPaymentProvider
                 $"The provider answered an authorisation with {(int)response.StatusCode}.");
         }
 
-        AuthoriseAnswer? answer = await response.Content.ReadFromJsonAsync<AuthoriseAnswer>(ct);
+        AuthoriseAnswer? answer;
+        try
+        {
+            answer = await response.Content.ReadFromJsonAsync<AuthoriseAnswer>(ct);
+        }
+        catch (JsonException e)
+        {
+            throw new PaymentProviderUnavailableException("The provider answered an authorisation with no JSON body.", e);
+        }
 
+        // The body must agree with its status, and each verdict must carry what
+        // it is a verdict about. A contradiction is a provider this adapter does
+        // not understand — a fault, never an authorisation or a decline.
         if (response.StatusCode == HttpStatusCode.PaymentRequired)
-            return new AuthorisationResult.Declined(answer?.Code ?? "declined");
+        {
+            return answer is { Status: "declined", Code: { Length: > 0 } code }
+                ? new AuthorisationResult.Declined(code)
+                : throw new PaymentProviderUnavailableException("The provider declined with a body that is not a decline.");
+        }
 
-        return answer?.Reference is { Length: > 0 } reference
+        return answer is { Status: "approved", Reference: { Length: > 0 } reference }
             ? new AuthorisationResult.Authorised(reference)
-            : throw new PaymentProviderUnavailableException("The provider approved an authorisation with no reference.");
+            : throw new PaymentProviderUnavailableException("The provider approved with a body that is not an approval.");
     }
 
     public async Task VoidAsync(VoidRequest request, CancellationToken ct)
@@ -713,7 +798,11 @@ public static class DependencyInjection
         if (string.IsNullOrWhiteSpace(baseUrl))
             throw new InvalidOperationException($"{BaseUrlKey} is not configured. Payments cannot reach a provider.");
 
-        string apiKey = configuration[ApiKeyKey] ?? "";
+        // Required for the same reason, and §15.4 says so: a host must not
+        // start and then call a provider unauthenticated.
+        string? apiKey = configuration[ApiKeyKey];
+        if (string.IsNullOrWhiteSpace(apiKey))
+            throw new InvalidOperationException($"{ApiKeyKey} is not configured. Payments does not call a provider unauthenticated.");
 
         services.AddSingleton<ProviderMetrics>();
         services.AddTransient<ProviderAttemptCounter>();
@@ -728,7 +817,7 @@ public static class DependencyInjection
         // pipeline's builder, not the client's, so a chained
         // AddHttpMessageHandler would not compile onto the client. Added after
         // the pipeline, the counter is inside it and sees every attempt.
-        client.AddStandardResilienceHandler(options =>
+        client.AddStandardResilienceHandler().Configure((HttpStandardResilienceOptions options, IServiceProvider sp) =>
         {
             options.TotalRequestTimeout.Timeout = ProviderHop.TotalRequestTimeout;
             options.AttemptTimeout.Timeout = ProviderHop.AttemptTimeout;
@@ -740,6 +829,15 @@ public static class DependencyInjection
             // The circuit breaker's sampling window must be at least twice the
             // attempt timeout, which the library validates at startup.
             options.CircuitBreaker.SamplingDuration = ProviderHop.AttemptTimeout * 2;
+
+            // An attempt timeout is the provider's, and this is the one place
+            // it arrives distinguishable from the caller cancelling.
+            ProviderMetrics metrics = sp.GetRequiredService<ProviderMetrics>();
+            options.AttemptTimeout.OnTimeout = _ =>
+            {
+                metrics.Unavailable();
+                return ValueTask.CompletedTask;
+            };
         });
         client.AddHttpMessageHandler<ProviderAttemptCounter>();
 
@@ -788,7 +886,8 @@ git commit -m "feat(payments): the provider adapter, its resilience budget and a
 - Modify: `docs/backend-architecture/15-cicd-deployment.md` — §15.4's table
   gains `PaymentProvider__BaseUrl` (plain configuration; the provider's
   address) and `PaymentProvider__ApiKey` (Secret, External Secrets)
-- Modify: `.github/secret-scan/allowed/*.txt` if the scan flags the local key
+- Modify: `.github/secret-scan/allowed/deploy.txt` — the entry for the local
+  key in `deploy/compose/services/payments.yml`, which the scan flags
 
 - [ ] **Step 1: The meter**
 
@@ -832,8 +931,10 @@ The ports table in `deploy/compose/README.md` gains
 `| PSP simulator | http://localhost:5190 | /__admin/mappings — the scripted
 amounts are in deploy/compose/psp-simulator/README.md |`.
 
-Run the secret scan's suite and gate; if the local key is flagged, add an
-entry to the covering allow-list file stating it is §14.1's local default.
+Run the secret scan's suite and gate. The local key is flagged, as it was
+in this plan's own text: add the entry to `.github/secret-scan/allowed/deploy.txt`
+with the fingerprint the gate prints, stating it is §14.1's local default,
+and run both again.
 
 - [ ] **Step 3: §15.4's two rows**
 
