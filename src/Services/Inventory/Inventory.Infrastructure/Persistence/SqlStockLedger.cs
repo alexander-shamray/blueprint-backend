@@ -15,6 +15,8 @@ namespace Inventory.Infrastructure.Persistence;
 /// </summary>
 internal sealed class SqlStockLedger(InventoryDbContext db) : IStockLedger
 {
+    // The marker's scope is one call: a second take in the same transaction
+    // rolls back only its own decrements, not the first take's.
     private const string Savepoint = "Reserve";
 
     // §7.3's statement, as printed, with two additions the spec's section 4

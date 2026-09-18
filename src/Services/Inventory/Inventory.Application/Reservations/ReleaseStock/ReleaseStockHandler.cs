@@ -3,7 +3,11 @@ using Inventory.Domain.Reservations;
 
 namespace Inventory.Application.Reservations.ReleaseStock;
 
-/// <summary>Both of ADR-024's guarantees, and the one place they are implemented.</summary>
+/// <summary>
+/// The first of ADR-024's two guarantees, and the tombstone half of the
+/// second; the refusal that closes it is <c>ReserveStockHandler</c>'s,
+/// through <see cref="Reservation.AnswerAgain"/> on the row this writes.
+/// </summary>
 public sealed class ReleaseStockHandler(
     IReservationRepository reservations,
     IStockLedger ledger,
