@@ -3,10 +3,10 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace Inventory.Infrastructure.Persistence.Migrations;
 
 /// <summary>
-/// The two columns <see cref="ReservationConfiguration"/> adds for despatch
-/// tracking (ADR-029): <c>DespatchedUnreservedAt</c>, the domain's own
-/// timestamp, and <c>UnreservedCounted</c>, the projection's shadow claim
-/// over it (§13.3).
+/// The despatch-tracking columns, generated from <see cref="ReservationConfiguration"/>
+/// — the configuration is the source of truth and only this file's dress is
+/// hand-authored (file-scoped namespace, this comment). The <c>.Designer.cs</c>
+/// and the snapshot beside it are machine-owned and untouched.
 /// </summary>
 public partial class AddDespatchTracking : Migration
 {
