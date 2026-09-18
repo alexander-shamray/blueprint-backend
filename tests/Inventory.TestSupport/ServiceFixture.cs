@@ -6,6 +6,7 @@ using Common.Infrastructure.Idempotency;
 using Common.Infrastructure.Inbox;
 using Common.Infrastructure.Messaging;
 using Common.Infrastructure.Outbox;
+using DotNet.Testcontainers.Containers;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -129,6 +130,53 @@ public sealed class ServiceFixture : IAsyncLifetime
             $"No Platform.slnx above {AppContext.BaseDirectory}; the broker image cannot be built.");
     }
 
+    /// <summary>
+    /// Widens <c>inventory-svc</c>'s broker permissions against the test
+    /// container alone, after it starts. §14.1's grant already covers
+    /// <c>inventory-events</c> and every read on <c>Common\.Contracts</c>
+    /// (configure, write, read for the first; read for the second) — what it
+    /// refuses is this suite standing in for Ordering and Shipping to publish
+    /// <see cref="Common.Contracts.Ordering.V1.OrderCancelled"/> and
+    /// <see cref="Common.Contracts.Shipping.V1.ShipmentDispatched"/> onto
+    /// contract exchanges <c>inventory-svc</c> does not own. Production never
+    /// asks for that write, so the grant does not move; the harness does, on
+    /// the container this fixture disposes.
+    /// </summary>
+    /// <remarks>
+    /// A second copy of Ordering.TestSupport's method, deliberately. §4.3
+    /// permits exactly one assembly to cross a service boundary and a test
+    /// helper is not it.
+    /// <para>
+    /// This shrinks to nothing as the platform grows: each of those events
+    /// gains a real publisher with its own account, and the day the last one
+    /// does, this method deletes itself.
+    /// </para>
+    /// </remarks>
+    private async Task WidenWriteForTheHarnessAsync()
+    {
+        const string scope =
+            "^(inventory-|Common\\.Contracts|Inventory\\.Infrastructure\\.Messaging:|MassTransit:)";
+
+        ExecResult result = await _rabbit!.ExecAsync(
+            [
+                "rabbitmqctl", "set_permissions", "-p", "/", "inventory-svc",
+                scope, scope, scope
+            ],
+            TestContext.Current.CancellationToken);
+
+        // A silent failure here is the worst outcome available: every event
+        // test would then fail on a publish, twenty minutes later, naming a
+        // message rather than a permission. Measured — that is exactly how
+        // Ordering's copy was found, as a suite that retried a refused
+        // publish until it timed out.
+        if (result.ExitCode != 0)
+        {
+            throw new InvalidOperationException(
+                $"Could not widen inventory-svc's broker permissions for the harness "
+                + $"(exit {result.ExitCode}). stdout: {result.Stdout} stderr: {result.Stderr}");
+        }
+    }
+
     // ValueTask, not Task: xUnit v3 redefined IAsyncLifetime (§12.4).
     public async ValueTask InitializeAsync()
     {
@@ -176,6 +224,8 @@ public sealed class ServiceFixture : IAsyncLifetime
             _rabbit.StartAsync(TestContext.Current.CancellationToken),
             _redisCache.StartAsync(TestContext.Current.CancellationToken),
             _redisCoordination.StartAsync(TestContext.Current.CancellationToken));
+
+        await WidenWriteForTheHarnessAsync();
 
         // The container hands out a connection to master; Inventory owns a
         // database of its own (§7.1), and MigrateAsync is what creates it.

@@ -1,4 +1,6 @@
 using Common.Contracts.Inventory.V1;
+using Common.Contracts.Ordering.V1;
+using Common.Contracts.Shipping.V1;
 using Common.Infrastructure.Messaging;
 using Inventory.Application.Reservations.ReleaseStock;
 using Inventory.Application.Reservations.ReserveStock;
@@ -203,6 +205,25 @@ public class MessagingRegistrationTests
             services.ShouldContain(
                 d => d.ImplementationType == consumer || d.ServiceType == consumer,
                 $"{consumer.Name} is in §3.2's Accepts column and has no AddConsumer");
+        }
+    }
+
+    [Fact]
+    public void Every_event_in_the_consumes_column_is_registered()
+    {
+        ServiceCollection services = new();
+
+        services.AddMassTransitMessaging(Configuration());
+
+        foreach (Type consumer in new[]
+                 {
+                     typeof(IntegrationEventConsumer<OrderCancelled>),
+                     typeof(IntegrationEventConsumer<ShipmentDispatched>)
+                 })
+        {
+            services.ShouldContain(
+                d => d.ImplementationType == consumer || d.ServiceType == consumer,
+                $"{consumer.Name} is in §3.2's Consumes column and has no AddConsumer");
         }
     }
 

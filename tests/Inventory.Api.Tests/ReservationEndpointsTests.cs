@@ -210,14 +210,6 @@ public sealed class ReservationEndpointsTests(ServiceFixture fixture) : IAsyncLi
             .StatusCode.ShouldBe(HttpStatusCode.Forbidden);
     }
 
-    private HttpClient Admin()
-    {
-        HttpClient client = fixture.Factory.CreateClient();
-        client.DefaultRequestHeaders.Add(TestAuthHandler.UserHeader, Guid.CreateVersion7().ToString());
-        client.DefaultRequestHeaders.Add(TestAuthHandler.PermissionsHeader, InventoryPermissions.Admin);
-        return client;
-    }
-
     // Thin forwarders onto ReservationTestSupport — see
     // InventoryCommandEndpointTests for why the implementation lives there.
     private Task SeedStock(Guid product, int available) =>
@@ -235,4 +227,6 @@ public sealed class ReservationEndpointsTests(ServiceFixture fixture) : IAsyncLi
     private Task SendAsync<T>(T command, bool drain = true)
         where T : class =>
         ReservationTestSupport.SendAsync(fixture, command, drain);
+
+    private HttpClient Admin() => ReservationTestSupport.Admin(fixture);
 }
