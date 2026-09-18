@@ -21,6 +21,13 @@
     <Project Path="src/Services/Catalog/Catalog.Infrastructure/Catalog.Infrastructure.csproj" />
     <Project Path="src/Services/Catalog/Catalog.Migrator/Catalog.Migrator.csproj" />
   </Folder>
+  <Folder Name="/src/Services/Inventory/">
+    <Project Path="src/Services/Inventory/Inventory.Api/Inventory.Api.csproj" />
+    <Project Path="src/Services/Inventory/Inventory.Application/Inventory.Application.csproj" />
+    <Project Path="src/Services/Inventory/Inventory.Domain/Inventory.Domain.csproj" />
+    <Project Path="src/Services/Inventory/Inventory.Infrastructure/Inventory.Infrastructure.csproj" />
+    <Project Path="src/Services/Inventory/Inventory.Migrator/Inventory.Migrator.csproj" />
+  </Folder>
   <Folder Name="/src/Services/Ordering/">
     <Project Path="src/Services/Ordering/Ordering.Api/Ordering.Api.csproj" />
     <Project Path="src/Services/Ordering/Ordering.Application/Ordering.Application.csproj" />
@@ -38,6 +45,10 @@
     <Project Path="tests/Common.Infrastructure.Tests/Common.Infrastructure.Tests.csproj" />
     <Project Path="tests/Common.Web.Tests/Common.Web.Tests.csproj" />
     <Project Path="tests/Gateway.Api.Tests/Gateway.Api.Tests.csproj" />
+    <Project Path="tests/Inventory.Api.Tests/Inventory.Api.Tests.csproj" />
+    <Project Path="tests/Inventory.Application.Tests/Inventory.Application.Tests.csproj" />
+    <Project Path="tests/Inventory.Domain.Tests/Inventory.Domain.Tests.csproj" />
+    <Project Path="tests/Inventory.TestSupport/Inventory.TestSupport.csproj" />
     <Project Path="tests/Ordering.Api.Tests/Ordering.Api.Tests.csproj" />
     <Project Path="tests/Ordering.Application.Tests/Ordering.Application.Tests.csproj" />
     <Project Path="tests/Ordering.Domain.Tests/Ordering.Domain.Tests.csproj" />

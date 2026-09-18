@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- xUnit v3 test projects are self-executing: the runner is compiled in
+         rather than loaded by a host, so the assembly has to be an Exe. -->
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="xunit.v3" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="Shouldly" />
+    <!-- The §4.2 gates that reason over type dependencies rather than
+         assembly references — a job GetReferencedAssemblies cannot do. -->
+    <PackageReference Include="NetArchTest.Rules" />
+    <!-- ServiceCollection itself, for the registration tests: the
+         abstractions package Inventory.Application compiles against has no
+         container in it to build. -->
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Services\Inventory\Inventory.Application\Inventory.Application.csproj" />
+    <!-- No Inventory.TestSupport and no Inventory.Infrastructure yet, and no
+         Docker with them: §12.1 homes the handler tests here against real
+         containers, and this project has no handler to test. The fixture
+         reference, the DbContext reference and the provider package all
+         return with the first one. -->
+  </ItemGroup>
+
+</Project>

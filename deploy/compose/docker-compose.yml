@@ -39,3 +39,4 @@ include:
   - services/gateway.yml
   - services/ordering.yml
   - services/web-bff.yml
+  - services/inventory.yml
