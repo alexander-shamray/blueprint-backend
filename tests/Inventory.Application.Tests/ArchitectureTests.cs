@@ -77,6 +77,11 @@ public class ArchitectureTests
         // rather than a concrete provider, so no §4.2 row forbids it, and
         // LoggerMessage.Define rather than log.LogWarning is CA1848 under
         // ADR-019.
+        //
+        // System.Diagnostics.DiagnosticSource is InventoryMetrics' own:
+        // Counter<T>, Meter and IMeterFactory live in that assembly, and
+        // §13.3 puts the one business-shaped counter beside the aggregate it
+        // claims a row against rather than behind Common.Application.
         string[] allowed =
         [
             "Inventory.Domain",
@@ -90,6 +95,7 @@ public class ArchitectureTests
             "Microsoft.Extensions.Logging.Abstractions",
             "System.Collections",
             "System.Data.Common",
+            "System.Diagnostics.DiagnosticSource",
             "System.Linq",
             "System.Linq.Expressions",
             "System.Runtime"

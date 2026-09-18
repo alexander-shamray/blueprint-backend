@@ -25,6 +25,11 @@
          argued in Messaging/DependencyInjection.cs. -->
     <PackageReference Include="MassTransit.RabbitMQ" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" />
+    <!-- §13.6's OutboxStats holds its five-second snapshot in a MemoryCache.
+         Common.Infrastructure's HybridCache reference carries the package
+         transitively; the direct reference states the direct use, exactly as
+         the SqlClient line above does. -->
+    <PackageReference Include="Microsoft.Extensions.Caching.Memory" />
   </ItemGroup>
 
   <ItemGroup>

@@ -1,4 +1,5 @@
 using System.Net;
+using Common.Application;
 using Common.Contracts;
 using Common.Contracts.Inventory.V1;
 using Common.Contracts.Ordering.V1;
@@ -123,9 +124,10 @@ public sealed class InventoryEventEndpointTests(ServiceFixture fixture) : IAsync
             expected: 1,
             because: "the open case is recorded as state, not logged and forgotten");
         (await Available(product)).ShouldBe(3, "ADR-029's gap is left open, visibly");
+        (await fixture.OutboxAsync()).ShouldContain(
+            r => r.MessageType.Contains("DespatchedUnreservedDomainEvent", StringComparison.Ordinal)
+                && r.Lane == OutboxLane.Local);
 
-        // The Local-lane outbox row for this event is asserted alongside the
-        // projection that stages it, rather than here where nothing registers one yet.
         HttpResponseMessage reinstate = await Admin().PostAsync(
             $"/v1/inventory/reservations/{order}/reinstate", null, TestContext.Current.CancellationToken);
         reinstate.StatusCode.ShouldBe(

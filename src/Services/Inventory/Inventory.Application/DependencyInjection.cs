@@ -1,4 +1,5 @@
 using Inventory.Application.Integration;
+using Inventory.Application.Reservations;
 using Common.Application;
 using FluentValidation;
 using Microsoft.Extensions.DependencyInjection;
@@ -37,6 +38,12 @@ public static class DependencyInjection
         // dispatcher. The registration test is what guards these two lines.
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton<RequestMetrics>();
+
+        // §13.3's claim, forced beside RequestMetrics for the reason that one
+        // is: nothing dispatches a request through UnreservedDespatchProjection,
+        // so only MetricsInitialiser constructing this makes the counter exist
+        // before the first claim (§13.6).
+        services.AddSingleton<InventoryMetrics>();
 
         // Ordered, explicit, not scanned — registration order is pipeline
         // order (§6.3), and all four seats are filled since the PR that built

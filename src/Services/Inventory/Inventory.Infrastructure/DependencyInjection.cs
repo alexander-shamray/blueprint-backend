@@ -2,6 +2,7 @@ using Inventory.Application.Reservations;
 using Inventory.Domain.Reservations;
 using Inventory.Domain.Stock;
 using Inventory.Infrastructure.Messaging;
+using Inventory.Infrastructure.Observability;
 using Inventory.Infrastructure.Persistence;
 using Common.Application;
 using Common.Contracts.Inventory.V1;
@@ -10,6 +11,7 @@ using Common.Infrastructure.Inbox;
 using Common.Infrastructure.Messaging;
 using Common.Infrastructure.Outbox;
 using Common.Infrastructure.Redis;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -115,6 +117,40 @@ public static class DependencyInjection
         // §13.3's messaging instruments, on the Commerce.Messaging meter
         // AddObservability already collects; the class owns the list.
         services.AddSingleton<MessagingMetrics>();
+
+        // §13.6's per-lane outbox gauges, and the stats type behind them. Both
+        // singletons: the gauges are callbacks the Meter holds. InventoryMetrics
+        // is an Application type AddInventoryApplication registers; a second
+        // AddSingleton here would not fail, the container
+        // would keep both, and two instances would mean two sets of
+        // instruments on one meter.
+        //
+        // OutboxStats gets its own connection factory with a bounded connect
+        // timeout because it runs inside observable gauge callbacks, and a
+        // command timeout bounds only the statement: at SqlClient's default
+        // Connect Timeout, which OutboxStats.ConnectTimeoutSeconds is argued
+        // against, a database that hangs rather than refuses would block every
+        // callback before the command timer started and stall the metric
+        // reader for unrelated telemetry too. The runtime key, because it
+        // reads the same data plane (§7.1);
+        // only the timeout differs, so no query path inherits it.
+        string metricsConnectionString =
+            new SqlConnectionStringBuilder(configuration.GetConnectionString("Inventory"))
+            {
+                ConnectTimeout = OutboxStats.ConnectTimeoutSeconds
+            }.ConnectionString;
+
+        services.AddSingleton<IOutboxStats>(sp => new OutboxStats(
+            new SqlConnectionFactory(metricsConnectionString),
+            sp.GetRequiredService<OutboxTable>()));
+        services.AddSingleton<OutboxMetrics>();
+
+        // Singleton registration alone is lazy: instruments appear on first
+        // resolve, which for a class nothing injects is never, and
+        // ValidateOnBuild cannot check it because nothing depends on a metrics
+        // class (§6.2). Registered before the bus and the dispatcher, so the
+        // instruments exist before the first message is delivered against them.
+        services.AddHostedService<MetricsInitialiser>();
 
         // §8's two connections. The call brings §8.2's HybridCache stack with
         // it whether or not this service reads a cache, because the method is

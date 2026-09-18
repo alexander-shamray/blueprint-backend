@@ -32,6 +32,8 @@ public class ObservabilityTests
     [
         "Ordering.Orders",
         "Ordering.Outbox",
+        "Inventory.Reservations",
+        "Inventory.Outbox",
         "Commerce.Requests",
         "Commerce.Messaging",
         "MassTransit",
@@ -77,7 +79,7 @@ public class ObservabilityTests
     [Fact]
     public void The_one_instrument_the_repo_actually_has_is_collected()
     {
-        // The test above guards seven strings against a list of seven strings.
+        // The test above guards the strings above against the list below.
         // Both copies are here in the test project; RequestMetrics holds a
         // third, unshared copy of "Commerce.Requests" over in
         // Common.Application. Rename that one and the test above stays green
