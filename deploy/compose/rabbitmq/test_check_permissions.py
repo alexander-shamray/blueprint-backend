@@ -131,9 +131,11 @@ class AForbiddenGrantAdded(unittest.TestCase):
     """#44's property. Each of these is the exploit, re-opened one way."""
 
     def test_a_peer_s_command_endpoint(self):
+        # Widens the real grant rather than replacing it, so catalog-svc's own
+        # receive endpoint stays covered and check 2 does not fail first.
         definitions = real()
-        permission(definitions, "catalog-svc")["write"] = \
-            r"^(Common\.Contracts|MassTransit:|ordering-)"
+        entry = permission(definitions, "catalog-svc")
+        entry["write"] = entry["write"].replace("|MassTransit:", "|MassTransit:|ordering-")
 
         failures = run_against(definitions)
         self.assertTrue(
@@ -141,9 +143,12 @@ class AForbiddenGrantAdded(unittest.TestCase):
             f"the gate accepted broker write access to a peer's command queue: {failures}")
 
     def test_another_context_s_contracts(self):
+        # Removes only the owned-contract alternative, so `catalog-` survives
+        # and check 2 still finds its own receive endpoint covered.
         definitions = real()
-        permission(definitions, "catalog-svc")["write"] = \
-            r"^(Common\.Contracts|MassTransit:)"
+        entry = permission(definitions, "catalog-svc")
+        entry["write"] = entry["write"].replace(
+            r"Common\.Contracts(\.Catalog\.V1:|:)", r"Common\.Contracts")
 
         failures = run_against(definitions)
         self.assertTrue(
