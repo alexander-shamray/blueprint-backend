@@ -6,10 +6,10 @@ namespace Catalog.Application.Products.GetProducts;
 
 /// <summary>
 /// §6.5's read side: Dapper over the write tables — Catalog is level 1, one
-/// database, no projection — with a keyset seek over
-/// <c>(PublishedAt DESC, Id DESC)</c>. The tiebreaker is required: rows
-/// sharing a <c>PublishedAt</c> would otherwise straddle the page boundary
-/// unpredictably.
+/// database, one projection left-joined for Inventory's level (§3.2) — with
+/// a keyset seek over <c>(PublishedAt DESC, Id DESC)</c>. The tiebreaker is
+/// required: rows sharing a <c>PublishedAt</c> would otherwise straddle the
+/// page boundary unpredictably.
 /// </summary>
 public sealed class GetProductsHandler(IDbConnectionFactory connections)
     : IQueryHandler<GetProductsQuery, CursorPage<ProductSummaryDto>>
@@ -17,13 +17,15 @@ public sealed class GetProductsHandler(IDbConnectionFactory connections)
     private const string Sql =
         """
         SELECT TOP (@Take)
-            ProductId    = p.Id,
-            Name         = p.Name,
-            ThumbnailUrl = p.ThumbnailUrl,
-            Amount       = p.PriceAmount,
-            Currency     = p.PriceCurrency,
-            PublishedAt  = p.PublishedAt
+            ProductId         = p.Id,
+            Name              = p.Name,
+            ThumbnailUrl      = p.ThumbnailUrl,
+            Amount            = p.PriceAmount,
+            Currency          = p.PriceCurrency,
+            PublishedAt       = p.PublishedAt,
+            QuantityAvailable = s.QuantityAvailable
         FROM catalog.Products p
+        LEFT JOIN catalog.StockLevels s ON s.ProductId = p.Id
         WHERE (@AfterPublishedAt IS NULL
             OR p.PublishedAt < @AfterPublishedAt
             OR (p.PublishedAt = @AfterPublishedAt AND p.Id < @AfterId))
