@@ -1,6 +1,7 @@
 using Common.Infrastructure.Idempotency;
 using Common.Infrastructure.Inbox;
 using Common.Infrastructure.Outbox;
+using Inventory.Domain.Stock;
 using Microsoft.EntityFrameworkCore;
 
 namespace Inventory.Infrastructure.Persistence;
@@ -22,6 +23,9 @@ namespace Inventory.Infrastructure.Persistence;
 /// </remarks>
 public sealed class InventoryDbContext(DbContextOptions<InventoryDbContext> options) : DbContext(options)
 {
+    /// <summary>§5's first aggregate (§7.3).</summary>
+    public DbSet<StockItem> StockItems => Set<StockItem>();
+
     /// <summary>
     /// §9.4's outbox, and the first <c>DbSet</c> here that is not an aggregate
     /// root — §9.5's inbox and §8.5's marker followed it, each for a version of

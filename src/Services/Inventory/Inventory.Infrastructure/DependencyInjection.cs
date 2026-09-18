@@ -48,8 +48,7 @@ public static class DependencyInjection
         services.AddPluggableFrom(typeof(DependencyInjection).Assembly);
 
         services.AddScoped<IUnitOfWork, EfUnitOfWork>();                     // §6.3
-
-        // §5.6's repository registrations join with the first aggregate.
+        services.AddScoped<IStockItemRepository, StockItemRepository>();     // §5.6
 
         // §8.5's durable half, beside the unit of work rather than in
         // AddRedisConnections with its Redis sibling: the two ports are backed
