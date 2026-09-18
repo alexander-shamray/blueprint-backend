@@ -1,5 +1,5 @@
 using System.Reflection;
-using Inventory.Domain;
+using Inventory.Domain.Stock;
 using Inventory.Infrastructure.Persistence;
 using Inventory.Migrator;
 using NetArchTest.Rules;
@@ -153,7 +153,7 @@ public class ArchitectureTests
     /// </remarks>
     private static readonly Assembly[] ServiceAssemblies =
     [
-        typeof(AssemblyMarker).Assembly,
+        typeof(StockItem).Assembly,
         typeof(Inventory.Application.DependencyInjection).Assembly,
         typeof(InventoryDbContext).Assembly,
         typeof(MigratorHost).Assembly,

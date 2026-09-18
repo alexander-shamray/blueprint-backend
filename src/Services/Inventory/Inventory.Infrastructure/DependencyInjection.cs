@@ -1,4 +1,4 @@
-using Inventory.Domain;
+using Inventory.Domain.Stock;
 using Inventory.Infrastructure.Messaging;
 using Inventory.Infrastructure.Persistence;
 using Common.Application;
@@ -92,13 +92,13 @@ public static class DependencyInjection
         // dispatcher claims a row, so MessageTypeMapValidator is what makes a
         // duplicate FullName fail the host rather than the first message. It
         // is the first hosted service because hosted services start in order.
-        // IIntegrationEvent and AssemblyMarker stand in for the two anchors
-        // §9.4 names — this service's contracts and its domain — because it
-        // has neither yet. Both point at the right assemblies regardless, so
-        // the first contract and the first aggregate change what these lines
-        // say and not what they resolve to.
+        // §9.4's two anchors are this service's contracts and its domain.
+        // StockItem, the first aggregate, is the real domain anchor now;
+        // IIntegrationEvent still stands in for the contracts side, because
+        // this service has none of its own yet. The line changes again with
+        // the first contract.
         services.AddSingleton(
-            new MessageTypeSource(typeof(IIntegrationEvent).Assembly, typeof(AssemblyMarker).Assembly));
+            new MessageTypeSource(typeof(IIntegrationEvent).Assembly, typeof(StockItem).Assembly));
         services.AddSingleton(sp =>
         {
             MessageTypeSource source = sp.GetRequiredService<MessageTypeSource>();
