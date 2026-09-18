@@ -19,10 +19,10 @@ namespace Catalog.Api.Tests;
 /// consume context rather than of the broker.
 /// </summary>
 /// <remarks>
-/// Catalog binds no receive endpoint of its own (§3.2 gives it one Consumes
-/// cell, owned by a service that does not exist), so this suite declares the
-/// endpoints it needs rather than inventing a subscription §3.2 does not give
-/// it.
+/// This suite declares the endpoints it needs rather than driving one of the
+/// service's own: what it asserts is the filter's behaviour, and a probe
+/// endpoint of its own keeps that claim apart from any subscription §3.2 gives
+/// the service.
 /// </remarks>
 [Collection(nameof(IntegrationCollection))]
 public sealed class InboxFilterTests(ServiceFixture fixture) : IAsyncLifetime

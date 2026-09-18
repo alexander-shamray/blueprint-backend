@@ -866,21 +866,6 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
             "                cfg.Host(new Uri(connectionString));\n",
         ),
     ),
-    # The entry below carries an argument out of a copied file: *why* Catalog
-    # once bound no receive endpoint is a fact about Catalog's row in §3.2, and
-    # a scaffolded service inherits the state without inheriting the reason.
-    # The generic replacement says the rule the reason produced.
-    "tests/Catalog.Api.Tests/InboxFilterTests.cs": (
-        (
-            "/// Catalog binds no receive endpoint of its own (§3.2 gives it one Consumes\n"
-            "/// cell, owned by a service that does not exist), so this suite declares the\n"
-            "/// endpoints it needs rather than inventing a subscription §3.2 does not give\n"
-            "/// it.\n",
-            "/// This service binds no receive endpoint of its own yet, so this suite\n"
-            "/// declares the endpoints it needs rather than inventing a subscription §3.2\n"
-            "/// does not give it.\n",
-        ),
-    ),
     # §8.5's marker suite travels, and its anti-vacuity floor is INVERTED for
     # the reason IdempotencyOptInTests' three are: a rendered service opts no
     # command into idempotency, so a floor asserting the selector found one
@@ -1034,12 +1019,11 @@ INBOX_MIGRATION_PATCHES: tuple[tuple[str, str], ...] = (
         "/// untouched.\n",
     ),
     (
-        "/// <b>The table ships to every service, including the ones that consume\n"
-        "/// nothing.</b> Catalog binds no receive endpoint yet (§3.2 gives it one\n"
-        "/// Consumes cell, owned by a service that does not exist), so nothing writes a\n"
-        "/// row here — but <c>RetentionPurgeService</c> runs from first boot and deletes\n"
-        "/// from every table it was given, and a purge against a table that is not there\n"
-        "/// logs a failure every pass. That is the same argument that keeps\n"
+        "/// <b>The table arrives before the first consumer, deliberately.</b> A service\n"
+        "/// that binds no receive endpoint writes no row here — but\n"
+        "/// <c>RetentionPurgeService</c> runs from first boot and deletes from every\n"
+        "/// table it was given, and a purge against a table that is not there logs a\n"
+        "/// failure every pass. That is the same argument that keeps\n"
         "/// <c>AddOutbox</c> in the scaffold's output, inverted: the dispatcher would\n"
         "/// fail a claim, this would fail a delete.\n",
         "/// <b>The table arrives before the first consumer, deliberately.</b> A service\n"
