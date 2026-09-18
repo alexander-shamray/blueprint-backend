@@ -106,9 +106,10 @@ when both need the same one.
 **Why `.claude/**` is one agent.** `settings.json` self-locks and `ship.md`
 is one file.
 
-**Why two of the mutexes are temporary.** `CLAUDE.md` is one until step 2
-rewrites it and `appendix-a-adrs.md` until step 3 splits it; the contract's
-mutex list is where either stands.
+**Why two mutexes are removed rather than listed.** A file every PR edits
+is a mutex for as long as it keeps that shape, so step 2 rewrites
+`CLAUDE.md` and step 3 splits `appendix-a-adrs.md` rather than naming either
+as a surface to queue on.
 
 ## 4. The work, in order
 
@@ -300,9 +301,11 @@ Done when no deployable unit's Compose environment shares a file with
 another's, and no single file under `.github/secret-scan/` holds suppressions
 for two trees.
 
-The criterion is about environments, not files: the Compose and allow-list
-files that stay shared, and why, are the contract's
-[§4](change-locality.md#repo-wide-mutex-surfaces).
+The criterion is about environments, not files: which Compose and
+allow-list files stay shared is the contract's
+[§4](change-locality.md#repo-wide-mutex-surfaces), and why the allow-list
+splits per tree rather than per service is
+[`.github/secret-scan/allowed/README.md`](../.github/secret-scan/allowed/README.md)'s.
 
 ## 5. Where this differs from `agent-locality.md`
 
