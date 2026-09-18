@@ -24,12 +24,11 @@ public class ArchitectureTests
         // System.Text.Json is the extension the table forbids by name.
         //
         // Two entries is what an empty domain references. System.Collections
-        // is the third, earned by StockLevelChangedDomainEvent: the first
-        // domain event's generated record equality goes through
-        // EqualityComparer<T>. System.Linq would be the next one, earned by
-        // the first value object doing enumerable logic over owned values —
-        // domain work, not an I/O dependency.
-        string[] allowed = ["Common.Domain", "System.Runtime", "System.Collections"];
+        // is the third: a domain event's generated record equality goes
+        // through EqualityComparer<T>. System.Linq is the fourth: Reservation
+        // enumerates its own lines to enforce an invariant, which is domain
+        // work over owned values, not an I/O dependency.
+        string[] allowed = ["Common.Domain", "System.Runtime", "System.Collections", "System.Linq"];
 
         IEnumerable<string> referenced = typeof(StockItem).Assembly
             .GetReferencedAssemblies()
