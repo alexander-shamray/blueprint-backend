@@ -107,14 +107,9 @@ up to 128 characters of letters, digits, `-` and `_` — and any other value is
 replaced with a fresh one rather than echoed, exactly as a missing one is
 (§10.4).
 
-**One of the four routes has no service behind it yet** —
-`/api/v1/inventory` answers 502 until Inventory
-lands — and it is in the file deliberately, because the two configuration
-tests over it are what PR-17 exists to deliver. `/api/v1/orders` was one of
-three until PR-18 and `/bff` until PR-19, which is what "stops answering
-502" looks like: the route file did not change, because PR-17 shipped it whole
-and a service PR that re-decides a route is the mistake §10.2's dual-version
-trap describes. `/api/v1/catalog` is GET-only at the edge, so publishing a
+Every route in §10.2's file now has a service behind it; the two
+configuration tests over the file are what let it ship whole, ahead of
+three of them. `/api/v1/catalog` is GET-only at the edge, so publishing a
 product is a call to port 5102 and not to port 5000.
 
 ## Getting a token

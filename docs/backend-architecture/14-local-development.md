@@ -350,8 +350,8 @@ the ones that exist — Compose rejects a dependency it cannot see, and one
 undefined name fails the whole `up` rather than one service. Its *routes* are
 under no such constraint and [§10.2](10-api-gateway.md) ships all four, so
 a path answers 502 until its service lands. A route is configuration the
-gateway reads; a `depends_on` is a name Compose has to resolve. One answers 502
-today — inventory — the BFF's route having gained its service with PR-19.
+gateway reads; a `depends_on` is a name Compose has to resolve. Every route
+now has a destination Compose can see, Inventory's being the last to join.
 
 **The fence above and the shipped file now gate on the same three services**,
 `catalog-api`, `ordering-api` and `web-bff`, because all three exist: PR-10
@@ -360,7 +360,7 @@ explain a discrepancy — the sample was the finished platform's, with Ordering
 as its worked pair, while the file on disk had only Catalog — and the
 explanation expired when Ordering landed. Read the fence for the shape of a
 block; a destination still joins the dependency list with the PR that builds
-it, so the two will diverge again at Inventory.
+it, so the two would diverge again at the next service.
 
 **The BFF's own block gained a `depends_on` the fence above does not show**, on
 `catalog-api`, and the asymmetry with the gateway is the point: the gateway

@@ -248,10 +248,9 @@ client picks one or the other: aggregated responses shaped for a screen, or the
 service APIs shaped for a resource.
 
 **This file shipped whole, ahead of three of the four services it routes to,
-and one of them is still missing** — Ordering arrived behind its route with
-PR-18 and the BFF with PR-19, leaving Inventory alone answering 502 —
-which is the opposite of the rule [§14.1](14-local-development.md)'s Compose
-file follows — and the asymmetry is in what each costs. A Compose block naming
+each of which has since arrived behind its route** — which is the opposite of
+the rule [§14.1](14-local-development.md)'s Compose file follows — and the
+asymmetry is in what each costs. A Compose block naming
 an image that does not exist fails `up`; a route whose destination is not
 running 502s one path and costs nothing at startup, nothing in CI and nothing
 in any other route. What buys the difference is the pair of tests over the
