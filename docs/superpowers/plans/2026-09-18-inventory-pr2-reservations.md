@@ -1465,23 +1465,31 @@ public async Task A_malformed_reserve_is_a_contract_fault_and_is_not_retried(int
     var order = Guid.CreateVersion7();
     Guid product = emptyProduct ? Guid.Empty : Guid.CreateVersion7();
 
-    await SendAsync(new ReserveStock(order, [new StockLine(product, quantity)]));
+    // drain: false, because a message the mapper refuses never reaches the
+    // inbox filter and so leaves no row for the default drain to wait on.
+    await SendAsync(new ReserveStock(order, [new StockLine(product, quantity)]), drain: false);
 
-    await Eventually(
-        () => fixture.ScalarAsync<int>("SELECT Value = COUNT(*) FROM inventory.Reservations WHERE OrderId = {0}", order),
-        expected: 0,
-        because: "the mapper threw ContractMappingException, which the endpoint excludes from retry");
-    await Task.Delay(TimeSpan.FromSeconds(2), TestContext.Current.CancellationToken);
+    // A well-formed sentinel behind it on the same queue: once the sentinel
+    // has been consumed, the malformed message in front of it has been too,
+    // and "no row" is then a verdict rather than a race.
+    var sentinelProduct = Guid.CreateVersion7();
+    await SeedStock(sentinelProduct, 1);
+    var sentinelOrder = Guid.CreateVersion7();
+    await SendAsync(new ReserveStock(sentinelOrder, [new StockLine(sentinelProduct, 1)]));
+    await EventuallyStatus(sentinelOrder, "Reserved");
+
     (await fixture.ScalarAsync<int>("SELECT Value = COUNT(*) FROM inventory.Reservations WHERE OrderId = {0}", order))
-        .ShouldBe(0);
+        .ShouldBe(0, "the mapper threw ContractMappingException, which the endpoint excludes from retry, and nothing was written");
 }
 ```
 
 `SeedStock`, `Available`, `EventuallyStatus` (reads `Status` from
 `inventory.Reservations`) and `SendAsync` are private helpers in the test
 file; `SendAsync` resolves `ISendEndpointProvider` from
-`fixture.Factory.Services`, gets `queue:inventory-commands`, sends, and waits
-on the inbox row the way Ordering's does.
+`fixture.Factory.Services`, gets `queue:inventory-commands`, sends with the
+transport `MessageId` pinned, and — with its `drain` parameter at its
+default of `true` — waits on the inbox row, the way Ordering's does;
+`drain: false` sends and returns, for a message that will never write one.
 
 - [ ] **Step 2: Run to see them fail**
 

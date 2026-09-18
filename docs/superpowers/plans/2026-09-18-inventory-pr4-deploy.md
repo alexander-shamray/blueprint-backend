@@ -65,25 +65,24 @@ dependencies:
 ```
 
 In `values.yaml`, replace every value and comment that names Ordering: the
-header comment (Inventory, one port, no gRPC); `workload.name: inventory-api`
-— §10.2 dials that literal; `image.api: inventory-api`;
-`image.migrator: inventory-migrator`; `database.connectionName: Inventory`,
-so the chart injects `ConnectionStrings__Inventory` and
-`ConnectionStrings__InventoryMigrator`, the keys PR-1's host reads; the
-database's `runtimeSecretRef` and `migratorSecretRef` names and the
-broker's `secretRef.name`, each renamed on Ordering's pattern
-(`inventory-rabbitmq` for the account `inventory-svc`); and the comment
-beside each. Keep `replicaCount: 3`, the HPA at 20, the PDB,
-`service.enabled: true`. Then read every comment in the copied file, not
-only those naming Ordering: Ordering's `values.yaml` carries comments that
-recount how a value was arrived at, name pull requests and issues, and
-inventory what other charts do, and a copy would carry that history into a
-chart that has none. Each comment here says one reason and cites its
-owner — `_helpers.tpl`, §15.3, §15.5, ADR-022 — or is cut; the
-`terminationGracePeriodSeconds` comment becomes Inventory's two receive
-endpoints and the outbox dispatcher against the library's ceiling
-argument. When done, `grep -n -i "ordering\|PR-\|#[0-9]"
-deploy/helm/inventory/values.yaml` prints nothing.
+header comment (Inventory, one port, no gRPC); `workload.name: inventory-api` —
+§10.2 dials that literal; `image.api: inventory-api`; `image.migrator:
+inventory-migrator`; `database.connectionName: Inventory`, so the chart injects
+`ConnectionStrings__Inventory` and `ConnectionStrings__InventoryMigrator`, the
+keys PR-1's host reads; the database's `runtimeSecretRef` and
+`migratorSecretRef` names and the broker's `secretRef.name`, each renamed on
+Ordering's pattern (`inventory-rabbitmq` for the account `inventory-svc`); and
+the comment beside each. Keep `replicaCount: 3`, the HPA at 20, the PDB,
+`service.enabled: true`. Then read every comment in the copied file, not only
+those naming Ordering: Ordering's `values.yaml` carries comments that recount
+how a value was arrived at, name pull requests and issues, and inventory what
+other charts do, and a copy would carry that history into a chart that has none.
+Each comment here says one reason and cites its owner — `_helpers.tpl`, §15.3,
+§15.5, ADR-022 — or is cut; the `terminationGracePeriodSeconds` comment cites
+`_deployment.tpl`'s shutdown-ceiling argument and enumerates nothing — an
+endpoint count in a comment is stale the day a subscription is added. When done,
+`grep -n -i "ordering\|PR-\|#[0-9]" deploy/helm/inventory/values.yaml` prints
+nothing.
 
 The seven one-line templates are unchanged: each is `{{- include
 "commerce.<kind>" . }}`.
