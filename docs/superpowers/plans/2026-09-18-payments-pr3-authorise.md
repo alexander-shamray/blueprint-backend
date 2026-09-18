@@ -578,6 +578,17 @@ public class AuthorisePaymentHandlerTests
         _intents.Added.ShouldHaveSingleItem().DeclineReason.ShouldBe(DeclineReasons.OrderCancelled);
     }
 
+    [Fact]
+    public async Task A_placed_then_cancelled_order_with_other_money_is_a_mismatch_not_a_decline()
+    {
+        OrderId order = OrderId.New();
+        _orders.Record = Placed(order, cancelledAt: Now.AddSeconds(-5));
+
+        await Should.ThrowAsync<PaymentMismatchException>(() =>
+            Handler().HandleAsync(new AuthorisePaymentCommand(order.Value, 99.99m, "USD"), default));
+        _intents.Added.ShouldBeEmpty("no customer-facing decline is published for a command that disagrees with the order");
+    }
+
     [Theory]
     [InlineData(42.11, "EUR")]
     [InlineData(42.10, "USD")]
@@ -705,6 +716,16 @@ public sealed class AuthorisePaymentHandler(
             return Result.Success();
         }
 
+        // Money first, whenever there are figures to compare: a cancelled order
+        // that was placed still holds its total, and a command disagreeing
+        // with it is a fault, not a customer-facing decline. A tombstone has no
+        // figures, so it has nothing to disagree with.
+        if (record is { IsPlaced: true }
+            && (command.Amount != record.TotalAmount || !string.Equals(command.Currency, record.Currency, StringComparison.Ordinal)))
+        {
+            throw new PaymentMismatchException(Mismatch(order, command, record.TotalAmount, record.Currency, "the placed order"));
+        }
+
         if (record is { IsCancelled: true })
         {
             intents.Add(PaymentIntent.Decline(
@@ -716,9 +737,6 @@ public sealed class AuthorisePaymentHandler(
         // endpoint's delayed redelivery takes it (spec, section 8).
         if (record is not { IsPlaced: true })
             throw new PaymentOrderNotYetKnownException($"No OrderPlaced has reached Payments for {order}.");
-
-        if (command.Amount != record.TotalAmount || !string.Equals(command.Currency, record.Currency, StringComparison.Ordinal))
-            throw new PaymentMismatchException(Mismatch(order, command, record.TotalAmount, record.Currency, "the placed order"));
 
         AuthorisationResult verdict = await provider.AuthoriseAsync(
             new AuthorisationRequest(order, record.CustomerId!.Value, command.Amount, command.Currency), ct);

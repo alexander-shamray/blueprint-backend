@@ -1192,7 +1192,12 @@ git commit -m "feat(payments): the payments-events endpoint, and the broker gran
 
 - [ ] **Step 1: Run both gates to see them fail**
 
+The pipeline gate's suite first, then the gate, even on a run expected to
+fail — `docs/testing.md`'s order, and the only way a red gate means the tree
+rather than the gate:
+
 ```bash
+py -3.12 -m unittest discover -s .github/pipeline-gate
 py -3.12 .github/pipeline-gate/pipeline_gate.py filters
 py -3.12 .github/pipeline-gate/pipeline_gate.py images
 py -3.12 deploy/observability/check.py
@@ -1287,10 +1292,13 @@ teardown reach the stack the `up` started.
 dotnet build Platform.slnx
 dotnet test Platform.slnx
 py -3.12 -m unittest discover -s tools/new-service
+py -3.12 -m unittest discover -s .github/secret-scan
 py -3.12 .github/secret-scan/secret_scan.py
 ```
 
-Expected: 0 warnings; every suite green; both exit 0.
+Expected: 0 warnings; every suite green; the gate exits 0. The scaffold's
+suite tests the scaffold, not the scan, so the scan's own suite runs
+immediately before the scan.
 
 - [ ] **Step 3: The PR body**
 
