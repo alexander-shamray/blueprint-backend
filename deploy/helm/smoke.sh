@@ -30,8 +30,8 @@ CIDR='{10.42.0.0/16}'
 GATEWAY_OVERLAY="--set ingress.trustedNetworks=$CIDR"
 PLATFORM_OVERLAY="--set gateway.ingress.trustedNetworks=$CIDR"
 
-SERVICE_CHARTS="catalog ordering gateway web-bff"
-MIGRATOR_CHARTS="catalog ordering"
+SERVICE_CHARTS="catalog ordering inventory gateway web-bff"
+MIGRATOR_CHARTS="catalog ordering inventory"
 DATABASELESS_CHARTS="gateway web-bff"
 
 # Every path outside deploy/helm that this script reads, declared once beside
@@ -43,6 +43,7 @@ src/Gateway/Gateway.Api
 src/BFF/Web.Bff
 src/Services/Catalog
 src/Services/Ordering
+src/Services/Inventory
 src/BuildingBlocks/Common.Web/HealthCheckExtensions.cs
 .gitattributes
 deploy/canary/canary.json
@@ -289,7 +290,7 @@ for chart in $SERVICE_CHARTS; do
     pass "$chart resolves commerce-common"
 done
 "$HELM" dependency update "$CHARTS_DIR/platform" --skip-refresh >/dev/null
-pass 'platform resolves its four subcharts'
+pass 'platform resolves its subcharts'
 
 # --------------------------------------------------------------------------
 section 'helm lint'
@@ -298,6 +299,7 @@ for chart in $SERVICE_CHARTS platform; do
     check "$chart lints" "$HELM" lint "$CHARTS_DIR/$chart" --set-string "image.tag=$TAG" \
         --set-string "catalog.image.tag=$TAG" \
         --set-string "ordering.image.tag=$TAG" \
+        --set-string "inventory.image.tag=$TAG" \
         --set-string "gateway.image.tag=$TAG" \
         --set-string "web-bff.image.tag=$TAG" \
         $GATEWAY_OVERLAY $PLATFORM_OVERLAY
@@ -332,6 +334,7 @@ done
 "$HELM" template platform "$CHARTS_DIR/platform" \
     --set-string "catalog.image.tag=$TAG" \
     --set-string "ordering.image.tag=$TAG" \
+    --set-string "inventory.image.tag=$TAG" \
     --set-string "gateway.image.tag=$TAG" \
     --set-string "web-bff.image.tag=$TAG" \
     $PLATFORM_OVERLAY >"$OUT/platform.yaml"
@@ -661,8 +664,9 @@ done <"$OUT/pairs.txt"
 section 'Values that must agree across charts'
 # --------------------------------------------------------------------------
 # §15.3 gives each chart its own values file, so a platform-wide value is
-# written four times. That is the chapter's design and it is also a drift
-# risk — converted here into a gated invariant rather than left to review.
+# written once per service chart. That is the chapter's design and it is also
+# a drift risk — converted here into a gated invariant rather than left to
+# review.
 for key in Identity__Authority OTEL_EXPORTER_OTLP_ENDPOINT; do
     distinct="$(grep -h "^ *$key:" "$OUT/platform.yaml" | sed 's/^ *//' | sort -u | wc -l)"
     check "$key has one value across every chart (found $distinct)" test "$distinct" -eq 1

@@ -11,7 +11,7 @@
     "count the step needs (ADR-022).",
     "",
     "That count is 19, and the charts already permit it: §15.3's",
-    "autoscaling.maxReplicas is 20 on the three service charts, exactly 19",
+    "autoscaling.maxReplicas is 20 on the service charts, exactly 19",
     "stable plus one canary. The gateway's is 30, so there the 19 is what the",
     "weight costs rather than all the chart allows.",
     "The smallest configuration in which 5% is expressible is the largest one",
@@ -98,6 +98,7 @@
     ],
     "catalog-api": { "serviceName": "Catalog.Api", "chart": "catalog" },
     "ordering-api": { "serviceName": "Ordering.Api", "chart": "ordering" },
+    "inventory-api": { "serviceName": "Inventory.Api", "chart": "inventory" },
     "gateway": { "serviceName": "Gateway.Api", "chart": "gateway" },
     "web-bff": { "serviceName": "Web.Bff", "chart": "web-bff" }
   }

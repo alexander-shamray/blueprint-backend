@@ -62,10 +62,10 @@ class WeightTests(unittest.TestCase):
         self.assertIn("25.0%", message)
 
     def test_five_percent_is_expressible_at_nineteen(self) -> None:
-        """And 19 + 1 is 20, which is the three service charts' maxReplicas
+        """And 19 + 1 is 20, which is the service charts' maxReplicas
         exactly — not the gateway's, which is 30 because every external request
         passes through it. The 19 is what the weight costs, and only on those
-        three is it also all the chart allows."""
+        is it also all the chart allows."""
         result = canary.plan(5, stable_replicas=19, overshoot_points=0)
 
         self.assertEqual(result["canaryReplicas"], 1)

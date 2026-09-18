@@ -40,6 +40,7 @@
 #     helm upgrade platform deploy/helm/platform \
 #       --set catalog.image.tag="$SHA" \
 #       --set ordering.image.tag="$SHA" \
+#       --set inventory.image.tag="$SHA" \
 #       --set gateway.image.tag="$SHA" \
 #       --set web-bff.image.tag="$SHA"
 #

@@ -10,12 +10,14 @@ produce — and an environment can be stood up whole.
 ```
 common/      the library chart: every template, once
 catalog/     ┐
-ordering/    │ Chart.yaml + values.yaml + one-line templates that include
+ordering/    │
+inventory/   │ Chart.yaml + values.yaml + one-line templates that include
 web-bff/     ┘ the library's. The values ARE the per-service decisions.
 gateway/     the same, plus edge-config.yaml — the two keys no service has
              (§15.3), in a template only this chart carries
-platform/    the umbrella — four dependencies and no values of its own
-smoke.sh     renders all five and asserts what comes out
+platform/    the umbrella — one dependency per service chart and no values
+             of its own
+smoke.sh     renders every chart and the umbrella and asserts what comes out
 ```
 
 ## Setup is one command per chart
@@ -24,8 +26,8 @@ smoke.sh     renders all five and asserts what comes out
 no network and no chart repository:
 
 ```bash
-helm dependency update deploy/helm/catalog     # and ordering, gateway, web-bff
-helm dependency update deploy/helm/platform    # after the four above
+helm dependency update deploy/helm/catalog     # and ordering, inventory, gateway, web-bff
+helm dependency update deploy/helm/platform    # after the service charts
 ```
 
 Order matters: a service chart must already hold `commerce-common` in its own
@@ -90,6 +92,7 @@ helm upgrade --install platform deploy/helm/platform \
     --values environments/staging.yaml \
     --set-string catalog.image.tag="$CATALOG_SHA" \
     --set-string ordering.image.tag="$ORDERING_SHA" \
+    --set-string inventory.image.tag="$INVENTORY_SHA" \
     --set-string gateway.image.tag="$GATEWAY_SHA" \
     --set-string web-bff.image.tag="$BFF_SHA"
 ```
