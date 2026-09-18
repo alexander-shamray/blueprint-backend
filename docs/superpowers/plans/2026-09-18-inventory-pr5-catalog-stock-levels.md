@@ -539,7 +539,8 @@ positional constructor mapping keeps working for the existing columns.
 - [ ] **Step 3: Run both suites; commit**
 
 ```bash
-dotnet test tests/Catalog.Application.Tests tests/Catalog.Api.Tests
+dotnet test tests/Catalog.Application.Tests
+dotnet test tests/Catalog.Api.Tests
 git add src/Services/Catalog/Catalog.Application tests/Catalog.Application.Tests tests/Catalog.Api.Tests
 git commit -m "feat(catalog): the listing carries Inventory's level, null when unreported"
 ```

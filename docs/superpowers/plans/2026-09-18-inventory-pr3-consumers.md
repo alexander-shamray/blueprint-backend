@@ -51,7 +51,16 @@ sections 5 (the despatch table), 8, 9 and 13.
 **Files:**
 - Modify: `src/Services/Inventory/Inventory.Domain/Reservations/Reservation.cs`
 - Modify: `src/Services/Inventory/Inventory.Domain/Reservations/Events/ReservationEvents.cs`
+- Modify: `src/Services/Inventory/Inventory.Application/Reservations/Reinstate/ReinstateReservationHandler.cs`
+  — the `NotReinstatable` precheck gains the despatched condition, so the
+  endpoint answers 422 rather than reaching the ledger and faulting on the
+  domain guard
+- Modify: `src/Services/Inventory/Inventory.Application/Reservations/ReservationErrors.cs`
+  (the description)
 - Test: `tests/Inventory.Domain.Tests/ReservationTests.cs` (extend)
+- Test: `tests/Inventory.Api.Tests/ReservationEndpointsTests.cs` (extend:
+  reinstating after an unreserved despatch is 422; the row and the stock
+  are unchanged)
 
 **Interfaces:**
 - Produces: `void Fulfil(DateTimeOffset now)` — from `Reserved` moves to
@@ -186,15 +195,30 @@ if (Status != ReservationStatus.Released || _lines.Count == 0 || DespatchedUnres
     throw new DomainException("Only a released reservation with lines, not yet despatched, can be reinstated.");
 ```
 
-with the matching condition added to `ReinstateReservationHandler`'s
-`NotReinstatable` check in `Inventory.Application`, so the endpoint answers
-422 rather than letting the domain exception fault the request.
+and in `ReinstateReservationHandler`, the precheck that answers
+`NotReinstatable` before the ledger is called:
+
+```csharp
+if (reservation.Status != ReservationStatus.Released
+    || reservation.Lines.Count == 0
+    || reservation.DespatchedUnreservedAt is not null)
+{
+    return Result.Failure(ReservationErrors.NotReinstatable);
+}
+```
+
+so the endpoint answers 422 rather than taking stock and then faulting on
+the domain guard. The endpoint test for it — a reservation released, then
+despatched, then reinstated, answering 422 with the row still `Released`
+and the level unmoved — joins `ReservationEndpointsTests` in this task;
+Task 4 repeats the assertion from the broker's side.
 
 - [ ] **Step 4: Run the domain tests; commit**
 
 ```bash
 dotnet test tests/Inventory.Domain.Tests
-git add src/Services/Inventory/Inventory.Domain tests/Inventory.Domain.Tests
+dotnet test tests/Inventory.Api.Tests --filter ReservationEndpointsTests
+git add src/Services/Inventory/Inventory.Domain src/Services/Inventory/Inventory.Application tests/Inventory.Domain.Tests tests/Inventory.Api.Tests
 git commit -m "feat(inventory): Reservation.Fulfil, and the unreserved despatch as state"
 ```
 
@@ -990,7 +1014,8 @@ test's lines first and see them fail. That is the Class B half of this PR.
 - [ ] **Step 3: Run the API suite; commit**
 
 ```bash
-dotnet test tests/Inventory.Api.Tests tests/Common.Web.Tests
+dotnet test tests/Inventory.Api.Tests
+dotnet test tests/Common.Web.Tests
 py -3.12 deploy/observability/check.py
 git add src/Services/Inventory tests/Inventory.Api.Tests tests/Inventory.Application.Tests src/BuildingBlocks/Common.Web tests/Common.Web.Tests deploy/observability/check.py
 git commit -m "feat(inventory): outbox gauges, the metrics initialiser, and one claimed counter"

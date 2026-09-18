@@ -93,11 +93,14 @@ Expected: 0 warnings, 0 errors. A warning is a failed build under ADR-019.
 - [ ] **Step 4: Run the scaffolded suite against containers**
 
 ```bash
-dotnet test tests/Inventory.Domain.Tests tests/Inventory.Application.Tests tests/Inventory.Api.Tests
+dotnet test tests/Inventory.Domain.Tests
+dotnet test tests/Inventory.Application.Tests
+dotnet test tests/Inventory.Api.Tests
 ```
 
-Expected: every test green. The container half needs Docker; a failure on
-`Failed to connect to Docker endpoint` is the daemon, not the scaffold.
+One project per invocation: `dotnet test` takes a single project or solution
+argument. Expected: every test green. The container half needs Docker; a failure
+on `Failed to connect to Docker endpoint` is the daemon, not the scaffold.
 
 - [ ] **Step 5: Confirm the secret scan accepts the rendered tree**
 
@@ -1170,7 +1173,7 @@ API (§14.1)."
 
 ```bash
 py -3.12 -m unittest discover -s deploy/keycloak
-py -3.12 deploy/keycloak/realm_check.py --kind local deploy/compose/keycloak/realm-export.json
+py -3.12 deploy/keycloak/realm_check.py check --kind local
 docker compose -f deploy/compose/docker-compose.yml up --build --wait
 ```
 
