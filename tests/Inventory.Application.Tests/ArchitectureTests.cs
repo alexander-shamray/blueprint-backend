@@ -70,6 +70,13 @@ public class ArchitectureTests
         // something no longer referenced is a pre-authorised hole rather than
         // a failure, which is the same trade the Domain gate takes. What both
         // buy is that ADDING one is a decision somebody has to write down.
+        //
+        // Microsoft.Extensions.Logging.Abstractions is the newest entry:
+        // FulfilReservationHandler's two LoggerMessage.Define delegates are
+        // this layer's first ILogger use. It is the abstractions package
+        // rather than a concrete provider, so no §4.2 row forbids it, and
+        // LoggerMessage.Define rather than log.LogWarning is CA1848 under
+        // ADR-019.
         string[] allowed =
         [
             "Inventory.Domain",
@@ -80,6 +87,7 @@ public class ArchitectureTests
             "FluentValidation",
             "FluentValidation.DependencyInjectionExtensions",
             "Microsoft.Extensions.DependencyInjection.Abstractions",
+            "Microsoft.Extensions.Logging.Abstractions",
             "System.Collections",
             "System.Data.Common",
             "System.Linq",
