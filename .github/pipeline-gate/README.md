@@ -1,15 +1,15 @@
 # The pipeline gate
 
 **The claim: [§15.1](../../docs/backend-architecture/15-cicd-deployment.md)'s
-staged pipeline is not quietly running less than it appears to.** Each of its
-three subcommands is an inventory, and each fails on the one way the
-pipeline can go green while covering less.
+staged pipeline is not quietly doing other than it appears to.** Each of its
+three subcommands is an inventory, and each fails on the ways the pipeline
+can go green while running something other than what it shows.
 
 | Subcommand | Refuses | Reads |
 |---|---|---|
-| `filters` | a deployable under `src/` that no path filter matches — one CI would never rebuild | `src/` and the path filters in `ci.yml` |
+| `filters` | an immediate child of `src/` or `src/Services/` that no path filter matches — one CI would never rebuild — and a paths-filter step without `predicate-quantifier: 'some-with-excludes'`, under which the `deploy` filter's exclusions are never evaluated and a compose-only change deploys | those two directories' children, and in `ci.yml` the path filters and the paths-filter step |
 | `images` | a Dockerfile under `src/` no matrix entry builds, and an entry whose Dockerfile is missing or whose filter is undefined, not exported by the `changes` job, or does not match that Dockerfile's path | the Dockerfiles, and in `ci.yml` the image matrix, the path filters and the `changes` job's outputs |
-| `stages` | a test project in `Platform.slnx` that ran in no stage, a test that ran in two, an empty stage, and a stage under its floor | `Platform.slnx` and the TRX files in the three stage result directories |
+| `stages` | a test project in `Platform.slnx` that ran in no stage, a test that ran in two, an empty stage, a stage under its floor, a stage whose results directory was never passed, and a directory naming no stage it knows | `Platform.slnx` and the TRX files in the three stage result directories |
 
 `stages` counts tests rather than trusting an exit code, because `dotnet
 test` exits zero on a filter that matched nothing

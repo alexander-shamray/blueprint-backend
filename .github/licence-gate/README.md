@@ -23,8 +23,9 @@ uncleared", for the reason under *What it does not claim*.
   project steps past central pinning: a `PackageReference` naming its own
   version — a `Version` attribute, a `Version` child element or a
   `VersionOverride` — and `ManagePackageVersionsCentrally` set to anything
-  but `true`. An imported `.props` does either for every project at once,
-  which is why the scan reaches past the projects.
+  but `true`. A shared `.props` does either for every project that imports
+  it — every project, for `Directory.Build.props` — which is why the scan
+  reaches past the projects.
 - The fenced `Directory.Packages.props` sample in §4.4, which it compares
   with the real file, identity and version both. The failure it reports is
   against the chapter, because the file is what CI restores and the chapter
