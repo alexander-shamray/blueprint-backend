@@ -183,9 +183,9 @@ def validate_tag(tag: str, job_prefix: str | None = None) -> None:
     # accepted and the chart then rejected, which is the preflight failing at
     # the one job it has: to move that refusal in front of the scale-up.
     #
-    # `catalog-api-migrate-` costs 20 and `ordering-api-migrate-` 21, leaving
-    # 43 and 42. Derived here rather than written down, so a workload renamed
-    # in canary.json moves its own budget with it.
+    # The prefix is derived from canary.json's workload map rather than
+    # written down, so a workload added there brings its own budget with it,
+    # and the longest prefix among the workloads sets the tightest one.
     if job_prefix is not None and len(job_prefix) + len(tag) > 63:
         raise PlanError(
             f"image tag {tag!r} is {len(tag)} characters, and the migration Job "

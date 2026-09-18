@@ -12,7 +12,7 @@ replicaCount: 3
 
 # §15.5's canary track, and OFF is what every ordinary release means.
 #
-# Turned on, this chart renders the SECOND of two Deployments that answer to the
+# Turned on, this chart renders the second of two Deployments that answer to the
 # one Service: its objects take a `-canary` suffix, its pods carry
 # `app.kubernetes.io/track: canary`, and the Service, Ingress, HPA and
 # PodDisruptionBudget are suppressed because the stable release owns those names
@@ -72,9 +72,7 @@ probes:
 
 service:
   # True: the gateway dials this workload by name. False is the worker case
-  # (§15.3), and it is the ONE key separating Shipping's chart from this one —
-  # the chapter said two until the charts were written, because it assumed a
-  # service behind the edge would carry an Ingress of its own.
+  # (§15.3).
   enabled: true
 
 ingress:
@@ -85,7 +83,7 @@ ingress:
 
 identity:
   # The authority, to validate incoming JWTs (§11.2) — and nothing else.
-  # Identity:Client is what a host presents when it CALLS a peer (§11.5), and
+  # Identity:Client is what a host presents when it calls a peer (§11.5), and
   # Inventory calls none: reservation and release travel over the broker
   # (§9.4). No clientId here means no Keycloak client, no secret in the
   # vault and nothing to rotate.

@@ -4,7 +4,7 @@ deliberately NOT derived from the release name.
 
 Helm's convention is `{{ .Release.Name }}-{{ .Chart.Name }}`, and it is wrong
 for this platform: these names are ROUTING CONFIGURATION. The gateway's route
-file resolves `http://catalog-api:8080/` and `http://ordering-api:8080/`
+file resolves each service's `http://<workload>:8080/` as a literal
 (§10.2, appsettings.json), and the BFF's one synchronous hop resolves
 `http://catalog-api:8081` from a literal in PricingHop.cs, which argues on the
 record that the value does not vary because "the host is the Kubernetes Service
