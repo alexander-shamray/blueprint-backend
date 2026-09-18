@@ -213,6 +213,18 @@ public sealed class StockLevelProjectionTests(ServiceFixture fixture) : IAsyncLi
         (await fixture.ScalarAsync<int>("SELECT Value = COUNT(*) FROM catalog.StockLevels WHERE ProductId = {0}", product))
             .ShouldBe(1);
     }
+
+    [Fact]
+    public async Task Concurrent_first_deliveries_for_one_product_converge_on_one_row_with_the_newest_level()
+    {
+        var product = Guid.CreateVersion7();
+
+        await Task.WhenAll(Enumerable.Range(0, 8).Select(i => Apply(product, 10 + i, T0.AddSeconds(i))));
+
+        (await fixture.ScalarAsync<int>("SELECT Value = COUNT(*) FROM catalog.StockLevels WHERE ProductId = {0}", product))
+            .ShouldBe(1, "HOLDLOCK on the MERGE is what keeps two NOT MATCHED branches from both inserting");
+        (await Level(product)).ShouldBe(17, "the watermark makes the newest event the winner whatever order the eight ran in");
+    }
 }
 ```
 
@@ -354,9 +366,14 @@ public class StockLevelRegistrationTests
 - [ ] **Step 2: Write the failing endpoint test**
 
 Over containers, publishing `StockLevelChanged` through `IPublishEndpoint`
-and waiting on the inbox row for `StockLevelConsumer.Queue`, then asserting
-the `catalog.StockLevels` row. A second publish with the same `MessageId`
-must leave one inbox row and one level row.
+with the transport id pinned to the contract's —
+`Publish(message, c => c.MessageId = message.MessageId, ct)`, as Ordering's
+tests do, because §9.5's inbox keys on `ConsumeContext.MessageId` and not
+on the body — and waiting on the inbox row for `StockLevelConsumer.Queue`,
+then asserting the `catalog.StockLevels` row. A second publish with the
+same id must leave one inbox row and one level row; without the pinned
+transport id MassTransit would mint a second, and the test would prove
+nothing about suppression.
 
 - [ ] **Step 3: Write the consumer file and the two calls**
 
@@ -375,8 +392,10 @@ namespace Catalog.Infrastructure.Messaging;
 /// Catalog is the scaffold's template and a rendered service subscribes to
 /// nothing: the two calls into this file are what the scaffold strips.
 /// </summary>
-internal static class StockLevelConsumer
+public static class StockLevelConsumer
 {
+    // Public, as Ordering's queue constants are: §9.5's inbox keys each row on
+    // the endpoint name, and the tests that read those rows back name it.
     public const string Queue = "catalog-inventory-events";
 
     public static void AddStockLevelConsumer(this IBusRegistrationConfigurator x) =>
@@ -423,14 +442,16 @@ publisher's grant, and the read pattern names only
 binds another context's exchange, so:
 
 ```json
-"configure": "^(catalog-|Common\\.Contracts(\\.Catalog\\.V1:|:)|MassTransit:)",
+"configure": "^(catalog-|Common\\.Contracts(\\.Catalog\\.V1:|\\.Inventory\\.V1:|:)|MassTransit:)",
 "write": "^(catalog-|Common\\.Contracts(\\.Catalog\\.V1:|:)|MassTransit:)",
 "read": "^(catalog-|Common\\.Contracts\\.Catalog\\.V1:|Common\\.Contracts\\.Inventory\\.V1:|MassTransit:)"
 ```
 
-`write` gains the queue and nothing of Inventory's: `check_permissions.py`
-refuses a context writing another's exchange, and reading one is all a
-consumer needs. Run it and its suite:
+`configure` and `read` gain Inventory's exchange and `write` does not: a
+consumer declares the exchange it binds, which §9.5 says takes `configure`, and
+binding takes `read`, while `check_permissions.py` refuses a context writing
+another's exchange. `write` gains the queue and nothing else. Run it and its
+suite:
 
 ```bash
 py -3.12 deploy/compose/rabbitmq/check_permissions.py

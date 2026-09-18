@@ -8,7 +8,7 @@ build, run and reach it locally: the Compose pair, the gateway's
 `depends_on`, CI's filter and image matrix, and the realm grant that lets a
 local login set stock.
 
-**Architecture:** `python tools/new-service/new_service.py Inventory --port
+**Architecture:** `py -3.12 tools/new-service/new_service.py Inventory --port
 5103` renders the service and test projects §4.1 names and the shared-file
 edits; this PR adds the `StockItem` slice on top in Ordering's shapes — a
 typed id, an `AggregateRoot<ProductId>`, an `IEntityTypeConfiguration`, one
@@ -26,9 +26,13 @@ sections 1, 2, 3 (the `StockItem` half), 6 (the two stock endpoints), 7,
 ## Global Constraints
 
 - The blueprint wins over the spec; the spec wins over this plan.
-- **Class A+B+D.** Touch set: `src/Services/Inventory/**`, `tests/Inventory.*`,
-  `Platform.slnx`, `deploy/compose/**`, `.github/secret-scan/allowed/**`,
-  `.github/workflows/ci.yml`, `deploy/compose/keycloak/realm-export.json`,
+- **Class A+B+D+E.** Touch set: `src/Services/Inventory/**`,
+  `tests/Inventory.*`, `Platform.slnx` and the rendered `*.csproj` files
+  (the E half: the scaffold adds projects to the solution, and Task 4 adds a
+  package reference the scaffold stripped), `deploy/compose/**`,
+  `.github/secret-scan/allowed/**`, `.github/workflows/ci.yml`,
+  `deploy/observability/check.py` (the exemption in Task 7),
+  `deploy/compose/keycloak/realm-export.json`,
   `tests/Common.Web.Tests/RealmImportTests.cs` (the B half: the building
   block's test that pins the realm's grants), and the three prose sites in
   section 10 of the spec.
@@ -315,7 +319,7 @@ Add to `Inventory.Domain.csproj` an `InternalsVisibleTo` for
 - [ ] **Step 4: Run the tests to see them pass**
 
 Run: `dotnet test tests/Inventory.Domain.Tests --filter StockItemTests`
-Expected: 4 passed.
+Expected: green.
 
 - [ ] **Step 5: Commit**
 
@@ -492,6 +496,18 @@ git commit -m "feat(inventory): map StockItems and add its migration"
   (replace the scaffolded one's registry)
 - Test: `tests/Inventory.Application.Tests/SetOnHandValidatorTests.cs`
 - Test: `tests/Inventory.Application.Tests/InventoryIntegrationEventMapperTests.cs`
+- Test: `tests/Inventory.Application.Tests/OutboxSerialisationTests.cs` —
+  the scaffold omits Ordering's file because a rendered service has no
+  domain event to round-trip; this is the first, so the file comes back in
+  Ordering's shape: a `DomainEventSamples.Create(Type)` dictionary with one
+  entry per event, a test that serialises and deserialises every type in
+  `MessageTypeMap.StageableDomainEvents` through `OutboxJson.Options` and
+  asserts the JSON survives the round trip, and a test asserting the
+  stageable set is exactly `[typeof(StockLevelChangedDomainEvent)]` (PR-2
+  and PR-3 extend both). Its `Registered()` builds a provider from
+  `AddInventoryApplication()` and `AddInventoryInfrastructure(configuration)`
+  with an in-memory configuration carrying the connection-string keys, as
+  Ordering's does.
 
 **Interfaces:**
 - Produces: `record SetOnHandCommand(Guid ProductId, int OnHand) : ICommand<Result>`;
@@ -1032,8 +1048,13 @@ git commit -m "ci: build and filter Inventory's two images"
 
 **Files:**
 - Modify: `deploy/compose/services/gateway.yml` (`depends_on` gains
-  `inventory-api: { condition: service_healthy }`; the comment that says the
-  inventory route 502s is cut)
+  `inventory-api: { condition: service_started }`, the condition its three
+  siblings use; the comment that says the inventory route 502s is cut)
+- Modify: `deploy/observability/check.py` — `OUTBOX_METRICS_EXEMPT` gains
+  `"Inventory"`, because the scaffold renders Catalog's dispatcher without
+  Catalog's gauges and the gate fails a dispatcher-hosting service that is
+  neither instrumented nor exempt. The reason text: "Rendered from Catalog
+  and inherits its gap; removed when Inventory registers OutboxMetrics."
 - Modify: `deploy/compose/keycloak/realm-export.json` (the `demo` user's
   `commerce-api` roles gain `"inventory:admin"`; the role's description is
   rewritten)
@@ -1045,20 +1066,25 @@ git commit -m "ci: build and filter Inventory's two images"
   through the API it guards. Write this change first and see the suite fail
   on the realm before editing the realm.
 
-- [ ] **Step 1: Edit the gateway unit**
+- [ ] **Step 1: Edit the gateway unit and the observability gate**
 
-Add `inventory-api: { condition: service_healthy }` beside `ordering-api`
+Add `inventory-api: { condition: service_started }` beside `ordering-api`
 and remove the sentence in the comment that names inventory as the one
-remaining 502.
+remaining 502. In `deploy/observability/check.py`, add the `"Inventory"`
+entry to `OUTBOX_METRICS_EXEMPT` with the reason above, then run
+`py -3.12 deploy/observability/check.py` and expect it to pass; without the
+entry it fails naming Inventory, which is the check that this step is owed.
 
 - [ ] **Step 2: Edit the realm**
 
 In the `demo` user's `clientRoles.commerce-api` array append
-`"inventory:admin"`. Replace the role's `description` with:
-
-`"Administer inventory through the gateway's inventory-admin route (§10.2): set
-a product's on-hand stock and inspect, release or reinstate a reservation.
-Granted to demo locally because stock exists only through this API (§14.1)."`
+`"inventory:admin"`. Replace the role's `description` with one JSON string
+on one physical line — the export is JSON and a literal newline inside a
+string is invalid — reading, without the wrapping this document adds:
+"Administer inventory through the gateway's inventory-admin route (§10.2):
+set a product's on-hand stock and inspect, release or reinstate a
+reservation. Granted to demo locally because stock exists only through this
+API (§14.1)."
 
 - [ ] **Step 3: Run the realm gate and bring the platform up**
 
@@ -1081,7 +1107,8 @@ Expected: 204 through the gateway. Tear down with `docker compose down -v`.
 
 ```bash
 dotnet test tests/Common.Web.Tests --filter RealmImportTests
-git add deploy/compose/services/gateway.yml deploy/compose/keycloak/realm-export.json tests/Common.Web.Tests/RealmImportTests.cs
+py -3.12 deploy/observability/check.py
+git add deploy/compose/services/gateway.yml deploy/compose/keycloak/realm-export.json tests/Common.Web.Tests/RealmImportTests.cs deploy/observability/check.py
 git commit -m "feat(dev): the gateway waits for inventory-api, and demo may administer stock"
 ```
 
@@ -1100,10 +1127,12 @@ git commit -m "feat(dev): the gateway waits for inventory-api, and demo may admi
 
 - [ ] **Step 1: Rewrite each to the past it describes**
 
-§10.2: "This file shipped whole, ahead of three of the four services it
-routes to — Ordering arrived behind its route with PR-18, the BFF with PR-19
-and Inventory last — which is the opposite of the rule …". Keep the rest of
-the paragraph; it argues the asymmetry and is still true.
+§10.2: the paragraph opening "This file shipped whole" keeps its argument
+about the asymmetry, which is still true, and loses the clause that names
+one service as still missing: "ahead of three of the four services it
+routes to, each of which has since arrived behind its route — which is the
+opposite of the rule …". The two PR numbers the sentence carried today go
+with the clause; a chapter cites the owner, not the history.
 
 §14.1: replace "One answers 502 today — inventory — the BFF's route having
 gained its service with PR-19." with "Every route now has a destination
@@ -1156,7 +1185,8 @@ Expected: all exit 0.
 
 - [ ] **Step 3: Write the PR body's class row**
 
-`| Class | A+B+D |` and the touch set from the Global Constraints, then `/ship`.
+`| Class | A+B+D+E |` and the touch set from the Global Constraints, then
+`/ship`.
 
 ## Self-review
 

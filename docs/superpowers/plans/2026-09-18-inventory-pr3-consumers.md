@@ -26,11 +26,13 @@ sections 5 (the despatch table), 8, 9 and 13.
 ## Global Constraints
 
 - The blueprint wins over the spec; the spec wins over this plan.
-- **Class A+B.** Touch set: `src/Services/Inventory/**`, `tests/Inventory.*`,
+- **Class A+B+D.** Touch set: `src/Services/Inventory/**`, `tests/Inventory.*`,
   `src/BuildingBlocks/Common.Web/ObservabilityExtensions.cs` and
-  `tests/Common.Web.Tests/ObservabilityTests.cs` — the B half is one
-  `AddMeter` line, because §13.2's export lists meters by name and a meter
-  it does not name is collected by nobody.
+  `tests/Common.Web.Tests/ObservabilityTests.cs` — the B half is two
+  `AddMeter` lines, because §13.2's export lists meters by name and a meter
+  it does not name is collected by nobody — and
+  `deploy/observability/check.py`, the D half: this PR deletes the
+  exemption PR-1 added, and the gate refuses a stale one.
 - Depends on PR-2 having merged.
 - Every event in §3.2's Consumes column has both an `AddConsumer` and a
   `ConfigureConsumer`, and the registration test says so.
@@ -555,7 +557,11 @@ globally.
 
 Endpoint, over containers, in the shape of PR-2's command tests with a
 `PublishAsync<T>` helper that publishes through `IPublishEndpoint` and waits
-for the inbox row on `EventsQueue`:
+for the inbox row on `EventsQueue`. The helper sets the transport id from
+the contract, `Publish(message, c => c.MessageId = message.MessageId, ct)`,
+as Ordering's does: §9.5's inbox keys on `ConsumeContext.MessageId`, not on
+the body's property, so a helper that leaves the transport id to MassTransit
+polls a row that never appears and cannot prove duplicate suppression.
 
 ```csharp
 [Fact]
@@ -899,26 +905,43 @@ the Local row, and `MessageTypeMapValidator` needs the event type in its
 source — confirm the Domain assembly is in `MessageTypeSource` as Ordering's
 is, or the validator stops the host at startup naming the type.
 
-Also add the projection to `MetricsInitialiser`'s registration if the
-scaffold carries one that pre-touches meters, so the instrument exists
-before the first claim.
+**The instrument has to exist before the first claim, and the outbox gauges have
+to exist at all.** The scaffold carries no `MetricsInitialiser` and no
+`OutboxMetrics`: both are Ordering's, in
+`Ordering.Infrastructure/Observability`, and §13.6 requires every metrics type
+forced at startup so a quiet service reports zero rather than nothing. So this
+task takes Ordering's `OutboxMetrics.cs`, `OutboxStats.cs`, `IOutboxStats.cs`
+and `MetricsInitialiser.cs` into `Inventory.Infrastructure/Observability` with
+the namespace changed, the meter renamed `Inventory.Outbox`, and
+`InventoryMetrics` added to the initialiser's constructor so the counter is
+created on startup; registers them in `AddInventoryInfrastructure` exactly as
+Ordering's `DependencyInjection.cs` does, including `IOutboxStats` over a
+`SqlConnectionFactory` on the `Inventory` connection string with
+`OutboxStats.ConnectTimeoutSeconds`; and deletes `"Inventory"` from
+`OUTBOX_METRICS_EXEMPT` in `deploy/observability/check.py`, which now fails if
+the entry stays, because an exemption for an instrumented service is a stale
+excuse. Run `py -3.12 deploy/observability/check.py` and expect it to pass with
+Inventory instrumented. The four outbox alerts group by service name and read
+the gauges from then on.
 
 **The meter is exported only if §13.2's registration names it.**
 `Common.Web/ObservabilityExtensions.cs` lists every meter the OTLP exporter
 collects — `Ordering.Orders`, `Ordering.Outbox`, the shared `Commerce.*`
 names — and a meter absent from that list is one the `MeterListener` test
 above sees while production collects nothing. So this task adds
-`.AddMeter("Inventory.Reservations")` beside `Ordering.Orders`, with the
-same one-line comment citing §13.3, and adds the name to the list
+`.AddMeter("Inventory.Reservations")` and `.AddMeter("Inventory.Outbox")`
+beside Ordering's two, with the same one-line comments citing §13.3 and
+§13.6, and adds both names to the list
 `tests/Common.Web.Tests/ObservabilityTests.cs` asserts against — write the
-test's line first and see it fail. That is the Class B half of this PR.
+test's lines first and see them fail. That is the Class B half of this PR.
 
 - [ ] **Step 3: Run the API suite; commit**
 
 ```bash
 dotnet test tests/Inventory.Api.Tests tests/Common.Web.Tests
-git add src/Services/Inventory tests/Inventory.Api.Tests src/BuildingBlocks/Common.Web tests/Common.Web.Tests
-git commit -m "feat(inventory): count an unreserved despatch once, by claiming the row"
+py -3.12 deploy/observability/check.py
+git add src/Services/Inventory tests/Inventory.Api.Tests src/BuildingBlocks/Common.Web tests/Common.Web.Tests deploy/observability/check.py
+git commit -m "feat(inventory): outbox gauges, the metrics initialiser, and one claimed counter"
 ```
 
 ---
@@ -928,7 +951,7 @@ git commit -m "feat(inventory): count an unreserved despatch once, by claiming t
 - [ ] `dotnet build Platform.slnx` — 0 warnings.
 - [ ] `dotnet test Platform.slnx` — green.
 - [ ] Neither `/validate-blueprint` nor `/check-links` is owed: no chapter moved.
-- [ ] PR body: `| Class | A+B |`, touch set from Global Constraints.
+- [ ] PR body: `| Class | A+B+D |`, touch set from Global Constraints.
 
 ## Self-review
 

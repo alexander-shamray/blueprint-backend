@@ -612,7 +612,9 @@ public interface IStockLedger
 ```
 
 The port lives in Application because handlers call it; the SQL lives in
-Infrastructure because §4.2 keeps Dapper out of Application. It follows
+Infrastructure because it is a write bound to the `DbContext`'s current
+transaction, which Application cannot see — Dapper itself is already on
+Application's read side. It follows
 `IUnitOfWork.ExecuteRawAsync`'s rule without going through that member,
 which returns no rows where the statement's `OUTPUT` is the level (spec,
 section 3): `SqlStockLedger` takes the `InventoryDbContext` and runs Dapper
@@ -674,7 +676,12 @@ public sealed class StockLedgerTests(ServiceFixture fixture) : IAsyncLifetime
             l.TryTakeAsync([new(new ProductId(b), 1), new(new ProductId(a), 2)], TestContext.Current.CancellationToken));
 
         outcome.Unavailable.ShouldBeEmpty();
-        outcome.Levels.Select(x => x.Available).ShouldBe([3, 0], "in ProductId order, whatever order the lines came in");
+        outcome.Levels.ShouldBe([new(new ProductId(a), 3), new(new ProductId(b), 0)], ignoreOrder: true);
+        // Version-7 ids are not creation-ordered under Guid.CompareTo, so the
+        // order is asserted against the comparer the ledger sorts with, not
+        // against which id was made first.
+        outcome.Levels.Select(l => l.ProductId.Value)
+            .ShouldBe(outcome.Levels.Select(l => l.ProductId.Value).OrderBy(g => g), "in ProductId order, whatever order the lines came in");
         (await Available(a)).ShouldBe(3);
         (await Available(b)).ShouldBe(0);
     }
@@ -868,7 +875,7 @@ Register: `services.AddScoped<IStockLedger, SqlStockLedger>();`.
 - [ ] **Step 4: Run the ledger tests**
 
 Run: `dotnet test tests/Inventory.Api.Tests --filter StockLedgerTests`
-Expected: 5 passed. The concurrent one is the point of the PR.
+Expected: green. The concurrent one is the point of the PR.
 
 - [ ] **Step 5: Commit**
 
@@ -944,7 +951,20 @@ public class ReserveStockValidatorTests
         _validator.TestValidate(new ReserveStockCommand(Guid.CreateVersion7(), [new(ProductId.New(), 0)]))
             .ShouldHaveValidationErrorFor("Lines[0].Quantity");
     }
+
+    [Fact]
+    public void A_quantity_past_the_contract_ceiling_is_refused()
+    {
+        _validator.TestValidate(new ReserveStockCommand(
+                Guid.CreateVersion7(), [new(ProductId.New(), OrderLimits.MaxQuantity + 1)]))
+            .ShouldHaveValidationErrorFor("Lines[0].Quantity");
+    }
 }
+```
+
+The test file imports `Common.Contracts.Ordering.V1` for `OrderLimits`.
+
+```csharp
 ```
 
 Mapper additions:
@@ -1008,7 +1028,9 @@ public sealed class ReserveStockValidator : AbstractValidator<ReserveStockComman
             .WithMessage("A product appears at most once.");
         RuleForEach(c => c.Lines).ChildRules(line =>
         {
-            line.RuleFor(l => l.Quantity).GreaterThanOrEqualTo(OrderLimits.MinQuantity);
+            line.RuleFor(l => l.Quantity)
+                .GreaterThanOrEqualTo(OrderLimits.MinQuantity)
+                .LessThanOrEqualTo(OrderLimits.MaxQuantity);
         });
     }
 }
@@ -1327,12 +1349,14 @@ public async Task A_second_release_of_a_released_reservation_publishes_again_and
     (await Available(product)).ShouldBe(3, "the lines were given back once, not twice");
 }
 
-[Fact]
-public async Task A_reserve_with_a_zero_quantity_is_a_contract_fault_and_is_not_retried()
+[Theory]
+[InlineData(0)]
+[InlineData(OrderLimits.MaxQuantity + 1)]
+public async Task A_reserve_with_a_quantity_outside_the_contract_is_a_fault_and_is_not_retried(int quantity)
 {
     var order = Guid.CreateVersion7();
 
-    await SendAsync(new ReserveStock(order, [new StockLine(Guid.CreateVersion7(), 0)]));
+    await SendAsync(new ReserveStock(order, [new StockLine(Guid.CreateVersion7(), quantity)]));
 
     await Eventually(
         () => fixture.ScalarAsync<int>("SELECT Value = COUNT(*) FROM inventory.Reservations WHERE OrderId = {0}", order),
@@ -1361,6 +1385,7 @@ Expected: registration test fails on missing consumers; endpoint tests time out.
 ```csharp
 using Common.Application;
 using Common.Contracts.Inventory.V1;
+using Common.Contracts.Ordering.V1;
 using Inventory.Application;
 using Inventory.Application.Reservations.ReleaseStock;
 using Inventory.Application.Reservations.ReserveStock;
@@ -1376,8 +1401,14 @@ public sealed class ReserveStockMapper : ICommandMessageMapper<ReserveStock, Res
         if (message.Lines is null || message.Lines.Count == 0)
             throw new ContractMappingException($"No lines on {nameof(ReserveStock)}.");
 
-        if (message.Lines.Any(l => l.Quantity <= 0))
-            throw new ContractMappingException($"A non-positive quantity on {nameof(ReserveStock)}.");
+        // A null element is a malformed payload, and reading its members
+        // would throw NullReferenceException — a fault the endpoint retries
+        // where this exception is the one it does not.
+        if (message.Lines.Any(l => l is null))
+            throw new ContractMappingException($"A null line on {nameof(ReserveStock)}.");
+
+        if (message.Lines.Any(l => l.Quantity < OrderLimits.MinQuantity || l.Quantity > OrderLimits.MaxQuantity))
+            throw new ContractMappingException($"A quantity outside the contract's bounds on {nameof(ReserveStock)}.");
 
         if (message.Lines.Select(l => l.ProductId).Distinct().Count() != message.Lines.Count)
             throw new ContractMappingException($"A repeated product on {nameof(ReserveStock)}.");
@@ -1660,14 +1691,17 @@ public sealed class GetReservationHandler(IDbConnectionFactory connections)
         using SqlMapper.GridReader grid = await connection.QueryMultipleAsync(
             new CommandDefinition(Sql, new { query.OrderId }, cancellationToken: ct));
 
-        (Guid OrderId, string Status, DateTimeOffset UpdatedAt)? head =
-            await grid.ReadSingleOrDefaultAsync<(Guid, string, DateTimeOffset)?>();
+        // A named record, not a ValueTuple: Dapper maps columns by name, and a
+        // tuple's members are Item1..Item3.
+        ReservationHead? head = await grid.ReadSingleOrDefaultAsync<ReservationHead>();
         if (head is null)
             return null;
 
         List<ReservationLineDto> lines = (await grid.ReadAsync<ReservationLineDto>()).AsList();
-        return new ReservationDto(head.Value.OrderId, head.Value.Status, lines, head.Value.UpdatedAt);
+        return new ReservationDto(head.OrderId, head.Status, lines, head.UpdatedAt);
     }
+
+    private sealed record ReservationHead(Guid OrderId, string Status, DateTimeOffset UpdatedAt);
 }
 ```
 

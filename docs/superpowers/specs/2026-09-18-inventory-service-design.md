@@ -10,8 +10,8 @@ it. Where this document and the blueprint disagree, the blueprint wins.
 row: it owns `StockItem` and `Reservation`, publishes `StockReserved`,
 `StockReservationFailed`, `StockReleased` and `StockLevelChanged`, consumes
 `OrderCancelled` and `ShipmentDispatched`, and accepts `ReserveStock` and
-`ReleaseStock`. All six contracts exist in `Common.Contracts.Inventory.V1` since
-PR-15, with samples in `Platform.IntegrationTests`.
+`ReleaseStock`. All six contracts exist in `Common.Contracts.Inventory.V1`,
+with samples in `Platform.IntegrationTests`.
 [§7.3](../../backend-architecture/07-persistence.md) prints the reservation
 write as one atomic `UPDATE … WHERE Available >= @Quantity` and names Inventory
 the exception to optimistic concurrency.
@@ -35,7 +35,8 @@ against something written down.
 ## 1. Four questions the blueprint leaves open, and their answers
 
 **What a `StockItem` is.** One row per `ProductId`, holding `Available` and
-`Reserved` — exactly §7.3's columns. No locations and no SKU distinct from
+`Reserved` — the two counters §7.3's statement moves, beside the `UpdatedAt`
+it also writes. No locations and no SKU distinct from
 the product. `CLAUDE.md` names the domain question as undecided, and this is
 where it was raised: the e-commerce domain is taken as the specification it
 reads as, because §7.3's SQL keys on `ProductId` alone and a location would
@@ -72,9 +73,9 @@ event and the deploy tree is a class of its own. Each row names its
 
 | PR | Subject | Class |
 |---|---|---|
-| 1 | `feat(inventory): third service from the scaffold` — the scaffold run, `StockItem` and its two admin endpoints, the Compose pair, the gateway's `depends_on`, `ci.yml`'s filter and image matrix, the realm's grant to `demo` and the building-block test that pins it, and the three sentences that say Inventory answers 502 | A+B+D |
+| 1 | `feat(inventory): third service from the scaffold` — the scaffold run, `StockItem` and its two admin endpoints, the Compose pair, the gateway's `depends_on`, `ci.yml`'s filter and image matrix, the realm's grant to `demo` and the building-block test that pins it, the observability gate's exemption, and the three sentences that say Inventory answers 502 | A+B+D+E — E because the scaffold adds projects to the solution |
 | 2 | `feat(inventory): reservations` — `Reservation`, `inventory-commands` and the broker grant that lets it be declared, ADR-024's guarantees, the four events, the three reservation admin endpoints, §3.2's despatch sentence | A+B+D |
-| 3 | `feat(inventory): consume OrderCancelled and ShipmentDispatched` — `inventory-events` and its two handlers, and the one `AddMeter` line in `Common.Web` that lets section 13's counter be exported | A+B |
+| 3 | `feat(inventory): consume OrderCancelled and ShipmentDispatched` — `inventory-events` and its two handlers, Inventory's outbox gauges and metrics initialiser, the two `AddMeter` lines in `Common.Web` that let section 13's meters be exported, and the deletion of PR-1's exemption | A+B+D |
 | 4 | `feat(deploy): Inventory's chart, deploy target and canary` — `deploy/helm/inventory`, the umbrella dependency, `smoke.sh`'s lists, `deploy.yml`'s option, the canary preflight | D |
 | 5 | `feat(catalog): consume StockLevelChanged` — Catalog's binding and the broker grant it needs, the level's projection and its column on the listing, the scaffold's patches for a template that now consumes, and the cut of the test that says Inventory does not exist | A+D |
 
@@ -237,8 +238,8 @@ of this table rather than of any one branch.
 |---|---|---|
 | `Reserved` | for each line, `Reserved = Reserved - @Quantity WHERE … AND Reserved >= @Quantity`; status `Fulfilled` | nothing |
 | `Fulfilled` | nothing | nothing |
-| `Released` | nothing to stock; records `DespatchedUnreservedAt` on the row, which section 13 counts and which refuses a later reinstate, since the parcel has gone | nothing |
-| `Failed`, nothing | logs at warning; acks | nothing |
+| `Released` with lines | nothing to stock; records `DespatchedUnreservedAt` on the row, which section 13 counts and which refuses a later reinstate, since the parcel has gone | nothing |
+| `Failed`; `Released` with no lines, the tombstone; nothing | logs at warning; acks. A tombstone never held stock, so a despatch against it is not the gap above | nothing |
 
 **The `Released` row at despatch is ADR-029's open gap, met in data.** The
 stock was returned to `Available` on the cancellation and has now physically
@@ -246,8 +247,9 @@ left, so the level is wrong by the recorded lines. This design moves nothing
 there, on purpose: the runbook's `cancelled_after_confirmation` procedure has
 an operator reinstate the reservation while the parcel is still in the
 warehouse, and a `Released` row reaching despatch means that step did not
-happen. Subtracting the lines here would make `Available` negative and hand
-Catalog a level below zero; leaving it makes the count a stock-take matter,
+happen. Subtracting the lines here would move the level a second time for
+stock that left once, and could hand Catalog a level below zero; leaving it
+makes the count a stock-take matter,
 which is what the metric and the log line are for. Closing the gap properly
 needs `OrderConfirmed`, which is the decision section 1 declines, and the
 metric is what says how often the decision costs anything.
@@ -266,8 +268,8 @@ to skip it.
 | `PUT stock/{productId}` with `{ onHand }` | `SetOnHandCommand` — upserts the `StockItem` | `204`; `422` when reserved exceeds on-hand, a domain rule; `409` only on a stale rowversion, which is §10.5's concurrency row and not this service's to map |
 | `GET stock/{productId}` | `GetStockQuery`, Dapper over the write table | `{ available, reserved, updatedAt }`; `404` |
 | `GET reservations/{orderId}` | `GetReservationQuery` | status and lines; `404` — the runbook's step one |
-| `POST reservations/{orderId}/release` | `ReleaseStockCommand` with `CommandOrigin.User` | `204` always, because the command always establishes its postcondition — the runbook's step two |
-| `POST reservations/{orderId}/reinstate` | `ReinstateReservationCommand` | `204`; `422` `reservation.not_reinstatable` when the row is not `Released`, has no lines, or has already met a despatch (section 5) — one code, because all three mean there is nothing to restore and the description says which; `422` `reservation.unavailable` naming the unavailable ids when stock is short. No `409`: §10.5 reserves it for concurrency and idempotency, and `ErrorType` stays at its three members |
+| `POST reservations/{orderId}/release` | `ReleaseStockCommand` with `CommandOrigin.User` | `204` for every reservation state, because the command always establishes its postcondition — the runbook's step two. The one other answer is the framework's `409` when a rowversion race is lost, which §10.5's concurrency row owns |
+| `POST reservations/{orderId}/reinstate` | `ReinstateReservationCommand` | `204`; `422` `reservation.not_reinstatable` when the row is not `Released`, has no lines, or has already met a despatch (section 5) — one code, because all three mean there is nothing to restore and the description says which; `422` `reservation.unavailable` naming the unavailable ids when stock is short. No `409` from the domain: §10.5 reserves it for concurrency and idempotency, `ErrorType` stays at its three members, and a lost rowversion race answers the framework's `409` as on every endpoint |
 
 **Reinstate is the runbook's promise, kept.** `order-review.md` already says
 an operator reinstates a picked reservation by hand, and ADR-024's tombstone
@@ -302,10 +304,10 @@ endpoints at once, and the loser of that race must retry against the
 winner's row rather than overwrite it; `StockItems` takes one for section
 3's admin path and nothing else.
 
-Two migrations after the scaffold's own: `AddStockItems` in PR-1 and
-`AddReservations` in PR-2, each emitted by `dotnet ef migrations add` from
-the configuration that owns the table, so the DDL is the model's and not a
-second copy of it.
+The migrations after the scaffold's own are named for their tables and
+emitted by `dotnet ef migrations add` from the configuration that owns each,
+so the DDL is the model's and not a second copy of it: `AddStockItems` in
+PR-1, `AddReservations` in PR-2, `AddDespatchTracking` in PR-3.
 
 **A release and a fulfilment for the same order can arrive on two endpoints
 at once**, and the rowversion is what settles it: the loser throws
@@ -402,8 +404,8 @@ container tests are `Category=Integration` and never skipped.
 - **ADR-024 and ADR-029 do not move.** Both say nothing enforces them until
   Inventory is built. An ADR is superseded and never rewritten, and those
   paragraphs are the history the tests in section 9 now make true.
-- **Appendix C gains no row.** §4.1's tree already names Inventory as "the
-  same five projects", which stays true.
+- **Appendix C gains no row.** §4.1's tree already names Inventory beside
+  Ordering with the same project shape, which stays true.
 
 ## 11. Local development and the realm
 
@@ -415,8 +417,10 @@ table, which the scaffold's own edit adds the row to.
 **`demo` gains `inventory:admin`.** The realm export grants the permission to
 nobody, with a description saying the route has no service behind it. With
 stock existing only through the admin API (section 1), a local checkout in
-which no shipped login holds the permission is one in which no reservation
-can ever succeed, so PR-1 adds the role to `demo`'s `commerce-api` client
+which no shipped login holds the permission is one in which no stock can
+ever be set — and a reservation, which needs no permission because the saga
+sends it over the broker, then fails on empty rows. So PR-1 adds the role to
+`demo`'s `commerce-api` client
 roles beside `catalog:write`, `orders:write` and `orders:cancel`, and
 rewrites the description to say what it grants. `orders:admin` stays
 ungranted, and the difference is §14.1's: that permission overrides §11.4's
@@ -444,18 +448,27 @@ is `inventory-api`, because §10.2's route file already dials that literal;
 `inventory-migrator`, matching PR-1's matrix entries; `service.enabled` is
 true, since the gateway dials it. It joins `MIGRATOR_CHARTS` in `smoke.sh`,
 the umbrella's dependencies, `deploy.yml`'s target list, and
-`deploy/canary/canary.json`'s workload map — where `inventory-api-migrate-`
-costs 22 characters against the Job name's 63, so the tag budget is 41, one
-under Ordering's; the canary derives that rather than reading it here.
+`deploy/canary/canary.json`'s workload map, where the canary derives the
+migration Job's name budget from the workload name rather than reading it
+from any document.
 
 ## 13. Observability
 
-**What comes free.** `MessagingMetrics` in `Common.Infrastructure` already
-counts every delivery lag and every domain rejection per message type, the
-outbox dashboard reads per-service outbox depth by resource attribute, and
-the golden-signals board keys on the host. None of that names a service, so
-`inventory-api` appears on both the day it exports; PR-4 confirms it from a
-rendered chart rather than assuming it.
+**What comes free, and what does not.** `MessagingMetrics` in
+`Common.Infrastructure` already counts every delivery lag and every domain
+rejection per message type, and the golden-signals board keys on the host,
+so `inventory-api` appears there the day it exports. The outbox gauges do
+not come free: §13.3 places `OutboxMetrics` in `Ordering.Infrastructure`,
+Catalog hosts the dispatcher without them under a named exemption in
+`deploy/observability/check.py`, and a scaffolded service inherits the gap
+— and that gate fails any dispatcher-hosting service that is neither
+instrumented nor exempt. So PR-1 adds Inventory to the exemption, with the
+template's reason, and PR-3 takes Ordering's `OutboxMetrics`, `OutboxStats`
+and `MetricsInitialiser` under Inventory's namespace, names
+`Inventory.Outbox` beside `Inventory.Reservations` in §13.2's export, and
+deletes the exemption, which the gate would otherwise refuse as stale. The
+four outbox alerts group by service name and read Inventory's gauges from
+then on.
 
 **One business-shaped counter, and it follows §13.3's rule.**
 `inventory.fulfilment.unreserved` counts a `ShipmentDispatched` that met a
@@ -471,9 +484,10 @@ second count of the same fact is the reconciliation §13.3 warns against.
 
 **No new dashboard and no new alert.** The runbook procedure the counter
 serves is a review-row one, and §13.6's `Orders awaiting review` alert
-already fires on the row `cancelled_after_confirmation` writes. A panel
-joins the golden-signals board only if PR-4's render shows the host missing
-from it.
+already fires on the row `cancelled_after_confirmation` writes. PR-4
+confirms the golden-signals board keys on the host rather than naming one;
+a board that turns out to name hosts is an issue against the board, not a
+widening of that PR.
 
 ## 14. What Catalog does with the level
 

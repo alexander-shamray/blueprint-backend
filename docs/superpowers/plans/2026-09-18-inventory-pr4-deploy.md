@@ -20,9 +20,11 @@ sections 12 and 13.
 ## Global Constraints
 
 - The blueprint wins over the spec; the spec wins over this plan.
-- **Class D.** Touch set: `deploy/helm/**`, `deploy/canary/canary.json`,
+- **Class D.** Touch set: `deploy/helm/**`, `deploy/canary/**`,
   `.github/workflows/deploy.yml`, `.github/workflows/helm.yml`.
-- Depends on PR-1 having merged (the images exist in CI's matrix).
+- Depends on PR-1 having merged (the images exist in CI's matrix) and on
+  PR-3 (the spec's order: a deployed Inventory that consumes no events holds
+  every reservation until a person notices).
 - Every list touched has a check that reads it: `smoke.sh` for the chart
   lists, `canary.py`'s check 4 for the workload map, `deploy.yml`'s own
   `pull_request` run for the choice list.
@@ -60,13 +62,20 @@ dependencies:
     repository: file://../common
 ```
 
-In `values.yaml`, replace: the header comment (Inventory, one port, no
-gRPC); `workload.name: inventory-api` — §10.2 dials that literal;
-`image.api: inventory-api`; `image.migrator: inventory-migrator`. Keep
-`replicaCount: 3`, the HPA at 20, the PDB, `service.enabled: true`. The
-`terminationGracePeriodSeconds` comment names Ordering's four endpoints;
-rewrite it for Inventory's two receive endpoints and the outbox dispatcher,
-or cut it to the library's argument.
+In `values.yaml`, replace every value and comment that names Ordering: the
+header comment (Inventory, one port, no gRPC); `workload.name: inventory-api`
+— §10.2 dials that literal; `image.api: inventory-api`;
+`image.migrator: inventory-migrator`; `database.connectionName: Inventory`,
+so the chart injects `ConnectionStrings__Inventory` and
+`ConnectionStrings__InventoryMigrator`, the keys PR-1's host reads; the
+database's `runtimeSecretRef` and `migratorSecretRef` names and the
+broker's `secretRef.name`, each renamed on Ordering's pattern
+(`inventory-rabbitmq` for the account `inventory-svc`); and the comment
+beside each. Keep `replicaCount: 3`, the HPA at 20, the PDB,
+`service.enabled: true`. The `terminationGracePeriodSeconds` comment names
+Ordering's endpoints; rewrite it for Inventory's two receive endpoints and
+the outbox dispatcher. When done, `grep -n -i ordering
+deploy/helm/inventory/values.yaml` prints nothing.
 
 The seven one-line templates are unchanged: each is `{{- include
 "commerce.<kind>" . }}`.
@@ -161,9 +170,18 @@ example gains `--set-string inventory.image.tag="$INVENTORY_SHA" \` beside
 its four, because that command as printed fails the chart's required-tag
 check the moment the umbrella has a fifth dependency.
 
-`canary.json`: add the entry after `ordering-api`. `canary.py` derives the
-Job prefix, so nothing else changes; check 4 will assert `Inventory.Api` is
+`canary.json`: add the entry after `ordering-api`, and in its `$comment`
+change "the three service charts" to "the service charts" — a count the
+fifth chart falsifies. `deploy/canary/test_canary.py` carries the same
+count in a docstring and loses it the same way. `canary.py` derives the
+Job prefix, so nothing else changes; `check` will assert `Inventory.Api` is
 an entry assembly and `inventory` a chart directory.
+
+`smoke.sh`'s `pass 'platform resolves its four subcharts'` becomes `pass
+'platform resolves its subcharts'`, and `deploy/helm/platform/values.yaml`'s
+commented `helm upgrade` example gains `--set inventory.image.tag="$SHA"` beside
+its four, because every subchart refuses to render without a tag and an example
+that omits one is an example that fails.
 
 `deploy.yml`: add `inventory-api` to `options`.
 
@@ -172,17 +190,20 @@ an entry assembly and `inventory` a chart directory.
 ```bash
 bash deploy/helm/smoke.sh
 py -3.12 -m unittest discover -s deploy/canary
-py -3.12 deploy/canary/canary.py --help
+py -3.12 deploy/canary/canary.py check
 ```
 
-Expected: `smoke.sh` passes every section for five charts and the umbrella;
-the canary suite passes, including its check that `canary.json`'s workloads
-match the solution's entry assemblies and the chart directories.
+Expected: `smoke.sh` passes every section for every chart and the umbrella;
+the canary suite passes; and `canary.py check`, the command the workflow
+gates on, accepts the plan — including its check that `canary.json`'s
+workloads match the solution's entry assemblies and the chart directories.
+`--help` exercises only the argument parser and proves nothing about the
+plan.
 
 - [ ] **Step 4: Commit**
 
 ```bash
-git add deploy/helm/smoke.sh deploy/helm/platform/Chart.yaml deploy/helm/README.md deploy/canary/canary.json .github/workflows/deploy.yml .github/workflows/helm.yml
+git add deploy/helm/smoke.sh deploy/helm/platform deploy/helm/README.md deploy/canary .github/workflows/deploy.yml .github/workflows/helm.yml
 git commit -m "feat(deploy): Inventory joins the umbrella, the smoke lists, the canary map and the deploy choice"
 ```
 
@@ -190,9 +211,8 @@ git commit -m "feat(deploy): Inventory joins the umbrella, the smoke lists, the 
 
 ### Task 3: Observability confirmation
 
-**Files:**
-- Possibly modify: `deploy/observability/dashboards/golden-signals.json`
-- Test: none new; `deploy/observability/check.py` runs as-is
+**Files:** none. This task is verification only; `deploy/observability/**`
+is outside this PR's touch set on purpose, and PR-3 owns Inventory's gauges.
 
 - [ ] **Step 1: Confirm the boards key on the host, not on a name**
 
@@ -202,7 +222,7 @@ grep -n "service.name\|service_name\|ordering-api\|catalog-api" deploy/observabi
 
 Expected: panels filter on a `service.name` variable or label, and no panel
 names `ordering-api` as a literal. If a panel does name services literally,
-add `inventory-api` beside them and say so in the PR body.
+file an issue against the dashboard rather than widening this PR.
 
 - [ ] **Step 2: Run the observability check**
 
@@ -210,14 +230,7 @@ add `inventory-api` beside them and say so in the PR body.
 py -3.12 deploy/observability/check.py
 ```
 
-Expected: exit 0.
-
-- [ ] **Step 3: Commit only if something changed**
-
-```bash
-git add deploy/observability
-git commit -m "feat(deploy): name inventory-api where a board lists hosts"
-```
+Expected: exit 0, with Inventory instrumented by PR-3 and no exemption left.
 
 ---
 
