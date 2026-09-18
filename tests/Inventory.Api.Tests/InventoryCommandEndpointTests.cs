@@ -1,13 +1,8 @@
 using Common.Contracts.Inventory.V1;
 using Common.Contracts.Ordering.V1;
 using Inventory.TestSupport;
-using MassTransit;
-using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
 using Xunit;
-// Aliased because Common.Application has a DependencyInjection too, and the
-// queue name this suite asserts on is the messaging one's.
-using MessagingRegistration = Inventory.Infrastructure.Messaging.DependencyInjection;
 
 namespace Inventory.Api.Tests;
 
@@ -22,14 +17,6 @@ namespace Inventory.Api.Tests;
 [Collection(nameof(IntegrationCollection))]
 public sealed class InventoryCommandEndpointTests(ServiceFixture fixture) : IAsyncLifetime
 {
-    /// <summary>
-    /// <see cref="OrderingCommandEndpointTests"/>'s budget, for its reason: a
-    /// broker round trip on a runner holding other container sets, and
-    /// bounded because an endpoint that binds nothing never arrives late — it
-    /// never arrives.
-    /// </summary>
-    private static readonly TimeSpan DeliveryBudget = TimeSpan.FromSeconds(30);
-
     public async ValueTask InitializeAsync() => await fixture.ResetAsync();
 
     public ValueTask DisposeAsync() => ValueTask.CompletedTask;
@@ -218,106 +205,25 @@ public sealed class InventoryCommandEndpointTests(ServiceFixture fixture) : IAsy
                 "refusal rather than to the validator's, which this alone cannot tell apart");
     }
 
+    // Thin forwarders onto ReservationTestSupport, which both this class and
+    // ReservationEndpointsTests need: the implementation lives once there,
+    // and each class keeps its own name so its test bodies read unchanged.
     private Task SeedStock(Guid product, int available) =>
-        fixture.ExecuteAsync(
-            "INSERT INTO inventory.StockItems (ProductId, Available, Reserved, UpdatedAt) " +
-            "VALUES ({0}, {1}, 0, SYSDATETIMEOFFSET())",
-            product,
-            available);
+        ReservationTestSupport.SeedStock(fixture, product, available);
 
     private Task<int> Available(Guid product) =>
-        fixture.ScalarAsync<int>(
-            "SELECT Value = Available FROM inventory.StockItems WHERE ProductId = {0}", product);
+        ReservationTestSupport.Available(fixture, product);
 
     private Task<string> StatusAsync(Guid orderId) =>
-        fixture.ScalarAsync<string>(
-            "SELECT Value = Status FROM inventory.Reservations WHERE OrderId = {0}", orderId);
+        ReservationTestSupport.StatusAsync(fixture, orderId);
 
-    /// <summary>
-    /// Polls <see cref="StatusAsync"/> until it reads <paramref name="expected"/>
-    /// or the budget elapses. No row yet is not a failure — the handler has not
-    /// committed — so it is read as "not yet" rather than let the missing-row
-    /// exception end the poll early.
-    /// </summary>
-    private async Task EventuallyStatus(Guid orderId, string expected)
-    {
-        DateTimeOffset deadline = DateTimeOffset.UtcNow + DeliveryBudget;
-        string actual = "";
+    private Task EventuallyStatus(Guid orderId, string expected) =>
+        ReservationTestSupport.EventuallyStatus(fixture, orderId, expected);
 
-        while (DateTimeOffset.UtcNow < deadline)
-        {
-            try
-            {
-                actual = await StatusAsync(orderId);
-            }
-            catch (InvalidOperationException)
-            {
-                actual = "";
-            }
+    private static Task Eventually(Func<Task<int>> read, int expected, string because) =>
+        ReservationTestSupport.Eventually(read, expected, because);
 
-            if (actual == expected)
-                return;
-
-            await Task.Delay(TimeSpan.FromMilliseconds(100), TestContext.Current.CancellationToken);
-        }
-
-        actual.ShouldBe(expected, $"the reservation for {orderId} never reached {expected}");
-    }
-
-    private static async Task Eventually(Func<Task<int>> read, int expected, string because)
-    {
-        DateTimeOffset deadline = DateTimeOffset.UtcNow + DeliveryBudget;
-        int actual = 0;
-
-        while (DateTimeOffset.UtcNow < deadline)
-        {
-            actual = await read();
-
-            if (actual == expected)
-                return;
-
-            await Task.Delay(TimeSpan.FromMilliseconds(100), TestContext.Current.CancellationToken);
-        }
-
-        actual.ShouldBe(expected, because);
-    }
-
-    /// <summary>
-    /// Sends to <c>inventory-commands</c> by address, exactly as §9.6's saga
-    /// does. <paramref name="drain"/> at its default waits on the inbox row
-    /// the delivery writes, so the caller observes the handler's own
-    /// transaction rather than a send that has not yet been consumed.
-    /// </summary>
-    /// <param name="drain">
-    /// False only where no inbox row will ever be written — the
-    /// malformed-contract case: <c>InboxFilter</c> commits its row after the
-    /// consumer returns, and a mapper that throws means it never does, so
-    /// waiting for that row would spend the whole delivery budget proving
-    /// something the caller already asserts a different way.
-    /// </param>
-    private async Task SendAsync<T>(T command, bool drain = true)
-        where T : class
-    {
-        // IBus, not the scoped ISendEndpointProvider: IBus is registered as
-        // a singleton and is itself an ISendEndpointProvider, so it resolves
-        // straight from the root provider — the same resolution
-        // OrderingCommandEndpointTests uses.
-        ISendEndpoint endpoint = await fixture.Factory.Services
-            .GetRequiredService<IBus>()
-            .GetSendEndpoint(new Uri($"queue:{MessagingRegistration.CommandsQueue}"));
-
-        var messageId = Guid.CreateVersion7();
-
-        await endpoint.Send(command, c => c.MessageId = messageId, TestContext.Current.CancellationToken);
-
-        if (drain)
-        {
-            await Eventually(
-                async () => (await fixture.InboxAsync())
-                    .Count(r => r.MessageId == messageId && r.Endpoint == MessagingRegistration.CommandsQueue),
-                expected: 1,
-                because: "the inbox row commits after the consumer returns, which is what makes this a " +
-                    "wait for delivery rather than for the send");
-        }
-    }
+    private Task SendAsync<T>(T command, bool drain = true)
+        where T : class =>
+        ReservationTestSupport.SendAsync(fixture, command, drain);
 }

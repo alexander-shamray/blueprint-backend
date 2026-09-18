@@ -82,6 +82,34 @@ public class EndpointSecurityTests(HostSmokeTests.UnreachableInfrastructureFacto
     }
 
     [Fact]
+    public async Task Forged_identity_headers_do_not_authenticate_on_any_reservation_route()
+    {
+        // The same forged headers that authenticate against nothing on
+        // /v1/inventory/stock authenticate against nothing here either, on
+        // the read and both admin actions this group also requires a real
+        // token for.
+        using HttpClient client = factory.CreateClient();
+        var order = Guid.CreateVersion7();
+
+        HttpRequestMessage[] requests =
+        [
+            new(HttpMethod.Get, $"/v1/inventory/reservations/{order}"),
+            new(HttpMethod.Post, $"/v1/inventory/reservations/{order}/release"),
+            new(HttpMethod.Post, $"/v1/inventory/reservations/{order}/reinstate")
+        ];
+
+        foreach (HttpRequestMessage request in requests)
+        {
+            request.Headers.Add(TestAuthHandler.UserHeader, Guid.CreateVersion7().ToString());
+            request.Headers.Add(TestAuthHandler.PermissionsHeader, InventoryPermissions.Admin);
+
+            HttpResponseMessage response = await client.SendAsync(request, TestContext.Current.CancellationToken);
+
+            response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized, request.RequestUri!.ToString());
+        }
+    }
+
+    [Fact]
     public async Task The_liveness_probe_still_answers_without_a_token()
     {
         // What keeps the two above from passing for the wrong reason: if this
