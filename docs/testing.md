@@ -181,10 +181,9 @@ gh api "repos/{owner}/{repo}/pulls/<n>/files" --paginate --jq '.[] | {filename, 
 ```
 
 The second reads the paginated files endpoint rather than
-`gh pr view --json files`, which is one page; `changedFiles` rides along
-because the endpoint stops at a ceiling however it is paginated and the gate
-refuses a shorter list as a prefix, and `previous_filename` because a rename
-is judged at both ends.
+`gh pr view --json files`, which is one page; why it needs `changedFiles` and
+`previous_filename` beside it is
+[its README](../.github/locality-gate/README.md)'s.
 
 **The Compose smoke is the one gate that needs a running daemon and the one
 whose run changes the machine it runs on**, so its teardown is part of what
