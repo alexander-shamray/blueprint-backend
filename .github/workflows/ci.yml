@@ -118,6 +118,55 @@ jobs:
       - name: Test the edit-target guard
         run: python -m unittest discover -s .claude/scripts -p "test_edit_target_guard.py" -v
 
+  # The style guide's comment rule over the lines a pull request adds. Stdlib
+  # Python over text and git, so it sits beside the licence gate rather than
+  # inside `build`. What it reads and claims is its README's.
+  comment-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The diff needs the merge base, and the enforcing copy needs the
+          # base commit; a shallow checkout has neither.
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Test the proposed gate
+        working-directory: .github/comment-gate
+        run: python -m unittest
+
+      # The judge comes out of the base commit, so a pull request cannot loosen
+      # the rule it is judged by; the bootstrap branch is the locality gate's.
+      - name: The comments this pull request adds keep the style guide's rule
+        if: github.event_name == 'pull_request'
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          GATE: .github/comment-gate/comment_gate.py
+        run: |
+          set -euo pipefail
+          judge="$RUNNER_TEMP/comment_gate.py"
+          if git cat-file -e "$BASE_SHA:$GATE" 2>/dev/null; then
+            git show "$BASE_SHA:$GATE" > "$judge"
+            # An empty judge would read nothing and pass.
+            if [ ! -s "$judge" ]; then
+              echo "::error::$GATE at $BASE_SHA is empty"
+              exit 1
+            fi
+            echo "enforcing with the gate as of $BASE_SHA"
+          elif git cat-file -e "$BASE_SHA:.github/comment-gate" 2>/dev/null; then
+            echo "::error::base commit $BASE_SHA carries .github/comment-gate but no $GATE"
+            exit 1
+          else
+            echo "::warning::base commit $BASE_SHA carries no comment gate; this pull request is judged by the gate it proposes (bootstrap)"
+            cp "$GATE" "$judge"
+          fi
+          python "$judge" --base "$BASE_SHA" --head "$HEAD_SHA"
+
   # The inventory gates, beside the licence gate rather than inside `build` for
   # the same reason it is: stdlib Python over text, so they need no restore and
   # cannot be skipped by a build failure.
