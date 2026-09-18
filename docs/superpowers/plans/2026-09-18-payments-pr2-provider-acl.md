@@ -698,8 +698,11 @@ namespace Payments.Infrastructure.Provider;
 
 public static class DependencyInjection
 {
-    public const string BaseUrlKey = "PaymentProvider:BaseUrl";
-    public const string ApiKeyKey = "PaymentProvider:ApiKey";
+    // The section is written once, so the two setting names cannot name
+    // different sections; ApiKeyKey is the setting's name, never its value.
+    private const string Section = "PaymentProvider";
+    public const string BaseUrlKey = $"{Section}:BaseUrl";
+    public const string ApiKeyKey = $"{Section}:ApiKey";
 
     public static IServiceCollection AddPaymentProvider(this IServiceCollection services, IConfiguration configuration)
     {
