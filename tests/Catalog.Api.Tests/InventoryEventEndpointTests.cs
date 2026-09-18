@@ -104,9 +104,14 @@ public sealed class InventoryEventEndpointTests(ServiceFixture fixture) : IAsync
             async () => (await fixture.InboxAsync(messageId)).Count,
             expected: 1,
             because: "the first delivery has to land before the second can be a redelivery of it");
-        await PublishAsync(product, 7, messageId);
 
-        // Held past the first sighting, because the claim is about a SECOND
+        // A different level and a later OccurredAt (PublishAsync stamps
+        // UtcNow) under the same MessageId: an identical copy could not tell
+        // suppression before the projection runs from an idempotent MERGE
+        // that simply reapplies the same row.
+        await PublishAsync(product, 3, messageId);
+
+        // Held past the first sighting, because the claim is about a second
         // row: an assertion that stops at the first would pass whether or not
         // another was on its way.
         await Task.Delay(TimeSpan.FromSeconds(2), TestContext.Current.CancellationToken);
@@ -119,6 +124,11 @@ public sealed class InventoryEventEndpointTests(ServiceFixture fixture) : IAsync
             "SELECT Value = COUNT(*) FROM catalog.StockLevels WHERE ProductId = {0}",
             product))
             .ShouldBe(1);
+        (await fixture.ScalarAsync<int>(
+            "SELECT Value = QuantityAvailable FROM catalog.StockLevels WHERE ProductId = {0}",
+            product))
+            .ShouldBe(7, "the redelivery's level never reached the projection: the filter suppressed it " +
+                "before the second row could apply");
     }
 
     /// <summary>

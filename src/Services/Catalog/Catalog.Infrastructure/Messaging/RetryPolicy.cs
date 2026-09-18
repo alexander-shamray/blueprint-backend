@@ -21,10 +21,10 @@ namespace Catalog.Infrastructure.Messaging;
 /// and comparing them.
 /// </para>
 /// <para>
-/// <b>What this type does not decide is what gets retried.</b>
-/// <c>ordering-commands</c> ignores <c>ContractMappingException</c> before
+/// <b>What this type does not decide is what gets retried.</b> An endpoint
+/// that maps a contract excludes <c>ContractMappingException</c> before
 /// calling <see cref="Standard"/> — a malformed contract does not parse
-/// itself on the fourth attempt — and that exclusion is the endpoint's,
+/// itself on the fourth attempt — and the exclusion is the endpoint's,
 /// because it is a claim about which faults are terminal rather than about
 /// how long to wait between attempts. Folding it in here would apply one
 /// endpoint's exclusion to those that never raise it.
@@ -32,10 +32,7 @@ namespace Catalog.Infrastructure.Messaging;
 /// <para>
 /// <see cref="RetryLimit"/> counts <em>retries</em> and not deliveries: the
 /// endpoint makes one more attempt than this number, and the wait it produces
-/// is that many intervals. §9.6's confirmation wait has to clear that sum —
-/// a floor it must exceed rather than the term that decides it, which is
-/// §9.4's dispatcher backoff — so the saga's own comment reasons about these
-/// by name instead of restating them.
+/// is that many intervals.
 /// </para>
 /// </remarks>
 internal static class RetryPolicy

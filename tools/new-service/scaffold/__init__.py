@@ -40,7 +40,14 @@ class Names:
 
     @property
     def article(self) -> str:
-        """The indefinite article a rendered sentence puts before the name."""
+        """The indefinite article a rendered sentence puts before the name.
+
+        The rule is by letter, not by sound: a name starting with the vowel
+        letter U still takes "an" even where it is pronounced with a
+        consonant sound — `Users` said "yoo-zers" wants "a" — because
+        English's own exception needs the pronunciation this scaffold has no
+        way to know.
+        """
         return "an" if self.pascal[:1].lower() in "aeiou" else "a"
 
     def rename(self, text: str) -> str:

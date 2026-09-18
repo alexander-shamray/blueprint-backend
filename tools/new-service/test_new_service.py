@@ -532,6 +532,15 @@ class GeneratedGuidanceIsTrue(unittest.TestCase):
         csproj = self.claim("tests/Yankee.Api.Tests/Yankee.Api.Tests.csproj")
         self.assertNotIn("shared with\n         Yankee.Application.Tests", csproj)
 
+    def test_the_fixture_names_no_peer_and_no_contract(self):
+        # Catalog's first consumer taught the fixture to widen its own broker
+        # account for the harness; the reason has to stay true of a service
+        # that consumes nothing of Inventory's, so the doc comment names
+        # neither the peer nor the contract it widens for.
+        fixture = self.claim("tests/Yankee.TestSupport/ServiceFixture.cs")
+        self.assertNotIn("StockLevel", fixture)
+        self.assertNotIn("Inventory", fixture)
+
 
 class TheMigrationAndItsSnapshot(unittest.TestCase):
     def setUp(self):
@@ -1408,16 +1417,21 @@ class RefusesToRun(unittest.TestCase):
         self.assertEqual("CATALOGSearch.Domain", Names("CATALOGSearch").rename("Catalog.Domain"))
         self.assertEqual("catalogsearch-api", Names("CATALOGSearch").rename("catalog-api"))
 
+        rendered = render(name="CATALOGSearch")
+        self.assertIn(
+            "src/Services/CATALOGSearch/CATALOGSearch.Domain/AssemblyMarker.cs", rendered.created
+        )
+
     def test_the_article_follows_the_name(self):
         # A rendered sentence puts an article before the service's name, and a
         # hardcoded "a" rendered "a Inventory PR" into that service's unit file.
         self.assertEqual("an", Names("Inventory").article)
         self.assertEqual("a", Names("Zulu").article)
 
-        rendered = render(name="CATALOGSearch")
-        self.assertIn(
-            "src/Services/CATALOGSearch/CATALOGSearch.Domain/AssemblyMarker.cs", rendered.created
-        )
+        # The rule is by letter and stops there: `Users` is said "yoo-zers",
+        # a consonant sound, but the heuristic sees the vowel letter and
+        # renders "an Users PR" anyway — the limit stated rather than found.
+        self.assertEqual("an", Names("Users").article)
 
     def test_a_name_longer_than_a_sql_server_identifier(self):
         # The name is the database and the schema, and `sysname` is

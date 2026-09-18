@@ -276,8 +276,8 @@ OUTBOX_MIGRATION = re.compile(r"^\d{14}_AddOutbox(\.Designer)?\.cs$")
 # The inbox table travels for the mirror of the outbox's reason: §9.5 gives
 # every service one, the retention purge runs from first boot and deletes from
 # both, and a service that carried the purge without the table would log a
-# failed delete every pass. Consuming nothing does not exempt it — Catalog
-# itself consumes nothing and has the table for exactly this.
+# failed delete every pass. Catalog had the table before its first consumer,
+# for exactly this.
 INBOX_MIGRATION = re.compile(r"^\d{14}_AddInbox(\.Designer)?\.cs$")
 # The purge's index, and it travels for the same reason the tables do: the
 # claim's index is filtered `WHERE ProcessedAt IS NULL` and so excludes every
