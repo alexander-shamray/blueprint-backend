@@ -217,10 +217,9 @@ file and a reviewer are the only things that do.
       await publisher.StageAsync(domainEvent, OutboxLane.Local, ct);
   ```
 
-  This holds across every braceless body in the blueprint's ` ```csharp `
-  fences. `csharp_preserve_single_line_statements = false` keeps a format run
-  from pulling any of them back up onto the condition's line. The one exception is a
-  **wrapped** condition, which takes braces — see below.
+  `csharp_preserve_single_line_statements = false` keeps a format run from
+  pulling such a body back up onto the condition's line. The one exception is
+  a **wrapped** condition, which takes braces — see below.
 - **Explicit types for locals**, except where the right-hand side names the
   type. A reader of a fenced code block has no hover and no go-to-definition,
   and this blueprint's job is to teach types and contracts. Code blocks may run
@@ -305,9 +304,8 @@ file and a reviewer are the only things that do.
   `MemoryStream.ToArray()` is a stream accessor — the type implements no
   `IEnumerable`, so `[.. buffer]` does not compile (CS9212). The rule is about
   the *terminal LINQ operator*, where the spread and the call are two spellings
-  of one thing. This was narrowed after a reviewer read "there are no
-  `.ToArray()` calls left in the corpus" as the grep it literally is — **a rule
-  whose stated test is a string match will be enforced as one.**
+  of one thing, and it is stated that way because **a rule whose stated test
+  is a string match will be enforced as one.**
 
 ### Wrapping
 
@@ -487,15 +485,11 @@ file and a reviewer are the only things that do.
   ```
 
   This is the **one exception to the braces rule above**. Prefer not to wrap at
-  all; joining is the better fix and has been applied everywhere it fits. The
-  block above is the corpus: one wrapped header, in §11.4, kept because an
-  ownership check that fails closed does not join inside 120. A second one
-  appearing is a signal to join, not a precedent. **A parenthesised group that
-  breaks indents a further four**, so nesting depth is visible. The check above
-  gained its second level when the guard was rewritten to fail closed; the
-  earlier form led with `currentUser.IsAuthenticated &&`, which read as a guard
-  and behaved as an exemption, admitting every caller arriving with no
-  principal at all.
+  all; joining is the better fix. The block above is §11.4's wrapped header,
+  kept because an ownership check that fails closed does not join inside 120;
+  another one appearing is a signal to join, not a precedent. **A
+  parenthesised group that breaks indents a further four**, so nesting depth
+  is visible.
 - **Operators go at the end of the line they continue from**
   (`dotnet_style_operator_placement_when_wrapping = end_of_line`). Each line
   then ends by announcing that more is coming. This holds for `&&`, `||`, `??`
@@ -551,27 +545,12 @@ file and a reviewer are the only things that do.
   the whole of what it reaches. **The rule above therefore holds as
   written and as enforced**, and a reviewer may cite the build for it.
 
-  **This paragraph argued the opposite for three review rounds, and the
-  mistake is worth more than the rule.** A grep for a padded `=` across
-  `src/` returned real hits on a green `main`, and they were read as C#
-  initialisers proving a deliberate carve-out — so the rule was narrowed to
-  admit them, `CLAUDE.md`'s short list was narrowed to match, and the SQL
-  section was rewritten to stop leaning on a claim that had just been
-  "corrected". Every one of those hits was SQL. **A grep does not know what
-  language it is reading**, and a raw string literal is exactly where this
-  repository keeps the other one — so a measurement over `.cs` files is a
-  measurement over two languages unless it is told otherwise.
-
-  **Then it hedged, which was the second error and the more tempting one.**
-  Having found the evidence bad, the fix was to call the enforcement
-  "unsettled" and mark the rule review-carried — which reads as caution and
-  is just a second unmeasured claim wearing the opposite sign. One probe
-  settled it in three seconds. **When a question is decidable by running
-  something, hedging is not the safe answer, it is the unmeasured one.**
-  `.editorconfig`'s own comment still names "78 declarations and initialiser
-  members" as relying on that setting; an initialiser member does not, by
-  the probe above, and the sites it means are the SQL ones. That comment is
-  corrected in the same change.
+  **A grep for a padded `=` across `src/` finds SQL, not C#.** A grep does
+  not know what language it is reading, and a raw string literal is where
+  this repository keeps its SQL — so a measurement over `.cs` files is a
+  measurement over two languages unless it is told otherwise. **When a
+  question is decidable by running something, a probe answers it**, and a
+  hedge is an unmeasured claim like the one it replaces.
 
   **Two places the analyser does not reach, and they are opposites.** Padding
   between a type and its identifier —
@@ -610,7 +589,7 @@ file and a reviewer are the only things that do.
 | | |
 |---|---|
 | Namespaces | File-scoped (`namespace X;`), never block-scoped |
-| Extension declarations | C# 14 `extension(T receiver)` blocks where a class groups several extensions on one receiver — `Common.Application.DependencyInjection` is the worked example. **The corpus is split**: every extension class in `Common.Web` still uses the classic `this`-parameter form. Four extend a receiver nothing else does — `ProblemDetailsExtensions` (`IServiceCollection`), `HealthCheckExtensions` (`IEndpointRouteBuilder`), `AuthorizationPolicyExtensions` (`AuthorizationPolicyBuilder`) and `ResultExtensions` (`Result`) — while two groups share one: `CorrelationIdExtensions` and `SecurityHeadersExtensions` on `IApplicationBuilder`, and `ObservabilityExtensions`, `AuthenticationExtensions` and the `CommonWebDefaultsExtensions` that composes them on `IHostApplicationBuilder`. Whether to group those three is open and deliberately unsettled — they are separate files because one composes the other two, and merging would put a caller-facing entry point in the same block as the pieces it calls. Converting anything is a decision about the whole corpus |
+| Extension declarations | C# 14 `extension(T receiver)` blocks where a class groups several extensions on one receiver — `Common.Application.DependencyInjection` is the worked example. **The corpus is split**: every extension class in `Common.Web` still uses the classic `this`-parameter form. `ProblemDetailsExtensions` (`IServiceCollection`), `HealthCheckExtensions` (`IEndpointRouteBuilder`), `AuthorizationPolicyExtensions` (`AuthorizationPolicyBuilder`) and `ResultExtensions` (`Result`) each extend a receiver nothing else does, while some share one: `CorrelationIdExtensions` and `SecurityHeadersExtensions` on `IApplicationBuilder`, and `ObservabilityExtensions`, `AuthenticationExtensions` and the `CommonWebDefaultsExtensions` that composes them on `IHostApplicationBuilder`. Whether to group those three is open and deliberately unsettled — they are separate files because one composes the other two, and merging would put a caller-facing entry point in the same block as the pieces it calls. Converting anything is a decision about the whole corpus |
 | Expression-bodied members | Used for one-line members, not for constructors |
 | Braces | Optional for a single statement **that fits on its line**; required for two or more, and for one that wraps |
 | Target framework | .NET 10 (LTS), C# 14 |
