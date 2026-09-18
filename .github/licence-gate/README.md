@@ -46,11 +46,12 @@ it ahead of the build.
 - a registered licence any part of which is outside `allowed-licences.txt`.
   **Every** part of a multi-part cell has to be inside it: the gate reads a
   `/` and cannot tell a disjunction from a conjunction, so a row cleared
-  because one half was allowed would clear the other with it. A package
-  really offered under either names, in its row, the licence taken here;
-- a licence spelling its map does not know. That is a separate finding from
-  the one above because it has a separate repair — a misspelt cell is fixed
-  in the register, a spelling nobody has taught the gate in
+  because one half was allowed would clear the other with it. So where a
+  package really is offered under either licence, its row names the one
+  taken here;
+- a licence whose spelling its map does not know. That is a separate finding
+  from the one above because it has a separate repair — a misspelt cell is
+  fixed in the register, a spelling nobody has taught the gate in
   `licence_gate.py` — and teaching it is not clearing it, since a newly
   nameable licence still needs an allow-list line. The vocabulary is closed
   on purpose, so a real identifier the map has never been shown is refused

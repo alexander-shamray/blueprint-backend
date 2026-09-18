@@ -7,8 +7,8 @@ compares them:
 1. the `| Closes |` row of the house body form, which GitHub's linker does
    not read, because a table pipe leaves it no keyword-reference pair;
 2. `closingIssuesReferences`, GitHub's own parse of the description;
-3. a closing keyword in a commit body, honoured on merge whatever the
-   description says, and not editable after the push.
+3. a closing keyword in a commit message, subject or body, honoured on merge
+   whatever the description says, and not editable after the push.
 
 ## What it compares
 

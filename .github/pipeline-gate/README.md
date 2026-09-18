@@ -7,7 +7,7 @@ can go green while running something other than what it shows.
 
 | Subcommand | Refuses | Reads |
 |---|---|---|
-| `filters` | an immediate child of `src/` or `src/Services/` that no path filter matches — one CI would never rebuild — and a paths-filter step without `predicate-quantifier: 'some-with-excludes'`, under which the `deploy` filter's exclusions are never evaluated and a compose-only change deploys | those two directories' children, and in `ci.yml` the path filters and the paths-filter step |
+| `filters` | an immediate child of `src/` or `src/Services/` that no path filter matches — one CI would never rebuild — and a `ci.yml` in which the text `some-with-excludes` appears nowhere, the quantifier without which the `deploy` filter's exclusions are never evaluated and a compose-only change deploys. That is a text search, not a read of the paths-filter step, so the token surviving elsewhere in the file passes it | those two directories' children, and `ci.yml`'s path filters and its text |
 | `images` | a Dockerfile under `src/` no matrix entry builds, and an entry whose Dockerfile is missing or whose filter is undefined, not exported by the `changes` job, or does not match that Dockerfile's path | the Dockerfiles, and in `ci.yml` the image matrix, the path filters and the `changes` job's outputs |
 | `stages` | a test project in `Platform.slnx` that ran in no stage, a test that ran in two, an empty stage, a stage under its floor, a stage whose results directory was never passed, and a directory naming no stage it knows | `Platform.slnx` and the TRX files in the three stage result directories |
 
