@@ -1,5 +1,4 @@
 using Common.Contracts.Inventory.V1;
-using Common.Contracts.Ordering.V1;
 using MassTransit;
 using MassTransit.Testing;
 using Microsoft.Extensions.DependencyInjection;

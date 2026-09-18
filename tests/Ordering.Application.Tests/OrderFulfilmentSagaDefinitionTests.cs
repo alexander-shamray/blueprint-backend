@@ -1,7 +1,3 @@
-using Common.Contracts.Inventory.V1;
-using Common.Contracts.Ordering.V1;
-using Common.Contracts.Payments.V1;
-using Common.Contracts.Shipping.V1;
 using MassTransit;
 using Ordering.Infrastructure.Messaging;
 using Shouldly;
