@@ -255,6 +255,7 @@ services:
       # one costs nothing at startup. So a name joins this list with the PR
       # that builds its service.
       catalog-api: { condition: service_started }
+      inventory-api: { condition: service_started }
       ordering-api: { condition: service_started }
       web-bff: { condition: service_started }
 
@@ -353,14 +354,14 @@ a path answers 502 until its service lands. A route is configuration the
 gateway reads; a `depends_on` is a name Compose has to resolve. Every route
 now has a destination Compose can see, Inventory's being the last to join.
 
-**The fence above and the shipped file now gate on the same three services**,
-`catalog-api`, `ordering-api` and `web-bff`, because all three exist: PR-10
-built the first, PR-18 the second and PR-19 the third. This paragraph used to
-explain a discrepancy — the sample was the finished platform's, with Ordering
-as its worked pair, while the file on disk had only Catalog — and the
-explanation expired when Ordering landed. Read the fence for the shape of a
-block; a destination still joins the dependency list with the PR that builds
-it, so the two would diverge again at the next service.
+**The fence above and the shipped file now gate on the same four services**,
+`catalog-api`, `ordering-api`, `web-bff` and `inventory-api`, because all four
+exist: PR-10 built the first, PR-18 the second and PR-19 the third. This
+paragraph used to explain a discrepancy — the sample was the finished
+platform's, with Ordering as its worked pair, while the file on disk had only
+Catalog — and the explanation expired when Ordering landed. Read the fence for
+the shape of a block; a destination still joins the dependency list with the
+PR that builds it, so the two would diverge again at the next service.
 
 **The BFF's own block gained a `depends_on` the fence above does not show**, on
 `catalog-api`, and the asymmetry with the gateway is the point: the gateway

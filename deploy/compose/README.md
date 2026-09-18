@@ -72,10 +72,10 @@ and exits, then `catalog-api` starts (§14.1's pair rule).
 | Gateway | http://localhost:5000 | `/health/live`, `/health/ready`, and [§10.2](../../docs/backend-architecture/10-api-gateway.md)'s four routes |
 | Ordering API | http://localhost:5101 | `/health/live`, `/health/ready`, `/openapi/v1.json` (needs a token — see below), `/v1/orders` — every route needs a token, unlike Catalog's listing |
 | Web BFF | http://localhost:5200 | `/health/live`, `/health/ready`, `POST /v1/checkout/quote` with a body of `currency` and `lines` ([ADR-045](../../docs/backend-architecture/adr/ADR-045-the-checkout-quote-takes-quantities.md)) — a token needed, and the only host that mints one of its own ([§11.5](../../docs/backend-architecture/11-identity-authorization.md)) |
-| Inventory API | http://localhost:5103 | `/health/live`, `/health/ready`, `/openapi/v1.json` (needs a token — see below) |
+| Inventory API | http://localhost:5103 | `/health/live`, `/health/ready`, `/openapi/v1.json` (needs a token — see below), `/v1/inventory/stock/{productId}` — needs a token, unlike Catalog's listing |
 
-**Both OpenAPI documents need a token**, and that is a decision rather than an
-oversight. `MapOpenApi()` carries no authorization metadata, so the
+**Every OpenAPI document needs a token**, and that is a decision rather than
+an oversight. `MapOpenApi()` carries no authorization metadata, so the
 deny-by-default fallback
 ([ADR-030](../../docs/backend-architecture/adr/ADR-030-authorization-is-deny-by-default-in-the-building-block.md))
 answers 401 to an anonymous request for one: the document enumerates every
