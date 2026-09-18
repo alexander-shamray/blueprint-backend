@@ -120,9 +120,13 @@ class TouchSetGrammar(unittest.TestCase):
         with self.assertRaisesRegex(InputRefused, "repeats a class"):
             read_rows(body("A+A", "`docs/**`"))
 
-    def test_three_classes_are_refused(self) -> None:
-        with self.assertRaisesRegex(InputRefused, "Class row is not a class"):
-            read_rows(body("A+B+C", "`docs/**`"))
+    def test_three_classes_other_than_a_d_e_are_refused(self) -> None:
+        for cell in ("A+B+C", "A+E+D", "D+A+E", "A+D+E+B", "A+D+D"):
+            with self.subTest(cell=cell), self.assertRaisesRegex(InputRefused, "Class row is not a class"):
+                read_rows(body(cell, "`docs/**`"))
+
+    def test_a_d_e_is_read_as_its_three_members(self) -> None:
+        self.assertEqual(read_rows(body("A+D+E", "`docs/**`"))[0], ["A", "D", "E"])
 
     def test_an_empty_touch_set_is_refused(self) -> None:
         with self.assertRaisesRegex(InputRefused, "Touch set row is empty"):
@@ -341,6 +345,16 @@ class Verdicts(unittest.TestCase):
         problems = check(payload(files, class_cell="B", touch_cell=touch), self.map)
         self.assertEqual(len(problems), 1)
         self.assertIn("Directory.Packages.props", problems[0])
+
+    def test_a_d_e_is_the_union_of_its_three_members(self) -> None:
+        files = ["src/Services/Payments/Payments.Api/Program.cs", "docs/runbooks/x.md",
+                 "src/Services/Payments/Payments.Api/Payments.Api.csproj"]
+        touch = "`src/Services/Payments/**`, `docs/runbooks/x.md`"
+        self.assertEqual(check(payload(files, class_cell="A+D+E", touch_cell=touch), self.map), [])
+        # And as A+E, the runbook is outside the class: D is the member that reaches it.
+        problems = check(payload(files, class_cell="A+E", touch_cell=touch), self.map)
+        self.assertEqual(len(problems), 1)
+        self.assertIn("docs/runbooks/x.md", problems[0])
 
     def test_class_d_does_not_reach_src(self) -> None:
         problems = check(payload(["docs/testing.md", "src/Services/Catalog/X.cs"],
