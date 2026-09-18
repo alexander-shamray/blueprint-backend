@@ -186,6 +186,16 @@ The second reads the paginated files endpoint rather than
 `previous_filename` beside it is
 [its README](../.github/locality-gate/README.md)'s.
 
+**The comment gate needs only a base**, because it diffs the checkout's own
+history, so a branch can run it before it has a pull request:
+
+```bash
+git fetch origin main
+py -3.12 .github/comment-gate/comment_gate.py --base origin/main
+```
+
+What it reads and judges is [its README](../.github/comment-gate/README.md)'s.
+
 **The Compose smoke is the one gate that needs a running daemon and the one
 whose run changes the machine it runs on**, so its teardown is part of what
 it asserts rather than tidying: RabbitMQ seeds its default user only on an
