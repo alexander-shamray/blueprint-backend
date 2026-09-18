@@ -671,6 +671,7 @@ using Inventory.Domain.Stock;
 using Inventory.Infrastructure.Persistence;
 using Inventory.TestSupport;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
 using Xunit;
@@ -689,7 +690,7 @@ public sealed class StockLedgerTests(ServiceFixture fixture) : IAsyncLifetime
         await using AsyncServiceScope scope = fixture.Factory.Services.CreateAsyncScope();
         InventoryDbContext db = scope.ServiceProvider.GetRequiredService<InventoryDbContext>();
         IStockLedger ledger = scope.ServiceProvider.GetRequiredService<IStockLedger>();
-        await using var tx = await db.Database.BeginTransactionAsync(TestContext.Current.CancellationToken);
+        await using IDbContextTransaction tx = await db.Database.BeginTransactionAsync(TestContext.Current.CancellationToken);
         T result = await act(ledger);
         if (commit)
             await tx.CommitAsync(TestContext.Current.CancellationToken);
@@ -791,6 +792,13 @@ public sealed class StockLedgerTests(ServiceFixture fixture) : IAsyncLifetime
         levels.ShouldHaveSingleItem().Available.ShouldBe(2);
         (await fixture.ScalarAsync<int>("SELECT Value = Reserved FROM inventory.StockItems WHERE ProductId = {0}", a))
             .ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task Giving_back_a_line_whose_row_is_gone_is_a_fault_not_a_release()
+    {
+        await Should.ThrowAsync<InvalidOperationException>(() => InTransaction(l =>
+            l.GiveBackAsync([new(ProductId.New(), 1)], TestContext.Current.CancellationToken)));
     }
 
     [Fact]
@@ -913,8 +921,15 @@ internal sealed class SqlStockLedger(InventoryDbContext db) : IStockLedger
                 transaction: transaction,
                 cancellationToken: ct));
 
-            if (row is not null)
-                levels.Add(new ReservedLevel(line.ProductId, row.Available, row.UpdatedAt));
+            // A held line implies its row: a reservation holds stock a
+            // statement decremented, and the row it decremented cannot have
+            // gone. No row is the ledger disagreeing with itself, and a
+            // release that skipped it would publish StockReleased for stock it
+            // never returned; the transaction rolls back instead.
+            if (row is null)
+                throw new InvalidOperationException($"Product {line.ProductId} has a held line and no stock row.");
+
+            levels.Add(new ReservedLevel(line.ProductId, row.Available, row.UpdatedAt));
         }
 
         return levels;

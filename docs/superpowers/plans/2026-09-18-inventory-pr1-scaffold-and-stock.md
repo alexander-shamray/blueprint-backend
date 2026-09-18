@@ -1262,9 +1262,12 @@ Expected: 0 warnings; every suite green.
 py -3.12 -m unittest discover -s .github/pipeline-gate
 py -3.12 .github/pipeline-gate/pipeline_gate.py filters
 py -3.12 .github/pipeline-gate/pipeline_gate.py images
+py -3.12 -m unittest discover -s .github/secret-scan
 py -3.12 .github/secret-scan/secret_scan.py
 py -3.12 -m unittest discover -s tools/new-service
 ```
+
+Each gate's suite runs before the gate, which is `docs/testing.md`'s order.
 
 Expected: all exit 0.
 
