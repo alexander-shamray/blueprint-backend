@@ -896,7 +896,7 @@ public async Task An_authorisation_before_its_order_waits_and_succeeds_when_the_
     Guid order = Guid.CreateVersion7();
 
     await SendAsync(new AuthorisePayment(order, 42.10m, "EUR"), drain: false);
-    await Task.Delay(TimeSpan.FromSeconds(2), TestContext.Current.CancellationToken);
+    await fixture.Orders.Locked(order).WaitAsync(DeliveryBudget, TestContext.Current.CancellationToken);
     (await StatusAsync(order)).ShouldBeNull("§3.2: a missing record is a wait, not a decline");
     (await StagedAsync("PaymentDeclined")).ShouldBe(0);
 
@@ -956,16 +956,17 @@ public async Task A_resend_under_a_fresh_id_is_acknowledged_without_a_second_cha
 }
 
 [Fact]
-public async Task A_unit_retried_after_the_provider_answered_charges_once_and_stages_once()
+public async Task A_commit_that_fails_after_the_verdict_is_staged_rolls_back_and_the_retry_charges_once()
 {
     Guid order = Guid.CreateVersion7();
     await PublishAsync(Placed(order, 42.10m));
-    using FailOnceAfterProvider fault = fixture.FailNextCommitAfterProvider();
+    using CommitFault fault = fixture.FailNextCommit();
 
     await SendAsync(new AuthorisePayment(order, 42.10m, "EUR"));
 
+    fault.Fired.ShouldBeTrue("the first unit reached its commit with the intent and the outbox row staged");
     (await StatusAsync(order)).ShouldBe("Authorised");
-    (await StagedAsync("PaymentAuthorised")).ShouldBe(1);
+    (await StagedAsync("PaymentAuthorised")).ShouldBe(1, "the rolled-back unit's outbox row went with it");
     fixture.Provider.LogEntries.Count(e => e.RequestMessage.Path == "/v1/authorisations").ShouldBe(2,
         "the retry replayed the provider call under the same key");
     fixture.Provider.LogEntries.Select(e => e.RequestMessage.Headers!["Idempotency-Key"].Single()).Distinct()
@@ -985,13 +986,24 @@ distinguishes it from a message still queued or retrying.
 `Payments.Infrastructure.Messaging.DependencyInjection`; alias the class as
 Inventory's plans do if its name collides with the root one.
 
-**The fault-injection seam.** `FailNextCommitAfterProvider()` on the fixture
-arms a singleton `ProviderFaultSwitch` that the fixture's factory registers
-with `ConfigureTestServices`, decorating `IPaymentProvider`: after the inner
-call returns, when armed, it disarms and throws `TimeoutException`, a fault
-§9.8's policy retries. Disposing the returned handle disarms it. The decorator
-is test-support code and never ships. Ordering's `TransientFaultInjection` is
-the precedent for a test-only fault; read it before writing this.
+**The two test seams, both test-support code that never ships.** Ordering's
+`TransientFaultInjection` is the precedent for a test-only fault; read it
+before writing these.
+
+- **`FailNextCommit()`** arms a singleton `SaveChangesInterceptor` the
+  fixture's factory adds with
+  `services.ConfigureDbContext<PaymentsDbContext>(o => o.AddInterceptors(...))`
+  inside `ConfigureTestServices`. Armed, its `SavingChangesAsync` disarms,
+  sets `Fired` and throws `TimeoutException` — a fault §9.8's policy retries —
+  after the handler has added the intent and the collector has staged the
+  outbox row, which is the rollback the test is for. Disposing the returned
+  `CommitFault` disarms it.
+- **`fixture.Orders`** is an `ObservedOrderStore`, a decorator over
+  `IPaymentOrderStore` registered the same way. `Locked(Guid order)` and
+  `Stamping(Guid order)` return tasks that complete when `LockAsync` or
+  `RecordCancelledAsync` is entered for that order — before its SQL runs, so
+  a caller can prove a consumer reached the store and is waiting on a lock,
+  rather than infer it from a sleep. PR-4's race test uses the second.
 
 - [ ] **Step 3: Run to see them fail**
 

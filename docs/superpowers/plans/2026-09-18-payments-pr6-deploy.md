@@ -273,6 +273,29 @@ The second line is the capability's required address, supplied the way a
 tag is; without it the umbrella fails the capability's own guard on the
 first run, which is the guard working.
 
+**The direct lints and renders need it too, and for Payments only.**
+`smoke.sh` also lints, renders, tries untagged and renders a canary of every
+chart on its own, where a nested `payments.` key reaches nothing. It cannot
+ride `GATEWAY_OVERLAY`, which every chart receives: an address on a chart
+with no capability is exactly what Task 1's coherence guard refuses. So
+beside `GATEWAY_OVERLAY`:
+
+```bash
+# Payments' required provider address (§15.4). Per chart, not for all: on any
+# other chart it is a setting with the capability off, which the library's
+# coherence guard refuses.
+overlay_for() {
+    case "$1" in
+        payments) printf '%s' "--set-string paymentProvider.baseUrl=https://psp.example.invalid/" ;;
+    esac
+}
+```
+
+and each per-chart `helm lint`, untagged `helm template`, `Rendering` and
+canary `helm template` call gains `$(overlay_for "$chart")` beside
+`$GATEWAY_OVERLAY`, so the untagged check still fails on the tag and on
+nothing else.
+
 `helm.yml`: `'src/Services/Payments/**'` in both `paths:` lists, after
 Inventory's line — `smoke.sh` asserts the filter covers every source input it
 reads.

@@ -543,10 +543,11 @@ public async Task A_cancellation_arriving_mid_authorisation_waits_for_it_and_the
     await SendAsync(new AuthorisePayment(order, 42.10m, "EUR"), drain: false, messageId: command);
     await gate.Reached.WaitAsync(DeliveryBudget, TestContext.Current.CancellationToken);
     await PublishAsync(cancelled, drain: false);
-    await Task.Delay(TimeSpan.FromSeconds(2), TestContext.Current.CancellationToken);
+    await fixture.Orders.Stamping(order).WaitAsync(DeliveryBudget, TestContext.Current.CancellationToken);
+    await Task.Delay(TimeSpan.FromSeconds(1), TestContext.Current.CancellationToken);
 
     (await fixture.InboxAsync(cancelled.MessageId)).ShouldBeEmpty(
-        "the cancellation's stamp waits on the record lock the paused authorisation holds");
+        "the cancellation entered its stamp and is waiting on the record lock the paused authorisation holds");
 
     gate.Release();
     await Eventually(
@@ -561,19 +562,48 @@ public async Task A_cancellation_arriving_mid_authorisation_waits_for_it_and_the
 }
 ```
 
-The gate makes the interleaving the test's rather than the scheduler's: the
-authorisation is held after the provider answered and before its unit
-commits, which is the window an unlocked read would let the cancellation
+The gate makes the interleaving the test's rather than the scheduler's, and
+`Stamping` proves the cancellation arrived inside it — the one-second hold
+after that is a wait on a consumer known to be blocked, not a guess that it
+started: the authorisation is held after the provider answered and before
+its unit commits, which is the window an unlocked read would let the cancellation
 through — it would find no intent, void nothing, and leave money held on a
 cancelled order. The other order, the cancellation committing first, is
 PR-3's `order_cancelled` test.
 
-`ServiceFixture.PauseNextAuthorisation()` joins PR-3's fault switch on the
-same test-only `IPaymentProvider` decorator: armed, the next `AuthoriseAsync`
-awaits the inner call, completes `ProviderGate.Reached`, then waits on the
+`ServiceFixture.PauseNextAuthorisation()` is this task's: a test-only
+`IPaymentProvider` decorator the fixture's factory registers through the
+same `ConfigureTestServices` hook as PR-3's two seams. Armed, the next
+`AuthoriseAsync` awaits the inner call, completes `ProviderGate.Reached`, then waits on the
 gate until `Release()` or disposal. `ProviderGate` exposes `Task Reached` and
 `void Release()`, and disposing it releases, so a failing test cannot leave
 a consumer parked.
+
+The void has the authorisation's hazard: money moves at the provider inside
+a unit that may still roll back. So it gets the same test, with PR-3's
+`FailNextCommit()` armed for the cancellation's unit only:
+
+```csharp
+[Fact]
+public async Task A_void_whose_commit_fails_is_replayed_under_the_same_key_and_refunds_once()
+{
+    Guid order = Guid.CreateVersion7();
+    await PublishAsync(Placed(order, 42.10m));
+    await SendAsync(new AuthorisePayment(order, 42.10m, "EUR"));
+    using CommitFault fault = fixture.FailNextCommit();
+
+    await PublishAsync(Cancelled(order));
+
+    fault.Fired.ShouldBeTrue("the first unit voided and staged the refund before its commit failed");
+    (await RefundCount(order)).ShouldBe(1);
+    (await StagedAsync("PaymentRefunded")).ShouldBe(1, "the rolled-back unit's refund event went with it");
+    VoidCalls().ShouldBe(2, "the retry replayed the void rather than skipping it");
+    fixture.Provider.LogEntries
+        .Where(e => e.RequestMessage.Path.EndsWith("/void", StringComparison.Ordinal))
+        .Select(e => e.RequestMessage.Headers!["Idempotency-Key"].Single())
+        .Distinct().ShouldHaveSingleItem().ShouldBe($"void:{order}");
+}
+```
 
 - [ ] **Step 2: Run; commit**
 
