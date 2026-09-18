@@ -112,7 +112,7 @@ operator surface crosses the gateway and the realm. Each row names its
 | 3 | `feat(payments): authorise` — `PaymentIntent`, `payments-commands` with its delayed redelivery, the mismatch fault, `PaymentAuthorised` and `PaymentDeclined`, ADR-047 and §3.2's sentence, and the ladder's cross-service assertion | A+B+E — E for `Platform.IntegrationTests`' two references |
 | 4 | `feat(payments): void on cancellation` — `Refund`, the void on the `OrderCancelled` consumer, `PaymentRefunded`, Payments' outbox gauges, metrics initialiser and `AddMeter` line, and the deletion of PR-1's exemption | A+B+D+E |
 | 5 | `feat(payments): operators read a payment` — the admin `GET`, `payments:admin` in the service, the gateway's `payments-admin` route and cluster, the realm's permission granted to `demo`, §10.2's route and `order-review.md`'s step 1 | A+D |
-| 6 | `feat(deploy): Payments' chart, deploy target and canary` — `deploy/helm/payments` with no Redis values, the umbrella dependency, `smoke.sh`'s lists, `deploy.yml`'s option, the canary map | D |
+| 6 | `feat(deploy): Payments' chart, deploy target and canary` — `deploy/helm/payments` with `redis.enabled: false`, the library chart's `paymentProvider` capability, the umbrella dependency, `smoke.sh`'s lists, `deploy.yml`'s option, the canary map, and §15.3's sentence naming the charts with no Redis | B+D |
 
 **Why the cancellation is recorded in PR-1 and voided in PR-4.** Both
 consumers write the same record, and PR-3's guard reads `CancelledAt`. Were
@@ -367,13 +367,19 @@ provider keys. Port 5104 joins `deploy/compose/README.md`'s table by the
 scaffold's own edit.
 
 **PR-6's chart is Ordering's shape.** `workload.name` is `payments-api`;
-`image.api` and `image.migrator` match PR-1's matrix entries;
-`service.enabled` is true, because PR-5's route dials it. It carries no Redis
-value. `PaymentProvider__BaseUrl` defaults to empty, so a deploy that forgot
-it fails at start rather than paying a stub, and the simulator is never
-charted. It joins `MIGRATOR_CHARTS` in `smoke.sh`, the umbrella's
-dependencies, `deploy.yml`'s target list and `deploy/canary/canary.json`'s
-workload map.
+`image.api` and `image.migrator` match PR-1's matrix entries; `service.enabled`
+is true, because PR-5's route dials it. It declares `redis.enabled: false`,
+written down rather than omitted as §15.3 says the gateway and the BFF do, and
+that sentence gains Payments. The library chart has no generic secret variable —
+each capability is a block whose settings it guards — so the two provider keys
+arrive as a `paymentProvider` capability on the `identity.clientCredentials`
+pattern: the base address in the ConfigMap and the key from a Secret reference,
+both required when the block is enabled. A deploy that forgot the address
+therefore fails at render, which is the library chart's own rule — a clean
+render followed by a pod that cannot start is the shape its guards exist to
+refuse — and stricter than the host's refusal at start. The simulator is never
+charted. It joins `MIGRATOR_CHARTS` in `smoke.sh`, the umbrella's dependencies,
+`deploy.yml`'s target list and `deploy/canary/canary.json`'s workload map.
 
 ## 12. Observability
 
