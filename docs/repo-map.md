@@ -186,11 +186,12 @@ coverage.runsettings         the report filtered to `.*\.Domain\.dll$` (§12.9)
                              secret-scan, closure-gate, locality-gate,
                              pipeline-gate, output-gate — holding the gate,
                              its suite and a README. The README is the ONE
-                             owner of what the gate reads and what it claims;
-                             this entry and the chapter whose rule a gate
-                             enforces cite it, and docs/testing.md carries the
-                             invocations only. secret-scan is also a library,
-                             imported by the scaffold
+                             owner of what the gate reads and what it claims,
+                             and any other mention cites it rather than
+                             restating it (docs/change-locality.md §2);
+                             docs/testing.md carries the invocations only.
+                             secret-scan is also a library, imported by the
+                             scaffold
 .github/coverage/            the domain-coverage reporter, laid out like a
                              gate — script, suite, README — and not one: it
                              reports and never fails on a figure
