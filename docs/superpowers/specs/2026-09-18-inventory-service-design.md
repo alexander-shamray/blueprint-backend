@@ -113,11 +113,14 @@ Two aggregates. One table is written two ways, and the argument for that is
 onHand, DateTimeOffset now)` sets `Available = onHand - Reserved`, refuses
 with a domain error when `Reserved > onHand` — a stock-take cannot make the
 warehouse hold less than it has promised — and raises
-`StockLevelChangedDomainEvent(ProductId, Available, now)`. It is EF-mapped
-with a `rowversion`, so an admin write that races a reservation gets §7.3's
-`409 Conflict` from `ConcurrencyExceptionHandler` and the operator retries.
-That is the default §7.3 states, applied to the one path that is not
-contended.
+`StockLevelChangedDomainEvent(ProductId, Available, now)`. Its first write
+is an insert-where-absent under `UPDLOCK, HOLDLOCK` on the unit of work's
+transaction, and that lock is held to the commit whether the row existed or
+not, so an admin write and a ledger statement on one row serialise rather
+than race: whichever reaches the row second waits. It is EF-mapped with a
+`rowversion` as §7.2's default, which is EF's own guard on the update and
+answers §10.5's `409` only for a write that reached the row outside that
+lock, which nothing in this design does.
 
 The same row's counters are also written by the reservation path's raw
 statements, and `StockItem` is never loaded on that path. Two write paths to
@@ -188,9 +191,10 @@ inside the unit of work, through the ledger port section 3 names:
    tick otherwise, so every stamp on one row is strictly greater than the
    one before, whatever the server clock does between two serialised
    writers. The admin path keeps the same invariant from the other side:
-   `StockItem.SetOnHand` stamps `max(loaded UpdatedAt + 1 tick, now)`, and
-   the rowversion refuses the update if any statement stamped the row after
-   the load. A level is therefore wall-clock time when the clocks agree and
+   `StockItem.SetOnHand` stamps `max(loaded UpdatedAt + 1 tick, now)` on a
+   row its own lock holds from the load to the commit, so no statement can
+   stamp it between the two. A level is therefore wall-clock time when the
+   clocks agree and
    one tick past its predecessor when they do not, and Catalog's strict
    watermark on `OccurredAt` — the rule the contract's own remark states —
    is sufficient without a new member on the contract. Two clocks that
@@ -221,8 +225,10 @@ below `OrderLimits.MinQuantity`, for a product repeated across lines, and
 for no lines at all. The bounds are Ordering's contract constants rather than
 Inventory's own, because the saga builds the command from an order that
 already satisfied them, so a violation here is a bug in the sender and not a
-stock decision. No ceiling on line count is declared here for the same
-reason: `OrderLimits.MaxLines` bounds the order the lines came from.
+stock decision. `OrderLimits.MaxLines` is enforced on the same terms: every
+line is a statement run under row locks inside one transaction, so a
+payload with more lines than any order can carry is refused before it
+holds a lock, rather than starving the queue while it runs them.
 
 **Outcomes of `ReserveStock`, by the reservation's existing state:**
 
@@ -346,14 +352,14 @@ a `StockReleased` in one instant. So the repository's read is
 work's connection, which locks the row where one exists and the key range
 where none does: the second of two creators blocks until the first commits
 and then finds the row, and every state-derived reply runs against a row
-nobody else can change until it commits. The rowversion stays as the guard
-on the EF update itself, and a loser there — a fulfilment and a release
-that both loaded before either locked, which the lock now prevents, or an
-admin write against a ledger write — throws `DbUpdateConcurrencyException`,
-which MassTransit retries under the endpoint's policy and the API answers
-with §10.5's `409`. That is a fault time fixes, which is §9.8's definition
-of what retry is for. Section 3's admin path takes the same shape for its
-first write, an insert-where-absent under the same lock.
+nobody else can change until it commits. The rowversion stays as EF's own
+guard on the update, and a loser there — a write that reached the row
+outside the lock, which no path in this design takes — throws
+`DbUpdateConcurrencyException`, which MassTransit retries under the
+endpoint's policy and the API answers with §10.5's `409`. That is a fault
+time fixes, which is §9.8's definition of what retry is for. Section 3's
+admin path takes the same shape, an insert-where-absent under the same
+lock, held to the commit either way.
 
 **Reservations are not purged in this sequence.** ADR-024 bounds the
 tombstone's life by the order's, and nothing in the platform states what an

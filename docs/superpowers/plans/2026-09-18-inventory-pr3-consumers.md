@@ -256,10 +256,10 @@ public async Task Fulfilling_more_than_is_reserved_is_a_fault()
 - [ ] **Step 2: Run to see them fail; write the statement**
 
 ```csharp
-// The same Stamp expression as the two PR-2 statements: a fulfilment
-// publishes no level, but it moves UpdatedAt, and a stamp that went
-// backwards here would let the next SetOnHand carry an OccurredAt behind
-// Catalog's watermark.
+// The same Stamp expression as the reserve and give-back statements: a
+// fulfilment publishes no level, but it moves UpdatedAt, and a stamp that
+// went backwards here would let the next stock-take carry an OccurredAt
+// behind Catalog's watermark (§7.3's exception, spec section 4).
 private static readonly string FulfilSql =
     $"""
     UPDATE inventory.StockItems
@@ -769,9 +769,11 @@ configurator).
 reads.** `inventory-` admits `inventory-events` for configure, write and
 read, and `Common\.Contracts` on the read pattern admits every context's
 contract exchange, which is what binding `OrderCancelled` and
-`ShipmentDispatched` needs. Confirm rather than assume:
+`ShipmentDispatched` needs. Confirm rather than assume, suite first so the
+confirmation comes from a gate that is itself verified:
 
 ```bash
+py -3.12 -m unittest discover -s deploy/compose/rabbitmq
 py -3.12 deploy/compose/rabbitmq/check_permissions.py
 ```
 

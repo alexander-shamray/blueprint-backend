@@ -326,8 +326,8 @@ public sealed class StockItem : AggregateRoot<ProductId>
         // from its side: the level's instant is the clock when the clock is
         // ahead of the row and one tick past the row otherwise, so Catalog's
         // watermark never keeps an older level for a newer stamp whatever the
-        // two clocks do. The rowversion refuses this update if the ledger
-        // stamped the row after it was loaded.
+        // two clocks do. The row is locked from the load to the commit, so
+        // no ledger stamp lands between the two.
         UpdatedAt = now > UpdatedAt ? now : UpdatedAt.AddTicks(1);
         Raise(new StockLevelChangedDomainEvent(Id, Available, UpdatedAt));
     }
@@ -458,10 +458,12 @@ namespace Inventory.Infrastructure.Persistence;
 
 internal sealed class StockItemRepository(InventoryDbContext db) : IStockItemRepository
 {
-    // HOLDLOCK on the probe: two first writes for one product both reach
-    // this statement, the second blocks on the first's key-range lock, and
-    // finds the row when it proceeds. Without it both insert and the loser
-    // fails on the key, which ConcurrencyExceptionHandler does not map.
+    // UPDLOCK, HOLDLOCK on the probe, held to the commit: two first writes
+    // for one product both reach this statement, the second blocks on the
+    // first's key-range lock and finds the row when it proceeds — without it
+    // both insert and the loser fails on the key, which
+    // ConcurrencyExceptionHandler does not map. On a row that exists the same
+    // lock serialises this write with the ledger's statements on the row.
     public async Task EnsureAsync(ProductId id, DateTimeOffset now, CancellationToken ct)
     {
         if (db.Database.CurrentTransaction is null)
@@ -721,11 +723,12 @@ public sealed class SetOnHandHandler(IStockItemRepository items, TimeProvider cl
         var product = new ProductId(command.ProductId);
 
         // Ensure, then load, then set: the row exists before it is read, so a
-        // first write and a stock-take are one code path. Two first writes
-        // serialise on the key-range lock EnsureAsync holds to the commit —
-        // the second waits, then loads the first's committed row — and the
-        // rowversion guards only the update against a ledger write that
-        // lands between this load and this commit.
+        // first write and a stock-take are one code path. EnsureAsync's lock
+        // is held to the commit whether the row existed or not, so two admin
+        // writes, or an admin write and a ledger statement, serialise on the
+        // row rather than race — the second waits, then sees the first's
+        // commit. The rowversion is EF's own guard on the update and fires
+        // for nothing this path can meet.
         await items.EnsureAsync(product, clock.GetUtcNow(), ct);
         StockItem item = await items.GetAsync(product, ct)
             ?? throw new InvalidOperationException($"StockItems has no row for {product} after EnsureAsync.");
@@ -1060,15 +1063,17 @@ git commit -m "feat(inventory): the two stock admin endpoints under inventory:ad
 - Modify: `.github/workflows/ci.yml` — the `changes` job's `outputs`, its
   `filters`, the `images` job's `if`, and its `matrix.include`
 
-- [ ] **Step 1: Run the pipeline gate to see it fail**
+- [ ] **Step 1: Run the pipeline gate's suite, then the gate, to see it fail**
 
 ```bash
+py -3.12 -m unittest discover -s .github/pipeline-gate
 py -3.12 .github/pipeline-gate/pipeline_gate.py filters
 py -3.12 .github/pipeline-gate/pipeline_gate.py images
 ```
 
-Expected: `filters` refuses `src/Services/Inventory`; `images` refuses the
-two Inventory Dockerfiles.
+Expected: the suite is green, so the refusals that follow are the gate's
+and not a broken gate's; `filters` refuses `src/Services/Inventory`;
+`images` refuses the two Inventory Dockerfiles.
 
 - [ ] **Step 2: Add the four edits**
 

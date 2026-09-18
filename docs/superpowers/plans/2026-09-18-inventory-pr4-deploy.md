@@ -233,12 +233,16 @@ is outside this PR's touch set on purpose, and PR-3 owns Inventory's gauges.
 - [ ] **Step 1: Confirm the boards key on the host, not on a name**
 
 ```bash
-grep -n "service.name\|service_name\|ordering-api\|catalog-api" deploy/observability/dashboards/*.json | head
+grep -c "service.name\|service_name" deploy/observability/dashboards/*.json
+grep -n "ordering-api\|catalog-api\|inventory-api" deploy/observability/dashboards/*.json
 ```
 
-Expected: panels filter on a `service.name` variable or label, and no panel
-names `ordering-api` as a literal. If a panel does name services literally,
-file an issue against the dashboard rather than widening this PR.
+Expected: the first prints a count above zero for each board, and the
+second prints nothing — two commands, because a single search piped
+through `head` could show the label matches and truncate the literal it
+exists to find. If the second prints a line, a panel names a host
+literally: file an issue against the dashboard rather than widening this
+PR.
 
 - [ ] **Step 2: Run the observability check**
 

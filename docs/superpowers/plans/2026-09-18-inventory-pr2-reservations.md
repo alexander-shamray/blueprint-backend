@@ -1036,6 +1036,15 @@ public class ReserveStockValidatorTests
     }
 
     [Fact]
+    public void More_lines_than_an_order_can_carry_are_refused()
+    {
+        ReservationLine[] lines = [.. Enumerable.Range(0, OrderLimits.MaxLines + 1).Select(_ => new ReservationLine(ProductId.New(), 1))];
+
+        _validator.TestValidate(new ReserveStockCommand(Guid.CreateVersion7(), lines))
+            .ShouldHaveValidationErrorFor(c => c.Lines);
+    }
+
+    [Fact]
     public void A_quantity_past_the_contract_ceiling_is_refused()
     {
         _validator.TestValidate(new ReserveStockCommand(
@@ -1106,6 +1115,9 @@ public sealed class ReserveStockValidator : AbstractValidator<ReserveStockComman
     {
         RuleFor(c => c.OrderId).NotEmpty();
         RuleFor(c => c.Lines).NotEmpty();
+        RuleFor(c => c.Lines)
+            .Must(lines => lines.Count <= OrderLimits.MaxLines)
+            .WithMessage("More lines than an order can carry.");
         RuleFor(c => c.Lines)
             .Must(lines => lines.Select(l => l.ProductId).Distinct().Count() == lines.Count)
             .WithMessage("A product appears at most once.");
@@ -1457,17 +1469,21 @@ public async Task A_second_release_of_a_released_reservation_publishes_again_and
 }
 
 [Theory]
-[InlineData(0, false)]
-[InlineData(OrderLimits.MaxQuantity + 1, false)]
-[InlineData(1, true)]
-public async Task A_malformed_reserve_is_a_contract_fault_and_is_not_retried(int quantity, bool emptyProduct)
+[InlineData(0, false, 1)]
+[InlineData(OrderLimits.MaxQuantity + 1, false, 1)]
+[InlineData(1, true, 1)]
+[InlineData(1, false, OrderLimits.MaxLines + 1)]
+public async Task A_malformed_reserve_is_a_contract_fault_and_is_not_retried(int quantity, bool emptyProduct, int lineCount)
 {
     var order = Guid.CreateVersion7();
-    Guid product = emptyProduct ? Guid.Empty : Guid.CreateVersion7();
+    StockLine[] lines =
+    [
+        .. Enumerable.Range(0, lineCount).Select(_ => new StockLine(emptyProduct ? Guid.Empty : Guid.CreateVersion7(), quantity))
+    ];
 
     // drain: false, because a message the mapper refuses never reaches the
     // inbox filter and so leaves no row for the default drain to wait on.
-    await SendAsync(new ReserveStock(order, [new StockLine(product, quantity)]), drain: false);
+    await SendAsync(new ReserveStock(order, lines), drain: false);
 
     // A well-formed sentinel behind it on the same queue: once the sentinel
     // has been consumed, the malformed message in front of it has been too,
@@ -1532,6 +1548,12 @@ public sealed class ReserveStockMapper : ICommandMessageMapper<ReserveStock, Res
         // published as an out-of-stock decision about a product that is not one.
         if (message.OrderId == Guid.Empty || message.Lines.Any(l => l.ProductId == Guid.Empty))
             throw new ContractMappingException($"An empty identifier on {nameof(ReserveStock)}.");
+
+        // Every line is a statement under a row lock in one transaction, so a
+        // payload longer than any order can be is refused before it holds a
+        // lock rather than starving the queue while it runs them.
+        if (message.Lines.Count > OrderLimits.MaxLines)
+            throw new ContractMappingException($"More lines than an order can carry on {nameof(ReserveStock)}.");
 
         if (message.Lines.Select(l => l.ProductId).Distinct().Count() != message.Lines.Count)
             throw new ContractMappingException($"A repeated product on {nameof(ReserveStock)}.");
