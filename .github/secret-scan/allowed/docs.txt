@@ -37,5 +37,6 @@ docs/superpowers/plans/2026-08-07-pr06-compose.md | env-assignment | 8a11e54d9d5
 docs/superpowers/plans/2026-08-07-pr06-compose.md | credential-assignment | 8a11e54d9d5b | The same default in the same frozen plan's compose excerpt.
 docs/superpowers/plans/2026-08-10-pr13-masstransit-registration.md | credential-assignment | 9b73a3370355 | PR-13's frozen plan, printing the broker default of the day.
 docs/superpowers/specs/2026-08-10-pr13-masstransit-registration-design.md | credential-assignment | 9b73a3370355 | PR-13's frozen design spec, printing the same broker default.
+docs/superpowers/plans/2026-09-18-payments-pr2-provider-acl.md | credential-assignment | 9f5482218873 | The Payments PR-2 plan printing the simulator key its Compose unit sets, §14.1's local default; the simulator ignores it.
 docs/backend-architecture/13-observability.md | connection-string-password | b988560af286 | Section 13.4's prose describing the shape, not carrying one.
 docs/backend-architecture/13-observability.md | connection-string-password | f52fbd32b2b3 | The chapter's throwaway example of a value the redactor catches.
