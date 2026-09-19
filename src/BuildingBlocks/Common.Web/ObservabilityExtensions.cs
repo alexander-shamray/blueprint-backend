@@ -89,6 +89,7 @@ public static class ObservabilityExtensions
                 .AddMeter("Ordering.Outbox")                       // §13.6 per-lane
                 .AddMeter("Inventory.Reservations")                // §13.3
                 .AddMeter("Inventory.Outbox")                      // §13.6 per-lane
+                .AddMeter("Payments.Provider")                    // spec §12; the error queue sees only exhausted units
 
                 // Shared names, not service-prefixed: every service emits the
                 // same instruments and the service.name resource attribute

@@ -74,6 +74,7 @@ and exits, then `catalog-api` starts (§14.1's pair rule).
 | Web BFF | http://localhost:5200 | `/health/live`, `/health/ready`, `POST /v1/checkout/quote` with a body of `currency` and `lines` ([ADR-045](../../docs/backend-architecture/adr/ADR-045-the-checkout-quote-takes-quantities.md)) — a token needed, and the only host that mints one of its own ([§11.5](../../docs/backend-architecture/11-identity-authorization.md)) |
 | Inventory API | http://localhost:5103 | `/health/live`, `/health/ready`, `/openapi/v1.json` (needs a token — see below), `/v1/inventory/stock/{productId}` — needs a token, unlike Catalog's listing |
 | Payments API | http://localhost:5104 | `/health/live`, `/health/ready`, `/openapi/v1.json` (needs a token — see below) |
+| PSP simulator | http://localhost:5190 | /__admin/mappings — the scripted amounts are in deploy/compose/psp-simulator/README.md |
 
 **Every OpenAPI document needs a token**, and that is a decision rather than
 an oversight. `MapOpenApi()` carries no authorization metadata, so the

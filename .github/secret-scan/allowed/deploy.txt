@@ -79,3 +79,4 @@ deploy/compose/services/payments.yml | connection-string-password | 8a11e54d9d5b
 deploy/compose/services/payments.yml | credential-assignment | 1df0b369ce40 | Payments's local connection default, in-cluster hostname.
 deploy/compose/services/payments.yml | credential-assignment | e03d477c7cd2 | Section 14.1's broker default for Payments, the per-service account that replaced guest.
 deploy/compose/rabbitmq/definitions.json | credential-assignment | fe985803dd60 | The Payments service account's password hash, Section 14.1's local default.
+deploy/compose/services/payments.yml | credential-assignment | 9f5482218873 | Section 14.1's local default for the simulated provider's API key; the simulator ignores it.
