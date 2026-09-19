@@ -26,4 +26,11 @@ public static class ProviderHop
     public static readonly TimeSpan MaxRetryDelay = TimeSpan.FromSeconds(1);
 
     public static readonly TimeSpan TotalRequestTimeout = TimeSpan.FromSeconds(20);
+
+    /// <summary>
+    /// The most an answer may carry. Every answer the wire format defines is a
+    /// few short fields, so a larger one is a provider this adapter does not
+    /// understand, refused before it is read.
+    /// </summary>
+    public const int MaxAnswerBytes = 64 * 1024;
 }

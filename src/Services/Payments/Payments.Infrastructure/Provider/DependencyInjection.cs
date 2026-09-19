@@ -83,6 +83,7 @@ public static class DependencyInjection
 
         services.AddSingleton<ProviderMetrics>();
         services.AddTransient<ProviderAttemptCounter>();
+        services.AddTransient<ProviderAnswerBuffer>();
 
         IHttpClientBuilder client = services.AddHttpClient<IPaymentProvider, HttpPaymentProvider>(http =>
         {
@@ -124,6 +125,10 @@ public static class DependencyInjection
             };
         });
         client.AddHttpMessageHandler<ProviderAttemptCounter>();
+
+        // Inside the counter, so a body that breaks off or runs over is an
+        // attempt it counts and the pipeline retries.
+        client.AddHttpMessageHandler<ProviderAnswerBuffer>();
 
         return services;
     }

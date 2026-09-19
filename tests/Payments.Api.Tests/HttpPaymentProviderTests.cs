@@ -128,8 +128,11 @@ public sealed class HttpPaymentProviderTests : IClassFixture<HttpPaymentProvider
         OrderId order = OrderId.New();
         CancellationToken ct = TestContext.Current.CancellationToken;
 
-        AuthorisationResult first = await Provider().AuthoriseAsync(Authorisation(42.10m, order), ct);
-        AuthorisationResult second = await Provider().AuthoriseAsync(Authorisation(42.10m, order), ct);
+        // The same request twice, payer included: a replay repeats the figures,
+        // and a key reused with different ones is the provider's 409.
+        AuthorisationRequest request = Authorisation(42.10m, order);
+        AuthorisationResult first = await Provider().AuthoriseAsync(request, ct);
+        AuthorisationResult second = await Provider().AuthoriseAsync(request, ct);
 
         AuthorisationResult.Authorised authorised = first.ShouldBeOfType<AuthorisationResult.Authorised>();
         authorised.Reference.ShouldBe($"psp_authorise:{order.Value}");
@@ -224,6 +227,25 @@ public sealed class HttpPaymentProviderTests : IClassFixture<HttpPaymentProvider
                 .AuthoriseAsync(Authorisation(42.10m), TestContext.Current.CancellationToken));
 
         counted.Value.ShouldBe(ProviderHop.MaxRetryAttempts + 1, "one per refused attempt, not one per call");
+    }
+
+    [Fact]
+    public async Task An_answer_larger_than_the_bound_is_read_inside_the_attempt_so_it_is_retried_and_counted()
+    {
+        // Read after the pipeline, an oversized body would fail once, uncounted;
+        // read inside each attempt, it is a transport fault like any other.
+        string padding = new('x', ProviderHop.MaxAnswerBytes);
+        _server.Given(Request.Create().WithPath("/v1/authorisations").UsingPost())
+            .AtPriority(0)
+            .RespondWith(Response.Create().WithStatusCode(201)
+                .WithBody($"{{\"status\":\"approved\",\"reference\":\"psp_x\",\"padding\":\"{padding}\"}}"));
+        using UnavailableCount counted = CountUnavailable();
+
+        await Should.ThrowAsync<PaymentProviderUnavailableException>(() =>
+            Provider().AuthoriseAsync(Authorisation(42.10m), TestContext.Current.CancellationToken));
+
+        Calls("/v1/authorisations").ShouldBe(ProviderHop.MaxRetryAttempts + 1);
+        counted.Value.ShouldBe(ProviderHop.MaxRetryAttempts + 1);
     }
 
     [Theory]
