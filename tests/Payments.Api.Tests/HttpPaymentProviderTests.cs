@@ -185,6 +185,22 @@ public sealed class HttpPaymentProviderTests : IClassFixture<HttpPaymentProvider
         counted.Value.ShouldBe(ProviderHop.MaxRetryAttempts + 1, "one per failing attempt, not one per call");
     }
 
+    [Fact]
+    public async Task A_long_retry_after_does_not_spend_the_budget_the_retries_are_owed()
+    {
+        // A provider's Retry-After replaces the bounded backoff, and nothing
+        // caps it at ProviderHop.MaxRetryDelay; honoured, one long header
+        // spends the total before the retries the budget test counts on.
+        _server.Given(Request.Create().WithPath("/v1/authorisations").UsingPost())
+            .AtPriority(0)
+            .RespondWith(Response.Create().WithStatusCode(503).WithHeader("Retry-After", "60"));
+
+        await Should.ThrowAsync<PaymentProviderUnavailableException>(() =>
+            Provider().AuthoriseAsync(Authorisation(42.10m), TestContext.Current.CancellationToken));
+
+        Calls("/v1/authorisations").ShouldBe(ProviderHop.MaxRetryAttempts + 1);
+    }
+
     [Theory]
     [InlineData(408)]
     [InlineData(429)]

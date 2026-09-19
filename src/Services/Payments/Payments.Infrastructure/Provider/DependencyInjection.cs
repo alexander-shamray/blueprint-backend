@@ -104,6 +104,11 @@ public static class DependencyInjection
             options.Retry.Delay = ProviderHop.RetryDelay;
             options.Retry.MaxDelay = ProviderHop.MaxRetryDelay;
 
+            // A Retry-After replaces the backoff above and MaxDelay does not
+            // cap it, so one long header would spend the total before the
+            // retries ProviderHop's budget counts on.
+            options.Retry.ShouldRetryAfterHeader = false;
+
             // An attempt timeout is the provider's, and this is the one place
             // it arrives distinguishable from the caller cancelling.
             ProviderMetrics metrics = sp.GetRequiredService<ProviderMetrics>();
