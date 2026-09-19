@@ -1,4 +1,5 @@
 using System.Data.Common;
+using System.Text.Json;
 using Catalog.Infrastructure.Persistence;
 using Catalog.Migrator;
 using Common.Application;
@@ -138,12 +139,26 @@ public sealed class ServiceFixture : IAsyncLifetime
     /// built; the production definitions file does not move for the
     /// harness's sake.
     /// </summary>
+    /// <remarks>
+    /// Only <c>write</c> moves. <c>configure</c> and <c>read</c> are handed
+    /// back exactly as the imported definitions grant them, because they are
+    /// the half a real broker lets this suite judge: an exchange or a queue
+    /// the deployed grant would refuse to declare or to bind is refused here
+    /// too, and a wide scope installed on those two as well would answer every
+    /// topology question with a permission nothing outside the harness holds.
+    /// They are read back from the file the container imports rather than
+    /// written out a second time, so the scope under test cannot drift from
+    /// the scope that deploys.
+    /// </remarks>
     private async Task WidenWriteForTheHarnessAsync()
     {
-        const string scope = "^(catalog-|Common\\.Contracts|MassTransit:)";
+        const string user = "catalog-svc";
+        const string write = "^(catalog-|Common\\.Contracts|MassTransit:)";
+
+        (string configure, string read) = ImportedGrant();
 
         ExecResult result = await _rabbit!.ExecAsync(
-            ["rabbitmqctl", "set_permissions", "-p", "/", "catalog-svc", scope, scope, scope],
+            ["rabbitmqctl", "set_permissions", "-p", "/", user, configure, write, read],
             TestContext.Current.CancellationToken);
 
         // A silent failure here would surface as every endpoint test retrying
@@ -152,8 +167,27 @@ public sealed class ServiceFixture : IAsyncLifetime
         if (result.ExitCode != 0)
         {
             throw new InvalidOperationException(
-                $"Could not widen catalog-svc's broker permissions for the harness "
+                $"Could not widen {user}'s broker permissions for the harness "
                 + $"(exit {result.ExitCode}). stdout: {result.Stdout} stderr: {result.Stderr}");
+        }
+
+        // The mapped file rather than the container, because it is the same
+        // text the broker imported and it can be read before anything starts.
+        static (string Configure, string Read) ImportedGrant()
+        {
+            string path = Path.Combine(BrokerContextPath(), "definitions.json");
+            using JsonDocument definitions = JsonDocument.Parse(File.ReadAllText(path));
+
+            foreach (JsonElement entry in definitions.RootElement.GetProperty("permissions").EnumerateArray())
+            {
+                if (entry.GetProperty("user").GetString() != user || entry.GetProperty("vhost").GetString() != "/")
+                    continue;
+
+                return (entry.GetProperty("configure").GetString()!, entry.GetProperty("read").GetString()!);
+            }
+
+            throw new InvalidOperationException(
+                $"{path} grants {user} nothing on the default vhost, so there is no scope to preserve.");
         }
     }
 
