@@ -152,4 +152,19 @@ public sealed class OutboxDispatcherTests(ServiceFixture fixture) : IAsyncLifeti
         // forever: nothing else in the design ever stops it.
         (await fixture.ProcessOutboxBatchAsync()).ShouldBe(0);
     }
+
+    [Fact]
+    public async Task A_payload_longer_than_the_string_convention_survives_the_column()
+    {
+        // §7.2's convention caps every string property at 400 characters, and
+        // OutboxMessageConfiguration clears the model's max length on
+        // Payload alongside the nvarchar(max) column type — this asserts
+        // the column rather than the setting.
+        string note = new('a', 1_000);
+
+        await fixture.StageOutboxAsync(OutboxRows.Verbose(fixture, note));
+
+        OutboxMessage row = (await fixture.OutboxAsync()).ShouldHaveSingleItem();
+        row.Payload.ShouldContain(note, Case.Sensitive);
+    }
 }

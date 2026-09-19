@@ -1,3 +1,4 @@
+using System.Diagnostics.Metrics;
 using Common.Contracts;
 using Common.Contracts.Ordering.V1;
 using MassTransit;
@@ -69,9 +70,39 @@ public sealed class PaymentsEventEndpointTests(ServiceFixture fixture) : IAsyncL
         Guid order = Guid.CreateVersion7();
         OrderPlaced placed = Placed(order);
 
+        // §9.5's filter counts a drop on messaging.inbox.suppressed before it
+        // returns, so waiting on that instrument is a claim that the second
+        // delivery actually reached the filter and was dropped — a fixed
+        // delay is only a claim that some time passed.
+        using SemaphoreSlim suppressed = new(0);
+        using MeterListener listener = new();
+
+        listener.InstrumentPublished = (instrument, active) =>
+        {
+            if (instrument.Meter.Name == "Commerce.Messaging" &&
+                instrument.Name == "messaging.inbox.suppressed")
+            {
+                active.EnableMeasurementEvents(instrument);
+            }
+        };
+
+        listener.SetMeasurementEventCallback<long>((_, _, tags, _) =>
+        {
+            if (TagValue(tags, "message") == nameof(OrderPlaced) &&
+                TagValue(tags, "endpoint") == Payments.Infrastructure.Messaging.DependencyInjection.EventsQueue)
+            {
+                suppressed.Release();
+            }
+        });
+
+        listener.Start();
+
         await PublishAsync(placed);
         await PublishAsync(placed, drain: false);
-        await Task.Delay(TimeSpan.FromSeconds(2), TestContext.Current.CancellationToken);
+
+        (await suppressed.WaitAsync(DeliveryBudget, TestContext.Current.CancellationToken))
+            .ShouldBeTrue("the redelivery has to be counted as suppressed before the rows below can be read " +
+                "as settled");
 
         (await fixture.InboxAsync(placed.MessageId)).Count.ShouldBe(1, "§9.5's inbox dropped the redelivery");
         (await fixture.ScalarAsync<int>(
@@ -112,7 +143,7 @@ public sealed class PaymentsEventEndpointTests(ServiceFixture fixture) : IAsyncL
             await Eventually(
                 async () => (await fixture.InboxAsync(message.MessageId)).Count,
                 expected: 1,
-                because: "the inbox row is written when the handler's transaction commits (§9.5)");
+                because: "the inbox row is written after the handler's command has committed (§9.5)");
         }
     }
 
@@ -169,5 +200,20 @@ public sealed class PaymentsEventEndpointTests(ServiceFixture fixture) : IAsyncL
         }
 
         actual.ShouldBe(expected, because);
+    }
+
+    /// <summary>
+    /// One tag off a measurement. A span cannot be captured, so the read
+    /// happens inside the callback and only the string escapes.
+    /// </summary>
+    private static string TagValue(ReadOnlySpan<KeyValuePair<string, object?>> tags, string name)
+    {
+        foreach (KeyValuePair<string, object?> tag in tags)
+        {
+            if (tag.Key == name)
+                return tag.Value?.ToString() ?? string.Empty;
+        }
+
+        return string.Empty;
     }
 }
