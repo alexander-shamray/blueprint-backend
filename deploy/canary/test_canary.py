@@ -527,12 +527,20 @@ class PlanDocumentTests(unittest.TestCase):
 
     def test_every_threshold_analyse_reads_is_present(self) -> None:
         """`analyse` indexes these rather than `.get`-ing them, so a missing
-        key is a KeyError mid-rollout with a canary already serving traffic."""
-        canary.analyse(
-            readings(signals=("http", "consume")),
+        key is a KeyError mid-rollout with a canary already serving traffic.
+
+        Every signal the plan defines is read, and the verdict has to be a
+        promotion: an early rollback returns before any threshold is indexed,
+        and would pass this vacuously."""
+        signals = canary.entries(self.document["signals"])
+
+        verdict = canary.analyse(
+            readings(signals=tuple(signals)),
             canary.entries(self.document["thresholds"]),
-            canary.entries(self.document["signals"]),
+            signals,
         )
+
+        self.assertEqual(verdict["decision"], canary.PROMOTE, verdict["reason"])
 
     def queries(self) -> dict:
         """Every shipped query, keyed by `<signal>.<metric>`."""
@@ -656,6 +664,53 @@ class SignalTests(unittest.TestCase):
 
         self.assertTrue(any("errorRate" in f and "absolute" in f for f in failures),
                         failures)
+
+    def test_the_contract_names_exactly_the_three_signals(self) -> None:
+        self.assertEqual(set(canary.SIGNAL_CONTRACT), {"http", "consume", "saga"})
+        self.assertEqual(set(canary.entries(self.document["signals"])),
+                         set(canary.SIGNAL_CONTRACT))
+
+    def test_a_renamed_signal_fails_the_plan(self) -> None:
+        """Renaming http would slip it past its own threshold rule and the
+        probe exclusion, both of which are bound to the name."""
+        document = json.loads(json.dumps(self.document))
+        document["signals"]["web"] = document["signals"].pop("http")
+
+        failures = canary.check(document)
+
+        self.assertTrue(any("'web'" in f for f in failures), failures)
+        self.assertTrue(any("'http'" in f for f in failures), failures)
+
+    def test_a_signal_reading_another_signals_series_fails_the_plan(self) -> None:
+        """Saga's queries pointed at the consume series would judge the saga
+        on its neighbour's health, which is the defect saga exists to end."""
+        document = json.loads(json.dumps(self.document))
+        document["signals"]["saga"]["queries"] = dict(
+            document["signals"]["consume"]["queries"])
+
+        failures = canary.check(document)
+
+        self.assertTrue(
+            any("signals.saga" in f and "messaging_masstransit_consume" in f
+                for f in failures),
+            failures)
+
+    def test_a_query_reading_the_wrong_series_for_its_role_fails_the_plan(self) -> None:
+        """An error rate over the attempt counter alone is always zero or
+        one, and neither is a fault rate."""
+        document = json.loads(json.dumps(self.document))
+        attempts = ('messaging_masstransit_consume_ea_total{service_name="$SERVICE", '
+                    'deployment_track="$TRACK"}[$WINDOW]')
+        document["signals"]["consume"]["queries"]["errorRate"] = (
+            f"(sum(rate({attempts})) or vector(0)) / sum(rate({attempts}))")
+
+        failures = canary.check(document)
+
+        self.assertTrue(
+            any("signals.consume.queries.errorRate" in f
+                and "messaging_masstransit_consume_errors_ea_total" in f
+                for f in failures),
+            failures)
 
     def test_http_not_held_to_the_latency_threshold_fails_the_plan(self) -> None:
         """ADR-047 holds http to both of §13.6's numbers, so dropping p99 from

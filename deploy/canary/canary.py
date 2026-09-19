@@ -604,24 +604,65 @@ def check(plan_document: dict, root: Path = ROOT) -> list[str]:
     return failures
 
 
-# The absolute thresholds each signal must name (ADR-047): every signal's
-# fault rate, and http's p99 besides, because only a request has a latency
-# alert to be held to.
-REQUIRED_ABSOLUTE_DEFAULT = ("errorRate",)
-REQUIRED_ABSOLUTE = {"http": ("errorRate", "latencyP99Seconds")}
+# The signals ADR-047 defines, and what binds each to its meaning: the
+# absolute thresholds it must name, and for each query the exact series it
+# reads. A signal is known by these and not by its name, so renaming one or
+# pointing it at a neighbour's series fails the plan rather than slipping past
+# the rules bound to it. Only http names p99, because only a request has a
+# latency alert to be held to.
+SIGNAL_CONTRACT = {
+    "http": {
+        "absolute": ("errorRate", "latencyP99Seconds"),
+        "series": {
+            "errorRate": {"http_server_request_duration_seconds_count"},
+            "latencyP99Seconds": {"http_server_request_duration_seconds_bucket"},
+            "requests": {"http_server_request_duration_seconds_count"},
+        },
+    },
+    "consume": {
+        "absolute": ("errorRate",),
+        "series": {
+            "errorRate": {"messaging_masstransit_consume_errors_ea_total",
+                          "messaging_masstransit_consume_ea_total"},
+            "latencyP99Seconds": {"messaging_masstransit_consume_duration_milliseconds_bucket"},
+            "requests": {"messaging_masstransit_consume_ea_total"},
+        },
+    },
+    "saga": {
+        "absolute": ("errorRate",),
+        "series": {
+            "errorRate": {"messaging_masstransit_saga_errors_ea_total",
+                          "messaging_masstransit_saga_ea_total"},
+            "latencyP99Seconds": {"messaging_masstransit_saga_duration_milliseconds_bucket"},
+            "requests": {"messaging_masstransit_saga_ea_total"},
+        },
+    },
+}
+
+# A series a query reads, by the suffix every exported series ends in.
+SERIES_READ = re.compile(r"\b([a-z][a-z0-9_]*_(?:count|bucket|sum|total))\b")
 
 
 def _signals_are_complete(signals: dict) -> list[str]:
-    """Each signal carries the three queries `analyse` reads and a fault rate.
+    """Each signal is one the contract defines, and honours it.
 
-    A missing query rolls every rung back for an absent series, ten minutes
-    at a time; a signal with no absolute errorRate is judged only against the
-    stable track, so a canary as broken as the release before it promotes.
+    It carries the three queries `analyse` reads, each reading exactly the
+    series its role is bound to, and names the absolute thresholds its
+    signal must. A missing query rolls every rung back for an absent series;
+    a missing threshold leaves the signal judged only against the stable
+    track, so a canary as broken as the release before it promotes.
     """
     failures = []
     if not signals:
         failures.append("signals is empty: no workload can be judged on anything")
     for signal, definition in sorted(signals.items()):
+        contract = SIGNAL_CONTRACT.get(signal)
+        if contract is None:
+            failures.append(
+                f"signals defines {signal!r}, which is not a signal ADR-047 "
+                f"defines: {', '.join(SIGNAL_CONTRACT)}"
+            )
+            continue
         queries = entries(definition.get("queries", {}))
         for name in METRICS:
             if name not in queries:
@@ -629,8 +670,17 @@ def _signals_are_complete(signals: dict) -> list[str]:
                     f"signals.{signal}.queries.{name} is missing, and analyse() "
                     "reads it for both tracks"
                 )
+                continue
+            expected = contract["series"][name]
+            read = set(SERIES_READ.findall(queries[name]))
+            if read != expected:
+                failures.append(
+                    f"signals.{signal}.queries.{name} reads "
+                    f"{', '.join(sorted(read)) or 'no series'}, and its role is "
+                    f"bound to exactly {', '.join(sorted(expected))}"
+                )
         absolute = definition.get("absolute", [])
-        for key in REQUIRED_ABSOLUTE.get(signal, REQUIRED_ABSOLUTE_DEFAULT):
+        for key in contract["absolute"]:
             if key not in absolute:
                 failures.append(
                     f"signals.{signal}.absolute does not name {key}, so the "
@@ -833,6 +883,8 @@ def _probe_routes_are_excluded(signals: dict, root: Path) -> list[str]:
         "so the probe exclusion cannot be checked against it"
         for site in unresolved_health_routes(root)
     ]
+    if "http" not in signals:
+        failures.append("signals defines no 'http', so no probe exclusion is checked")
     queries = entries(signals.get("http", {}).get("queries", {}))
     for name, expression in sorted(queries.items()):
         selectors = HTTP_SELECTOR.findall(expression)
@@ -1012,7 +1064,7 @@ def _metrics_are_vouched_for(plan_document: dict, root: Path) -> list[str]:
     for signal, definition in sorted(entries(plan_document.get("signals", {})).items()):
         for name, query in sorted(entries(definition.get("queries", {})).items()):
             where = f"signals.{signal}.queries.{name}"
-            for metric in sorted(set(re.findall(r"\b([a-z][a-z0-9_]*_(?:count|bucket|sum|total))\b", query))):
+            for metric in sorted(set(SERIES_READ.findall(query))):
                 if metric in EXPORTED_SERIES:
                     meter, instrument, _, _ = EXPORTED_SERIES[metric]
                     if instrument not in METER_INSTRUMENTS.get(meter, ()):
