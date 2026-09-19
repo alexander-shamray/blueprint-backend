@@ -69,6 +69,17 @@ public class ArchitectureTests
         // something no longer referenced is a pre-authorised hole rather than
         // a failure, which is the same trade the Domain gate takes. What both
         // buy is that ADDING one is a decision somebody has to write down.
+        //
+        // Microsoft.Extensions.Logging.Abstractions is here because
+        // FulfilReservationHandler logs through LoggerMessage.Define. It is
+        // the abstractions package rather than a concrete provider, so no
+        // §4.2 row forbids it, and LoggerMessage.Define rather than
+        // log.LogWarning is CA1848 under ADR-019.
+        //
+        // System.Diagnostics.DiagnosticSource is InventoryMetrics' own:
+        // Counter<T>, Meter and IMeterFactory live in that assembly, and
+        // §13.3 puts the business-shaped counter beside the aggregate it
+        // claims a row against rather than behind Common.Application.
         string[] allowed =
         [
             "Inventory.Domain",
@@ -79,8 +90,10 @@ public class ArchitectureTests
             "FluentValidation",
             "FluentValidation.DependencyInjectionExtensions",
             "Microsoft.Extensions.DependencyInjection.Abstractions",
+            "Microsoft.Extensions.Logging.Abstractions",
             "System.Collections",
             "System.Data.Common",
+            "System.Diagnostics.DiagnosticSource",
             "System.Linq",
             "System.Linq.Expressions",
             "System.Runtime"

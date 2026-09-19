@@ -159,4 +159,58 @@ public sealed class StockLedgerTests(ServiceFixture fixture) : IAsyncLifetime
         // Pinned for the same reason as above.
         error.Message.ShouldContain("inside the unit of work's transaction");
     }
+
+    [Fact]
+    public async Task Fulfilling_moves_reserved_down_and_available_not_at_all()
+    {
+        var a = Guid.CreateVersion7();
+        await Seed(a, 3, reserved: 2);
+
+        await InTransaction(async l =>
+        {
+            await l.FulfilAsync([new(new ProductId(a), 2)], TestContext.Current.CancellationToken);
+            return 0;
+        });
+
+        (await Available(a)).ShouldBe(3);
+        (await fixture.ScalarAsync<int>("SELECT Value = Reserved FROM inventory.StockItems WHERE ProductId = {0}", a))
+            .ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task Fulfilling_more_than_is_reserved_is_a_fault()
+    {
+        var a = Guid.CreateVersion7();
+        await Seed(a, 3, reserved: 1);
+
+        await Should.ThrowAsync<InvalidOperationException>(() => InTransaction(async l =>
+        {
+            await l.FulfilAsync([new(new ProductId(a), 2)], TestContext.Current.CancellationToken);
+            return 0;
+        }));
+    }
+
+    [Fact]
+    public async Task A_short_second_line_rolls_the_first_lines_fulfilment_back()
+    {
+        Guid[] ids = [Guid.CreateVersion7(), Guid.CreateVersion7()];
+        Array.Sort(ids);
+        Guid a = ids[0];
+        Guid b = ids[1];
+        await Seed(a, 3, reserved: 2);
+        await Seed(b, 0, reserved: 0);
+
+        InvalidOperationException error = await Should.ThrowAsync<InvalidOperationException>(() =>
+            InTransaction(async l =>
+            {
+                await l.FulfilAsync(
+                    [new(new ProductId(a), 2), new(new ProductId(b), 1)],
+                    TestContext.Current.CancellationToken);
+                return 0;
+            }));
+
+        error.Message.ShouldContain(b.ToString());
+        (await fixture.ScalarAsync<int>("SELECT Value = Reserved FROM inventory.StockItems WHERE ProductId = {0}", a))
+            .ShouldBe(2);
+    }
 }

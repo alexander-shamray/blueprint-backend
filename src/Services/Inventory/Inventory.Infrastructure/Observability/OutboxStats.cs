@@ -1,0 +1,169 @@
+using System.Data;
+using Common.Application;
+using Common.Infrastructure.Outbox;
+using Dapper;
+using Microsoft.Extensions.Caching.Memory;
+
+namespace Inventory.Infrastructure.Observability;
+
+/// <summary>
+/// §13.6's <see cref="IOutboxStats"/> over three aggregate queries.
+/// </summary>
+/// <remarks>
+/// It takes the connection factory rather than a scope, because that port is a
+/// singleton (§6.5) holding a string, and a singleton must not hold a
+/// <c>DbContext</c>: the reads are Dapper on a connection the caller disposes,
+/// which is what §6.5 says the read side is.
+/// <para>
+/// Cached briefly, because the collector's schedule is not this type's to
+/// choose. An observable gauge is read once per export interval per
+/// instrument, so each callback would otherwise be an aggregate query every
+/// interval — and a metrics type that loads the database it is measuring is a
+/// monitor that causes the symptom.
+/// </para>
+/// <para>
+/// Failure surfaces as an absent series, and <see cref="OutboxMetrics"/> is
+/// what makes that true. This type throws — a timeout or an unreachable
+/// server is a <c>SqlException</c> like any other — and
+/// <c>MeterListener.RecordObservableInstruments</c> abandons the rest of the
+/// pass, so the containment lives in the callback rather than in this type.
+/// Nothing here tries to be clever about a database that is down: readiness
+/// (§13.5) already covers that, and an outbox alert firing because SQL
+/// Server is unreachable would page the wrong person with the wrong
+/// runbook.
+/// </para>
+/// </remarks>
+internal sealed class OutboxStats : IOutboxStats, IDisposable
+{
+    /// <summary>
+    /// Short enough that a stalled lane is visible within one export interval,
+    /// long enough that a burst of scrapes does not become a burst of queries.
+    /// </summary>
+    /// <remarks>
+    /// Each instrument is cached under its own key — one entry per
+    /// <c>(question, lane)</c> pair, not one shared snapshot. That is the
+    /// shape §13.6 specifies, and collapsing the three questions into one
+    /// grouped query would be an optimisation rather than a fix.
+    /// <para>
+    /// <c>GetOrCreate</c> takes no lock, so two concurrent scrapes can both
+    /// miss and both query. Harmless for a read, and worth knowing before
+    /// anyone reads this cache as a guarantee rather than a damper.
+    /// </para>
+    /// </remarks>
+    private static readonly TimeSpan CacheFor = TimeSpan.FromSeconds(5);
+
+    /// <summary>
+    /// A bound on each statement, because these run inside observable gauge
+    /// callbacks and the metric reader invokes them on its own thread.
+    /// </summary>
+    /// <remarks>
+    /// Far shorter than SqlClient's default, because collection drives every
+    /// gauge callback in turn: against a black-holed database — a dropped
+    /// route or a NetworkPolicy change, where connections hang rather than
+    /// refuse — the default would let those waits serialise and stall the
+    /// reader, taking unrelated telemetry down with these gauges. That is a
+    /// monitor causing an outage in the signal it exists to provide.
+    /// <para>
+    /// A timeout here throws, and <c>OutboxMetrics.PerLane</c> is what
+    /// contains it: the measurement is skipped and the series is absent for
+    /// that interval rather than wrong. Absent is the correct reading —
+    /// readiness (§13.5) is what reports a database that is gone, and an
+    /// outbox alert firing because SQL Server is unreachable would page the
+    /// wrong person with the wrong runbook.
+    /// </para>
+    /// </remarks>
+    private const int CommandTimeoutSeconds = 2;
+
+    /// <summary>
+    /// The other half of that bound, and the half a command timeout does not
+    /// cover: <c>AddInventoryInfrastructure</c> builds this type's connection
+    /// string with <c>ConnectTimeout</c> set to it.
+    /// </summary>
+    /// <remarks>
+    /// A <c>commandTimeout</c> starts once a connection is open. Against a
+    /// database that black-holes rather than refuses, the open itself can hang
+    /// before a command is ever sent, so
+    /// <see cref="CommandTimeoutSeconds"/> never gets a chance to bound the
+    /// wait — <see cref="ConnectTimeoutSeconds"/> exists to bound the connect
+    /// phase on its own rather than leaving it to SqlClient's default.
+    /// </remarks>
+    public const int ConnectTimeoutSeconds = 2;
+
+    private readonly IDbConnectionFactory _connections;
+    private readonly MemoryCache _cache = new(new MemoryCacheOptions());
+    private readonly string _oldestSql;
+    private readonly string _pendingSql;
+    private readonly string _abandonedSql;
+
+    public OutboxStats(IDbConnectionFactory connections, OutboxTable table)
+    {
+        _connections = connections;
+
+        // Composed from the registered table for the reason OutboxTable itself
+        // gives: §13.6 writes `ordering.OutboxMessages` because it is a chapter
+        // about Ordering, and a second literal here would be a second place the
+        // schema has to be right.
+        _oldestSql =
+            $"""
+            SELECT DATEDIFF(second, MIN(OccurredAt), SYSDATETIMEOFFSET())
+            FROM {table.QualifiedName}
+            WHERE ProcessedAt IS NULL
+                AND Lane = @lane;
+            """;
+
+        _pendingSql =
+            $"""
+            SELECT COUNT(*)
+            FROM {table.QualifiedName}
+            WHERE ProcessedAt IS NULL
+                AND Lane = @lane;
+            """;
+
+        // The cap is read from the dispatcher rather than written again here.
+        // §9.4 claims only rows below OutboxDispatcher.MaxAttempts, so a row at
+        // or above it is skipped for ever — and a second copy of that number is
+        // a gauge that stops agreeing with the loop it describes on the day
+        // somebody tunes one of them.
+        _abandonedSql =
+            $"""
+            SELECT COUNT(*)
+            FROM {table.QualifiedName}
+            WHERE ProcessedAt IS NULL
+                AND Lane = @lane
+                AND Attempts >= {OutboxDispatcher.MaxAttempts};
+            """;
+    }
+
+    public double OldestAgeSeconds(OutboxLane lane) =>
+        Read($"oldest:{lane}", _oldestSql, lane);
+
+    public int PendingCount(OutboxLane lane) =>
+        (int)Read($"pending:{lane}", _pendingSql, lane);
+
+    public int AbandonedCount(OutboxLane lane) =>
+        (int)Read($"abandoned:{lane}", _abandonedSql, lane);
+
+    public void Dispose() => _cache.Dispose();
+
+    /// <summary>
+    /// One shape for all three, because they differ only in their statement.
+    /// <c>double</c> throughout: the age is one, and a count that has to be
+    /// widened for the gauge anyway loses nothing by being widened here.
+    /// </summary>
+    private double Read(string key, string sql, OutboxLane lane) =>
+        _cache.GetOrCreate(key, entry =>
+        {
+            entry.AbsoluteExpirationRelativeToNow = CacheFor;
+            using IDbConnection connection = _connections.Create();
+
+            // NULL rather than zero is what an empty lane returns from the age
+            // query — MIN over no rows — and COUNT never returns it. One
+            // coalesce covers both because the alternative is two helpers that
+            // differ in a `??`.
+            return connection.ExecuteScalar<double?>(
+                new CommandDefinition(
+                    sql,
+                    new { lane = lane.ToString() },
+                    commandTimeout: CommandTimeoutSeconds)) ?? 0;
+        });
+}

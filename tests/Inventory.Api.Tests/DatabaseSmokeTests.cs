@@ -53,11 +53,11 @@ public class DatabaseSmokeTests(ServiceFixture fixture)
         // the index the retention purge deletes through, and §8.5's marker
         // table with the database clock it is aged by and the rowversion the
         // purge identifies one of its rows by — all of them wiring every
-        // service has rather than anything this one chose. AddStockItems and
-        // AddReservations are this service's own (§7.3, §5's second
-        // aggregate).
+        // service has rather than anything this one chose. The rest are this
+        // service's own: §7.3's stock items, §5's reservation aggregate and
+        // ADR-029's despatch columns.
         string[] applied = await fixture.AppliedMigrationsAsync();
-        applied.Length.ShouldBe(9);
+        applied.Length.ShouldBe(10);
         applied[0].ShouldEndWith("_InitialCreate");
         applied[1].ShouldEndWith("_AddOutbox");
         applied[2].ShouldEndWith("_AddInbox");
@@ -67,6 +67,7 @@ public class DatabaseSmokeTests(ServiceFixture fixture)
         applied[6].ShouldEndWith("_AddIdempotencyMarkerRowVersion");
         applied[7].ShouldEndWith("_AddStockItems");
         applied[8].ShouldEndWith("_AddReservations");
+        applied[9].ShouldEndWith("_AddDespatchTracking");
     }
 
     [Fact]

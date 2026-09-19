@@ -87,6 +87,8 @@ public static class ObservabilityExtensions
                 // one block's edits across six later pull requests.
                 .AddMeter("Ordering.Orders")                       // §13.3, §13.6
                 .AddMeter("Ordering.Outbox")                       // §13.6 per-lane
+                .AddMeter("Inventory.Reservations")                // §13.3
+                .AddMeter("Inventory.Outbox")                      // §13.6 per-lane
 
                 // Shared names, not service-prefixed: every service emits the
                 // same instruments and the service.name resource attribute

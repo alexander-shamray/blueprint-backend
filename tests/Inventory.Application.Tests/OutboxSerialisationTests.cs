@@ -69,7 +69,8 @@ public class OutboxSerialisationTests
                 typeof(StockLevelChangedDomainEvent),
                 typeof(StockReservedDomainEvent),
                 typeof(StockReservationFailedDomainEvent),
-                typeof(StockReleasedDomainEvent)
+                typeof(StockReleasedDomainEvent),
+                typeof(DespatchedUnreservedDomainEvent)
             ],
             ignoreOrder: true);
     }
@@ -116,7 +117,9 @@ public class OutboxSerialisationTests
             [typeof(StockReservationFailedDomainEvent)] =
                 new StockReservationFailedDomainEvent(OrderId.New(), [ProductId.New()], Raised),
             [typeof(StockReleasedDomainEvent)] =
-                new StockReleasedDomainEvent(OrderId.New(), Raised)
+                new StockReleasedDomainEvent(OrderId.New(), Raised),
+            [typeof(DespatchedUnreservedDomainEvent)] =
+                new DespatchedUnreservedDomainEvent(OrderId.New(), Raised)
         };
 
         public static object Create(Type type) =>
