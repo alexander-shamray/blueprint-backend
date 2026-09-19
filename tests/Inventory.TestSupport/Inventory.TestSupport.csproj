@@ -4,10 +4,9 @@
     Settings come from Directory.Build.props (§4.4).
 
     NOT a test project — no runner, no adapter, no Test.Sdk, and Library
-    output. §4.1: "referenced by the two above, which cannot reference each
-    other". The API suite is its consumer today; the application suite becomes
-    the second with its first handler test, which is the condition §4.1 names
-    for this project to exist.
+    output. §4.1: a fixture referenced by more than one test project cannot
+    live in either of them, because they cannot reference each other, so it
+    lives here instead.
   -->
 
   <PropertyGroup>

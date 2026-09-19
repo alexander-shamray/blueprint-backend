@@ -83,6 +83,15 @@ which case the class is wrong, so change the class, not the set. A change
 that genuinely needs two classes names both — `C+E` for a rule that brings
 a package — and its touch set is the union.
 
+**`A+D+E` is the one three-member class**, for a service's own work that
+reaches its deployment or harness tree: its arrival from the scaffold, and a
+feature that brings its Compose unit, its workflow filter or a package with
+it. The scaffold's own render already spans the slice, the solution file and
+the Compose and CI trees, so no split of a service's arrival keeps it to
+two. No other three is admitted: a rule moved inside a service's work is
+still its own PR, and the touch set of `A+D+E` names the one service's paths
+and the files outside the slice it edits, never a class's whole tree.
+
 The paths each class may reach are held once, in
 [`.github/locality-gate/classes.yml`](../.github/locality-gate/classes.yml),
 and CI's locality gate reads them from there and from nowhere else. The gate

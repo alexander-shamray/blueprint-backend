@@ -12,12 +12,9 @@ namespace Inventory.Api.Tests;
 /// <summary>
 /// §4.2's composition-root rule: only <c>Program.cs</c> may reference
 /// Infrastructure, and everything else in the host holds to Application and
-/// Domain contracts.
-/// Vacuously green until this service maps its first endpoint: a rule
-/// introduced before the violations exist is a constraint, not a backlog
-/// item. The rule was observed failing against a deliberately added
-/// forbidden reference before it was trusted — in the service this one
-/// was scaffolded from, not here, where there is nothing yet to judge.
+/// Domain contracts, endpoints included. The rule was proved capable of
+/// failing — against a deliberately added forbidden reference — in the
+/// service this one was scaffolded from.
 /// </summary>
 /// <remarks>
 /// <b>This gate has been wrong four times, and every one was the same mistake:
@@ -116,10 +113,9 @@ public class ArchitectureTests
         // produce an empty list here and a vacuously green rule above.
         exempted.ShouldContain("Program");
 
-        // The other half of this assertion belongs with the first endpoint:
-        // that the gate is judging something. Until then Program is all
-        // there is, and naming an adapter that does not exist is not an
-        // assertion — see the service this one was scaffolded from.
+        // Bounds the exemption itself: it must cover Program and its own
+        // compiler-generated helpers and nothing beyond that, or a wrongly
+        // widened predicate could exempt a real violator alongside it.
         exempted.Length.ShouldBeLessThanOrEqualTo(
             4,
             "the exemption should cover Program and its own generated helpers, nothing more");

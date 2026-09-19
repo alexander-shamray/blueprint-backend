@@ -1,4 +1,11 @@
 using Common.Application;
+using FluentValidation;
+using Inventory.Application.Reservations.GetReservation;
+using Inventory.Application.Reservations.Reinstate;
+using Inventory.Application.Reservations.ReleaseStock;
+using Inventory.Application.Reservations.ReserveStock;
+using Inventory.Application.Stock.GetStock;
+using Inventory.Application.Stock.SetOnHand;
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
 using Xunit;
@@ -159,10 +166,33 @@ public class DependencyInjectionTests
             "a singleton would carry one command's key into every other command in the process");
     }
 
-    // Two tests are missing here, and they come back separately rather
-    // than together. The first handler of either kind earns the one that
-    // asserts the §6.2 scan produced a registration; the first validator
-    // earns the one that asserts the validator scan found it. Both scans
-    // fail silently when lost, which is why neither is left implicit —
-    // and a query-only slice needs the first and not the second.
+    [Fact]
+    public void AddInventoryApplication_registers_the_slice_handlers()
+    {
+        // The scan is public-only (§6.2); a handler or validator it misses
+        // registers as nothing rather than as something wrong, so every
+        // slice adds its rows here.
+        ServiceCollection services = new();
+
+        services.AddInventoryApplication();
+
+        services.ShouldContain(d =>
+            d.ServiceType == typeof(ICommandHandler<SetOnHandCommand, Result>));
+        services.ShouldContain(d =>
+            d.ServiceType == typeof(IQueryHandler<GetStockQuery, StockDto?>));
+        services.ShouldContain(d =>
+            d.ServiceType == typeof(IValidator<SetOnHandCommand>));
+        services.ShouldContain(d =>
+            d.ServiceType == typeof(ICommandHandler<ReserveStockCommand, Result>));
+        services.ShouldContain(d =>
+            d.ServiceType == typeof(IValidator<ReserveStockCommand>));
+        services.ShouldContain(d =>
+            d.ServiceType == typeof(ICommandHandler<ReleaseStockCommand, Result>));
+        services.ShouldContain(d =>
+            d.ServiceType == typeof(IValidator<ReleaseStockCommand>));
+        services.ShouldContain(d =>
+            d.ServiceType == typeof(ICommandHandler<ReinstateReservationCommand, Result>));
+        services.ShouldContain(d =>
+            d.ServiceType == typeof(IQueryHandler<GetReservationQuery, ReservationDto?>));
+    }
 }

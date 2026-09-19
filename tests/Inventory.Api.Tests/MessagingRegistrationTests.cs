@@ -165,9 +165,9 @@ public class MessagingRegistrationTests
     [Fact]
     public void Registration_adds_the_bus_and_its_hosted_service()
     {
-        // Descriptors, not a built provider — the PR-12 shape. Building would
-        // start nothing (the bus starts with the host), but a provider is a
-        // heavier claim than the test makes.
+        // Descriptors, not a built provider. Building would start nothing
+        // (the bus starts with the host), but a provider is a heavier claim
+        // than the test makes.
         ServiceCollection services = new();
 
         services.AddMassTransitMessaging(Configuration());
