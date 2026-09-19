@@ -59,9 +59,9 @@ public class OutboxSerialisationTests
         // The loop above is vacuous if the map is empty, and it would be
         // vacuous quietly — a registration that stopped naming
         // Inventory.Domain would turn the assertion into a no-op and nothing
-        // else would say so. Pinning the set exact means a new stageable
-        // event has to gain a sample here, or the round trip above stops
-        // covering it silently.
+        // else would say so. The exact-set assertion below is what forces a
+        // new stageable event to gain a sample in DomainEventSamples; without
+        // it the round-trip test above cannot cover the event at all.
         using ServiceProvider provider = Registered();
 
         provider.GetRequiredService<MessageTypeMap>().StageableDomainEvents.ShouldBe(

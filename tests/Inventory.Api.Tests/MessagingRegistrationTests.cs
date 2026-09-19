@@ -26,8 +26,8 @@ namespace Inventory.Api.Tests;
 /// COMPOSES (its eager key read runs, its options land, nothing conflicts
 /// with the consumer bindings) and that MassTransit's pipeline delivers.
 /// What the swap deliberately removes is the <c>UsingRabbitMq</c> transport
-/// configuration itself, so that half is asserted where it can be true: in
-/// <c>DatabaseSmokeTests</c>, against a real broker.
+/// configuration itself, so that half is asserted where it can be true:
+/// against a real broker, over the container-backed fixture.
 /// </summary>
 /// <remarks>
 /// The message and consumer are test-local on purpose, and stay that way now

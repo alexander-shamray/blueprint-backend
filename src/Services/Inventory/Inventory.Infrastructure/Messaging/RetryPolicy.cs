@@ -24,8 +24,9 @@ namespace Inventory.Infrastructure.Messaging;
 /// <b>What this type does not decide is what gets retried.</b>
 /// <c>inventory-commands</c> ignores <c>ContractMappingException</c> before
 /// calling <see cref="Standard"/> — a malformed contract does not parse
-/// itself on the fourth attempt — and that exclusion is the endpoint's,
-/// because it is a claim about which faults are terminal rather than about
+/// itself no matter how many times it is retried — and that exclusion is
+/// the endpoint's, because it is a claim about which faults are terminal
+/// rather than about
 /// how long to wait between attempts. Folding it in here would apply one
 /// endpoint's exclusion to those that never raise it.
 /// </para>

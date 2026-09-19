@@ -47,4 +47,12 @@
     <ProjectReference Include="..\..\..\BuildingBlocks\Common.Contracts\Common.Contracts.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- RetryPolicy.MinInterval, for the container test that proves
+         Messaging/DependencyInjection.cs's ContractMappingException
+         exclusion — the same trade Inventory.Domain.csproj already makes for
+         its own test project. -->
+    <InternalsVisibleTo Include="Inventory.Api.Tests" />
+  </ItemGroup>
+
 </Project>

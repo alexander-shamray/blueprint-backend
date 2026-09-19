@@ -12,8 +12,12 @@ public sealed class ReserveStockHandler(
     public async Task<Result> HandleAsync(ReserveStockCommand command, CancellationToken ct)
     {
         var order = new OrderId(command.OrderId);
-        DateTimeOffset now = clock.GetUtcNow();
         Reservation? existing = await reservations.GetForUpdateAsync(order, ct);
+
+        // Read under the lock: the instant is taken once a writer that waited
+        // behind this one has committed, so it cannot stamp earlier than the
+        // one it waited for.
+        DateTimeOffset now = clock.GetUtcNow();
 
         // Section 4's outcome table: an existing row answers again rather
         // than reserving twice, and a Released row is ADR-024's refusal. The

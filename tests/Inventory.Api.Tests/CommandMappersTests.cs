@@ -18,15 +18,13 @@ namespace Inventory.Api.Tests;
 /// a database, or <see cref="IntegrationCollection"/>.
 /// </summary>
 /// <remarks>
-/// This is the half <see cref="InventoryCommandEndpointTests"/> cannot be.
-/// The malformed-reserve cases that suite's validators also refuse, and its
-/// <c>ReleaseStock</c> sibling, are refused there too by
-/// <c>ReserveStockValidator</c>/<c>ReleaseStockValidator</c> — a
-/// <c>ValidationException</c> from <c>ValidationBehavior</c> is a fault
-/// <c>CommandConsumer</c> retries and error-queues, and it writes no row
-/// either, so "no row" over the broker cannot say which of the two threw.
-/// Only a test that calls the mapper on its own, past the point where a
-/// validator would ever see the value, can.
+/// A validator's refusal and a mapper's refusal both end as a fault over the
+/// broker with no row written, by <c>ReserveStockValidator</c> or
+/// <c>ReleaseStockValidator</c> alike — a <c>ValidationException</c> from
+/// <c>ValidationBehavior</c> is a fault <c>CommandConsumer</c> retries and
+/// error-queues, so "no row" there cannot say which of the two threw.
+/// Calling the mapper directly, past the point where a validator would ever
+/// see the value, is the only way to isolate its own refusals.
 /// </remarks>
 public sealed class CommandMappersTests
 {
