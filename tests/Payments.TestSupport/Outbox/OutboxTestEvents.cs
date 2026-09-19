@@ -9,9 +9,8 @@ namespace Payments.TestSupport.Outbox;
 /// registers no projection handler of its own — §8.4's cache invalidator
 /// needs a cached query to invalidate, and there is not one yet — so the
 /// lane's behaviour is proven here rather than by inventing a read model
-/// for it. In <c>Payments.TestSupport</c> rather than either test project,
-/// on §4.1's terms: the two suites cannot reference each other, and the
-/// fixture that registers them is here.
+/// for it. In <c>Payments.TestSupport</c> because the fixture that
+/// registers them is here.
 /// </summary>
 public sealed record AlwaysThrows : IDomainEvent
 {

@@ -146,13 +146,8 @@ public sealed class ServiceFixture : IAsyncLifetime
         // §14.1's broker CONFIGURATION on the stock image, not the built one:
         // Payments needs the per-service accounts and none of ADR-021's
         // delayed-exchange plugin, since it runs no saga and schedules
-        // nothing. Building is also unsafe here: Testcontainers writes the
-        // build context to a tar named after the image, and this fixture's
-        // two process-level consumers — Payments.Api.Tests and
-        // Payments.Application.Tests — would race on that file under a
-        // shared name. Ordering's fixture still builds, since its plugin
-        // leaves no choice and it has one consumer. The two mapped paths
-        // must match the Dockerfile's COPY targets (check_permissions.py).
+        // nothing. The two mapped paths must match the Dockerfile's COPY
+        // targets (check_permissions.py).
         _rabbit = new RabbitMqBuilder()
             .WithImage("rabbitmq:4.1-management-alpine")
             .WithUsername("payments-svc")
