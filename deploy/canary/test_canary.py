@@ -753,6 +753,60 @@ class SignalTests(unittest.TestCase):
                         for f in failures),
                     failures)
 
+    def test_swapped_message_error_rate_operands_fail_the_plan(self) -> None:
+        """Attempts over faults keeps both series and inverts the rate: a
+        clean canary reads as broken and a broken one as clean."""
+        for signal in ("consume", "saga"):
+            with self.subTest(signal=signal):
+                document = json.loads(json.dumps(self.document))
+                queries = document["signals"][signal]["queries"]
+                faults = f"messaging_masstransit_{signal}_errors_ea_total"
+                attempts = f"messaging_masstransit_{signal}_ea_total"
+                queries["errorRate"] = (
+                    queries["errorRate"]
+                    .replace(faults, "FAULTS")
+                    .replace(attempts, faults)
+                    .replace("FAULTS", attempts))
+
+                failures = canary.check(document)
+
+                self.assertTrue(
+                    any(f"signals.{signal}.queries.errorRate" in f for f in failures),
+                    failures)
+
+    def test_a_workload_or_track_matcher_that_is_not_equality_fails_the_plan(self) -> None:
+        """`deployment_track!="$TRACK"` keeps every placeholder and series
+        and reads the other track: the canary judged on stable traffic. Only
+        the first selector is changed, so the numerator alone is enough."""
+        for label, value in (("service_name", "$SERVICE"), ("deployment_track", "$TRACK")):
+            for operator in ("!=", "=~", "!~"):
+                for signal, role in (("http", "errorRate"), ("consume", "requests"),
+                                     ("saga", "latencyP99Seconds")):
+                    with self.subTest(label=label, operator=operator, signal=signal):
+                        document = json.loads(json.dumps(self.document))
+                        queries = document["signals"][signal]["queries"]
+                        queries[role] = queries[role].replace(
+                            f'{label}="{value}"', f'{label}{operator}"{value}"', 1)
+
+                        failures = canary.check(document)
+
+                        self.assertTrue(
+                            any(f"signals.{signal}.queries.{role}" in f and label in f
+                                for f in failures),
+                            failures)
+
+    def test_a_selector_missing_the_track_matcher_fails_the_plan(self) -> None:
+        document = json.loads(json.dumps(self.document))
+        queries = document["signals"]["consume"]["queries"]
+        queries["requests"] = queries["requests"].replace(', deployment_track="$TRACK"', "")
+
+        failures = canary.check(document)
+
+        self.assertTrue(
+            any("signals.consume.queries.requests" in f and "deployment_track" in f
+                for f in failures),
+            failures)
+
     def test_an_absolute_threshold_a_signal_does_not_own_fails_the_plan(self) -> None:
         """ADR-047 judges message duration against the stable track only, so
         the http p99 threshold on consume would page on a slow consumer."""

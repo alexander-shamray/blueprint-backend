@@ -613,6 +613,23 @@ def check(plan_document: dict, root: Path = ROOT) -> list[str]:
 SERVER_ERRORS = (r'http_response_status_code=~"5\.\."\}\[\$WINDOW\]\)\) or vector\(0\)\)', 1)
 ONE_STATUS_SELECTOR = (r"http_response_status_code", 1)
 MILLISECONDS_TO_SECONDS = (r"\) / 1000$", 1)
+
+
+def _faults_over_attempts(signal: str) -> tuple[tuple[str, int], ...]:
+    """A message error rate's operands in place: the fault counter opens the
+    coalesced numerator and the attempt counter is the denominator."""
+    return (
+        (rf"^\(sum\(rate\(messaging_masstransit_{signal}_errors_ea_total\{{", 1),
+        (rf"\) / sum\(rate\(messaging_masstransit_{signal}_ea_total\{{", 1),
+    )
+
+
+# The matchers every selector of every query carries, as exact equality: a
+# negated or regex matcher keeps every placeholder and reads another
+# workload's or the other track's traffic.
+REQUIRED_MATCHERS = {"service_name": "$SERVICE", "deployment_track": "$TRACK"}
+SELECTOR = re.compile(r"\b([a-z][a-z0-9_]*_(?:count|bucket|sum|total))\b(\{[^}]*\})?")
+MATCHER = re.compile(r"([a-z_][a-z0-9_]*)\s*(=~|!~|!=|=)\s*\"([^\"]*)\"")
 SIGNAL_CONTRACT = {
     "http": {
         "absolute": ("errorRate", "latencyP99Seconds"),
@@ -631,7 +648,10 @@ SIGNAL_CONTRACT = {
             "latencyP99Seconds": {"messaging_masstransit_consume_duration_milliseconds_bucket"},
             "requests": {"messaging_masstransit_consume_ea_total"},
         },
-        "shape": {"latencyP99Seconds": (MILLISECONDS_TO_SECONDS,)},
+        "shape": {
+            "errorRate": _faults_over_attempts("consume"),
+            "latencyP99Seconds": (MILLISECONDS_TO_SECONDS,),
+        },
     },
     "saga": {
         "absolute": ("errorRate",),
@@ -641,12 +661,33 @@ SIGNAL_CONTRACT = {
             "latencyP99Seconds": {"messaging_masstransit_saga_duration_milliseconds_bucket"},
             "requests": {"messaging_masstransit_saga_ea_total"},
         },
-        "shape": {"latencyP99Seconds": (MILLISECONDS_TO_SECONDS,)},
+        "shape": {
+            "errorRate": _faults_over_attempts("saga"),
+            "latencyP99Seconds": (MILLISECONDS_TO_SECONDS,),
+        },
     },
 }
 
 # A series a query reads, by the suffix every exported series ends in.
 SERIES_READ = re.compile(r"\b([a-z][a-z0-9_]*_(?:count|bucket|sum|total))\b")
+
+
+def _selectors_are_exact(where: str, query: str) -> list[str]:
+    """Every series the query reads is selected by REQUIRED_MATCHERS, each
+    exactly once and as equality."""
+    failures = []
+    for selector in SELECTOR.finditer(query):
+        series, braces = selector.groups()
+        matchers = MATCHER.findall(braces or "")
+        for label, value in REQUIRED_MATCHERS.items():
+            found = [(op, got) for name, op, got in matchers if name == label]
+            if found != [("=", value)]:
+                failures.append(
+                    f"{where} selects {series} with {label} "
+                    f"{' '.join(op + repr(got) for op, got in found) or 'unmatched'}, "
+                    f"and every selector needs exactly {label}=\"{value}\""
+                )
+    return failures
 
 
 def _signals_are_complete(signals: dict) -> list[str]:
@@ -685,6 +726,7 @@ def _signals_are_complete(signals: dict) -> list[str]:
                     f"{', '.join(sorted(read)) or 'no series'}, and its role is "
                     f"bound to exactly {', '.join(sorted(expected))}"
                 )
+            failures += _selectors_are_exact(f"signals.{signal}.queries.{name}", queries[name])
             for pattern, times in contract.get("shape", {}).get(name, ()):
                 found = len(re.findall(pattern, queries[name]))
                 if found != times:
