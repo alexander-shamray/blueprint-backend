@@ -26,8 +26,8 @@ public static class DependencyInjection
 
         // The allow-list of §9.3, and the one registration that decides what
         // this service publishes. Explicit rather than scanned: a mapper
-        // discovered by convention would make "Payments publishes these three
-        // facts" a property of which types happen to be in the assembly.
+        // discovered by convention would make what this service publishes a
+        // property of which types happen to be in the assembly, not a decision.
         services.AddScoped<IIntegrationEventMapper, PaymentsIntegrationEventMapper>();
 
         // The clock (§5.4) and the request histogram (§13.3): LoggingBehavior

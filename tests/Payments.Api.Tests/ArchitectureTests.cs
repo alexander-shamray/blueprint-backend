@@ -88,9 +88,8 @@ public class ArchitectureTests
     }
 
     /// <summary>
-    /// The five projects §4.1 gives a service, anchored one type each: the
-    /// Api and <c>Payments.TestSupport</c> (which carries the Migrator) are
-    /// what let this suite see all five.
+    /// The five projects §4.1 gives a service, anchored one type each:
+    /// Domain, Application, Infrastructure, Migrator and Api.
     /// </summary>
     /// <remarks>
     /// Both gates read emitted references (<c>GetReferencedAssemblies</c>),

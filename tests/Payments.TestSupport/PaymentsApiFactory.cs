@@ -94,9 +94,10 @@ public class PaymentsApiFactory(string connectionString, string rabbitConnection
                     .ShouldBeSource()
                     .Add(typeof(AlwaysThrows).Assembly);
 
-                // The projection handlers for two of those three events. Each
-                // layer scans itself (§6.2), and this assembly is a layer the
-                // production registration has no reason to know about.
+                // The projection handlers those events need, short of the one
+                // built to have none. Each layer scans itself (§6.2), and this
+                // assembly is a layer the production registration has no
+                // reason to know about.
                 services.AddPluggableFrom(typeof(AlwaysThrows).Assembly);
             });
 

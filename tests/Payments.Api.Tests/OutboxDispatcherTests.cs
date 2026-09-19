@@ -133,13 +133,6 @@ public sealed class OutboxDispatcherTests(ServiceFixture fixture) : IAsyncLifeti
         (await fixture.OutboxAsync()).ShouldHaveSingleItem().ProcessedAt.ShouldNotBeNull();
     }
 
-    // Three tests return with this service's first contract, beside the
-    // OutboxRows.Broker builder they all need — this one, the Local
-    // lane's guard below, and OutboxTransportIdentityTests, which pins
-    // §9.1's single identity onto the transport. Until then the
-    // allow-list is empty and nothing can build a contract instance, so
-    // each would assert against a row no code here can produce.
-
     [Fact]
     public async Task A_processed_row_is_never_claimed_again()
     {

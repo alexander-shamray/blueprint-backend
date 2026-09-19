@@ -4,7 +4,7 @@ using Common.Domain;
 namespace Payments.TestSupport.Outbox;
 
 /// <summary>
-/// The <c>Local</c> lane's three cases, as real domain events in an
+/// The <c>Local</c> lane's cases, as real domain events in an
 /// assembly the fixture adds to <c>MessageTypeSource</c> (§9.4). Payments
 /// registers no projection handler of its own — §8.4's cache invalidator
 /// needs a cached query to invalidate, and there is not one yet — so the

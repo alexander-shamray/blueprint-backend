@@ -217,7 +217,7 @@ public class IdempotencyMarkerTests(ServiceFixture fixture)
         version.ValueGenerated.ShouldBe(
             ValueGenerated.OnAddOrUpdate,
             "a version the application supplies is a version a replacement could be given, which " +
-            "is the identity-by-construction #173 was filed against");
+            "breaks the identity-by-construction ADR-041 requires");
 
         version.IsConcurrencyToken.ShouldBeTrue("IsRowVersion() is what sets both, and both matter");
 

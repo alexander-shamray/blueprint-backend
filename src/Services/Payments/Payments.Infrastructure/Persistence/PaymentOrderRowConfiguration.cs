@@ -5,9 +5,9 @@ using Payments.Application;
 namespace Payments.Infrastructure.Persistence;
 
 /// <summary>
-/// Maps the record's table on the terms Ordering's <c>ProductPriceConfiguration</c>
-/// states for a read model: no <c>DbSet</c>, and the columns are nullable
-/// because either event can arrive first (§9.4).
+/// Maps the order-record table §6.3's <see cref="SqlPaymentOrderStore"/>
+/// reads and writes: no <c>DbSet</c>, and the columns are nullable because
+/// either event can arrive first (§9.4).
 /// </summary>
 internal sealed class PaymentOrderRowConfiguration : IEntityTypeConfiguration<PaymentOrderRow>
 {

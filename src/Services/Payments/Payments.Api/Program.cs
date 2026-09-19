@@ -24,8 +24,7 @@ builder.Services.AddOpenApi();
 // that needs one; the first slice brings both together (§11.4). A policy
 // registered before an endpoint names it is an unused registration, and an
 // endpoint naming one nobody registered throws on the first request that
-// reaches it, never at startup. Add AuthorizationPolicyTests with the slice —
-// it enumerates the endpoints and requires every policy they name to resolve.
+// reaches it, never at startup.
 
 WebApplication app = builder.Build();
 

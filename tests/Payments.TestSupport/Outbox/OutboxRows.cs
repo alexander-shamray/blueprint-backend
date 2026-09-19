@@ -34,11 +34,6 @@ public static class OutboxRows
     public static OutboxMessage Blocking(ServiceFixture fixture) =>
         Local(new BlocksUntilReleased { OccurredAt = Raised }, fixture);
 
-    // A Broker-lane builder returns with this service's first contract,
-    // together with the dispatcher test that uses it: staging that lane
-    // needs a type Common.Contracts publishes on this service's behalf,
-    // and the allow-list mapper is empty until there is one (§9.3).
-
     /// <summary>A row for an event type with no handler at all.</summary>
     public static OutboxMessage Unhandled(ServiceFixture fixture) =>
         Local(new UnhandledEvent { OccurredAt = Raised }, fixture);

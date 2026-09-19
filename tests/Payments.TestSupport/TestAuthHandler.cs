@@ -25,7 +25,7 @@ public sealed class TestAuthHandler(
     // SchemeName, not Scheme. AuthenticationHandler<T> already declares a
     // protected Scheme — the AuthenticationScheme this handler was resolved
     // for — so the constant §12.4 prints hides it, and CS0108 is an error
-    // under ADR-019's TreatWarningsAsErrors. The chapter was amended.
+    // under ADR-019's TreatWarningsAsErrors.
     public const string SchemeName = "Test";
     public const string UserHeader = "X-Test-User";
     public const string PermissionsHeader = "X-Test-Permissions";

@@ -72,11 +72,8 @@ deploy/compose/rabbitmq/definitions.json | credential-assignment | db2d2dd96341 
 
 # --- Payments, rendered by tools/new-service ------------------------------
 #
-# One entry per finding the gate reported over this render, carrying the
-# fingerprints it computed rather than any this script worked out. The
-# equivalent literals for a hand-built service are entries above, written
-# the day that service landed; these are the same decision, taken by the
-# tool that rendered them (#161).
+# The fingerprints below are Section 14.1's local-development defaults, the
+# same rationale as the hand-built entries above.
 
 deploy/compose/services/payments.yml | connection-string-password | 8a11e54d9d5b | Section 14.1's local database default, nested inside this service's two connection defaults.
 deploy/compose/services/payments.yml | credential-assignment | 1df0b369ce40 | Payments's local connection default, in-cluster hostname.
