@@ -5,9 +5,10 @@ using Xunit;
 namespace Catalog.Api.Tests;
 
 /// <summary>
-/// §3.2's one Catalog projection table, asserted in a Catalog-only file:
-/// <c>DatabaseSmokeTests</c> is copied into every rendered service, and an
-/// assertion about <c>catalog.StockLevels</c> there would fail every render.
+/// §3.2's one Catalog projection table, asserted in a Catalog-only file: the
+/// project's general schema smoke test is copied into every rendered
+/// service, and an assertion about <c>catalog.StockLevels</c> there would
+/// fail every render.
 /// </summary>
 [Collection(nameof(IntegrationCollection))]
 public sealed class StockLevelsSchemaTests(ServiceFixture fixture)

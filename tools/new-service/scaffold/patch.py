@@ -847,11 +847,9 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
             "    for this project to exist.\n",
         ),
     ),
-    # Catalog binds §3.2's one Consumes cell through two one-line calls into
-    # StockLevelConsumer.cs, which is OMITTED: a rendered service subscribes to
-    # nothing, so the calls go and the registration is otherwise byte-for-byte
-    # the template's. Each anchor carries the line before it, so the blank line
-    # that separated the call leaves with it.
+    # StockLevelConsumer.cs is OMITTED: a rendered service subscribes to
+    # nothing, so these registrations of it are removed and the rest of the
+    # file is otherwise byte-for-byte the template's.
     "src/Services/Catalog/Catalog.Infrastructure/Messaging/DependencyInjection.cs": (
         (
             "            x.DisableUsageTelemetry();\n"

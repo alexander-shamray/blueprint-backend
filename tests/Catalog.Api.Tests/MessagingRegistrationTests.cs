@@ -179,20 +179,13 @@ public class MessagingRegistrationTests
     [Fact]
     public void The_consumer_assertion_can_actually_see_a_consumer()
     {
-        // The positive control for any assertion built on IsConsumerRegistration,
-        // and it exists because the first such assertion was written wrong and
-        // passed anyway. It matched on
-        // `ServiceType` closing IConsumer<>, which MassTransit never registers:
-        // at the 8.5.3 pin AddConsumer<T> calls TryAddScoped<T>() — the
-        // CONCRETE type — so the predicate found nothing whether or not a
-        // consumer was present. An assertion that cannot fail in one direction
-        // is the fail-open shape this repository has been caught by before.
-        //
-        // Verified by running it: with the old predicate this test goes red.
-        // Deliberately NOT through AddMassTransitMessaging: that helper calls
-        // AddMassTransit itself, and MassTransit permits exactly one such call
-        // per container. What this control has to establish is what a consumer
-        // registration looks like, and a bare AddMassTransit establishes it.
+        // The positive control for any assertion built on IsConsumerRegistration:
+        // MassTransit's AddConsumer<T> registers the consumer's concrete type,
+        // not an implementation of IConsumer<T>, so a predicate matching on the
+        // interface finds nothing whether or not a consumer is present — the
+        // fail-open shape this repository watches for. Deliberately NOT through
+        // AddMassTransitMessaging: that helper calls AddMassTransit itself, and
+        // MassTransit permits exactly one such call per container.
         ServiceCollection services = new();
 
         services.AddMassTransit(x => x.AddConsumer<ProbeConsumer>());

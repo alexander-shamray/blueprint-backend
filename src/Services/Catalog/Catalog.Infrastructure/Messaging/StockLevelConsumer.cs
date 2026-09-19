@@ -6,9 +6,9 @@ using MassTransit;
 namespace Catalog.Infrastructure.Messaging;
 
 /// <summary>
-/// §3.2's Consumes column for Catalog, and exactly it. Its own file because
-/// Catalog is the scaffold's template and a rendered service subscribes to
-/// nothing: the two calls into this file are what the scaffold strips.
+/// §3.2's Consumes column for Catalog, and exactly it. This file owns
+/// Catalog's one subscription, and it is Catalog-only, so the scaffold
+/// omits it.
 /// </summary>
 public static class StockLevelConsumer
 {

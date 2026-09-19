@@ -18,11 +18,12 @@ namespace Catalog.Api.Tests;
 /// The real transport rather than the harness, because the harness removes the
 /// thing under test: <c>AddMassTransitTestHarness</c> replaces the
 /// <c>UsingRabbitMq</c> configuration wholesale, and the receive endpoint, its
-/// retry policy and its inbox filter all live inside that callback.
-/// <see cref="StockLevelProjectionTests"/> covers the statement; this covers
-/// the binding. Catalog publishes Inventory's event to itself, and the
-/// topology is the same either way: MassTransit routes on the message type,
-/// so the exchange this reaches is the one Inventory publishes to.
+/// retry policy and its inbox filter all live inside that callback. The
+/// projection's statement is proved without a broker elsewhere in this
+/// project; this suite proves the binding. Catalog publishes Inventory's
+/// event to itself, and the topology is the same either way: MassTransit
+/// routes on the message type, so the exchange this reaches is the one
+/// Inventory publishes to.
 /// </remarks>
 [Collection(nameof(IntegrationCollection))]
 public sealed class InventoryEventEndpointTests(ServiceFixture fixture) : IAsyncLifetime

@@ -276,8 +276,8 @@ OUTBOX_MIGRATION = re.compile(r"^\d{14}_AddOutbox(\.Designer)?\.cs$")
 # The inbox table travels for the mirror of the outbox's reason: §9.5 gives
 # every service one, the retention purge runs from first boot and deletes from
 # both, and a service that carried the purge without the table would log a
-# failed delete every pass. Catalog had the table before its first consumer,
-# for exactly this.
+# failed delete every pass. A service that consumes nothing today still owns
+# the table its first consumer needs.
 INBOX_MIGRATION = re.compile(r"^\d{14}_AddInbox(\.Designer)?\.cs$")
 # The purge's index, and it travels for the same reason the tables do: the
 # claim's index is filtered `WHERE ProcessedAt IS NULL` and so excludes every
@@ -1058,8 +1058,8 @@ def render_service_compose(repo_root: Path, names: Names, port: int) -> str:
         f"# {names.pascal}'s deployment (§14.1), included by {COMPOSE_INDEX}.\n"
         f"# Rendered by tools/new-service from the template service's unit file: the\n"
         f"# pair rule below belongs to the chapter, and the file boundary belongs to\n"
-        f"# docs/change-locality.md, so {names.article} {names.pascal} PR edits this file and never\n"
-        f"# another service's.\n"
+        f"# docs/change-locality.md, so a PR for {names.pascal} edits this file and\n"
+        f"# never another service's.\n"
         f"#\n"
         f"# `include` resolves a relative path against the directory of the file that\n"
         f"# declares it, so the repository root — the build context — is three levels up\n"

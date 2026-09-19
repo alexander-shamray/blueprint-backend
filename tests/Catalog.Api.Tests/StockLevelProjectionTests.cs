@@ -12,8 +12,8 @@ namespace Catalog.Api.Tests;
 /// handler interface the §6.2 scan registered it under. The broker is not in
 /// this suite deliberately — what these tests are about is the statement's
 /// watermark and its <c>HOLDLOCK</c>, which are properties of SQL Server
-/// rather than of how the message arrived. <see cref="InventoryEventEndpointTests"/>
-/// drives the same handler over a real queue.
+/// rather than of how the message arrived. The binding this handler is
+/// registered behind is proved over a real queue elsewhere in this project.
 /// </summary>
 /// <remarks>
 /// Resolved, never constructed: <c>AddPluggableFrom</c> registers the

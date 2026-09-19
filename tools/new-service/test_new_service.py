@@ -533,10 +533,9 @@ class GeneratedGuidanceIsTrue(unittest.TestCase):
         self.assertNotIn("shared with\n         Yankee.Application.Tests", csproj)
 
     def test_the_fixture_names_no_peer_and_no_contract(self):
-        # Catalog's first consumer taught the fixture to widen its own broker
-        # account for the harness; the reason has to stay true of a service
-        # that consumes nothing of Inventory's, so the doc comment names
-        # neither the peer nor the contract it widens for.
+        # A rendered fixture names no peer service and no peer contract, so
+        # the doc comment stays true of a service that consumes nothing of
+        # Inventory's.
         fixture = self.claim("tests/Yankee.TestSupport/ServiceFixture.cs")
         self.assertNotIn("StockLevel", fixture)
         self.assertNotIn("Inventory", fixture)
@@ -1422,16 +1421,9 @@ class RefusesToRun(unittest.TestCase):
             "src/Services/CATALOGSearch/CATALOGSearch.Domain/AssemblyMarker.cs", rendered.created
         )
 
-    def test_the_article_follows_the_name(self):
-        # A rendered sentence puts an article before the service's name, and a
-        # hardcoded "a" rendered "a Inventory PR" into that service's unit file.
-        self.assertEqual("an", Names("Inventory").article)
-        self.assertEqual("a", Names("Zulu").article)
-
-        # The rule is by letter and stops there: `Users` is said "yoo-zers",
-        # a consonant sound, but the heuristic sees the vowel letter and
-        # renders "an Users PR" anyway — the limit stated rather than found.
-        self.assertEqual("an", Names("Users").article)
+    def test_the_compose_header_needs_no_article(self):
+        unit = render().created[UNIT]
+        self.assertIn(f"a PR for {PROBE} edits this file", unit)
 
     def test_a_name_longer_than_a_sql_server_identifier(self):
         # The name is the database and the schema, and `sysname` is
