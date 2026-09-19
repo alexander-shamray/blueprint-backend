@@ -16,7 +16,11 @@ public class PaymentsIntegrationEventMapperTests
     {
         ServiceCollection services = new();
         services.AddPaymentsApplication();
-        return services.BuildServiceProvider().CreateScope().ServiceProvider.GetRequiredService<IIntegrationEventMapper>();
+        return services
+            .BuildServiceProvider()
+            .CreateScope()
+            .ServiceProvider
+            .GetRequiredService<IIntegrationEventMapper>();
     }
 
     [Fact]

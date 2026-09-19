@@ -29,7 +29,12 @@ public sealed class PaymentIntent : AggregateRoot<OrderId>
         CreatedAt = now;
     }
 
-    public static PaymentIntent Authorise(OrderId id, decimal amount, string currency, string reference, DateTimeOffset now)
+    public static PaymentIntent Authorise(
+        OrderId id,
+        decimal amount,
+        string currency,
+        string reference,
+        DateTimeOffset now)
     {
         if (string.IsNullOrWhiteSpace(reference))
             throw new DomainException("An authorisation needs the provider's reference.");

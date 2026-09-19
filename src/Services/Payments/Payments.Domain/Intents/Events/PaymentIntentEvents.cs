@@ -12,4 +12,7 @@ public sealed record PaymentAuthorisedDomainEvent(
     DateTimeOffset OccurredAt) : IDomainEvent;
 
 /// <summary>Raised when a <see cref="PaymentIntent"/> is created declined (spec, section 5).</summary>
-public sealed record PaymentDeclinedDomainEvent(OrderId OrderId, string Reason, DateTimeOffset OccurredAt) : IDomainEvent;
+public sealed record PaymentDeclinedDomainEvent(
+    OrderId OrderId,
+    string Reason,
+    DateTimeOffset OccurredAt) : IDomainEvent;

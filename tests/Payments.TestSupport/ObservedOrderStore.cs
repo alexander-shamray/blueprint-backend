@@ -19,7 +19,9 @@ public sealed class ObservedOrderStore
     /// <summary>Completes once <see cref="IPaymentOrderStore.LockAsync"/> is entered for the order.</summary>
     public Task Locked(Guid order) => Signal(_locked, order).Task;
 
-    /// <summary>Completes once <see cref="IPaymentOrderStore.RecordCancelledAsync"/> is entered for the order.</summary>
+    /// <summary>
+    /// Completes once <see cref="IPaymentOrderStore.RecordCancelledAsync"/> is entered for the order.
+    /// </summary>
     public Task Stamping(Guid order) => Signal(_stamping, order).Task;
 
     /// <summary>The registered store, observed.</summary>

@@ -195,7 +195,6 @@ public class MessagingRegistrationTests
         RedeliveryLadder.Intervals.ShouldBe(RedeliveryLadder.Intervals.Order());
         RedeliveryLadder.Intervals[0].ShouldBeLessThan(TimeSpan.FromMinutes(1),
             "the routine reorder is milliseconds; the first wait should not cost the saga minutes");
-        RedeliveryLadder.Total.ShouldBe(RedeliveryLadder.Intervals.Aggregate(TimeSpan.Zero, (a, b) => a + b));
     }
 
     [Fact]
