@@ -50,6 +50,9 @@ deploy/compose/README.md | credential-assignment | c409f770497f | The host-run b
 deploy/compose/rabbitmq/test_check_permissions.py | credential-assignment | 3c8acf667613 | A placeholder in a gate mutation; no broker ever reads it.
 deploy/compose/README.md | credential-assignment | eb26d4a9a0ef | Section 11.5's local BFF client default in the same recipe.
 deploy/compose/README.md | connection-string-password | 2a97516c354b | Keycloak's demo user in the token-fetch recipe, realm-export seeded.
+deploy/compose/README.md | credential-assignment | 3ca2bbaf7358 | Payments' local connection recipe against a published port.
+deploy/compose/README.md | credential-assignment | 3e7bc4243142 | The host-run broker recipe for Payments, its own service account.
+deploy/compose/README.md | credential-assignment | 9f5482218873 | Section 14.1's local provider key in the host-run recipe; the simulator ignores it.
 deploy/compose/keycloak/realm-export.json | credential-assignment | eb26d4a9a0ef | The realm export's copy of the same local BFF client default.
 deploy/compose/keycloak/realm-export.json | credential-assignment | 96d649b3eeda | A Keycloak creation timestamp under a dotted attribute name.
 
@@ -79,3 +82,4 @@ deploy/compose/services/payments.yml | connection-string-password | 8a11e54d9d5b
 deploy/compose/services/payments.yml | credential-assignment | 1df0b369ce40 | Payments's local connection default, in-cluster hostname.
 deploy/compose/services/payments.yml | credential-assignment | e03d477c7cd2 | Section 14.1's broker default for Payments, the per-service account that replaced guest.
 deploy/compose/rabbitmq/definitions.json | credential-assignment | fe985803dd60 | The Payments service account's password hash, Section 14.1's local default.
+deploy/compose/services/payments.yml | credential-assignment | 9f5482218873 | Section 14.1's local default for the simulated provider's API key; the simulator ignores it.

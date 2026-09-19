@@ -2853,7 +2853,7 @@ two-BFF diagram illustrates it, and is a picture of the pattern rather than of
 this platform.
 
 `Web.Bff`'s pricing hop to Catalog (below) is the platform's one synchronous
-call and Catalog calls nobody, so the deepest chain is
+call between its services and Catalog calls nobody, so the deepest chain is
 `Client → Gateway → BFF → Catalog`. The fan-out allowance is stated because it
 is the rule a reviewer needs.
 
@@ -2909,7 +2909,10 @@ configuration-validation test at startup.
 
 1. **Timeout.** One to two seconds per attempt, per the table above; never
    infinite. Where in that band is decided by the arithmetic below, not by
-   taste — the attempts plus their backoff have to fit the client total.
+   taste — the attempts plus their backoff have to fit the client total. A
+   third party behind an anti-corruption layer sits outside the band, and
+   `ProviderHop` is sized to it: the provider's latency is not a peer's, and
+   the call fits the saga's payment wait (§9.6) rather than a waiting caller.
 2. **Circuit breaker.** After a threshold of failures, fail fast rather than
    queueing threads against a dead service.
 3. **A fallback.** Cached data, a degraded response, or a clear error — decided
@@ -2930,11 +2933,14 @@ configuration-validation test at startup.
    500, because a contract violation between two services is nobody's caller's
    fault.
 
-The BFF's `Program.cs` (§4.1) is the one composition root that registers any
-of this — `Web.Bff` is the only host in this blueprint that calls a peer
-synchronously, which makes it the only one holding client credentials
-(§11.5), and §4.2's helper deliberately registers none of it. `PricingHop`
-beside it names the client and Catalog's address once: `http`, not `https`,
+For a peer call, the BFF's `Program.cs` (§4.1) is the one composition root
+that registers any of this — `Web.Bff` is the only host in this blueprint that
+calls a peer synchronously, which makes it the only one holding client
+credentials (§11.5), and §4.2's helper deliberately registers none of it. The
+other outbound client is Payments' provider hop, `ProviderHop`, behind §3.2's
+anti-corruption layer, which Payments registers for itself. `PricingHop`,
+beside the BFF's registration, names the client and Catalog's address once:
+`http`, not `https`,
 because TLS terminates at the ingress and traffic inside the cluster is plain
 (§10.1); the host is the Service name YARP also routes to (§10.2); and a
 second, HTTP/2-only port rather than the REST one, because a cleartext Kestrel

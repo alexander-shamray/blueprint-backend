@@ -26,6 +26,21 @@ services:
       sql: { condition: service_healthy }
     restart: "no"
 
+  # §3.2's provider, simulated (spec section 9). Payments' own dependency,
+  # so it lives in Payments' unit rather than the shared baseline, and
+  # docker-compose.infra-only.yml keeps it, since a Payments host run from an
+  # IDE needs it as much as a containerised one. The tag is
+  # Directory.Packages.props' WireMock.Net pin: one engine, one version, one
+  # set of mappings for this container and the tests.
+  psp-simulator:
+    image: sheyenrath/wiremock.net:2.12.0
+    # The image does not read static mappings by default; without this flag
+    # every request answers 404 and spec section 9's mappings never load.
+    command: [ "--ReadStaticMappings", "true" ]
+    volumes:
+      - ../psp-simulator/mappings:/app/__admin/mappings:ro
+    ports: [ "127.0.0.1:5190:80" ]
+
   payments-api:
     build:
       context: ../../..
@@ -51,9 +66,13 @@ services:
       # identity belongs to the BFF alone (§9.7, §11.5).
       Identity__Authority: "http://keycloak:8080/realms/commerce"
       OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4317"
+      PaymentProvider__BaseUrl: "http://psp-simulator/"
+      # §14.1's local-development exception: the simulator ignores it.
+      PaymentProvider__ApiKey: "local-dev-psp"
     ports: [ "127.0.0.1:5104:8080" ]
     depends_on:
       payments-migrator: { condition: service_completed_successfully }
+      psp-simulator: { condition: service_started }
       rabbitmq: { condition: service_healthy }
       # service_healthy since infrastructure.yml's keycloak declares a
       # healthcheck. The API

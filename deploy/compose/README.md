@@ -74,6 +74,7 @@ and exits, then `catalog-api` starts (§14.1's pair rule).
 | Web BFF | http://localhost:5200 | `/health/live`, `/health/ready`, `POST /v1/checkout/quote` with a body of `currency` and `lines` ([ADR-045](../../docs/backend-architecture/adr/ADR-045-the-checkout-quote-takes-quantities.md)) — a token needed, and the only host that mints one of its own ([§11.5](../../docs/backend-architecture/11-identity-authorization.md)) |
 | Inventory API | http://localhost:5103 | `/health/live`, `/health/ready`, `/openapi/v1.json` (needs a token — see below), `/v1/inventory/stock/{productId}` — needs a token, unlike Catalog's listing |
 | Payments API | http://localhost:5104 | `/health/live`, `/health/ready`, `/openapi/v1.json` (needs a token — see below) |
+| PSP simulator | http://localhost:5190 | `/__admin/mappings` — the scripted amounts are in [`psp-simulator/README.md`](psp-simulator/README.md) |
 
 **Every OpenAPI document needs a token**, and that is a decision rather than
 an oversight. `MapOpenApi()` carries no authorization metadata, so the
@@ -310,6 +311,21 @@ does not vary is not configuration. A `hosts` entry mapping `catalog-api` to
 `127.0.0.1` is the honest local workaround — and note that a host-run
 `Catalog.Api` does listen on 8081, because its `appsettings.json` declares both
 endpoints and that file overrides `ASPNETCORE_HTTP_PORTS`.
+
+Payments refuses to start without its provider too, read as eagerly as the
+authority (§15.4). The override leaves `psp-simulator` running, so a host-run
+Payments points at the port it publishes, with the same local key the Compose
+unit sets:
+
+```bash
+export ASPNETCORE_ENVIRONMENT=Development
+export ConnectionStrings__Payments='Server=localhost;Database=Payments;User Id=sa;Password=Local_Dev_Pa55w0rd!;TrustServerCertificate=True'
+export ConnectionStrings__RabbitMq='amqp://payments-svc:local-dev-payments@localhost:5672'
+export Identity__Authority='http://localhost:8080/realms/commerce'
+export PaymentProvider__BaseUrl='http://localhost:5190/'
+export PaymentProvider__ApiKey='local-dev-psp'
+dotnet run --project src/Services/Payments/Payments.Api
+```
 
 `ASPNETCORE_ENVIRONMENT` leads this block for the same reason it leads the one
 above, and the block is written to stand alone rather than as a delta on that

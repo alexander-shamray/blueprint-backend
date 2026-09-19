@@ -1,0 +1,15 @@
+{
+  "Guid": "5b7e3f0a-0005-4000-8000-000000000005",
+  "Title": "Minor units ending 05 answer 503, unavailable",
+  "Priority": 1,
+  "Request": {
+    "Path": { "Matchers": [{ "Name": "ExactMatcher", "Pattern": "/v1/authorisations" }] },
+    "Methods": ["POST"],
+    "Body": { "Matcher": { "Name": "RegexMatcher", "Pattern": "\"amountMinor\"\\s*:\\s*(\\d*0)?5\\s*[,}]" } }
+  },
+  "Response": {
+    "StatusCode": 503,
+    "Headers": { "Content-Type": "application/json" },
+    "BodyAsJson": { "status": "unavailable" }
+  }
+}

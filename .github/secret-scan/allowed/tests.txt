@@ -58,3 +58,4 @@ tests/Inventory.Api.Tests/MessagingRegistrationTests.cs | credential-assignment 
 tests/Payments.Api.Tests/HostSmokeTests.cs | connection-string-password | da3fd0c5abaa | A deliberately unusable value in a host that must not reach a database.
 tests/Payments.Api.Tests/MessageTypeMapValidatorTests.cs | connection-string-password | da3fd0c5abaa | The same unusable fixture in the validator suite.
 tests/Payments.Api.Tests/MessagingRegistrationTests.cs | credential-assignment | 9e66c51d3ea2 | A broker URI pointing at a hostname that does not resolve.
+tests/Payments.TestSupport/PaymentsApiFactory.cs | credential-assignment | 9f5482218873 | The provider key §14.1 allows as a local-development placeholder; the simulator ignores it.

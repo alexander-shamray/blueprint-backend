@@ -79,16 +79,18 @@ public static class ObservabilityExtensions
                 .AddAspNetCoreInstrumentation()
                 .AddHttpClientInstrumentation()
                 .AddRuntimeInstrumentation()
-                // Every meter an alert or SLO reads from. A condition whose
-                // signal is not registered here cannot fire — it looks
-                // configured and is silent, which is worse than having no
-                // alert at all. Registered ahead of the instruments: a name is
-                // a string and costs nothing, and the alternative is spreading
-                // one block's edits across six later pull requests.
+                // Every meter the platform exports, so every one an alert or
+                // SLO reads from. A condition whose signal is not registered
+                // here cannot fire — it looks configured and is silent, which
+                // is worse than having no alert at all. Registered ahead of the
+                // instruments: a name is a string and costs nothing, and the
+                // alternative is spreading one block's edits across six later
+                // pull requests.
                 .AddMeter("Ordering.Orders")                       // §13.3, §13.6
                 .AddMeter("Ordering.Outbox")                       // §13.6 per-lane
                 .AddMeter("Inventory.Reservations")                // §13.3
                 .AddMeter("Inventory.Outbox")                      // §13.6 per-lane
+                .AddMeter("Payments.Provider")                     // §3.2's provider
 
                 // Shared names, not service-prefixed: every service emits the
                 // same instruments and the service.name resource attribute

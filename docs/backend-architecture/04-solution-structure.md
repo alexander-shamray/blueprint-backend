@@ -16,8 +16,8 @@ A monorepo makes cross-cutting changes and contract updates atomic and reviewabl
 │   │   │                               EF conventions, Redis
 │   │   ├── Common.Web/                 Host defaults: OTel, health, auth, ProblemDetails.
 │   │   │                               Referenced by every host. NOT resilience —
-│   │   │                               the one outbound client is the BFF's (§9.7),
-│   │   │                               so the policy lives with it.
+│   │   │                               the BFF and Payments each hold an outbound
+│   │   │                               client (§9.7), so each policy lives with it.
 │   │   │                               (Aspire's template calls this ServiceDefaults.)
 │   │   └── Common.Contracts/           Integration event DTOs — the ONLY shared types
 │   │
@@ -1477,7 +1477,12 @@ EF Core minor versions and behave differently under identical code.
          package resolving into the graph is not a thing to carry. -->
     <PackageVersion Include="SSH.NET" Version="2026.0.0" />
     <PackageVersion Include="Respawn" Version="6.2.1" />
-    <PackageVersion Include="WireMock.Net" Version="1.8.11" />
+    <!-- 2.12.0 is the first release whose Scriban.Signed carries no advisory.
+         The 1.x releases resolve Scriban.Signed 5.5.0, whose critical and high
+         advisories fail the restore through NU1904 and NU1903. Not the newest:
+         2.16.0 needs a Microsoft.OpenApi above the pin in this file, which
+         NU1109 refuses as a downgrade. -->
+    <PackageVersion Include="WireMock.Net" Version="2.12.0" />
     <PackageVersion Include="Microsoft.Extensions.TimeProvider.Testing" Version="9.9.0" />
     <!-- ServiceCollection itself. §6.2's registration test and §6.3's ordering
          test resolve from a real container, and the abstractions package the

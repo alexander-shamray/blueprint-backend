@@ -37,6 +37,10 @@
          fake by hand means stubbing an interface with a dozen members nobody
          calls. -->
     <PackageReference Include="NSubstitute" />
+    <!-- The provider's stand-in (§12's third-party row): a real HTTP server
+         in process, loading the simulator's own mappings, so the adapter is
+         asserted against the file Compose runs. -->
+    <PackageReference Include="WireMock.Net" />
   </ItemGroup>
 
   <ItemGroup>

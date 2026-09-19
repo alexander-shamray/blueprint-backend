@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using ProviderRegistration = Payments.Infrastructure.Provider.DependencyInjection;
 
 namespace Payments.TestSupport;
 
@@ -17,7 +18,11 @@ namespace Payments.TestSupport;
 /// resolve, the container suite at running containers — so what differs
 /// between them is the infrastructure and not the wiring.
 /// </summary>
-public class PaymentsApiFactory(string connectionString, string rabbitConnectionString)
+public class PaymentsApiFactory(
+    string connectionString,
+    string rabbitConnectionString,
+    string providerBaseUrl = PaymentsApiFactory.UnreachableProvider,
+    string? providerApiKey = null)
     : WebApplicationFactory<Program>
 {
     /// <summary>
@@ -33,6 +38,24 @@ public class PaymentsApiFactory(string connectionString, string rabbitConnection
     public const string UnreachableAuthority = "https://identity.invalid/realms/test";
 
     /// <summary>
+    /// The provider every host over this <c>Program</c> must name (§3.2).
+    /// Unreachable for the authority's reason — <c>.invalid</c> never
+    /// resolves, so a test that dials the provider by accident fails loudly
+    /// rather than authorising anything — and plain HTTP because the factory
+    /// runs the host as Development, the one environment that allows it.
+    /// Defaulted rather than required: a host that never calls the provider
+    /// has nothing to say about where it is.
+    /// </summary>
+    public const string UnreachableProvider = "http://psp.invalid/";
+
+    /// <summary>
+    /// §14.1's local-development placeholder for the provider key, which the
+    /// simulator ignores. Required by the host (§15.4), so a caller that
+    /// names none still gets one.
+    /// </summary>
+    public const string LocalProviderApiKey = "local-dev-psp";
+
+    /// <summary>
     /// The RUNTIME connection of §7.1, and only that one. The host has no
     /// business reading <c>PaymentsMigrator</c>, and a fixture that supplied
     /// both would hide it if it started. The bus key is required because
@@ -44,6 +67,8 @@ public class PaymentsApiFactory(string connectionString, string rabbitConnection
             .UseSetting("ConnectionStrings:Payments", connectionString)
             .UseSetting("ConnectionStrings:RabbitMq", rabbitConnectionString)
             .UseSetting(AuthenticationExtensions.AuthorityKey, UnreachableAuthority)
+            .UseSetting(ProviderRegistration.BaseUrlKey, providerBaseUrl)
+            .UseSetting(ProviderRegistration.ApiKeyKey, providerApiKey ?? LocalProviderApiKey)
             .ConfigureServices(services =>
             {
                 ConfigureAuthentication(services);

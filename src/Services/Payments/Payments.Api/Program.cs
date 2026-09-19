@@ -1,5 +1,6 @@
 using Payments.Application;
 using Payments.Infrastructure;
+using Payments.Infrastructure.Provider;
 using Common.Web;
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
@@ -16,6 +17,10 @@ builder.Host.UseDefaultServiceProvider(o =>
 builder.AddCommonWebDefaults();                 // §13.2
 builder.Services.AddPaymentsApplication();       // §6.2
 builder.Services.AddPaymentsInfrastructure(builder.Configuration);   // §4.2, §7.1
+
+// §3.2's anti-corruption layer; its address is read, and its scheme checked,
+// eagerly.
+builder.Services.AddPaymentProvider(builder.Configuration, builder.Environment);
 
 // Appendix C's OpenAPI deliverable: document only, no UI.
 builder.Services.AddOpenApi();

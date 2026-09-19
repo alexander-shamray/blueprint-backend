@@ -1,0 +1,15 @@
+{
+  "Guid": "5b7e3f0a-0002-4000-8000-000000000002",
+  "Title": "Minor units ending 02 decline as insufficient_funds",
+  "Priority": 1,
+  "Request": {
+    "Path": { "Matchers": [{ "Name": "ExactMatcher", "Pattern": "/v1/authorisations" }] },
+    "Methods": ["POST"],
+    "Body": { "Matcher": { "Name": "RegexMatcher", "Pattern": "\"amountMinor\"\\s*:\\s*(\\d*0)?2\\s*[,}]" } }
+  },
+  "Response": {
+    "StatusCode": 402,
+    "Headers": { "Content-Type": "application/json" },
+    "BodyAsJson": { "status": "declined", "code": "insufficient_funds" }
+  }
+}
