@@ -1,32 +1,18 @@
 #!/usr/bin/env python3
-"""The canary's arithmetic and its verdict, and a gate over the plan itself.
+"""§15.5's weight arithmetic and verdict, and a gate over canary.json.
 
-§15.5 specifies the rollout: "route 5% of traffic to the new version, watch
-error rate and p99 for ten minutes, then progress to 25%, 50%, 100%. Roll back
-automatically if either metric regresses beyond threshold." This file is the
-half of that sentence a workflow cannot be trusted with — the weight
-arithmetic and the promote/rollback decision — kept out of YAML so it can be
-asserted.
-
-**It reaches no cluster and no Prometheus.** `plan` and `analyse` are pure
-functions over their arguments; the workflow queries Prometheus and runs
-`kubectl scale`, and hands the numbers here. That split is what makes a canary
-nobody has run still worth shipping: the part that decides is testable today,
-and the part that acts is four commands whose failure is loud.
-
-Stdlib only, on the licence gate's terms — no restore, no SDK, no
-dependencies. The plan is JSON rather than YAML for the same reason
-`deploy/observability/dashboards` is: there is no stdlib YAML parser, and a
-gate that needs a `pip install` is a gate that gets skipped.
+Pure over its arguments and stdlib only: the workflow fetches and acts, and
+the README beside this file says what is asserted and what is not.
 
     py -3.12 deploy/canary/canary.py check
     py -3.12 deploy/canary/canary.py plan --workload catalog-api --stable 19 --step 0
-    py -3.12 deploy/canary/canary.py analyse --readings readings.json
+    py -3.12 deploy/canary/canary.py analyse --workload catalog-api --readings readings.json
 """
 
 from __future__ import annotations
 
 import argparse
+import functools
 import json
 import re
 import sys
@@ -315,113 +301,116 @@ def plan(weight_percent: int, stable_replicas: int, overshoot_points: int) -> di
 # The verdict
 # --------------------------------------------------------------------------
 
-def analyse(readings: dict, thresholds: dict) -> dict:
-    """Promote or roll back, from one step's readings.
+TRACKS = ("canary", "baseline")
+METRICS = ("errorRate", "latencyP99Seconds", "requests")
 
-    Four ways to fail and one way to pass, and the order below is the order
-    they are checked in.
+# The thresholds a signal may name in `absolute`, and how each is printed.
+# Both are §13.6's alert numbers, which check 3 reads out of the rules file.
+ABSOLUTE = {"errorRate": ("error rate", "{:.3%}"), "latencyP99Seconds": ("p99", "{:.3f}s")}
 
-    **An absent series is a failure, not a silence.** §15.1 already says this
-    about the k6 SLO run — it "fails on an absent series as well as on a
-    breached one" — and §13.6 spends a callout on the same shape: an empty
-    dashboard reads identically whether the system is healthy or the metric was
-    never published. A canary that promotes on `None` promotes on a scrape that
-    did not happen.
 
-    **Too little traffic is also a failure**, for the reason above one step on.
-    Five per cent of a quiet ten minutes can be four requests, and four
-    requests cannot distinguish a 1% error rate from a 0% one. Promoting there
-    is promoting on no evidence while reporting a green analysis.
+def analyse(readings: dict, thresholds: dict, signals: dict) -> dict:
+    """Promote or roll back, from one step's readings of one workload's signals.
 
-    **Absolute breach is measured against §13.6's own thresholds**, not against
-    a looser number chosen for the rollout. A canary tuned to tolerate what
-    pages the on-call has bought nothing: it would promote a release and then
-    wake somebody at 3 a.m. about the release it promoted.
-
-    **Relative regression has a floor under it**, because a ratio between two
-    small numbers is noise. A baseline of 0.0001 and a canary of 0.0004 is
-    four times worse and is two requests; without the floor every quiet service
-    rolls back for ever.
+    `readings` is `{track: {signal: {metric: value}}}` and `signals` is the
+    workload's declared subset of canary.json's `signals`. An absent, quiet,
+    missing or undeclared signal is a rollback, like every other doubt: an
+    empty series reads the same whether nothing failed or nothing was scraped
+    (§13.6). Each declared signal is then held to its own `absolute`
+    thresholds and compared with the stable track (ADR-047).
     """
-    verdicts = []
-
-    for track in ("canary", "baseline"):
-        if track not in readings:
+    for track in TRACKS:
+        if not isinstance(readings.get(track), dict):
             return _verdict(ROLLBACK, f"no readings for the {track} track")
 
-    canary = readings["canary"]
-    baseline = readings["baseline"]
+    if not signals:
+        return _verdict(
+            ROLLBACK, "the workload declares no signal, so there is nothing to judge it on")
 
-    # BOTH TRACKS, all three metrics, before any threshold is applied.
-    #
-    # This checked the canary's three and left the baseline's to the relative
-    # check, which reached two of them and never looked at `requests` at all —
-    # a reading fetched on every step and validated by nothing. `read` runs
-    # each query independently, so one malformed response can null a single
-    # metric while its neighbours succeed, and the contract this function
-    # states is "any absent reading is a rollback". A loop over both tracks is
-    # the only shape in which that sentence is true, and it costs one nesting
-    # level to remove the exception.
-    for track, values in (("canary", canary), ("baseline", baseline)):
-        for name in ("errorRate", "latencyP99Seconds", "requests"):
-            if values.get(name) is None:
-                return _verdict(
-                    ROLLBACK,
-                    f"the {track} track reported no {name}: the series is "
-                    "absent, which is what a metric nobody publishes and a pod "
-                    "nobody scraped look like alike (§13.6). The stable track "
-                    "carries the majority of traffic at every rung, so its "
-                    "silence is the monitoring failing on the larger half",
-                )
+    for track in TRACKS:
+        present = set(readings[track])
+        undeclared = sorted(present - set(signals))
+        if undeclared:
+            return _verdict(
+                ROLLBACK,
+                f"the {track} track carries readings for {', '.join(undeclared)}, "
+                "which this workload does not declare: the fetch and the plan "
+                "disagree about what is being judged",
+            )
+        missing = sorted(set(signals) - present)
+        if missing:
+            return _verdict(
+                ROLLBACK,
+                f"the {track} track has no {', '.join(missing)} readings, and a "
+                "declared signal nobody fetched is not one that passed",
+            )
+
+    for track in TRACKS:
+        for signal in sorted(signals):
+            values = readings[track][signal]
+            for name in METRICS:
+                if not isinstance(values, dict) or values.get(name) is None:
+                    return _verdict(
+                        ROLLBACK,
+                        f"the {track} track reported no {signal} {name}: the "
+                        "series is absent, which is what a metric nobody "
+                        "publishes and a pod nobody scraped look like alike "
+                        "(§13.6)",
+                    )
 
     minimum = thresholds["minimumRequests"]
-    if canary["requests"] < minimum:
-        return _verdict(
-            ROLLBACK,
-            f"the canary served {canary['requests']:.0f} requests in the step's "
-            f"window, below the {minimum} this plan calls enough to judge. "
-            "Promoting on that is promoting on no evidence",
-        )
+    for signal in sorted(signals):
+        counted = readings["canary"][signal]["requests"]
+        if counted < minimum:
+            return _verdict(
+                ROLLBACK,
+                f"the canary's {signal} signal counted {counted:.0f} in the "
+                f"step's window, below the {minimum} this plan calls enough to "
+                "judge. Promoting on that is promoting on no evidence",
+            )
 
-    if canary["errorRate"] > thresholds["errorRate"]:
-        verdicts.append(
-            f"error rate {canary['errorRate']:.3%} is above the "
-            f"{thresholds['errorRate']:.3%} that pages (§13.6)"
-        )
-
-    if canary["latencyP99Seconds"] > thresholds["latencyP99Seconds"]:
-        verdicts.append(
-            f"p99 {canary['latencyP99Seconds']:.3f}s is above the "
-            f"{thresholds['latencyP99Seconds']:.3f}s that pages (§13.6)"
-        )
-
+    verdicts = []
     factor = thresholds["regressionFactor"]
-    verdicts += _regression(
-        "error rate",
-        canary["errorRate"],
-        baseline.get("errorRate"),
-        thresholds["errorRateFloor"],
-        factor,
-        "{:.3%}",
-    )
-    verdicts += _regression(
-        "p99",
-        canary["latencyP99Seconds"],
-        baseline.get("latencyP99Seconds"),
-        thresholds["latencyP99FloorSeconds"],
-        factor,
-        "{:.3f}s",
-    )
+    for signal, definition in sorted(signals.items()):
+        canary = readings["canary"][signal]
+        baseline = readings["baseline"][signal]
+        for key in definition.get("absolute", []):
+            label, fmt = ABSOLUTE[key]
+            if canary[key] > thresholds[key]:
+                verdicts.append(
+                    f"{signal} {label} {fmt.format(canary[key])} is above the "
+                    f"{fmt.format(thresholds[key])} that pages (§13.6)"
+                )
+        verdicts += _regression(
+            f"{signal} error rate",
+            canary["errorRate"],
+            baseline["errorRate"],
+            thresholds["errorRateFloor"],
+            factor,
+            "{:.3%}",
+        )
+        verdicts += _regression(
+            f"{signal} p99",
+            canary["latencyP99Seconds"],
+            baseline["latencyP99Seconds"],
+            thresholds["latencyP99FloorSeconds"],
+            factor,
+            "{:.3f}s",
+        )
 
     if verdicts:
         return _verdict(ROLLBACK, "; ".join(verdicts))
 
+    judged = "; ".join(
+        f"{signal}: error rate {readings['canary'][signal]['errorRate']:.3%} and "
+        f"p99 {readings['canary'][signal]['latencyP99Seconds']:.3f}s over "
+        f"{readings['canary'][signal]['requests']:.0f}"
+        for signal in sorted(signals)
+    )
     return _verdict(
         PROMOTE,
-        f"error rate {canary['errorRate']:.3%} and p99 "
-        f"{canary['latencyP99Seconds']:.3f}s over {canary['requests']:.0f} "
-        "requests, both inside threshold and neither materially worse than the "
-        "stable track",
+        f"{judged} - every signal inside its thresholds and none materially "
+        "worse than the stable track",
     )
 
 
@@ -576,30 +565,10 @@ def check(plan_document: dict, root: Path = ROOT) -> list[str]:
                 "not a chart under deploy/helm"
             )
 
-    # 5. Every metric the queries read is one an alert already reads.
-    #
-    #    NOT a second copy of check.py's C#-instrument scan. That gate proves a
-    #    LOADED alert's metric is published by something; anything this file
-    #    reads that a loaded alert also reads inherits the proof. A metric here
-    #    and nowhere else is a name nothing has ever vouched for, which is the
-    #    typo this catches.
-    # 5a. The three queries `analyse` consumes must exist.
-    #
-    # Check 5 vouches for the metrics a query READS, and says nothing about a
-    # query that is not there: deleting `requests` — or the whole `queries`
-    # object — passed every check here, after which `read` returns a reading
-    # short and `analyse` rolls back for an absent series. An inoperable plan
-    # that fails at the end of the first ten-minute dwell rather than in a gate
-    # that takes milliseconds.
-    queries = entries(plan_document.get("queries", {}))
-    for name in ("errorRate", "latencyP99Seconds", "requests"):
-        if name not in queries:
-            failures.append(
-                f"queries.{name} is missing, and analyse() reads it for both "
-                "tracks. Without it every rung ends in a rollback for an absent "
-                "series, ten minutes at a time"
-            )
-
+    # 5. Every metric a query reads is one something vouches for: a loaded
+    #    alert, whose metrics check.py has proved published, or a meter
+    #    Common.Web registers. A name nothing vouches for is a typo that
+    #    matches no series and rolls every canary back.
     failures += _metrics_are_vouched_for(plan_document, root)
 
     # 6. The gate's own subject. Checks 3, 4 and 5 all compare against
@@ -618,6 +587,190 @@ def check(plan_document: dict, root: Path = ROOT) -> list[str]:
     # 8. The dispatch menu is exactly the plan's workload set.
     failures += _dispatch_options_match_workloads(workloads)
 
+    # 9. Each signal is complete, and each workload declares the signals it
+    #    receives: a service that registers a consumer declares consume or
+    #    argues why not (ADR-047).
+    signals = entries(plan_document.get("signals", {}))
+    failures += _signals_are_complete(signals)
+    failures += _workloads_declare_what_they_receive(workloads, signals, root)
+
+    # 10. The http signal excludes every probe route the code maps.
+    failures += _probe_routes_are_excluded(signals, root)
+
+    return failures
+
+
+def _signals_are_complete(signals: dict) -> list[str]:
+    """Each signal carries the three queries `analyse` reads and a fault rate.
+
+    A missing query rolls every rung back for an absent series, ten minutes
+    at a time; a signal with no absolute errorRate is judged only against the
+    stable track, so a canary as broken as the release before it promotes.
+    """
+    failures = []
+    if not signals:
+        failures.append("signals is empty: no workload can be judged on anything")
+    for signal, definition in sorted(signals.items()):
+        queries = entries(definition.get("queries", {}))
+        for name in METRICS:
+            if name not in queries:
+                failures.append(
+                    f"signals.{signal}.queries.{name} is missing, and analyse() "
+                    "reads it for both tracks"
+                )
+        absolute = definition.get("absolute", [])
+        if "errorRate" not in absolute:
+            failures.append(
+                f"signals.{signal}.absolute does not name errorRate, so the "
+                "signal's fault rate is never held to §13.6's threshold"
+            )
+        for key in absolute:
+            if key not in ABSOLUTE:
+                failures.append(
+                    f"signals.{signal}.absolute names {key!r}, which is not an "
+                    f"alert threshold analyse() can apply: {', '.join(ABSOLUTE)}"
+                )
+    return failures
+
+
+def _workloads_declare_what_they_receive(workloads: dict, signals: dict, root: Path) -> list[str]:
+    """Every workload declares a known signal, and a consumer declares consume.
+
+    An exemption has to argue, and has to be needed: on a workload with no
+    consumer, or beside a declared consume signal, it is a claim nothing
+    rechecks.
+    """
+    failures = []
+    for name, workload in sorted(workloads.items()):
+        declared = workload.get("signals", [])
+        if not declared:
+            failures.append(
+                f"workloads.{name} declares no signal, and analyse() rolls back "
+                "a workload with nothing to judge"
+            )
+        for signal in declared:
+            if signal not in signals:
+                failures.append(
+                    f"workloads.{name} declares the signal {signal!r}, which "
+                    f"canary.json does not define: {', '.join(sorted(signals))}"
+                )
+
+        consumes = has_consumers(workload.get("serviceName", ""), root)
+        exemption = workload.get("consumeExemption")
+        if exemption is None:
+            if consumes and "consume" not in declared:
+                failures.append(
+                    f"workloads.{name} registers a consumer and declares no "
+                    "consume signal, so none of its broker work is judged. "
+                    "Declare it, or argue a consumeExemption"
+                )
+        elif not isinstance(exemption, str) or not exemption.strip():
+            failures.append(
+                f"workloads.{name}.consumeExemption is empty, which is an "
+                "exemption without an argument"
+            )
+        elif not consumes:
+            failures.append(
+                f"workloads.{name}.consumeExemption exempts a service that "
+                "registers no consumer"
+            )
+        elif "consume" in declared:
+            failures.append(
+                f"workloads.{name}.consumeExemption sits beside a declared "
+                "consume signal, and one of the two is wrong"
+            )
+    return failures
+
+
+# A MassTransit registration a scan can find: a consumer, a saga or a job
+# consumer added to the bus. Registration rather than an IConsumer<T>
+# implementation, because the common consumers live in Common.Infrastructure
+# and a service is a consumer by adding one.
+CONSUMER_REGISTRATION = re.compile(r"\.Add(?:Consumer|Saga|SagaStateMachine|JobConsumer)\s*<")
+
+
+def has_consumers(service_name: str, root: Path = ROOT) -> bool:
+    """Whether the service whose host is `service_name` registers a consumer.
+
+    The service's tree is the host project's parent directory, which holds
+    the host and the projects it composes.
+    """
+    sources = _csharp_sources(root)
+    for host in (path for path in sources if path.name == f"{service_name}.csproj"):
+        tree = host.parent.parent
+        for path, code in sources.items():
+            if path.suffix == ".cs" and tree in path.parents and CONSUMER_REGISTRATION.search(
+                    re.sub(r"//.*", "", code)):
+                return True
+    return False
+
+
+@functools.cache
+def _csharp_sources(root: Path) -> dict[Path, str]:
+    """Every project file and C# source under src/, outside build output.
+
+    Cached because the scans run once per workload and per check; a project
+    file maps to an empty text, since only its name is read.
+    """
+    found = {}
+    for path in (root / "src").rglob("*"):
+        if {"obj", "bin"} & set(path.relative_to(root).parts):
+            continue
+        if path.suffix == ".cs":
+            found[path] = path.read_text(encoding="utf-8")
+        elif path.suffix == ".csproj":
+            found[path] = ""
+    return found
+
+
+# The probe routes, as MapHealthChecks names them.
+HEALTH_ROUTE = re.compile(r"MapHealthChecks\(\s*\"([^\"]+)\"")
+ROUTE_EXCLUSION = re.compile(r"http_route!~\"([^\"]*)\"")
+HTTP_SELECTOR = re.compile(r"http_server_request_duration_seconds_[a-z]+\{([^}]*)\}")
+
+
+def health_routes(root: Path = ROOT) -> set[str]:
+    """Every route a host maps a health check on, read from the code."""
+    routes = set()
+    for code in _csharp_sources(root).values():
+        routes |= set(HEALTH_ROUTE.findall(code))
+    return routes
+
+
+def _probe_routes_are_excluded(signals: dict, root: Path) -> list[str]:
+    """Every http selector's route exclusion matches every mapped probe route.
+
+    PromQL anchors a regex matcher at both ends, as `fullmatch` does. The
+    subject is checked first, because a scan that found no route would
+    certify any selector at all.
+    """
+    routes = health_routes(root)
+    if not routes:
+        return ["found no MapHealthChecks route under src/: the probe exclusion "
+                "would pass vacuously, so the scan is what is broken"]
+
+    failures = []
+    queries = entries(signals.get("http", {}).get("queries", {}))
+    for name, expression in sorted(queries.items()):
+        selectors = HTTP_SELECTOR.findall(expression)
+        if not selectors:
+            failures.append(f"signals.http.queries.{name} reads no http selector")
+        for selector in selectors:
+            exclusion = ROUTE_EXCLUSION.search(selector)
+            if not exclusion:
+                failures.append(
+                    f"signals.http.queries.{name} has a selector with no "
+                    "http_route exclusion, so probe traffic counts as the "
+                    "canary's own"
+                )
+                continue
+            for route in sorted(routes):
+                if not re.fullmatch(exclusion.group(1), route):
+                    failures.append(
+                        f"signals.http.queries.{name} excludes "
+                        f"{exclusion.group(1)!r}, which does not match the "
+                        f"mapped probe route {route}"
+                    )
     return failures
 
 
@@ -698,28 +851,81 @@ def _chart_exists(chart: str | None, root: Path) -> bool:
     return (root / "deploy" / "helm" / chart / "Chart.yaml").is_file()
 
 
+# Instruments of a third-party meter a query may read, by the meter's name.
+# MassTransit's are its InstrumentationOptions defaults at the pinned version,
+# and they are real only while Common.Web collects the meter, which is the
+# registration `_metrics_are_vouched_for` looks for.
+METER_INSTRUMENTS = {
+    "MassTransit": (
+        "messaging.masstransit.consume",
+        "messaging.masstransit.consume.errors",
+        "messaging.masstransit.consume.duration",
+    ),
+}
+
+# The suffixes the OTLP-to-Prometheus mapping appends: the series kind, and
+# the units these instruments carry (ea on MassTransit's counters, ms on its
+# histograms, s on ASP.NET Core's).
+SERIES_SUFFIX = re.compile(r"_(?:count|bucket|sum|total|ea|milliseconds|seconds)$")
+
+
 def _metrics_are_vouched_for(plan_document: dict, root: Path) -> list[str]:
+    """Every metric a signal's queries read, against what vouches for it.
+
+    Matched on the instrument rather than the suffix a query takes, because an
+    alert may read `_count` where a query reads `_bucket` off one histogram.
+    """
     rules = root / "deploy" / "observability" / "alerts" / "platform-alerts.yaml"
+    registration = root / "src" / "BuildingBlocks" / "Common.Web" / "ObservabilityExtensions.cs"
     try:
         alert_text = rules.read_text(encoding="utf-8")
+        registered_text = registration.read_text(encoding="utf-8")
     except OSError as error:
-        return [f"{rules} is not readable, so no metric here can be vouched for: {error}"]
+        return [f"a file check 5 reads is not readable, so no metric can be vouched for: {error}"]
+
+    registered = {
+        meter for meter in METER_INSTRUMENTS
+        if re.search(rf"\.AddMeter\(\s*\"{re.escape(meter)}\"\s*\)", registered_text)
+    }
 
     failures = []
-    for name, query in sorted(entries(plan_document.get("queries", {})).items()):
-        for metric in sorted(set(re.findall(r"\b([a-z][a-z0-9_]*_(?:count|bucket|sum|total))\b", query))):
-            # The base name, because an alert may read `_count` where a query
-            # reads `_bucket` off the same histogram. Vouching is about the
-            # instrument, not the suffix a query happens to take.
-            base = re.sub(r"_(?:count|bucket|sum|total)$", "", metric)
-            if base not in alert_text:
-                failures.append(
-                    f"queries.{name} reads {metric}, and no loaded alert reads "
-                    f"{base}. Nothing has established that this platform "
-                    "publishes it, and a query matching no series rolls every "
-                    "canary back"
-                )
+    for signal, definition in sorted(entries(plan_document.get("signals", {})).items()):
+        for name, query in sorted(entries(definition.get("queries", {})).items()):
+            for metric in sorted(set(re.findall(r"\b([a-z][a-z0-9_]*_(?:count|bucket|sum|total))\b", query))):
+                base = re.sub(r"_(?:count|bucket|sum|total)$", "", metric)
+                if base in alert_text:
+                    continue
+                meter = _meter_of(metric)
+                if meter is None:
+                    failures.append(
+                        f"signals.{signal}.queries.{name} reads {metric}, which no "
+                        "loaded alert reads and no known meter's instrument "
+                        "exports, so nothing establishes that it is published"
+                    )
+                elif meter not in registered:
+                    failures.append(
+                        f"signals.{signal}.queries.{name} reads {metric}, from the "
+                        f"{meter} meter, and {registration.name} does not register "
+                        f"AddMeter(\"{meter}\"), so nothing collects it"
+                    )
     return failures
+
+
+def _meter_of(metric: str) -> str | None:
+    """The meter whose instrument a series is, stripping suffixes one at a time."""
+    instruments = {
+        instrument.replace(".", "_"): meter
+        for meter, names in METER_INSTRUMENTS.items()
+        for instrument in names
+    }
+    name = metric
+    while True:
+        if name in instruments:
+            return instruments[name]
+        stripped = SERIES_SUFFIX.sub("", name)
+        if stripped == name:
+            return None
+        name = stripped
 
 
 def _workflow_covers_inputs() -> list[str]:
@@ -856,6 +1062,7 @@ def main(argv: list[str]) -> int:
     planner.add_argument("--step", type=int, required=True)
 
     analyser = sub.add_parser("analyse", help="promote or roll back")
+    analyser.add_argument("--workload", required=True, help="whose declared signals to judge")
     analyser.add_argument("--readings", required=True, help="path to a readings JSON file")
 
     args = parser.parse_args(argv[1:])
@@ -936,7 +1143,6 @@ def main(argv: list[str]) -> int:
             return 1
         workload = entries(document["workloads"])[args.workload]
         result["dwellMinutes"] = step.get("dwellMinutes", 0)
-        result["serviceName"] = workload["serviceName"]
         result["chart"] = workload["chart"]
 
         # `KEY=value` rather than JSON, so the caller is `eval`-able from a
@@ -948,8 +1154,17 @@ def main(argv: list[str]) -> int:
             print(f"CANARY_{_shout(key)}={value}")
         return 0
 
+    workloads = entries(document["workloads"])
+    if args.workload not in workloads:
+        print(f"canary: no workload {args.workload!r} in the plan", file=sys.stderr)
+        return 1
+    defined = entries(document["signals"])
+    declared = {
+        signal: defined.get(signal, {})
+        for signal in workloads[args.workload].get("signals", [])
+    }
     readings = json.loads(Path(args.readings).read_text(encoding="utf-8"))
-    verdict = analyse(readings, entries(document["thresholds"]))
+    verdict = analyse(readings, entries(document["thresholds"]), declared)
     print(json.dumps(verdict, indent=2))
     return 0 if verdict["decision"] == PROMOTE else 2
 

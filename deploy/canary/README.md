@@ -28,14 +28,14 @@ every chart and asserts what comes out.
 
 | File | What it is |
 |---|---|
-| `canary.json` | §15.5's ladder, the thresholds, the PromQL and the workload map |
+| `canary.json` | §15.5's ladder, the thresholds, each signal's PromQL, and the workload map with the signals each workload is judged on |
 | `canary.py` | The weight arithmetic, the promote/rollback verdict, and the gate over `canary.json` |
-| `read_prometheus.py` | The one file that talks to anything. Runs the queries and writes what came back |
+| `read_prometheus.py` | The one file that talks to anything. Runs the queries of the signals a workload declares and writes what came back |
 | `test_canary.py` | The suite. It is the whole of the assurance the rollout has |
 
 ## What it asserts
 
-`canary.py check` is seven checks and the last two are about itself:
+`canary.py check` is ten checks, and the sixth is about itself:
 
 1. The ladder climbs, ends at 100%, and every rung but the last has a dwell.
 2. Every threshold `analyse` reads is present — it indexes them, so a missing
@@ -43,14 +43,43 @@ every chart and asserts what comes out.
 3. The absolute thresholds **are** §13.6's alert thresholds, read out of
    `platform-alerts.yaml` rather than restated. A canary tuned looser than the
    alert promotes a release and then pages about it.
-4. Each workload's `serviceName` is an entry assembly this solution builds, and
-   its `chart` is a chart under `deploy/helm`.
-5. Every metric the queries read is one a loaded alert reads — which
-   `deploy/observability/check.py` has already established is published by
-   something. Not a second copy of that scan; a composition with it.
+4. Each workload's key is a Helm release name, its `serviceName` is an entry
+   assembly this solution builds, and its `chart` is a chart under
+   `deploy/helm`.
+5. Every metric a signal's queries read is vouched for: either a loaded alert
+   reads it — and `deploy/observability/check.py` has already established
+   that something publishes it — or it is an instrument of a meter
+   `Common.Web`'s `ObservabilityExtensions` registers, which is how
+   MassTransit's consume series qualify. Deleting the registration fails it.
 6. The parser found host assemblies at all, so checks 4 and 5 cannot pass
    vacuously.
 7. Both of `deploy.yml`'s triggers cover every path in `SOURCE_INPUTS`.
+8. `deploy.yml`'s dispatch menu is exactly the plan's workload set.
+9. Every signal carries the three queries `analyse` reads and holds its fault
+   rate to an absolute threshold; every workload declares at least one signal
+   the plan defines; and a service whose tree registers a MassTransit consumer
+   or saga declares `consume` or carries a non-empty `consumeExemption` —
+   which fails on a service with no consumer, or beside a declared `consume`.
+10. Every selector in the `http` signal's queries excludes the probe routes,
+    and the exclusion matches every route `MapHealthChecks` maps in `src/` —
+    found by scanning, so a fourth probe route fails the plan rather than
+    counting as traffic again.
+
+## What a workload is judged on
+
+[ADR-047](../../docs/backend-architecture/adr/ADR-047-the-canary-judges-each-workload-on-the-signals-it-receives.md)
+is the decision; this is where it lives. A workload declares `signals` in
+`canary.json`, and `read_prometheus.py` fetches those and no others:
+
+- **`http`** is ASP.NET Core's request histogram, less the probe routes. It is
+  held to both of §13.6's absolute numbers.
+- **`consume`** is MassTransit's consume counters and duration histogram. Its
+  fault rate is held to §13.6's error threshold; its duration is compared with
+  the stable track only, because no alert owns a consume-duration number.
+
+Every declared signal is compared with the stable track on both metrics, and
+every declared signal must reach `minimumRequests` on its own: a workload is
+promoted only when each thing it does was observed doing it.
 
 ## What it does not
 
@@ -73,6 +102,17 @@ every chart and asserts what comes out.
   gRPC listener, or a client that opens one connection and holds it will all
   under-deliver the weight, and nothing short of a cluster can measure that.
   ADR-022 names it as owed.
+- **It does not establish the exported spelling of MassTransit's series.**
+  The instrument names are MassTransit's defaults at the pinned version and the
+  meter registration is checked, but the unit suffixes — `ea` on the counters,
+  `ms` on the histogram — become `_ea` and `_milliseconds` under the
+  OTLP-to-Prometheus mapping the deployed backend applies, which nothing here
+  reaches. A wrong spelling matches nothing and rolls back, like the
+  `deployment_track` requirement below.
+- **It does not establish that the consume share is the replica share.** The
+  tracks are competing consumers on one queue, so the canary's share of the
+  messages follows prefetch and processing speed rather than the pod ratio
+  `plan` computed.
 - **It cannot see an ad-hoc `--set` at deploy time**, the same reach
   `deploy/helm/README.md` states for the chart gate.
 - **It does not establish that `deployment_track` is a label on the deployed
@@ -97,9 +137,9 @@ nearest expressible weight is how a step labelled 5% comes to serve five times
 the blast radius anybody authorised.
 
 **There is no third verdict.** Promote or roll back, and every doubt resolves to
-the second: an absent series, a canary too quiet to judge, a breach, or a
-regression against the stable track. That is affordable because of what the
-mechanism is — the canary is a second Deployment and the stable release is
-never touched, so a rollback costs the canary's own pods and nothing else. When
-rolling back is cheap, "inconclusive" is not caution, it is a canary left
-serving traffic on nobody's authority.
+the second: an absent series, a declared signal nobody fetched or one too quiet
+to judge, a breach, or a regression against the stable track. That is
+affordable because of what the mechanism is — the canary is a second
+Deployment and the stable release is never touched, so a rollback costs the
+canary's own pods and nothing else. When rolling back is cheap, "inconclusive"
+is not caution, it is a canary left serving traffic on nobody's authority.
