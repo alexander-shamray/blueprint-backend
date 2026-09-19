@@ -49,6 +49,12 @@ class CSharpComments(unittest.TestCase):
         text = 'var a = $"{(x ? "a" : "b")}"; // yes\n'
         self.assertEqual(said(gate.csharp, text), ["yes"])
 
+    def test_a_format_clause_is_literal_text(self):
+        text = ('var a = $"{value:// #12}"; // yes\n'
+                'var b = $$"""{{value:// no}}"""; // also\n'
+                'var c = $"{global::A.B /* hole */}";\n')
+        self.assertEqual(said(gate.csharp, text), ["yes", "also", "hole"])
+
     def test_a_directive_message_is_code_and_a_trailing_comment_is_not(self):
         text = ("#region see http://example\n"
                 "#pragma warning disable CA1822 // why\n"
@@ -72,6 +78,13 @@ class PythonComments(unittest.TestCase):
                 'z = f"{y} # no"\n')
         self.assertEqual(said(gate.python, text), [])
 
+    def test_a_docstring_ends_where_its_expression_does(self):
+        self.assertEqual(said(gate.python, 'def f(): "doc"; v = "PR-7"\n'),
+                         ["doc"])
+        self.assertEqual(said(gate.python, 'def f(): "é"; v = "#1"\n'),
+                         ["é"])
+        self.assertEqual(judged("m.py", 'def f(): "doc"; v = "PR-7"\n'), [])
+
     def test_python_that_does_not_parse_refuses_the_file(self):
         with self.assertRaises(gate.Unreadable):
             gate.python("def (:\n")
@@ -92,6 +105,12 @@ class ShellComments(unittest.TestCase):
                 "cat <<-EOF\n\t# no\n\tEOF\n"
                 "# after\n")
         self.assertEqual(said(gate.shell, text), ["yes", "after"])
+
+    def test_a_heredoc_word_is_read_whole(self):
+        for opener in ["END-OF-FILE", "END-OF'-FILE'", 'EN"D"-OF-FILE']:
+            with self.subTest(opener=opener):
+                text = f"cat <<{opener}\n# no\nEND-OF-FILE\n# after\n"
+                self.assertEqual(said(gate.shell, text), ["after"])
 
     def test_a_here_string_is_not_a_heredoc(self):
         text = 'grep x <<<"$y" # yes\n# also\n'
@@ -125,6 +144,12 @@ class YamlComments(unittest.TestCase):
                 "      # also\n"
                 "    name: x # sibling\n")
         self.assertEqual(said(gate.yaml, text), ["yes", "also", "sibling"])
+
+    def test_every_spelling_of_the_run_key_is_shell(self):
+        for key in ["run", '"run"', "'run'", "run ", '"run" ']:
+            with self.subTest(key=key):
+                text = f"- {key}: |\n    echo '# no' # yes\n"
+                self.assertEqual(said(gate.yaml, text), ["yes"])
 
     def test_a_run_block_comment_lands_on_its_own_line(self):
         text = "- run: |\n    true\n    # PR-1\n"
@@ -298,6 +323,24 @@ class TheGateOnARepository(unittest.TestCase):
         self.write("Latin.cs", "// café\n", encoding="latin-1")
         self.commit("change")
         self.assertEqual(self.run_gate().returncode, 2)
+
+    def test_a_change_git_calls_binary_refuses_the_run(self):
+        Path(self.repo, "Bin.cs").write_bytes(b"\x00\xff\xfe// PR-1\n")
+        self.commit("change")
+        self.assertEqual(self.run_gate().returncode, 2)
+
+    def test_fused_hunks_judge_only_their_added_lines(self):
+        lines = [f"x{k}();\n" for k in range(10)]
+        lines[3] = "// PR-3\n"
+        self.write("Fused.cs", "".join(lines))
+        self.commit("old")
+        lines[1] = "y();\n"
+        lines[5] = "y();\n"
+        self.write("Fused.cs", "".join(lines))
+        self.commit("change")
+        git(self.repo, "config", "diff.interHunkContext", "5")
+        result = self.run_gate(base="HEAD~1")
+        self.assertEqual(result.returncode, 0, result.stdout)
 
 
 class TheShippedTree(unittest.TestCase):

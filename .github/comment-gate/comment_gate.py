@@ -68,6 +68,7 @@ _MESSAGE_DIRECTIVE = re.compile(r"#\s*(region|endregion|error|warning)\b")
 
 def _cs_code(text, i, found, closing):
     depth = 0
+    nest = 0
     at_line_start = True
     n = len(text)
     while i < n:
@@ -101,6 +102,12 @@ def _cs_code(text, i, found, closing):
             i = _cs_char(text, i)
         elif c in "$@\"":
             i = _cs_string(text, i, found)
+        elif closing and c in "([":
+            nest += 1
+            i += 1
+        elif closing and c in ")]":
+            nest -= 1
+            i += 1
         elif closing and c == "{":
             depth += 1
             i += 1
@@ -109,6 +116,12 @@ def _cs_code(text, i, found, closing):
                 return i + 1
             depth -= 1
             i += 1
+        elif (closing and c == ":" and depth == 0 and nest <= 0
+              and not text.startswith("::", i) and text[i - 1] != ":"):
+            # A hole's top-level colon opens its format clause, which is
+            # literal text up to the brace that closes the hole.
+            close = text.find("}", i)
+            return n if close < 0 else close + 1
         else:
             i += 1
     return i
@@ -194,6 +207,13 @@ def python(text):
     def offset(position):
         return starts[position[0] - 1] + position[1]
 
+    def node_offset(line, byte_column):
+        # The syntax tree counts columns in UTF-8 bytes, the tokenizer in
+        # characters.
+        start = starts[line - 1]
+        row = text[start:_line_end(text, start)]
+        return start + len(row.encode("utf-8")[:byte_column].decode("utf-8"))
+
     found = []
     for token in tokens:
         if token.type == tokenize.COMMENT:
@@ -208,9 +228,11 @@ def python(text):
                 and isinstance(body[0].value, ast.Constant)
                 and isinstance(body[0].value.value, str)):
             continue
-        first, last = body[0].lineno, body[0].end_lineno
+        doc = body[0].value
+        first = node_offset(doc.lineno, doc.col_offset)
+        last = node_offset(doc.end_lineno, doc.end_col_offset)
         spans = [t for t in strings
-                 if t.start[0] >= first and t.end[0] <= last]
+                 if offset(t.start) >= first and offset(t.end) <= last]
         if not spans:
             continue
         head, tail = spans[0], spans[-1]
@@ -231,8 +253,37 @@ def shell(text):
 
 
 _SH_WORD_BREAK = " \t\r\n;&|()"
-_HEREDOC = re.compile(
-    r"<<(-?)[ \t]*(?:'([^'\n]*)'|\"([^\"\n]*)\"|\\?([A-Za-z_][\w]*))")
+
+
+def _sh_heredoc_word(text, i):
+    """The delimiter after `<<` or `<<-`, quotes removed, and where it ends.
+
+    The whole word, as the shell reads it: a delimiter cut short at the first
+    character a narrower pattern did not expect never matches its terminator,
+    and everything after it would be read as heredoc body. A leading digit is
+    an arithmetic shift, `$((a<<2))`, rather than a delimiter.
+    """
+    n = len(text)
+    while i < n and text[i] in " \t":
+        i += 1
+    if i < n and text[i].isdigit():
+        return None, i
+    word = []
+    while i < n and text[i] not in _SH_WORD_BREAK + "<>":
+        c = text[i]
+        if c == "\\" and i + 1 < n:
+            word.append(text[i + 1])
+            i += 2
+        elif c in "'\"":
+            close = text.find(c, i + 1)
+            if close < 0 or "\n" in text[i:close]:
+                return None, i
+            word.append(text[i + 1:close])
+            i = close + 1
+        else:
+            word.append(c)
+            i += 1
+    return "".join(word) or None, i
 
 
 def _sh_code(text, i, found, closing):
@@ -266,13 +317,13 @@ def _sh_code(text, i, found, closing):
         elif text.startswith("<<<", i):
             i += 3
         elif text.startswith("<<", i):
-            match = _HEREDOC.match(text, i)
-            if match:
-                word = next(g for g in match.groups()[1:] if g is not None)
-                pending.append((word, match.group(1) == "-"))
-                i = match.end()
-            else:
+            strip_tabs = text.startswith("<<-", i)
+            word, end = _sh_heredoc_word(text, i + (3 if strip_tabs else 2))
+            if word is None:
                 i += 2
+            else:
+                pending.append((word, strip_tabs))
+                i = end
         elif closing and c == "(":
             depth += 1
             i += 1
@@ -413,7 +464,7 @@ def yaml(text):
     return found
 
 
-_RUN_KEY = re.compile(r"run:\s")
+_RUN_KEY = re.compile(r"""(?:run|"run"|'run')[ \t]*:\s""")
 
 
 def _run_block(text, rows, found):
@@ -576,15 +627,20 @@ def added_lines(diff):
         match = hunk.match(line)
         if not match or path is None:
             continue
-        removed = 1 if match.group(1) is None else int(match.group(1))
-        first = int(match.group(2))
-        count = 1 if match.group(3) is None else int(match.group(3))
-        added.setdefault(path, set()).update(range(first, first + count))
-        remaining = removed + count
-        while i < len(lines) and (remaining or lines[i].startswith("\\")):
-            if not lines[i].startswith("\\"):
-                remaining -= 1
+        old = 1 if match.group(1) is None else int(match.group(1))
+        number = int(match.group(2))
+        new = 1 if match.group(3) is None else int(match.group(3))
+        numbers = added.setdefault(path, set())
+        while i < len(lines) and (old or new or lines[i].startswith("\\")):
+            kind = lines[i][:1]
             i += 1
+            if kind == "+":
+                numbers.add(number)
+            if kind in ("+", " "):
+                number += 1
+                new -= 1
+            if kind in ("-", " "):
+                old -= 1
     return added
 
 
@@ -595,19 +651,25 @@ def main(argv):
     args = parser.parse_args(argv[1:])
     span = f"{args.base}...{args.head}"
     try:
-        changed = _git("diff", "--name-only", "-z", "--diff-filter=AMR", span)
-        if not changed.strip(b"\0"):
+        changed = _git("diff", "--name-only", "-z", "-M", "--diff-filter=AMR",
+                       span).decode("utf-8", errors="strict")
+        paths = [p for p in changed.split("\0") if p]
+        if not paths:
             raise Unreadable(f"{span} changes no file, so the base or the "
                              "head is not the pull request's")
         diff = _git("-c", "core.quotePath=false", "diff", "-U0", "--no-color",
-                    "--no-ext-diff", "--src-prefix=a/", "--dst-prefix=b/",
-                    "-M", "--diff-filter=AMR", span)
+                    "--no-ext-diff", "--inter-hunk-context=0",
+                    "--src-prefix=a/", "--dst-prefix=b/", "-M",
+                    "--diff-filter=AMR", span)
         added = added_lines(diff.decode("utf-8", errors="strict"))
         findings = []
         judged = 0
-        for path, numbers in sorted(added.items()):
+        # A binary change has no hunk, so the file list, not the hunks, says
+        # what is read.
+        for path in sorted(paths):
             if reader_for(path) is None:
                 continue
+            numbers = added.get(path, set())
             raw = _git("show", f"{args.head}:{path}")
             try:
                 text = raw.decode("utf-8-sig")
