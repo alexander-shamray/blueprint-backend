@@ -608,6 +608,61 @@ ran, which separates the two exactly. Both sweeps deny `git push origin`,
 its `-u` form and the raw `gh issue create` by name, and the deny wins over
 the global allow because precedence is deny first.
 
+**A frontmatter deny holds for the rest of the user turn, not for the command
+that states it (blueprint-admin#17).** Measured there: `/ship` ran `/commit`,
+which denied `Bash(git push:*)`, and then pushed in the same turn, and the
+push came back "has been denied" in under a second with no hook reason, every
+time, while the identical push after a new user message ran. No command
+`/ship` chains here carries that deny, and the rule is that none gains one:
+**a command `/ship` runs before it pushes never denies push.** It reads as
+hardening and is not — `/branch` and `/commit` leave the push to `/pr`,
+`/review-copilot` pushes only an already-committed review fix, by name, and
+the git-argv hook and `settings.json` refuse `main`, force and delete whoever
+asks. `NothingShipChainsDeniesPush` in `test_triager_guards.py` names the
+commands and fails if one denies push. A terminal, read-only command — the
+two sweeps — keeps its deny, because nothing pushes after it.
+
+**`/review-grok` is the one chained command that cannot follow that rule, so
+`/ship` step 5 runs it inside an `Agent` instead.** Run inline, its bare `Bash`
+deny is its boundary — it reads an untrusted review holding `Edit` — and under
+the same turn-wide lifetime it would also refuse every command step 5 runs
+after it: the checks, `/commit` and the push. The deny stays and the triage
+moves. **On the one agent type measured, the agent keeps the deny off the push
+by discarding it, so the agent alone is not the boundary**
+(blueprint-admin#19): `/review-grok` loaded through the Skill tool in the main
+session removed `Bash` until the next user message — background notifications
+did not end it — while the same load inside a `general-purpose` agent left
+`Bash` working there, and the parent's `Bash` in the same turn was unaffected.
+On that path the push is safe and the triage would read an untrusted review
+holding a shell.
+
+**So the triage runs under a profile of its own, and two hooks say what a
+profile cannot.** Step 5 grants exactly `Agent(review-grok-triager)`, whose
+`tools:` — an allowlist — holds no `Bash` and no `Skill`; it reads
+`review-grok.md` rather than loading it, so the skill load measured above
+never happens there. A type list inside a subagent's `Agent` grant is ignored,
+so the profile's own `PreToolUse` hook, `guard-triager-dispatch.py`, admits
+`review-adjudicator` and refuses every other dispatch — the triager itself
+included, which `/ship` grants and so could not deny. And a path in a
+profile's `disallowedTools` removes the whole tool, while a command's
+frontmatter list lasts one turn and is not applied inside an agent at all
+(blueprint-admin#27), so a second hook, `guard-triager-edit.py`, on
+`Edit|Write|MultiEdit|NotebookEdit`, reads the `Edit(...)` denies from
+`review-grok.md` on every call — one list, no copy — and refuses a target
+under any of them, matched without regard to case, and any target outside the
+checkout its event's `cwd` stands in. Both fail closed, and both are wired as
+the session-wide hooks are, through `py -3.12`. `test_triager_guards.py` pins
+the profile, the grant, the sweeps' and the triage's deny of the new type, and
+runs both hooks against every pattern that list holds.
+
+**None of the profile's runtime behaviour was measured in this repository.**
+The tool allowlist and the dispatch hook were probed in blueprint-admin
+(blueprint-admin#23), on the same harness; that the edit hook fires on `Edit`
+inside the triager was not probed anywhere and rests on the mechanism the
+dispatch hook was measured under. Grok is enabled here, so the measurement is
+owed on the first `/ship` that reaches step 5: spawn the triager, have it
+edit `.github/workflows/ci.yml`, and see the hook refuse it.
+
 The sixth **was** the `--output` deny itself — the inventory's one entry that
 is a *deny* rather than an allow, listed because a deny over a command string
 is defeated by shell quoting. **#30 closed it, and not by improving the rule.**
