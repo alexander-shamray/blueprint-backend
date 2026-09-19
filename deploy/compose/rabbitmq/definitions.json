@@ -57,9 +57,9 @@
     {
       "user": "payments-svc",
       "vhost": "/",
-      "configure": "^(Common\\.Contracts(\\.Payments\\.V1:|:)|MassTransit:)",
-      "write": "^(Common\\.Contracts(\\.Payments\\.V1:|:)|MassTransit:)",
-      "read": "^(Common\\.Contracts\\.Payments\\.V1:|MassTransit:)"
+      "configure": "^(payments-|Common\\.Contracts|Payments\\.Infrastructure\\.Messaging:|MassTransit:)",
+      "write": "^(payments-|Common\\.Contracts(\\.Payments\\.V1:|:)|Payments\\.Infrastructure\\.Messaging:|MassTransit:)",
+      "read": "^(payments-|Common\\.Contracts|Payments\\.Infrastructure\\.Messaging:|MassTransit:)"
     }
   ],
   "topic_permissions": [],

@@ -11,6 +11,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using DotNet.Testcontainers.Containers;
 using Respawn;
 using Testcontainers.MsSql;
 using Testcontainers.RabbitMq;
@@ -59,6 +60,51 @@ public sealed class ServiceFixture : IAsyncLifetime
     private RabbitMqContainer? _rabbit;
 
     private Respawner? _respawner;
+
+    /// <summary>
+    /// Widens <c>payments-svc</c>'s <c>write</c> for the duration of the
+    /// suite, because these tests publish <c>OrderPlaced</c> and
+    /// <c>OrderCancelled</c> as <c>payments-svc</c> — Ordering's exchanges —
+    /// and ADR-036's production grant refuses that, correctly: Payments must
+    /// not be able to forge either fact.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// **The widening is here rather than in <c>definitions.json</c> on
+    /// purpose.** That file is the deployed artefact and a gate holds it to
+    /// the code; loosening it so a test can pass would make the gate agree
+    /// with a permission set nothing deploys. Doing it in the harness keeps
+    /// the production shape honest and puts the exception where a reader of
+    /// the suite can see it.
+    /// </para>
+    /// <para>
+    /// <c>configure</c> and <c>read</c> are untouched, so a receive endpoint
+    /// or a peer queue this service is not permitted to declare or bind still
+    /// fails here. ADR-036's negative property is not exercised by this
+    /// suite; it is exercised by <c>check_permissions.py</c>.
+    /// </para>
+    /// </remarks>
+    private async Task WidenWriteForTheHarnessAsync()
+    {
+        const string scope = "^(payments-|Common\\.Contracts|Payments\\.Infrastructure\\.Messaging:|MassTransit:)";
+
+        ExecResult result = await _rabbit!.ExecAsync(
+            [
+                "rabbitmqctl", "set_permissions", "-p", "/", "payments-svc",
+                scope, scope, scope
+            ],
+            TestContext.Current.CancellationToken);
+
+        // A silent failure here is the worst outcome available: every
+        // endpoint test would then fail on a publish, thirty seconds later,
+        // naming a message rather than a permission.
+        if (result.ExitCode != 0)
+        {
+            throw new InvalidOperationException(
+                $"Could not widen payments-svc's broker permissions for the harness "
+                + $"(exit {result.ExitCode}). stdout: {result.Stdout} stderr: {result.Stderr}");
+        }
+    }
 
     /// <summary>
     /// The connection each §7.1 identity would hold, pointed at Payments's own
@@ -147,6 +193,8 @@ public sealed class ServiceFixture : IAsyncLifetime
         await Task.WhenAll(
             _sql.StartAsync(TestContext.Current.CancellationToken),
             _rabbit.StartAsync(TestContext.Current.CancellationToken));
+
+        await WidenWriteForTheHarnessAsync();
 
         // The container hands out a connection to master; Payments owns a
         // database of its own (§7.1), and MigrateAsync is what creates it.
