@@ -26,4 +26,14 @@
     <ProjectReference Include="..\..\src\BuildingBlocks\Common.Contracts\Common.Contracts.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!--
+      §3.2 holds Payments' redelivery ladder to Ordering's payment timeout
+      without either service reading the other's assembly (§4.2); this suite
+      is where the two constants are read side by side instead.
+    -->
+    <ProjectReference Include="..\..\src\Services\Ordering\Ordering.Infrastructure\Ordering.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\Services\Payments\Payments.Infrastructure\Payments.Infrastructure.csproj" />
+  </ItemGroup>
+
 </Project>
