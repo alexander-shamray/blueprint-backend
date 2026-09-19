@@ -107,10 +107,10 @@ up to 128 characters of letters, digits, `-` and `_` — and any other value is
 replaced with a fresh one rather than echoed, exactly as a missing one is
 (§10.4).
 
-Every route in §10.2's file now has a service behind it; the two
-configuration tests over the file are what let it ship whole, ahead of
-three of them. `/api/v1/catalog` is GET-only at the edge, so publishing a
-product is a call to port 5102 and not to port 5000.
+A route in §10.2's file whose service is not running answers 502 on that
+path and costs nothing else; the two configuration tests over the file are
+what let it ship whole. `/api/v1/catalog` is GET-only at the edge, so
+publishing a product is a call to port 5102 and not to port 5000.
 
 ## Getting a token
 

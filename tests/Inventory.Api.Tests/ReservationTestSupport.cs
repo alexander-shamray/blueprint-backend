@@ -11,27 +11,24 @@ using MessagingRegistration = Inventory.Infrastructure.Messaging.DependencyInjec
 namespace Inventory.Api.Tests;
 
 /// <summary>
-/// The arrange-and-poll helpers <see cref="InventoryCommandEndpointTests"/>
-/// and <see cref="ReservationEndpointsTests"/> both need over one
+/// The arrange-and-poll helpers a caller needs over one
 /// <see cref="ServiceFixture"/> per test run. Each member names its fixture
 /// explicitly rather than capturing one, because the fixture is per-test-class
-/// state and this class holds none of its own; both callers keep a private,
+/// state and this class holds none of its own; a caller keeps a private,
 /// same-named forwarder onto it.
 /// </summary>
 internal static class ReservationTestSupport
 {
     /// <summary>
-    /// <see cref="OrderingCommandEndpointTests"/>'s budget, for its reason: a
-    /// broker round trip on a runner holding other container sets, and
-    /// bounded because an endpoint that binds nothing never arrives late — it
-    /// never arrives.
+    /// A broker round trip on a runner holding other container sets, bounded
+    /// because an endpoint that binds nothing never arrives late — it never
+    /// arrives.
     /// </summary>
     public static readonly TimeSpan DeliveryBudget = TimeSpan.FromSeconds(30);
 
     /// <summary>
     /// A client carrying <see cref="InventoryPermissions.Admin"/>, for the
-    /// suites that need an admin client — lifted here rather than left as
-    /// separate copies.
+    /// suites whose subject is an admin-only endpoint.
     /// </summary>
     public static HttpClient Admin(ServiceFixture fixture)
     {

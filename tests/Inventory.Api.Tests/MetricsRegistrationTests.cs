@@ -23,27 +23,26 @@ namespace Inventory.Api.Tests;
 /// <remarks>
 /// No container and no <see cref="IntegrationCollection"/> — every assertion
 /// here is about a <c>ServiceCollection</c> or about a <see cref="Meter"/>, so
-/// these run in the fast half (<c>Category!=Integration</c>). The gauges' SQL
-/// is proven one file over, against a real engine, where it can be.
+/// these run in the fast half (<c>Category!=Integration</c>).
 /// </remarks>
 public class MetricsRegistrationTests
 {
     /// <summary>
     /// Types deliberately not forced, each with the reason it does not need to
-    /// be. Empty today, and that is the point: a name lands here only when
-    /// somebody argues it in a pull request.
+    /// be. Empty, and that is the point: a name lands here only with the
+    /// argument for it beside it.
     /// </summary>
     private static readonly Dictionary<Type, string> NotForced = [];
 
     [Fact]
     public void Every_metrics_type_is_forced_or_has_a_stated_reason_not_to_be()
     {
-        // The COLLECTION, not a built provider. IServiceCollection is the input
+        // The collection, not a built provider. IServiceCollection is the input
         // to BuildServiceProvider and is not itself a registered service, so
         // asking a provider for one throws — registrations cannot be enumerated
         // after the build.
         //
-        // It runs BOTH helpers, which matters here and nowhere else: the types
+        // It runs both helpers, which matters here and nowhere else: the types
         // are split across AddInventoryApplication (RequestMetrics,
         // InventoryMetrics) and AddInventoryInfrastructure (OutboxMetrics,
         // MessagingMetrics). A helper that ran only one half would see a subset
@@ -76,11 +75,13 @@ public class MetricsRegistrationTests
     }
 
     /// <summary>
-    /// The subject of the test above is what it is <i>looking at</i>, and this
-    /// is that assertion. A selector that silently matched nothing would pass
+    /// The subject of the test above is what it is looking at, and this is that
+    /// assertion. A selector that silently matched nothing would pass
     /// both directions vacuously — the repeated failure this repository names
     /// in <c>CLAUDE.md</c> — so the candidate set is asserted to be non-empty
-    /// and to hold the two types this pull request added.
+    /// and to hold a type registered by <c>AddInventoryApplication</c> and one
+    /// by <c>AddInventoryInfrastructure</c>, so a selector scoped to only one
+    /// of the two cannot pass unnoticed.
     /// </summary>
     [Fact]
     public void The_metrics_selector_actually_selects_something()
@@ -128,21 +129,20 @@ public class MetricsRegistrationTests
         OutboxMetrics metrics = new(factory, stats, NullLogger<OutboxMetrics>.Instance);
         metrics.ShouldNotBeNull();
 
-        // The SAME Meter instance the constructor above used — IMeterFactory
+        // The same Meter instance the constructor above used — IMeterFactory
         // caches by name, so this is a handle on it rather than a second meter.
         Meter mine = factory.Create(OutboxMetrics.MeterName);
 
         using MeterListener listener = new();
 
-        // Filter on the meter INSTANCE, never on its name. A MeterListener is
+        // Filter on the meter instance, never on its name. A MeterListener is
         // process-wide and RecordObservableInstruments() invokes every
         // instrument this listener has enabled — so matching `Meter.Name ==
         // "Inventory.Outbox"` also enables the gauges of any OutboxMetrics some
-        // other test built, and those are wired to a REAL OutboxStats against a
+        // other test built, and those are wired to a real OutboxStats against a
         // container that may be gone, so its callback throws a SqlException
         // whenever this listener's turn to run falls after that container is
-        // torn down. Same shape as Common.Web.Tests' process-wide
-        // DiagnosticListener, which is why that project disables parallelism.
+        // torn down.
         listener.InstrumentPublished = (instrument, l) =>
         {
             if (ReferenceEquals(instrument.Meter, mine))
@@ -196,25 +196,23 @@ public class MetricsRegistrationTests
     /// <c>RecordObservableInstruments()</c> invokes every instrument the
     /// listener has enabled — not the ones the test created. A filter on
     /// <c>Meter.Name</c> therefore also enables the gauges of any
-    /// <see cref="OutboxMetrics"/> another test built, and those read a REAL
+    /// <see cref="OutboxMetrics"/> another test built, and those read a real
     /// <c>OutboxStats</c> against a database that may be unreachable or gone.
     /// <para>
     /// This reproduces that deterministically: a second <c>OutboxMetrics</c> on
-    /// the same meter <i>name</i>, resolved from a container whose connection
+    /// the same meter name, resolved from a container whose connection
     /// string points nowhere. Under a name filter its callbacks run and throw
     /// <c>SqlException</c>; under the instance filter they are never enabled.
-    /// The test that found this constructs no database at all, which is what
-    /// made the failure so confusing to read.
     /// </para>
     /// </remarks>
     [Fact]
     public void A_foreign_meter_of_the_same_name_is_not_collected()
     {
-        // AddMetrics() and AddLogging() because a HOST adds both, not
+        // AddMetrics() and AddLogging() because a host adds both, not
         // AddInventoryInfrastructure — OutboxMetrics takes an IMeterFactory and
         // an ILogger, and nothing in the service's own registration supplies
-        // either. `WebApplication.CreateBuilder` has always had them; this
-        // container is assembled by hand and has to say so.
+        // either. `WebApplication.CreateBuilder` supplies them; this container
+        // is assembled by hand and has to say so.
         ServiceCollection services = BuildServices();
         services.AddMetrics();
         services.AddLogging();
@@ -261,9 +259,9 @@ public class MetricsRegistrationTests
     /// <remarks>
     /// <c>MeterListener.RecordObservableInstruments</c> propagates an exception
     /// out of an observable callback and abandons the rest of the pass, so an
-    /// unhandled <c>SqlException</c> here would stop <em>unrelated</em>
-    /// instruments being collected — a database outage taking telemetry with it
-    /// that has nothing to do with the database. <c>OutboxMetrics</c> contains
+    /// unhandled <c>SqlException</c> here would stop unrelated instruments
+    /// being collected — a database outage taking telemetry with it that has
+    /// nothing to do with the database. <c>OutboxMetrics</c> contains
     /// the read for that reason, and this is the assertion that it does.
     /// </remarks>
     [Fact]
@@ -290,8 +288,8 @@ public class MetricsRegistrationTests
 
         listener.Start();
 
-        // Enabled, unlike the foreign meter one file down — the whole point is
-        // that recording it is safe.
+        // Enabled, unlike a foreign meter's instruments — the whole point here
+        // is that recording this one is safe.
         Should.NotThrow(() => listener.RecordObservableInstruments());
 
         collected.ShouldBeEmpty("a failing read must drop the series, not report one");
@@ -302,23 +300,18 @@ public class MetricsRegistrationTests
         // check proves the connection opens and nothing about this table, so
         // it does not report it either. The log is the only signal there is,
         // which makes an unasserted one a signal nobody would miss removing.
-        // Counted on THIS thread only, and that is not a detail. A
+        // Counted on this thread only, and that is not a detail. A
         // `MeterProvider` built by any host in this assembly registers
-        // `AddMeter("Inventory.Outbox")` — by NAME, in ObservabilityExtensions
-        // — so it matches the meter created here and collects these very
-        // gauges on its own export thread, logging into this logger. Several
+        // `AddMeter("Inventory.Outbox")` by name, in ObservabilityExtensions,
+        // so it matches the meter created here and collects these very gauges
+        // on its own export thread, logging into this logger. Several
         // host-building classes run in parallel with this one, so the count
-        // was whatever their timers happened to add.
+        // would otherwise be whatever their timers happen to add.
         //
         // `RecordObservableInstruments()` invokes the callbacks synchronously
         // on the caller, so the calling thread is exactly "our pass" and a
         // foreign collector is exactly "not ours". Filtering on it keeps the
         // assertion exact instead of loosening it to a lower bound.
-        //
-        // The assembly-wide switch `Common.Web.Tests` carries was the other
-        // candidate and is the wrong tool here: its argument is that
-        // serialising is cheap *because that suite needs no container*, and
-        // this one does. Same hazard, different price, different answer.
         logger.OwnErrors.Count.ShouldBe(3, "one per gauge, carrying the exception");
         logger.OwnErrors.ShouldAllBe(e => e is InvalidOperationException);
     }
@@ -396,10 +389,9 @@ public class MetricsRegistrationTests
         /// </summary>
         /// <remarks>
         /// A foreign <c>MeterProvider</c> — any host in this assembly builds
-        /// one, and it subscribes to this meter by NAME — collects the same
+        /// one, and it subscribes to this meter by name — collects the same
         /// gauges on its own export thread and logs here too. Recording the
-        /// thread is what separates this test's own pass from that traffic,
-        /// and it also removes the data race a shared unsynchronised list had.
+        /// thread is what separates this test's own pass from that traffic.
         /// </remarks>
         public IReadOnlyList<Exception?> OwnErrors
         {

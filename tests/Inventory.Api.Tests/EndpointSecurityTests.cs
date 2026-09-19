@@ -15,18 +15,17 @@ namespace Inventory.Api.Tests;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Catalog's counterpart is the model, and this file is the second half of
-/// the promise <c>UnreachableInfrastructureFactory</c> already carried: its
-/// <c>ConfigureAuthentication</c> override is deliberately empty, and its
-/// comment said the forged-header suite "arrives with the first endpoint to
-/// forge against". Inventory has two now.
+/// Catalog's counterpart is the model, and this file honours the promise
+/// <c>UnreachableInfrastructureFactory</c> carries: its
+/// <c>ConfigureAuthentication</c> override stays deliberately empty, proved
+/// here against a forged-header request.
 /// </para>
 /// <para>
-/// Separate from <c>HostSmokeTests</c>, which owns the factory these share,
-/// and separate for the scaffold's sake: this file names
-/// <c>/v1/inventory/stock</c>, so it belongs to the slice and must not
-/// survive into a service with no endpoints. <c>HostSmokeTests</c> is copied
-/// to every new service and this file is not.
+/// Kept apart from the class that owns the shared factory, and apart for
+/// the scaffold's sake: this file names <c>/v1/inventory/stock</c>, so it
+/// belongs to the slice and must not survive into a service with no
+/// endpoints. The factory is copied to every new service; this file is
+/// written once per slice instead.
 /// </para>
 /// </remarks>
 public class EndpointSecurityTests(HostSmokeTests.UnreachableInfrastructureFactory factory)

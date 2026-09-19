@@ -52,7 +52,7 @@ public class IdempotencyOptInTests
     [Fact]
     public void Every_idempotent_command_declares_a_stable_operation_name()
     {
-        // #114. The key's middle segment must not be derivable from the type,
+        // The key's middle segment must not be derivable from the type,
         // because a rename then changes a live key and a rolling deployment
         // serves both spellings at once. The compiler already refuses a
         // command that supplies no OperationName; what it cannot refuse is one
@@ -182,10 +182,10 @@ public class IdempotencyOptInTests
         // a nested unit.
         //
         // Named by shape rather than by type, because this file is §4.5's
-        // template: Ordering has such a handler and Inventory does not, so a
-        // type name here would reach every rendered service as a near miss
-        // about something it has never had. SLICE_TOKEN would not catch it —
-        // the name carries no slice token — so nothing else would.
+        // template: the near miss here is the reservation slice's own event
+        // consumers, and a type name would reach every rendered service as a
+        // near miss about something it has never had. SLICE_TOKEN would not
+        // catch it — the name carries no slice token — so nothing else would.
         //
         // REACH: constructor parameters, which is where every handler in this
         // solution takes its dependencies. A handler that resolves

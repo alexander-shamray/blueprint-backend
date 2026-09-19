@@ -46,7 +46,7 @@ internal sealed class IdempotencyMarkerConfiguration : IEntityTypeConfiguration<
             // identity; neither is promised to be ASCII by anything.
             .UseCollation("Latin1_General_BIN2");
 
-        // Stamped by the database and never by a pod (#167, ADR-038). Both
+        // Stamped by the database and never by a pod (ADR-038). Both
         // ends of the comparison the purge makes are then the one clock: this
         // default writes the row, and RetentionPurgeService computes its cutoff
         // with SYSDATETIMEOFFSET() in the same statement that reads it. The
@@ -74,8 +74,8 @@ internal sealed class IdempotencyMarkerConfiguration : IEntityTypeConfiguration<
             .HasDefaultValueSql("SYSDATETIMEOFFSET()")
             .ValueGeneratedOnAdd();
 
-        // What RetentionPurgeService's DELETE identifies a row by (#173,
-        // ADR-041). It is unique and monotonic per database, immutable for the
+        // What RetentionPurgeService's DELETE identifies a row by (ADR-041).
+        // It is unique and monotonic per database, immutable for the
         // life of a row nothing updates, and reads no clock — which is what the
         // (Key, CommittedAt) pair before it was standing in for. That pair
         // distinguished two writes under one key BY CONSTRUCTION and nothing

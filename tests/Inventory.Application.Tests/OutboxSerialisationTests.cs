@@ -59,9 +59,9 @@ public class OutboxSerialisationTests
         // The loop above is vacuous if the map is empty, and it would be
         // vacuous quietly — a registration that stopped naming
         // Inventory.Domain would turn the assertion into a no-op and nothing
-        // else would say so. This service has two aggregates and five domain
-        // events today, so the set is exactly those five; a sixth event added
-        // without a sample fails here rather than being skipped.
+        // else would say so. Asserting the stageable set exactly, rather than
+        // asserting it non-empty, is what forces a newly added domain event
+        // to gain a sample here instead of passing the loop above unnoticed.
         using ServiceProvider provider = Registered();
 
         provider.GetRequiredService<MessageTypeMap>().StageableDomainEvents.ShouldBe(

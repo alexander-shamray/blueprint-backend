@@ -2,6 +2,7 @@ using Inventory.TestSupport;
 using Inventory.TestSupport.Outbox;
 using Common.Application;
 using Common.Contracts;
+using Common.Domain;
 using Common.Infrastructure.Outbox;
 using Shouldly;
 using Xunit;
@@ -82,6 +83,24 @@ public sealed class OutboxDispatcherTests(ServiceFixture fixture) : IAsyncLifeti
     }
 
     [Fact]
+    public async Task An_integration_event_on_the_local_lane_never_reaches_a_projection()
+    {
+        // The mirror, and the quieter of the two: ProjectionInvoker is
+        // generic and unconstrained, so without the guard a contract would be
+        // offered to any matching IProjectionHandler<T> and the row marked
+        // processed — no publish, no handler, no trace.
+        OutboxMessage row = OutboxRows.Broker(fixture, Guid.CreateVersion7());
+        await fixture.StageOutboxAsync(row);
+        await fixture.SetOutboxLaneAsync(row.MessageId, OutboxLane.Local);
+
+        await fixture.ProcessOutboxBatchAsync();
+
+        OutboxMessage failed = (await fixture.OutboxAsync()).ShouldHaveSingleItem();
+        failed.ProcessedAt.ShouldBeNull();
+        failed.LastError.ShouldNotBeNull().ShouldContain(nameof(IDomainEvent));
+    }
+
+    [Fact]
     public async Task A_local_row_with_no_registered_handler_fails_loudly()
     {
         // The one worth keeping forever. It asserts the failure mode that
@@ -139,12 +158,29 @@ public sealed class OutboxDispatcherTests(ServiceFixture fixture) : IAsyncLifeti
         (await fixture.OutboxAsync()).ShouldHaveSingleItem().ProcessedAt.ShouldNotBeNull();
     }
 
-    // Three tests return with this service's first contract, beside the
-    // OutboxRows.Broker builder they all need — this one, the Local
-    // lane's guard below, and OutboxTransportIdentityTests, which pins
-    // §9.1's single identity onto the transport. Until then the
-    // allow-list is empty and nothing can build a contract instance, so
-    // each would assert against a row no code here can produce.
+    [Fact]
+    public async Task A_broker_row_is_published_and_completed()
+    {
+        // The Broker half of DeliverAsync, against the real RabbitMQ the
+        // fixture runs. Everything else here exercises the Local lane, so
+        // without this a failure in payload deserialisation, type resolution
+        // or the publish call would ship while the staging tests and the
+        // direct-bus smoke both stayed green.
+        //
+        // What is asserted is that the row completed — not what reached the
+        // transport. §12.4 refuses the latter deliberately: observing the
+        // headers needs an ITestHarness, and this fixture runs the real host
+        // against the real broker on purpose. Publishing without throwing and
+        // marking the row processed is the part this suite owns.
+        await fixture.StageOutboxAsync(OutboxRows.Broker(fixture, Guid.CreateVersion7()));
+
+        (await fixture.ProcessOutboxBatchAsync()).ShouldBe(1);
+
+        OutboxMessage row = (await fixture.OutboxAsync()).ShouldHaveSingleItem();
+        row.Lane.ShouldBe(OutboxLane.Broker);
+        row.ProcessedAt.ShouldNotBeNull();
+        row.LastError.ShouldBeNull();
+    }
 
     [Fact]
     public async Task A_processed_row_is_never_claimed_again()

@@ -74,16 +74,8 @@ public sealed class ServiceFixture : IAsyncLifetime
         .WithImage("mcr.microsoft.com/mssql/server:2022-latest")
         .Build();
 
-    // Assigned in InitializeAsync rather than here, because the image has to
-    // be BUILT and a field initialiser cannot await. It used to be the stock
-    // `rabbitmq:4.1-management-alpine` on the argument that Inventory needs no
-    // plugin and sharing the base tag was cheaper than a second image.
-    //
-    // #44 ended that: §14.1's broker image is where definitions.json lives, so
-    // the stock image is a broker with ONE administrator account and no
-    // permissions at all — the state this suite is now meant to prove Inventory
-    // works without. Ordering's fixture already builds this image and names it
-    // the same, so the cost is a cache hit rather than a second download.
+    // Assigned in InitializeAsync rather than here, because starting the
+    // container is async and a field initialiser cannot await.
     private RabbitMqContainer? _rabbit;
 
     private Respawner? _respawner;
@@ -146,11 +138,6 @@ public sealed class ServiceFixture : IAsyncLifetime
     /// A second copy of Ordering.TestSupport's method, deliberately. §4.3
     /// permits exactly one assembly to cross a service boundary and a test
     /// helper is not it.
-    /// <para>
-    /// This shrinks to nothing as the platform grows: each of those events
-    /// gains a real publisher with its own account, and the day the last one
-    /// does, this method deletes itself.
-    /// </para>
     /// </remarks>
     private async Task WidenWriteForTheHarnessAsync()
     {
@@ -165,10 +152,8 @@ public sealed class ServiceFixture : IAsyncLifetime
             TestContext.Current.CancellationToken);
 
         // A silent failure here is the worst outcome available: every event
-        // test would then fail on a publish, twenty minutes later, naming a
-        // message rather than a permission. Measured — that is exactly how
-        // Ordering's copy was found, as a suite that retried a refused
-        // publish until it timed out.
+        // test would then fail on a publish, minutes later, naming a message
+        // rather than the permission that was never widened.
         if (result.ExitCode != 0)
         {
             throw new InvalidOperationException(
@@ -181,7 +166,7 @@ public sealed class ServiceFixture : IAsyncLifetime
     public async ValueTask InitializeAsync()
     {
         // §14.1's broker CONFIGURATION on the stock image, rather than
-        // §14.1's built image. Inventory needs the per-service accounts (#44) and
+        // §14.1's built image. Inventory needs the per-service accounts and
         // does not need ADR-021's delayed-exchange plugin: it runs no saga and
         // schedules nothing, so the only thing the build would buy it is the
         // one thing it cannot use.
@@ -460,9 +445,9 @@ public sealed class ServiceFixture : IAsyncLifetime
     /// <c>IntegrationCollection</c> share this fixture and run in sequence, so
     /// a message an earlier class published and a consumer handled after this
     /// class's <see cref="ResetAsync"/> is a second row under an assertion with
-    /// nothing to do with it. Seen once in CI against Ordering's copy of this
-    /// suite (#166); the shape is the fixture's, not that service's, so the
-    /// read is added on both sides rather than where it happened to fire.
+    /// nothing to do with it. The shape is the fixture's, not that service's,
+    /// so the read is added on both sides rather than only where a failure
+    /// would surface it.
     /// <para>
     /// The precedent is <c>Ordering.Api.Tests</c>' <c>InventoryEventEndpointTests</c>,
     /// which already filters on <c>MessageId</c> inline at its own call site.
@@ -614,9 +599,9 @@ public sealed class ServiceFixture : IAsyncLifetime
     /// <remarks>
     /// <b>The outbox's and the inbox's cutoffs are computed by the application
     /// and the marker's is computed by the server</b> — <c>DATEADD(second,
-    /// -@WindowSeconds, SYSDATETIMEOFFSET())</c>, which is #167's fix and
-    /// ADR-038's decision, against a <c>@Before</c> the service subtracts from
-    /// the registered <c>TimeProvider</c> for the other two. Every other
+    /// -@WindowSeconds, SYSDATETIMEOFFSET())</c>, which is ADR-038's decision,
+    /// against a <c>@Before</c> the service subtracts from the registered
+    /// <c>TimeProvider</c> for the other two. Every other
     /// retention test stages rows against <c>DateTimeOffset.UtcNow</c> and the
     /// test host's clock agrees with the container's, so all three statements
     /// read what is effectively one clock and a marker statement that had
@@ -734,8 +719,9 @@ public sealed class ServiceFixture : IAsyncLifetime
     /// <remarks>
     /// <b>Preserving the timestamp is the whole of it.</b> A replacement
     /// stamped at a fresh instant is caught by the <c>(Key, CommittedAt)</c>
-    /// pair the delete used before #173, so a test that let the column move
-    /// would pass against the defect it is aimed at. Reading the old value into
+    /// pair the delete used to identify a row by, before ADR-041's rowversion
+    /// column replaced it, so a test that let the column move would pass
+    /// against the defect it is aimed at. Reading the old value into
     /// a variable and writing it back is how the coincidence ADR-041 describes
     /// — a database clock set to the exact tick of a row already past its
     /// window — is produced without touching the container's clock.

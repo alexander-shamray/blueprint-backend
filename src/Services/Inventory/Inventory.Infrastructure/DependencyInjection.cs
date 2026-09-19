@@ -108,10 +108,11 @@ public static class DependencyInjection
         });
         services.AddHostedService<MessageTypeMapValidator>();
 
-        // The payload format (§9.4). The first value object this service puts
-        // on a domain event needs a converter registered here: a readonly
-        // record struct deserialises to its default rather than failing,
-        // and §12.4's round-trip assertion is what catches that.
+        // The payload format (§9.4). No converter is registered beside it:
+        // the typed identifiers these events carry declare public primary
+        // constructors, which is what System.Text.Json needs to bind them
+        // without one, and §12.4's round-trip assertion is what would catch
+        // a value object that stopped qualifying.
         services.AddSingleton<OutboxJson>();
 
         // §13.3's messaging instruments, on the Commerce.Messaging meter
@@ -124,13 +125,10 @@ public static class DependencyInjection
         // AddSingleton here would not fail, the container would keep both, and
         // two instances would mean two sets of instruments on one meter.
         //
-        // OutboxStats gets its own connection factory with a bounded connect
-        // timeout because it runs inside observable gauge callbacks, and a
-        // command timeout bounds only the statement: at SqlClient's default
-        // Connect Timeout, which OutboxStats.ConnectTimeoutSeconds is argued
-        // against, a database that hangs rather than refuses would block every
-        // callback before the command timer started and stall the metric
-        // reader for unrelated telemetry too. The runtime key, because it reads
+        // OutboxStats gets its own connection factory because a command
+        // timeout bounds only the statement and these reads run inside
+        // observable gauge callbacks; OutboxStats.ConnectTimeoutSeconds argues
+        // the bound on the connect phase. The runtime key, because it reads
         // the same data plane (§7.1); only the timeout differs, so no query
         // path inherits it.
         string metricsConnectionString =

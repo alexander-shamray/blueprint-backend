@@ -1,4 +1,5 @@
 using Common.Application;
+using Common.Contracts.Inventory.V1;
 using Common.Infrastructure.Outbox;
 
 namespace Inventory.TestSupport.Outbox;
@@ -34,10 +35,25 @@ public static class OutboxRows
     public static OutboxMessage Blocking(ServiceFixture fixture) =>
         Local(new BlocksUntilReleased { OccurredAt = Raised }, fixture);
 
-    // A Broker-lane builder returns with this service's first contract,
-    // together with the dispatcher test that uses it: staging that lane
-    // needs a type Common.Contracts publishes on this service's behalf,
-    // and the allow-list mapper is empty until there is one (§9.3).
+    /// <summary>
+    /// A Broker-lane row carrying a real contract, so the publish half of
+    /// <c>DeliverAsync</c> is exercised against the running broker rather than
+    /// inferred from the staging tests.
+    /// </summary>
+    public static OutboxMessage Broker(ServiceFixture fixture, Guid productId) =>
+        OutboxMessage.Stage(
+            new StockLevelChanged
+            {
+                MessageId = Guid.CreateVersion7(),
+                CorrelationId = productId,
+                OccurredAt = Raised,
+                ProductId = productId,
+                QuantityAvailable = 7
+            },
+            OutboxLane.Broker,
+            productId,
+            fixture.MessageTypes,
+            fixture.OutboxJson);
 
     /// <summary>A row for an event type with no handler at all.</summary>
     public static OutboxMessage Unhandled(ServiceFixture fixture) =>

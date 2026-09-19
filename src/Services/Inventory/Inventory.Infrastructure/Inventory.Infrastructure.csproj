@@ -3,11 +3,10 @@
   <!--
     Settings come from Directory.Build.props (§4.4).
 
-    Domain and Application — §4.2's third row permits any package besides, and
-    PR-08 is where that row starts being used: EF Core for the write side
-    (§7.2), Dapper for the raw writes IUnitOfWork exposes (§6.3), the SQL
-    readiness check (§13.5), and IConfiguration, which AddInventoryInfrastructure
-    now names in its signature.
+    Domain and Application — §4.2's third row permits any package besides:
+    EF Core for the write side (§7.2), Dapper for the raw writes IUnitOfWork
+    exposes (§6.3), the SQL readiness check (§13.5), and IConfiguration,
+    which AddInventoryInfrastructure names in its signature.
   -->
 
   <ItemGroup>
@@ -25,7 +24,7 @@
          argued in Messaging/DependencyInjection.cs. -->
     <PackageReference Include="MassTransit.RabbitMQ" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" />
-    <!-- §13.6's OutboxStats holds its five-second snapshot in a MemoryCache.
+    <!-- §13.6's OutboxStats holds its snapshot in a MemoryCache.
          Common.Infrastructure's HybridCache reference carries the package
          transitively; the direct reference states the direct use, exactly as
          the SqlClient line above does. -->
@@ -41,10 +40,18 @@
          the lock factory and §8.5's idempotency store — so a first cache
          read costs no new reference and no new registration. -->
     <ProjectReference Include="..\..\..\BuildingBlocks\Common.Infrastructure\Common.Infrastructure.csproj" />
-    <!-- MessageTypeSource's Broker half. Named through IIntegrationEvent
-         until this service has a contract of its own, at which point the
-         anchor becomes that contract — same assembly either way. -->
+    <!-- typeof(StockLevelChanged).Assembly, the Broker lane's half of
+         MessageTypeSource. Transitive through Inventory.Application, named
+         directly because this file names the type. -->
     <ProjectReference Include="..\..\..\BuildingBlocks\Common.Contracts\Common.Contracts.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- RetryPolicy's intervals are internal to this assembly, and an
+         assertion about Messaging/DependencyInjection.cs's
+         ContractMappingException exclusion has to cite MinInterval rather
+         than copy the value it owns. -->
+    <InternalsVisibleTo Include="Inventory.Api.Tests" />
   </ItemGroup>
 
 </Project>

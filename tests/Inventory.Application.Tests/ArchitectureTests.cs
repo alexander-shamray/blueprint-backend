@@ -37,8 +37,7 @@ namespace Inventory.Application.Tests;
 /// Closing it means reading the declared graph instead of the compiled one,
 /// which is a repo-wide build change with a silent-failure mode of its own —
 /// see §4.2, which states the reach and what closing it would cost. The limit
-/// belongs to the Domain gate one project down as much as to this one, and
-/// predates the PR that wrote this comment.
+/// belongs to the Domain gate one project down as much as to this one.
 /// </para>
 /// </remarks>
 public class ArchitectureTests
@@ -72,15 +71,14 @@ public class ArchitectureTests
         // buy is that ADDING one is a decision somebody has to write down.
         //
         // Microsoft.Extensions.Logging.Abstractions is here because
-        // FulfilReservationHandler's two LoggerMessage.Define delegates are
-        // this layer's first ILogger use. It is the abstractions package
-        // rather than a concrete provider, so no §4.2 row forbids it, and
-        // LoggerMessage.Define rather than log.LogWarning is CA1848 under
-        // ADR-019.
+        // FulfilReservationHandler logs through LoggerMessage.Define. It is
+        // the abstractions package rather than a concrete provider, so no
+        // §4.2 row forbids it, and LoggerMessage.Define rather than
+        // log.LogWarning is CA1848 under ADR-019.
         //
         // System.Diagnostics.DiagnosticSource is InventoryMetrics' own:
         // Counter<T>, Meter and IMeterFactory live in that assembly, and
-        // §13.3 puts the one business-shaped counter beside the aggregate it
+        // §13.3 puts the business-shaped counter beside the aggregate it
         // claims a row against rather than behind Common.Application.
         string[] allowed =
         [
@@ -140,10 +138,10 @@ public class ArchitectureTests
         // A handler that copies the saga's style gets a dual write with no outbox
         // behind it, and it works in every test where the broker is up.
         //
-        // The sentence this replaced said "MassTransit's in-memory outbox holds
-        // those until the consume transaction commits". It did not: the in-memory
-        // buffer flushes AFTER the consumer returns, which is after the repository
-        // has committed, and that gap was #128.
+        // MassTransit's in-memory outbox does not close that gap on its own:
+        // the buffer flushes AFTER the consumer returns, which is after the
+        // repository has committed, so a handler relying on it alone can
+        // still publish against a write that never lands.
         Assembly[] assemblies = [typeof(DependencyInjection).Assembly, typeof(StockItem).Assembly];
         foreach (Assembly assembly in assemblies)
         {

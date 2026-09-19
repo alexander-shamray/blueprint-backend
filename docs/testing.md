@@ -38,8 +38,9 @@ tree has established that a replica ratio is a traffic ratio.
 The review helpers' suite under `.claude/scripts/` is the one with
 requirements a workflow step does not show: `bash`, `grep`, `git` and `jq`
 on `PATH`, and no network. The `gh` its ledger cases call is a stub the
-suite writes itself, so no `gh` is needed. Its docstring is its own
-inventory of what it covers.
+suite writes itself, so no `gh` is needed. Each module is named for its
+subject — one helper, a family of helpers, or the harness's deny list — and
+its test classes name the properties they check.
 
 **`py -3.12`, not `python`.** Every CI job that runs Python pins 3.12, and a
 newer interpreter is the hazard — it accepts APIs 3.12 does not, so the local
@@ -184,6 +185,16 @@ The second reads the paginated files endpoint rather than
 `gh pr view --json files`, which is one page; why it needs `changedFiles` and
 `previous_filename` beside it is
 [its README](../.github/locality-gate/README.md)'s.
+
+**The comment gate needs only a base**, because it diffs the checkout's own
+history, so a branch can run it before it has a pull request:
+
+```bash
+git fetch origin main
+py -3.12 .github/comment-gate/comment_gate.py --base origin/main
+```
+
+What it reads and judges is [its README](../.github/comment-gate/README.md)'s.
 
 **The Compose smoke is the one gate that needs a running daemon and the one
 whose run changes the machine it runs on**, so its teardown is part of what

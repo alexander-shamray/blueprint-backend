@@ -25,7 +25,6 @@ public sealed class UnreservedDespatchProjectionTests(ServiceFixture fixture) : 
     [Fact]
     public async Task Two_deliveries_of_one_unreserved_despatch_count_once()
     {
-        // Arrange: a Released reservation with lines, and the Local row staged twice.
         Guid order = Guid.CreateVersion7();
         await fixture.ExecuteAsync(
             "INSERT INTO inventory.Reservations " +

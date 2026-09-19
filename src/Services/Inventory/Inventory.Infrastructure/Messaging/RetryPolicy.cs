@@ -7,7 +7,7 @@ namespace Inventory.Infrastructure.Messaging;
 /// says otherwise.
 /// </summary>
 /// <remarks>
-/// <b>These are in-memory retries of one broker delivery, not redeliveries.</b>
+/// These are in-memory retries of one broker delivery, not redeliveries.
 /// <c>UseMessageRetry</c> holds the message and waits, so the delivery lock and
 /// the endpoint's concurrency slot are still taken for the whole ladder — which
 /// is what makes the ceiling an operational number rather than only a
@@ -21,21 +21,20 @@ namespace Inventory.Infrastructure.Messaging;
 /// and comparing them.
 /// </para>
 /// <para>
-/// <b>What this type does not decide is what gets retried.</b>
+/// What this type does not decide is what gets retried.
 /// <c>inventory-commands</c> ignores <c>ContractMappingException</c> before
 /// calling <see cref="Standard"/> — a malformed contract does not parse
-/// itself on the fourth attempt — and that exclusion is the endpoint's,
-/// because it is a claim about which faults are terminal rather than about
-/// how long to wait between attempts. Folding it in here would apply one
-/// endpoint's exclusion to those that never raise it.
+/// itself no matter how many times it is retried — and that exclusion is
+/// the endpoint's, because it is a claim about which faults are terminal
+/// rather than about how long to wait between attempts. Folding it in here
+/// would apply one endpoint's exclusion to those that never raise it.
 /// </para>
 /// <para>
-/// <see cref="RetryLimit"/> counts <em>retries</em> and not deliveries: the
-/// endpoint makes one more attempt than this number, and the wait it produces
-/// is that many intervals. §9.6's confirmation wait has to clear that sum —
-/// a floor it must exceed rather than the term that decides it, which is
-/// §9.4's dispatcher backoff — so the saga's own comment reasons about these
-/// by name instead of restating them.
+/// <see cref="RetryLimit"/> counts retries and not deliveries: the endpoint
+/// makes one more attempt than this number, and the wait it produces is that
+/// many intervals. §9.6's confirmation wait has to clear that sum — a floor it
+/// must exceed rather than the term that decides it, which is §9.4's
+/// dispatcher backoff.
 /// </para>
 /// </remarks>
 internal static class RetryPolicy

@@ -93,8 +93,8 @@ the PR opens, with any file added mid-work and the reason it was:
 
 `Class` is one letter from that file's table — A local, B shared mechanism,
 C a rule moved, D docs or harness, E the dependency graph — or two joined
-with `+`, as `C+E`, for a change the contract's §3 says needs both, with the
-touch set as the union. `Touch set` is the
+with `+`, as `C+E`, for a change the contract's §3 says needs both, or the
+one three §3 admits, `A+D+E`, with the touch set as the union. `Touch set` is the
 paths that class allows and this branch actually edited, as globs or files on
 one line. A file in the diff outside the set is a finding for
 `/review-branch`, and the answer is a narrower diff, a row widened with its
