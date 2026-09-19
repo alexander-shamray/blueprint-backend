@@ -23,12 +23,12 @@ namespace Payments.TestSupport;
 /// <summary>
 /// A real SQL Server, migrated by the real migrator (ADR-010, §12.4), and a
 /// real RabbitMQ on §14.1's base tag (ADR-021), since Payments needs no
-/// message scheduler. Serves <c>Payments.Api.Tests</c> today and the
-/// application suite once it gains a handler test; the two cannot reference
-/// each other, so each declares its own <c>IntegrationCollection</c> over
-/// this one type. Tests deliberately collapse the two database identities of
-/// §7.1 — the <c>sa</c> login holds both DML and DDL — but not the two
-/// configuration keys, so the migrator can be caught reading the wrong one.
+/// message scheduler. Test projects cannot reference each other (§4.1), so
+/// one that needs containers declares its own <c>IntegrationCollection</c>
+/// over this one type. Tests deliberately collapse the two database
+/// identities of §7.1 — the <c>sa</c> login holds both DML and DDL — but not
+/// the two configuration keys, so the migrator can be caught reading the
+/// wrong one.
 /// </summary>
 public sealed class ServiceFixture : IAsyncLifetime
 {

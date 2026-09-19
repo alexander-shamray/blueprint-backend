@@ -5,8 +5,7 @@
 
     NOT a test project — no runner, no adapter, no Test.Sdk, and Library
     output. §4.1: referenced by whichever sibling suite needs containers,
-    since those suites cannot reference each other. The API suite is that
-    consumer today.
+    since those suites cannot reference each other.
   -->
 
   <PropertyGroup>

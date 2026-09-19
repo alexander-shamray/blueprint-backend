@@ -42,10 +42,9 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Services\Payments\Payments.Api\Payments.Api.csproj" />
     <!-- ServiceFixture and PaymentsApiFactory (§12.4, §4.1) — the containers,
-         the migrator runs and the reset live there. The application suite
-         becomes the second consumer with its first handler test, and the
-         two cannot reference each other — which is why the fixture has a
-         project of its own. -->
+         the migrator runs and the reset live there. Test projects cannot
+         reference each other, which is why the fixture has a project of
+         its own. -->
     <ProjectReference Include="..\..\tests\Payments.TestSupport\Payments.TestSupport.csproj" />
   </ItemGroup>
 
