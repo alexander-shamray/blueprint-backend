@@ -1,0 +1,328 @@
+using System.Diagnostics.Metrics;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Payments.Application;
+using Payments.Application.Provider;
+using Payments.Domain.Orders;
+using Payments.Infrastructure.Provider;
+using Payments.TestSupport;
+using Shouldly;
+using WireMock.Logging;
+using WireMock.RequestBuilders;
+using WireMock.ResponseBuilders;
+using WireMock.Server;
+using Xunit;
+using ProviderRegistration = Payments.Infrastructure.Provider.DependencyInjection;
+
+namespace Payments.Api.Tests;
+
+/// <summary>
+/// The adapter over a real HTTP server loading the simulator's own mappings,
+/// so the file Compose runs is the file these assert (§12: WireMock.Net for a
+/// third-party API).
+/// </summary>
+public sealed class HttpPaymentProviderTests : IDisposable
+{
+    private const string UnreachableSql =
+        "Server=sql.invalid;Database=Payments;User Id=x;Password=x;TrustServerCertificate=true";
+
+    private const string UnreachableRabbit = "amqp://payments-svc:x@rabbit.invalid:5672";
+
+    private readonly WireMockServer _server;
+    private readonly PaymentsApiFactory _factory;
+
+    public HttpPaymentProviderTests()
+    {
+        _server = WireMockServer.Start();
+        _server.ReadStaticMappings(SimulatorMappings.Directory());
+        _factory = new PaymentsApiFactory(UnreachableSql, UnreachableRabbit, _server.Urls[0] + "/");
+    }
+
+    public void Dispose()
+    {
+        _factory.Dispose();
+        _server.Stop();
+    }
+
+    private IPaymentProvider Provider() =>
+        _factory.Services.CreateScope().ServiceProvider.GetRequiredService<IPaymentProvider>();
+
+    private static AuthorisationRequest Authorisation(decimal amount, OrderId? order = null) =>
+        new(order ?? OrderId.New(), Guid.CreateVersion7(), amount, "EUR");
+
+    private int Calls(string path) =>
+        _server.LogEntries.Count(e => e.RequestMessage!.Path == path);
+
+    private static MeterListener CountUnavailable(Action<long> add)
+    {
+        MeterListener listener = new()
+        {
+            InstrumentPublished = (instrument, l) =>
+            {
+                if (instrument.Meter.Name == ProviderMetrics.MeterName
+                    && instrument.Name == "payments.provider.unavailable")
+                {
+                    l.EnableMeasurementEvents(instrument);
+                }
+            }
+        };
+        listener.SetMeasurementEventCallback<long>((_, value, _, _) => add(value));
+        listener.Start();
+        return listener;
+    }
+
+    [Fact]
+    public async Task An_ordinary_amount_is_authorised_and_a_replay_of_the_key_answers_the_same_reference()
+    {
+        OrderId order = OrderId.New();
+        CancellationToken ct = TestContext.Current.CancellationToken;
+
+        AuthorisationResult first = await Provider().AuthoriseAsync(Authorisation(42.10m, order), ct);
+        AuthorisationResult second = await Provider().AuthoriseAsync(Authorisation(42.10m, order), ct);
+
+        AuthorisationResult.Authorised authorised = first.ShouldBeOfType<AuthorisationResult.Authorised>();
+        authorised.Reference.ShouldBe($"psp_authorise:{order.Value}");
+        second.ShouldBe(first, "section 4: a unit retried after the provider answered receives the same answer");
+        _server.LogEntries.ShouldAllBe(e =>
+            e.RequestMessage!.Headers!["Idempotency-Key"].Single() == $"authorise:{order.Value}");
+
+        // The simulator ignores the credential, so only this line fails if the
+        // adapter stops sending it: compared with what the host configured, so
+        // the test prints no key of its own.
+        string configured = _factory.Services.GetRequiredService<IConfiguration>()[ProviderRegistration.ApiKeyKey]!;
+        _server.LogEntries.ShouldAllBe(e =>
+            e.RequestMessage!.Headers!["Authorization"].Single() == $"Bearer {configured}");
+    }
+
+    [Theory]
+    [InlineData(10.01, "card_declined")]
+    [InlineData(0.01, "card_declined")]
+    [InlineData(10.02, "insufficient_funds")]
+    [InlineData(0.02, "insufficient_funds")]
+    public async Task A_scripted_decline_is_a_decline_with_the_providers_code(decimal amount, string code)
+    {
+        AuthorisationResult result =
+            await Provider().AuthoriseAsync(Authorisation(amount), TestContext.Current.CancellationToken);
+
+        result.ShouldBe(new AuthorisationResult.Declined(code));
+        Calls("/v1/authorisations").ShouldBe(1, "a decline is an answer, and the pipeline does not retry a 402");
+    }
+
+    [Fact]
+    public async Task A_503_is_retried_in_the_client_then_thrown_as_unavailable_and_counted_per_attempt()
+    {
+        long counted = 0;
+        using MeterListener listener = CountUnavailable(value => Interlocked.Add(ref counted, value));
+
+        await Should.ThrowAsync<PaymentProviderUnavailableException>(() =>
+            Provider().AuthoriseAsync(Authorisation(10.05m), TestContext.Current.CancellationToken));
+
+        Calls("/v1/authorisations").ShouldBe(ProviderHop.MaxRetryAttempts + 1);
+        Interlocked.Read(ref counted)
+            .ShouldBe(ProviderHop.MaxRetryAttempts + 1, "one per failing attempt, not one per call");
+    }
+
+    [Theory]
+    [InlineData(408)]
+    [InlineData(429)]
+    public async Task A_timeout_or_throttle_status_is_retried_then_thrown_as_unavailable(int status)
+    {
+        // Stubbed rather than scripted: the translation table names both, and
+        // the simulator scripts neither, so without this a branch that dropped
+        // either would leave the suite green.
+        _server.Given(Request.Create().WithPath("/v1/authorisations").UsingPost())
+            .AtPriority(0)
+            .RespondWith(Response.Create().WithStatusCode(status));
+
+        await Should.ThrowAsync<PaymentProviderUnavailableException>(() =>
+            Provider().AuthoriseAsync(Authorisation(42.10m), TestContext.Current.CancellationToken));
+
+        Calls("/v1/authorisations")
+            .ShouldBe(ProviderHop.MaxRetryAttempts + 1, "the pipeline retries both, as it does a 503");
+    }
+
+    [Theory]
+    [InlineData(0.11)]
+    [InlineData(0.21)]
+    public async Task An_amount_ending_in_one_that_is_not_one_cent_is_approved(decimal amount)
+    {
+        (await Provider().AuthoriseAsync(Authorisation(amount), TestContext.Current.CancellationToken))
+            .ShouldBeOfType<AuthorisationResult.Authorised>("only a minor amount ending 01, or exactly 1, is scripted");
+    }
+
+    [Fact]
+    public async Task A_stalled_provider_is_unavailable_within_the_total_budget_and_its_timeouts_count()
+    {
+        long counted = 0;
+        using MeterListener listener = CountUnavailable(value => Interlocked.Add(ref counted, value));
+        DateTimeOffset started = DateTimeOffset.UtcNow;
+
+        await Should.ThrowAsync<PaymentProviderUnavailableException>(() =>
+            Provider().AuthoriseAsync(Authorisation(10.09m), TestContext.Current.CancellationToken));
+
+        (DateTimeOffset.UtcNow - started).ShouldBeLessThan(ProviderHop.TotalRequestTimeout + TimeSpan.FromSeconds(2));
+        Interlocked.Read(ref counted)
+            .ShouldBeGreaterThanOrEqualTo(1, "an attempt timeout is the provider's, counted by OnTimeout");
+    }
+
+    [Fact]
+    public void Every_attempt_and_every_bounded_delay_fit_inside_the_total()
+    {
+        TimeSpan worst = ProviderHop.AttemptTimeout * (ProviderHop.MaxRetryAttempts + 1)
+                         + ProviderHop.MaxRetryDelay * ProviderHop.MaxRetryAttempts;
+
+        worst.ShouldBeLessThan(ProviderHop.TotalRequestTimeout,
+            "the Web.Bff's PricingHop argument: a total that cancels the last retry makes the retry count a fiction");
+    }
+
+    [Fact]
+    public async Task A_409_is_a_mismatch_and_is_not_retried()
+    {
+        // Stubbed here, not in the mappings: a stateless simulator cannot know a
+        // key was used before (spec, section 9).
+        _server.Given(Request.Create().WithPath("/v1/authorisations").UsingPost())
+            .AtPriority(0)
+            .RespondWith(Response.Create().WithStatusCode(409));
+
+        await Should.ThrowAsync<PaymentMismatchException>(() =>
+            Provider().AuthoriseAsync(Authorisation(42.10m), TestContext.Current.CancellationToken));
+        Calls("/v1/authorisations").ShouldBe(1);
+    }
+
+    [Theory]
+    [InlineData(202, "{\"status\":\"voided\"}")]
+    [InlineData(204, "")]
+    [InlineData(200, "{\"status\":\"pending\"}")]
+    [InlineData(200, "not json")]
+    public async Task A_void_answered_with_anything_but_200_voided_is_not_a_void(int status, string body)
+    {
+        _server.Given(Request.Create().WithPath("/v1/authorisations/*/void").UsingPost())
+            .AtPriority(0)
+            .RespondWith(Response.Create().WithStatusCode(status).WithBody(body));
+
+        await Should.ThrowAsync<PaymentProviderUnavailableException>(() =>
+            Provider().VoidAsync(new VoidRequest(OrderId.New(), "psp_ref"), TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task A_void_goes_to_the_references_path_under_the_void_key()
+    {
+        OrderId order = OrderId.New();
+
+        await Provider().VoidAsync(new VoidRequest(order, "psp_ref"), TestContext.Current.CancellationToken);
+
+        ILogEntry call = _server.LogEntries.ShouldHaveSingleItem();
+        call.RequestMessage!.Path.ShouldBe("/v1/authorisations/psp_ref/void");
+        call.RequestMessage.Headers!["Idempotency-Key"].Single().ShouldBe($"void:{order.Value}");
+    }
+
+    [Fact]
+    public async Task A_base_url_with_a_path_and_no_trailing_slash_keeps_its_path()
+    {
+        using PaymentsApiFactory factory = new(UnreachableSql, UnreachableRabbit, _server.Urls[0] + "/psp");
+        _server.Given(Request.Create().WithPath("/psp/v1/authorisations").UsingPost())
+            .AtPriority(0)
+            .RespondWith(Response.Create().WithStatusCode(201)
+                .WithBody("{\"status\":\"approved\",\"reference\":\"psp_p\"}"));
+
+        AuthorisationResult result = await factory.Services.CreateScope().ServiceProvider
+            .GetRequiredService<IPaymentProvider>()
+            .AuthoriseAsync(Authorisation(42.10m), TestContext.Current.CancellationToken);
+
+        result.ShouldBe(new AuthorisationResult.Authorised("psp_p"));
+    }
+
+    [Theory]
+    [InlineData("http://psp.example/", false)]
+    [InlineData("https://psp.example/", true)]
+    public void Outside_development_only_an_https_provider_is_accepted(string address, bool starts)
+    {
+        using PaymentsApiFactory factory = new(UnreachableSql, UnreachableRabbit, address);
+        using WebApplicationFactory<Program> production =
+            factory.WithWebHostBuilder(b => b.UseEnvironment("Production"));
+
+        if (starts)
+        {
+            production.Services.GetRequiredService<IPaymentProvider>().ShouldNotBeNull();
+        }
+        else
+        {
+            Should.Throw<InvalidOperationException>(() => production.Services)
+                .Message.ShouldContain("plain HTTP outside Development");
+        }
+    }
+
+    [Fact]
+    public void A_missing_base_url_stops_the_host()
+    {
+        using PaymentsApiFactory factory = new(UnreachableSql, UnreachableRabbit, providerBaseUrl: "");
+
+        Should.Throw<InvalidOperationException>(() => factory.Services)
+            .Message.ShouldContain("PaymentProvider:BaseUrl");
+    }
+
+    [Fact]
+    public void A_missing_provider_key_stops_the_host()
+    {
+        using PaymentsApiFactory factory = new(
+            UnreachableSql, UnreachableRabbit, _server.Urls[0] + "/", providerApiKey: " ");
+
+        Should.Throw<InvalidOperationException>(() => factory.Services)
+            .Message.ShouldContain("PaymentProvider:ApiKey", Case.Sensitive,
+                "§15.4 marks the key required; a host must not call a provider unauthenticated");
+    }
+
+    [Theory]
+    [InlineData(201, "{\"status\":\"declined\",\"reference\":\"psp_x\"}")]
+    [InlineData(201, "{\"status\":\"approved\"}")]
+    [InlineData(402, "{\"status\":\"declined\"}")]
+    [InlineData(402, "{\"status\":\"approved\",\"code\":\"card_declined\"}")]
+    [InlineData(201, "not json")]
+    [InlineData(201, "{\"status\":\"approved\",\"reference\":\"   \"}")]
+    [InlineData(402, "{\"status\":\"declined\",\"code\":\" \"}")]
+    public async Task A_body_that_contradicts_its_status_is_unavailable_never_a_verdict(int status, string body)
+    {
+        _server.Given(Request.Create().WithPath("/v1/authorisations").UsingPost())
+            .AtPriority(0)
+            .RespondWith(Response.Create().WithStatusCode(status).WithBody(body));
+
+        await Should.ThrowAsync<PaymentProviderUnavailableException>(() =>
+            Provider().AuthoriseAsync(Authorisation(42.10m), TestContext.Current.CancellationToken));
+    }
+
+    [Theory]
+    [InlineData(ProviderLimits.MaxReferenceLength, true)]
+    [InlineData(ProviderLimits.MaxReferenceLength + 1, false)]
+    public async Task A_reference_longer_than_the_column_is_refused_before_it_is_recorded(int length, bool accepted)
+    {
+        string reference = new('r', length);
+        _server.Given(Request.Create().WithPath("/v1/authorisations").UsingPost())
+            .AtPriority(0)
+            .RespondWith(Response.Create().WithStatusCode(201)
+                .WithBody($"{{\"status\":\"approved\",\"reference\":\"{reference}\"}}"));
+
+        Func<Task<AuthorisationResult>> call = () =>
+            Provider().AuthoriseAsync(Authorisation(42.10m), TestContext.Current.CancellationToken);
+
+        if (accepted)
+            (await call()).ShouldBe(new AuthorisationResult.Authorised(reference));
+        else
+            await Should.ThrowAsync<PaymentProviderUnavailableException>(call);
+    }
+
+    [Fact]
+    public async Task The_callers_own_cancellation_is_not_counted_against_the_provider()
+    {
+        long counted = 0;
+        using MeterListener listener = CountUnavailable(value => Interlocked.Add(ref counted, value));
+        using CancellationTokenSource cancelled = new();
+        await cancelled.CancelAsync();
+
+        await Should.ThrowAsync<OperationCanceledException>(() =>
+            Provider().AuthoriseAsync(Authorisation(42.10m), cancelled.Token));
+
+        Interlocked.Read(ref counted).ShouldBe(0, "a consume cancelled at shutdown is not a provider incident");
+    }
+}

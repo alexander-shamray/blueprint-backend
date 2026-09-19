@@ -1477,7 +1477,7 @@ EF Core minor versions and behave differently under identical code.
          package resolving into the graph is not a thing to carry. -->
     <PackageVersion Include="SSH.NET" Version="2026.0.0" />
     <PackageVersion Include="Respawn" Version="6.2.1" />
-    <PackageVersion Include="WireMock.Net" Version="1.8.11" />
+    <PackageVersion Include="WireMock.Net" Version="2.12.0" />
     <PackageVersion Include="Microsoft.Extensions.TimeProvider.Testing" Version="9.9.0" />
     <!-- ServiceCollection itself. §6.2's registration test and §6.3's ordering
          test resolve from a real container, and the abstractions package the

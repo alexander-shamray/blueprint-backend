@@ -23,6 +23,12 @@
          argued in Messaging/DependencyInjection.cs. -->
     <PackageReference Include="MassTransit.RabbitMQ" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" />
+    <!-- The provider's typed client and its budget (§3.2's anti-corruption
+         layer): the standard pipeline, configured in Provider/. -->
+    <PackageReference Include="Microsoft.Extensions.Http.Resilience" />
+    <!-- IHostEnvironment, which AddPaymentProvider names in its signature for
+         the scheme rule, as Common.Infrastructure references it. -->
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
   </ItemGroup>
 
   <ItemGroup>
