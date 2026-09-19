@@ -479,9 +479,10 @@ def _shout(key: str) -> str:
 def check(plan_document: dict, root: Path = ROOT) -> list[str]:
     """Everything that can be wrong with canary.json without a cluster.
 
-    Seven checks. The last two are the ones this repository keeps learning it
-    needs: one asserts the gate's own subject is non-empty, and one asserts the
-    workflow's path filter covers every input the rollout reads.
+    Eight checks. The last three are the ones this repository keeps learning
+    it needs: one asserts the gate's own subject is non-empty, one asserts the
+    workflow's path filter covers every input the rollout reads, and one
+    asserts its dispatch menu covers every workload the rollout can reach.
     """
     failures: list[str] = []
 
@@ -615,6 +616,9 @@ def check(plan_document: dict, root: Path = ROOT) -> list[str]:
 
     # 7. The workflow's triggers cover every input this rollout reads.
     failures += _workflow_covers_inputs()
+
+    # 8. The dispatch menu is exactly the plan's workload set.
+    failures += _dispatch_options_match_workloads(workloads)
 
     return failures
 
@@ -761,6 +765,49 @@ def _workflow_covers_inputs() -> list[str]:
                     f"{WORKFLOW_PATH} trigger {index + 1} does not cover "
                     f"{entry!r}, which deploy/canary/canary.py reads"
                 )
+    return failures
+
+
+def _dispatch_options_match_workloads(workloads: dict) -> list[str]:
+    """The `workload:` dispatch input's `options:` against canary.json's keys.
+
+    An exact set, not a subset either way. An option this plan cannot roll
+    dispatches a release `chart` and `plan` have never heard of; a workload
+    missing from the list is one a manual dispatch cannot choose, invisible
+    while `check` on this file's own path filters stays green — nothing else
+    compares the two. Parsed as a flow sequence rather than with a YAML
+    library, on `_alert_threshold`'s terms: no dependency this gate would
+    need to restore.
+    """
+    try:
+        text = WORKFLOW.read_text(encoding="utf-8")
+    except OSError as error:
+        return [f"{WORKFLOW_PATH} is not readable, so its dispatch options cannot be checked: {error}"]
+
+    match = re.search(r"workload:\n(?:.*\n)*?\s*options:\s*\[([^\]]*)\]", text)
+    if not match:
+        return [
+            f"{WORKFLOW_PATH} has no options list for the workload dispatch "
+            "input, so a manual rollout cannot be checked against the plan"
+        ]
+
+    options = {item.strip() for item in match.group(1).split(",") if item.strip()}
+    expected = set(workloads)
+
+    failures = []
+    missing = expected - options
+    if missing:
+        failures.append(
+            f"{WORKFLOW_PATH}'s workload dispatch options omit "
+            f"{', '.join(sorted(missing))}: canary.json can roll them and a "
+            "manual dispatch cannot choose them"
+        )
+    extra = options - expected
+    if extra:
+        failures.append(
+            f"{WORKFLOW_PATH}'s workload dispatch options list "
+            f"{', '.join(sorted(extra))}, which is not a workload in canary.json"
+        )
     return failures
 
 

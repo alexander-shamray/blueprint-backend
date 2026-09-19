@@ -19,6 +19,7 @@ import contextlib
 import io
 import json
 import re
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -425,6 +426,58 @@ class PlanDocumentTests(unittest.TestCase):
         for expression in canary.entries(self.document["queries"]).values():
             self.assertIn("deployment_track", expression)
             self.assertNotIn("service_version", expression)
+
+
+class DispatchOptionTests(unittest.TestCase):
+    """The `workload:` dispatch input's `options:` against canary.json's keys.
+
+    A workload the plan can roll and this list cannot choose stays invisible
+    to a manual rollout while every path-filter check stays green — check 7
+    covers the trigger, not the menu underneath it.
+    """
+
+    WORKFLOW_TEXT = """\
+on:
+  workflow_dispatch:
+    inputs:
+      workload:
+        description: 'x'
+        required: true
+        type: choice
+        options: [{options}]
+"""
+
+    def _failures(self, options: str, workloads: dict) -> list[str]:
+        original = canary.WORKFLOW
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "deploy.yml"
+            path.write_text(self.WORKFLOW_TEXT.format(options=options), encoding="utf-8")
+            canary.WORKFLOW = path
+            try:
+                return canary._dispatch_options_match_workloads(workloads)
+            finally:
+                canary.WORKFLOW = original
+
+    def test_a_missing_option_fails(self) -> None:
+        failures = self._failures(
+            "catalog-api, ordering-api",
+            {"catalog-api": {}, "ordering-api": {}, "inventory-api": {}},
+        )
+
+        self.assertTrue(any("inventory-api" in f for f in failures), failures)
+
+    def test_an_extra_option_fails(self) -> None:
+        failures = self._failures("catalog-api, ordering-api", {"catalog-api": {}})
+
+        self.assertTrue(any("ordering-api" in f for f in failures), failures)
+
+    def test_the_real_repository_passes(self) -> None:
+        document = canary.load_plan()
+
+        self.assertEqual(
+            canary._dispatch_options_match_workloads(canary.entries(document["workloads"])),
+            [],
+        )
 
 
 class SourceInputTests(unittest.TestCase):
