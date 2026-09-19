@@ -781,7 +781,11 @@ def _dispatch_options_match_workloads(workloads: dict) -> list[str]:
     need to restore. The block is scoped to `workload:`'s own indentation, on
     the same terms `_alert_threshold` stops at the next `- alert:`: without
     it, a sibling input's `options:` — one YAML step over, not this input's
-    own — would satisfy the search just as well.
+    own — would satisfy the search just as well. `options:` is matched at the
+    indentation of `workload:`'s own child keys, not as a bare substring: a
+    `description:` (or `default:`) value that happens to contain the text
+    `options:` sits deeper than, or beside, that key and must not stand in
+    for it.
     """
     try:
         text = WORKFLOW.read_text(encoding="utf-8")
@@ -789,7 +793,10 @@ def _dispatch_options_match_workloads(workloads: dict) -> list[str]:
         return [f"{WORKFLOW_PATH} is not readable, so its dispatch options cannot be checked: {error}"]
 
     block = re.search(r"(?m)^([ \t]*)workload:\n((?:\1[ \t].*\n?)*)", text)
-    options_match = block and re.search(r"options:\s*\[([^\]]*)\]", block.group(2))
+    child_indent = block and re.match(r"[ \t]+", block.group(2))
+    options_match = child_indent and re.search(
+        rf"(?m)^{re.escape(child_indent.group(0))}options:\s*\[([^\]]*)\]", block.group(2)
+    )
     if not options_match:
         return [
             f"{WORKFLOW_PATH} has no options list for the workload dispatch "

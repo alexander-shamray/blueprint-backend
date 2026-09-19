@@ -538,6 +538,46 @@ on:
 
         self.assertEqual(failures, [])
 
+    def test_a_description_naming_options_is_not_the_options_key(self) -> None:
+        # No `options:` key at all — the description merely says the word,
+        # the way a real dispatch input's description does. An unanchored
+        # substring search reads this as the list and calls the input
+        # covered when a manual rollout still has no choices.
+        text = """\
+on:
+  workflow_dispatch:
+    inputs:
+      workload:
+        description: 'options: [catalog-api, ordering-api, inventory-api]'
+        required: true
+        type: choice
+"""
+        failures = self._failures_for_text(
+            text, {"catalog-api": {}, "ordering-api": {}, "inventory-api": {}}
+        )
+
+        self.assertTrue(
+            any("no options list" in f for f in failures),
+            failures,
+        )
+
+    def test_a_description_naming_options_before_the_real_key_is_skipped(self) -> None:
+        # The description mentions `options:` ahead of the real key. The real
+        # key still has to be the one read, in whichever order they fall.
+        text = """\
+on:
+  workflow_dispatch:
+    inputs:
+      workload:
+        description: 'options: [wrong, values]'
+        required: true
+        type: choice
+        options: [catalog-api]
+"""
+        failures = self._failures_for_text(text, {"catalog-api": {}})
+
+        self.assertEqual(failures, [])
+
 
 class SourceInputTests(unittest.TestCase):
     """SOURCE_INPUTS against the reads it claims to enumerate.
