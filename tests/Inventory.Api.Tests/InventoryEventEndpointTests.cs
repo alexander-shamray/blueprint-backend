@@ -259,7 +259,7 @@ public sealed class InventoryEventEndpointTests(ServiceFixture fixture) : IAsync
     private static OrderCancelled OrderCancelledFor(Guid orderId) => new()
     {
         MessageId = Guid.CreateVersion7(),
-        CorrelationId = Guid.CreateVersion7(),
+        CorrelationId = orderId,
         OccurredAt = DateTimeOffset.UtcNow,
         OrderId = orderId,
         CustomerId = Guid.CreateVersion7(),
@@ -269,7 +269,7 @@ public sealed class InventoryEventEndpointTests(ServiceFixture fixture) : IAsync
     private static ShipmentDispatched ShipmentDispatchedFor(Guid orderId) => new()
     {
         MessageId = Guid.CreateVersion7(),
-        CorrelationId = Guid.CreateVersion7(),
+        CorrelationId = orderId,
         OccurredAt = DateTimeOffset.UtcNow,
         OrderId = orderId,
         TrackingNumber = $"TRACK-{Guid.CreateVersion7()}"

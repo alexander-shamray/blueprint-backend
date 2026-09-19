@@ -97,14 +97,6 @@ public sealed class OutboxMetrics
     /// instruments being collected — a database outage taking telemetry with
     /// it that has nothing to do with the database.
     /// <para>
-    /// This repository proved that on itself:
-    /// <c>A_foreign_meter_of_the_same_name_is_not_collected</c> only avoids a
-    /// <c>SqlException</c> by never enabling the foreign callback, which is a
-    /// demonstration that enabling it would have thrown through the collector.
-    /// An earlier comment on <c>OutboxStats</c> claimed the SDK swallowed it;
-    /// that was an assumption, and this makes it true by construction instead.
-    /// </para>
-    /// <para>
     /// Returning no measurements is the right failure for a <em>transient</em>
     /// outage: the series goes absent for that interval, and an outbox alert
     /// firing because SQL Server is briefly unreachable would page the wrong
@@ -115,19 +107,16 @@ public sealed class OutboxMetrics
     /// not cover it.</b> Schema drift, a revoked grant or a renamed table make
     /// every read fail for ever — and then all four outbox alerts are silent
     /// while the service stays ready, because §13.5's readiness check proves
-    /// the connection opens and nothing about this table. An earlier version of
-    /// this remark said readiness "already reports properly"; it reports
-    /// connectivity, which is not the same claim. That is why the failure is
-    /// <b>logged</b> rather than only swallowed: an empty outbox dashboard is
-    /// indistinguishable from a healthy one, and the log is the only thing that
-    /// tells them apart.
+    /// the connection opens and nothing about this table. That is why the
+    /// failure is <b>logged</b> rather than only swallowed: an empty outbox
+    /// dashboard is indistinguishable from a healthy one, and the log is the
+    /// only thing that tells them apart.
     /// </para>
     /// <para>
     /// <b>An alert on the absence itself would be the complete answer and is
     /// deliberately not here.</b> It needs a thirteenth alert, a thirteenth
     /// runbook and a row in §13.6's table — a chapter decision rather than a
-    /// fix, and one taken at a review ceiling would be the worst moment for it.
-    /// Named as owed, on the same terms as §13.6's four unloaded alerts.
+    /// fix. Named as owed, on the same terms as §13.6's four unloaded alerts.
     /// </para>
     /// </remarks>
     private static List<Measurement<double>> PerLane(Func<OutboxLane, double> read, ILogger logger)

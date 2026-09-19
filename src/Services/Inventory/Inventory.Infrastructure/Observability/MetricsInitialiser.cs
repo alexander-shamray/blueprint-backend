@@ -18,9 +18,9 @@ namespace Inventory.Infrastructure.Observability;
 /// <para>
 /// <b>The test for membership is not "is it a gauge" — it is "can this service
 /// run for an hour without constructing it".</b> For every type below the
-/// answer is yes. <see cref="RequestMetrics"/> is the worked example and the
-/// one that nearly got left out: <c>LoggingBehavior</c> injects it and a
-/// behaviour runs on every dispatched request, which is not the same as
+/// answer is yes. <see cref="RequestMetrics"/> is the worked example:
+/// <c>LoggingBehavior</c> injects it and a behaviour runs on every
+/// dispatched request, which is not the same as
 /// something having constructed it — a health probe is mapped by
 /// <c>MapHealthChecks</c> (§13.5) and never enters the pipeline, and a canary
 /// before cutover or a service whose traffic has simply stopped publishes

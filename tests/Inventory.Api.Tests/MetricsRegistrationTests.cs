@@ -205,8 +205,6 @@ public class MetricsRegistrationTests
     /// the same meter <i>name</i>, resolved from a container whose connection
     /// string points nowhere. Under a name filter its callbacks run and throw
     /// <c>SqlException</c>; under the instance filter they are never enabled.
-    /// The test that found this constructs no database at all, which is what
-    /// made the failure so confusing to read.
     /// </para>
     /// </remarks>
     [Fact]

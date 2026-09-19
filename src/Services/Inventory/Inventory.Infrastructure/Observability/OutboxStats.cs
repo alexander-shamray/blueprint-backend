@@ -26,14 +26,13 @@ namespace Inventory.Infrastructure.Observability;
 /// <para>
 /// <b>Failure surfaces as an absent series, and <see cref="OutboxMetrics"/> is
 /// what makes that true.</b> This type throws — a timeout or an unreachable
-/// server is a <c>SqlException</c> like any other. An earlier comment here
-/// claimed the SDK swallowed it; it does not, and
+/// server is a <c>SqlException</c> like any other — and
 /// <c>MeterListener.RecordObservableInstruments</c> abandons the rest of the
-/// pass, so the containment lives in the callback rather than in an assumption
-/// about the collector. Nothing here tries to be clever about a database that
-/// is down: readiness (§13.5) already covers that, and an outbox alert firing
-/// because SQL Server is unreachable would page the wrong person with the
-/// wrong runbook.
+/// pass, so the containment lives in the callback rather than in this type.
+/// Nothing here tries to be clever about a database that is down: readiness
+/// (§13.5) already covers that, and an outbox alert firing because SQL
+/// Server is unreachable would page the wrong person with the wrong
+/// runbook.
 /// </para>
 /// </remarks>
 internal sealed class OutboxStats : IOutboxStats, IDisposable
@@ -43,15 +42,10 @@ internal sealed class OutboxStats : IOutboxStats, IDisposable
     /// long enough that a burst of scrapes does not become a burst of queries.
     /// </summary>
     /// <remarks>
-    /// <b>Each instrument is cached under its own key, so this is three
-    /// statements per lane and six per collection — not one shared snapshot.</b>
-    /// An earlier comment here claimed the three shared a round trip; they do
-    /// not, and the entry is per <c>(question, lane)</c> because that is the
-    /// shape §13.6 specifies. The cost is six aggregate queries over a filtered
-    /// index per export interval, which at the SDK's default of sixty seconds
-    /// is six a minute — small enough that collapsing them into one grouped
-    /// query would be an optimisation rather than a fix, and large enough that
-    /// removing the cache would not be.
+    /// <b>Each instrument is cached under its own key — one entry per
+    /// <c>(question, lane)</c> pair, not one shared snapshot.</b> That is the
+    /// shape §13.6 specifies, and collapsing the three questions into one
+    /// grouped query would be an optimisation rather than a fix.
     /// <para>
     /// <c>GetOrCreate</c> takes no lock, so two concurrent scrapes can both
     /// miss and both query. Harmless for a read, and worth knowing before
@@ -89,11 +83,11 @@ internal sealed class OutboxStats : IOutboxStats, IDisposable
     /// </summary>
     /// <remarks>
     /// <b>A <c>commandTimeout</c> starts once a connection is open.</b>
-    /// SqlClient's default connect timeout is fifteen seconds, so against a
-    /// database that black-holes rather than refuses, the open blocks first and
-    /// the command timer never gets a chance — the safeguard above would be
-    /// stated and absent, which is the failure this whole pull request keeps
-    /// finding in other people's guards.
+    /// Against a database that black-holes rather than refuses, the open
+    /// itself can hang before a command is ever sent, so
+    /// <see cref="CommandTimeoutSeconds"/> never gets a chance to bound the
+    /// wait — <see cref="ConnectTimeoutSeconds"/> exists to bound the connect
+    /// phase on its own rather than leaving it to SqlClient's default.
     /// </remarks>
     public const int ConnectTimeoutSeconds = 2;
 
