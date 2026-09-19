@@ -122,6 +122,18 @@ class ShellComments(unittest.TestCase):
                 "x=`echo '# no'` # last\n")
         self.assertEqual(said(gate.shell, text), ["yes", "also", "last"])
 
+    def test_a_dollar_quoted_heredoc_word_loses_its_dollar(self):
+        for opener in ["$'EOF'", '$"EOF"']:
+            with self.subTest(opener=opener):
+                text = f"cat <<{opener}@# no@EOF@# after@".replace("@", "\n")
+                self.assertEqual(said(gate.shell, text), ["after"])
+
+    def test_a_substitution_inside_arithmetic_is_code(self):
+        text = ("v=$(( $(count # yes@) + 1 )) # also@"
+                "((w = `count # third@` << 2)) # last@").replace("@", "\n")
+        self.assertEqual(said(gate.shell, text),
+                         ["yes", "also", "third", "last"])
+
     def test_a_heredoc_word_is_read_whole(self):
         for opener in ["END-OF-FILE", "END-OF'-FILE'", 'EN"D"-OF-FILE']:
             with self.subTest(opener=opener):
@@ -190,6 +202,22 @@ class YamlComments(unittest.TestCase):
                 text = f"- {key}: |\n    echo '# no' # yes\n"
                 self.assertEqual(said(gate.yaml, text), ["yes"])
 
+    def test_a_node_property_comes_before_the_scalar_it_decorates(self):
+        for line in ['key: &name "x #12"', 'key: !!str "x #12"',
+                     "- !tag &a 'x #12'"]:
+            with self.subTest(line=line):
+                self.assertEqual(said(gate.yaml, line + "\n"), [])
+        self.assertEqual(said(gate.yaml, 'key: a !b "c # yes' + "\n"), ["yes"])
+
+    def test_a_folded_run_block_is_read_folded(self):
+        folded = ("- run: >@    true # yes@    echo '#12'@"
+                  "      kept # own@@    last # end@").replace("@", "\n")
+        self.assertEqual(said(gate.yaml, folded),
+                         ["yes\n    echo '#12'", "own", "end"])
+        self.assertEqual(len(judged("w.yml", folded)), 1)
+        literal = folded.replace(">", "|", 1)
+        self.assertEqual(judged("w.yml", literal), [])
+
     def test_a_run_block_comment_lands_on_its_own_line(self):
         text = "- run: |\n    true\n    # PR-1\n"
         self.assertEqual([line for _, line, _ in judged("w.yml", text)], [3])
@@ -224,7 +252,8 @@ class WhichFilesAreRead(unittest.TestCase):
 class ThePatterns(unittest.TestCase):
     def test_each_pattern_fails_a_comment_and_passes_as_code(self):
         samples = ["see #12", "PR-7", "Copilot said so", "found in review",
-                   "it used to", "went stale", "this comment said",
+                   "it used to", "Used to be one", "went stale",
+                   "this comment said",
                    "**stress**", "<b>stress</b>"]
         for sample in samples:
             with self.subTest(sample=sample):

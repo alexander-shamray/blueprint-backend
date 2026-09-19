@@ -26,7 +26,8 @@ PATTERNS = [
     ("a reviewer", re.compile(r"Copilot|Grok|CodeQL|found in review"),
      (".claude/",)),
     ("history", re.compile(r"\b(used to|went stale|"
-                           r"this (line|sentence|comment) (said|carried))\b"),
+                           r"this (line|sentence|comment) (said|carried))\b",
+                           re.IGNORECASE),
      ()),
     ("emphasis", re.compile(r"\*\*[^*]+\*\*|</?b>"), ()),
 ]
@@ -292,6 +293,8 @@ def _sh_heredoc_word(text, i):
         elif c == "\\" and i + 1 < n:
             word.append(text[i + 1])
             i += 2
+        elif c == "$" and text[i + 1:i + 2] in ("'", '"'):
+            i += 1
         elif c in "'\"":
             close = text.find(c, i + 1)
             if close < 0 or "\n" in text[i:close]:
@@ -334,12 +337,8 @@ def _sh_code(text, i, found, closing):
             if closing == "`":
                 return i + 1
             i = _sh_code(text, i + 1, found, closing="`")
-        elif text.startswith("$((", i) and _sh_arithmetic(text, i + 3):
-            i = _sh_arithmetic(text, i + 3)
-        elif (text.startswith("((", i)
-              and (i == 0 or text[i - 1] in _SH_WORD_BREAK)
-              and _sh_arithmetic(text, i + 2)):
-            i = _sh_arithmetic(text, i + 2)
+        elif (end := _sh_arithmetic_at(text, i, found)) is not None:
+            i = end
         elif text.startswith("$(", i):
             i = _sh_code(text, i + 2, found, closing=")")
         elif text.startswith("${", i):
@@ -367,12 +366,34 @@ def _sh_code(text, i, found, closing):
     return i
 
 
-def _sh_arithmetic(text, i):
+def _sh_arithmetic_at(text, i, found):
+    """Past the arithmetic context opening at `i`, or None when none does."""
+    if text.startswith("$((", i):
+        body = i + 3
+    elif text.startswith("((", i) and (i == 0
+                                       or text[i - 1] in _SH_WORD_BREAK):
+        body = i + 2
+    else:
+        return None
+    inner = []
+    end = _sh_arithmetic(text, body, inner)
+    if end is not None:
+        found.extend(inner)
+    return end
+
+
+def _sh_arithmetic(text, i, found):
     """Past the `))` closing an arithmetic context, where `<<` is a shift and
     `#` a base; None when the parentheses were nested subshells after all."""
     depth = 0
     while i < len(text):
         c = text[i]
+        if text.startswith("$(", i) and not text.startswith("$((", i):
+            i = _sh_code(text, i + 2, found, closing=")")
+            continue
+        if c == "`":
+            i = _sh_code(text, i + 1, found, closing="`")
+            continue
         if c == "(":
             depth += 1
         elif c == ")" and depth:
@@ -453,17 +474,21 @@ _ITEM_PREFIX = re.compile(r"^[ ]*(?:-[ ]+)*")
 
 
 _ENTRY_INDICATOR = re.compile(r"[ ]*(?:-[ ]+)*[-?]")
+_NODE_PROPERTY = re.compile(r"(?:^|(?<=[ \t]))[&!][^ \t]*[ \t]+$")
 
 
 def _opens_scalar(line, j):
     """Whether a quote at `j` starts a scalar; mid-scalar it is plain text."""
-    before = line[:j].rstrip()
+    head = line[:j]
+    while (match := _NODE_PROPERTY.search(head)):
+        head = head[:match.start()]
+    before = head.rstrip()
     last = before[-1:]
     if last in ("", "[", "{", ","):
         return True
     if last == ":":
-        return before != line[:j] or before[-2:-1] in ("'", '"')
-    return before != line[:j] and bool(_ENTRY_INDICATOR.fullmatch(before))
+        return before != head or before[-2:-1] in ("'", '"')
+    return before != head and bool(_ENTRY_INDICATOR.fullmatch(before))
 
 
 def yaml(text):
@@ -473,6 +498,7 @@ def yaml(text):
     quote = None
     scalar_parent = None
     script = None
+    folded = False
     for start in starts:
         end = _line_end(text, start)
         line = text[start:end]
@@ -483,7 +509,7 @@ def yaml(text):
                     script.append((start, end))
                 continue
             scalar_parent = None
-            _run_block(text, script, found)
+            _run_block(text, script, found, folded)
             script = None
         code_end = len(line)
         j = 0
@@ -515,19 +541,22 @@ def yaml(text):
             if not _INDICATOR.fullmatch(owner):
                 scalar_parent = len(prefix)
                 script = [] if _RUN_KEY.match(owner) else None
+                folded = ">" in code[_BLOCK_SCALAR.search(code).start():]
             elif prefix.strip():
                 scalar_parent = code.rfind("-", 0, len(prefix))
             else:
                 scalar_parent = indent - 1
-    _run_block(text, script, found)
+    _run_block(text, script, found, folded)
     return found
 
 
 _RUN_KEY = re.compile(r"""(?:run|"run"|'run')[ \t]*:\s""")
 
 
-def _run_block(text, rows, found):
-    """A `run:` block's comments, read as the runner's shell reads it."""
+def _run_block(text, rows, found, folded):
+    """A `run:` block's comments, read as the runner's shell reads it: `>`
+    joins neighbouring lines at the block's own indent before the shell sees
+    them, so a comment there runs on through the lines folded into it."""
     content = [text[s:e] for s, e in rows or [] if text[s:e].strip()]
     if not content:
         return
@@ -538,6 +567,11 @@ def _run_block(text, rows, found):
         cut = min(indent, end - start)
         script.append(text[start + cut:end] + "\n")
         where.extend(range(start + cut, end + 1))
+    if folded:
+        for k in range(len(script) - 1):
+            if all(row.strip() and row[0] not in " \t"
+                   for row in script[k:k + 2]):
+                script[k] = script[k][:-1] + " "
     for comment in shell("".join(script)):
         found.append(Comment(where[comment.start], where[comment.end - 1] + 1,
                              where[comment.body_start],
