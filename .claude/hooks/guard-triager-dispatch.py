@@ -1,30 +1,12 @@
 #!/usr/bin/env python3
 """Let the /review-grok triager dispatch the adjudicator and nothing else.
 
-**The profile cannot say this, and neither can the command that spawns it.**
-`review-grok-triager` holds `Agent` because `/review-grok`'s method starts by
-dispatching `review-adjudicator`, and a type list inside a subagent's `Agent`
-grant is ignored — so the profile admits every type. No command's deny list
-binds it either: `/review-grok`'s names the types and is not applied inside
-an agent, and `/ship` could not deny `review-grok-triager` itself, the one
-type it grants. So the triager could spawn another triager: an editing agent
-dispatched by one that has been reading an untrusted review, which is the
-shape the split between adjudication and application exists to refuse.
-
-**So the rule is one comparison, and it is wired only where it applies.** This
-hook sits in the triager profile's own `hooks:`, not in `settings.json`, so it
-judges the triager's dispatches and nobody else's: `/ship` spawning the
-triager, or a sweep spawning its auditor, never reaches it. A dispatch whose
-`subagent_type` is exactly `review-adjudicator` passes; anything else — the
-triager itself, a built-in, a missing type, which the harness would default to
-`general-purpose` — is refused.
-
-**It fails closed, unlike the two session-wide guards.** They fail open on an
-unreadable event because refusing every call would turn a defect in the guard
-into a dead session. This one guards one agent's dispatches, so the cost of
-refusing is a stopped triage — which `/ship` reports as a step that did not
-run — and the cost of admitting is the recursion above. Exit 2 is the only
-code that blocks a `PreToolUse` call; any other non-zero exit lets it through.
+A type list inside a subagent's `Agent` grant is ignored, and no command's
+deny list binds inside an agent, so the profile alone admits every type, the
+triager itself included. Wired in the profile's own `hooks:`, this judges the
+triager's dispatches and nobody else's. It fails closed, because a wrong
+refusal costs one stopped triage, and exit 2 is the only code that blocks a
+`PreToolUse` call. `docs/harness-boundaries.md` owns the argument.
 """
 import json
 import sys

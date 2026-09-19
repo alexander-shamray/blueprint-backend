@@ -2331,8 +2331,8 @@ def _offence(command, depth, judged):
     return None
 
 
-# **Every scan here must finish inside the hook's timeout, because a hook that
-# times out is non-blocking.** The scanners as a whole grow faster than
+# Every scan here must finish inside the hook's timeout, because a hook that
+# times out is non-blocking. The scanners as a whole grow faster than
 # linearly in the command's length: measured here, 200,000 plain characters
 # took 6 seconds and 1,000,000 took 58, against a default timeout of 60. A
 # command past `LENGTH_BUDGET` is refused before any scan runs, which fails

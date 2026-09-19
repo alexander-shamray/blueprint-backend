@@ -1,44 +1,12 @@
 #!/usr/bin/env python3
 """Refuse the /review-grok triager every edit `/review-grok` refuses itself.
 
-**A frontmatter `disallowed-tools` binds only the turn it was loaded in, and
-not at all inside an agent**, and `/ship` step 5 runs the triage in one, so
-the trees `review-grok.md` denies `Edit` would bind nothing there — in the
-rounds reading an untrusted review, holding `Edit`.
-`docs/harness-boundaries.md` owns the measurement.
-
-**So the boundary sits on the profile, where a turn cannot end it.** This hook
-is wired in `review-grok-triager.md`'s own `hooks:`, like
-`guard-triager-dispatch.py` beside it, so it judges the triager's edits and
-nobody else's.
-
-**It holds no copy of the list.** The trees are read from `/review-grok`'s
-`disallowed-tools` on every call — the `Edit(...)` entries, from the
-`review-grok.md` beside this file — so the list has one owner and a path
-added there is refused here with no second edit to forget.
-
-**The triager edits the checkout it was spawned in and nothing else.** The
-root is the checkout holding the event's `cwd`; a target outside it — a
-sibling worktree, another repository, a temp path — is refused, and so is
-any target when `cwd` is in no checkout. Inside it, the target is judged
-relative to that root against the patterns, both as spelled and as resolved.
-
-**Matching ignores case on every host.** Windows and macOS file systems do,
-so `readme.md` there is `README.md`; on a case-sensitive Linux file system
-this deliberately over-refuses a distinct file differing only in case, which
-is the safe direction for a boundary. For the same reason the trailing dots,
-spaces and `:stream` suffixes Windows drops are folded before matching.
-
-**One question, and another guard answers the rest.** Whether a path is the
-file it spells — a link, a junction, an alternate spelling — is
-`guard-edit-target.py`'s subject, wired session-wide in `settings.json` and
-so in force here too.
-
-**It fails closed, like the dispatch guard and unlike the session-wide two.**
-An unreadable event, or a `review-grok.md` yielding no `Edit(...)` patterns,
-refuses
-the edit: a guard that cannot find its rules and admits everything is no
-boundary. Exit 2 is the only code that blocks a `PreToolUse` call.
+A frontmatter `disallowed-tools` is not applied inside an agent, so the trees
+are read from `review-grok.md`'s `Edit(...)` entries on every call: one owner,
+no copy here. A target outside the checkout holding the event's `cwd` is
+refused too. It fails closed, because a guard that cannot find its rules and
+admits everything is no boundary, and exit 2 is the only code that blocks a
+`PreToolUse` call. `docs/harness-boundaries.md` owns the argument.
 """
 import json
 import os
@@ -78,9 +46,10 @@ def patterns():
 def compile_glob(glob):
     """A permission-rule glob as an anchored, case-insensitive regex.
 
-    `**/` is zero or more directories, a trailing `**` everything beneath,
-    `*` and `?` stay within one component. A pattern with no `**/` prefix is
-    anchored at the checkout root, as the rule it copies is.
+    A double star with a slash is zero or more directories, a trailing
+    double star everything beneath, and `*` and `?` stay within one
+    component. A pattern that does not open with a double star is anchored
+    at the checkout root, as the rule it copies is.
     """
     out = []
     i = 0
@@ -116,7 +85,12 @@ def checkout_root(path):
 
 
 def relative(path, root):
-    """`path` relative to `root`, `/`-separated and folded, or `None`."""
+    """`path` relative to `root`, `/`-separated and folded, or `None`.
+
+    Folded means without the trailing dots, spaces and `:stream` suffixes
+    Windows drops; with the case-blind match, that over-refuses on a
+    case-sensitive file system, which is the safe direction for a boundary.
+    """
     try:
         rel = os.path.relpath(path, root)
     except ValueError:

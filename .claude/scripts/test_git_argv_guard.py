@@ -2565,7 +2565,7 @@ class TheGitArgvGuard(unittest.TestCase):
         self.assertRefused("${" * 500 + "; git push origin +HEAD:main")
 
     def test_a_command_too_long_to_judge_in_time_is_refused(self):
-        # **The same fail-open by exhaustion, reached by length alone.** The
+        # The same fail-open by exhaustion, reached by length alone. The
         # scanners grow faster than linearly in the command: 1,000,000 plain
         # characters took 58 of the hook's 60 seconds, and a little more is no
         # verdict at all. `LENGTH_BUDGET` refuses before any scan runs.
