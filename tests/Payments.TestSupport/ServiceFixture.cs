@@ -270,6 +270,17 @@ public sealed class ServiceFixture : IAsyncLifetime
 
         await _respawner.ResetAsync(connection);
 
+        // The mappings as well as the log, and the mappings are the half that
+        // bites. A test that stubs an answer — a 409 on the void key, say —
+        // adds a mapping the log reset does not touch, so it keeps answering
+        // for every test that runs after it in this collection. That is
+        // invisible where it is caused and shows up as unrelated tests failing
+        // in whatever order xUnit chose, which is the shape of a defect nobody
+        // can reproduce in isolation. Re-reading the simulator's own mappings
+        // (§14.1) is what makes the baseline the same for every test.
+        Provider.ResetMappings();
+        Provider.ReadStaticMappings(SimulatorMappings.Directory());
+        Provider.ResetScenarios();
         Provider.ResetLogEntries();
     }
 
