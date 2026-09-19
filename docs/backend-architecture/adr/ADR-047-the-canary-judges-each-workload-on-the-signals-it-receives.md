@@ -17,8 +17,11 @@ declarations to the code: a service whose tree registers a MassTransit consumer
 declares `consume` and one that registers a saga declares `saga`, or carries a
 non-empty `consumeExemption` or `sagaExemption` that argues why not; an
 exemption on a service with nothing to exempt, or beside the signal it exempts,
-fails. The queries are code: `canary.py` renders one PromQL template per signal
-and role, and the plan declares signals and holds no query text. Every
+fails, and a declared message signal needs its registration. Every workload is
+an ASP.NET Core host, so one that does not declare `http` argues a non-empty
+`httpExemption`; Inventory's, for admin routes too quiet to reach the minimum,
+is the first. The queries are code: `canary.py` renders one PromQL template per
+signal and role, and the plan declares signals and holds no query text. Every
 MassTransit series a template reads must be an exact entry in a table of
 exported series, verified against the pinned MassTransit version, and the check
 fails when the pin moves. The probe exclusion is derived from every route

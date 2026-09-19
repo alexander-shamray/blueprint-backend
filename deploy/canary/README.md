@@ -62,7 +62,10 @@ every chart and asserts what comes out.
    service whose tree registers a MassTransit
    consumer declares `consume`, and one that registers a saga declares `saga`,
    or carries a non-empty `consumeExemption` or `sagaExemption` — which fails
-   on a service with nothing to exempt, or beside the signal it exempts.
+   on a service with nothing to exempt, or beside the signal it exempts. A
+   declared `consume` or `saga` needs its registration, and a workload that
+   does not declare `http` argues a non-empty `httpExemption`, since every
+   workload is an ASP.NET Core host.
 10. The probe-route scan finds the routes `MapHealthChecks` maps in `src/`,
     and every call site's route is a literal. The `http` templates' exclusion
     is derived from those routes, so a new probe route is excluded without an
