@@ -9,22 +9,27 @@ public static class SimulatorMappings
 {
     public static string Directory()
     {
+        string root = RepositoryRoot();
+        string mappings = Path.Combine(root, "deploy", "compose", "psp-simulator", "mappings");
+        if (!System.IO.Directory.Exists(mappings))
+        {
+            throw new InvalidOperationException(
+                $"Found the solution at {root} but no simulator mappings at {mappings} (§14.1).");
+        }
+
+        return mappings;
+    }
+
+    /// <summary>The directory holding <c>Platform.slnx</c>, walked up to from the test's own output.</summary>
+    public static string RepositoryRoot()
+    {
         for (DirectoryInfo? dir = new(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
         {
-            if (!File.Exists(Path.Combine(dir.FullName, "Platform.slnx")))
-                continue;
-
-            string mappings = Path.Combine(dir.FullName, "deploy", "compose", "psp-simulator", "mappings");
-            if (!System.IO.Directory.Exists(mappings))
-            {
-                throw new InvalidOperationException(
-                    $"Found the solution at {dir.FullName} but no simulator mappings at {mappings} (§14.1).");
-            }
-
-            return mappings;
+            if (File.Exists(Path.Combine(dir.FullName, "Platform.slnx")))
+                return dir.FullName;
         }
 
         throw new InvalidOperationException(
-            $"No Platform.slnx above {AppContext.BaseDirectory}; the simulator's mappings cannot be found.");
+            $"No Platform.slnx above {AppContext.BaseDirectory}; the simulator's files cannot be found.");
     }
 }
