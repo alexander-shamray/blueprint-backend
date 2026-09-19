@@ -19,8 +19,12 @@ public sealed class ReinstateReservationHandler(
         Reservation? reservation = await reservations.GetForUpdateAsync(new OrderId(command.OrderId), ct);
         if (reservation is null)
             return Result.Failure(ReservationErrors.NotFound);
-        if (reservation.Status != ReservationStatus.Released || reservation.Lines.Count == 0)
+        if (reservation.Status != ReservationStatus.Released
+            || reservation.Lines.Count == 0
+            || reservation.DespatchedUnreservedAt is not null)
+        {
             return Result.Failure(ReservationErrors.NotReinstatable);
+        }
 
         LedgerOutcome outcome = await ledger.TryTakeAsync(reservation.Lines, ct);
         if (outcome.Unavailable.Count > 0)

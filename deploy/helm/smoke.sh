@@ -30,8 +30,8 @@ CIDR='{10.42.0.0/16}'
 GATEWAY_OVERLAY="--set ingress.trustedNetworks=$CIDR"
 PLATFORM_OVERLAY="--set gateway.ingress.trustedNetworks=$CIDR"
 
-SERVICE_CHARTS="catalog ordering gateway web-bff"
-MIGRATOR_CHARTS="catalog ordering"
+SERVICE_CHARTS="catalog ordering inventory gateway web-bff"
+MIGRATOR_CHARTS="catalog ordering inventory"
 DATABASELESS_CHARTS="gateway web-bff"
 
 # Every path outside deploy/helm that this script reads, declared once beside
@@ -43,6 +43,7 @@ src/Gateway/Gateway.Api
 src/BFF/Web.Bff
 src/Services/Catalog
 src/Services/Ordering
+src/Services/Inventory
 src/BuildingBlocks/Common.Web/HealthCheckExtensions.cs
 .gitattributes
 deploy/canary/canary.json
@@ -289,7 +290,22 @@ for chart in $SERVICE_CHARTS; do
     pass "$chart resolves commerce-common"
 done
 "$HELM" dependency update "$CHARTS_DIR/platform" --skip-refresh >/dev/null
-pass 'platform resolves its four subcharts'
+pass 'platform resolves its subcharts'
+
+# `helm dependency update` only checks that every NAMED dependency resolves —
+# deleting one from the list still updates cleanly, the routed-service section
+# further down reports "no chart yet" for what it dropped and passes, and every
+# render after this point simply has one fewer subchart. So the umbrella's own
+# dependency names are reconciled against SERVICE_CHARTS directly, both ways.
+deps_declared="$(awk '/^dependencies:/ { d = 1; next } d && /^  - name: / { print $3 }' \
+    "$CHARTS_DIR/platform/Chart.yaml" | sort | tr '\n' ' ' | sed 's/ *$//')"
+if [ "$deps_declared" = "$listed" ]; then
+    pass "platform/Chart.yaml depends on exactly SERVICE_CHARTS ($deps_declared)"
+else
+    deps_missing="$(comm -23 <(printf '%s\n' $listed) <(printf '%s\n' $deps_declared))"
+    deps_extra="$(comm -13 <(printf '%s\n' $listed) <(printf '%s\n' $deps_declared))"
+    fail "platform/Chart.yaml's dependencies ($deps_declared) do not match SERVICE_CHARTS ($listed) — missing: ${deps_missing:-none}, extra: ${deps_extra:-none}"
+fi
 
 # --------------------------------------------------------------------------
 section 'helm lint'
@@ -298,6 +314,7 @@ for chart in $SERVICE_CHARTS platform; do
     check "$chart lints" "$HELM" lint "$CHARTS_DIR/$chart" --set-string "image.tag=$TAG" \
         --set-string "catalog.image.tag=$TAG" \
         --set-string "ordering.image.tag=$TAG" \
+        --set-string "inventory.image.tag=$TAG" \
         --set-string "gateway.image.tag=$TAG" \
         --set-string "web-bff.image.tag=$TAG" \
         $GATEWAY_OVERLAY $PLATFORM_OVERLAY
@@ -332,6 +349,7 @@ done
 "$HELM" template platform "$CHARTS_DIR/platform" \
     --set-string "catalog.image.tag=$TAG" \
     --set-string "ordering.image.tag=$TAG" \
+    --set-string "inventory.image.tag=$TAG" \
     --set-string "gateway.image.tag=$TAG" \
     --set-string "web-bff.image.tag=$TAG" \
     $PLATFORM_OVERLAY >"$OUT/platform.yaml"
@@ -661,8 +679,9 @@ done <"$OUT/pairs.txt"
 section 'Values that must agree across charts'
 # --------------------------------------------------------------------------
 # §15.3 gives each chart its own values file, so a platform-wide value is
-# written four times. That is the chapter's design and it is also a drift
-# risk — converted here into a gated invariant rather than left to review.
+# written once per service chart. That is the chapter's design and it is also
+# a drift risk — converted here into a gated invariant rather than left to
+# review.
 for key in Identity__Authority OTEL_EXPORTER_OTLP_ENDPOINT; do
     distinct="$(grep -h "^ *$key:" "$OUT/platform.yaml" | sed 's/^ *//' | sort -u | wc -l)"
     check "$key has one value across every chart (found $distinct)" test "$distinct" -eq 1

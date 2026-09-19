@@ -1,5 +1,8 @@
 using Common.Application;
+using Common.Contracts.Ordering.V1;
+using Common.Contracts.Shipping.V1;
 using FluentValidation;
+using Inventory.Application.Reservations.Fulfil;
 using Inventory.Application.Reservations.GetReservation;
 using Inventory.Application.Reservations.Reinstate;
 using Inventory.Application.Reservations.ReleaseStock;
@@ -194,5 +197,13 @@ public class DependencyInjectionTests
             d.ServiceType == typeof(ICommandHandler<ReinstateReservationCommand, Result>));
         services.ShouldContain(d =>
             d.ServiceType == typeof(IQueryHandler<GetReservationQuery, ReservationDto?>));
+        services.ShouldContain(d =>
+            d.ServiceType == typeof(ICommandHandler<FulfilReservationCommand, Result>));
+        services.ShouldContain(d =>
+            d.ServiceType == typeof(IValidator<FulfilReservationCommand>));
+        services.ShouldContain(d =>
+            d.ServiceType == typeof(IIntegrationEventHandler<OrderCancelled>));
+        services.ShouldContain(d =>
+            d.ServiceType == typeof(IIntegrationEventHandler<ShipmentDispatched>));
     }
 }

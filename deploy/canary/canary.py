@@ -175,17 +175,14 @@ def validate_tag(tag: str, job_prefix: str | None = None) -> None:
                 "--set-string would read as a second assignment"
             )
 
-    # AND THE MIGRATION JOB'S NAME, which is a tighter budget than the label's
-    # on any chart that has one. `_migration-job.tpl` derives
-    # `<workload>-migrate-<tag>` and refuses it past 63 — correctly, and at
-    # RENDER time, which on this path is after the stable track has already
-    # been scaled to nineteen. Sixty-three characters is a tag this preflight
-    # accepted and the chart then rejected, which is the preflight failing at
-    # the one job it has: to move that refusal in front of the scale-up.
-    #
-    # `catalog-api-migrate-` costs 20 and `ordering-api-migrate-` 21, leaving
-    # 43 and 42. Derived here rather than written down, so a workload renamed
-    # in canary.json moves its own budget with it.
+    # The migration Job's name is a tighter budget than the label's on any
+    # chart that has one: `_migration-job.tpl` derives
+    # `<workload>-migrate-<tag>` and refuses it past 63 at render time, which
+    # on this path is after the stable track has been scaled up. Moving that
+    # refusal in front of the scale-up is the one job this preflight has.
+    # The prefix comes from canary.json's workload map rather than being
+    # written down, so a workload added there brings its own budget with it,
+    # and the longest prefix among them sets the tightest one.
     if job_prefix is not None and len(job_prefix) + len(tag) > 63:
         raise PlanError(
             f"image tag {tag!r} is {len(tag)} characters, and the migration Job "
@@ -479,9 +476,11 @@ def _shout(key: str) -> str:
 def check(plan_document: dict, root: Path = ROOT) -> list[str]:
     """Everything that can be wrong with canary.json without a cluster.
 
-    Seven checks. The last two are the ones this repository keeps learning it
-    needs: one asserts the gate's own subject is non-empty, and one asserts the
-    workflow's path filter covers every input the rollout reads.
+    Failures are collected rather than raised, so one run reports them all.
+    Some checks guard the gate rather than the plan: that its own subject is
+    non-empty, that the workflow's path filter covers every input the rollout
+    reads, and that its dispatch menu covers every workload the rollout can
+    reach.
     """
     failures: list[str] = []
 
@@ -615,6 +614,9 @@ def check(plan_document: dict, root: Path = ROOT) -> list[str]:
 
     # 7. The workflow's triggers cover every input this rollout reads.
     failures += _workflow_covers_inputs()
+
+    # 8. The dispatch menu is exactly the plan's workload set.
+    failures += _dispatch_options_match_workloads(workloads)
 
     return failures
 
@@ -761,6 +763,52 @@ def _workflow_covers_inputs() -> list[str]:
                     f"{WORKFLOW_PATH} trigger {index + 1} does not cover "
                     f"{entry!r}, which deploy/canary/canary.py reads"
                 )
+    return failures
+
+
+def _dispatch_options_match_workloads(workloads: dict) -> list[str]:
+    """The `workload:` dispatch input's `options:` against canary.json's keys.
+
+    An exact set, not a subset either way: an option the plan cannot roll
+    dispatches a release `chart` and `plan` have never heard of, a workload
+    missing from the list is one a manual dispatch cannot choose, and nothing
+    else compares the two. Parsed as a flow sequence on `_alert_threshold`'s
+    terms, and scoped to `workload:`'s own child indentation so that a
+    sibling input's `options:` cannot stand in for this input's own.
+    """
+    try:
+        text = WORKFLOW.read_text(encoding="utf-8")
+    except OSError as error:
+        return [f"{WORKFLOW_PATH} is not readable, so its dispatch options cannot be checked: {error}"]
+
+    block = re.search(r"(?m)^([ \t]*)workload:\n((?:\1[ \t].*\n?)*)", text)
+    child_indent = block and re.match(r"[ \t]+", block.group(2))
+    options_match = child_indent and re.search(
+        rf"(?m)^{re.escape(child_indent.group(0))}options:\s*\[([^\]]*)\]", block.group(2)
+    )
+    if not options_match:
+        return [
+            f"{WORKFLOW_PATH} has no options list for the workload dispatch "
+            "input, so a manual rollout cannot be checked against the plan"
+        ]
+
+    options = {item.strip() for item in options_match.group(1).split(",") if item.strip()}
+    expected = set(workloads)
+
+    failures = []
+    missing = expected - options
+    if missing:
+        failures.append(
+            f"{WORKFLOW_PATH}'s workload dispatch options omit "
+            f"{', '.join(sorted(missing))}: canary.json can roll them and a "
+            "manual dispatch cannot choose them"
+        )
+    extra = options - expected
+    if extra:
+        failures.append(
+            f"{WORKFLOW_PATH}'s workload dispatch options list "
+            f"{', '.join(sorted(extra))}, which is not a workload in canary.json"
+        )
     return failures
 
 

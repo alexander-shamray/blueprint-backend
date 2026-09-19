@@ -15,4 +15,10 @@ public interface IStockLedger
 
     /// <summary>Returns each line to Available with no guard. Levels after.</summary>
     Task<IReadOnlyList<ReservedLevel>> GiveBackAsync(IReadOnlyList<ReservationLine> lines, CancellationToken ct);
+
+    /// <summary>
+    /// Moves each line's Reserved down with no effect on Available. A line
+    /// short of what it holds is a ledger fault, not a business outcome.
+    /// </summary>
+    Task FulfilAsync(IReadOnlyList<ReservationLine> lines, CancellationToken ct);
 }

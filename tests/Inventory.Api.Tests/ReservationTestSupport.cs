@@ -26,6 +26,18 @@ internal static class ReservationTestSupport
     /// </summary>
     public static readonly TimeSpan DeliveryBudget = TimeSpan.FromSeconds(30);
 
+    /// <summary>
+    /// A client carrying <see cref="InventoryPermissions.Admin"/>, for the
+    /// suites whose subject is an admin-only endpoint.
+    /// </summary>
+    public static HttpClient Admin(ServiceFixture fixture)
+    {
+        HttpClient client = fixture.Factory.CreateClient();
+        client.DefaultRequestHeaders.Add(TestAuthHandler.UserHeader, Guid.CreateVersion7().ToString());
+        client.DefaultRequestHeaders.Add(TestAuthHandler.PermissionsHeader, InventoryPermissions.Admin);
+        return client;
+    }
+
     public static Task SeedStock(ServiceFixture fixture, Guid product, int available) =>
         fixture.ExecuteAsync(
             "INSERT INTO inventory.StockItems (ProductId, Available, Reserved, UpdatedAt) " +

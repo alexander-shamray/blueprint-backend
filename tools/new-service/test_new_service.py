@@ -272,21 +272,24 @@ class RendersTheTemplate(unittest.TestCase):
         ]
         self.assertIn("services.AddMassTransitMessaging(configuration);", infrastructure)
 
-        # PR-20's correction, guarded here because nowhere else can guard it.
+        # Guarded here because nowhere else can guard it.
         # ConfigureEndpoints(context) gives a registered consumer with no
         # explicit binding a queue named after its type, carrying neither the
         # inbox filter nor the retry policy §9.8 requires of every endpoint.
-        # Catalog has no consumers, so its own registration tests stay green if
-        # the call comes back — and this file renders Catalog, so a rendered
-        # service is the only place the absence is observable at all. Without
-        # this assertion the trap can be handed silently to every service
-        # generated from here.
+        # This file renders Catalog, and Catalog binds its own consumer
+        # explicitly, so a rendered service is the only place the absence is
+        # observable at all.
         #
-        # The CALL, not the identifier: the template's comment explains why the
-        # line is gone and names it doing so, so a bare "ConfigureEndpoints"
-        # assertion fails on the prose that documents the fix. Caught by
-        # writing it that way first.
+        # The call, not the identifier: the template's comment explains why the
+        # line is gone and names it doing so.
         self.assertNotIn("cfg.ConfigureEndpoints(", messaging)
+
+        # A rendered service subscribes to nothing. Calls are matched rather
+        # than identifiers, because the template's comment names
+        # ReceiveEndpoint.
+        self.assertNotIn(".AddConsumer<", messaging)
+        self.assertNotIn(".ReceiveEndpoint(", messaging)
+        self.assertNotIn("StockLevel", messaging)
 
         self.assertIn(
             "tests/Zulu.Api.Tests/MessagingRegistrationTests.cs", self.rendered.created
@@ -522,6 +525,22 @@ class GeneratedGuidanceIsTrue(unittest.TestCase):
 
         csproj = self.claim("tests/Yankee.Api.Tests/Yankee.Api.Tests.csproj")
         self.assertNotIn("shared with\n         Yankee.Application.Tests", csproj)
+
+    def test_the_fixture_names_no_peer_and_no_contract(self):
+        # A rendered fixture names no peer service and no peer contract, so
+        # the doc comment stays true of a service that consumes nothing of
+        # Inventory's.
+        fixture = self.claim("tests/Yankee.TestSupport/ServiceFixture.cs")
+        self.assertNotIn("StockLevel", fixture)
+        self.assertNotIn("Inventory", fixture)
+
+        # A rendered service starts with no consumer and no receive endpoint,
+        # so it has no reason to inherit the harness-only broker widening a
+        # consuming service's fixture carries; that widening belongs with a
+        # service's first consumer.
+        self.assertNotIn("WidenWriteForTheHarness", fixture)
+        self.assertNotIn("ExecResult", fixture)
+        self.assertNotIn("set_permissions", fixture)
 
 
 class TheMigrationAndItsSnapshot(unittest.TestCase):
@@ -1404,6 +1423,10 @@ class RefusesToRun(unittest.TestCase):
             "src/Services/CATALOGSearch/CATALOGSearch.Domain/AssemblyMarker.cs", rendered.created
         )
 
+    def test_the_compose_header_needs_no_article(self):
+        unit = render().created[UNIT]
+        self.assertIn(f"a PR for {PROBE} edits this file", unit)
+
     def test_a_name_longer_than_a_sql_server_identifier(self):
         # The name is the database and the schema, and `sysname` is
         # nvarchar(128). Past that everything renders and the first migration
@@ -2051,7 +2074,7 @@ class TheCommandLine(unittest.TestCase):
             # `6 updated` and not 7: this root has no `.github/`, so §15.1's
             # allow-list step degrades — which is `TheAllowListStep`'s subject
             # and is asserted there from both sides.
-            self.assertIn("64 files created, 6 updated", out)
+            self.assertIn("65 files created, 6 updated", out)
             self.assertIn(f"port {PORT}", out)
             self.assertTrue((root / "src/Services/Zulu/Zulu.Api/Program.cs").exists())
 

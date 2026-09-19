@@ -1,4 +1,5 @@
 using Inventory.Application.Integration;
+using Inventory.Application.Reservations;
 using Inventory.Application.Stock.SetOnHand;
 using Common.Application;
 using FluentValidation;
@@ -38,6 +39,12 @@ public static class DependencyInjection
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton<RequestMetrics>();
 
+        // §13.3's claim, forced beside RequestMetrics for the reason that one
+        // is: nothing dispatches a request through UnreservedDespatchProjection,
+        // so only MetricsInitialiser constructing this makes the counter exist
+        // before the first claim (§13.6).
+        services.AddSingleton<InventoryMetrics>();
+
         // Ordered, explicit, not scanned — registration order is pipeline
         // order (§6.3), and all four seats are filled.
         //
@@ -66,11 +73,11 @@ public static class DependencyInjection
         // §4.2's sample line. IValidator<T> is not in PluggableInterfaces.All
         // because it is FluentValidation's contract, not one of ours — its own
         // scanner knows its own conventions (Include* filters, internal
-        // validators) and a second scan would drift from it.
-        // Anchored on the first validator rather than the assembly, guarded
-        // by the registration test beside it: ValidationBehavior takes
-        // IEnumerable<IValidator<T>>, so a lost scan is a pipeline that
-        // validates nothing and says so to nobody.
+        // validators) and a second scan would drift from it. Anchored on
+        // SetOnHandValidator rather than on this static class, which cannot be
+        // a type argument. A registration test is what guards this line,
+        // because ValidationBehavior takes IEnumerable<IValidator<T>> and asks
+        // nobody when that sequence comes back empty.
         services.AddValidatorsFromAssemblyContaining<SetOnHandValidator>();
         return services;
     }

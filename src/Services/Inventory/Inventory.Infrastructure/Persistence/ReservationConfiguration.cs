@@ -23,6 +23,8 @@ internal sealed class ReservationConfiguration : IEntityTypeConfiguration<Reserv
         builder.Property(r => r.Status).HasConversion<string>().HasMaxLength(20);
         builder.Property(r => r.CreatedAt).IsRequired();
         builder.Property(r => r.UpdatedAt).IsRequired();
+        builder.Property(r => r.DespatchedUnreservedAt);
+        builder.Property<bool>("UnreservedCounted").HasDefaultValue(false);
 
         // The failed reserve's answer has to be repeatable (ADR-024), so the
         // ids it named are kept with the row. A JSON column rather than a

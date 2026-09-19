@@ -54,10 +54,10 @@ metadata:
   A truncated name is also a name that can collide, which is the quieter half:
   two tags sharing a 63-character prefix would produce one Job.
 
-  So the derived name is checked whole and a tag that does not fit is refused.
-  The budget is comfortable for what CI supplies — `ordering-api-migrate-` is 21
-  characters and a 40-character commit SHA lands on 61 — and a tag that
-  overruns it is a deploy that must fail rather than one that mangles a name.
+  So the derived name is checked whole and a tag that does not fit is
+  refused. The Job name is the migrator prefix plus the image tag, bounded by
+  Kubernetes' name ceiling, and a tag that overruns it fails the render
+  rather than mangling a name.
   */}}
   {{- $jobName := printf "%s-migrate-%s" (include "commerce.name" .) $tag }}
   {{- if gt (len $jobName) 63 }}

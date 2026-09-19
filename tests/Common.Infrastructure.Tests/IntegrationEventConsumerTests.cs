@@ -12,18 +12,14 @@ using Xunit;
 namespace Common.Infrastructure.Tests;
 
 /// <summary>
-/// §9.4's adapter from the broker to <c>IIntegrationEventHandler&lt;T&gt;</c>.
-/// Driven through the in-memory harness rather than by constructing the
-/// consumer, because two of the three claims here are about resolution: that
-/// MassTransit builds the closed generic from the container, and that the
-/// handler collection it injects is the one the §6.2 scan registered.
+/// §9.4's adapter from the broker to <c>IIntegrationEventHandler&lt;T&gt;</c>,
+/// through the in-memory harness rather than by construction: what is under
+/// test is resolution — the closed generic off the container, and the handler
+/// collection the §6.2 scan registered.
 /// </summary>
 /// <remarks>
-/// The contract is test-local, on <c>MessagingRegistrationTests</c>' terms and
-/// for the same reason: this suite needs a payload carrying the §9.1 envelope,
-/// not a published contract other services may come to depend on. Catalog binds
-/// no receive endpoint of its own (§3.2 gives it one Consumes cell, owned by a
-/// service that does not exist), so there is no real consumer to drive instead.
+/// The contract is test-local: a payload carrying the §9.1 envelope, not one
+/// other services depend on.
 /// </remarks>
 public class IntegrationEventConsumerTests
 {

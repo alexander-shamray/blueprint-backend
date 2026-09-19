@@ -182,10 +182,10 @@ public class IdempotencyOptInTests
         // a nested unit.
         //
         // Named by shape rather than by type, because this file is §4.5's
-        // template: Ordering has such a handler and Inventory does not, so a
-        // type name here would reach every rendered service as a near miss
-        // about something it has never had. SLICE_TOKEN would not catch it —
-        // the name carries no slice token — so nothing else would.
+        // template: the near miss here is the reservation slice's own event
+        // consumers, and a type name would reach every rendered service as a
+        // near miss about something it has never had. SLICE_TOKEN would not
+        // catch it — the name carries no slice token — so nothing else would.
         //
         // REACH: constructor parameters, which is where every handler in this
         // solution takes its dependencies. A handler that resolves

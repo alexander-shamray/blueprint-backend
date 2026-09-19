@@ -1,4 +1,5 @@
 using System.Data.Common;
+using System.Text.Json;
 using Catalog.Infrastructure.Persistence;
 using Catalog.Migrator;
 using Common.Application;
@@ -11,6 +12,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using DotNet.Testcontainers.Containers;
 using Respawn;
 using Testcontainers.MsSql;
 using Testcontainers.RabbitMq;
@@ -128,6 +130,57 @@ public sealed class ServiceFixture : IAsyncLifetime
             $"No Platform.slnx above {AppContext.BaseDirectory}; the broker image cannot be built.");
     }
 
+    /// <summary>
+    /// The harness publishes a peer's contract under this service's own
+    /// account, which the deployed grant refuses: a consumer reads a peer's
+    /// exchange and never writes it. Only the test container's write moves.
+    /// </summary>
+    /// <remarks>
+    /// <c>configure</c> and <c>read</c> are read back out of the definitions
+    /// the container imports rather than restated, so the topology this suite
+    /// judges is judged by the scope that deploys.
+    /// </remarks>
+    private async Task WidenWriteForTheHarnessAsync()
+    {
+        const string user = "catalog-svc";
+        const string write = "^(catalog-|Common\\.Contracts|MassTransit:)";
+
+        (string configure, string read) = ImportedGrant();
+
+        ExecResult result = await _rabbit!.ExecAsync(
+            ["rabbitmqctl", "set_permissions", "-p", "/", user, configure, write, read],
+            TestContext.Current.CancellationToken);
+
+        // A silent failure here would surface as every endpoint test retrying
+        // a refused publish until its budget ran out, naming a message rather
+        // than a permission.
+        if (result.ExitCode != 0)
+        {
+            throw new InvalidOperationException(
+                $"Could not widen {user}'s broker permissions for the harness "
+                + $"(exit {result.ExitCode}). stdout: {result.Stdout} stderr: {result.Stderr}");
+        }
+
+        // The mapped file rather than the container, because it is the same
+        // text the broker imported and it can be read before anything starts.
+        static (string Configure, string Read) ImportedGrant()
+        {
+            string path = Path.Combine(BrokerContextPath(), "definitions.json");
+            using JsonDocument definitions = JsonDocument.Parse(File.ReadAllText(path));
+
+            foreach (JsonElement entry in definitions.RootElement.GetProperty("permissions").EnumerateArray())
+            {
+                if (entry.GetProperty("user").GetString() != user || entry.GetProperty("vhost").GetString() != "/")
+                    continue;
+
+                return (entry.GetProperty("configure").GetString()!, entry.GetProperty("read").GetString()!);
+            }
+
+            throw new InvalidOperationException(
+                $"{path} grants {user} nothing on the default vhost, so there is no scope to preserve.");
+        }
+    }
+
     // ValueTask, not Task: xUnit v3 redefined IAsyncLifetime (§12.4).
     public async ValueTask InitializeAsync()
     {
@@ -175,6 +228,8 @@ public sealed class ServiceFixture : IAsyncLifetime
             _rabbit.StartAsync(TestContext.Current.CancellationToken),
             _redisCache.StartAsync(TestContext.Current.CancellationToken),
             _redisCoordination.StartAsync(TestContext.Current.CancellationToken));
+
+        await WidenWriteForTheHarnessAsync();
 
         // The container hands out a connection to master; Catalog owns a
         // database of its own (§7.1), and MigrateAsync is what creates it.

@@ -46,7 +46,8 @@ public sealed class ProductEndpointsTests(ServiceFixture fixture) : IAsyncLifeti
         string? ThumbnailUrl,
         decimal Amount,
         string Currency,
-        DateTimeOffset PublishedAt);
+        DateTimeOffset PublishedAt,
+        int? QuantityAvailable);
 
     /// <summary>
     /// A fresh <c>CommandId</c> per call, and it is load-bearing rather than
@@ -319,6 +320,19 @@ public sealed class ProductEndpointsTests(ServiceFixture fixture) : IAsyncLifeti
         item.Amount.ShouldBe(19.99m);
         item.Currency.ShouldBe("EUR");
         page.NextCursor.ShouldBeNull("one row is one page");
+    }
+
+    [Fact]
+    public async Task An_unreported_product_lists_a_null_level_rather_than_omitting_the_member()
+    {
+        // null and 0 are different facts to a screen: Inventory has said
+        // nothing about this product, and the member says so rather than
+        // vanishing and leaving the reader to guess between the two.
+        await PublishAsync("Walnut desk", 19.99m);
+
+        string body = await _client.GetStringAsync("/v1/catalog/products", TestContext.Current.CancellationToken);
+
+        body.ShouldContain("\"quantityAvailable\":null");
     }
 
     [Fact]

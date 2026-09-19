@@ -48,7 +48,7 @@ global.json, .config/        SDK pin (§4.4); dotnet-ef, pinned to the EF Core v
 Directory.*.props            shared MSBuild settings and ADR-019's analyser policy; exact package pins
 .github/workflows/           ci, compose, helm, observability, deploy, closure-gate, locality-gate, broker-permissions, realm
 .github/<gate>/              licence-gate, secret-scan, closure-gate, locality-gate, pipeline-gate, coverage,
-                             output-gate — a directory each
+                             output-gate, comment-gate — a directory each
 deploy/canary/               §15.5's ladder, its arithmetic and its verdict
 deploy/keycloak/             §11's realm obligations, over any realm
 deploy/compose/              §14.1's model: an index, the shared baseline, one file per unit under services/

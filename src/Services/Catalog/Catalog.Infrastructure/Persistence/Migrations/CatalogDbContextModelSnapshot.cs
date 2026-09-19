@@ -70,6 +70,22 @@ namespace Catalog.Infrastructure.Persistence.Migrations
                     b.ToTable("Products", "catalog");
                 });
 
+            modelBuilder.Entity("Catalog.Infrastructure.Persistence.StockLevel", b =>
+                {
+                    b.Property<Guid>("ProductId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTimeOffset>("AsOf")
+                        .HasColumnType("datetimeoffset(7)");
+
+                    b.Property<int>("QuantityAvailable")
+                        .HasColumnType("int");
+
+                    b.HasKey("ProductId");
+
+                    b.ToTable("StockLevels", "catalog");
+                });
+
             modelBuilder.Entity("Common.Infrastructure.Idempotency.IdempotencyMarker", b =>
                 {
                     b.Property<string>("Key")

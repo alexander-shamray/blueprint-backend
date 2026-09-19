@@ -681,6 +681,78 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
             "/// suite gains a handler test — the two cannot reference each other, so each\n"
             "/// declares its own\n",
         ),
+        # A rendered service starts with no consumer and no receive endpoint,
+        # so it never needs the harness-only broker widening below: that
+        # widening belongs with a service's first consumer, and arrives with
+        # it rather than with the scaffold.
+        (
+            "    /// <summary>\n"
+            "    /// The harness publishes a peer's contract under this service's own\n"
+            "    /// account, which the deployed grant refuses: a consumer reads a peer's\n"
+            "    /// exchange and never writes it. Only the test container's write moves.\n"
+            "    /// </summary>\n"
+            "    /// <remarks>\n"
+            "    /// <c>configure</c> and <c>read</c> are read back out of the definitions\n"
+            "    /// the container imports rather than restated, so the topology this suite\n"
+            "    /// judges is judged by the scope that deploys.\n"
+            "    /// </remarks>\n"
+            "    private async Task WidenWriteForTheHarnessAsync()\n"
+            "    {\n"
+            "        const string user = \"catalog-svc\";\n"
+            "        const string write = \"^(catalog-|Common\\\\.Contracts|MassTransit:)\";\n"
+            "\n"
+            "        (string configure, string read) = ImportedGrant();\n"
+            "\n"
+            "        ExecResult result = await _rabbit!.ExecAsync(\n"
+            "            [\"rabbitmqctl\", \"set_permissions\", \"-p\", \"/\", user, configure, write, read],\n"
+            "            TestContext.Current.CancellationToken);\n"
+            "\n"
+            "        // A silent failure here would surface as every endpoint test retrying\n"
+            "        // a refused publish until its budget ran out, naming a message rather\n"
+            "        // than a permission.\n"
+            "        if (result.ExitCode != 0)\n"
+            "        {\n"
+            "            throw new InvalidOperationException(\n"
+            "                $\"Could not widen {user}'s broker permissions for the harness \"\n"
+            "                + $\"(exit {result.ExitCode}). stdout: {result.Stdout} stderr: {result.Stderr}\");\n"
+            "        }\n"
+            "\n"
+            "        // The mapped file rather than the container, because it is the same\n"
+            "        // text the broker imported and it can be read before anything starts.\n"
+            "        static (string Configure, string Read) ImportedGrant()\n"
+            "        {\n"
+            "            string path = Path.Combine(BrokerContextPath(), \"definitions.json\");\n"
+            "            using JsonDocument definitions = JsonDocument.Parse(File.ReadAllText(path));\n"
+            "\n"
+            "            foreach (JsonElement entry in definitions.RootElement"
+            ".GetProperty(\"permissions\").EnumerateArray())\n"
+            "            {\n"
+            "                if (entry.GetProperty(\"user\").GetString() != user "
+            "|| entry.GetProperty(\"vhost\").GetString() != \"/\")\n"
+            "                    continue;\n"
+            "\n"
+            "                return (entry.GetProperty(\"configure\").GetString()!, "
+            "entry.GetProperty(\"read\").GetString()!);\n"
+            "            }\n"
+            "\n"
+            "            throw new InvalidOperationException(\n"
+            "                $\"{path} grants {user} nothing on the default vhost, "
+            "so there is no scope to preserve.\");\n"
+            "        }\n"
+            "    }\n"
+            "\n",
+            "",
+        ),
+        (
+            "\n"
+            "        await WidenWriteForTheHarnessAsync();\n"
+            "\n",
+            "\n",
+        ),
+        ("using DotNet.Testcontainers.Containers;\n", ""),
+        # The widening above is the fixture's one JSON reader, so its using
+        # leaves with it.
+        ("using System.Text.Json;\n", ""),
     ),
     "tests/Catalog.Api.Tests/Catalog.Api.Tests.csproj": (
         # PricingServiceTests is Catalog's and does not travel, so the package
@@ -847,47 +919,21 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
             "    for this project to exist.\n",
         ),
     ),
-    # Both of the entries below carry the same argument out of a copied file:
-    # *why* Catalog binds no receive endpoint is a fact about Catalog's row in
-    # §3.2, and a scaffolded service inherits the state without inheriting the
-    # reason. The generic replacement says the rule the reason produced.
-    "tests/Catalog.Api.Tests/MessagingRegistrationTests.cs": (
+    # StockLevelConsumer.cs is OMITTED: a rendered service subscribes to
+    # nothing, so these registrations of it are removed and the rest of the
+    # file is otherwise byte-for-byte the template's.
+    "src/Services/Catalog/Catalog.Infrastructure/Messaging/DependencyInjection.cs": (
         (
-            "        // Asserted rather than assumed, which is PR-14's shape one lane over:\n"
-            "        // that PR asserted Catalog stages no Local row rather than leaving the\n"
-            "        // absence to be inferred.\n"
-            "        //\n"
-            "        // §3.2 gives Catalog exactly one Consumes cell — StockLevelChanged,\n"
-            "        // owned by Inventory, which does not exist. Even with the contract now\n"
-            "        // present (PR-15), binding it would create an endpoint whose every\n"
-            "        // message reaches §9.4's throw: \"the endpoint binds this type, so\n"
-            "        // something should handle it\" is one of the two sites where an empty\n"
-            "        // handler list must fail, and §8.4's cache invalidator — the handler\n"
-            "        // that eventually arrives — needs a cached query to invalidate.\n",
-            "        // Asserted rather than assumed: an absence nobody states is an absence\n"
-            "        // nobody notices changing.\n"
-            "        //\n"
-            "        // A consumer belongs here once §3.2 gives this service something to\n"
-            "        // consume and an IIntegrationEventHandler exists for it. Binding a\n"
-            "        // type with no handler registered creates an endpoint whose every\n"
-            "        // message reaches §9.4's throw: \"the endpoint binds this type, so\n"
-            "        // something should handle it\" is one of the two sites where an empty\n"
-            "        // handler list must fail rather than proceed.\n",
+            "            x.DisableUsageTelemetry();\n"
+            "\n"
+            "            x.AddStockLevelConsumer();\n",
+            "            x.DisableUsageTelemetry();\n",
         ),
         (
-            "            \"a consumer here is a subscription §3.2 does not give Catalog — and one bound with no \" +\n",
-            "            \"a consumer here is a subscription §3.2 does not give this service — and one bound with no \" +\n",
-        ),
-    ),
-    "tests/Catalog.Api.Tests/InboxFilterTests.cs": (
-        (
-            "/// Catalog binds no receive endpoint of its own (§3.2 gives it one Consumes\n"
-            "/// cell, owned by a service that does not exist), so this suite declares the\n"
-            "/// endpoints it needs rather than inventing a subscription §3.2 does not give\n"
-            "/// it.\n",
-            "/// This service binds no receive endpoint of its own yet, so this suite\n"
-            "/// declares the endpoints it needs rather than inventing a subscription §3.2\n"
-            "/// does not give it.\n",
+            "                cfg.Host(new Uri(connectionString));\n"
+            "\n"
+            "                cfg.ConfigureStockLevelEndpoint(context);\n",
+            "                cfg.Host(new Uri(connectionString));\n",
         ),
     ),
     # §8.5's marker suite travels, and its anti-vacuity floor is INVERTED for
@@ -939,7 +985,7 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
             "        // apply every migration in sequence, and a count alone would pass on\n"
             "        // a shorter prefix of them applied twice.\n"
             "        string[] applied = await fixture.AppliedMigrationsAsync();\n"
-            "        applied.Length.ShouldBe(8);\n"
+            "        applied.Length.ShouldBe(9);\n"
             "        applied[0].ShouldEndWith(\"_InitialCreate\");\n"
             "        applied[1].ShouldEndWith(\"_AddProducts\");\n"
             "        applied[2].ShouldEndWith(\"_AddOutbox\");\n"
@@ -947,7 +993,8 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
             "        applied[4].ShouldEndWith(\"_AddOutboxRetentionIndex\");\n"
             "        applied[5].ShouldEndWith(\"_AddIdempotencyMarkers\");\n"
             "        applied[6].ShouldEndWith(\"_IdempotencyMarkerCommittedAtDefault\");\n"
-            "        applied[7].ShouldEndWith(\"_AddIdempotencyMarkerRowVersion\");\n",
+            "        applied[7].ShouldEndWith(\"_AddIdempotencyMarkerRowVersion\");\n"
+            "        applied[8].ShouldEndWith(\"_AddStockLevels\");\n",
             "        schema.ShouldBe(1, \"InitialCreate's hand-written EnsureSchema is what creates it\");\n"
             "\n"
             "        // Named and ordered, not merely counted: the migrator's job is to\n"
@@ -1025,38 +1072,17 @@ OUTBOX_MIGRATION_PATCHES: tuple[tuple[str, str], ...] = (
     ),
 )
 
-# And the inbox migration's, for the same reason again. Its remark argues why
-# Catalog carries a table it never writes to, which is a fact about Catalog;
-# the scaffolded service's copy states the general rule the argument produced.
+# And the inbox migration's, for the same reason again: the template names the
+# outbox migration whose dress it follows, and a scaffolded service's copy
+# states the convention without the cross-reference.
 INBOX_MIGRATION_PATCHES: tuple[tuple[str, str], ...] = (
     (
         "/// §9.5's inbox table, generated from <see cref=\"InboxMessageConfiguration\"/>\n"
-        "/// on <c>AddOutbox</c>'s terms — the configuration is the source of truth and\n"
-        "/// only this file's dress is hand-authored (file-scoped namespace, this\n"
-        "/// comment). The <c>.Designer.cs</c> and the snapshot beside it are\n"
-        "/// machine-owned and untouched.\n",
-        "/// §9.5's inbox table, generated from <see cref=\"InboxMessageConfiguration\"/>\n"
-        "/// — the configuration is the source of truth and only this file's dress is\n"
-        "/// hand-authored (file-scoped namespace, this comment). The\n"
-        "/// <c>.Designer.cs</c> and the snapshot beside it are machine-owned and\n"
-        "/// untouched.\n",
-    ),
-    (
-        "/// <b>The table ships to every service, including the ones that consume\n"
-        "/// nothing.</b> Catalog binds no receive endpoint yet (§3.2 gives it one\n"
-        "/// Consumes cell, owned by a service that does not exist), so nothing writes a\n"
-        "/// row here — but <c>RetentionPurgeService</c> runs from first boot and deletes\n"
-        "/// from every table it was given, and a purge against a table that is not there\n"
-        "/// logs a failure every pass. That is the same argument that keeps\n"
-        "/// <c>AddOutbox</c> in the scaffold's output, inverted: the dispatcher would\n"
-        "/// fail a claim, this would fail a delete.\n",
-        "/// <b>The table arrives before the first consumer, deliberately.</b> A service\n"
-        "/// that binds no receive endpoint writes no row here — but\n"
-        "/// <c>RetentionPurgeService</c> runs from first boot and deletes from every\n"
-        "/// table it was given, and a purge against a table that is not there logs a\n"
-        "/// failure every pass. That is the same argument that keeps the outbox\n"
-        "/// migration here, inverted: the dispatcher would fail a claim, this would fail\n"
-        "/// a delete.\n",
+        "/// on <c>AddOutbox</c>'s terms: the configuration is the source of truth, and\n"
+        "/// the <c>.Designer.cs</c> and snapshot beside it are machine-owned.\n",
+        "/// §9.5's inbox table, generated from <see cref=\"InboxMessageConfiguration\"/>:\n"
+        "/// the configuration is the source of truth, and the <c>.Designer.cs</c> and\n"
+        "/// snapshot beside it are machine-owned.\n",
     ),
 )
 
