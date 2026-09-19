@@ -7,13 +7,15 @@ that has no payment intent yet, and that agrees with whatever total the record
 holds, calls no provider and publishes `PaymentDeclined` with reason
 `order_cancelled`; one that disagrees with a placed order's total is a
 mismatch and faults, and a resend for an order that already has an intent is
-acknowledged. That decline is a verdict on the order, not on a payer, so
-it stands for a tombstone as much as for a placed order; where Payments holds
-no record of the order at all, the command still waits, as §3.2's callout on
-the subscription requires. `PaymentDeclined.Reason` is for a human: nothing
-branches on it, and nothing makes it a metric dimension. `PaymentRefunded` is
-published only when money moved back, so a cancellation of an order with
-nothing authorised publishes nothing.
+acknowledged when it asks for the intent's amount and currency, and faults as
+a mismatch when it does not. That decline is a verdict on the order, not on a
+payer, so it stands for a tombstone as much as for a placed order; where
+Payments holds no record of the order at all, the command still waits, as
+§3.2's callout on the subscription requires. `PaymentDeclined.Reason` is for
+a human: nothing branches on it, and nothing makes it a metric dimension.
+`PaymentRefunded` is published only when an authorisation is voided or money
+is returned, so a cancellation of an order with nothing authorised publishes
+nothing.
 
 **Why.** [§9.4](../09-messaging.md) orders nothing between two deliveries, so
 Ordering's `OrderCancelled` can reach Payments ahead of the saga's
@@ -50,9 +52,9 @@ have been a second verdict the saga must learn to read for the same outcome.
 
 **Why the refund is not symmetric.** ADR-024 answers every release, because
 the saga waits on `StockReleased`. Nobody waits on `PaymentRefunded` but
-Notifications, and what it tells is a customer: a refund event for money never
-taken announces a refund that did not happen. So the event reports the act,
-and where there was no act there is no event.
+Notifications, and what it tells is a customer: a refund event for an order
+nothing was authorised for announces a refund that did not happen. So the
+event reports the act, and where there was no act there is no event.
 
 **Consequences.** The authorisation and the cancellation for one order are
 serialised by the lock on Payments' record, and the provider call happens
@@ -67,7 +69,10 @@ authors, the provider and Payments; anything that reads it as the provider's
 word alone reads it wrongly, which is tolerable only because this record
 forbids branching on it. Notifications consumes `PaymentDeclined` too, so it
 must not tell a customer who cancelled that their payment failed; it decides
-that from its own record of `OrderCancelled`, never from `Reason`.
+that from its own record of `OrderCancelled`, never from `Reason`, and waits
+for that record when the decline arrives first — §9.4 orders nothing between
+them, and every decline has a cancellation of its order, published before
+or after it (§9.6).
 
 ---
 
