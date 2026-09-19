@@ -42,7 +42,7 @@ public sealed class Reservation : AggregateRoot<OrderId>
         CheckLines(lines);
         var reservation = new Reservation(order, ReservationStatus.Reserved, lines, now);
         reservation.Raise(new StockReservedDomainEvent(order, now));
-        reservation.RaiseLevels(levels, now);
+        reservation.RaiseLevels(levels);
         return reservation;
     }
 
@@ -84,7 +84,7 @@ public sealed class Reservation : AggregateRoot<OrderId>
         {
             Status = ReservationStatus.Released;
             UpdatedAt = now;
-            RaiseLevels(levels, now);
+            RaiseLevels(levels);
         }
 
         Raise(new StockReleasedDomainEvent(Id, now));
@@ -98,7 +98,7 @@ public sealed class Reservation : AggregateRoot<OrderId>
 
         Status = ReservationStatus.Reserved;
         UpdatedAt = now;
-        RaiseLevels(levels, now);
+        RaiseLevels(levels);
     }
 
     /// <summary>A command that arrives again is answered again rather than ignored (ADR-024).</summary>
@@ -121,10 +121,12 @@ public sealed class Reservation : AggregateRoot<OrderId>
         }
     }
 
-    private void RaiseLevels(IReadOnlyList<ReservedLevel> levels, DateTimeOffset now)
+    private void RaiseLevels(IReadOnlyList<ReservedLevel> levels)
     {
-        // The row's own timestamp, not `now`: `now` orders the reservation's
-        // events, the row's UpdatedAt orders the product's.
+        // No clock is taken here: a level's instant is the one stamped on the
+        // row the ledger moved, because a product's events are ordered
+        // against that row rather than against the reservation the move
+        // arrived through.
         foreach (ReservedLevel level in levels)
             Raise(new StockLevelChangedDomainEvent(level.ProductId, level.Available, level.UpdatedAt));
     }
