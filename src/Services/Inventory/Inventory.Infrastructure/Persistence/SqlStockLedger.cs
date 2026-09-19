@@ -19,7 +19,7 @@ internal sealed class SqlStockLedger(InventoryDbContext db) : IStockLedger
     // rolls back only its own decrements, not the first take's.
     private const string Savepoint = "Reserve";
 
-    // §7.3's statement, as printed, with two additions the spec's section 4
+    // §7.3's statement, as printed, with the additions the spec's section 4
     // argues: the OUTPUT returns the stamp, and the stamp is monotonic per
     // row — the clock when it is ahead of the row, one tick past the row
     // otherwise — so two serialised writers' levels carry strictly ordered

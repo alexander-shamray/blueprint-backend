@@ -273,10 +273,10 @@ atomic statement. If it affects zero rows, there was not enough stock — no rea
 no race, no retry loop.
 
 `SqlStockLedger` in `Inventory.Infrastructure/Persistence` owns the statement
-as it runs, and two of its terms are the ledger's rather than this section's.
-The stamp is monotonic per row rather than a bare clock read, so two serialised
-writers leave strictly ordered instants whatever the server clock does between
-them; and it is returned beside the level because it is the `OccurredAt` of the
+as it runs, and the stamp is the ledger's term rather than this section's. It
+is monotonic per row rather than a bare clock read, so two serialised writers
+leave strictly ordered instants whatever the server clock does between them,
+and it is returned beside the level because it is the `OccurredAt` of the
 `StockLevelChanged` that write publishes ([§3.2](03-bounded-contexts.md)). A
 bare reading in both places is the version that fails — the second writer can
 take an earlier one than the first, and Catalog's projection then keeps the

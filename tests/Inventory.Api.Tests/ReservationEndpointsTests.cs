@@ -218,10 +218,8 @@ public sealed class ReservationEndpointsTests(ServiceFixture fixture) : IAsyncLi
         return client;
     }
 
-    // Thin forwarders onto ReservationTestSupport, whose helpers are static
-    // and hold no fixture of their own, so every call has to name one.
-    // Binding the fixture this class was handed, once, is what stops a test
-    // body arranging against one database and asserting against another.
+    // Thin forwarders that bind this class's fixture once: the private,
+    // same-named members ReservationTestSupport expects of a caller.
     private Task SeedStock(Guid product, int available) =>
         ReservationTestSupport.SeedStock(fixture, product, available);
 

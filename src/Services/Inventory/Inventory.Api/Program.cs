@@ -51,7 +51,7 @@ app.MapCommonHealthEndpoints();   // §13.5 — anonymous; kubelet carries no to
 app.MapOpenApi();
 
 app.MapStockEndpoints();          // §11.4 — the group fails closed
-app.MapReservationEndpoints();    // §11.4 — the runbook's three admin routes
+app.MapReservationEndpoints();    // §11.4 — the runbook's admin routes, failing closed
 
 app.Run();
 

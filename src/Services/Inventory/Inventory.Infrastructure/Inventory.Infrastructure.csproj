@@ -42,10 +42,10 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- RetryPolicy.MinInterval, for the container test that proves
-         Messaging/DependencyInjection.cs's ContractMappingException
-         exclusion — the same trade Inventory.Domain.csproj already makes for
-         its own test project. -->
+    <!-- RetryPolicy's intervals are internal to this assembly, and an
+         assertion about Messaging/DependencyInjection.cs's
+         ContractMappingException exclusion has to cite MinInterval rather
+         than copy the value it owns. -->
     <InternalsVisibleTo Include="Inventory.Api.Tests" />
   </ItemGroup>
 

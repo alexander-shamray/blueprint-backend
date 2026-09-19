@@ -18,8 +18,7 @@ namespace Inventory.Api.Tests;
 /// Catalog's counterpart is the model, and this file honours the promise
 /// <c>UnreachableInfrastructureFactory</c> carries: its
 /// <c>ConfigureAuthentication</c> override stays deliberately empty, proved
-/// here against a forged-header request now that Inventory has endpoints to
-/// forge against.
+/// here against a forged-header request.
 /// </para>
 /// <para>
 /// Kept apart from the class that owns the shared factory, and apart for

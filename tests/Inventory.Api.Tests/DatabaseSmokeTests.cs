@@ -53,9 +53,9 @@ public class DatabaseSmokeTests(ServiceFixture fixture)
         // the index the retention purge deletes through, and §8.5's marker
         // table with the database clock it is aged by and the rowversion the
         // purge identifies one of its rows by — all of them wiring every
-        // service has rather than anything this one chose. AddStockItems is
-        // the first migration that is this service's own (§7.3), and
-        // AddReservations the second (§5's second aggregate).
+        // service has rather than anything this one chose. AddStockItems and
+        // AddReservations are this service's own (§7.3, §5's second
+        // aggregate).
         string[] applied = await fixture.AppliedMigrationsAsync();
         applied.Length.ShouldBe(9);
         applied[0].ShouldEndWith("_InitialCreate");
