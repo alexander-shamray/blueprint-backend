@@ -28,8 +28,7 @@ internal static class ReservationTestSupport
 
     /// <summary>
     /// A client carrying <see cref="InventoryPermissions.Admin"/>, for the
-    /// suites that need an admin client — lifted here rather than left as
-    /// separate copies.
+    /// suites whose subject is an admin-only endpoint.
     /// </summary>
     public static HttpClient Admin(ServiceFixture fixture)
     {

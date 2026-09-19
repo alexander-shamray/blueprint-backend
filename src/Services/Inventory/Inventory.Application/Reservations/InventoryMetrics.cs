@@ -3,8 +3,8 @@ using System.Diagnostics.Metrics;
 namespace Inventory.Application.Reservations;
 
 /// <summary>
-/// The one business-shaped counter (spec §13). Fired by the projection that
-/// claims the row, never by the handler that writes it.
+/// §13.3's business-shaped counter. Fired by the projection that claims the
+/// row, never by the handler that writes it.
 /// </summary>
 public sealed class InventoryMetrics
 {

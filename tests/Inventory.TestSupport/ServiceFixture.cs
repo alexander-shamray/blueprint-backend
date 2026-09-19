@@ -146,11 +146,6 @@ public sealed class ServiceFixture : IAsyncLifetime
     /// A second copy of Ordering.TestSupport's method, deliberately. §4.3
     /// permits exactly one assembly to cross a service boundary and a test
     /// helper is not it.
-    /// <para>
-    /// This shrinks to nothing as the platform grows: each of those events
-    /// gains a real publisher with its own account, and the day the last one
-    /// does, this method deletes itself.
-    /// </para>
     /// </remarks>
     private async Task WidenWriteForTheHarnessAsync()
     {

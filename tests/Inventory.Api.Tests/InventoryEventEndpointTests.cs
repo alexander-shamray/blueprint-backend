@@ -16,12 +16,10 @@ using MessagingRegistration = Inventory.Infrastructure.Messaging.DependencyInjec
 namespace Inventory.Api.Tests;
 
 /// <summary>
-/// <c>inventory-events</c> (§3.2): both handlers, the inbox filter and the
-/// <c>UPDLOCK, HOLDLOCK</c> probe in <c>GetForUpdateAsync</c> that serialises
-/// a cancellation racing a despatch, driven over the real broker rather than
-/// <see cref="MessagingRegistrationTests"/>' in-memory harness — that suite
-/// proves the registration composes and stops at the queue address; this
-/// covers the topology Ordering and Shipping actually publish into.
+/// <c>inventory-events</c> (§3.2) over the real broker: both handlers, the
+/// inbox filter and the <c>UPDLOCK, HOLDLOCK</c> probe in
+/// <c>GetForUpdateAsync</c> that serialises a cancellation racing a despatch,
+/// driven through the topology Ordering and Shipping publish into.
 /// </summary>
 [Collection(nameof(IntegrationCollection))]
 public sealed class InventoryEventEndpointTests(ServiceFixture fixture) : IAsyncLifetime
@@ -276,8 +274,7 @@ public sealed class InventoryEventEndpointTests(ServiceFixture fixture) : IAsync
     };
 
     /// <summary>
-    /// Publishes with both transport headers pinned from the contract, as
-    /// Ordering's <c>CatalogEventEndpointTests.PublishAsync</c> does. §9.5's
+    /// Publishes with both transport headers pinned from the contract. §9.5's
     /// inbox keys on <see cref="ConsumeContext.MessageId"/>, not on the
     /// body's property, so leaving the transport id to MassTransit would
     /// poll a row that never appears; §9.1 makes the body, the row and the
@@ -285,9 +282,8 @@ public sealed class InventoryEventEndpointTests(ServiceFixture fixture) : IAsync
     /// exercise a split identity no producer emits.
     /// </summary>
     /// <param name="drain">
-    /// False only where the two deliveries must genuinely overlap — the
-    /// race test's arrange — so the wait for the inbox row is the
-    /// <c>Eventually</c> on both rows instead.
+    /// False only where two deliveries must genuinely overlap, so the wait for
+    /// the inbox row is the <c>Eventually</c> on both rows instead.
     /// </param>
     private async Task PublishAsync<T>(T message, bool drain = true)
         where T : class, IIntegrationEvent
@@ -316,8 +312,7 @@ public sealed class InventoryEventEndpointTests(ServiceFixture fixture) : IAsync
     }
 
     // Thin forwarders onto ReservationTestSupport, which every messaging
-    // suite over this fixture needs — see InventoryCommandEndpointTests for
-    // why the implementation lives there.
+    // suite over this fixture needs.
     private Task SeedStock(Guid product, int available) =>
         ReservationTestSupport.SeedStock(fixture, product, available);
 

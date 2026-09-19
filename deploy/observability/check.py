@@ -137,8 +137,9 @@ EXTERNAL_METRICS = {
 # was empty.
 #
 # The four loaded outbox alerts group `by (service_name)` and read gauges only
-# a service publishes by registering OutboxMetrics. A dispatcher-hosting
-# service that does neither is the silent case §13.6 spends its callout on.
+# a service that registers OutboxMetrics publishes. A dispatcher-hosting
+# service that does not register it is the silent case §13.6 spends its
+# callout on.
 OUTBOX_METRICS_EXEMPT = {
     "Catalog":
         "§4.5 names Catalog as the scaffold template, so a service-local "

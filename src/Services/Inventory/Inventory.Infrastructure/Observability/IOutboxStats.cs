@@ -6,10 +6,10 @@ namespace Inventory.Infrastructure.Observability;
 /// The three questions §13.6's gauges ask of the outbox table, each per lane.
 /// </summary>
 /// <remarks>
-/// <b>Every member takes the lane, and the predicate is not optional on any of
-/// them.</b> The two lanes fail for different reasons, produce different
-/// symptoms and need different people (§13.6) — an untagged gauge cannot
-/// answer the first question its runbook asks.
+/// Every member takes the lane, and the predicate is not optional on any of
+/// them. The two lanes fail for different reasons, produce different symptoms
+/// and need different people (§13.6) — an untagged gauge cannot say which of
+/// them a reading came from.
 /// </remarks>
 public interface IOutboxStats
 {

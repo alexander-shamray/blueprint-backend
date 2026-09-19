@@ -49,7 +49,7 @@ internal sealed class SqlStockLedger(InventoryDbContext db) : IStockLedger
     // The same Stamp expression as the reserve and give-back statements: a
     // fulfilment publishes no level, but it moves UpdatedAt, and a stamp that
     // went backwards here would let the next stock-take carry an OccurredAt
-    // behind Catalog's watermark (§7.3's exception, spec section 4).
+    // behind Catalog's watermark (§7.3's exception).
     private static readonly string FulfilSql =
         $"""
         UPDATE inventory.StockItems

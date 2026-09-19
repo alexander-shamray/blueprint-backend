@@ -15,13 +15,13 @@ namespace Inventory.Api.Tests;
 /// The three aggregate queries behind §13.6's gauges, against the real table.
 /// </summary>
 /// <remarks>
-/// <b>The lane predicate is the subject, not a detail.</b> §13.6 gives the two
-/// lanes thresholds an order of magnitude apart precisely because they fail for
-/// different reasons — so a query that dropped <c>Lane = @lane</c> would report
-/// one number for both, every alert would read it, and the local lane's
-/// thirty-second threshold would fire on a broker blip it was designed to
-/// tolerate. Each test below stages rows on <em>both</em> lanes for that
-/// reason: an assertion over one lane cannot fail on a missing predicate.
+/// The lane predicate is the subject, not a detail. §13.6 gives the two lanes
+/// different thresholds precisely because they fail for different reasons — so
+/// a query that dropped <c>Lane = @lane</c> would report one number for both,
+/// every alert would read it, and the local lane's threshold would fire on a
+/// broker blip it was designed to tolerate. Each test below stages rows on
+/// both lanes for that reason: an assertion over one lane cannot fail on a
+/// missing predicate.
 /// </remarks>
 [Collection(nameof(IntegrationCollection))]
 public sealed class OutboxStatsTests(ServiceFixture fixture) : IAsyncLifetime
@@ -138,10 +138,10 @@ public sealed class OutboxStatsTests(ServiceFixture fixture) : IAsyncLifetime
     /// A fresh instance per assertion, resolved through the real registration.
     /// </summary>
     /// <remarks>
-    /// <b>Fresh matters, and so does resolved.</b> The type caches for five
-    /// seconds and these tests change the table between reads, so a shared
-    /// instance would let a stale snapshot satisfy an assertion about a row
-    /// written after it. Resolving rather than constructing is the other half:
+    /// Fresh matters, and so does resolved. The type caches its reads and
+    /// these tests change the table between them, so a shared instance would
+    /// let a stale snapshot satisfy an assertion about a row written after
+    /// it. Resolving rather than constructing is the other half:
     /// <c>OutboxStats</c> is internal, and asking the container for
     /// <see cref="IOutboxStats"/> proves <c>AddInventoryInfrastructure</c>
     /// wires it to the schema and connection the service actually uses — a

@@ -72,15 +72,14 @@ public class ArchitectureTests
         // buy is that ADDING one is a decision somebody has to write down.
         //
         // Microsoft.Extensions.Logging.Abstractions is here because
-        // FulfilReservationHandler's two LoggerMessage.Define delegates are
-        // this layer's first ILogger use. It is the abstractions package
-        // rather than a concrete provider, so no §4.2 row forbids it, and
-        // LoggerMessage.Define rather than log.LogWarning is CA1848 under
-        // ADR-019.
+        // FulfilReservationHandler logs through LoggerMessage.Define. It is
+        // the abstractions package rather than a concrete provider, so no
+        // §4.2 row forbids it, and LoggerMessage.Define rather than
+        // log.LogWarning is CA1848 under ADR-019.
         //
         // System.Diagnostics.DiagnosticSource is InventoryMetrics' own:
         // Counter<T>, Meter and IMeterFactory live in that assembly, and
-        // §13.3 puts the one business-shaped counter beside the aggregate it
+        // §13.3 puts the business-shaped counter beside the aggregate it
         // claims a row against rather than behind Common.Application.
         string[] allowed =
         [

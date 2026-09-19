@@ -76,9 +76,8 @@ public static class DependencyInjection
         // because it is FluentValidation's contract, not one of ours — its own
         // scanner knows its own conventions (Include* filters, internal
         // validators) and a second scan would drift from it. Anchored on
-        // ReserveStockValidator, the first validator this assembly gained,
-        // rather than on this static class, which cannot be a type argument;
-        // the registration test that guards it is what a lost scan needs,
+        // ReserveStockValidator rather than on this static class, which cannot
+        // be a type argument. A registration test is what guards this line,
         // because ValidationBehavior takes IEnumerable<IValidator<T>> and asks
         // nobody when that sequence comes back empty.
         services.AddValidatorsFromAssemblyContaining<ReserveStockValidator>();

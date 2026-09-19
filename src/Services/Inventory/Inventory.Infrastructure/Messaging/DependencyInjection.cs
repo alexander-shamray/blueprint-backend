@@ -124,9 +124,7 @@ public static class DependencyInjection
                         });
 
                         // Inbox before the in-memory outbox, for the reason
-                        // EventsQueue's endpoint states: the other order
-                        // commits the inbox row before the buffered sends
-                        // have flushed.
+                        // EventsQueue's endpoint states.
                         e.UseConsumeFilter(typeof(InboxFilter<>), context);
                         e.UseInMemoryOutbox(context);
 

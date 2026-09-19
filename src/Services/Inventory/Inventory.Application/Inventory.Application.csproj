@@ -26,9 +26,9 @@
          would be a claim this project never states. -->
     <PackageReference Include="FluentValidation" />
     <PackageReference Include="FluentValidation.DependencyInjectionExtensions" />
-    <!-- FulfilReservationHandler's LoggerMessage.Define pair (CA1848 under
-         ADR-019 makes log.LogWarning an error) — the first ILogger use in
-         this layer, referenced directly rather than arriving transitively. -->
+    <!-- FulfilReservationHandler's LoggerMessage.Define calls (CA1848 under
+         ADR-019 makes log.LogWarning an error), referenced directly rather
+         than arriving transitively. -->
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
   </ItemGroup>
 
