@@ -241,10 +241,13 @@ thresholds are [§13.6](13-observability.md)'s alert thresholds **read out of
 the rules file rather than restated**, that each workload's `serviceName` is an
 entry assembly this solution actually builds — §13.2 takes `service.name` from
 `ApplicationName`, so a query spelled from the deployment's vocabulary matches
-no series — and that every metric its queries read is one a loaded alert reads,
-which is what the observability gate has already proved is published. It
-reaches no cluster and no Prometheus, and the weight arithmetic and the
-promote/rollback decision have a suite because they are the parts a workflow
+no series — and that every metric its queries read is vouched for as
+[`deploy/canary/README.md`](../../deploy/canary/README.md) states: by a loaded
+alert the observability gate has proved published, or, for MassTransit's
+series, on
+[ADR-047](adr/ADR-047-the-canary-judges-each-workload-on-the-signals-it-receives.md)'s
+terms. It reaches no cluster and no Prometheus, and the weight arithmetic and
+the promote/rollback decision have a suite because they are the parts a workflow
 cannot be trusted with.
 
 The fifth is the Keycloak realm gate
@@ -303,9 +306,12 @@ alert's signal exists means reading every instrument declaration in C#, and
 `docs/runbooks/**`, because a renamed runbook is an alert with no procedure
 behind it; the canary one names `deploy/helm/**`, because its plan asserts each
 workload's chart exists and can render a canary track, `src/**`, because it
-checks each `serviceName` against a real entry assembly, and
+checks each `serviceName` against a real entry assembly,
 `deploy/observability/**`, because it takes §13.6's thresholds out of the rules
-file rather than restating them; the realm one names
+file rather than restating them, and `Directory.Packages.props`, because the
+MassTransit series its plan reads are held to that pin
+([ADR-047](adr/ADR-047-the-canary-judges-each-workload-on-the-signals-it-receives.md));
+the realm one names
 `src/BuildingBlocks/Common.Web/AuthenticationExtensions.cs`, because the
 lifetime every realm owes is read out of `AccessTokenLifetime` rather than
 restated, `deploy/compose/keycloak/realm-export.json`, because that file is
