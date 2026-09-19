@@ -54,7 +54,9 @@ public sealed class PaymentsEventEndpointTests(ServiceFixture fixture) : IAsyncL
         await PublishAsync(Placed(order));
 
         (await PlacedCount(order)).ShouldBe(1);
-        (await fixture.ScalarAsync<decimal>("SELECT Value = TotalAmount FROM payments.PaymentOrders WHERE OrderId = {0}", order))
+        (await fixture.ScalarAsync<decimal>(
+            "SELECT Value = TotalAmount FROM payments.PaymentOrders WHERE OrderId = {0}",
+            order))
             .ShouldBe(42.10m);
     }
 
@@ -84,7 +86,9 @@ public sealed class PaymentsEventEndpointTests(ServiceFixture fixture) : IAsyncL
         await Task.Delay(TimeSpan.FromSeconds(2), TestContext.Current.CancellationToken);
 
         (await fixture.InboxAsync(placed.MessageId)).Count.ShouldBe(1, "§9.5's inbox dropped the redelivery");
-        (await fixture.ScalarAsync<int>("SELECT Value = COUNT(*) FROM payments.PaymentOrders WHERE OrderId = {0}", order))
+        (await fixture.ScalarAsync<int>(
+            "SELECT Value = COUNT(*) FROM payments.PaymentOrders WHERE OrderId = {0}",
+            order))
             .ShouldBe(1);
     }
 
@@ -97,7 +101,9 @@ public sealed class PaymentsEventEndpointTests(ServiceFixture fixture) : IAsyncL
 
         await Eventually(() => PlacedCount(order), expected: 1, because: "the placement landed");
         await Eventually(() => CancelledCount(order), expected: 1, because: "the cancellation landed on the same row");
-        (await fixture.ScalarAsync<int>("SELECT Value = COUNT(*) FROM payments.PaymentOrders WHERE OrderId = {0}", order))
+        (await fixture.ScalarAsync<int>(
+            "SELECT Value = COUNT(*) FROM payments.PaymentOrders WHERE OrderId = {0}",
+            order))
             .ShouldBe(1, "the loser of the first insert updated the winner's row rather than failing on the key");
     }
 
@@ -145,10 +151,14 @@ public sealed class PaymentsEventEndpointTests(ServiceFixture fixture) : IAsyncL
     };
 
     private Task<int> PlacedCount(Guid order) =>
-        fixture.ScalarAsync<int>("SELECT Value = COUNT(*) FROM payments.PaymentOrders WHERE OrderId = {0} AND PlacedAt IS NOT NULL", order);
+        fixture.ScalarAsync<int>(
+            "SELECT Value = COUNT(*) FROM payments.PaymentOrders WHERE OrderId = {0} AND PlacedAt IS NOT NULL",
+            order);
 
     private Task<int> CancelledCount(Guid order) =>
-        fixture.ScalarAsync<int>("SELECT Value = COUNT(*) FROM payments.PaymentOrders WHERE OrderId = {0} AND CancelledAt IS NOT NULL", order);
+        fixture.ScalarAsync<int>(
+            "SELECT Value = COUNT(*) FROM payments.PaymentOrders WHERE OrderId = {0} AND CancelledAt IS NOT NULL",
+            order);
 
     /// <summary>
     /// Polls rather than sleeps, and fails with the last value it saw — a

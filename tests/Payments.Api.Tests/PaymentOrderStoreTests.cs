@@ -25,7 +25,8 @@ public sealed class PaymentOrderStoreTests(ServiceFixture fixture) : IAsyncLifet
         await using AsyncServiceScope scope = fixture.Factory.Services.CreateAsyncScope();
         PaymentsDbContext db = scope.ServiceProvider.GetRequiredService<PaymentsDbContext>();
         IPaymentOrderStore store = scope.ServiceProvider.GetRequiredService<IPaymentOrderStore>();
-        await using IDbContextTransaction tx = await db.Database.BeginTransactionAsync(TestContext.Current.CancellationToken);
+        await using IDbContextTransaction tx =
+            await db.Database.BeginTransactionAsync(TestContext.Current.CancellationToken);
         T result = await act(store);
         await tx.CommitAsync(TestContext.Current.CancellationToken);
         return result;
@@ -43,10 +44,12 @@ public sealed class PaymentOrderStoreTests(ServiceFixture fixture) : IAsyncLifet
         OrderId second = OrderId.New();
         Guid customer = Guid.CreateVersion7();
 
-        await InTransaction(s => s.RecordPlacedAsync(first, customer, 25.50m, "EUR", Placed, TestContext.Current.CancellationToken));
+        await InTransaction(s =>
+            s.RecordPlacedAsync(first, customer, 25.50m, "EUR", Placed, TestContext.Current.CancellationToken));
         await InTransaction(s => s.RecordCancelledAsync(first, Cancelled, TestContext.Current.CancellationToken));
         await InTransaction(s => s.RecordCancelledAsync(second, Cancelled, TestContext.Current.CancellationToken));
-        await InTransaction(s => s.RecordPlacedAsync(second, customer, 25.50m, "EUR", Placed, TestContext.Current.CancellationToken));
+        await InTransaction(s =>
+            s.RecordPlacedAsync(second, customer, 25.50m, "EUR", Placed, TestContext.Current.CancellationToken));
 
         PaymentOrderRecord? a = await InTransaction(s => s.LockAsync(first, TestContext.Current.CancellationToken));
         PaymentOrderRecord? b = await InTransaction(s => s.LockAsync(second, TestContext.Current.CancellationToken));
@@ -67,7 +70,8 @@ public sealed class PaymentOrderStoreTests(ServiceFixture fixture) : IAsyncLifet
         OrderId order = OrderId.New();
 
         await InTransaction(s => s.RecordCancelledAsync(order, Cancelled, TestContext.Current.CancellationToken));
-        PaymentOrderRecord? record = await InTransaction(s => s.LockAsync(order, TestContext.Current.CancellationToken));
+        PaymentOrderRecord? record = await InTransaction(s =>
+            s.LockAsync(order, TestContext.Current.CancellationToken));
 
         record.ShouldNotBeNull();
         record.IsPlaced.ShouldBeFalse();
@@ -81,10 +85,14 @@ public sealed class PaymentOrderStoreTests(ServiceFixture fixture) : IAsyncLifet
         OrderId order = OrderId.New();
         Guid customer = Guid.CreateVersion7();
 
-        await InTransaction(s => s.RecordPlacedAsync(order, customer, 10m, "EUR", Placed, TestContext.Current.CancellationToken));
-        await InTransaction(s => s.RecordPlacedAsync(order, customer, 10m, "EUR", Placed, TestContext.Current.CancellationToken));
+        await InTransaction(s =>
+            s.RecordPlacedAsync(order, customer, 10m, "EUR", Placed, TestContext.Current.CancellationToken));
+        await InTransaction(s =>
+            s.RecordPlacedAsync(order, customer, 10m, "EUR", Placed, TestContext.Current.CancellationToken));
 
-        (await fixture.ScalarAsync<int>("SELECT Value = COUNT(*) FROM payments.PaymentOrders WHERE OrderId = {0}", order.Value))
+        (await fixture.ScalarAsync<int>(
+            "SELECT Value = COUNT(*) FROM payments.PaymentOrders WHERE OrderId = {0}",
+            order.Value))
             .ShouldBe(1);
     }
 
@@ -94,8 +102,10 @@ public sealed class PaymentOrderStoreTests(ServiceFixture fixture) : IAsyncLifet
         OrderId order = OrderId.New();
 
         await InTransaction(s => s.RecordCancelledAsync(order, Cancelled, TestContext.Current.CancellationToken));
-        await InTransaction(s => s.RecordCancelledAsync(order, Cancelled.AddHours(1), TestContext.Current.CancellationToken));
-        PaymentOrderRecord? record = await InTransaction(s => s.LockAsync(order, TestContext.Current.CancellationToken));
+        await InTransaction(s =>
+            s.RecordCancelledAsync(order, Cancelled.AddHours(1), TestContext.Current.CancellationToken));
+        PaymentOrderRecord? record = await InTransaction(s =>
+            s.LockAsync(order, TestContext.Current.CancellationToken));
 
         record!.CancelledAt.ShouldBe(Cancelled, "the order was cancelled once; a redelivery does not move when");
     }

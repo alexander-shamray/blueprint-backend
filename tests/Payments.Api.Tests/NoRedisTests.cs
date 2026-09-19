@@ -26,7 +26,8 @@ public sealed class NoRedisTests
         // Redis should not be the thing that gives its project one. The type is
         // still loadable, because Common.Infrastructure carries the package.
         Type multiplexer = Type.GetType("StackExchange.Redis.IConnectionMultiplexer, StackExchange.Redis")
-            ?? throw new InvalidOperationException("StackExchange.Redis did not load; the assertions below would prove nothing.");
+            ?? throw new InvalidOperationException(
+                "StackExchange.Redis did not load; the assertions below would prove nothing.");
         IKeyedServiceProvider keyed = (IKeyedServiceProvider)services;
 
         services.GetService(multiplexer).ShouldBeNull();

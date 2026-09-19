@@ -9,12 +9,12 @@ namespace Payments.Infrastructure.Persistence;
 
 internal sealed class SqlPaymentOrderStore(PaymentsDbContext db) : IPaymentOrderStore
 {
-    // UPDLOCK with SERIALIZABLE on the update: two first writes for one order
+    // UPDLOCK with HOLDLOCK on the update: two first writes for one order
     // meet on the key-range lock rather than on the primary key, so the loser
     // updates the winner's row instead of failing its insert.
     private const string PlacedSql =
         """
-        UPDATE payments.PaymentOrders WITH (UPDLOCK, SERIALIZABLE)
+        UPDATE payments.PaymentOrders WITH (UPDLOCK, HOLDLOCK)
         SET CustomerId = @CustomerId, TotalAmount = @TotalAmount, Currency = @Currency, PlacedAt = @PlacedAt
         WHERE OrderId = @OrderId;
 
@@ -27,7 +27,7 @@ internal sealed class SqlPaymentOrderStore(PaymentsDbContext db) : IPaymentOrder
     // order was cancelled, not that it was cancelled again later.
     private const string CancelledSql =
         """
-        UPDATE payments.PaymentOrders WITH (UPDLOCK, SERIALIZABLE)
+        UPDATE payments.PaymentOrders WITH (UPDLOCK, HOLDLOCK)
         SET CancelledAt = COALESCE(CancelledAt, @CancelledAt)
         WHERE OrderId = @OrderId;
 
@@ -65,7 +65,14 @@ internal sealed class SqlPaymentOrderStore(PaymentsDbContext db) : IPaymentOrder
 
         await connection.ExecuteAsync(new CommandDefinition(
             PlacedSql,
-            new { OrderId = id.Value, CustomerId = customerId, TotalAmount = total, Currency = currency, PlacedAt = placedAt },
+            new
+            {
+                OrderId = id.Value,
+                CustomerId = customerId,
+                TotalAmount = total,
+                Currency = currency,
+                PlacedAt = placedAt
+            },
             transaction,
             cancellationToken: ct));
     }
@@ -103,7 +110,10 @@ internal sealed class SqlPaymentOrderStore(PaymentsDbContext db) : IPaymentOrder
         // The refusal EfUnitOfWork.ExecuteRawAsync makes: a statement with no
         // transaction autocommits outside the unit the caller believes it is in.
         if (current is null)
-            throw new InvalidOperationException("The order record is written only inside the unit of work's transaction (§6.3).");
+        {
+            throw new InvalidOperationException(
+                "The order record is written only inside the unit of work's transaction (§6.3).");
+        }
 
         return (db.Database.GetDbConnection(), current.GetDbTransaction());
     }
