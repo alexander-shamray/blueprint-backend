@@ -5,11 +5,11 @@ using Dapper;
 namespace Catalog.Application.Products.GetProducts;
 
 /// <summary>
-/// §6.5's read side: Dapper over the write tables — Catalog is level 1, one
-/// database, one projection left-joined for Inventory's level (§3.2) — with
-/// a keyset seek over <c>(PublishedAt DESC, Id DESC)</c>. The tiebreaker is
-/// required: rows sharing a <c>PublishedAt</c> would otherwise straddle the
-/// page boundary unpredictably.
+/// §6.5's read side: Dapper over the write tables at level 1, with one level
+/// 2 projection left-joined for Inventory's level (§6.1, §3.2), and a keyset
+/// seek over <c>(PublishedAt DESC, Id DESC)</c>. The tiebreaker is required:
+/// rows sharing a <c>PublishedAt</c> would otherwise straddle the page
+/// boundary unpredictably.
 /// </summary>
 public sealed class GetProductsHandler(IDbConnectionFactory connections)
     : IQueryHandler<GetProductsQuery, CursorPage<ProductSummaryDto>>
