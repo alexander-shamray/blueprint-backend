@@ -1477,6 +1477,15 @@ EF Core minor versions and behave differently under identical code.
          package resolving into the graph is not a thing to carry. -->
     <PackageVersion Include="SSH.NET" Version="2026.0.0" />
     <PackageVersion Include="Respawn" Version="6.2.1" />
+    <!-- 2.12.0 is the first release whose Scriban.Signed carries no advisory.
+         The 1.x releases resolve 5.5.0, which carries GHSA-5wr9-m6jw-xx44,
+         GHSA-24c8-4792-22hx, GHSA-c875-h985-hvrc, GHSA-grr9-747v-xvcp,
+         GHSA-p6q4-fgr8-vx4p, GHSA-v66j-x4hw-fv9g, GHSA-wgh7-7m3c-fx25,
+         GHSA-x6m9-38vm-2xhf, GHSA-xcx6-vp38-8hr5, GHSA-5rpf-x9jg-8j5p,
+         GHSA-m2p3-hwv5-xpqw, GHSA-q6rr-fm2g-g5x8 and GHSA-xw6w-9jjh-p9cr;
+         NU1903 and NU1904 fail the restore on them. Not the newest: 2.16.0
+         needs a Microsoft.OpenApi above the pin in this file, which NU1109
+         refuses as a downgrade. -->
     <PackageVersion Include="WireMock.Net" Version="2.12.0" />
     <PackageVersion Include="Microsoft.Extensions.TimeProvider.Testing" Version="9.9.0" />
     <!-- ServiceCollection itself. §6.2's registration test and §6.3's ordering

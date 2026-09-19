@@ -3,8 +3,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Payments.Application;
 using Payments.Application.Provider;
-using Polly.CircuitBreaker;
-using Polly.Timeout;
+using Polly;
 
 namespace Payments.Infrastructure.Provider;
 
@@ -121,7 +120,9 @@ internal sealed class HttpPaymentProvider(HttpClient http) : IPaymentProvider
         {
             response = await http.SendAsync(message, ct);
         }
-        catch (Exception e) when (e is HttpRequestException or TimeoutRejectedException or BrokenCircuitException
+        // ExecutionRejectedException is every refusal the pipeline makes on its
+        // own account: a timeout, an open circuit, the concurrency limiter.
+        catch (Exception e) when (e is HttpRequestException or ExecutionRejectedException
                                       || (e is OperationCanceledException && !ct.IsCancellationRequested))
         {
             throw new PaymentProviderUnavailableException("The provider did not answer within the budget.", e);

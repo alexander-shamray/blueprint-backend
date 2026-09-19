@@ -23,27 +23,50 @@ namespace Payments.Api.Tests;
 /// so the file Compose runs is the file these assert (§12: WireMock.Net for a
 /// third-party API).
 /// </summary>
-public sealed class HttpPaymentProviderTests : IDisposable
+public sealed class HttpPaymentProviderTests : IClassFixture<HttpPaymentProviderTests.ProviderHost>
 {
     private const string UnreachableSql =
         "Server=sql.invalid;Database=Payments;User Id=x;Password=x;TrustServerCertificate=true";
 
     private const string UnreachableRabbit = "amqp://payments-svc:x@rabbit.invalid:5672";
 
+    /// <summary>
+    /// One server and one host for the class: a host over an unreachable
+    /// broker can take seconds to stop, so only a test that needs different
+    /// settings builds its own.
+    /// </summary>
+    public sealed class ProviderHost : IDisposable
+    {
+        public ProviderHost()
+        {
+            Server = WireMockServer.Start();
+            Factory = new PaymentsApiFactory(UnreachableSql, UnreachableRabbit, Server.Urls[0] + "/");
+        }
+
+        public WireMockServer Server { get; }
+
+        public PaymentsApiFactory Factory { get; }
+
+        public void Dispose()
+        {
+            Factory.Dispose();
+            Server.Stop();
+        }
+    }
+
     private readonly WireMockServer _server;
     private readonly PaymentsApiFactory _factory;
 
-    public HttpPaymentProviderTests()
+    public HttpPaymentProviderTests(ProviderHost host)
     {
-        _server = WireMockServer.Start();
-        _server.ReadStaticMappings(SimulatorMappings.Directory());
-        _factory = new PaymentsApiFactory(UnreachableSql, UnreachableRabbit, _server.Urls[0] + "/");
-    }
+        _server = host.Server;
+        _factory = host.Factory;
 
-    public void Dispose()
-    {
-        _factory.Dispose();
-        _server.Stop();
+        // Each test starts from the simulator's files alone: no stub another
+        // test added, and no request it made.
+        _server.ResetLogEntries();
+        _server.ResetMappings();
+        _server.ReadStaticMappings(SimulatorMappings.Directory());
     }
 
     private IPaymentProvider Provider() =>
@@ -55,22 +78,43 @@ public sealed class HttpPaymentProviderTests : IDisposable
     private int Calls(string path) =>
         _server.LogEntries.Count(e => e.RequestMessage!.Path == path);
 
-    private static MeterListener CountUnavailable(Action<long> add)
+    // This host's meter, never one matched by name: a MeterListener is
+    // process-wide, and another host's provider would count into it. The
+    // factory caches by name, so this is the instance ProviderMetrics holds,
+    // and resolving ProviderMetrics first means the counter already exists.
+    private UnavailableCount CountUnavailable()
     {
-        MeterListener listener = new()
+        _factory.Services.GetRequiredService<ProviderMetrics>();
+        Meter mine = _factory.Services.GetRequiredService<IMeterFactory>().Create(ProviderMetrics.MeterName);
+        UnavailableCount count = new(mine);
+        count.Enabled.ShouldBeTrue("no counter on this host's meter was enabled, so a zero would prove nothing");
+        return count;
+    }
+
+    private sealed class UnavailableCount : IDisposable
+    {
+        private readonly MeterListener _listener = new();
+        private long _counted;
+
+        public UnavailableCount(Meter mine)
         {
-            InstrumentPublished = (instrument, l) =>
+            _listener.InstrumentPublished = (instrument, l) =>
             {
-                if (instrument.Meter.Name == ProviderMetrics.MeterName
-                    && instrument.Name == "payments.provider.unavailable")
+                if (ReferenceEquals(instrument.Meter, mine) && instrument.Name == "payments.provider.unavailable")
                 {
                     l.EnableMeasurementEvents(instrument);
+                    Enabled = true;
                 }
-            }
-        };
-        listener.SetMeasurementEventCallback<long>((_, value, _, _) => add(value));
-        listener.Start();
-        return listener;
+            };
+            _listener.SetMeasurementEventCallback<long>((_, value, _, _) => Interlocked.Add(ref _counted, value));
+            _listener.Start();
+        }
+
+        public bool Enabled { get; private set; }
+
+        public long Value => Interlocked.Read(ref _counted);
+
+        public void Dispose() => _listener.Dispose();
     }
 
     [Fact]
@@ -113,15 +157,13 @@ public sealed class HttpPaymentProviderTests : IDisposable
     [Fact]
     public async Task A_503_is_retried_in_the_client_then_thrown_as_unavailable_and_counted_per_attempt()
     {
-        long counted = 0;
-        using MeterListener listener = CountUnavailable(value => Interlocked.Add(ref counted, value));
+        using UnavailableCount counted = CountUnavailable();
 
         await Should.ThrowAsync<PaymentProviderUnavailableException>(() =>
             Provider().AuthoriseAsync(Authorisation(10.05m), TestContext.Current.CancellationToken));
 
         Calls("/v1/authorisations").ShouldBe(ProviderHop.MaxRetryAttempts + 1);
-        Interlocked.Read(ref counted)
-            .ShouldBe(ProviderHop.MaxRetryAttempts + 1, "one per failing attempt, not one per call");
+        counted.Value.ShouldBe(ProviderHop.MaxRetryAttempts + 1, "one per failing attempt, not one per call");
     }
 
     [Theory]
@@ -155,16 +197,15 @@ public sealed class HttpPaymentProviderTests : IDisposable
     [Fact]
     public async Task A_stalled_provider_is_unavailable_within_the_total_budget_and_its_timeouts_count()
     {
-        long counted = 0;
-        using MeterListener listener = CountUnavailable(value => Interlocked.Add(ref counted, value));
+        using UnavailableCount counted = CountUnavailable();
         DateTimeOffset started = DateTimeOffset.UtcNow;
 
         await Should.ThrowAsync<PaymentProviderUnavailableException>(() =>
             Provider().AuthoriseAsync(Authorisation(10.09m), TestContext.Current.CancellationToken));
 
         (DateTimeOffset.UtcNow - started).ShouldBeLessThan(ProviderHop.TotalRequestTimeout + TimeSpan.FromSeconds(2));
-        Interlocked.Read(ref counted)
-            .ShouldBeGreaterThanOrEqualTo(1, "an attempt timeout is the provider's, counted by OnTimeout");
+        counted.Value.ShouldBe(
+            ProviderHop.MaxRetryAttempts + 1, "every attempt timed out, each the provider's, counted by OnTimeout");
     }
 
     [Fact]
@@ -263,6 +304,19 @@ public sealed class HttpPaymentProviderTests : IDisposable
             .Message.ShouldContain("PaymentProvider:BaseUrl");
     }
 
+    [Theory]
+    [InlineData("https://payer:not-the-key@psp.example/")]
+    [InlineData("ftp://payer:not-the-key@psp.example/")]
+    public void A_base_url_carrying_user_information_is_refused_without_echoing_it(string address)
+    {
+        using PaymentsApiFactory factory = new(UnreachableSql, UnreachableRabbit, address);
+
+        string message = Should.Throw<InvalidOperationException>(() => factory.Services).Message;
+
+        message.ShouldContain("PaymentProvider:BaseUrl");
+        message.ShouldNotContain("not-the-key", Case.Insensitive, "a startup message is logged; a credential is not");
+    }
+
     [Fact]
     public void A_missing_provider_key_stops_the_host()
     {
@@ -315,14 +369,29 @@ public sealed class HttpPaymentProviderTests : IDisposable
     [Fact]
     public async Task The_callers_own_cancellation_is_not_counted_against_the_provider()
     {
-        long counted = 0;
-        using MeterListener listener = CountUnavailable(value => Interlocked.Add(ref counted, value));
+        using UnavailableCount counted = CountUnavailable();
         using CancellationTokenSource cancelled = new();
         await cancelled.CancelAsync();
 
         await Should.ThrowAsync<OperationCanceledException>(() =>
             Provider().AuthoriseAsync(Authorisation(42.10m), cancelled.Token));
 
-        Interlocked.Read(ref counted).ShouldBe(0, "a consume cancelled at shutdown is not a provider incident");
+        counted.Value.ShouldBe(0, "a consume cancelled at shutdown is not a provider incident");
+    }
+
+    [Fact]
+    public async Task A_cancellation_during_an_attempt_is_the_callers_and_is_not_counted()
+    {
+        using UnavailableCount counted = CountUnavailable();
+        using CancellationTokenSource cancelled = CancellationTokenSource.CreateLinkedTokenSource(
+            TestContext.Current.CancellationToken);
+        cancelled.CancelAfter(TimeSpan.FromSeconds(1));
+
+        // The stalled script, so the cancellation lands inside an attempt,
+        // where it and an attempt timeout arrive as the same exception.
+        await Should.ThrowAsync<OperationCanceledException>(() =>
+            Provider().AuthoriseAsync(Authorisation(10.09m), cancelled.Token));
+
+        counted.Value.ShouldBe(0, "the caller cancelling mid-attempt is not a provider incident");
     }
 }

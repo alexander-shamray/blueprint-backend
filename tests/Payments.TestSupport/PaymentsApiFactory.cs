@@ -49,9 +49,9 @@ public class PaymentsApiFactory(
     public const string UnreachableProvider = "http://psp.invalid/";
 
     /// <summary>
-    /// The key the Compose unit gives the host, the one stated exception
-    /// §14.1 makes for local-development defaults. Required by the host
-    /// (§15.4), so a caller that names none still gets one.
+    /// §14.1's local-development placeholder for the provider key, which the
+    /// simulator ignores. Required by the host (§15.4), so a caller that
+    /// names none still gets one.
     /// </summary>
     public const string LocalProviderApiKey = "local-dev-psp";
 

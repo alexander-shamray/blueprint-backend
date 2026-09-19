@@ -26,17 +26,25 @@ public static class DependencyInjection
         IHostEnvironment environment)
     {
         // Eager, as the broker's key is: a host that cannot name its provider
-        // does not start, rather than failing its first authorisation. An empty
-        // value is the chart's default, so a deploy that forgot it stops here.
+        // does not start, rather than failing its first authorisation.
         string? configured = configuration[BaseUrlKey];
         if (string.IsNullOrWhiteSpace(configured))
             throw new InvalidOperationException($"{BaseUrlKey} is not configured. Payments cannot reach a provider.");
 
+        // No message below echoes the configured value: a startup failure is
+        // logged, and an address can carry user information.
         if (!Uri.TryCreate(configured, UriKind.Absolute, out Uri? parsed)
             || (parsed.Scheme != Uri.UriSchemeHttps && parsed.Scheme != Uri.UriSchemeHttp))
         {
+            throw new InvalidOperationException($"{BaseUrlKey} is not an absolute HTTP(S) address.");
+        }
+
+        // The provider is authenticated by the key alone, and a credential in
+        // the address would travel wherever the address is printed.
+        if (parsed.UserInfo.Length > 0)
+        {
             throw new InvalidOperationException(
-                $"{BaseUrlKey} is '{configured}', which is not an absolute HTTP(S) address.");
+                $"{BaseUrlKey} carries user information; the provider's credential is {ApiKeyKey} alone.");
         }
 
         // HTTPS everywhere but Development, the rule AuthenticationExtensions
@@ -46,7 +54,7 @@ public static class DependencyInjection
         if (!environment.IsDevelopment() && parsed.Scheme != Uri.UriSchemeHttps)
         {
             throw new InvalidOperationException(
-                $"{BaseUrlKey} is '{configured}', which is plain HTTP outside Development; " +
+                $"{BaseUrlKey} names {parsed.Host} over plain HTTP outside Development; " +
                 "the provider key would travel in the clear.");
         }
 
