@@ -148,6 +148,12 @@ class ShellComments(unittest.TestCase):
         text = "x=${y:-`count # yes@`}@".replace("@", "\n")
         self.assertEqual(said(gate.shell, text), ["yes"])
 
+    def test_a_continuation_joins_a_hash_to_the_word_before_it(self):
+        joined = "echo value\\@# no@".replace("@", "\n")
+        self.assertEqual(said(gate.shell, joined), [])
+        apart = "echo value \\@# yes@".replace("@", "\n")
+        self.assertEqual(said(gate.shell, apart), ["yes"])
+
     def test_a_heredoc_word_is_read_whole(self):
         for opener in ["END-OF-FILE", "END-OF'-FILE'", 'EN"D"-OF-FILE']:
             with self.subTest(opener=opener):
@@ -236,6 +242,13 @@ class YamlComments(unittest.TestCase):
             with self.subTest(line=line):
                 text = f"{line}@  # no@".replace("@", "\n")
                 self.assertEqual(said(gate.yaml, text), [])
+
+    def test_an_indentation_indicator_says_where_a_block_ends(self):
+        for text in ["key: |2@   # no@ # yes@", "- |2@   # no@ # yes@",
+                     "- key: >2-@     # no@   # yes@"]:
+            with self.subTest(text=text):
+                self.assertEqual(said(gate.yaml, text.replace("@", "\n")),
+                                 ["yes"])
 
     def test_a_folded_run_block_is_read_folded(self):
         folded = ("- run: >@    true # yes@    echo '#12'@"

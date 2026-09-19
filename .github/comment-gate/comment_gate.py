@@ -307,6 +307,14 @@ def _sh_heredoc_word(text, i):
     return "".join(word) or None, i
 
 
+def _sh_word_starts(text, i):
+    """Whether a word starts at `i`, once the continuations before it are
+    removed as the shell removes them."""
+    while text.startswith("\\\n", i - 2) and i >= 2:
+        i -= 2
+    return i == 0 or text[i - 1] in _SH_WORD_BREAK
+
+
 def _sh_code(text, i, found, closing):
     depth = 0
     pending = []
@@ -318,7 +326,7 @@ def _sh_code(text, i, found, closing):
         elif c == "\n":
             i = _sh_heredocs(text, i + 1, pending)
             pending = []
-        elif c == "#" and (i == 0 or text[i - 1] in _SH_WORD_BREAK):
+        elif c == "#" and _sh_word_starts(text, i):
             end = _line_end(text, i)
             if closing == "`":
                 # The shell cuts a backtick body out before it reads it.
@@ -570,6 +578,12 @@ def yaml(text, run_blocks=False):
                 scalar_parent = code.rfind("-", 0, len(prefix))
             else:
                 scalar_parent = indent - 1
+            # An explicit indentation indicator sets where content starts, and
+            # a line short of it ends the scalar.
+            indicator = code[_BLOCK_SCALAR.search(code).start():]
+            width = re.search(r"[1-9]", indicator)
+            if width and scalar_parent is not None:
+                scalar_parent += int(width.group(0)) - 1
     _run_block(text, script, found, folded)
     return found
 
