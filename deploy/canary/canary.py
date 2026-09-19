@@ -838,8 +838,9 @@ def _csharp_sources(root: Path) -> dict[Path, str]:
     return found
 
 
-# A MapHealthChecks call, and the string literal it maps where it has one.
-HEALTH_CALL = re.compile(r"\bMapHealthChecks\s*\(\s*(?:\"([^\"]+)\")?")
+# A MapHealthChecks call, and its route where that is one whole literal: a
+# literal the argument continues past, as a concatenation, is not the route.
+HEALTH_CALL = re.compile(r"\bMapHealthChecks\s*\(\s*(?:\"([^\"]+)\"(?=\s*[,)]))?")
 
 
 def health_routes(root: Path = ROOT) -> set[str]:
