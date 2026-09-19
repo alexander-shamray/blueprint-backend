@@ -2938,8 +2938,9 @@ that registers any of this — `Web.Bff` is the only host in this blueprint that
 calls a peer synchronously, which makes it the only one holding client
 credentials (§11.5), and §4.2's helper deliberately registers none of it. The
 other outbound client is Payments' provider hop, `ProviderHop`, behind §3.2's
-anti-corruption layer, which Payments registers for itself. `PricingHop`
-beside it names the client and Catalog's address once: `http`, not `https`,
+anti-corruption layer, which Payments registers for itself. `PricingHop`,
+beside the BFF's registration, names the client and Catalog's address once:
+`http`, not `https`,
 because TLS terminates at the ingress and traffic inside the cluster is plain
 (§10.1); the host is the Service name YARP also routes to (§10.2); and a
 second, HTTP/2-only port rather than the REST one, because a cleartext Kestrel
