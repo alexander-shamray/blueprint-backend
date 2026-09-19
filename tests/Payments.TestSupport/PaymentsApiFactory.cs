@@ -10,6 +10,7 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Payments.Application.Orders;
+using Payments.Application.Provider;
 using Payments.Infrastructure.Persistence;
 using ProviderRegistration = Payments.Infrastructure.Provider.DependencyInjection;
 
@@ -67,6 +68,13 @@ public class PaymentsApiFactory(
 
     /// <summary>The host's record of the order, observed (spec, section 6).</summary>
     public ObservedOrderStore Orders { get; } = new();
+
+    /// <summary>
+    /// The host's provider seam, unarmed until a test arms it. Installed on
+    /// every host over this factory, because an unarmed seam changes nothing
+    /// and one host per seam would be a container set per seam.
+    /// </summary>
+    public ProviderGateSeam ProviderGates { get; } = new();
 
     /// <summary>
     /// The RUNTIME connection of §7.1, and only that one. The host has no
@@ -150,6 +158,20 @@ public class PaymentsApiFactory(
                 services.Remove(store);
                 services.AddScoped<IPaymentOrderStore>(sp => Orders.Wrap(
                     (IPaymentOrderStore)ActivatorUtilities.CreateInstance(sp, store.ImplementationType!)));
+
+                // The provider, decorated on the same terms: the real adapter
+                // still makes every call, so the simulator's journal is what a
+                // test counts charges and voids by. Built from the registered
+                // descriptor, because HttpPaymentProvider is internal to
+                // Infrastructure. Transient, matching what it replaces: a
+                // typed client's lifetime is the handler's, which is why the
+                // arm lives on ProviderGates instead.
+                ServiceDescriptor provider = services.Single(d => d.ServiceType == typeof(IPaymentProvider));
+                services.Remove(provider);
+                services.AddSingleton(ProviderGates);
+                services.AddTransient<IPaymentProvider>(sp => new PausingPaymentProvider(
+                    (IPaymentProvider)provider.ImplementationFactory!(sp),
+                    ProviderGates));
             });
 
     /// <summary>

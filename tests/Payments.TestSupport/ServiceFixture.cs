@@ -122,6 +122,13 @@ public sealed class ServiceFixture : IAsyncLifetime
     public CommitFault FailNextCommit() => Factory.CommitFaults.Arm();
 
     /// <summary>
+    /// Holds the host's next authorisation open after the provider has
+    /// answered and before its unit commits, once. Disposing the returned gate
+    /// releases it.
+    /// </summary>
+    public ProviderGate PauseNextAuthorisation() => Factory.ProviderGates.PauseNextAuthorisation();
+
+    /// <summary>
     /// Messages a queue holds, read from the broker itself, or zero when it
     /// does not exist yet — MassTransit declares an <c>_error</c> queue on its
     /// first fault, and a fault's arrival there is an outcome no table shows.
