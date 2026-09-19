@@ -853,6 +853,17 @@ class BulkRegistrationTests(unittest.TestCase):
         self.assertFalse(canary.has_consumers("Svc.Api", root))
         self.assertFalse(canary.has_sagas("Svc.Api", root))
 
+    def test_a_comment_marker_inside_a_string_hides_nothing(self) -> None:
+        """A URL is a string holding `//`, and a scan that read it as a
+        comment would lose the rest of the line."""
+        root = service_tree({"Svc.Infrastructure/Bus.cs": (
+            'var host = "rabbitmq://broker"; x.AddConsumer<OrderConsumer>();\n'
+            'var glob = @"/*"; x.AddSaga<OrderState>(); var end = "*/";\n'
+        )})
+
+        self.assertTrue(canary.has_consumers("Svc.Api", root))
+        self.assertTrue(canary.has_sagas("Svc.Api", root))
+
 
 class SagaScanTests(unittest.TestCase):
     """The scan that decides which workloads owe a saga signal."""
@@ -935,22 +946,26 @@ class HealthRouteTests(unittest.TestCase):
         self.assertEqual(routes, {"/health/live", "/health/ready", "/health/startup"})
 
     def test_a_route_that_is_not_a_literal_fails_the_plan_by_location(self) -> None:
-        """A route read through a constant, or built by concatenation, is one
-        the scan cannot see, and a probe it cannot see is traffic again. The
-        XML doc mention is the negative control: a comment is not a call
-        site."""
+        """A route read through a constant, built by concatenation or spelled
+        with an escape is one the scan cannot see as the host maps it, and a
+        probe it cannot see is traffic again. The XML doc mention is the
+        negative control: a comment is not a call site; and a URL before a
+        call on its line does not hide the call."""
         root = service_tree({"Svc.Api/Health.cs": (
             "/// Maps <c>MapHealthChecks</c> for the probes.\n"
             'app.MapHealthChecks("/health/live");\n'
             "app.MapHealthChecks(ReadyPath, options);\n"
             'app.MapHealthChecks("/health/" + "startup", options);\n'
+            'app.MapHealthChecks("/health/\\u0072eady");\n'
+            'var u = "http://docs"; app.MapHealthChecks("/probe");\n'
         )})
 
         failures = canary._probe_routes_are_readable(root)
 
-        self.assertEqual(canary.health_routes(root), {"/health/live"})
+        self.assertEqual(canary.health_routes(root), {"/health/live", "/probe"})
         self.assertTrue(any("Health.cs:3" in f for f in failures), failures)
         self.assertTrue(any("Health.cs:4" in f for f in failures), failures)
+        self.assertTrue(any("Health.cs:5" in f for f in failures), failures)
         self.assertFalse(any("Health.cs:1" in f for f in failures), failures)
 
     def test_the_real_call_sites_are_all_literals(self) -> None:

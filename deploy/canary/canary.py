@@ -808,15 +808,24 @@ def _registers(service_name: str, pattern: re.Pattern, root: Path) -> bool:
     return False
 
 
+# A literal is matched before a comment, so a `//` or `/*` inside one stays
+# text: raw, verbatim, regular and character literals, then the two comments.
+CSHARP_TOKEN = re.compile(
+    r'(?P<literal>"""[\s\S]*?"""|\$?@\$?"(?:[^"]|"")*"|\$?"(?:\\.|[^"\\\n])*"'
+    r"|'(?:\\.|[^'\\\n])')"
+    r"|(?P<comment>//[^\n]*|/\*[\s\S]*?\*/)"
+)
+
+
 @functools.cache
 def _code_only(code: str) -> str:
     """C# with its comments blanked and its line breaks kept, so a match's
     offset still gives the line it is on. Cached, as the scans repeat."""
-    return re.sub(
-        r"//[^\n]*|/\*.*?\*/",
-        lambda comment: re.sub(r"[^\n]", " ", comment.group(0)),
+    return CSHARP_TOKEN.sub(
+        lambda token: (
+            re.sub(r"[^\n]", " ", token.group(0)) if token.group("comment") else token.group(0)
+        ),
         code,
-        flags=re.DOTALL,
     )
 
 
@@ -838,9 +847,10 @@ def _csharp_sources(root: Path) -> dict[Path, str]:
     return found
 
 
-# A MapHealthChecks call, and its route where that is one whole literal: a
-# literal the argument continues past, as a concatenation, is not the route.
-HEALTH_CALL = re.compile(r"\bMapHealthChecks\s*\(\s*(?:\"([^\"]+)\"(?=\s*[,)]))?")
+# A MapHealthChecks call, and its route where that is one whole literal with
+# no escape: a literal the argument continues past, as a concatenation, is not
+# the route, and an escape spells a route the source text does not show.
+HEALTH_CALL = re.compile(r"\bMapHealthChecks\s*\(\s*(?:\"([^\"\\]+)\"(?=\s*[,)]))?")
 
 
 def health_routes(root: Path = ROOT) -> set[str]:
