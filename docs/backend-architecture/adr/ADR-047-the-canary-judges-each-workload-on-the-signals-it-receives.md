@@ -60,7 +60,12 @@ not verified against a running backend, on the same terms as ADR-022's
 `deployment_track` requirement: a wrong spelling matches nothing and rolls every
 consume- or saga-judged rung back rather than promoting. A MassTransit upgrade
 is a red gate until somebody re-reads the package and moves the verified
-version, which is a chore the pin now carries. Catalog carries the first
+version, which is a chore the pin now carries. The verified version is not a
+second owner of the pin, which [change-locality](../../change-locality.md) §2
+keeps in `Directory.Packages.props`: it records what the table was read
+against, and it exists to disagree with the pin until someone reads the new
+package. Deriving it from the pin would make the check agree with any upgrade
+it has never seen. Catalog carries the first
 exemption: its one consumer is a projection fed at a rate another service's
 traffic sets, faults there already reach a paging error queue, and the reads it
 serves are judged by `http`.
