@@ -1,5 +1,5 @@
 using Payments.Application.Orders;
-using Payments.Domain;
+using Payments.Domain.Intents;
 using Payments.Infrastructure.Idempotency;
 using Payments.Infrastructure.Messaging;
 using Payments.Infrastructure.Persistence;
@@ -91,10 +91,10 @@ public static class DependencyInjection
         // dispatcher claims a row, so MessageTypeMapValidator is what makes a
         // duplicate FullName fail the host rather than the first message. It
         // is the first hosted service because hosted services start in order.
-        // §9.4's two anchors are this service's contracts and its domain; both
-        // are IIntegrationEvent and AssemblyMarker until the first of each lands.
+        // §9.4's two anchors are this service's contracts and its domain;
+        // IIntegrationEvent and PaymentIntent respectively.
         services.AddSingleton(
-            new MessageTypeSource(typeof(IIntegrationEvent).Assembly, typeof(AssemblyMarker).Assembly));
+            new MessageTypeSource(typeof(IIntegrationEvent).Assembly, typeof(PaymentIntent).Assembly));
         services.AddSingleton(sp =>
         {
             MessageTypeSource source = sp.GetRequiredService<MessageTypeSource>();

@@ -1,3 +1,4 @@
+using Payments.Domain.Intents;
 using Shouldly;
 using Xunit;
 
@@ -23,7 +24,7 @@ public class ArchitectureTests
         // record struct's generated equality goes through EqualityComparer<T>.
         string[] allowed = ["Common.Domain", "System.Runtime", "System.Collections"];
 
-        IEnumerable<string> referenced = typeof(AssemblyMarker).Assembly
+        IEnumerable<string> referenced = typeof(PaymentIntent).Assembly
             .GetReferencedAssemblies()
             .Select(a => a.Name!);
 

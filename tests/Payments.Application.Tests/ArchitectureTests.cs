@@ -1,5 +1,5 @@
 using System.Reflection;
-using Payments.Domain;
+using Payments.Domain.Intents;
 using NetArchTest.Rules;
 using Shouldly;
 using Xunit;
@@ -88,7 +88,7 @@ public class ArchitectureTests
         // dual write with no outbox behind it, and MassTransit's in-memory
         // buffer flushes after the consumer returns, after the repository
         // has already committed.
-        Assembly[] assemblies = [typeof(DependencyInjection).Assembly, typeof(AssemblyMarker).Assembly];
+        Assembly[] assemblies = [typeof(DependencyInjection).Assembly, typeof(PaymentIntent).Assembly];
         foreach (Assembly assembly in assemblies)
         {
             Types
