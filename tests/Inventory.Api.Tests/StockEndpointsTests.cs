@@ -14,13 +14,7 @@ public sealed class StockEndpointsTests(ServiceFixture fixture) : IAsyncLifetime
 
     public ValueTask DisposeAsync() => ValueTask.CompletedTask;
 
-    private HttpClient Admin()
-    {
-        HttpClient client = fixture.Factory.CreateClient();
-        client.DefaultRequestHeaders.Add(TestAuthHandler.UserHeader, Guid.CreateVersion7().ToString());
-        client.DefaultRequestHeaders.Add(TestAuthHandler.PermissionsHeader, InventoryPermissions.Admin);
-        return client;
-    }
+    private HttpClient Admin() => ReservationTestSupport.Admin(fixture);
 
     [Fact]
     public async Task Setting_stock_creates_the_row_and_stages_the_level()

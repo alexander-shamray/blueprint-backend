@@ -124,4 +124,61 @@ public class ReservationTests
         Should.Throw<DomainException>(() =>
             Reservation.Reserve(OrderId.New(), [new(A, 1), new(A, 1)], [new(A, 1, Now)], Now));
     }
+
+    [Fact]
+    public void Fulfil_moves_a_held_reservation_to_fulfilled_and_raises_nothing()
+    {
+        Reservation reservation = Reservation.Rehydrate(OrderId.New(), ReservationStatus.Reserved, Lines());
+
+        reservation.Fulfil(Now);
+
+        reservation.Status.ShouldBe(ReservationStatus.Fulfilled);
+        reservation.DomainEvents.ShouldBeEmpty("no §3.2 event describes despatch and the level did not move");
+    }
+
+    [Fact]
+    public void Fulfil_twice_is_a_no_op()
+    {
+        Reservation reservation = Reservation.Rehydrate(OrderId.New(), ReservationStatus.Fulfilled, Lines());
+
+        reservation.Fulfil(Now);
+
+        reservation.Status.ShouldBe(ReservationStatus.Fulfilled);
+    }
+
+    [Theory]
+    [InlineData(ReservationStatus.Failed)]
+    [InlineData(ReservationStatus.Released)]
+    public void Fulfil_refuses_what_was_never_held_or_is_no_longer_held(ReservationStatus status)
+    {
+        Should.Throw<DomainException>(() => Reservation.Rehydrate(OrderId.New(), status, Lines()).Fulfil(Now));
+    }
+
+    [Fact]
+    public void A_despatch_against_a_released_reservation_is_recorded_once_as_state()
+    {
+        Reservation reservation = Reservation.Rehydrate(OrderId.New(), ReservationStatus.Released, Lines());
+
+        reservation.RecordDespatchUnreserved(Now);
+        reservation.RecordDespatchUnreserved(Now.AddMinutes(1));
+
+        reservation.Status.ShouldBe(ReservationStatus.Released, "no stock moves: ADR-029's gap stays open");
+        reservation.DespatchedUnreservedAt.ShouldBe(Now);
+        reservation.DomainEvents.ShouldHaveSingleItem().ShouldBeOfType<DespatchedUnreservedDomainEvent>();
+    }
+
+    [Fact]
+    public void A_tombstone_cannot_record_a_despatch()
+    {
+        Should.Throw<DomainException>(() => Reservation.Tombstone(OrderId.New(), Now).RecordDespatchUnreserved(Now));
+    }
+
+    [Fact]
+    public void A_reservation_whose_parcel_has_gone_cannot_be_reinstated()
+    {
+        Reservation reservation = Reservation.Rehydrate(OrderId.New(), ReservationStatus.Released, Lines());
+        reservation.RecordDespatchUnreserved(Now);
+
+        Should.Throw<DomainException>(() => reservation.Reinstate(Levels(), Now));
+    }
 }

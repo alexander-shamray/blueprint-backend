@@ -1,18 +1,21 @@
 using Inventory.Application.Reservations;
+using Inventory.Application.Reservations.Fulfil;
 using Inventory.Application.Reservations.ReleaseStock;
 using Inventory.Application.Reservations.ReserveStock;
 using Inventory.Domain.Reservations;
 using Inventory.Domain.Reservations.Events;
 using Inventory.Domain.Stock;
+using Microsoft.Extensions.Logging.Abstractions;
 using Shouldly;
 using Xunit;
 
 namespace Inventory.Application.Tests;
 
 /// <summary>
-/// Both handlers read <see cref="TimeProvider.GetUtcNow"/> after
-/// <c>GetForUpdateAsync</c> returns, so a writer that waited behind the lock
-/// cannot stamp earlier than the one it waited for. <see cref="LockAdvancingClock"/>
+/// Every handler that stamps a reservation reads
+/// <see cref="TimeProvider.GetUtcNow"/> after <c>GetForUpdateAsync</c> returns,
+/// so a writer that waited behind the lock cannot stamp earlier than the one it
+/// waited for. <see cref="LockAdvancingClock"/>
 /// stands in for the wait: it moves the clock forward inside the fake
 /// repository's call, so a handler that samples the clock first would still
 /// observe the earlier instant.
@@ -54,6 +57,37 @@ public sealed class ReservationClockOrderingTests
         answered.OccurredAt.ShouldBe(BeforeLock + WaitBehindLock);
     }
 
+    [Fact]
+    public async Task Fulfilment_stamps_the_instant_taken_after_the_lock()
+    {
+        var clock = new LockAdvancingClock(BeforeLock, WaitBehindLock);
+        var order = OrderId.New();
+        Reservation held = Reservation.Reserve(order, [new ReservationLine(ProductId.New(), 1)], [], BeforeLock);
+        var repository = new FakeReservationRepository(held, clock);
+        var handler = new FulfilReservationHandler(
+            repository, new FakeStockLedger(), clock, NullLogger<FulfilReservationHandler>.Instance);
+
+        await handler.HandleAsync(new FulfilReservationCommand(order.Value), CancellationToken.None);
+
+        held.UpdatedAt.ShouldBe(BeforeLock + WaitBehindLock);
+    }
+
+    [Fact]
+    public async Task An_unreserved_despatch_stamps_the_instant_taken_after_the_lock()
+    {
+        var clock = new LockAdvancingClock(BeforeLock, WaitBehindLock);
+        var order = OrderId.New();
+        Reservation released = Reservation.Reserve(order, [new ReservationLine(ProductId.New(), 1)], [], BeforeLock);
+        released.Release([], BeforeLock);
+        var repository = new FakeReservationRepository(released, clock);
+        var handler = new FulfilReservationHandler(
+            repository, new FakeStockLedger(), clock, NullLogger<FulfilReservationHandler>.Instance);
+
+        await handler.HandleAsync(new FulfilReservationCommand(order.Value), CancellationToken.None);
+
+        released.DespatchedUnreservedAt.ShouldBe(BeforeLock + WaitBehindLock);
+    }
+
     /// <summary>Advances by <c>wait</c> on every call, standing in for a writer queued behind the lock.</summary>
     private sealed class LockAdvancingClock(DateTimeOffset start, TimeSpan wait) : TimeProvider
     {
@@ -86,5 +120,7 @@ public sealed class ReservationClockOrderingTests
         public Task<IReadOnlyList<ReservedLevel>> GiveBackAsync(
             IReadOnlyList<ReservationLine> lines, CancellationToken ct) =>
             Task.FromResult<IReadOnlyList<ReservedLevel>>([]);
+
+        public Task FulfilAsync(IReadOnlyList<ReservationLine> lines, CancellationToken ct) => Task.CompletedTask;
     }
 }

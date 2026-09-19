@@ -137,18 +137,15 @@ EXTERNAL_METRICS = {
 # was empty.
 #
 # The four loaded outbox alerts group `by (service_name)` and read gauges only
-# Ordering publishes. A stalled Catalog outbox is therefore the silent case
-# §13.6 spends its callout on — and Catalog is §4.5's template, so every
-# scaffolded service inherits the gap until this is closed.
+# a service that registers OutboxMetrics publishes. A dispatcher-hosting
+# service that does not register it is the silent case §13.6 spends its
+# callout on.
 OUTBOX_METRICS_EXEMPT = {
     "Catalog":
-        "§13.3 places OutboxMetrics in Ordering.Infrastructure, so closing this "
-        "means lifting the type into common code and teaching §4.5's scaffold to "
-        "emit it — a design decision PR-24 does not own. Named here so it is a "
-        "known gap rather than an empty panel.",
-    "Inventory":
-        "Rendered from Catalog and inherits its gap; removed when Inventory "
-        "registers OutboxMetrics.",
+        "§4.5 names Catalog as the scaffold template, so a service-local "
+        "OutboxMetrics registered here would render into every new service; "
+        "closing the gap is a decision about the template (§13.6), not one "
+        "this service can make alone.",
 }
 
 # PromQL keywords that survive the stripping below and are not metric names.

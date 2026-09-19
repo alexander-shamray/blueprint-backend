@@ -184,7 +184,8 @@ coverage.runsettings         the report filtered to `.*\.Domain\.dll$` (§12.9)
                              deploy.yml; this is the moment between rollouts
 .github/<gate>/              one directory per gate — licence-gate,
                              secret-scan, closure-gate, locality-gate,
-                             pipeline-gate, output-gate — holding the gate,
+                             pipeline-gate, output-gate, comment-gate —
+                             holding the gate,
                              its suite and a README. The README is the ONE
                              owner of what the gate reads and what it claims,
                              and any other mention cites it rather than

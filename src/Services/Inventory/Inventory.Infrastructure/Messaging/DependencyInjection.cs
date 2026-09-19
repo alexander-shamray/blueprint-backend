@@ -1,5 +1,7 @@
 using Common.Application;
 using Common.Contracts.Inventory.V1;
+using Common.Contracts.Ordering.V1;
+using Common.Contracts.Shipping.V1;
 using Common.Infrastructure.Inbox;
 using Common.Infrastructure.Messaging;
 using Inventory.Application.Reservations.ReleaseStock;
@@ -28,6 +30,13 @@ public static class DependencyInjection
     /// below.
     /// </summary>
     public const string CommandsQueue = "inventory-commands";
+
+    /// <summary>
+    /// §3.2's Consumes column, both entries on one queue: each dispatches a
+    /// command whose rejections are acked rather than thrown (§9.8), so they
+    /// share one retry vocabulary and splitting them would buy no isolation.
+    /// </summary>
+    public const string EventsQueue = "inventory-events";
 
     public static IServiceCollection AddMassTransitMessaging(
         this IServiceCollection services,
@@ -59,9 +68,41 @@ public static class DependencyInjection
             x.AddConsumer<CommandConsumer<ReserveStock, ReserveStockCommand>>();
             x.AddConsumer<CommandConsumer<ReleaseStock, ReleaseStockCommand>>();
 
+            // §3.2's Consumes column.
+            x.AddConsumer<IntegrationEventConsumer<OrderCancelled>>();
+            x.AddConsumer<IntegrationEventConsumer<ShipmentDispatched>>();
+
             x.UsingRabbitMq((context, cfg) =>
             {
                 cfg.Host(new Uri(connectionString));
+
+                // §9.4's event endpoint, for §3.2's Consumes column.
+                cfg.ReceiveEndpoint(
+                    EventsQueue,
+                    e =>
+                    {
+                        // No exclusion, unlike CommandsQueue below: no mapper
+                        // runs on this queue, so no ContractMappingException
+                        // can arise for the retry policy to ignore.
+                        e.UseMessageRetry(RetryPolicy.Standard);
+
+                        // Inbox before the in-memory outbox, a correctness
+                        // rule (§9.8): filters added first are outermost, and
+                        // the outbox flushes its buffered sends after the
+                        // inner pipeline returns. The other order commits the
+                        // inbox row first, so a failed flush leaves a message
+                        // acknowledged, its sends lost, and the redelivery
+                        // suppressed by the filter's own row.
+                        e.UseConsumeFilter(typeof(InboxFilter<>), context);
+                        e.UseInMemoryOutbox(context);
+
+                        // One per event in §3.2's Consumes column that
+                        // Inventory owns; a handler with no line here is
+                        // never invoked and looks correct while doing
+                        // nothing.
+                        e.ConfigureConsumer<IntegrationEventConsumer<OrderCancelled>>(context);
+                        e.ConfigureConsumer<IntegrationEventConsumer<ShipmentDispatched>>(context);
+                    });
 
                 // §9.4's command endpoint, for the commands §3.2 says this
                 // service accepts.
@@ -82,13 +123,8 @@ public static class DependencyInjection
                             RetryPolicy.Standard(r);
                         });
 
-                        // Inbox before the in-memory outbox, a correctness
-                        // rule (§9.8): filters added first are outermost, and
-                        // the outbox flushes its buffered sends after the
-                        // inner pipeline returns. The other order commits the
-                        // inbox row first, so a failed flush leaves a message
-                        // acknowledged, its sends lost, and the redelivery
-                        // suppressed by the filter's own row.
+                        // Inbox before the in-memory outbox, for the reason
+                        // EventsQueue's endpoint states.
                         e.UseConsumeFilter(typeof(InboxFilter<>), context);
                         e.UseInMemoryOutbox(context);
 

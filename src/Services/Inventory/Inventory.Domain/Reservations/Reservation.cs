@@ -21,6 +21,7 @@ public sealed class Reservation : AggregateRoot<OrderId>
     public DateTimeOffset UpdatedAt { get; private set; }
     public IReadOnlyList<ReservationLine> Lines => _lines.AsReadOnly();
     public IReadOnlyList<ProductId> UnavailableProductIds => _unavailable.AsReadOnly();
+    public DateTimeOffset? DespatchedUnreservedAt { get; private set; }
 
     private Reservation() { }
 
@@ -93,12 +94,40 @@ public sealed class Reservation : AggregateRoot<OrderId>
     /// <summary>The runbook's reinstatement: an operator's act, so no <c>StockReserved</c>.</summary>
     public void Reinstate(IReadOnlyList<ReservedLevel> levels, DateTimeOffset now)
     {
-        if (Status != ReservationStatus.Released || _lines.Count == 0)
-            throw new DomainException("Only a released reservation with lines can be reinstated.");
+        if (Status != ReservationStatus.Released || _lines.Count == 0 || DespatchedUnreservedAt is not null)
+        {
+            throw new DomainException(
+                "Only a released reservation with lines, not yet despatched, can be reinstated.");
+        }
 
         Status = ReservationStatus.Reserved;
         UpdatedAt = now;
         RaiseLevels(levels);
+    }
+
+    /// <summary>Reaches <see cref="ReservationStatus.Fulfilled"/>; no §3.2 event describes despatch.</summary>
+    public void Fulfil(DateTimeOffset now)
+    {
+        if (Status == ReservationStatus.Fulfilled)
+            return;
+        if (Status != ReservationStatus.Reserved)
+            throw new DomainException("Only a held reservation can be fulfilled.");
+
+        Status = ReservationStatus.Fulfilled;
+        UpdatedAt = now;
+    }
+
+    /// <summary>ADR-029's open case: a despatch against a row already released, recorded as state.</summary>
+    public void RecordDespatchUnreserved(DateTimeOffset now)
+    {
+        if (Status != ReservationStatus.Released || _lines.Count == 0)
+            throw new DomainException("Only a released reservation with lines can record an unreserved despatch.");
+        if (DespatchedUnreservedAt is not null)
+            return;
+
+        DespatchedUnreservedAt = now;
+        UpdatedAt = now;
+        Raise(new DespatchedUnreservedDomainEvent(Id, now));
     }
 
     /// <summary>A command that arrives again is answered again rather than ignored (ADR-024).</summary>

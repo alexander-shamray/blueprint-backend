@@ -46,6 +46,18 @@ internal sealed class SqlStockLedger(InventoryDbContext db) : IStockLedger
         WHERE ProductId = @ProductId;
         """;
 
+    // The same Stamp expression as the reserve and give-back statements: a
+    // fulfilment publishes no level, but it moves UpdatedAt, and a stamp that
+    // went backwards here would let the next stock-take carry an OccurredAt
+    // behind Catalog's watermark (§7.3's exception).
+    private static readonly string FulfilSql =
+        $"""
+        UPDATE inventory.StockItems
+        SET Reserved = Reserved - @Quantity, UpdatedAt = {Stamp}
+        WHERE ProductId = @ProductId
+            AND Reserved >= @Quantity;
+        """;
+
     private sealed record LevelRow(int Available, DateTimeOffset UpdatedAt);
 
     public async Task<LedgerOutcome> TryTakeAsync(IReadOnlyList<ReservationLine> lines, CancellationToken ct)
@@ -108,6 +120,28 @@ internal sealed class SqlStockLedger(InventoryDbContext db) : IStockLedger
         }
 
         return levels;
+    }
+
+    public async Task FulfilAsync(IReadOnlyList<ReservationLine> lines, CancellationToken ct)
+    {
+        (DbConnection connection, DbTransaction transaction) = Current();
+
+        foreach (ReservationLine line in lines.OrderBy(l => l.ProductId.Value))
+        {
+            int affected = await connection.ExecuteAsync(new CommandDefinition(
+                FulfilSql,
+                new { ProductId = line.ProductId.Value, line.Quantity },
+                transaction: transaction,
+                cancellationToken: ct));
+
+            // Reserved below what this row holds is the ledger disagreeing
+            // with itself; retrying will not fix it and acking would hide it.
+            if (affected == 0)
+            {
+                throw new InvalidOperationException(
+                    $"Product {line.ProductId} has fewer reserved than this reservation holds.");
+            }
+        }
     }
 
     private (DbConnection, DbTransaction) Current()

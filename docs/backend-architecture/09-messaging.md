@@ -1232,10 +1232,12 @@ public sealed class CancelOrderMapper : ICommandMessageMapper<CancelOrder, Cance
 > `read` on the exchange, and a RabbitMQ permission pattern cannot tell a queue
 > from an exchange — so granting the bind grants the consume.
 
-**A command reachable both ways has exactly two mappings of its origin**, and
-both are literals: `CommandOrigin.User` at the endpoint, `CommandOrigin.System`
-here. A third — an origin read from a message, a header or a request body —
-re-opens the failure §11.4 describes, because it moves the choice to the caller.
+**A command reachable both ways maps its origin only as a literal**, written
+where the command is constructed: `CommandOrigin.User` at the endpoint,
+`CommandOrigin.System` at every arrival the broker scopes — this mapper, and
+the handler for a consumed event that dispatches a command. An origin read
+from a message, a header or a request body is the case that re-opens the
+failure §11.4 describes, because it moves the choice to the caller.
 
 The command endpoint is declared in Ordering's `AddMassTransitMessaging`
 (`Ordering.Infrastructure/Messaging/DependencyInjection.cs`), which holds
@@ -3142,18 +3144,19 @@ lives.
 
 **The ladder is a `RetryPolicy` in each service's own
 `*.Infrastructure/Messaging`** — Ordering's for the endpoints above,
-Inventory's for `inventory-commands` and Catalog's for
-`catalog-inventory-events` ([§3.2](03-bounded-contexts.md)) — which holds
-`RetryLimit`, `MinInterval`, `MaxInterval` and `IntervalDelta` and applies
-them through `Standard`. Declaring it once per service is what makes agreement
-between that service's endpoints structural: an endpoint that wants a different
-ladder has to say so, where a ladder written out per endpoint can only be
-checked by reading every call site and comparing them. The agreement is
-therefore within a service — nothing here makes two services' ladders equal,
+Inventory's for every endpoint its own `DependencyInjection` declares, under
+[§3.2](03-bounded-contexts.md)'s Accepts column and under its Consumes alike,
+and Catalog's for `catalog-inventory-events` — which holds `RetryLimit`,
+`MinInterval`, `MaxInterval` and `IntervalDelta` and applies them through
+`Standard`. Declaring it once per service is what makes agreement between that
+service's endpoints structural: an endpoint that wants a different ladder has
+to say so, where a ladder written out per endpoint can only be checked by
+reading every call site and comparing them. The agreement is therefore within
+a service — nothing here makes two services' ladders equal,
 and neither reads the other's. §9.6's confirmation wait has to clear the ladder
-these produce — a floor rather than the term that decides it — and clears a
-name rather than a number. `RetryLimit` counts **retries**, so an endpoint makes
-one more attempt than it says. They are retries of one broker delivery and not
+these produce — a floor rather than the term that decides it — and clears a name
+rather than a number. `RetryLimit` counts **retries**, so an endpoint makes one
+more attempt than it says. They are retries of one broker delivery and not
 redeliveries in §9.5's sense: `UseMessageRetry` holds the message and waits, so
 the delivery and the endpoint's concurrency slot are taken for the whole ladder.
 Releasing a message and having the broker bring it back is a different filter,
