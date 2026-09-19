@@ -935,19 +935,22 @@ class HealthRouteTests(unittest.TestCase):
         self.assertEqual(routes, {"/health/live", "/health/ready", "/health/startup"})
 
     def test_a_route_that_is_not_a_literal_fails_the_plan_by_location(self) -> None:
-        """A route read through a constant is one the scan cannot see, and a
-        probe it cannot see is traffic again. The XML doc mention is the
-        negative control: a comment is not a call site."""
+        """A route read through a constant, or built by concatenation, is one
+        the scan cannot see, and a probe it cannot see is traffic again. The
+        XML doc mention is the negative control: a comment is not a call
+        site."""
         root = service_tree({"Svc.Api/Health.cs": (
             "/// Maps <c>MapHealthChecks</c> for the probes.\n"
             'app.MapHealthChecks("/health/live");\n'
             "app.MapHealthChecks(ReadyPath, options);\n"
+            'app.MapHealthChecks("/health/" + "startup", options);\n'
         )})
 
         failures = canary._probe_routes_are_readable(root)
 
         self.assertEqual(canary.health_routes(root), {"/health/live"})
         self.assertTrue(any("Health.cs:3" in f for f in failures), failures)
+        self.assertTrue(any("Health.cs:4" in f for f in failures), failures)
         self.assertFalse(any("Health.cs:1" in f for f in failures), failures)
 
     def test_the_real_call_sites_are_all_literals(self) -> None:
