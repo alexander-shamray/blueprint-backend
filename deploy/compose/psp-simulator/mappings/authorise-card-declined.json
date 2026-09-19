@@ -1,0 +1,15 @@
+{
+  "Guid": "5b7e3f0a-0001-4000-8000-000000000001",
+  "Title": "Minor units ending 01 decline as card_declined",
+  "Priority": 1,
+  "Request": {
+    "Path": { "Matchers": [{ "Name": "ExactMatcher", "Pattern": "/v1/authorisations" }] },
+    "Methods": ["POST"],
+    "Body": { "Matcher": { "Name": "RegexMatcher", "Pattern": "\"amountMinor\":(\\d*0)?1[,}]" } }
+  },
+  "Response": {
+    "StatusCode": 402,
+    "Headers": { "Content-Type": "application/json" },
+    "BodyAsJson": { "status": "declined", "code": "card_declined" }
+  }
+}

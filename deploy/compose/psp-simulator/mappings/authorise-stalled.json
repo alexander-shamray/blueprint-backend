@@ -1,0 +1,17 @@
+{
+  "Guid": "5b7e3f0a-0009-4000-8000-000000000009",
+  "Title": "Minor units ending 09 delay past the adapter's total, then answer as approved",
+  "Priority": 1,
+  "Request": {
+    "Path": { "Matchers": [{ "Name": "ExactMatcher", "Pattern": "/v1/authorisations" }] },
+    "Methods": ["POST"],
+    "Body": { "Matcher": { "Name": "RegexMatcher", "Pattern": "\"amountMinor\":(\\d*0)?9[,}]" } }
+  },
+  "Response": {
+    "StatusCode": 201,
+    "Headers": { "Content-Type": "application/json" },
+    "Body": "{\"status\":\"approved\",\"reference\":\"psp_{{request.headers.Idempotency-Key}}\"}",
+    "UseTransformer": true,
+    "Delay": 30000
+  }
+}

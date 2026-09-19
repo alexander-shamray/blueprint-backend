@@ -1,0 +1,15 @@
+{
+  "Guid": "5b7e3f0a-0010-4000-8000-000000000010",
+  "Title": "Everything else is approved; the reference is the key, so a replay answers the same",
+  "Priority": 10,
+  "Request": {
+    "Path": { "Matchers": [{ "Name": "ExactMatcher", "Pattern": "/v1/authorisations" }] },
+    "Methods": ["POST"]
+  },
+  "Response": {
+    "StatusCode": 201,
+    "Headers": { "Content-Type": "application/json" },
+    "Body": "{\"status\":\"approved\",\"reference\":\"psp_{{request.headers.Idempotency-Key}}\"}",
+    "UseTransformer": true
+  }
+}
