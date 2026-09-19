@@ -108,10 +108,11 @@ public static class DependencyInjection
         });
         services.AddHostedService<MessageTypeMapValidator>();
 
-        // The payload format (§9.4). The first value object this service puts
-        // on a domain event needs a converter registered here: a readonly
-        // record struct deserialises to its default rather than failing,
-        // and §12.4's round-trip assertion is what catches that.
+        // The payload format (§9.4). No converter is registered beside it:
+        // the typed identifiers these events carry declare public primary
+        // constructors, which is what System.Text.Json needs to bind them
+        // without one, and §12.4's round-trip assertion is what would catch
+        // a value object that stopped qualifying.
         services.AddSingleton<OutboxJson>();
 
         // §13.3's messaging instruments, on the Commerce.Messaging meter

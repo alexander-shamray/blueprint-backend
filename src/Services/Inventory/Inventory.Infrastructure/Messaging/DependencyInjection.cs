@@ -21,8 +21,8 @@ namespace Inventory.Infrastructure.Messaging;
 public static class DependencyInjection
 {
     /// <summary>
-    /// §9.4's command endpoint, for the two commands §3.2's Accepts column
-    /// gives this service. One queue for both, unlike a queue per command:
+    /// §9.4's command endpoint, for the commands §3.2's Accepts column gives
+    /// this service. One queue for them all, unlike a queue per command:
     /// the saga addresses Inventory through exactly this endpoint for both
     /// a reserve and a release, and splitting them would buy no isolation —
     /// each is excluded from retry by the same

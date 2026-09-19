@@ -12,6 +12,11 @@
     <PackageReference Include="xunit.runner.visualstudio" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="Shouldly" />
+    <!-- SetOnHandValidatorTests names FluentValidation.TestHelper directly;
+         the register's honesty rule is that an assembly named directly is
+         referenced directly, so it does not ride in on Inventory.Application
+         alone. -->
+    <PackageReference Include="FluentValidation" />
     <!-- The §4.2 gates that reason over type dependencies rather than
          assembly references — a job GetReferencedAssemblies cannot do. -->
     <PackageReference Include="NetArchTest.Rules" />
@@ -31,12 +36,11 @@
          OutboxSerialisationTests resolves OutboxJson and MessageTypeMap out
          of. §4.2's gate binds Inventory.Application, not its tests.
 
-         Still no Inventory.TestSupport and no Docker: §12.1 homes handler
-         tests here against real containers, and this project has no handler
-         under test against one yet — GetStockHandler's Dapper query is
-         exercised once a TestSupport-backed suite exists to run it against.
-         The fixture reference, the DbContext reference and the provider
-         package all return with that one. -->
+         Still no Inventory.TestSupport and no Docker: GetStockHandler's
+         Dapper query is exercised against a real database by
+         StockEndpointsTests in Inventory.Api.Tests, which already carries
+         the fixture, the DbContext reference and the provider package a
+         second copy here would duplicate. -->
     <ProjectReference Include="..\..\src\Services\Inventory\Inventory.Infrastructure\Inventory.Infrastructure.csproj" />
   </ItemGroup>
 

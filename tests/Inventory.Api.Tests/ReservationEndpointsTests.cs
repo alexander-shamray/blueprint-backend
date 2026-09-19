@@ -210,9 +210,8 @@ public sealed class ReservationEndpointsTests(ServiceFixture fixture) : IAsyncLi
             .StatusCode.ShouldBe(HttpStatusCode.Forbidden);
     }
 
-    // Thin forwarders onto ReservationTestSupport: the implementation lives
-    // once there, and this class keeps its own name so its test bodies read
-    // unchanged.
+    // Thin forwarders that bind this class's fixture once: the private,
+    // same-named members ReservationTestSupport expects of a caller.
     private Task SeedStock(Guid product, int available) =>
         ReservationTestSupport.SeedStock(fixture, product, available);
 

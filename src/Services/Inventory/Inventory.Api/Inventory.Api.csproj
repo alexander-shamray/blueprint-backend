@@ -10,7 +10,7 @@
   -->
 
   <ItemGroup>
-    <!-- PR-07's OpenAPI deliverable (Appendix C): document only, no UI. -->
+    <!-- Appendix C's OpenAPI deliverable: document only, no UI. -->
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
   </ItemGroup>
 

@@ -11,7 +11,7 @@ namespace Inventory.Api.Tests;
 /// <summary>
 /// The host builds under <c>ValidateOnBuild</c> and answers what an empty
 /// service can already be asked: the probes (§13.5) and the OpenAPI document
-/// (Appendix C, PR-07). One factory for the class — each test sends one
+/// (Appendix C). One factory for the class — each test sends one
 /// request, and a host per test buys nothing.
 /// </summary>
 /// <remarks>

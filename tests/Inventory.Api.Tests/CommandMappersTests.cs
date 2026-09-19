@@ -11,7 +11,7 @@ using Xunit;
 namespace Inventory.Api.Tests;
 
 /// <summary>
-/// §9.4's wire-to-command boundary for §3.2's two Inventory commands,
+/// §9.4's wire-to-command boundary for the commands in §3.2's Accepts column,
 /// constructed directly rather than over containers: every refusal below is
 /// decided in the mapper itself, before a message ever reaches
 /// <c>ValidationBehavior</c> or a dispatcher, so nothing here needs a broker,

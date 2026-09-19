@@ -223,8 +223,7 @@ public sealed class InventoryCommandEndpointTests(ServiceFixture fixture) : IAsy
         (await fixture.ScalarAsync<int>(
                 "SELECT Value = COUNT(*) FROM inventory.Reservations WHERE OrderId = {0}", order))
             .ShouldBe(0, "nothing was written for this order, and the sentinel behind it on the same " +
-                "queue was consumed — CommandMappersTests ties that to the mapper's own refusal rather " +
-                "than to the validator's, which this alone cannot tell apart");
+                "queue was consumed");
     }
 
     [Fact]
@@ -250,8 +249,7 @@ public sealed class InventoryCommandEndpointTests(ServiceFixture fixture) : IAsy
         (await fixture.ScalarAsync<int>(
                 "SELECT Value = COUNT(*) FROM inventory.Reservations WHERE OrderId = {0}", order))
             .ShouldBe(0, "nothing was written for this order, and the sentinel behind it on the same " +
-                "queue was consumed — CommandMappersTests ties that to ReleaseStockMapper's own " +
-                "refusal rather than to the validator's, which this alone cannot tell apart");
+                "queue was consumed");
     }
 
     [Fact]
@@ -279,9 +277,8 @@ public sealed class InventoryCommandEndpointTests(ServiceFixture fixture) : IAsy
         (await Available(product)).ShouldBe(0);
     }
 
-    // Thin forwarders onto ReservationTestSupport: the implementation lives
-    // once there, and this class keeps its own name so its test bodies read
-    // unchanged.
+    // Thin forwarders that bind this class's fixture once: the private,
+    // same-named members ReservationTestSupport expects of a caller.
     private Task SeedStock(Guid product, int available) =>
         ReservationTestSupport.SeedStock(fixture, product, available);
 

@@ -3,9 +3,11 @@ using Common.Contracts.Ordering.V1;
 using Common.Contracts.Shipping.V1;
 using FluentValidation;
 using Inventory.Application.Reservations.Fulfil;
+using Inventory.Application.Reservations.GetReservation;
 using Inventory.Application.Reservations.Reinstate;
 using Inventory.Application.Reservations.ReleaseStock;
 using Inventory.Application.Reservations.ReserveStock;
+using Inventory.Application.Stock.GetStock;
 using Inventory.Application.Stock.SetOnHand;
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
@@ -168,39 +170,40 @@ public class DependencyInjectionTests
     }
 
     [Fact]
-    public void AddInventoryApplication_registers_the_scanned_handlers()
+    public void AddInventoryApplication_registers_the_slice_handlers()
     {
-        // The §6.2 scan is public types only: a handler that is not public
-        // registers as nothing. Nothing resolves an open generic at build
-        // time, so ValidateOnBuild says nothing either, and the dispatcher
-        // throws on the first request that needs the handler instead.
+        // The scan is public-only (§6.2); a handler or validator it misses
+        // registers as nothing rather than as something wrong, so every
+        // slice adds its rows here.
         ServiceCollection services = new();
 
         services.AddInventoryApplication();
 
         services.ShouldContain(d =>
-            d.ServiceType == typeof(ICommandHandler<FulfilReservationCommand, Result>));
+            d.ServiceType == typeof(ICommandHandler<SetOnHandCommand, Result>));
+        services.ShouldContain(d =>
+            d.ServiceType == typeof(IQueryHandler<GetStockQuery, StockDto?>));
+        services.ShouldContain(d =>
+            d.ServiceType == typeof(IValidator<SetOnHandCommand>));
         services.ShouldContain(d =>
             d.ServiceType == typeof(ICommandHandler<ReserveStockCommand, Result>));
         services.ShouldContain(d =>
+            d.ServiceType == typeof(IValidator<ReserveStockCommand>));
+        services.ShouldContain(d =>
             d.ServiceType == typeof(ICommandHandler<ReleaseStockCommand, Result>));
+        services.ShouldContain(d =>
+            d.ServiceType == typeof(IValidator<ReleaseStockCommand>));
         services.ShouldContain(d =>
             d.ServiceType == typeof(ICommandHandler<ReinstateReservationCommand, Result>));
         services.ShouldContain(d =>
-            d.ServiceType == typeof(ICommandHandler<SetOnHandCommand, Result>));
+            d.ServiceType == typeof(IQueryHandler<GetReservationQuery, ReservationDto?>));
+        services.ShouldContain(d =>
+            d.ServiceType == typeof(ICommandHandler<FulfilReservationCommand, Result>));
+        services.ShouldContain(d =>
+            d.ServiceType == typeof(IValidator<FulfilReservationCommand>));
         services.ShouldContain(d =>
             d.ServiceType == typeof(IIntegrationEventHandler<OrderCancelled>));
         services.ShouldContain(d =>
             d.ServiceType == typeof(IIntegrationEventHandler<ShipmentDispatched>));
-    }
-
-    [Fact]
-    public void AddInventoryApplication_registers_ReserveStockValidator()
-    {
-        ServiceCollection services = new();
-
-        services.AddInventoryApplication();
-
-        services.ShouldContain(d => d.ServiceType == typeof(IValidator<ReserveStockCommand>));
     }
 }

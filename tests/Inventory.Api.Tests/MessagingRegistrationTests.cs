@@ -167,9 +167,9 @@ public class MessagingRegistrationTests
     [Fact]
     public void Registration_adds_the_bus_and_its_hosted_service()
     {
-        // Descriptors, not a built provider — the PR-12 shape. Building would
-        // start nothing (the bus starts with the host), but a provider is a
-        // heavier claim than the test makes.
+        // Descriptors, not a built provider. Building would start nothing
+        // (the bus starts with the host), but a provider is a heavier claim
+        // than the test makes.
         ServiceCollection services = new();
 
         services.AddMassTransitMessaging(Configuration());
@@ -183,14 +183,14 @@ public class MessagingRegistrationTests
     [Fact]
     public void Every_command_in_the_accepts_column_is_registered_and_bound()
     {
-        // §3.2's Accepts column now has two entries, and each needs both an
-        // AddConsumer and a ConfigureConsumer naming it (asserted at the
-        // endpoint, over containers) — this is the registration half, the
-        // one a unit test can see. Matching on ImplementationType or
-        // ServiceType rather than on IConsumer<> closed over the message
-        // type: AddConsumer<T> calls TryAddScoped<T>(), registering the
-        // CONCRETE closed CommandConsumer<,>, not an open interface a
-        // reflection-based predicate would have to close itself.
+        // Each entry in §3.2's Accepts column needs both an AddConsumer and
+        // a ConfigureConsumer naming it (asserted at the endpoint, over
+        // containers) — this is the registration half, the one a unit test
+        // can see. Matching on ImplementationType or ServiceType rather than
+        // on IConsumer<> closed over the message type: AddConsumer<T> calls
+        // TryAddScoped<T>(), registering the concrete closed
+        // CommandConsumer<,>, not an open interface a reflection-based
+        // predicate would have to close itself.
         ServiceCollection services = new();
 
         services.AddMassTransitMessaging(Configuration());

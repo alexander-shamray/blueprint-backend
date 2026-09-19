@@ -52,9 +52,9 @@ internal sealed class InventoryIntegrationEventMapper : IIntegrationEventMapper
         QuantityAvailable = e.Available
     };
 
-    // The correlation is the ORDER for all three reservation events: §9.6's
-    // saga is keyed on it, and a trace over one order's stock decision is
-    // what that saga and a support tool both follow.
+    // A reservation event correlates on its order, not its product: §9.6's
+    // saga is keyed on the order, and a trace over one order's stock decision
+    // is what that saga and a support tool both follow.
     private static StockReserved ToContract(StockReservedDomainEvent e) => new()
     {
         MessageId = Guid.CreateVersion7(),

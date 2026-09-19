@@ -165,8 +165,12 @@ def _cell(rest: str, row: str) -> str:
 
 def _read_class(rest: str) -> list[str]:
     cell = _cell(rest, "Class")
-    if not re.fullmatch(r"[A-E](\+[A-E])?", cell):
-        raise InputRefused("the Class row is not a class: one letter A-E, or two distinct letters joined by `+`")
+    # A+D+E is the one three-member class, and it is spelled only that way:
+    # docs/change-locality.md section 3 argues why a service's own work is
+    # the case that needs it.
+    if not re.fullmatch(r"[A-E](\+[A-E])?|A\+D\+E", cell):
+        raise InputRefused(
+            "the Class row is not a class: one letter A-E, two distinct letters joined by `+`, or `A+D+E`")
     members = cell.split("+")
     if len(set(members)) != len(members):
         raise InputRefused("the Class row repeats a class")
