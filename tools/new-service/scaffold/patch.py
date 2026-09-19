@@ -681,6 +681,48 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
             "/// suite gains a handler test — the two cannot reference each other, so each\n"
             "/// declares its own\n",
         ),
+        # A rendered service starts with no consumer and no receive endpoint,
+        # so it never needs the harness-only broker widening below: that
+        # widening belongs with a service's first consumer, and arrives with
+        # it rather than with the scaffold.
+        (
+            "    /// <summary>\n"
+            "    /// The harness publishes peers' contracts under this service's own\n"
+            "    /// account, which the production grant refuses by design: a consumer\n"
+            "    /// reads another context's exchange and never writes it\n"
+            "    /// (<c>check_permissions.py</c> enforces exactly that). So the test\n"
+            "    /// container alone is widened, after it starts and before the factory is\n"
+            "    /// built; the production definitions file does not move for the\n"
+            "    /// harness's sake.\n"
+            "    /// </summary>\n"
+            "    private async Task WidenWriteForTheHarnessAsync()\n"
+            "    {\n"
+            "        const string scope = \"^(catalog-|Common\\\\.Contracts|MassTransit:)\";\n"
+            "\n"
+            "        ExecResult result = await _rabbit!.ExecAsync(\n"
+            "            [\"rabbitmqctl\", \"set_permissions\", \"-p\", \"/\", \"catalog-svc\", scope, scope, scope],\n"
+            "            TestContext.Current.CancellationToken);\n"
+            "\n"
+            "        // A silent failure here would surface as every endpoint test retrying\n"
+            "        // a refused publish until its budget ran out, naming a message rather\n"
+            "        // than a permission.\n"
+            "        if (result.ExitCode != 0)\n"
+            "        {\n"
+            "            throw new InvalidOperationException(\n"
+            "                $\"Could not widen catalog-svc's broker permissions for the harness \"\n"
+            "                + $\"(exit {result.ExitCode}). stdout: {result.Stdout} stderr: {result.Stderr}\");\n"
+            "        }\n"
+            "    }\n"
+            "\n",
+            "",
+        ),
+        (
+            "\n"
+            "        await WidenWriteForTheHarnessAsync();\n"
+            "\n",
+            "\n",
+        ),
+        ("using DotNet.Testcontainers.Containers;\n", ""),
     ),
     "tests/Catalog.Api.Tests/Catalog.Api.Tests.csproj": (
         # PricingServiceTests is Catalog's and does not travel, so the package

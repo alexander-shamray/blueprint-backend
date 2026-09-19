@@ -288,9 +288,9 @@ class RendersTheTemplate(unittest.TestCase):
         # writing it that way first.
         self.assertNotIn("cfg.ConfigureEndpoints(", messaging)
 
-        # A rendered service subscribes to nothing: the two calls Catalog makes
-        # into its own StockLevelConsumer are stripped, and no consumer, endpoint
-        # or projection name survives in the copied registration.
+        # A rendered service subscribes to nothing: the rendered registration
+        # carries no consumer and no receive endpoint, and no consumer,
+        # endpoint or projection name survives in it.
         # The CALLS, not the identifiers, for the reason the assertion above
         # gives: the comment that explains the absence names ReceiveEndpoint.
         self.assertNotIn(".AddConsumer<", messaging)
@@ -539,6 +539,14 @@ class GeneratedGuidanceIsTrue(unittest.TestCase):
         fixture = self.claim("tests/Yankee.TestSupport/ServiceFixture.cs")
         self.assertNotIn("StockLevel", fixture)
         self.assertNotIn("Inventory", fixture)
+
+        # A rendered service starts with no consumer and no receive endpoint,
+        # so it has no reason to inherit the harness-only broker widening a
+        # consuming service's fixture carries; that widening belongs with a
+        # service's first consumer.
+        self.assertNotIn("WidenWriteForTheHarness", fixture)
+        self.assertNotIn("ExecResult", fixture)
+        self.assertNotIn("set_permissions", fixture)
 
 
 class TheMigrationAndItsSnapshot(unittest.TestCase):
