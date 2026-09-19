@@ -50,16 +50,20 @@ every chart and asserts what comes out.
    reads it — and `deploy/observability/check.py` has already established
    that something publishes it — or it is an instrument of a meter
    `Common.Web`'s `ObservabilityExtensions` registers, which is how
-   MassTransit's consume series qualify. Deleting the registration fails it.
+   MassTransit's series qualify — and those only as exact entries in
+   `EXPORTED_SERIES`, verified against the MassTransit pin in
+   `Directory.Packages.props`, which fails the check when it moves. Deleting
+   the registration fails it too.
 6. The parser found host assemblies at all, so checks 4 and 5 cannot pass
    vacuously.
 7. Both of `deploy.yml`'s triggers cover every path in `SOURCE_INPUTS`.
 8. `deploy.yml`'s dispatch menu is exactly the plan's workload set.
 9. Every signal carries the three queries `analyse` reads and holds its fault
    rate to an absolute threshold; every workload declares at least one signal
-   the plan defines; and a service whose tree registers a MassTransit consumer
-   or saga declares `consume` or carries a non-empty `consumeExemption` —
-   which fails on a service with no consumer, or beside a declared `consume`.
+   the plan defines; and a service whose tree registers a MassTransit
+   consumer declares `consume`, and one that registers a saga declares `saga`,
+   or carries a non-empty `consumeExemption` or `sagaExemption` — which fails
+   on a service with nothing to exempt, or beside the signal it exempts.
 10. Every selector in the `http` signal's queries excludes the probe routes,
     and the exclusion matches every route `MapHealthChecks` maps in `src/` —
     found by scanning, so a fourth probe route fails the plan rather than
@@ -76,6 +80,9 @@ is the decision; this is where it lives. A workload declares `signals` in
 - **`consume`** is MassTransit's consume counters and duration histogram. Its
   fault rate is held to §13.6's error threshold; its duration is compared with
   the stable track only, because no alert owns a consume-duration number.
+- **`saga`** is MassTransit's saga instruments, judged on the same terms as
+  `consume`. A state machine's messages are counted there and not on the
+  consume series, so healthy consumers cannot carry a failing saga.
 
 Every declared signal is compared with the stable track on both metrics, and
 every declared signal must reach `minimumRequests` on its own: a workload is

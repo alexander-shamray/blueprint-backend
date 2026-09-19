@@ -59,8 +59,8 @@
       "signal is held to (ADR-047). Every signal is also compared with the",
       "stable track on both errorRate and latencyP99Seconds, which needs no",
       "alert to own a number. A workload declares the signals it receives, and",
-      "check 9 holds a service that registers a consumer to declaring consume",
-      "or arguing why not.",
+      "check 9 holds a service that registers a consumer or a saga to",
+      "declaring consume or saga, or arguing why not.",
       "",
       "PromQL, with three substitutions read_prometheus makes: $SERVICE is the",
       "workload's serviceName, $TRACK is stable or canary, and $WINDOW is the",
@@ -95,7 +95,8 @@
         "registers: consume attempts, the faulted ones, and their duration.",
         "The names are the OTLP-to-Prometheus spelling of the instrument and",
         "its unit, ea on the counters and ms on the histogram, so the p99 is",
-        "divided back into seconds.",
+        "divided back into seconds; canary.py's EXPORTED_SERIES holds each",
+        "spelling to the MassTransit version it was read from.",
         "",
         "Only errorRate is absolute: it is §13.6's error threshold, and no",
         "alert owns a consume-duration number, so duration is judged against",
@@ -107,6 +108,20 @@
         "errorRate": "(sum(rate(messaging_masstransit_consume_errors_ea_total{service_name=\"$SERVICE\", deployment_track=\"$TRACK\"}[$WINDOW])) or vector(0)) / sum(rate(messaging_masstransit_consume_ea_total{service_name=\"$SERVICE\", deployment_track=\"$TRACK\"}[$WINDOW]))",
         "latencyP99Seconds": "histogram_quantile(0.99, sum by (le) (rate(messaging_masstransit_consume_duration_milliseconds_bucket{service_name=\"$SERVICE\", deployment_track=\"$TRACK\"}[$WINDOW]))) / 1000",
         "requests": "sum(increase(messaging_masstransit_consume_ea_total{service_name=\"$SERVICE\", deployment_track=\"$TRACK\"}[$WINDOW]))"
+      }
+    },
+    "saga": {
+      "$comment": [
+        "MassTransit's saga instruments, which count a state machine's messages",
+        "apart from the consume ones, so a saga faulting on every message leaves",
+        "consume clean. Judged on the same terms as consume, and on its own",
+        "minimumRequests (ADR-047)."
+      ],
+      "absolute": ["errorRate"],
+      "queries": {
+        "errorRate": "(sum(rate(messaging_masstransit_saga_errors_ea_total{service_name=\"$SERVICE\", deployment_track=\"$TRACK\"}[$WINDOW])) or vector(0)) / sum(rate(messaging_masstransit_saga_ea_total{service_name=\"$SERVICE\", deployment_track=\"$TRACK\"}[$WINDOW]))",
+        "latencyP99Seconds": "histogram_quantile(0.99, sum by (le) (rate(messaging_masstransit_saga_duration_milliseconds_bucket{service_name=\"$SERVICE\", deployment_track=\"$TRACK\"}[$WINDOW]))) / 1000",
+        "requests": "sum(increase(messaging_masstransit_saga_ea_total{service_name=\"$SERVICE\", deployment_track=\"$TRACK\"}[$WINDOW]))"
       }
     }
   },
@@ -126,7 +141,7 @@
       "signals": ["http"],
       "consumeExemption": "Catalog's one consumer is the stock-level projection, fed at a rate Inventory's traffic sets rather than Catalog's, so a canary's share of it cannot be relied on to reach minimumRequests in a dwell and a declared consume signal would roll healthy releases back for quiet. A projection that faults is already loud: it retries and then lands in the error queue §13.6 pages on, and the reads it serves are judged by the http signal."
     },
-    "ordering-api": { "serviceName": "Ordering.Api", "chart": "ordering", "signals": ["http", "consume"] },
+    "ordering-api": { "serviceName": "Ordering.Api", "chart": "ordering", "signals": ["http", "consume", "saga"] },
     "inventory-api": { "serviceName": "Inventory.Api", "chart": "inventory", "signals": ["consume"] },
     "gateway": { "serviceName": "Gateway.Api", "chart": "gateway", "signals": ["http"] },
     "web-bff": { "serviceName": "Web.Bff", "chart": "web-bff", "signals": ["http"] }

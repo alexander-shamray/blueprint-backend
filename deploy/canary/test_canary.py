@@ -43,6 +43,7 @@ SIGNALS = {
     "consume": {"absolute": ["errorRate"]},
 }
 HTTP = {"http": SIGNALS["http"]}
+WITH_SAGA = {**SIGNALS, "saga": {"absolute": ["errorRate"]}}
 
 
 def readings(signals=("http",), **overrides) -> dict:
@@ -339,6 +340,28 @@ class VerdictTests(unittest.TestCase):
         self.assertEqual(verdict["decision"], canary.ROLLBACK)
         self.assertIn("consume", verdict["reason"])
 
+    def test_a_failing_saga_is_not_carried_by_healthy_consumers(self) -> None:
+        """MassTransit counts a saga's messages on its own instruments, so a
+        state machine faulting on every message leaves the consume series
+        clean. Judged together, the healthy signal would promote it."""
+        document = readings(signals=("http", "consume", "saga"))
+        document["canary"]["saga"]["errorRate"] = 0.5
+
+        verdict = canary.analyse(document, THRESHOLDS, WITH_SAGA)
+
+        self.assertEqual(verdict["decision"], canary.ROLLBACK)
+        self.assertIn("saga", verdict["reason"])
+        self.assertNotIn("consume", verdict["reason"])
+
+    def test_a_quiet_saga_signal_rolls_back(self) -> None:
+        document = readings(signals=("http", "consume", "saga"))
+        document["canary"]["saga"]["requests"] = 3.0
+
+        verdict = canary.analyse(document, THRESHOLDS, WITH_SAGA)
+
+        self.assertEqual(verdict["decision"], canary.ROLLBACK)
+        self.assertIn("saga", verdict["reason"])
+
     def test_breaching_the_latency_threshold_rolls_back(self) -> None:
         verdict = canary.analyse(
             readings(canary={"http": {"latencyP99Seconds": 1.5}}), THRESHOLDS, HTTP)
@@ -567,7 +590,7 @@ class SignalTests(unittest.TestCase):
         }
 
         self.assertEqual(declared["inventory-api"], {"consume"})
-        self.assertEqual(declared["ordering-api"], {"http", "consume"})
+        self.assertEqual(declared["ordering-api"], {"http", "consume", "saga"})
         self.assertEqual(declared["gateway"], {"http"})
         self.assertEqual(declared["web-bff"], {"http"})
         self.assertEqual(declared["catalog-api"], {"http"})
@@ -592,15 +615,16 @@ class SignalTests(unittest.TestCase):
         """Deleting a query passed every check before there were signals, after
         which `read` returns a reading short and the rung ends in a rollback
         for an absent series — ten minutes to say what a gate says at once."""
-        for metric in ("errorRate", "latencyP99Seconds", "requests"):
-            with self.subTest(metric=metric):
-                document = json.loads(json.dumps(self.document))
-                del document["signals"]["consume"]["queries"][metric]
+        for signal in ("consume", "saga"):
+            for metric in ("errorRate", "latencyP99Seconds", "requests"):
+                with self.subTest(signal=signal, metric=metric):
+                    document = json.loads(json.dumps(self.document))
+                    del document["signals"][signal]["queries"][metric]
 
-                failures = canary.check(document)
+                    failures = canary.check(document)
 
-                self.assertTrue(
-                    any(metric in f and "consume" in f for f in failures), failures)
+                    self.assertTrue(
+                        any(metric in f and signal in f for f in failures), failures)
 
     def test_a_signal_not_judged_on_the_fault_rate_fails_the_plan(self) -> None:
         """A signal with no absolute threshold is judged only against the
@@ -687,6 +711,74 @@ class ConsumerScanTests(unittest.TestCase):
         self.assertTrue(any("inventory-api" in f for f in failures), failures)
 
 
+class SagaScanTests(unittest.TestCase):
+    """The scan that decides which workloads owe a saga signal."""
+
+    def setUp(self) -> None:
+        self.document = canary.load_plan()
+
+    def test_the_scan_finds_the_services_it_judges(self) -> None:
+        """Ordering's fulfilment saga is the one state machine, and a scan
+        that found none would let it off."""
+        found = {
+            name: canary.has_sagas(entry["serviceName"])
+            for name, entry in canary.entries(self.document["workloads"]).items()
+        }
+
+        self.assertTrue(found["ordering-api"])
+        for name in ("catalog-api", "inventory-api", "gateway", "web-bff"):
+            self.assertFalse(found[name], name)
+
+    def test_a_saga_is_not_a_consumer_to_the_consume_scan(self) -> None:
+        """The two scans are split because the two signals are: a service
+        whose only registration is a saga owes saga, not consume."""
+        self.assertNotRegex(".AddSagaStateMachine<S, T>()", canary.CONSUMER_REGISTRATION)
+        self.assertRegex(".AddSagaStateMachine<S, T>()", canary.SAGA_REGISTRATION)
+        self.assertRegex(".AddConsumer<C>()", canary.CONSUMER_REGISTRATION)
+        self.assertNotRegex(".AddConsumer<C>()", canary.SAGA_REGISTRATION)
+
+    def test_a_saga_service_declaring_no_saga_signal_is_named(self) -> None:
+        document = json.loads(json.dumps(self.document))
+        document["workloads"]["ordering-api"]["signals"] = ["http", "consume"]
+
+        failures = canary.check(document)
+
+        self.assertTrue(
+            any("ordering-api" in f and "saga" in f for f in failures), failures)
+
+    def test_an_argued_saga_exemption_is_accepted(self) -> None:
+        document = json.loads(json.dumps(self.document))
+        document["workloads"]["ordering-api"]["signals"] = ["http", "consume"]
+        document["workloads"]["ordering-api"]["sagaExemption"] = "an argument"
+
+        self.assertEqual(canary.check(document), [])
+
+    def test_an_empty_saga_exemption_does_not_count_as_an_argument(self) -> None:
+        document = json.loads(json.dumps(self.document))
+        document["workloads"]["ordering-api"]["signals"] = ["http", "consume"]
+        document["workloads"]["ordering-api"]["sagaExemption"] = "  "
+
+        failures = canary.check(document)
+
+        self.assertTrue(any("ordering-api" in f for f in failures), failures)
+
+    def test_a_saga_exemption_on_a_workload_with_no_saga_fails(self) -> None:
+        document = json.loads(json.dumps(self.document))
+        document["workloads"]["inventory-api"]["sagaExemption"] = "no saga here"
+
+        failures = canary.check(document)
+
+        self.assertTrue(any("inventory-api" in f for f in failures), failures)
+
+    def test_a_saga_exemption_beside_a_declared_saga_signal_fails(self) -> None:
+        document = json.loads(json.dumps(self.document))
+        document["workloads"]["ordering-api"]["sagaExemption"] = "unneeded"
+
+        failures = canary.check(document)
+
+        self.assertTrue(any("ordering-api" in f for f in failures), failures)
+
+
 class HealthRouteTests(unittest.TestCase):
     """The probe exclusion, against the routes Common.Web actually maps."""
 
@@ -734,12 +826,13 @@ class HealthRouteTests(unittest.TestCase):
 
         self.assertTrue(any("/health/ready" in f for f in failures), failures)
 
-    def test_the_consume_queries_carry_no_route_selector(self) -> None:
+    def test_the_message_queries_carry_no_route_selector(self) -> None:
         """A message has no route, so a selector on one would match nothing
-        and roll every consume-judged canary back."""
-        for expression in canary.entries(
-                self.document["signals"]["consume"]["queries"]).values():
-            self.assertNotIn("http_route", expression)
+        and roll every consume- or saga-judged canary back."""
+        for signal in ("consume", "saga"):
+            for expression in canary.entries(
+                    self.document["signals"][signal]["queries"]).values():
+                self.assertNotIn("http_route", expression)
 
 
 class VouchingTests(unittest.TestCase):
@@ -772,7 +865,7 @@ class VouchingTests(unittest.TestCase):
         root = self.root_with('.AddMeter("MassTransit")\n')
 
         failures = canary._metrics_are_vouched_for(
-            self.plan_for("messaging_masstransit_consume_count_total"), root)
+            self.plan_for("messaging_masstransit_consume_ea_total"), root)
 
         self.assertEqual(failures, [])
 
@@ -782,9 +875,33 @@ class VouchingTests(unittest.TestCase):
         root = self.root_with('.AddMeter("Commerce.Messaging")\n')
 
         failures = canary._metrics_are_vouched_for(
-            self.plan_for("messaging_masstransit_consume_count_total"), root)
+            self.plan_for("messaging_masstransit_consume_ea_total"), root)
 
         self.assertTrue(any("MassTransit" in f for f in failures), failures)
+
+    def test_a_series_the_instrument_does_not_export_is_refused(self) -> None:
+        """Each spelling is the instrument's own exported name or nothing: a
+        counter exports no `_count`, and a millisecond histogram no
+        `_seconds` bucket, however near the prefix."""
+        root = self.root_with('.AddMeter("MassTransit")\n')
+        for metric in (
+            "messaging_masstransit_consume_count_total",
+            "messaging_masstransit_consume_duration_seconds_bucket",
+            "messaging_masstransit_consume_total",
+        ):
+            with self.subTest(metric=metric):
+                failures = canary._metrics_are_vouched_for(self.plan_for(metric), root)
+
+                self.assertTrue(failures)
+
+    def test_every_table_entry_is_its_instruments_exported_spelling(self) -> None:
+        """The table is data a reviewer reads, so each key is derived again
+        here from its instrument, kind and unit, and each instrument is one
+        the pinned version declares."""
+        for series, (meter, instrument, kind, unit) in canary.EXPORTED_SERIES.items():
+            with self.subTest(series=series):
+                self.assertIn(instrument, canary.METER_INSTRUMENTS[meter])
+                self.assertIn(series, canary.exported_series(instrument, kind, unit))
 
     def test_an_undeclared_series_no_alert_reads_still_fails(self) -> None:
         root = self.root_with('.AddMeter("MassTransit")\n')
@@ -794,9 +911,51 @@ class VouchingTests(unittest.TestCase):
 
         self.assertTrue(failures)
 
-    def test_the_shipped_consume_series_are_vouched_for(self) -> None:
+    def test_the_shipped_message_series_are_vouched_for(self) -> None:
         self.assertEqual(
             canary._metrics_are_vouched_for(canary.load_plan(), canary.ROOT), [])
+
+
+class VerifiedVersionTests(unittest.TestCase):
+    """The MassTransit pin against the version the series table was read from."""
+
+    def root_with(self, version: str) -> Path:
+        tmp = Path(tempfile.mkdtemp())
+        (tmp / "Directory.Packages.props").write_text(
+            f'<Project>\n  <ItemGroup>\n    <PackageVersion Include="MassTransit" '
+            f'Version="{version}" />\n  </ItemGroup>\n</Project>\n',
+            encoding="utf-8",
+        )
+        return tmp
+
+    def test_the_verified_version_passes(self) -> None:
+        root = self.root_with(canary.MASSTRANSIT_VERIFIED)
+
+        self.assertEqual(canary._masstransit_pin_is_verified(root), [])
+
+    def test_an_upgrade_fails_until_the_table_is_reverified(self) -> None:
+        """An upgrade can rename or re-unit an instrument, and every
+        consume-judged rung would then read an absent series."""
+        root = self.root_with("99.0.0")
+
+        failures = canary._masstransit_pin_is_verified(root)
+
+        self.assertTrue(
+            any("99.0.0" in f and canary.MASSTRANSIT_VERIFIED in f for f in failures),
+            failures)
+
+    def test_a_missing_pin_fails(self) -> None:
+        tmp = Path(tempfile.mkdtemp())
+        (tmp / "Directory.Packages.props").write_text("<Project />\n", encoding="utf-8")
+
+        self.assertTrue(canary._masstransit_pin_is_verified(tmp))
+
+    def test_the_real_repository_passes(self) -> None:
+        self.assertEqual(canary._masstransit_pin_is_verified(canary.ROOT), [])
+
+    def test_the_pin_is_a_declared_input(self) -> None:
+        """So deploy.yml's triggers run the gate when the pin moves."""
+        self.assertIn("Directory.Packages.props", canary.SOURCE_INPUTS)
 
 
 class DispatchOptionTests(unittest.TestCase):
@@ -1108,12 +1267,12 @@ class FetchTests(unittest.TestCase):
 
         self.assertEqual(set(readings["canary"]), {"consume"})
 
-    def test_both_tracks_and_both_signals_where_both_are_declared(self) -> None:
+    def test_both_tracks_and_every_signal_where_several_are_declared(self) -> None:
         readings = self.read("ordering-api")
 
         for track in ("canary", "baseline"):
-            self.assertEqual(set(readings[track]), {"http", "consume"})
-            for signal in ("http", "consume"):
+            self.assertEqual(set(readings[track]), {"http", "consume", "saga"})
+            for signal in ("http", "consume", "saga"):
                 self.assertEqual(
                     set(readings[track][signal]),
                     {"errorRate", "latencyP99Seconds", "requests"},

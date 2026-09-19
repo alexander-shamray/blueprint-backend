@@ -38,6 +38,8 @@ SOURCE_INPUTS = [
     # observability.yml runs check.py, which does not compare canary
     # thresholds, and the canary gate never runs.
     "deploy/observability",
+    # Check 5 holds the MassTransit pin to the version its series were read from.
+    "Directory.Packages.props",
 ]
 
 WORKFLOW_PATH = ".github/workflows/deploy.yml"
@@ -567,9 +569,11 @@ def check(plan_document: dict, root: Path = ROOT) -> list[str]:
 
     # 5. Every metric a query reads is one something vouches for: a loaded
     #    alert, whose metrics check.py has proved published, or a meter
-    #    Common.Web registers. A name nothing vouches for is a typo that
-    #    matches no series and rolls every canary back.
+    #    Common.Web registers, at the MassTransit version the series table
+    #    was verified against. A name nothing vouches for matches no series
+    #    and rolls every canary back.
     failures += _metrics_are_vouched_for(plan_document, root)
+    failures += _masstransit_pin_is_verified(root)
 
     # 6. The gate's own subject. Checks 3, 4 and 5 all compare against
     #    something parsed out of another file, and a parser that quietly
@@ -588,8 +592,8 @@ def check(plan_document: dict, root: Path = ROOT) -> list[str]:
     failures += _dispatch_options_match_workloads(workloads)
 
     # 9. Each signal is complete, and each workload declares the signals it
-    #    receives: a service that registers a consumer declares consume or
-    #    argues why not (ADR-047).
+    #    receives: a service that registers a consumer or a saga declares
+    #    consume or saga, or argues why not (ADR-047).
     signals = entries(plan_document.get("signals", {}))
     failures += _signals_are_complete(signals)
     failures += _workloads_declare_what_they_receive(workloads, signals, root)
@@ -634,11 +638,11 @@ def _signals_are_complete(signals: dict) -> list[str]:
 
 
 def _workloads_declare_what_they_receive(workloads: dict, signals: dict, root: Path) -> list[str]:
-    """Every workload declares a known signal, and a consumer declares consume.
+    """Every workload declares a known signal, and each registration its signal.
 
-    An exemption has to argue, and has to be needed: on a workload with no
-    consumer, or beside a declared consume signal, it is a claim nothing
-    rechecks.
+    A consumer owes consume and a saga owes saga, unless an exemption argues
+    otherwise. An exemption has to be needed: on a workload with nothing to
+    exempt, or beside the signal it exempts, it is a claim nothing rechecks.
     """
     failures = []
     for name, workload in sorted(workloads.items()):
@@ -655,42 +659,60 @@ def _workloads_declare_what_they_receive(workloads: dict, signals: dict, root: P
                     f"canary.json does not define: {', '.join(sorted(signals))}"
                 )
 
-        consumes = has_consumers(workload.get("serviceName", ""), root)
-        exemption = workload.get("consumeExemption")
-        if exemption is None:
-            if consumes and "consume" not in declared:
+        for signal, pattern, key, kind in OWED_SIGNALS:
+            registers = _registers(workload.get("serviceName", ""), pattern, root)
+            exemption = workload.get(key)
+            if exemption is None:
+                if registers and signal not in declared:
+                    failures.append(
+                        f"workloads.{name} registers {kind} and declares no "
+                        f"{signal} signal, so that broker work is not judged. "
+                        f"Declare it, or argue a {key}"
+                    )
+            elif not isinstance(exemption, str) or not exemption.strip():
                 failures.append(
-                    f"workloads.{name} registers a consumer and declares no "
-                    "consume signal, so none of its broker work is judged. "
-                    "Declare it, or argue a consumeExemption"
+                    f"workloads.{name}.{key} is empty, which is an exemption "
+                    "without an argument"
                 )
-        elif not isinstance(exemption, str) or not exemption.strip():
-            failures.append(
-                f"workloads.{name}.consumeExemption is empty, which is an "
-                "exemption without an argument"
-            )
-        elif not consumes:
-            failures.append(
-                f"workloads.{name}.consumeExemption exempts a service that "
-                "registers no consumer"
-            )
-        elif "consume" in declared:
-            failures.append(
-                f"workloads.{name}.consumeExemption sits beside a declared "
-                "consume signal, and one of the two is wrong"
-            )
+            elif not registers:
+                failures.append(
+                    f"workloads.{name}.{key} exempts a service that registers "
+                    f"no {kind.split()[-1]}"
+                )
+            elif signal in declared:
+                failures.append(
+                    f"workloads.{name}.{key} sits beside a declared {signal} "
+                    "signal, and one of the two is wrong"
+                )
     return failures
 
 
-# A MassTransit registration a scan can find: a consumer, a saga or a job
-# consumer added to the bus. Registration rather than an IConsumer<T>
-# implementation, because the common consumers live in Common.Infrastructure
-# and a service is a consumer by adding one.
-CONSUMER_REGISTRATION = re.compile(r"\.Add(?:Consumer|Saga|SagaStateMachine|JobConsumer)\s*<")
+# The MassTransit registrations a scan can find. Registration rather than an
+# IConsumer<T> implementation, because the common consumers live in
+# Common.Infrastructure and a service is a consumer by adding one. Sagas are
+# apart because MassTransit measures them on instruments of their own.
+CONSUMER_REGISTRATION = re.compile(r"\.Add(?:Consumer|JobConsumer)\s*<")
+SAGA_REGISTRATION = re.compile(r"\.Add(?:Saga|SagaStateMachine)\s*<")
+
+# Each registration, the signal it owes, and the key that exempts it.
+OWED_SIGNALS = (
+    ("consume", CONSUMER_REGISTRATION, "consumeExemption", "a consumer"),
+    ("saga", SAGA_REGISTRATION, "sagaExemption", "a saga"),
+)
 
 
 def has_consumers(service_name: str, root: Path = ROOT) -> bool:
-    """Whether the service whose host is `service_name` registers a consumer.
+    """Whether the service whose host is `service_name` registers a consumer."""
+    return _registers(service_name, CONSUMER_REGISTRATION, root)
+
+
+def has_sagas(service_name: str, root: Path = ROOT) -> bool:
+    """Whether the service whose host is `service_name` registers a saga."""
+    return _registers(service_name, SAGA_REGISTRATION, root)
+
+
+def _registers(service_name: str, pattern: re.Pattern, root: Path) -> bool:
+    """Whether any source in the service's tree matches `pattern`.
 
     The service's tree is the host project's parent directory, which holds
     the host and the projects it composes.
@@ -699,7 +721,7 @@ def has_consumers(service_name: str, root: Path = ROOT) -> bool:
     for host in (path for path in sources if path.name == f"{service_name}.csproj"):
         tree = host.parent.parent
         for path, code in sources.items():
-            if path.suffix == ".cs" and tree in path.parents and CONSUMER_REGISTRATION.search(
+            if path.suffix == ".cs" and tree in path.parents and pattern.search(
                     re.sub(r"//.*", "", code)):
                 return True
     return False
@@ -851,29 +873,66 @@ def _chart_exists(chart: str | None, root: Path) -> bool:
     return (root / "deploy" / "helm" / chart / "Chart.yaml").is_file()
 
 
-# Instruments of a third-party meter a query may read, by the meter's name.
-# MassTransit's are its InstrumentationOptions defaults at the pinned version,
-# and they are real only while Common.Web collects the meter, which is the
-# registration `_metrics_are_vouched_for` looks for.
+# The MassTransit version the two tables below were read from, out of its
+# package's own instrument names and units. Check 5 fails when the pin in
+# Directory.Packages.props moves, because an upgrade may rename or re-unit an
+# instrument and every message-judged rung would then read an absent series.
+MASSTRANSIT_VERIFIED = "8.5.3"
+
+# The instruments of a third-party meter this plan reads, as the verified
+# version declares them. They are real only while Common.Web collects the
+# meter, which is the registration `_metrics_are_vouched_for` looks for.
 METER_INSTRUMENTS = {
     "MassTransit": (
         "messaging.masstransit.consume",
         "messaging.masstransit.consume.errors",
         "messaging.masstransit.consume.duration",
+        "messaging.masstransit.saga",
+        "messaging.masstransit.saga.errors",
+        "messaging.masstransit.saga.duration",
     ),
 }
 
-# The suffixes the OTLP-to-Prometheus mapping appends: the series kind, and
-# the units these instruments carry (ea on MassTransit's counters, ms on its
-# histograms, s on ASP.NET Core's).
-SERIES_SUFFIX = re.compile(r"_(?:count|bucket|sum|total|ea|milliseconds|seconds)$")
+# Every exported series of those instruments a query may read, exactly:
+# series -> (meter, instrument, kind, unit). A spelling missing here is one
+# the instrument does not export, however near its prefix.
+EXPORTED_SERIES = {
+    "messaging_masstransit_consume_ea_total":
+        ("MassTransit", "messaging.masstransit.consume", "Counter", "ea"),
+    "messaging_masstransit_consume_errors_ea_total":
+        ("MassTransit", "messaging.masstransit.consume.errors", "Counter", "ea"),
+    "messaging_masstransit_consume_duration_milliseconds_bucket":
+        ("MassTransit", "messaging.masstransit.consume.duration", "Histogram", "ms"),
+    "messaging_masstransit_saga_ea_total":
+        ("MassTransit", "messaging.masstransit.saga", "Counter", "ea"),
+    "messaging_masstransit_saga_errors_ea_total":
+        ("MassTransit", "messaging.masstransit.saga.errors", "Counter", "ea"),
+    "messaging_masstransit_saga_duration_milliseconds_bucket":
+        ("MassTransit", "messaging.masstransit.saga.duration", "Histogram", "ms"),
+}
+
+# The OTLP-to-Prometheus unit suffixes: a known UCUM unit is spelled out, and
+# an unknown one such as ea is appended as it stands.
+UNIT_SUFFIX = {"s": "seconds", "ms": "milliseconds"}
+
+
+def exported_series(instrument: str, kind: str, unit: str) -> set[str]:
+    """The series one instrument exports, under the OTLP-to-Prometheus mapping."""
+    base = instrument.replace(".", "_") + (f"_{UNIT_SUFFIX.get(unit, unit)}" if unit else "")
+    if kind == "Histogram":
+        return {f"{base}_bucket", f"{base}_count", f"{base}_sum"}
+    if kind == "Counter":
+        return {f"{base}_total"}
+    return {base}
 
 
 def _metrics_are_vouched_for(plan_document: dict, root: Path) -> list[str]:
     """Every metric a signal's queries read, against what vouches for it.
 
-    Matched on the instrument rather than the suffix a query takes, because an
+    A metric a loaded alert reads is matched on its instrument, because an
     alert may read `_count` where a query reads `_bucket` off one histogram.
+    Any other must be an exact entry in EXPORTED_SERIES, of a meter Common.Web
+    registers.
     """
     rules = root / "deploy" / "observability" / "alerts" / "platform-alerts.yaml"
     registration = root / "src" / "BuildingBlocks" / "Common.Web" / "ObservabilityExtensions.cs"
@@ -891,41 +950,55 @@ def _metrics_are_vouched_for(plan_document: dict, root: Path) -> list[str]:
     failures = []
     for signal, definition in sorted(entries(plan_document.get("signals", {})).items()):
         for name, query in sorted(entries(definition.get("queries", {})).items()):
+            where = f"signals.{signal}.queries.{name}"
             for metric in sorted(set(re.findall(r"\b([a-z][a-z0-9_]*_(?:count|bucket|sum|total))\b", query))):
-                base = re.sub(r"_(?:count|bucket|sum|total)$", "", metric)
-                if base in alert_text:
+                if metric in EXPORTED_SERIES:
+                    meter, instrument, _, _ = EXPORTED_SERIES[metric]
+                    if instrument not in METER_INSTRUMENTS.get(meter, ()):
+                        failures.append(
+                            f"{where} reads {metric}, whose instrument {instrument} "
+                            f"is not one {meter} {MASSTRANSIT_VERIFIED} declares"
+                        )
+                    elif meter not in registered:
+                        failures.append(
+                            f"{where} reads {metric}, from the {meter} meter, and "
+                            f"{registration.name} does not register "
+                            f"AddMeter(\"{meter}\"), so nothing collects it"
+                        )
                     continue
-                meter = _meter_of(metric)
-                if meter is None:
+                base = re.sub(r"_(?:count|bucket|sum|total)$", "", metric)
+                if base not in alert_text:
                     failures.append(
-                        f"signals.{signal}.queries.{name} reads {metric}, which no "
-                        "loaded alert reads and no known meter's instrument "
-                        "exports, so nothing establishes that it is published"
-                    )
-                elif meter not in registered:
-                    failures.append(
-                        f"signals.{signal}.queries.{name} reads {metric}, from the "
-                        f"{meter} meter, and {registration.name} does not register "
-                        f"AddMeter(\"{meter}\"), so nothing collects it"
+                        f"{where} reads {metric}, which no loaded alert reads and "
+                        "which is not an exported series in EXPORTED_SERIES, so "
+                        "nothing establishes that it is published"
                     )
     return failures
 
 
-def _meter_of(metric: str) -> str | None:
-    """The meter whose instrument a series is, stripping suffixes one at a time."""
-    instruments = {
-        instrument.replace(".", "_"): meter
-        for meter, names in METER_INSTRUMENTS.items()
-        for instrument in names
-    }
-    name = metric
-    while True:
-        if name in instruments:
-            return instruments[name]
-        stripped = SERIES_SUFFIX.sub("", name)
-        if stripped == name:
-            return None
-        name = stripped
+# The pin the series table is held to.
+MASSTRANSIT_PIN = re.compile(r"<PackageVersion\s+Include=\"MassTransit\"\s+Version=\"([^\"]+)\"")
+
+
+def _masstransit_pin_is_verified(root: Path) -> list[str]:
+    """The MassTransit pin is the version EXPORTED_SERIES was verified against."""
+    props = root / "Directory.Packages.props"
+    try:
+        text = props.read_text(encoding="utf-8")
+    except OSError as error:
+        return [f"{props.name} is not readable, so the MassTransit pin cannot be checked: {error}"]
+    pin = MASSTRANSIT_PIN.search(text)
+    if not pin:
+        return [f"{props.name} pins no MassTransit version, so the series table "
+                "cannot be held to one"]
+    if pin.group(1) != MASSTRANSIT_VERIFIED:
+        return [
+            f"{props.name} pins MassTransit {pin.group(1)}, and canary.py's "
+            f"EXPORTED_SERIES was verified against {MASSTRANSIT_VERIFIED}. Re-read "
+            "the package's instrument names and units, correct the table and "
+            "the queries, then move MASSTRANSIT_VERIFIED"
+        ]
+    return []
 
 
 def _workflow_covers_inputs() -> list[str]:

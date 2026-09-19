@@ -1347,12 +1347,13 @@ on fire.
 signal it receives:
 [ADR-047](adr/ADR-047-the-canary-judges-each-workload-on-the-signals-it-receives.md).**
 A workload declares its signals in `deploy/canary/canary.json` — its HTTP
-requests less the health probes, its MassTransit consumes, or both — and each
-must be observed, reach the plan's minimum sample on its own and pass, or the
-step rolls back. A service that registers a consumer is judged on it unless
-the plan argues an exemption, and the plan's gate is what holds it to that. A
-consumer's duration is compared with the stable track only, because
-[§13.6](13-observability.md) owns no threshold for it.
+requests less the health probes, its MassTransit consumes, its saga messages,
+or any of them together — and each must be observed, reach the plan's minimum
+sample on its own and pass, or the step rolls back. A service that registers a
+consumer or a saga is judged on it unless the plan argues an exemption, and
+the plan's gate is what holds it to that. A message's duration is compared
+with the stable track only, because [§13.6](13-observability.md) owns no
+threshold for it.
 
 > **A canary that cannot be measured is worse than no canary**, and the failure
 > is silent in one direction only. A query spelled with the wrong label matches
