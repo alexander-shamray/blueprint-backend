@@ -28,8 +28,12 @@ public sealed class FulfilReservationHandler(
     public async Task<Result> HandleAsync(FulfilReservationCommand command, CancellationToken ct)
     {
         var order = new OrderId(command.OrderId);
-        DateTimeOffset now = clock.GetUtcNow();
         Reservation? reservation = await reservations.GetForUpdateAsync(order, ct);
+
+        // Read under the lock: the instant is taken once a writer that waited
+        // behind this one has committed, so it cannot stamp earlier than the
+        // one it waited for.
+        DateTimeOffset now = clock.GetUtcNow();
 
         switch (reservation?.Status)
         {
