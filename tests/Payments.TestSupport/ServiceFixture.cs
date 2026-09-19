@@ -12,23 +12,25 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using DotNet.Testcontainers.Builders;
 using DotNet.Testcontainers.Containers;
+using DotNet.Testcontainers.Images;
 using Respawn;
 using Testcontainers.MsSql;
 using Testcontainers.RabbitMq;
+using WireMock.Server;
 using Xunit;
 
 namespace Payments.TestSupport;
 
 /// <summary>
-/// A real SQL Server, migrated by the real migrator (ADR-010, §12.4), and a
-/// real RabbitMQ on §14.1's base tag (ADR-021), since Payments needs no
-/// message scheduler. Test projects cannot reference each other (§4.1), so
-/// one that needs containers declares its own <c>IntegrationCollection</c>
-/// over this one type. Tests deliberately collapse the two database
-/// identities of §7.1 — the <c>sa</c> login holds both DML and DDL — but not
-/// the two configuration keys, so the migrator can be caught reading the
-/// wrong one.
+/// A real SQL Server, migrated by the real migrator (ADR-010, §12.4), a real
+/// RabbitMQ on the image §14.1 builds, with ADR-021's delayed exchange, and
+/// the simulator's mappings in process. Test projects cannot reference each
+/// other (§4.1), so one that needs containers declares its own
+/// <c>IntegrationCollection</c> over this type. Tests collapse §7.1's two
+/// database identities — <c>sa</c> holds DML and DDL — but not the two
+/// configuration keys, so the migrator can be caught reading the wrong one.
 /// </summary>
 public sealed class ServiceFixture : IAsyncLifetime
 {
@@ -37,12 +39,9 @@ public sealed class ServiceFixture : IAsyncLifetime
         .Build();
 
     // Assigned in InitializeAsync rather than here, because the image has to
-    // be BUILT and a field initialiser cannot await. §14.1's broker image is
-    // where definitions.json lives, so the stock image is a broker with one
-    // administrator account and no permissions at all — the state this suite
-    // is meant to prove Payments works without. Ordering's fixture already
-    // builds this image and names it the same, so the cost is a cache hit
-    // rather than a second download.
+    // be BUILT and a field initialiser cannot await. A stock broker takes the
+    // delayed scheduler's registration and reports healthy, and the first
+    // redelivery then hangs on a declare it refuses (ADR-021).
     private RabbitMqContainer? _rabbit;
 
     private Respawner? _respawner;
@@ -106,6 +105,49 @@ public sealed class ServiceFixture : IAsyncLifetime
 
     public PaymentsApiFactory Factory { get; private set; } = null!;
 
+    /// <summary>
+    /// The provider, loading the simulator's mappings (§14.1) so the host is
+    /// answered by the stubs the local stack runs. Its log is what a test
+    /// counts charges by.
+    /// </summary>
+    public WireMockServer Provider { get; private set; } = null!;
+
+    /// <summary>The host's record of the order, observed (spec, section 6).</summary>
+    public ObservedOrderStore Orders => Factory.Orders;
+
+    /// <summary>
+    /// Fails the host's next commit that has an outbox row staged, once.
+    /// Disposing the returned fault disarms it.
+    /// </summary>
+    public CommitFault FailNextCommit() => Factory.CommitFaults.Arm();
+
+    /// <summary>
+    /// Messages a queue holds, read from the broker itself, or zero when it
+    /// does not exist yet — MassTransit declares an <c>_error</c> queue on its
+    /// first fault, and a fault's arrival there is an outcome no table shows.
+    /// </summary>
+    public async Task<int> QueueDepthAsync(string queue)
+    {
+        ExecResult result = await _rabbit!.ExecAsync(
+            ["rabbitmqctl", "list_queues", "--quiet", "--no-table-headers", "name", "messages"],
+            TestContext.Current.CancellationToken);
+
+        if (result.ExitCode != 0)
+        {
+            throw new InvalidOperationException(
+                $"Could not list the broker's queues (exit {result.ExitCode}). stderr: {result.Stderr}");
+        }
+
+        foreach (string line in result.Stdout.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+        {
+            string[] columns = line.Split('\t', StringSplitOptions.TrimEntries);
+            if (columns.Length == 2 && columns[0] == queue)
+                return int.Parse(columns[1], System.Globalization.CultureInfo.InvariantCulture);
+        }
+
+        return 0;
+    }
+
     /// <summary>The exit code of the first real migration run.</summary>
     public int FirstRunExitCode { get; private set; } = -1;
 
@@ -143,22 +185,32 @@ public sealed class ServiceFixture : IAsyncLifetime
     // ValueTask, not Task: xUnit v3 redefined IAsyncLifetime (§12.4).
     public async ValueTask InitializeAsync()
     {
-        // §14.1's broker CONFIGURATION on the stock image, not the built one:
-        // Payments needs the per-service accounts and none of ADR-021's
-        // delayed-exchange plugin, since it runs no saga and schedules
-        // nothing. The two mapped paths must match the Dockerfile's COPY
-        // targets (check_permissions.py).
+        // The image §14.1 builds, from the same Dockerfile. A name of this
+        // fixture's own, as Ordering's argues: Testcontainers writes the build
+        // context to a file named after the image, and two suites building one
+        // name at once race on that file. The layers are shared, so the second
+        // build is a cache hit; WithCleanUp(false) keeps the plugin download to
+        // once per machine.
+        IFutureDockerImage broker = new ImageFromDockerfileBuilder()
+            .WithDockerfileDirectory(BrokerContextPath())
+            .WithDockerfile("Dockerfile")
+            .WithName("ashamray-test-broker-payments:4.1-delayed")
+            .WithCleanUp(false)
+            .Build();
+
+        // The service's own account: the built image carries definitions.json,
+        // so the container starts with exactly the grant §14.1 deploys. The
+        // password is §14.1's local-development default.
         _rabbit = new RabbitMqBuilder()
-            .WithImage("rabbitmq:4.1-management-alpine")
+            .WithImage(broker)
             .WithUsername("payments-svc")
             .WithPassword("local-dev-payments")
-            .WithResourceMapping(
-                new FileInfo(Path.Combine(BrokerContextPath(), "definitions.json")),
-                "/etc/rabbitmq/")
-            .WithResourceMapping(
-                new FileInfo(Path.Combine(BrokerContextPath(), "20-commerce.conf")),
-                "/etc/rabbitmq/conf.d/")
             .Build();
+
+        await broker.CreateAsync(TestContext.Current.CancellationToken);
+
+        Provider = WireMockServer.Start();
+        Provider.ReadStaticMappings(SimulatorMappings.Directory());
 
         // Together, §12.4's printed shape — the broker's start hides inside
         // SQL Server's, which is the slower of the two by some margin.
@@ -179,7 +231,7 @@ public sealed class ServiceFixture : IAsyncLifetime
 
         FirstRunExitCode = await RunMigratorAsync(ConnectionString);
 
-        Factory = new PaymentsApiFactory(ConnectionString, _rabbit.GetConnectionString());
+        Factory = new PaymentsApiFactory(ConnectionString, _rabbit.GetConnectionString(), Provider.Urls[0] + "/");
 
         // A table for the transaction tests, created here and not in a
         // migration. It is a fixture of the test rather than a table of the
@@ -217,6 +269,8 @@ public sealed class ServiceFixture : IAsyncLifetime
             });
 
         await _respawner.ResetAsync(connection);
+
+        Provider.ResetLogEntries();
     }
 
     /// <summary>
@@ -654,6 +708,7 @@ public sealed class ServiceFixture : IAsyncLifetime
         {
             try
             {
+                Provider?.Stop();
                 await _sql.DisposeAsync();
             }
             finally

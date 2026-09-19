@@ -1,9 +1,14 @@
+using Common.Application;
 using Common.Contracts.Ordering.V1;
+using Common.Contracts.Payments.V1;
 using Common.Infrastructure.Inbox;
 using Common.Infrastructure.Messaging;
 using MassTransit;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Payments.Application;
+using Payments.Application.Intents;
+using Payments.Application.Intents.AuthorisePayment;
 
 namespace Payments.Infrastructure.Messaging;
 
@@ -21,6 +26,13 @@ public static class DependencyInjection
     /// vocabulary.
     /// </summary>
     public const string EventsQueue = "payments-events";
+
+    /// <summary>
+    /// §3.2's Accepts column for Payments. The address Ordering's saga sends
+    /// to is <c>Endpoints.PaymentsQueue</c> in Ordering.Infrastructure, and
+    /// the two must name one queue.
+    /// </summary>
+    public const string CommandsQueue = "payments-commands";
 
     public static IServiceCollection AddMassTransitMessaging(
         this IServiceCollection services,
@@ -51,9 +63,22 @@ public static class DependencyInjection
             x.AddConsumer<IntegrationEventConsumer<OrderPlaced>>();
             x.AddConsumer<IntegrationEventConsumer<OrderCancelled>>();
 
+            // §3.2's Accepts column.
+            x.AddConsumer<CommandConsumer<AuthorisePayment, AuthorisePaymentCommand>>();
+
+            // ADR-021's scheduler, the half that registers IMessageScheduler.
+            // UseDelayedMessageScheduler below is the other half, and either
+            // alone leaves the command endpoint's redelivery unable to schedule.
+            x.AddDelayedMessageScheduler();
+
             x.UsingRabbitMq((context, cfg) =>
             {
                 cfg.Host(new Uri(connectionString));
+
+                // The transport half of ADR-021's scheduler: RabbitMQ's delayed
+                // exchange, a plugin the image deploy/compose builds carries.
+                // On a broker without it the first redelivery hangs.
+                cfg.UseDelayedMessageScheduler();
 
                 cfg.ReceiveEndpoint(
                     EventsQueue,
@@ -68,6 +93,36 @@ public static class DependencyInjection
 
                         e.ConfigureConsumer<IntegrationEventConsumer<OrderPlaced>>(context);
                         e.ConfigureConsumer<IntegrationEventConsumer<OrderCancelled>>(context);
+                    });
+
+                cfg.ReceiveEndpoint(
+                    CommandsQueue,
+                    e =>
+                    {
+                        // Outermost: a record that has not arrived is a wait (§3.2), so the
+                        // message is released and delivered again later rather than held.
+                        e.UseDelayedRedelivery(r =>
+                        {
+                            r.Handle<PaymentOrderNotYetKnownException>();
+                            r.Intervals([.. RedeliveryLadder.Intervals]);
+                        });
+
+                        e.UseMessageRetry(r =>
+                        {
+                            // Terminal: a malformed contract, a mismatch and a wait each get
+                            // nothing from an immediate retry — the first two never will, and
+                            // the third is the redelivery's above.
+                            r.Ignore<ContractMappingException>();
+                            r.Ignore<PaymentMismatchException>();
+                            r.Ignore<PaymentOrderNotYetKnownException>();
+
+                            RetryPolicy.Standard(r);
+                        });
+
+                        e.UseConsumeFilter(typeof(InboxFilter<>), context);
+                        e.UseInMemoryOutbox(context);
+
+                        e.ConfigureConsumer<CommandConsumer<AuthorisePayment, AuthorisePaymentCommand>>(context);
                     });
 
                 // No ConfigureEndpoints, deliberately: for a registered
