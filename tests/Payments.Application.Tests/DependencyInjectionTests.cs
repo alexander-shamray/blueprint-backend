@@ -1,6 +1,7 @@
 using Common.Application;
 using Common.Contracts.Ordering.V1;
 using Microsoft.Extensions.DependencyInjection;
+using Payments.Application.Intents.AuthorisePayment;
 using Payments.Application.Orders.RecordOrderCancelled;
 using Payments.Application.Orders.RecordOrderPlaced;
 using Shouldly;
@@ -180,5 +181,7 @@ public class DependencyInjectionTests
             d.ServiceType == typeof(ICommandHandler<RecordOrderCancelledCommand, Result>));
         services.ShouldContain(d =>
             d.ServiceType == typeof(IIntegrationEventHandler<OrderCancelled>));
+        services.ShouldContain(d =>
+            d.ServiceType == typeof(ICommandHandler<AuthorisePaymentCommand, Result>));
     }
 }
