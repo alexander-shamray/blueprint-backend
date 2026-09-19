@@ -80,7 +80,9 @@ public class MetricsRegistrationTests
     /// is that assertion. A selector that silently matched nothing would pass
     /// both directions vacuously — the repeated failure this repository names
     /// in <c>CLAUDE.md</c> — so the candidate set is asserted to be non-empty
-    /// and to hold the two types this pull request added.
+    /// and to hold a type registered by <c>AddInventoryApplication</c> and one
+    /// by <c>AddInventoryInfrastructure</c>, so a selector scoped to only one
+    /// of the two cannot pass unnoticed.
     /// </summary>
     [Fact]
     public void The_metrics_selector_actually_selects_something()

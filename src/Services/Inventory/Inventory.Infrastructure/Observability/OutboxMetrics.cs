@@ -49,8 +49,9 @@ public sealed class OutboxMetrics
         LoggerMessage.Define(
             LogLevel.Error,
             new EventId(1, nameof(GaugeReadFailed)),
-            "Outbox gauge read failed. This interval's measurements are omitted, so "
-            + "every outbox series is absent rather than wrong — see OutboxMetrics.");
+            "Outbox gauge read failed. PerLane runs once per gauge, so this "
+            + "collection omits only that gauge's lane measurements, absent "
+            + "rather than wrong — see OutboxMetrics.");
 
     public OutboxMetrics(IMeterFactory factory, IOutboxStats stats, ILogger<OutboxMetrics> logger)
     {

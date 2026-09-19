@@ -72,12 +72,12 @@ internal sealed class OutboxStats : IOutboxStats, IDisposable
     /// reader, taking down <em>unrelated</em> telemetry with these gauges. That
     /// is a monitor causing an outage in the signal it exists to provide.
     /// <para>
-    /// A timeout here fails the callback, and a callback that throws is
-    /// swallowed by the SDK: the measurement is skipped and the series is
-    /// absent for that interval. Absent is the correct reading — readiness
-    /// (§13.5) is what reports a database that is gone, and an outbox alert
-    /// firing because SQL Server is unreachable would page the wrong person
-    /// with the wrong runbook.
+    /// A timeout here throws, and <c>OutboxMetrics.PerLane</c> is what
+    /// contains it: the measurement is skipped and the series is absent for
+    /// that interval rather than wrong. Absent is the correct reading —
+    /// readiness (§13.5) is what reports a database that is gone, and an
+    /// outbox alert firing because SQL Server is unreachable would page the
+    /// wrong person with the wrong runbook.
     /// </para>
     /// </remarks>
     private const int CommandTimeoutSeconds = 2;

@@ -165,10 +165,8 @@ public sealed class ServiceFixture : IAsyncLifetime
             TestContext.Current.CancellationToken);
 
         // A silent failure here is the worst outcome available: every event
-        // test would then fail on a publish, twenty minutes later, naming a
-        // message rather than a permission. Measured — that is exactly how
-        // Ordering's copy was found, as a suite that retried a refused
-        // publish until it timed out.
+        // test would then fail on a publish, minutes later, naming a message
+        // rather than the permission that was never widened.
         if (result.ExitCode != 0)
         {
             throw new InvalidOperationException(

@@ -137,9 +137,8 @@ EXTERNAL_METRICS = {
 # was empty.
 #
 # The four loaded outbox alerts group `by (service_name)` and read gauges only
-# Ordering and Inventory publish. A stalled Catalog outbox is therefore the
-# silent case §13.6 spends its callout on — and Catalog is §4.5's template, so
-# every scaffolded service inherits the gap until this is closed.
+# a service publishes by registering OutboxMetrics. A dispatcher-hosting
+# service that does neither is the silent case §13.6 spends its callout on.
 OUTBOX_METRICS_EXEMPT = {
     "Catalog":
         "§13.3 places OutboxMetrics in Ordering.Infrastructure, so closing this "

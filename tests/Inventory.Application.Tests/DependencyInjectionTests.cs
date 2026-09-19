@@ -170,17 +170,10 @@ public class DependencyInjectionTests
     [Fact]
     public void AddInventoryApplication_registers_the_scanned_handlers()
     {
-        // The §6.2 scan fails silently when it stops finding things: nothing
-        // resolves an open generic at build time, so ValidateOnBuild says
-        // nothing and the dispatcher throws on the first request that needs
-        // the handler — in production, on the path that matters, exactly the
-        // shape of the incident Ordering's own version of this test records.
-        //
-        // OrderCancelledHandler and ShipmentDispatchedHandler are this
-        // assembly's first IIntegrationEventHandler implementations, and
-        // FulfilReservationHandler is the command handler this PR adds; the
-        // loop below also covers the four command handlers that predate it,
-        // so the scan's coverage here is the assembly's rather than one PR's.
+        // The §6.2 scan is public types only: a handler that is not public
+        // registers as nothing. Nothing resolves an open generic at build
+        // time, so ValidateOnBuild says nothing either, and the dispatcher
+        // throws on the first request that needs the handler instead.
         ServiceCollection services = new();
 
         services.AddInventoryApplication();
