@@ -1,5 +1,7 @@
 using System.Text.Json;
 using Common.Infrastructure.Outbox;
+using Inventory.Domain.Reservations;
+using Inventory.Domain.Reservations.Events;
 using Inventory.Domain.Stock;
 using Inventory.Domain.Stock.Events;
 using Inventory.Infrastructure;
@@ -52,7 +54,7 @@ public class OutboxSerialisationTests
     }
 
     [Fact]
-    public void The_stageable_set_is_exactly_the_one_event_this_service_raises()
+    public void The_stageable_set_is_exactly_the_events_this_service_raises()
     {
         // The loop above is vacuous if the map is empty, and it would be
         // vacuous quietly — a registration that stopped naming
@@ -63,7 +65,12 @@ public class OutboxSerialisationTests
         using ServiceProvider provider = Registered();
 
         provider.GetRequiredService<MessageTypeMap>().StageableDomainEvents.ShouldBe(
-            [typeof(StockLevelChangedDomainEvent)],
+            [
+                typeof(StockLevelChangedDomainEvent),
+                typeof(StockReservedDomainEvent),
+                typeof(StockReservationFailedDomainEvent),
+                typeof(StockReleasedDomainEvent)
+            ],
             ignoreOrder: true);
     }
 
@@ -103,7 +110,13 @@ public class OutboxSerialisationTests
         private static readonly Dictionary<Type, object> Samples = new()
         {
             [typeof(StockLevelChangedDomainEvent)] =
-                new StockLevelChangedDomainEvent(ProductId.New(), 7, Raised)
+                new StockLevelChangedDomainEvent(ProductId.New(), 7, Raised),
+            [typeof(StockReservedDomainEvent)] =
+                new StockReservedDomainEvent(OrderId.New(), Raised),
+            [typeof(StockReservationFailedDomainEvent)] =
+                new StockReservationFailedDomainEvent(OrderId.New(), [ProductId.New()], Raised),
+            [typeof(StockReleasedDomainEvent)] =
+                new StockReleasedDomainEvent(OrderId.New(), Raised)
         };
 
         public static object Create(Type type) =>

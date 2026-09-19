@@ -41,4 +41,12 @@
     <ProjectReference Include="..\..\..\BuildingBlocks\Common.Contracts\Common.Contracts.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- RetryPolicy's intervals are internal to this assembly, and an
+         assertion about Messaging/DependencyInjection.cs's
+         ContractMappingException exclusion has to cite MinInterval rather
+         than copy the value it owns. -->
+    <InternalsVisibleTo Include="Inventory.Api.Tests" />
+  </ItemGroup>
+
 </Project>

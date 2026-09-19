@@ -1,3 +1,5 @@
+using Inventory.Application.Reservations;
+using Inventory.Domain.Reservations;
 using Inventory.Domain.Stock;
 using Inventory.Infrastructure.Messaging;
 using Inventory.Infrastructure.Persistence;
@@ -49,6 +51,8 @@ public static class DependencyInjection
 
         services.AddScoped<IUnitOfWork, EfUnitOfWork>();                     // §6.3
         services.AddScoped<IStockItemRepository, StockItemRepository>();     // §5.6
+        services.AddScoped<IReservationRepository, ReservationRepository>(); // §5.6
+        services.AddScoped<IStockLedger, SqlStockLedger>();                  // §7.3
 
         // §8.5's durable half, beside the unit of work rather than in
         // AddRedisConnections with its Redis sibling: the two ports are backed
@@ -103,9 +107,10 @@ public static class DependencyInjection
         services.AddHostedService<MessageTypeMapValidator>();
 
         // The payload format (§9.4). No converter is registered beside it:
-        // ProductId's public primary constructor is what System.Text.Json
-        // needs to bind it without one, and §12.4's round-trip assertion is
-        // what would catch a value object that stopped qualifying.
+        // the typed identifiers these events carry declare public primary
+        // constructors, which is what System.Text.Json needs to bind them
+        // without one, and §12.4's round-trip assertion is what would catch
+        // a value object that stopped qualifying.
         services.AddSingleton<OutboxJson>();
 
         // §13.3's messaging instruments, on the Commerce.Messaging meter

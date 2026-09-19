@@ -44,9 +44,9 @@
     {
       "user": "inventory-svc",
       "vhost": "/",
-      "configure": "^(Common\\.Contracts(\\.Inventory\\.V1:|:)|MassTransit:)",
-      "write": "^(Common\\.Contracts(\\.Inventory\\.V1:|:)|MassTransit:)",
-      "read": "^(Common\\.Contracts\\.Inventory\\.V1:|MassTransit:)"
+      "configure": "^(inventory-|Common\\.Contracts|Inventory\\.Infrastructure\\.Messaging:|MassTransit:)",
+      "write": "^(inventory-|Common\\.Contracts(\\.Inventory\\.V1:|:)|Inventory\\.Infrastructure\\.Messaging:|MassTransit:)",
+      "read": "^(inventory-|Common\\.Contracts|Inventory\\.Infrastructure\\.Messaging:|MassTransit:)"
     }
   ],
   "topic_permissions": [],

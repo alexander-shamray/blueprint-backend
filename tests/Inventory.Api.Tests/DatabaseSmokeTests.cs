@@ -53,10 +53,11 @@ public class DatabaseSmokeTests(ServiceFixture fixture)
         // the index the retention purge deletes through, and §8.5's marker
         // table with the database clock it is aged by and the rowversion the
         // purge identifies one of its rows by — all of them wiring every
-        // service has rather than anything this one chose. AddStockItems is
-        // the first migration that is this service's own (§7.3).
+        // service has rather than anything this one chose. AddStockItems and
+        // AddReservations are this service's own (§7.3, §5's second
+        // aggregate).
         string[] applied = await fixture.AppliedMigrationsAsync();
-        applied.Length.ShouldBe(8);
+        applied.Length.ShouldBe(9);
         applied[0].ShouldEndWith("_InitialCreate");
         applied[1].ShouldEndWith("_AddOutbox");
         applied[2].ShouldEndWith("_AddInbox");
@@ -65,6 +66,7 @@ public class DatabaseSmokeTests(ServiceFixture fixture)
         applied[5].ShouldEndWith("_IdempotencyMarkerCommittedAtDefault");
         applied[6].ShouldEndWith("_AddIdempotencyMarkerRowVersion");
         applied[7].ShouldEndWith("_AddStockItems");
+        applied[8].ShouldEndWith("_AddReservations");
     }
 
     [Fact]
@@ -383,6 +385,19 @@ public class DatabaseSmokeTests(ServiceFixture fixture)
             "SELECT Value = COUNT(*) FROM sys.columns WHERE object_id = OBJECT_ID('inventory.StockItems') " +
             "AND name = 'RowVersion' AND system_type_id = TYPE_ID('timestamp')"))
             .ShouldBe(1, "§7.3's admin path is optimistic, and the column is what makes it so");
+    }
+
+    [Fact]
+    public async Task The_migrator_creates_reservations_and_their_lines()
+    {
+        (await fixture.ScalarAsync<int>(
+            "SELECT Value = COUNT(*) FROM sys.tables WHERE schema_id = SCHEMA_ID('inventory') " +
+            "AND name IN ('Reservations', 'ReservationLines')"))
+            .ShouldBe(2);
+        (await fixture.ScalarAsync<int>(
+            "SELECT Value = COUNT(*) FROM sys.columns WHERE object_id = OBJECT_ID('inventory.Reservations') " +
+            "AND name = 'RowVersion' AND system_type_id = TYPE_ID('timestamp')"))
+            .ShouldBe(1, "a release and a fulfilment for one order can race on two endpoints");
     }
 }
 

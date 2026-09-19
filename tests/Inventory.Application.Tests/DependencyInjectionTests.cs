@@ -1,5 +1,9 @@
 using Common.Application;
 using FluentValidation;
+using Inventory.Application.Reservations.GetReservation;
+using Inventory.Application.Reservations.Reinstate;
+using Inventory.Application.Reservations.ReleaseStock;
+using Inventory.Application.Reservations.ReserveStock;
 using Inventory.Application.Stock.GetStock;
 using Inventory.Application.Stock.SetOnHand;
 using Microsoft.Extensions.DependencyInjection;
@@ -178,5 +182,17 @@ public class DependencyInjectionTests
             d.ServiceType == typeof(IQueryHandler<GetStockQuery, StockDto?>));
         services.ShouldContain(d =>
             d.ServiceType == typeof(IValidator<SetOnHandCommand>));
+        services.ShouldContain(d =>
+            d.ServiceType == typeof(ICommandHandler<ReserveStockCommand, Result>));
+        services.ShouldContain(d =>
+            d.ServiceType == typeof(IValidator<ReserveStockCommand>));
+        services.ShouldContain(d =>
+            d.ServiceType == typeof(ICommandHandler<ReleaseStockCommand, Result>));
+        services.ShouldContain(d =>
+            d.ServiceType == typeof(IValidator<ReleaseStockCommand>));
+        services.ShouldContain(d =>
+            d.ServiceType == typeof(ICommandHandler<ReinstateReservationCommand, Result>));
+        services.ShouldContain(d =>
+            d.ServiceType == typeof(IQueryHandler<GetReservationQuery, ReservationDto?>));
     }
 }

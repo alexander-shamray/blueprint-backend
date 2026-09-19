@@ -1,6 +1,8 @@
 using Common.Application;
 using Common.Contracts.Inventory.V1;
 using Inventory.Application;
+using Inventory.Domain.Reservations;
+using Inventory.Domain.Reservations.Events;
 using Inventory.Domain.Stock;
 using Inventory.Domain.Stock.Events;
 using Microsoft.Extensions.DependencyInjection;
@@ -34,5 +36,24 @@ public class InventoryIntegrationEventMapperTests
         contract.CorrelationId.ShouldBe(product.Value);
         contract.OccurredAt.ShouldBe(Raised);
         contract.MessageId.ShouldNotBe(Guid.Empty);
+    }
+
+    [Fact]
+    public void The_three_reservation_events_become_their_contracts_correlated_on_the_order()
+    {
+        OrderId order = OrderId.New();
+        ProductId short1 = ProductId.New();
+
+        IReadOnlyList<object> mapped = Mapper().Map(
+        [
+            new StockReservedDomainEvent(order, Raised),
+            new StockReservationFailedDomainEvent(order, [short1], Raised),
+            new StockReleasedDomainEvent(order, Raised)
+        ]);
+
+        mapped.Count.ShouldBe(3);
+        mapped[0].ShouldBeOfType<StockReserved>().OrderId.ShouldBe(order.Value);
+        mapped[1].ShouldBeOfType<StockReservationFailed>().UnavailableProductIds.ShouldBe([short1.Value]);
+        mapped[2].ShouldBeOfType<StockReleased>().CorrelationId.ShouldBe(order.Value);
     }
 }

@@ -1,6 +1,7 @@
 using Common.Application;
 using Common.Contracts.Inventory.V1;
 using Common.Domain;
+using Inventory.Domain.Reservations.Events;
 using Inventory.Domain.Stock.Events;
 
 namespace Inventory.Application.Integration;
@@ -19,7 +20,10 @@ internal sealed class InventoryIntegrationEventMapper : IIntegrationEventMapper
     // the property that keeps this list honest.
     private static readonly Dictionary<Type, Func<IDomainEvent, object>> Registry = new()
     {
-        [typeof(StockLevelChangedDomainEvent)] = e => ToContract((StockLevelChangedDomainEvent)e)
+        [typeof(StockLevelChangedDomainEvent)] = e => ToContract((StockLevelChangedDomainEvent)e),
+        [typeof(StockReservedDomainEvent)] = e => ToContract((StockReservedDomainEvent)e),
+        [typeof(StockReservationFailedDomainEvent)] = e => ToContract((StockReservationFailedDomainEvent)e),
+        [typeof(StockReleasedDomainEvent)] = e => ToContract((StockReleasedDomainEvent)e)
     };
 
     public IReadOnlyList<object> Map(IReadOnlyList<IDomainEvent> domainEvents)
@@ -46,5 +50,33 @@ internal sealed class InventoryIntegrationEventMapper : IIntegrationEventMapper
         OccurredAt = e.OccurredAt,
         ProductId = e.ProductId.Value,
         QuantityAvailable = e.Available
+    };
+
+    // A reservation event correlates on its order, not its product: §9.6's
+    // saga is keyed on the order, and a trace over one order's stock decision
+    // is what that saga and a support tool both follow.
+    private static StockReserved ToContract(StockReservedDomainEvent e) => new()
+    {
+        MessageId = Guid.CreateVersion7(),
+        CorrelationId = e.OrderId.Value,
+        OccurredAt = e.OccurredAt,
+        OrderId = e.OrderId.Value
+    };
+
+    private static StockReservationFailed ToContract(StockReservationFailedDomainEvent e) => new()
+    {
+        MessageId = Guid.CreateVersion7(),
+        CorrelationId = e.OrderId.Value,
+        OccurredAt = e.OccurredAt,
+        OrderId = e.OrderId.Value,
+        UnavailableProductIds = [.. e.UnavailableProductIds.Select(p => p.Value)]
+    };
+
+    private static StockReleased ToContract(StockReleasedDomainEvent e) => new()
+    {
+        MessageId = Guid.CreateVersion7(),
+        CorrelationId = e.OrderId.Value,
+        OccurredAt = e.OccurredAt,
+        OrderId = e.OrderId.Value
     };
 }

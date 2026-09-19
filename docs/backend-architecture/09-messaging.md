@@ -3140,25 +3140,30 @@ Retry and idempotency are configured per receive endpoint, and Ordering has
 the stock-events endpoint, which §9.6 argues where the transition it serves
 lives.
 
-**The ladder is `RetryPolicy` in `Ordering.Infrastructure/Messaging`**, which
-holds `RetryLimit`, `MinInterval`, `MaxInterval` and `IntervalDelta` and
-applies them through `Standard`. Declaring it once is what makes agreement
-between the endpoints structural: an endpoint that wants a different ladder has
-to say so, where a ladder written out per endpoint can only be checked by
-reading every call site and comparing them. §9.6's confirmation wait has to
-clear the ladder these produce — a floor rather than the term that decides
-it — and clears a name rather than a number.
-`RetryLimit` counts **retries**, so an endpoint makes one more attempt than it
-says. They are retries of one broker delivery and not redeliveries in §9.5's
-sense: `UseMessageRetry` holds the message and waits, so the delivery and the
-endpoint's concurrency slot are taken for the whole ladder. Releasing a message
-and having the broker bring it back is a different filter, which none of these
-endpoints uses.
+**The ladder is a `RetryPolicy` in each service's own
+`*.Infrastructure/Messaging`** — Ordering's for the endpoints above and
+Inventory's for `inventory-commands` ([§3.2](03-bounded-contexts.md)) — which
+holds `RetryLimit`, `MinInterval`, `MaxInterval` and `IntervalDelta` and applies
+them through `Standard`. Declaring it once per service is what makes agreement
+between that service's endpoints structural: an endpoint that wants a different
+ladder has to say so, where a ladder written out per endpoint can only be
+checked by reading every call site and comparing them. The agreement is
+therefore within a service — nothing here makes two services' ladders equal,
+and neither reads the other's. §9.6's confirmation wait has to clear the ladder
+these produce — a floor rather than the term that decides it — and clears a
+name rather than a number. `RetryLimit` counts **retries**, so an endpoint makes
+one more attempt than it says. They are retries of one broker delivery and not
+redeliveries in §9.5's sense: `UseMessageRetry` holds the message and waits, so
+the delivery and the endpoint's concurrency slot are taken for the whole ladder.
+Releasing a message and having the broker bring it back is a different filter,
+which none of these endpoints uses.
 
-**Idempotency is the same on all four**: every one applies `InboxFilter<>`,
-and the callout under the saga's endpoint is the argument for there being no
-exception. **Retry differs, and so does the outbox** — three endpoints defer
-their sends with `UseInMemoryOutbox` and the saga's persists them, which is
+**Idempotency is the same everywhere**: every endpoint applies
+`InboxFilter<>`, and the callout under the saga's endpoint is the argument
+for there being no exception. **Retry differs, and so does the outbox** —
+every other endpoint defers its sends with `UseInMemoryOutbox`, and the
+saga persists them instead, because its sends must survive its own commit,
+which is
 [ADR-032](adr/ADR-032-the-sagas-outbox-is-masstransits-in-the-sagas-own-transaction.md)
 and the callout under that block.
 The **projection** endpoint from §9.4, carrying Catalog's events into local read
