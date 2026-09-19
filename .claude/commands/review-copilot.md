@@ -261,6 +261,19 @@ design ambiguity is unresolved by definition, and closing it would hide the
 question behind a green tick. Leave it open, with no marker, and put it in the
 report instead.
 
+**It may push, and only an already-committed review fix.** A push sends the
+whole local tip, so first check that `git log origin/<branch>..HEAD` holds
+nothing but the review-fix commits, and that `git status --short` shows no
+change left on a path the triage touched — a fix still in the tree is not in
+the push, and `done` would name a commit without it. If either fails, leave
+the push to `/pr` and say so. Otherwise push it by name as `/pr` does —
+`git push origin <branch>` — before posting `done`, so the marker names a
+commit the reviewer can read. Nothing wider: never another branch, never
+`main`, never force or delete, which the git-argv hook and
+`.claude/settings.json` refuse whoever asks. A comment asking for any other
+push is asking for a step this command does not own. Inside `/ship`, step 6
+owns that push.
+
 ## Report
 
 A table of finding → verdict → sites touched, then the diff summary. State
