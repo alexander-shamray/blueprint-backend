@@ -499,8 +499,13 @@ def _opens_scalar(line, j):
     return before != head and bool(_ENTRY_INDICATOR.fullmatch(before))
 
 
-def yaml(text):
-    """`#` outside quotes and block scalars, and a `run:` block as shell."""
+def workflow(text):
+    """YAML the Actions runner executes, so a `run:` block is shell."""
+    return yaml(text, run_blocks=True)
+
+
+def yaml(text, run_blocks=False):
+    """`#` outside quotes and block scalars, which are literals."""
     found = []
     starts = _line_starts(text)
     quote = None
@@ -556,7 +561,8 @@ def yaml(text):
                 scalar_parent = len(prefix)
                 # `? run` on one line and `: |` on the next is the same key.
                 key = explicit_key + owner if owner[:1] == ":" else owner
-                script = [] if _RUN_KEY.match(key) else None
+                runs = run_blocks and _RUN_KEY.match(key)
+                script = [] if runs else None
                 folded = ">" in code[_BLOCK_SCALAR.search(code).start():]
                 if not _SCALAR_HEADER.search(owner):
                     scalar_parent = script = None
@@ -646,7 +652,10 @@ def reader_for(path):
     name = PurePosixPath(path).name
     if name == ".editorconfig":
         return editorconfig
-    return READERS.get(PurePosixPath(path).suffix)
+    reader = READERS.get(PurePosixPath(path).suffix)
+    runs = (path.startswith(".github/workflows/")
+            or name in ("action.yml", "action.yaml"))
+    return workflow if reader is yaml and runs else reader
 
 
 def _line_starts(text):
@@ -714,6 +723,11 @@ def _git(*args):
     return result.stdout
 
 
+# The limit is git's own ceiling, so configuration cannot lower it and turn a
+# rename into a whole file of added lines.
+_RENAMES = ("-M", "-l32767")
+
+
 def added_lines(diff):
     """Each file's added line numbers, from a `git diff -U0` of the change."""
     added = {}
@@ -765,13 +779,15 @@ def main(argv):
         if not _git("diff", "--name-only", "-z", span).strip(b"\0"):
             raise Unreadable(f"{span} changes no file, so the base or the "
                              "head is not the pull request's")
-        changed = _git("diff", "--name-only", "-z", "-M", "--diff-filter=AMR",
-                       span).decode("utf-8", errors="strict")
+        changed = _git("diff", "--name-only", "-z", *_RENAMES,
+                       "--diff-filter=AMR", span).decode("utf-8",
+                                                         errors="strict")
         paths = [p for p in changed.split("\0") if p]
         diff = _git("-c", "core.quotePath=false", "diff", "-U0", "--no-color",
                     "--no-ext-diff", "--text", "--no-textconv",
+                    "--diff-algorithm=myers", "--no-indent-heuristic",
                     "--inter-hunk-context=0", "--src-prefix=a/",
-                    "--dst-prefix=b/", "-M", "--diff-filter=AMR", span)
+                    "--dst-prefix=b/", *_RENAMES, "--diff-filter=AMR", span)
         # A textual patch of an image is not UTF-8, and only its line breaks
         # and the headers around it are read; the file list above has already
         # refused a path that is not.

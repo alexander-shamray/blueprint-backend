@@ -200,7 +200,7 @@ class YamlComments(unittest.TestCase):
                 "      EOF\n"
                 "      # also\n"
                 "    name: x # sibling\n")
-        self.assertEqual(said(gate.yaml, text), ["yes", "also", "sibling"])
+        self.assertEqual(said(gate.workflow, text), ["yes", "also", "sibling"])
 
     def test_a_quote_inside_a_plain_scalar_opens_nothing(self):
         for line in ['key: tag:"value # yes', 'key: x - "y # yes',
@@ -218,7 +218,7 @@ class YamlComments(unittest.TestCase):
         for key in ["run", '"run"', "'run'", "run ", '"run" ']:
             with self.subTest(key=key):
                 text = f"- {key}: |\n    echo '# no' # yes\n"
-                self.assertEqual(said(gate.yaml, text), ["yes"])
+                self.assertEqual(said(gate.workflow, text), ["yes"])
 
     def test_a_node_property_comes_before_the_scalar_it_decorates(self):
         for line in ['key: &name "x #12"', 'key: !!str "x #12"',
@@ -240,21 +240,30 @@ class YamlComments(unittest.TestCase):
     def test_a_folded_run_block_is_read_folded(self):
         folded = ("- run: >@    true # yes@    echo '#12'@"
                   "      kept # own@@    last # end@").replace("@", "\n")
-        self.assertEqual(said(gate.yaml, folded),
+        self.assertEqual(said(gate.workflow, folded),
                          ["yes\n    echo '#12'", "own", "end"])
-        self.assertEqual(len(judged("w.yml", folded)), 1)
+        self.assertEqual(len(judged(".github/workflows/w.yml", folded)), 1)
         literal = folded.replace(">", "|", 1)
-        self.assertEqual(judged("w.yml", literal), [])
+        self.assertEqual(judged(".github/workflows/w.yml", literal), [])
 
     def test_an_explicit_run_key_is_shell_and_another_key_is_not(self):
         text = "- ? run\n  : |\n    echo '# no' # yes\n"
-        self.assertEqual(said(gate.yaml, text), ["yes"])
+        self.assertEqual(said(gate.workflow, text), ["yes"])
         other = "- ? run\n  : x\n  ? text\n  : |\n    echo # no\n"
-        self.assertEqual(said(gate.yaml, other), [])
+        self.assertEqual(said(gate.workflow, other), [])
+
+    def test_a_run_key_outside_a_workflow_is_a_literal(self):
+        text = "- run: |@    echo # no@".replace("@", "\n")
+        self.assertEqual(said(gate.yaml, text), [])
+        self.assertEqual(judged("deploy/values.yml", text), [])
+        for path in [".github/workflows/ci.yml", "tools/x/action.yml"]:
+            with self.subTest(path=path):
+                self.assertIs(gate.reader_for(path), gate.workflow)
 
     def test_a_run_block_comment_lands_on_its_own_line(self):
         text = "- run: |\n    true\n    # PR-1\n"
-        self.assertEqual([line for _, line, _ in judged("w.yml", text)], [3])
+        found = judged(".github/workflows/w.yml", text)
+        self.assertEqual([line for _, line, _ in found], [3])
 
 
 class MsbuildComments(unittest.TestCase):

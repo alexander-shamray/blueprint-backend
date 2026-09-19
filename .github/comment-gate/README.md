@@ -8,10 +8,10 @@ longer than `BLOCK_LIMIT`.** [`docs/style-guide.md`](../../docs/style-guide.md)'
 ## What it reads
 
 - **The lines the pull request adds**, from `git diff -U0 -M` between the
-  merge base and the head, with git's prefixes, rename detection, hunk
-  context and a textual patch fixed on the command line so that no local
-  configuration or attribute changes what it is handed.
-  A renamed file is judged on its changed lines only. A diff that changes no
+  merge base and the head, with git's prefixes, rename detection and its
+  limit, the diff algorithm, hunk context and a textual patch fixed on the
+  command line so that no local configuration or attribute changes what it
+  is handed. A renamed file is judged on its changed lines only. A diff that changes no
   file, a path git has to quote, or a header of a shape it does not know
   refuses the run with exit 2 rather than passing it.
 - **Each changed file as the head commit holds it**, in the languages the
@@ -30,8 +30,11 @@ longer than `BLOCK_LIMIT`.** [`docs/style-guide.md`](../../docs/style-guide.md)'
   service is committed, not the strings it renders from.
 - **A workflow's `run:` block as the shell it is.** It is a YAML block scalar,
   and the runner executes it, so its comments are read with the shell reader
-  after the block's indentation is removed. Any other block scalar — a path
-  filter's embedded YAML included — stays a literal.
+  after the block's indentation is removed. A workflow is a file under
+  `.github/workflows/` or an `action.yml`; the block is read as POSIX shell
+  whatever the step's `shell:` names, which the gate does not check. Any
+  other block scalar — a path filter's embedded YAML and a `run:` key in any
+  other YAML file included — stays a literal.
 
 Each reader is a small lexer over the one language, stdlib only, on the
 licence gate's terms: a gate that needs a `pip install` gets skipped.
