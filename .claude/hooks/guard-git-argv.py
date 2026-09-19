@@ -2331,6 +2331,29 @@ def _offence(command, depth, judged):
     return None
 
 
+# **Every scan here must finish inside the hook's timeout, because a hook that
+# times out is non-blocking.** The scanners as a whole grow faster than
+# linearly in the command's length: measured here, 200,000 plain characters
+# took 6 seconds and 1,000,000 took 58, against a default timeout of 60. A
+# command past `LENGTH_BUDGET` is refused before any scan runs, which fails
+# closed where the timeout would fail open. The opener-times-length budget
+# blueprint-admin carries beside this one is not needed here: `${` and `(`
+# end their scan on a missing closer, and 9,000 of either judge in a second.
+LENGTH_BUDGET = 100_000
+
+
+def scan_budget(command):
+    """The refusal for a command the scanners could not finish in time."""
+    if len(command) <= LENGTH_BUDGET:
+        return None
+    return (
+        f"this command's {len(command)} characters are more than this guard "
+        "can judge inside its time limit, and a guard that times out admits "
+        "the command, so it is refused instead. Shorten it or split it into "
+        "separate commands."
+    )
+
+
 def main():
     try:
         event = json.load(sys.stdin)
@@ -2349,7 +2372,7 @@ def main():
         return 0
 
     try:
-        reason = offence(command)
+        reason = scan_budget(command) or offence(command)
     except Exception:  # noqa: BLE001 - the direction is the point
         # A crash is empty stdout, and `PreToolUse` reads empty stdout as
         # non-blocking, so an uncaught defect here would be a fail-open.
