@@ -39,7 +39,7 @@ divide one idea.
 ## Message form
 
 ```
-<type>(<scope>): <what changed>, <where>
+<type>(<scope>): <what changed, and where>
 
 <Body. Why, not what — the diff already says what. Wrapped at 80 columns,
 British spelling in prose, identifiers left alone.>
