@@ -2,7 +2,7 @@
 
 **The claim: no comment a pull request adds names an issue, a delivery-plan
 row, a reviewer or a history, stresses a word, or sits in a comment block
-over ten lines.** [`docs/style-guide.md`](../../docs/style-guide.md)'s
+longer than `BLOCK_LIMIT`.** [`docs/style-guide.md`](../../docs/style-guide.md)'s
 *Comments* section is the rule; this gate is its mechanical half.
 
 ## What it reads
@@ -50,7 +50,7 @@ reviewers and naming one there is a subject rather than a history.
 a blank line or a line of code ends it, and a multi-line token — a
 docstring, a `/* */` — counts every line it spans. An added comment line is
 judged as its whole block in the file after the change, because one added
-line can push an old block past ten. A trailing comment is on a line of code,
+line can push an old block past the limit. A trailing comment is on a line of code,
 so it is never part of a block.
 
 **Added lines only.** The corpus is brought under the rule by the sweeps in
