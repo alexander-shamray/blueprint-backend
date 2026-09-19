@@ -111,14 +111,17 @@ holding a secret that must differ per environment.
 
 ## Rotation
 
-**One** client secret reaches a running host — `Identity__Client__ClientSecret`,
-for the BFF, the only host that calls a peer synchronously
+**A running host holds a datastore credential, or the credential of an
+outbound call it makes itself** — `Identity__Client__ClientSecret`, for the
+BFF, the only host that calls a peer synchronously
 ([§9.7](backend-architecture/09-messaging.md),
-[§11.5](backend-architecture/11-identity-authorization.md), ADR-017). Everything
-else a *host* holds is a datastore credential.
+[§11.5](backend-architecture/11-identity-authorization.md), ADR-017), and
+`PaymentProvider__ApiKey`, for Payments' provider behind §3.2's
+anti-corruption layer
+([§15.4](backend-architecture/15-cicd-deployment.md)).
 
 **The fourth subsection below is not a host's, and that is why the sentence
-above counts the ones that reach one.** Since ADR-042 this repository also holds
+above names the ones that reach one.** Since ADR-042 this repository also holds
 a Keycloak client secret that no pod ever reads — and a count of what the
 platform holds is falsified by the next thing that holds one, where a count of
 what reaches a host is a claim about a mechanism. `No_client_secret_is_committed`
@@ -325,13 +328,14 @@ to be tidied away:
 | BFF client secret | `${BFF_CLIENT_SECRET:-local-dev-secret}` |
 | Keycloak admin | `admin` / `admin` |
 | RabbitMQ | `catalog-svc` / `local-dev-catalog`, `ordering-svc` / `local-dev-ordering` |
+| Payment provider key | `local-dev-psp` |
 
 These defaults are what make `docker compose up` work with no prior setup, and
 **the environment variable in front of each is the seam** that keeps them out of
 anything deployed. `deploy/compose/.env.example` documents the overrides.
 
-**Two of those four rows carry no variable in front of them, and the sentence
-above is about the other two.** RabbitMQ's per-service credentials are imported
+**Not every row carries a variable in front of it, and the sentence above is
+about the ones that do.** RabbitMQ's per-service credentials are imported
 into the image from `deploy/compose/rabbitmq/definitions.json`, so a `${…}`
 would front one half of a pair while the broker still expected the compiled-in
 password (ADR-036) — rotating them locally is an edit to that file and a
@@ -341,7 +345,8 @@ check uses**: `read_admin.py` refuses a base URL that is not `https` and has no
 local subject at all, because the local realm is checked from its file rather
 than through a running Keycloak. The two never meet, and a reader who has just
 met the realm-check service account should not have to infer that from a
-silence.
+silence. The provider key has no seam because nothing reads it: the simulator
+ignores the key, so a variable would front a value no local party checks.
 
 Note how the connection strings nest — `${CATALOG_CONNECTION:-…Password=${SQL_PASSWORD:-…}…}`
 — so overriding the password alone keeps every connection string correct. That
