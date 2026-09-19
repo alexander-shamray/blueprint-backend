@@ -8,9 +8,9 @@ longer than `BLOCK_LIMIT`.** [`docs/style-guide.md`](../../docs/style-guide.md)'
 ## What it reads
 
 - **The lines the pull request adds**, from `git diff -U0 -M` between the
-  merge base and the head, with git's prefixes, rename detection and hunk
-  context fixed on the command line so that no local configuration changes
-  what it is handed.
+  merge base and the head, with git's prefixes, rename detection, hunk
+  context and a textual patch fixed on the command line so that no local
+  configuration or attribute changes what it is handed.
   A renamed file is judged on its changed lines only. A diff that changes no
   file, a path git has to quote, or a header of a shape it does not know
   refuses the run with exit 2 rather than passing it.

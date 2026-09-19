@@ -470,6 +470,7 @@ def _sh_parameter(text, i, found):
 
 _BLOCK_SCALAR = re.compile(r"(?:^|[\s:\-])[|>][-+0-9]*$")
 _INDICATOR = re.compile(r"[|>][-+0-9]*")
+_SCALAR_HEADER = re.compile(r":[ \t]+(?:[&!][^ \t]*[ \t]+)*[|>][-+0-9]*$")
 _ITEM_PREFIX = re.compile(r"^[ ]*(?:-[ ]+)*")
 
 
@@ -542,6 +543,8 @@ def yaml(text):
                 scalar_parent = len(prefix)
                 script = [] if _RUN_KEY.match(owner) else None
                 folded = ">" in code[_BLOCK_SCALAR.search(code).start():]
+                if not _SCALAR_HEADER.search(owner):
+                    scalar_parent = script = None
             elif prefix.strip():
                 scalar_parent = code.rfind("-", 0, len(prefix))
             else:
@@ -751,14 +754,17 @@ def main(argv):
             raise Unreadable(f"{span} changes no file, so the base or the "
                              "head is not the pull request's")
         diff = _git("-c", "core.quotePath=false", "diff", "-U0", "--no-color",
-                    "--no-ext-diff", "--inter-hunk-context=0",
-                    "--src-prefix=a/", "--dst-prefix=b/", "-M",
-                    "--diff-filter=AMR", span)
-        added = added_lines(diff.decode("utf-8", errors="strict"))
+                    "--no-ext-diff", "--text", "--no-textconv",
+                    "--inter-hunk-context=0", "--src-prefix=a/",
+                    "--dst-prefix=b/", "-M", "--diff-filter=AMR", span)
+        # A textual patch of an image is not UTF-8, and only its line breaks
+        # and the headers around it are read; the file list above has already
+        # refused a path that is not.
+        added = added_lines(diff.decode("utf-8", errors="replace"))
         findings = []
         judged = 0
-        # A binary change has no hunk, so the file list, not the hunks, says
-        # what is read.
+        # The file list, not the hunks, says what is read, so a file the diff
+        # is silent about is still opened.
         for path in sorted(paths):
             if reader_for(path) is None:
                 continue

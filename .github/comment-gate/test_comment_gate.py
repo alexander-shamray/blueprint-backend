@@ -209,6 +209,16 @@ class YamlComments(unittest.TestCase):
                 self.assertEqual(said(gate.yaml, line + "\n"), [])
         self.assertEqual(said(gate.yaml, 'key: a !b "c # yes' + "\n"), ["yes"])
 
+    def test_a_plain_scalar_ending_in_an_indicator_opens_no_block(self):
+        for line in ["value: text |", "value: text >", "- text |"]:
+            with self.subTest(line=line):
+                text = f"{line}@  # yes@".replace("@", "\n")
+                self.assertEqual(said(gate.yaml, text), ["yes"])
+        for line in ["value: |", "value: !!str &a >-", "- |", '"key" : |']:
+            with self.subTest(line=line):
+                text = f"{line}@  # no@".replace("@", "\n")
+                self.assertEqual(said(gate.yaml, text), [])
+
     def test_a_folded_run_block_is_read_folded(self):
         folded = ("- run: >@    true # yes@    echo '#12'@"
                   "      kept # own@@    last # end@").replace("@", "\n")
@@ -391,6 +401,22 @@ class TheGateOnARepository(unittest.TestCase):
         self.write("Latin.cs", "// café\n", encoding="latin-1")
         self.commit("change")
         self.assertEqual(self.run_gate().returncode, 2)
+
+    def test_a_file_git_would_not_diff_is_still_judged_on_its_added_lines(self):
+        Path(self.repo, "Zero.cs").write_bytes(b"x(); // PR-1\x00\n")
+        self.write(".gitattributes", "Quiet.cs -diff\n")
+        self.write("Quiet.cs", "x(); // PR-2\n")
+        self.commit("change")
+        result = self.run_gate()
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertIn("Zero.cs:1", result.stdout)
+        self.assertIn("Quiet.cs:1", result.stdout)
+
+    def test_a_binary_file_it_does_not_read_refuses_nothing(self):
+        Path(self.repo, "logo.png").write_bytes(b"\x89PNG\n\xff\xfe+++ b/x\n")
+        self.write("New.cs", "x();\n")
+        self.commit("change")
+        self.assertEqual(self.run_gate().returncode, 0)
 
     def test_a_change_git_calls_binary_refuses_the_run(self):
         Path(self.repo, "Bin.cs").write_bytes(b"\x00\xff\xfe// PR-1\n")
