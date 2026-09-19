@@ -267,7 +267,8 @@ public class DatabaseSmokeTests(ServiceFixture fixture)
         // attempt 2 reads attempt 1's already-mutated instance back out of
         // the identity map and the domain method applies twice into one
         // commit. ProbeModelCustomizer is what makes a tracked entity
-        // possible before this service has an aggregate.
+        // possible without mapping it into the production model StockItem
+        // owns.
         Guid id = Guid.CreateVersion7();
 
         await using ServiceProvider provider = BuildFaultInjectingProvider();

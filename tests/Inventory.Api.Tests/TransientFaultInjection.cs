@@ -25,8 +25,8 @@ public sealed class MarkerRetryingStrategy(ExecutionStrategyDependencies depende
 }
 
 /// <summary>
-/// A tracked entity over the fixture's probe table, so the identity-map half
-/// of the retry defect is assertable before this service has an aggregate.
+/// A tracked entity over the fixture's probe table, isolating the retry
+/// mechanics under test from the service's production entities.
 /// </summary>
 public sealed class TrackedProbe
 {

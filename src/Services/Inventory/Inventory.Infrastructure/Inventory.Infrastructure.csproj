@@ -35,9 +35,9 @@
          the lock factory and §8.5's idempotency store — so a first cache
          read costs no new reference and no new registration. -->
     <ProjectReference Include="..\..\..\BuildingBlocks\Common.Infrastructure\Common.Infrastructure.csproj" />
-    <!-- MessageTypeSource's Broker half. Named through IIntegrationEvent
-         until this service has a contract of its own, at which point the
-         anchor becomes that contract — same assembly either way. -->
+    <!-- typeof(StockLevelChanged).Assembly, the Broker lane's half of
+         MessageTypeSource. Transitive through Inventory.Application, named
+         directly because this file names the type. -->
     <ProjectReference Include="..\..\..\BuildingBlocks\Common.Contracts\Common.Contracts.csproj" />
   </ItemGroup>
 
