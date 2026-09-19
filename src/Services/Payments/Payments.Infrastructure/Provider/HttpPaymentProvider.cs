@@ -11,7 +11,7 @@ namespace Payments.Infrastructure.Provider;
 /// The one place that knows the provider's wire format (§3.2's anti-corruption
 /// layer). Everything it returns is the port's vocabulary.
 /// </summary>
-internal sealed class HttpPaymentProvider(HttpClient http) : IPaymentProvider
+internal sealed class HttpPaymentProvider(HttpClient http, ProviderMetrics metrics) : IPaymentProvider
 {
     private const string KeyHeader = "Idempotency-Key";
 
@@ -35,10 +35,7 @@ internal sealed class HttpPaymentProvider(HttpClient http) : IPaymentProvider
         // reading; anything else is a provider this adapter does not
         // understand, which is a fault rather than a verdict.
         if (response.StatusCode is not (HttpStatusCode.Created or HttpStatusCode.PaymentRequired))
-        {
-            throw new PaymentProviderUnavailableException(
-                $"The provider answered an authorisation with {(int)response.StatusCode}.");
-        }
+            throw Unavailable($"The provider answered an authorisation with {(int)response.StatusCode}.");
 
         AuthoriseAnswer? answer;
         try
@@ -47,8 +44,7 @@ internal sealed class HttpPaymentProvider(HttpClient http) : IPaymentProvider
         }
         catch (JsonException e)
         {
-            throw new PaymentProviderUnavailableException(
-                "The provider answered an authorisation with no JSON body.", e);
+            throw Unavailable("The provider answered an authorisation with no JSON body.", e);
         }
 
         // The body must agree with its status, and each verdict must carry what
@@ -61,15 +57,13 @@ internal sealed class HttpPaymentProvider(HttpClient http) : IPaymentProvider
         {
             return answer is { Status: "declined", Code: { } code } && Recordable(code, ProviderLimits.MaxReasonLength)
                 ? new AuthorisationResult.Declined(code)
-                : throw new PaymentProviderUnavailableException(
-                    "The provider declined with a body that is not a decline.");
+                : throw Unavailable("The provider declined with a body that is not a decline.");
         }
 
         return answer is { Status: "approved", Reference: { } reference }
                && Recordable(reference, ProviderLimits.MaxReferenceLength)
             ? new AuthorisationResult.Authorised(reference)
-            : throw new PaymentProviderUnavailableException(
-                "The provider approved with a body that is not an approval.");
+            : throw Unavailable("The provider approved with a body that is not an approval.");
     }
 
     // The adapter's own rule: a blank reference or reason records nothing, so
@@ -90,10 +84,7 @@ internal sealed class HttpPaymentProvider(HttpClient http) : IPaymentProvider
         // saying anything else is a provider this adapter does not understand;
         // either would record a Refund and PaymentRefunded before money moved.
         if (response.StatusCode != HttpStatusCode.OK)
-        {
-            throw new PaymentProviderUnavailableException(
-                $"The provider answered a void with {(int)response.StatusCode}.");
-        }
+            throw Unavailable($"The provider answered a void with {(int)response.StatusCode}.");
 
         VoidAnswer? answer;
         try
@@ -102,14 +93,21 @@ internal sealed class HttpPaymentProvider(HttpClient http) : IPaymentProvider
         }
         catch (JsonException e)
         {
-            throw new PaymentProviderUnavailableException("The provider answered a void with no JSON body.", e);
+            throw Unavailable("The provider answered a void with no JSON body.", e);
         }
 
         if (answer is not { Status: "voided" })
-        {
-            throw new PaymentProviderUnavailableException(
-                "The provider answered a void with a body that is not a void.");
-        }
+            throw Unavailable("The provider answered a void with a body that is not a void.");
+    }
+
+    // An answer the pipeline passed as a success, which this adapter cannot
+    // read as a verdict, is still an attempt that met a failing provider
+    // (spec, section 12). Statuses the pipeline retries, broken connections
+    // and timeouts are counted inside it, and never here as well.
+    private PaymentProviderUnavailableException Unavailable(string message, Exception? inner = null)
+    {
+        metrics.Unavailable();
+        return inner is null ? new(message) : new(message, inner);
     }
 
     private async Task<HttpResponseMessage> SendAsync(HttpRequestMessage message, CancellationToken ct)

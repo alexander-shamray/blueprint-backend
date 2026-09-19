@@ -3,9 +3,10 @@ using System.Diagnostics.Metrics;
 namespace Payments.Infrastructure.Provider;
 
 /// <summary>
-/// One attempt that met a failing provider. A fact about the provider rather
-/// than an order, so §13.3's claim rule does not reach it: a unit that rolls
-/// back still met a failing provider.
+/// One attempt that met a failing provider: a fault rather than a verdict,
+/// whether the pipeline saw it or the adapter read it from the answer. A fact
+/// about the provider rather than an order, so §13.3's claim rule does not
+/// reach it: a unit that rolls back still met a failing provider.
 /// </summary>
 public sealed class ProviderMetrics
 {
@@ -20,7 +21,8 @@ public sealed class ProviderMetrics
             "payments.provider.unavailable",
             unit: "{attempt}",
             description:
-                "Provider attempts that ended in a transient fault; the error queue sees only exhausted units.");
+                "Provider attempts that ended in a fault rather than a verdict; " +
+                "the error queue sees only exhausted units.");
     }
 
     public void Unavailable() => _unavailable.Add(1);

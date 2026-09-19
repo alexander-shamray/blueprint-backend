@@ -1,4 +1,5 @@
 using System.Diagnostics.Metrics;
+using System.Text.Json;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
@@ -140,6 +141,24 @@ public sealed class HttpPaymentProviderTests : IClassFixture<HttpPaymentProvider
             e.RequestMessage!.Headers!["Authorization"].Single() == $"Bearer {configured}");
     }
 
+    [Fact]
+    public async Task The_authorisation_body_carries_the_minor_amount_the_currency_and_the_payer_and_nothing_else()
+    {
+        // The simulator matches on the amount alone, so only this reads the
+        // other two fields of the wire format off the request the adapter sent.
+        Guid payer = Guid.CreateVersion7();
+
+        await Provider().AuthoriseAsync(
+            new AuthorisationRequest(OrderId.New(), payer, 42.10m, "EUR"), TestContext.Current.CancellationToken);
+
+        using JsonDocument sent = JsonDocument.Parse(_server.LogEntries.ShouldHaveSingleItem().RequestMessage!.Body!);
+        sent.RootElement.EnumerateObject().Select(p => p.Name)
+            .ShouldBe(["amountMinor", "currency", "payerId"], ignoreOrder: true);
+        sent.RootElement.GetProperty("amountMinor").GetInt64().ShouldBe(4210);
+        sent.RootElement.GetProperty("currency").GetString().ShouldBe("EUR");
+        sent.RootElement.GetProperty("payerId").GetGuid().ShouldBe(payer);
+    }
+
     [Theory]
     [InlineData(10.01, "card_declined")]
     [InlineData(0.01, "card_declined")]
@@ -242,9 +261,32 @@ public sealed class HttpPaymentProviderTests : IClassFixture<HttpPaymentProvider
         _server.Given(Request.Create().WithPath("/v1/authorisations/*/void").UsingPost())
             .AtPriority(0)
             .RespondWith(Response.Create().WithStatusCode(status).WithBody(body));
+        using UnavailableCount counted = CountUnavailable();
 
         await Should.ThrowAsync<PaymentProviderUnavailableException>(() =>
             Provider().VoidAsync(new VoidRequest(OrderId.New(), "psp_ref"), TestContext.Current.CancellationToken));
+
+        counted.Value.ShouldBe(1, "one attempt, answered with something that is not a void");
+    }
+
+    [Theory]
+    [InlineData(400)]
+    [InlineData(401)]
+    [InlineData(404)]
+    public async Task A_status_the_wire_format_does_not_define_is_unavailable_and_counted_once(int status)
+    {
+        // A 401 is a wrong key: not retried, and not a verdict either, so it is
+        // exactly the failing provider the counter exists to show first.
+        _server.Given(Request.Create().WithPath("/v1/authorisations").UsingPost())
+            .AtPriority(0)
+            .RespondWith(Response.Create().WithStatusCode(status));
+        using UnavailableCount counted = CountUnavailable();
+
+        await Should.ThrowAsync<PaymentProviderUnavailableException>(() =>
+            Provider().AuthoriseAsync(Authorisation(42.10m), TestContext.Current.CancellationToken));
+
+        Calls("/v1/authorisations").ShouldBe(1);
+        counted.Value.ShouldBe(1);
     }
 
     [Fact]
@@ -317,6 +359,19 @@ public sealed class HttpPaymentProviderTests : IClassFixture<HttpPaymentProvider
         message.ShouldNotContain("not-the-key", Case.Insensitive, "a startup message is logged; a credential is not");
     }
 
+    [Theory]
+    [InlineData("https://psp.example/api?tenant=private-tenant")]
+    [InlineData("https://psp.example/api#private-tenant")]
+    public void A_base_url_with_a_query_or_fragment_is_refused_without_echoing_it(string address)
+    {
+        using PaymentsApiFactory factory = new(UnreachableSql, UnreachableRabbit, address);
+
+        string message = Should.Throw<InvalidOperationException>(() => factory.Services).Message;
+
+        message.ShouldContain("PaymentProvider:BaseUrl");
+        message.ShouldNotContain("private-tenant", Case.Insensitive, "a query can carry what a log must not");
+    }
+
     [Fact]
     public void A_missing_provider_key_stops_the_host()
     {
@@ -341,9 +396,12 @@ public sealed class HttpPaymentProviderTests : IClassFixture<HttpPaymentProvider
         _server.Given(Request.Create().WithPath("/v1/authorisations").UsingPost())
             .AtPriority(0)
             .RespondWith(Response.Create().WithStatusCode(status).WithBody(body));
+        using UnavailableCount counted = CountUnavailable();
 
         await Should.ThrowAsync<PaymentProviderUnavailableException>(() =>
             Provider().AuthoriseAsync(Authorisation(42.10m), TestContext.Current.CancellationToken));
+
+        counted.Value.ShouldBe(1, "one attempt, answered with something that is not a verdict");
     }
 
     [Theory]

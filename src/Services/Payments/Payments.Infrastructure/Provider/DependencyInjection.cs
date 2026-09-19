@@ -47,6 +47,15 @@ public static class DependencyInjection
                 $"{BaseUrlKey} carries user information; the provider's credential is {ApiKeyKey} alone.");
         }
 
+        // Every request resolves a relative path against the address, which
+        // keeps its path and drops its query and fragment, so an address with
+        // either would start clean and call a different endpoint.
+        if (parsed.Query.Length > 0 || parsed.Fragment.Length > 0)
+        {
+            throw new InvalidOperationException(
+                $"{BaseUrlKey} carries a query or fragment, which no request to the provider would keep.");
+        }
+
         // HTTPS everywhere but Development, the rule AuthenticationExtensions
         // applies to the identity provider: the key below is a bearer
         // credential, and plain HTTP hands it to anyone on the path. The local
