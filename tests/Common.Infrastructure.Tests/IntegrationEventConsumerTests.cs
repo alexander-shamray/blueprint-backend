@@ -18,8 +18,8 @@ namespace Common.Infrastructure.Tests;
 /// collection the §6.2 scan registered.
 /// </summary>
 /// <remarks>
-/// The contract is test-local, on <c>MessagingRegistrationTests</c>' terms:
-/// a payload carrying the §9.1 envelope, not one other services depend on.
+/// The contract is test-local: a payload carrying the §9.1 envelope, not one
+/// other services depend on.
 /// </remarks>
 public class IntegrationEventConsumerTests
 {
