@@ -235,16 +235,20 @@ validate rule syntax: `promtool` would be the tool for that, and adding it is a
 decision no chapter has taken.
 
 The fourth is the canary (PR-25). A workflow path-filtered to
-`deploy/canary/**` runs that tree's own suite and `canary.py check`, which
+`deploy/canary/**` and to the inputs its plan reads, named below with the other
+filters, runs that tree's own suite and `canary.py check`, which
 asserts §15.5's ladder climbs and ends at 100, that the rollout's absolute
 thresholds are [§13.6](13-observability.md)'s alert thresholds **read out of
 the rules file rather than restated**, that each workload's `serviceName` is an
 entry assembly this solution actually builds — §13.2 takes `service.name` from
 `ApplicationName`, so a query spelled from the deployment's vocabulary matches
-no series — and that every metric its queries read is one a loaded alert reads,
-which is what the observability gate has already proved is published. It
-reaches no cluster and no Prometheus, and the weight arithmetic and the
-promote/rollback decision have a suite because they are the parts a workflow
+no series — and that every metric its queries read is vouched for as
+[`deploy/canary/README.md`](../../deploy/canary/README.md) states: by a loaded
+alert the observability gate has proved published, or, for MassTransit's
+series, on
+[ADR-047](adr/ADR-047-the-canary-judges-each-workload-on-the-signals-it-receives.md)'s
+terms. It reaches no cluster and no Prometheus, and the weight arithmetic and
+the promote/rollback decision have a suite because they are the parts a workflow
 cannot be trusted with.
 
 The fifth is the Keycloak realm gate
@@ -303,9 +307,12 @@ alert's signal exists means reading every instrument declaration in C#, and
 `docs/runbooks/**`, because a renamed runbook is an alert with no procedure
 behind it; the canary one names `deploy/helm/**`, because its plan asserts each
 workload's chart exists and can render a canary track, `src/**`, because it
-checks each `serviceName` against a real entry assembly, and
+checks each `serviceName` against a real entry assembly,
 `deploy/observability/**`, because it takes §13.6's thresholds out of the rules
-file rather than restating them; the realm one names
+file rather than restating them, and `Directory.Packages.props`, because the
+MassTransit series its plan reads are held to that pin
+([ADR-047](adr/ADR-047-the-canary-judges-each-workload-on-the-signals-it-receives.md));
+the realm one names
 `src/BuildingBlocks/Common.Web/AuthenticationExtensions.cs`, because the
 lifetime every realm owes is read out of `AccessTokenLifetime` rather than
 restated, `deploy/compose/keycloak/realm-export.json`, because that file is
@@ -1342,6 +1349,18 @@ purpose, and nothing in the solution sets an assembly version, so every build in
 the platform reports `1.0.0`. Without a discriminator the analysis compares a
 release against itself, which passes every time — including on a canary that is
 on fire.
+
+**"Error rate and p99" are read per signal, and a workload is judged on every
+signal it receives:
+[ADR-047](adr/ADR-047-the-canary-judges-each-workload-on-the-signals-it-receives.md).**
+A workload declares its signals in `deploy/canary/canary.json` — its HTTP
+requests less the health probes, its MassTransit consumes, its saga messages,
+or any of them together — and each must be observed, reach the plan's minimum
+sample on its own and pass, or the step rolls back. A service that registers a
+consumer or a saga is judged on it unless the plan argues an exemption, and
+the plan's gate is what holds it to that. A message's duration is compared
+with the stable track only, because [§13.6](13-observability.md) owns no
+threshold for it.
 
 > **A canary that cannot be measured is worse than no canary**, and the failure
 > is silent in one direction only. A query spelled with the wrong label matches

@@ -53,6 +53,7 @@ decision looks wrong.
 | **ADR-044** | [The native client holds a refresh token, and the realm rotates it](adr/ADR-044-the-native-client-holds-a-refresh-token-and-the-realm-rotates-it.md) |
 | **ADR-045** | [The checkout quote takes quantities](adr/ADR-045-the-checkout-quote-takes-quantities.md) |
 | **ADR-046** | [Each client declares a browser origin, and the gate asserts the shape](adr/ADR-046-each-client-declares-a-browser-origin-and-the-gate-asserts-the-shape.md) |
+| **ADR-047** | [The canary judges each workload on the signals it receives](adr/ADR-047-the-canary-judges-each-workload-on-the-signals-it-receives.md) |
 
 ---
 

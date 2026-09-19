@@ -34,6 +34,7 @@ on:
       - 'deploy/helm/**'
       - 'deploy/observability/**'
       - 'src/**'
+      - 'Directory.Packages.props'
   push:
     branches: [main]
     paths:
@@ -42,6 +43,7 @@ on:
       - 'deploy/helm/**'
       - 'deploy/observability/**'
       - 'src/**'
+      - 'Directory.Packages.props'
 
 permissions:
   contents: read
@@ -448,11 +450,11 @@ jobs:
             # §15.5's "watch": a rate over the dwell, read at the end of it.
             sleep "$((CANARY_DWELL_MINUTES * 60))"
             python deploy/canary/read_prometheus.py \
-              --service "$CANARY_SERVICE_NAME" \
+              --workload "$WORKLOAD" \
               --window "${CANARY_DWELL_MINUTES}m" \
               --out readings.json
 
-            if ! python deploy/canary/canary.py analyse --readings readings.json; then
+            if ! python deploy/canary/canary.py analyse --workload "$WORKLOAD" --readings readings.json; then
               echo "::error::Rolling back at step $STEP."
               helm uninstall "$WORKLOAD-canary" -n "$NAMESPACE"
               exit 1

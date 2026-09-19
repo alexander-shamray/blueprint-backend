@@ -1,23 +1,11 @@
 #!/usr/bin/env python3
-"""Run the plan's queries against Prometheus and write what came back.
+"""Run a workload's declared queries against Prometheus and write the result.
 
-The one file in `deploy/canary` that talks to anything. It is deliberately thin
-and deliberately separate: `canary.py` decides, this fetches, and keeping the
-network on the other side of a file boundary is what lets the decision have a
-suite at all.
+The one file here that talks to anything, so that `canary.py` can decide with
+a suite. It never interprets: no series is `null`, never a zero, and
+`analyse` reads `null` as a rollback (§13.6). Stdlib `urllib` only.
 
-**It never interprets.** A query that matched no series produces `null` here,
-not a zero — and `canary.py analyse` reads `null` as a rollback, because an
-absent series and a healthy one look identical from a dashboard and §13.6
-spends a callout on exactly that. Substituting a zero would turn "nobody
-scraped the canary" into "the canary had no errors", which promotes on a
-measurement that did not happen.
-
-Stdlib `urllib`, so `deploy/canary` adds no dependency and no licence-register
-entry. Prometheus' HTTP API is one GET and a JSON body; a client library would
-be a package to pin for a call this short.
-
-    py -3.12 deploy/canary/read_prometheus.py --service Catalog.Api --window 10m --out readings.json
+    py -3.12 deploy/canary/read_prometheus.py --workload catalog-api --window 10m --out readings.json
 """
 
 from __future__ import annotations
@@ -32,7 +20,7 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
-from canary import entries, load_plan
+from canary import PlanError, entries, load_plan, queries
 
 TIMEOUT_SECONDS = 30
 
@@ -87,29 +75,37 @@ def query(base_url: str, expression: str) -> float | None:
     return value if math.isfinite(value) else None
 
 
-def read(base_url: str, service: str, window: str, plan: dict) -> dict:
-    readings: dict[str, dict[str, float | None]] = {}
+def read(base_url: str, workload: str, window: str, plan: dict) -> dict:
+    """Both tracks' readings of the signals `workload` declares, and no others.
+
+    The service name is the plan's, so it has one spelling. An unknown
+    workload raises KeyError rather than reading nothing.
+    """
+    entry = entries(plan["workloads"])[workload]
+    readings: dict[str, dict[str, dict[str, float | None]]] = {}
     for track in ("canary", "baseline"):
-        # `baseline` is this run's name for the stable track, and `stable` is
-        # the label's. They are kept distinct because the plan's vocabulary is
-        # about the comparison and the cluster's is about the deployment.
+        # `baseline` is the verdict's name for the stable track, and `stable`
+        # is the label's.
         label = "stable" if track == "baseline" else "canary"
         readings[track] = {
-            name: query(
-                base_url,
-                expression
-                .replace("$SERVICE", service)
-                .replace("$TRACK", label)
-                .replace("$WINDOW", window),
-            )
-            for name, expression in entries(plan["queries"]).items()
+            signal: {
+                name: query(
+                    base_url,
+                    expression
+                    .replace("$SERVICE", entry["serviceName"])
+                    .replace("$TRACK", label)
+                    .replace("$WINDOW", window),
+                )
+                for name, expression in queries(signal).items()
+            }
+            for signal in entry.get("signals", [])
         }
     return readings
 
 
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--service", required=True, help="the service_name resource attribute")
+    parser.add_argument("--workload", required=True, help="a workload key in canary.json")
     parser.add_argument("--window", required=True, help="the step's dwell, as a PromQL duration")
     parser.add_argument("--out", required=True, type=Path)
     args = parser.parse_args(argv[1:])
@@ -122,8 +118,11 @@ def main(argv: list[str]) -> int:
         return 1
 
     try:
-        readings = read(base_url, args.service, args.window, load_plan())
-    except (urllib.error.URLError, RuntimeError, OSError) as error:
+        readings = read(base_url, args.workload, args.window, load_plan())
+    except KeyError as error:
+        print(f"read_prometheus: no workload or signal {error} in the plan", file=sys.stderr)
+        return 1
+    except (urllib.error.URLError, RuntimeError, OSError, PlanError) as error:
         print(f"read_prometheus: {error}", file=sys.stderr)
         return 1
 

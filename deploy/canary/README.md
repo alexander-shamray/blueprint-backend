@@ -28,14 +28,14 @@ every chart and asserts what comes out.
 
 | File | What it is |
 |---|---|
-| `canary.json` | §15.5's ladder, the thresholds, the PromQL and the workload map |
-| `canary.py` | The weight arithmetic, the promote/rollback verdict, and the gate over `canary.json` |
-| `read_prometheus.py` | The one file that talks to anything. Runs the queries and writes what came back |
+| `canary.json` | §15.5's ladder, the thresholds, and the workload map with the signals each workload is judged on |
+| `canary.py` | The weight arithmetic, the signals and their PromQL templates, the promote/rollback verdict, and the gate over `canary.json` |
+| `read_prometheus.py` | The one file that talks to anything. Runs `canary.py`'s queries for the signals a workload declares and writes what came back |
 | `test_canary.py` | The suite. It is the whole of the assurance the rollout has |
 
 ## What it asserts
 
-`canary.py check` is seven checks and the last two are about itself:
+`canary.py check`'s checks, in order; the sixth is about itself:
 
 1. The ladder climbs, ends at 100%, and every rung but the last has a dwell.
 2. Every threshold `analyse` reads is present — it indexes them, so a missing
@@ -43,23 +43,71 @@ every chart and asserts what comes out.
 3. The absolute thresholds **are** §13.6's alert thresholds, read out of
    `platform-alerts.yaml` rather than restated. A canary tuned looser than the
    alert promotes a release and then pages about it.
-4. Each workload's `serviceName` is an entry assembly this solution builds, and
-   its `chart` is a chart under `deploy/helm`.
-5. Every metric the queries read is one a loaded alert reads — which
-   `deploy/observability/check.py` has already established is published by
-   something. Not a second copy of that scan; a composition with it.
-6. The parser found host assemblies at all, so checks 4 and 5 cannot pass
+4. Each workload's key is a Helm release name, its `serviceName` is an entry
+   assembly this solution builds, and its `chart` is a chart under
+   `deploy/helm`.
+5. Every series the query templates read is vouched for: either a loaded alert
+   reads it — and `deploy/observability/check.py` has already established
+   that something publishes it — or it is an instrument of a meter
+   `Common.Web`'s `ObservabilityExtensions` registers, which is how
+   MassTransit's series qualify — and those only as exact entries in
+   `EXPORTED_SERIES`, verified against the MassTransit pin in
+   `Directory.Packages.props`, which fails the check when it moves. Deleting
+   the registration fails it too.
+6. The parser found host assemblies at all, so check 4 cannot pass
    vacuously.
 7. Both of `deploy.yml`'s triggers cover every path in `SOURCE_INPUTS`.
+8. `deploy.yml`'s dispatch menu is exactly the plan's workload set.
+9. Every workload declares at least one signal `canary.py` defines; and a
+   service whose tree registers a MassTransit
+   consumer declares `consume`, and one that registers a saga declares `saga`,
+   or carries a non-empty `consumeExemption` or `sagaExemption` — which fails
+   on a service with nothing to exempt, or beside the signal it exempts. A
+   declared `consume` or `saga` needs its registration, and a workload that
+   does not declare `http` argues a non-empty `httpExemption`, since every
+   workload is an ASP.NET Core host.
+10. The probe-route scan finds the routes `MapHealthChecks` maps in `src/`,
+    and every call site's route is a literal. The `http` templates' exclusion
+    is derived from those routes, so a new probe route is excluded without an
+    edit, and one the scan cannot read fails the plan — and refuses to render
+    an `http` query — rather than counting as traffic again.
+11. `canary.json` holds the ladder, the tolerance, the thresholds and the
+    workloads, and nothing else: a plan carrying query text again is refused
+    rather than ignored beside the templates that run.
+
+## What a workload is judged on
+
+[ADR-047](../../docs/backend-architecture/adr/ADR-047-the-canary-judges-each-workload-on-the-signals-it-receives.md)
+is the decision; this is where it lives. A workload declares `signals` in
+`canary.json`, and `read_prometheus.py` fetches those and no others. The
+signals and their thresholds are `canary.py`'s `SIGNALS`, and their queries
+are `queries()`, one template per signal and role, which the suite pins as
+golden strings:
+
+- **`http`** is ASP.NET Core's request histogram, less the probe routes. It is
+  held to both of §13.6's absolute numbers.
+- **`consume`** is MassTransit's consume counters and duration histogram. Its
+  fault rate is held to §13.6's error threshold; its duration is compared with
+  the stable track only, because no alert owns a consume-duration number.
+- **`saga`** is MassTransit's saga instruments, judged on the same terms as
+  `consume`. A state machine's messages are counted there and not on the
+  consume series, so healthy consumers cannot carry a failing saga.
+
+Every declared signal is compared with the stable track on both metrics, and
+every declared signal must reach `minimumRequests` on its own: a workload is
+promoted only when each thing it does was observed doing it.
 
 ## What it does not
 
-- **It reaches no cluster and no Prometheus.** Every function in `canary.py` is
-  pure over its arguments; the workflow fetches and acts.
-- **It does not validate PromQL.** The queries are strings here. A syntax error
-  in one surfaces as a failed query at the end of a ten-minute dwell — which
-  the verdict reads as an absent series and therefore as a rollback, so it
-  fails safe and slowly rather than unsafely.
+- **It reaches no cluster and no Prometheus.** The weight arithmetic and the
+  verdict are pure over their arguments; the gate and the templates read the
+  repository, and the workflow fetches and acts.
+- **It does not validate PromQL.** The templates are strings, and their golden
+  tests pin the text rather than that Prometheus parses it. A syntax error
+  in one surfaces at the end of a ten-minute dwell, when Prometheus refuses
+  the query: `read_prometheus.py` exits before writing any readings, the step
+  fails before the verdict runs, and the workflow's cleanup removes the
+  canary — so it fails safe and slowly rather than unsafely.
 - **It does not hold the weight against a voluntary disruption.** The
   PodDisruptionBudget belongs to the stable release and its selector matches
   both tracks, so it constrains the total rather than the stable count: a node
@@ -73,6 +121,17 @@ every chart and asserts what comes out.
   gRPC listener, or a client that opens one connection and holds it will all
   under-deliver the weight, and nothing short of a cluster can measure that.
   ADR-022 names it as owed.
+- **It does not establish the exported spelling of MassTransit's series.**
+  The instrument names are MassTransit's defaults at the pinned version and the
+  meter registration is checked, but the unit suffixes — `ea` on the counters,
+  `ms` on the histogram — become `_ea` and `_milliseconds` under the
+  OTLP-to-Prometheus mapping the deployed backend applies, which nothing here
+  reaches. A wrong spelling matches nothing and rolls back, like the
+  `deployment_track` requirement below.
+- **It does not establish that the consume share is the replica share.** The
+  tracks are competing consumers on one queue, so the canary's share of the
+  messages follows prefetch and processing speed rather than the pod ratio
+  `plan` computed.
 - **It cannot see an ad-hoc `--set` at deploy time**, the same reach
   `deploy/helm/README.md` states for the chart gate.
 - **It does not establish that `deployment_track` is a label on the deployed
@@ -97,9 +156,9 @@ nearest expressible weight is how a step labelled 5% comes to serve five times
 the blast radius anybody authorised.
 
 **There is no third verdict.** Promote or roll back, and every doubt resolves to
-the second: an absent series, a canary too quiet to judge, a breach, or a
-regression against the stable track. That is affordable because of what the
-mechanism is — the canary is a second Deployment and the stable release is
-never touched, so a rollback costs the canary's own pods and nothing else. When
-rolling back is cheap, "inconclusive" is not caution, it is a canary left
-serving traffic on nobody's authority.
+the second: an absent series, a declared signal nobody fetched or one too quiet
+to judge, a breach, or a regression against the stable track. That is
+affordable because of what the mechanism is — the canary is a second
+Deployment and the stable release is never touched, so a rollback costs the
+canary's own pods and nothing else. When rolling back is cheap, "inconclusive"
+is not caution, it is a canary left serving traffic on nobody's authority.
