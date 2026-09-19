@@ -1,4 +1,5 @@
 using System.Data.Common;
+using System.Text.Json;
 using Payments.Infrastructure.Persistence;
 using Payments.Migrator;
 using Common.Application;
@@ -47,24 +48,24 @@ public sealed class ServiceFixture : IAsyncLifetime
     private Respawner? _respawner;
 
     /// <summary>
-    /// Widens <c>payments-svc</c>'s <c>write</c> for the duration of the
-    /// suite, because these tests publish <c>OrderPlaced</c> and
-    /// <c>OrderCancelled</c> as <c>payments-svc</c> — Ordering's exchanges —
-    /// and ADR-036's production grant refuses that, correctly. Widened here
-    /// rather than in <c>definitions.json</c>, the deployed artefact a gate
-    /// holds to the code, so loosening it would make the gate agree with a
-    /// permission set nothing deploys; <c>configure</c> and <c>read</c> stay
-    /// untouched, so a route this service may not declare still fails here.
+    /// Widens <c>payments-svc</c>'s <c>write</c> for the suite, since these
+    /// tests publish <c>OrderPlaced</c> and <c>OrderCancelled</c> as
+    /// <c>payments-svc</c> onto Ordering's exchanges and ADR-036's production
+    /// grant correctly refuses that. Widened here rather than in
+    /// <c>definitions.json</c>, the deployed artefact a gate holds to the
+    /// code; <c>configure</c> and <c>read</c> are read back from that same
+    /// file rather than restated, so a route this service may not declare
+    /// still fails here.
     /// </summary>
     private async Task WidenWriteForTheHarnessAsync()
     {
-        const string scope = "^(payments-|Common\\.Contracts|Payments\\.Infrastructure\\.Messaging:|MassTransit:)";
+        const string user = "payments-svc";
+        const string write = "^(payments-|Common\\.Contracts|Payments\\.Infrastructure\\.Messaging:|MassTransit:)";
+
+        (string configure, string read) = ImportedGrant();
 
         ExecResult result = await _rabbit!.ExecAsync(
-            [
-                "rabbitmqctl", "set_permissions", "-p", "/", "payments-svc",
-                scope, scope, scope
-            ],
+            ["rabbitmqctl", "set_permissions", "-p", "/", user, configure, write, read],
             TestContext.Current.CancellationToken);
 
         // A silent failure here is the worst outcome available: every
@@ -73,8 +74,27 @@ public sealed class ServiceFixture : IAsyncLifetime
         if (result.ExitCode != 0)
         {
             throw new InvalidOperationException(
-                $"Could not widen payments-svc's broker permissions for the harness "
+                $"Could not widen {user}'s broker permissions for the harness "
                 + $"(exit {result.ExitCode}). stdout: {result.Stdout} stderr: {result.Stderr}");
+        }
+
+        // The mapped file rather than the container, because it is the same
+        // text the broker imported and it can be read before anything starts.
+        static (string Configure, string Read) ImportedGrant()
+        {
+            string path = Path.Combine(BrokerContextPath(), "definitions.json");
+            using JsonDocument definitions = JsonDocument.Parse(File.ReadAllText(path));
+
+            foreach (JsonElement entry in definitions.RootElement.GetProperty("permissions").EnumerateArray())
+            {
+                if (entry.GetProperty("user").GetString() != user || entry.GetProperty("vhost").GetString() != "/")
+                    continue;
+
+                return (entry.GetProperty("configure").GetString()!, entry.GetProperty("read").GetString()!);
+            }
+
+            throw new InvalidOperationException(
+                $"{path} grants {user} nothing on the default vhost, so there is no scope to preserve.");
         }
     }
 
