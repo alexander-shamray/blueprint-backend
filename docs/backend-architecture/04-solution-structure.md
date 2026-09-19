@@ -16,8 +16,8 @@ A monorepo makes cross-cutting changes and contract updates atomic and reviewabl
 │   │   │                               EF conventions, Redis
 │   │   ├── Common.Web/                 Host defaults: OTel, health, auth, ProblemDetails.
 │   │   │                               Referenced by every host. NOT resilience —
-│   │   │                               the one outbound client is the BFF's (§9.7),
-│   │   │                               so the policy lives with it.
+│   │   │                               the BFF and Payments each hold an outbound
+│   │   │                               client (§9.7), so each policy lives with it.
 │   │   │                               (Aspire's template calls this ServiceDefaults.)
 │   │   └── Common.Contracts/           Integration event DTOs — the ONLY shared types
 │   │
