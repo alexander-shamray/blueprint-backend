@@ -2,6 +2,7 @@ using Common.Infrastructure.Idempotency;
 using Common.Infrastructure.Inbox;
 using Common.Infrastructure.Outbox;
 using Microsoft.EntityFrameworkCore;
+using Payments.Domain.Intents;
 
 namespace Payments.Infrastructure.Persistence;
 
@@ -45,6 +46,9 @@ public sealed class PaymentsDbContext(DbContextOptions<PaymentsDbContext> option
     /// other two.
     /// </summary>
     public DbSet<IdempotencyMarker> IdempotencyMarkers => Set<IdempotencyMarker>();
+
+    /// <summary>§3.2's aggregate, and the first <c>DbSet</c> here that is one (spec, section 7).</summary>
+    public DbSet<PaymentIntent> PaymentIntents => Set<PaymentIntent>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

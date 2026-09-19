@@ -1,5 +1,7 @@
 using Common.Application;
+using Common.Contracts.Payments.V1;
 using Common.Domain;
+using Payments.Domain.Intents.Events;
 
 namespace Payments.Application.Integration;
 
@@ -12,16 +14,16 @@ namespace Payments.Application.Integration;
 /// </summary>
 internal sealed class PaymentsIntegrationEventMapper : IIntegrationEventMapper
 {
-    // The allow-list, empty until this service publishes something. Every
-    // domain event it raises is local-only while this dictionary is empty,
-    // which is the correct state for a service with no contracts — §9.3 makes
-    // translation opt-in precisely so a new event stays internal until
-    // somebody decides otherwise. An entry is one line plus one private
-    // ToContract method beside it, with the contract living in
+    // §3.2's Publishes column for Payments: PaymentIntent's two events, each
+    // with one private ToContract method beside it, the contract living in
     // Common.Contracts under a versioned namespace (§9.2), carrying
     // primitives only, and taking its MessageId and CorrelationId from the
     // mapper rather than from Stage (§9.1).
-    private static readonly Dictionary<Type, Func<IDomainEvent, object>> Registry = [];
+    private static readonly Dictionary<Type, Func<IDomainEvent, object>> Registry = new()
+    {
+        [typeof(PaymentAuthorisedDomainEvent)] = e => ToContract((PaymentAuthorisedDomainEvent)e),
+        [typeof(PaymentDeclinedDomainEvent)] = e => ToContract((PaymentDeclinedDomainEvent)e)
+    };
 
     public IReadOnlyList<object> Map(IReadOnlyList<IDomainEvent> domainEvents)
     {
@@ -37,4 +39,25 @@ internal sealed class PaymentsIntegrationEventMapper : IIntegrationEventMapper
 
         return mapped;
     }
+
+    // The correlation is the ORDER: §9.6's saga correlates every payment event on it.
+    private static PaymentAuthorised ToContract(PaymentAuthorisedDomainEvent e) => new()
+    {
+        MessageId = Guid.CreateVersion7(),
+        CorrelationId = e.OrderId.Value,
+        OccurredAt = e.OccurredAt,
+        OrderId = e.OrderId.Value,
+        Reference = e.Reference,
+        Amount = e.Amount,
+        Currency = e.Currency
+    };
+
+    private static PaymentDeclined ToContract(PaymentDeclinedDomainEvent e) => new()
+    {
+        MessageId = Guid.CreateVersion7(),
+        CorrelationId = e.OrderId.Value,
+        OccurredAt = e.OccurredAt,
+        OrderId = e.OrderId.Value,
+        Reason = e.Reason
+    };
 }

@@ -51,7 +51,8 @@ public static class DependencyInjection
         services.AddScoped<IUnitOfWork, EfUnitOfWork>();                     // §6.3
         services.AddScoped<IPaymentOrderStore, SqlPaymentOrderStore>();      // §3.2, §6.3
 
-        // §5.6's repository registrations join with the first aggregate.
+        // §5.6's repository registration for the first aggregate.
+        services.AddScoped<IPaymentIntentRepository, PaymentIntentRepository>();
 
         // §8.5's durable half. Only this one has to land on the transaction
         // EfUnitOfWork opens — it resolves the DbContext alias above, which is

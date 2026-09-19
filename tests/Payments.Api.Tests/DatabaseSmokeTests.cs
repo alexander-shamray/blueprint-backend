@@ -45,9 +45,9 @@ public class DatabaseSmokeTests(ServiceFixture fixture)
         // table with the database clock it is aged by and the rowversion the
         // purge identifies one of its rows by — all of them wiring every
         // service has rather than anything this one chose. AddPaymentOrders
-        // is this service's own (§3.2).
+        // and AddPaymentIntents are this service's own (§3.2).
         string[] applied = await fixture.AppliedMigrationsAsync();
-        applied.Length.ShouldBe(8);
+        applied.Length.ShouldBe(9);
         applied[0].ShouldEndWith("_InitialCreate");
         applied[1].ShouldEndWith("_AddOutbox");
         applied[2].ShouldEndWith("_AddInbox");
@@ -56,6 +56,16 @@ public class DatabaseSmokeTests(ServiceFixture fixture)
         applied[5].ShouldEndWith("_IdempotencyMarkerCommittedAtDefault");
         applied[6].ShouldEndWith("_AddIdempotencyMarkerRowVersion");
         applied[7].ShouldEndWith("_AddPaymentOrders");
+        applied[8].ShouldEndWith("_AddPaymentIntents");
+    }
+
+    [Fact]
+    public async Task The_migrator_creates_the_intent_table_with_its_rowversion()
+    {
+        (await fixture.ScalarAsync<int>(
+            "SELECT Value = COUNT(*) FROM sys.columns WHERE object_id = OBJECT_ID('payments.PaymentIntents') " +
+            "AND name = 'RowVersion' AND system_type_id = TYPE_ID('timestamp')"))
+            .ShouldBe(1);
     }
 
     [Fact]

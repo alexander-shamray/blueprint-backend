@@ -19,18 +19,27 @@
          abstractions package Payments.Application compiles against has no
          container in it to build. -->
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <!-- ConfigurationBuilder and AddInMemoryCollection: AddPaymentsInfrastructure
+         takes an IConfiguration, and OutboxSerialisationTests builds a real
+         one rather than substitute the contract. -->
+    <PackageReference Include="Microsoft.Extensions.Configuration" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Services\Payments\Payments.Application\Payments.Application.csproj" />
-    <!-- No Payments.TestSupport and no Payments.Infrastructure, and no Docker
-         with them: this project's own tests exercise the event handlers
-         against a hand-rolled IDispatcher fake — each handler is one
-         dispatch (§3.2), so the fact worth pinning is what it sent, not a
-         database. The persisted write is exercised over a real broker and
-         database in the API suite, which already carries the fixture, the
-         DbContext reference and the provider package a second copy here
-         would duplicate. -->
+    <!-- No Payments.TestSupport and no Docker: this project's own handler
+         tests exercise event handlers against a hand-rolled IDispatcher fake
+         — each handler is one dispatch (§3.2), so the fact worth pinning is
+         what it sent, not a database. The persisted write is exercised over
+         a real broker and database in the API suite, which already carries
+         the fixture, the DbContext reference and the provider package a
+         second copy here would duplicate.
+
+         Payments.Infrastructure IS referenced, for AddPaymentsInfrastructure,
+         which OutboxSerialisationTests resolves OutboxJson and MessageTypeMap
+         out of (Ordering's precedent for the same test). §4.2's gate binds
+         Payments.Application, not its tests. -->
+    <ProjectReference Include="..\..\src\Services\Payments\Payments.Infrastructure\Payments.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>
