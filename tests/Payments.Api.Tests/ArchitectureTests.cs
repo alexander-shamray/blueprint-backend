@@ -1,5 +1,5 @@
 using System.Reflection;
-using Payments.Domain;
+using Payments.Domain.Intents;
 using Payments.Infrastructure.Persistence;
 using Payments.Migrator;
 using NetArchTest.Rules;
@@ -98,7 +98,7 @@ public class ArchitectureTests
     /// </remarks>
     private static readonly Assembly[] ServiceAssemblies =
     [
-        typeof(AssemblyMarker).Assembly,
+        typeof(PaymentIntent).Assembly,
         typeof(Payments.Application.DependencyInjection).Assembly,
         typeof(PaymentsDbContext).Assembly,
         typeof(MigratorHost).Assembly,

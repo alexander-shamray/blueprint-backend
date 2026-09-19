@@ -21,6 +21,10 @@
          would be a claim this project never states. -->
     <PackageReference Include="FluentValidation" />
     <PackageReference Include="FluentValidation.DependencyInjectionExtensions" />
+    <!-- AuthorisePaymentHandler's LoggerMessage.Define call (CA1848 under
+         ADR-019 makes log.LogInformation an error), referenced directly
+         rather than arriving transitively. -->
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
   </ItemGroup>
 
 </Project>

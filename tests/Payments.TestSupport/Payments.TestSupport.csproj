@@ -37,6 +37,9 @@
          named here because this assembly uses the types itself, which is the
          register's honesty rule rather than a restore requirement. -->
     <PackageReference Include="Microsoft.EntityFrameworkCore" />
+    <!-- The provider's stand-in (§12's third-party row), which the fixture
+         starts over the simulator's mappings and hands the host. -->
+    <PackageReference Include="WireMock.Net" />
   </ItemGroup>
 
   <ItemGroup>

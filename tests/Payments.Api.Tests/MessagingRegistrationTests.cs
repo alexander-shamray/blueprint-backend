@@ -1,5 +1,7 @@
+using Payments.Application.Intents.AuthorisePayment;
 using Payments.Infrastructure.Messaging;
 using Common.Contracts.Ordering.V1;
+using Common.Contracts.Payments.V1;
 using Common.Infrastructure.Messaging;
 using MassTransit;
 using MassTransit.Testing;
@@ -172,6 +174,27 @@ public class MessagingRegistrationTests
                 d => d.ImplementationType == consumer || d.ServiceType == consumer,
                 $"{consumer.Name} is in §3.2's Consumes column and has no AddConsumer");
         }
+    }
+
+    [Fact]
+    public void Every_command_in_the_accepts_column_is_registered()
+    {
+        ServiceCollection services = new();
+
+        services.AddMassTransitMessaging(Configuration());
+
+        services.ShouldContain(
+            d => d.ImplementationType == typeof(CommandConsumer<AuthorisePayment, AuthorisePaymentCommand>)
+                 || d.ServiceType == typeof(CommandConsumer<AuthorisePayment, AuthorisePaymentCommand>),
+            "AuthorisePayment is §3.2's Accepts column and has no AddConsumer");
+    }
+
+    [Fact]
+    public void The_ladder_is_non_decreasing_and_starts_under_a_minute()
+    {
+        RedeliveryLadder.Intervals.ShouldBe(RedeliveryLadder.Intervals.Order());
+        RedeliveryLadder.Intervals[0].ShouldBeLessThan(TimeSpan.FromMinutes(1),
+            "the routine reorder is milliseconds; the first wait should not cost the saga minutes");
     }
 
     [Fact]

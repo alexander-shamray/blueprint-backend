@@ -1,5 +1,5 @@
 using Payments.Application.Orders;
-using Payments.Domain;
+using Payments.Domain.Intents;
 using Payments.Infrastructure.Idempotency;
 using Payments.Infrastructure.Messaging;
 using Payments.Infrastructure.Persistence;
@@ -51,7 +51,8 @@ public static class DependencyInjection
         services.AddScoped<IUnitOfWork, EfUnitOfWork>();                     // §6.3
         services.AddScoped<IPaymentOrderStore, SqlPaymentOrderStore>();      // §3.2, §6.3
 
-        // §5.6's repository registrations join with the first aggregate.
+        // §5.6's repository registration for the first aggregate.
+        services.AddScoped<IPaymentIntentRepository, PaymentIntentRepository>();
 
         // §8.5's durable half. Only this one has to land on the transaction
         // EfUnitOfWork opens — it resolves the DbContext alias above, which is
@@ -91,10 +92,10 @@ public static class DependencyInjection
         // dispatcher claims a row, so MessageTypeMapValidator is what makes a
         // duplicate FullName fail the host rather than the first message. It
         // is the first hosted service because hosted services start in order.
-        // §9.4's two anchors are this service's contracts and its domain; both
-        // are IIntegrationEvent and AssemblyMarker until the first of each lands.
+        // §9.4's two anchors are this service's contracts and its domain;
+        // IIntegrationEvent and PaymentIntent respectively.
         services.AddSingleton(
-            new MessageTypeSource(typeof(IIntegrationEvent).Assembly, typeof(AssemblyMarker).Assembly));
+            new MessageTypeSource(typeof(IIntegrationEvent).Assembly, typeof(PaymentIntent).Assembly));
         services.AddSingleton(sp =>
         {
             MessageTypeSource source = sp.GetRequiredService<MessageTypeSource>();

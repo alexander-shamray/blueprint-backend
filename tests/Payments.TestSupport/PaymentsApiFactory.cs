@@ -6,8 +6,11 @@ using Common.Web;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Payments.Application.Orders;
+using Payments.Infrastructure.Persistence;
 using ProviderRegistration = Payments.Infrastructure.Provider.DependencyInjection;
 
 namespace Payments.TestSupport;
@@ -54,6 +57,16 @@ public class PaymentsApiFactory(
     /// names none still gets one.
     /// </summary>
     public const string LocalProviderApiKey = "local-dev-psp";
+
+    /// <summary>
+    /// The host's commit fault, disarmed until a test arms it. Installed on
+    /// every host over this factory, because a disarmed interceptor changes
+    /// nothing and one host per seam would be a container set per seam.
+    /// </summary>
+    public CommitFaultInterceptor CommitFaults { get; } = new();
+
+    /// <summary>The host's record of the order, observed (spec, section 6).</summary>
+    public ObservedOrderStore Orders { get; } = new();
 
     /// <summary>
     /// The RUNTIME connection of §7.1, and only that one. The host has no
@@ -124,6 +137,19 @@ public class PaymentsApiFactory(
                 // assembly is a layer the production registration has no
                 // reason to know about.
                 services.AddPluggableFrom(typeof(AlwaysThrows).Assembly);
+            })
+            .ConfigureTestServices(services =>
+            {
+                services.ConfigureDbContext<PaymentsDbContext>(o => o.AddInterceptors(CommitFaults));
+
+                // Decorated rather than replaced, so every call still reaches
+                // the real statements and their locks. Built from the
+                // registered descriptor, because the store is internal to
+                // Infrastructure and this assembly cannot name it.
+                ServiceDescriptor store = services.Single(d => d.ServiceType == typeof(IPaymentOrderStore));
+                services.Remove(store);
+                services.AddScoped<IPaymentOrderStore>(sp => Orders.Wrap(
+                    (IPaymentOrderStore)ActivatorUtilities.CreateInstance(sp, store.ImplementationType!)));
             });
 
     /// <summary>
