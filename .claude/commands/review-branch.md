@@ -220,7 +220,7 @@ They are **enumerated** rather than denied wholesale, and `suggestions.md` is
 why: it lives at the root, it is this command's one legitimate output, and it
 is untracked — so denying every *tracked* root file leaves it alone, where a
 blanket `Edit(**)` or a `/*` root pattern would take the deliverable with it.
-`test_grok_helpers.py` reads the tracked set from `git ls-files` and asserts
+`test_harness_denies.py` reads the tracked set from `git ls-files` and asserts
 each is denied, so a new root file is a red build rather than a silent gap.
 
 **Two limits, both stated rather than glossed.**
@@ -235,7 +235,7 @@ disposability — a property of the sandbox, not of this grant. Do not read the
 frontmatter as reaching that run.
 
 And the list is a deny-list, so a tree added later is editable until someone
-adds it. `test_grok_helpers.py` asserts the list covers every tracked
+adds it. `test_harness_denies.py` asserts the list covers every tracked
 top-level tree, which is what makes that a red build instead of a quiet
 widening.
 

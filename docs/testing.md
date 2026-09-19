@@ -38,8 +38,9 @@ tree has established that a replica ratio is a traffic ratio.
 The review helpers' suite under `.claude/scripts/` is the one with
 requirements a workflow step does not show: `bash`, `grep`, `git` and `jq`
 on `PATH`, and no network. The `gh` its ledger cases call is a stub the
-suite writes itself, so no `gh` is needed. Its docstring is its own
-inventory of what it covers.
+suite writes itself, so no `gh` is needed. Each module is named for its
+subject — one helper, a family of helpers, or the harness's deny list — and
+its test classes name the properties they check.
 
 **`py -3.12`, not `python`.** Every CI job that runs Python pins 3.12, and a
 newer interpreter is the hazard — it accepts APIs 3.12 does not, so the local

@@ -17,8 +17,12 @@ public sealed class ReleaseStockHandler(
     public async Task<Result> HandleAsync(ReleaseStockCommand command, CancellationToken ct)
     {
         var order = new OrderId(command.OrderId);
-        DateTimeOffset now = clock.GetUtcNow();
         Reservation? reservation = await reservations.GetForUpdateAsync(order, ct);
+
+        // Read under the lock: the instant is taken once a writer that waited
+        // behind this one has committed, so it cannot stamp earlier than the
+        // one it waited for.
+        DateTimeOffset now = clock.GetUtcNow();
 
         // Two releases for an unknown order serialise on the key-range lock the
         // read took: the second waits, then finds the tombstone the first wrote.

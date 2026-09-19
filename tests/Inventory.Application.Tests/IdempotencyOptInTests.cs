@@ -52,7 +52,7 @@ public class IdempotencyOptInTests
     [Fact]
     public void Every_idempotent_command_declares_a_stable_operation_name()
     {
-        // #114. The key's middle segment must not be derivable from the type,
+        // The key's middle segment must not be derivable from the type,
         // because a rename then changes a live key and a rolling deployment
         // serves both spellings at once. The compiler already refuses a
         // command that supplies no OperationName; what it cannot refuse is one

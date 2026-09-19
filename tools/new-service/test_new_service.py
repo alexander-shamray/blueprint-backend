@@ -276,11 +276,11 @@ class RendersTheTemplate(unittest.TestCase):
         # ConfigureEndpoints(context) gives a registered consumer with no
         # explicit binding a queue named after its type, carrying neither the
         # inbox filter nor the retry policy §9.8 requires of every endpoint.
-        # Catalog has no consumers, so its own registration tests stay green if
-        # the call comes back — and this file renders Catalog, so a rendered
-        # service is the only place the absence is observable at all. Without
-        # this assertion the trap can be handed silently to every service
-        # generated from here.
+        # Catalog binds its one consumer explicitly, so its own registration
+        # tests stay green if the call comes back — and this file renders
+        # Catalog, so a rendered service is the only place the absence is
+        # observable at all. Without this assertion the trap can be handed
+        # silently to every service generated from here.
         #
         # The CALL, not the identifier: the template's comment explains why the
         # line is gone and names it doing so, so a bare "ConfigureEndpoints"

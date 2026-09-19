@@ -11,22 +11,20 @@ using Xunit;
 namespace Inventory.Api.Tests;
 
 /// <summary>
-/// §9.4's wire-to-command boundary for §3.2's two Inventory commands,
+/// §9.4's wire-to-command boundary for the commands in §3.2's Accepts column,
 /// constructed directly rather than over containers: every refusal below is
 /// decided in the mapper itself, before a message ever reaches
 /// <c>ValidationBehavior</c> or a dispatcher, so nothing here needs a broker,
 /// a database, or <see cref="IntegrationCollection"/>.
 /// </summary>
 /// <remarks>
-/// This is the half <see cref="InventoryCommandEndpointTests"/> cannot be.
-/// The malformed-reserve cases that suite's validators also refuse, and its
-/// <c>ReleaseStock</c> sibling, are refused there too by
-/// <c>ReserveStockValidator</c>/<c>ReleaseStockValidator</c> — a
-/// <c>ValidationException</c> from <c>ValidationBehavior</c> is a fault
-/// <c>CommandConsumer</c> retries and error-queues, and it writes no row
-/// either, so "no row" over the broker cannot say which of the two threw.
-/// Only a test that calls the mapper on its own, past the point where a
-/// validator would ever see the value, can.
+/// A validator's refusal and a mapper's refusal both end as a fault over the
+/// broker with no row written, by <c>ReserveStockValidator</c> or
+/// <c>ReleaseStockValidator</c> alike — a <c>ValidationException</c> from
+/// <c>ValidationBehavior</c> is a fault <c>CommandConsumer</c> retries and
+/// error-queues, so "no row" there cannot say which of the two threw.
+/// Calling the mapper directly, past the point where a validator would ever
+/// see the value, is the only way to isolate its own refusals.
 /// </remarks>
 public sealed class CommandMappersTests
 {

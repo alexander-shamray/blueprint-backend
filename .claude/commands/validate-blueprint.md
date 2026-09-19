@@ -246,7 +246,7 @@ audits `docs/backend-architecture/`, `docs/roadmap.md` and `docs/testing.md`;
 every other file `docs/` holds is outside that scope and denied by name, so an
 exemption written at the tree does not make them editable.
 
-`test_grok_helpers.py` reads the entries under `docs/` and at the root from
+`test_harness_denies.py` reads the entries under `docs/` and at the root from
 `git ls-files` and asserts each is either in the audited scope or denied, so
 **a new file under `docs/` or at the root is a decision this command forces**
 rather than a path that quietly becomes writable — the shape

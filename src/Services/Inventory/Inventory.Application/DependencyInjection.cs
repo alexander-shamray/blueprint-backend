@@ -1,4 +1,5 @@
 using Inventory.Application.Integration;
+using Inventory.Application.Stock.SetOnHand;
 using Common.Application;
 using FluentValidation;
 using Microsoft.Extensions.DependencyInjection;
@@ -18,16 +19,15 @@ public static class DependencyInjection
         services.AddDispatcher();
 
         // Explicit rather than scanned, beside the dispatcher it serves —
-        // §4.2's registration sample is the shape. It stages nothing until
-        // this service has an aggregate raising domain events, and needs no
-        // null object to say so: a collector over an empty change tracker
-        // returns nothing and the dispatcher exits early (§7.5).
+        // §4.2's registration sample is the shape. It stages every domain
+        // event a tracked aggregate raised during the unit of work, collected
+        // from the change tracker at commit (§7.5).
         services.AddDomainEventDispatcher();
 
         // The allow-list of §9.3, and the one registration that decides what
         // this service publishes. Explicit rather than scanned: a mapper
-        // discovered by convention would make "Inventory publishes these three
-        // facts" a property of which types happen to be in the assembly.
+        // discovered by convention would make what Inventory publishes a
+        // property of which types happen to be in the assembly.
         services.AddScoped<IIntegrationEventMapper, InventoryIntegrationEventMapper>();
 
         // The clock (§5.4) and the request histogram (§13.3): LoggingBehavior
@@ -39,8 +39,7 @@ public static class DependencyInjection
         services.AddSingleton<RequestMetrics>();
 
         // Ordered, explicit, not scanned — registration order is pipeline
-        // order (§6.3), and all four seats are filled since the PR that built
-        // §8.5's behaviour.
+        // order (§6.3), and all four seats are filled.
         //
         // Idempotency sits INSIDE validation and OUTSIDE the transaction, and
         // both neighbours are load-bearing. Inside validation, because a
@@ -68,15 +67,11 @@ public static class DependencyInjection
         // because it is FluentValidation's contract, not one of ours — its own
         // scanner knows its own conventions (Include* filters, internal
         // validators) and a second scan would drift from it.
-        // §4.2's line spelt over the assembly rather than over a type in
-        // it, because there is no validator yet to name — and this class,
-        // the obvious anchor, is static and cannot be a type argument.
-        // Move to AddValidatorsFromAssemblyContaining<TFirstValidator>()
-        // with the first one, and add the registration test that guards
-        // it: ValidationBehavior takes IEnumerable<IValidator<T>>, so a
-        // lost scan is a pipeline that validates nothing and says so to
-        // nobody.
-        services.AddValidatorsFromAssembly(typeof(DependencyInjection).Assembly);
+        // Anchored on the first validator rather than the assembly, guarded
+        // by the registration test beside it: ValidationBehavior takes
+        // IEnumerable<IValidator<T>>, so a lost scan is a pipeline that
+        // validates nothing and says so to nobody.
+        services.AddValidatorsFromAssemblyContaining<SetOnHandValidator>();
         return services;
     }
 }

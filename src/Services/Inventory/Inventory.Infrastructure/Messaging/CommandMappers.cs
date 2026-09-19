@@ -55,9 +55,10 @@ public sealed class ReleaseStockMapper : ICommandMessageMapper<ReleaseStock, Rel
     {
         // A malformed payload, the same refusal ReserveStockMapper makes for
         // an empty identifier: on this path a validator failure propagates
-        // out of CommandConsumer as a fault, and RetryPolicy.Standard spends
-        // five exponential attempts on it before the error queue, where a
-        // domain rejection is acked, counted and logged on the first.
+        // out of CommandConsumer as a fault, and spends RetryPolicy.Standard's
+        // whole ladder (RetryPolicy.RetryLimit retries) on it before the
+        // error queue, where a domain rejection is acked, counted and logged
+        // on the first.
         if (message.OrderId == Guid.Empty)
             throw new ContractMappingException($"An empty identifier on {nameof(ReleaseStock)}.");
 

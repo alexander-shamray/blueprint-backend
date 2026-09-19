@@ -5,10 +5,10 @@ using Xunit;
 namespace Inventory.Domain.Tests;
 
 /// <summary>
-/// §4.2's first gate, a CI failure from the first template commit rather than
-/// a review convention. Plain reflection, no NetArchTest: the rule is about
-/// assembly references, not type dependencies, and
-/// <c>GetReferencedAssemblies</c> asks exactly that question.
+/// §4.2's first gate: Domain references only <c>Common.Domain</c> and the
+/// framework. Plain reflection, no NetArchTest: the rule is about assembly
+/// references, not type dependencies, and <c>GetReferencedAssemblies</c>
+/// asks exactly that question.
 /// </summary>
 public class ArchitectureTests
 {
@@ -23,11 +23,11 @@ public class ArchitectureTests
         // extending this list is the decision the gate exists to force, and
         // System.Text.Json is the extension the table forbids by name.
         //
-        // Two entries is what an empty domain references. System.Collections
-        // is the third: a domain event's generated record equality goes
-        // through EqualityComparer<T>. System.Linq is the fourth: Reservation
-        // enumerates its own lines to enforce an invariant, which is domain
-        // work over owned values, not an I/O dependency.
+        // Common.Domain and System.Runtime are what an empty domain
+        // references. System.Collections carries a domain event's generated
+        // record equality through EqualityComparer<T>. System.Linq is
+        // Reservation enumerating its own lines to enforce an invariant,
+        // which is domain work over owned values, not an I/O dependency.
         string[] allowed = ["Common.Domain", "System.Runtime", "System.Collections", "System.Linq"];
 
         IEnumerable<string> referenced = typeof(StockItem).Assembly

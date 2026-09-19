@@ -21,9 +21,7 @@ namespace Common.Infrastructure.Tests;
 /// <remarks>
 /// The contract is test-local, on <c>MessagingRegistrationTests</c>' terms and
 /// for the same reason: this suite needs a payload carrying the §9.1 envelope,
-/// not a published contract other services may come to depend on. Catalog binds
-/// no receive endpoint of its own (§3.2 gives it one Consumes cell, owned by a
-/// service that does not exist), so there is no real consumer to drive instead.
+/// not a published contract other services may come to depend on.
 /// </remarks>
 public class IntegrationEventConsumerTests
 {

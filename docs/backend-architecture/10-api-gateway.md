@@ -247,18 +247,16 @@ privately, it is deployed unreachably. `/bff` rather than `/api`, because a
 client picks one or the other: aggregated responses shaped for a screen, or the
 service APIs shaped for a resource.
 
-**This file shipped whole, ahead of three of the four services it routes to,
-each of which has since arrived behind its route** — which is the opposite of
-the rule [§14.1](14-local-development.md)'s Compose file follows — and the
-asymmetry is in what each costs. A Compose block naming
-an image that does not exist fails `up`; a route whose destination is not
-running 502s one path and costs nothing at startup, nothing in CI and nothing
-in any other route. What buys the difference is the pair of tests over the
-file: "every policy resolves" and "every strip matches" say nothing over a
-single route, and §11.4 names a vacuously passing policy test as its own
-defect. Delivering it a route at a time would also make each later PR
-re-decide the policies, which is precisely the mistake the dual-version trap
-below describes.
+**This file ships whole, ahead of the services it routes to** — which is the
+opposite of the rule [§14.1](14-local-development.md)'s Compose file follows —
+and the asymmetry is in what each costs. A Compose block naming an image that
+does not exist fails `up`; a route whose destination is not running 502s one
+path and costs nothing at startup, nothing in CI and nothing in any other
+route. What buys the difference is the pair of tests over the file: "every
+policy resolves" and "every strip matches" say nothing over a single route,
+and §11.4 names a vacuously passing policy test as its own defect. Delivering
+it a route at a time would also make each later PR re-decide the policies,
+which is precisely the mistake the dual-version trap below describes.
 
 Note the shape of the policy name. `inventory:admin` is a **permission**, not a
 role, for the reason [§11.4](11-identity-authorization.md) gives — and the gateway is where role-shaped names
