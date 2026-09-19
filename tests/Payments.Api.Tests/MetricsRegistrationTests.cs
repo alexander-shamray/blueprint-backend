@@ -30,8 +30,8 @@ public class MetricsRegistrationTests
 {
     /// <summary>
     /// Types deliberately not forced, each with the reason it does not need to
-    /// be. Empty today, and that is the point: a name lands here only when
-    /// somebody argues it in a pull request.
+    /// be. Empty today, and that is the point: a name lands here only with an
+    /// argument for why its instrument can go unbuilt.
     /// </summary>
     private static readonly Dictionary<Type, string> NotForced = [];
 
@@ -70,11 +70,11 @@ public class MetricsRegistrationTests
     }
 
     /// <summary>
-    /// The subject of the test above is what it is <i>looking at</i>, and this
-    /// is that assertion. A selector that silently matched nothing would pass
-    /// both directions vacuously — the repeated failure this repository names
-    /// in <c>CLAUDE.md</c> — so the candidate set is asserted to be non-empty
-    /// and to hold the one type this pull request added.
+    /// The subject of the test above is what it is looking at, and this is
+    /// that assertion. A selector that silently matched nothing would pass
+    /// both directions vacuously — the repeated failure CLAUDE.md names — so
+    /// the candidate set is asserted to hold every metrics type this service
+    /// registers.
     /// </summary>
     [Fact]
     public void The_metrics_selector_actually_selects_something()

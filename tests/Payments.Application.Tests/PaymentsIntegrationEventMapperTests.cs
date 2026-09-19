@@ -76,11 +76,16 @@ public class PaymentsIntegrationEventMapperTests
     }
 
     [Fact]
-    public void The_three_registered_events_are_the_Publishes_column_and_exactly_it()
+    public void One_commit_raising_all_three_stages_each_events_own_contract()
     {
-        // §3.2's Publishes column for Payments is three facts, and the
-        // allow-list is what makes that structural rather than reviewed: one
-        // commit raising all three stages three contracts and no fourth.
+        // The three tests above each map one event; this maps all three at
+        // once, which is the shape a commit actually stages. What it proves is
+        // that they do not interfere — three events in, the three matching
+        // contracts out, none swallowed and none duplicated.
+        //
+        // It does not prove the registry holds only these three: Map reaches
+        // only the events it is given, so a fourth entry would leave this
+        // green. Absence is covered one test down instead.
         OrderId order = OrderId.New();
 
         IReadOnlyList<object> mapped = Mapper().Map(
