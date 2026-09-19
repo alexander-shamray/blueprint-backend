@@ -1,4 +1,5 @@
 using Inventory.Application.Integration;
+using Inventory.Application.Stock.SetOnHand;
 using Common.Application;
 using FluentValidation;
 using Microsoft.Extensions.DependencyInjection;
@@ -26,8 +27,8 @@ public static class DependencyInjection
 
         // The allow-list of §9.3, and the one registration that decides what
         // this service publishes. Explicit rather than scanned: a mapper
-        // discovered by convention would make "Inventory publishes these three
-        // facts" a property of which types happen to be in the assembly.
+        // discovered by convention would make what Inventory publishes a
+        // property of which types happen to be in the assembly.
         services.AddScoped<IIntegrationEventMapper, InventoryIntegrationEventMapper>();
 
         // The clock (§5.4) and the request histogram (§13.3): LoggingBehavior
@@ -68,15 +69,11 @@ public static class DependencyInjection
         // because it is FluentValidation's contract, not one of ours — its own
         // scanner knows its own conventions (Include* filters, internal
         // validators) and a second scan would drift from it.
-        // §4.2's line spelt over the assembly rather than over a type in
-        // it, because there is no validator yet to name — and this class,
-        // the obvious anchor, is static and cannot be a type argument.
-        // Move to AddValidatorsFromAssemblyContaining<TFirstValidator>()
-        // with the first one, and add the registration test that guards
-        // it: ValidationBehavior takes IEnumerable<IValidator<T>>, so a
-        // lost scan is a pipeline that validates nothing and says so to
-        // nobody.
-        services.AddValidatorsFromAssembly(typeof(DependencyInjection).Assembly);
+        // Anchored on the first validator rather than the assembly, guarded
+        // by the registration test beside it: ValidationBehavior takes
+        // IEnumerable<IValidator<T>>, so a lost scan is a pipeline that
+        // validates nothing and says so to nobody.
+        services.AddValidatorsFromAssemblyContaining<SetOnHandValidator>();
         return services;
     }
 }
