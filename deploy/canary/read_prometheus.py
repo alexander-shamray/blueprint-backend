@@ -20,7 +20,7 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
-from canary import entries, load_plan
+from canary import PlanError, entries, load_plan, queries
 
 TIMEOUT_SECONDS = 30
 
@@ -82,7 +82,6 @@ def read(base_url: str, workload: str, window: str, plan: dict) -> dict:
     workload raises KeyError rather than reading nothing.
     """
     entry = entries(plan["workloads"])[workload]
-    definitions = entries(plan["signals"])
     readings: dict[str, dict[str, dict[str, float | None]]] = {}
     for track in ("canary", "baseline"):
         # `baseline` is the verdict's name for the stable track, and `stable`
@@ -97,7 +96,7 @@ def read(base_url: str, workload: str, window: str, plan: dict) -> dict:
                     .replace("$TRACK", label)
                     .replace("$WINDOW", window),
                 )
-                for name, expression in entries(definitions[signal]["queries"]).items()
+                for name, expression in queries(signal).items()
             }
             for signal in entry.get("signals", [])
         }
@@ -123,7 +122,7 @@ def main(argv: list[str]) -> int:
     except KeyError as error:
         print(f"read_prometheus: no workload or signal {error} in the plan", file=sys.stderr)
         return 1
-    except (urllib.error.URLError, RuntimeError, OSError) as error:
+    except (urllib.error.URLError, RuntimeError, OSError, PlanError) as error:
         print(f"read_prometheus: {error}", file=sys.stderr)
         return 1
 

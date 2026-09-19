@@ -53,79 +53,6 @@
     "minimumRequests": 100
   },
 
-  "signals": {
-    "$comment": [
-      "What a workload can be judged on, and which absolute thresholds each",
-      "signal is held to (ADR-047). Every signal is also compared with the",
-      "stable track on both errorRate and latencyP99Seconds, which needs no",
-      "alert to own a number. A workload declares the signals it receives, and",
-      "check 9 holds a service that registers a consumer or a saga to",
-      "declaring consume or saga, or arguing why not.",
-      "",
-      "PromQL, with three substitutions read_prometheus makes: $SERVICE is the",
-      "workload's serviceName, $TRACK is stable or canary, and $WINDOW is the",
-      "step's dwell. The window equals the dwell because a rate over the dwell",
-      "read at its end is §15.5's watch.",
-      "",
-      "deployment_track is the resource attribute ADR-022 adds; service_version",
-      "is not a discriminator, because every build reports the same one.",
-      "",
-      "The or vector(0) on each error-rate numerator is what lets a clean",
-      "canary promote: a canary with no failures matches no numerator series,",
-      "and PromQL carries the empty vector through the division. Only the",
-      "numerator is coalesced, because an empty denominator is no traffic at",
-      "all, which requests and minimumRequests judge."
-    ],
-    "http": {
-      "$comment": [
-        "http_route excludes the probe routes Common.Web maps (§13.5), because",
-        "the chart's probes alone pass minimumRequests inside one dwell; check",
-        "10 holds the pattern to every MapHealthChecks route in src/."
-      ],
-      "absolute": ["errorRate", "latencyP99Seconds"],
-      "queries": {
-        "errorRate": "(sum(rate(http_server_request_duration_seconds_count{service_name=\"$SERVICE\", deployment_track=\"$TRACK\", http_route!~\"/health/.*\", http_response_status_code=~\"5..\"}[$WINDOW])) or vector(0)) / sum(rate(http_server_request_duration_seconds_count{service_name=\"$SERVICE\", deployment_track=\"$TRACK\", http_route!~\"/health/.*\"}[$WINDOW]))",
-        "latencyP99Seconds": "histogram_quantile(0.99, sum by (le) (rate(http_server_request_duration_seconds_bucket{service_name=\"$SERVICE\", deployment_track=\"$TRACK\", http_route!~\"/health/.*\"}[$WINDOW])))",
-        "requests": "sum(increase(http_server_request_duration_seconds_count{service_name=\"$SERVICE\", deployment_track=\"$TRACK\", http_route!~\"/health/.*\"}[$WINDOW]))"
-      }
-    },
-    "consume": {
-      "$comment": [
-        "MassTransit's own consume instruments, from the meter Common.Web",
-        "registers: consume attempts, the faulted ones, and their duration.",
-        "The names are the OTLP-to-Prometheus spelling of the instrument and",
-        "its unit, ea on the counters and ms on the histogram, so the p99 is",
-        "divided back into seconds; canary.py's EXPORTED_SERIES holds each",
-        "spelling to the MassTransit version it was read from.",
-        "",
-        "Only errorRate is absolute: it is §13.6's error threshold, and no",
-        "alert owns a consume-duration number, so duration is judged against",
-        "the stable track alone (ADR-047). A message has no route, so these",
-        "carry no route selector."
-      ],
-      "absolute": ["errorRate"],
-      "queries": {
-        "errorRate": "(sum(rate(messaging_masstransit_consume_errors_ea_total{service_name=\"$SERVICE\", deployment_track=\"$TRACK\"}[$WINDOW])) or vector(0)) / sum(rate(messaging_masstransit_consume_ea_total{service_name=\"$SERVICE\", deployment_track=\"$TRACK\"}[$WINDOW]))",
-        "latencyP99Seconds": "histogram_quantile(0.99, sum by (le) (rate(messaging_masstransit_consume_duration_milliseconds_bucket{service_name=\"$SERVICE\", deployment_track=\"$TRACK\"}[$WINDOW]))) / 1000",
-        "requests": "sum(increase(messaging_masstransit_consume_ea_total{service_name=\"$SERVICE\", deployment_track=\"$TRACK\"}[$WINDOW]))"
-      }
-    },
-    "saga": {
-      "$comment": [
-        "MassTransit's saga instruments, which count a state machine's messages",
-        "apart from the consume ones, so a saga faulting on every message leaves",
-        "consume clean. Judged on the same terms as consume, and on its own",
-        "minimumRequests (ADR-047)."
-      ],
-      "absolute": ["errorRate"],
-      "queries": {
-        "errorRate": "(sum(rate(messaging_masstransit_saga_errors_ea_total{service_name=\"$SERVICE\", deployment_track=\"$TRACK\"}[$WINDOW])) or vector(0)) / sum(rate(messaging_masstransit_saga_ea_total{service_name=\"$SERVICE\", deployment_track=\"$TRACK\"}[$WINDOW]))",
-        "latencyP99Seconds": "histogram_quantile(0.99, sum by (le) (rate(messaging_masstransit_saga_duration_milliseconds_bucket{service_name=\"$SERVICE\", deployment_track=\"$TRACK\"}[$WINDOW]))) / 1000",
-        "requests": "sum(increase(messaging_masstransit_saga_ea_total{service_name=\"$SERVICE\", deployment_track=\"$TRACK\"}[$WINDOW]))"
-      }
-    }
-  },
-
   "workloads": {
     "$comment": [
       "serviceName is what the process emits and chart is what Helm installs,",
@@ -133,7 +60,12 @@
       "first against the solution's own entry assemblies and the second against",
       "deploy/helm, because a query spelled from the deployment's vocabulary",
       "matches no series — and an empty result rolls every canary back, so the",
-      "mistake produces a rollout that can only ever fail."
+      "mistake produces a rollout that can only ever fail.",
+      "",
+      "signals names what each workload is judged on; the signals, their",
+      "thresholds and their queries are canary.py's SIGNALS and queries()",
+      "(ADR-047). consumeExemption and sagaExemption argue a registration the",
+      "scan in check 9 finds and the workload does not declare."
     ],
     "catalog-api": {
       "serviceName": "Catalog.Api",

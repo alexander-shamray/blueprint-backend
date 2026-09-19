@@ -529,73 +529,169 @@ class PlanDocumentTests(unittest.TestCase):
         """`analyse` indexes these rather than `.get`-ing them, so a missing
         key is a KeyError mid-rollout with a canary already serving traffic.
 
-        Every signal the plan defines is read, and the verdict has to be a
+        Every signal canary.py defines is read, and the verdict has to be a
         promotion: an early rollback returns before any threshold is indexed,
         and would pass this vacuously."""
-        signals = canary.entries(self.document["signals"])
-
         verdict = canary.analyse(
-            readings(signals=tuple(signals)),
+            readings(signals=tuple(canary.SIGNALS)),
             canary.entries(self.document["thresholds"]),
-            signals,
+            canary.SIGNALS,
         )
 
         self.assertEqual(verdict["decision"], canary.PROMOTE, verdict["reason"])
 
-    def queries(self) -> dict:
-        """Every shipped query, keyed by `<signal>.<metric>`."""
-        found = {}
-        for signal, definition in canary.entries(self.document["signals"]).items():
-            for name, expression in canary.entries(definition["queries"]).items():
-                found[f"{signal}.{name}"] = expression
-        return found
+    def test_the_plan_holds_no_query_text(self) -> None:
+        """The queries are code; a plan that carries some again is refused
+        rather than silently ignored beside the templates that run."""
+        self.assertNotIn("signals", self.document)
+        for key in ("signals", "queries"):
+            with self.subTest(key=key):
+                document = json.loads(json.dumps(self.document))
+                document[key] = {}
 
-    def test_the_queries_carry_all_three_substitutions(self) -> None:
-        """A query that kept `$TRACK` literal matches no series, and an absent
-        series rolls back — so the mistake yields a rollout that can only ever
-        fail, at the end of a ten-minute wait."""
-        for name, expression in self.queries().items():
-            with self.subTest(query=name):
-                self.assertIn("$SERVICE", expression)
-                self.assertIn("$TRACK", expression)
-                self.assertIn("$WINDOW", expression)
+                failures = canary.check(document)
 
-    def test_the_error_rate_numerator_is_coalesced(self) -> None:
-        """The difference between a canary that can promote and one that
-        cannot. A canary with a clean record matches no series for the
-        numerator, and PromQL carries an empty vector through the division
-        rather than treating it as zero — so the query returns no sample and
-        `analyse` reads an absent series and rolls back, every step, for ever.
+                self.assertTrue(any(repr(key) in f for f in failures), failures)
 
-        Only the numerator: an empty denominator means no traffic at all,
-        which is a real silence and is judged by `requests` against
-        `minimumRequests`.
-        """
-        for name, expression in self.queries().items():
-            with self.subTest(query=name):
-                if name.endswith(".errorRate"):
-                    self.assertIn("or vector(0)", expression)
-                    self.assertTrue(
-                        expression.startswith("(sum("),
-                        "the coalesce has to wrap the numerator, not the whole "
-                        "expression",
-                    )
-                else:
-                    self.assertNotIn(
-                        "or vector(0)", expression,
-                        "coalescing a count or a quantile turns 'nobody scraped "
-                        "this' into a healthy zero, which is the trap the "
-                        "absent-series rule exists for",
-                    )
 
-    def test_the_queries_read_the_track_label_and_not_the_version(self) -> None:
-        """service_version was the obvious discriminator and is not one:
-        BuildInfo.Version strips the source-revision suffix on purpose and
-        nothing sets an assembly version, so every build reports 1.0.0. A
-        registered name is not a live signal."""
-        for expression in self.queries().values():
-            self.assertIn("deployment_track", expression)
-            self.assertNotIn("service_version", expression)
+def selectors(expression: str) -> list[tuple[str, list[tuple[str, str, str]]]]:
+    """Each series selector in a rendered query, with its matchers."""
+    return [
+        (series, re.findall(r'([a-z_]+)(=~|!~|!=|=)"([^"]*)"', braces))
+        for series, braces in re.findall(r"([a-z_]+)\{([^}]*)\}", expression)
+    ]
+
+
+class TemplateTests(unittest.TestCase):
+    """The PromQL canary.py generates, one template per signal and role.
+
+    The golden strings are the point: each is the whole meaning of its role,
+    so any change to what a query measures is a change to one of them.
+    """
+
+    SERVICE, TRACK, WINDOW = "Catalog.Api", "canary", "10m"
+    WHERE = 'service_name="Catalog.Api", deployment_track="canary"'
+    PROBES = 'http_route!~"/health/live|/health/ready|/health/startup"'
+    HTTP = "http_server_request_duration_seconds"
+
+    def rendered(self, signal: str) -> dict[str, str]:
+        return {
+            role: template
+            .replace("$SERVICE", self.SERVICE)
+            .replace("$TRACK", self.TRACK)
+            .replace("$WINDOW", self.WINDOW)
+            for role, template in canary.queries(signal).items()
+        }
+
+    def test_the_http_queries(self) -> None:
+        where = f"{self.WHERE}, {self.PROBES}"
+        self.assertEqual(self.rendered("http"), {
+            "errorRate":
+                f"(sum(rate({self.HTTP}_count{{{where}, "
+                'http_response_status_code=~"5.."}[10m])) or vector(0)) '
+                f"/ sum(rate({self.HTTP}_count{{{where}}}[10m]))",
+            "latencyP99Seconds":
+                f"histogram_quantile(0.99, sum by (le) "
+                f"(rate({self.HTTP}_bucket{{{where}}}[10m])))",
+            "requests": f"sum(increase({self.HTTP}_count{{{where}}}[10m]))",
+        })
+
+    def test_the_message_queries(self) -> None:
+        for signal in ("consume", "saga"):
+            with self.subTest(signal=signal):
+                series = f"messaging_masstransit_{signal}"
+                self.assertEqual(self.rendered(signal), {
+                    "errorRate":
+                        f"(sum(rate({series}_errors_ea_total{{{self.WHERE}}}[10m])) "
+                        f"or vector(0)) / sum(rate({series}_ea_total{{{self.WHERE}}}[10m]))",
+                    "latencyP99Seconds":
+                        f"histogram_quantile(0.99, sum by (le) (rate("
+                        f"{series}_duration_milliseconds_bucket{{{self.WHERE}}}[10m]))) / 1000",
+                    "requests": f"sum(increase({series}_ea_total{{{self.WHERE}}}[10m]))",
+                })
+
+    def test_every_selector_carries_exactly_the_workload_and_track(self) -> None:
+        """Equality on both, once each, and nothing else but the probe
+        exclusion on http and the server-error class on its numerator."""
+        allowed = {
+            ("service_name", "=", "$SERVICE"),
+            ("deployment_track", "=", "$TRACK"),
+        }
+        probes = ("http_route", "!~", canary.probe_exclusion())
+        server_errors = ("http_response_status_code", "=~", "5..")
+        for signal in canary.SIGNALS:
+            for role, template in canary.queries(signal).items():
+                for series, matchers in selectors(template):
+                    with self.subTest(signal=signal, role=role, series=series):
+                        self.assertEqual(len(matchers), len(set(matchers)))
+                        self.assertTrue(allowed <= set(matchers))
+                        extra = set(matchers) - allowed
+                        if signal == "http":
+                            self.assertIn(probes, extra)
+                            extra.discard(probes)
+                            if role == "errorRate" and server_errors in extra:
+                                extra.discard(server_errors)
+                        self.assertEqual(extra, set())
+
+    def test_only_the_http_numerator_selects_server_errors(self) -> None:
+        template = canary.queries("http")["errorRate"]
+        numerator, denominator = template.split(" / ", 1)
+
+        self.assertIn('http_response_status_code=~"5.."', numerator)
+        self.assertNotIn("http_response_status_code", denominator)
+
+    def test_the_templates_carry_all_three_substitutions(self) -> None:
+        """A template that kept `$TRACK` literal matches no series, and an
+        absent series rolls back — a rollout that can only ever fail."""
+        for signal in canary.SIGNALS:
+            for role, template in canary.queries(signal).items():
+                with self.subTest(signal=signal, role=role):
+                    for placeholder in ("$SERVICE", "$TRACK", "$WINDOW"):
+                        self.assertIn(placeholder, template)
+
+    def test_only_the_error_rate_numerator_is_coalesced(self) -> None:
+        """A clean canary matches no numerator series, and PromQL carries the
+        empty vector through the division; coalescing a count or a quantile
+        would turn nobody-scraped-this into a healthy zero."""
+        for signal in canary.SIGNALS:
+            for role, template in canary.queries(signal).items():
+                with self.subTest(signal=signal, role=role):
+                    if role == "errorRate":
+                        self.assertTrue(template.startswith("(sum("))
+                        self.assertIn(") or vector(0)) / ", template)
+                    else:
+                        self.assertNotIn("or vector(0)", template)
+
+    def test_the_templates_read_the_track_label_and_not_the_version(self) -> None:
+        """service_version is not a discriminator: every build reports the
+        same one, so a query on it compares a release against itself."""
+        for signal in canary.SIGNALS:
+            for template in canary.queries(signal).values():
+                self.assertIn("deployment_track", template)
+                self.assertNotIn("service_version", template)
+
+    def test_the_message_templates_carry_no_route_selector(self) -> None:
+        """A message has no route, so a selector on one would match nothing
+        and roll every consume- or saga-judged canary back."""
+        for signal in ("consume", "saga"):
+            for template in canary.queries(signal).values():
+                self.assertNotIn("http_route", template)
+
+    def test_the_signals_hold_adr_047s_thresholds(self) -> None:
+        """http is held to both of §13.6's numbers; a message signal's
+        duration is judged against the stable track only."""
+        self.assertEqual(
+            {name: set(signal["absolute"]) for name, signal in canary.SIGNALS.items()},
+            {"http": {"errorRate", "latencyP99Seconds"},
+             "consume": {"errorRate"}, "saga": {"errorRate"}},
+        )
+        for signal in canary.SIGNALS.values():
+            self.assertTrue(set(signal["absolute"]) <= set(canary.ABSOLUTE))
+
+    def test_every_series_the_templates_read_is_vouched_for(self) -> None:
+        self.assertEqual(
+            canary._metrics_are_vouched_for(sorted(canary.series_read()), canary.ROOT), [])
+        self.assertIn("messaging_masstransit_saga_errors_ea_total", canary.series_read())
 
 
 class SignalTests(unittest.TestCase):
@@ -637,208 +733,6 @@ class SignalTests(unittest.TestCase):
         failures = canary.check(document)
 
         self.assertTrue(any("'grpc'" in f for f in failures), failures)
-
-    def test_a_signal_missing_a_query_fails_the_plan(self) -> None:
-        """Deleting a query passed every check before there were signals, after
-        which `read` returns a reading short and the rung ends in a rollback
-        for an absent series — ten minutes to say what a gate says at once."""
-        for signal in ("consume", "saga"):
-            for metric in ("errorRate", "latencyP99Seconds", "requests"):
-                with self.subTest(signal=signal, metric=metric):
-                    document = json.loads(json.dumps(self.document))
-                    del document["signals"][signal]["queries"][metric]
-
-                    failures = canary.check(document)
-
-                    self.assertTrue(
-                        any(metric in f and signal in f for f in failures), failures)
-
-    def test_a_signal_not_judged_on_the_fault_rate_fails_the_plan(self) -> None:
-        """A signal with no absolute threshold is judged only against the
-        stable track, so a canary exactly as broken as a broken stable release
-        promotes."""
-        document = json.loads(json.dumps(self.document))
-        document["signals"]["consume"]["absolute"] = []
-
-        failures = canary.check(document)
-
-        self.assertTrue(any("errorRate" in f and "absolute" in f for f in failures),
-                        failures)
-
-    def test_the_contract_names_exactly_the_three_signals(self) -> None:
-        self.assertEqual(set(canary.SIGNAL_CONTRACT), {"http", "consume", "saga"})
-        self.assertEqual(set(canary.entries(self.document["signals"])),
-                         set(canary.SIGNAL_CONTRACT))
-
-    def test_a_renamed_signal_fails_the_plan(self) -> None:
-        """Renaming http would slip it past its own threshold rule and the
-        probe exclusion, both of which are bound to the name."""
-        document = json.loads(json.dumps(self.document))
-        document["signals"]["web"] = document["signals"].pop("http")
-
-        failures = canary.check(document)
-
-        self.assertTrue(any("'web'" in f for f in failures), failures)
-        self.assertTrue(any("'http'" in f for f in failures), failures)
-
-    def test_a_signal_reading_another_signals_series_fails_the_plan(self) -> None:
-        """Saga's queries pointed at the consume series would judge the saga
-        on its neighbour's health, which is the defect saga exists to end."""
-        document = json.loads(json.dumps(self.document))
-        document["signals"]["saga"]["queries"] = dict(
-            document["signals"]["consume"]["queries"])
-
-        failures = canary.check(document)
-
-        self.assertTrue(
-            any("signals.saga" in f and "messaging_masstransit_consume" in f
-                for f in failures),
-            failures)
-
-    def test_a_query_reading_the_wrong_series_for_its_role_fails_the_plan(self) -> None:
-        """An error rate over the attempt counter alone is always zero or
-        one, and neither is a fault rate."""
-        document = json.loads(json.dumps(self.document))
-        attempts = ('messaging_masstransit_consume_ea_total{service_name="$SERVICE", '
-                    'deployment_track="$TRACK"}[$WINDOW]')
-        document["signals"]["consume"]["queries"]["errorRate"] = (
-            f"(sum(rate({attempts})) or vector(0)) / sum(rate({attempts}))")
-
-        failures = canary.check(document)
-
-        self.assertTrue(
-            any("signals.consume.queries.errorRate" in f
-                and "messaging_masstransit_consume_errors_ea_total" in f
-                for f in failures),
-            failures)
-
-    def test_an_http_error_rate_counting_client_errors_fails_the_plan(self) -> None:
-        """Same series, different meaning: a numerator over 4xx stops
-        counting the server failures §13.6 pages on."""
-        document = json.loads(json.dumps(self.document))
-        queries = document["signals"]["http"]["queries"]
-        queries["errorRate"] = queries["errorRate"].replace('"5.."', '"4.."')
-
-        failures = canary.check(document)
-
-        self.assertTrue(
-            any("signals.http.queries.errorRate" in f for f in failures), failures)
-
-    def test_a_server_error_selector_on_the_denominator_fails_the_plan(self) -> None:
-        """Selecting 5xx on both sides makes every error rate one."""
-        document = json.loads(json.dumps(self.document))
-        queries = document["signals"]["http"]["queries"]
-        queries["errorRate"] = queries["errorRate"].replace(
-            'http_route!~"/health/.*"}',
-            'http_route!~"/health/.*", http_response_status_code=~"5.."}')
-
-        failures = canary.check(document)
-
-        self.assertTrue(
-            any("signals.http.queries.errorRate" in f for f in failures), failures)
-
-    def test_a_millisecond_latency_left_unconverted_fails_the_plan(self) -> None:
-        """Without the division a 200ms p99 reads as 200 seconds."""
-        for signal in ("consume", "saga"):
-            with self.subTest(signal=signal):
-                document = json.loads(json.dumps(self.document))
-                queries = document["signals"][signal]["queries"]
-                queries["latencyP99Seconds"] = queries["latencyP99Seconds"].replace(
-                    " / 1000", "")
-
-                failures = canary.check(document)
-
-                self.assertTrue(
-                    any(f"signals.{signal}.queries.latencyP99Seconds" in f
-                        for f in failures),
-                    failures)
-
-    def test_swapped_message_error_rate_operands_fail_the_plan(self) -> None:
-        """Attempts over faults keeps both series and inverts the rate: a
-        clean canary reads as broken and a broken one as clean."""
-        for signal in ("consume", "saga"):
-            with self.subTest(signal=signal):
-                document = json.loads(json.dumps(self.document))
-                queries = document["signals"][signal]["queries"]
-                faults = f"messaging_masstransit_{signal}_errors_ea_total"
-                attempts = f"messaging_masstransit_{signal}_ea_total"
-                queries["errorRate"] = (
-                    queries["errorRate"]
-                    .replace(faults, "FAULTS")
-                    .replace(attempts, faults)
-                    .replace("FAULTS", attempts))
-
-                failures = canary.check(document)
-
-                self.assertTrue(
-                    any(f"signals.{signal}.queries.errorRate" in f for f in failures),
-                    failures)
-
-    def test_a_workload_or_track_matcher_that_is_not_equality_fails_the_plan(self) -> None:
-        """`deployment_track!="$TRACK"` keeps every placeholder and series
-        and reads the other track: the canary judged on stable traffic. Only
-        the first selector is changed, so the numerator alone is enough."""
-        for label, value in (("service_name", "$SERVICE"), ("deployment_track", "$TRACK")):
-            for operator in ("!=", "=~", "!~"):
-                for signal, role in (("http", "errorRate"), ("consume", "requests"),
-                                     ("saga", "latencyP99Seconds")):
-                    with self.subTest(label=label, operator=operator, signal=signal):
-                        document = json.loads(json.dumps(self.document))
-                        queries = document["signals"][signal]["queries"]
-                        queries[role] = queries[role].replace(
-                            f'{label}="{value}"', f'{label}{operator}"{value}"', 1)
-
-                        failures = canary.check(document)
-
-                        self.assertTrue(
-                            any(f"signals.{signal}.queries.{role}" in f and label in f
-                                for f in failures),
-                            failures)
-
-    def test_a_selector_missing_the_track_matcher_fails_the_plan(self) -> None:
-        document = json.loads(json.dumps(self.document))
-        queries = document["signals"]["consume"]["queries"]
-        queries["requests"] = queries["requests"].replace(', deployment_track="$TRACK"', "")
-
-        failures = canary.check(document)
-
-        self.assertTrue(
-            any("signals.consume.queries.requests" in f and "deployment_track" in f
-                for f in failures),
-            failures)
-
-    def test_an_absolute_threshold_a_signal_does_not_own_fails_the_plan(self) -> None:
-        """ADR-047 judges message duration against the stable track only, so
-        the http p99 threshold on consume would page on a slow consumer."""
-        document = json.loads(json.dumps(self.document))
-        document["signals"]["consume"]["absolute"] = ["errorRate", "latencyP99Seconds"]
-
-        failures = canary.check(document)
-
-        self.assertTrue(
-            any("signals.consume.absolute" in f and "latencyP99Seconds" in f
-                for f in failures),
-            failures)
-
-    def test_http_not_held_to_the_latency_threshold_fails_the_plan(self) -> None:
-        """ADR-047 holds http to both of §13.6's numbers, so dropping p99 from
-        its absolute list is a rule moved, not a tidy-up."""
-        document = json.loads(json.dumps(self.document))
-        document["signals"]["http"]["absolute"] = ["errorRate"]
-
-        failures = canary.check(document)
-
-        self.assertTrue(
-            any("http" in f and "latencyP99Seconds" in f for f in failures), failures)
-
-    def test_an_absolute_key_that_is_not_a_threshold_fails_the_plan(self) -> None:
-        document = json.loads(json.dumps(self.document))
-        document["signals"]["http"]["absolute"] = ["errorRate", "saturation"]
-
-        failures = canary.check(document)
-
-        self.assertTrue(any("saturation" in f for f in failures), failures)
-
 
 class ConsumerScanTests(unittest.TestCase):
     """The scan that decides which workloads owe a consume signal."""
@@ -1050,8 +944,7 @@ class HealthRouteTests(unittest.TestCase):
             "app.MapHealthChecks(ReadyPath, options);\n"
         )})
 
-        failures = canary._probe_routes_are_excluded(
-            canary.entries(self.document["signals"]), root)
+        failures = canary._probe_routes_are_readable(root)
 
         self.assertEqual(canary.health_routes(root), {"/health/live"})
         self.assertTrue(any("Health.cs:3" in f for f in failures), failures)
@@ -1060,64 +953,51 @@ class HealthRouteTests(unittest.TestCase):
     def test_the_real_call_sites_are_all_literals(self) -> None:
         self.assertEqual(canary.unresolved_health_routes(canary.ROOT), [])
 
-    def test_every_http_query_excludes_every_mapped_probe_route(self) -> None:
+    def test_the_exclusion_covers_every_mapped_probe_route(self) -> None:
         """The library chart probes every five and ten seconds, which alone
         passes minimumRequests inside one dwell — so unfiltered, a canary that
-        served no real request is judged healthy on its own probes."""
-        queries = canary.entries(self.document["signals"]["http"]["queries"])
+        served no real request is judged healthy on its own probes. PromQL
+        anchors the regex at both ends, as `fullmatch` does."""
+        exclusion = canary.probe_exclusion()
 
-        for name, expression in queries.items():
-            with self.subTest(query=name):
-                self.assertIn("http_route!~", expression)
+        for route in canary.health_routes():
+            with self.subTest(route=route):
+                self.assertIsNotNone(re.fullmatch(exclusion, route))
+        self.assertIsNone(re.fullmatch(exclusion, "/api/products"))
 
-        self.assertEqual(canary.check(self.document), [])
+    def test_a_route_mapped_later_is_excluded_without_an_edit(self) -> None:
+        root = service_tree({"Svc.Api/Health.cs": (
+            'app.MapHealthChecks("/health/live");\n'
+            'app.MapHealthChecks("/probe/deep");\n'
+        )})
 
-    def test_an_http_query_without_the_exclusion_fails_the_plan(self) -> None:
-        document = json.loads(json.dumps(self.document))
-        queries = document["signals"]["http"]["queries"]
-        queries["requests"] = queries["requests"].replace(
-            ', http_route!~"/health/.*"', "")
+        exclusion = canary.probe_exclusion(root)
 
-        failures = canary.check(document)
+        self.assertIsNotNone(re.fullmatch(exclusion, "/probe/deep"))
+        self.assertIn(f'http_route!~"{exclusion}"', canary.queries("http", root)["requests"])
 
-        self.assertTrue(any("http_route" in f for f in failures), failures)
+    def test_no_http_query_is_rendered_over_an_unreadable_route(self) -> None:
+        """A partial exclusion counts the probes it misses as traffic, so the
+        template is refused rather than rendered short."""
+        root = service_tree({"Svc.Api/Health.cs": (
+            'app.MapHealthChecks("/health/live");\n'
+            "app.MapHealthChecks(ReadyPath);\n"
+        )})
 
-    def test_an_exclusion_that_misses_a_mapped_route_fails_the_plan(self) -> None:
-        """The assertion whose subject is what the gate looks at: a fourth
-        probe route would be counted as traffic again, and this is what says
-        so rather than a reader noticing."""
-        document = json.loads(json.dumps(self.document))
-        queries = document["signals"]["http"]["queries"]
-        for name, expression in queries.items():
-            queries[name] = expression.replace('/health/.*', '/health/live')
+        with self.assertRaises(canary.PlanError) as raised:
+            canary.queries("http", root)
 
-        failures = canary.check(document)
+        self.assertIn("Health.cs:2", str(raised.exception))
 
-        self.assertTrue(any("/health/ready" in f for f in failures), failures)
-
-    def test_the_message_queries_carry_no_route_selector(self) -> None:
-        """A message has no route, so a selector on one would match nothing
-        and roll every consume- or saga-judged canary back."""
-        for signal in ("consume", "saga"):
-            for expression in canary.entries(
-                    self.document["signals"][signal]["queries"]).values():
-                self.assertNotIn("http_route", expression)
+    def test_no_http_query_is_rendered_when_the_scan_finds_no_route(self) -> None:
+        with self.assertRaises(canary.PlanError):
+            canary.queries("http", service_tree({}))
 
 
 class VouchingTests(unittest.TestCase):
     """Check 5, over a series no loaded alert reads."""
 
     ALERTS = "  - alert: X\n    expr: http_server_request_duration_seconds_count\n"
-
-    def plan_for(self, metric: str) -> dict:
-        return {
-            "signals": {
-                "consume": {
-                    "absolute": ["errorRate"],
-                    "queries": {"requests": f"sum(increase({metric}[$WINDOW]))"},
-                }
-            }
-        }
 
     def root_with(self, registration: str) -> Path:
         """A throwaway tree holding just the two files check 5 reads."""
@@ -1134,7 +1014,7 @@ class VouchingTests(unittest.TestCase):
         root = self.root_with('.AddMeter("MassTransit")\n')
 
         failures = canary._metrics_are_vouched_for(
-            self.plan_for("messaging_masstransit_consume_ea_total"), root)
+            ["messaging_masstransit_consume_ea_total"], root)
 
         self.assertEqual(failures, [])
 
@@ -1144,7 +1024,7 @@ class VouchingTests(unittest.TestCase):
         root = self.root_with('.AddMeter("Commerce.Messaging")\n')
 
         failures = canary._metrics_are_vouched_for(
-            self.plan_for("messaging_masstransit_consume_ea_total"), root)
+            ["messaging_masstransit_consume_ea_total"], root)
 
         self.assertTrue(any("MassTransit" in f for f in failures), failures)
 
@@ -1159,7 +1039,7 @@ class VouchingTests(unittest.TestCase):
             "messaging_masstransit_consume_total",
         ):
             with self.subTest(metric=metric):
-                failures = canary._metrics_are_vouched_for(self.plan_for(metric), root)
+                failures = canary._metrics_are_vouched_for([metric], root)
 
                 self.assertTrue(failures)
 
@@ -1176,13 +1056,17 @@ class VouchingTests(unittest.TestCase):
         root = self.root_with('.AddMeter("MassTransit")\n')
 
         failures = canary._metrics_are_vouched_for(
-            self.plan_for("messaging_masstransit_invented_total"), root)
+            ["messaging_masstransit_invented_total"], root)
 
         self.assertTrue(failures)
 
-    def test_the_shipped_message_series_are_vouched_for(self) -> None:
-        self.assertEqual(
-            canary._metrics_are_vouched_for(canary.load_plan(), canary.ROOT), [])
+    def test_an_alert_vouches_for_the_series_it_reads(self) -> None:
+        root = self.root_with('.AddMeter("MassTransit")\n')
+
+        failures = canary._metrics_are_vouched_for(
+            ["http_server_request_duration_seconds_bucket"], root)
+
+        self.assertEqual(failures, [])
 
 
 class VerifiedVersionTests(unittest.TestCase):

@@ -33,7 +33,7 @@ SOURCE_INPUTS = [
     "deploy/helm",
     # Checks 3 and 5 both read platform-alerts.yaml — one to take §13.6's
     # thresholds out of it rather than restate them, the other to establish
-    # that a metric this plan queries is one a loaded alert already reads.
+    # that a series the query templates read is one a loaded alert reads.
     # Retuning ErrorRateService without this entry is a green pull request:
     # observability.yml runs check.py, which does not compare canary
     # thresholds, and the canary gate never runs.
@@ -567,12 +567,12 @@ def check(plan_document: dict, root: Path = ROOT) -> list[str]:
                 "not a chart under deploy/helm"
             )
 
-    # 5. Every metric a query reads is one something vouches for: a loaded
-    #    alert, whose metrics check.py has proved published, or a meter
-    #    Common.Web registers, at the MassTransit version the series table
-    #    was verified against. A name nothing vouches for matches no series
-    #    and rolls every canary back.
-    failures += _metrics_are_vouched_for(plan_document, root)
+    # 5. Every series the query templates read is one something vouches
+    #    for: a loaded alert, whose metrics check.py has proved published, or
+    #    a meter Common.Web registers, at the MassTransit version the series
+    #    table was verified against. A name nothing vouches for matches no
+    #    series and rolls every canary back.
+    failures += _metrics_are_vouched_for(sorted(series_read()), root)
     failures += _masstransit_pin_is_verified(root)
 
     # 6. The gate's own subject. Checks 3, 4 and 5 all compare against
@@ -591,171 +591,111 @@ def check(plan_document: dict, root: Path = ROOT) -> list[str]:
     # 8. The dispatch menu is exactly the plan's workload set.
     failures += _dispatch_options_match_workloads(workloads)
 
-    # 9. Each signal is complete, and each workload declares the signals it
-    #    receives: a service that registers a consumer or a saga declares
-    #    consume or saga, or argues why not (ADR-047).
-    signals = entries(plan_document.get("signals", {}))
-    failures += _signals_are_complete(signals)
-    failures += _workloads_declare_what_they_receive(workloads, signals, root)
+    # 9. Each workload declares the signals it receives: a service that
+    #    registers a consumer or a saga declares consume or saga, or argues
+    #    why not (ADR-047).
+    failures += _workloads_declare_what_they_receive(workloads, SIGNALS, root)
 
-    # 10. The http signal excludes every probe route the code maps.
-    failures += _probe_routes_are_excluded(signals, root)
+    # 10. The probe routes the http templates exclude can all be read.
+    failures += _probe_routes_are_readable(root)
+
+    # 11. The plan holds data and no query text: the templates are code.
+    for key in sorted(set(entries(plan_document)) - PLAN_KEYS):
+        failures.append(
+            f"canary.json has a top-level {key!r}, which the plan does not "
+            "hold: the queries and each signal's thresholds are canary.py's "
+            "(ADR-047)"
+        )
 
     return failures
 
 
-# The signals ADR-047 defines, and what binds each to its meaning: exactly
-# the absolute thresholds it is held to, and for each query the series it
-# reads and the shape that gives them their meaning, as (pattern, count)
-# pairs. Only http names p99, because only a request has a latency alert;
-# the http numerator selects server errors and nothing else does; and a
-# millisecond histogram is divided back into the seconds analyse compares.
-SERVER_ERRORS = (r'http_response_status_code=~"5\.\."\}\[\$WINDOW\]\)\) or vector\(0\)\)', 1)
-ONE_STATUS_SELECTOR = (r"http_response_status_code", 1)
-MILLISECONDS_TO_SECONDS = (r"\) / 1000$", 1)
+# The keys canary.json holds.
+PLAN_KEYS = {"steps", "tolerance", "thresholds", "workloads"}
 
-
-def _faults_over_attempts(signal: str) -> tuple[tuple[str, int], ...]:
-    """A message error rate's operands in place: the fault counter opens the
-    coalesced numerator and the attempt counter is the denominator."""
-    return (
-        (rf"^\(sum\(rate\(messaging_masstransit_{signal}_errors_ea_total\{{", 1),
-        (rf"\) / sum\(rate\(messaging_masstransit_{signal}_ea_total\{{", 1),
-    )
-
-
-# The matchers every selector of every query carries, as exact equality: a
-# negated or regex matcher keeps every placeholder and reads another
-# workload's or the other track's traffic.
-REQUIRED_MATCHERS = {"service_name": "$SERVICE", "deployment_track": "$TRACK"}
-SELECTOR = re.compile(r"\b([a-z][a-z0-9_]*_(?:count|bucket|sum|total))\b(\{[^}]*\})?")
-MATCHER = re.compile(r"([a-z_][a-z0-9_]*)\s*(=~|!~|!=|=)\s*\"([^\"]*)\"")
-SIGNAL_CONTRACT = {
-    "http": {
-        "absolute": ("errorRate", "latencyP99Seconds"),
-        "series": {
-            "errorRate": {"http_server_request_duration_seconds_count"},
-            "latencyP99Seconds": {"http_server_request_duration_seconds_bucket"},
-            "requests": {"http_server_request_duration_seconds_count"},
-        },
-        "shape": {"errorRate": (SERVER_ERRORS, ONE_STATUS_SELECTOR)},
-    },
-    "consume": {
-        "absolute": ("errorRate",),
-        "series": {
-            "errorRate": {"messaging_masstransit_consume_errors_ea_total",
-                          "messaging_masstransit_consume_ea_total"},
-            "latencyP99Seconds": {"messaging_masstransit_consume_duration_milliseconds_bucket"},
-            "requests": {"messaging_masstransit_consume_ea_total"},
-        },
-        "shape": {
-            "errorRate": _faults_over_attempts("consume"),
-            "latencyP99Seconds": (MILLISECONDS_TO_SECONDS,),
-        },
-    },
-    "saga": {
-        "absolute": ("errorRate",),
-        "series": {
-            "errorRate": {"messaging_masstransit_saga_errors_ea_total",
-                          "messaging_masstransit_saga_ea_total"},
-            "latencyP99Seconds": {"messaging_masstransit_saga_duration_milliseconds_bucket"},
-            "requests": {"messaging_masstransit_saga_ea_total"},
-        },
-        "shape": {
-            "errorRate": _faults_over_attempts("saga"),
-            "latencyP99Seconds": (MILLISECONDS_TO_SECONDS,),
-        },
-    },
+# The signals ADR-047 defines, with the absolute thresholds each is held to.
+# Only http names p99, because only a request has a latency alert to be held
+# to; a message signal's duration is judged against the stable track alone.
+# A message signal names the MassTransit instrument its series come from.
+SIGNALS = {
+    "http": {"absolute": ("errorRate", "latencyP99Seconds")},
+    "consume": {"absolute": ("errorRate",), "instrument": "messaging.masstransit.consume"},
+    "saga": {"absolute": ("errorRate",), "instrument": "messaging.masstransit.saga"},
 }
 
-# A series a query reads, by the suffix every exported series ends in.
-SERIES_READ = re.compile(r"\b([a-z][a-z0-9_]*_(?:count|bucket|sum|total))\b")
+# ASP.NET Core's request histogram (§13.2), in seconds, which check 5 vouches
+# for through the alerts that read it.
+HTTP_HISTOGRAM = "http_server_request_duration_seconds"
+
+# What turns a histogram's unit into the seconds analyse compares.
+TO_SECONDS = {"s": "", "ms": " / 1000"}
+
+# Every selector's workload and track matchers, as equality: the one form in
+# which a query reads exactly one workload's one track.
+WORKLOAD_AND_TRACK = 'service_name="$SERVICE", deployment_track="$TRACK"'
 
 
-def _selectors_are_exact(where: str, query: str) -> list[str]:
-    """Every series the query reads is selected by REQUIRED_MATCHERS, each
-    exactly once and as equality."""
-    failures = []
-    for selector in SELECTOR.finditer(query):
-        series, braces = selector.groups()
-        matchers = MATCHER.findall(braces or "")
-        for label, value in REQUIRED_MATCHERS.items():
-            found = [(op, got) for name, op, got in matchers if name == label]
-            if found != [("=", value)]:
-                failures.append(
-                    f"{where} selects {series} with {label} "
-                    f"{' '.join(op + repr(got) for op, got in found) or 'unmatched'}, "
-                    f"and every selector needs exactly {label}=\"{value}\""
-                )
-    return failures
+def queries(signal: str, root: Path = ROOT) -> dict[str, str]:
+    """The three PromQL templates for `signal`, one per role analyse reads.
 
-
-def _signals_are_complete(signals: dict) -> list[str]:
-    """Each signal is one the contract defines, and honours it.
-
-    It carries the three queries `analyse` reads, each reading exactly the
-    series its role is bound to, and names the absolute thresholds its
-    signal must. A missing query rolls every rung back for an absent series;
-    a missing threshold leaves the signal judged only against the stable
-    track, so a canary as broken as the release before it promotes.
+    Each carries $SERVICE, $TRACK and $WINDOW for read_prometheus to fill.
+    The error rate coalesces its numerator, because a canary with no failures
+    matches no numerator series and PromQL carries the empty vector through
+    the division; the denominator is not, because no traffic is a silence
+    that requests and minimumRequests judge.
     """
-    failures = []
-    if not signals:
-        failures.append("signals is empty: no workload can be judged on anything")
-    for signal, definition in sorted(signals.items()):
-        contract = SIGNAL_CONTRACT.get(signal)
-        if contract is None:
-            failures.append(
-                f"signals defines {signal!r}, which is not a signal ADR-047 "
-                f"defines: {', '.join(SIGNAL_CONTRACT)}"
-            )
-            continue
-        queries = entries(definition.get("queries", {}))
-        for name in METRICS:
-            if name not in queries:
-                failures.append(
-                    f"signals.{signal}.queries.{name} is missing, and analyse() "
-                    "reads it for both tracks"
-                )
-                continue
-            expected = contract["series"][name]
-            read = set(SERIES_READ.findall(queries[name]))
-            if read != expected:
-                failures.append(
-                    f"signals.{signal}.queries.{name} reads "
-                    f"{', '.join(sorted(read)) or 'no series'}, and its role is "
-                    f"bound to exactly {', '.join(sorted(expected))}"
-                )
-            failures += _selectors_are_exact(f"signals.{signal}.queries.{name}", queries[name])
-            for pattern, times in contract.get("shape", {}).get(name, ()):
-                found = len(re.findall(pattern, queries[name]))
-                if found != times:
-                    failures.append(
-                        f"signals.{signal}.queries.{name} matches {pattern!r} "
-                        f"{found} time(s), and its role requires {times}"
-                    )
-        absolute = definition.get("absolute", [])
-        for key in contract["absolute"]:
-            if key not in absolute:
-                failures.append(
-                    f"signals.{signal}.absolute does not name {key}, so the "
-                    f"signal's {ABSOLUTE[key][0]} is never held to §13.6's "
-                    "threshold (ADR-047)"
-                )
-        for key in absolute:
-            if key in ABSOLUTE and key not in contract["absolute"]:
-                failures.append(
-                    f"signals.{signal}.absolute names {key}, a threshold this "
-                    "signal is not held to: ADR-047 judges it against the "
-                    "stable track only"
-                )
-        for key in absolute:
-            if key not in ABSOLUTE:
-                failures.append(
-                    f"signals.{signal}.absolute names {key!r}, which is not an "
-                    f"alert threshold analyse() can apply: {', '.join(ABSOLUTE)}"
-                )
-    return failures
+    series = _series_of(signal)
+    selector = WORKLOAD_AND_TRACK
+    failed = selector
+    if signal == "http":
+        selector += f', http_route!~"{probe_exclusion(root)}"'
+        failed = selector + ', http_response_status_code=~"5.."'
+    return {
+        "errorRate": (
+            f"(sum(rate({series['faults']}{{{failed}}}[$WINDOW])) or vector(0)) "
+            f"/ sum(rate({series['attempts']}{{{selector}}}[$WINDOW]))"
+        ),
+        "latencyP99Seconds": (
+            f"histogram_quantile(0.99, sum by (le) "
+            f"(rate({series['bucket']}{{{selector}}}[$WINDOW])))"
+            f"{TO_SECONDS[series['unit']]}"
+        ),
+        "requests": f"sum(increase({series['attempts']}{{{selector}}}[$WINDOW]))",
+    }
+
+
+def _series_of(signal: str) -> dict[str, str]:
+    """The series a signal's templates read: attempts, faults and the
+    duration bucket, and the bucket's unit."""
+    if signal == "http":
+        return {
+            "attempts": f"{HTTP_HISTOGRAM}_count",
+            "faults": f"{HTTP_HISTOGRAM}_count",
+            "bucket": f"{HTTP_HISTOGRAM}_bucket",
+            "unit": "s",
+        }
+    instrument = SIGNALS[signal]["instrument"]
+    by_instrument = {
+        (entry[1], name.rsplit("_", 1)[-1]): (name, entry[3])
+        for name, entry in EXPORTED_SERIES.items()
+    }
+    bucket, unit = by_instrument[(f"{instrument}.duration", "bucket")]
+    return {
+        "attempts": by_instrument[(instrument, "total")][0],
+        "faults": by_instrument[(f"{instrument}.errors", "total")][0],
+        "bucket": bucket,
+        "unit": unit,
+    }
+
+
+def series_read() -> set[str]:
+    """Every series any signal's templates read."""
+    return {
+        name
+        for signal in SIGNALS
+        for role, name in _series_of(signal).items()
+        if role != "unit"
+    }
 
 
 def _workloads_declare_what_they_receive(workloads: dict, signals: dict, root: Path) -> list[str]:
@@ -777,7 +717,7 @@ def _workloads_declare_what_they_receive(workloads: dict, signals: dict, root: P
             if signal not in signals:
                 failures.append(
                     f"workloads.{name} declares the signal {signal!r}, which "
-                    f"canary.json does not define: {', '.join(sorted(signals))}"
+                    f"canary.py does not define: {', '.join(sorted(signals))}"
                 )
 
         for signal, pattern, key, kind in OWED_SIGNALS:
@@ -900,8 +840,6 @@ def _csharp_sources(root: Path) -> dict[Path, str]:
 
 # A MapHealthChecks call, and the string literal it maps where it has one.
 HEALTH_CALL = re.compile(r"\bMapHealthChecks\s*\(\s*(?:\"([^\"]+)\")?")
-ROUTE_EXCLUSION = re.compile(r"http_route!~\"([^\"]*)\"")
-HTTP_SELECTOR = re.compile(r"http_server_request_duration_seconds_[a-z]+\{([^}]*)\}")
 
 
 def health_routes(root: Path = ROOT) -> set[str]:
@@ -928,47 +866,35 @@ def _health_calls(root: Path) -> tuple[tuple[str | None, str], ...]:
     return tuple(calls)
 
 
-def _probe_routes_are_excluded(signals: dict, root: Path) -> list[str]:
-    """Every http selector's route exclusion matches every mapped probe route.
+def probe_exclusion(root: Path = ROOT) -> str:
+    """The http_route regex that excludes every probe route the code maps.
 
-    PromQL anchors a regex matcher at both ends, as `fullmatch` does. The
-    subject is checked first, because a scan that found no route would
-    certify any selector at all.
+    Derived from the routes rather than written, so a new probe route is
+    excluded the day it is mapped. Refused where the scan found none or
+    cannot read one, because a partial exclusion counts probes as traffic.
     """
-    routes = health_routes(root)
-    if not routes:
-        return ["found no MapHealthChecks route under src/: the probe exclusion "
-                "would pass vacuously, so the scan is what is broken"]
+    failures = _probe_routes_are_readable(root)
+    if failures:
+        raise PlanError("; ".join(failures))
+    # PromQL anchors the regex at both ends; its string literal needs each
+    # backslash re.escape adds doubled.
+    return "|".join(re.escape(route).replace("\\", "\\\\") for route in sorted(health_routes(root)))
 
-    failures = [
+
+def _probe_routes_are_readable(root: Path) -> list[str]:
+    """The probe-route scan found routes, and every call site's is a literal.
+
+    The subject is checked first, because a scan that found no route would
+    exclude nothing and certify it.
+    """
+    if not health_routes(root):
+        return ["found no MapHealthChecks route under src/: the probe exclusion "
+                "would be empty, so the scan is what is broken"]
+    return [
         f"{site} maps a health check on a route that is not a string literal, "
-        "so the probe exclusion cannot be checked against it"
+        "so the probe exclusion cannot include it"
         for site in unresolved_health_routes(root)
     ]
-    if "http" not in signals:
-        failures.append("signals defines no 'http', so no probe exclusion is checked")
-    queries = entries(signals.get("http", {}).get("queries", {}))
-    for name, expression in sorted(queries.items()):
-        selectors = HTTP_SELECTOR.findall(expression)
-        if not selectors:
-            failures.append(f"signals.http.queries.{name} reads no http selector")
-        for selector in selectors:
-            exclusion = ROUTE_EXCLUSION.search(selector)
-            if not exclusion:
-                failures.append(
-                    f"signals.http.queries.{name} has a selector with no "
-                    "http_route exclusion, so probe traffic counts as the "
-                    "canary's own"
-                )
-                continue
-            for route in sorted(routes):
-                if not re.fullmatch(exclusion.group(1), route):
-                    failures.append(
-                        f"signals.http.queries.{name} excludes "
-                        f"{exclusion.group(1)!r}, which does not match the "
-                        f"mapped probe route {route}"
-                    )
-    return failures
 
 
 def _thresholds_match_alerts(thresholds: dict, root: Path) -> list[str]:
@@ -1101,8 +1027,8 @@ def exported_series(instrument: str, kind: str, unit: str) -> set[str]:
     return {base}
 
 
-def _metrics_are_vouched_for(plan_document: dict, root: Path) -> list[str]:
-    """Every metric a signal's queries read, against what vouches for it.
+def _metrics_are_vouched_for(metrics: list[str], root: Path) -> list[str]:
+    """Every series in `metrics`, against what vouches for it.
 
     A metric a loaded alert reads is matched on its instrument, because an
     alert may read `_count` where a query reads `_bucket` off one histogram.
@@ -1123,31 +1049,28 @@ def _metrics_are_vouched_for(plan_document: dict, root: Path) -> list[str]:
     }
 
     failures = []
-    for signal, definition in sorted(entries(plan_document.get("signals", {})).items()):
-        for name, query in sorted(entries(definition.get("queries", {})).items()):
-            where = f"signals.{signal}.queries.{name}"
-            for metric in sorted(set(SERIES_READ.findall(query))):
-                if metric in EXPORTED_SERIES:
-                    meter, instrument, _, _ = EXPORTED_SERIES[metric]
-                    if instrument not in METER_INSTRUMENTS.get(meter, ()):
-                        failures.append(
-                            f"{where} reads {metric}, whose instrument {instrument} "
-                            f"is not one {meter} {MASSTRANSIT_VERIFIED} declares"
-                        )
-                    elif meter not in registered:
-                        failures.append(
-                            f"{where} reads {metric}, from the {meter} meter, and "
-                            f"{registration.name} does not register "
-                            f"AddMeter(\"{meter}\"), so nothing collects it"
-                        )
-                    continue
-                base = re.sub(r"_(?:count|bucket|sum|total)$", "", metric)
-                if base not in alert_text:
-                    failures.append(
-                        f"{where} reads {metric}, which no loaded alert reads and "
-                        "which is not an exported series in EXPORTED_SERIES, so "
-                        "nothing establishes that it is published"
-                    )
+    for metric in metrics:
+        if metric in EXPORTED_SERIES:
+            meter, instrument, _, _ = EXPORTED_SERIES[metric]
+            if instrument not in METER_INSTRUMENTS.get(meter, ()):
+                failures.append(
+                    f"a template reads {metric}, whose instrument {instrument} "
+                    f"is not one {meter} {MASSTRANSIT_VERIFIED} declares"
+                )
+            elif meter not in registered:
+                failures.append(
+                    f"a template reads {metric}, from the {meter} meter, and "
+                    f"{registration.name} does not register "
+                    f"AddMeter(\"{meter}\"), so nothing collects it"
+                )
+            continue
+        base = re.sub(r"_(?:count|bucket|sum|total)$", "", metric)
+        if base not in alert_text:
+            failures.append(
+                f"a template reads {metric}, which no loaded alert reads and "
+                "which is not an exported series in EXPORTED_SERIES, so "
+                "nothing establishes that it is published"
+            )
     return failures
 
 
@@ -1406,9 +1329,8 @@ def main(argv: list[str]) -> int:
     if args.workload not in workloads:
         print(f"canary: no workload {args.workload!r} in the plan", file=sys.stderr)
         return 1
-    defined = entries(document["signals"])
     declared = {
-        signal: defined.get(signal, {})
+        signal: SIGNALS.get(signal, {})
         for signal in workloads[args.workload].get("signals", [])
     }
     readings = json.loads(Path(args.readings).read_text(encoding="utf-8"))
