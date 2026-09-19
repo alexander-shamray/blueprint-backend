@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Common.Contracts;
 using Common.Contracts.Ordering.V1;
 using Common.Contracts.Payments.V1;
@@ -75,6 +76,13 @@ public sealed class PaymentsCommandEndpointTests(ServiceFixture fixture) : IAsyn
             expected: 1,
             because: "the first redelivery, RedeliveryLadder.Intervals[0] later, finds the record",
             budget: RedeliveryLadder.Intervals[0] + TimeSpan.FromSeconds(30));
+
+        // The delayed exchange's wait, not an immediate retry's: a retry
+        // would find the record within seconds and pass everything above.
+        IReadOnlyList<long> locks = fixture.Orders.LockedAt(order);
+        Stopwatch.GetElapsedTime(locks[0], locks[^1]).ShouldBeGreaterThanOrEqualTo(
+            RedeliveryLadder.Intervals[0],
+            "the attempt that found the record is the redelivery's (§3.2)");
     }
 
     [Fact]
