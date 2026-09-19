@@ -50,8 +50,8 @@ reviewers and naming one there is a subject rather than a history.
 a blank line or a line of code ends it, and a multi-line token — a
 docstring, a `/* */` — counts every line it spans. An added comment line is
 judged as its whole block in the file after the change, because one added
-line can push an old block past the limit. A trailing comment is on a line of code,
-so it is never part of a block.
+line can push an old block past the limit. A trailing comment is on a line
+of code, so it is never part of a block.
 
 **Added lines only.** The corpus is brought under the rule by the sweeps in
 [`docs/churn-plan.md`](../../docs/churn-plan.md), not by this gate refusing
