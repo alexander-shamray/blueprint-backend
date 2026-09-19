@@ -44,7 +44,8 @@ with it, and between them they are the reason these tests are "a few" rather
 than hundreds. **Contract compatibility** —
 does the message one service publishes still mean what its consumers expect —
 is a reflection test over the contract assembly, and it is why
-`Platform.IntegrationTests` exists and holds nothing else. It is **not the
+`Platform.IntegrationTests` exists; what else that suite holds is §12.6's. It
+is **not the
 only thing genuinely between services** — §9.7's one synchronous hop is the
 other, and §12.6 tests the two in almost opposite ways. The hop is
 deliberately not in this suite: a contract over it needs the provider
@@ -2341,7 +2342,11 @@ argument. **An algorithm that can only be run against production data can only
 be tested with the cases production happens to contain.**
 
 This is the one suite that references every service, which is why it has its own
-project and why that project holds nothing else:
+project and why that project holds contract shape and one other kind of check:
+two services' constants held to each other where the blueprint couples them,
+as [§3.2](03-bounded-contexts.md)'s wait for a missing order is held to
+[§9.6](09-messaging.md)'s payment timeout, because §4.2 lets neither service
+read the other's assembly. The contract shape is this:
 
 ```csharp
 public class ContractTests

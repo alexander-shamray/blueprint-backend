@@ -16,11 +16,8 @@
 
   <ItemGroup>
     <!--
-      §4.1 calls this "the only suite that references every service", and today
-      that is one reference: the platform's contracts are a single assembly
-      that itself references nothing (§4.3). The list grows as services arrive
-      — Ordering's projections and consumers are the first thing here that will
-      need one — and the assertions below are already about the whole assembly
+      The platform's contracts are a single assembly that itself references
+      nothing (§4.3), so the contract assertions are about the whole assembly
       rather than about any service in it.
     -->
     <ProjectReference Include="..\..\src\BuildingBlocks\Common.Contracts\Common.Contracts.csproj" />
