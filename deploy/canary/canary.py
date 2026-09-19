@@ -745,6 +745,12 @@ def _workloads_declare_what_they_receive(workloads: dict, signals: dict, root: P
                     f"workloads.{name}.{key} sits beside a declared {signal} "
                     "signal, and one of the two is wrong"
                 )
+            if signal in declared and not registers:
+                failures.append(
+                    f"workloads.{name} declares the {signal} signal and registers "
+                    f"no {kind.split()[-1]}, so its series cannot exist and every "
+                    "rung would roll back"
+                )
     return failures
 
 
@@ -819,14 +825,31 @@ CSHARP_TOKEN = re.compile(
 
 @functools.cache
 def _code_only(code: str) -> str:
-    """C# with its comments blanked and its line breaks kept, so a match's
-    offset still gives the line it is on. Cached, as the scans repeat."""
-    return CSHARP_TOKEN.sub(
-        lambda token: (
-            re.sub(r"[^\n]", " ", token.group(0)) if token.group("comment") else token.group(0)
-        ),
-        code,
-    )
+    """C# with its comments and the contents of its literals blanked.
+
+    Every character keeps its offset and every line break stays, so a match
+    in the result gives its line, and a literal argument is read back from
+    the original text at the same offset. Cached, as the scans repeat.
+    """
+    return CSHARP_TOKEN.sub(lambda token: re.sub(r"[^\n]", " ", token.group(0)), code)
+
+
+# One ordinary literal with no escape, closing its argument. A literal the
+# argument continues past, as a concatenation, is not the whole value, and an
+# escape spells a value the source text does not show.
+WHOLE_LITERAL = re.compile(r"\s*\"([^\"\\\n]+)\"(?=\s*[,)])")
+
+
+def _literal_arguments(code: str, method: str) -> list[tuple[str | None, int]]:
+    """Each live call to `method`, with its first argument where that is a
+    whole literal, and the call's offset. The call is found in the masked
+    text, so a comment or a string that spells one is not a call."""
+    masked = _code_only(code)
+    calls = []
+    for call in re.finditer(rf"\b{method}\s*\(", masked):
+        literal = WHOLE_LITERAL.match(code, call.end())
+        calls.append((literal.group(1) if literal else None, call.start()))
+    return calls
 
 
 @functools.cache
@@ -847,12 +870,6 @@ def _csharp_sources(root: Path) -> dict[Path, str]:
     return found
 
 
-# A MapHealthChecks call, and its route where that is one whole literal with
-# no escape: a literal the argument continues past, as a concatenation, is not
-# the route, and an escape spells a route the source text does not show.
-HEALTH_CALL = re.compile(r"\bMapHealthChecks\s*\(\s*(?:\"([^\"\\]+)\"(?=\s*[,)]))?")
-
-
 def health_routes(root: Path = ROOT) -> set[str]:
     """Every literal route a host maps a health check on, read from the code."""
     return {route for route, _ in _health_calls(root) if route is not None}
@@ -870,10 +887,9 @@ def _health_calls(root: Path) -> tuple[tuple[str | None, str], ...]:
     for path, code in sorted(_csharp_sources(root).items()):
         if path.suffix != ".cs":
             continue
-        stripped = _code_only(code)
-        for call in HEALTH_CALL.finditer(stripped):
-            line = stripped.count("\n", 0, call.start()) + 1
-            calls.append((call.group(1), f"{path.relative_to(root).as_posix()}:{line}"))
+        for route, offset in _literal_arguments(code, "MapHealthChecks"):
+            line = code.count("\n", 0, offset) + 1
+            calls.append((route, f"{path.relative_to(root).as_posix()}:{line}"))
     return tuple(calls)
 
 
@@ -1055,9 +1071,8 @@ def _metrics_are_vouched_for(metrics: list[str], root: Path) -> list[str]:
         return [f"a file check 5 reads is not readable, so no metric can be vouched for: {error}"]
 
     registered = {
-        meter for meter in METER_INSTRUMENTS
-        if re.search(rf"\.AddMeter\(\s*\"{re.escape(meter)}\"\s*\)", registered_text)
-    }
+        meter for meter, _ in _literal_arguments(registered_text, "AddMeter")
+    } & set(METER_INSTRUMENTS)
 
     failures = []
     for metric in metrics:

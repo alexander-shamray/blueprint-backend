@@ -789,6 +789,20 @@ class ConsumerScanTests(unittest.TestCase):
 
         self.assertTrue(any("gateway" in f for f in failures), failures)
 
+    def test_a_message_signal_on_a_service_that_registers_nothing_fails(self) -> None:
+        """The other direction: a declared consume or saga signal on a
+        service with nothing to measure reads series that cannot exist, so
+        every rung rolls back on a release that did nothing wrong."""
+        for signal in ("consume", "saga"):
+            with self.subTest(signal=signal):
+                document = json.loads(json.dumps(self.document))
+                document["workloads"]["gateway"]["signals"].append(signal)
+
+                failures = canary.check(document)
+
+                self.assertTrue(
+                    any("gateway" in f and signal in f for f in failures), failures)
+
     def test_an_exemption_beside_a_declared_consume_signal_fails(self) -> None:
         document = json.loads(json.dumps(self.document))
         document["workloads"]["inventory-api"]["consumeExemption"] = "unneeded"
@@ -863,6 +877,17 @@ class BulkRegistrationTests(unittest.TestCase):
 
         self.assertTrue(canary.has_consumers("Svc.Api", root))
         self.assertTrue(canary.has_sagas("Svc.Api", root))
+
+    def test_a_registration_spelled_inside_a_string_is_not_one(self) -> None:
+        """A string is text, not a call: a log message or a raw literal that
+        names a registration owes no signal."""
+        root = service_tree({"Svc.Infrastructure/Bus.cs": (
+            'log.Info("calling x.AddConsumer<OrderConsumer>() next");\n'
+            'var doc = """\n    x.AddSaga<OrderState>();\n    """;\n'
+        )})
+
+        self.assertFalse(canary.has_consumers("Svc.Api", root))
+        self.assertFalse(canary.has_sagas("Svc.Api", root))
 
 
 class SagaScanTests(unittest.TestCase):
@@ -963,10 +988,22 @@ class HealthRouteTests(unittest.TestCase):
         failures = canary._probe_routes_are_readable(root)
 
         self.assertEqual(canary.health_routes(root), {"/health/live", "/probe"})
+        self.assertEqual(len(failures), 3, failures)
         self.assertTrue(any("Health.cs:3" in f for f in failures), failures)
         self.assertTrue(any("Health.cs:4" in f for f in failures), failures)
         self.assertTrue(any("Health.cs:5" in f for f in failures), failures)
         self.assertFalse(any("Health.cs:1" in f for f in failures), failures)
+
+    def test_a_call_spelled_inside_a_string_maps_no_route(self) -> None:
+        """Excluding a route nobody maps as a probe would hide real traffic
+        on it, so text inside a string is not a call site."""
+        root = service_tree({"Svc.Api/Health.cs": (
+            'app.MapHealthChecks("/health/live");\n'
+            'var hint = "try app.MapHealthChecks(\\"/orders\\")";\n'
+        )})
+
+        self.assertEqual(canary.health_routes(root), {"/health/live"})
+        self.assertEqual(canary.unresolved_health_routes(root), [])
 
     def test_the_real_call_sites_are_all_literals(self) -> None:
         self.assertEqual(canary.unresolved_health_routes(canary.ROOT), [])
@@ -1045,6 +1082,22 @@ class VouchingTests(unittest.TestCase):
             ["messaging_masstransit_consume_ea_total"], root)
 
         self.assertTrue(any("MassTransit" in f for f in failures), failures)
+
+    def test_a_registration_left_in_a_comment_or_a_string_vouches_for_nothing(self) -> None:
+        """What collects the series is a live call, so the text of one that
+        was commented out, or quoted, is not a registration."""
+        for registration in (
+            '// .AddMeter("MassTransit")\n',
+            '/* .AddMeter("MassTransit") */\n',
+            'var note = ".AddMeter(\\"MassTransit\\")";\n',
+        ):
+            with self.subTest(registration=registration):
+                root = self.root_with(registration)
+
+                failures = canary._metrics_are_vouched_for(
+                    ["messaging_masstransit_consume_ea_total"], root)
+
+                self.assertTrue(any("MassTransit" in f for f in failures), failures)
 
     def test_a_series_the_instrument_does_not_export_is_refused(self) -> None:
         """Each spelling is the instrument's own exported name or nothing: a
