@@ -6,11 +6,8 @@ namespace Payments.Domain;
 /// this project has none until its first aggregate.
 /// </summary>
 /// <remarks>
-/// Written to be deleted. When that aggregate lands, re-anchor
-/// <c>ArchitectureTests</c> in <c>Payments.Domain.Tests</c> and
-/// <c>Payments.Application.Tests</c> on it and remove this file. A marker is
-/// what a service has before it has a domain; leaving one in place after the
-/// first aggregate arrives means the gates are judging an empty type instead
-/// of the model they exist to constrain.
+/// Written to be deleted: re-anchor <c>ArchitectureTests</c> on the first
+/// aggregate and remove this file, so the gates judge the model they exist
+/// to constrain rather than an empty type.
 /// </remarks>
 public sealed class AssemblyMarker;

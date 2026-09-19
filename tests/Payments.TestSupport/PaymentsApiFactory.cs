@@ -25,17 +25,11 @@ public class PaymentsApiFactory(string connectionString, string rabbitConnection
     /// Deliberately fake and deliberately unreachable — <c>.invalid</c> is
     /// reserved and never resolves, so a test that accidentally dials the
     /// authority fails loudly rather than reaching a real identity provider.
-    /// </summary>
-    /// <remarks>
     /// Required rather than optional for the same reason both connection
     /// strings are: <c>AddJwtAuthentication</c> reads this key eagerly and
-    /// throws naming it, so a service host that cannot name its identity
-    /// provider does not start. §12.4 attributed that failure to
-    /// <c>ValidateOnStart</c> and <c>OptionsValidationException</c>, and the
-    /// chapter was amended — §15.4 keeps <c>ServiceIdentityOptions</c> as the
-    /// solution's only options type, so there is nothing here for
-    /// <c>ValidateDataAnnotations</c> to check.
-    /// </remarks>
+    /// throws naming it, so a host that cannot name its identity provider
+    /// does not start.
+    /// </summary>
     public const string UnreachableAuthority = "https://identity.invalid/realms/test";
 
     /// <summary>
@@ -54,19 +48,16 @@ public class PaymentsApiFactory(string connectionString, string rabbitConnection
             {
                 ConfigureAuthentication(services);
 
-                // Remove ONLY the outbox dispatcher, not every hosted service:
-                // MassTransit registers its bus as one, so a
-                // RemoveAll<IHostedService>() would stop the broker from
-                // starting and silently disable every consumption test.
-                //
-                // The dispatcher polls every 500 ms; left running it drains
-                // outbox rows underneath assertions about them. Tests that
-                // want it call fixture.ProcessOutboxBatchAsync() explicitly.
-                //
-                // This match is why AddPaymentsInfrastructure uses
-                // AddHostedService<T> rather than a factory overload — a
-                // factory registration leaves ImplementationType null and
-                // this line would quietly match nothing.
+                // Remove only the outbox dispatcher, not every hosted
+                // service: MassTransit registers its bus as one, and
+                // RemoveAll<IHostedService>() would stop the broker and
+                // silently disable every consumption test. Left running it
+                // polls every 500 ms and drains rows underneath assertions
+                // about them — tests that want it call
+                // fixture.ProcessOutboxBatchAsync() explicitly.
+                // AddPaymentsInfrastructure uses AddHostedService<T> rather
+                // than a factory overload for exactly this match: a factory
+                // registration leaves ImplementationType null.
                 ServiceDescriptor hosted = services.Single(d =>
                     d.ServiceType == typeof(IHostedService) &&
                     d.ImplementationType == typeof(OutboxDispatcher));
@@ -110,30 +101,15 @@ public class PaymentsApiFactory(string connectionString, string rabbitConnection
             });
 
     /// <summary>
-    /// Replaces the JWT scheme with <see cref="TestAuthHandler"/> (§12.4).
-    /// Replacing rather than configuring: the endpoints under test are behind
-    /// <c>RequireAuthorization</c> (§11.4), and the alternative is either a 401
-    /// on every call or a fixture that fetches OIDC metadata over the network
-    /// from an authority that is unreachable on purpose.
+    /// Replaces the JWT scheme with <see cref="TestAuthHandler"/> (§12.4),
+    /// rather than configuring it: the endpoints under test are behind
+    /// <c>RequireAuthorization</c> (§11.4), and the alternative is either a
+    /// 401 on every call or fetching OIDC metadata from an unreachable
+    /// authority. Virtual, so the one host that keeps the production
+    /// scheme can prove this handler's headers mean nothing to a real
+    /// deployment. <c>DefaultForbidScheme</c> stays unset, so a 403 falls
+    /// back to this handler's own inherited forbid.
     /// </summary>
-    /// <remarks>
-    /// Virtual, and the one override matters. A host that keeps the production
-    /// scheme is the only thing that can prove <see cref="TestAuthHandler"/>'s
-    /// headers mean nothing to a real deployment, so it arrives with the first
-    /// endpoint there is anything to forge against. A flag would say the same
-    /// thing; a method says it at the site that makes the decision, which is
-    /// where the argument for it belongs.
-    ///
-    /// Only the authenticate and challenge schemes are set, and forbid follows
-    /// the challenge one: <c>DefaultForbidScheme</c> is unset, and
-    /// <c>AuthenticationSchemeProvider</c> falls back to
-    /// <c>DefaultChallengeScheme</c> before <c>DefaultScheme</c>. So the 403 is
-    /// answered by <see cref="TestAuthHandler"/>'s inherited forbid — a bare
-    /// status code, no metadata — and the wrong-permission test needs no
-    /// identity provider either. Measured by resolving the provider rather
-    /// than assumed: this comment previously credited the bearer handler,
-    /// which never sees a forbid here.
-    /// </remarks>
     protected virtual void ConfigureAuthentication(IServiceCollection services)
     {
         services.Configure<AuthenticationOptions>(o =>

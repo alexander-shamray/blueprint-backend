@@ -21,26 +21,14 @@ namespace Payments.TestSupport;
 
 /// <summary>
 /// A real SQL Server, migrated by the real migrator (ADR-010, §12.4), and a
-/// real RabbitMQ for the bus to connect to. Each image is the one §14.1's
-/// Compose file runs — for the broker that means the base tag its Dockerfile
-/// builds from, since ADR-021 made §14.1 build rather than pull, and Payments
-/// may stop at the base because it registers no message scheduler and
-/// schedules nothing; Ordering's fixture builds the Dockerfile itself, for
-/// exactly the reason this one need not. So a test and a developer machine
-/// cannot disagree about
-/// the engine. §12.4's name and §4.1's home: the fixture serves
-/// <c>Payments.Api.Tests</c> today, and the application suite the moment that
-/// suite gains a handler test — the two cannot reference each other, so each
-/// declares its own
-/// <c>IntegrationCollection</c> over this one type.
+/// real RabbitMQ on §14.1's base tag (ADR-021), since Payments needs no
+/// message scheduler. Serves <c>Payments.Api.Tests</c> today and the
+/// application suite once it gains a handler test; the two cannot reference
+/// each other, so each declares its own <c>IntegrationCollection</c> over
+/// this one type. Tests deliberately collapse the two database identities of
+/// §7.1 — the <c>sa</c> login holds both DML and DDL — but not the two
+/// configuration keys, so the migrator can be caught reading the wrong one.
 /// </summary>
-/// <remarks>
-/// Tests deliberately collapse the two database identities of §7.1 — the
-/// container's <c>sa</c> login holds both DML and DDL — but not the two
-/// configuration keys, which stay distinct so that the migrator can be caught
-/// reading the wrong one. Production keeps both separate, and migrations run as
-/// a job, never from a host (ADR-007).
-/// </remarks>
 public sealed class ServiceFixture : IAsyncLifetime
 {
     private readonly MsSqlContainer _sql = new MsSqlBuilder()
@@ -48,15 +36,12 @@ public sealed class ServiceFixture : IAsyncLifetime
         .Build();
 
     // Assigned in InitializeAsync rather than here, because the image has to
-    // be BUILT and a field initialiser cannot await. It used to be the stock
-    // `rabbitmq:4.1-management-alpine` on the argument that Payments needs no
-    // plugin and sharing the base tag was cheaper than a second image.
-    //
-    // #44 ended that: §14.1's broker image is where definitions.json lives, so
-    // the stock image is a broker with ONE administrator account and no
-    // permissions at all — the state this suite is now meant to prove Payments
-    // works without. Ordering's fixture already builds this image and names it
-    // the same, so the cost is a cache hit rather than a second download.
+    // be BUILT and a field initialiser cannot await. §14.1's broker image is
+    // where definitions.json lives, so the stock image is a broker with one
+    // administrator account and no permissions at all — the state this suite
+    // is meant to prove Payments works without. Ordering's fixture already
+    // builds this image and names it the same, so the cost is a cache hit
+    // rather than a second download.
     private RabbitMqContainer? _rabbit;
 
     private Respawner? _respawner;
@@ -65,25 +50,12 @@ public sealed class ServiceFixture : IAsyncLifetime
     /// Widens <c>payments-svc</c>'s <c>write</c> for the duration of the
     /// suite, because these tests publish <c>OrderPlaced</c> and
     /// <c>OrderCancelled</c> as <c>payments-svc</c> — Ordering's exchanges —
-    /// and ADR-036's production grant refuses that, correctly: Payments must
-    /// not be able to forge either fact.
+    /// and ADR-036's production grant refuses that, correctly. Widened here
+    /// rather than in <c>definitions.json</c>, the deployed artefact a gate
+    /// holds to the code, so loosening it would make the gate agree with a
+    /// permission set nothing deploys; <c>configure</c> and <c>read</c> stay
+    /// untouched, so a route this service may not declare still fails here.
     /// </summary>
-    /// <remarks>
-    /// <para>
-    /// **The widening is here rather than in <c>definitions.json</c> on
-    /// purpose.** That file is the deployed artefact and a gate holds it to
-    /// the code; loosening it so a test can pass would make the gate agree
-    /// with a permission set nothing deploys. Doing it in the harness keeps
-    /// the production shape honest and puts the exception where a reader of
-    /// the suite can see it.
-    /// </para>
-    /// <para>
-    /// <c>configure</c> and <c>read</c> are untouched, so a receive endpoint
-    /// or a peer queue this service is not permitted to declare or bind still
-    /// fails here. ADR-036's negative property is not exercised by this
-    /// suite; it is exercised by <c>check_permissions.py</c>.
-    /// </para>
-    /// </remarks>
     private async Task WidenWriteForTheHarnessAsync()
     {
         const string scope = "^(payments-|Common\\.Contracts|Payments\\.Infrastructure\\.Messaging:|MassTransit:)";
@@ -151,31 +123,16 @@ public sealed class ServiceFixture : IAsyncLifetime
     // ValueTask, not Task: xUnit v3 redefined IAsyncLifetime (§12.4).
     public async ValueTask InitializeAsync()
     {
-        // §14.1's broker CONFIGURATION on the stock image, rather than
-        // §14.1's built image. Payments needs the per-service accounts (#44) and
-        // does not need ADR-021's delayed-exchange plugin: it runs no saga and
-        // schedules nothing, so the only thing the build would buy it is the
-        // one thing it cannot use.
-        //
-        // **NOT BUILDING IS THE FIX, AND RENAMING THE IMAGE WAS NOT.**
-        // Testcontainers writes the build context to a tar named after the
-        // image, so two processes building one name race on that file. Naming
-        // the image per FIXTURE looked like enough and was measured green
-        // locally — but the axis is the PROCESS, and this fixture has two
-        // consumers: `Payments.Api.Tests` and `Payments.Application.Tests` run as
-        // separate test hosts and both instantiate it. CI failed all 60 and all
-        // 11 of them, in 128 ms and 51 ms, with "Cannot locate specified
-        // Dockerfile" — the loser reading a tar the winner had not finished
-        // writing. A fixture fault wearing a suite-wide failure, again.
-        //
-        // Ordering's fixture still builds, because the plugin leaves it no
-        // choice, and it has exactly one consumer today. That is a premise
-        // about who calls it, so it is written down where the next caller will
-        // read it rather than assumed.
-        //
-        // The two mapped paths must match the Dockerfile's COPY targets. They
-        // are the second copy of those paths, and `check_permissions.py`
-        // asserts the two agree rather than leaving it to a reader.
+        // §14.1's broker CONFIGURATION on the stock image, not the built one:
+        // Payments needs the per-service accounts and none of ADR-021's
+        // delayed-exchange plugin, since it runs no saga and schedules
+        // nothing. Building is also unsafe here: Testcontainers writes the
+        // build context to a tar named after the image, and this fixture's
+        // two process-level consumers — Payments.Api.Tests and
+        // Payments.Application.Tests — would race on that file under a
+        // shared name. Ordering's fixture still builds, since its plugin
+        // leaves no choice and it has one consumer. The two mapped paths
+        // must match the Dockerfile's COPY targets (check_permissions.py).
         _rabbit = new RabbitMqBuilder()
             .WithImage("rabbitmq:4.1-management-alpine")
             .WithUsername("payments-svc")
@@ -407,33 +364,14 @@ public sealed class ServiceFixture : IAsyncLifetime
     }
 
     /// <summary>
-    /// The inbox rows <em>one message</em> wrote, untracked (§9.5) — the read
-    /// an assertion about the filter wants, and the one
-    /// <see cref="InboxAsync()"/> cannot be.
+    /// The inbox rows one message wrote, untracked (§9.5) — the read an
+    /// assertion about the filter wants, which <see cref="InboxAsync()"/>
+    /// cannot give. An unscoped read makes every assertion two claims at
+    /// once: that the duplicate was suppressed, and that no other row
+    /// exists anywhere in the schema — a property of test isolation, not of
+    /// <c>InboxFilter&lt;T&gt;</c>, and the one that breaks when
+    /// <c>IntegrationCollection</c> classes share this fixture in sequence.
     /// </summary>
-    /// <remarks>
-    /// <b>An unscoped read makes every assertion two claims at once, and only
-    /// one of them is the filter's guarantee.</b>
-    /// <c>(await InboxAsync()).ShouldHaveSingleItem()</c> asserts both that the
-    /// duplicate was suppressed and that no other row exists anywhere in the
-    /// schema. The second is a property of test isolation rather than of
-    /// <c>InboxFilter&lt;T&gt;</c>, and it is the half that breaks: classes in
-    /// <c>IntegrationCollection</c> share this fixture and run in sequence, so
-    /// a message an earlier class published and a consumer handled after this
-    /// class's <see cref="ResetAsync"/> is a second row under an assertion with
-    /// nothing to do with it. Seen once in CI against Ordering's copy of this
-    /// suite (#166); the shape is the fixture's, not that service's, so the
-    /// read is added on both sides rather than where it happened to fire.
-    /// <para>
-    /// The precedent is Ordering's own container suite for its projection
-    /// endpoint, which already filters on <c>MessageId</c> inline at its own
-    /// call site. This is that filter moved into the helper every test
-    /// already calls, which is where a barrier leaves nothing to forget.
-    /// <see cref="InboxAsync()"/> stays for the assertions whose subject
-    /// genuinely <em>is</em> the table — the retention purge counts rows it
-    /// never keyed.
-    /// </para>
-    /// </remarks>
     public async Task<IReadOnlyList<InboxMessage>> InboxAsync(Guid messageId)
     {
         await using AsyncServiceScope scope = Factory.Services.CreateAsyncScope();
@@ -515,31 +453,24 @@ public sealed class ServiceFixture : IAsyncLifetime
     /// <summary>
     /// One pass under a policy of the test's own, for the batching edges the
     /// registered one cannot show: a batch of 5,000 would need 10,001 rows
-    /// before a second batch ran at all.
+    /// before a second batch ran at all. Constructed rather than resolved,
+    /// because the policy is a constructor argument and the service composes
+    /// a statement per table from the same registered tables either way, so
+    /// what varies is the batching and nothing else.
     /// </summary>
-    /// <remarks>
-    /// Constructed rather than resolved, because the policy is a constructor
-    /// argument and the service composes a statement per table from the same
-    /// registered tables either way — so what varies is the batching and
-    /// nothing else.
-    /// </remarks>
     public Task<(int Outbox, int Inbox, int Idempotency)> PurgeWithAsync(RetentionPolicy policy) =>
         PurgeWithAsync(policy, Factory.Services.GetRequiredService<IIdempotencyStore>());
 
     /// <summary>
     /// The same pass with the claim store substituted, which is the only seam
-    /// in the marker's leg wide enough to reach the window the split opened or
-    /// to stand a key still held (ADR-039) — the registered store never holds
-    /// one.
+    /// in the marker's leg wide enough to reach the window the split opened
+    /// or to stand a key still held (ADR-039) — the registered store never
+    /// holds one. <c>UnheldAsync</c> is called between the <c>SELECT</c> and
+    /// the <c>DELETE</c>, exactly where a replacement lands in production, so
+    /// a decorator that mutates the table there puts a test on the far side
+    /// of that window deterministically, without a fake clock or a second
+    /// connection racing the first.
     /// </summary>
-    /// <remarks>
-    /// <c>UnheldAsync</c> is called between the <c>SELECT</c> and the
-    /// <c>DELETE</c>, which is exactly where a replacement lands in
-    /// production, so a decorator that mutates the table while answering puts
-    /// a test on the far side of that window without a fake clock, a paused
-    /// thread or a second connection racing the first — the interleaving is
-    /// deterministic because the pass itself calls the seam.
-    /// </remarks>
     public Task<(int Outbox, int Inbox, int Idempotency)> PurgeWithAsync(
         RetentionPolicy policy,
         IIdempotencyStore claims)
@@ -557,34 +488,15 @@ public sealed class ServiceFixture : IAsyncLifetime
     }
 
     /// <summary>
-    /// One pass under a policy of the test's own <em>and</em> a registered
-    /// clock moved forward by <paramref name="skew"/>. It exists because
-    /// nothing else in this suite can tell the marker's cutoff from the other
-    /// two.
+    /// One pass under a policy of the test's own and a registered clock
+    /// moved forward by <paramref name="skew"/>, because nothing else in
+    /// this suite can tell the marker's cutoff from the other two: the
+    /// outbox's and inbox's are computed by the application against the
+    /// registered <c>TimeProvider</c>, the marker's by the server
+    /// (ADR-038). Moving only the registered clock and leaving the
+    /// server's alone is what proves a pass reads each statement's own
+    /// clock rather than assuming it.
     /// </summary>
-    /// <remarks>
-    /// <b>The outbox's and the inbox's cutoffs are computed by the application
-    /// and the marker's is computed by the server</b> — <c>DATEADD(second,
-    /// -@WindowSeconds, SYSDATETIMEOFFSET())</c>, which is #167's fix and
-    /// ADR-038's decision, against a <c>@Before</c> the service subtracts from
-    /// the registered <c>TimeProvider</c> for the other two. Every other
-    /// retention test stages rows against <c>DateTimeOffset.UtcNow</c> and the
-    /// test host's clock agrees with the container's, so all three statements
-    /// read what is effectively one clock and a marker statement that had
-    /// regressed to <c>@Before</c> passes every one of them. Moving the
-    /// registered clock and leaving the server's alone is the only thing that
-    /// separates them, and a pass that then purges the first two tables while
-    /// keeping the marker has <em>read</em> which clock each statement used
-    /// rather than assumed it.
-    /// <para>
-    /// A wrapped <see cref="IServiceScopeFactory"/> rather than a second host,
-    /// because the service resolves <c>TimeProvider</c> from the scope it
-    /// creates and from nowhere else — so one delegating provider reaches it,
-    /// and every other service the pass resolves is the registered one. The
-    /// alternative is a whole second <c>WebApplicationFactory</c> with its own
-    /// containers, for one substituted singleton.
-    /// </para>
-    /// </remarks>
     public Task<(int Outbox, int Inbox, int Idempotency)> PurgeWithSkewedClockAsync(
         RetentionPolicy policy,
         TimeSpan skew)
@@ -604,17 +516,13 @@ public sealed class ServiceFixture : IAsyncLifetime
     }
 
     /// <summary>
-    /// The system clock plus a fixed offset, which is what a test skewing one
-    /// end of a two-clock comparison needs.
+    /// The system clock plus a fixed offset, which is what a test skewing
+    /// one end of a two-clock comparison needs. Hand-written rather than
+    /// <c>FakeTimeProvider</c>: that package is pinned centrally, but this
+    /// project does not reference it, and a frozen clock is not wanted
+    /// here either — the pass compares against rows staged in real time,
+    /// so the substitute has to keep running and simply run ahead.
     /// </summary>
-    /// <remarks>
-    /// Hand-written rather than <c>FakeTimeProvider</c>: that package is pinned
-    /// centrally, but this project does not reference it and adding a
-    /// dependency to move a clock forward by two days would buy a licence
-    /// register entry for four lines of code. A frozen clock is not wanted here
-    /// either — the pass is compared against rows staged in real time, so the
-    /// substitute has to keep running and simply run ahead.
-    /// </remarks>
     private sealed class SkewedClock(TimeSpan skew) : TimeProvider
     {
         public override DateTimeOffset GetUtcNow() => TimeProvider.System.GetUtcNow() + skew;
@@ -677,25 +585,15 @@ public sealed class ServiceFixture : IAsyncLifetime
     }
 
     /// <summary>
-    /// Deletes the marker under <paramref name="key"/> and writes a fresh one
-    /// back under the same key <em>and the same <c>CommittedAt</c></em> — the
-    /// ABA a purge pass can meet between its <c>SELECT</c> and its
-    /// <c>DELETE</c>, staged at its worst.
+    /// Deletes the marker under <paramref name="key"/> and writes a fresh
+    /// one back under the same key and the same <c>CommittedAt</c> — the ABA
+    /// a purge pass can meet between its <c>SELECT</c> and its
+    /// <c>DELETE</c>, staged at its worst. Preserving the timestamp
+    /// reproduces ADR-041's coincidence — a clock set to the exact tick of a
+    /// row past its window — without touching the container's clock. The
+    /// <c>rowversion</c> is not carried across: SQL Server generates it, and
+    /// a replacement getting a new one is the property being tested.
     /// </summary>
-    /// <remarks>
-    /// <b>Preserving the timestamp is the whole of it.</b> A replacement
-    /// stamped at a fresh instant is caught by the <c>(Key, CommittedAt)</c>
-    /// pair the delete used before #173, so a test that let the column move
-    /// would pass against the defect it is aimed at. Reading the old value into
-    /// a variable and writing it back is how the coincidence ADR-041 describes
-    /// — a database clock set to the exact tick of a row already past its
-    /// window — is produced without touching the container's clock.
-    /// <para>
-    /// The <c>rowversion</c> is not carried across and cannot be: SQL Server
-    /// generates it, and that a replacement necessarily gets a new one is the
-    /// property being tested rather than something this helper arranges.
-    /// </para>
-    /// </remarks>
     public Task ReplaceIdempotencyMarkerAsync(string key) =>
         ExecuteAsync(
             """

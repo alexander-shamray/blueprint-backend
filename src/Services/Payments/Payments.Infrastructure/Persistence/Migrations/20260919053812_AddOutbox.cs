@@ -4,18 +4,14 @@ namespace Payments.Infrastructure.Persistence.Migrations;
 
 /// <summary>
 /// §9.4's outbox table, generated from <see cref="OutboxMessageConfiguration"/>
-/// — the configuration is the source of truth and only this file's dress is
-/// hand-authored (file-scoped namespace, this comment, the field CA1861 asks
-/// for). The <c>.Designer.cs</c> and the snapshot beside it are machine-owned
-/// and untouched.
+/// — the configuration is the source of truth, and only this file's dress
+/// is hand-authored (file-scoped namespace, this comment, the field CA1861
+/// asks for); the <c>.Designer.cs</c> and snapshot beside it are
+/// machine-owned and untouched. <c>IX_Outbox_Unprocessed</c> is filtered and
+/// covering, sized to the backlog rather than the table, because the
+/// dispatcher claims twice a second and only reads rows with a null
+/// <c>ProcessedAt</c>.
 /// </summary>
-/// <remarks>
-/// <c>IX_Outbox_Unprocessed</c> is filtered and covering, and both halves earn
-/// their place: the dispatcher claims twice a second and only ever reads rows
-/// with a null <c>ProcessedAt</c>, so the index stays the size of the backlog
-/// rather than the size of the table, and the included columns are exactly
-/// what the claim's predicate needs beyond the key.
-/// </remarks>
 public partial class AddOutbox : Migration
 {
     // A field rather than the generated `new[] { … }` argument, which is what

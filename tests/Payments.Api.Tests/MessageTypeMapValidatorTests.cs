@@ -8,23 +8,15 @@ using Xunit;
 namespace Payments.Api.Tests;
 
 /// <summary>
-/// §9.4 promises that two staged types sharing a <c>FullName</c> fail the host
-/// rather than the first message, and `MessageTypeMapValidator` is the only
-/// thing that makes it true — the map is registered through a factory, and a
-/// factory is lazy.
+/// §9.4 promises that two staged types sharing a <c>FullName</c> fail the
+/// host rather than the first message, and <c>MessageTypeMapValidator</c>
+/// is the only thing that makes it true — the map is registered through a
+/// factory, and a factory is lazy. Without this test, deleting that
+/// validator leaves the whole suite green: nothing else resolves the map
+/// before the dispatcher claims a row, so the regression would surface on
+/// a background thread in a host already serving traffic. No containers:
+/// the constructor throws before anything else starts.
 /// </summary>
-/// <remarks>
-/// Without this test, deleting that validator leaves the whole suite green:
-/// nothing else resolves the map before the dispatcher claims a row, and the
-/// dispatcher is removed in every fixture. The regression would then surface
-/// on a background thread in a host that had been serving traffic — which is
-/// the failure the validator exists to convert into a refusal to start.
-/// <para>
-/// No containers. The host never opens a connection, because the map is
-/// resolved by a hosted service and the constructor throws before anything
-/// else starts.
-/// </para>
-/// </remarks>
 public class MessageTypeMapValidatorTests
 {
     [Fact]

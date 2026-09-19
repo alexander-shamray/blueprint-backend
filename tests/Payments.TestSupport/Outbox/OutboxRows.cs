@@ -5,7 +5,7 @@ namespace Payments.TestSupport.Outbox;
 
 /// <summary>
 /// Ordinary factories over <see cref="OutboxMessage"/>, staged through the
-/// <b>real</b> <see cref="MessageTypeMap"/> and <see cref="OutboxJson"/>
+/// real <see cref="MessageTypeMap"/> and <see cref="OutboxJson"/>
 /// resolved from the fixture's provider (§12.4). Doubles for either would let
 /// a test stage a row the running host cannot read back, which is the one
 /// thing these builders exist to prove does not happen.

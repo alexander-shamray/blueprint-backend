@@ -17,16 +17,10 @@ public class ArchitectureTests
         // The dependency table's rule is an allow-list — "Common.Domain and
         // nothing else" — so the gate is one too, and an exact one: a
         // blacklist only bans what someone thought to name, and a System.*
-        // prefix still passes System.Data.SqlClient or a serialiser. Each
-        // BCL assembly Domain starts using earns its line here on purpose —
-        // extending this list is the decision the gate exists to force, and
-        // System.Text.Json is the extension the table forbids by name.
-        //
+        // prefix still passes System.Data.SqlClient or a serialiser.
         // Common.Domain and System.Runtime are what an empty domain
-        // references. System.Collections is OrderId's: a readonly record
-        // struct's generated equality goes through EqualityComparer<T>, and
-        // that is true of the first typed identifier as much as the first
-        // domain event.
+        // references; System.Collections is OrderId's, since a readonly
+        // record struct's generated equality goes through EqualityComparer<T>.
         string[] allowed = ["Common.Domain", "System.Runtime", "System.Collections"];
 
         IEnumerable<string> referenced = typeof(AssemblyMarker).Assembly

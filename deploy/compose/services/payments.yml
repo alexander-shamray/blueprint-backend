@@ -39,13 +39,10 @@ services:
       # variable: this is §14.1's local default, not a secret with a production
       # shape, and .env.example's contract covers variables, not constants.
       #
-      # `payments-svc` rather than the `guest` this carried until #44. That account
-      # was tagged `administrator` and the base image ships
-      # `loopback_users.guest = false`, so ONE principal reachable from any
-      # container could publish onto `ordering-commands` and have the message
-      # mapped as system-initiated (§9.4). The broker now enforces per-service
-      # write permissions; deploy/compose/rabbitmq/Dockerfile carries which
-      # ones and why.
+      # `payments-svc`, not `guest`: the broker enforces per-service write
+      # permissions (§9.4), so no principal reachable from any container can
+      # publish onto another service's queue; deploy/compose/rabbitmq/Dockerfile
+      # carries which ones.
       ConnectionStrings__RabbitMq: "amqp://payments-svc:local-dev-payments@rabbitmq:5672"
       # The authority, to validate inbound tokens (§11.2). Read eagerly by
       # AddJwtAuthentication, which throws naming the key — so this line is

@@ -13,25 +13,15 @@ using Xunit;
 namespace Payments.Api.Tests;
 
 /// <summary>
-/// The harness smoke of Appendix C's messaging row, and the row's own split
-/// says which half lives here: "publish/consume proven with the in-memory
-/// harness" is this file, "bus connects" is the container suite's readiness
-/// poll. <c>AddMassTransitTestHarness</c> replaces an existing
-/// <c>AddMassTransit</c> bus with the in-memory transport — verified against
-/// the 8.5.3 source — which means these tests prove the production helper
-/// COMPOSES (its eager key read runs, its options land, nothing conflicts
-/// with the consumer bindings) and that MassTransit's pipeline delivers.
-/// What the swap deliberately removes is the <c>UsingRabbitMq</c> transport
-/// configuration itself, so that half is asserted where it can be true:
-/// against a real broker, in the container suite's own readiness poll.
+/// The harness smoke: <c>AddMassTransitTestHarness</c> replaces an existing
+/// <c>AddMassTransit</c> bus with the in-memory transport, so these tests
+/// prove the production helper composes (its eager key read runs, its
+/// options land, nothing conflicts with the consumer bindings) and that
+/// MassTransit's pipeline delivers. What the swap removes is the
+/// <c>UsingRabbitMq</c> transport configuration itself, asserted instead
+/// against a real broker in the container suite's readiness poll. The
+/// message and consumer are test-local, needing only a payload to carry.
 /// </summary>
-/// <remarks>
-/// The message and consumer are test-local on purpose, and stay that way now
-/// that <c>Common.Contracts</c> exists: this smoke needs a payload the
-/// pipeline can carry, not a published contract other services may come to
-/// depend on. A real contract here would make every change to it a change to
-/// this test, and the test is about the registration rather than the message.
-/// </remarks>
 public class MessagingRegistrationTests
 {
     /// <summary>
@@ -50,35 +40,23 @@ public class MessagingRegistrationTests
 
     /// <summary>
     /// The bound that decides the assertions below, stated rather than
-    /// inherited. It runs from the last bus activity, and MassTransit's
-    /// default is 1.2 seconds — a developer machine's budget, not a statement
-    /// about how long a saturated runner may take to schedule a consumer.
+    /// inherited: it runs from the last bus activity, and MassTransit's
+    /// default of 1.2 seconds is a developer machine's budget, not a
+    /// saturated CI runner's. 30 s is generous enough for a smoke that
+    /// asserts only positives and so never waits it out, while still
+    /// failing a genuine composition defect in one bounded wait.
     /// </summary>
-    /// <remarks>
-    /// CI runs seven test assemblies concurrently, three of them starting
-    /// Testcontainers, on two cores, and this test failed there and passed on
-    /// a re-run of the same commit with no changes. 30 s is a generous
-    /// scheduling budget for a smoke that asserts only positives and so never
-    /// waits it out, while still failing a genuine composition defect in one
-    /// bounded wait rather than hanging.
-    /// </remarks>
     private static readonly TimeSpan HarnessInactivityTimeout = TimeSpan.FromSeconds(30);
 
     /// <summary>
-    /// The harness's other bound, stated for the same reason and deliberately
-    /// larger. An assertion ends at the <em>earliest</em> applicable bound,
-    /// not at the inactivity one alone — verified at the 8.5.3 pin, where
-    /// <c>testTimeout: 2 s</c> against <c>testInactivityTimeout: 10 s</c> gave
-    /// up after 2 s, and where this timeout is measured from the
-    /// <c>Any(…)</c> call rather than from harness start. Leaving it inherited
-    /// would let a number the test never states decide the wait, which is the
-    /// defect this file exists to fix, one parameter over.
+    /// The harness's other bound, stated for the same reason and
+    /// deliberately larger: an assertion ends at the earliest applicable
+    /// bound, not the inactivity one alone, and leaving this one inherited
+    /// would let a number the test never states decide the wait. 60 s
+    /// rather than a matching 30 s so it never fires first — equal values
+    /// would leave the two bounds racing, and which one failed would be a
+    /// detail of how long the publish took.
     /// </summary>
-    /// <remarks>
-    /// 60 s rather than a matching 30 s so that it never fires first: equal
-    /// values would leave the two bounds racing, and which one reported a
-    /// failure would be a detail of how long the publish took.
-    /// </remarks>
     private static readonly TimeSpan HarnessTestTimeout = TimeSpan.FromSeconds(60);
 
     public sealed record ProbeMessage(Guid Id);
@@ -89,17 +67,14 @@ public class MessagingRegistrationTests
     }
 
     /// <summary>
-    /// One registration, shared by the smoke and by the guard that asserts its
-    /// timeout — and shared deliberately. A guard building its own harness
-    /// would keep passing with <c>SetTestTimeouts</c> deleted from the smoke,
-    /// which is precisely the deletion it exists to catch.
+    /// One registration, shared by the smoke and by the guard that asserts
+    /// its timeout, deliberately: a guard building its own harness would
+    /// keep passing with <c>SetTestTimeouts</c> deleted from the smoke,
+    /// precisely the deletion it exists to catch. <c>SetTestTimeouts</c>
+    /// comes first because it is the only call in the chain returning
+    /// <c>IBusRegistrationConfigurator</c>; <c>AddConsumer&lt;T&gt;</c>
+    /// returns a consumer configurator, so the other order does not compile.
     /// </summary>
-    /// <remarks>
-    /// <c>SetTestTimeouts</c> comes first because it is the only call in the
-    /// chain returning <c>IBusRegistrationConfigurator</c>;
-    /// <c>AddConsumer&lt;T&gt;</c> returns a consumer configurator, so the
-    /// other order does not compile.
-    /// </remarks>
     private static ServiceProvider BuildHarnessProvider()
     {
         ServiceCollection services = new();
@@ -163,9 +138,9 @@ public class MessagingRegistrationTests
     [Fact]
     public void Registration_adds_the_bus_and_its_hosted_service()
     {
-        // Descriptors, not a built provider — the PR-12 shape. Building would
-        // start nothing (the bus starts with the host), but a provider is a
-        // heavier claim than the test makes.
+        // Descriptors, not a built provider: building would start nothing
+        // (the bus starts with the host), but a provider is a heavier claim
+        // than the test makes.
         ServiceCollection services = new();
 
         services.AddMassTransitMessaging(Configuration());

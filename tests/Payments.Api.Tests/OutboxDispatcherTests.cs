@@ -100,17 +100,11 @@ public sealed class OutboxDispatcherTests(ServiceFixture fixture) : IAsyncLifeti
     public async Task A_row_still_being_delivered_is_not_claimed_by_a_second_pass()
     {
         // The lease, observed while it is held — which takes two overlapping
-        // passes and cannot be done with sequential ones. An earlier version
-        // of this test staged a poison row and ran two passes back to back,
-        // and proved nothing about the lease at all: the first pass fails the
-        // row, `_failSql` immediately replaces the 60-second lease with the
-        // 5-second retry backoff, and the second pass is then blocked by the
-        // backoff. It would have passed with the lease removed entirely.
-        //
-        // So: a handler that blocks, a first pass left in flight, and a second
-        // pass run while the first still holds the claim. This is what
-        // UPDLOCK, READPAST and LockedUntil exist for — without them two
-        // replicas deliver the same row at the same time.
+        // passes and cannot be done with sequential ones: a handler that
+        // blocks, a first pass left in flight, and a second pass run while
+        // the first still holds the claim. This is what UPDLOCK, READPAST
+        // and LockedUntil exist for — without them two replicas deliver the
+        // same row at the same time.
         DeliveryGate.Close();
         try
         {

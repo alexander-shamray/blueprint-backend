@@ -12,17 +12,14 @@ using Xunit;
 namespace Payments.Api.Tests;
 
 /// <summary>
-/// §9.5's inbox filter, over a real consume pipeline and the real table. The
-/// in-memory transport rather than RabbitMQ, because what is under test is the
-/// filter's own arithmetic — which of <c>MessageId</c> and <c>Endpoint</c> the
-/// row is keyed on, and when it is committed — and both are properties of the
-/// consume context rather than of the broker.
+/// §9.5's inbox filter, over a real consume pipeline and the real table.
+/// The in-memory transport rather than RabbitMQ, because what is under
+/// test is the filter's own arithmetic — which of <c>MessageId</c> and
+/// <c>Endpoint</c> the row is keyed on, and when it is committed — both
+/// properties of the consume context rather than the broker. This service
+/// binds no receive endpoint of its own yet, so this suite declares the
+/// endpoints it needs rather than inventing a subscription §3.2 does not give it.
 /// </summary>
-/// <remarks>
-/// This service binds no receive endpoint of its own yet, so this suite
-/// declares the endpoints it needs rather than inventing a subscription §3.2
-/// does not give it.
-/// </remarks>
 [Collection(nameof(IntegrationCollection))]
 public sealed class InboxFilterTests(ServiceFixture fixture) : IAsyncLifetime
 {
@@ -72,17 +69,14 @@ public sealed class InboxFilterTests(ServiceFixture fixture) : IAsyncLifetime
     }
 
     /// <summary>
-    /// Clears the change tracker on the service's context, which is the first
-    /// thing <c>EfUnitOfWork.ExecuteAsync</c> does on every attempt (§7.5) and
-    /// so the first thing every message-borne command does under §6.3's
-    /// <c>TransactionBehavior</c>.
+    /// Clears the change tracker on the service's context, which is the
+    /// first thing <c>EfUnitOfWork.ExecuteAsync</c> does on every attempt
+    /// (§7.5). The line rather than the type, because <c>EfUnitOfWork</c> is
+    /// internal to <c>Payments.Infrastructure</c> and registering it here
+    /// would need an <c>InternalsVisibleTo</c> for one call; what has to be
+    /// reproduced is the interaction, on the same context the filter writes
+    /// through.
     /// </summary>
-    /// <remarks>
-    /// The line rather than the type, because <c>EfUnitOfWork</c> is internal
-    /// to <c>Payments.Infrastructure</c> and registering it here would need an
-    /// <c>InternalsVisibleTo</c> for one call. What has to be reproduced is
-    /// the interaction, on the same context the filter writes through.
-    /// </remarks>
     public sealed class ClearsTheChangeTrackerConsumer(DbContext db) : IConsumer<ProbeMessage>
     {
         public Task Consume(ConsumeContext<ProbeMessage> context)

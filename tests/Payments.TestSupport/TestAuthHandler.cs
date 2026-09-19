@@ -9,17 +9,15 @@ using Microsoft.Extensions.Primitives;
 namespace Payments.TestSupport;
 
 /// <summary>
-/// §12.4's test scheme. Tests state who they are in headers, so authorization
-/// runs against a real principal rather than being switched off — the policies
-/// of §11.4 are exercised, not bypassed.
-/// </summary>
-/// <remarks>
-/// Here rather than in either test project for §4.1's reason: both suites need
-/// it and they cannot reference each other. It is installed by
+/// §12.4's test scheme. Tests state who they are in headers, so
+/// authorization runs against a real principal rather than being switched
+/// off — the policies of §11.4 are exercised, not bypassed. Here rather
+/// than in either test project for §4.1's reason: both suites need it and
+/// they cannot reference each other. Installed by
 /// <see cref="PaymentsApiFactory.ConfigureAuthentication"/>, which
-/// <c>HostSmokeTests</c> overrides off — a host still carrying the production
-/// scheme is the only one that can prove these headers mean nothing to it.
-/// </remarks>
+/// <c>HostSmokeTests</c> overrides off — a host still carrying the
+/// production scheme is the only one that can prove these headers mean nothing.
+/// </summary>
 public sealed class TestAuthHandler(
     IOptionsMonitor<AuthenticationSchemeOptions> options,
     ILoggerFactory logger,

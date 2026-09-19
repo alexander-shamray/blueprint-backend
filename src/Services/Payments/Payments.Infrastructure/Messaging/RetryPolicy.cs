@@ -7,33 +7,10 @@ namespace Payments.Infrastructure.Messaging;
 /// says otherwise.
 /// </summary>
 /// <remarks>
-/// These are in-memory retries of one broker delivery, not redeliveries.
-/// <c>UseMessageRetry</c> holds the message and waits, so the delivery lock and
-/// the endpoint's concurrency slot are still taken for the whole ladder — which
-/// is what makes the ceiling an operational number rather than only a
-/// correctness one. MassTransit's redelivery filters are a different API that
-/// releases the message and has the broker deliver it again, and §9.5 uses the
-/// word in that sense throughout.
-/// <para>
-/// Declaring the ladder once is what makes agreement between the endpoints
-/// structural: an endpoint that wants a different one has to say so, where a
-/// value repeated per endpoint can only be checked by reading every call site
-/// and comparing them.
-/// </para>
-/// <para>
-/// What this type does not decide is what gets retried. An endpoint that
-/// wants some exception excluded configures that itself, because it is a
-/// claim about which faults are terminal rather than about how long to wait
-/// between attempts. Folding it in here would apply one endpoint's exclusion
-/// to those that never raise it.
-/// </para>
-/// <para>
-/// <see cref="RetryLimit"/> counts retries and not deliveries: the endpoint
-/// makes one more attempt than this number, and the wait it produces is that
-/// many intervals. §9.6's confirmation wait has to clear that sum — a floor it
-/// must exceed rather than the term that decides it, which is §9.4's
-/// dispatcher backoff.
-/// </para>
+/// These are in-memory retries of one broker delivery, not redeliveries:
+/// <c>UseMessageRetry</c> holds the message and the endpoint's concurrency
+/// slot for the whole ladder, which is what makes the ceiling an operational
+/// number and not only a correctness one.
 /// </remarks>
 internal static class RetryPolicy
 {

@@ -39,8 +39,7 @@ public static class DependencyInjection
         services.AddSingleton<RequestMetrics>();
 
         // Ordered, explicit, not scanned — registration order is pipeline
-        // order (§6.3), and all four seats are filled since the PR that built
-        // §8.5's behaviour.
+        // order (§6.3), and all four seats are filled.
         //
         // Idempotency sits INSIDE validation and OUTSIDE the transaction, and
         // both neighbours are load-bearing. Inside validation, because a
@@ -64,18 +63,15 @@ public static class DependencyInjection
         // dispatched command. A registration test is what guards this line.
         services.AddScoped<IdempotencyContext>();
 
-        // §4.2's sample line. IValidator<T> is not in PluggableInterfaces.All
-        // because it is FluentValidation's contract, not one of ours — its own
-        // scanner knows its own conventions (Include* filters, internal
-        // validators) and a second scan would drift from it.
-        // §4.2's line spelt over the assembly rather than over a type in
-        // it, because there is no validator yet to name — and this class,
-        // the obvious anchor, is static and cannot be a type argument.
-        // Move to AddValidatorsFromAssemblyContaining<TFirstValidator>()
-        // with the first one, and add the registration test that guards
-        // it: ValidationBehavior takes IEnumerable<IValidator<T>>, so a
-        // lost scan is a pipeline that validates nothing and says so to
-        // nobody.
+        // §4.2's sample line, spelt over the assembly rather than over a type
+        // in it: IValidator<T> is not in PluggableInterfaces.All because it is
+        // FluentValidation's own contract — its own scanner knows its own
+        // conventions, and a second scan would drift from it — and there is no
+        // validator yet to anchor on; this static class cannot be a type
+        // argument. Move to AddValidatorsFromAssemblyContaining<TFirstValidator>()
+        // with the first one, and add the registration test that guards it:
+        // ValidationBehavior takes IEnumerable<IValidator<T>> and asks nobody
+        // when that sequence comes back empty.
         services.AddValidatorsFromAssembly(typeof(DependencyInjection).Assembly);
         return services;
     }

@@ -17,18 +17,13 @@ builder.AddCommonWebDefaults();                 // §13.2
 builder.Services.AddPaymentsApplication();       // §6.2
 builder.Services.AddPaymentsInfrastructure(builder.Configuration);   // §4.2, §7.1
 
-// PR-07's OpenAPI deliverable (Appendix C): document only, no UI.
+// Appendix C's OpenAPI deliverable: document only, no UI.
 builder.Services.AddOpenApi();
 
 // This service registers no permission policy, because it names no endpoint
-// that needs one. The first slice brings both together (§11.4):
-//
-//     builder.Services
-//         .AddAuthorizationBuilder()
-//         .AddPolicy(<Service>Permissions.Write, p => p.RequirePermission(…));
-//
-// A policy registered before an endpoint names it is an unused registration;
-// an endpoint naming one nobody registered throws on the first request that
+// that needs one; the first slice brings both together (§11.4). A policy
+// registered before an endpoint names it is an unused registration, and an
+// endpoint naming one nobody registered throws on the first request that
 // reaches it, never at startup. Add AuthorizationPolicyTests with the slice —
 // it enumerates the endpoints and requires every policy they name to resolve.
 
@@ -44,8 +39,8 @@ app.UseExceptionHandler();        // §10.5 — catches every fault below it
 app.UseCorrelationId();           // §10.4 — above everything else that logs
 
 // §10.5's promise applied to the statuses no handler produces: a challenge and
-// a forbid are written by the middleware below and carry no body, so the
-// platform's one error shape had two holes in it until PR-17 measured a 401.
+// a forbid are written by the middleware below and carry no body, so without
+// this the platform's one error shape would have two holes in it.
 app.UseStatusCodePages();         // §10.5 — 401 and 403 as problem+json
 app.UseAuthentication();          // §11.3 — populates HttpContext.User
 app.UseAuthorization();           // §11.4 — evaluates the permission policies

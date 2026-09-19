@@ -10,37 +10,27 @@ namespace Payments.Api.Tests;
 
 /// <summary>
 /// The host builds under <c>ValidateOnBuild</c> and answers what an empty
-/// service can already be asked: the probes (§13.5) and the OpenAPI document
-/// (Appendix C, PR-07). One factory for the class — each test sends one
-/// request, and a host per test buys nothing.
+/// service can already be asked: the probes (§13.5) and the OpenAPI
+/// document (Appendix C). One factory for the class — a host per test buys
+/// nothing. Both connection strings are required rather than optional:
+/// §13.5's rule ties a readiness check to having one, and both
+/// registrations throw on a missing key, so a host with no database or no
+/// broker does not start. The values point at names that cannot resolve;
+/// real ones answer in <c>DatabaseSmokeTests</c>.
 /// </summary>
-/// <remarks>
-/// Both connection strings are required rather than optional, and supplying
-/// them is not a workaround. §13.5's rule is that a host with a connection
-/// string has a readiness check and a host without one does not; this
-/// service has both pairs from its first commit, and both
-/// registrations throw on a missing key — so a service host with no database
-/// or no broker configured does not start, which is the correct behaviour and
-/// worth having a class depend on. The values point at names that cannot
-/// resolve, because these tests are about wiring rather than about the
-/// engines. <c>DatabaseSmokeTests</c> is where real ones answer.
-/// </remarks>
 public class HostSmokeTests(HostSmokeTests.UnreachableInfrastructureFactory factory)
     : IClassFixture<HostSmokeTests.UnreachableInfrastructureFactory>
 {
     /// <summary>
-    /// A parameterless factory, because that is what <c>IClassFixture</c> can
+    /// A parameterless factory, since that is what <c>IClassFixture</c> can
     /// construct. <c>.invalid</c> is reserved and never resolves, so both
-    /// checks fail on NXDOMAIN rather than on a timeout — and
-    /// <c>Connect Timeout=1</c> bounds the case where a resolver answers
-    /// anyway. The bus needs no such bound: <c>WaitUntilStarted</c> is false
-    /// (the registration argues it), so the host never waits on the broker at
-    /// all.
+    /// checks fail on NXDOMAIN rather than a timeout; <c>Connect Timeout=1</c>
+    /// bounds the case where a resolver answers anyway. The bus needs no
+    /// such bound, since <c>WaitUntilStarted</c> is false and the host never
+    /// waits on the broker at all.
     /// </summary>
-    // The two literals both factories below take. Declared once because they
-    // are the same host under two authentication schemes, and a pair that
-    // drifted would make the two suites disagree about which deployment they
-    // are describing.
+    // The two literals both factories below take, declared once so the two
+    // suites cannot disagree about which deployment they describe.
     private const string UnreachableSql =
         "Server=payments-sql.invalid,1433;Database=Payments;User Id=sa;" +
         "Password=not-a-real-password;Encrypt=False;Connect Timeout=1";
@@ -49,16 +39,11 @@ public class HostSmokeTests(HostSmokeTests.UnreachableInfrastructureFactory fact
 
     /// <summary>
     /// The same unreachable host with the <c>TestAuthHandler</c> scheme the
-    /// base factory installs, so a caller can authenticate.
+    /// base factory installs, so a caller can authenticate: the
+    /// production-scheme factory can only prove a caller is challenged, and
+    /// whether the document still generates needs one who gets through —
+    /// this is the cheapest, since generating it reaches no dependency.
     /// </summary>
-    /// <remarks>
-    /// It exists because <c>AddCommonWebDefaults</c> sets a fallback
-    /// authorization policy (§11.4): the OpenAPI document is behind it, so the
-    /// production-scheme factory can prove only that a caller is challenged.
-    /// Whether the document still generates needs a caller who gets through,
-    /// and this is the cheapest one — no container, since generating the
-    /// document reaches no dependency.
-    /// </remarks>
     public sealed class AuthenticatedUnreachableFactory()
         : PaymentsApiFactory(UnreachableSql, UnreachableRabbit);
 

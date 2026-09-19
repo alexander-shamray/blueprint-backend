@@ -6,20 +6,14 @@ using Microsoft.EntityFrameworkCore;
 namespace Payments.Infrastructure.Persistence;
 
 /// <summary>
-/// Payments's write-side context (§7.2). Sealed, and an implementation detail of
-/// this assembly — §6.3 rejects an <c>IApplicationDbContext</c> exposing
-/// <c>DbSet&lt;T&gt;</c>, because that puts EF Core types in an Application
-/// signature while appearing to respect the boundary.
+/// Payments's write-side context (§7.2). Sealed, and an implementation
+/// detail of this assembly — §6.3 rejects an <c>IApplicationDbContext</c>
+/// exposing <c>DbSet&lt;T&gt;</c>, which puts EF Core in an Application
+/// signature while appearing to respect the boundary. Public rather than
+/// internal, because the rule is that the context never leaves
+/// Infrastructure by reference — enforced by the architecture gates, not by
+/// the access modifier.
 /// </summary>
-/// <remarks>
-/// Public rather than internal, and the distinction is worth stating: §6.3's
-/// rule is that the context never <em>leaves</em> Infrastructure, which is a
-/// rule about references and is enforced by the architecture gates, not by the
-/// access modifier. Three callers construct or resolve it by name — the
-/// <c>dotnet ef</c> tooling, the migrator host (§7.4) and the Testcontainers
-/// fixture (§12.4) — and none of them is Application, which could not name it
-/// anyway without the EF Core dependency its gate forbids.
-/// </remarks>
 public sealed class PaymentsDbContext(DbContextOptions<PaymentsDbContext> options) : DbContext(options)
 {
     /// <summary>

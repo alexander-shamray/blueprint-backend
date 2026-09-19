@@ -7,20 +7,14 @@ namespace Payments.Application.Tests;
 
 /// <summary>
 /// §8.5's opt-in gate. <c>IdempotencyBehavior</c> is constrained to
-/// <see cref="IIdempotentCommand"/>, and the container omits an open-generic
-/// registration whose constraints the closed type does not satisfy —
-/// <b>silently</b>. So a command that carries a <c>CommandId</c> and forgets
-/// the interface is dispatched unprotected, with no error and no warning, and
-/// a retry runs the whole command a second time.
+/// <see cref="IIdempotentCommand"/>, and the container silently omits an
+/// open-generic registration whose constraints the closed type does not
+/// satisfy: a command that carries a <c>CommandId</c> and forgets the
+/// interface is dispatched unprotected, with no error and no warning, and a
+/// retry runs the whole command a second time. The shape of the command is
+/// read, not the author's intent: a <c>CommandId</c> member is a claim
+/// that retrying is safe, the one signal that needs no memory.
 /// </summary>
-/// <remarks>
-/// The shape of the command is what is read, not the author's intent: a
-/// <c>CommandId</c> member is a claim that retrying is safe, so it is the one
-/// signal available that does not depend on remembering. The measurement
-/// behind this gate is in <c>Common.Application.Tests</c> —
-/// <c>A_command_that_does_not_opt_in_runs_unprotected_and_says_nothing</c> —
-/// which establishes that nothing else reports the omission.
-/// </remarks>
 public class IdempotencyOptInTests
 {
     private static readonly Assembly Application = typeof(Payments.Application.DependencyInjection).Assembly;
@@ -52,7 +46,7 @@ public class IdempotencyOptInTests
     [Fact]
     public void Every_idempotent_command_declares_a_stable_operation_name()
     {
-        // #114. The key's middle segment must not be derivable from the type,
+        // The key's middle segment must not be derivable from the type,
         // because a rename then changes a live key and a rolling deployment
         // serves both spellings at once. The compiler already refuses a
         // command that supplies no OperationName; what it cannot refuse is one
@@ -160,38 +154,16 @@ public class IdempotencyOptInTests
     [Fact]
     public void No_command_handler_dispatches_a_command()
     {
-        // §8.5 names one dispatch as outside every argument it makes. A
-        // command sent from INSIDE a command handler lands in its parent's open
-        // transaction, because §6.3 opens none when one is already active — so
-        // this behaviour completes a claim for 24 hours against work the outer
-        // transaction may still roll back, and a retry then replays a success
-        // for a row that does not exist. The client cannot see that, which is
-        // what makes it worse than the duplicate it replaces.
-        //
-        // The chapter calls the case "unreached rather than handled", and that
-        // was a claim about this assembly with nothing checking it. A residual
-        // nothing re-checks is a decision rather than a deferral: the day a
-        // handler takes an IDispatcher the paragraph is silently false and the
-        // hole is live.
-        //
-        // An IIntegrationEventHandler that dispatches is the near miss, and it
-        // is deliberately NOT caught. §9.5's InboxFilter opens no IUnitOfWork
-        // transaction — it adds its row on the DbContext after the consumer
-        // returns — so HasActiveTransaction is false when that dispatch
-        // arrives and §6.3 opens a transaction of its own. An entry point, not
-        // a nested unit.
-        //
-        // Named by shape rather than by type, because this file is §4.5's
-        // template: Ordering has such a handler and Payments does not, so a
-        // type name here would reach every rendered service as a near miss
-        // about something it has never had. SLICE_TOKEN would not catch it —
-        // the name carries no slice token — so nothing else would.
-        //
-        // REACH: constructor parameters, which is where every handler in this
-        // solution takes its dependencies. A handler that resolves
-        // IServiceProvider and asks it for an IDispatcher is invisible here,
-        // exactly as a forbidden-but-unused reference is invisible to §4.2's
-        // gates. Late rather than absent.
+        // §8.5 names one dispatch as outside every argument it makes: a
+        // command sent from inside a command handler lands in its parent's
+        // open transaction, so this behaviour completes a claim for 24 hours
+        // against work the outer transaction may still roll back, and a
+        // retry then replays a success for a row that does not exist.
+        // Deliberately not caught: an IIntegrationEventHandler that
+        // dispatches, since §9.5's InboxFilter opens no IUnitOfWork
+        // transaction before the consumer returns, so that dispatch is an
+        // entry point rather than a nested one. Reach is constructor
+        // parameters only; one resolving IDispatcher through IServiceProvider is invisible here.
         IEnumerable<string> offenders = CommandHandlers()
             .Where(t => t
                 .GetConstructors()

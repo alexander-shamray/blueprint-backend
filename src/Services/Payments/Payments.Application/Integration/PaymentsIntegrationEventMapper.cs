@@ -14,17 +14,13 @@ internal sealed class PaymentsIntegrationEventMapper : IIntegrationEventMapper
 {
     // The allow-list, empty until this service publishes something. Every
     // domain event it raises is local-only while this dictionary is empty,
-    // which is the correct state for a service with no contracts — and not
-    // a gap, because §9.3 makes translation opt-in precisely so that a new
-    // event is internal until somebody decides otherwise.
-    //
-    // An entry is one line and one private ToContract method beside it:
-    //
-    //     [typeof(OrderPlacedDomainEvent)] = e => ToContract((OrderPlacedDomainEvent)e)
-    //
-    // with the contract living in Common.Contracts under a versioned
-    // namespace (§9.2), carrying primitives only, and taking its MessageId
-    // and CorrelationId from the mapper rather than from Stage (§9.1).
+    // which is the correct state for a service with no contracts — §9.3 makes
+    // translation opt-in precisely so a new event stays internal until
+    // somebody decides otherwise. An entry is one line plus one private
+    // ToContract method beside it, with the contract living in
+    // Common.Contracts under a versioned namespace (§9.2), carrying
+    // primitives only, and taking its MessageId and CorrelationId from the
+    // mapper rather than from Stage (§9.1).
     private static readonly Dictionary<Type, Func<IDomainEvent, object>> Registry = [];
 
     public IReadOnlyList<object> Map(IReadOnlyList<IDomainEvent> domainEvents)

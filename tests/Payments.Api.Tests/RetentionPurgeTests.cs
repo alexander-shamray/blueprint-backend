@@ -380,16 +380,13 @@ public sealed class RetentionPurgeTests(ServiceFixture fixture) : IAsyncLifetime
     }
 
     /// <summary>
-    /// The registered claim store, with one side effect run at the moment the
-    /// pass asks it which keys are unheld.
-    /// </summary>
-    /// <remarks>
-    /// Every answer is the real store's; the decoration is when, not what,
-    /// because substituting the verdict would make the test assert its own
-    /// idea of the claim against a pass that reads the registered store.
+    /// The registered claim store, with one side effect run at the moment
+    /// the pass asks it which keys are unheld. Every answer is the real
+    /// store's; the decoration is when, not what, since substituting the
+    /// verdict would make the test assert its own idea of the claim.
     /// <see cref="Asked"/> is what stops a seam nothing reached leaving the
     /// test green.
-    /// </remarks>
+    /// </summary>
     private sealed class ReplacingClaims(IIdempotencyStore inner, Func<Task> onAsked) : IIdempotencyStore
     {
         public bool Asked { get; private set; }

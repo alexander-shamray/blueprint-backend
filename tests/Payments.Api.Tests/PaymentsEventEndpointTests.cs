@@ -12,24 +12,12 @@ namespace Payments.Api.Tests;
 /// The full async path of §3.2's Consumes column for Payments: an
 /// <c>OrderPlaced</c> or <c>OrderCancelled</c> published on a real broker,
 /// consumed by the real receive endpoint, dispatched through the command
-/// pipeline and written to Payments' own record of the order.
+/// pipeline and written to Payments' own record of the order. The real
+/// transport rather than the harness, since the endpoint and its retry
+/// policy live inside <c>UsingRabbitMq</c>'s callback, which
+/// <c>AddMassTransitTestHarness</c> replaces wholesale. <c>SqlPaymentOrderStore</c>
+/// throws unless the ambient transaction is set (§6.3), so a landed row is unreachable.
 /// </summary>
-/// <remarks>
-/// The real transport rather than the harness, because the harness removes
-/// the thing under test — the receive endpoint, its retry policy and its
-/// inbox filter all live inside <c>UsingRabbitMq</c>'s callback, and
-/// <c>AddMassTransitTestHarness</c> replaces that callback wholesale. This
-/// covers what does not survive that swap; the registration half does.
-/// <para>
-/// <b>The store's own guard is what makes a successful write here proof of
-/// <c>OrderPlacedHandler</c>'s remark that the write runs inside the command
-/// pipeline's transaction.</b> <c>SqlPaymentOrderStore</c> throws unless
-/// <c>PaymentsDbContext.Database.CurrentTransaction</c> is set (§6.3), so a
-/// row landing in <c>payments.PaymentOrders</c> at the far end of a queue
-/// delivery is not merely consistent with a transaction — it is unreachable
-/// without one.
-/// </para>
-/// </remarks>
 [Collection(nameof(IntegrationCollection))]
 public sealed class PaymentsEventEndpointTests(ServiceFixture fixture) : IAsyncLifetime
 {

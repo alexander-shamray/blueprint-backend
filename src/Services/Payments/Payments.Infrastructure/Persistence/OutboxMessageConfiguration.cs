@@ -31,27 +31,15 @@ internal sealed class OutboxMessageConfiguration : IEntityTypeConfiguration<Outb
         // "was this message processed?" stops having an answer.
         builder.HasIndex(m => m.MessageId).IsUnique();
 
-        // Unicode, and bounded at 300. This column was varchar until a review
-        // checked the premise: "a type's FullName is ASCII by construction" is
-        // simply false — C# permits Unicode identifiers, so `CommandeCréée` is
-        // a legal event name and `MessageTypeMap` accepts it. Persisted to
-        // varchar it would be mangled by the database code page, and `Resolve`
-        // would then fail on a name that no longer matched any type: ten
-        // attempts and an abandoned row, for a type that was never wrong.
-        //
-        // The alternative was to refuse non-ASCII names when the map is built.
-        // That is the cheaper fix and the wrong one, for the reason
-        // MoneyJsonConverter exists rather than a [JsonConstructor]: what a
-        // type may be called is the domain's business, and a storage choice
-        // does not get to narrow it. This blueprint is adapted by people whose
-        // domain language is not English.
-        //
-        // The cost is 300 bytes per unprocessed row. It is not paid by the
-        // claim's index, which covers OccurredAt and includes only Lane,
+        // Unicode, and bounded at MessageTypeMap.MaxNameLength, not a literal
+        // 300: the map refuses a longer name at startup, and two independent
+        // numbers would let the guard and the column drift into disagreeing
+        // about what fits. Not varchar: C# permits Unicode identifiers, so a
+        // domain event named in another language is a legal type, and a
+        // storage choice does not get to narrow what the domain may call
+        // something. The cost is 300 bytes per unprocessed row, not paid by
+        // the claim's index, which covers OccurredAt and includes only Lane,
         // Attempts and LockedUntil.
-        // MessageTypeMap.MaxNameLength, not a literal 300: the map refuses a
-        // longer name at startup, and two independent numbers would let the
-        // guard and the column drift into disagreeing about what fits.
         builder
             .Property(m => m.MessageType)
             .HasMaxLength(MessageTypeMap.MaxNameLength);
@@ -59,14 +47,11 @@ internal sealed class OutboxMessageConfiguration : IEntityTypeConfiguration<Outb
         // The one deliberate exception to §7.2's max-length convention. A
         // payload is a contract or a domain event of unknown size, and a
         // truncated one is a row that cannot be delivered and cannot be read.
-        //
-        // "Otherwise" has to be said twice, which is the trap. HasColumnType
-        // alone fixes the DDL and leaves MaxLength at the convention's 400 in
-        // the model — the generated migration says `nvarchar(max)` and
-        // `maxLength: 400` in the same line — so the property is cleared as
-        // well. A container test stages a payload past 400 characters and
-        // reads it back, because this is the kind of claim that should not
-        // rest on which of two settings the provider happens to prefer.
+        // HasColumnType alone fixes the DDL but leaves MaxLength at the
+        // convention's 400 in the model, so the property is cleared as well —
+        // otherwise the generated migration says both `nvarchar(max)` and
+        // `maxLength: 400` in the same line. A container test stages a
+        // payload past 400 characters and reads it back.
         builder
             .Property(m => m.Payload)
             .HasColumnType("nvarchar(max)")
@@ -104,15 +89,11 @@ internal sealed class OutboxMessageConfiguration : IEntityTypeConfiguration<Outb
 
         // The retention purge's index, and it has to be a second one: the
         // filtered index above is `WHERE ProcessedAt IS NULL`, which excludes
-        // by construction every row `DELETE … WHERE ProcessedAt IS NOT NULL AND
-        // ProcessedAt < @Before` targets. Without this the hourly purge scans
-        // the whole table — and it is the processed rows that make the table
-        // large, so the scan grows exactly as the purge matters more.
-        //
-        // Filtered the other way for the same reason its twin is: the purge
-        // never looks at an unprocessed row, so the index stays the size of the
-        // undeleted backlog rather than the size of the table. Nothing is
-        // included — the delete needs the clustered key, which it already has.
+        // by construction every row the purge's own DELETE targets, and
+        // without this the hourly purge scans the whole table. Filtered the
+        // other way for the same reason its twin is, so it stays the size of
+        // the undeleted backlog rather than the table; nothing is included,
+        // since the delete needs only the clustered key it already has.
         builder
             .HasIndex(m => m.ProcessedAt)
             .HasDatabaseName("IX_Outbox_Processed")

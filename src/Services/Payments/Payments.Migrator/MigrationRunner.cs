@@ -5,18 +5,14 @@ using Microsoft.Extensions.Logging;
 namespace Payments.Migrator;
 
 /// <summary>
-/// <c>Database.Migrate()</c> and nothing else (§7.4), plus the exit code that
-/// makes it a job.
+/// <c>Database.Migrate()</c> and nothing else (§7.4), plus the exit code
+/// that makes it a job. A type rather than a few lines in
+/// <c>Program.cs</c>: the exit-code contract is the whole interface between
+/// this process and §7.4's <c>backoffLimit: 2</c> — a swallowed exception
+/// makes the Job succeed against an unmigrated database — so it is worth a
+/// test, which top-level statements are not callable for; CA1848 also wants
+/// the log messages compiled once, which needs fields.
 /// </summary>
-/// <remarks>
-/// A type rather than a few lines in <c>Program.cs</c>, for two reasons. The
-/// exit-code contract is the whole interface between this process and §7.4's
-/// <c>backoffLimit: 2</c> — a swallowed exception makes the Job succeed against
-/// an unmigrated database and lets the new pods take traffic — so it is worth a
-/// test, and top-level statements are not callable from one. And CA1848 wants
-/// the log messages compiled once, which needs fields, which top-level
-/// statements do not have.
-/// </remarks>
 public sealed class MigrationRunner(PaymentsDbContext db, ILogger<MigrationRunner> logger)
 {
     private static readonly Action<ILogger, int, string, Exception?> Applying =

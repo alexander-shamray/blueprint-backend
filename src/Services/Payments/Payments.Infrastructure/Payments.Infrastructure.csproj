@@ -3,11 +3,10 @@
   <!--
     Settings come from Directory.Build.props (§4.4).
 
-    Domain and Application — §4.2's third row permits any package besides, and
-    PR-08 is where that row starts being used: EF Core for the write side
-    (§7.2), Dapper for the raw writes IUnitOfWork exposes (§6.3), the SQL
-    readiness check (§13.5), and IConfiguration, which AddPaymentsInfrastructure
-    now names in its signature.
+    Domain and Application — §4.2's third row permits any package besides,
+    used here for EF Core for the write side (§7.2), Dapper for the raw writes
+    IUnitOfWork exposes (§6.3), the SQL readiness check (§13.5), and
+    IConfiguration, which AddPaymentsInfrastructure names in its signature.
   -->
 
   <ItemGroup>

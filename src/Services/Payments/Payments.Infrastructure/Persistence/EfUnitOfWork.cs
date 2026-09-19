@@ -48,17 +48,12 @@ internal sealed class EfUnitOfWork(PaymentsDbContext db) : IUnitOfWork
                 {
                     // And the tracker is cleared with it, because a rollback that
                     // leaves the rejected mutations tracked is only half a
-                    // rollback. This line used to be unnecessary and the comment
-                    // above used to say so: "declines to SaveChanges … which is
-                    // enough for tracked changes" was true while this behaviour
-                    // was the only thing that called SaveChanges on the scope.
-                    //
-                    // §9.5's inbox filter is the second caller. It runs after the
-                    // consumer returns and saves unconditionally — it has its own
-                    // row to write — so anything a rejected handler left tracked
-                    // would be persisted by it, outside the transaction that was
-                    // just rolled back. A domain refusal would commit its own
-                    // mutations, which is the one outcome §6.3 exists to prevent.
+                    // rollback. §9.5's inbox filter is the second caller: it runs
+                    // after the consumer returns and saves unconditionally, so
+                    // anything a rejected handler left tracked would be persisted
+                    // by it, outside the transaction that was just rolled back —
+                    // a domain refusal committing its own mutations, the one
+                    // outcome §6.3 exists to prevent.
                     db.ChangeTracker.Clear();
 
                     return result;

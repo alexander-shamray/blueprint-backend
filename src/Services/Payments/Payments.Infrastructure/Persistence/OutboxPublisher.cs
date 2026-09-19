@@ -5,15 +5,13 @@ namespace Payments.Infrastructure.Persistence;
 
 /// <summary>
 /// §9.3's publisher port over the command's own <c>DbContext</c>, which is
-/// what makes the outbox row part of the same transaction as the state change
-/// that raised it. Scoped, for the same reason.
+/// what makes the outbox row part of the same transaction as the state
+/// change that raised it. Scoped, for the same reason. It calls no
+/// transport and opens no connection: the row is added to the tracker and
+/// travels out on <c>TransactionBehavior</c>'s single <c>SaveChanges</c>,
+/// so a publish here, or a second connection, would be the dual write the
+/// outbox exists to eliminate.
 /// </summary>
-/// <remarks>
-/// It calls no transport and opens no connection. The row is added to the
-/// tracker and travels out on <c>TransactionBehavior</c>'s single
-/// <c>SaveChanges</c> — a publish here, or a second connection, is precisely
-/// the dual write the outbox exists to eliminate.
-/// </remarks>
 internal sealed class OutboxPublisher(
     PaymentsDbContext db,
     MessageTypeMap types,
