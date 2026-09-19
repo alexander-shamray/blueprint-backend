@@ -5,7 +5,7 @@
   "Request": {
     "Path": { "Matchers": [{ "Name": "ExactMatcher", "Pattern": "/v1/authorisations" }] },
     "Methods": ["POST"],
-    "Body": { "Matcher": { "Name": "RegexMatcher", "Pattern": "\"amountMinor\":(\\d*0)?9[,}]" } }
+    "Body": { "Matcher": { "Name": "RegexMatcher", "Pattern": "\"amountMinor\"\\s*:\\s*(\\d*0)?9\\s*[,}]" } }
   },
   "Response": {
     "StatusCode": 201,

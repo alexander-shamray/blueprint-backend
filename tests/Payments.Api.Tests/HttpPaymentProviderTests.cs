@@ -221,6 +221,28 @@ public sealed class HttpPaymentProviderTests : IClassFixture<HttpPaymentProvider
     }
 
     [Theory]
+    [InlineData(1001, 402)]
+    [InlineData(1002, 402)]
+    [InlineData(1005, 503)]
+    [InlineData(1011, 201)]
+    public async Task The_simulator_scripts_an_amount_however_its_json_is_spaced(long amountMinor, int expected)
+    {
+        // Straight at the simulator, past the adapter: a person probing it by
+        // hand sends spaced JSON, and a scripted amount must not fall through
+        // to an approval because of it.
+        using HttpClient client = new() { BaseAddress = new Uri(_server.Urls[0]) };
+        using StringContent body = new(
+            $"{{ \"amountMinor\" : {amountMinor} , \"currency\" : \"EUR\" }}",
+            System.Text.Encoding.UTF8,
+            "application/json");
+
+        using HttpResponseMessage response =
+            await client.PostAsync("/v1/authorisations", body, TestContext.Current.CancellationToken);
+
+        ((int)response.StatusCode).ShouldBe(expected);
+    }
+
+    [Theory]
     [InlineData(0.11)]
     [InlineData(0.21)]
     public async Task An_amount_ending_in_one_that_is_not_one_cent_is_approved(decimal amount)
