@@ -23,8 +23,7 @@
          takes an IConfiguration, and OutboxSerialisationTests builds a real
          one rather than substitute the contract. -->
     <PackageReference Include="Microsoft.Extensions.Configuration" />
-    <!-- AuthorisePaymentHandlerTests names NullLogger<T> directly, as
-         Ordering.Application.Tests does for its own handler tests — a
+    <!-- AuthorisePaymentHandlerTests names NullLogger<T> directly — a
          project that names a package's type references the package
          directly, rather than leaning on what Common.Application carries. -->
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />

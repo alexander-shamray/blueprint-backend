@@ -199,8 +199,7 @@ public class AuthorisePaymentHandlerTests
     }
 
     // Holds a reference to the order store so a call made before the lock is
-    // taken can be told apart from one made after (The_record_is_locked_before
-    // _anything_else_is_read).
+    // taken can be told apart from one made after.
     private sealed class FakeIntents(FakeOrderStore orders) : IPaymentIntentRepository
     {
         private readonly Dictionary<OrderId, PaymentIntent> _byOrder = [];

@@ -38,8 +38,12 @@ public sealed class AuthorisePaymentHandler(
         {
             // A resend is answered only when it asks for what was decided: a
             // fresh command with other money must not inherit an authorisation.
-            if (command.Amount != existing.Amount || !string.Equals(command.Currency, existing.Currency, StringComparison.Ordinal))
-                throw new PaymentMismatchException(Mismatch(order, command, existing.Amount, existing.Currency, "the recorded payment"));
+            if (command.Amount != existing.Amount ||
+                !string.Equals(command.Currency, existing.Currency, StringComparison.Ordinal))
+            {
+                throw new PaymentMismatchException(
+                    Mismatch(order, command, existing.Amount, existing.Currency, "the recorded payment"));
+            }
 
             // Acknowledged, not answered again: the verdict was staged with the
             // intent and reaches the saga regardless, and a second
@@ -51,10 +55,12 @@ public sealed class AuthorisePaymentHandler(
         // that was placed still holds its total, and a command disagreeing
         // with it is a fault, not a customer-facing decline. A tombstone has no
         // figures, so it has nothing to disagree with.
-        if (record is { IsPlaced: true }
-            && (command.Amount != record.TotalAmount || !string.Equals(command.Currency, record.Currency, StringComparison.Ordinal)))
+        if (record is { IsPlaced: true } &&
+            (command.Amount != record.TotalAmount ||
+                !string.Equals(command.Currency, record.Currency, StringComparison.Ordinal)))
         {
-            throw new PaymentMismatchException(Mismatch(order, command, record.TotalAmount, record.Currency, "the placed order"));
+            throw new PaymentMismatchException(
+                Mismatch(order, command, record.TotalAmount, record.Currency, "the placed order"));
         }
 
         if (record is { IsCancelled: true })
@@ -78,8 +84,10 @@ public sealed class AuthorisePaymentHandler(
         DateTimeOffset now = clock.GetUtcNow();
         intents.Add(verdict switch
         {
-            AuthorisationResult.Authorised a => PaymentIntent.Authorise(order, command.Amount, command.Currency, a.Reference, now),
-            AuthorisationResult.Declined d => PaymentIntent.Decline(order, command.Amount, command.Currency, d.Reason, now),
+            AuthorisationResult.Authorised a =>
+                PaymentIntent.Authorise(order, command.Amount, command.Currency, a.Reference, now),
+            AuthorisationResult.Declined d =>
+                PaymentIntent.Decline(order, command.Amount, command.Currency, d.Reason, now),
             _ => throw new InvalidOperationException($"Unknown verdict {verdict.GetType().Name}.")
         });
 
@@ -88,6 +96,8 @@ public sealed class AuthorisePaymentHandler(
 
     // Both fields, both sides: the error queue is read by a person deciding
     // whether the sender or the record is wrong.
-    private static string Mismatch(OrderId order, AuthorisePaymentCommand command, decimal? amount, string? currency, string against) =>
-        $"AuthorisePayment for {order} asks for {command.Amount} {command.Currency}; {against} holds {amount} {currency}.";
+    private static string Mismatch(
+        OrderId order, AuthorisePaymentCommand command, decimal? amount, string? currency, string against) =>
+        $"AuthorisePayment for {order} asks for {command.Amount} {command.Currency}; " +
+        $"{against} holds {amount} {currency}.";
 }
