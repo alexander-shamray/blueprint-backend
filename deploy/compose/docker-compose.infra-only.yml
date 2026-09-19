@@ -31,3 +31,7 @@ services:
     profiles: [ "excluded" ]
   web-bff:
     profiles: [ "excluded" ]
+  inventory-migrator:
+    profiles: [ "excluded" ]
+  inventory-api:
+    profiles: [ "excluded" ]

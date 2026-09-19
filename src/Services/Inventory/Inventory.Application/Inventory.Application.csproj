@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Settings come from Directory.Build.props (§4.4).
+
+    Domain, Common.Application and Common.Contracts — the §4.2 dependency
+    table's second row, complete now that the mapper's allow-list names
+    StockLevelChanged. §4.3's one assembly that crosses a service boundary,
+    and it crosses at the mapper.
+  -->
+
+  <ItemGroup>
+    <ProjectReference Include="..\Inventory.Domain\Inventory.Domain.csproj" />
+    <ProjectReference Include="..\..\..\BuildingBlocks\Common.Application\Common.Application.csproj" />
+    <ProjectReference Include="..\..\..\BuildingBlocks\Common.Contracts\Common.Contracts.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The read side of §6.5: GetStockHandler uses Dapper directly, never
+         EF — the architecture gate in Inventory.Application.Tests holds
+         that line. -->
+    <PackageReference Include="Dapper" />
+    <!-- AbstractValidator for the command validators, and the assembly-scan
+         registration §4.2's sample uses. Both used directly, both referenced
+         directly — a transitive compile against Common.Application's copy
+         would be a claim this project never states. -->
+    <PackageReference Include="FluentValidation" />
+    <PackageReference Include="FluentValidation.DependencyInjectionExtensions" />
+  </ItemGroup>
+
+</Project>

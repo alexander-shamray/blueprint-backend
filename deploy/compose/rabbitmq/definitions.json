@@ -13,6 +13,12 @@
       "password_hash": "Xm96izB7BOqJM5z1OlKgMzMOlEHtqvzPTo72fDhpbM8IiDqr",
       "hashing_algorithm": "rabbit_password_hashing_sha256",
       "tags": []
+    },
+    {
+      "name": "inventory-svc",
+      "password_hash": "D6tVbx547EM/04Yq6eTvuyWVmB1d0UHBeBud/lMccWEz3sbe",
+      "hashing_algorithm": "rabbit_password_hashing_sha256",
+      "tags": []
     }
   ],
   "vhosts": [
@@ -34,6 +40,13 @@
       "configure": "^(ordering-|inventory-commands|payments-commands|Common\\.Contracts|Ordering\\.Infrastructure\\.Messaging:|MassTransit:)",
       "write": "^(ordering-|inventory-commands|payments-commands|Common\\.Contracts(\\.Ordering\\.V1:|:)|Ordering\\.Infrastructure\\.Messaging:|MassTransit:)",
       "read": "^(ordering-|inventory-commands|payments-commands|Common\\.Contracts|Ordering\\.Infrastructure\\.Messaging:|MassTransit:)"
+    },
+    {
+      "user": "inventory-svc",
+      "vhost": "/",
+      "configure": "^(Common\\.Contracts(\\.Inventory\\.V1:|:)|MassTransit:)",
+      "write": "^(Common\\.Contracts(\\.Inventory\\.V1:|:)|MassTransit:)",
+      "read": "^(Common\\.Contracts\\.Inventory\\.V1:|MassTransit:)"
     }
   ],
   "topic_permissions": [],

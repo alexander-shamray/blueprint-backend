@@ -20,6 +20,7 @@ include:
   - services/gateway.yml
   - services/ordering.yml
   - services/web-bff.yml
+  - services/inventory.yml
 ```
 
 **`include` is what raises the floor, and it is the one prerequisite this
@@ -255,6 +256,7 @@ services:
       # one costs nothing at startup. So a name joins this list with the PR
       # that builds its service.
       catalog-api: { condition: service_started }
+      inventory-api: { condition: service_started }
       ordering-api: { condition: service_started }
       web-bff: { condition: service_started }
 
@@ -350,17 +352,15 @@ the ones that exist — Compose rejects a dependency it cannot see, and one
 undefined name fails the whole `up` rather than one service. Its *routes* are
 under no such constraint and [§10.2](10-api-gateway.md) ships all four, so
 a path answers 502 until its service lands. A route is configuration the
-gateway reads; a `depends_on` is a name Compose has to resolve. One answers 502
-today — inventory — the BFF's route having gained its service with PR-19.
+gateway reads; a `depends_on` is a name Compose has to resolve. Which
+destinations Compose can see is the `include` list in
+`deploy/compose/docker-compose.yml`, the owner of that fact.
 
-**The fence above and the shipped file now gate on the same three services**,
-`catalog-api`, `ordering-api` and `web-bff`, because all three exist: PR-10
-built the first, PR-18 the second and PR-19 the third. This paragraph used to
-explain a discrepancy — the sample was the finished platform's, with Ordering
-as its worked pair, while the file on disk had only Catalog — and the
-explanation expired when Ordering landed. Read the fence for the shape of a
-block; a destination still joins the dependency list with the PR that builds
-it, so the two will diverge again at Inventory.
+**The fence above and the shipped file gate on the same services**: the
+`depends_on` list in `deploy/compose/services/gateway.yml` is the owner of
+which, and the fence is its sample. Read the fence for the shape of a block;
+a destination still joins the dependency list with the change that builds
+it, so the two would diverge again at the next service.
 
 **The BFF's own block gained a `depends_on` the fence above does not show**, on
 `catalog-api`, and the asymmetry with the gateway is the point: the gateway
@@ -546,10 +546,10 @@ var coordination = builder
 // AppHost runs Ordering, so it does not have that excuse.
 var mq = builder.AddRabbitMQ("RabbitMq").WithManagementPlugin();
 
-// One database per service that this AppHost runs. Inventory, Payments,
-// Shipping and Notifications are omitted deliberately — adding a database
-// without the service and migrator that own it creates a schema nothing
-// maintains, which is the shape §4.1 rules out.
+// One database per service that this AppHost runs. The rest are omitted
+// deliberately — adding a database without the service and migrator
+// resources that own it creates a schema nothing maintains, which is the
+// shape §4.1 rules out.
 var orderingDb = sql.AddDatabase("Ordering");
 var catalogDb = sql.AddDatabase("Catalog");
 

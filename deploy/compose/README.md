@@ -72,9 +72,10 @@ and exits, then `catalog-api` starts (§14.1's pair rule).
 | Gateway | http://localhost:5000 | `/health/live`, `/health/ready`, and [§10.2](../../docs/backend-architecture/10-api-gateway.md)'s four routes |
 | Ordering API | http://localhost:5101 | `/health/live`, `/health/ready`, `/openapi/v1.json` (needs a token — see below), `/v1/orders` — every route needs a token, unlike Catalog's listing |
 | Web BFF | http://localhost:5200 | `/health/live`, `/health/ready`, `POST /v1/checkout/quote` with a body of `currency` and `lines` ([ADR-045](../../docs/backend-architecture/adr/ADR-045-the-checkout-quote-takes-quantities.md)) — a token needed, and the only host that mints one of its own ([§11.5](../../docs/backend-architecture/11-identity-authorization.md)) |
+| Inventory API | http://localhost:5103 | `/health/live`, `/health/ready`, `/openapi/v1.json` (needs a token — see below), `/v1/inventory/stock/{productId}` — needs a token, unlike Catalog's listing |
 
-**Both OpenAPI documents need a token**, and that is a decision rather than an
-oversight. `MapOpenApi()` carries no authorization metadata, so the
+**Every OpenAPI document needs a token**, and that is a decision rather than
+an oversight. `MapOpenApi()` carries no authorization metadata, so the
 deny-by-default fallback
 ([ADR-030](../../docs/backend-architecture/adr/ADR-030-authorization-is-deny-by-default-in-the-building-block.md))
 answers 401 to an anonymous request for one: the document enumerates every
@@ -106,15 +107,10 @@ up to 128 characters of letters, digits, `-` and `_` — and any other value is
 replaced with a fresh one rather than echoed, exactly as a missing one is
 (§10.4).
 
-**One of the four routes has no service behind it yet** —
-`/api/v1/inventory` answers 502 until Inventory
-lands — and it is in the file deliberately, because the two configuration
-tests over it are what PR-17 exists to deliver. `/api/v1/orders` was one of
-three until PR-18 and `/bff` until PR-19, which is what "stops answering
-502" looks like: the route file did not change, because PR-17 shipped it whole
-and a service PR that re-decides a route is the mistake §10.2's dual-version
-trap describes. `/api/v1/catalog` is GET-only at the edge, so publishing a
-product is a call to port 5102 and not to port 5000.
+A route in §10.2's file whose service is not running answers 502 on that
+path and costs nothing else; the two configuration tests over the file are
+what let it ship whole. `/api/v1/catalog` is GET-only at the edge, so
+publishing a product is a call to port 5102 and not to port 5000.
 
 ## Getting a token
 

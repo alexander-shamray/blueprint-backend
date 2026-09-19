@@ -249,6 +249,7 @@ jobs:
     outputs:
       catalog: ${{ steps.changes.outputs.catalog }}
       ordering: ${{ steps.changes.outputs.ordering }}
+      inventory: ${{ steps.changes.outputs.inventory }}
       gateway: ${{ steps.changes.outputs.gateway }}
       bff: ${{ steps.changes.outputs.bff }}
       deploy: ${{ steps.changes.outputs.deploy }}
@@ -293,6 +294,10 @@ jobs:
               - *shared
               - 'src/Services/Ordering/**'
               - 'tests/Ordering.*/**'
+            inventory:
+              - *shared
+              - 'src/Services/Inventory/**'
+              - 'tests/Inventory.*/**'
             # The gateway is a deployable like any other — its own image
             # (§15.2), its own chart (§15.3), its own Program.cs and route
             # file. Left out of this list, a change to that route file is never
@@ -492,12 +497,12 @@ jobs:
   # under src/ appears below.
   images:
     needs: [changes, build]
-    if: ${{ needs.changes.outputs.catalog == 'true' || needs.changes.outputs.ordering == 'true' || needs.changes.outputs.gateway == 'true' || needs.changes.outputs.bff == 'true' }}
+    if: ${{ needs.changes.outputs.catalog == 'true' || needs.changes.outputs.ordering == 'true' || needs.changes.outputs.gateway == 'true' || needs.changes.outputs.bff == 'true' || needs.changes.outputs.inventory == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
-      # One red image should not cancel the others: which of six Dockerfiles
-      # broke is the useful signal, and fail-fast reports the first alphabetically.
+      # One red image should not cancel the others: which Dockerfile broke is
+      # the useful signal, and fail-fast reports the first alphabetically.
       fail-fast: false
       matrix:
         include:
@@ -513,6 +518,12 @@ jobs:
           - filter: ordering
             image: ordering-migrator
             dockerfile: src/Services/Ordering/Ordering.Migrator/Dockerfile
+          - filter: inventory
+            image: inventory-api
+            dockerfile: src/Services/Inventory/Inventory.Api/Dockerfile
+          - filter: inventory
+            image: inventory-migrator
+            dockerfile: src/Services/Inventory/Inventory.Migrator/Dockerfile
           - filter: gateway
             image: gateway
             dockerfile: src/Gateway/Gateway.Api/Dockerfile
