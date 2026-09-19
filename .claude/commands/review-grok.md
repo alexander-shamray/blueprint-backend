@@ -241,7 +241,8 @@ for it.
 
 ## Report
 
-Counts by status, the record's path, the number of blocks dropped as
+Counts by status, the record's path — or, on the agent path, the record
+itself, as the section above says — the number of blocks dropped as
 malformed, whether a locality verdict bounded the pass, and every
 `Needs a decision` and `Outside touch set` row spelled out in full — those
 are the ones that stop here rather than in a commit.
