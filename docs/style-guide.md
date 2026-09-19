@@ -86,9 +86,12 @@ time.
 The rule reaches `//` and `///` in C# — `/* */` appears only as the one-line
 elision inside a sample block, never as a comment, so a block comment is
 itself a finding — `#` and docstrings in Python, `#` in shell, and the
-comment syntax of YAML, MSBuild and `.editorconfig`. No
-analyser enforces any of it; the reviewer does, and the review commands
-reach it through the contract's §2, which they already cite.
+comment syntax of YAML, MSBuild and `.editorconfig`. Its mechanical half —
+the names and history a search can find, emphasis, and a block's length — is
+enforced on the lines a pull request adds by
+[`.github/comment-gate/`](../.github/comment-gate/README.md); the rest the
+reviewer carries, and the review commands reach it through the contract's
+§2, which they already cite.
 [`docs/change-locality.md`](change-locality.md) §2 is the same rule for
 documents, and a comment is a document that happens to sit beside code:
 the churn it produces is the same, and it was measured in
