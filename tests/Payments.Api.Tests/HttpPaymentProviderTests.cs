@@ -1,4 +1,6 @@
 using System.Diagnostics.Metrics;
+using System.Net;
+using System.Net.Sockets;
 using System.Text.Json;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -83,10 +85,12 @@ public sealed class HttpPaymentProviderTests : IClassFixture<HttpPaymentProvider
     // process-wide, and another host's provider would count into it. The
     // factory caches by name, so this is the instance ProviderMetrics holds,
     // and resolving ProviderMetrics first means the counter already exists.
-    private UnavailableCount CountUnavailable()
+    private UnavailableCount CountUnavailable() => CountUnavailable(_factory);
+
+    private static UnavailableCount CountUnavailable(PaymentsApiFactory factory)
     {
-        _factory.Services.GetRequiredService<ProviderMetrics>();
-        Meter mine = _factory.Services.GetRequiredService<IMeterFactory>().Create(ProviderMetrics.MeterName);
+        factory.Services.GetRequiredService<ProviderMetrics>();
+        Meter mine = factory.Services.GetRequiredService<IMeterFactory>().Create(ProviderMetrics.MeterName);
         UnavailableCount count = new(mine);
         count.Enabled.ShouldBeTrue("no counter on this host's meter was enabled, so a zero would prove nothing");
         return count;
@@ -199,6 +203,27 @@ public sealed class HttpPaymentProviderTests : IClassFixture<HttpPaymentProvider
             Provider().AuthoriseAsync(Authorisation(42.10m), TestContext.Current.CancellationToken));
 
         Calls("/v1/authorisations").ShouldBe(ProviderHop.MaxRetryAttempts + 1);
+    }
+
+    [Fact]
+    public async Task A_refused_connection_is_retried_then_thrown_as_unavailable_and_counted_per_attempt()
+    {
+        // A refused connection reaches the client as an HttpRequestException,
+        // counted by the attempt handler's own branch rather than by status.
+        // The in-process server answers its connection faults with a status,
+        // so the provider here is a port nothing listens on.
+        using TcpListener probe = new(IPAddress.Loopback, 0);
+        probe.Start();
+        int closed = ((IPEndPoint)probe.LocalEndpoint).Port;
+        probe.Stop();
+        using PaymentsApiFactory factory = new(UnreachableSql, UnreachableRabbit, $"http://127.0.0.1:{closed}/");
+        using UnavailableCount counted = CountUnavailable(factory);
+
+        await Should.ThrowAsync<PaymentProviderUnavailableException>(() =>
+            factory.Services.CreateScope().ServiceProvider.GetRequiredService<IPaymentProvider>()
+                .AuthoriseAsync(Authorisation(42.10m), TestContext.Current.CancellationToken));
+
+        counted.Value.ShouldBe(ProviderHop.MaxRetryAttempts + 1, "one per refused attempt, not one per call");
     }
 
     [Theory]
