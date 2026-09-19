@@ -47,3 +47,16 @@ tests/Web.Bff.Tests/TokenEndpointSchemeTests.cs | credential-assignment | 96b273
 tests/Inventory.Api.Tests/HostSmokeTests.cs | connection-string-password | da3fd0c5abaa | A deliberately unusable value in a host that must not reach a database.
 tests/Inventory.Api.Tests/MessageTypeMapValidatorTests.cs | connection-string-password | da3fd0c5abaa | The same unusable fixture in the validator suite.
 tests/Inventory.Api.Tests/MessagingRegistrationTests.cs | credential-assignment | 79c9f072d3ca | A broker URI pointing at a hostname that does not resolve.
+
+
+# --- Payments, rendered by tools/new-service ------------------------------
+#
+# One entry per finding the gate reported over this render, carrying the
+# fingerprints it computed rather than any this script worked out. The
+# equivalent literals for a hand-built service are entries above, written
+# the day that service landed; these are the same decision, taken by the
+# tool that rendered them (#161).
+
+tests/Payments.Api.Tests/HostSmokeTests.cs | connection-string-password | da3fd0c5abaa | A deliberately unusable value in a host that must not reach a database.
+tests/Payments.Api.Tests/MessageTypeMapValidatorTests.cs | connection-string-password | da3fd0c5abaa | The same unusable fixture in the validator suite.
+tests/Payments.Api.Tests/MessagingRegistrationTests.cs | credential-assignment | 9e66c51d3ea2 | A broker URI pointing at a hostname that does not resolve.

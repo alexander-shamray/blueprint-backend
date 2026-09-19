@@ -1,0 +1,53 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Settings come from Directory.Build.props (§4.4).
+
+    NOT a test project — no runner, no adapter, no Test.Sdk, and Library
+    output. §4.1: "referenced by the two above, which cannot reference each
+    other". The API suite is its consumer today; the application suite becomes
+    the second with its first handler test, which is the condition §4.1 names
+    for this project to exist.
+  -->
+
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- IAsyncLifetime and TestContext — the fixture contract. Not xunit.v3:
+         that package refuses Library output by design, and names this one as
+         the reference for a non-test project. The runner stays in the
+         consuming test projects. -->
+    <PackageReference Include="xunit.v3.extensibility.core" />
+    <!-- WebApplicationFactory over the real Program (§12.4). -->
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
+    <!-- Real SQL Server, per ADR-010. -->
+    <PackageReference Include="Testcontainers.MsSql" />
+    <!-- Real RabbitMQ, same terms: the host's bus readiness needs a broker
+         that answers, and ADR-010 made real infrastructure non-optional. -->
+    <PackageReference Include="Testcontainers.RabbitMq" />
+    <PackageReference Include="Testcontainers.Redis" />
+    <!-- Reset-by-truncation between tests (§12.4) — far faster than
+         recreating the schema, and honest where a rolled-back transaction
+         would hide transaction-related bugs. -->
+    <PackageReference Include="Respawn" />
+    <!-- The open connection Respawn inspects. Already pinned for
+         Payments.Infrastructure's factory. -->
+    <PackageReference Include="Microsoft.Data.SqlClient" />
+    <!-- MigrateAsync and ExecuteSqlRawAsync, both used directly by
+         ServiceFixture. Carried transitively by the project references below;
+         named here because this assembly uses the types itself, which is the
+         register's honesty rule rather than a restore requirement. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Services\Payments\Payments.Api\Payments.Api.csproj" />
+    <!-- The migrator, because its exit code is a contract with §7.4's
+         `backoffLimit: 2` and the fixture drives the real host rather than a
+         copy of its wiring. -->
+    <ProjectReference Include="..\..\src\Services\Payments\Payments.Migrator\Payments.Migrator.csproj" />
+  </ItemGroup>
+
+</Project>

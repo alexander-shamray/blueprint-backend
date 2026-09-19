@@ -68,3 +68,19 @@ deploy/compose/services/inventory.yml | credential-assignment | 4a61c07ce58a | S
 deploy/compose/services/inventory.yml | credential-assignment | 12e48b0a29c6 | A Redis cache endpoint. Host and port only, no credential in it.
 deploy/compose/services/inventory.yml | credential-assignment | 7dd6402e12f4 | A Redis coordination endpoint. Host and port only, no credential.
 deploy/compose/rabbitmq/definitions.json | credential-assignment | db2d2dd96341 | The Inventory service account's password hash, Section 14.1's local default.
+
+
+# --- Payments, rendered by tools/new-service ------------------------------
+#
+# One entry per finding the gate reported over this render, carrying the
+# fingerprints it computed rather than any this script worked out. The
+# equivalent literals for a hand-built service are entries above, written
+# the day that service landed; these are the same decision, taken by the
+# tool that rendered them (#161).
+
+deploy/compose/services/payments.yml | connection-string-password | 8a11e54d9d5b | Section 14.1's local database default, nested inside this service's two connection defaults.
+deploy/compose/services/payments.yml | credential-assignment | 1df0b369ce40 | Payments's local connection default, in-cluster hostname.
+deploy/compose/services/payments.yml | credential-assignment | e03d477c7cd2 | Section 14.1's broker default for Payments, the per-service account that replaced guest.
+deploy/compose/services/payments.yml | credential-assignment | 12e48b0a29c6 | A Redis cache endpoint. Host and port only, no credential in it.
+deploy/compose/services/payments.yml | credential-assignment | 7dd6402e12f4 | A Redis coordination endpoint. Host and port only, no credential.
+deploy/compose/rabbitmq/definitions.json | credential-assignment | fe985803dd60 | The Payments service account's password hash, Section 14.1's local default.

@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Settings come from Directory.Build.props (§4.4).
+
+    Common.Domain and nothing else — the §4.2 dependency table's first row,
+    and the reason domain tests are instant and mock-free. The architecture
+    gate in Payments.Domain.Tests turns this comment into a build failure.
+  -->
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\BuildingBlocks\Common.Domain\Common.Domain.csproj" />
+  </ItemGroup>
+
+</Project>

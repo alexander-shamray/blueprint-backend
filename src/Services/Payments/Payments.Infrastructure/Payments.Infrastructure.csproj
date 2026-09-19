@@ -1,0 +1,45 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Settings come from Directory.Build.props (§4.4).
+
+    Domain and Application — §4.2's third row permits any package besides, and
+    PR-08 is where that row starts being used: EF Core for the write side
+    (§7.2), Dapper for the raw writes IUnitOfWork exposes (§6.3), the SQL
+    readiness check (§13.5), and IConfiguration, which AddPaymentsInfrastructure
+    now names in its signature.
+  -->
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
+    <PackageReference Include="Dapper" />
+    <!-- SqlConnection, constructed by name in SqlConnectionFactory (§6.5).
+         The EF provider above carries it transitively; the direct reference
+         states the direct use. -->
+    <PackageReference Include="Microsoft.Data.SqlClient" />
+    <PackageReference Include="AspNetCore.HealthChecks.SqlServer" />
+    <PackageReference Include="AspNetCore.HealthChecks.Redis" />
+    <!-- The bus (§9). The transport package; MassTransit itself rides in
+         transitively at the same pinned version. No RabbitMQ health-check
+         package beside it: AddMassTransit registers the bus check itself,
+         argued in Messaging/DependencyInjection.cs. -->
+    <PackageReference Include="MassTransit.RabbitMQ" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Payments.Domain\Payments.Domain.csproj" />
+    <ProjectReference Include="..\Payments.Application\Payments.Application.csproj" />
+    <!-- §9.4's outbox: the entity this assembly maps, the type map, the
+         metrics and the dispatcher it hosts. §8's Redis helpers ride in on
+         the same reference and are wired from the start — the connections,
+         the lock factory and §8.5's idempotency store — so a first cache
+         read costs no new reference and no new registration. -->
+    <ProjectReference Include="..\..\..\BuildingBlocks\Common.Infrastructure\Common.Infrastructure.csproj" />
+    <!-- MessageTypeSource's Broker half. Named through IIntegrationEvent
+         until this service has a contract of its own, at which point the
+         anchor becomes that contract — same assembly either way. -->
+    <ProjectReference Include="..\..\..\BuildingBlocks\Common.Contracts\Common.Contracts.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -19,6 +19,12 @@
       "password_hash": "D6tVbx547EM/04Yq6eTvuyWVmB1d0UHBeBud/lMccWEz3sbe",
       "hashing_algorithm": "rabbit_password_hashing_sha256",
       "tags": []
+    },
+    {
+      "name": "payments-svc",
+      "password_hash": "jf2lBk/Sv4yp0KrnOTNvBAmmqFocTtbmI+Re5KDUjtPlZWwT",
+      "hashing_algorithm": "rabbit_password_hashing_sha256",
+      "tags": []
     }
   ],
   "vhosts": [
@@ -47,6 +53,13 @@
       "configure": "^(inventory-|Common\\.Contracts|Inventory\\.Infrastructure\\.Messaging:|MassTransit:)",
       "write": "^(inventory-|Common\\.Contracts(\\.Inventory\\.V1:|:)|Inventory\\.Infrastructure\\.Messaging:|MassTransit:)",
       "read": "^(inventory-|Common\\.Contracts|Inventory\\.Infrastructure\\.Messaging:|MassTransit:)"
+    },
+    {
+      "user": "payments-svc",
+      "vhost": "/",
+      "configure": "^(Common\\.Contracts(\\.Payments\\.V1:|:)|MassTransit:)",
+      "write": "^(Common\\.Contracts(\\.Payments\\.V1:|:)|MassTransit:)",
+      "read": "^(Common\\.Contracts\\.Payments\\.V1:|MassTransit:)"
     }
   ],
   "topic_permissions": [],
