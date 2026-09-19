@@ -479,6 +479,65 @@ on:
             [],
         )
 
+    def _failures_for_text(self, text: str, workloads: dict) -> list[str]:
+        original = canary.WORKFLOW
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "deploy.yml"
+            path.write_text(text, encoding="utf-8")
+            canary.WORKFLOW = path
+            try:
+                return canary._dispatch_options_match_workloads(workloads)
+            finally:
+                canary.WORKFLOW = original
+
+    def test_a_sibling_inputs_options_do_not_stand_in_for_a_missing_list(self) -> None:
+        # `workload` has no `options:` of its own; `region`, a later sibling
+        # choice input, happens to carry the workload names. A search that
+        # runs past `workload:`'s own block would read `region`'s list and
+        # call the input covered when it is not.
+        text = """\
+on:
+  workflow_dispatch:
+    inputs:
+      workload:
+        description: 'x'
+        required: true
+        type: choice
+      region:
+        description: 'y'
+        required: true
+        type: choice
+        options: [catalog-api]
+"""
+        failures = self._failures_for_text(text, {"catalog-api": {}})
+
+        self.assertTrue(
+            any("no options list" in f for f in failures),
+            failures,
+        )
+
+    def test_workload_after_another_choice_input_is_still_read(self) -> None:
+        # `workload` is not the first input here; the block has to be found
+        # by its own heading rather than assumed to start the section.
+        text = """\
+on:
+  workflow_dispatch:
+    inputs:
+      region:
+        description: 'y'
+        required: true
+        type: choice
+        options: [north, south]
+      workload:
+        description: 'x'
+        required: true
+        type: choice
+        options: [catalog-api]
+"""
+        failures = self._failures_for_text(text, {"catalog-api": {}})
+
+        self.assertEqual(failures, [])
+
 
 class SourceInputTests(unittest.TestCase):
     """SOURCE_INPUTS against the reads it claims to enumerate.

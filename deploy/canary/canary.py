@@ -778,21 +778,25 @@ def _dispatch_options_match_workloads(workloads: dict) -> list[str]:
     while `check` on this file's own path filters stays green — nothing else
     compares the two. Parsed as a flow sequence rather than with a YAML
     library, on `_alert_threshold`'s terms: no dependency this gate would
-    need to restore.
+    need to restore. The block is scoped to `workload:`'s own indentation, on
+    the same terms `_alert_threshold` stops at the next `- alert:`: without
+    it, a sibling input's `options:` — one YAML step over, not this input's
+    own — would satisfy the search just as well.
     """
     try:
         text = WORKFLOW.read_text(encoding="utf-8")
     except OSError as error:
         return [f"{WORKFLOW_PATH} is not readable, so its dispatch options cannot be checked: {error}"]
 
-    match = re.search(r"workload:\n(?:.*\n)*?\s*options:\s*\[([^\]]*)\]", text)
-    if not match:
+    block = re.search(r"(?m)^([ \t]*)workload:\n((?:\1[ \t].*\n?)*)", text)
+    options_match = block and re.search(r"options:\s*\[([^\]]*)\]", block.group(2))
+    if not options_match:
         return [
             f"{WORKFLOW_PATH} has no options list for the workload dispatch "
             "input, so a manual rollout cannot be checked against the plan"
         ]
 
-    options = {item.strip() for item in match.group(1).split(",") if item.strip()}
+    options = {item.strip() for item in options_match.group(1).split(",") if item.strip()}
     expected = set(workloads)
 
     failures = []
