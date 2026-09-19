@@ -604,12 +604,15 @@ def check(plan_document: dict, root: Path = ROOT) -> list[str]:
     return failures
 
 
-# The signals ADR-047 defines, and what binds each to its meaning: the
-# absolute thresholds it must name, and for each query the exact series it
-# reads. A signal is known by these and not by its name, so renaming one or
-# pointing it at a neighbour's series fails the plan rather than slipping past
-# the rules bound to it. Only http names p99, because only a request has a
-# latency alert to be held to.
+# The signals ADR-047 defines, and what binds each to its meaning: exactly
+# the absolute thresholds it is held to, and for each query the series it
+# reads and the shape that gives them their meaning, as (pattern, count)
+# pairs. Only http names p99, because only a request has a latency alert;
+# the http numerator selects server errors and nothing else does; and a
+# millisecond histogram is divided back into the seconds analyse compares.
+SERVER_ERRORS = (r'http_response_status_code=~"5\.\."\}\[\$WINDOW\]\)\) or vector\(0\)\)', 1)
+ONE_STATUS_SELECTOR = (r"http_response_status_code", 1)
+MILLISECONDS_TO_SECONDS = (r"\) / 1000$", 1)
 SIGNAL_CONTRACT = {
     "http": {
         "absolute": ("errorRate", "latencyP99Seconds"),
@@ -618,6 +621,7 @@ SIGNAL_CONTRACT = {
             "latencyP99Seconds": {"http_server_request_duration_seconds_bucket"},
             "requests": {"http_server_request_duration_seconds_count"},
         },
+        "shape": {"errorRate": (SERVER_ERRORS, ONE_STATUS_SELECTOR)},
     },
     "consume": {
         "absolute": ("errorRate",),
@@ -627,6 +631,7 @@ SIGNAL_CONTRACT = {
             "latencyP99Seconds": {"messaging_masstransit_consume_duration_milliseconds_bucket"},
             "requests": {"messaging_masstransit_consume_ea_total"},
         },
+        "shape": {"latencyP99Seconds": (MILLISECONDS_TO_SECONDS,)},
     },
     "saga": {
         "absolute": ("errorRate",),
@@ -636,6 +641,7 @@ SIGNAL_CONTRACT = {
             "latencyP99Seconds": {"messaging_masstransit_saga_duration_milliseconds_bucket"},
             "requests": {"messaging_masstransit_saga_ea_total"},
         },
+        "shape": {"latencyP99Seconds": (MILLISECONDS_TO_SECONDS,)},
     },
 }
 
@@ -679,6 +685,13 @@ def _signals_are_complete(signals: dict) -> list[str]:
                     f"{', '.join(sorted(read)) or 'no series'}, and its role is "
                     f"bound to exactly {', '.join(sorted(expected))}"
                 )
+            for pattern, times in contract.get("shape", {}).get(name, ()):
+                found = len(re.findall(pattern, queries[name]))
+                if found != times:
+                    failures.append(
+                        f"signals.{signal}.queries.{name} matches {pattern!r} "
+                        f"{found} time(s), and its role requires {times}"
+                    )
         absolute = definition.get("absolute", [])
         for key in contract["absolute"]:
             if key not in absolute:
@@ -686,6 +699,13 @@ def _signals_are_complete(signals: dict) -> list[str]:
                     f"signals.{signal}.absolute does not name {key}, so the "
                     f"signal's {ABSOLUTE[key][0]} is never held to §13.6's "
                     "threshold (ADR-047)"
+                )
+        for key in absolute:
+            if key in ABSOLUTE and key not in contract["absolute"]:
+                failures.append(
+                    f"signals.{signal}.absolute names {key}, a threshold this "
+                    "signal is not held to: ADR-047 judges it against the "
+                    "stable track only"
                 )
         for key in absolute:
             if key not in ABSOLUTE:

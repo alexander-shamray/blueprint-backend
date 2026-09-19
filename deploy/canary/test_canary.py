@@ -712,6 +712,60 @@ class SignalTests(unittest.TestCase):
                 for f in failures),
             failures)
 
+    def test_an_http_error_rate_counting_client_errors_fails_the_plan(self) -> None:
+        """Same series, different meaning: a numerator over 4xx stops
+        counting the server failures §13.6 pages on."""
+        document = json.loads(json.dumps(self.document))
+        queries = document["signals"]["http"]["queries"]
+        queries["errorRate"] = queries["errorRate"].replace('"5.."', '"4.."')
+
+        failures = canary.check(document)
+
+        self.assertTrue(
+            any("signals.http.queries.errorRate" in f for f in failures), failures)
+
+    def test_a_server_error_selector_on_the_denominator_fails_the_plan(self) -> None:
+        """Selecting 5xx on both sides makes every error rate one."""
+        document = json.loads(json.dumps(self.document))
+        queries = document["signals"]["http"]["queries"]
+        queries["errorRate"] = queries["errorRate"].replace(
+            'http_route!~"/health/.*"}',
+            'http_route!~"/health/.*", http_response_status_code=~"5.."}')
+
+        failures = canary.check(document)
+
+        self.assertTrue(
+            any("signals.http.queries.errorRate" in f for f in failures), failures)
+
+    def test_a_millisecond_latency_left_unconverted_fails_the_plan(self) -> None:
+        """Without the division a 200ms p99 reads as 200 seconds."""
+        for signal in ("consume", "saga"):
+            with self.subTest(signal=signal):
+                document = json.loads(json.dumps(self.document))
+                queries = document["signals"][signal]["queries"]
+                queries["latencyP99Seconds"] = queries["latencyP99Seconds"].replace(
+                    " / 1000", "")
+
+                failures = canary.check(document)
+
+                self.assertTrue(
+                    any(f"signals.{signal}.queries.latencyP99Seconds" in f
+                        for f in failures),
+                    failures)
+
+    def test_an_absolute_threshold_a_signal_does_not_own_fails_the_plan(self) -> None:
+        """ADR-047 judges message duration against the stable track only, so
+        the http p99 threshold on consume would page on a slow consumer."""
+        document = json.loads(json.dumps(self.document))
+        document["signals"]["consume"]["absolute"] = ["errorRate", "latencyP99Seconds"]
+
+        failures = canary.check(document)
+
+        self.assertTrue(
+            any("signals.consume.absolute" in f and "latencyP99Seconds" in f
+                for f in failures),
+            failures)
+
     def test_http_not_held_to_the_latency_threshold_fails_the_plan(self) -> None:
         """ADR-047 holds http to both of §13.6's numbers, so dropping p99 from
         its absolute list is a rule moved, not a tidy-up."""
