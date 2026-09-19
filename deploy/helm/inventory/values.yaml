@@ -8,17 +8,14 @@ workload:
 
 replicaCount: 3
 
-# §15.5's canary track, and OFF is what every ordinary release means.
-#
-# Turned on, this chart renders the second of two Deployments that answer to the
-# one Service: its objects take a `-canary` suffix, its pods carry
-# `app.kubernetes.io/track: canary`, and the Service, Ingress, HPA and
-# PodDisruptionBudget are suppressed because the stable release owns those names
-# (ADR-022). The share of traffic it serves is its replica count over the total,
-# which is why `deploy/canary/canary.py` does the arithmetic and refuses the
-# weights a replica ratio cannot express.
-#
-# Set by the rollout, not by an operator: `deploy/canary/` drives it.
+# §15.5's canary track, and off is what every ordinary release means. Turned
+# on, this chart renders a second Deployment behind the one Service, with a
+# `-canary` suffix and a `track: canary` pod label, and suppresses the
+# Service, Ingress, HPA and PodDisruptionBudget because the stable release
+# owns those names (ADR-022). Its share of traffic is its replica count over
+# the total, which is why `deploy/canary/canary.py` does the arithmetic and
+# refuses a weight no replica ratio expresses. The rollout sets this, not an
+# operator.
 canary:
   enabled: false
 
@@ -104,19 +101,13 @@ database:
 
 # The bus (§9): each service names its own Secret, holding a distinct broker
 # account, because a shared principal makes queue arrival a boundary in name
-# only (§9.4).
-#
-# The Secret this names must carry a connection string for the
+# only (§9.4). The Secret must carry a connection string for the
 # `inventory-svc` account, whose permissions
-# deploy/compose/rabbitmq/definitions.json declares and check_permissions.py
-# holds to the code. Provisioning those accounts on a deployed broker is an
-# obligation this repository states and does not check — the same division
-# §15.4 draws for every Secret, and the same one ADR-033 and ADR-034 draw for
-# the realm. ADR-040 narrows what an unchecked realm can cost without
-# discharging the obligation: no host accepts a token with more than the
-# revocation bound left to live, so a long-lived one is contained rather than
-# detected, and the realm still owes the setting. Nothing here does even that
-# much for a broker account.
+# deploy/compose/rabbitmq/definitions.json declares. Provisioning that account
+# on a deployed broker is an obligation this repository states and does not
+# check, the division §15.4 draws for every Secret; ADR-040 narrows what an
+# unchecked realm can cost, and nothing here does even that much for a broker
+# account.
 broker:
   enabled: true
   secretRef:
