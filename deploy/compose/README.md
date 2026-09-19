@@ -312,6 +312,21 @@ does not vary is not configuration. A `hosts` entry mapping `catalog-api` to
 `Catalog.Api` does listen on 8081, because its `appsettings.json` declares both
 endpoints and that file overrides `ASPNETCORE_HTTP_PORTS`.
 
+Payments refuses to start without its provider too, read as eagerly as the
+authority (§15.4). The override leaves `psp-simulator` running, so a host-run
+Payments points at the port it publishes, with the same local key the Compose
+unit sets:
+
+```bash
+export ASPNETCORE_ENVIRONMENT=Development
+export ConnectionStrings__Payments='Server=localhost;Database=Payments;User Id=sa;Password=Local_Dev_Pa55w0rd!;TrustServerCertificate=True'
+export ConnectionStrings__RabbitMq='amqp://payments-svc:local-dev-payments@localhost:5672'
+export Identity__Authority='http://localhost:8080/realms/commerce'
+export PaymentProvider__BaseUrl='http://localhost:5190/'
+export PaymentProvider__ApiKey='local-dev-psp'
+dotnet run --project src/Services/Payments/Payments.Api
+```
+
 `ASPNETCORE_ENVIRONMENT` leads this block for the same reason it leads the one
 above, and the block is written to stand alone rather than as a delta on that
 shell: without it the authority on the next line is plain HTTP outside
