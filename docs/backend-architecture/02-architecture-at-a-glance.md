@@ -81,7 +81,6 @@ graph TB
     CAT --> RK
     ORD --> RK
     INV --> RK
-    PAY --> RK
 
     CAT <--> MQ
     ORD <--> MQ
