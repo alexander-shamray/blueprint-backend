@@ -10,19 +10,10 @@ using Xunit;
 namespace Inventory.Api.Tests;
 
 /// <summary>
-/// Messaging/DependencyInjection.cs's <c>r.Ignore&lt;ContractMappingException&gt;()</c>
-/// has no assertion anywhere that would fail if it were deleted — a malformed
-/// message still reaches the error queue eventually either way, and
-/// <see cref="InventoryCommandEndpointTests.A_malformed_reserve_is_a_contract_fault_and_is_not_retried"/>
-/// only bounds how long "eventually" takes by racing a sentinel, which the
-/// endpoint's prefetch lets through regardless of whether the malformed
-/// message is retrying behind it. This proves the exclusion directly, on
-/// timing rather than a count: <c>IConsumeObserver.ConsumeFault</c> fires
-/// once a message is given up on, and the exclusion is what makes that happen
-/// at once rather than only after <see cref="RetryPolicy.Standard"/>'s whole
-/// ladder has run its course. Remove the exclusion and the fault this test
-/// waits for still has retries ahead of it when the window below closes, so
-/// the observer never sees it and the count stays at zero.
+/// The exclusion makes a malformed message fault at once rather than after
+/// <see cref="RetryPolicy.Standard"/>'s whole ladder runs its course, so a
+/// fault observed inside <see cref="RetryPolicy.MinInterval"/> is the
+/// exclusion acting rather than the ladder's own first wait.
 /// </summary>
 [Collection(nameof(IntegrationCollection))]
 public sealed class RetryExclusionTests(ServiceFixture fixture) : IAsyncLifetime

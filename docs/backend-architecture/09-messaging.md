@@ -3158,10 +3158,12 @@ the delivery and the endpoint's concurrency slot are taken for the whole ladder.
 Releasing a message and having the broker bring it back is a different filter,
 which none of these endpoints uses.
 
-**Idempotency is the same on all four**: every one applies `InboxFilter<>`,
-and the callout under the saga's endpoint is the argument for there being no
-exception. **Retry differs, and so does the outbox** — three endpoints defer
-their sends with `UseInMemoryOutbox` and the saga's persists them, which is
+**Idempotency is the same everywhere**: every endpoint applies
+`InboxFilter<>`, and the callout under the saga's endpoint is the argument
+for there being no exception. **Retry differs, and so does the outbox** —
+every other endpoint defers its sends with `UseInMemoryOutbox`, and the
+saga persists them instead, because its sends must survive its own commit,
+which is
 [ADR-032](adr/ADR-032-the-sagas-outbox-is-masstransits-in-the-sagas-own-transaction.md)
 and the callout under that block.
 The **projection** endpoint from §9.4, carrying Catalog's events into local read

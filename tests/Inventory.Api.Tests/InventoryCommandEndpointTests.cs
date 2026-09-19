@@ -9,10 +9,8 @@ namespace Inventory.Api.Tests;
 /// <summary>
 /// <c>inventory-commands</c> (§9.6): the mappers, the retry policy's
 /// exclusion, the inbox filter and both handlers, driven over the real
-/// broker rather than through <see cref="MessagingRegistrationTests"/>'
-/// in-memory harness — that suite proves the registration composes, and
-/// stops at the queue address; nothing else exercises the topology a saga
-/// actually sends into.
+/// broker rather than an in-memory harness, because only a real delivery
+/// exercises the topology a saga actually sends into.
 /// </summary>
 [Collection(nameof(IntegrationCollection))]
 public sealed class InventoryCommandEndpointTests(ServiceFixture fixture) : IAsyncLifetime
@@ -281,9 +279,9 @@ public sealed class InventoryCommandEndpointTests(ServiceFixture fixture) : IAsy
         (await Available(product)).ShouldBe(0);
     }
 
-    // Thin forwarders onto ReservationTestSupport, which both this class and
-    // ReservationEndpointsTests need: the implementation lives once there,
-    // and each class keeps its own name so its test bodies read unchanged.
+    // Thin forwarders onto ReservationTestSupport: the implementation lives
+    // once there, and this class keeps its own name so its test bodies read
+    // unchanged.
     private Task SeedStock(Guid product, int available) =>
         ReservationTestSupport.SeedStock(fixture, product, available);
 

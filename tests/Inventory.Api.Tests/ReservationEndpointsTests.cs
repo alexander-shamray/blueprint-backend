@@ -9,10 +9,10 @@ using Xunit;
 namespace Inventory.Api.Tests;
 
 /// <summary>
-/// The three routes the runbook promises over <c>Reservation</c>: a read, a
-/// release an operator can trigger by hand, and the reinstate the runbook is
-/// the only caller of. <see cref="InventoryCommandEndpointTests"/> already
-/// covers the release the queue drives; this suite is the admin surface.
+/// The routes the runbook promises over <c>Reservation</c>: a read, a
+/// release an operator can trigger by hand, and a reinstate that only the
+/// runbook calls. The release the queue drives is a separate path through
+/// the command mappers; this suite is the admin surface.
 /// </summary>
 [Collection(nameof(IntegrationCollection))]
 public sealed class ReservationEndpointsTests(ServiceFixture fixture) : IAsyncLifetime
@@ -218,8 +218,9 @@ public sealed class ReservationEndpointsTests(ServiceFixture fixture) : IAsyncLi
         return client;
     }
 
-    // Thin forwarders onto ReservationTestSupport — see
-    // InventoryCommandEndpointTests for why the implementation lives there.
+    // Thin forwarders onto ReservationTestSupport: the implementation lives
+    // once there, and this class keeps its own name so its test bodies read
+    // unchanged.
     private Task SeedStock(Guid product, int available) =>
         ReservationTestSupport.SeedStock(fixture, product, available);
 
