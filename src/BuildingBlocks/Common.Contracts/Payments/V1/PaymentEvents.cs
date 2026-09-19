@@ -32,7 +32,7 @@ public sealed record PaymentAuthorised : IIntegrationEvent
 /// </summary>
 /// <remarks>
 /// <see cref="Reason"/> is the provider's code, or Payments' own
-/// <c>order_cancelled</c>, and deliberately not a closed vocabulary:
+/// <c>order_cancelled</c> (ADR-049), and deliberately not a closed vocabulary:
 /// a PSP's release could break one pinned here. It is for a human, never
 /// branched on and never a metric dimension (ADR-049).
 /// </remarks>

@@ -27,12 +27,13 @@ cancellation has somewhere to land that the command reads anyway. A decline
 settles the saga's payment half at once; staying silent would hold it until
 §9.6's payment timeout for a verdict that is already known.
 
-**Why a decline for a payer Payments may not know.** ADR-028 and §3.2 refuse a
-`PaymentDeclined` about a payer Payments has not identified, because a missing
-record says nothing about the order and a decline there would be a guess. A
-recorded cancellation is not a missing record: it is Ordering's own statement
-that the order will not be paid for, and the decline repeats it. No payer is
-judged, so none needs to be known.
+**Why a decline for a payer Payments may not know.** ADR-028 and §3.2's
+callout refuse `PaymentDeclined` when Payments holds no record, because it is
+"a business verdict about a payer it has not identified". This decline judges
+no payer: it judges the order, which Ordering has already cancelled, so it is
+the case their reason does not reach, and a tombstone that names no payer
+serves as well as a placed order that does. The case they govern — no record
+of the order at all — is unchanged and still a wait.
 
 **Why a decline and not a postcondition event.** ADR-024 answers a refused
 reserve with `StockReleased` because that event states a postcondition — no
