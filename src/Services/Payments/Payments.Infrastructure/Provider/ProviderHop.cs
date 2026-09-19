@@ -7,9 +7,8 @@ namespace Payments.Infrastructure.Provider;
 /// the saga's payment wait (§9.6).
 /// </summary>
 /// <remarks>
-/// Public, not internal, for the reason <c>Program</c> is (§4.2): the budget's
-/// arithmetic is asserted from another assembly, and one access modifier is a
-/// smaller commitment than an <c>InternalsVisibleTo</c> naming its consumer.
+/// Public for the reason <c>Program</c> is (§4.2): read from another assembly,
+/// and one modifier commits less than an <c>InternalsVisibleTo</c>.
 /// </remarks>
 public static class ProviderHop
 {
