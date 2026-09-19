@@ -68,6 +68,25 @@ def readings(signals=("http",), **overrides) -> dict:
     return document
 
 
+def service_tree(files: dict[str, str]) -> Path:
+    """A throwaway src/ holding one service, `Svc.Api`, and the given sources.
+
+    Keys are paths under src/Services/Svc; the host project and Program.cs
+    are always written, because the scans find a service by its host.
+    """
+    root = Path(tempfile.mkdtemp())
+    service = root / "src" / "Services" / "Svc"
+    host = service / "Svc.Api"
+    host.mkdir(parents=True)
+    (host / "Svc.Api.csproj").write_text("<Project />\n", encoding="utf-8")
+    (host / "Program.cs").write_text("// host\n", encoding="utf-8")
+    for relative, text in files.items():
+        path = service / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+    return root
+
+
 class WeightTests(unittest.TestCase):
     def test_five_percent_is_not_expressible_at_the_chart_default(self) -> None:
         """§15.3's replicaCount is 3, so one canary pod already serves 25% —
@@ -638,6 +657,17 @@ class SignalTests(unittest.TestCase):
         self.assertTrue(any("errorRate" in f and "absolute" in f for f in failures),
                         failures)
 
+    def test_http_not_held_to_the_latency_threshold_fails_the_plan(self) -> None:
+        """ADR-047 holds http to both of §13.6's numbers, so dropping p99 from
+        its absolute list is a rule moved, not a tidy-up."""
+        document = json.loads(json.dumps(self.document))
+        document["signals"]["http"]["absolute"] = ["errorRate"]
+
+        failures = canary.check(document)
+
+        self.assertTrue(
+            any("http" in f and "latencyP99Seconds" in f for f in failures), failures)
+
     def test_an_absolute_key_that_is_not_a_threshold_fails_the_plan(self) -> None:
         document = json.loads(json.dumps(self.document))
         document["signals"]["http"]["absolute"] = ["errorRate", "saturation"]
@@ -709,6 +739,62 @@ class ConsumerScanTests(unittest.TestCase):
         failures = canary.check(document)
 
         self.assertTrue(any("inventory-api" in f for f in failures), failures)
+
+
+class BulkRegistrationTests(unittest.TestCase):
+    """Every MassTransit 8.5.3 registration form, singly and in bulk.
+
+    A service that registers its consumers by namespace owes the same signal
+    as one that names them, and a scan that knew only the generic single
+    form would let it off.
+    """
+
+    CONSUMER_FORMS = (
+        "x.AddConsumer<OrderConsumer>();",
+        "x.AddConsumer(typeof(OrderConsumer));",
+        "x.AddConsumers(typeof(OrderConsumer).Assembly);",
+        "x.AddConsumersFromNamespaceContaining<OrderConsumer>();",
+        "x.AddFutureRequestConsumer<OrderFuture, OrderRequest, Order>();",
+    )
+    SAGA_FORMS = (
+        "x.AddSaga<OrderSaga>();",
+        "x.AddSagas(typeof(OrderSaga).Assembly);",
+        "x.AddSagasFromNamespaceContaining<OrderSaga>();",
+        "x.AddSagaStateMachine<OrderStateMachine, OrderState>();",
+        "x.AddSagaStateMachines(typeof(OrderStateMachine).Assembly);",
+        "x.AddSagaStateMachinesFromNamespaceContaining<OrderStateMachine>();",
+        "x.AddJobSagaStateMachines();",
+        "x.AddFuture<OrderFuture>();",
+        "x.AddFutures(typeof(OrderFuture).Assembly);",
+        "x.AddFuturesFromNamespaceContaining<OrderFuture>();",
+    )
+
+    def test_every_consumer_form_owes_consume_and_not_saga(self) -> None:
+        for form in self.CONSUMER_FORMS:
+            with self.subTest(form=form):
+                root = service_tree({"Svc.Infrastructure/Bus.cs": form + "\n"})
+
+                self.assertTrue(canary.has_consumers("Svc.Api", root))
+                self.assertFalse(canary.has_sagas("Svc.Api", root))
+
+    def test_every_saga_form_owes_saga_and_not_consume(self) -> None:
+        for form in self.SAGA_FORMS:
+            with self.subTest(form=form):
+                root = service_tree({"Svc.Infrastructure/Bus.cs": form + "\n"})
+
+                self.assertTrue(canary.has_sagas("Svc.Api", root))
+                self.assertFalse(canary.has_consumers("Svc.Api", root))
+
+    def test_a_saga_repository_or_a_commented_registration_owes_nothing(self) -> None:
+        """The negative control: a repository is not a saga, and a comment
+        is not a registration."""
+        root = service_tree({"Svc.Infrastructure/Bus.cs": (
+            "x.AddSagaRepository<OrderState>();\n"
+            "// x.AddConsumersFromNamespaceContaining<OrderConsumer>();\n"
+        )})
+
+        self.assertFalse(canary.has_consumers("Svc.Api", root))
+        self.assertFalse(canary.has_sagas("Svc.Api", root))
 
 
 class SagaScanTests(unittest.TestCase):
@@ -790,6 +876,26 @@ class HealthRouteTests(unittest.TestCase):
         routes = canary.health_routes()
 
         self.assertEqual(routes, {"/health/live", "/health/ready", "/health/startup"})
+
+    def test_a_route_that_is_not_a_literal_fails_the_plan_by_location(self) -> None:
+        """A route read through a constant is one the scan cannot see, and a
+        probe it cannot see is traffic again. The XML doc mention is the
+        negative control: a comment is not a call site."""
+        root = service_tree({"Svc.Api/Health.cs": (
+            "/// Maps <c>MapHealthChecks</c> for the probes.\n"
+            'app.MapHealthChecks("/health/live");\n'
+            "app.MapHealthChecks(ReadyPath, options);\n"
+        )})
+
+        failures = canary._probe_routes_are_excluded(
+            canary.entries(self.document["signals"]), root)
+
+        self.assertEqual(canary.health_routes(root), {"/health/live"})
+        self.assertTrue(any("Health.cs:3" in f for f in failures), failures)
+        self.assertFalse(any("Health.cs:1" in f for f in failures), failures)
+
+    def test_the_real_call_sites_are_all_literals(self) -> None:
+        self.assertEqual(canary.unresolved_health_routes(canary.ROOT), [])
 
     def test_every_http_query_excludes_every_mapped_probe_route(self) -> None:
         """The library chart probes every five and ten seconds, which alone

@@ -604,6 +604,13 @@ def check(plan_document: dict, root: Path = ROOT) -> list[str]:
     return failures
 
 
+# The absolute thresholds each signal must name (ADR-047): every signal's
+# fault rate, and http's p99 besides, because only a request has a latency
+# alert to be held to.
+REQUIRED_ABSOLUTE_DEFAULT = ("errorRate",)
+REQUIRED_ABSOLUTE = {"http": ("errorRate", "latencyP99Seconds")}
+
+
 def _signals_are_complete(signals: dict) -> list[str]:
     """Each signal carries the three queries `analyse` reads and a fault rate.
 
@@ -623,11 +630,13 @@ def _signals_are_complete(signals: dict) -> list[str]:
                     "reads it for both tracks"
                 )
         absolute = definition.get("absolute", [])
-        if "errorRate" not in absolute:
-            failures.append(
-                f"signals.{signal}.absolute does not name errorRate, so the "
-                "signal's fault rate is never held to §13.6's threshold"
-            )
+        for key in REQUIRED_ABSOLUTE.get(signal, REQUIRED_ABSOLUTE_DEFAULT):
+            if key not in absolute:
+                failures.append(
+                    f"signals.{signal}.absolute does not name {key}, so the "
+                    f"signal's {ABSOLUTE[key][0]} is never held to §13.6's "
+                    "threshold (ADR-047)"
+                )
         for key in absolute:
             if key not in ABSOLUTE:
                 failures.append(
@@ -687,12 +696,31 @@ def _workloads_declare_what_they_receive(workloads: dict, signals: dict, root: P
     return failures
 
 
-# The MassTransit registrations a scan can find. Registration rather than an
-# IConsumer<T> implementation, because the common consumers live in
-# Common.Infrastructure and a service is a consumer by adding one. Sagas are
-# apart because MassTransit measures them on instruments of their own.
-CONSUMER_REGISTRATION = re.compile(r"\.Add(?:Consumer|JobConsumer)\s*<")
-SAGA_REGISTRATION = re.compile(r"\.Add(?:Saga|SagaStateMachine)\s*<")
+# The MassTransit registration methods a scan can find, singly and in bulk,
+# as MassTransit's own assembly names them at the verified version. A service
+# is a consumer by registering one, and the common consumers live in
+# Common.Infrastructure, so the call is the subject rather than an IConsumer<T>
+# implementation. Sagas and futures, which are state machines, are apart
+# because MassTransit measures them on the saga instruments.
+CONSUMER_METHODS = (
+    "AddConsumer", "AddConsumers", "AddConsumersFromNamespaceContaining",
+    "AddFutureRequestConsumer",
+)
+SAGA_METHODS = (
+    "AddSaga", "AddSagas", "AddSagasFromNamespaceContaining",
+    "AddSagaStateMachine", "AddSagaStateMachines",
+    "AddSagaStateMachinesFromNamespaceContaining", "AddJobSagaStateMachines",
+    "AddFuture", "AddFutures", "AddFuturesFromNamespaceContaining",
+)
+
+
+def _registration(methods: tuple[str, ...]) -> re.Pattern:
+    """A call to any of `methods`, generic or not, and to nothing longer."""
+    return re.compile(rf"\.(?:{'|'.join(methods)})\s*[<(]")
+
+
+CONSUMER_REGISTRATION = _registration(CONSUMER_METHODS)
+SAGA_REGISTRATION = _registration(SAGA_METHODS)
 
 # Each registration, the signal it owes, and the key that exempts it.
 OWED_SIGNALS = (
@@ -711,6 +739,7 @@ def has_sagas(service_name: str, root: Path = ROOT) -> bool:
     return _registers(service_name, SAGA_REGISTRATION, root)
 
 
+@functools.cache
 def _registers(service_name: str, pattern: re.Pattern, root: Path) -> bool:
     """Whether any source in the service's tree matches `pattern`.
 
@@ -722,9 +751,21 @@ def _registers(service_name: str, pattern: re.Pattern, root: Path) -> bool:
         tree = host.parent.parent
         for path, code in sources.items():
             if path.suffix == ".cs" and tree in path.parents and pattern.search(
-                    re.sub(r"//.*", "", code)):
+                    _code_only(code)):
                 return True
     return False
+
+
+@functools.cache
+def _code_only(code: str) -> str:
+    """C# with its comments blanked and its line breaks kept, so a match's
+    offset still gives the line it is on. Cached, as the scans repeat."""
+    return re.sub(
+        r"//[^\n]*|/\*.*?\*/",
+        lambda comment: re.sub(r"[^\n]", " ", comment.group(0)),
+        code,
+        flags=re.DOTALL,
+    )
 
 
 @functools.cache
@@ -745,18 +786,34 @@ def _csharp_sources(root: Path) -> dict[Path, str]:
     return found
 
 
-# The probe routes, as MapHealthChecks names them.
-HEALTH_ROUTE = re.compile(r"MapHealthChecks\(\s*\"([^\"]+)\"")
+# A MapHealthChecks call, and the string literal it maps where it has one.
+HEALTH_CALL = re.compile(r"\bMapHealthChecks\s*\(\s*(?:\"([^\"]+)\")?")
 ROUTE_EXCLUSION = re.compile(r"http_route!~\"([^\"]*)\"")
 HTTP_SELECTOR = re.compile(r"http_server_request_duration_seconds_[a-z]+\{([^}]*)\}")
 
 
 def health_routes(root: Path = ROOT) -> set[str]:
-    """Every route a host maps a health check on, read from the code."""
-    routes = set()
-    for code in _csharp_sources(root).values():
-        routes |= set(HEALTH_ROUTE.findall(code))
-    return routes
+    """Every literal route a host maps a health check on, read from the code."""
+    return {route for route, _ in _health_calls(root) if route is not None}
+
+
+def unresolved_health_routes(root: Path = ROOT) -> list[str]:
+    """Every MapHealthChecks call whose route is not a literal, as file:line."""
+    return [site for route, site in _health_calls(root) if route is None]
+
+
+@functools.cache
+def _health_calls(root: Path) -> tuple[tuple[str | None, str], ...]:
+    """Each MapHealthChecks call site outside a comment, with its literal."""
+    calls = []
+    for path, code in sorted(_csharp_sources(root).items()):
+        if path.suffix != ".cs":
+            continue
+        stripped = _code_only(code)
+        for call in HEALTH_CALL.finditer(stripped):
+            line = stripped.count("\n", 0, call.start()) + 1
+            calls.append((call.group(1), f"{path.relative_to(root).as_posix()}:{line}"))
+    return tuple(calls)
 
 
 def _probe_routes_are_excluded(signals: dict, root: Path) -> list[str]:
@@ -771,7 +828,11 @@ def _probe_routes_are_excluded(signals: dict, root: Path) -> list[str]:
         return ["found no MapHealthChecks route under src/: the probe exclusion "
                 "would pass vacuously, so the scan is what is broken"]
 
-    failures = []
+    failures = [
+        f"{site} maps a health check on a route that is not a string literal, "
+        "so the probe exclusion cannot be checked against it"
+        for site in unresolved_health_routes(root)
+    ]
     queries = entries(signals.get("http", {}).get("queries", {}))
     for name, expression in sorted(queries.items()):
         selectors = HTTP_SELECTOR.findall(expression)
