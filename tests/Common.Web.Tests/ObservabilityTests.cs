@@ -35,6 +35,7 @@ public class ObservabilityTests
         "Inventory.Reservations",
         "Inventory.Outbox",
         "Payments.Provider",
+        "Payments.Outbox",
         "Commerce.Requests",
         "Commerce.Messaging",
         "MassTransit",
