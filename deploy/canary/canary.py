@@ -356,7 +356,7 @@ def analyse(readings: dict, thresholds: dict, signals: dict) -> dict:
                         ROLLBACK,
                         f"the {track} track reported no {signal} {name}: the "
                         "series is absent, which is what a metric nobody "
-                        "publishes and a pod nobody scraped look like alike "
+                        "publishes and a pod nobody scraped look alike"
                         "(§13.6)",
                     )
 
