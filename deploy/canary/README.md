@@ -28,14 +28,14 @@ every chart and asserts what comes out.
 
 | File | What it is |
 |---|---|
-| `canary.json` | §15.5's ladder, the thresholds, each signal's PromQL, and the workload map with the signals each workload is judged on |
-| `canary.py` | The weight arithmetic, the promote/rollback verdict, and the gate over `canary.json` |
-| `read_prometheus.py` | The one file that talks to anything. Runs the queries of the signals a workload declares and writes what came back |
+| `canary.json` | §15.5's ladder, the thresholds, and the workload map with the signals each workload is judged on |
+| `canary.py` | The weight arithmetic, the signals and their PromQL templates, the promote/rollback verdict, and the gate over `canary.json` |
+| `read_prometheus.py` | The one file that talks to anything. Runs `canary.py`'s queries for the signals a workload declares and writes what came back |
 | `test_canary.py` | The suite. It is the whole of the assurance the rollout has |
 
 ## What it asserts
 
-`canary.py check` is ten checks, and the sixth is about itself:
+`canary.py check`'s checks, in order; the sixth is about itself:
 
 1. The ladder climbs, ends at 100%, and every rung but the last has a dwell.
 2. Every threshold `analyse` reads is present — it indexes them, so a missing
@@ -46,7 +46,7 @@ every chart and asserts what comes out.
 4. Each workload's key is a Helm release name, its `serviceName` is an entry
    assembly this solution builds, and its `chart` is a chart under
    `deploy/helm`.
-5. Every metric a signal's queries read is vouched for: either a loaded alert
+5. Every series the query templates read is vouched for: either a loaded alert
    reads it — and `deploy/observability/check.py` has already established
    that something publishes it — or it is an instrument of a meter
    `Common.Web`'s `ObservabilityExtensions` registers, which is how
@@ -58,22 +58,28 @@ every chart and asserts what comes out.
    vacuously.
 7. Both of `deploy.yml`'s triggers cover every path in `SOURCE_INPUTS`.
 8. `deploy.yml`'s dispatch menu is exactly the plan's workload set.
-9. Every signal carries the three queries `analyse` reads and holds its fault
-   rate to an absolute threshold; every workload declares at least one signal
-   the plan defines; and a service whose tree registers a MassTransit
+9. Every workload declares at least one signal `canary.py` defines; and a
+   service whose tree registers a MassTransit
    consumer declares `consume`, and one that registers a saga declares `saga`,
    or carries a non-empty `consumeExemption` or `sagaExemption` — which fails
    on a service with nothing to exempt, or beside the signal it exempts.
-10. Every selector in the `http` signal's queries excludes the probe routes,
-    and the exclusion matches every route `MapHealthChecks` maps in `src/` —
-    found by scanning, so a fourth probe route fails the plan rather than
-    counting as traffic again.
+10. The probe-route scan finds the routes `MapHealthChecks` maps in `src/`,
+    and every call site's route is a literal. The `http` templates' exclusion
+    is derived from those routes, so a new probe route is excluded without an
+    edit, and one the scan cannot read fails the plan — and refuses to render
+    an `http` query — rather than counting as traffic again.
+11. `canary.json` holds the ladder, the tolerance, the thresholds and the
+    workloads, and nothing else: a plan carrying query text again is refused
+    rather than ignored beside the templates that run.
 
 ## What a workload is judged on
 
 [ADR-047](../../docs/backend-architecture/adr/ADR-047-the-canary-judges-each-workload-on-the-signals-it-receives.md)
 is the decision; this is where it lives. A workload declares `signals` in
-`canary.json`, and `read_prometheus.py` fetches those and no others:
+`canary.json`, and `read_prometheus.py` fetches those and no others. The
+signals and their thresholds are `canary.py`'s `SIGNALS`, and their queries
+are `queries()`, one template per signal and role, which the suite pins as
+golden strings:
 
 - **`http`** is ASP.NET Core's request histogram, less the probe routes. It is
   held to both of §13.6's absolute numbers.
@@ -92,7 +98,8 @@ promoted only when each thing it does was observed doing it.
 
 - **It reaches no cluster and no Prometheus.** Every function in `canary.py` is
   pure over its arguments; the workflow fetches and acts.
-- **It does not validate PromQL.** The queries are strings here. A syntax error
+- **It does not validate PromQL.** The templates are strings, and their golden
+  tests pin the text rather than that Prometheus parses it. A syntax error
   in one surfaces as a failed query at the end of a ten-minute dwell — which
   the verdict reads as an absent series and therefore as a rollback, so it
   fails safe and slowly rather than unsafely.
