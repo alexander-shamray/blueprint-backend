@@ -1,54 +1,11 @@
-# ONE RELEASE OWNS A RESOURCE, AND THAT IS WHAT THE TWO FLOWS CANNOT SHARE.
+# The umbrella carries no configuration of its own: every key a deployable
+# needs is in its own chart's values.yaml, so one file governs both a
+# per-service release and this one. A second copy here would be the first
+# thing to drift, and the drift would be invisible — both renders succeed and
+# only one matches what is running, and a key set here silently wins over the
+# subchart's own.
 #
-# Helm stamps `meta.helm.sh/release-name` onto every object it creates, and
-# these charts render fixed names (§15.3 — the Service name is routing
-# configuration, so it cannot carry a release prefix). So `platform` and a
-# per-service release cannot both own `catalog-api`: if this chart installs it,
-# a later `helm upgrade --install catalog-api deploy/helm/catalog` is REJECTED
-# for ownership, and the reverse is rejected the same way. An environment stood
-# up by this chart is upgraded by this chart.
-#
-# NOT "one release per namespace" — the production model below is several
-# per-service releases sharing one, which is fine because they own disjoint
-# objects. The conflict is overlap, not co-tenancy.
-#
-# §15.1 settles which one production uses, and it is not this one: its
-# config-only deploy step reads `helm get values ordering-api -n "$NAMESPACE"`,
-# which is a per-service release by name. The pipeline builds, tests and
-# deploys per service, so the releases are per service.
-#
-# That leaves this chart a real job and a narrower one: standing an
-# environment up WHOLE — a fresh cluster, a review environment, a local kind
-# cluster — where one command is the point and nothing deploys independently
-# afterwards. It is not the production release mechanism, and using it as one
-# means giving up §15.1's per-service path.
-#
-# Nothing in a render can catch a mix; the conflict is an API-server error at
-# install time. deploy/helm/README.md names it as not covered.
-#
-# The umbrella carries no configuration of its own, and that is the point.
-#
-# Every key a deployable needs is in its own chart's values.yaml, so the same
-# file governs `helm upgrade catalog-api deploy/helm/catalog` and this release.
-# A second copy here would be the first thing to drift, and the drift would be
-# invisible: both renders succeed, and only one of them matches what is
-# running.
-#
-# What DOES belong here is the per-environment overlay, supplied on the command
-# line or in a values file beside this one, under each subchart's name:
-#
-#     helm upgrade platform deploy/helm/platform \
-#       --set catalog.image.tag="$SHA" \
-#       --set ordering.image.tag="$SHA" \
-#       --set gateway.image.tag="$SHA" \
-#       --set web-bff.image.tag="$SHA"
-#
-# The tags are separate rather than global because §15.1 builds and deploys
-# per service: a change under src/Services/Catalog rebuilds Catalog alone, and
-# every other subchart must keep the tag it is already running (§15.1's
-# "Resolve the running tag"). One shared tag would roll the whole platform on
-# every merge and call it a config-only deploy.
-#
-# Nothing is set below. A key here with a value would silently win over the
-# subchart's own, which is the one thing this file must not do quietly.
+# The per-environment overlay goes on the command line or in a values file
+# beside this one, under each subchart's name; deploy/helm/README.md holds
+# that command, and why an umbrella release and a per-service one conflict.
 {}

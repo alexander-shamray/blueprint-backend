@@ -23,6 +23,7 @@ on:
       - 'src/BFF/Web.Bff/**'
       - 'src/Services/Catalog/**'
       - 'src/Services/Ordering/**'
+      - 'src/Services/Inventory/**'
       - 'src/BuildingBlocks/Common.Web/HealthCheckExtensions.cs'
       - 'deploy/canary/**'
   push:
@@ -35,6 +36,7 @@ on:
       - 'src/BFF/Web.Bff/**'
       - 'src/Services/Catalog/**'
       - 'src/Services/Ordering/**'
+      - 'src/Services/Inventory/**'
       - 'src/BuildingBlocks/Common.Web/HealthCheckExtensions.cs'
       - 'deploy/canary/**'
 

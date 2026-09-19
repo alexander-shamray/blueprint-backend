@@ -19,6 +19,7 @@ import contextlib
 import io
 import json
 import re
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -62,10 +63,10 @@ class WeightTests(unittest.TestCase):
         self.assertIn("25.0%", message)
 
     def test_five_percent_is_expressible_at_nineteen(self) -> None:
-        """And 19 + 1 is 20, which is the three service charts' maxReplicas
+        """And 19 + 1 is 20, which is the service charts' maxReplicas
         exactly — not the gateway's, which is 30 because every external request
         passes through it. The 19 is what the weight costs, and only on those
-        three is it also all the chart allows."""
+        charts is it also all the chart allows."""
         result = canary.plan(5, stable_replicas=19, overshoot_points=0)
 
         self.assertEqual(result["canaryReplicas"], 1)
@@ -425,6 +426,157 @@ class PlanDocumentTests(unittest.TestCase):
         for expression in canary.entries(self.document["queries"]).values():
             self.assertIn("deployment_track", expression)
             self.assertNotIn("service_version", expression)
+
+
+class DispatchOptionTests(unittest.TestCase):
+    """The `workload:` dispatch input's `options:` against canary.json's keys.
+
+    A workload the plan can roll and this list cannot choose stays invisible
+    to a manual rollout while every path-filter check stays green: that check
+    covers the trigger, not the menu underneath it.
+    """
+
+    WORKFLOW_TEXT = """\
+on:
+  workflow_dispatch:
+    inputs:
+      workload:
+        description: 'x'
+        required: true
+        type: choice
+        options: [{options}]
+"""
+
+    def _failures(self, options: str, workloads: dict) -> list[str]:
+        original = canary.WORKFLOW
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "deploy.yml"
+            path.write_text(self.WORKFLOW_TEXT.format(options=options), encoding="utf-8")
+            canary.WORKFLOW = path
+            try:
+                return canary._dispatch_options_match_workloads(workloads)
+            finally:
+                canary.WORKFLOW = original
+
+    def test_a_missing_option_fails(self) -> None:
+        failures = self._failures(
+            "catalog-api, ordering-api",
+            {"catalog-api": {}, "ordering-api": {}, "inventory-api": {}},
+        )
+
+        self.assertTrue(any("inventory-api" in f for f in failures), failures)
+
+    def test_an_extra_option_fails(self) -> None:
+        failures = self._failures("catalog-api, ordering-api", {"catalog-api": {}})
+
+        self.assertTrue(any("ordering-api" in f for f in failures), failures)
+
+    def test_the_real_repository_passes(self) -> None:
+        document = canary.load_plan()
+
+        self.assertEqual(
+            canary._dispatch_options_match_workloads(canary.entries(document["workloads"])),
+            [],
+        )
+
+    def _failures_for_text(self, text: str, workloads: dict) -> list[str]:
+        original = canary.WORKFLOW
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "deploy.yml"
+            path.write_text(text, encoding="utf-8")
+            canary.WORKFLOW = path
+            try:
+                return canary._dispatch_options_match_workloads(workloads)
+            finally:
+                canary.WORKFLOW = original
+
+    def test_a_sibling_inputs_options_do_not_stand_in_for_a_missing_list(self) -> None:
+        # `workload` has no `options:` of its own; `region`, a later sibling
+        # choice input, happens to carry the workload names. A search that
+        # runs past `workload:`'s own block would read `region`'s list and
+        # call the input covered when it is not.
+        text = """\
+on:
+  workflow_dispatch:
+    inputs:
+      workload:
+        description: 'x'
+        required: true
+        type: choice
+      region:
+        description: 'y'
+        required: true
+        type: choice
+        options: [catalog-api]
+"""
+        failures = self._failures_for_text(text, {"catalog-api": {}})
+
+        self.assertTrue(
+            any("no options list" in f for f in failures),
+            failures,
+        )
+
+    def test_workload_after_another_choice_input_is_still_read(self) -> None:
+        # `workload` is not the first input here; the block has to be found
+        # by its own heading rather than assumed to start the section.
+        text = """\
+on:
+  workflow_dispatch:
+    inputs:
+      region:
+        description: 'y'
+        required: true
+        type: choice
+        options: [north, south]
+      workload:
+        description: 'x'
+        required: true
+        type: choice
+        options: [catalog-api]
+"""
+        failures = self._failures_for_text(text, {"catalog-api": {}})
+
+        self.assertEqual(failures, [])
+
+    def test_a_description_naming_options_is_not_the_options_key(self) -> None:
+        # No `options:` key at all — the description merely says the word,
+        # the way a real dispatch input's description does. An unanchored
+        # substring search reads this as the list and calls the input
+        # covered when a manual rollout still has no choices.
+        text = """\
+on:
+  workflow_dispatch:
+    inputs:
+      workload:
+        description: 'options: [catalog-api, ordering-api, inventory-api]'
+        required: true
+        type: choice
+"""
+        failures = self._failures_for_text(
+            text, {"catalog-api": {}, "ordering-api": {}, "inventory-api": {}}
+        )
+
+        self.assertTrue(
+            any("no options list" in f for f in failures),
+            failures,
+        )
+
+    def test_a_description_naming_options_before_the_real_key_is_skipped(self) -> None:
+        # The description mentions `options:` ahead of the real key. The real
+        # key still has to be the one read, in whichever order they fall.
+        text = """\
+on:
+  workflow_dispatch:
+    inputs:
+      workload:
+        description: 'options: [wrong, values]'
+        required: true
+        type: choice
+        options: [catalog-api]
+"""
+        failures = self._failures_for_text(text, {"catalog-api": {}})
+
+        self.assertEqual(failures, [])
 
 
 class SourceInputTests(unittest.TestCase):
