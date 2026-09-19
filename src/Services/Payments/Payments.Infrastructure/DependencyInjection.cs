@@ -1,3 +1,4 @@
+using Payments.Application.Orders;
 using Payments.Domain;
 using Payments.Infrastructure.Idempotency;
 using Payments.Infrastructure.Messaging;
@@ -48,6 +49,7 @@ public static class DependencyInjection
         services.AddPluggableFrom(typeof(DependencyInjection).Assembly);
 
         services.AddScoped<IUnitOfWork, EfUnitOfWork>();                     // §6.3
+        services.AddScoped<IPaymentOrderStore, SqlPaymentOrderStore>();      // §3.2, §6.3
 
         // §5.6's repository registrations join with the first aggregate.
 

@@ -53,9 +53,10 @@ public class DatabaseSmokeTests(ServiceFixture fixture)
         // the index the retention purge deletes through, and §8.5's marker
         // table with the database clock it is aged by and the rowversion the
         // purge identifies one of its rows by — all of them wiring every
-        // service has rather than anything this one chose.
+        // service has rather than anything this one chose. AddPaymentOrders
+        // is this service's own (§3.2).
         string[] applied = await fixture.AppliedMigrationsAsync();
-        applied.Length.ShouldBe(7);
+        applied.Length.ShouldBe(8);
         applied[0].ShouldEndWith("_InitialCreate");
         applied[1].ShouldEndWith("_AddOutbox");
         applied[2].ShouldEndWith("_AddInbox");
@@ -63,6 +64,7 @@ public class DatabaseSmokeTests(ServiceFixture fixture)
         applied[4].ShouldEndWith("_AddIdempotencyMarkers");
         applied[5].ShouldEndWith("_IdempotencyMarkerCommittedAtDefault");
         applied[6].ShouldEndWith("_AddIdempotencyMarkerRowVersion");
+        applied[7].ShouldEndWith("_AddPaymentOrders");
     }
 
     [Fact]
