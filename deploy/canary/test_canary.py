@@ -358,6 +358,9 @@ class VerdictTests(unittest.TestCase):
 
         self.assertEqual(verdict["decision"], canary.ROLLBACK)
         self.assertIn("consume", verdict["reason"])
+        # §13.6's alerts page on the HTTP series only, so a message signal's
+        # breach names the threshold without claiming an alert fires.
+        self.assertNotIn("pages", verdict["reason"])
 
     def test_a_failing_saga_is_not_carried_by_healthy_consumers(self) -> None:
         """MassTransit counts a saga's messages on its own instruments, so a
@@ -810,6 +813,39 @@ class ConsumerScanTests(unittest.TestCase):
         failures = canary.check(document)
 
         self.assertTrue(any("inventory-api" in f for f in failures), failures)
+
+
+class HttpExemptionTests(unittest.TestCase):
+    """Every workload is an ASP.NET Core host, so leaving its HTTP traffic
+    unjudged is a decision the plan argues rather than an omission."""
+
+    def setUp(self) -> None:
+        self.document = canary.load_plan()
+
+    def test_a_workload_without_http_and_without_an_argument_fails(self) -> None:
+        document = json.loads(json.dumps(self.document))
+        document["workloads"]["inventory-api"].pop("httpExemption", None)
+
+        failures = canary.check(document)
+
+        self.assertTrue(
+            any("inventory-api" in f and "httpExemption" in f for f in failures), failures)
+
+    def test_an_empty_http_exemption_fails(self) -> None:
+        document = json.loads(json.dumps(self.document))
+        document["workloads"]["inventory-api"]["httpExemption"] = "  "
+
+        failures = canary.check(document)
+
+        self.assertTrue(any("inventory-api" in f for f in failures), failures)
+
+    def test_an_http_exemption_beside_a_declared_http_signal_fails(self) -> None:
+        document = json.loads(json.dumps(self.document))
+        document["workloads"]["gateway"]["httpExemption"] = "unneeded"
+
+        failures = canary.check(document)
+
+        self.assertTrue(any("gateway" in f for f in failures), failures)
 
 
 class BulkRegistrationTests(unittest.TestCase):

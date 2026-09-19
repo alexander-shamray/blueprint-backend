@@ -379,9 +379,12 @@ def analyse(readings: dict, thresholds: dict, signals: dict) -> dict:
         for key in definition.get("absolute", []):
             label, fmt = ABSOLUTE[key]
             if canary[key] > thresholds[key]:
+                # §13.6's alerts read the HTTP series alone, so only there
+                # is the breached number one that pages.
+                pages = " that pages" if signal == "http" else ""
                 verdicts.append(
                     f"{signal} {label} {fmt.format(canary[key])} is above the "
-                    f"{fmt.format(thresholds[key])} that pages (§13.6)"
+                    f"{fmt.format(thresholds[key])}{pages} (§13.6)"
                 )
         verdicts += _regression(
             f"{signal} error rate",
@@ -719,6 +722,21 @@ def _workloads_declare_what_they_receive(workloads: dict, signals: dict, root: P
                     f"workloads.{name} declares the signal {signal!r}, which "
                     f"canary.py does not define: {', '.join(sorted(signals))}"
                 )
+
+        # Every workload is an ASP.NET Core host, so its HTTP traffic is
+        # judged unless the plan argues why not, and only then.
+        http_exemption = workload.get("httpExemption")
+        if "http" in declared:
+            if http_exemption is not None:
+                failures.append(
+                    f"workloads.{name}.httpExemption sits beside a declared http "
+                    "signal, and one of the two is wrong"
+                )
+        elif not isinstance(http_exemption, str) or not http_exemption.strip():
+            failures.append(
+                f"workloads.{name} declares no http signal and argues no "
+                "httpExemption, so its HTTP endpoints are unjudged by omission"
+            )
 
         for signal, pattern, key, kind in OWED_SIGNALS:
             registers = _registers(workload.get("serviceName", ""), pattern, root)

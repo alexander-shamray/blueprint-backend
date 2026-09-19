@@ -65,7 +65,8 @@
       "signals names what each workload is judged on; the signals, their",
       "thresholds and their queries are canary.py's SIGNALS and queries()",
       "(ADR-047). consumeExemption and sagaExemption argue a registration the",
-      "scan in check 9 finds and the workload does not declare."
+      "scan in check 9 finds and the workload does not declare; httpExemption",
+      "argues a host whose HTTP traffic is not judged."
     ],
     "catalog-api": {
       "serviceName": "Catalog.Api",
@@ -74,7 +75,12 @@
       "consumeExemption": "Catalog's one consumer is the stock-level projection, fed at a rate Inventory's traffic sets rather than Catalog's, so a canary's share of it cannot be relied on to reach minimumRequests in a dwell and a declared consume signal would roll healthy releases back for quiet. A projection that faults is already loud: it retries and then lands in the error queue §13.6 pages on, and the reads it serves are judged by the http signal."
     },
     "ordering-api": { "serviceName": "Ordering.Api", "chart": "ordering", "signals": ["http", "consume", "saga"] },
-    "inventory-api": { "serviceName": "Inventory.Api", "chart": "inventory", "signals": ["consume"] },
+    "inventory-api": {
+      "serviceName": "Inventory.Api",
+      "chart": "inventory",
+      "signals": ["consume"],
+      "httpExemption": "Inventory's HTTP surface is its stock and reservation admin routes, behind the inventory:admin policy at the gateway and in the service, and an operator's occasional call cannot be relied on to reach minimumRequests in a dwell, so a declared http signal would roll healthy releases back for quiet. Its commands and events arrive on the broker and are judged by consume, and an admin request that fails is still counted by the gateway's http signal, which proxies it."
+    },
     "gateway": { "serviceName": "Gateway.Api", "chart": "gateway", "signals": ["http"] },
     "web-bff": { "serviceName": "Web.Bff", "chart": "web-bff", "signals": ["http"] }
   }
