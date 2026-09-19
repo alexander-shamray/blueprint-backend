@@ -1,4 +1,5 @@
 using System.Data.Common;
+using System.Text.Json;
 using Inventory.Infrastructure.Persistence;
 using Inventory.Migrator;
 using Common.Application;
@@ -123,32 +124,23 @@ public sealed class ServiceFixture : IAsyncLifetime
     }
 
     /// <summary>
-    /// Widens <c>inventory-svc</c>'s broker permissions against the test
-    /// container alone, after it starts. §14.1's grant already covers
-    /// <c>inventory-events</c> and every read on <c>Common\.Contracts</c>
-    /// (configure, write, read for the first; read for the second) — what it
-    /// refuses is this suite standing in for Ordering and Shipping to publish
-    /// <see cref="Common.Contracts.Ordering.V1.OrderCancelled"/> and
-    /// <see cref="Common.Contracts.Shipping.V1.ShipmentDispatched"/> onto
-    /// contract exchanges <c>inventory-svc</c> does not own. Production never
-    /// asks for that write, so the grant does not move; the harness does, on
-    /// the container this fixture disposes.
+    /// The harness publishes Ordering's and Shipping's contracts under this
+    /// service's own account, which the deployed grant refuses. Only the test
+    /// container's write moves; <c>configure</c> and <c>read</c> are read back
+    /// from the definitions the container imports, so the topology is judged
+    /// by the scope that deploys. A copy of Ordering.TestSupport's method,
+    /// because §4.3 lets no test helper cross a service boundary.
     /// </summary>
-    /// <remarks>
-    /// A second copy of Ordering.TestSupport's method, deliberately. §4.3
-    /// permits exactly one assembly to cross a service boundary and a test
-    /// helper is not it.
-    /// </remarks>
     private async Task WidenWriteForTheHarnessAsync()
     {
-        const string scope =
+        const string user = "inventory-svc";
+        const string write =
             "^(inventory-|Common\\.Contracts|Inventory\\.Infrastructure\\.Messaging:|MassTransit:)";
 
+        (string configure, string read) = ImportedGrant();
+
         ExecResult result = await _rabbit!.ExecAsync(
-            [
-                "rabbitmqctl", "set_permissions", "-p", "/", "inventory-svc",
-                scope, scope, scope
-            ],
+            ["rabbitmqctl", "set_permissions", "-p", "/", user, configure, write, read],
             TestContext.Current.CancellationToken);
 
         // A silent failure here is the worst outcome available: every event
@@ -157,8 +149,27 @@ public sealed class ServiceFixture : IAsyncLifetime
         if (result.ExitCode != 0)
         {
             throw new InvalidOperationException(
-                $"Could not widen inventory-svc's broker permissions for the harness "
+                $"Could not widen {user}'s broker permissions for the harness "
                 + $"(exit {result.ExitCode}). stdout: {result.Stdout} stderr: {result.Stderr}");
+        }
+
+        // The mapped file rather than the container, because it is the same
+        // text the broker imported and it can be read before anything starts.
+        static (string Configure, string Read) ImportedGrant()
+        {
+            string path = Path.Combine(BrokerContextPath(), "definitions.json");
+            using JsonDocument definitions = JsonDocument.Parse(File.ReadAllText(path));
+
+            foreach (JsonElement entry in definitions.RootElement.GetProperty("permissions").EnumerateArray())
+            {
+                if (entry.GetProperty("user").GetString() != user || entry.GetProperty("vhost").GetString() != "/")
+                    continue;
+
+                return (entry.GetProperty("configure").GetString()!, entry.GetProperty("read").GetString()!);
+            }
+
+            throw new InvalidOperationException(
+                $"{path} grants {user} nothing on the default vhost, so there is no scope to preserve.");
         }
     }
 
