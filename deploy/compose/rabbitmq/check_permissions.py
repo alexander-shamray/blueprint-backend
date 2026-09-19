@@ -84,8 +84,18 @@ USER_SUFFIX = "-svc"
 FRAMEWORK_PREFIX = "MassTransit:"
 
 # The polymorphic publish exchange. MassTransit binds each concrete contract
-# exchange to one exchange per interface the message implements, so every
-# publisher declares and writes this and every consumer reads it.
+# exchange to one exchange per interface the message implements, and the
+# SENDER declares that binding: `exchange.bind` takes write on the destination
+# — this exchange — and read on the source, which is the concrete contract. So
+# a publisher declares and writes it, and the check below asks for no more.
+#
+# A consumer needs no read here, which is why a grant that enumerates
+# contract prefixes rather than naming `Common\.Contracts` whole is not thereby
+# too narrow. Measured on a real broker running these definitions with a
+# consumer bound: this exchange appears in exactly one binding and appears
+# there as the DESTINATION, while the receive endpoint binds to the concrete
+# contract exchange — which is the read a consumer does need, on its peer's
+# versioned prefix.
 INTERFACE_EXCHANGE = "Common.Contracts:IIntegrationEvent"
 
 failures: list[str] = []
