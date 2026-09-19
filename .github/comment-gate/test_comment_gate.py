@@ -154,6 +154,10 @@ class ShellComments(unittest.TestCase):
                 text = f"cat <<{opener}\n# no\nEND-OF-FILE\n# after\n"
                 self.assertEqual(said(gate.shell, text), ["after"])
 
+    def test_a_number_is_a_heredoc_word_outside_arithmetic(self):
+        text = "cat <<2\n# no\n2\n# after\n"
+        self.assertEqual(said(gate.shell, text), ["after"])
+
     def test_an_arithmetic_shift_is_not_a_heredoc(self):
         for line in ["((mask << shift))", "x=$((1 << width))",
                      "if ((a << (b + 1))); then :; fi"]:

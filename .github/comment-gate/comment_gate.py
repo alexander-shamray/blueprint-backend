@@ -277,14 +277,11 @@ def _sh_heredoc_word(text, i):
 
     The whole word, as the shell reads it: a delimiter cut short at the first
     character a narrower pattern did not expect never matches its terminator,
-    and everything after it would be read as heredoc body. A leading digit is
-    an arithmetic shift, `$((a<<2))`, rather than a delimiter.
+    and everything after it would be read as heredoc body.
     """
     n = len(text)
     while i < n and text[i] in " \t":
         i += 1
-    if i < n and text[i].isdigit():
-        return None, i
     word = []
     while i < n and text[i] not in _SH_WORD_BREAK + "<>":
         c = text[i]
