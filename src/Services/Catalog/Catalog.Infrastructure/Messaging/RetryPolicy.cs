@@ -25,8 +25,7 @@ internal static class RetryPolicy
 
     /// <summary>
     /// The ceiling the ladder climbs towards. It is not reached at
-    /// <see cref="RetryLimit"/> retries, which is the arithmetic §9.6's
-    /// confirmation wait depends on.
+    /// <see cref="RetryLimit"/> retries.
     /// </summary>
     public static readonly TimeSpan MaxInterval = TimeSpan.FromMinutes(1);
 
