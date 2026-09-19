@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <!--
+    Settings come from Directory.Build.props (§4.4).
+
+    The Web SDK, because this is the one project in the service that is a
+    host. Application and Infrastructure per §4.2's fourth row — Program.cs is
+    the only composition root, and the endpoints gate in Payments.Api.Tests
+    holds every other file to Application and Domain contracts.
+  -->
+
+  <ItemGroup>
+    <!-- The OpenAPI document only, no UI (Appendix C). -->
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Payments.Application\Payments.Application.csproj" />
+    <ProjectReference Include="..\Payments.Infrastructure\Payments.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\..\BuildingBlocks\Common.Web\Common.Web.csproj" />
+  </ItemGroup>
+
+</Project>

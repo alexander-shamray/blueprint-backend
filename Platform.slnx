@@ -35,6 +35,13 @@
     <Project Path="src/Services/Ordering/Ordering.Infrastructure/Ordering.Infrastructure.csproj" />
     <Project Path="src/Services/Ordering/Ordering.Migrator/Ordering.Migrator.csproj" />
   </Folder>
+  <Folder Name="/src/Services/Payments/">
+    <Project Path="src/Services/Payments/Payments.Api/Payments.Api.csproj" />
+    <Project Path="src/Services/Payments/Payments.Application/Payments.Application.csproj" />
+    <Project Path="src/Services/Payments/Payments.Domain/Payments.Domain.csproj" />
+    <Project Path="src/Services/Payments/Payments.Infrastructure/Payments.Infrastructure.csproj" />
+    <Project Path="src/Services/Payments/Payments.Migrator/Payments.Migrator.csproj" />
+  </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Catalog.Api.Tests/Catalog.Api.Tests.csproj" />
     <Project Path="tests/Catalog.Application.Tests/Catalog.Application.Tests.csproj" />
@@ -53,6 +60,10 @@
     <Project Path="tests/Ordering.Application.Tests/Ordering.Application.Tests.csproj" />
     <Project Path="tests/Ordering.Domain.Tests/Ordering.Domain.Tests.csproj" />
     <Project Path="tests/Ordering.TestSupport/Ordering.TestSupport.csproj" />
+    <Project Path="tests/Payments.Api.Tests/Payments.Api.Tests.csproj" />
+    <Project Path="tests/Payments.Application.Tests/Payments.Application.Tests.csproj" />
+    <Project Path="tests/Payments.Domain.Tests/Payments.Domain.Tests.csproj" />
+    <Project Path="tests/Payments.TestSupport/Payments.TestSupport.csproj" />
     <Project Path="tests/Platform.IntegrationTests/Platform.IntegrationTests.csproj" />
     <Project Path="tests/Web.Bff.TestSupport/Web.Bff.TestSupport.csproj" />
     <Project Path="tests/Web.Bff.Tests/Web.Bff.Tests.csproj" />

@@ -40,3 +40,4 @@ include:
   - services/ordering.yml
   - services/web-bff.yml
   - services/inventory.yml
+  - services/payments.yml

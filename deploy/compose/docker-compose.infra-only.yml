@@ -35,3 +35,7 @@ services:
     profiles: [ "excluded" ]
   inventory-api:
     profiles: [ "excluded" ]
+  payments-migrator:
+    profiles: [ "excluded" ]
+  payments-api:
+    profiles: [ "excluded" ]

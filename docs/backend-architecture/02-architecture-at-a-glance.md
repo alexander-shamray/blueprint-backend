@@ -81,7 +81,6 @@ graph TB
     CAT --> RK
     ORD --> RK
     INV --> RK
-    PAY --> RK
 
     CAT <--> MQ
     ORD <--> MQ
@@ -104,8 +103,9 @@ Three details in this picture are decisions, not layout:
 
 - **Two Redis instances, not one.** Their eviction policies are incompatible
   ([§8.1](08-caching-redis.md)) — a shared instance under `allkeys-lru` will drop a held lock or a
-  revoked token with no error. Payments reaches only the coordination instance:
-  it takes idempotency keys (§8.5) and caches nothing.
+  revoked token with no error. Payments reaches neither: it caches nothing,
+  and §8.5's keys belong to HTTP write commands, which it does not have —
+  its idempotency is the payment provider's key and its own rows.
 - **Every service validates its own token**, not just the gateway. [§11.2](11-identity-authorization.md) treats
   the network as hostile, so a request arriving by any other path is still
   authenticated. A diagram showing only `GW -.-> IDP` would depict exactly the

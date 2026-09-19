@@ -1,0 +1,51 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- xUnit v3 test projects are self-executing: the runner is compiled in
+         rather than loaded by a host, so the assembly has to be an Exe. -->
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="xunit.v3" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="Shouldly" />
+    <!-- The endpoints gate (§4.2) — a namespace rule, so it needs type-level
+         dependency analysis rather than GetReferencedAssemblies. -->
+    <PackageReference Include="NetArchTest.Rules" />
+    <!-- WebApplicationFactory over the real Program (§12.4) — the fixture
+         types live in Payments.TestSupport now, but CreateClient and friends
+         are still this package's API, named directly below. -->
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
+    <!-- SqlServerRetryingExecutionStrategy, for the subclass that lets the
+         retry test inject a fault the strategy treats as transient. Already
+         pinned centrally and in Appendix B via Payments.Infrastructure. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
+    <!-- The in-memory harness for the messaging smoke (§12.5). Core, not
+         MassTransit.RabbitMQ: the harness swaps the transport out, and a test
+         project that uses no transport must not claim one. -->
+    <PackageReference Include="MassTransit" />
+    <!-- One substitute, for one assertion: capturing the IPipe<PublishContext>
+         the outbox dispatcher hands IPublishEndpoint, so §9.1's single-identity
+         rule can be checked on the transport rather than inferred. Writing that
+         fake by hand means stubbing an interface with a dozen members nobody
+         calls. -->
+    <PackageReference Include="NSubstitute" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Services\Payments\Payments.Api\Payments.Api.csproj" />
+    <!-- ServiceFixture and PaymentsApiFactory (§12.4, §4.1) — the containers,
+         the migrator runs and the reset live there. Test projects cannot
+         reference each other, which is why the fixture has a project of
+         its own. -->
+    <ProjectReference Include="..\..\tests\Payments.TestSupport\Payments.TestSupport.csproj" />
+  </ItemGroup>
+
+</Project>

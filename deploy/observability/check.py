@@ -146,6 +146,9 @@ OUTBOX_METRICS_EXEMPT = {
         "OutboxMetrics registered here would render into every new service; "
         "closing the gap is a decision about the template (§13.6), not one "
         "this service can make alone.",
+    "Payments":
+        "Rendered from Catalog and inherits its gap; removed when Payments "
+        "registers OutboxMetrics.",
 }
 
 # PromQL keywords that survive the stripping below and are not metric names.

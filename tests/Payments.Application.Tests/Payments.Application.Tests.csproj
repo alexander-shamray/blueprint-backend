@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- xUnit v3 test projects are self-executing: the runner is compiled in
+         rather than loaded by a host, so the assembly has to be an Exe. -->
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="xunit.v3" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="Shouldly" />
+    <!-- The §4.2 gates that reason over type dependencies rather than
+         assembly references — a job GetReferencedAssemblies cannot do. -->
+    <PackageReference Include="NetArchTest.Rules" />
+    <!-- ServiceCollection itself, for the registration tests: the
+         abstractions package Payments.Application compiles against has no
+         container in it to build. -->
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Services\Payments\Payments.Application\Payments.Application.csproj" />
+    <!-- No Payments.TestSupport and no Payments.Infrastructure, and no Docker
+         with them: this project's own tests exercise the event handlers
+         against a hand-rolled IDispatcher fake — each handler is one
+         dispatch (§3.2), so the fact worth pinning is what it sent, not a
+         database. The persisted write is exercised over a real broker and
+         database in the API suite, which already carries the fixture, the
+         DbContext reference and the provider package a second copy here
+         would duplicate. -->
+  </ItemGroup>
+
+</Project>
