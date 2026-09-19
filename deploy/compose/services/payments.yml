@@ -54,24 +54,6 @@ services:
       # identity belongs to the BFF alone (§9.7, §11.5).
       Identity__Authority: "http://keycloak:8080/realms/commerce"
       OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4317"
-      # §8.1's two connections, and they joined on exactly the terms the
-      # comment that used to stand here set: an env var nothing reads is the
-      # container form of an unused registration, so each waits for the PR
-      # whose code reads it. §8.5's IdempotencyBehavior is that PR — it claims
-      # a {service}:idem: key on the coordination instance before any command
-      # runs.
-      #
-      # BOTH are required even though only the second is read today.
-      # AddRedisConnections is one call by design (§8.2), so a service either
-      # has Redis or does not; it reads both eagerly and throws naming the
-      # missing one, which is what makes an absent key a host that will not
-      # start rather than a cache that silently reads the database.
-      #
-      # 6379 on both, and the ports differ only on the HOST side (6379/6380).
-      # Inside the network each container listens on Redis's own port, so
-      # naming 6380 here would reach nothing.
-      ConnectionStrings__RedisCache: "redis-cache:6379"
-      ConnectionStrings__RedisCoordination: "redis-coordination:6379"
     ports: [ "127.0.0.1:5104:8080" ]
     depends_on:
       payments-migrator: { condition: service_completed_successfully }
@@ -84,15 +66,3 @@ services:
       # README's token command the moment it returns. Under service_started
       # that command races the realm import and can be handed a 404.
       keycloak: { condition: service_healthy }
-      # Both Redis instances, and the coordination one is load-bearing since
-      # §8.5's behaviour claims a key before any command runs. Ordered after
-      # keycloak only because this list reads top-down; compose treats every
-      # entry alike.
-      #
-      # service_healthy, not service_started: AddRedisConnections sets
-      # AbortOnConnectFail = false (§8.1's "degrade, don't die"), so the host
-      # WOULD start against a Redis still booting — and the first protected
-      # command would then fail on a claim rather than on anything a reader
-      # could connect to a missing container.
-      redis-cache: { condition: service_healthy }
-      redis-coordination: { condition: service_healthy }

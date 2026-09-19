@@ -181,62 +181,6 @@ public sealed class RetentionPurgeTests(ServiceFixture fixture) : IAsyncLifetime
     }
 
     [Fact]
-    public async Task A_marker_whose_claim_is_still_held_survives_however_old_the_row_is()
-    {
-        // A forward step of the database's clock relative to Redis's reads as
-        // a row past its window while the claim behind it is still live, and
-        // no test owns the container's clock — so the same state is staged
-        // from the other end. The window is not what keeps this row; the pass
-        // asking the store that owns the claim is (ADR-039).
-        string key = Key();
-
-        await fixture.StageIdempotencyMarkersAsync(new IdempotencyMarker(key, LongAgo));
-
-        string? claim = await fixture.IdempotencyClaims.TryClaimAsync(
-            key,
-            IdempotencyRetention.Window,
-            TestContext.Current.CancellationToken);
-
-        claim.ShouldNotBeNull("the key is this test's own, so nothing else can be holding it");
-
-        (await fixture.PurgeRetentionAsync()).Idempotency.ShouldBe(
-            0,
-            "the claim behind this key is still live, so the row that refuses its retry may not go");
-
-        // The table as well as the count, because a pass that deleted the row
-        // and miscounted is a different defect from one that kept it.
-        (await fixture.IdempotencyMarkersAsync()).ShouldHaveSingleItem();
-    }
-
-    [Fact]
-    public async Task The_same_row_goes_once_the_claim_behind_it_has_been_released()
-    {
-        // The companion: same row, same age, same pass, and the one thing that
-        // differs is whether the store still holds the key. Without it a pass
-        // that had simply stopped deleting markers would satisfy the assertion
-        // above.
-        string key = Key();
-
-        await fixture.StageIdempotencyMarkersAsync(new IdempotencyMarker(key, LongAgo));
-
-        string? claim = await fixture.IdempotencyClaims.TryClaimAsync(
-            key,
-            IdempotencyRetention.Window,
-            TestContext.Current.CancellationToken);
-
-        claim.ShouldNotBeNull();
-
-        await fixture.IdempotencyClaims.ReleaseAsync(
-            key,
-            claim,
-            TestContext.Current.CancellationToken);
-
-        (await fixture.PurgeRetentionAsync()).Idempotency.ShouldBe(1);
-
-        (await fixture.IdempotencyMarkersAsync()).ShouldBeEmpty();
-    }
-
-    [Fact]
     public async Task A_marker_replaced_between_the_select_and_the_delete_is_not_the_row_that_goes()
     {
         // The ABA between the select and the delete: a key names a command, so
@@ -284,7 +228,9 @@ public sealed class RetentionPurgeTests(ServiceFixture fixture) : IAsyncLifetime
         // refills the deleted slots with the next-oldest rows, so a partial
         // batch does not mean the store would release nothing more. Five rows
         // in batches of two with the middle one held: stopping on a partial
-        // batch ends at three, stopping on no progress at four.
+        // batch ends at three, stopping on no progress at four. The store is
+        // substituted, because §2 gives Payments no way to hold a claim of
+        // its own to test against.
         string held = Key();
 
         await fixture.StageIdempotencyMarkersAsync(
@@ -294,13 +240,6 @@ public sealed class RetentionPurgeTests(ServiceFixture fixture) : IAsyncLifetime
             new IdempotencyMarker(Key(), LongAgo.AddMinutes(-2)),
             new IdempotencyMarker(Key(), LongAgo.AddMinutes(-1)));
 
-        (await fixture.IdempotencyClaims.TryClaimAsync(
-            held,
-            IdempotencyRetention.Window,
-            TestContext.Current.CancellationToken)).ShouldNotBeNull();
-
-        // The floor is read rather than restated, so this stays correct if
-        // IdempotencyRetention.Window is retuned.
         RetentionPolicy twoAtATime = new()
         {
             BatchSize = 2,
@@ -308,12 +247,12 @@ public sealed class RetentionPurgeTests(ServiceFixture fixture) : IAsyncLifetime
             IdempotencyWindow = IdempotencyRetention.MarkerFloor
         };
 
-        (await fixture.PurgeWithAsync(twoAtATime)).Idempotency.ShouldBe(
+        (await fixture.PurgeWithAsync(twoAtATime, new WithOneKeyHeld(held))).Idempotency.ShouldBe(
             4,
             "stopping on a partial batch would have ended the pass at three");
 
         IdempotencyMarker survivor = (await fixture.IdempotencyMarkersAsync()).ShouldHaveSingleItem();
-        survivor.Key.ShouldBe(held, "the row whose claim is still live is the one that stays");
+        survivor.Key.ShouldBe(held, "the row the store still reports held is the one that stays");
     }
 
     [Fact]
@@ -447,8 +386,9 @@ public sealed class RetentionPurgeTests(ServiceFixture fixture) : IAsyncLifetime
     /// <remarks>
     /// Every answer is the real store's; the decoration is when, not what,
     /// because substituting the verdict would make the test assert its own
-    /// idea of the claim against a pass that reads Redis. <see cref="Asked"/>
-    /// is what stops a seam nothing reached leaving the test green.
+    /// idea of the claim against a pass that reads the registered store.
+    /// <see cref="Asked"/> is what stops a seam nothing reached leaving the
+    /// test green.
     /// </remarks>
     private sealed class ReplacingClaims(IIdempotencyStore inner, Func<Task> onAsked) : IIdempotencyStore
     {
@@ -475,5 +415,28 @@ public sealed class RetentionPurgeTests(ServiceFixture fixture) : IAsyncLifetime
 
             return await inner.UnheldAsync(keys, ct);
         }
+    }
+
+    /// <summary>
+    /// A claim store that reports one key as still held and every other key
+    /// as unheld — the shape a live claim would give the purge (ADR-039),
+    /// which Payments' own registered store cannot (§2).
+    /// </summary>
+    private sealed class WithOneKeyHeld(string held) : IIdempotencyStore
+    {
+        public Task<string?> TryClaimAsync(string key, TimeSpan retention, CancellationToken ct) =>
+            throw new NotSupportedException("This double answers only UnheldAsync.");
+
+        public Task<IdempotencyEntry?> GetAsync(string key, CancellationToken ct) =>
+            throw new NotSupportedException("This double answers only UnheldAsync.");
+
+        public Task CompleteAsync(string key, string claim, string payload, CancellationToken ct) =>
+            throw new NotSupportedException("This double answers only UnheldAsync.");
+
+        public Task ReleaseAsync(string key, string claim, CancellationToken ct) =>
+            throw new NotSupportedException("This double answers only UnheldAsync.");
+
+        public Task<IReadOnlyCollection<string>> UnheldAsync(IReadOnlyCollection<string> keys, CancellationToken ct) =>
+            Task.FromResult<IReadOnlyCollection<string>>([.. keys.Where(k => k != held)]);
     }
 }

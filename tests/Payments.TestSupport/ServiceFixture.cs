@@ -14,7 +14,6 @@ using Microsoft.Extensions.Logging;
 using Respawn;
 using Testcontainers.MsSql;
 using Testcontainers.RabbitMq;
-using Testcontainers.Redis;
 using Xunit;
 
 namespace Payments.TestSupport;
@@ -32,10 +31,7 @@ namespace Payments.TestSupport;
 /// <c>Payments.Api.Tests</c> today, and the application suite the moment that
 /// suite gains a handler test — the two cannot reference each other, so each
 /// declares its own
-/// <c>IntegrationCollection</c> over this one type. §12.4's full shape is
-/// complete since §8.5's PR: the two Redis containers arrived with the
-/// behaviour whose code reads those keys, which is the same rule the broker
-/// followed.
+/// <c>IntegrationCollection</c> over this one type.
 /// </summary>
 /// <remarks>
 /// Tests deliberately collapse the two database identities of §7.1 — the
@@ -46,29 +42,6 @@ namespace Payments.TestSupport;
 /// </remarks>
 public sealed class ServiceFixture : IAsyncLifetime
 {
-    /// <summary>
-    /// §8.1's two servers, and two rather than one for §12.4's stated reason:
-    /// with a single server playing both roles, a stack accidentally wired to
-    /// the wrong connection passes every prefix, TTL and claim test while
-    /// production idempotency keys sit on an <c>allkeys-lru</c> instance —
-    /// evicted under exactly the memory pressure that makes the duplicate
-    /// write hardest to reproduce. Two servers make role-routing assertable.
-    /// </summary>
-    /// <remarks>
-    /// They joined with §8.5's PR, which is the rule this fixture already
-    /// followed for the broker: a container arrives with the code that reads
-    /// what it holds.
-    /// </remarks>
-    private readonly RedisContainer _redisCache = new RedisBuilder()
-        .WithImage("redis:7-alpine")
-        .WithCommand("--maxmemory-policy", "allkeys-lru")
-        .Build();
-
-    private readonly RedisContainer _redisCoordination = new RedisBuilder()
-        .WithImage("redis:7-alpine")
-        .WithCommand("--maxmemory-policy", "noeviction")
-        .Build();
-
     private readonly MsSqlContainer _sql = new MsSqlBuilder()
         .WithImage("mcr.microsoft.com/mssql/server:2022-latest")
         .Build();
@@ -173,9 +146,7 @@ public sealed class ServiceFixture : IAsyncLifetime
         // SQL Server's, which is the slower of the two by some margin.
         await Task.WhenAll(
             _sql.StartAsync(TestContext.Current.CancellationToken),
-            _rabbit.StartAsync(TestContext.Current.CancellationToken),
-            _redisCache.StartAsync(TestContext.Current.CancellationToken),
-            _redisCoordination.StartAsync(TestContext.Current.CancellationToken));
+            _rabbit.StartAsync(TestContext.Current.CancellationToken));
 
         // The container hands out a connection to master; Payments owns a
         // database of its own (§7.1), and MigrateAsync is what creates it.
@@ -188,15 +159,7 @@ public sealed class ServiceFixture : IAsyncLifetime
 
         FirstRunExitCode = await RunMigratorAsync(ConnectionString);
 
-        // Both Redis connections, because AddRedisConnections reads both
-        // eagerly (§8.1) — and real ones rather than the factory's unreachable
-        // default, because §8.5's behaviour claims a key on every protected
-        // command this suite dispatches.
-        Factory = new PaymentsApiFactory(
-            ConnectionString,
-            _rabbit.GetConnectionString(),
-            _redisCache.GetConnectionString(),
-            _redisCoordination.GetConnectionString());
+        Factory = new PaymentsApiFactory(ConnectionString, _rabbit.GetConnectionString());
 
         // A table for the transaction tests, created here and not in a
         // migration. It is a fixture of the test rather than a table of the
@@ -476,16 +439,10 @@ public sealed class ServiceFixture : IAsyncLifetime
     }
 
     /// <summary>
-    /// §8.5's claim store, so a retention test can put a live claim behind a
-    /// staged marker and take it away again.
+    /// §2's registered claim store — <c>NoClaimsIdempotencyStore</c>, which
+    /// never holds a key, so <c>UnheldAsync</c> reports every marker unheld
+    /// (ADR-039) and a claim attempt throws.
     /// </summary>
-    /// <remarks>
-    /// <b>The registered store against the real container, rather than a
-    /// double.</b> ADR-039 makes the purge ask this store whether a claim is
-    /// gone, so a test of that has to leave the store able to say no — and a
-    /// substitute would be asserting the test's own idea of the answer against
-    /// a pass that reads the real one.
-    /// </remarks>
     public IIdempotencyStore IdempotencyClaims =>
         Factory.Services.GetRequiredService<IIdempotencyStore>();
 
@@ -523,21 +480,17 @@ public sealed class ServiceFixture : IAsyncLifetime
 
     /// <summary>
     /// The same pass with the claim store substituted, which is the only seam
-    /// in the marker's leg wide enough to reach the window the split opened.
+    /// in the marker's leg wide enough to reach the window the split opened or
+    /// to stand a key still held (ADR-039) — the registered store never holds
+    /// one.
     /// </summary>
     /// <remarks>
-    /// <b><c>UnheldAsync</c> is called between the <c>SELECT</c> and the
+    /// <c>UnheldAsync</c> is called between the <c>SELECT</c> and the
     /// <c>DELETE</c>, which is exactly where a replacement lands in
-    /// production.</b> A decorator that mutates the table while answering puts
+    /// production, so a decorator that mutates the table while answering puts
     /// a test on the far side of that window without a fake clock, a paused
     /// thread or a second connection racing the first — the interleaving is
     /// deterministic because the pass itself calls the seam.
-    /// <para>
-    /// The registered store stays the default above, for the reason
-    /// <see cref="IdempotencyClaims"/> gives: a substitute that answers from
-    /// the test's own idea of the claim would be asserting against itself. This
-    /// overload substitutes <em>when</em> the answer arrives, not what it says.
-    /// </para>
     /// </remarks>
     public Task<(int Outbox, int Inbox, int Idempotency)> PurgeWithAsync(
         RetentionPolicy policy,
@@ -744,28 +697,11 @@ public sealed class ServiceFixture : IAsyncLifetime
             }
             finally
             {
-                try
-                {
-                    // Null-safe on Ordering's fixture's argument: the image
-                    // build and the builder chain both run before the field is
-                    // assigned, and either can throw.
-                    if (_rabbit is not null)
-                        await _rabbit.DisposeAsync();
-                }
-                finally
-                {
-                    // Nested on the same argument as every layer above it: a
-                    // failed broker disposal must not leave two Redis
-                    // containers running for the rest of the CI job.
-                    try
-                    {
-                        await _redisCache.DisposeAsync();
-                    }
-                    finally
-                    {
-                        await _redisCoordination.DisposeAsync();
-                    }
-                }
+                // Null-safe on Ordering's fixture's argument: the image build
+                // and the builder chain both run before the field is assigned,
+                // and either can throw.
+                if (_rabbit is not null)
+                    await _rabbit.DisposeAsync();
             }
         }
     }

@@ -18,7 +18,6 @@
          states the direct use. -->
     <PackageReference Include="Microsoft.Data.SqlClient" />
     <PackageReference Include="AspNetCore.HealthChecks.SqlServer" />
-    <PackageReference Include="AspNetCore.HealthChecks.Redis" />
     <!-- The bus (§9). The transport package; MassTransit itself rides in
          transitively at the same pinned version. No RabbitMQ health-check
          package beside it: AddMassTransit registers the bus check itself,
@@ -31,10 +30,8 @@
     <ProjectReference Include="..\Payments.Domain\Payments.Domain.csproj" />
     <ProjectReference Include="..\Payments.Application\Payments.Application.csproj" />
     <!-- §9.4's outbox: the entity this assembly maps, the type map, the
-         metrics and the dispatcher it hosts. §8's Redis helpers ride in on
-         the same reference and are wired from the start — the connections,
-         the lock factory and §8.5's idempotency store — so a first cache
-         read costs no new reference and no new registration. -->
+         metrics and the dispatcher it hosts; §9.5's inbox and §8.5's marker
+         store ride in on the same reference. -->
     <ProjectReference Include="..\..\..\BuildingBlocks\Common.Infrastructure\Common.Infrastructure.csproj" />
     <!-- MessageTypeSource's Broker half. Named through IIntegrationEvent
          until this service has a contract of its own, at which point the

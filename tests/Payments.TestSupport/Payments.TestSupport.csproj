@@ -27,7 +27,6 @@
     <!-- Real RabbitMQ, same terms: the host's bus readiness needs a broker
          that answers, and ADR-010 made real infrastructure non-optional. -->
     <PackageReference Include="Testcontainers.RabbitMq" />
-    <PackageReference Include="Testcontainers.Redis" />
     <!-- Reset-by-truncation between tests (§12.4) — far faster than
          recreating the schema, and honest where a rolled-back transaction
          would hide transaction-related bugs. -->

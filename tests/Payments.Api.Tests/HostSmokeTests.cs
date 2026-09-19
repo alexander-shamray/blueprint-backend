@@ -99,7 +99,7 @@ public class HostSmokeTests(HostSmokeTests.UnreachableInfrastructureFactory fact
     }
 
     [Fact]
-    public void Ready_probe_reports_the_sql_redis_and_bus_checks()
+    public void Ready_probe_reports_the_sql_and_bus_checks()
     {
         // Registration, read without a network round trip. §13.5's concern is
         // that "reports ready immediately" and "readiness was never wired up"
@@ -109,12 +109,10 @@ public class HostSmokeTests(HostSmokeTests.UnreachableInfrastructureFactory fact
             .GetRequiredService<IOptions<HealthCheckServiceOptions>>()
             .Value;
 
-        // Four since §8.5's PR, and the count is the assertion rather
-        // than a detail of it: an inventory that only ever grows silently
-        // is how a readiness check gets dropped without anything going
-        // red. This test failed when the two Redis lines were added,
-        // which is what it is for.
-        options.Registrations.Count.ShouldBe(4);
+        // Two, and the count is the assertion rather than a detail of it: an
+        // inventory that only ever grows silently is how a readiness check
+        // gets dropped without anything going red.
+        options.Registrations.Count.ShouldBe(2);
 
         HealthCheckRegistration sql = options.Registrations.Single(r => r.Name == "sql");
         sql.Tags.ShouldContain("ready", "an untagged check is invisible to the /health/ready predicate");
@@ -123,22 +121,6 @@ public class HostSmokeTests(HostSmokeTests.UnreachableInfrastructureFactory fact
         // — name and tags read from the 8.5.3 source, asserted here so a
         // MassTransit major that changes either fails this test rather than a
         // cluster's readiness.
-        // §13.5 prints both lines and the code carried neither until §8.5's
-        // PR gave this service its Redis connection strings. The rule that
-        // section states is what makes them owed: a host with a connection
-        // string has a readiness check. AbortOnConnectFail is false (§8.1), so
-        // without these the pod sits Ready while every claim fails closed.
-        //
-        // Both, because §8.1 gives the two instances different eviction
-        // policies and therefore different servers — a healthy cache says
-        // nothing about the instance idempotency claims are written to.
-        HealthCheckRegistration cache = options.Registrations.Single(r => r.Name == "redis-cache");
-        cache.Tags.ShouldContain("ready", "an untagged check is invisible to the /health/ready predicate");
-
-        HealthCheckRegistration coordination =
-            options.Registrations.Single(r => r.Name == "redis-coordination");
-        coordination.Tags.ShouldContain("ready", "§8.5's claims are written to this instance");
-
         HealthCheckRegistration bus = options.Registrations.Single(r => r.Name == "masstransit-bus");
         bus.Tags.ShouldContain("ready", "a bus check outside the ready predicate reports to nobody");
         bus.Tags.ShouldContain("masstransit", "both tags are the documented contract (§13.5), so both are pinned");
