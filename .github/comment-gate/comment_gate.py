@@ -287,7 +287,9 @@ def _sh_heredoc_word(text, i):
     word = []
     while i < n and text[i] not in _SH_WORD_BREAK + "<>":
         c = text[i]
-        if c == "\\" and i + 1 < n:
+        if text.startswith("\\\n", i):
+            i += 2
+        elif c == "\\" and i + 1 < n:
             word.append(text[i + 1])
             i += 2
         elif c in "'\"":
@@ -315,6 +317,10 @@ def _sh_code(text, i, found, closing):
             pending = []
         elif c == "#" and (i == 0 or text[i - 1] in _SH_WORD_BREAK):
             end = _line_end(text, i)
+            if closing == "`":
+                # The shell cuts a backtick body out before it reads it.
+                tick = text.find("`", i, end)
+                end = end if tick < 0 else tick
             found.append(_comment(i, end, 1))
             i = end
         elif c == "'":
@@ -325,7 +331,9 @@ def _sh_code(text, i, found, closing):
         elif c == '"':
             i = _sh_double(text, i + 1, found)
         elif c == "`":
-            i = _sh_escaped(text, i + 1, "`")
+            if closing == "`":
+                return i + 1
+            i = _sh_code(text, i + 1, found, closing="`")
         elif text.startswith("$((", i) and _sh_arithmetic(text, i + 3):
             i = _sh_arithmetic(text, i + 3)
         elif (text.startswith("((", i)
@@ -346,10 +354,10 @@ def _sh_code(text, i, found, closing):
             else:
                 pending.append((word, strip_tabs))
                 i = end
-        elif closing and c == "(":
+        elif closing == ")" and c == "(":
             depth += 1
             i += 1
-        elif closing and c == ")":
+        elif closing == ")" and c == ")":
             if depth == 0:
                 return i + 1
             depth -= 1
@@ -402,7 +410,7 @@ def _sh_double(text, i, found):
         elif c == '"':
             return i + 1
         elif c == "`":
-            i = _sh_escaped(text, i + 1, "`")
+            i = _sh_code(text, i + 1, found, closing="`")
         elif text.startswith("$(", i):
             i = _sh_code(text, i + 2, found, closing=")")
         elif text.startswith("${", i):
@@ -444,6 +452,20 @@ _INDICATOR = re.compile(r"[|>][-+0-9]*")
 _ITEM_PREFIX = re.compile(r"^[ ]*(?:-[ ]+)*")
 
 
+_ENTRY_INDICATOR = re.compile(r"[ ]*(?:-[ ]+)*[-?]")
+
+
+def _opens_scalar(line, j):
+    """Whether a quote at `j` starts a scalar; mid-scalar it is plain text."""
+    before = line[:j].rstrip()
+    last = before[-1:]
+    if last in ("", "[", "{", ","):
+        return True
+    if last == ":":
+        return before != line[:j] or before[-2:-1] in ("'", '"')
+    return before != line[:j] and bool(_ENTRY_INDICATOR.fullmatch(before))
+
+
 def yaml(text):
     """`#` outside quotes and block scalars, and a `run:` block as shell."""
     found = []
@@ -483,8 +505,7 @@ def yaml(text):
                 found.append(_comment(start + j, start + len(line), 1))
                 code_end = j
                 break
-            elif c in "'\"" and line[:j].rstrip()[-1:] in ("", ":", "-", "[",
-                                                          "{", ",", "?"):
+            elif c in "'\"" and _opens_scalar(line, j):
                 quote = c
             j += 1
         code = line[:code_end].rstrip()

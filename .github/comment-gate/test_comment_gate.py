@@ -112,6 +112,16 @@ class ShellComments(unittest.TestCase):
                 "# after\n")
         self.assertEqual(said(gate.shell, text), ["yes", "after"])
 
+    def test_a_continuation_inside_a_heredoc_word_is_removed(self):
+        text = "cat <<EO\\\nF\n# no\nEOF\n# after\n"
+        self.assertEqual(said(gate.shell, text), ["after"])
+
+    def test_a_backtick_substitution_is_code(self):
+        text = ("v=`echo ok # yes\n`\n"
+                'w="`echo ok # also` # no"\n'
+                "x=`echo '# no'` # last\n")
+        self.assertEqual(said(gate.shell, text), ["yes", "also", "last"])
+
     def test_a_heredoc_word_is_read_whole(self):
         for opener in ["END-OF-FILE", "END-OF'-FILE'", 'EN"D"-OF-FILE']:
             with self.subTest(opener=opener):
@@ -161,6 +171,18 @@ class YamlComments(unittest.TestCase):
                 "      # also\n"
                 "    name: x # sibling\n")
         self.assertEqual(said(gate.yaml, text), ["yes", "also", "sibling"])
+
+    def test_a_quote_inside_a_plain_scalar_opens_nothing(self):
+        for line in ['key: tag:"value # yes', 'key: x - "y # yes',
+                     "- it's # yes"]:
+            with self.subTest(line=line):
+                self.assertEqual(said(gate.yaml, line + "\n"), ["yes"])
+
+    def test_a_quote_where_a_scalar_starts_opens_one(self):
+        for line in ['key: "a # no"', "- 'a # no'", '- - "a # no"',
+                     '{"a":"b # no"}', '[a, "b # no"]', '? "a # no"']:
+            with self.subTest(line=line):
+                self.assertEqual(said(gate.yaml, line + "\n"), [])
 
     def test_every_spelling_of_the_run_key_is_shell(self):
         for key in ["run", '"run"', "'run'", "run ", '"run" ']:
