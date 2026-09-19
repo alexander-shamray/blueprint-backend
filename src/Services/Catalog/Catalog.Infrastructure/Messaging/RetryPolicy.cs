@@ -7,33 +7,10 @@ namespace Catalog.Infrastructure.Messaging;
 /// says otherwise.
 /// </summary>
 /// <remarks>
-/// <b>These are in-memory retries of one broker delivery, not redeliveries.</b>
-/// <c>UseMessageRetry</c> holds the message and waits, so the delivery lock and
-/// the endpoint's concurrency slot are still taken for the whole ladder — which
-/// is what makes the ceiling an operational number rather than only a
-/// correctness one. MassTransit's redelivery filters are a different API that
-/// releases the message and has the broker deliver it again, and §9.5 uses the
-/// word in that sense throughout.
-/// <para>
-/// Declaring the ladder once is what makes agreement between the endpoints
-/// structural: an endpoint that wants a different one has to say so, where a
-/// value repeated per endpoint can only be checked by reading every call site
-/// and comparing them.
-/// </para>
-/// <para>
-/// <b>What this type does not decide is what gets retried.</b> An endpoint
-/// that maps a contract excludes <c>ContractMappingException</c> before
-/// calling <see cref="Standard"/> — a malformed contract does not parse
-/// itself on the fourth attempt — and the exclusion is the endpoint's,
-/// because it is a claim about which faults are terminal rather than about
-/// how long to wait between attempts. Folding it in here would apply one
-/// endpoint's exclusion to those that never raise it.
-/// </para>
-/// <para>
-/// <see cref="RetryLimit"/> counts <em>retries</em> and not deliveries: the
-/// endpoint makes one more attempt than this number, and the wait it produces
-/// is that many intervals.
-/// </para>
+/// In-memory retries of one delivery, not redeliveries: the delivery lock and
+/// the concurrency slot stay taken for the whole ladder, which is what makes
+/// the ceiling an operational number. Which faults are terminal is the
+/// endpoint's claim, excluded there rather than folded in here.
 /// </remarks>
 internal static class RetryPolicy
 {

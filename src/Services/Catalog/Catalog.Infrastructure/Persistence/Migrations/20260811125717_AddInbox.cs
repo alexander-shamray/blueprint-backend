@@ -4,37 +4,13 @@ namespace Catalog.Infrastructure.Persistence.Migrations;
 
 /// <summary>
 /// §9.5's inbox table, generated from <see cref="InboxMessageConfiguration"/>
-/// on <c>AddOutbox</c>'s terms — the configuration is the source of truth and
-/// only this file's dress is hand-authored (file-scoped namespace, this
-/// comment). The <c>.Designer.cs</c> and the snapshot beside it are
-/// machine-owned and untouched.
+/// on <c>AddOutbox</c>'s terms: the configuration is the source of truth, and
+/// the <c>.Designer.cs</c> and snapshot beside it are machine-owned.
 /// </summary>
 /// <remarks>
-/// <b>The table arrives before the first consumer, deliberately.</b> A service
-/// that binds no receive endpoint writes no row here — but
+/// The table ships before a service's first consumer because
 /// <c>RetentionPurgeService</c> runs from first boot and deletes from every
-/// table it was given, and a purge against a table that is not there logs a
-/// failure every pass. That is the same argument that keeps
-/// <c>AddOutbox</c> in the scaffold's output, inverted: the dispatcher would
-/// fail a claim, this would fail a delete.
-/// <para>
-/// <b><c>Endpoint</c> carries a binary collation because it is half a key.</b>
-/// SQL Server's default is case-insensitive and a broker's queue names are
-/// not, so <c>orders</c> and <c>Orders</c> — two endpoints — would collide, and
-/// a message that arrived on one would be dropped as a duplicate on the other.
-/// That is the once-per-endpoint guarantee the composite key exists to give,
-/// defeated by how the column compares rather than by what it holds.
-/// <c>BIN2</c> rather than <c>CS_AS</c>: an endpoint address is an identifier
-/// matched exactly, and linguistic comparison has no meaning over it.
-/// </para>
-/// <para>
-/// <b>And <c>nvarchar</c>, because the collation only governs what was already
-/// stored.</b> This column was <c>varchar</c> for one revision on the claim that
-/// queue names are ASCII; AMQP 0-9-1 allows 255 bytes of UTF-8, so two legal
-/// endpoints differing outside the code page both land as the same run of
-/// <c>?</c> and collide in the key — the second endpoint's message suppressed as
-/// a duplicate it never was.
-/// </para>
+/// table it was given, and a missing table logs a failed purge every pass.
 /// </remarks>
 public partial class AddInbox : Migration
 {

@@ -131,24 +131,14 @@ public sealed class ServiceFixture : IAsyncLifetime
     }
 
     /// <summary>
-    /// The harness publishes peers' contracts under this service's own
-    /// account, which the production grant refuses by design: a consumer
-    /// reads another context's exchange and never writes it
-    /// (<c>check_permissions.py</c> enforces exactly that). So the test
-    /// container alone is widened, after it starts and before the factory is
-    /// built; the production definitions file does not move for the
-    /// harness's sake.
+    /// The harness publishes a peer's contract under this service's own
+    /// account, which the deployed grant refuses: a consumer reads a peer's
+    /// exchange and never writes it. Only the test container's write moves.
     /// </summary>
     /// <remarks>
-    /// Only <c>write</c> moves. <c>configure</c> and <c>read</c> are handed
-    /// back exactly as the imported definitions grant them, because they are
-    /// the half a real broker lets this suite judge: an exchange or a queue
-    /// the deployed grant would refuse to declare or to bind is refused here
-    /// too, and a wide scope installed on those two as well would answer every
-    /// topology question with a permission nothing outside the harness holds.
-    /// They are read back from the file the container imports rather than
-    /// written out a second time, so the scope under test cannot drift from
-    /// the scope that deploys.
+    /// <c>configure</c> and <c>read</c> are read back out of the definitions
+    /// the container imports rather than restated, so the topology this suite
+    /// judges is judged by the scope that deploys.
     /// </remarks>
     private async Task WidenWriteForTheHarnessAsync()
     {

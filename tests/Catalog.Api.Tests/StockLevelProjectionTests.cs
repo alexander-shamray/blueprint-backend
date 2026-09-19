@@ -9,17 +9,13 @@ namespace Catalog.Api.Tests;
 
 /// <summary>
 /// §3.2's Catalog projection against the real table, driven through the
-/// handler interface the §6.2 scan registered it under. The broker is not in
-/// this suite deliberately — what these tests are about is the statement's
-/// watermark and its <c>HOLDLOCK</c>, which are properties of SQL Server
-/// rather than of how the message arrived. The binding this handler is
-/// registered behind is proved over a real queue elsewhere in this project.
+/// handler interface the §6.2 scan registered it under. No broker: the
+/// watermark and the <c>HOLDLOCK</c> are SQL Server's, not the transport's.
 /// </summary>
 /// <remarks>
-/// Resolved, never constructed: <c>AddPluggableFrom</c> registers the
-/// projection with <c>AsImplementedInterfaces()</c>, so the concrete type is
-/// not resolvable, and a test that constructed it would keep passing with the
-/// class made internal — the one change that silently unregisters it.
+/// Resolved, never constructed: a test that constructed the projection would
+/// keep passing with the class made internal — the one change that silently
+/// unregisters it.
 /// </remarks>
 [Collection(nameof(IntegrationCollection))]
 public sealed class StockLevelProjectionTests(ServiceFixture fixture) : IAsyncLifetime

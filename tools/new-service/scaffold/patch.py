@@ -687,24 +687,14 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
         # it rather than with the scaffold.
         (
             "    /// <summary>\n"
-            "    /// The harness publishes peers' contracts under this service's own\n"
-            "    /// account, which the production grant refuses by design: a consumer\n"
-            "    /// reads another context's exchange and never writes it\n"
-            "    /// (<c>check_permissions.py</c> enforces exactly that). So the test\n"
-            "    /// container alone is widened, after it starts and before the factory is\n"
-            "    /// built; the production definitions file does not move for the\n"
-            "    /// harness's sake.\n"
+            "    /// The harness publishes a peer's contract under this service's own\n"
+            "    /// account, which the deployed grant refuses: a consumer reads a peer's\n"
+            "    /// exchange and never writes it. Only the test container's write moves.\n"
             "    /// </summary>\n"
             "    /// <remarks>\n"
-            "    /// Only <c>write</c> moves. <c>configure</c> and <c>read</c> are handed\n"
-            "    /// back exactly as the imported definitions grant them, because they are\n"
-            "    /// the half a real broker lets this suite judge: an exchange or a queue\n"
-            "    /// the deployed grant would refuse to declare or to bind is refused here\n"
-            "    /// too, and a wide scope installed on those two as well would answer every\n"
-            "    /// topology question with a permission nothing outside the harness holds.\n"
-            "    /// They are read back from the file the container imports rather than\n"
-            "    /// written out a second time, so the scope under test cannot drift from\n"
-            "    /// the scope that deploys.\n"
+            "    /// <c>configure</c> and <c>read</c> are read back out of the definitions\n"
+            "    /// the container imports rather than restated, so the topology this suite\n"
+            "    /// judges is judged by the scope that deploys.\n"
             "    /// </remarks>\n"
             "    private async Task WidenWriteForTheHarnessAsync()\n"
             "    {\n"
@@ -1082,37 +1072,17 @@ OUTBOX_MIGRATION_PATCHES: tuple[tuple[str, str], ...] = (
     ),
 )
 
-# And the inbox migration's, for the same reason again. Its remark argues why
-# Catalog carries a table it never writes to, which is a fact about Catalog;
-# the scaffolded service's copy states the general rule the argument produced.
+# And the inbox migration's, for the same reason again: the template names the
+# outbox migration whose dress it follows, and a scaffolded service's copy
+# states the convention without the cross-reference.
 INBOX_MIGRATION_PATCHES: tuple[tuple[str, str], ...] = (
     (
         "/// §9.5's inbox table, generated from <see cref=\"InboxMessageConfiguration\"/>\n"
-        "/// on <c>AddOutbox</c>'s terms — the configuration is the source of truth and\n"
-        "/// only this file's dress is hand-authored (file-scoped namespace, this\n"
-        "/// comment). The <c>.Designer.cs</c> and the snapshot beside it are\n"
-        "/// machine-owned and untouched.\n",
-        "/// §9.5's inbox table, generated from <see cref=\"InboxMessageConfiguration\"/>\n"
-        "/// — the configuration is the source of truth and only this file's dress is\n"
-        "/// hand-authored (file-scoped namespace, this comment). The\n"
-        "/// <c>.Designer.cs</c> and the snapshot beside it are machine-owned and\n"
-        "/// untouched.\n",
-    ),
-    (
-        "/// <b>The table arrives before the first consumer, deliberately.</b> A service\n"
-        "/// that binds no receive endpoint writes no row here — but\n"
-        "/// <c>RetentionPurgeService</c> runs from first boot and deletes from every\n"
-        "/// table it was given, and a purge against a table that is not there logs a\n"
-        "/// failure every pass. That is the same argument that keeps\n"
-        "/// <c>AddOutbox</c> in the scaffold's output, inverted: the dispatcher would\n"
-        "/// fail a claim, this would fail a delete.\n",
-        "/// <b>The table arrives before the first consumer, deliberately.</b> A service\n"
-        "/// that binds no receive endpoint writes no row here — but\n"
-        "/// <c>RetentionPurgeService</c> runs from first boot and deletes from every\n"
-        "/// table it was given, and a purge against a table that is not there logs a\n"
-        "/// failure every pass. That is the same argument that keeps the outbox\n"
-        "/// migration here, inverted: the dispatcher would fail a claim, this would fail\n"
-        "/// a delete.\n",
+        "/// on <c>AddOutbox</c>'s terms: the configuration is the source of truth, and\n"
+        "/// the <c>.Designer.cs</c> and snapshot beside it are machine-owned.\n",
+        "/// §9.5's inbox table, generated from <see cref=\"InboxMessageConfiguration\"/>:\n"
+        "/// the configuration is the source of truth, and the <c>.Designer.cs</c> and\n"
+        "/// snapshot beside it are machine-owned.\n",
     ),
 )
 

@@ -12,19 +12,13 @@ namespace Catalog.Api.Tests;
 
 /// <summary>
 /// The async path behind §3.2's one Catalog Consumes cell: an Inventory event
-/// published on a real broker, consumed by the real receive endpoint, applied
-/// by the projection, and read back from <c>catalog.StockLevels</c>.
+/// on a real broker, through the real receive endpoint and the projection,
+/// read back from <c>catalog.StockLevels</c>.
 /// </summary>
 /// <remarks>
-/// The real transport rather than the harness, because the harness removes the
-/// thing under test: <c>AddMassTransitTestHarness</c> replaces the
-/// <c>UsingRabbitMq</c> configuration wholesale, and the receive endpoint, its
-/// retry policy and its inbox filter all live inside that callback. The
-/// projection's statement is proved without a broker elsewhere in this
-/// project; this suite proves the binding. Catalog publishes Inventory's
-/// event to itself, and the topology is the same either way: MassTransit
-/// routes on the message type, so the exchange this reaches is the one
-/// Inventory publishes to.
+/// The real transport rather than the harness, which removes the thing under
+/// test: <c>AddMassTransitTestHarness</c> replaces the <c>UsingRabbitMq</c>
+/// callback the endpoint, its retry policy and its inbox filter live inside.
 /// </remarks>
 [Collection(nameof(IntegrationCollection))]
 public sealed class InventoryEventEndpointTests(ServiceFixture fixture) : IAsyncLifetime

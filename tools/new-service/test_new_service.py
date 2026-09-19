@@ -272,20 +272,16 @@ class RendersTheTemplate(unittest.TestCase):
         ]
         self.assertIn("services.AddMassTransitMessaging(configuration);", infrastructure)
 
-        # PR-20's correction, guarded here because nowhere else can guard it.
+        # Guarded here because nowhere else can guard it.
         # ConfigureEndpoints(context) gives a registered consumer with no
         # explicit binding a queue named after its type, carrying neither the
         # inbox filter nor the retry policy §9.8 requires of every endpoint.
-        # Catalog binds its one consumer explicitly, so its own registration
-        # tests stay green if the call comes back — and this file renders
-        # Catalog, so a rendered service is the only place the absence is
-        # observable at all. Without this assertion the trap can be handed
-        # silently to every service generated from here.
+        # This file renders Catalog, and Catalog binds its own consumer
+        # explicitly, so a rendered service is the only place the absence is
+        # observable at all.
         #
-        # The CALL, not the identifier: the template's comment explains why the
-        # line is gone and names it doing so, so a bare "ConfigureEndpoints"
-        # assertion fails on the prose that documents the fix. Caught by
-        # writing it that way first.
+        # The call, not the identifier: the template's comment explains why the
+        # line is gone and names it doing so.
         self.assertNotIn("cfg.ConfigureEndpoints(", messaging)
 
         # A rendered service subscribes to nothing: the rendered registration

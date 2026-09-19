@@ -6,20 +6,14 @@ using Dapper;
 namespace Catalog.Infrastructure.Projections;
 
 /// <summary>
-/// A level, not a delta, with a watermark on OccurredAt: a stale level
-/// arriving late changes nothing, and a redelivered one changes nothing
-/// twice (§9.4, the contract's own remark).
+/// A level, not a delta, with a watermark on OccurredAt: a stale or a
+/// redelivered level changes nothing (§9.4).
 /// </summary>
 /// <remarks>
 /// Public, and the modifier is load-bearing: §6.2's scan is public-only, so
-/// an internal handler is registered as nothing at all — silently, with the
-/// endpoint still bound, so every delivery reaches §9.4's "no handler is
-/// registered" throw instead of a table.
-/// <para>
-/// Its own connection, never a consumer's <c>DbContext</c>: §6.6 and §7.5
-/// both say a projection must not run inside the write transaction, and this
-/// one is reached from the broker after Inventory committed.
-/// </para>
+/// an internal handler is registered as nothing at all while the endpoint
+/// stays bound. Its own connection, never a consumer's <c>DbContext</c>:
+/// §6.6 and §7.5 both keep a projection out of the write transaction.
 /// </remarks>
 public sealed class StockLevelProjection(IDbConnectionFactory connections)
     : IIntegrationEventHandler<StockLevelChanged>
