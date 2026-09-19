@@ -51,5 +51,18 @@ def main():
     return 0
 
 
+def run():
+    """`main()`, with any unexpected exception refused rather than admitted.
+
+    A crash exits 1, which a `PreToolUse` hook treats as non-blocking.
+    """
+    try:
+        return main()
+    except Exception as error:
+        print(f"guard-triager-dispatch: {type(error).__name__}: {error}; "
+              "refusing", file=sys.stderr)
+        return 2
+
+
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(run())

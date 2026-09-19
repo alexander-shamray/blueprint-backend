@@ -650,10 +650,12 @@ frontmatter list lasts one turn and is not applied inside an agent at all
 `Edit|Write|MultiEdit|NotebookEdit`, reads the `Edit(...)` denies from
 `review-grok.md` on every call — one list, no copy — and refuses a target
 under any of them, matched without regard to case, and any target outside the
-checkout its event's `cwd` stands in. The list is the one beside the hook, so
-a branch under review cannot loosen what it is judged by, plus the edited
+checkout its event's `cwd` stands in. The list is the one beside the hook, plus the edited
 checkout's own when that is another file — a sibling worktree's — because an
-added list can only narrow. Both fail closed, and both are wired as
+added list can only narrow, where a replaced one would let that worktree's
+branch loosen it. Run in place, hook and list are both the branch's, as
+`settings.json` and every other guard are; what keeps a review from
+loosening the list is that the list denies its own tree. Both fail closed, and both are wired as
 the session-wide hooks are, through `py -3.12`. `test_triager_guards.py` pins
 the profile, the grant, the sweeps' and the triage's deny of the new type, and
 runs both hooks against every pattern that list holds.

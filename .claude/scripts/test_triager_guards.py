@@ -27,9 +27,28 @@ PROFILE = AGENTS / "review-grok-triager.md"
 
 
 def frontmatter_list(text, key):
+    # The closed opening block only: a body line that opens with the key is
+    # prose, and reading it would pass a command whose real list had gone.
+    block = re.match(r"---\n(.*?)\n---[ \t]*(?:\n|\Z)", text, re.DOTALL)
     return [item.strip() for line in
-            re.findall(rf"^{key}:\s*(.+)$", text, re.MULTILINE)
+            re.findall(rf"^{key}:\s*(.+)$", block.group(1) if block else "",
+                       re.MULTILINE)
             for item in line.split(",") if item.strip()]
+
+
+def bash_deny_matches(rule, command):
+    """Whether a `Bash(...)` deny refuses `command`: `:*` is a prefix, and
+    `*` matches at any position."""
+    inner = re.fullmatch(r"Bash\((.*)\)", rule)
+    if inner is None:
+        return rule == "Bash"
+    spelled = inner.group(1)
+    prefix = spelled.endswith(":*")
+    if prefix:
+        spelled = spelled[:-2]
+    body = ".*".join(re.escape(part) for part in spelled.split("*"))
+    return re.fullmatch(body + (".*" if prefix else ""), command,
+                        re.DOTALL) is not None
 
 
 def load(name):
@@ -150,6 +169,30 @@ class NothingShipChainsDeniesPush(unittest.TestCase):
                 self.assertNotIn("Bash(git push", denied)
                 self.assertIsNone(
                     re.search(r"(^|,\s*)Bash(\s*,|\s*$)", denied))
+                for rule in frontmatter_list(text, "disallowed-tools"):
+                    for push in self.PUSHES:
+                        self.assertFalse(bash_deny_matches(rule, push),
+                                         f"{rule} refuses {push}")
+
+    PUSHES = ("git push origin fix/a-branch",
+              "git push -u origin fix/a-branch")
+
+    def test_a_push_deny_is_seen_however_it_is_spelled(self):
+        # The positive control for the matcher above: a wildcard takes any
+        # position in a deny, so a literal prefix check alone would miss it.
+        for rule in ("Bash", "Bash(git push:*)", "Bash(git *push*)",
+                     "Bash(git push origin:*)", "Bash(*)"):
+            with self.subTest(rule=rule):
+                self.assertTrue(bash_deny_matches(rule, self.PUSHES[0]))
+        for rule in ("Edit(.git/**)", "Bash(git commit:*)", "Bash(gh *)"):
+            with self.subTest(rule=rule):
+                self.assertFalse(bash_deny_matches(rule, self.PUSHES[0]))
+
+    def test_a_body_line_is_not_frontmatter(self):
+        text = "---\nname: x\n---\n\ndisallowed-tools: Bash\n"
+        self.assertEqual([], frontmatter_list(text, "disallowed-tools"))
+        self.assertEqual(["x"], frontmatter_list(text, "name"))
+        self.assertEqual([], frontmatter_list("name: x\n", "name"))
 
 
 class TheTriagerDispatchesOnlyTheAdjudicator(unittest.TestCase):
@@ -188,6 +231,17 @@ class TheTriagerDispatchesOnlyTheAdjudicator(unittest.TestCase):
             with self.subTest(event=event):
                 self.assertEqual(
                     2, run_hook("guard-triager-dispatch", event).returncode)
+
+    def test_a_crash_blocks(self):
+        # An event nested past the parser's depth raises something other
+        # than a decode error, and a crash exits 1, which does not block.
+        deep = "[" * 100_000 + "]" * 100_000
+        self.assertEqual(
+            2, run_hook("guard-triager-dispatch", deep).returncode)
+        module = load("guard-triager-dispatch")
+        with mock.patch.object(module, "main",
+                               side_effect=RuntimeError("boom")):
+            self.assertEqual(2, module.run())
 
     def test_other_tools_are_not_judged(self):
         out = run_hook("guard-triager-dispatch",

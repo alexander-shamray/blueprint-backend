@@ -17,8 +17,7 @@ EDIT_TOOLS = ("Edit", "Write", "MultiEdit", "NotebookEdit")
 HERE = os.path.dirname(os.path.dirname(os.path.dirname(
     os.path.abspath(__file__))))
 COMMAND = os.path.join(".claude", "commands", "review-grok.md")
-# Beside this file, so the guard and the list it enforces are one checkout's:
-# a branch under review cannot loosen the list it is judged by.
+# Beside this file, so the guard and the list it enforces are one checkout's.
 OWNER = os.path.join(HERE, COMMAND)
 FRONTMATTER = re.compile(r"---\n(.*?)\n---[ \t]*(?:\n|\Z)", re.DOTALL)
 EVERYTHING = "**"
@@ -183,7 +182,7 @@ def main():
             return 2
         held = {glob for glob, _ in rules}
         rules = rules + [rule for rule in added if rule[0] not in held]
-    lexical =os.path.abspath(
+    lexical = os.path.abspath(
         spelled if os.path.isabs(spelled) else os.path.join(cwd, spelled))
     for target, base in ((lexical, root),
                          (os.path.realpath(lexical), os.path.realpath(root))):
