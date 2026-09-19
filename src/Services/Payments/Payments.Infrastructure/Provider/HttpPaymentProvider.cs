@@ -72,8 +72,8 @@ internal sealed class HttpPaymentProvider(HttpClient http) : IPaymentProvider
                 "The provider approved with a body that is not an approval.");
     }
 
-    // What PaymentIntent's factories accept: blank is refused there, after the
-    // money has moved, so it is refused here before a verdict exists.
+    // The adapter's own rule: a blank reference or reason records nothing, so
+    // it is refused with the over-long one, before a verdict exists.
     private static bool Recordable(string value, int maxLength) =>
         !string.IsNullOrWhiteSpace(value) && value.Length <= maxLength;
 
@@ -147,8 +147,8 @@ internal sealed class HttpPaymentProvider(HttpClient http) : IPaymentProvider
     }
 
     // The factor PaymentAmounts.MinorUnitPlaces implies, derived rather than
-    // written, so the mapper's refusal and this conversion cannot disagree
-    // about how many places a payment has.
+    // written, so the constant and the refusal below cannot disagree about
+    // how many places a payment has.
     private static readonly decimal MinorUnitFactor =
         Enumerable.Repeat(10m, PaymentAmounts.MinorUnitPlaces).Aggregate(1m, (factor, ten) => factor * ten);
 

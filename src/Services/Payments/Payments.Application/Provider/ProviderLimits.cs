@@ -2,8 +2,8 @@ namespace Payments.Application.Provider;
 
 /// <summary>
 /// What a verdict may carry and still be recorded. The reference is confirmed
-/// onto the order, so Ordering's PaymentReference.MaxLength is the bound it
-/// must fit; the adapter refuses a longer answer and the columns are this wide.
+/// onto the order, so Ordering.Domain.Orders.PaymentReference.MaxLength is the
+/// bound it must fit, and the adapter refuses a longer answer.
 /// </summary>
 public static class ProviderLimits
 {

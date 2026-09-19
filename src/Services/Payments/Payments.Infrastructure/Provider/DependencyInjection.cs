@@ -95,10 +95,6 @@ public static class DependencyInjection
             options.Retry.Delay = ProviderHop.RetryDelay;
             options.Retry.MaxDelay = ProviderHop.MaxRetryDelay;
 
-            // The circuit breaker's sampling window must be at least twice the
-            // attempt timeout, which the library validates at startup.
-            options.CircuitBreaker.SamplingDuration = ProviderHop.AttemptTimeout * 2;
-
             // An attempt timeout is the provider's, and this is the one place
             // it arrives distinguishable from the caller cancelling.
             ProviderMetrics metrics = sp.GetRequiredService<ProviderMetrics>();
