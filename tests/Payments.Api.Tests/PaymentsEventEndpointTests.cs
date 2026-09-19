@@ -18,9 +18,8 @@ namespace Payments.Api.Tests;
 /// The real transport rather than the harness, because the harness removes
 /// the thing under test — the receive endpoint, its retry policy and its
 /// inbox filter all live inside <c>UsingRabbitMq</c>'s callback, and
-/// <c>AddMassTransitTestHarness</c> replaces that callback wholesale.
-/// <see cref="MessagingRegistrationTests"/> covers what survives the swap;
-/// this covers what does not.
+/// <c>AddMassTransitTestHarness</c> replaces that callback wholesale. This
+/// covers what does not survive that swap; the registration half does.
 /// <para>
 /// <b>The store's own guard is what makes a successful write here proof of
 /// <c>OrderPlacedHandler</c>'s remark that the write runs inside the command

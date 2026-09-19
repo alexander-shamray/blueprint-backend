@@ -22,8 +22,8 @@ namespace Payments.Api.Tests;
 /// COMPOSES (its eager key read runs, its options land, nothing conflicts
 /// with the consumer bindings) and that MassTransit's pipeline delivers.
 /// What the swap deliberately removes is the <c>UsingRabbitMq</c> transport
-/// configuration itself, so that half is asserted where it can be true: in
-/// <c>DatabaseSmokeTests</c>, against a real broker.
+/// configuration itself, so that half is asserted where it can be true:
+/// against a real broker, in the container suite's own readiness poll.
 /// </summary>
 /// <remarks>
 /// The message and consumer are test-local on purpose, and stay that way now
@@ -156,7 +156,7 @@ public class MessagingRegistrationTests
             TestContext.Current.CancellationToken)).ShouldBeTrue(
             "the harness replaced the RabbitMQ transport, so a message that publishes but is never " +
             "consumed means the helper's registrations did not compose with the consumer bindings — " +
-            "the transport configuration itself is DatabaseSmokeTests' claim, not this one's, and both " +
+            "the transport configuration itself is the container suite's claim, not this one's, and both " +
             "harness bounds are stated rather than inherited, so a busy runner is not the answer");
     }
 
@@ -182,7 +182,7 @@ public class MessagingRegistrationTests
         // §3.2's Consumes column for Payments. A consumer registered and
         // never bound looks exactly like one that was never added, and this
         // is the half of that pair a harness-swapped registration can see —
-        // PaymentsEventEndpointTests covers the binding, against a real queue.
+        // the binding is a separate claim, provable only against a real queue.
         ServiceCollection services = new();
 
         services.AddMassTransitMessaging(Configuration());

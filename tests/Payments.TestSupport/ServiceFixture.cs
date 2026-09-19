@@ -425,10 +425,10 @@ public sealed class ServiceFixture : IAsyncLifetime
     /// suite (#166); the shape is the fixture's, not that service's, so the
     /// read is added on both sides rather than where it happened to fire.
     /// <para>
-    /// The precedent is <c>Ordering.Api.Tests</c>' <c>PaymentsEventEndpointTests</c>,
-    /// which already filters on <c>MessageId</c> inline at its own call site.
-    /// This is that filter moved into the helper every test already calls,
-    /// which is where a barrier leaves nothing to forget.
+    /// The precedent is Ordering's own container suite for its projection
+    /// endpoint, which already filters on <c>MessageId</c> inline at its own
+    /// call site. This is that filter moved into the helper every test
+    /// already calls, which is where a barrier leaves nothing to forget.
     /// <see cref="InboxAsync()"/> stays for the assertions whose subject
     /// genuinely <em>is</em> the table — the retention purge counts rows it
     /// never keyed.
