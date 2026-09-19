@@ -1,3 +1,4 @@
+using System.Diagnostics.Metrics;
 using Catalog.Infrastructure.Messaging;
 using Catalog.TestSupport;
 using Common.Contracts.Inventory.V1;
@@ -100,6 +101,33 @@ public sealed class InventoryEventEndpointTests(ServiceFixture fixture) : IAsync
         var product = Guid.CreateVersion7();
         var messageId = Guid.CreateVersion7();
 
+        // §9.5's filter counts a drop on messaging.inbox.suppressed before it
+        // returns, so waiting on that instrument is a claim that the
+        // duplicate was actually seen and dropped — a delay is only a claim
+        // that some time passed.
+        using SemaphoreSlim suppressed = new(0);
+        using MeterListener listener = new();
+
+        listener.InstrumentPublished = (instrument, active) =>
+        {
+            if (instrument.Meter.Name == "Commerce.Messaging" &&
+                instrument.Name == "messaging.inbox.suppressed")
+            {
+                active.EnableMeasurementEvents(instrument);
+            }
+        };
+
+        listener.SetMeasurementEventCallback<long>((_, _, tags, _) =>
+        {
+            if (TagValue(tags, "message") == nameof(StockLevelChanged) &&
+                TagValue(tags, "endpoint") == StockLevelConsumer.Queue)
+            {
+                suppressed.Release();
+            }
+        });
+
+        listener.Start();
+
         await PublishAsync(product, 7, messageId);
         await Eventually(
             async () => (await fixture.InboxAsync(messageId)).Count,
@@ -112,10 +140,9 @@ public sealed class InventoryEventEndpointTests(ServiceFixture fixture) : IAsync
         // that simply reapplies the same row.
         await PublishAsync(product, 3, messageId);
 
-        // Held past the first sighting, because the claim is about a second
-        // row: an assertion that stops at the first would pass whether or not
-        // another was on its way.
-        await Task.Delay(TimeSpan.FromSeconds(2), TestContext.Current.CancellationToken);
+        (await suppressed.WaitAsync(DeliveryBudget, TestContext.Current.CancellationToken))
+            .ShouldBeTrue("the redelivery has to be counted as suppressed before the rows below can be read " +
+                "as settled");
 
         (await fixture.InboxAsync(messageId)).Count.ShouldBe(
             1,
@@ -177,5 +204,20 @@ public sealed class InventoryEventEndpointTests(ServiceFixture fixture) : IAsync
         }
 
         last.ShouldBe(expected, because);
+    }
+
+    /// <summary>
+    /// One tag off a measurement. A span cannot be captured, so the read
+    /// happens inside the callback and only the string escapes.
+    /// </summary>
+    private static string TagValue(ReadOnlySpan<KeyValuePair<string, object?>> tags, string name)
+    {
+        foreach (KeyValuePair<string, object?> tag in tags)
+        {
+            if (tag.Key == name)
+                return tag.Value?.ToString() ?? string.Empty;
+        }
+
+        return string.Empty;
     }
 }
