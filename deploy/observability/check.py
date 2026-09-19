@@ -149,6 +149,9 @@ OUTBOX_METRICS_EXEMPT = {
     "Inventory":
         "Rendered from Catalog and inherits its gap; removed when Inventory "
         "registers OutboxMetrics.",
+    "Payments":
+        "Rendered from Catalog and inherits its gap; removed when Payments "
+        "registers OutboxMetrics.",
 }
 
 # PromQL keywords that survive the stripping below and are not metric names.

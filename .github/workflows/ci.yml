@@ -250,6 +250,7 @@ jobs:
       catalog: ${{ steps.changes.outputs.catalog }}
       ordering: ${{ steps.changes.outputs.ordering }}
       inventory: ${{ steps.changes.outputs.inventory }}
+      payments: ${{ steps.changes.outputs.payments }}
       gateway: ${{ steps.changes.outputs.gateway }}
       bff: ${{ steps.changes.outputs.bff }}
       deploy: ${{ steps.changes.outputs.deploy }}
@@ -298,6 +299,10 @@ jobs:
               - *shared
               - 'src/Services/Inventory/**'
               - 'tests/Inventory.*/**'
+            payments:
+              - *shared
+              - 'src/Services/Payments/**'
+              - 'tests/Payments.*/**'
             # The gateway is a deployable like any other — its own image
             # (§15.2), its own chart (§15.3), its own Program.cs and route
             # file. Left out of this list, a change to that route file is never
@@ -497,7 +502,7 @@ jobs:
   # under src/ appears below.
   images:
     needs: [changes, build]
-    if: ${{ needs.changes.outputs.catalog == 'true' || needs.changes.outputs.ordering == 'true' || needs.changes.outputs.gateway == 'true' || needs.changes.outputs.bff == 'true' || needs.changes.outputs.inventory == 'true' }}
+    if: ${{ needs.changes.outputs.catalog == 'true' || needs.changes.outputs.ordering == 'true' || needs.changes.outputs.gateway == 'true' || needs.changes.outputs.bff == 'true' || needs.changes.outputs.inventory == 'true' || needs.changes.outputs.payments == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
@@ -524,6 +529,12 @@ jobs:
           - filter: inventory
             image: inventory-migrator
             dockerfile: src/Services/Inventory/Inventory.Migrator/Dockerfile
+          - filter: payments
+            image: payments-api
+            dockerfile: src/Services/Payments/Payments.Api/Dockerfile
+          - filter: payments
+            image: payments-migrator
+            dockerfile: src/Services/Payments/Payments.Migrator/Dockerfile
           - filter: gateway
             image: gateway
             dockerfile: src/Gateway/Gateway.Api/Dockerfile
