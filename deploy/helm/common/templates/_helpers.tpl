@@ -5,11 +5,11 @@ deliberately NOT derived from the release name.
 Helm's convention is `{{ .Release.Name }}-{{ .Chart.Name }}`, and it is wrong
 for this platform: these names are ROUTING CONFIGURATION. The gateway's route
 configuration (§10.2, `Gateway.Api/appsettings.json`) dials each workload by
-this literal name, and so does the BFF's one synchronous hop, `PricingHop.cs`'s
-— both on the record that the host does not vary because it is the Kubernetes
-Service name. A release-derived name makes that false the moment the umbrella
-chart installs the same workload under a different release, and the failure is
-a 502 rather than a template error.
+this literal name, and so does the BFF's one synchronous hop, defined in
+`PricingHop.cs` — both on the record that the host does not vary because it
+is the Kubernetes Service name. A release-derived name makes that false the
+moment the umbrella chart installs the same workload under a different
+release, and the failure is a 502 rather than a template error.
 
 So the name is a value, and it is required. `workload.name` is what the Service
 is called, which is what a peer dials.

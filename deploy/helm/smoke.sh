@@ -292,6 +292,21 @@ done
 "$HELM" dependency update "$CHARTS_DIR/platform" --skip-refresh >/dev/null
 pass 'platform resolves its subcharts'
 
+# `helm dependency update` only checks that every NAMED dependency resolves —
+# deleting one from the list still updates cleanly, the routed-service section
+# further down reports "no chart yet" for what it dropped and passes, and every
+# render after this point simply has one fewer subchart. So the umbrella's own
+# dependency names are reconciled against SERVICE_CHARTS directly, both ways.
+deps_declared="$(awk '/^dependencies:/ { d = 1; next } d && /^  - name: / { print $3 }' \
+    "$CHARTS_DIR/platform/Chart.yaml" | sort | tr '\n' ' ' | sed 's/ *$//')"
+if [ "$deps_declared" = "$listed" ]; then
+    pass "platform/Chart.yaml depends on exactly SERVICE_CHARTS ($deps_declared)"
+else
+    deps_missing="$(comm -23 <(printf '%s\n' $listed) <(printf '%s\n' $deps_declared))"
+    deps_extra="$(comm -13 <(printf '%s\n' $listed) <(printf '%s\n' $deps_declared))"
+    fail "platform/Chart.yaml's dependencies ($deps_declared) do not match SERVICE_CHARTS ($listed) — missing: ${deps_missing:-none}, extra: ${deps_extra:-none}"
+fi
+
 # --------------------------------------------------------------------------
 section 'helm lint'
 # --------------------------------------------------------------------------
