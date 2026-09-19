@@ -507,6 +507,7 @@ def yaml(text):
     scalar_parent = None
     script = None
     folded = False
+    explicit_key = ""
     for start in starts:
         end = _line_end(text, start)
         line = text[start:end]
@@ -543,12 +544,19 @@ def yaml(text):
                 quote = c
             j += 1
         code = line[:code_end].rstrip()
+        entry = code[_ITEM_PREFIX.match(code).end():]
+        if entry.startswith("? "):
+            explicit_key = entry[2:].strip()
+        elif entry and not entry.startswith(":"):
+            explicit_key = ""
         if quote is None and _BLOCK_SCALAR.search(code):
             prefix = _ITEM_PREFIX.match(code).group(0)
             owner = code[len(prefix):]
             if not _INDICATOR.fullmatch(owner):
                 scalar_parent = len(prefix)
-                script = [] if _RUN_KEY.match(owner) else None
+                # `? run` on one line and `: |` on the next is the same key.
+                key = explicit_key + owner if owner[:1] == ":" else owner
+                script = [] if _RUN_KEY.match(key) else None
                 folded = ">" in code[_BLOCK_SCALAR.search(code).start():]
                 if not _SCALAR_HEADER.search(owner):
                     scalar_parent = script = None

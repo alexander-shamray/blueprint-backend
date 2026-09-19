@@ -246,6 +246,12 @@ class YamlComments(unittest.TestCase):
         literal = folded.replace(">", "|", 1)
         self.assertEqual(judged("w.yml", literal), [])
 
+    def test_an_explicit_run_key_is_shell_and_another_key_is_not(self):
+        text = "- ? run\n  : |\n    echo '# no' # yes\n"
+        self.assertEqual(said(gate.yaml, text), ["yes"])
+        other = "- ? run\n  : x\n  ? text\n  : |\n    echo # no\n"
+        self.assertEqual(said(gate.yaml, other), [])
+
     def test_a_run_block_comment_lands_on_its_own_line(self):
         text = "- run: |\n    true\n    # PR-1\n"
         self.assertEqual([line for _, line, _ in judged("w.yml", text)], [3])
