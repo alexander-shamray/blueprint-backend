@@ -8,9 +8,10 @@ namespace Payments.TestSupport;
 /// <summary>
 /// Signals when a consumer reaches Payments' record of an order, so a caller
 /// can prove a unit is at the lock (spec, section 6) rather than infer it from
-/// elapsed time. Each signal is raised as the call is entered, before its SQL
-/// runs, and latches: a caller that asks after the fact still sees it. Test
-/// support only; the host never registers it.
+/// elapsed time. The stamp signal is raised as the call is entered, before its
+/// SQL runs, and the lock signal once the lock is held; both latch, so a caller
+/// that asks after the fact still sees them. Test support only; the host never
+/// registers it.
 /// </summary>
 public sealed class ObservedOrderStore
 {
@@ -18,7 +19,7 @@ public sealed class ObservedOrderStore
     private readonly ConcurrentDictionary<Guid, TaskCompletionSource> _stamping = new();
     private readonly ConcurrentDictionary<Guid, ConcurrentQueue<long>> _lockedAt = new();
 
-    /// <summary>Completes once <see cref="IPaymentOrderStore.LockAsync"/> is entered for the order.</summary>
+    /// <summary>Completes once <see cref="IPaymentOrderStore.LockAsync"/> holds the order's lock.</summary>
     public Task Locked(Guid order) => Signal(_locked, order).Task;
 
     /// <summary>
@@ -56,11 +57,15 @@ public sealed class ObservedOrderStore
             return inner.RecordCancelledAsync(id, cancelledAt, ct);
         }
 
-        public Task<PaymentOrderRecord?> LockAsync(OrderId id, CancellationToken ct)
+        public async Task<PaymentOrderRecord?> LockAsync(OrderId id, CancellationToken ct)
         {
             observer._lockedAt.GetOrAdd(id.Value, _ => new()).Enqueue(Stopwatch.GetTimestamp());
+            PaymentOrderRecord? record = await inner.LockAsync(id, ct);
+
+            // Raised once the lock is held, not on entry: a caller that writes
+            // the record next must queue behind the lock rather than beat it.
             Signal(observer._locked, id.Value).TrySetResult();
-            return inner.LockAsync(id, ct);
+            return record;
         }
     }
 }

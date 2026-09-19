@@ -63,8 +63,9 @@ public sealed class PaymentsCommandEndpointTests(ServiceFixture fixture) : IAsyn
     public async Task An_authorisation_before_its_order_waits_and_succeeds_when_the_order_lands()
     {
         Guid order = Guid.CreateVersion7();
+        Guid command = Guid.CreateVersion7();
 
-        await SendAsync(new AuthorisePayment(order, 42.10m, "EUR"), drain: false);
+        await SendAsync(new AuthorisePayment(order, 42.10m, "EUR"), drain: false, messageId: command);
         await fixture.Orders.Locked(order).WaitAsync(DeliveryBudget, TestContext.Current.CancellationToken);
         (await StatusAsync(order)).ShouldBeNull("§3.2: a missing record is a wait, not a decline");
         (await StagedAsync("PaymentDeclined")).ShouldBe(0);
@@ -76,6 +77,13 @@ public sealed class PaymentsCommandEndpointTests(ServiceFixture fixture) : IAsyn
             expected: 1,
             because: "the first redelivery, RedeliveryLadder.Intervals[0] later, finds the record",
             budget: RedeliveryLadder.Intervals[0] + TimeSpan.FromSeconds(30));
+
+        // The intent commits before the inbox row does (§9.5), so the test
+        // ends on the settled state rather than racing the next reset.
+        await Eventually(
+            async () => (await fixture.InboxAsync(command)).Count,
+            expected: 1,
+            because: "the redelivered command is consumed once its unit has committed");
 
         // The delayed exchange's wait, not an immediate retry's: a retry
         // would find the record within seconds and pass everything above.
