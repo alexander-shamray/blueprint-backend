@@ -231,6 +231,14 @@ applied to it before it is touched — plus the defects the re-grep turned
 up, verified the same way. That
 table is often the more valuable of the two; do not fold it into the first.
 
+**On `/ship`'s agent path the record is returned, not written.** The
+`review-grok-triager` profile's edit hook refuses every target outside the
+checkout, the scratchpad among them, and the record does not go in the
+checkout instead. There it is kept in the run and returned whole in the
+Report, in the form above, in place of its path; `/ship` writes it to its
+scratchpad. `docs/harness-boundaries.md` argues why the hook has no exception
+for it.
+
 ## Report
 
 Counts by status, the record's path, the number of blocks dropped as

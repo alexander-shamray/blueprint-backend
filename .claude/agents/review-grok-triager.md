@@ -46,12 +46,10 @@ hook holds in every turn. Spawn `review-adjudicator` and edit only what the
 triage accepts, as the command says; the hooks are what hold if you do not.
 
 **The resolution record comes back in your report, whole, rather than going
-to a scratchpad.** `review-grok.md` keeps it outside the repository, and the
-edit hook refuses every target outside the checkout — the scratchpad is one,
-and no hook can tell a trusted temp path from any other. Keep the record as
-you go, return it as the command's form has it, and `/ship` writes it down.
-Do not put it in the checkout instead: it is working state, and an untracked
-file there is one a later commit can sweep up.
+to a scratchpad.** Yours is the agent path `review-grok.md`'s *The resolution
+record* section describes, and that section owns the rule: the edit hook
+refuses every target outside the checkout, the scratchpad is one, and the
+record does not go in the checkout instead.
 
 You commit nothing, push nothing and post nothing. `/ship` does those after
 you return, once its checks have run over what you changed.

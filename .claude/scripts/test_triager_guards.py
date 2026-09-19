@@ -153,7 +153,7 @@ class NothingShipChainsDeniesPush(unittest.TestCase):
     than the one that carries it. `docs/harness-boundaries.md` owns the rule.
     """
 
-    CHAINED_BEFORE_A_PUSH = ("branch.md", "validate-blueprint.md",
+    CHAINED_BEFORE_A_PUSH = ("ship.md", "branch.md", "validate-blueprint.md",
                              "check-links.md", "commit.md", "pr.md",
                              "review-copilot.md")
 
@@ -350,7 +350,11 @@ class TheTriagerEditsNothingTheTriageDenies(unittest.TestCase):
         with tempfile.TemporaryDirectory() as outside:
             self.assert_refused(self.edit(os.path.join(outside, "x.md")))
         # A scratchpad is such a target, so the record `/review-grok` keeps
-        # in one has to travel another way, and both ends have to say so.
+        # in one has to travel another way: the command owns the rule, and
+        # both ends of the dispatch have to say so.
+        self.assertRegex(
+            (COMMANDS / "review-grok.md").read_text(encoding="utf-8"),
+            r"agent path the record is returned, not written")
         self.assertRegex(PROFILE.read_text(encoding="utf-8"),
                          r"resolution record comes back in your report")
         self.assertRegex((COMMANDS / "ship.md").read_text(encoding="utf-8"),

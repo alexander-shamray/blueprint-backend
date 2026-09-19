@@ -811,8 +811,9 @@ because asking failed.
       adjudicator — the triager included, which this file grants. The
       edit hook refuses every target outside the checkout, the scratchpad
       among them, so the triager's resolution record comes back in its
-      report: write it to the scratchpad with `Write` before anything
-      else, because a `Needs a decision` row is answered in that file.
+      report, as `/review-grok`'s own record section says: write it to the
+      scratchpad with `Write` before anything else, because a
+      `Needs a decision` row is answered in that file.
       Then rerun the step 2 checks that apply to what it
       changed: a review fix is still an edit, and committing it unchecked
       hands the next reviewer a broken branch. Then `/commit` **scoped to
