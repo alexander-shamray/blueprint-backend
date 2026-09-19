@@ -235,7 +235,8 @@ validate rule syntax: `promtool` would be the tool for that, and adding it is a
 decision no chapter has taken.
 
 The fourth is the canary (PR-25). A workflow path-filtered to
-`deploy/canary/**` runs that tree's own suite and `canary.py check`, which
+`deploy/canary/**` and to the inputs its plan reads, named below with the other
+filters, runs that tree's own suite and `canary.py check`, which
 asserts §15.5's ladder climbs and ends at 100, that the rollout's absolute
 thresholds are [§13.6](13-observability.md)'s alert thresholds **read out of
 the rules file rather than restated**, that each workload's `serviceName` is an

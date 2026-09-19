@@ -54,7 +54,7 @@ every chart and asserts what comes out.
    `EXPORTED_SERIES`, verified against the MassTransit pin in
    `Directory.Packages.props`, which fails the check when it moves. Deleting
    the registration fails it too.
-6. The parser found host assemblies at all, so checks 4 and 5 cannot pass
+6. The parser found host assemblies at all, so check 4 cannot pass
    vacuously.
 7. Both of `deploy.yml`'s triggers cover every path in `SOURCE_INPUTS`.
 8. `deploy.yml`'s dispatch menu is exactly the plan's workload set.
@@ -96,13 +96,15 @@ promoted only when each thing it does was observed doing it.
 
 ## What it does not
 
-- **It reaches no cluster and no Prometheus.** Every function in `canary.py` is
-  pure over its arguments; the workflow fetches and acts.
+- **It reaches no cluster and no Prometheus.** The weight arithmetic and the
+  verdict are pure over their arguments; the gate and the templates read the
+  repository, and the workflow fetches and acts.
 - **It does not validate PromQL.** The templates are strings, and their golden
   tests pin the text rather than that Prometheus parses it. A syntax error
-  in one surfaces as a failed query at the end of a ten-minute dwell — which
-  the verdict reads as an absent series and therefore as a rollback, so it
-  fails safe and slowly rather than unsafely.
+  in one surfaces at the end of a ten-minute dwell, when Prometheus refuses
+  the query: `read_prometheus.py` exits before writing any readings, the step
+  fails before the verdict runs, and the workflow's cleanup removes the
+  canary — so it fails safe and slowly rather than unsafely.
 - **It does not hold the weight against a voluntary disruption.** The
   PodDisruptionBudget belongs to the stable release and its selector matches
   both tracks, so it constrains the total rather than the stable count: a node

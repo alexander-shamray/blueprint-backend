@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """§15.5's weight arithmetic and verdict, and a gate over canary.json.
 
-Pure over its arguments and stdlib only: the workflow fetches and acts, and
-the README beside this file says what is asserted and what is not.
+Stdlib only. The arithmetic and verdict are pure; the gate and templates read
+the repository, and the README says what is asserted and what is not.
 
     py -3.12 deploy/canary/canary.py check
     py -3.12 deploy/canary/canary.py plan --workload catalog-api --stable 19 --step 0
