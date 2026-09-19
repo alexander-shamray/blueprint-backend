@@ -1,4 +1,5 @@
 using System.Data.Common;
+using System.Text.Json;
 using Ordering.Domain.Common;
 using Ordering.Domain.Orders;
 using Ordering.Infrastructure.Persistence;
@@ -163,65 +164,54 @@ public sealed class ServiceFixture : IAsyncLifetime
     }
 
     /// <summary>
-    /// Widens <c>ordering-svc</c>'s <c>write</c> for the duration of the suite,
-    /// because this harness stands in for services that do not exist yet.
+    /// The harness publishes the saga's inbound events under this service's
+    /// own account, which the deployed grant refuses: Ordering must not forge
+    /// a <c>StockReservationFailed</c> (ADR-036). Only the test container's
+    /// write moves; <c>configure</c> and <c>read</c> are read back from the
+    /// definitions the container imports, so the topology is judged by the
+    /// scope that deploys. ADR-036's negative property is
+    /// <c>check_permissions.py</c>'s to assert, not this suite's.
     /// </summary>
-    /// <remarks>
-    /// <para>
-    /// §9.6's saga is driven by events Inventory, Payments, Shipping and
-    /// Catalog publish, and none of those services has been built — so the
-    /// tests publish them through the host's own <c>IBus</c>, as
-    /// <c>ordering-svc</c>. Under ADR-036's production permissions that is
-    /// refused, correctly: Ordering must not be able to forge a
-    /// <c>StockReservationFailed</c>.
-    /// </para>
-    /// <para>
-    /// **The widening is here rather than in <c>definitions.json</c> on
-    /// purpose.** That file is the deployed artefact and a gate holds it to
-    /// the code; loosening it so a test can pass would make the gate agree
-    /// with a permission set nothing deploys, which is the "double cannot
-    /// disagree with itself" failure one artefact over. Doing it in the
-    /// harness keeps the production shape honest and puts the exception where
-    /// a reader of the suite can see it.
-    /// </para>
-    /// <para>
-    /// **So be precise about what `dotnet test` proves and what it does not.**
-    /// <c>configure</c> and <c>read</c> are untouched, so a receive endpoint or
-    /// a peer queue this service is not permitted to declare or bind still
-    /// fails here — which is the half that rots as endpoints are added.
-    /// ADR-036's *negative* property is NOT exercised by this suite; it is
-    /// exercised by <c>check_permissions.py</c>, which asserts no service may
-    /// write another's resources, and it was measured directly against a
-    /// running broker as <c>catalog-svc</c>.
-    /// </para>
-    /// <para>
-    /// This shrinks to nothing as the platform grows: each of those events
-    /// gains a real publisher with its own account, and the day the last one
-    /// does, this method deletes itself.
-    /// </para>
-    /// </remarks>
     private async Task WidenWriteForTheHarnessAsync()
     {
-        const string scope =
+        const string user = "ordering-svc";
+        const string write =
             "^(ordering-|inventory-commands|payments-commands|Common\\.Contracts|" +
             "Ordering\\.Infrastructure\\.Messaging:|MassTransit:)";
 
+        (string configure, string read) = ImportedGrant();
+
         ExecResult result = await _rabbit!.ExecAsync(
-            [
-                "rabbitmqctl", "set_permissions", "-p", "/", "ordering-svc",
-                scope, scope, scope
-            ],
+            ["rabbitmqctl", "set_permissions", "-p", "/", user, configure, write, read],
             TestContext.Current.CancellationToken);
 
-        // A silent failure here is the worst outcome available: every saga test
-        // would then fail on a publish, twenty minutes later, naming a message
-        // rather than a permission. Measured — that is exactly how this was
-        // found, as a suite that retried a refused publish until it timed out.
+        // A silent failure here would surface as every saga test retrying a
+        // refused publish until its budget ran out, naming a message rather
+        // than a permission.
         if (result.ExitCode != 0)
         {
             throw new InvalidOperationException(
-                $"Could not widen ordering-svc's broker permissions for the harness "
+                $"Could not widen {user}'s broker permissions for the harness "
                 + $"(exit {result.ExitCode}). stdout: {result.Stdout} stderr: {result.Stderr}");
+        }
+
+        // The mapped file rather than the container, because it is the same
+        // text the broker imported and it can be read before anything starts.
+        static (string Configure, string Read) ImportedGrant()
+        {
+            string path = Path.Combine(BrokerContextPath(), "definitions.json");
+            using JsonDocument definitions = JsonDocument.Parse(File.ReadAllText(path));
+
+            foreach (JsonElement entry in definitions.RootElement.GetProperty("permissions").EnumerateArray())
+            {
+                if (entry.GetProperty("user").GetString() != user || entry.GetProperty("vhost").GetString() != "/")
+                    continue;
+
+                return (entry.GetProperty("configure").GetString()!, entry.GetProperty("read").GetString()!);
+            }
+
+            throw new InvalidOperationException(
+                $"{path} grants {user} nothing on the default vhost, so there is no scope to preserve.");
         }
     }
 

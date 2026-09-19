@@ -48,7 +48,10 @@ public sealed class MigrationRunner(CatalogDbContext db, ILogger<MigrationRunner
             // schema may be half applied.
             "Catalog migration failed; the schema may be partially applied. The job exits non-zero.");
 
-    /// <returns>0 when the schema is current, 1 when it is not.</returns>
+    /// <returns>
+    /// 0 once every pending migration has applied; 1 if the run threw, in
+    /// which case the schema may be left partially applied.
+    /// </returns>
     public async Task<int> RunAsync(CancellationToken ct)
     {
         try
