@@ -66,6 +66,22 @@ def csharp(text):
 _MESSAGE_DIRECTIVE = re.compile(r"#\s*(region|endregion|error|warning)\b")
 
 
+def _cs_directive_comment(text, i, end):
+    """Where a directive's trailing `//` opens, or -1: never inside the
+    quoted arguments `#line` and `#pragma checksum` take."""
+    while i < end:
+        if text[i] == '"':
+            close = text.find('"', i + 1, end)
+            if close < 0:
+                return -1
+            i = close + 1
+        elif text.startswith("//", i):
+            return i
+        else:
+            i += 1
+    return -1
+
+
 def _cs_code(text, i, found, closing):
     depth = 0
     nest = 0
@@ -82,7 +98,7 @@ def _cs_code(text, i, found, closing):
             continue
         if c == "#" and at_line_start:
             end = _line_end(text, i)
-            comment = text.find("//", i, end)
+            comment = _cs_directive_comment(text, i, end)
             if comment >= 0 and not _MESSAGE_DIRECTIVE.match(text, i):
                 found.append(_comment(comment, end, 2))
             i = end
@@ -310,6 +326,12 @@ def _sh_code(text, i, found, closing):
             i = _sh_double(text, i + 1, found)
         elif c == "`":
             i = _sh_escaped(text, i + 1, "`")
+        elif text.startswith("$((", i) and _sh_arithmetic(text, i + 3):
+            i = _sh_arithmetic(text, i + 3)
+        elif (text.startswith("((", i)
+              and (i == 0 or text[i - 1] in _SH_WORD_BREAK)
+              and _sh_arithmetic(text, i + 2)):
+            i = _sh_arithmetic(text, i + 2)
         elif text.startswith("$(", i):
             i = _sh_code(text, i + 2, found, closing=")")
         elif text.startswith("${", i):
@@ -335,6 +357,22 @@ def _sh_code(text, i, found, closing):
         else:
             i += 1
     return i
+
+
+def _sh_arithmetic(text, i):
+    """Past the `))` closing an arithmetic context, where `<<` is a shift and
+    `#` a base; None when the parentheses were nested subshells after all."""
+    depth = 0
+    while i < len(text):
+        c = text[i]
+        if c == "(":
+            depth += 1
+        elif c == ")" and depth:
+            depth -= 1
+        elif c == ")":
+            return i + 2 if text.startswith("))", i) else None
+        i += 1
+    return None
 
 
 def _sh_heredocs(text, i, pending):

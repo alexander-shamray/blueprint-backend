@@ -55,6 +55,12 @@ class CSharpComments(unittest.TestCase):
                 'var c = $"{global::A.B /* hole */}";\n')
         self.assertEqual(said(gate.csharp, text), ["yes", "also", "hole"])
 
+    def test_a_directive_string_argument_is_not_a_comment(self):
+        text = ('#line 1 "https://host/#12" // yes\n'
+                '#pragma checksum "a.cs" "{406EA660}" "ab" // also\n'
+                '#line 2 "https://host/#13"\n')
+        self.assertEqual(said(gate.csharp, text), ["yes", "also"])
+
     def test_a_directive_message_is_code_and_a_trailing_comment_is_not(self):
         text = ("#region see http://example\n"
                 "#pragma warning disable CA1822 // why\n"
@@ -111,6 +117,17 @@ class ShellComments(unittest.TestCase):
             with self.subTest(opener=opener):
                 text = f"cat <<{opener}\n# no\nEND-OF-FILE\n# after\n"
                 self.assertEqual(said(gate.shell, text), ["after"])
+
+    def test_an_arithmetic_shift_is_not_a_heredoc(self):
+        for line in ["((mask << shift))", "x=$((1 << width))",
+                     "if ((a << (b + 1))); then :; fi"]:
+            with self.subTest(line=line):
+                text = f"{line} # yes\n# after\n"
+                self.assertEqual(said(gate.shell, text), ["yes", "after"])
+
+    def test_nested_subshells_are_not_arithmetic(self):
+        text = "((cat <<END\n# no\nEND\n); true) # yes\n"
+        self.assertEqual(said(gate.shell, text), ["yes"])
 
     def test_a_here_string_is_not_a_heredoc(self):
         text = 'grep x <<<"$y" # yes\n# also\n'
