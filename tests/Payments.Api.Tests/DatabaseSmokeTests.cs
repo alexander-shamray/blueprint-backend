@@ -44,10 +44,10 @@ public class DatabaseSmokeTests(ServiceFixture fixture)
         // the index the retention purge deletes through, and §8.5's marker
         // table with the database clock it is aged by and the rowversion the
         // purge identifies one of its rows by — all of them wiring every
-        // service has rather than anything this one chose. AddPaymentOrders
-        // and AddPaymentIntents are this service's own (§3.2).
+        // service has rather than anything this one chose. AddPaymentOrders,
+        // AddPaymentIntents and AddRefunds are this service's own (§3.2).
         string[] applied = await fixture.AppliedMigrationsAsync();
-        applied.Length.ShouldBe(9);
+        applied.Length.ShouldBe(10);
         applied[0].ShouldEndWith("_InitialCreate");
         applied[1].ShouldEndWith("_AddOutbox");
         applied[2].ShouldEndWith("_AddInbox");
@@ -57,6 +57,7 @@ public class DatabaseSmokeTests(ServiceFixture fixture)
         applied[6].ShouldEndWith("_AddIdempotencyMarkerRowVersion");
         applied[7].ShouldEndWith("_AddPaymentOrders");
         applied[8].ShouldEndWith("_AddPaymentIntents");
+        applied[9].ShouldEndWith("_AddRefunds");
     }
 
     [Fact]
@@ -66,6 +67,23 @@ public class DatabaseSmokeTests(ServiceFixture fixture)
             "SELECT Value = COUNT(*) FROM sys.columns WHERE object_id = OBJECT_ID('payments.PaymentIntents') " +
             "AND name = 'RowVersion' AND system_type_id = TYPE_ID('timestamp')"))
             .ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task The_migrator_creates_the_refund_table_with_its_money_and_no_rowversion()
+    {
+        // One refund per order, inserted once and never updated, so the order
+        // record's lock is what serialises the insert and there is nothing for
+        // an optimistic token to catch (spec, section 6).
+        (await fixture.ScalarAsync<int>(
+            "SELECT Value = COUNT(*) FROM sys.columns WHERE object_id = OBJECT_ID('payments.Refunds') " +
+            "AND name IN ('OrderId', 'Reference', 'Amount', 'Currency', 'VoidedAt')"))
+            .ShouldBe(5);
+
+        (await fixture.ScalarAsync<int>(
+            "SELECT Value = COUNT(*) FROM sys.columns WHERE object_id = OBJECT_ID('payments.Refunds') " +
+            "AND system_type_id = TYPE_ID('timestamp')"))
+            .ShouldBe(0, "the record's lock serialises the insert; no rowversion");
     }
 
     [Fact]

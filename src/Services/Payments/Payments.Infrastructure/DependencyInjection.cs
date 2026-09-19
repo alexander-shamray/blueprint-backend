@@ -1,5 +1,6 @@
 using Payments.Application.Orders;
 using Payments.Domain.Intents;
+using Payments.Domain.Refunds;
 using Payments.Infrastructure.Idempotency;
 using Payments.Infrastructure.Messaging;
 using Payments.Infrastructure.Persistence;
@@ -51,8 +52,9 @@ public static class DependencyInjection
         services.AddScoped<IUnitOfWork, EfUnitOfWork>();                     // §6.3
         services.AddScoped<IPaymentOrderStore, SqlPaymentOrderStore>();      // §3.2, §6.3
 
-        // §5.6's repository registration for the first aggregate.
+        // §5.6's repository registration for each aggregate.
         services.AddScoped<IPaymentIntentRepository, PaymentIntentRepository>();
+        services.AddScoped<IRefundRepository, RefundRepository>();
 
         // §8.5's durable half. Only this one has to land on the transaction
         // EfUnitOfWork opens — it resolves the DbContext alias above, which is

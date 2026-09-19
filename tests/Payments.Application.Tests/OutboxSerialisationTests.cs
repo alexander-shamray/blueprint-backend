@@ -4,6 +4,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Payments.Domain.Intents.Events;
 using Payments.Domain.Orders;
+using Payments.Domain.Refunds.Events;
 using Payments.Infrastructure;
 using Shouldly;
 using Xunit;
@@ -48,19 +49,20 @@ public class OutboxSerialisationTests
     }
 
     [Fact]
-    public void Both_domain_events_are_stageable()
+    public void All_three_domain_events_are_stageable()
     {
         // The loop above is vacuous if the map is empty, and it would be
         // vacuous quietly — a registration that stopped naming Payments.Domain
         // would turn the assertion into a no-op and nothing else would say so.
-        // Naming both rather than one also makes an added event a decision:
-        // it fails here until it has a sample.
+        // Naming each rather than counting them also makes an added event a
+        // decision: it fails here until it has a sample.
         using ServiceProvider provider = Registered();
 
         provider.GetRequiredService<MessageTypeMap>().StageableDomainEvents.ShouldBe(
             [
                 typeof(PaymentAuthorisedDomainEvent),
-                typeof(PaymentDeclinedDomainEvent)
+                typeof(PaymentDeclinedDomainEvent),
+                typeof(PaymentRefundedDomainEvent)
             ],
             ignoreOrder: true);
     }
@@ -96,7 +98,9 @@ public class OutboxSerialisationTests
             [typeof(PaymentAuthorisedDomainEvent)] =
                 new PaymentAuthorisedDomainEvent(Order, "psp_1", 42.10m, "EUR", Raised),
             [typeof(PaymentDeclinedDomainEvent)] =
-                new PaymentDeclinedDomainEvent(Order, "card_declined", Raised)
+                new PaymentDeclinedDomainEvent(Order, "card_declined", Raised),
+            [typeof(PaymentRefundedDomainEvent)] =
+                new PaymentRefundedDomainEvent(Order, "psp_1", 42.10m, "EUR", Raised)
         };
 
         public static object Create(Type type) =>

@@ -3,6 +3,7 @@ using Common.Infrastructure.Inbox;
 using Common.Infrastructure.Outbox;
 using Microsoft.EntityFrameworkCore;
 using Payments.Domain.Intents;
+using Payments.Domain.Refunds;
 
 namespace Payments.Infrastructure.Persistence;
 
@@ -49,6 +50,9 @@ public sealed class PaymentsDbContext(DbContextOptions<PaymentsDbContext> option
 
     /// <summary>§3.2's aggregate, and the first <c>DbSet</c> here that is one (spec, section 7).</summary>
     public DbSet<PaymentIntent> PaymentIntents => Set<PaymentIntent>();
+
+    /// <summary>§3.2's second aggregate: the money a cancellation voided back (spec, section 7).</summary>
+    public DbSet<Refund> Refunds => Set<Refund>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
