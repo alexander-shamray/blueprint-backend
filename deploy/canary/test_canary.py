@@ -432,7 +432,7 @@ class DispatchOptionTests(unittest.TestCase):
     """The `workload:` dispatch input's `options:` against canary.json's keys.
 
     A workload the plan can roll and this list cannot choose stays invisible
-    to a manual rollout while every path-filter check stays green — check 7
+    to a manual rollout while every path-filter check stays green: that check
     covers the trigger, not the menu underneath it.
     """
 

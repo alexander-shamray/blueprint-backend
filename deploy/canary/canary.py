@@ -479,10 +479,11 @@ def _shout(key: str) -> str:
 def check(plan_document: dict, root: Path = ROOT) -> list[str]:
     """Everything that can be wrong with canary.json without a cluster.
 
-    Eight checks. The last three are the ones this repository keeps learning
-    it needs: one asserts the gate's own subject is non-empty, one asserts the
-    workflow's path filter covers every input the rollout reads, and one
-    asserts its dispatch menu covers every workload the rollout can reach.
+    Failures are collected rather than raised, so one run reports them all.
+    Some checks guard the gate rather than the plan: that its own subject is
+    non-empty, that the workflow's path filter covers every input the rollout
+    reads, and that its dispatch menu covers every workload the rollout can
+    reach.
     """
     failures: list[str] = []
 
