@@ -1,10 +1,12 @@
 # ADR-048 — A reservation row is kept for as long as its order
 
-**Decision.** Inventory's `Reservations` table is **append-only**: a row, in any
-`ReservationStatus`, and its `ReservationLines` are never deleted, and no purge
-reaps them. The platform states no lifetime for an order, so this table states
-none either. A purge arrives only with a rule that bounds an order's life, owned
-by Ordering and argued in the ADR that supersedes this one.
+**Decision.** Inventory **never deletes** a `Reservations` row, in any
+`ReservationStatus`, or its `ReservationLines`, and no purge reaps them. A row
+still changes state as the order moves; what is kept is the row itself. The
+platform states no lifetime for an order, so this table states none either. A
+purge arrives only with a rule that bounds an order's life, owned by Ordering
+and argued in the ADR that supersedes this one.
+
 **Why.** Every row is an answer the order may ask for again, not only
 [ADR-024](ADR-024-a-release-answers-for-the-order-not-for-the-reservation.md)'s
 tombstone. `Reservation.AnswerAgain` repeats a `ReserveStock`'s answer from the
@@ -21,8 +23,10 @@ Nothing in the platform deletes an order: the saga instance is finalised and
 removed, the `Orders` row is not. A bound written here would be the one number
 nothing in the system can derive, and reaping early turns housekeeping into a
 correctness defect, where keeping the row costs storage.
-**Consequences.** The table grows by one row, and a line per product, for every
-order that reaches Inventory, for ever. That is the same growth Ordering's
+
+**Consequences.** The table grows by one row for every order that reaches
+Inventory, for ever, and by a line per product for each of those that asked for
+stock; ADR-024's tombstone carries none. That is the same growth Ordering's
 `Orders` and `OrderLines` already carry with no bound of their own, so Inventory
 adds a constant factor to a cost the platform has taken rather than a new one —
 and it is the cost a future reader will resent when the table is the largest in
