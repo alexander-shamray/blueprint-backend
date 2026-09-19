@@ -26,7 +26,7 @@ smoke.sh     renders every chart and the umbrella and asserts what comes out
 no network and no chart repository:
 
 ```bash
-helm dependency update deploy/helm/catalog     # and ordering, inventory, gateway, web-bff
+helm dependency update deploy/helm/catalog     # and each other service chart
 helm dependency update deploy/helm/platform    # after the service charts
 ```
 

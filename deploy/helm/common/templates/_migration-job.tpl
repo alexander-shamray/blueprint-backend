@@ -54,11 +54,10 @@ metadata:
   A truncated name is also a name that can collide, which is the quieter half:
   two tags sharing a 63-character prefix would produce one Job.
 
-  So the derived name is checked whole and a tag that does not fit is refused.
-  The budget is comfortable for what CI supplies — the longest migrator prefix
-  among the charts plus a 40-character commit SHA still fits the 63-character
-  ceiling, exercised by smoke.sh's long-tag check — and a tag that overruns it
-  is a deploy that must fail rather than one that mangles a name.
+  So the derived name is checked whole and a tag that does not fit is
+  refused. The Job name is the migrator prefix plus the image tag, bounded by
+  Kubernetes' name ceiling, and a tag that overruns it fails the render
+  rather than mangling a name.
   */}}
   {{- $jobName := printf "%s-migrate-%s" (include "commerce.name" .) $tag }}
   {{- if gt (len $jobName) 63 }}

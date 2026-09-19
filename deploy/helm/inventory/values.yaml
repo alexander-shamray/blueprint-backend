@@ -1,11 +1,9 @@
-# Inventory, and the chart §15.3 prints. One port rather than Catalog's two:
-# Inventory serves no gRPC, because ADR-017 spends the platform's one
-# synchronous hop on the BFF's pricing call and nothing else.
+# Inventory, and the chart §15.3 prints. HTTP only: nothing calls this
+# service synchronously (§9.7).
 
 workload:
-  # §10.2's route file dials `http://inventory-api:8080/` as a literal, so
-  # this value is that string — _helpers.tpl argues why it is not
-  # release-derived.
+  # §10.2's route configuration dials this workload by this literal name —
+  # _helpers.tpl argues why it is not release-derived.
   name: inventory-api
 
 replicaCount: 3
@@ -71,14 +69,13 @@ probes:
   startup:   { path: /health/startup, failureThreshold: 30,  periodSeconds: 2 }
 
 service:
-  # True: the gateway dials this workload by name. False is the worker case
-  # (§15.3).
+  # True: reachable from the edge (§10.2).
   enabled: true
 
 ingress:
-  # False, and written down rather than omitted (§15.3). Inventory is reached
-  # through the gateway (§10.2); an Ingress here would be a second door past
-  # the edge's rate limiting, CORS policy and forwarded-header handling.
+  # False, and written down rather than omitted (§15.3). Traffic reaches this
+  # workload through the edge (§10.2), and an Ingress here would be a second
+  # door past it.
   enabled: false
 
 identity:
@@ -90,7 +87,7 @@ identity:
   authority: https://id.example.com/realms/commerce
   # False, and written down rather than absent: §15.4's
   # required-for-some-hosts category is a claim a chart has to make, not one to
-  # infer from a missing key. Exactly one chart in the platform sets it true.
+  # infer from a missing key.
   clientCredentials: false
 
 database:

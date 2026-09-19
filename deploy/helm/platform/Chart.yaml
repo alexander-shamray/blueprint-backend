@@ -10,8 +10,8 @@ dependencies:
   # No `condition` keys. A service is either built and deployable or it is not
   # in this list, and a chart switched off by a value would render nothing while
   # reading as present — the same failure §15.3 argues against for
-  # `service.enabled`, one level up. Payments, Shipping and Notifications join
-  # when their PRs build them (Appendix C).
+  # `service.enabled`, one level up. A service chart joins this list with the
+  # change that adds it (Appendix C).
   - name: catalog
     version: 0.1.0
     repository: file://../catalog
