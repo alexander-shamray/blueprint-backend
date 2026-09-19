@@ -132,4 +132,21 @@ public sealed class GetProductsHandlerTests(ServiceFixture fixture) : IAsyncLife
         CursorPage<ProductSummaryDto> stingy = await QueryAsync(null, 0);
         stingy.Items.ShouldHaveSingleItem();
     }
+
+    [Fact]
+    public async Task A_reported_product_lists_its_level_and_an_unreported_one_lists_null()
+    {
+        List<Product> seeded = await SeedAsync(("Reported", Base), ("Unreported", Base.AddMinutes(1)));
+        Guid reported = seeded[0].Id.Value;
+        Guid unreported = seeded[1].Id.Value;
+        await fixture.ExecuteAsync(
+            "INSERT INTO catalog.StockLevels (ProductId, QuantityAvailable, AsOf) VALUES ({0}, 4, SYSDATETIMEOFFSET())",
+            reported);
+
+        CursorPage<ProductSummaryDto> page = await QueryAsync(null, 20);
+
+        page.Items.Single(p => p.ProductId == reported).QuantityAvailable.ShouldBe(4);
+        page.Items.Single(p => p.ProductId == unreported).QuantityAvailable.ShouldBeNull(
+            "unknown and none are different facts to a screen");
+    }
 }

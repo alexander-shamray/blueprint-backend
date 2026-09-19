@@ -30,9 +30,9 @@
     {
       "user": "catalog-svc",
       "vhost": "/",
-      "configure": "^(Common\\.Contracts(\\.Catalog\\.V1:|:)|MassTransit:)",
-      "write": "^(Common\\.Contracts(\\.Catalog\\.V1:|:)|MassTransit:)",
-      "read": "^(Common\\.Contracts\\.Catalog\\.V1:|MassTransit:)"
+      "configure": "^(catalog-|Common\\.Contracts(\\.Catalog\\.V1:|\\.Inventory\\.V1:|:)|MassTransit:)",
+      "write": "^(catalog-|Common\\.Contracts(\\.Catalog\\.V1:|:)|MassTransit:)",
+      "read": "^(catalog-|Common\\.Contracts\\.Catalog\\.V1:|Common\\.Contracts\\.Inventory\\.V1:|MassTransit:)"
     },
     {
       "user": "ordering-svc",

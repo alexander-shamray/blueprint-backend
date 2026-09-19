@@ -13,16 +13,13 @@ namespace Catalog.Api.Tests;
 
 /// <summary>
 /// §9.5's inbox filter, over a real consume pipeline and the real table. The
-/// in-memory transport rather than RabbitMQ, because what is under test is the
+/// in-memory transport rather than RabbitMQ: what is under test is the
 /// filter's own arithmetic — which of <c>MessageId</c> and <c>Endpoint</c> the
-/// row is keyed on, and when it is committed — and both are properties of the
-/// consume context rather than of the broker.
+/// row is keyed on, and when it is committed — and both belong to the consume
+/// context rather than to the broker.
 /// </summary>
 /// <remarks>
-/// Catalog binds no receive endpoint of its own (§3.2 gives it one Consumes
-/// cell, owned by a service that does not exist), so this suite declares the
-/// endpoints it needs rather than inventing a subscription §3.2 does not give
-/// it.
+/// The endpoints are this suite's own, so the claim stays about the filter.
 /// </remarks>
 [Collection(nameof(IntegrationCollection))]
 public sealed class InboxFilterTests(ServiceFixture fixture) : IAsyncLifetime

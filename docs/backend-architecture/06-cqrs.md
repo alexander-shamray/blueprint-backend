@@ -16,7 +16,7 @@ The blueprint uses two levels and shows how to move between them:
 | Store | One database | Write DB + read store |
 | Sync | None needed | Projections from events |
 | Consistency | Strong | Eventual |
-| Used by | Catalog, Inventory, Payments, Shipping | Ordering (section 6.6) |
+| Used by | Catalog, Inventory, Payments, Shipping | Ordering (section 6.6); the stock level Catalog's listing joins ([§3.2](03-bounded-contexts.md)) |
 
 **Start at level 1.** It gives most of the benefit — the write model stays
 clean, queries stay fast — at none of the operational cost. Escalate only where

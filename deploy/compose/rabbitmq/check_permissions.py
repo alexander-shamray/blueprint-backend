@@ -84,8 +84,13 @@ USER_SUFFIX = "-svc"
 FRAMEWORK_PREFIX = "MassTransit:"
 
 # The polymorphic publish exchange. MassTransit binds each concrete contract
-# exchange to one exchange per interface the message implements, so every
-# publisher declares and writes this and every consumer reads it.
+# exchange to one exchange per interface the message implements, and the
+# sender declares that binding: `exchange.bind` takes write on the
+# destination, which is this exchange, and read on the source, which is the
+# concrete contract. So a publisher declares and writes it and a consumer
+# needs no read here — a grant that enumerates contract prefixes rather than
+# naming `Common\.Contracts` whole is not thereby too narrow, because the
+# read a consumer does need is on its peer's concrete contract exchange.
 INTERFACE_EXCHANGE = "Common.Contracts:IIntegrationEvent"
 
 failures: list[str] = []

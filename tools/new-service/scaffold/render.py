@@ -55,6 +55,9 @@ COPIED = frozenset(
         "src/Services/Catalog/Catalog.Infrastructure/Catalog.Infrastructure.csproj",
         "src/Services/Catalog/Catalog.Infrastructure/DependencyInjection.cs",
         "src/Services/Catalog/Catalog.Infrastructure/Messaging/DependencyInjection.cs",
+        # §9.8's ladder, declared once per service: a rendered service's first
+        # endpoint wants it, and it names nothing of Catalog's.
+        "src/Services/Catalog/Catalog.Infrastructure/Messaging/RetryPolicy.cs",
         "src/Services/Catalog/Catalog.Infrastructure/SqlConnectionFactory.cs",
         "src/Services/Catalog/Catalog.Infrastructure/Persistence/CatalogDbContext.cs",
         "src/Services/Catalog/Catalog.Infrastructure/Persistence/EfDomainEventCollector.cs",
@@ -155,6 +158,11 @@ OMITTED = frozenset(
         "src/Services/Catalog/Catalog.Infrastructure/Persistence/MoneyJsonConverter.cs",
         "src/Services/Catalog/Catalog.Infrastructure/Persistence/ProductConfiguration.cs",
         "src/Services/Catalog/Catalog.Infrastructure/Persistence/ProductRepository.cs",
+        # §3.2 gives Catalog one Consumes cell, and the projection of it is the
+        # slice's: a rendered service consumes nothing and projects nothing.
+        "src/Services/Catalog/Catalog.Infrastructure/Persistence/StockLevelConfiguration.cs",
+        "src/Services/Catalog/Catalog.Infrastructure/Projections/StockLevelProjection.cs",
+        "src/Services/Catalog/Catalog.Infrastructure/Messaging/StockLevelConsumer.cs",
         "tests/Catalog.Domain.Tests/MoneyTests.cs",
         "tests/Catalog.Domain.Tests/ProductTests.cs",
         "tests/Catalog.Application.Tests/CatalogIntegrationEventMapperTests.cs",
@@ -206,6 +214,10 @@ OMITTED = frozenset(
         # entity cannot assert it, so it returns with the first real slice.
         "tests/Catalog.Api.Tests/UnitOfWorkRollbackTests.cs",
         "tests/Catalog.Api.Tests/ProductEndpointsTests.cs",
+        "tests/Catalog.Api.Tests/StockLevelsSchemaTests.cs",
+        "tests/Catalog.Api.Tests/StockLevelProjectionTests.cs",
+        "tests/Catalog.Api.Tests/StockLevelRegistrationTests.cs",
+        "tests/Catalog.Api.Tests/InventoryEventEndpointTests.cs",
         # Not slice, but container wiring with nothing left to wire: with the
         # handler tests gone, the collection has no member and the fixture no
         # consumer here. Both return with the service's first handler test,
@@ -264,8 +276,8 @@ OUTBOX_MIGRATION = re.compile(r"^\d{14}_AddOutbox(\.Designer)?\.cs$")
 # The inbox table travels for the mirror of the outbox's reason: §9.5 gives
 # every service one, the retention purge runs from first boot and deletes from
 # both, and a service that carried the purge without the table would log a
-# failed delete every pass. Consuming nothing does not exempt it — Catalog
-# itself consumes nothing and has the table for exactly this.
+# failed delete every pass. A service that consumes nothing today still owns
+# the table its first consumer needs.
 INBOX_MIGRATION = re.compile(r"^\d{14}_AddInbox(\.Designer)?\.cs$")
 # The purge's index, and it travels for the same reason the tables do: the
 # claim's index is filtered `WHERE ProcessedAt IS NULL` and so excludes every
@@ -1046,8 +1058,8 @@ def render_service_compose(repo_root: Path, names: Names, port: int) -> str:
         f"# {names.pascal}'s deployment (§14.1), included by {COMPOSE_INDEX}.\n"
         f"# Rendered by tools/new-service from the template service's unit file: the\n"
         f"# pair rule below belongs to the chapter, and the file boundary belongs to\n"
-        f"# docs/change-locality.md, so a {names.pascal} PR edits this file and never\n"
-        f"# another service's.\n"
+        f"# docs/change-locality.md, so a PR for {names.pascal} edits this file and\n"
+        f"# never another service's.\n"
         f"#\n"
         f"# `include` resolves a relative path against the directory of the file that\n"
         f"# declares it, so the repository root — the build context — is three levels up\n"
