@@ -345,8 +345,8 @@ check uses**: `read_admin.py` refuses a base URL that is not `https` and has no
 local subject at all, because the local realm is checked from its file rather
 than through a running Keycloak. The two never meet, and a reader who has just
 met the realm-check service account should not have to infer that from a
-silence. The provider key has no seam because nothing reads it: the simulator
-ignores the key, so a variable would front a value no local party checks.
+silence. The provider key has no seam because nothing checks it: the simulator
+ignores the key, so a variable would override a value no local party compares.
 
 Note how the connection strings nest — `${CATALOG_CONNECTION:-…Password=${SQL_PASSWORD:-…}…}`
 — so overriding the password alone keeps every connection string correct. That
