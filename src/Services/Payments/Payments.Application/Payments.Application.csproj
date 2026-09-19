@@ -2,18 +2,12 @@
 
   <!--
     Settings come from Directory.Build.props (§4.4).
-
-    Domain and Common.Application — the §4.2 dependency table's second row,
-    minus Common.Contracts. The §9.3 mapper is the only type that would name
-    a contract, and its allow-list is empty until this service publishes
-    something — so the reference joins with the first entry in it, and not
-    before. §4.3's one assembly that crosses a service boundary; it crosses
-    at the mapper or nowhere.
   -->
 
   <ItemGroup>
     <ProjectReference Include="..\Payments.Domain\Payments.Domain.csproj" />
     <ProjectReference Include="..\..\..\BuildingBlocks\Common.Application\Common.Application.csproj" />
+    <ProjectReference Include="..\..\..\BuildingBlocks\Common.Contracts\Common.Contracts.csproj" />
   </ItemGroup>
 
   <ItemGroup>

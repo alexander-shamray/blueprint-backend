@@ -1,5 +1,8 @@
 using Common.Application;
+using Common.Contracts.Ordering.V1;
 using Microsoft.Extensions.DependencyInjection;
+using Payments.Application.Orders.RecordOrderCancelled;
+using Payments.Application.Orders.RecordOrderPlaced;
 using Shouldly;
 using Xunit;
 
@@ -159,10 +162,23 @@ public class DependencyInjectionTests
             "a singleton would carry one command's key into every other command in the process");
     }
 
-    // Two tests are missing here, and they come back separately rather
-    // than together. The first handler of either kind earns the one that
-    // asserts the §6.2 scan produced a registration; the first validator
-    // earns the one that asserts the validator scan found it. Both scans
-    // fail silently when lost, which is why neither is left implicit —
-    // and a query-only slice needs the first and not the second.
+    [Fact]
+    public void AddPaymentsApplication_registers_the_slice_handlers()
+    {
+        // The scan is public-only (§6.2); a handler it misses registers as
+        // nothing rather than as something wrong, so every slice adds its
+        // rows here. No validator row yet: neither command below has one.
+        ServiceCollection services = new();
+
+        services.AddPaymentsApplication();
+
+        services.ShouldContain(d =>
+            d.ServiceType == typeof(ICommandHandler<RecordOrderPlacedCommand, Result>));
+        services.ShouldContain(d =>
+            d.ServiceType == typeof(IIntegrationEventHandler<OrderPlaced>));
+        services.ShouldContain(d =>
+            d.ServiceType == typeof(ICommandHandler<RecordOrderCancelledCommand, Result>));
+        services.ShouldContain(d =>
+            d.ServiceType == typeof(IIntegrationEventHandler<OrderCancelled>));
+    }
 }
