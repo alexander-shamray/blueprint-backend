@@ -1068,13 +1068,15 @@ because asking failed.
       `/review-copilot` **paused at its marker step**: let it
       triage and fix, then — because its tool grant cannot commit, and a
       `done` marker claims a committed fix — rerun the applicable step 2
-      checks, `/commit` **scoped to the paths the triage touched**, and only
-      then let it post its markers and resolve the threads. The scope is
-      load-bearing, not habit: after a mid-cycle limits skip,
-      `suggestions.md` is still on disk through this loop, and the unscoped
-      form sweeps untracked files — committing the review record is exactly
-      what the resume table forbids. Push the branch by name so the next
-      request reviews the fixed state, and go back to (1).
+      checks, `/commit` **scoped to the paths the triage touched**, push the
+      branch by name, and only then let it post its markers and resolve the
+      threads. The scope is load-bearing, not habit: after a mid-cycle
+      limits skip, `suggestions.md` is still on disk through this loop, and
+      the unscoped form sweeps untracked files — committing the review record
+      is exactly what the resume table forbids. The push comes before the
+      markers for the reason `/review-copilot` gives: `done` names a commit,
+      and one that is not on the remote is a claim the reviewer cannot check.
+      The same push is what the next request reviews; then go back to (1).
 
    **This loop does not share step 5's stopping condition, and the asymmetry
    is deliberate.** It ends on the **first** clean round, marked all-resolved,
