@@ -30,9 +30,14 @@ public sealed class RetryExclusionTests(ServiceFixture fixture) : IAsyncLifetime
     private sealed class FaultCountingObserver : IConsumeObserver
     {
         private readonly ConcurrentDictionary<Guid, int> _faults = new();
+        private readonly ConcurrentDictionary<Guid, TaskCompletionSource> _entered = new();
 
         public Task PreConsume<T>(ConsumeContext<T> context)
-            where T : class => Task.CompletedTask;
+            where T : class
+        {
+            Entry(context.MessageId ?? Guid.Empty).TrySetResult();
+            return Task.CompletedTask;
+        }
 
         public Task PostConsume<T>(ConsumeContext<T> context)
             where T : class => Task.CompletedTask;
@@ -45,6 +50,20 @@ public sealed class RetryExclusionTests(ServiceFixture fixture) : IAsyncLifetime
         }
 
         public int FaultsFor(Guid messageId) => _faults.GetValueOrDefault(messageId);
+
+        /// <summary>
+        /// Completes once a consumer has been entered for
+        /// <paramref name="messageId"/>. Per message rather than bus-wide, so
+        /// another delivery on the same queue cannot answer for this one, and
+        /// askable either side of the delivery: the entry is recorded against
+        /// the id whether or not anything is waiting on it yet.
+        /// </summary>
+        public Task Entered(Guid messageId) => Entry(messageId).Task;
+
+        private TaskCompletionSource Entry(Guid messageId) =>
+            _entered.GetOrAdd(
+                messageId,
+                static _ => new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously));
     }
 
     [Fact]
@@ -55,6 +74,7 @@ public sealed class RetryExclusionTests(ServiceFixture fixture) : IAsyncLifetime
         using ConnectHandle handle = bus.ConnectConsumeObserver(observer);
 
         var messageId = Guid.CreateVersion7();
+        Task entered = observer.Entered(messageId);
         ISendEndpoint endpoint = await bus.GetSendEndpoint(
             new Uri($"queue:{DependencyInjection.CommandsQueue}"));
         await endpoint.Send(
@@ -62,20 +82,24 @@ public sealed class RetryExclusionTests(ServiceFixture fixture) : IAsyncLifetime
             c => c.MessageId = messageId,
             TestContext.Current.CancellationToken);
 
-        // The sentinel behind it on the same queue: its own row is the signal
-        // that the broker round trip and the handler pipeline both ran, which
-        // is what makes the delay below a wait for the retry ladder rather
-        // than for delivery itself.
-        var sentinelProduct = Guid.CreateVersion7();
-        await ReservationTestSupport.SeedStock(fixture, sentinelProduct, 1);
-        var sentinelOrder = Guid.CreateVersion7();
-        await ReservationTestSupport.SendAsync(
-            fixture, new ReserveStock(sentinelOrder, [new StockLine(sentinelProduct, 1)]));
-        await ReservationTestSupport.EventuallyStatus(fixture, sentinelOrder, "Reserved");
+        // The window below measures the ladder from the attempt, so it cannot
+        // open before this delivery has reached a consumer. The endpoint
+        // prefetches and runs its deliveries concurrently, so a window opened
+        // on the send would spend itself queued on a loaded runner and read
+        // the absence of a fault as the exclusion acting. Budgeted rather
+        // than awaited outright, because a delivery that never arrives must
+        // say so instead of hanging the suite.
+        await Task.WhenAny(
+            entered,
+            Task.Delay(ReservationTestSupport.DeliveryBudget, TestContext.Current.CancellationToken));
+        entered.IsCompletedSuccessfully.ShouldBeTrue(
+            $"no consumer was entered for {messageId} within {ReservationTestSupport.DeliveryBudget}, " +
+            "so the interval below would be timing a delivery nothing has looked at");
 
         // RetryPolicy.MinInterval is the ladder's first wait; a message still
         // on it has not yet faulted, so this window closes well before a
-        // retried attempt could. The margin absorbs scheduling jitter without
+        // retried attempt could. The margin absorbs scheduling jitter between
+        // the consumer being entered and this delay starting, without
         // reaching into the ladder's second, longer wait.
         await Task.Delay(
             RetryPolicy.MinInterval + TimeSpan.FromSeconds(2), TestContext.Current.CancellationToken);
