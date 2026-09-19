@@ -1,15 +1,20 @@
 # ADR-049 — A cancellation Payments has recorded declines the authorisation that follows
 
-**Decision.** Payments records `OrderCancelled` on its own record of the order,
-creating the record as a tombstone when `OrderPlaced` has not arrived. An
-`AuthorisePayment` for an order so marked calls no provider and publishes
-`PaymentDeclined` with reason `order_cancelled`. `PaymentRefunded` is published
-only when money moved back, so a cancellation of an order with nothing
-authorised publishes nothing.
+**Decision.** Payments records `OrderCancelled` on its own record of the order
+([§3.2](../03-bounded-contexts.md)), creating the record as a tombstone when
+`OrderPlaced` has not arrived. An `AuthorisePayment` for an order so marked
+calls no provider and publishes `PaymentDeclined` with reason
+`order_cancelled`. That decline is a verdict on the order, not on a payer, so
+it stands for a tombstone as much as for a placed order; where Payments holds
+no record of the order at all, the command still waits, as §3.2's callout on
+the subscription requires. `PaymentDeclined.Reason` is for a human: nothing
+branches on it, and nothing makes it a metric dimension. `PaymentRefunded` is
+published only when money moved back, so a cancellation of an order with
+nothing authorised publishes nothing.
 
 **Why.** [§9.4](../09-messaging.md) orders nothing between two deliveries, so
-the saga's `AuthorisePayment` and Ordering's `OrderCancelled` can reach
-Payments in either order — the race
+Ordering's `OrderCancelled` can reach Payments ahead of the saga's
+`AuthorisePayment` — the race
 [ADR-024](ADR-024-a-release-answers-for-the-order-not-for-the-reservation.md)
 closed for Inventory, one service over. Without a guard the late command
 charges a cancelled order, and it charges it while the saga is in
@@ -22,16 +27,22 @@ cancellation has somewhere to land that the command reads anyway. A decline
 settles the saga's payment half at once; staying silent would hold it until
 §9.6's payment timeout for a verdict that is already known.
 
+**Why a decline for a payer Payments may not know.** ADR-028 and §3.2 refuse a
+`PaymentDeclined` about a payer Payments has not identified, because a missing
+record says nothing about the order and a decline there would be a guess. A
+recorded cancellation is not a missing record: it is Ordering's own statement
+that the order will not be paid for, and the decline repeats it. No payer is
+judged, so none needs to be known.
+
 **Why a decline and not a postcondition event.** ADR-024 answers a refused
 reserve with `StockReleased` because that event states a postcondition — no
 stock is held for the order — which is true whether or not anything was ever
 reserved. Payments' three events state acts, not postconditions, and none of
 them says "nothing is charged". `PaymentDeclined` is the one whose meaning
-survives: the order will not be paid for. Its `Reason` is for a human and
-never branched on ([§9.8](../09-messaging.md)), so a reason Payments owns
-beside the provider's codes is the cheapest honest answer, and it moves no
-contract and no consumer. A new event would have been a second verdict the
-saga must learn to read for the same outcome.
+survives: the order will not be paid for. Because nothing branches on its
+`Reason`, a reason Payments owns beside the provider's codes is the cheapest
+honest answer, and it moves no contract and no consumer. A new event would
+have been a second verdict the saga must learn to read for the same outcome.
 
 **Why the refund is not symmetric.** ADR-024 answers every release, because
 the saga waits on `StockReleased`. Nobody waits on `PaymentRefunded` but
@@ -44,11 +55,13 @@ serialised by the lock on Payments' record, and the provider call happens
 inside that lock, so a slow provider holds the row and the cancellation waits
 behind it rather than landing between the check and the charge. A cancellation
 that arrives for an order Payments never hears placed leaves a tombstone that
-nothing reaps — the same cost ADR-024's tombstone carries, and for the same
-reason: the row is an answer a later message may still ask for. And
-`PaymentDeclined.Reason` now has two authors, the provider and Payments;
-anything that reads it as the provider's word alone reads it wrongly, which is
-tolerable only because nothing may branch on it.
+nothing reaps — the cost
+[ADR-048](ADR-048-a-reservation-row-is-kept-for-as-long-as-its-order.md)
+accepts for Inventory's rows, and for the same reason: the row is an answer a
+later message may still ask for. And `PaymentDeclined.Reason` now has two
+authors, the provider and Payments; anything that reads it as the provider's
+word alone reads it wrongly, which is tolerable only because this record
+forbids branching on it.
 
 ---
 
