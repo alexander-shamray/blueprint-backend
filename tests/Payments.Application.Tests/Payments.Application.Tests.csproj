@@ -31,18 +31,15 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Services\Payments\Payments.Application\Payments.Application.csproj" />
-    <!-- No Payments.TestSupport and no Docker: this project's own handler
-         tests exercise event handlers against a hand-rolled IDispatcher fake
-         — each handler is one dispatch (§3.2), so the fact worth pinning is
-         what it sent, not a database. The persisted write is exercised over
-         a real broker and database in the API suite, which already carries
-         the fixture, the DbContext reference and the provider package a
-         second copy here would duplicate.
-
-         Payments.Infrastructure IS referenced, for AddPaymentsInfrastructure,
-         which OutboxSerialisationTests resolves OutboxJson and MessageTypeMap
-         out of (Ordering's precedent for the same test). §4.2's gate binds
-         Payments.Application, not its tests. -->
+    <!-- No Payments.TestSupport and no Docker: the handlers here run against
+         hand-rolled fakes, because what is worth pinning is what each one
+         sent or decided, not a database. The persisted write is exercised
+         over a real broker and database in the API suite, which already
+         carries the fixture a second copy here would duplicate.
+         Payments.Infrastructure is referenced for AddPaymentsInfrastructure,
+         so the Local lane's payload contract (§9.4) is checked against the
+         real registration; §4.2's gate binds Payments.Application, not its
+         tests. -->
     <ProjectReference Include="..\..\src\Services\Payments\Payments.Infrastructure\Payments.Infrastructure.csproj" />
   </ItemGroup>
 

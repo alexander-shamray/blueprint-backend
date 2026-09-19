@@ -11,18 +11,14 @@ using Xunit;
 namespace Payments.Application.Tests;
 
 /// <summary>
-/// The <c>Local</c> lane's payload contract (§9.4). No containers, and it
-/// lives here rather than in §12.6's contract suite because the set it
-/// iterates comes from the <see cref="MessageTypeMap"/> and that suite selects
-/// on the contracts namespace, which no domain event is in.
+/// The <c>Local</c> lane's payload contract (§9.4), here rather than in
+/// §12.6's contract suite because the set it iterates comes from the
+/// <see cref="MessageTypeMap"/>, not the contracts namespace it selects on.
 /// </summary>
 /// <remarks>
-/// Both halves come out of the real <c>AddPaymentsInfrastructure</c>, and that
-/// is the whole design of this test. A hand-built <see cref="OutboxJson"/>
-/// listing the converters would assert that they work — which nobody
-/// doubts — and stay green if a registration were deleted, while the running
-/// host wrote a null reference into every row. Registration is the thing that
-/// can silently go missing, so registration is what this resolves.
+/// Both halves come out of the real <c>AddPaymentsInfrastructure</c>: a
+/// hand-built <see cref="OutboxJson"/> would stay green if a converter's
+/// registration were deleted, and registration is what can go missing.
 /// </remarks>
 public class OutboxSerialisationTests
 {
@@ -58,7 +54,7 @@ public class OutboxSerialisationTests
         // vacuous quietly — a registration that stopped naming Payments.Domain
         // would turn the assertion into a no-op and nothing else would say so.
         // Naming both rather than one also makes an added event a decision:
-        // it fails here until it has a sample (PR-4 adds the third).
+        // it fails here until it has a sample.
         using ServiceProvider provider = Registered();
 
         provider.GetRequiredService<MessageTypeMap>().StageableDomainEvents.ShouldBe(
