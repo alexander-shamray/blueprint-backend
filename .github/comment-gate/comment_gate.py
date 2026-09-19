@@ -294,6 +294,9 @@ def _sh_heredoc_word(text, i):
             word.append(text[i + 1])
             i += 2
         elif c == "$" and text[i + 1:i + 2] in ("'", '"'):
+            close = text.find(text[i + 1], i + 2)
+            if text[i + 1] == "'" and "\\" in text[i:max(close, i)]:
+                raise Unreadable("a heredoc delimiter spelt with an escape")
             i += 1
         elif c in "'\"":
             close = text.find(c, i + 1)
@@ -366,12 +369,13 @@ def _sh_code(text, i, found, closing):
     return i
 
 
-def _sh_arithmetic_at(text, i, found):
-    """Past the arithmetic context opening at `i`, or None when none does."""
+def _sh_arithmetic_at(text, i, found, bare=True):
+    """Past the arithmetic context opening at `i`, or None when none does;
+    `((` opens one only where a command can start, which `bare` says."""
     if text.startswith("$((", i):
         body = i + 3
-    elif text.startswith("((", i) and (i == 0
-                                       or text[i - 1] in _SH_WORD_BREAK):
+    elif bare and text.startswith("((", i) and (
+            i == 0 or text[i - 1] in _SH_WORD_BREAK):
         body = i + 2
     else:
         return None
@@ -432,6 +436,8 @@ def _sh_double(text, i, found):
             return i + 1
         elif c == "`":
             i = _sh_code(text, i + 1, found, closing="`")
+        elif (end := _sh_arithmetic_at(text, i, found, bare=False)):
+            i = end
         elif text.startswith("$(", i):
             i = _sh_code(text, i + 2, found, closing=")")
         elif text.startswith("${", i):
@@ -453,6 +459,10 @@ def _sh_parameter(text, i, found):
             i = n if close < 0 else close + 1
         elif c == '"':
             i = _sh_double(text, i + 1, found)
+        elif c == "`":
+            i = _sh_code(text, i + 1, found, closing="`")
+        elif (end := _sh_arithmetic_at(text, i, found, bare=False)):
+            i = end
         elif text.startswith("$(", i):
             i = _sh_code(text, i + 2, found, closing=")")
         elif c == "{":
@@ -747,12 +757,12 @@ def main(argv):
     args = parser.parse_args(argv[1:])
     span = f"{args.base}...{args.head}"
     try:
+        if not _git("diff", "--name-only", "-z", span).strip(b"\0"):
+            raise Unreadable(f"{span} changes no file, so the base or the "
+                             "head is not the pull request's")
         changed = _git("diff", "--name-only", "-z", "-M", "--diff-filter=AMR",
                        span).decode("utf-8", errors="strict")
         paths = [p for p in changed.split("\0") if p]
-        if not paths:
-            raise Unreadable(f"{span} changes no file, so the base or the "
-                             "head is not the pull request's")
         diff = _git("-c", "core.quotePath=false", "diff", "-U0", "--no-color",
                     "--no-ext-diff", "--text", "--no-textconv",
                     "--inter-hunk-context=0", "--src-prefix=a/",

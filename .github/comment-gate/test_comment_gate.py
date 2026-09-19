@@ -1,8 +1,8 @@
 """The comment gate's subject: what it must find, and what it must not judge.
 
 Each reader's class pairs the comments it must find with the literals it must
-leave alone, because a literal is code; the rule classes pair each finding
-with its innocent neighbour; the last two run the gate over real git history.
+leave alone, because a literal is code, and each rule's class pairs a finding
+with its innocent neighbour.
 """
 
 import subprocess
@@ -133,6 +133,20 @@ class ShellComments(unittest.TestCase):
                 "((w = `count # third@` << 2)) # last@").replace("@", "\n")
         self.assertEqual(said(gate.shell, text),
                          ["yes", "also", "third", "last"])
+
+    def test_an_escape_in_a_heredoc_word_refuses_the_file(self):
+        with self.assertRaises(gate.Unreadable):
+            gate.shell("cat <<$'E\\x4fF'@# no@EOF@".replace("@", "\n"))
+
+    def test_arithmetic_is_arithmetic_inside_quotes_and_parameters(self):
+        for line in ['x="$((mask << shift@))"', "x=${y:-$((mask << shift@))}"]:
+            with self.subTest(line=line):
+                text = (line + " # yes@# after@").replace("@", "\n")
+                self.assertEqual(said(gate.shell, text), ["yes", "after"])
+
+    def test_a_backtick_inside_a_parameter_is_code(self):
+        text = "x=${y:-`count # yes@`}@".replace("@", "\n")
+        self.assertEqual(said(gate.shell, text), ["yes"])
 
     def test_a_heredoc_word_is_read_whole(self):
         for opener in ["END-OF-FILE", "END-OF'-FILE'", 'EN"D"-OF-FILE']:
@@ -402,7 +416,7 @@ class TheGateOnARepository(unittest.TestCase):
         self.commit("change")
         self.assertEqual(self.run_gate().returncode, 2)
 
-    def test_a_file_git_would_not_diff_is_still_judged_on_its_added_lines(self):
+    def test_a_file_git_would_not_diff_is_judged_on_its_added_lines(self):
         Path(self.repo, "Zero.cs").write_bytes(b"x(); // PR-1\x00\n")
         self.write(".gitattributes", "Quiet.cs -diff\n")
         self.write("Quiet.cs", "x(); // PR-2\n")
@@ -417,6 +431,14 @@ class TheGateOnARepository(unittest.TestCase):
         self.write("New.cs", "x();\n")
         self.commit("change")
         self.assertEqual(self.run_gate().returncode, 0)
+
+    def test_a_change_that_only_deletes_adds_nothing_and_passes(self):
+        self.write("Old.cs", "x(); // PR-1\n")
+        self.commit("old")
+        Path(self.repo, "Old.cs").unlink()
+        self.commit("change")
+        result = self.run_gate(base="HEAD~1")
+        self.assertEqual(result.returncode, 0, result.stdout)
 
     def test_a_change_git_calls_binary_refuses_the_run(self):
         Path(self.repo, "Bin.cs").write_bytes(b"\x00\xff\xfe// PR-1\n")
