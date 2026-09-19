@@ -125,4 +125,87 @@ public sealed class PaymentOrderStoreTests(ServiceFixture fixture) : IAsyncLifet
         await Should.ThrowAsync<InvalidOperationException>(() =>
             store.LockAsync(OrderId.New(), TestContext.Current.CancellationToken));
     }
+
+    /// <summary>
+    /// Two connections, two transactions, released at a shared gate so
+    /// neither's first statement for one new order can see the other's: only
+    /// the key-range lock (§6.3's <c>UPDLOCK, HOLDLOCK</c> on
+    /// <see cref="SqlPaymentOrderStore"/>) serialises them onto one row.
+    /// Sequencing one statement fully before starting the other would let
+    /// the second see the first's row and never reach that codepath, so this
+    /// repeats the release across fresh orders rather than trusting one to
+    /// land on the instant both scans overlap.
+    /// </summary>
+    private async Task RaceConcurrentFirstWritesAsync(
+        Func<IPaymentOrderStore, OrderId, Task> first,
+        Func<IPaymentOrderStore, OrderId, Task> second,
+        Func<OrderId, Task> assertLanded)
+    {
+        for (int attempt = 0; attempt < 20; attempt++)
+        {
+            OrderId order = OrderId.New();
+            TaskCompletionSource gate = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            async Task RunAsync(Func<IPaymentOrderStore, OrderId, Task> act)
+            {
+                await using AsyncServiceScope scope = fixture.Factory.Services.CreateAsyncScope();
+                PaymentsDbContext db = scope.ServiceProvider.GetRequiredService<PaymentsDbContext>();
+                IPaymentOrderStore store = scope.ServiceProvider.GetRequiredService<IPaymentOrderStore>();
+                await using IDbContextTransaction tx =
+                    await db.Database.BeginTransactionAsync(TestContext.Current.CancellationToken);
+
+                await gate.Task;
+                await act(store, order);
+                await tx.CommitAsync(TestContext.Current.CancellationToken);
+            }
+
+            Task firstTask = Task.Run(() => RunAsync(first), TestContext.Current.CancellationToken);
+            Task secondTask = Task.Run(() => RunAsync(second), TestContext.Current.CancellationToken);
+
+            await Task.Delay(TimeSpan.FromMilliseconds(20), TestContext.Current.CancellationToken);
+            gate.SetResult();
+
+            await Task.WhenAll(firstTask, secondTask);
+            await assertLanded(order);
+        }
+    }
+
+    [Fact]
+    public async Task A_placement_and_a_cancellation_racing_on_one_new_order_both_land_on_it()
+    {
+        Guid customer = Guid.CreateVersion7();
+
+        await RaceConcurrentFirstWritesAsync(
+            (store, order) => store.RecordPlacedAsync(
+                order, customer, 25.50m, "EUR", Placed, TestContext.Current.CancellationToken),
+            (store, order) => store.RecordCancelledAsync(order, Cancelled, TestContext.Current.CancellationToken),
+            async order =>
+            {
+                PaymentOrderRecord? record =
+                    await InTransaction(s => s.LockAsync(order, TestContext.Current.CancellationToken));
+
+                record.ShouldNotBeNull();
+                record.IsPlaced.ShouldBeTrue();
+                record.IsCancelled.ShouldBeTrue();
+            });
+    }
+
+    [Fact]
+    public async Task Two_placements_racing_on_one_new_order_leave_exactly_one_row()
+    {
+        Guid customer = Guid.CreateVersion7();
+
+        await RaceConcurrentFirstWritesAsync(
+            (store, order) => store.RecordPlacedAsync(
+                order, customer, 25.50m, "EUR", Placed, TestContext.Current.CancellationToken),
+            (store, order) => store.RecordPlacedAsync(
+                order, customer, 25.50m, "EUR", Placed, TestContext.Current.CancellationToken),
+            async order =>
+            {
+                (await fixture.ScalarAsync<int>(
+                    "SELECT Value = COUNT(*) FROM payments.PaymentOrders WHERE OrderId = {0}",
+                    order.Value))
+                    .ShouldBe(1, "the loser's insert updated the winner's row instead of failing on the key");
+            });
+    }
 }

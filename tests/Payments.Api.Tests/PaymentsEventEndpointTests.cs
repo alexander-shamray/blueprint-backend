@@ -116,7 +116,7 @@ public sealed class PaymentsEventEndpointTests(ServiceFixture fixture) : IAsyncL
     {
         Guid order = Guid.CreateVersion7();
 
-        await Task.WhenAll(PublishAsync(Placed(order), drain: false), PublishAsync(Cancelled(order), drain: false));
+        await Task.WhenAll(PublishAsync(Placed(order)), PublishAsync(Cancelled(order)));
 
         await Eventually(() => PlacedCount(order), expected: 1, because: "the placement landed");
         await Eventually(() => CancelledCount(order), expected: 1, because: "the cancellation landed on the same row");
