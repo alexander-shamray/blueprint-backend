@@ -90,6 +90,11 @@ public static class DependencyInjection
             http.DefaultRequestHeaders.Authorization = new("Bearer", apiKey);
         });
 
+        // A followed 307 or 308 would replay the payer and the amount to
+        // wherever the provider pointed, and take that answer as its verdict.
+        // Unfollowed, a redirect is a status the adapter does not define.
+        client.ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false });
+
         // Separate statements: AddStandardResilienceHandler returns the
         // pipeline's builder, not the client's, so a chained
         // AddHttpMessageHandler would not compile onto the client. Added after

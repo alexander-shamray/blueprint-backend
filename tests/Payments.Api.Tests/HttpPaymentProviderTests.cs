@@ -308,6 +308,25 @@ public sealed class HttpPaymentProviderTests : IClassFixture<HttpPaymentProvider
     }
 
     [Theory]
+    [InlineData(307)]
+    [InlineData(308)]
+    public async Task A_redirect_is_not_followed_and_is_unavailable(int status)
+    {
+        _server.Given(Request.Create().WithPath("/v1/authorisations").UsingPost())
+            .AtPriority(0)
+            .RespondWith(Response.Create().WithStatusCode(status).WithHeader("Location", "/elsewhere"));
+        _server.Given(Request.Create().WithPath("/elsewhere").UsingPost())
+            .AtPriority(0)
+            .RespondWith(Response.Create().WithStatusCode(201)
+                .WithBody("{\"status\":\"approved\",\"reference\":\"psp_elsewhere\"}"));
+
+        await Should.ThrowAsync<PaymentProviderUnavailableException>(() =>
+            Provider().AuthoriseAsync(Authorisation(42.10m), TestContext.Current.CancellationToken));
+
+        Calls("/elsewhere").ShouldBe(0, "the payer and the amount go to the provider's address and nowhere else");
+    }
+
+    [Theory]
     [InlineData(400)]
     [InlineData(401)]
     [InlineData(404)]
@@ -458,6 +477,26 @@ public sealed class HttpPaymentProviderTests : IClassFixture<HttpPaymentProvider
 
         if (accepted)
             (await call()).ShouldBe(new AuthorisationResult.Authorised(reference));
+        else
+            await Should.ThrowAsync<PaymentProviderUnavailableException>(call);
+    }
+
+    [Theory]
+    [InlineData(ProviderLimits.MaxReasonLength, true)]
+    [InlineData(ProviderLimits.MaxReasonLength + 1, false)]
+    public async Task A_decline_code_longer_than_the_column_is_refused_before_it_is_recorded(int length, bool accepted)
+    {
+        string code = new('c', length);
+        _server.Given(Request.Create().WithPath("/v1/authorisations").UsingPost())
+            .AtPriority(0)
+            .RespondWith(Response.Create().WithStatusCode(402)
+                .WithBody($"{{\"status\":\"declined\",\"code\":\"{code}\"}}"));
+
+        Func<Task<AuthorisationResult>> call = () =>
+            Provider().AuthoriseAsync(Authorisation(42.10m), TestContext.Current.CancellationToken);
+
+        if (accepted)
+            (await call()).ShouldBe(new AuthorisationResult.Declined(code));
         else
             await Should.ThrowAsync<PaymentProviderUnavailableException>(call);
     }
