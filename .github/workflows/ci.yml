@@ -162,7 +162,8 @@ jobs:
             echo "::error::base commit $BASE_SHA carries .github/comment-gate but no $GATE"
             exit 1
           else
-            echo "::warning::base commit $BASE_SHA carries no comment gate; this pull request is judged by the gate it proposes (bootstrap)"
+            echo "::warning::base commit $BASE_SHA carries no comment gate;" \
+              "this pull request is judged by the gate it proposes (bootstrap)"
             cp "$GATE" "$judge"
           fi
           python "$judge" --base "$BASE_SHA" --head "$HEAD_SHA"
