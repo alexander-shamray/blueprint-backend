@@ -12,6 +12,11 @@
     <PackageReference Include="xunit.runner.visualstudio" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="Shouldly" />
+    <!-- SetOnHandValidatorTests names FluentValidation.TestHelper directly;
+         the register's honesty rule is that an assembly named directly is
+         referenced directly, so it does not ride in on Inventory.Application
+         alone. -->
+    <PackageReference Include="FluentValidation" />
     <!-- The §4.2 gates that reason over type dependencies rather than
          assembly references — a job GetReferencedAssemblies cannot do. -->
     <PackageReference Include="NetArchTest.Rules" />

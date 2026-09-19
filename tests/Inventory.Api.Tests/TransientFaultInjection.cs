@@ -40,8 +40,8 @@ public sealed class TrackedProbe
 /// <c>DbContextOptions</c> — and nothing else's. The production model and its
 /// migration snapshot never see the entity: a test table mapped in
 /// <c>InventoryDbContext</c> itself would make the next <c>migrations add</c>
-/// generate DDL for a table only the fixture creates, which is the snapshot
-/// drift PR-08 forbids.
+/// generate DDL for a table only the fixture creates, leaving the migration
+/// snapshot describing a schema the running service never has.
 /// </summary>
 public sealed class ProbeModelCustomizer(ModelCustomizerDependencies dependencies)
     : ModelCustomizer(dependencies)

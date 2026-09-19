@@ -5,10 +5,10 @@ using Xunit;
 namespace Inventory.Domain.Tests;
 
 /// <summary>
-/// §4.2's first gate, a CI failure from the first template commit rather than
-/// a review convention. Plain reflection, no NetArchTest: the rule is about
-/// assembly references, not type dependencies, and
-/// <c>GetReferencedAssemblies</c> asks exactly that question.
+/// §4.2's first gate: Domain references only <c>Common.Domain</c> and the
+/// framework. Plain reflection, no NetArchTest: the rule is about assembly
+/// references, not type dependencies, and <c>GetReferencedAssemblies</c>
+/// asks exactly that question.
 /// </summary>
 public class ArchitectureTests
 {
