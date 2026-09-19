@@ -816,8 +816,9 @@ def _registers(service_name: str, pattern: re.Pattern, root: Path) -> bool:
 
 # A literal is matched before a comment, so a `//` or `/*` inside one stays
 # text: raw, verbatim, regular and character literals, then the two comments.
+# A raw literal closes on a run of exactly as many quotes as opened it.
 CSHARP_TOKEN = re.compile(
-    r'(?P<literal>"""[\s\S]*?"""|\$?@\$?"(?:[^"]|"")*"|\$?"(?:\\.|[^"\\\n])*"'
+    r'(?P<literal>\$*(?P<run>"{3,})[\s\S]*?(?P=run)|\$?@\$?"(?:[^"]|"")*"|\$?"(?:\\.|[^"\\\n])*"'
     r"|'(?:\\.|[^'\\\n])')"
     r"|(?P<comment>//[^\n]*|/\*[\s\S]*?\*/)"
 )

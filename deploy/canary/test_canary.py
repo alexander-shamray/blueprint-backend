@@ -889,6 +889,20 @@ class BulkRegistrationTests(unittest.TestCase):
         self.assertFalse(canary.has_consumers("Svc.Api", root))
         self.assertFalse(canary.has_sagas("Svc.Api", root))
 
+    def test_a_raw_string_closes_on_its_own_delimiter(self) -> None:
+        """A raw literal opened with four quotes may hold three, so it ends
+        at the matching run of four, and nothing inside it is a call."""
+        for prefix in ("", "$$"):
+            with self.subTest(prefix=prefix):
+                root = service_tree({"Svc.Infrastructure/Bus.cs": (
+                    f'var doc = {prefix}""""\n    a """ b x.AddConsumer<OrderConsumer>();\n'
+                    '    app.MapHealthChecks("/orders");\n    """";\n'
+                    'app.MapHealthChecks("/health/live");\n'
+                )})
+
+                self.assertFalse(canary.has_consumers("Svc.Api", root))
+                self.assertEqual(canary.health_routes(root), {"/health/live"})
+
 
 class SagaScanTests(unittest.TestCase):
     """The scan that decides which workloads owe a saga signal."""
