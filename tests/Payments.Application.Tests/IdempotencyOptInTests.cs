@@ -63,13 +63,10 @@ public class IdempotencyOptInTests
     [Fact]
     public void Idempotent_commands_return_a_result_shape_the_behaviour_rebuilds()
     {
-        // §8.5's gate, and it is written to what the BEHAVIOUR accepts rather
-        // than to what the container's constraint accepts. An earlier revision
-        // of this test asked `typeof(Result).IsAssignableFrom(result)`, which
-        // is the constraint's own question — and §8.5 says in as many words
-        // that a gate written that way "would pass a command the behaviour
-        // cannot serve and leave it to fail on first use". The chapter
-        // specified all three assertions below; this file implemented one.
+        // §8.5's gate is written to what the BEHAVIOUR accepts rather than to
+        // what the container's constraint accepts: a gate asking only the
+        // constraint's own question would pass a command the behaviour
+        // cannot serve, and the failure would surface no earlier than first use.
         (Type Command, Type Result)[] candidates =
         [
             .. Commands()

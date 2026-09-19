@@ -23,11 +23,14 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Services\Payments\Payments.Application\Payments.Application.csproj" />
-    <!-- No Payments.TestSupport and no Payments.Infrastructure yet, and no
-         Docker with them: §12.1 homes the handler tests here against real
-         containers, and this project has no handler to test. The fixture
-         reference, the DbContext reference and the provider package all
-         return with the first one. -->
+    <!-- No Payments.TestSupport and no Payments.Infrastructure, and no Docker
+         with them: this project's own tests exercise the event handlers
+         against a hand-rolled IDispatcher fake — each handler is one
+         dispatch (§3.2), so the fact worth pinning is what it sent, not a
+         database. The persisted write is exercised over a real broker and
+         database in the API suite, which already carries the fixture, the
+         DbContext reference and the provider package a second copy here
+         would duplicate. -->
   </ItemGroup>
 
 </Project>
