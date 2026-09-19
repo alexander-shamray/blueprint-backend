@@ -279,9 +279,10 @@ public sealed class InventoryCommandEndpointTests(ServiceFixture fixture) : IAsy
         (await Available(product)).ShouldBe(0);
     }
 
-    // Thin forwarders onto ReservationTestSupport: the implementation lives
-    // once there, and this class keeps its own name so its test bodies read
-    // unchanged.
+    // Thin forwarders onto ReservationTestSupport, whose helpers are static
+    // and hold no fixture of their own, so every call has to name one.
+    // Binding the fixture this class was handed, once, is what stops a test
+    // body arranging against one database and asserting against another.
     private Task SeedStock(Guid product, int available) =>
         ReservationTestSupport.SeedStock(fixture, product, available);
 
