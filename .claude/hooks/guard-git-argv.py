@@ -2336,9 +2336,7 @@ def _offence(command, depth, judged):
 # linearly in the command's length: measured here, 200,000 plain characters
 # took 6 seconds and 1,000,000 took 58, against a default timeout of 60. A
 # command past `LENGTH_BUDGET` is refused before any scan runs, which fails
-# closed where the timeout would fail open. The opener-times-length budget
-# blueprint-admin carries beside this one is not needed here: `${` and `(`
-# end their scan on a missing closer, and 9,000 of either judge in a second.
+# closed where the timeout would fail open.
 LENGTH_BUDGET = 100_000
 
 

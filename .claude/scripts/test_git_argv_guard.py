@@ -2566,12 +2566,8 @@ class TheGitArgvGuard(unittest.TestCase):
 
     def test_a_command_too_long_to_judge_in_time_is_refused(self):
         # The same fail-open by exhaustion, reached by length alone. The
-        # scanners grow faster than linearly in the command: 1,000,000 plain
-        # characters took 58 of the hook's 60 seconds, and a little more is no
-        # verdict at all. `LENGTH_BUDGET` refuses before any scan runs.
-        #
-        # The subject is the budget `main` reads, so the inputs are built from
-        # it rather than from a number this test would have to keep in step.
+        # subject is the budget `main` reads, so the inputs are built from it
+        # rather than from a number this test would have to keep in step.
         spec = importlib.util.spec_from_file_location("guard_git_argv", HOOK)
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
@@ -2581,7 +2577,7 @@ class TheGitArgvGuard(unittest.TestCase):
             "a" * budget + "; git push origin +HEAD:main")
         # The positive control: a command inside the budget is still judged
         # on its merits, or a guard that refused everything would pass.
-        self.judge("echo " + "a" * (budget - 5))
+        self.assertAdmitted("echo " + "a" * (budget - 5))
         self.assertIsNone(module.scan_budget("git status"))
 
     def test_an_expanding_heredoc_body_removes_its_continuations(self):
