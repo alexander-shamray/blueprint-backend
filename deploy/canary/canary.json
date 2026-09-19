@@ -62,7 +62,7 @@
       "matches no series — and an empty result rolls every canary back, so the",
       "mistake produces a rollout that can only ever fail.",
       "",
-      "signals names what each workload is judged on; the signals, their",
+      "The signals field names what each workload is judged on; the signals, their",
       "thresholds and their queries are canary.py's SIGNALS and queries()",
       "(ADR-047). consumeExemption and sagaExemption argue a registration the",
       "scan in check 9 finds and the workload does not declare; httpExemption",
