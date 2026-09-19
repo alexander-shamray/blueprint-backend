@@ -196,6 +196,12 @@ two guarantees, both recorded in
   this the reserve creates a hold for an order that is already cancelled and
   nobody is left waiting to notice.
 
+**What remembers it is the order's reservation row, and the row is never
+reaped.** Every row, tombstone or not, is the answer a repeated message for
+that order gets, and no chapter bounds an order's life, so none bounds the
+row's
+([ADR-048](adr/ADR-048-a-reservation-row-is-kept-for-as-long-as-its-order.md)).
+
 **A pair of cells does not state a derivation either, and that is the same gap
 one message over.** `OrderCancelled` sits in Inventory's Consumes column and
 `StockReleased` in its Publishes column, and every reader has been joining the
