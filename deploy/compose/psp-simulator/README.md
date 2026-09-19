@@ -16,19 +16,10 @@ The verdict is scripted by the amount's minor units:
 | `.01` | 402 `card_declined` |
 | `.02` | 402 `insufficient_funds` |
 | `.05` | 503 |
-| `.09` | a thirty-second delay, past the adapter's total |
+| `.09` | a delay past the adapter's total |
 | any other | 201 `approved` |
 | a void | 200 |
 
 The reference is `psp_` followed by the request's `Idempotency-Key` header,
 templated from the request, so a replay of the same key answers the same
 reference.
-
-## Watching it
-
-Order something whose total ends in `.05` and watch Payments retry, then
-the error queue. A total ending in `.01` or `.02` declines on the first
-attempt, with the code the table above names. A total ending in `.09`
-stalls past the adapter's own timeout, which the retry sees as the
-provider being unavailable rather than as a late approval. Every other
-total is approved, and cancelling the order reaches the void mapping.
