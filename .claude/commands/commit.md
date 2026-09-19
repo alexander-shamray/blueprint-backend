@@ -39,7 +39,7 @@ divide one idea.
 ## Message form
 
 ```
-<type>(<scope>): <imperative summary, lower case, no full stop>
+<type>(<scope>): <what changed, and where>
 
 <Body. Why, not what — the diff already says what. Wrapped at 80 columns,
 British spelling in prose, identifiers left alone.>
@@ -49,6 +49,11 @@ British spelling in prose, identifiers left alone.>
   **Implementing a delivery-plan PR? Use Appendix C's title verbatim** — it is
   already written in this form, and matching it is what lets the plan be traced
   against the log.
+- **The subject names what changed and where** — a symbol, a file or a
+  behaviour a reviewer could search for — lower case, with no full stop; the
+  aphorism goes in the body. The primer's *Commit messages* line is the rule.
+  `fix(ci): comment-gate honours a block scalar's indentation indicator` can
+  be searched for; a subject that states a principle cannot.
 - The body carries the argument and the honest cost. `docs: use explicit types
   for locals in the C# samples` earns its keep with *"a reader of a fenced code
   block has no hover and no go-to-definition"* — the reason, not the count.
