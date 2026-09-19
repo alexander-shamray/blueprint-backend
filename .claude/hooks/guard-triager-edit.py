@@ -182,10 +182,11 @@ def main():
             return 2
         held = {glob for glob, _ in rules}
         rules = rules + [rule for rule in added if rule[0] not in held]
-    lexical = os.path.abspath(
-        spelled if os.path.isabs(spelled) else os.path.join(cwd, spelled))
-    for target, base in ((lexical, root),
-                         (os.path.realpath(lexical), os.path.realpath(root))):
+    joined = spelled if os.path.isabs(spelled) else os.path.join(cwd, spelled)
+    # `realpath` of the spelling, not of its lexical form: `abspath` collapses
+    # a `..` that follows a link before the link is ever read.
+    for target, base in ((os.path.abspath(joined), root),
+                         (os.path.realpath(joined), os.path.realpath(root))):
         rel = relative(target, base)
         if rel is None:
             return refusal(f"edits inside {root!r} only; refused {spelled!r}")

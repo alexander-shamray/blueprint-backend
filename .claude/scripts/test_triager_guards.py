@@ -374,6 +374,26 @@ class TheTriagerEditsNothingTheTriageDenies(unittest.TestCase):
             self.assert_admitted(self.edit(
                 os.path.join(other, "docs", "x.md"), cwd=other))
 
+    def test_a_parent_step_after_a_link_is_resolved_not_collapsed(self):
+        if os.name == "nt":
+            self.skipTest("Windows collapses `..` before it reads a link, "
+                          "so there the spelling and the target agree")
+        with tempfile.TemporaryDirectory() as other:
+            os.makedirs(os.path.join(other, ".git"))
+            os.makedirs(os.path.join(other, ".github", "workflows"))
+            os.makedirs(os.path.join(other, "docs", "sub"))
+            try:
+                os.symlink(os.path.join(other, ".github", "workflows"),
+                           os.path.join(other, "docs", "link"),
+                           target_is_directory=True)
+            except OSError as error:
+                self.skipTest(f"this host refuses a symlink: {error}")
+            self.assert_refused(
+                self.edit("docs/link/../ci.yml", cwd=other))
+            # The positive control: the same shape through a real directory.
+            self.assert_admitted(
+                self.edit("docs/sub/../x.md", cwd=other))
+
     def test_a_cwd_in_no_checkout_refuses_everything(self):
         with tempfile.TemporaryDirectory() as outside:
             self.assert_refused(self.edit(str(ROOT / "docs" / "x.md"),
