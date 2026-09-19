@@ -3,8 +3,11 @@
 **Decision.** Payments records `OrderCancelled` on its own record of the order
 ([§3.2](../03-bounded-contexts.md)), creating the record as a tombstone when
 `OrderPlaced` has not arrived. An `AuthorisePayment` for an order so marked
-calls no provider and publishes `PaymentDeclined` with reason
-`order_cancelled`. That decline is a verdict on the order, not on a payer, so
+that has no payment intent yet, and that agrees with whatever total the record
+holds, calls no provider and publishes `PaymentDeclined` with reason
+`order_cancelled`; one that disagrees with a placed order's total is a
+mismatch and faults, and a resend for an order that already has an intent is
+acknowledged. That decline is a verdict on the order, not on a payer, so
 it stands for a tombstone as much as for a placed order; where Payments holds
 no record of the order at all, the command still waits, as §3.2's callout on
 the subscription requires. `PaymentDeclined.Reason` is for a human: nothing
@@ -62,7 +65,9 @@ accepts for Inventory's rows, and for the same reason: the row is an answer a
 later message may still ask for. And `PaymentDeclined.Reason` now has two
 authors, the provider and Payments; anything that reads it as the provider's
 word alone reads it wrongly, which is tolerable only because this record
-forbids branching on it.
+forbids branching on it. Notifications consumes `PaymentDeclined` too, so it
+must not tell a customer who cancelled that their payment failed; it decides
+that from its own record of `OrderCancelled`, never from `Reason`.
 
 ---
 
