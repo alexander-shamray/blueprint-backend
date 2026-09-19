@@ -708,8 +708,14 @@ public sealed class ServiceFixture : IAsyncLifetime
         {
             try
             {
-                Provider?.Stop();
-                await _sql.DisposeAsync();
+                try
+                {
+                    Provider?.Stop();
+                }
+                finally
+                {
+                    await _sql.DisposeAsync();
+                }
             }
             finally
             {
