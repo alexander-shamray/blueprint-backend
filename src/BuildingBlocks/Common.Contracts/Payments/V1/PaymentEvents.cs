@@ -31,9 +31,10 @@ public sealed record PaymentAuthorised : IIntegrationEvent
 /// and the order is cancelled with <c>CancelReasons.PaymentDeclined</c> (§9.6).
 /// </summary>
 /// <remarks>
-/// <see cref="Reason"/> is the provider's and deliberately not a closed
-/// vocabulary: a PSP's release could break one pinned here. It is for a human,
-/// never branched on and never a metric dimension (§9.8).
+/// <see cref="Reason"/> is the provider's code, or Payments' own
+/// <c>order_cancelled</c> (ADR-049), and deliberately not a closed vocabulary:
+/// a PSP's release could break one pinned here. It is for a human, never
+/// branched on and never a metric dimension (§9.8).
 /// </remarks>
 public sealed record PaymentDeclined : IIntegrationEvent
 {

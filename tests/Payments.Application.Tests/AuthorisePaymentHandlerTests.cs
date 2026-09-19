@@ -82,7 +82,7 @@ public class AuthorisePaymentHandlerTests
         await Handler().HandleAsync(
             new AuthorisePaymentCommand(order.Value, 42.10m, "EUR"), TestContext.Current.CancellationToken);
 
-        _provider.Requests.ShouldBeEmpty("ADR-047: a cancelled order is never charged");
+        _provider.Requests.ShouldBeEmpty("ADR-049: a cancelled order is never charged");
         PaymentIntent intent = _intents.Added.ShouldHaveSingleItem();
         intent.Status.ShouldBe(PaymentIntentStatus.Declined);
         intent.DeclineReason.ShouldBe(DeclineReasons.OrderCancelled);

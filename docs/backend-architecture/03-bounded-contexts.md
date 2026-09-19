@@ -176,6 +176,13 @@ here, an assertion nobody could verify replaced by a record the service owns.
 > timeout, so an order whose `OrderPlaced` never arrives compensates on that
 > timeout rather than paging long before it.
 
+**A cancellation can reach Payments before the `AuthorisePayment` it
+precedes, too**, and Payments records it rather than racing it: the
+authorisation that follows is declined with reason `order_cancelled` and
+charges nothing, and `PaymentRefunded` is published only when money moved
+back —
+[ADR-049](adr/ADR-049-a-cancellation-payments-has-recorded-declines-the-authorisation-that-follows.md).
+
 **A cell names a message; it does not say what the message means when there is
 nothing to do.** `ReleaseStock` is where that gap was load-bearing, and it is
 now closed here rather than assumed in the saga that sends it. Inventory owes

@@ -91,7 +91,7 @@ public sealed class PaymentsCommandEndpointTests(ServiceFixture fixture) : IAsyn
             "SELECT Value = DeclineReason FROM payments.PaymentIntents WHERE OrderId = {0}",
             order))
             .ShouldBe("order_cancelled");
-        ProviderCalls().ShouldBe(0, "ADR-047");
+        ProviderCalls().ShouldBe(0, "ADR-049");
     }
 
     [Fact]

@@ -30,7 +30,7 @@ public sealed class AuthorisePaymentHandler(
 
         // First, and held to commit: the cancellation's stamp waits behind this
         // lock, so it cannot land between the check below and the charge
-        // (spec, section 6; ADR-047).
+        // (spec, section 6; ADR-049).
         PaymentOrderRecord? record = await orders.LockAsync(order, ct);
 
         PaymentIntent? existing = await intents.GetAsync(order, ct);
