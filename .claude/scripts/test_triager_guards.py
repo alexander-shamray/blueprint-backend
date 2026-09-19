@@ -134,7 +134,8 @@ class NothingShipChainsDeniesPush(unittest.TestCase):
     than the one that carries it. `docs/harness-boundaries.md` owns the rule.
     """
 
-    CHAINED_BEFORE_A_PUSH = ("branch.md", "commit.md", "pr.md",
+    CHAINED_BEFORE_A_PUSH = ("branch.md", "validate-blueprint.md",
+                             "check-links.md", "commit.md", "pr.md",
                              "review-copilot.md")
 
     def test_none_of_them_denies_push_or_the_shell(self):
@@ -294,6 +295,12 @@ class TheTriagerEditsNothingTheTriageDenies(unittest.TestCase):
     def test_a_target_in_no_checkout_is_refused(self):
         with tempfile.TemporaryDirectory() as outside:
             self.assert_refused(self.edit(os.path.join(outside, "x.md")))
+        # A scratchpad is such a target, so the record `/review-grok` keeps
+        # in one has to travel another way, and both ends have to say so.
+        self.assertRegex(PROFILE.read_text(encoding="utf-8"),
+                         r"resolution record comes back in your report")
+        self.assertRegex((COMMANDS / "ship.md").read_text(encoding="utf-8"),
+                         r"resolution record comes back in its\s+report")
 
     def test_another_checkout_is_refused(self):
         # The root is the checkout holding cwd, not the one holding the
@@ -328,7 +335,8 @@ class TheTriagerEditsNothingTheTriageDenies(unittest.TestCase):
         module = load("guard-triager-edit")
         with tempfile.TemporaryDirectory() as tmp:
             for body in ("no frontmatter\n", "---\nname: x\n---\n",
-                         "---\ndisallowed-tools: Agent(claude)\n---\n"):
+                         "---\ndisallowed-tools: Agent(claude)\n---\n",
+                         "---\ndisallowed-tools: Edit(.github/**)\nno end\n"):
                 owner = os.path.join(tmp, "owner.md")
                 with open(owner, "w", encoding="utf-8") as handle:
                     handle.write(body)
@@ -345,6 +353,48 @@ class TheTriagerEditsNothingTheTriageDenies(unittest.TestCase):
                 handle.write(b"---\ndisallowed-tools: Edit(\xff\xfe)\n---\n")
             with mock.patch.object(module, "OWNER", owner):
                 self.assertIsNone(module.patterns())
+
+    def test_a_bare_edit_deny_is_every_path(self):
+        module = load("guard-triager-edit")
+        with tempfile.TemporaryDirectory() as tmp:
+            owner = os.path.join(tmp, "owner.md")
+            for listed in ("Bash, Edit, Edit(.github/**)", "Edit",
+                           "Agent(claude),Edit ,Bash"):
+                with open(owner, "w", encoding="utf-8") as handle:
+                    handle.write(f"---\ndisallowed-tools: {listed}\n---\n")
+                with self.subTest(listed=listed):
+                    rules = module.patterns(owner)
+                    self.assertTrue(any(
+                        pattern.match("docs/x.md") for _, pattern in rules))
+            # The positive control: a scoped list leaves other paths alone.
+            with open(owner, "w", encoding="utf-8") as handle:
+                handle.write("---\ndisallowed-tools: Edit(.github/**)\n---\n")
+            self.assertFalse(any(
+                pattern.match("docs/x.md")
+                for _, pattern in module.patterns(owner)))
+
+    def test_a_newline_in_a_name_does_not_end_the_match(self):
+        module = load("guard-triager-edit")
+        pattern = module.compile_glob(".github/**")
+        self.assertIsNotNone(pattern.match(".github/ci\n.yml"))
+        self.assertIsNone(pattern.match("docs/ci\n.yml"))
+
+    def test_the_edited_checkout_adds_its_own_denies(self):
+        # A sibling worktree whose command denies one more tree than the
+        # checkout holding the guard: both lists bind, neither replaces.
+        with tempfile.TemporaryDirectory() as other:
+            os.makedirs(os.path.join(other, ".git"))
+            commands = os.path.join(other, ".claude", "commands")
+            os.makedirs(commands)
+            local = os.path.join(commands, "review-grok.md")
+            with open(local, "w", encoding="utf-8") as handle:
+                handle.write("---\ndisallowed-tools: Edit(docs/**)\n---\n")
+            self.assert_refused(self.edit("docs/x.md", cwd=other))
+            self.assert_refused(self.edit(".github/x.yml", cwd=other))
+            self.assert_admitted(self.edit("src/x.py", cwd=other))
+            with open(local, "w", encoding="utf-8") as handle:
+                handle.write("---\nname: x\n---\n")
+            self.assertEqual(2, self.edit("src/x.py", cwd=other).returncode)
 
     def test_a_crash_blocks(self):
         module = load("guard-triager-edit")

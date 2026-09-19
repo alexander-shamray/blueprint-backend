@@ -16,24 +16,36 @@ import sys
 EDIT_TOOLS = ("Edit", "Write", "MultiEdit", "NotebookEdit")
 HERE = os.path.dirname(os.path.dirname(os.path.dirname(
     os.path.abspath(__file__))))
-OWNER = os.path.join(HERE, ".claude", "commands", "review-grok.md")
+COMMAND = os.path.join(".claude", "commands", "review-grok.md")
+# Beside this file, so the guard and the list it enforces are one checkout's:
+# a branch under review cannot loosen the list it is judged by.
+OWNER = os.path.join(HERE, COMMAND)
+FRONTMATTER = re.compile(r"---\n(.*?)\n---[ \t]*(?:\n|\Z)", re.DOTALL)
+EVERYTHING = "**"
 
 
-def patterns():
-    """`/review-grok`'s `Edit(...)` denies as patterns, or `None`."""
+def patterns(owner=None):
+    """A command's `Edit(...)` denies as patterns, or `None`.
+
+    A bare `Edit` deny is every path. Frontmatter with no closing line is no
+    frontmatter, so a body line cannot pass for the list.
+    """
     try:
-        with open(OWNER, encoding="utf-8") as handle:
+        with open(owner or OWNER, encoding="utf-8") as handle:
             text = handle.read().replace("\r\n", "\n")
     except (OSError, UnicodeDecodeError):
         return None
-    if not text.startswith("---\n"):
+    front = FRONTMATTER.match(text)
+    if front is None:
         return None
-    front = text[4:].split("\n---", 1)[0]
-    line = next((entry for entry in front.split("\n")
+    line = next((entry for entry in front.group(1).split("\n")
                  if entry.startswith("disallowed-tools:")), None)
     if line is None:
         return None
+    line = line.split(":", 1)[1]
     found = []
+    if re.search(r"(?:^|,)\s*Edit\s*(?:,|$)", line):
+        found.append(EVERYTHING)
     for spelled in re.findall(r"Edit\(([^)]*)\)", line):
         spelled = spelled.strip()
         while spelled.startswith("./"):
@@ -69,7 +81,9 @@ def compile_glob(glob):
         else:
             out.append(re.escape(glob[i]))
             i += 1
-    return re.compile("".join(out) + r"\Z", re.IGNORECASE)
+    # DOTALL, because a POSIX file name may hold a newline and `.` alone
+    # would stop at it.
+    return re.compile("".join(out) + r"\Z", re.IGNORECASE | re.DOTALL)
 
 
 def checkout_root(path):
@@ -156,7 +170,20 @@ def main():
     if root is None:
         return refusal(f"edits inside its checkout only; cwd {cwd!r} is in "
                        "no checkout")
-    lexical = os.path.abspath(
+    # The checkout being edited may carry a newer list than this guard's own,
+    # a sibling worktree's for one. Its denies are added, which can only
+    # narrow; a list there that cannot be read refuses.
+    local = os.path.join(root, COMMAND)
+    if (os.path.exists(local)
+            and os.path.realpath(local) != os.path.realpath(OWNER)):
+        added = patterns(local)
+        if added is None:
+            print("guard-triager-edit: no Edit(...) denies read from "
+                  f"{local}; refusing", file=sys.stderr)
+            return 2
+        held = {glob for glob, _ in rules}
+        rules = rules + [rule for rule in added if rule[0] not in held]
+    lexical =os.path.abspath(
         spelled if os.path.isabs(spelled) else os.path.join(cwd, spelled))
     for target, base in ((lexical, root),
                          (os.path.realpath(lexical), os.path.realpath(root))):

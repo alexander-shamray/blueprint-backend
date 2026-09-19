@@ -650,10 +650,28 @@ frontmatter list lasts one turn and is not applied inside an agent at all
 `Edit|Write|MultiEdit|NotebookEdit`, reads the `Edit(...)` denies from
 `review-grok.md` on every call — one list, no copy — and refuses a target
 under any of them, matched without regard to case, and any target outside the
-checkout its event's `cwd` stands in. Both fail closed, and both are wired as
+checkout its event's `cwd` stands in. The list is the one beside the hook, so
+a branch under review cannot loosen what it is judged by, plus the edited
+checkout's own when that is another file — a sibling worktree's — because an
+added list can only narrow. Both fail closed, and both are wired as
 the session-wide hooks are, through `py -3.12`. `test_triager_guards.py` pins
 the profile, the grant, the sweeps' and the triage's deny of the new type, and
 runs both hooks against every pattern that list holds.
+
+**The outside-the-checkout refusal takes the scratchpad with it, and that is
+accepted rather than excepted.** `/review-grok` keeps its resolution record in
+a scratchpad, and a hook sees a path, not who chose it: an exception for temp
+paths is an exception for every file outside the repository a review could
+name. So on this path the triager returns the record in its report and
+`/ship` writes it.
+
+**`/ship` still holds `Agent` for every type, because `allowed-tools`
+approves and does not restrict.** The grant names the triager and step 5's
+text spawns it; nothing refuses `/ship` a `general-purpose` dispatch. The
+control that would is a `disallowed-tools` line on `/ship`, which lasts the
+turn and would bind every later step of the chain — the defect this section
+opens with — and a session-wide dispatch hook cannot tell `/ship` from a
+sweep spawning its auditor.
 
 **None of the profile's runtime behaviour was measured in this repository.**
 The tool allowlist and the dispatch hook were probed in blueprint-admin

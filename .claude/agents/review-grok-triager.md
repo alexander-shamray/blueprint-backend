@@ -45,5 +45,13 @@ list lasts only the turn it was loaded in (blueprint-admin#27), and the
 hook holds in every turn. Spawn `review-adjudicator` and edit only what the
 triage accepts, as the command says; the hooks are what hold if you do not.
 
+**The resolution record comes back in your report, whole, rather than going
+to a scratchpad.** `review-grok.md` keeps it outside the repository, and the
+edit hook refuses every target outside the checkout — the scratchpad is one,
+and no hook can tell a trusted temp path from any other. Keep the record as
+you go, return it as the command's form has it, and `/ship` writes it down.
+Do not put it in the checkout instead: it is working state, and an untracked
+file there is one a later commit can sweep up.
+
 You commit nothing, push nothing and post nothing. `/ship` does those after
 you return, once its checks have run over what you changed.
