@@ -1166,8 +1166,10 @@ two paragraphs up, which merely provisions credentials nothing sends: this one
 stops the service. The rule that resolved it is §14.1's, applied one deployment
 target over — **a key joins when a host's code reads it**.
 
-`IdempotencyBehavior` reads one, so Catalog and Ordering carry both rows
-unconditionally and the gateway and the BFF carry neither. **Both, not just the
+`IdempotencyBehavior` reads one, so a chart whose service calls
+`AddRedisConnections` carries both rows unconditionally and every other chart
+carries neither; §15.3 names which are which today, and this table does not
+repeat it. **Both, not just the
 coordination one that is actually read**: `AddRedisConnections` is a single
 call by design (§8.2) and reads both eagerly, so a host given one key throws
 naming the other. The condition that remains is per chart rather than per
