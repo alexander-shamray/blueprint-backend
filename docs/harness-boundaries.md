@@ -120,12 +120,15 @@ The `cbx` wrapper is the other half — whitelist and
 `CBX_NO_SKILL_AUTO_UPDATE=1` — and is not a substitute for the hook.
 
 **`PostToolUse` runs `.claude/hooks/refresh-index.py` after every edit**, over
-the checkout the event's `cwd` names rather than `CLAUDE_PROJECT_DIR`'s: the
-two differ exactly when it matters, because in a sibling worktree the first
-is the tree that changed. Otherwise the index is refreshed only when a query
-reports it stale and `SKILL.md`'s instruction is followed — freshness as a
-property of having asked rather than of having edited. The hook spawns the
-CLI detached, discards both streams and always returns 0: it runs on every
+the checkout the **edited path** belongs to, resolved before it is walked.
+`cwd` answers when the event names no file and `CLAUDE_PROJECT_DIR` when it
+names neither, and the three differ exactly when it matters: an edit is
+admitted against the session's tree or the one it forked from, so only the
+file's own path says which of them changed. Otherwise the index is refreshed
+only when a query reports it stale and `SKILL.md`'s instruction is followed
+— freshness as a property of having asked rather than of having edited. The
+hook spawns the CLI detached, discards both streams and always returns 0: it
+runs on every
 edit, so it may not make one wait, and an index that cannot refresh is not a
 reason to fail the edit that provoked it. A checkout with no index is left
 alone, because unindexed is not stale.

@@ -2,8 +2,8 @@
 
 The hook suppresses every failure on purpose, so its exit status says
 nothing: a wrong checkout, an absent CLI and a hook nothing calls all look
-like success. Everything that could be wrong with it is asserted here,
-registration included.
+like success. The invariant held here is that the tree refreshed is the one
+the edit landed in, or none of them.
 """
 
 import importlib.util
@@ -104,6 +104,19 @@ class RefreshIndex(unittest.TestCase):
                         "tool_input": {"file_path": str(touched)}})
 
         self.assertEqual(str(edited), self.spawned[0][1]["cwd"])
+
+    def test_a_relative_edit_climbing_out_lands_in_the_other_checkout(self):
+        """`guard-edit-target` admits a non-link `..` path, and the session's
+        own checkout is among the lexical parents of one, so an unresolved
+        walk finds the wrong `.git` first."""
+        edited = self.checkout("original")
+        session = self.checkout("worktree")
+        (edited / "src").mkdir(parents=True)
+
+        self.run_event({"cwd": str(session),
+                        "tool_input": {"file_path": "../original/src/Thing.cs"}})
+
+        self.assertEqual(str(edited.resolve()), self.spawned[0][1]["cwd"])
 
     def test_a_relative_edit_is_resolved_against_the_session_directory(self):
         session = self.checkout("worktree")

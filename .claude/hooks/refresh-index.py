@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Refresh the code index of the checkout that was edited.
+"""Refresh the code index of the checkout the edited file belongs to.
 
-Nothing runs `update` on its own, so between an edit and the query that
-reports the index stale it describes a tree that has moved. The checkout is
-the event's `cwd` walked up to its root, because `/branch` moves a session
-into a sibling worktree while `CLAUDE_PROJECT_DIR` names the one it left.
-Detached and never waited on, and it returns 0 whatever happens: it runs on
-every edit, and an index that cannot refresh is no reason to fail one.
+Claude Code runs no `update` of its own, so the index describes a tree that
+has moved until a query reports it stale. The checkout comes from the edited
+path, because after `/branch` the session's directory and the checkout an
+edit is admitted against can be different trees. Detached and never waited
+on, and it returns 0 whatever happens: it runs on every edit, and an index
+that cannot refresh is no reason to fail one.
 """
 
 from __future__ import annotations
@@ -51,7 +51,16 @@ def edited(event: dict) -> Path | None:
         if isinstance(value, str) and value.strip():
             path = Path(value.strip())
             base = event.get("cwd")
-            return path if path.is_absolute() or not base else Path(str(base)) / path
+            if not path.is_absolute() and base:
+                path = Path(str(base)) / path
+            # Resolved before anything walks it. `../main/src/Thing.cs` from a
+            # sibling worktree lands in `main`, and the worktree is among that
+            # path's lexical parents -- so an unresolved walk finds the
+            # worktree's `.git` and refreshes the tree the edit did not touch.
+            try:
+                return path.resolve()
+            except OSError:
+                return None
     return None
 
 
