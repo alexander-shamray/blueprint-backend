@@ -1283,238 +1283,15 @@ EF Core minor versions and behave differently under identical code.
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
     <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
   </PropertyGroup>
-  <ItemGroup Label="Runtime">
-    <!-- The base package, referenced only by Common.Infrastructure: §9.5's
-         InboxFilter writes through the service's DbContext because sharing
-         the handler's transaction is the point of it, and common code may
-         name the base type but never a provider. Every service's own
-         Infrastructure takes the provider below instead. -->
-    <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="10.0.0" />
-    <PackageVersion Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.0" />
-    <!-- Design-time only, referenced by each *.Migrator with PrivateAssets.
-         `dotnet ef migrations add` (§7.4) needs it in the startup project and
-         nothing at runtime does — the version is pinned to the line above
-         because the tool and the runtime move together. -->
-    <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.0" />
-    <!-- Transitive, pinned deliberately, and the same shape as Microsoft.OpenApi
-         below. The package above reaches it twice — through
-         Microsoft.Build.Tasks.Core and through
-         Microsoft.CodeAnalysis.Workspaces.MSBuild — and both floors resolve to
-         9.0.0, which carries eight advisories. NU1903 turns that into a failed
-         restore, so this pin is what makes the line above restorable at all.
-
-         PrivateAssets on the Design reference means it never ships in an image.
-         The restore fails anyway, and rightly: a design-time supply chain is
-         still a supply chain, and this one runs on a developer's machine with
-         their credentials. -->
-    <PackageVersion Include="System.Security.Cryptography.Xml" Version="10.0.10" />
-    <PackageVersion Include="Microsoft.Extensions.Caching.Hybrid" Version="10.0.0" />
-    <!-- HybridCache's L2 (§8.2): AddStackExchangeRedisCache and
-         RedisCacheOptions. The IDistributedCache implementation over
-         StackExchange.Redis — a separate package from both, and the one that
-         actually stores an entry in Redis. -->
-    <PackageVersion Include="Microsoft.Extensions.Caching.StackExchangeRedis" Version="10.0.0" />
-    <!-- The in-process cache §13.6's OutboxStats holds its five-second
-         snapshot in. HybridCache above carries it transitively; the direct pin
-         states the direct use, and central package management requires one for
-         a direct PackageReference either way. Not a second cache in the sense
-         §8 argues about — it stores no domain data and crosses no process. -->
-    <PackageVersion Include="Microsoft.Extensions.Caching.Memory" Version="10.0.0" />
-    <PackageVersion Include="Microsoft.Extensions.Http.Resilience" Version="10.0.0" />
-    <!-- The container and logging contracts Common.Application compiles
-         against (§6.2, §13.3). ASP.NET Core's shared framework carries both,
-         but Application takes no FrameworkReference — §4.2 puts the web on the
-         other side of the boundary, and the building block that defines
-         IPipelineBehavior sits on this one. -->
-    <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.0" />
-    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.0" />
-    <!-- AddOptions<RedisCacheOptions>().Configure (§8.2) — options
-         configuration called directly by Common.Infrastructure, so the
-         assembly is referenced directly, on the register's honesty rule. -->
-    <PackageVersion Include="Microsoft.Extensions.Options" Version="10.0.0" />
-    <!-- The same argument one row down: AddCatalogInfrastructure names
-         IConfiguration in its signature (§4.2) and *.Infrastructure is not a
-         web project, so it pays for the contract as a package. -->
-    <PackageVersion Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.0" />
-    <!-- The migrator's job host (§7.4). ASP.NET Core's shared framework carries
-         the generic host, and a *.Migrator is a console job with no listener —
-         so it is the one project shape here that pays for hosting as a
-         package. -->
-    <PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.0" />
-    <!-- IHostEnvironment, for RedisKeys' key prefix (§8.3). Rides in the
-         shared framework and in the Hosting meta-package above, but
-         Common.Infrastructure is a library that takes neither — it pays for
-         the contract as a package, like the abstractions rows above. -->
-    <PackageVersion Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.0" />
-    <PackageVersion Include="Dapper" Version="2.1.66" />
-    <!-- SqlConnection itself, for §6.5's IDbConnectionFactory. EF's SqlServer
-         provider already carries it transitively at exactly this version;
-         the explicit pin exists because *.Infrastructure constructs the type
-         by name, and referencing what is actually used keeps the register
-         honest. -->
-    <PackageVersion Include="Microsoft.Data.SqlClient" Version="6.1.1" />
-    <!-- Exact major. v9 is commercially licensed — see ADR-003. The core
-         package is a transitive of the transport one, pinned separately
-         because five projects reference it directly: Common.Infrastructure
-         since PR-14, for the IPublishEndpoint the outbox dispatcher publishes
-         the Broker lane through (§9.4), and four test projects that drive the
-         in-memory harness — core API, which a test project using no transport
-         must not claim one for. Appendix B names them; this comment does not,
-         because a list in two places is the drift that made it say "two"
-         while five were true. Same version as the transport: they ship as one
-         release. -->
-    <PackageVersion Include="MassTransit" Version="8.5.3" />
-    <PackageVersion Include="MassTransit.RabbitMQ" Version="8.5.3" />
-    <!-- §9.6's saga repository — EntityFrameworkRepository and
-         ConcurrencyMode.Pessimistic — and ADR-032's transactional outbox,
-         which is the same package and the same DbContext. Same version and
-         same release as the two rows above: a saga repository a minor behind
-         the state machine it stores is not a combination anyone tests.
-         Referenced by Ordering.Infrastructure, which holds the only saga;
-         by Ordering.Api.Tests, for the EntityFrameworkOutboxOptions<T> its
-         Serializable assertion resolves; and by Ordering.TestSupport, for the
-         InboxCleanupService<T> OrderingApiFactory removes from the test host.
-         Enumerated rather than counted, on Appendix B's terms. -->
-    <PackageVersion Include="MassTransit.EntityFrameworkCore" Version="8.5.3" />
-    <PackageVersion Include="StackExchange.Redis" Version="2.9.11" />
-    <PackageVersion Include="FluentValidation" Version="12.0.0" />
-    <!-- AddValidatorsFromAssemblyContaining (§4.2's registration sample) lives
-         in this separate package, not in FluentValidation itself. Same
-         version, same licence, same publisher — pinned together. -->
-    <PackageVersion Include="FluentValidation.DependencyInjectionExtensions" Version="12.0.0" />
-    <PackageVersion Include="Scrutor" Version="6.1.0" />
-    <PackageVersion Include="Yarp.ReverseProxy" Version="2.3.0" />
-    <!-- The BFF's one synchronous hop (§9.7). Grpc.* majors move on their own
-         schedule, independent of the .NET release — exactly the case for
-         pinning rather than trusting the SDK to carry a compatible version. -->
-    <PackageVersion Include="Grpc.Net.ClientFactory" Version="2.71.0" />
-    <PackageVersion Include="Grpc.AspNetCore" Version="2.71.0" />
-    <PackageVersion Include="Grpc.Tools" Version="2.71.0" />
-    <!-- 3.30.2, not 3.29.3, and the number could only be found by compiling
-         it: Grpc.AspNetCore 2.71.0 floors this package at 3.30.2, and with
-         CentralPackageTransitivePinningEnabled a lower pin is a package
-         DOWNGRADE rather than a floor NuGet quietly raises — NU1109 fails the
-         restore and the three rows above are unbuildable. This blueprint
-         carried the lower number from the outside for four PRs. -->
-    <PackageVersion Include="Google.Protobuf" Version="3.30.2" />
-    <!-- §11.3's JWT bearer handler, referenced by Common.Web. Not carried by
-         Microsoft.AspNetCore.App — the shared framework has the authentication
-         abstractions and the cookie handler, and the JWT one has been a package
-         since ASP.NET Core 3.0. Same version line as the runtime: it ships with
-         the framework and moves with it. -->
-    <PackageVersion Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.10" />
-    <!-- JwtSecurityTokenHandler, which §11.5's Keycloak suite reads an `aud`
-         claim with. A transitive of the row above, pinned because a project
-         names the type — and pinned to 8.19.2 because that is the floor it is
-         reached at, anything lower being a downgrade NU1109 refuses. -->
-    <PackageVersion Include="System.IdentityModel.Tokens.Jwt" Version="8.19.2" />
-    <!-- PR-07's OpenAPI deliverable (Appendix C): the framework's own document
-         generator — AddOpenApi/MapOpenApi, document only, no UI. -->
-    <PackageVersion Include="Microsoft.AspNetCore.OpenApi" Version="10.0.10" />
-    <!-- Transitive, pinned deliberately: every patch of the package above
-         floors this at 2.0.0, which carries GHSA-v5pm-xwqc-g5wc, and NuGet
-         resolves a floor to its lowest. NU1903 turns that into a failed
-         restore, so the pin is what makes the line above buildable at all —
-         CentralPackageTransitivePinningEnabled is why it works. -->
-    <PackageVersion Include="Microsoft.OpenApi" Version="2.11.0" />
-  </ItemGroup>
-  <ItemGroup Label="Telemetry">
-    <PackageVersion Include="OpenTelemetry.Extensions.Hosting" Version="1.17.0" />
-    <PackageVersion Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.17.0" />
-    <PackageVersion Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.17.0" />
-    <PackageVersion Include="OpenTelemetry.Instrumentation.Http" Version="1.17.0" />
-    <PackageVersion Include="OpenTelemetry.Instrumentation.Runtime" Version="1.17.0" />
-    <PackageVersion Include="OpenTelemetry.Instrumentation.EntityFrameworkCore" Version="1.17.0-beta.1" />
-    <PackageVersion Include="OpenTelemetry.Instrumentation.StackExchangeRedis" Version="1.17.0-beta.1" />
-    <!-- No AspNetCore.HealthChecks.Rabbitmq beside these two, and the absence
-         is a decision (PR-13): its parameterless AddRabbitMQ resolves an
-         IConnection nothing registers — MassTransit does not expose one — and
-         the bus health check AddMassTransit registers itself answers the
-         question better, endpoints included. -->
-    <PackageVersion Include="AspNetCore.HealthChecks.SqlServer" Version="9.0.0" />
-    <PackageVersion Include="AspNetCore.HealthChecks.Redis" Version="9.0.0" />
-  </ItemGroup>
-  <ItemGroup Label="Test">
-    <!-- Test packages are pinned for exactly the same reason as runtime ones.
-         xUnit v2 → v3 changed IAsyncLifetime from Task to ValueTask (§12.4):
-         a major that drifts in silently breaks every fixture in the repo. -->
-    <PackageVersion Include="xunit.v3" Version="3.1.0" />
-    <!-- The fixture contract (IAsyncLifetime, TestContext) for
-         Catalog.TestSupport, which is a Library — xunit.v3 itself refuses
-         non-Exe output and names this package as the alternative. Pinned to
-         the runner's version because they ship as one release. -->
-    <PackageVersion Include="xunit.v3.extensibility.core" Version="3.1.0" />
-    <!-- The VSTest adapter, and the reason `dotnet test` discovers anything.
-         Microsoft.NET.Test.Sdk is the host; it finds tests through an adapter,
-         and xunit.v3 does not carry one. Without this line the build succeeds,
-         the run reports zero tests, and CI is green on a suite it never ran. -->
-    <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.5" />
-    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
-    <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.0" />
-    <!-- TestServer without a host project. Mvc.Testing carries this
-         transitively, but WebApplicationFactory<T> needs an entry point and
-         Common.Web has none — it is a library (§4.1). Referencing what is
-         actually used keeps the register honest. -->
-    <PackageVersion Include="Microsoft.AspNetCore.TestHost" Version="10.0.0" />
-    <PackageVersion Include="Shouldly" Version="4.3.0" />
-    <PackageVersion Include="NSubstitute" Version="5.3.0" />
-    <PackageVersion Include="Testcontainers.MsSql" Version="4.6.0" />
-    <PackageVersion Include="Testcontainers.Redis" Version="4.6.0" />
-    <PackageVersion Include="Testcontainers.RabbitMq" Version="4.6.0" />
-    <!-- §11.5's suite, and the ONE place in the solution that runs a real
-         Keycloak. The audience mapper it proves is realm configuration, so
-         nothing compiles differently when it is missing. Same version line as
-         the three above: the Testcontainers modules ship as one release. -->
-    <PackageVersion Include="Testcontainers.Keycloak" Version="4.6.0" />
-    <!-- Transitive of the three rows above, pinned deliberately, and the third
-         instance of the shape Microsoft.OpenApi and System.Security.Cryptography.Xml
-         already carry. Testcontainers 4.6.0 floors this at 2024.2.0 for its SSH
-         port-forwarding path, and every version through 2025.1.0 carries
-         GHSA-q939-rpr3-3284 — a malicious SCP server escaping the download
-         directory through traversal sequences in a filename. NU1903 turns that
-         into a failed restore, so the pin is what makes the three rows above
-         buildable at all. Nothing here downloads over SCP; the pin is not a
-         judgement that the advisory is reachable, only that a vulnerable
-         package resolving into the graph is not a thing to carry. -->
-    <PackageVersion Include="SSH.NET" Version="2026.0.0" />
-    <PackageVersion Include="Respawn" Version="6.2.1" />
-    <!-- 2.12.0 is the first release whose Scriban.Signed carries no advisory.
-         The 1.x releases resolve Scriban.Signed 5.5.0, whose critical and high
-         advisories fail the restore through NU1904 and NU1903. Not the newest:
-         2.16.0 needs a Microsoft.OpenApi above the pin in this file, which
-         NU1109 refuses as a downgrade. -->
-    <PackageVersion Include="WireMock.Net" Version="2.12.0" />
-    <PackageVersion Include="Microsoft.Extensions.TimeProvider.Testing" Version="9.9.0" />
-    <!-- ServiceCollection itself. §6.2's registration test and §6.3's ordering
-         test resolve from a real container, and the abstractions package the
-         source references has none to build — it is contracts only. -->
-    <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.0" />
-    <!-- ConfigurationBuilder and AddInMemoryCollection. AddRedisConnections
-         takes IConfiguration (§8.2), and its tests build a real one rather
-         than substitute the contract — the same argument as the container
-         row above, one abstraction over. -->
-    <PackageVersion Include="Microsoft.Extensions.Configuration" Version="10.0.0" />
-    <!-- The architecture gates of §4.2, which PR-07 turns from a review
-         comment into a build failure. A major bump can change which rules
-         exist, so it fails loudly rather than quietly stopping to enforce. -->
-    <PackageVersion Include="NetArchTest.Rules" Version="1.3.2" />
-    <!-- The in-memory reader the observability tests read back through:
-         §13.4's redaction tests, which that chapter prints one of, the
-         meter-coverage tests guarding §13.2's meter list in
-         Common.Web.Tests, and the Redis client-span tests in
-         Common.Infrastructure.Tests proving AddRedisConnections instruments
-         its own connections. Test-only: nothing in src/ exports in
-         memory. -->
-    <PackageVersion Include="OpenTelemetry.Exporter.InMemory" Version="1.17.0" />
-  </ItemGroup>
+  <!-- One PackageVersion per package, exact, grouped by Label. -->
 </Project>
 ```
 
-**Every package means every package**, including the test ones — those are where
-the version numbers here came from, and the list is the same set [Appendix B](appendix-b-licences.md)
-registers. The two files answer different questions about the same dependencies:
-Appendix B says whether a licence is acceptable, this file says which version CI
-will actually resolve. A package in one and not the other is how a licence
+**Every package means every package**, including the test ones, and the set is
+the one [Appendix B](appendix-b-licences.md) registers. The two files answer
+different questions about the same dependencies: Appendix B says whether a
+licence is acceptable, `Directory.Packages.props` says which version CI will
+actually resolve. A package in one and not the other is how a licence
 boundary gets crossed by a restore, so
 [`.github/licence-gate/`](../../.github/licence-gate/README.md) fails the build
 on a pin nobody cleared, and its README owns what it reads to find one, what
@@ -1527,25 +1304,24 @@ somebody stops reading its output:
 - **Infrastructure products** — SQL Server, Redis, RabbitMQ, Keycloak — are
   licensable in their own right but are containers, not packages. The
   `StackExchange.Redis`, `Testcontainers.*` and `AspNetCore.HealthChecks.*` pins
-  above are the *client libraries* that talk to them: a different artefact under
+  are the *client libraries* that talk to them: a different artefact under
   a different licence. Match on package identity, never on the product a package
   is named after.
 - **The Aspire packages** of [§14.2](14-local-development.md) are deliberately
   unpinned. Aspire is optional, nothing references it until the AppHost is
   adopted, and its API has moved fast enough that pinning a version this
   document cannot keep current would be worse than pinning none. Adopting
-  Aspire means adding the pins here in the same change — the licence rows
-  already exist, so the gap this file shows is the reminder.
+  Aspire means adding the pins in the same change — the licence rows already
+  exist, so the gap between the two files is the reminder.
 - **Either/or rows** — `Shouldly` *or* `AwesomeAssertions` — pin only the chosen
   library. Clearing a licence for an alternative is not a commitment to restore
   it. Keep such rows rare and word them as alternatives, because a row that
   reads as two dependencies when it means one is how this check starts being
   ignored.
 
-The versions are those current at the review date in the header. A blueprint
-cannot keep them accurate, and the licence gate does not try. Currency and
-vulnerability scanning are a separate obligation, and the tooling for them is
-not yet in this repository.
+Which versions those are is `Directory.Packages.props`'s answer and never this
+chapter's. Currency and vulnerability scanning are a separate obligation, and
+the tooling for them is not yet in this repository.
 
 > **Trap — pinning floors instead of versions.** Writing `Version="8.*"`, or
 > treating the file as a set of minimums to be "reviewed quarterly", means a
@@ -1557,10 +1333,11 @@ not yet in this repository.
 Licence drift is only caught reliably by tooling — a convention will not survive
 the twentieth dependency.
 
-> **Trap — the sample above is a copy.** The fenced block in this section is a
-> second transcription of `Directory.Packages.props`, and nothing about a
-> passing build proves the two agree. The licence gate compares them, and
-> reports a disagreement against this chapter.
+> **Trap — transcribing the pins into this chapter.** A fenced copy of
+> `Directory.Packages.props` reads as documentation and behaves as a second
+> owner: every pin raise then has to edit a chapter, which
+> [`docs/change-locality.md`](../change-locality.md) §2 forbids and Class E's
+> row forbids again. The file owns the versions; this chapter owns the rule.
 
 ## 4.5 Adding a service
 

@@ -44,8 +44,9 @@ taste. Prefer:
    `docs/change-locality.md` §2 forbids writing, so a stale one is awaiting
    removal by the plan, not a finding against this branch. One this branch
    **introduces or edits** is a finding under the same section.
-3. **Register drift** — `Directory.Packages.props` vs Appendix B vs §4.4 sample;
-   licence gate failing.
+3. **Register drift** — `Directory.Packages.props` vs Appendix B vs
+   `allowed-licences.txt`, and any chapter writing a pin as an MSBuild
+   `Include`/`Version` pair, which §2 gives one owner; licence gate failing.
 4. **Deploy drift** — Compose / Helm / CI vs §14 / §15 claims (ports, secrets,
    service names, healthchecks).
 5. **Incomplete reconciliation** — a rule this change states (or a fix it claims)

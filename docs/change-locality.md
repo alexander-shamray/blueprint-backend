@@ -53,7 +53,10 @@ doc, a docstring or a configuration comment is a document:
 
 - a number of tests, projects, ADRs, chapters, or lines;
 - a package version outside `Directory.Packages.props`, except in Appendix
-  B where the version itself is the decision, as Class E says;
+  B where the version itself is the decision, as Class E says. For a chapter
+  the rule is mechanical: [`.github/licence-gate/`](../.github/licence-gate/README.md)
+  reads every file under `docs/backend-architecture/` for a printed pin and
+  fails the build on one, Appendix B excepted;
 - a timeout, retry count, port, TTL or window as a raw integer in a second
   place;
 - "since PR-NN", "this used to say", or the history of how a rule was

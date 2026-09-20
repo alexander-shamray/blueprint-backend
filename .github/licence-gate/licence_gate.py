@@ -1,22 +1,12 @@
 #!/usr/bin/env python3
 """Fail the build on a package pin whose licence has not been cleared.
 
-Appendix B is the register of what is cleared. `Directory.Packages.props` is
-what CI will actually restore. Section 4.4 asks for a check that the two agree,
-and this is it: a package in the props file and not the register is how a
-licence obligation gets acquired by a restore rather than by a decision.
-
-The props file is not the only thing that can add a restore, so every
-`.csproj`, `.props` and `.targets` is read as well. A `PackageReference`
-carrying its own `Version` or a `VersionOverride`, and a project setting
-`ManagePackageVersionsCentrally` to anything but `true`, each resolve a package
-no register row was ever asked about. All of them are ordinary MSBuild, and
-none of them puts a `PackageVersion` element anywhere the pin reader looks.
-
-It reads every file as text and resolves nothing over the network, which is why
-Section 15.1 can put it ahead of the build fork. Nothing here needs a restore,
-and the scan that catches a licence obligation is cheapest before anything has
-compiled.
+Appendix B registers what is cleared and `Directory.Packages.props` is what
+CI restores; Section 4.4 asks for a check that the two agree. Two ways a
+package reaches a restore around that file are read with it: a project
+pinning its own version, and one opting out of central management. The
+chapters are read for a different fault — a pin printed there restores
+nothing, but it gives the version a second owner the next raise must edit.
 """
 
 from __future__ import annotations
@@ -32,8 +22,8 @@ REPO_ROOT = GATE_DIR.parents[1]
 
 DEFAULT_PINS = REPO_ROOT / "Directory.Packages.props"
 DEFAULT_REGISTER = REPO_ROOT / "docs" / "backend-architecture" / "appendix-b-licences.md"
-DEFAULT_CHAPTER = REPO_ROOT / "docs" / "backend-architecture" / "04-solution-structure.md"
 DEFAULT_ALLOWED = GATE_DIR / "allowed-licences.txt"
+DEFAULT_CHAPTERS = REPO_ROOT / "docs" / "backend-architecture"
 
 # The register has three tables. Only the first clears anything — the other two
 # record what was avoided and what still needs review, and a pin matching either
@@ -93,6 +83,13 @@ SKIPPED_DIRECTORIES = frozenset({"obj", "bin", ".git"})
 # so including it costs nothing and a stray `PackageReference` written there is
 # caught rather than being the one file the check declines to read.
 PROJECT_SUFFIXES = (".csproj", ".props", ".targets")
+
+# An MSBuild tag, and the two attributes that make a pin of it read one tag at
+# a time rather than as one ordered pattern. Either attribute may be written
+# first and either quote character is legal, so a pattern fixing the order and
+# the quotes reads one spelling of the pair and passes the rest of them.
+TAG = re.compile(r"<[A-Za-z][^<>]*>")
+PIN_ATTRIBUTE = re.compile(r"""\b(Include|Version)\s*=\s*(?:"([^"]*)"|'([^']*)')""")
 
 
 def local_name(element: ElementTree.Element) -> str:
@@ -254,40 +251,28 @@ def read_register(path: Path) -> list[tuple[list[str], str]]:
     return rows
 
 
-def read_versions(text: str) -> dict[str, str]:
-    """Every Include/Version pair in a props document, by identity."""
-    return dict(re.findall(r'Include="([^"]+)"\s+Version="([^"]+)"', text))
+def chapter_pins(chapters: Path) -> list[str]:
+    """Package versions printed in the blueprint rather than cited from the file.
 
-
-def read_chapter_sample(path: Path) -> str:
-    """Section 4.4's fenced transcription of Directory.Packages.props.
-
-    Identified by content rather than by position, so inserting a chapter or
-    another XML block above it does not silently start comparing the wrong one.
+    docs/change-locality.md section 2 gives a version one owner and names
+    Appendix B as the single exception, so that file is passed over and every
+    other is read. The shape is MSBuild's attribute pair, taken from one tag
+    at a time so that neither the order of the two attributes nor the quote
+    character around them decides whether the pair is seen; a version named in
+    prose, as Appendix B names one, is a different claim and not this gate's.
     """
-    for block in re.findall(r"```xml\r?\n(.*?)```", path.read_text(encoding="utf-8"), re.S):
-        if "ManagePackageVersionsCentrally" in block:
-            return block
-    return ""
-
-
-def compare_sample(props_text: str, sample: str) -> list[str]:
-    """Disagreements between the props file and the chapter that prints it.
-
-    Reported against the chapter. The props file is what CI restores, so it is
-    the side the rest of the system depends on; the sample is what a reader
-    believes, which is the half that can be wrong without anything breaking.
-    """
-    if not sample:
-        return ["Section 4.4 has no central package management sample to compare against"]
-
-    actual, printed = read_versions(props_text), read_versions(sample)
     findings = []
-    for identity in sorted(set(actual) | set(printed)):
-        if actual.get(identity) != printed.get(identity):
-            findings.append(
-                f"{identity}: props pins {actual.get(identity) or 'nothing'}, "
-                f"Section 4.4 prints {printed.get(identity) or 'nothing'}")
+    for path in sorted(chapters.rglob("*.md")):
+        if path.name == "appendix-b-licences.md":
+            continue
+        for tag in TAG.findall(path.read_text(encoding="utf-8")):
+            attributes: dict[str, str] = {}
+            for name, double_quoted, single_quoted in PIN_ATTRIBUTE.findall(tag):
+                attributes.setdefault(name, double_quoted or single_quoted)
+            if "Include" in attributes and "Version" in attributes:
+                findings.append(
+                    f"{path.name} prints a pin: {attributes['Include']} {attributes['Version']}. "
+                    f"Directory.Packages.props owns the version; cite the file instead")
     return findings
 
 
@@ -379,8 +364,8 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--pins", type=Path, default=DEFAULT_PINS)
     parser.add_argument("--register", type=Path, default=DEFAULT_REGISTER)
-    parser.add_argument("--chapter", type=Path, default=DEFAULT_CHAPTER)
     parser.add_argument("--allowed", type=Path, default=DEFAULT_ALLOWED)
+    parser.add_argument("--chapters", type=Path, default=DEFAULT_CHAPTERS)
     parser.add_argument("--projects", type=Path, default=REPO_ROOT)
     args = parser.parse_args(argv)
 
@@ -388,8 +373,7 @@ def main(argv: list[str] | None = None) -> int:
     rows = read_register(args.register)
     projects = find_projects(args.projects)
     findings = audit(pins, rows, read_allowed(args.allowed))
-    findings += compare_sample(
-        args.pins.read_text(encoding="utf-8"), read_chapter_sample(args.chapter))
+    findings += chapter_pins(args.chapters)
     findings += scan_projects(args.projects)
 
     if findings:
@@ -397,16 +381,18 @@ def main(argv: list[str] | None = None) -> int:
               f"and {len(projects)} project(s).\n")
         for finding in findings:
             print(f"  {finding}")
-        print(f"\nReconcile {args.pins.name}, {args.register.name} and {args.chapter.name}"
-              f" in the same change. A project naming a version of its own is reconciled"
-              f" the other way: move the pin into {args.pins.name} and register it.")
+        print(f"\nReconcile {args.pins.name} and {args.register.name} in the same"
+              f" change. A project naming a version of its own is reconciled the other"
+              f" way: move the pin into {args.pins.name} and register it. A chapter"
+              f" printing one loses the version and cites the file.")
         return 1
 
     # Output stays ASCII. A gate whose job is to report a failure must not be the
     # thing that fails, and stdout encoding on a runner is not ours to assume.
-    print(f"Licence gate: {len(pins)} pinned package(s). Every one registered, "
-          f"licence-cleared, and printed correctly in {args.chapter.name}. "
-          f"{len(projects)} MSBuild file(s) pin nothing of their own.")
+    print(f"Licence gate: {len(pins)} pinned package(s). Every one registered and "
+          f"licence-cleared. {len(projects)} MSBuild file(s) pin nothing of their own, "
+          f"and no chapter writes a version the file owns as an MSBuild "
+          f"Include/Version pair.")
     return 0
 
 
