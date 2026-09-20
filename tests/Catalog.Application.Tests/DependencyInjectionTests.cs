@@ -187,10 +187,10 @@ public class DependencyInjectionTests
     [Fact]
     public void AddCatalogApplication_registers_the_slice_handlers()
     {
-        // The §6.2 scan found nothing until PR-10; these are the registrations
-        // it produces, so the scan itself is testable. Every slice adds a row
-        // here — the scan is public-only, and a handler it misses registers as
-        // nothing at all rather than as something wrong.
+        // These are the registrations §6.2's scan produces, so the scan itself
+        // is testable. Every slice adds a row here — the scan is public-only,
+        // and a handler it misses registers as nothing at all rather than as
+        // something wrong.
         ServiceCollection services = new();
 
         services.AddCatalogApplication();
@@ -200,11 +200,10 @@ public class DependencyInjectionTests
         services.ShouldContain(d =>
             d.ServiceType == typeof(IQueryHandler<GetProductsQuery, CursorPage<ProductSummaryDto>>));
 
-        // PR-19's third slice. The scan is public-only (§6.2), so an internal
+        // The pricing slice. The scan is public-only (§6.2), so an internal
         // handler, a rename or a missed IQueryHandler<,> registers as nothing
-        // and fails on the first gRPC call rather than at startup —
+        // and fails on the first gRPC call rather than at startup:
         // ValidateOnBuild never constructs the dispatcher's handler map.
-        // PricingServiceTests would catch it, but only in the Docker suite.
         services.ShouldContain(d =>
             d.ServiceType == typeof(IQueryHandler<GetPricesQuery, IReadOnlyList<ProductPriceDto>>));
     }

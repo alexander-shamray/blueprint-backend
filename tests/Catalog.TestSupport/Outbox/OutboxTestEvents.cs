@@ -4,17 +4,15 @@ using Common.Domain;
 namespace Catalog.TestSupport.Outbox;
 
 /// <summary>
-/// The <c>Local</c> lane's three cases, as real domain events in an assembly
-/// the fixture adds to <c>MessageTypeSource</c> (§9.4). Catalog registers no
+/// The <c>Local</c> lane's cases, as real domain events in an assembly the
+/// fixture adds to <c>MessageTypeSource</c> (§9.4). Catalog registers no
 /// projection handler of its own — §8.4's cache invalidator needs a cached
-/// query to invalidate, and there is not one yet — so the lane's behaviour is
-/// proven here rather than by inventing a read model for it.
+/// query to invalidate — so the lane's behaviour is proven here rather than
+/// by inventing a read model for it.
 /// </summary>
-/// <remarks>
-/// In <c>Catalog.TestSupport</c> rather than either test project, on §4.1's
-/// terms: the two suites cannot reference each other, and the fixture that
-/// registers them is here.
-/// </remarks>
+/// <remarks>In <c>Catalog.TestSupport</c> rather than either test project,
+/// on §4.1's terms: the suites cannot reference each other, and the fixture
+/// that registers them is here.</remarks>
 public sealed record AlwaysThrows : IDomainEvent
 {
     public DateTimeOffset OccurredAt { get; init; }

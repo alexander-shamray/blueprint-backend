@@ -22,29 +22,15 @@ using Xunit;
 namespace Catalog.TestSupport;
 
 /// <summary>
-/// A real SQL Server, migrated by the real migrator (ADR-010, §12.4), and a
-/// real RabbitMQ for the bus to connect to. Each image is the one §14.1's
-/// Compose file runs — for the broker that means the base tag its Dockerfile
-/// builds from, since ADR-021 made §14.1 build rather than pull, and Catalog
-/// may stop at the base because it registers no message scheduler and
-/// schedules nothing; Ordering's fixture builds the Dockerfile itself, for
-/// exactly the reason this one need not. So a test and a developer machine
-/// cannot disagree about
-/// the engine. §12.4's name and §4.1's home: the fixture serves
-/// <c>Catalog.Application.Tests</c> and <c>Catalog.Api.Tests</c>, which
-/// cannot reference each other — each declares its own
-/// <c>IntegrationCollection</c> over this one type. §12.4's full shape is
-/// complete since §8.5's PR: the two Redis containers arrived with the
-/// behaviour whose code reads those keys, which is the same rule the broker
-/// followed.
+/// A real SQL Server migrated by the real migrator, a real RabbitMQ, and
+/// §8.1's two Redis servers (ADR-010, §12.4) — each the image §14.1's
+/// Compose file runs, so a test and a developer machine cannot disagree
+/// about the engine. §4.1's home: the suites it serves cannot reference each
+/// other.
 /// </summary>
-/// <remarks>
-/// Tests deliberately collapse the two database identities of §7.1 — the
-/// container's <c>sa</c> login holds both DML and DDL — but not the two
-/// configuration keys, which stay distinct so that the migrator can be caught
-/// reading the wrong one. Production keeps both separate, and migrations run as
-/// a job, never from a host (ADR-007).
-/// </remarks>
+/// <remarks>§7.1's two database identities collapse here — the container's
+/// <c>sa</c> holds DML and DDL — but not its two configuration keys, which
+/// stay distinct so a migrator reading the wrong one is caught.</remarks>
 public sealed class ServiceFixture : IAsyncLifetime
 {
     /// <summary>
@@ -55,11 +41,6 @@ public sealed class ServiceFixture : IAsyncLifetime
     /// evicted under exactly the memory pressure that makes the duplicate
     /// write hardest to reproduce. Two servers make role-routing assertable.
     /// </summary>
-    /// <remarks>
-    /// They joined with §8.5's PR, which is the rule this fixture already
-    /// followed for the broker: a container arrives with the code that reads
-    /// what it holds.
-    /// </remarks>
     private readonly RedisContainer _redisCache = new RedisBuilder()
         .WithImage("redis:7-alpine")
         .WithCommand("--maxmemory-policy", "allkeys-lru")
@@ -74,16 +55,9 @@ public sealed class ServiceFixture : IAsyncLifetime
         .WithImage("mcr.microsoft.com/mssql/server:2022-latest")
         .Build();
 
-    // Assigned in InitializeAsync rather than here, because the image has to
-    // be BUILT and a field initialiser cannot await. It used to be the stock
-    // `rabbitmq:4.1-management-alpine` on the argument that Catalog needs no
-    // plugin and sharing the base tag was cheaper than a second image.
-    //
-    // #44 ended that: §14.1's broker image is where definitions.json lives, so
-    // the stock image is a broker with ONE administrator account and no
-    // permissions at all — the state this suite is now meant to prove Catalog
-    // works without. Ordering's fixture already builds this image and names it
-    // the same, so the cost is a cache hit rather than a second download.
+    // Built in InitializeAsync rather than here: its resource mappings
+    // resolve through BrokerContextPath, which walks up to the solution root
+    // and throws when the broker context is missing.
     private RabbitMqContainer? _rabbit;
 
     private Respawner? _respawner;
@@ -184,31 +158,16 @@ public sealed class ServiceFixture : IAsyncLifetime
     // ValueTask, not Task: xUnit v3 redefined IAsyncLifetime (§12.4).
     public async ValueTask InitializeAsync()
     {
-        // §14.1's broker CONFIGURATION on the stock image, rather than
-        // §14.1's built image. Catalog needs the per-service accounts (#44) and
-        // does not need ADR-021's delayed-exchange plugin: it runs no saga and
-        // schedules nothing, so the only thing the build would buy it is the
-        // one thing it cannot use.
-        //
-        // **NOT BUILDING IS THE FIX, AND RENAMING THE IMAGE WAS NOT.**
-        // Testcontainers writes the build context to a tar named after the
-        // image, so two processes building one name race on that file. Naming
-        // the image per FIXTURE looked like enough and was measured green
-        // locally — but the axis is the PROCESS, and this fixture has two
-        // consumers: `Catalog.Api.Tests` and `Catalog.Application.Tests` run as
-        // separate test hosts and both instantiate it. CI failed all 60 and all
-        // 11 of them, in 128 ms and 51 ms, with "Cannot locate specified
-        // Dockerfile" — the loser reading a tar the winner had not finished
-        // writing. A fixture fault wearing a suite-wide failure, again.
-        //
-        // Ordering's fixture still builds, because the plugin leaves it no
-        // choice, and it has exactly one consumer today. That is a premise
-        // about who calls it, so it is written down where the next caller will
-        // read it rather than assumed.
-        //
-        // The two mapped paths must match the Dockerfile's COPY targets. They
-        // are the second copy of those paths, and `check_permissions.py`
-        // asserts the two agree rather than leaving it to a reader.
+        // §14.1's broker configuration on the stock image, rather than
+        // §14.1's built image. Catalog needs the per-service accounts and not
+        // ADR-021's delayed-exchange plugin: it runs no saga and schedules
+        // nothing, so the build would buy it only the one thing it cannot use.
+        // Not building also keeps concurrent test hosts off one build
+        // context — Testcontainers writes that context to a tar named after
+        // the image, and separate processes instantiating this fixture would
+        // race on that file. The mapped paths must match the Dockerfile's
+        // COPY targets; `check_permissions.py` asserts they agree rather than
+        // leaving it to a reader.
         _rabbit = new RabbitMqBuilder()
             .WithImage("rabbitmq:4.1-management-alpine")
             .WithUsername("catalog-svc")
@@ -352,8 +311,8 @@ public sealed class ServiceFixture : IAsyncLifetime
     /// selecting from <c>__EFMigrationsHistory</c>, so the assertion is about
     /// what that table holds and not about where it lives — which is EF's to
     /// decide, is configured by <c>MigrationsHistoryTable</c> rather than by
-    /// this context's <c>HasDefaultSchema</c>, and is no part of what PR-08
-    /// claims.
+    /// this context's <c>HasDefaultSchema</c>, and is no part of what this
+    /// fixture claims.
     /// </summary>
     public async Task<string[]> AppliedMigrationsAsync()
     {
@@ -450,33 +409,15 @@ public sealed class ServiceFixture : IAsyncLifetime
     }
 
     /// <summary>
-    /// The inbox rows <em>one message</em> wrote, untracked (§9.5) — the read
-    /// an assertion about the filter wants, and the one
+    /// The inbox rows one message wrote, untracked (§9.5) — the read an
+    /// assertion about the filter wants, and the one
     /// <see cref="InboxAsync()"/> cannot be.
     /// </summary>
-    /// <remarks>
-    /// <b>An unscoped read makes every assertion two claims at once, and only
-    /// one of them is the filter's guarantee.</b>
-    /// <c>(await InboxAsync()).ShouldHaveSingleItem()</c> asserts both that the
-    /// duplicate was suppressed and that no other row exists anywhere in the
-    /// schema. The second is a property of test isolation rather than of
-    /// <c>InboxFilter&lt;T&gt;</c>, and it is the half that breaks: classes in
-    /// <c>IntegrationCollection</c> share this fixture and run in sequence, so
-    /// a message an earlier class published and a consumer handled after this
-    /// class's <see cref="ResetAsync"/> is a second row under an assertion with
-    /// nothing to do with it. Seen once in CI against Ordering's copy of this
-    /// suite (#166); the shape is the fixture's, not that service's, so the
-    /// read is added on both sides rather than where it happened to fire.
-    /// <para>
-    /// The precedent is <c>Ordering.Api.Tests</c>' <c>CatalogEventEndpointTests</c>,
-    /// which already filters on <c>MessageId</c> inline at its own call site.
-    /// This is that filter moved into the helper every test already calls,
-    /// which is where a barrier leaves nothing to forget.
-    /// <see cref="InboxAsync()"/> stays for the assertions whose subject
-    /// genuinely <em>is</em> the table — the retention purge counts rows it
-    /// never keyed.
-    /// </para>
-    /// </remarks>
+    /// <remarks>An unscoped read asserts both that the duplicate was
+    /// suppressed and that no other row exists in the schema, and only the
+    /// first is <c>InboxFilter&lt;T&gt;</c>'s guarantee: classes in
+    /// <c>IntegrationCollection</c> share this fixture and run in sequence.
+    /// <see cref="InboxAsync()"/> stays for the table itself.</remarks>
     public async Task<IReadOnlyList<InboxMessage>> InboxAsync(Guid messageId)
     {
         await using AsyncServiceScope scope = Factory.Services.CreateAsyncScope();
@@ -533,13 +474,11 @@ public sealed class ServiceFixture : IAsyncLifetime
     /// §8.5's claim store, so a retention test can put a live claim behind a
     /// staged marker and take it away again.
     /// </summary>
-    /// <remarks>
-    /// <b>The registered store against the real container, rather than a
-    /// double.</b> ADR-039 makes the purge ask this store whether a claim is
+    /// <remarks>The registered store against the real container, rather than
+    /// a double: ADR-039 makes the purge ask this store whether a claim is
     /// gone, so a test of that has to leave the store able to say no — and a
-    /// substitute would be asserting the test's own idea of the answer against
-    /// a pass that reads the real one.
-    /// </remarks>
+    /// substitute would be asserting the test's own idea of the answer
+    /// against a pass that reads the real one.</remarks>
     public IIdempotencyStore IdempotencyClaims =>
         Factory.Services.GetRequiredService<IIdempotencyStore>();
 
@@ -579,20 +518,12 @@ public sealed class ServiceFixture : IAsyncLifetime
     /// The same pass with the claim store substituted, which is the only seam
     /// in the marker's leg wide enough to reach the window the split opened.
     /// </summary>
-    /// <remarks>
-    /// <b><c>UnheldAsync</c> is called between the <c>SELECT</c> and the
-    /// <c>DELETE</c>, which is exactly where a replacement lands in
-    /// production.</b> A decorator that mutates the table while answering puts
-    /// a test on the far side of that window without a fake clock, a paused
-    /// thread or a second connection racing the first — the interleaving is
-    /// deterministic because the pass itself calls the seam.
-    /// <para>
-    /// The registered store stays the default above, for the reason
-    /// <see cref="IdempotencyClaims"/> gives: a substitute that answers from
-    /// the test's own idea of the claim would be asserting against itself. This
-    /// overload substitutes <em>when</em> the answer arrives, not what it says.
-    /// </para>
-    /// </remarks>
+    /// <remarks><c>UnheldAsync</c> is called between the <c>SELECT</c> and
+    /// the <c>DELETE</c>, which is exactly where a replacement lands in
+    /// production, so a decorator that mutates the table while answering puts
+    /// a test on the far side of that window deterministically. What this
+    /// overload substitutes is when the answer arrives, not what it says; the
+    /// registered store stays the default above.</remarks>
     public Task<(int Outbox, int Inbox, int Idempotency)> PurgeWithAsync(
         RetentionPolicy policy,
         IIdempotencyStore claims)
@@ -610,34 +541,15 @@ public sealed class ServiceFixture : IAsyncLifetime
     }
 
     /// <summary>
-    /// One pass under a policy of the test's own <em>and</em> a registered
-    /// clock moved forward by <paramref name="skew"/>. It exists because
-    /// nothing else in this suite can tell the marker's cutoff from the other
-    /// two.
+    /// One pass under a policy of the test's own and a registered clock moved
+    /// forward by <paramref name="skew"/>, because nothing else in this suite
+    /// can tell the marker's cutoff from the other two.
     /// </summary>
-    /// <remarks>
-    /// <b>The outbox's and the inbox's cutoffs are computed by the application
-    /// and the marker's is computed by the server</b> — <c>DATEADD(second,
-    /// -@WindowSeconds, SYSDATETIMEOFFSET())</c>, which is #167's fix and
-    /// ADR-038's decision, against a <c>@Before</c> the service subtracts from
-    /// the registered <c>TimeProvider</c> for the other two. Every other
-    /// retention test stages rows against <c>DateTimeOffset.UtcNow</c> and the
-    /// test host's clock agrees with the container's, so all three statements
-    /// read what is effectively one clock and a marker statement that had
-    /// regressed to <c>@Before</c> passes every one of them. Moving the
-    /// registered clock and leaving the server's alone is the only thing that
-    /// separates them, and a pass that then purges the first two tables while
-    /// keeping the marker has <em>read</em> which clock each statement used
-    /// rather than assumed it.
-    /// <para>
+    /// <remarks>The marker's cutoff is the server's — <c>DATEADD(second,
+    /// -@WindowSeconds, SYSDATETIMEOFFSET())</c>, ADR-038 — and the other two
+    /// the application's, so moving only the registered clock separates them.
     /// A wrapped <see cref="IServiceScopeFactory"/> rather than a second host,
-    /// because the service resolves <c>TimeProvider</c> from the scope it
-    /// creates and from nowhere else — so one delegating provider reaches it,
-    /// and every other service the pass resolves is the registered one. The
-    /// alternative is a whole second <c>WebApplicationFactory</c> with its own
-    /// containers, for one substituted singleton.
-    /// </para>
-    /// </remarks>
+    /// because the pass resolves <c>TimeProvider</c> from its scope.</remarks>
     public Task<(int Outbox, int Inbox, int Idempotency)> PurgeWithSkewedClockAsync(
         RetentionPolicy policy,
         TimeSpan skew)
@@ -731,24 +643,14 @@ public sealed class ServiceFixture : IAsyncLifetime
 
     /// <summary>
     /// Deletes the marker under <paramref name="key"/> and writes a fresh one
-    /// back under the same key <em>and the same <c>CommittedAt</c></em> — the
-    /// ABA a purge pass can meet between its <c>SELECT</c> and its
-    /// <c>DELETE</c>, staged at its worst.
+    /// back under the same key and the same <c>CommittedAt</c> — the ABA a
+    /// purge pass can meet between its <c>SELECT</c> and its <c>DELETE</c>.
     /// </summary>
-    /// <remarks>
-    /// <b>Preserving the timestamp is the whole of it.</b> A replacement
-    /// stamped at a fresh instant is caught by the <c>(Key, CommittedAt)</c>
-    /// pair the delete used before #173, so a test that let the column move
-    /// would pass against the defect it is aimed at. Reading the old value into
-    /// a variable and writing it back is how the coincidence ADR-041 describes
-    /// — a database clock set to the exact tick of a row already past its
-    /// window — is produced without touching the container's clock.
-    /// <para>
-    /// The <c>rowversion</c> is not carried across and cannot be: SQL Server
-    /// generates it, and that a replacement necessarily gets a new one is the
-    /// property being tested rather than something this helper arranges.
-    /// </para>
-    /// </remarks>
+    /// <remarks>Preserving the timestamp is the whole of it: a replacement
+    /// stamped at a fresh instant is a different row to any key that includes
+    /// <c>CommittedAt</c>, so only an identical one stages the collision. The
+    /// <c>rowversion</c> cannot be carried across, and that a replacement gets
+    /// a new one is the property under test.</remarks>
     public Task ReplaceIdempotencyMarkerAsync(string key) =>
         ExecuteAsync(
             """

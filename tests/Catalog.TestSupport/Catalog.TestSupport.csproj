@@ -4,9 +4,9 @@
     Settings come from Directory.Build.props (§4.4).
 
     NOT a test project — no runner, no adapter, no Test.Sdk, and Library
-    output. §4.1: "referenced by the two above, which cannot reference each
-    other". PR-08 gave the fixture one consumer; PR-10's handler tests are the
-    second, which is the condition §4.1 named for this project to exist.
+    output. §4.1: a fixture referenced by more than one test project cannot
+    live in either of them, because they cannot reference each other, so it
+    lives here instead.
   -->
 
   <PropertyGroup>

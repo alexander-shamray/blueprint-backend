@@ -32,7 +32,7 @@ public class ProductTests
     public void Publish_raises_the_domain_event_with_the_full_contract_payload()
     {
         // Everything ProductPublished declares rides on the event (§5.5) — a
-        // field missing here is a mapper PR-14 cannot write.
+        // field missing here is one the integration-event mapper cannot carry.
         Money price = Money.Of(19.99m, "EUR");
 
         var product = Product.Publish("Walnut desk", "https://cdn.example/desk.jpg", price, Now);
