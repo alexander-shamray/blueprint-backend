@@ -702,9 +702,9 @@ def check(plan_document: dict, root: Path = ROOT, source: Path | None = None,
             "(ADR-047)"
         )
 
-    # 12. The rollout hands the image's tree to everything that reads it
-    #     (ADR-050). Two arguments and one exported path, each of which can go
-    #     missing without anything else here noticing.
+    # 12. The rollout hands each image's tree to everything that reads it
+    #     (ADR-050), and every piece of that wiring can go missing without
+    #     anything else here noticing.
     failures += _rollout_reads_the_image_source()
 
     return failures
@@ -1365,13 +1365,14 @@ def _invocations(lines: list[str], command: str) -> list[str]:
 
 
 def _rollout_reads_the_image_source(workflow: Path = WORKFLOW) -> list[str]:
-    """The rollout hands the image's tree to everything that reads `src/`.
+    """The rollout hands each image's tree to everything that reads `src/`.
 
-    ADR-050's binding is one exported path and two arguments, and dropping
-    any of them restores the defect in silence: the commands still run, this
-    gate still passes, and every source-derived fact is the checkout's again.
-    So the subject here is the workflow text rather than a verdict, because
-    an argument that went missing is not observable from one.
+    ADR-050's binding is a path exported per image and an argument carrying
+    it to each reader. Drop any one and the defect returns in silence: the
+    commands still run, this gate still passes, and the facts that piece
+    covered are the checkout's again. So the subject here is the workflow
+    text rather than a verdict, because an argument that went missing is
+    not observable from one.
     """
     try:
         text = workflow.read_text(encoding="utf-8")

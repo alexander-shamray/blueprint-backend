@@ -298,6 +298,10 @@ jobs:
             echo "::error::The installed release serves $REVISION, which is not a commit in this repository, so the stable track's probe routes cannot be read."
             exit 1
           fi
+          if ! git merge-base --is-ancestor "$REVISION" HEAD; then
+            echo "::error::The installed release serves $REVISION, which this branch does not carry. A commit reachable only from another ref is not the history this rollout is judged against."
+            exit 1
+          fi
           mkdir -p "$RUNNER_TEMP/installed-source"
           git archive "$REVISION" src | tar -x -C "$RUNNER_TEMP/installed-source"
           echo "INSTALLED_SOURCE=$RUNNER_TEMP/installed-source" >> "$GITHUB_ENV"

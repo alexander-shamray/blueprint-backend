@@ -1658,8 +1658,7 @@ class ImageSourceTests(unittest.TestCase):
     def test_two_revisions_give_two_exclusions(self) -> None:
         """ADR-050's defect in one assertion. The same code over two trees
         produces two different exclusions, so which tree it reads decides
-        which requests the rung counts as traffic — and until the rollout was
-        given the image's, it read the one the runner checked out."""
+        which requests the rung counts as traffic."""
         self.assertNotEqual(
             canary.probe_exclusion(self._tree("/healthz/live")),
             canary.probe_exclusion(self._tree("/health/live")),
@@ -1890,10 +1889,9 @@ class TrackSourceTests(unittest.TestCase):
         return seen
 
     def test_each_track_reads_the_routes_of_the_image_it_runs(self) -> None:
-        """The defect round two found: one exclusion for both tracks filters
-        the stable track's probes by the candidate's routes, so a probe the
-        stable image serves and the candidate does not is counted as its
-        business traffic."""
+        """One exclusion for both tracks filters the stable track's probes
+        by the candidate's routes, so a probe the stable image serves and
+        the candidate does not is counted as its business traffic."""
         seen = self._expressions(
             candidate=self._tree("/healthz/live"), installed=self._tree("/health/ready"))
 

@@ -60,9 +60,9 @@ alerts describe what this rollout installs rather than what the image is.
 carries stops the rollout, because the baseline half of the comparison
 cannot be read; that is a new requirement on what is already deployed, and
 the alternative is judging the stable track by routes that are not its own.
-Holding one image to every workload in the plan was the first shape of this
-decision and it was wrong in the same way, one level up: it refused an
-Ordering rollout for a Catalog registration the Ordering image predates.
+**A tag answers for one workload and one track and for nothing else**: held
+wider it refuses an Ordering rollout for a Catalog registration the Ordering
+image predates, or judges a stable pod by routes it does not serve.
 The checkout needs full history, so the rollout pays a
 complete fetch it did not before; the alternative is a shallow clone that
 cannot resolve any tag but the head's, which is the one case this decision
@@ -80,9 +80,10 @@ here is that the tag *names* the revision whose source the rollout reads, and
 a signature is what makes the tag trustworthy. Facts the rollout does not
 derive from `src/` are unaffected, including the realm, which is read from
 the running release and not from any tree. The workflow check is the part
-most likely to rot: the binding is one exported path and two arguments, each
-of which can go missing while every command still runs and every other check
-still passes, which is why `canary.py check` reads `deploy.yml` for them
+most likely to rot: the binding is a path exported per image and an argument
+carrying it to each reader, any of which can go missing while every command
+still runs and every other check still passes, which is why
+`canary.py check` reads `deploy.yml` for them
 rather than trusting that a rollout nobody can run is still wired up.
 
 ---
