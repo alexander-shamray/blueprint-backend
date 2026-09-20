@@ -530,7 +530,7 @@ def _shout(key: str) -> str:
 # --------------------------------------------------------------------------
 
 def check(plan_document: dict, root: Path = ROOT, source: Path | None = None,
-          workload: str | None = None) -> list[str]:
+          workload: str | None = None, installed: Path | None = None) -> list[str]:
     """Everything that can be wrong with canary.json without a cluster.
 
     Failures are collected rather than raised, so one run reports them all.
@@ -662,6 +662,21 @@ def check(plan_document: dict, root: Path = ROOT, source: Path | None = None,
     #    series and rolls every canary back.
     failures += _metrics_are_vouched_for(sorted(series_read()), root, root)
     failures += _masstransit_pin_is_verified(root)
+
+    #    The installed release answers for the baseline half of every
+    #    comparison, and §13.2 takes service.name from each image's entry
+    #    assembly. An image from before a rename emits the old label, so
+    #    the baseline query matches no series and a healthy release rolls
+    #    back. Refused here, before the HPA floor moves, rather than
+    #    measured as an absence for a whole dwell.
+    if installed is not None and workload in trees:
+        name = workloads[workload].get("serviceName")
+        if name not in _host_assemblies(installed):
+            failures.append(
+                f"workloads.{workload}.serviceName is {name!r}, which the "
+                "installed release's image does not build, so the baseline "
+                "query would match no series and every rung would roll back"
+            )
 
     #    The rolled workload's own signals are vouched for against its image
     #    too, and only its own: series_read() spans every signal the plan
@@ -1359,7 +1374,15 @@ ARCHIVED = re.compile(
 RESOLVED_REVISION = "$REVISION"
 ASSIGNS_REVISION = re.compile(r"(?<![A-Za-z0-9_])REVISION=")
 RESOLVES_REVISION = re.compile(
-    r"(?<![A-Za-z0-9_])REVISION=\$\(\s*python\s+\S*canary\.py\s+revision\b")
+    r"(?<![A-Za-z0-9_])REVISION=\$\(\s*python\s+\S*canary\.py\s+revision"
+    r'\s+--value\s+"\$TAG"')
+
+# And the tag that feeds it. The candidate's arrives as a step input, so
+# the only shell assignment of it is the stable track's, which has to come
+# from the running release rather than from anywhere a name could be put.
+ASSIGNS_TAG = re.compile(r"(?<![A-Za-z0-9_])TAG=")
+RESOLVES_TAG = re.compile(
+    r"(?<![A-Za-z0-9_])TAG=\$\(\s*python\s+\S*canary\.py\s+installed-tag\b")
 
 
 def _resolved_above(live: list[str], index: int) -> bool:
@@ -1439,6 +1462,13 @@ def _rollout_reads_the_image_source(workflow: Path = WORKFLOW) -> list[str]:
 
     failures = []
     archived = _archived(live)
+
+    for line in live:
+        if ASSIGNS_TAG.search(line) and not RESOLVES_TAG.search(line):
+            failures.append(
+                "a step sets TAG from something other than `canary.py installed-tag`, "
+                "so the revision resolved from it is not the running release's (ADR-050)"
+            )
     for variable in (IMAGE_SOURCE, INSTALLED_SOURCE):
         # The name is matched whole. `IMAGE_SOURCE=` is also inside
         # `OLD_IMAGE_SOURCE=`, so a consistent rename would satisfy a
@@ -1499,18 +1529,26 @@ def _rollout_reads_the_image_source(workflow: Path = WORKFLOW) -> list[str]:
     # Both, because `--source` without the workload it belongs to is a
     # refusal rather than a check, and the workload alone scopes nothing.
     gate = _argument(SOURCE_FLAG, IMAGE_SOURCE)
-    scope = _argument("--workload", "WORKLOAD")
     runs = _invocations(live, "canary.py check")
     if not any(gate in run for run in runs):
         failures.append(
             f"no `canary.py check` run takes {gate}, so the plan is never held "
             "against the source the deployed image was built from (ADR-050)"
         )
-    elif not any(gate in run and scope in run for run in runs):
-        failures.append(
-            f"the `canary.py check` run that takes {gate} takes no {scope}, so "
-            "the tree is given without the workload it answers for (ADR-050)"
-        )
+    else:
+        # The same run, not merely the same file: a tree without the
+        # workload it answers for is refused inside check, and a candidate
+        # without the release it replaces leaves the baseline unjudged.
+        for flag, variable, cost in (
+            ("--workload", "WORKLOAD", "the workload it answers for"),
+            (INSTALLED_FLAG, INSTALLED_SOURCE, "the release it replaces"),
+        ):
+            wanted = _argument(flag, variable)
+            if not any(gate in run and wanted in run for run in runs):
+                failures.append(
+                    f"the `canary.py check` run that takes {gate} takes no "
+                    f"{wanted}, so the tree is given without {cost} (ADR-050)"
+                )
     return failures
 
 
@@ -1530,6 +1568,9 @@ def main(argv: list[str]) -> int:
         help="the tree the deployed image was built from (ADR-050)")
     checker.add_argument(
         "--workload", help="whose image --source is, and the only one read from it")
+    checker.add_argument(
+        "--installed-source", type=Path,
+        help="the tree the release being replaced was built from (ADR-050)")
 
     revision = sub.add_parser("revision", help="the commit an image tag names")
     revision.add_argument("--value", required=True)
@@ -1606,7 +1647,8 @@ def main(argv: list[str]) -> int:
         return 0
 
     if args.command == "check":
-        failures = check(document, source=args.source, workload=args.workload)
+        failures = check(document, source=args.source, workload=args.workload,
+                         installed=args.installed_source)
         if failures:
             print(f"canary: {len(failures)} problem(s) with the rollout plan:\n", file=sys.stderr)
             for failure in failures:

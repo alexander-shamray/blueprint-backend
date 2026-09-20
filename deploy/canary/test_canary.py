@@ -1737,6 +1737,22 @@ class ImageSourceTests(unittest.TestCase):
 
         self.assertEqual([], [f for f in failures if "MassTransit" in f], failures)
 
+    def test_the_installed_image_has_to_build_the_judged_assembly(self) -> None:
+        """§13.2 takes service.name from each image's entry assembly, and
+        the baseline is the installed image. One from before a rename emits
+        the old label, so the baseline query matches nothing and a healthy
+        release rolls back at every rung."""
+        candidate = self._tree("/healthz/live")
+        installed = service_tree({"Svc.Api/Health.cs": 'app.MapHealthChecks("/x");\n'})
+
+        failures = canary.check(
+            canary.load_plan(), source=candidate, workload="catalog-api",
+            installed=installed)
+
+        self.assertTrue(
+            any("installed release's image does not build" in f for f in failures),
+            failures)
+
     def test_check_reads_its_charts_from_the_root(self) -> None:
         """The other half of the split. The chart is installed from the
         checkout, so it is judged there — a source tree with no deploy/ at
@@ -1788,11 +1804,8 @@ class RolloutBindingTests(unittest.TestCase):
         """The other half, and the reason each is mutated separately: a run
         that removed both would report one diagnostic and leave the branch
         that produced the other unproved."""
-        without = "\n".join(
-            line.replace(' --source "$IMAGE_SOURCE"', "")
-            if "canary.py check" in line else line
-            for line in self.shipped.splitlines()
-        )
+        without = self.shipped.replace(
+            '--source "$IMAGE_SOURCE" --installed-source', "--installed-source")
 
         failures = canary._rollout_reads_the_image_source(self._workflow(without))
 
@@ -1901,18 +1914,47 @@ class RolloutBindingTests(unittest.TestCase):
             any("does not set from `canary.py revision`" in f for f in failures),
             failures)
 
-    def test_a_gate_run_without_its_workload_fails(self) -> None:
+    def test_a_gate_run_missing_either_companion_fails(self) -> None:
         """A tree handed over without the workload it answers for is a
-        refusal inside check(), so the gate has to insist on both here
-        rather than on the tree alone."""
-        without = self.shipped.replace(
-            'canary.py check --source "$IMAGE_SOURCE" --workload "$WORKLOAD"',
-            'canary.py check --source "$IMAGE_SOURCE"')
+        refusal inside check(), and one handed over without the release it
+        replaces leaves the baseline half unjudged. Both are the same run,
+        not merely the same file."""
+        for dropped in (' --workload "$WORKLOAD"',
+                        ' --installed-source "$INSTALLED_SOURCE"'):
+            with self.subTest(dropped=dropped.strip()):
+                without = self.shipped.replace(dropped.strip() + " " + chr(92), "")
+                without = without.replace(dropped, "")
 
-        failures = canary._rollout_reads_the_image_source(self._workflow(without))
+                failures = canary._rollout_reads_the_image_source(
+                    self._workflow(without))
 
-        self.assertEqual(1, len(failures), failures)
-        self.assertIn("--workload", failures[0])
+                self.assertTrue(
+                    any(dropped.split()[0] in f for f in failures), failures)
+
+    def test_a_revision_resolved_from_the_wrong_value_fails(self) -> None:
+        """One level below the archive again: `canary.py revision` is
+        invoked, and handed something that is not the tag."""
+        swapped = self.shipped.replace(
+            'revision --value "$TAG"', 'revision --value "$GITHUB_SHA"', 1)
+
+        failures = canary._rollout_reads_the_image_source(self._workflow(swapped))
+
+        self.assertTrue(
+            any("does not set from `canary.py revision`" in f for f in failures),
+            failures)
+
+    def test_a_tag_from_anywhere_but_the_release_fails(self) -> None:
+        """And below that: the stable track's tag is the running
+        release's or it is a name somebody put there."""
+        swapped = self.shipped.replace(
+            'TAG=$(python deploy/canary/canary.py installed-tag',
+            'TAG=$(echo installed-tag', 1)
+
+        failures = canary._rollout_reads_the_image_source(self._workflow(swapped))
+
+        self.assertTrue(
+            any("other than `canary.py installed-tag`" in f for f in failures),
+            failures)
 
     def test_a_continuation_is_read_as_one_invocation(self) -> None:
         """The flag is never on the line the command is named on."""

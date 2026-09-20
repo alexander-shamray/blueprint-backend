@@ -191,13 +191,43 @@ jobs:
         env:
           TAG: ${{ inputs.tag }}
 
+      # The other half of the comparison. The stable track serves the image
+      # it was installed with, so its probe routes are that image's and not
+      # the candidate's (ADR-050). Read from the release, because no input
+      # names it, and refused rather than guessed: a rollout that cannot tell
+      # what the track it is measuring against serves has no baseline.
+      - name: The stable track's facts come from the image it is running
+        run: |
+          set -euo pipefail
+          helm get values "$WORKLOAD" -n "$NAMESPACE" --all -o json \
+            > "$RUNNER_TEMP/stable.json"
+          TAG=$(python deploy/canary/canary.py installed-tag --values "$RUNNER_TEMP/stable.json")
+          REVISION=$(python deploy/canary/canary.py revision --value "$TAG")
+          if ! git cat-file -e "$REVISION^{commit}" 2>/dev/null; then
+            echo "::error::The installed release serves $REVISION, which is not a commit in this repository, so the stable track's probe routes cannot be read."
+            exit 1
+          fi
+          if ! git merge-base --is-ancestor "$REVISION" HEAD; then
+            echo "::error::The installed release serves $REVISION, which this branch does not carry. A commit reachable only from another ref is not the history this rollout is judged against."
+            exit 1
+          fi
+          mkdir -p "$RUNNER_TEMP/installed-source"
+          git archive "$REVISION" src | tar -x -C "$RUNNER_TEMP/installed-source"
+          echo "INSTALLED_SOURCE=$RUNNER_TEMP/installed-source" >> "$GITHUB_ENV"
+        env:
+          WORKLOAD: ${{ inputs.workload }}
+
       # The same gate the `check` job ran, over the image's tree instead of
-      # the checkout's (ADR-050). `--workload` is required beside `--source`
-      # and is the sharp part: a tag names one workload's image, and the
-      # others are running images built from other revisions, so judging
-      # their plan entries against this one refuses rollouts that are fine.
+      # the checkout's (ADR-050), and over the release it replaces as well.
+      # `--workload` scopes the first: a tag names one workload's image, and
+      # judging the others against it refuses rollouts that are fine.
+      # `--installed-source` is what lets the baseline half be refused here
+      # rather than measured as an absence for a whole dwell.
       - name: The plan agrees with the image about what it runs
-        run: python deploy/canary/canary.py check --source "$IMAGE_SOURCE" --workload "$WORKLOAD"
+        run: |
+          python deploy/canary/canary.py check \
+            --source "$IMAGE_SOURCE" --installed-source "$INSTALLED_SOURCE" \
+            --workload "$WORKLOAD"
         env:
           WORKLOAD: ${{ inputs.workload }}
 
@@ -281,32 +311,6 @@ jobs:
           set -euo pipefail
           echo "CHECKED_AUTHORITY=${KEYCLOAK_BASE_URL}/realms/${KEYCLOAK_REALM}" \
             >> "$GITHUB_ENV"
-
-      # The other half of the comparison. The stable track serves the image
-      # it was installed with, so its probe routes are that image's and not
-      # the candidate's (ADR-050). Read from the release, because no input
-      # names it, and refused rather than guessed: a rollout that cannot tell
-      # what the track it is measuring against serves has no baseline.
-      - name: The stable track's facts come from the image it is running
-        run: |
-          set -euo pipefail
-          helm get values "$WORKLOAD" -n "$NAMESPACE" --all -o json \
-            > "$RUNNER_TEMP/stable.json"
-          TAG=$(python deploy/canary/canary.py installed-tag --values "$RUNNER_TEMP/stable.json")
-          REVISION=$(python deploy/canary/canary.py revision --value "$TAG")
-          if ! git cat-file -e "$REVISION^{commit}" 2>/dev/null; then
-            echo "::error::The installed release serves $REVISION, which is not a commit in this repository, so the stable track's probe routes cannot be read."
-            exit 1
-          fi
-          if ! git merge-base --is-ancestor "$REVISION" HEAD; then
-            echo "::error::The installed release serves $REVISION, which this branch does not carry. A commit reachable only from another ref is not the history this rollout is judged against."
-            exit 1
-          fi
-          mkdir -p "$RUNNER_TEMP/installed-source"
-          git archive "$REVISION" src | tar -x -C "$RUNNER_TEMP/installed-source"
-          echo "INSTALLED_SOURCE=$RUNNER_TEMP/installed-source" >> "$GITHUB_ENV"
-        env:
-          WORKLOAD: ${{ inputs.workload }}
 
       - name: The first rung has a price, and it is paid before anything rolls
         run: |

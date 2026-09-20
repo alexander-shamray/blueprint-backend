@@ -25,6 +25,13 @@ what it was installed with, so the rollout reads that release's tag out of
 would filter the stable track's probes by the candidate's routes, which is
 the mismatch this decision exists to remove, one track over.
 
+**Both images have to build the assembly the workload is judged by.**
+[§13.2](../13-observability.md) takes `service.name` from an image's entry
+assembly, so a release whose assembly was renamed emits a label the
+plan does not name; the baseline query then matches no series and every
+rung rolls back a healthy release. The rollout refuses that before it
+changes anything rather than measuring it for a dwell.
+
 **Everything else stays the checkout's**: the chart,
 [§13.6](../13-observability.md)'s thresholds, the rollout plan, and the
 deciding code itself. `canary.py check` runs a second time inside the
@@ -60,6 +67,10 @@ alerts describe what this rollout installs rather than what the image is.
 carries stops the rollout, because the baseline half of the comparison
 cannot be read; that is a new requirement on what is already deployed, and
 the alternative is judging the stable track by routes that are not its own.
+**An entry-assembly rename cannot be canaried by this mechanism at all**,
+for the same reason and with the same remedy as §15.5's binding case: the
+two tracks are told apart by a label one of them stops emitting, so the
+release is a cutover or a pair of releases rather than a ladder.
 **A tag answers for one workload and one track and for nothing else**: held
 wider it refuses an Ordering rollout for a Catalog registration the Ordering
 image predates, or judges a stable pod by routes it does not serve.
