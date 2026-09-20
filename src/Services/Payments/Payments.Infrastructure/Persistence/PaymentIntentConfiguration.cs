@@ -1,3 +1,4 @@
+using Common.Contracts.Payments.V1;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Payments.Application;
@@ -26,9 +27,10 @@ internal sealed class PaymentIntentConfiguration : IEntityTypeConfiguration<Paym
         builder.Property(i => i.Amount).HasPrecision(PaymentAmounts.Precision, PaymentAmounts.Scale);
         builder.Property(i => i.Currency).HasMaxLength(3).IsFixedLength().IsUnicode(false);
 
-        // ProviderLimits, which the adapter enforces before a verdict exists,
-        // so nothing this column refuses can reach it.
-        builder.Property(i => i.Reference).HasMaxLength(ProviderLimits.MaxReferenceLength);
+        // The published width and this service's own, both enforced by the
+        // adapter before a verdict exists, so nothing these columns refuse
+        // can reach them.
+        builder.Property(i => i.Reference).HasMaxLength(PaymentLimits.MaxReferenceLength);
         builder.Property(i => i.DeclineReason).HasMaxLength(ProviderLimits.MaxReasonLength);
 
         builder.Property(i => i.Version).HasColumnName("RowVersion").IsRowVersion();
