@@ -44,38 +44,15 @@ public class CatalogApiFactory(
     public const string UnreachableAuthority = "https://identity.invalid/realms/test";
 
     /// <summary>
-    /// The Redis address a host takes when the caller supplies none, on
-    /// <see cref="UnreachableAuthority"/>'s terms and for the same reason:
+    /// The Redis address a host takes when the caller supplies none:
     /// <c>AddRedisConnections</c> reads both keys eagerly and throws naming
-    /// the missing one, so every host over this <c>Program</c> needs both,
-    /// reachable or not.
+    /// the missing one, so every host over this <c>Program</c> needs both.
     /// </summary>
-    /// <remarks>
-    /// <b>Unreachable is safe here in a way it would not be for SQL</b>, and
-    /// the difference is worth stating rather than relying on.
+    /// <remarks>Unreachable is safe here and would not be for SQL:
     /// <c>AddRedisConnections</c> forces <c>AbortOnConnectFail = false</c>
-    /// (§8.1's "degrade, don't die"), so a failed connection is <b>non-fatal</b>
-    /// rather than absent: <c>ConnectionMultiplexer.Connect</c> still attempts
-    /// it, and the flag is what keeps the throw from taking the host down.
-    /// The multiplexer then retries in the background.
-    /// <para>
-    /// <b>An earlier revision said this is never reached, on the grounds that
-    /// the multiplexer is constructed lazily and no host-smoke test resolves
-    /// one. Both halves are wrong, and this branch's own test says so.</b>
-    /// A host's <c>TelemetryHostedService</c> builds the <c>TracerProvider</c>
-    /// at startup, which runs <c>ConfigureRedisInstrumentation</c>, which calls
-    /// <c>GetRequiredKeyedService&lt;IConnectionMultiplexer&gt;</c> for
-    /// <b>both</b> connections — so every host over this factory resolves them
-    /// and attempts to reach <c>redis.invalid</c>. <c>HybridCacheRedisTests</c>
-    /// forces the same construction by hand and its comment spells out why.
-    /// What makes that harmless is the flag above, not the absence of a
-    /// resolve.
-    /// </para>
-    /// A suite that actually exercises §8.5's store passes a running
-    /// container instead; <c>.invalid</c> is reserved and never resolves, so
-    /// one that forgets to fails loudly rather than reaching a developer's own
-    /// Redis on localhost.
-    /// </remarks>
+    /// (§8.1), and every host resolves both multiplexers at startup, so it is
+    /// the flag that keeps the throw from taking the host down. A suite that
+    /// exercises §8.5's store passes a running container instead.</remarks>
     public const string UnreachableRedis = "redis.invalid:6379";
 
     /// <summary>
@@ -156,30 +133,15 @@ public class CatalogApiFactory(
             });
 
     /// <summary>
-    /// Replaces the JWT scheme with <see cref="TestAuthHandler"/> (§12.4).
-    /// Replacing rather than configuring: the endpoints under test are behind
-    /// <c>RequireAuthorization</c> (§11.4), and the alternative is either a 401
-    /// on every call or a fixture that fetches OIDC metadata over the network
-    /// from an authority that is unreachable on purpose.
+    /// Replaces the JWT scheme with <see cref="TestAuthHandler"/> (§12.4)
+    /// rather than configuring it: the endpoints under test sit behind
+    /// <c>RequireAuthorization</c> (§11.4), so the alternative is a 401 on
+    /// every call or a fixture fetching OIDC metadata over the network.
     /// </summary>
-    /// <remarks>
-    /// Virtual, and the one override matters. A host that keeps the production
-    /// scheme is the only thing that can prove <see cref="TestAuthHandler"/>'s
-    /// headers mean nothing to a real deployment, which is what
-    /// <c>EndpointSecurityTests</c> reads it for. A flag would say the same
-    /// thing; a method says it at the site that makes the decision, which is
-    /// where the argument for it belongs.
-    ///
-    /// Only the authenticate and challenge schemes are set, and forbid follows
-    /// the challenge one: <c>DefaultForbidScheme</c> is unset, and
-    /// <c>AuthenticationSchemeProvider</c> falls back to
-    /// <c>DefaultChallengeScheme</c> before <c>DefaultScheme</c>. So the 403 is
-    /// answered by <see cref="TestAuthHandler"/>'s inherited forbid — a bare
-    /// status code, no metadata — and the wrong-permission test needs no
-    /// identity provider either. Measured by resolving the provider rather
-    /// than assumed: this comment previously credited the bearer handler,
-    /// which never sees a forbid here.
-    /// </remarks>
+    /// <remarks>Virtual, because a host keeping the production scheme is the
+    /// only thing that can prove <see cref="TestAuthHandler"/>'s headers mean
+    /// nothing to a real deployment. Forbid is left unset and falls back to
+    /// the challenge scheme, so the 403 is a bare status code.</remarks>
     protected virtual void ConfigureAuthentication(IServiceCollection services)
     {
         services.Configure<AuthenticationOptions>(o =>

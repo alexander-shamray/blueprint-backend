@@ -2,6 +2,7 @@ using System.Diagnostics.Metrics;
 using System.Net;
 using System.Net.Sockets;
 using System.Text.Json;
+using Common.Contracts.Payments.V1;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
@@ -509,8 +510,8 @@ public sealed class HttpPaymentProviderTests : IClassFixture<HttpPaymentProvider
     }
 
     [Theory]
-    [InlineData(ProviderLimits.MaxReferenceLength, true)]
-    [InlineData(ProviderLimits.MaxReferenceLength + 1, false)]
+    [InlineData(PaymentLimits.MaxReferenceLength, true)]
+    [InlineData(PaymentLimits.MaxReferenceLength + 1, false)]
     public async Task A_reference_longer_than_the_column_is_refused_before_it_is_recorded(int length, bool accepted)
     {
         string reference = new('r', length);

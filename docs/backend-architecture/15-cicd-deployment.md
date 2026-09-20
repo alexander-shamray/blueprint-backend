@@ -214,7 +214,7 @@ makes [§14.2](14-local-development.md)'s "Compose runs in CI" true.
 
 The second is the Helm tree (PR-23). A workflow path-filtered to
 `deploy/helm/**` runs `deploy/helm/smoke.sh`, which resolves the charts'
-`file://` dependencies, lints each one, and then renders all five and asserts
+`file://` dependencies, lints each one, and then renders every one and asserts
 what comes out: three probes per workload, a memory limit and no CPU limit, the
 hook annotations of [§7.4](07-persistence.md), the ConfigMap/Secret split of
 §15.4, and one client secret in the whole platform (§11.5). Rendering only — no
@@ -644,7 +644,7 @@ drift the one rule exists to close — a later edit to either side has nothing t
 grep against. So each carries the keys the surrounding argument turns on and
 names what it leaves out; the files themselves are the one `values.yaml` per
 deployable chart, and `deploy/helm/smoke.sh` is what holds them to the claims
-made here. `platform/values.yaml` is the fifth file in that tree and is
+made here. `platform/values.yaml` is the one file in that tree that is
 deliberately not one of them — it holds `{}`, and says at length why a value
 there would silently win over the subchart that owns it.
 
@@ -827,13 +827,19 @@ container form of an unused registration — and it is why no chart carried the
 two Redis connection strings for as long as nothing called
 `AddRedisConnections`.
 
-**Catalog and Ordering now do**, because §8.5's `IdempotencyBehavior` claims a
-`{service}:idem:` key before any protected command runs, so both charts carry a
-`redis:` block on `broker`'s shape — one Secret, but two distinct keys where the
-broker needs one — and §15.4's column is unconditional for them. The gateway and
-the BFF declare `redis.enabled: false` — written down rather than omitted,
-because a capability is a claim a chart makes rather than one to infer from a
-missing key.
+**Catalog, Ordering and Inventory now do**, because §8.5's
+`IdempotencyBehavior` claims a `{service}:idem:` key before any protected
+command runs, so each of those charts carries a `redis:` block on `broker`'s
+shape — one Secret, but two distinct keys where the broker needs one — and
+§15.4's column is unconditional for them. The gateway, the BFF and Payments
+declare `redis.enabled: false` — written down rather than omitted, because a
+capability is a claim a chart makes rather than one to infer from a missing
+key.
+
+Neither list is restated anywhere else, and `deploy/helm/smoke.sh` is what
+holds both to the charts: it reads each service's source for a call to
+`AddRedisConnections` and asserts that chart declares `redis` — in **both**
+directions, so a chart that stops calling it and keeps the block fails too.
 
 **Both keys are required together even though only the coordination one is read
 today**, and the reason is the code's rather than the chart's:
@@ -1160,8 +1166,10 @@ two paragraphs up, which merely provisions credentials nothing sends: this one
 stops the service. The rule that resolved it is §14.1's, applied one deployment
 target over — **a key joins when a host's code reads it**.
 
-`IdempotencyBehavior` reads one, so Catalog and Ordering carry both rows
-unconditionally and the gateway and the BFF carry neither. **Both, not just the
+`IdempotencyBehavior` reads one, so a chart whose service calls
+`AddRedisConnections` carries both rows unconditionally and every other chart
+carries neither; §15.3 names which are which today, and this table does not
+repeat it. **Both, not just the
 coordination one that is actually read**: `AddRedisConnections` is a single
 call by design (§8.2) and reads both eagerly, so a host given one key throws
 naming the other. The condition that remains is per chart rather than per
@@ -1337,7 +1345,7 @@ naming the stable replica count that would satisfy the step. At §15.3's
 is unreachable until the stable track is scaled to **19** — which the rollout
 does, deliberately and before anything rolls, rather than quietly serving five
 times the blast radius under a label that says 5%. `autoscaling.maxReplicas` is
-20 on the three service charts, so on those 19 plus one canary is exactly the
+20 on every chart but one, so on those 19 plus one canary is exactly the
 ceiling. **The gateway's is 30** — every external request passes through it —
 so there 19 is simply what 5% needs rather than all the chart allows, and its
 autoscaler can still climb past the canary's stable count during a dwell. The

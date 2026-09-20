@@ -11,25 +11,14 @@ namespace Catalog.Api.Tests;
 
 /// <summary>
 /// §9.7's server half, driven over the real pipeline: authentication,
-/// authorization, the dispatcher, the validator and Dapper against a real
-/// database.
+/// authorization, the dispatcher, the validator and Dapper on a real database.
 /// </summary>
-/// <remarks>
-/// <para>
-/// <b>Over <c>TestServer</c>, deliberately, and that is not a shortcut.</b>
-/// PR-27's rule is to drive <c>TestServer</c> for what the <i>application</i>
-/// decides and a real server for what the <i>server</i> decides. Everything
-/// asserted here is the first kind. The second kind — that a cleartext
-/// endpoint has to be declared <c>Http2</c> before a gRPC client can reach it
-/// at all — is measured where it belongs, against a real Kestrel, in
-/// <c>Web.Bff.Tests</c>.
-/// </para>
-/// <para>
-/// <c>TestServer.CreateHandler()</c> is what makes this work: it hands the
-/// channel a handler that bypasses the network entirely, so the h2c
-/// negotiation this host would otherwise need never happens.
-/// </para>
-/// </remarks>
+/// <remarks>Over <c>TestServer</c>: it is the right instrument for what the
+/// application decides, and what the server decides — that a cleartext
+/// endpoint must be declared <c>Http2</c> before a gRPC client can reach it —
+/// belongs against a real Kestrel instead. <c>TestServer.CreateHandler()</c>
+/// bypasses the network, so the h2c negotiation this host would otherwise
+/// need never happens.</remarks>
 [Collection(nameof(IntegrationCollection))]
 public sealed class PricingServiceTests(ServiceFixture fixture) : IAsyncLifetime
 {
@@ -156,25 +145,14 @@ public sealed class PricingServiceTests(ServiceFixture fixture) : IAsyncLifetime
     }
 
     /// <summary>
-    /// The same request against a <b>case-sensitive</b> column, which is the
-    /// only configuration in which the handler's normalisation does anything.
+    /// The same request against a case-sensitive column, which is the only
+    /// configuration in which the handler's normalisation does anything.
     /// </summary>
-    /// <remarks>
-    /// <b>The test above cannot fail, and saying so in a comment was not
-    /// enough.</b> `ToUpperInvariant` exists for a deployment whose collation
-    /// is case-sensitive, and every fixture in this repository runs SQL
-    /// Server's case-insensitive default — so the line was covered by a test
-    /// that a do-nothing implementation satisfies, with the gap written down
-    /// beside it. A cheaply closable gap is closed rather than named.
-    /// <para>
-    /// The collation is changed on the column for the duration of one test and
-    /// restored in a <c>finally</c>. That is safe here and would not be
-    /// anywhere: <c>IntegrationCollection</c> is the only collection holding
-    /// the fixture and xUnit runs a collection's tests serially, so nothing
-    /// else is reading this table while it is altered. <c>Respawn</c> resets
-    /// rows and not schema, which is why the restore is this test's own job.
-    /// </para>
-    /// </remarks>
+    /// <remarks><c>ToUpperInvariant</c> exists for a deployment whose
+    /// collation is case-sensitive, which SQL Server's default is not. The
+    /// collation is changed on the column for this test and restored in a
+    /// <c>finally</c>: <c>IntegrationCollection</c> runs serially, and
+    /// <c>Respawn</c> resets rows and not schema.</remarks>
     [Fact]
     public async Task A_lower_case_currency_matches_under_a_case_sensitive_collation()
     {
@@ -358,10 +336,8 @@ public sealed class PricingServiceTests(ServiceFixture fixture) : IAsyncLifetime
         // ValidationInterceptor's whole job, and the status matters more than
         // it looks: untranslated this is Unknown, which the BFF maps to a 500 —
         // so a caller's malformed request would come back as this platform
-        // having failed. It is not about retries, whatever an earlier version
-        // of this comment claimed: Unknown rides an HTTP 200 like every other
-        // gRPC status, and UpstreamRetryTests measures that none of them is
-        // retried.
+        // having failed. Unknown rides an HTTP 200 like every other gRPC
+        // status, so none of them is retried.
         thrown.StatusCode.ShouldBe(StatusCode.InvalidArgument);
         thrown.Status.Detail.ShouldContain("ProductIds");
     }

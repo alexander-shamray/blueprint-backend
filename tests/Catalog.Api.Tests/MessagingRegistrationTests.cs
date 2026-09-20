@@ -13,23 +13,13 @@ namespace Catalog.Api.Tests;
 /// <summary>
 /// The harness smoke of Appendix C's messaging row, and the row's own split
 /// says which half lives here: "publish/consume proven with the in-memory
-/// harness" is this file, "bus connects" is the container suite's readiness
-/// poll. <c>AddMassTransitTestHarness</c> replaces an existing
-/// <c>AddMassTransit</c> bus with the in-memory transport — verified against
-/// the 8.5.3 source — which means these tests prove the production helper
-/// COMPOSES (its eager key read runs, its options land, nothing conflicts
-/// with the consumer bindings) and that MassTransit's pipeline delivers.
-/// What the swap deliberately removes is the <c>UsingRabbitMq</c> transport
-/// configuration itself, so that half is asserted where it can be true: in
-/// <c>DatabaseSmokeTests</c>, against a real broker.
+/// harness" is this file, "bus connects" belongs where a real broker answers.
+/// <c>AddMassTransitTestHarness</c> swaps the bus for the in-memory
+/// transport, so what these prove is that the production helper composes and
+/// that the pipeline delivers — not the swapped-out <c>UsingRabbitMq</c>.
 /// </summary>
-/// <remarks>
-/// The message and consumer are test-local on purpose, and stay that way now
-/// that <c>Common.Contracts</c> exists: this smoke needs a payload the
-/// pipeline can carry, not a published contract other services may come to
-/// depend on. A real contract here would make every change to it a change to
-/// this test, and the test is about the registration rather than the message.
-/// </remarks>
+/// <remarks>The message and consumer are test-local: this smoke needs a
+/// payload the pipeline can carry, not a published contract.</remarks>
 public class MessagingRegistrationTests
 {
     /// <summary>
@@ -112,7 +102,7 @@ public class MessagingRegistrationTests
     [Fact]
     public async Task The_harness_waits_for_the_stated_timeouts_rather_than_MassTransits_defaults()
     {
-        // The defect this replaced was invisible from the smoke below: with
+        // Not visible from the smoke below: with
         // SetTestTimeouts deleted that test still passes on an idle machine
         // and fails only on a loaded runner, so a deletion would come back as
         // a flake rather than as a red test. Asserted here it fails at once —
@@ -161,9 +151,9 @@ public class MessagingRegistrationTests
     [Fact]
     public void Registration_adds_the_bus_and_its_hosted_service()
     {
-        // Descriptors, not a built provider — the PR-12 shape. Building would
-        // start nothing (the bus starts with the host), but a provider is a
-        // heavier claim than the test makes.
+        // Descriptors, not a built provider. Building would start nothing
+        // (the bus starts with the host), but a provider is a heavier claim
+        // than the test makes.
         ServiceCollection services = new();
 
         services.AddMassTransitMessaging(Configuration());

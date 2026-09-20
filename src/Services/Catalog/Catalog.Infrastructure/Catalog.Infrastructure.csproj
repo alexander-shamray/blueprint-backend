@@ -3,11 +3,10 @@
   <!--
     Settings come from Directory.Build.props (§4.4).
 
-    Domain and Application — §4.2's third row permits any package besides, and
-    PR-08 is where that row starts being used: EF Core for the write side
-    (§7.2), Dapper for the raw writes IUnitOfWork exposes (§6.3), the SQL
-    readiness check (§13.5), and IConfiguration, which AddCatalogInfrastructure
-    now names in its signature.
+    Domain and Application — §4.2's third row permits any package besides:
+    EF Core for the write side (§7.2), Dapper for the raw writes IUnitOfWork
+    exposes (§6.3), the SQL readiness check (§13.5), and IConfiguration,
+    which AddCatalogInfrastructure names in its signature.
   -->
 
   <ItemGroup>
@@ -31,14 +30,10 @@
     <ProjectReference Include="..\Catalog.Domain\Catalog.Domain.csproj" />
     <ProjectReference Include="..\Catalog.Application\Catalog.Application.csproj" />
     <!-- §9.4's outbox: the entity this assembly maps, the type map, the
-         metrics and the dispatcher it hosts. PR-14's edge, and the reason
-         Common.Infrastructure stopped being a project no service referenced.
-         §8's Redis helpers ride in on this same reference and are now used
-         rather than merely available — AddRedisConnections and
-         RedisIdempotencyStore are wired in DependencyInjection.cs. This
-         comment said they were "still nobody's dependency" and that the first
-         service to wire them would need no new reference; the second half was
-         right and is why nothing here changed but the sentence. -->
+         metrics and the dispatcher it hosts. §8's Redis helpers ride in on
+         the same reference and are wired from the start — the connections,
+         the lock factory and §8.5's idempotency store — so a first cache
+         read costs no new reference and no new registration. -->
     <ProjectReference Include="..\..\..\BuildingBlocks\Common.Infrastructure\Common.Infrastructure.csproj" />
     <!-- typeof(ProductPublished).Assembly, the Broker lane's half of
          MessageTypeSource. Transitive through Catalog.Application, named

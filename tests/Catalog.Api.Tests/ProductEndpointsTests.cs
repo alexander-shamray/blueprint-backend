@@ -10,17 +10,14 @@ namespace Catalog.Api.Tests;
 
 /// <summary>
 /// §12.4's third level: HTTP in, HTTP out, covering what the levels below
-/// structurally cannot — status codes, serialisation and, since PR-16, the
-/// endpoint's authorization.
+/// structurally cannot — status codes, serialisation and authorization.
 /// </summary>
-/// <remarks>
-/// Every write here states a principal, and states the narrowest one that
-/// works: §12.4's rule is that a fixture handing out a blanket claim set makes
-/// the §11.4 policies untestable and, worse, makes them look tested — the
-/// endpoints are reached, the assertions pass, and the one behaviour nobody
-/// exercises is the refusal. So the two tests that assert a refusal grant
-/// nothing and grant the wrong thing respectively.
-/// </remarks>
+/// <remarks>Every write states the narrowest principal that works: §12.4's
+/// rule is that a fixture handing out a blanket claim set makes the §11.4
+/// policies untestable and, worse, makes them look tested — the endpoints are
+/// reached, the assertions pass, and the one behaviour nobody exercises is
+/// the refusal. So a refusal is asserted both with nothing granted and with
+/// the wrong thing granted.</remarks>
 [Collection(nameof(IntegrationCollection))]
 public sealed class ProductEndpointsTests(ServiceFixture fixture) : IAsyncLifetime
 {
@@ -193,10 +190,9 @@ public sealed class ProductEndpointsTests(ServiceFixture fixture) : IAsyncLifeti
         response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
 
         // And in the platform's one error shape (§10.5). A challenge is written
-        // by the middleware before any endpoint runs and carried no body at all
-        // until PR-17 measured one at the gateway and added UseStatusCodePages
-        // to every host — the promise §10.5 opens with had a hole in it on the
-        // status a client meets first.
+        // by the middleware before any endpoint runs and carries no body of its
+        // own, so without UseStatusCodePages the promise §10.5 opens with has a
+        // hole in it on the status a client meets first.
         response.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
 
         int rows = await fixture.ScalarAsync<int>("SELECT Value = COUNT(*) FROM catalog.Products");

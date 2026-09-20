@@ -21,6 +21,9 @@ dependencies:
   - name: inventory
     version: 0.1.0
     repository: file://../inventory
+  - name: payments
+    version: 0.1.0
+    repository: file://../payments
   - name: gateway
     version: 0.1.0
     repository: file://../gateway

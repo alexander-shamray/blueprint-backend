@@ -8,38 +8,14 @@ using TestResult = NetArchTest.Rules.TestResult;
 namespace Catalog.Application.Tests;
 
 /// <summary>
-/// The §4.2 gates for this layer. Green on an empty skeleton by design — "an
-/// architecture rule introduced before the violations exist is a constraint",
-/// and these have been observed failing against a deliberately added
-/// forbidden reference.
+/// The §4.2 gates for this layer. This project's row says what it may
+/// reference, so the gate below is an allow-list rather than a named deny.
 /// </summary>
 /// <remarks>
-/// <b>Two shapes, because §4.2's table has two.</b> A row that says what a
-/// project <i>may</i> reference gets an allow-list gate, and a row that says a
-/// project may reference any package gets a named deny. This project's row is
-/// the first kind, so the gate below is an allow-list over
-/// <c>GetReferencedAssemblies</c> — the same instrument the Domain gate uses
-/// one project down, and for the same reason: a blacklist only bans what
-/// somebody thought to name.
-/// <para>
-/// <b>What that instrument sees is narrower than the table's word, and the
-/// gap is worth knowing before trusting a green run.</b>
 /// <c>GetReferencedAssemblies</c> reads the emitted <c>AssemblyRef</c> table,
-/// and the compiler writes an entry only for an assembly whose types the
-/// compiled code actually names. A forbidden <c>ProjectReference</c> or
-/// <c>PackageReference</c> that nothing <i>uses</i> emits nothing, so this
-/// gate goes green on a project that declares one. It fires the moment any
-/// code names a type across that edge, which makes the gate late rather than
-/// absent — the escape needs the reference to be both forbidden and entirely
-/// unused.
-/// </para>
-/// <para>
-/// Closing it means reading the declared graph instead of the compiled one,
-/// which is a repo-wide build change with a silent-failure mode of its own —
-/// see §4.2, which states the reach and what closing it would cost. The limit
-/// belongs to the Domain gate one project down as much as to this one, and
-/// predates the PR that wrote this comment.
-/// </para>
+/// so a forbidden reference no code names emits nothing and goes green — the
+/// gate is late rather than absent, here and at the Domain gate one project
+/// down. §4.2 states the reach and what closing it would cost.
 /// </remarks>
 public class ArchitectureTests
 {
@@ -119,17 +95,15 @@ public class ArchitectureTests
     [Fact]
     public void Application_and_domain_do_not_reference_masstransit()
     {
-        // §9.3's must-not list. The saga may Send and Publish because its receive
-        // endpoint carries a transactional outbox (ADR-032), which writes those
-        // sends to the same DbContext and the same transaction as the instance —
-        // a guarantee that exists on that one consume pipeline and nowhere else.
-        // A handler that copies the saga's style gets a dual write with no outbox
-        // behind it, and it works in every test where the broker is up.
-        //
-        // The sentence this replaced said "MassTransit's in-memory outbox holds
-        // those until the consume transaction commits". It did not: the in-memory
-        // buffer flushes AFTER the consumer returns, which is after the repository
-        // has committed, and that gap was #128.
+        // §9.3's must-not list. The saga may Send and Publish because its
+        // receive endpoint carries a transactional outbox (ADR-032), which
+        // writes those sends to the same DbContext and transaction as the
+        // instance — a guarantee that exists on that one consume pipeline and
+        // nowhere else. A handler that copies the saga's style gets a dual
+        // write with no outbox behind it, and it works in every test where the
+        // broker is up. MassTransit's in-memory outbox does not close that gap
+        // on its own: the buffer flushes after the consumer returns, which is
+        // after the repository has committed.
         Assembly[] assemblies = [typeof(DependencyInjection).Assembly, typeof(Product).Assembly];
         foreach (Assembly assembly in assemblies)
         {

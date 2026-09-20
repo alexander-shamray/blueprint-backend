@@ -1,0 +1,9 @@
+{{- /*
+Payments registers its provider unconditionally (AddPaymentProvider), so on
+this chart the capability is a fact about the code: switched off, with its
+settings cleared, the library chart's coherence guard has nothing to refuse
+and the pod does not start. So this chart refuses the switch itself.
+*/}}
+{{- if not (.Values.paymentProvider).enabled }}
+{{- fail "paymentProvider.enabled is false on the payments chart. Payments registers its provider unconditionally and does not start without both keys (§15.4)." }}
+{{- end }}

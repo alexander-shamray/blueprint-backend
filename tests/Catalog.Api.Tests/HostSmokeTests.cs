@@ -11,36 +11,26 @@ namespace Catalog.Api.Tests;
 /// <summary>
 /// The host builds under <c>ValidateOnBuild</c> and answers what an empty
 /// service can already be asked: the probes (§13.5) and the OpenAPI document
-/// (Appendix C, PR-07). One factory for the class — each test sends one
-/// request, and a host per test buys nothing.
+/// (Appendix C). One factory for the class, since nothing mutates the host.
 /// </summary>
-/// <remarks>
-/// Both connection strings are required rather than optional, and supplying
-/// them is not a workaround. §13.5's rule is that a host with a connection
-/// string has a readiness check and a host without one does not; Catalog
-/// acquired the SQL pair in PR-08 and the bus pair in PR-13, and both
-/// registrations throw on a missing key — so a service host with no database
-/// or no broker configured does not start, which is the correct behaviour and
-/// worth having a class depend on. The values point at names that cannot
-/// resolve, because these tests are about wiring rather than about the
-/// engines. <c>DatabaseSmokeTests</c> is where real ones answer.
-/// </remarks>
+/// <remarks>§13.5's rule is that a host with a connection string has a
+/// readiness check and one without does not, and both registrations throw on
+/// a missing key — so supplying the strings is not a workaround. They name
+/// hosts that cannot resolve on purpose, because these tests are about the
+/// wiring and not about the engines behind it.</remarks>
 public class HostSmokeTests(HostSmokeTests.UnreachableInfrastructureFactory factory)
     : IClassFixture<HostSmokeTests.UnreachableInfrastructureFactory>
 {
     /// <summary>
     /// A parameterless factory, because that is what <c>IClassFixture</c> can
     /// construct. <c>.invalid</c> is reserved and never resolves, so both
-    /// checks fail on NXDOMAIN rather than on a timeout — and
+    /// checks fail on NXDOMAIN rather than on a timeout, and
     /// <c>Connect Timeout=1</c> bounds the case where a resolver answers
-    /// anyway. The bus needs no such bound: <c>WaitUntilStarted</c> is false
-    /// (the registration argues it), so the host never waits on the broker at
-    /// all.
+    /// anyway. The bus needs no such bound: <c>WaitUntilStarted</c> is false.
     /// </summary>
     // The two literals both factories below take. Declared once because they
-    // are the same host under two authentication schemes, and a pair that
-    // drifted would make the two suites disagree about which deployment they
-    // are describing.
+    // are the same host under two schemes, and a pair that drifted would
+    // leave the factories describing different deployments.
     private const string UnreachableSql =
         "Server=catalog-sql.invalid,1433;Database=Catalog;User Id=sa;" +
         "Password=not-a-real-password;Encrypt=False;Connect Timeout=1";
@@ -107,11 +97,9 @@ public class HostSmokeTests(HostSmokeTests.UnreachableInfrastructureFactory fact
             .GetRequiredService<IOptions<HealthCheckServiceOptions>>()
             .Value;
 
-        // Four since §8.5's PR, and the count is the assertion rather
-        // than a detail of it: an inventory that only ever grows silently
-        // is how a readiness check gets dropped without anything going
-        // red. This test failed when the two Redis lines were added,
-        // which is what it is for.
+        // The count is the assertion rather than a detail of it: a set that
+        // only ever grows silently is how a readiness check gets dropped
+        // without anything going red.
         options.Registrations.Count.ShouldBe(4);
 
         HealthCheckRegistration sql = options.Registrations.Single(r => r.Name == "sql");
@@ -120,16 +108,13 @@ public class HostSmokeTests(HostSmokeTests.UnreachableInfrastructureFactory fact
         // Registered by AddMassTransit itself, not by AddCatalogInfrastructure
         // — name and tags read from the 8.5.3 source, asserted here so a
         // MassTransit major that changes either fails this test rather than a
-        // cluster's readiness.
-        // §13.5 prints both lines and the code carried neither until §8.5's
-        // PR gave this service its Redis connection strings. The rule that
-        // section states is what makes them owed: a host with a connection
-        // string has a readiness check. AbortOnConnectFail is false (§8.1), so
-        // without these the pod sits Ready while every claim fails closed.
-        //
-        // Both, because §8.1 gives the two instances different eviction
-        // policies and therefore different servers — a healthy cache says
-        // nothing about the instance idempotency claims are written to.
+        // cluster's readiness. §13.5 makes the two Redis lines owed on the
+        // same rule: a host with a connection string has a readiness check,
+        // and AbortOnConnectFail is false (§8.1), so without them the pod sits
+        // Ready while every claim fails closed. Both, because §8.1 gives the
+        // two instances different eviction policies and therefore different
+        // servers — a healthy cache says nothing about the instance
+        // idempotency claims are written to.
         HealthCheckRegistration cache = options.Registrations.Single(r => r.Name == "redis-cache");
         cache.Tags.ShouldContain("ready", "an untagged check is invisible to the /health/ready predicate");
 
@@ -180,11 +165,11 @@ public class HostSmokeTests(HostSmokeTests.UnreachableInfrastructureFactory fact
     public async Task An_unknown_path_is_challenged_rather_than_missing()
     {
         // The third endpoint nobody wrote. A fallback policy is evaluated even
-        // when routing matched NOTHING, so an anonymous request for a path
-        // that does not exist is a 401 rather than a 404 — measured, and
-        // accepted on §11.2's terms: a caller with no credentials learns
-        // nothing about which paths this service has, which is the same
-        // argument the 405 pair and the OpenAPI document already carry.
+        // when routing matched nothing, so an anonymous request for a path
+        // that does not exist is a 401 rather than a 404, accepted on §11.2's
+        // terms: a caller with no credentials learns nothing about which paths
+        // this service has, which is the same argument the 405 pair and the
+        // OpenAPI document already carry.
         using HttpClient client = factory.CreateClient();
 
         HttpResponseMessage response =

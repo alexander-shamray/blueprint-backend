@@ -37,6 +37,71 @@ non-string, and `tag: 1.2` is a YAML float.
 {{- required $message ($value | default "" | toString | trim) -}}
 {{- end -}}
 
+{{/*
+NON-BLANK IS NOT AN ADDRESS, which is the same lesson one step further on.
+
+Two keys here are base addresses a host parses before it will start, and both
+hosts reject far more than the empty string: `AddJwtAuthentication` and
+`AddPaymentProvider` each require an absolute HTTP(S) URL with no query and no
+fragment, over HTTPS outside Development, and the provider additionally
+refuses user information because its credential is the API key alone. Under
+`commerce.require` a value like `keycloak:8080/realms/commerce` or
+`https://u:p@psp/` rendered cleanly, began a rollout and died in the new pod —
+the failure every render-time guard in this file exists to move earlier.
+
+HTTPS unconditionally, where the hosts say "outside Development": a chart is
+how a cluster is deployed and sets no environment, so Production is what runs.
+
+`commerce.tag` already validates a shape rather than a presence, for the same
+reason and with the same argument; this is that helper's sibling, kept apart
+from `commerce.require` because a presence check still has callers that want
+nothing more.
+*/}}
+{{- define "commerce.requireUrl" -}}
+{{- $value := index . 0 -}}
+{{- $message := index . 1 -}}
+{{- $url := include "commerce.require" (list $value $message) -}}
+{{- /*
+One regex rather than a parse, because Helm has no URL type. Read left to
+right: HTTPS, a host, an optional numeric port, an optional path. The host
+class excludes `@`, `:`, `[`, `]` and space as well as `/?#`, which is what
+refuses user information, a non-numeric port, an empty host and an IPv6
+literal — `https://:443/`, `https://host:bad/` and `https://[::1/` all
+satisfied a looser class and are all rejected by `Uri.TryCreate`.
+
+The host+port half is `edge-config.yaml`'s origin grammar, which arrived at
+this character class over several review rounds; the optional path is this
+helper's own, because an authority URL is a base address and an origin is not.
+
+**Deliberately a SUBSET of what the hosts accept, not a copy of it**, for the
+reason that guard states: the host's rule is `Uri.TryCreate` and a template
+cannot construct a Uri, so claiming equivalence would be the more dangerous
+error — the next shape this misses would be read as accepted. An IPv6 literal
+is refused outright rather than half-checked, on the same terms. What it does
+promise is narrower and enough: every address an operator plausibly writes
+that the host would reject is refused here instead of at startup.
+*/}}
+{{- if not (regexMatch "^https://[^/?#@:\\[\\] ]+(:[0-9]+)?(/[^?#]*)?$" $url) }}
+{{- fail (printf "%s The value is not an HTTPS address this chart will accept: a host, optionally a numeric port, and optionally a path. User information, a query, a fragment, a non-numeric port and IPv6 literals are refused here rather than at startup (§15.4)." $message) }}
+{{- end }}
+{{- /*
+The port's RANGE, which the digits above do not bound: `:65536` is numeric,
+matches, and is rejected by `Uri.TryCreate` — so it renders, rolls and dies in
+the new pod. `edge-config.yaml` bounds its own port for the same reason and
+this is that test; what is deliberately NOT copied from it is the
+canonical-spelling check, because that one exists for an origin compared as
+text and a base address is parsed, so `:08443` is accepted by the host here.
+*/}}
+{{- $port := regexFind ":[0-9]+$" (regexFind "^https://[^/]+" $url) }}
+{{- if $port }}
+{{- $n := atoi (trimPrefix ":" $port) }}
+{{- if or (lt $n 1) (gt $n 65535) }}
+{{- fail (printf "%s Its port is outside 1-65535, which the host's own parse rejects (§15.4)." $message) }}
+{{- end }}
+{{- end }}
+{{- $url -}}
+{{- end -}}
+
 {{- define "commerce.name" -}}
 {{- include "commerce.require" (list .Values.workload.name "workload.name is required: it is this deployable's Service name, and therefore the string the gateway's route file and the BFF's pricing hop dial (§10.2, §9.7).") -}}
 {{- end -}}
@@ -262,7 +327,7 @@ name is not a live signal.
 Two values only, so the cardinality cost is one extra series per track.
 */}}
 OTEL_RESOURCE_ATTRIBUTES: {{ printf "deployment.track=%s" (include "commerce.track" .) | quote }}
-Identity__Authority: {{ include "commerce.require" (list .Values.identity.authority "identity.authority is required for every host, the gateway included (§15.4) — AddJwtAuthentication reads it eagerly and throws naming the key, so an unset value is a pod that never starts.") | quote }}
+Identity__Authority: {{ include "commerce.requireUrl" (list .Values.identity.authority "identity.authority is required for every host, the gateway included (§15.4) — AddJwtAuthentication reads it eagerly and throws naming the key, so an unset value is a pod that never starts.") | quote }}
 OTEL_EXPORTER_OTLP_ENDPOINT: {{ include "commerce.require" (list .Values.observability.otlpEndpoint "observability.otlpEndpoint is required: UseOtlpExporter reads the OpenTelemetry standard variable, and left unset it exports to localhost:4317, where nothing listens in a pod (§15.4).") | quote }}
 {{- if .Values.identity.clientCredentials }}
 {{- /*
@@ -286,6 +351,19 @@ implied.
 */}}
 Identity__Client__ClientId: {{ include "commerce.require" (list .Values.identity.clientId "identity.clientId is required when identity.clientCredentials: Web.Bff binds ServiceIdentityOptions unconditionally and ValidateOnStart refuses to boot without it (§15.4).") | quote }}
 Identity__Client__Scope: {{ include "commerce.require" (list .Values.identity.scope "identity.scope is required when identity.clientCredentials: it becomes the audience every service validates (§11.5), and ServiceIdentityOptions marks it [Required].") | quote }}
+{{- end }}
+{{- if (.Values.paymentProvider).enabled }}
+{{- /*
+The provider's address (§3.2's one third party). Config, not a Secret: an
+address is not a credential. Required, and refused at render when empty,
+because the host's own refusal is at start — a clean render followed by a pod
+that will not start is the shape every guard in this file exists to refuse.
+
+`(.Values.paymentProvider).enabled` rather than the dotted form: the four other
+charts carry no such block, and the parenthesised form reads a missing map as
+empty where the dotted one fails the render.
+*/}}
+PaymentProvider__BaseUrl: {{ include "commerce.requireUrl" (list .Values.paymentProvider.baseUrl "paymentProvider.baseUrl is required when paymentProvider.enabled: AddPaymentProvider reads it eagerly and throws naming the key, so the host does not start (§15.4).") | quote }}
 {{- end }}
 {{- end -}}
 
@@ -361,6 +439,30 @@ database its host unconditionally resolves.
 {{- if and .Values.identity.clientId (not .Values.identity.clientCredentials) }}
 {{- fail "identity.clientCredentials is false but identity.clientId is set. Web.Bff binds ServiceIdentityOptions unconditionally and ValidateOnStart refuses to boot without all three values (§15.4) — so this is a render that succeeds and a pod that never starts." }}
 {{- end }}
+{{- if and (or (.Values.paymentProvider).apiKeySecretRef (.Values.paymentProvider).baseUrl) (not (.Values.paymentProvider).enabled) }}
+{{- fail "paymentProvider.enabled is false but a paymentProvider setting is set. AddPaymentProvider reads both provider keys eagerly (§15.4), so this renders cleanly and the host does not start. A capability is a fact about the code, not an environment setting." }}
+{{- end }}
+{{- /*
+The other direction, and the one that moves a CREDENTIAL rather than stalling
+a pod. Helm accepts values a chart's `values.yaml` never declares, so
+`--set paymentProvider.enabled=true` on any chart here renders that chart's
+pod with a `secretKeyRef` to Payments' provider Secret — a host that never
+calls `AddPaymentProvider`, holding the credential of one that does. The same
+is true of the BFF's client secret under `identity.clientCredentials`.
+
+Both blocks already say a capability is a fact about the code; until now they
+only enforced it downwards. These two enforce it upwards, and they name the
+owning chart because that is the fact: `AddPaymentProvider` is in
+`Payments.Api/Program.cs` and `ServiceIdentityOptions` is bound by `Web.Bff`
+alone (§9.7, ADR-017). A second chart growing either is a design change, and
+a design change edits this line.
+*/}}
+{{- if and (.Values.paymentProvider).enabled (ne .Chart.Name "payments") }}
+{{- fail (printf "paymentProvider.enabled is true on the %s chart, and only payments registers a provider (§3.2). This would mount the provider's Secret into a pod that never reads it — a credential crossing a service boundary, which no value in an environment file may do." .Chart.Name) }}
+{{- end }}
+{{- if and .Values.identity.clientCredentials (ne .Chart.Name "web-bff") }}
+{{- fail (printf "identity.clientCredentials is true on the %s chart, and the BFF is the one host that calls a peer synchronously (§9.7, ADR-017). This would mount the BFF's client secret into a pod that never presents it — a credential crossing a service boundary, which no value in an environment file may do." .Chart.Name) }}
+{{- end }}
 {{- if .Values.database.enabled }}
 {{- /*
 The RUNTIME connection string (DML only) — §7.1's split identity. The migrator
@@ -422,5 +524,12 @@ the duplicate write hardest to reproduce.
     secretKeyRef:
       name: {{ include "commerce.require" (list .Values.identity.clientSecretRef.name "identity.clientSecretRef.name is required when identity.clientCredentials. The secret is a reference, never a value (§15.3).") | quote }}
       key: {{ include "commerce.require" (list .Values.identity.clientSecretRef.key "identity.clientSecretRef.key is required when identity.clientCredentials.") | quote }}
+{{- end }}
+{{- if (.Values.paymentProvider).enabled }}
+- name: PaymentProvider__ApiKey
+  valueFrom:
+    secretKeyRef:
+      name: {{ include "commerce.require" (list .Values.paymentProvider.apiKeySecretRef.name "paymentProvider.apiKeySecretRef.name is required when paymentProvider.enabled. The key is a reference, never a value (§15.3).") | quote }}
+      key: {{ include "commerce.require" (list .Values.paymentProvider.apiKeySecretRef.key "paymentProvider.apiKeySecretRef.key is required when paymentProvider.enabled.") | quote }}
 {{- end }}
 {{- end -}}

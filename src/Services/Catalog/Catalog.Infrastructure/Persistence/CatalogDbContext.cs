@@ -56,11 +56,10 @@ public sealed class CatalogDbContext(DbContextOptions<CatalogDbContext> options)
     {
         modelBuilder.HasDefaultSchema("catalog");
 
-        // Landed before its first find (PR-08) so that PR-10 added an
-        // IEntityTypeConfiguration<T> and not also the line that discovers
-        // it; ProductConfiguration is what it finds today. §7.2 puts mapping
-        // in these classes and never in attributes on domain types, which
-        // would put EF Core in Catalog.Domain.
+        // Assembly scanning, so that adding an entity costs an
+        // IEntityTypeConfiguration<T> and nothing in this file. §7.2 puts
+        // mapping in these classes and never in attributes on domain types,
+        // which would put EF Core in Catalog.Domain.
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(CatalogDbContext).Assembly);
     }
 

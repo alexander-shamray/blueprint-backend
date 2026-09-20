@@ -30,19 +30,15 @@ public class UnitOfWorkRollbackTests(ServiceFixture fixture)
     public async Task A_rejected_command_leaves_nothing_tracked_for_a_later_save_to_commit()
     {
         // The rollback has to clear the change tracker as well as the
-        // transaction, and it did not until a review asked what happens next.
-        //
-        // §6.3's behaviour declines to SaveChanges on a failed Result, and that
-        // used to be enough — while it was the only thing calling SaveChanges
-        // on the scope. §9.5's inbox filter is the second caller: it runs after
-        // the consumer returns and saves unconditionally, because it has its own
-        // row to write. Anything a rejected handler left tracked would go with
-        // it, outside the transaction that was just rolled back — a domain
-        // refusal committing its own mutations, which is the single outcome the
-        // transaction boundary exists to prevent.
-        //
-        // Written against the real registered IUnitOfWork and the real context,
-        // because what is under test is that pair's contract with each other.
+        // transaction. §6.3's behaviour declines to SaveChanges on a failed
+        // Result, which covers the case where it is the only caller; §9.5's
+        // inbox filter is a second one, running after the consumer returns and
+        // saving unconditionally because it has its own row to write. Anything
+        // a rejected handler left tracked would go with it, outside the
+        // transaction that was just rolled back — a domain refusal committing
+        // its own mutations, which is the single outcome the transaction
+        // boundary exists to prevent. Written against the real registered
+        // IUnitOfWork and the real context, the pair whose contract is at issue.
         await using AsyncServiceScope scope = fixture.Factory.Services.CreateAsyncScope();
         IUnitOfWork unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
         CatalogDbContext db = scope.ServiceProvider.GetRequiredService<CatalogDbContext>();

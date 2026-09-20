@@ -8,14 +8,12 @@ namespace Catalog.Api.Endpoints;
 /// <summary>
 /// One static class per aggregate (ADR-015), in the namespace the §4.2 gate
 /// selects on. The group is <c>/v1/catalog/products</c> because the gateway
-/// strips <c>/api</c> from <c>/api/v1/catalog/{**catch-all}</c> (§10.2) — the
-/// service sees the version, never the <c>/api</c> prefix, and PR-17's config
-/// test will assert this group against the route's stripped path.
+/// strips <c>/api</c> from <c>/api/v1/catalog/{**catch-all}</c> (§10.2), so
+/// the service sees the version and never the <c>/api</c> prefix.
 /// </summary>
 /// <remarks>
-/// PR-16 closed the deliberately unauthenticated gap PR-10 shipped and
-/// <c>deploy/compose/README.md</c> named. It did not close it uniformly, and
-/// the asymmetry below is the point rather than an omission.
+/// Authentication is not uniform across this group, and the asymmetry below
+/// is a decision rather than an omission.
 /// </remarks>
 public static class ProductEndpoints
 {
@@ -57,17 +55,15 @@ public static class ProductEndpoints
 
                     return Results.Ok(page);
                 })
-            // Anonymous, deliberately and permanently — this is not the gap
-            // PR-16 closed but the shape §10.2 already specifies. The gateway's
-            // `catalog-public` route matches GET alone, names `anonymous` as
-            // its AuthorizationPolicy — YARP's reserved value — and rate-limits
-            // under a policy of the same name; a product listing is public, and
-            // requiring a token here would make the route unusable at the edge
-            // that publishes it.
-            //
-            // Stated rather than inherited by omission. The group above fails
-            // closed, so an anonymous endpoint has to say so out loud, and the
-            // reader can tell a decision from a forgotten line.
+            // Anonymous, deliberately and permanently: the shape §10.2
+            // specifies. The gateway's `catalog-public` route matches GET
+            // alone, names `anonymous` as its AuthorizationPolicy — YARP's
+            // reserved value — and rate-limits under a policy of the same
+            // name; a product listing is public, and requiring a token here
+            // would make the route unusable at the edge that publishes it.
+            // Stated rather than inherited by omission, because the group
+            // above fails closed and a reader has to be able to tell a
+            // decision from a forgotten line.
             .AllowAnonymous()
             .WithName("GetProducts");
     }
