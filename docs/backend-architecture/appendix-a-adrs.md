@@ -56,6 +56,7 @@ decision looks wrong.
 | **ADR-047** | [The canary judges each workload on the signals it receives](adr/ADR-047-the-canary-judges-each-workload-on-the-signals-it-receives.md) |
 | **ADR-048** | [A reservation row is kept for as long as its order](adr/ADR-048-a-reservation-row-is-kept-for-as-long-as-its-order.md) |
 | **ADR-049** | [A cancellation Payments has recorded declines the authorisation that follows](adr/ADR-049-a-cancellation-payments-has-recorded-declines-the-authorisation-that-follows.md) |
+| **ADR-050** | [The rollout reads the image's facts from the image's revision](adr/ADR-050-the-rollout-reads-the-images-facts-from-its-revision.md) |
 
 ---
 

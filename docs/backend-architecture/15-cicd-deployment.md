@@ -1364,6 +1364,18 @@ the plan's gate is what holds it to that. A message's duration is compared
 with the stable track only, because [§13.6](13-observability.md) owns no
 threshold for it.
 
+**Every fact the analysis derives from source is read from the revision the
+image was built from, and the tag is what says which that is:
+[ADR-050](adr/ADR-050-the-rollout-reads-the-images-facts-from-its-revision.md).**
+The probe exclusion, the consumer and saga registrations that decide which
+signals a workload owes, and each workload's entry assembly are all scanned
+out of `src/`, and the rollout job checks out `main` while the tag may name
+any other revision. Â§15.2 tags both of a service's images with the commit
+they were built from, so the rollout resolves the tag to a commit this
+branch carries and reads that commit's `src/` instead. What it does not
+move is the chart, the thresholds or the gates themselves, which describe
+this rollout rather than that image.
+
 > **A canary that cannot be measured is worse than no canary**, and the failure
 > is silent in one direction only. A query spelled with the wrong label matches
 > no series; an absent series is read here as a rollback, never as health — the

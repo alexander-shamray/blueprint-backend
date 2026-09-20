@@ -124,7 +124,13 @@ jobs:
             exit 1
           fi
 
+      # ADR-050 reads the image's src/ out of the tag's commit and resolves
+      # that commit's ancestry, and the default shallow fetch carries one
+      # commit. Without the history both fail for every tag but the head of
+      # main, which is the one case where the binding has nothing to catch.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-python@v5
         with:
@@ -161,6 +167,56 @@ jobs:
         env:
           TAG: ${{ inputs.tag }}
           WORKLOAD: ${{ inputs.workload }}
+
+      # ADR-050. Every fact the canary derives from src/ describes the image
+      # about to serve traffic: the probe routes the http templates exclude,
+      # the consumer and saga registrations that decide which signals a
+      # workload owes, and each workload's entry assembly. This job checks out
+      # main and the tag may name any other revision, so a probe route the
+      # image maps and main does not has its requests counted as traffic, and
+      # one main renamed is excluded from the measurement it should dominate.
+      # Either way the rung is judged on the wrong request set.
+
+      # §15.2 tags both of a service's images with the commit they were built
+      # from, so the tag already names the revision and what is added here is
+      # the rollout insisting on it. Ancestry rather than equality, because CI
+      # builds an image only for a service a commit changed, so the newest tag
+      # for a workload is routinely behind main. An ancestor is a revision the
+      # protected branch carries, which is the property being asked for.
+
+      # The deciding code is still the checkout's: the argument above the
+      # `Production rolls from main` step applies unchanged. Only the tree it
+      # reads comes from the image, and only src/ -- the chart, the alerts and
+      # the plan are the checkout's, because the checkout is what installs
+      # them.
+      - name: The image's facts come from the image's revision
+        run: |
+          set -euo pipefail
+          REVISION=$(python deploy/canary/canary.py revision --value "$TAG")
+          if ! git cat-file -e "$REVISION^{commit}" 2>/dev/null; then
+            echo "::error::$REVISION is not a commit in this repository, so the image's own source cannot be read."
+            exit 1
+          fi
+          if ! git merge-base --is-ancestor "$REVISION" HEAD; then
+            echo "::error::$REVISION is not an ancestor of $GITHUB_SHA. Production rolls images built from a merged revision."
+            exit 1
+          fi
+          mkdir -p "$RUNNER_TEMP/image-source"
+          git archive "$REVISION" src | tar -x -C "$RUNNER_TEMP/image-source"
+          echo "IMAGE_SOURCE=$RUNNER_TEMP/image-source" >> "$GITHUB_ENV"
+        env:
+          TAG: ${{ inputs.tag }}
+
+      # The same gate the `check` job ran, against the other tree. That run
+      # answers whether the plan matches main; this one answers whether it
+      # matches what is about to serve traffic -- whether the image maps the
+      # probe routes the exclusion names, registers the consumers and sagas
+      # the plan declares signals for, and builds the entry assembly every
+      # query selects on. The repetition is the realm suite's, a few steps
+      # down, and for the same reason: the copy that decides is the copy that
+      # has to have been observed red.
+      - name: The plan agrees with the image about what it runs
+        run: python deploy/canary/canary.py check --source "$IMAGE_SOURCE"
 
       # The realm is checked before the rollout changes anything: ADR-033's
       # revocation bound and ADR-034's no-refresh-token rule are realm
@@ -452,6 +508,7 @@ jobs:
             python deploy/canary/read_prometheus.py \
               --workload "$WORKLOAD" \
               --window "${CANARY_DWELL_MINUTES}m" \
+              --source "$IMAGE_SOURCE" \
               --out readings.json
 
             if ! python deploy/canary/canary.py analyse --workload "$WORKLOAD" --readings readings.json; then

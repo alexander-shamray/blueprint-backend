@@ -693,7 +693,8 @@ class TemplateTests(unittest.TestCase):
 
     def test_every_series_the_templates_read_is_vouched_for(self) -> None:
         self.assertEqual(
-            canary._metrics_are_vouched_for(sorted(canary.series_read()), canary.ROOT), [])
+            canary._metrics_are_vouched_for(
+                sorted(canary.series_read()), canary.ROOT, canary.ROOT), [])
         self.assertIn("messaging_masstransit_saga_errors_ea_total", canary.series_read())
 
 
@@ -1119,7 +1120,7 @@ class VouchingTests(unittest.TestCase):
         root = self.root_with('.AddMeter("MassTransit")\n')
 
         failures = canary._metrics_are_vouched_for(
-            ["messaging_masstransit_consume_ea_total"], root)
+            ["messaging_masstransit_consume_ea_total"], root, root)
 
         self.assertEqual(failures, [])
 
@@ -1129,7 +1130,7 @@ class VouchingTests(unittest.TestCase):
         root = self.root_with('.AddMeter("Commerce.Messaging")\n')
 
         failures = canary._metrics_are_vouched_for(
-            ["messaging_masstransit_consume_ea_total"], root)
+            ["messaging_masstransit_consume_ea_total"], root, root)
 
         self.assertTrue(any("MassTransit" in f for f in failures), failures)
 
@@ -1145,7 +1146,7 @@ class VouchingTests(unittest.TestCase):
                 root = self.root_with(registration)
 
                 failures = canary._metrics_are_vouched_for(
-                    ["messaging_masstransit_consume_ea_total"], root)
+                    ["messaging_masstransit_consume_ea_total"], root, root)
 
                 self.assertTrue(any("MassTransit" in f for f in failures), failures)
 
@@ -1160,7 +1161,7 @@ class VouchingTests(unittest.TestCase):
             "messaging_masstransit_consume_total",
         ):
             with self.subTest(metric=metric):
-                failures = canary._metrics_are_vouched_for([metric], root)
+                failures = canary._metrics_are_vouched_for([metric], root, root)
 
                 self.assertTrue(failures)
 
@@ -1177,7 +1178,7 @@ class VouchingTests(unittest.TestCase):
         root = self.root_with('.AddMeter("MassTransit")\n')
 
         failures = canary._metrics_are_vouched_for(
-            ["messaging_masstransit_invented_total"], root)
+            ["messaging_masstransit_invented_total"], root, root)
 
         self.assertTrue(failures)
 
@@ -1185,7 +1186,7 @@ class VouchingTests(unittest.TestCase):
         root = self.root_with('.AddMeter("MassTransit")\n')
 
         failures = canary._metrics_are_vouched_for(
-            ["http_server_request_duration_seconds_bucket"], root)
+            ["http_server_request_duration_seconds_bucket"], root, root)
 
         self.assertEqual(failures, [])
 
@@ -1596,6 +1597,162 @@ class CommentTests(unittest.TestCase):
 
         self.assertIn("$comment", raw)
         self.assertIn("$comment", raw["workloads"])
+
+
+class ImageRevisionTests(unittest.TestCase):
+    """An image tag names a commit, because §15.2 builds it that way."""
+
+    def test_a_commit_sha_is_the_revision(self) -> None:
+        self.assertEqual("a" * 40, canary.image_revision("a" * 40))
+
+    def test_a_version_tag_names_no_revision(self) -> None:
+        with self.assertRaises(canary.PlanError) as raised:
+            canary.image_revision("1.4.2")
+
+        self.assertIn("§15.2", str(raised.exception))
+
+    def test_an_abbreviation_is_refused(self) -> None:
+        """It resolves against the history like the full name does, and then
+        the rollout reports a revision spelled differently from the tag it
+        handed to Helm — two strings for the one fact ADR-050 is about."""
+        with self.assertRaises(canary.PlanError):
+            canary.image_revision("a" * 12)
+
+    def test_upper_case_is_refused(self) -> None:
+        """git prints lower case, and the comparison is textual."""
+        with self.assertRaises(canary.PlanError):
+            canary.image_revision("A" * 40)
+
+    def test_the_tag_alphabet_admits_what_names_no_revision(self) -> None:
+        """validate_tag is the Helm-injection guard, and a version tag and an
+        abbreviated commit both pass it — which is why ADR-050's rule is a
+        second check rather than a tightening of that one. Upper case is the
+        one refusal the two share, and for the unrelated reason that a tag is
+        a DNS-1123 label."""
+        for tag in ("1.4.2", "a" * 12):
+            with self.subTest(tag=tag):
+                canary.validate_tag(tag)
+
+
+class ImageSourceTests(unittest.TestCase):
+    """The facts that describe the image are read from the tree given."""
+
+    @staticmethod
+    def _tree(route: str) -> Path:
+        return service_tree({"Svc.Api/Health.cs": f'app.MapHealthChecks("{route}");\n'})
+
+    def test_the_exclusion_is_the_given_trees_routes(self) -> None:
+        self.assertEqual("/healthz/live", canary.probe_exclusion(self._tree("/healthz/live")))
+
+    def test_two_revisions_give_two_exclusions(self) -> None:
+        """ADR-050's defect in one assertion. The same code over two trees
+        produces two different exclusions, so which tree it reads decides
+        which requests the rung counts as traffic — and until the rollout was
+        given the image's, it read the one the runner checked out."""
+        self.assertNotEqual(
+            canary.probe_exclusion(self._tree("/healthz/live")),
+            canary.probe_exclusion(self._tree("/health/live")),
+        )
+
+    def test_the_queries_carry_the_given_trees_exclusion(self) -> None:
+        """Through `queries`, because that is the call read_prometheus makes
+        and an exclusion nothing interpolates is not applied to anything."""
+        self.assertIn(
+            "/health/live",
+            canary.queries("http", self._tree("/health/live"))["errorRate"],
+        )
+
+    def test_check_reads_its_hosts_from_the_source(self) -> None:
+        """Check 4 asks whether each serviceName is an entry assembly. Of the
+        image, now: a workload renamed in the image and not in the checkout
+        selects no series, and an absent series promotes nothing and rolls
+        every rung back."""
+        document = canary.load_plan()
+
+        failures = canary.check(document, source=self._tree("/healthz/live"))
+
+        self.assertTrue(any("not an entry assembly" in f for f in failures), failures)
+
+    def test_check_reads_its_charts_from_the_root(self) -> None:
+        """The other half of the split. The chart is installed from the
+        checkout, so it is judged there — a source tree with no deploy/ at
+        all raises nothing about charts."""
+        document = canary.load_plan()
+
+        failures = canary.check(document, source=self._tree("/healthz/live"))
+
+        self.assertEqual([], [f for f in failures if "not a chart under" in f])
+
+    def test_the_default_source_is_the_checkout(self) -> None:
+        """A pull request has no image and no tag, so `check` with one tree
+        is the run the gate job makes."""
+        self.assertEqual([], canary.check(canary.load_plan()))
+
+
+class RolloutBindingTests(unittest.TestCase):
+    """Check 12: the workflow hands the image's tree to what reads it."""
+
+    def _workflow(self, text: str) -> Path:
+        path = Path(tempfile.mkdtemp()) / "deploy.yml"
+        path.write_text(text, encoding="utf-8")
+        return path
+
+    @property
+    def shipped(self) -> str:
+        return canary.WORKFLOW.read_text(encoding="utf-8")
+
+    def test_the_shipped_workflow_is_bound(self) -> None:
+        self.assertEqual([], canary._rollout_reads_the_image_source())
+
+    def test_a_dropped_source_argument_fails(self) -> None:
+        """The mutation ADR-050 is defended against: the commands still run
+        and every other check still passes, so nothing but this one notices
+        that the readings went back to the checkout's routes."""
+        without = self.shipped.replace(' --source "$IMAGE_SOURCE"', "")
+
+        failures = canary._rollout_reads_the_image_source(self._workflow(without))
+
+        self.assertTrue(failures)
+        self.assertTrue(any("read_prometheus.py" in f for f in failures), failures)
+
+    def test_a_dropped_export_fails(self) -> None:
+        without = "\n".join(
+            line for line in self.shipped.splitlines() if "IMAGE_SOURCE=" not in line
+        )
+
+        failures = canary._rollout_reads_the_image_source(self._workflow(without))
+
+        self.assertTrue(any("GITHUB_ENV" in f for f in failures), failures)
+
+    def test_a_reading_that_is_not_run_at_all_fails(self) -> None:
+        """The gate's own subject, on checks 6's terms: a workflow this could
+        find nothing in would report a bound rollout it never looked at."""
+        without = "\n".join(
+            line for line in self.shipped.splitlines() if "read_prometheus.py" not in line
+        )
+
+        failures = canary._rollout_reads_the_image_source(self._workflow(without))
+
+        self.assertTrue(any("nowhere" in f for f in failures), failures)
+
+    def test_a_commented_out_binding_binds_nothing(self) -> None:
+        """This file argues at length about the commands it runs, so a check
+        reading its prose would pass on the argument for the thing."""
+        commented = "\n".join(
+            "# " + line if "read_prometheus.py" in line or "IMAGE_SOURCE=" in line else line
+            for line in self.shipped.splitlines()
+        )
+
+        self.assertTrue(canary._rollout_reads_the_image_source(self._workflow(commented)))
+
+    def test_a_continuation_is_read_as_one_invocation(self) -> None:
+        """The flag is never on the line the command is named on."""
+        lines = ["  run: |", "    python read_prometheus.py \\", '      --source "$IMAGE_SOURCE"']
+
+        self.assertEqual(
+            ['python read_prometheus.py --source "$IMAGE_SOURCE"'],
+            canary._invocations(lines, "read_prometheus.py"),
+        )
 
 
 if __name__ == "__main__":

@@ -20,7 +20,7 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
-from canary import PlanError, entries, load_plan, queries
+from canary import ROOT, PlanError, entries, load_plan, queries
 
 TIMEOUT_SECONDS = 30
 
@@ -75,11 +75,14 @@ def query(base_url: str, expression: str) -> float | None:
     return value if math.isfinite(value) else None
 
 
-def read(base_url: str, workload: str, window: str, plan: dict) -> dict:
+def read(base_url: str, workload: str, window: str, plan: dict,
+         source: Path = ROOT) -> dict:
     """Both tracks' readings of the signals `workload` declares, and no others.
 
     The service name is the plan's, so it has one spelling. An unknown
-    workload raises KeyError rather than reading nothing.
+    workload raises KeyError rather than reading nothing. `source` is the
+    tree the http template's probe exclusion is scanned from, which is the
+    deployed image's own revision during a rollout (ADR-050).
     """
     entry = entries(plan["workloads"])[workload]
     readings: dict[str, dict[str, dict[str, float | None]]] = {}
@@ -96,7 +99,7 @@ def read(base_url: str, workload: str, window: str, plan: dict) -> dict:
                     .replace("$TRACK", label)
                     .replace("$WINDOW", window),
                 )
-                for name, expression in queries(signal).items()
+                for name, expression in queries(signal, source).items()
             }
             for signal in entry.get("signals", [])
         }
@@ -107,6 +110,11 @@ def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--workload", required=True, help="a workload key in canary.json")
     parser.add_argument("--window", required=True, help="the step's dwell, as a PromQL duration")
+    # ADR-050. Absent, the probe routes excluded are whatever tree this
+    # process is running out of, which is the checkout and not the image.
+    parser.add_argument(
+        "--source", type=Path, default=ROOT,
+        help="the tree the deployed image was built from")
     parser.add_argument("--out", required=True, type=Path)
     args = parser.parse_args(argv[1:])
 
@@ -118,7 +126,7 @@ def main(argv: list[str]) -> int:
         return 1
 
     try:
-        readings = read(base_url, args.workload, args.window, load_plan())
+        readings = read(base_url, args.workload, args.window, load_plan(), args.source)
     except KeyError as error:
         print(f"read_prometheus: no workload or signal {error} in the plan", file=sys.stderr)
         return 1
