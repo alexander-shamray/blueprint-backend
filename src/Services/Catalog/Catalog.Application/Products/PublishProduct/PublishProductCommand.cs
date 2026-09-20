@@ -8,10 +8,9 @@ namespace Catalog.Application.Products.PublishProduct;
 /// wire shape and the command diverge, and here they are identical primitives.
 /// </summary>
 /// <remarks>
-/// <c>CommandId</c> and <c>IIdempotentCommand</c> belong together. §6.4 warns
-/// that the field without the interface is unprotected, so one without the
-/// other is worse than neither — a client reading the field would take a retry
-/// to be safe while nothing was claiming a key.
+/// <c>CommandId</c> and <c>IIdempotentCommand</c> belong together: §6.4 warns
+/// that the field without the interface is unprotected, so a client reading
+/// the field would take a retry to be safe while nothing claimed a key.
 /// </remarks>
 public sealed record PublishProductCommand(
     Guid CommandId,

@@ -39,16 +39,14 @@ services:
       ConnectionStrings__Catalog: "${CATALOG_CONNECTION:-Server=sql;Database=Catalog;User Id=sa;Password=${SQL_PASSWORD:-Local_Dev_Pa55w0rd!};TrustServerCertificate=True}"
       # The bus (§9), read by AddMassTransitMessaging — which throws without
       # it, so this line is what lets the host start. A plain value, no ${…}
-      # variable: this is §14.1's local default, not a secret with a production
-      # shape, and .env.example's contract covers variables, not constants.
+      # variable: this is §14.1's local default, not a secret with a
+      # production shape, and .env.example's contract covers variables.
       #
-      # `catalog-svc` rather than the `guest` this carried until #44. That account
-      # was tagged `administrator` and the base image ships
-      # `loopback_users.guest = false`, so ONE principal reachable from any
-      # container could publish onto `ordering-commands` and have the message
-      # mapped as system-initiated (§9.4). The broker now enforces per-service
-      # write permissions; deploy/compose/rabbitmq/Dockerfile carries which
-      # ones and why.
+      # `catalog-svc` rather than `guest`: that account is tagged
+      # `administrator` and the base image ships `loopback_users.guest =
+      # false`, so one principal reachable from any container could publish
+      # onto `ordering-commands` as system-initiated (§9.4). The broker's
+      # per-service write permissions live in rabbitmq/Dockerfile.
       ConnectionStrings__RabbitMq: "amqp://catalog-svc:local-dev-catalog@rabbitmq:5672"
       # The authority, to validate inbound tokens (§11.2). Read eagerly by
       # AddJwtAuthentication, which throws naming the key — so this line is
@@ -57,22 +55,16 @@ services:
       # identity belongs to the BFF alone (§9.7, §11.5).
       Identity__Authority: "http://keycloak:8080/realms/commerce"
       OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4317"
-      # §8.1's two connections, and they joined on exactly the terms the
-      # comment that used to stand here set: an env var nothing reads is the
-      # container form of an unused registration, so each waits for the PR
-      # whose code reads it. §8.5's IdempotencyBehavior is that PR — it claims
-      # a {service}:idem: key on the coordination instance before any command
-      # runs.
-      #
-      # BOTH are required even though only the second is read today.
-      # AddRedisConnections is one call by design (§8.2), so a service either
-      # has Redis or does not; it reads both eagerly and throws naming the
-      # missing one, which is what makes an absent key a host that will not
-      # start rather than a cache that silently reads the database.
-      #
-      # 6379 on both, and the ports differ only on the HOST side (6379/6380).
-      # Inside the network each container listens on Redis's own port, so
-      # naming 6380 here would reach nothing.
+      # §8.1's two connections. Both are required even though only the
+      # coordination one is read today: AddRedisConnections is one call by
+      # design (§8.2), so a service either has Redis or does not, and it
+      # reads both eagerly and throws naming the missing one — which is what
+      # makes an absent key a host that will not start rather than a cache
+      # silently reading the database. §8.5's IdempotencyBehavior is the
+      # reader, claiming a {service}:idem: key before any command runs.
+      # 6379 on both: the ports differ only on the host side (6379/6380),
+      # and inside the network each container listens on Redis's own port,
+      # so naming 6380 here would reach nothing.
       ConnectionStrings__RedisCache: "redis-cache:6379"
       ConnectionStrings__RedisCoordination: "redis-coordination:6379"
     ports: [ "127.0.0.1:5102:8080" ]
