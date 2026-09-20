@@ -131,7 +131,7 @@ already uses for `admin/admin` and the broker's service accounts:
 
 | User | Password | Holds |
 |---|---|---|
-| `demo` | `demo` | `catalog:write`, `orders:write`, `orders:cancel` |
+| `demo` | `demo` | `catalog:write`, `orders:write`, `orders:cancel`, `inventory:admin`, `payments:admin` |
 | `browser` | `browser` | nothing — the account that proves a refusal |
 
 `orders:admin` is grantable and held by **nobody**, deliberately: it overrides
