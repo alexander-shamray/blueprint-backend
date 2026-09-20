@@ -182,10 +182,8 @@ public class MetricsRegistrationTests
     /// </summary>
     /// <remarks>
     /// A <see cref="MeterListener"/> is process-wide, so a filter on
-    /// <c>Meter.Name</c> enables the gauges of any <see cref="OutboxMetrics"/>
-    /// another test built, against a database that may be gone. This
-    /// reproduces it: a second instance on the same meter name, from a
-    /// container whose connection string points nowhere.
+    /// <c>Meter.Name</c> would also enable another instance's gauges — here,
+    /// one wired to a container whose connection string points nowhere.
     /// </remarks>
     [Fact]
     public void A_foreign_meter_of_the_same_name_is_not_collected()

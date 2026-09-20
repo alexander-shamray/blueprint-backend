@@ -78,14 +78,11 @@ public class PaymentsIntegrationEventMapperTests
     [Fact]
     public void One_commit_raising_all_three_stages_each_events_own_contract()
     {
-        // The three tests above each map one event; this maps all three at
-        // once, which is the shape a commit actually stages. What it proves is
-        // that they do not interfere — three events in, the three matching
-        // contracts out, none swallowed and none duplicated.
-        //
-        // It does not prove the registry holds only these three: Map reaches
-        // only the events it is given, so a fourth entry would leave this
-        // green. Absence is covered one test down instead.
+        // A commit can raise every registered event at once, and mapping them
+        // together must not make them interfere: each reaches its own
+        // contract, none swallowed and none duplicated. It says nothing about
+        // what else the registry holds, because Map reaches only the events it
+        // is handed.
         OrderId order = OrderId.New();
 
         IReadOnlyList<object> mapped = Mapper().Map(

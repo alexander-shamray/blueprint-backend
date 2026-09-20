@@ -17,11 +17,9 @@ namespace Payments.Infrastructure.Observability;
 public sealed class OutboxMetrics
 {
     /// <summary>
-    /// The contract with §13.2's <c>AddMeter</c>. An instrument on an
-    /// unregistered meter is collected by nothing, so this constant and the
-    /// <c>AddMeter("Payments.Outbox")</c> line in
-    /// <c>ObservabilityExtensions</c> are one claim in two files — asserted by
-    /// a test rather than left to agree by inspection.
+    /// The contract with §13.2's <c>AddMeter</c>: this name and the one
+    /// <c>ObservabilityExtensions</c> registers must be the same string, or
+    /// the instruments below are collected by nothing.
     /// </summary>
     public const string MeterName = "Payments.Outbox";
 

@@ -29,8 +29,8 @@
     <!-- IHostEnvironment, which AddPaymentProvider names in its signature for
          the scheme rule, as Common.Infrastructure references it. -->
     <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
-    <!-- The damper OutboxStats holds over §13.6's six gauge callbacks, so a
-         scrape interval is not six aggregate queries. -->
+    <!-- OutboxStats caches each read briefly, so repeated collections inside
+         that window do not re-query §13.6's gauges. -->
     <PackageReference Include="Microsoft.Extensions.Caching.Memory" />
   </ItemGroup>
 
