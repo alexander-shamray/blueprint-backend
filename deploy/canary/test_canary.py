@@ -1699,14 +1699,27 @@ class ImageSourceTests(unittest.TestCase):
             [], [f for f in failures if "catalog-api" in f], failures)
 
     def test_a_source_without_a_workload_is_refused(self) -> None:
-        """Because the alternative is one image's revision answering for five
-        workloads, which is the defect rather than a stricter reading of it."""
+        """Because the alternative is one image's revision answering for every
+        workload, which is the defect rather than a stricter reading of it."""
         failures = canary.check(
             canary.load_plan(), source=self._tree("/healthz/live"))
 
         self.assertTrue(
-            any("without the workload whose image it is" in f for f in failures),
-            failures)
+            any("not a workload in this plan" in f for f in failures), failures)
+
+    def test_a_source_for_an_unknown_workload_is_refused(self) -> None:
+        """A name no key matches scopes nothing: every tree would come from
+        the checkout and the image would answer for none of them, which is
+        the scoping absent rather than refused."""
+        for name in ("", "catalog", "catalog-api "):
+            with self.subTest(workload=name):
+                failures = canary.check(
+                    canary.load_plan(), source=self._tree("/healthz/live"),
+                    workload=name)
+
+                self.assertTrue(
+                    any("not a workload in this plan" in f for f in failures),
+                    failures)
 
     def test_an_http_only_workload_is_not_held_to_message_series(self) -> None:
         """series_read() spans every signal the plan defines, so holding one
@@ -1841,6 +1854,48 @@ class RolloutBindingTests(unittest.TestCase):
 
         self.assertEqual(1, len(failures), failures)
         self.assertIn("--installed-source", failures[0])
+
+    def test_an_export_that_no_archive_wrote_fails(self) -> None:
+        """The near miss with the right name on it. Exporting the checkout
+        satisfies every name and argument check while the rollout reads
+        exactly the tree the binding exists to stop it reading."""
+        swapped = self.shipped.replace(
+            'IMAGE_SOURCE=$RUNNER_TEMP/image-source',
+            'IMAGE_SOURCE=$GITHUB_WORKSPACE')
+
+        failures = canary._rollout_reads_the_image_source(self._workflow(swapped))
+
+        self.assertTrue(any("no `git archive` writes" in f for f in failures),
+                        failures)
+
+    def test_a_tree_archived_from_the_checkout_fails(self) -> None:
+        """The other half: the path is the archive's, and the archive is of
+        the checkout. The export is then correct about a tree that is the
+        wrong revision."""
+        for revision in ("HEAD", "$GITHUB_SHA"):
+            with self.subTest(revision=revision):
+                swapped = self.shipped.replace(
+                    'git archive "$REVISION" src', f"git archive {revision} src")
+
+                failures = canary._rollout_reads_the_image_source(
+                    self._workflow(swapped))
+
+                self.assertTrue(
+                    any("rather than the revision the tag resolved to" in f
+                        for f in failures), failures)
+
+    def test_a_gate_run_without_its_workload_fails(self) -> None:
+        """A tree handed over without the workload it answers for is a
+        refusal inside check(), so the gate has to insist on both here
+        rather than on the tree alone."""
+        without = self.shipped.replace(
+            'canary.py check --source "$IMAGE_SOURCE" --workload "$WORKLOAD"',
+            'canary.py check --source "$IMAGE_SOURCE"')
+
+        failures = canary._rollout_reads_the_image_source(self._workflow(without))
+
+        self.assertEqual(1, len(failures), failures)
+        self.assertIn("--workload", failures[0])
 
     def test_a_continuation_is_read_as_one_invocation(self) -> None:
         """The flag is never on the line the command is named on."""

@@ -552,10 +552,13 @@ def check(plan_document: dict, root: Path = ROOT, source: Path | None = None,
     if source is None:
         trees = dict.fromkeys(workloads, root)
         source = root
-    elif workload is None:
+    elif workload not in workloads:
+        # Including None. An unknown name matches no key below, so every
+        # tree would come from the checkout and the image would answer for
+        # nothing -- the scoping silently absent rather than refused.
         failures.append(
-            "a source tree was given without the workload whose image it is, "
-            "so every workload would be judged against one image's revision "
+            f"a source tree was given for {workload!r}, which is not a workload "
+            "in this plan, so nothing would be judged against the image "
             "(ADR-050)"
         )
         trees = dict.fromkeys(workloads, root)
@@ -1343,6 +1346,38 @@ def _dispatch_options_match_workloads(workloads: dict) -> list[str]:
     return failures
 
 
+# What an archive writes and what a step exports, so check 12 can ask
+# whether they are the same path. A tree exported by the right name and
+# taken from somewhere else reads the checkout while every name matches.
+ARCHIVED = re.compile(
+    r'git\s+archive\s+"?(?P<revision>[^"\s]+)"?\s+src\b[^\n]*?-C\s+"?(?P<into>[^"\s]+)"?')
+
+# The revisions that are not the one the tag resolved to. Archiving any
+# of these is the defect with the binding's own spelling on it.
+CHECKOUT_REVISIONS = frozenset({"HEAD", "$GITHUB_SHA", "${GITHUB_SHA}"})
+
+
+def _archived(live: list[str]) -> dict[str, str]:
+    """Each tree an archive writes, and the revision it was taken from."""
+    found = {}
+    for line in live:
+        match = ARCHIVED.search(line)
+        if match:
+            found[match.group("into")] = match.group("revision")
+    return found
+
+
+def _exported(live: list[str], variable: str) -> str | None:
+    """The path a step writes into GITHUB_ENV under `variable`."""
+    pattern = re.compile(
+        rf'(?<![A-Za-z0-9_]){variable}=(?P<into>[^"\s]+)"?\s*>>\s*"?\$GITHUB_ENV')
+    for line in live:
+        match = pattern.search(line)
+        if match:
+            return match.group("into")
+    return None
+
+
 def _invocations(lines: list[str], command: str) -> list[str]:
     """Each run of `command` in `lines`, with its continuations joined.
 
@@ -1384,15 +1419,32 @@ def _rollout_reads_the_image_source(workflow: Path = WORKFLOW) -> list[str]:
     live = [line for line in text.splitlines() if not line.lstrip().startswith("#")]
 
     failures = []
+    archived = _archived(live)
     for variable in (IMAGE_SOURCE, INSTALLED_SOURCE):
         # The name is matched whole. `IMAGE_SOURCE=` is also inside
         # `OLD_IMAGE_SOURCE=`, so a consistent rename would satisfy a
         # substring test while exporting a different tree.
-        assignment = re.compile(rf"(?<![A-Za-z0-9_]){variable}=")
-        if not any(assignment.search(line) and "GITHUB_ENV" in line for line in live):
+        exported = _exported(live, variable)
+        if exported is None:
             failures.append(
                 f"no step exports {variable} into GITHUB_ENV, so the rollout has "
                 "no tree to read it from and ADR-050's binding is not in force"
+            )
+            continue
+        # And it has to be the tree an archive wrote. Exporting the
+        # checkout satisfies every name and argument check below while the
+        # rollout reads exactly what the binding exists to stop it reading.
+        if exported not in archived:
+            failures.append(
+                f"{variable} is exported as {exported}, which no `git archive` "
+                "writes, so the rollout reads a tree nothing took from the "
+                "image's revision (ADR-050)"
+            )
+        elif archived[exported] in CHECKOUT_REVISIONS:
+            failures.append(
+                f"{variable} is archived from {archived[exported]} rather than "
+                "the revision the tag resolved to, so it is the checkout under "
+                "another name (ADR-050)"
             )
 
     # Every reading, because one unbound query is a whole rung judged against
@@ -1417,11 +1469,20 @@ def _rollout_reads_the_image_source(workflow: Path = WORKFLOW) -> list[str]:
 
     # One, not every: the `check` job runs the same command against the
     # checkout on a pull request, where there is no image and no tag.
+    # Both, because `--source` without the workload it belongs to is a
+    # refusal rather than a check, and the workload alone scopes nothing.
     gate = _argument(SOURCE_FLAG, IMAGE_SOURCE)
-    if not any(gate in run for run in _invocations(live, "canary.py check")):
+    scope = _argument("--workload", "WORKLOAD")
+    runs = _invocations(live, "canary.py check")
+    if not any(gate in run for run in runs):
         failures.append(
             f"no `canary.py check` run takes {gate}, so the plan is never held "
             "against the source the deployed image was built from (ADR-050)"
+        )
+    elif not any(gate in run and scope in run for run in runs):
+        failures.append(
+            f"the `canary.py check` run that takes {gate} takes no {scope}, so "
+            "the tree is given without the workload it answers for (ADR-050)"
         )
     return failures
 

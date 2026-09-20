@@ -1373,7 +1373,7 @@ with the stable track only, because [§13.6](13-observability.md) owns no
 threshold for it.
 
 **Every fact the analysis derives from source is read from the revision the
-image serving it was built from, and the tag is what says which that is:
+image tag names, which is what the tag is for:
 [ADR-050](adr/ADR-050-the-rollout-reads-the-images-facts-from-its-revision.md).**
 The probe exclusion, the consumer and saga registrations that decide which
 signals a workload owes, and its entry assembly are all scanned out of
