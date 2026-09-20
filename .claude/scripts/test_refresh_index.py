@@ -91,6 +91,36 @@ class RefreshIndex(unittest.TestCase):
         self.assertEqual(1, len(self.spawned))
         self.assertEqual(str(edited), self.spawned[0][1]["cwd"])
 
+    def test_the_edited_file_decides_over_the_session_directory(self):
+        """`guard-edit-target` admits an edit against the session's tree or
+        the one it forked from, so an absolute edit into the original while
+        the session sits in a sibling leaves the tree that changed stale."""
+        edited = self.checkout("original")
+        session = self.checkout("worktree")
+        touched = edited / "src" / "Thing.cs"
+        touched.parent.mkdir(parents=True)
+
+        self.run_event({"cwd": str(session),
+                        "tool_input": {"file_path": str(touched)}})
+
+        self.assertEqual(str(edited), self.spawned[0][1]["cwd"])
+
+    def test_a_relative_edit_is_resolved_against_the_session_directory(self):
+        session = self.checkout("worktree")
+        (session / "src").mkdir(parents=True)
+
+        self.run_event({"cwd": str(session),
+                        "tool_input": {"file_path": "src/Thing.cs"}})
+
+        self.assertEqual(str(session), self.spawned[0][1]["cwd"])
+
+    def test_an_event_naming_no_file_falls_back_to_the_directory(self):
+        session = self.checkout("worktree")
+
+        self.run_event({"cwd": str(session), "tool_input": {}})
+
+        self.assertEqual(str(session), self.spawned[0][1]["cwd"])
+
     def test_a_nested_cwd_walks_up_to_its_checkout(self):
         edited = self.checkout("worktree")
         deep = edited / "src" / "Services"
@@ -197,10 +227,18 @@ class RefreshIndex(unittest.TestCase):
                    for hook in entry.get("hooks", []))
         ]
 
+        # Split before comparing: `"Edit" in "NotebookEdit|MultiEdit"` is
+        # true, so a matcher that had lost plain Edit would satisfy a
+        # substring test while the primary edit surface went unwatched.
+        matched = {
+            alternative.strip()
+            for entry in mine
+            for alternative in entry.get("matcher", "").split("|")
+        }
+
         self.assertTrue(mine, entries)
         for tool in ("Edit", "Write", "MultiEdit", "NotebookEdit"):
-            self.assertTrue(
-                any(tool in entry.get("matcher", "") for entry in mine), mine)
+            self.assertIn(tool, matched, mine)
 
 
 class RestoresWhatItPatched(unittest.TestCase):

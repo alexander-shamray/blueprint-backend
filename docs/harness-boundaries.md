@@ -135,10 +135,10 @@ preference.** An env-var prefix — `VAR=1 cmd` — is POSIX syntax that `cmd`
 and PowerShell do not run, and a bare `bash` is whatever `PATH` resolves
 first, which on Windows may be Git Bash or the WSL launcher: different
 programs, with different filesystems. Either way the failure lands in the
-redirect and reports nothing. So the form here is `py -3.12` over a file,
-like the `PreToolUse` three, and the file sets its own environment —
-`CBX_NO_SKILL_AUTO_UPDATE=1`, which it owes because it calls the CLI rather
-than the `cbx` wrapper that would have set it.
+redirect and reports nothing. So the form here is `py -3.12` over a file, as
+the `PreToolUse` guards beside it are, and the file sets its own environment
+— `CBX_NO_SKILL_AUTO_UPDATE=1`, which it owes because it calls the CLI
+rather than the `cbx` wrapper that would have set it.
 
 `examples/hooks/settings.json` carries the same block. It sits under
 `examples/`, which Claude Code does not read, so it documents the wiring

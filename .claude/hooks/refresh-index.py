@@ -36,16 +36,35 @@ def checkout_root(start: Path) -> Path | None:
     return None
 
 
-def target(event: dict) -> Path | None:
-    """The indexed checkout to refresh, which is the one that was edited.
+def edited(event: dict) -> Path | None:
+    """The file the tool touched, resolved against the session's directory.
 
-    The event's `cwd` decides alone whenever it has one. In a sibling
-    worktree it is the tree that changed and `CLAUDE_PROJECT_DIR` is the tree
-    that did not, so trying the variable when that tree turns out to be
-    unindexed refreshes the wrong checkout rather than none. The variable
-    answers only when the event is silent.
+    A relative path in the event is relative to `cwd`, and an absolute one
+    may name a different checkout entirely: `guard-edit-target` admits an
+    edit against the session's tree or the one it forked from.
     """
-    named = event.get("cwd") or os.environ.get("CLAUDE_PROJECT_DIR")
+    given = event.get("tool_input")
+    if not isinstance(given, dict):
+        return None
+    for key in ("file_path", "notebook_path"):
+        value = given.get(key)
+        if isinstance(value, str) and value.strip():
+            path = Path(value.strip())
+            base = event.get("cwd")
+            return path if path.is_absolute() or not base else Path(str(base)) / path
+    return None
+
+
+def target(event: dict) -> Path | None:
+    """The indexed checkout to refresh: the one holding the file that changed.
+
+    The edited path decides, because after `/branch` the session's directory
+    and the checkout an edit is admitted against can be different trees.
+    `cwd` answers when the event names no file and `CLAUDE_PROJECT_DIR` when
+    it names neither -- each in turn, and none of them as a second chance
+    after an unindexed tree, which would refresh the one that did not change.
+    """
+    named = edited(event) or event.get("cwd") or os.environ.get("CLAUDE_PROJECT_DIR")
     if not named:
         return None
     root = checkout_root(Path(str(named)))
