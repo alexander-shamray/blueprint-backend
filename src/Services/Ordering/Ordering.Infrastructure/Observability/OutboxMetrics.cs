@@ -49,8 +49,9 @@ public sealed class OutboxMetrics
         LoggerMessage.Define(
             LogLevel.Error,
             new EventId(1, nameof(GaugeReadFailed)),
-            "Outbox gauge read failed. This interval's measurements are omitted, so "
-            + "every outbox series is absent rather than wrong — see OutboxMetrics.");
+            "Outbox gauge read failed. PerLane runs once per gauge, so this "
+            + "collection omits only that gauge's lane measurements, absent "
+            + "rather than wrong — see OutboxMetrics.");
 
     public OutboxMetrics(IMeterFactory factory, IOutboxStats stats, ILogger<OutboxMetrics> logger)
     {
@@ -83,52 +84,15 @@ public sealed class OutboxMetrics
     }
 
     /// <summary>
-    /// One measurement per lane, read from the enum rather than from a list
-    /// written out here. A lane added to <see cref="OutboxLane"/> and forgotten
-    /// at one of three call sites would be a lane with no gauge and therefore
-    /// no alert, which is the silent gap §13.6 spends a callout on.
+    /// One measurement per lane, read from the enum rather than a list here: a
+    /// lane added to <see cref="OutboxLane"/> and forgotten at a call site is a
+    /// lane with no gauge and no alert, the silent gap §13.6 spends a callout
+    /// on. The read is contained because
+    /// <c>MeterListener.RecordObservableInstruments</c> propagates a callback's
+    /// exception and abandons the rest of the pass, so a failed lane leaves
+    /// this gauge's series absent for the interval rather than stopping
+    /// unrelated instruments.
     /// </summary>
-    /// <remarks>
-    /// <b>The read is contained, because an observable callback that throws
-    /// does not fail alone.</b> <c>MeterListener.RecordObservableInstruments</c>
-    /// propagates the exception and abandons the rest of the pass, so a
-    /// <c>SqlException</c> from one lane can stop <em>unrelated</em> observable
-    /// instruments being collected — a database outage taking telemetry with
-    /// it that has nothing to do with the database.
-    /// <para>
-    /// This repository proved that on itself:
-    /// <c>A_foreign_meter_of_the_same_name_is_not_collected</c> only avoids a
-    /// <c>SqlException</c> by never enabling the foreign callback, which is a
-    /// demonstration that enabling it would have thrown through the collector.
-    /// An earlier comment on <c>OutboxStats</c> claimed the SDK swallowed it;
-    /// that was an assumption, and this makes it true by construction instead.
-    /// </para>
-    /// <para>
-    /// Returning no measurements is the right failure for a <em>transient</em>
-    /// outage: the series goes absent for that interval, and an outbox alert
-    /// firing because SQL Server is briefly unreachable would page the wrong
-    /// person with the wrong runbook.
-    /// </para>
-    /// <para>
-    /// <b>A persistent failure is a different case, and containment alone does
-    /// not cover it.</b> Schema drift, a revoked grant or a renamed table make
-    /// every read fail for ever — and then all four outbox alerts are silent
-    /// while the service stays ready, because §13.5's readiness check proves
-    /// the connection opens and nothing about this table. An earlier version of
-    /// this remark said readiness "already reports properly"; it reports
-    /// connectivity, which is not the same claim. That is why the failure is
-    /// <b>logged</b> rather than only swallowed: an empty outbox dashboard is
-    /// indistinguishable from a healthy one, and the log is the only thing that
-    /// tells them apart.
-    /// </para>
-    /// <para>
-    /// <b>An alert on the absence itself would be the complete answer and is
-    /// deliberately not here.</b> It needs a thirteenth alert, a thirteenth
-    /// runbook and a row in §13.6's table — a chapter decision rather than a
-    /// fix, and one taken at a review ceiling would be the worst moment for it.
-    /// Named as owed, on the same terms as §13.6's four unloaded alerts.
-    /// </para>
-    /// </remarks>
     private static List<Measurement<double>> PerLane(Func<OutboxLane, double> read, ILogger logger)
     {
         List<Measurement<double>> measurements = [];

@@ -61,25 +61,14 @@ internal sealed class OutboxStats : IOutboxStats, IDisposable
     private static readonly TimeSpan CacheFor = TimeSpan.FromSeconds(5);
 
     /// <summary>
-    /// A bound on each statement, because these run <b>inside observable gauge
-    /// callbacks</b> and the metric reader invokes them on its own thread.
+    /// A bound on each statement, because these run inside observable gauge
+    /// callbacks the metric reader invokes on its own thread. Far shorter than
+    /// SqlClient's default: against a black-holed database, where connections
+    /// hang rather than refuse, the waits would serialise and stall the
+    /// reader, taking unrelated telemetry down with these gauges. A timeout
+    /// here throws, and <c>OutboxMetrics.PerLane</c> is what contains it, so
+    /// the series is absent for that interval rather than wrong.
     /// </summary>
-    /// <remarks>
-    /// <b>Two seconds, not SqlClient's default of thirty.</b> Collection drives
-    /// six callbacks; against a black-holed database — a dropped route or a
-    /// NetworkPolicy change, where connections hang rather than refuse — the
-    /// default would let those waits serialise into minutes and stall the
-    /// reader, taking down <em>unrelated</em> telemetry with these gauges. That
-    /// is a monitor causing an outage in the signal it exists to provide.
-    /// <para>
-    /// A timeout here fails the callback, and a callback that throws is
-    /// swallowed by the SDK: the measurement is skipped and the series is
-    /// absent for that interval. Absent is the correct reading — readiness
-    /// (§13.5) is what reports a database that is gone, and an outbox alert
-    /// firing because SQL Server is unreachable would page the wrong person
-    /// with the wrong runbook.
-    /// </para>
-    /// </remarks>
     private const int CommandTimeoutSeconds = 2;
 
     /// <summary>
