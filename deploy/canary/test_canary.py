@@ -1574,8 +1574,16 @@ class FetchTests(unittest.TestCase):
         self.assertFalse(any("$SERVICE" in e for e in asked), asked)
 
     def test_an_unknown_workload_is_refused(self) -> None:
+        """The name is deliberately not a service's. Spelled as one a service
+        could take, this test passes until that service joins the plan and
+        then reaches the network instead of the refusal it asserts — which is
+        what `payments-api` did here. The absence is asserted first, so the
+        fixture cannot go stale silently a second time."""
+        unknown = "no-such-workload"
+        self.assertNotIn(unknown, canary.entries(canary.load_plan()["workloads"]))
+
         with self.assertRaises(KeyError):
-            read_prometheus.read("http://x", "payments-api", "10m", canary.load_plan())
+            read_prometheus.read("http://x", unknown, "10m", canary.load_plan())
 
 
 class CommentTests(unittest.TestCase):
