@@ -848,6 +848,44 @@ refuses 'a whitespace-only OTLP endpoint fails the render' 'observability.otlpEn
 refuses 'a whitespace-only workload name fails the render' 'workload.name is required' \
     $GATEWAY_OVERLAY --set-string 'workload.name= '
 
+# --------------------------------------------------------------------------
+section 'Non-blank is not an address either'
+# --------------------------------------------------------------------------
+# The hosts parse both of these before they will start, and each rejects far
+# more than the empty string — an absolute HTTPS address, no user information,
+# no query, no fragment. Under a presence check every value below renders,
+# begins a rollout and dies in the new pod, which is what `commerce.requireUrl`
+# moves to render time. Asserted per rejected shape rather than once, because a
+# guard is a claim about what it refuses.
+for bad in 'keycloak:8080/realms/commerce' 'ftp://id.example.com/realms' \
+    'http://id.example.com/realms/commerce' 'https://u:p@id.example.com/realms' \
+    'https://id.example.com/realms?x' 'https://id.example.com/realms#f'; do
+    refuses "an authority of '$bad' fails the render" 'not an absolute HTTPS address' \
+        $GATEWAY_OVERLAY --set-string "identity.authority=$bad"
+done
+
+# The same guard on the other key it protects, which needs the payments chart
+# rather than the gateway: `refuses` renders the gateway, which has no
+# capability to carry an address at all.
+refuses_payments() {
+    local label="$1" needle="$2"
+    shift 2
+    if "$HELM" template payments "$CHARTS_DIR/payments" --set-string "image.tag=$TAG" \
+        "$@" >"$OUT/payments-bad-url.txt" 2>&1; then
+        fail "$label — it rendered instead"
+    else
+        check "$label" grep -q "$needle" "$OUT/payments-bad-url.txt"
+    fi
+}
+
+for bad in 'psp.example.invalid' 'ftp://psp.example.invalid/' \
+    'http://psp.example.invalid/' 'https://user:key@psp.example.invalid/' \
+    'https://psp.example.invalid/?x' 'https://psp.example.invalid/#f'; do
+    refuses_payments "a provider address of '$bad' fails the render" \
+        'not an absolute HTTPS address' \
+        --set-string "paymentProvider.baseUrl=$bad"
+done
+
 # The origin guard has to reject what Program.cs rejects, or it is theatre:
 # each of these renders, begins a rollout, and crashes the new pod otherwise.
 refuses 'an origin carrying userinfo fails the render' 'is not a browser origin' \

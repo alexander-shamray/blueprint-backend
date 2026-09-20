@@ -37,6 +37,42 @@ non-string, and `tag: 1.2` is a YAML float.
 {{- required $message ($value | default "" | toString | trim) -}}
 {{- end -}}
 
+{{/*
+NON-BLANK IS NOT AN ADDRESS, which is the same lesson one step further on.
+
+Two keys here are base addresses a host parses before it will start, and both
+hosts reject far more than the empty string: `AddJwtAuthentication` and
+`AddPaymentProvider` each require an absolute HTTP(S) URL with no query and no
+fragment, over HTTPS outside Development, and the provider additionally
+refuses user information because its credential is the API key alone. Under
+`commerce.require` a value like `keycloak:8080/realms/commerce` or
+`https://u:p@psp/` rendered cleanly, began a rollout and died in the new pod —
+the failure every render-time guard in this file exists to move earlier.
+
+HTTPS unconditionally, where the hosts say "outside Development": a chart is
+how a cluster is deployed and sets no environment, so Production is what runs.
+
+`commerce.tag` already validates a shape rather than a presence, for the same
+reason and with the same argument; this is that helper's sibling, kept apart
+from `commerce.require` because a presence check still has callers that want
+nothing more.
+*/}}
+{{- define "commerce.requireUrl" -}}
+{{- $value := index . 0 -}}
+{{- $message := index . 1 -}}
+{{- $url := include "commerce.require" (list $value $message) -}}
+{{- /*
+One regex rather than a parse, because Helm has no URL type. Read left to
+right it is: HTTPS, then an authority holding no `@` — which is what excludes
+user information — then an optional path, and `?` and `#` excluded throughout
+so a query or fragment cannot appear anywhere.
+*/}}
+{{- if not (regexMatch "^https://[^/@?#]+(/[^?#]*)?$" $url) }}
+{{- fail (printf "%s The value is not an absolute HTTPS address with no user information, query or fragment, which is what the host parses it as before it will start (§15.4)." $message) }}
+{{- end }}
+{{- $url -}}
+{{- end -}}
+
 {{- define "commerce.name" -}}
 {{- include "commerce.require" (list .Values.workload.name "workload.name is required: it is this deployable's Service name, and therefore the string the gateway's route file and the BFF's pricing hop dial (§10.2, §9.7).") -}}
 {{- end -}}
@@ -262,7 +298,7 @@ name is not a live signal.
 Two values only, so the cardinality cost is one extra series per track.
 */}}
 OTEL_RESOURCE_ATTRIBUTES: {{ printf "deployment.track=%s" (include "commerce.track" .) | quote }}
-Identity__Authority: {{ include "commerce.require" (list .Values.identity.authority "identity.authority is required for every host, the gateway included (§15.4) — AddJwtAuthentication reads it eagerly and throws naming the key, so an unset value is a pod that never starts.") | quote }}
+Identity__Authority: {{ include "commerce.requireUrl" (list .Values.identity.authority "identity.authority is required for every host, the gateway included (§15.4) — AddJwtAuthentication reads it eagerly and throws naming the key, so an unset value is a pod that never starts.") | quote }}
 OTEL_EXPORTER_OTLP_ENDPOINT: {{ include "commerce.require" (list .Values.observability.otlpEndpoint "observability.otlpEndpoint is required: UseOtlpExporter reads the OpenTelemetry standard variable, and left unset it exports to localhost:4317, where nothing listens in a pod (§15.4).") | quote }}
 {{- if .Values.identity.clientCredentials }}
 {{- /*
@@ -298,7 +334,7 @@ that will not start is the shape every guard in this file exists to refuse.
 charts carry no such block, and the parenthesised form reads a missing map as
 empty where the dotted one fails the render.
 */}}
-PaymentProvider__BaseUrl: {{ include "commerce.require" (list .Values.paymentProvider.baseUrl "paymentProvider.baseUrl is required when paymentProvider.enabled: AddPaymentProvider reads it eagerly and throws naming the key, so the host does not start (§15.4).") | quote }}
+PaymentProvider__BaseUrl: {{ include "commerce.requireUrl" (list .Values.paymentProvider.baseUrl "paymentProvider.baseUrl is required when paymentProvider.enabled: AddPaymentProvider reads it eagerly and throws naming the key, so the host does not start (§15.4).") | quote }}
 {{- end }}
 {{- end -}}
 
