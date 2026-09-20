@@ -106,7 +106,7 @@ class Base(unittest.TestCase):
     def worker_roots(self):
         """The checkout each spawned worker was pointed at.
 
-        Second from the end, because the token it owns follows it."""
+        Second from the end, because the stamp it owns follows it."""
         return [Path(arguments[0][-2]) for arguments, _ in self.spawned]
 
 
@@ -234,7 +234,7 @@ class OneRefreshAtATime(Base):
         self.assertTrue((root / self.mod.PENDING).exists())
 
     def claimed(self, root):
-        """The token the hook's own claim wrote, as a worker would receive it."""
+        """The stamp the hook's own claim wrote, as a worker would receive it."""
         return self.mod.holder(root)
 
     def test_the_worker_refreshes_once_for_one_request(self):
@@ -270,7 +270,7 @@ class OneRefreshAtATime(Base):
         worker, so the one finishing has to look once more."""
         root = self.checkout("main")
         self.run_event({"cwd": str(root)})
-        token = self.claimed(root)
+        stamp = self.claimed(root)
         letting_go = self.mod.release
         once = []
 
@@ -283,7 +283,7 @@ class OneRefreshAtATime(Base):
         self.patch(mock.patch.object(
             self.mod, "release", side_effect=edit_as_it_lets_go))
 
-        self.mod.work(root, token)
+        self.mod.work(root, stamp)
 
         self.assertEqual(2, len(self.ran))
 
@@ -304,12 +304,12 @@ class OneRefreshAtATime(Base):
         the stale window had its lock unlinked from under it."""
         root = self.checkout("main")
         self.run_event({"cwd": str(root)})
-        token = self.claimed(root)
+        stamp = self.claimed(root)
         import os
         stale = self.mod.time.time() - self.mod.STALE_SECONDS - 60
         os.utime(root / self.mod.LOCK, (stale, stale))
 
-        self.assertTrue(self.mod.beat(root, token))
+        self.assertTrue(self.mod.beat(root, stamp))
 
         self.assertIsNone(self.mod.claim(root), "a beaten lock was taken as stale")
 
@@ -317,11 +317,11 @@ class OneRefreshAtATime(Base):
         """And does not release, because the lock is the successor's now."""
         root = self.checkout("main")
         self.run_event({"cwd": str(root)})
-        token = self.claimed(root)
+        stamp = self.claimed(root)
         (root / self.mod.LOCK).write_text("somebody-else", encoding="utf-8")
         self.mod.request(root)
 
-        self.assertEqual(0, self.mod.work(root, token))
+        self.assertEqual(0, self.mod.work(root, stamp))
 
         self.assertEqual([], self.ran)
         self.assertEqual("somebody-else", self.mod.holder(root))

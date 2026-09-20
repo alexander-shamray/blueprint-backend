@@ -111,14 +111,14 @@ def request(root: Path) -> None:
 
 
 def claim(root: Path) -> str | None:
-    """Take the refresh lock, and answer with the token that proves it.
+    """Take the refresh lock, and answer with the stamp that proves it.
 
-    The token is what makes a takeover safe: without one a worker whose lock
+    The stamp is what makes a takeover safe: without one a worker whose lock
     was taken as stale would release its successor's on the way out, and a
     third edit would then run beside that successor.
     """
     lock = root / LOCK
-    token = f"{os.getpid()}:{time.time_ns()}"
+    stamp = f"{os.getpid()}:{time.time_ns()}"
     try:
         handle = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
     except FileExistsError:
@@ -132,25 +132,25 @@ def claim(root: Path) -> str | None:
     except OSError:
         return None
     try:
-        os.write(handle, token.encode("utf-8"))
+        os.write(handle, stamp.encode("utf-8"))
     except OSError:
         pass
     finally:
         os.close(handle)
-    return token
+    return stamp
 
 
 def holder(root: Path) -> str | None:
-    """The token in the lock, or None when there is no readable lock."""
+    """The stamp in the lock, or None when there is no readable lock."""
     try:
         return (root / LOCK).read_text(encoding="utf-8").strip()
     except OSError:
         return None
 
 
-def beat(root: Path, token: str) -> bool:
+def beat(root: Path, stamp: str) -> bool:
     """Say the worker is alive, and answer whether it still owns the lock."""
-    if holder(root) != token:
+    if holder(root) != stamp:
         return False
     try:
         os.utime(root / LOCK, None)
@@ -159,9 +159,9 @@ def beat(root: Path, token: str) -> bool:
     return True
 
 
-def release(root: Path, token: str) -> None:
+def release(root: Path, stamp: str) -> None:
     """Let go of our own lock, and of no other."""
-    if holder(root) != token:
+    if holder(root) != stamp:
         return
     try:
         (root / LOCK).unlink()
@@ -205,10 +205,10 @@ def refresh(root: Path) -> None:
             return
 
 
-def work(root: Path, token: str) -> int:
+def work(root: Path, stamp: str) -> int:
     """Refresh until no request is outstanding, then let the lock go."""
     while True:
-        if not beat(root, token):
+        if not beat(root, stamp):
             # The lock was taken from us as stale, so this work is the new
             # owner's. Releasing here would unlink their lock and let a
             # third edit run beside them.
@@ -216,14 +216,14 @@ def work(root: Path, token: str) -> int:
         if take_request(root):
             refresh(root)
             continue
-        release(root, token)
+        release(root, stamp)
         # A request made between the take above and this release found the
         # lock held and left a marker rather than a worker, so it is picked
         # up here instead of waiting for whatever edit comes next.
         if (root / PENDING).exists():
             regained = claim(root)
             if regained:
-                token = regained
+                stamp = regained
                 continue
         return 0
 
@@ -242,8 +242,8 @@ def main() -> int:
         return 0
 
     request(root)
-    token = claim(root)
-    if token is None:
+    stamp = claim(root)
+    if stamp is None:
         # Somebody is refreshing this checkout already. The marker above is
         # what makes them run again, rather than this edit starting a second
         # update against the same index.
@@ -252,7 +252,7 @@ def main() -> int:
     try:
         subprocess.Popen(
             [sys.executable, "-P", str(Path(__file__).resolve()),
-             "--worker", str(root), token],
+             "--worker", str(root), stamp],
             cwd=str(root),
             stdin=subprocess.DEVNULL,
             stdout=subprocess.DEVNULL,
@@ -261,7 +261,7 @@ def main() -> int:
         )
     except OSError:
         # No worker started, so the lock must not be left behind it.
-        release(root, token)
+        release(root, stamp)
     return 0
 
 
