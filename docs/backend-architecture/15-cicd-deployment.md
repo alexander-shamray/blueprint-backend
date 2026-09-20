@@ -1370,7 +1370,7 @@ image was built from, and the tag is what says which that is:
 The probe exclusion, the consumer and saga registrations that decide which
 signals a workload owes, and each workload's entry assembly are all scanned
 out of `src/`, and the rollout job checks out `main` while the tag may name
-any other revision. Â§15.2 tags both of a service's images with the commit
+any other revision. §15.2 tags both of a service's images with the commit
 they were built from, so the rollout resolves the tag to a commit this
 branch carries and reads that commit's `src/` instead. What it does not
 move is the chart, the thresholds or the gates themselves, which describe

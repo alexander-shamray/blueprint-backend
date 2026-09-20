@@ -499,21 +499,42 @@ def _shout(key: str) -> str:
 # The gate over the plan
 # --------------------------------------------------------------------------
 
-def check(plan_document: dict, root: Path = ROOT, source: Path | None = None) -> list[str]:
+def check(plan_document: dict, root: Path = ROOT, source: Path | None = None,
+          workload: str | None = None) -> list[str]:
     """Everything that can be wrong with canary.json without a cluster.
 
     Failures are collected rather than raised, so one run reports them all.
     Some checks guard the gate rather than the plan: its own subject, the
     workflow's path filter, its dispatch menu, and ADR-050's binding. `source`
-    is where the facts that describe the IMAGE are read -- its tree during a
-    rollout, and the checkout everywhere else, which is what it defaults to.
+    is the tree the deployed image was built from and `workload` is whose
+    image it is; without them every fact is read from the checkout.
     """
     failures: list[str] = []
-    source = root if source is None else source
 
     steps = plan_document.get("steps", [])
     thresholds = entries(plan_document.get("thresholds", {}))
     workloads = entries(plan_document.get("workloads", {}))
+
+    # A tag names ONE workload's image. The other workloads are running images
+    # built from other revisions, so judging their plan entries against this
+    # one answers a question nobody asked and refuses rollouts that are fine:
+    # CI builds an image only for a service a commit changed, so an Ordering
+    # image legitimately predates a Catalog-only registration change. Each
+    # workload is therefore read from its own tree, and only the rolled one
+    # has an image here.
+    if source is None:
+        trees = dict.fromkeys(workloads, root)
+        source = root
+    elif workload is None:
+        failures.append(
+            "a source tree was given without the workload whose image it is, "
+            "so every workload would be judged against one image's revision "
+            "(ADR-050)"
+        )
+        trees = dict.fromkeys(workloads, root)
+        source = root
+    else:
+        trees = {name: (source if name == workload else root) for name in workloads}
 
     # 1. The ladder climbs, ends at 100, and dwells.
     if not steps:
@@ -569,7 +590,7 @@ def check(plan_document: dict, root: Path = ROOT, source: Path | None = None) ->
     #    because a query that matches nothing returns nothing and an absent
     #    series is the rollback above — so it fails safe and never promotes,
     #    which is a rollout that can only ever roll back.
-    hosts = _host_assemblies(source)
+    hosts = _host_assemblies(root)
     if not workloads:
         failures.append("workloads is empty: the rollout has nothing to deploy")
     for name, workload in sorted(workloads.items()):
@@ -590,12 +611,13 @@ def check(plan_document: dict, root: Path = ROOT, source: Path | None = None) ->
                 "or digit, at most 53 characters"
             )
         service_name = workload.get("serviceName")
-        if service_name not in hosts:
+        known = _host_assemblies(trees[name])
+        if service_name not in known:
             failures.append(
                 f"workloads.{name}.serviceName is {service_name!r}, which is not "
                 f"an entry assembly in this solution. §13.2 takes service.name "
                 f"from ApplicationName, so it must be one of: "
-                f"{', '.join(sorted(hosts))}"
+                f"{', '.join(sorted(known))}"
             )
         if not _chart_exists(workload.get("chart"), root):
             failures.append(
@@ -615,11 +637,13 @@ def check(plan_document: dict, root: Path = ROOT, source: Path | None = None) ->
     #    something parsed out of another file, and a parser that quietly
     #    extracted nothing would pass all three vacuously — which is this
     #    repository's most-repeated failure, named in CLAUDE.md as such.
-    if not hosts:
-        failures.append(
-            "found no host assemblies under src/: check 4 would pass vacuously, "
-            "so the parser is what is broken rather than the plan"
-        )
+    for label, tree in (("the checkout", root), ("the image", source)):
+        if not _host_assemblies(tree):
+            failures.append(
+                f"found no host assemblies under {label}'s src/: check 4 would "
+                "pass vacuously, so the parser is what is broken rather than "
+                "the plan"
+            )
 
     # 7. The workflow's triggers cover every input this rollout reads.
     failures += _workflow_covers_inputs()
@@ -630,7 +654,7 @@ def check(plan_document: dict, root: Path = ROOT, source: Path | None = None) ->
     # 9. Each workload declares the signals it receives: a service that
     #    registers a consumer or a saga declares consume or saga, or argues
     #    why not (ADR-047).
-    failures += _workloads_declare_what_they_receive(workloads, SIGNALS, source)
+    failures += _workloads_declare_what_they_receive(workloads, SIGNALS, trees)
 
     # 10. The probe routes the http templates exclude can all be read.
     failures += _probe_routes_are_readable(source)
@@ -739,7 +763,8 @@ def series_read() -> set[str]:
     }
 
 
-def _workloads_declare_what_they_receive(workloads: dict, signals: dict, source: Path) -> list[str]:
+def _workloads_declare_what_they_receive(workloads: dict, signals: dict,
+                                         trees: dict[str, Path]) -> list[str]:
     """Every workload declares a known signal, and each registration its signal.
 
     A consumer owes consume and a saga owes saga, unless an exemption argues
@@ -777,7 +802,7 @@ def _workloads_declare_what_they_receive(workloads: dict, signals: dict, source:
             )
 
         for signal, pattern, key, kind in OWED_SIGNALS:
-            registers = _registers(workload.get("serviceName", ""), pattern, source)
+            registers = _registers(workload.get("serviceName", ""), pattern, trees[name])
             exemption = workload.get(key)
             if exemption is None:
                 if registers and signal not in declared:
@@ -1362,6 +1387,8 @@ def main(argv: list[str]) -> int:
     checker.add_argument(
         "--source", type=Path,
         help="the tree the deployed image was built from (ADR-050)")
+    checker.add_argument(
+        "--workload", help="whose image --source is, and the only one read from it")
 
     revision = sub.add_parser("revision", help="the commit an image tag names")
     revision.add_argument("--value", required=True)
@@ -1420,7 +1447,7 @@ def main(argv: list[str]) -> int:
         return 0
 
     if args.command == "check":
-        failures = check(document, source=args.source)
+        failures = check(document, source=args.source, workload=args.workload)
         if failures:
             print(f"canary: {len(failures)} problem(s) with the rollout plan:\n", file=sys.stderr)
             for failure in failures:

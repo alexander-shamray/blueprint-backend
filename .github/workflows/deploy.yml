@@ -168,27 +168,11 @@ jobs:
           TAG: ${{ inputs.tag }}
           WORKLOAD: ${{ inputs.workload }}
 
-      # ADR-050. Every fact the canary derives from src/ describes the image
-      # about to serve traffic: the probe routes the http templates exclude,
-      # the consumer and saga registrations that decide which signals a
-      # workload owes, and each workload's entry assembly. This job checks out
-      # main and the tag may name any other revision, so a probe route the
-      # image maps and main does not has its requests counted as traffic, and
-      # one main renamed is excluded from the measurement it should dominate.
-      # Either way the rung is judged on the wrong request set.
-
-      # §15.2 tags both of a service's images with the commit they were built
-      # from, so the tag already names the revision and what is added here is
-      # the rollout insisting on it. Ancestry rather than equality, because CI
-      # builds an image only for a service a commit changed, so the newest tag
-      # for a workload is routinely behind main. An ancestor is a revision the
-      # protected branch carries, which is the property being asked for.
-
-      # The deciding code is still the checkout's: the argument above the
-      # `Production rolls from main` step applies unchanged. Only the tree it
-      # reads comes from the image, and only src/ -- the chart, the alerts and
-      # the plan are the checkout's, because the checkout is what installs
-      # them.
+      # The tag is held to the revision it names and that revision's src/ is
+      # extracted for the steps below to read: ADR-050 argues why, and this is
+      # the whole of what the rule costs here. Ancestry rather than the
+      # checked-out commit, because CI builds an image only for a service a
+      # commit changed, so a workload's newest tag is routinely behind main.
       - name: The image's facts come from the image's revision
         run: |
           set -euo pipefail
@@ -207,16 +191,15 @@ jobs:
         env:
           TAG: ${{ inputs.tag }}
 
-      # The same gate the `check` job ran, against the other tree. That run
-      # answers whether the plan matches main; this one answers whether it
-      # matches what is about to serve traffic -- whether the image maps the
-      # probe routes the exclusion names, registers the consumers and sagas
-      # the plan declares signals for, and builds the entry assembly every
-      # query selects on. The repetition is the realm suite's, a few steps
-      # down, and for the same reason: the copy that decides is the copy that
-      # has to have been observed red.
+      # The same gate the `check` job ran, over the image's tree instead of
+      # the checkout's (ADR-050). `--workload` is required beside `--source`
+      # and is the sharp part: a tag names one workload's image, and the
+      # others are running images built from other revisions, so judging
+      # their plan entries against this one refuses rollouts that are fine.
       - name: The plan agrees with the image about what it runs
-        run: python deploy/canary/canary.py check --source "$IMAGE_SOURCE"
+        run: python deploy/canary/canary.py check --source "$IMAGE_SOURCE" --workload "$WORKLOAD"
+        env:
+          WORKLOAD: ${{ inputs.workload }}
 
       # The realm is checked before the rollout changes anything: ADR-033's
       # revocation bound and ADR-034's no-refresh-token rule are realm

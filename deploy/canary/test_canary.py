@@ -1662,24 +1662,49 @@ class ImageSourceTests(unittest.TestCase):
             canary.queries("http", self._tree("/health/live"))["errorRate"],
         )
 
-    def test_check_reads_its_hosts_from_the_source(self) -> None:
+    def test_check_reads_the_rolled_workloads_hosts_from_the_source(self) -> None:
         """Check 4 asks whether each serviceName is an entry assembly. Of the
-        image, now: a workload renamed in the image and not in the checkout
-        selects no series, and an absent series promotes nothing and rolls
-        every rung back."""
-        document = canary.load_plan()
+        image, for the workload being rolled: one renamed in the image and not
+        in the checkout selects no series, and an absent series promotes
+        nothing and rolls every rung back."""
+        failures = canary.check(
+            canary.load_plan(), source=self._tree("/healthz/live"),
+            workload="catalog-api")
 
-        failures = canary.check(document, source=self._tree("/healthz/live"))
+        self.assertEqual(
+            ["catalog-api"],
+            [f.split(".")[1].split(".serviceName")[0]
+             for f in failures if "not an entry assembly" in f])
 
-        self.assertTrue(any("not an entry assembly" in f for f in failures), failures)
+    def test_the_other_workloads_are_not_judged_against_this_image(self) -> None:
+        """A tag names one workload's image. CI builds an image only for a
+        service a commit changed, so an Ordering image legitimately predates a
+        Catalog-only change — and judging Catalog's plan entry against it
+        would refuse a rollout that is fine."""
+        failures = canary.check(
+            canary.load_plan(), source=self._tree("/healthz/live"),
+            workload="ordering-api")
+
+        self.assertEqual(
+            [], [f for f in failures if "catalog-api" in f], failures)
+
+    def test_a_source_without_a_workload_is_refused(self) -> None:
+        """Because the alternative is one image's revision answering for five
+        workloads, which is the defect rather than a stricter reading of it."""
+        failures = canary.check(
+            canary.load_plan(), source=self._tree("/healthz/live"))
+
+        self.assertTrue(
+            any("without the workload whose image it is" in f for f in failures),
+            failures)
 
     def test_check_reads_its_charts_from_the_root(self) -> None:
         """The other half of the split. The chart is installed from the
         checkout, so it is judged there — a source tree with no deploy/ at
         all raises nothing about charts."""
-        document = canary.load_plan()
-
-        failures = canary.check(document, source=self._tree("/healthz/live"))
+        failures = canary.check(
+            canary.load_plan(), source=self._tree("/healthz/live"),
+            workload="catalog-api")
 
         self.assertEqual([], [f for f in failures if "not a chart under" in f])
 
@@ -1704,16 +1729,36 @@ class RolloutBindingTests(unittest.TestCase):
     def test_the_shipped_workflow_is_bound(self) -> None:
         self.assertEqual([], canary._rollout_reads_the_image_source())
 
-    def test_a_dropped_source_argument_fails(self) -> None:
+    def test_a_dropped_reading_source_fails_on_its_own(self) -> None:
         """The mutation ADR-050 is defended against: the commands still run
         and every other check still passes, so nothing but this one notices
-        that the readings went back to the checkout's routes."""
-        without = self.shipped.replace(' --source "$IMAGE_SOURCE"', "")
+        that the readings went back to the checkout's routes. The reading's
+        flag is dropped alone, so this failure is its own rather than the
+        gate's standing in for it."""
+        without = "\n".join(
+            line for line in self.shipped.splitlines()
+            if line.strip() != '--source "$IMAGE_SOURCE" \\'
+        )
 
         failures = canary._rollout_reads_the_image_source(self._workflow(without))
 
-        self.assertTrue(failures)
-        self.assertTrue(any("read_prometheus.py" in f for f in failures), failures)
+        self.assertEqual(1, len(failures), failures)
+        self.assertIn("read_prometheus.py", failures[0])
+
+    def test_a_dropped_gate_source_fails_on_its_own(self) -> None:
+        """The other half, and the reason each is mutated separately: a run
+        that removed both would report one diagnostic and leave the branch
+        that produced the other unproved."""
+        without = "\n".join(
+            line.replace(' --source "$IMAGE_SOURCE"', "")
+            if "canary.py check" in line else line
+            for line in self.shipped.splitlines()
+        )
+
+        failures = canary._rollout_reads_the_image_source(self._workflow(without))
+
+        self.assertEqual(1, len(failures), failures)
+        self.assertIn("canary.py check", failures[0])
 
     def test_a_dropped_export_fails(self) -> None:
         without = "\n".join(
