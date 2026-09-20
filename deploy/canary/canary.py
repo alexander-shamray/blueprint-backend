@@ -45,6 +45,24 @@ SOURCE_INPUTS = [
 WORKFLOW_PATH = ".github/workflows/deploy.yml"
 WORKFLOW = ROOT / WORKFLOW_PATH
 
+# Where the rollout puts the image's own `src/`, and the flag that carries it.
+# Named here because check 12 asserts the workflow uses both, and a gate whose
+# subject is spelled twice is a gate that stops agreeing with itself.
+IMAGE_SOURCE = "IMAGE_SOURCE"
+INSTALLED_SOURCE = "INSTALLED_SOURCE"
+SOURCE_FLAG = "--source"
+INSTALLED_FLAG = "--installed-source"
+
+
+def _argument(flag: str, variable: str) -> str:
+    """The whole argument check 12 looks for, spelled once.
+
+    Whole, because a flag and a name found anywhere on the line are also
+    found in `--source "$OLD_IMAGE_SOURCE"`, which passes a different tree
+    and would leave the check green while the binding was gone.
+    """
+    return f'{flag} "${variable}"'
+
 # The two verdicts, and there are deliberately only two.
 #
 # A third — "hold", "inconclusive", "needs a human" — reads as caution and is
@@ -180,6 +198,50 @@ def validate_tag(tag: str, job_prefix: str | None = None) -> None:
             "(§7.4). Refused here rather than by `helm upgrade` after the stable "
             "track has been scaled up"
         )
+
+
+# §15.2 builds both of a service's images with the commit as the tag, so a
+# tag here is a commit object name. ADR-050 is why the rollout insists on it:
+# every fact this script derives from `src/` describes the running image, and
+# it can only be read from the revision that image was built from.
+IMAGE_REVISION = re.compile(r"^[0-9a-f]{40}$")
+
+
+def image_revision(tag: str) -> str:
+    """The commit an image tag names, or a refusal.
+
+    Full length and lower case, because the answer is resolved against this
+    repository's history and then printed. An abbreviation resolves too, and
+    the rollout would report a revision spelled differently from the tag it
+    deployed -- which is the confusion ADR-050 exists to remove.
+    """
+    if not IMAGE_REVISION.fullmatch(tag):
+        raise PlanError(
+            f"the image tag {tag!r} names no revision. §15.2 tags every image "
+            "with the commit it was built from, and §15.5's rollout reads that "
+            "image's probe routes, registrations and entry assembly out of the "
+            "same commit (ADR-050). A tag that is not a commit leaves all three "
+            "read from whatever the runner happened to check out"
+        )
+    return tag
+
+
+def installed_tag(values: dict) -> str:
+    """The image tag the running release was installed with.
+
+    `helm get values --all` is the only place the revision behind the stable
+    track's probe routes can be read, because that track serves whatever it
+    was installed with and no input names it. Every chart requires the tag
+    (§15.3), so a release without one is one this rollout cannot reason
+    about rather than a default to fall back on.
+    """
+    tag = values.get("image", {}).get("tag")
+    if not isinstance(tag, str) or not tag.strip():
+        raise PlanError(
+            "the installed release names no image.tag, so the revision its "
+            "probe routes come from cannot be read (ADR-050)"
+        )
+    return tag.strip()
 
 
 def _ceil_div(numerator: int, denominator: int) -> int:
@@ -467,20 +529,42 @@ def _shout(key: str) -> str:
 # The gate over the plan
 # --------------------------------------------------------------------------
 
-def check(plan_document: dict, root: Path = ROOT) -> list[str]:
+def check(plan_document: dict, root: Path = ROOT, source: Path | None = None,
+          workload: str | None = None, installed: Path | None = None) -> list[str]:
     """Everything that can be wrong with canary.json without a cluster.
 
     Failures are collected rather than raised, so one run reports them all.
-    Some checks guard the gate rather than the plan: that its own subject is
-    non-empty, that the workflow's path filter covers every input the rollout
-    reads, and that its dispatch menu covers every workload the rollout can
-    reach.
+    Some checks guard the gate rather than the plan: its own subject, the
+    workflow's path filter, its dispatch menu, and ADR-050's binding. `source`
+    is the tree the deployed image was built from and `workload` is whose
+    image it is; without them every fact is read from the checkout.
     """
     failures: list[str] = []
 
     steps = plan_document.get("steps", [])
     thresholds = entries(plan_document.get("thresholds", {}))
     workloads = entries(plan_document.get("workloads", {}))
+
+    # A tag names one workload's image, so only that workload is read from it
+    # (ADR-050). The others are running images built from other revisions,
+    # and judging their plan entries against this one refuses rollouts that
+    # are fine.
+    if source is None:
+        trees = dict.fromkeys(workloads, root)
+        source = root
+    elif workload not in workloads:
+        # Including None. An unknown name matches no key below, so every
+        # tree would come from the checkout and the image would answer for
+        # nothing -- the scoping silently absent rather than refused.
+        failures.append(
+            f"a source tree was given for {workload!r}, which is not a workload "
+            "in this plan, so nothing would be judged against the image "
+            "(ADR-050)"
+        )
+        trees = dict.fromkeys(workloads, root)
+        source = root
+    else:
+        trees = {name: (source if name == workload else root) for name in workloads}
 
     # 1. The ladder climbs, ends at 100, and dwells.
     if not steps:
@@ -539,7 +623,7 @@ def check(plan_document: dict, root: Path = ROOT) -> list[str]:
     hosts = _host_assemblies(root)
     if not workloads:
         failures.append("workloads is empty: the rollout has nothing to deploy")
-    for name, workload in sorted(workloads.items()):
+    for name, entry in sorted(workloads.items()):
         # 4a. The key is a Helm release name, and two shells read it as one.
         #     `deploy.yml` passes it to `helm upgrade` and `realm.yml`'s
         #     scheduled job reads it off `workloads` one line at a time, then
@@ -556,17 +640,18 @@ def check(plan_document: dict, root: Path = ROOT) -> list[str]:
                 "letters, digits and hyphens, starting and ending with a letter "
                 "or digit, at most 53 characters"
             )
-        service_name = workload.get("serviceName")
-        if service_name not in hosts:
+        service_name = entry.get("serviceName")
+        known = _host_assemblies(trees[name])
+        if service_name not in known:
             failures.append(
                 f"workloads.{name}.serviceName is {service_name!r}, which is not "
                 f"an entry assembly in this solution. §13.2 takes service.name "
                 f"from ApplicationName, so it must be one of: "
-                f"{', '.join(sorted(hosts))}"
+                f"{', '.join(sorted(known))}"
             )
-        if not _chart_exists(workload.get("chart"), root):
+        if not _chart_exists(entry.get("chart"), root):
             failures.append(
-                f"workloads.{name}.chart is {workload.get('chart')!r}, which is "
+                f"workloads.{name}.chart is {entry.get('chart')!r}, which is "
                 "not a chart under deploy/helm"
             )
 
@@ -575,18 +660,43 @@ def check(plan_document: dict, root: Path = ROOT) -> list[str]:
     #    a meter Common.Web registers, at the MassTransit version the series
     #    table was verified against. A name nothing vouches for matches no
     #    series and rolls every canary back.
-    failures += _metrics_are_vouched_for(sorted(series_read()), root)
+    failures += _metrics_are_vouched_for(sorted(series_read()), root, root)
     failures += _masstransit_pin_is_verified(root)
+
+    #    The installed release answers for the baseline half of every
+    #    comparison, and §13.2 takes service.name from each image's entry
+    #    assembly. An image from before a rename emits the old label, so
+    #    the baseline query matches no series and a healthy release rolls
+    #    back. Refused here, before the HPA floor moves, rather than
+    #    measured as an absence for a whole dwell.
+    if installed is not None and workload in trees:
+        name = workloads[workload].get("serviceName")
+        if name not in _host_assemblies(installed):
+            failures.append(
+                f"workloads.{workload}.serviceName is {name!r}, which the "
+                "installed release's image does not build, so the baseline "
+                "query would match no series and every rung would roll back"
+            )
+
+    #    The rolled workload's own signals are vouched for against its image
+    #    too, and only its own: series_read() spans every signal the plan
+    #    defines, so a gateway image that receives no messages would be
+    #    refused for lacking a MassTransit meter it has no reason to carry.
+    if workload in trees and trees[workload] is not root:
+        failures += _metrics_are_vouched_for(
+            sorted(_workload_series(workloads[workload])), root, trees[workload])
 
     # 6. The gate's own subject. Checks 3, 4 and 5 all compare against
     #    something parsed out of another file, and a parser that quietly
     #    extracted nothing would pass all three vacuously — which is this
     #    repository's most-repeated failure, named in CLAUDE.md as such.
-    if not hosts:
-        failures.append(
-            "found no host assemblies under src/: check 4 would pass vacuously, "
-            "so the parser is what is broken rather than the plan"
-        )
+    for label, tree in (("the checkout", root), ("the image", source)):
+        if not _host_assemblies(tree):
+            failures.append(
+                f"found no host assemblies under {label}'s src/: check 4 would "
+                "pass vacuously, so the parser is what is broken rather than "
+                "the plan"
+            )
 
     # 7. The workflow's triggers cover every input this rollout reads.
     failures += _workflow_covers_inputs()
@@ -597,10 +707,10 @@ def check(plan_document: dict, root: Path = ROOT) -> list[str]:
     # 9. Each workload declares the signals it receives: a service that
     #    registers a consumer or a saga declares consume or saga, or argues
     #    why not (ADR-047).
-    failures += _workloads_declare_what_they_receive(workloads, SIGNALS, root)
+    failures += _workloads_declare_what_they_receive(workloads, SIGNALS, trees)
 
     # 10. The probe routes the http templates exclude can all be read.
-    failures += _probe_routes_are_readable(root)
+    failures += _probe_routes_are_readable(source)
 
     # 11. The plan holds data and no query text: the templates are code.
     for key in sorted(set(entries(plan_document)) - PLAN_KEYS):
@@ -609,6 +719,11 @@ def check(plan_document: dict, root: Path = ROOT) -> list[str]:
             "hold: the queries and each signal's thresholds are canary.py's "
             "(ADR-047)"
         )
+
+    # 12. The rollout hands each image's tree to everything that reads it
+    #     (ADR-050), and every piece of that wiring can go missing without
+    #     anything else here noticing.
+    failures += _rollout_reads_the_image_source()
 
     return failures
 
@@ -638,7 +753,7 @@ TO_SECONDS = {"s": "", "ms": " / 1000"}
 WORKLOAD_AND_TRACK = 'service_name="$SERVICE", deployment_track="$TRACK"'
 
 
-def queries(signal: str, root: Path = ROOT) -> dict[str, str]:
+def queries(signal: str, source: Path = ROOT) -> dict[str, str]:
     """The three PromQL templates for `signal`, one per role analyse reads.
 
     Each carries $SERVICE, $TRACK and $WINDOW for read_prometheus to fill.
@@ -651,7 +766,7 @@ def queries(signal: str, root: Path = ROOT) -> dict[str, str]:
     selector = WORKLOAD_AND_TRACK
     failed = selector
     if signal == "http":
-        selector += f', http_route!~"{probe_exclusion(root)}"'
+        selector += f', http_route!~"{probe_exclusion(source)}"'
         failed = selector + ', http_response_status_code=~"5.."'
     return {
         "errorRate": (
@@ -691,6 +806,17 @@ def _series_of(signal: str) -> dict[str, str]:
     }
 
 
+def _workload_series(workload: dict) -> set[str]:
+    """Every series the templates read for the signals this workload declares."""
+    return {
+        name
+        for signal in workload.get("signals", [])
+        if signal in SIGNALS
+        for role, name in _series_of(signal).items()
+        if role != "unit"
+    }
+
+
 def series_read() -> set[str]:
     """Every series any signal's templates read."""
     return {
@@ -701,7 +827,8 @@ def series_read() -> set[str]:
     }
 
 
-def _workloads_declare_what_they_receive(workloads: dict, signals: dict, root: Path) -> list[str]:
+def _workloads_declare_what_they_receive(workloads: dict, signals: dict,
+                                         trees: dict[str, Path]) -> list[str]:
     """Every workload declares a known signal, and each registration its signal.
 
     A consumer owes consume and a saga owes saga, unless an exemption argues
@@ -739,7 +866,7 @@ def _workloads_declare_what_they_receive(workloads: dict, signals: dict, root: P
             )
 
         for signal, pattern, key, kind in OWED_SIGNALS:
-            registers = _registers(workload.get("serviceName", ""), pattern, root)
+            registers = _registers(workload.get("serviceName", ""), pattern, trees[name])
             exemption = workload.get(key)
             if exemption is None:
                 if registers and signal not in declared:
@@ -912,34 +1039,34 @@ def _health_calls(root: Path) -> tuple[tuple[str | None, str], ...]:
     return tuple(calls)
 
 
-def probe_exclusion(root: Path = ROOT) -> str:
+def probe_exclusion(source: Path = ROOT) -> str:
     """The http_route regex that excludes every probe route the code maps.
 
     Derived from the routes rather than written, so a new probe route is
     excluded the day it is mapped. Refused where the scan found none or
     cannot read one, because a partial exclusion counts probes as traffic.
     """
-    failures = _probe_routes_are_readable(root)
+    failures = _probe_routes_are_readable(source)
     if failures:
         raise PlanError("; ".join(failures))
     # PromQL anchors the regex at both ends; its string literal needs each
     # backslash re.escape adds doubled.
-    return "|".join(re.escape(route).replace("\\", "\\\\") for route in sorted(health_routes(root)))
+    return "|".join(re.escape(route).replace("\\", "\\\\") for route in sorted(health_routes(source)))
 
 
-def _probe_routes_are_readable(root: Path) -> list[str]:
+def _probe_routes_are_readable(source: Path) -> list[str]:
     """The probe-route scan found routes, and every call site's is a literal.
 
     The subject is checked first, because a scan that found no route would
     exclude nothing and certify it.
     """
-    if not health_routes(root):
+    if not health_routes(source):
         return ["found no MapHealthChecks route under src/: the probe exclusion "
                 "would be empty, so the scan is what is broken"]
     return [
         f"{site} maps a health check on a route that is not a string literal, "
         "so the probe exclusion cannot include it"
-        for site in unresolved_health_routes(root)
+        for site in unresolved_health_routes(source)
     ]
 
 
@@ -999,7 +1126,7 @@ def _alert_threshold(text: str, alert: str) -> float | None:
     return float(comparisons[0])
 
 
-def _host_assemblies(root: Path) -> set[str]:
+def _host_assemblies(source: Path) -> set[str]:
     """Every project that produces a host, by assembly name.
 
     A host is a project with a `Program.cs` beside its csproj — which is what
@@ -1008,7 +1135,7 @@ def _host_assemblies(root: Path) -> set[str]:
     service's API is a host here the day it exists.
     """
     hosts = set()
-    for csproj in (root / "src").rglob("*.csproj"):
+    for csproj in (source / "src").rglob("*.csproj"):
         if (csproj.parent / "Program.cs").exists():
             hosts.add(csproj.stem)
     return hosts
@@ -1073,7 +1200,7 @@ def exported_series(instrument: str, kind: str, unit: str) -> set[str]:
     return {base}
 
 
-def _metrics_are_vouched_for(metrics: list[str], root: Path) -> list[str]:
+def _metrics_are_vouched_for(metrics: list[str], root: Path, source: Path) -> list[str]:
     """Every series in `metrics`, against what vouches for it.
 
     A metric a loaded alert reads is matched on its instrument, because an
@@ -1082,7 +1209,7 @@ def _metrics_are_vouched_for(metrics: list[str], root: Path) -> list[str]:
     registers.
     """
     rules = root / "deploy" / "observability" / "alerts" / "platform-alerts.yaml"
-    registration = root / "src" / "BuildingBlocks" / "Common.Web" / "ObservabilityExtensions.cs"
+    registration = source / "src" / "BuildingBlocks" / "Common.Web" / "ObservabilityExtensions.cs"
     try:
         alert_text = rules.read_text(encoding="utf-8")
         registered_text = registration.read_text(encoding="utf-8")
@@ -1234,6 +1361,197 @@ def _dispatch_options_match_workloads(workloads: dict) -> list[str]:
     return failures
 
 
+# What an archive writes and what a step exports, so check 12 can ask
+# whether they are the same path. A tree exported by the right name and
+# taken from somewhere else reads the checkout while every name matches.
+ARCHIVED = re.compile(
+    r'git\s+archive\s+"?(?P<revision>[^"\s]+)"?\s+src\b[^\n]*?-C\s+"?(?P<into>[^"\s]+)"?')
+
+# The revision every archive has to be of, and the assignment that has to
+# have produced it. Named rather than denied: a list of spellings that are
+# not the right one admits the next spelling nobody listed, which is the
+# enumeration failure this repository keeps re-finding.
+RESOLVED_REVISION = "$REVISION"
+ASSIGNS_REVISION = re.compile(r"(?<![A-Za-z0-9_])REVISION=")
+RESOLVES_REVISION = re.compile(
+    r"(?<![A-Za-z0-9_])REVISION=\$\(\s*python\s+\S*canary\.py\s+revision"
+    r'\s+--value\s+"\$TAG"')
+
+# And the tag that feeds it. The candidate's arrives as a step input, so
+# the only shell assignment of it is the stable track's, which has to come
+# from the running release rather than from anywhere a name could be put.
+ASSIGNS_TAG = re.compile(r"(?<![A-Za-z0-9_])TAG=")
+RESOLVES_TAG = re.compile(
+    r"(?<![A-Za-z0-9_])TAG=\$\(\s*python\s+\S*canary\.py\s+installed-tag\b")
+
+
+def _resolved_above(live: list[str], index: int) -> bool:
+    """Whether the nearest REVISION= above `index` came from the tag.
+
+    The nearest one, because each archive runs in its own step and takes
+    the value that step set: an archive of the right variable, assigned
+    from the wrong thing, is the same tree by a longer route.
+    """
+    for line in reversed(live[:index]):
+        if ASSIGNS_REVISION.search(line):
+            return bool(RESOLVES_REVISION.search(line))
+    return False
+
+
+def _archived(live: list[str]) -> dict[str, tuple[str, bool]]:
+    """Each tree an archive writes, its revision, and where that came from."""
+    found = {}
+    for index, line in enumerate(live):
+        match = ARCHIVED.search(line)
+        if match:
+            found[match.group("into")] = (
+                match.group("revision"), _resolved_above(live, index))
+    return found
+
+
+def _exported(live: list[str], variable: str) -> str | None:
+    """The path a step writes into GITHUB_ENV under `variable`."""
+    pattern = re.compile(
+        rf'(?<![A-Za-z0-9_]){variable}=(?P<into>[^"\s]+)"?\s*>>\s*"?\$GITHUB_ENV')
+    for line in live:
+        match = pattern.search(line)
+        if match:
+            return match.group("into")
+    return None
+
+
+def _invocations(lines: list[str], command: str) -> list[str]:
+    """Each run of `command` in `lines`, with its continuations joined.
+
+    A workflow spells a long command over several lines ending in a
+    backslash, so the arguments that matter are not on the line the command
+    is named on. Joining is what lets the check below ask about a whole
+    invocation rather than about a line.
+    """
+    found = []
+    for index, line in enumerate(lines):
+        if command not in line:
+            continue
+        run = line.strip()
+        cursor = index
+        while run.endswith("\\") and cursor + 1 < len(lines):
+            cursor += 1
+            run = run[:-1].rstrip() + " " + lines[cursor].strip()
+        found.append(run)
+    return found
+
+
+def _rollout_reads_the_image_source(workflow: Path = WORKFLOW) -> list[str]:
+    """The rollout hands each image's tree to everything that reads `src/`.
+
+    ADR-050's binding is a path exported per image and an argument carrying
+    it to each reader. Drop any one and the defect returns in silence: the
+    commands still run, this gate still passes, and the facts that piece
+    covered are the checkout's again. So the subject here is the workflow
+    text rather than a verdict, because an argument that went missing is
+    not observable from one.
+    """
+    try:
+        text = workflow.read_text(encoding="utf-8")
+    except OSError as error:
+        return [f"{WORKFLOW_PATH} is not readable, so ADR-050's binding is unchecked: {error}"]
+
+    # Comment lines are dropped first: this file argues at length about the
+    # commands it runs, and a check that read those would pass on the prose.
+    live = [line for line in text.splitlines() if not line.lstrip().startswith("#")]
+
+    failures = []
+    archived = _archived(live)
+
+    for line in live:
+        if ASSIGNS_TAG.search(line) and not RESOLVES_TAG.search(line):
+            failures.append(
+                "a step sets TAG from something other than `canary.py installed-tag`, "
+                "so the revision resolved from it is not the running release's (ADR-050)"
+            )
+    for variable in (IMAGE_SOURCE, INSTALLED_SOURCE):
+        # The name is matched whole. `IMAGE_SOURCE=` is also inside
+        # `OLD_IMAGE_SOURCE=`, so a consistent rename would satisfy a
+        # substring test while exporting a different tree.
+        exported = _exported(live, variable)
+        if exported is None:
+            failures.append(
+                f"no step exports {variable} into GITHUB_ENV, so the rollout has "
+                "no tree to read it from and ADR-050's binding is not in force"
+            )
+            continue
+        # And it has to be the tree an archive wrote. Exporting the
+        # checkout satisfies every name and argument check below while the
+        # rollout reads exactly what the binding exists to stop it reading.
+        if exported not in archived:
+            failures.append(
+                f"{variable} is exported as {exported}, which no `git archive` "
+                "writes, so the rollout reads a tree nothing took from the "
+                "image's revision (ADR-050)"
+            )
+        else:
+            revision, resolved = archived[exported]
+            if revision != RESOLVED_REVISION:
+                failures.append(
+                    f"{variable} is archived from {revision} rather than "
+                    f"{RESOLVED_REVISION}, so the tree is not the one the tag "
+                    "resolved to (ADR-050)"
+                )
+            elif not resolved:
+                failures.append(
+                    f"{variable} is archived from {RESOLVED_REVISION}, which "
+                    "the step above it does not set from `canary.py revision`, "
+                    "so the name is right and the value is not (ADR-050)"
+                )
+
+    # Every reading, because one unbound query is a whole rung judged against
+    # the wrong request set, and both tracks are read here.
+    readings = _invocations(live, "read_prometheus.py")
+    if not readings:
+        failures.append(
+            f"{WORKFLOW_PATH} runs read_prometheus.py nowhere, so this check's "
+            "own subject is missing rather than satisfied"
+        )
+    for run in readings:
+        for flag, variable, track in (
+            (SOURCE_FLAG, IMAGE_SOURCE, "the candidate"),
+            (INSTALLED_FLAG, INSTALLED_SOURCE, "the stable track"),
+        ):
+            if _argument(flag, variable) not in run:
+                failures.append(
+                    f"a read_prometheus.py run takes no {_argument(flag, variable)}, "
+                    f"so {track}'s probe exclusion is the checkout's routes and "
+                    "not that image's (ADR-050)"
+                )
+
+    # One, not every: the `check` job runs the same command against the
+    # checkout on a pull request, where there is no image and no tag.
+    # Both, because `--source` without the workload it belongs to is a
+    # refusal rather than a check, and the workload alone scopes nothing.
+    gate = _argument(SOURCE_FLAG, IMAGE_SOURCE)
+    runs = _invocations(live, "canary.py check")
+    if not any(gate in run for run in runs):
+        failures.append(
+            f"no `canary.py check` run takes {gate}, so the plan is never held "
+            "against the source the deployed image was built from (ADR-050)"
+        )
+    else:
+        # The same run, not merely the same file: a tree without the
+        # workload it answers for is refused inside check, and a candidate
+        # without the release it replaces leaves the baseline unjudged.
+        for flag, variable, cost in (
+            ("--workload", "WORKLOAD", "the workload it answers for"),
+            (INSTALLED_FLAG, INSTALLED_SOURCE, "the release it replaces"),
+        ):
+            wanted = _argument(flag, variable)
+            if not any(gate in run and wanted in run for run in runs):
+                failures.append(
+                    f"the `canary.py check` run that takes {gate} takes no "
+                    f"{wanted}, so the tree is given without {cost} (ADR-050)"
+                )
+    return failures
+
+
 # --------------------------------------------------------------------------
 # CLI
 # --------------------------------------------------------------------------
@@ -1242,7 +1560,26 @@ def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
 
-    sub.add_parser("check", help="validate canary.json against the repository")
+    checker = sub.add_parser("check", help="validate canary.json against the repository")
+    # Absent on a pull request, where there is no image: the plan is then
+    # checked against the checkout, which is the only tree there is.
+    checker.add_argument(
+        "--source", type=Path,
+        help="the tree the deployed image was built from (ADR-050)")
+    checker.add_argument(
+        "--workload", help="whose image --source is, and the only one read from it")
+    checker.add_argument(
+        "--installed-source", type=Path,
+        help="the tree the release being replaced was built from (ADR-050)")
+
+    revision = sub.add_parser("revision", help="the commit an image tag names")
+    revision.add_argument("--value", required=True)
+
+    installed = sub.add_parser(
+        "installed-tag", help="the tag the running release was installed with")
+    installed.add_argument(
+        "--values", required=True, type=Path,
+        help="a `helm get values --all -o json` document")
 
     # The workflow asks this BEFORE the first step, because §15.5's 5% is not
     # expressible at §15.3's replicaCount of 3 and scaling up is the operator's
@@ -1289,8 +1626,29 @@ def main(argv: list[str]) -> int:
         print(f"canary: {error}", file=sys.stderr)
         return 1
 
+    if args.command == "installed-tag":
+        try:
+            document = json.loads(args.values.read_text(encoding="utf-8"))
+            print(installed_tag(document))
+        except (OSError, json.JSONDecodeError) as error:
+            print(f"canary: {args.values} is not readable JSON: {error}", file=sys.stderr)
+            return 1
+        except PlanError as error:
+            print(f"canary: {error}", file=sys.stderr)
+            return 1
+        return 0
+
+    if args.command == "revision":
+        try:
+            print(image_revision(args.value))
+        except PlanError as error:
+            print(f"canary: {error}", file=sys.stderr)
+            return 1
+        return 0
+
     if args.command == "check":
-        failures = check(document)
+        failures = check(document, source=args.source, workload=args.workload,
+                         installed=args.installed_source)
         if failures:
             print(f"canary: {len(failures)} problem(s) with the rollout plan:\n", file=sys.stderr)
             for failure in failures:

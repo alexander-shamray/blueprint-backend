@@ -74,6 +74,10 @@ every chart and asserts what comes out.
 11. `canary.json` holds the ladder, the tolerance, the thresholds and the
     workloads, and nothing else: a plan carrying query text again is refused
     rather than ignored beside the templates that run.
+12. `deploy.yml` still hands each image's own tree to everything that reads
+    `src/` — ADR-050's binding, and any piece of it can go missing while
+    every command in the rollout still runs, every other check here still
+    passes, and the facts above quietly describe the checkout again.
 
 ## What a workload is judged on
 

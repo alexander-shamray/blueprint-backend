@@ -20,7 +20,7 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
-from canary import PlanError, entries, load_plan, queries
+from canary import ROOT, PlanError, entries, load_plan, queries
 
 TIMEOUT_SECONDS = 30
 
@@ -75,15 +75,24 @@ def query(base_url: str, expression: str) -> float | None:
     return value if math.isfinite(value) else None
 
 
-def read(base_url: str, workload: str, window: str, plan: dict) -> dict:
+def read(base_url: str, workload: str, window: str, plan: dict,
+         candidate: Path = ROOT, installed: Path | None = None) -> dict:
     """Both tracks' readings of the signals `workload` declares, and no others.
 
-    The service name is the plan's, so it has one spelling. An unknown
-    workload raises KeyError rather than reading nothing.
+    The service name is the plan's, so it has one spelling, and an unknown
+    workload raises KeyError rather than reading nothing. Each track's probe
+    exclusion is scanned from the image that track is running (ADR-050): the
+    candidate on the canary, and the release being replaced on the baseline.
+    One exclusion for both would filter the stable track's probes by the
+    candidate's routes, which is the mismatch this is here to close.
     """
     entry = entries(plan["workloads"])[workload]
+    trees = {
+        "canary": candidate,
+        "baseline": candidate if installed is None else installed,
+    }
     readings: dict[str, dict[str, dict[str, float | None]]] = {}
-    for track in ("canary", "baseline"):
+    for track, tree in trees.items():
         # `baseline` is the verdict's name for the stable track, and `stable`
         # is the label's.
         label = "stable" if track == "baseline" else "canary"
@@ -96,7 +105,7 @@ def read(base_url: str, workload: str, window: str, plan: dict) -> dict:
                     .replace("$TRACK", label)
                     .replace("$WINDOW", window),
                 )
-                for name, expression in queries(signal).items()
+                for name, expression in queries(signal, tree).items()
             }
             for signal in entry.get("signals", [])
         }
@@ -107,6 +116,14 @@ def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--workload", required=True, help="a workload key in canary.json")
     parser.add_argument("--window", required=True, help="the step's dwell, as a PromQL duration")
+    # ADR-050. Absent, the probe routes excluded are whatever tree this
+    # process is running out of, which is the checkout and not either image.
+    parser.add_argument(
+        "--source", type=Path, default=ROOT,
+        help="the tree the candidate image was built from")
+    parser.add_argument(
+        "--installed-source", type=Path, default=None,
+        help="the tree the release being replaced was built from")
     parser.add_argument("--out", required=True, type=Path)
     args = parser.parse_args(argv[1:])
 
@@ -118,7 +135,8 @@ def main(argv: list[str]) -> int:
         return 1
 
     try:
-        readings = read(base_url, args.workload, args.window, load_plan())
+        readings = read(base_url, args.workload, args.window, load_plan(),
+                        args.source, args.installed_source)
     except KeyError as error:
         print(f"read_prometheus: no workload or signal {error} in the plan", file=sys.stderr)
         return 1

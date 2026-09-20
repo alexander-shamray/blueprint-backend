@@ -124,7 +124,13 @@ jobs:
             exit 1
           fi
 
+      # ADR-050 reads the image's src/ out of the tag's commit and resolves
+      # that commit's ancestry, and the default shallow fetch carries one
+      # commit. Without the history both fail for every tag but the head of
+      # main, which is the one case where the binding has nothing to catch.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-python@v5
         with:
@@ -160,6 +166,69 @@ jobs:
         run: python deploy/canary/canary.py validate-tag --value "$TAG" --workload "$WORKLOAD"
         env:
           TAG: ${{ inputs.tag }}
+          WORKLOAD: ${{ inputs.workload }}
+
+      # The tag is held to the revision it names and that revision's src/ is
+      # extracted for the steps below to read: ADR-050 argues why, and this is
+      # the whole of what the rule costs here. Ancestry rather than the
+      # checked-out commit, because CI builds an image only for a service a
+      # commit changed, so a workload's newest tag is routinely behind main.
+      - name: The image's facts come from the image's revision
+        run: |
+          set -euo pipefail
+          REVISION=$(python deploy/canary/canary.py revision --value "$TAG")
+          if ! git cat-file -e "$REVISION^{commit}" 2>/dev/null; then
+            echo "::error::$REVISION is not a commit in this repository, so the image's own source cannot be read."
+            exit 1
+          fi
+          if ! git merge-base --is-ancestor "$REVISION" HEAD; then
+            echo "::error::$REVISION is not an ancestor of $GITHUB_SHA. Production rolls images built from a merged revision."
+            exit 1
+          fi
+          mkdir -p "$RUNNER_TEMP/image-source"
+          git archive "$REVISION" src | tar -x -C "$RUNNER_TEMP/image-source"
+          echo "IMAGE_SOURCE=$RUNNER_TEMP/image-source" >> "$GITHUB_ENV"
+        env:
+          TAG: ${{ inputs.tag }}
+
+      # The other half of the comparison. The stable track serves the image
+      # it was installed with, so its probe routes are that image's and not
+      # the candidate's (ADR-050). Read from the release, because no input
+      # names it, and refused rather than guessed: a rollout that cannot tell
+      # what the track it is measuring against serves has no baseline.
+      - name: The stable track's facts come from the image it is running
+        run: |
+          set -euo pipefail
+          helm get values "$WORKLOAD" -n "$NAMESPACE" --all -o json \
+            > "$RUNNER_TEMP/stable.json"
+          TAG=$(python deploy/canary/canary.py installed-tag --values "$RUNNER_TEMP/stable.json")
+          REVISION=$(python deploy/canary/canary.py revision --value "$TAG")
+          if ! git cat-file -e "$REVISION^{commit}" 2>/dev/null; then
+            echo "::error::The installed release serves $REVISION, which is not a commit in this repository, so the stable track's probe routes cannot be read."
+            exit 1
+          fi
+          if ! git merge-base --is-ancestor "$REVISION" HEAD; then
+            echo "::error::The installed release serves $REVISION, which this branch does not carry. A commit reachable only from another ref is not the history this rollout is judged against."
+            exit 1
+          fi
+          mkdir -p "$RUNNER_TEMP/installed-source"
+          git archive "$REVISION" src | tar -x -C "$RUNNER_TEMP/installed-source"
+          echo "INSTALLED_SOURCE=$RUNNER_TEMP/installed-source" >> "$GITHUB_ENV"
+        env:
+          WORKLOAD: ${{ inputs.workload }}
+
+      # The same gate the `check` job ran, over the image's tree instead of
+      # the checkout's (ADR-050), and over the release it replaces as well.
+      # `--workload` scopes the first: a tag names one workload's image, and
+      # judging the others against it refuses rollouts that are fine.
+      # `--installed-source` is what lets the baseline half be refused here
+      # rather than measured as an absence for a whole dwell.
+      - name: The plan agrees with the image about what it runs
+        run: |
+          python deploy/canary/canary.py check \
+            --source "$IMAGE_SOURCE" --installed-source "$INSTALLED_SOURCE" \
+            --workload "$WORKLOAD"
+        env:
           WORKLOAD: ${{ inputs.workload }}
 
       # The realm is checked before the rollout changes anything: ADR-033's
@@ -452,6 +521,8 @@ jobs:
             python deploy/canary/read_prometheus.py \
               --workload "$WORKLOAD" \
               --window "${CANARY_DWELL_MINUTES}m" \
+              --source "$IMAGE_SOURCE" \
+              --installed-source "$INSTALLED_SOURCE" \
               --out readings.json
 
             if ! python deploy/canary/canary.py analyse --workload "$WORKLOAD" --readings readings.json; then
