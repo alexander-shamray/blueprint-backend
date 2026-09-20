@@ -5,8 +5,8 @@ namespace Common.Contracts.Payments.V1;
 /// service that mints one and the service that records it hold one number.
 /// Here because §4.3 lets only this assembly cross a service boundary, on
 /// <see cref="Ordering.V1.OrderLimits"/>'s terms. Ordering's own
-/// <c>PaymentReference</c> cannot cite it — §4.2 holds that domain to
-/// <c>Common.Domain</c> — so a test in Ordering's suite binds the two.
+/// <c>PaymentReference</c> restates the width rather than citing this,
+/// because §4.2 holds that domain to <c>Common.Domain</c>.
 /// </summary>
 public static class PaymentLimits
 {

@@ -19,7 +19,7 @@ public readonly record struct PaymentReference
     // The column width the reference is stored in (§7.2), and the width
     // Payments may mint. Restated rather than cited because §4.2 keeps this
     // assembly off Common.Contracts, where PaymentLimits.MaxReferenceLength
-    // owns it; a test in Ordering's suite holds the two numbers together.
+    // owns it.
     public const int MaxLength = 100;
 
     public string Value { get; }
