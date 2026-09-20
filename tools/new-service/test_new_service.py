@@ -499,23 +499,18 @@ class GeneratedGuidanceIsTrue(unittest.TestCase):
 
         The template is Catalog itself, so a word the comment gate calls
         history reaches every service that follows. The patterns are that
-        gate's own, imported rather than restated, and read by name with
-        the count asserted so a rename there fails here. Emphasis is its
-        fifth and is left to the churn plan's sweep. Whole files rather
+        gate's own, imported rather than restated: every one of them but
+        emphasis, which the churn plan's sweep owns, so a pattern added
+        there extends this without an edit. Whole files rather
         than comment tokens, so a match in a string literal fails too:
         the alternative is a second lexer to keep in step with the gate's.
         """
-        wanted = (
-            "an issue or pull request number",
-            "a delivery-plan row",
-            "a reviewer",
-            "history",
-        )
         gate = comment_gate_module()
-        patterns = [(name, pattern) for name, pattern, _ in gate.PATTERNS if name in wanted]
+        exempt = "emphasis"
+        patterns = [(name, pattern) for name, pattern, _ in gate.PATTERNS if name != exempt]
         self.assertEqual(
-            len(wanted), len(patterns),
-            "the comment gate renamed or dropped a pattern this guard reads by name")
+            len(gate.PATTERNS) - 1, len(patterns),
+            f"the comment gate no longer names exactly one {exempt!r} pattern")
 
         for path, text in self.rendered.created.items():
             body = text.replace("\r\n", "\n")
