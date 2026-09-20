@@ -30,8 +30,18 @@ CIDR='{10.42.0.0/16}'
 GATEWAY_OVERLAY="--set ingress.trustedNetworks=$CIDR"
 PLATFORM_OVERLAY="--set gateway.ingress.trustedNetworks=$CIDR"
 
-SERVICE_CHARTS="catalog ordering inventory gateway web-bff"
-MIGRATOR_CHARTS="catalog ordering inventory"
+# Payments' required provider address (§15.4). Per chart, not for all: on any
+# other chart it is a setting with the capability off, which the library's
+# coherence guard refuses. So it cannot ride GATEWAY_OVERLAY, which every
+# chart receives.
+overlay_for() {
+    case "$1" in
+        payments) printf '%s' "--set-string paymentProvider.baseUrl=https://psp.example.invalid/" ;;
+    esac
+}
+
+SERVICE_CHARTS="catalog ordering inventory payments gateway web-bff"
+MIGRATOR_CHARTS="catalog ordering inventory payments"
 DATABASELESS_CHARTS="gateway web-bff"
 
 # Every path outside deploy/helm that this script reads, declared once beside
@@ -44,6 +54,7 @@ src/BFF/Web.Bff
 src/Services/Catalog
 src/Services/Ordering
 src/Services/Inventory
+src/Services/Payments
 src/BuildingBlocks/Common.Web/HealthCheckExtensions.cs
 .gitattributes
 deploy/canary/canary.json
@@ -315,9 +326,11 @@ for chart in $SERVICE_CHARTS platform; do
         --set-string "catalog.image.tag=$TAG" \
         --set-string "ordering.image.tag=$TAG" \
         --set-string "inventory.image.tag=$TAG" \
+        --set-string "payments.image.tag=$TAG" \
+        --set-string "payments.paymentProvider.baseUrl=https://psp.example.invalid/" \
         --set-string "gateway.image.tag=$TAG" \
         --set-string "web-bff.image.tag=$TAG" \
-        $GATEWAY_OVERLAY $PLATFORM_OVERLAY
+        $GATEWAY_OVERLAY $(overlay_for "$chart") $PLATFORM_OVERLAY
 done
 
 # --------------------------------------------------------------------------
@@ -328,7 +341,7 @@ section 'A deploy that cannot name its tag fails (§15.3)'
 # the one tag §15.3 forbids by name. This is the assertion that the empty
 # default is a refusal rather than a hole.
 for chart in $SERVICE_CHARTS; do
-    if "$HELM" template "$chart" "$CHARTS_DIR/$chart" $GATEWAY_OVERLAY \
+    if "$HELM" template "$chart" "$CHARTS_DIR/$chart" $GATEWAY_OVERLAY $(overlay_for "$chart") \
         >"$OUT/untagged-$chart.txt" 2>&1; then
         fail "$chart renders WITHOUT a tag — it must not"
     elif grep -q 'image.tag is required' "$OUT/untagged-$chart.txt"; then
@@ -343,17 +356,48 @@ section 'Rendering'
 # --------------------------------------------------------------------------
 for chart in $SERVICE_CHARTS; do
     "$HELM" template "$chart" "$CHARTS_DIR/$chart" --set-string "image.tag=$TAG" \
-        $GATEWAY_OVERLAY >"$OUT/$chart.yaml"
+        $GATEWAY_OVERLAY $(overlay_for "$chart") >"$OUT/$chart.yaml"
     pass "$chart renders"
 done
 "$HELM" template platform "$CHARTS_DIR/platform" \
     --set-string "catalog.image.tag=$TAG" \
     --set-string "ordering.image.tag=$TAG" \
     --set-string "inventory.image.tag=$TAG" \
+    --set-string "payments.image.tag=$TAG" \
+    --set-string "payments.paymentProvider.baseUrl=https://psp.example.invalid/" \
     --set-string "gateway.image.tag=$TAG" \
     --set-string "web-bff.image.tag=$TAG" \
     $PLATFORM_OVERLAY >"$OUT/platform.yaml"
 pass 'platform renders'
+
+# --------------------------------------------------------------------------
+section 'paymentProvider is a capability, and its address is required'
+# --------------------------------------------------------------------------
+# Both keys are read eagerly by AddPaymentProvider, so every state below that
+# renders cleanly is a pod that will not start. Asserted in both directions:
+# supplied, the two keys land in the right Kind; absent or contradicted, the
+# render is refused rather than deferred to the cluster.
+PAYMENTS_RENDER=$("$HELM" template payments "$CHARTS_DIR/payments" \
+    --set-string image.tag="$TAG" \
+    --set-string paymentProvider.baseUrl=https://psp.example.invalid/)
+grep -q 'PaymentProvider__BaseUrl: "https://psp.example.invalid/"' <<<"$PAYMENTS_RENDER" \
+    || fail 'payments: PaymentProvider__BaseUrl missing from the ConfigMap'
+grep -q 'name: PaymentProvider__ApiKey' <<<"$PAYMENTS_RENDER" \
+    || fail 'payments: PaymentProvider__ApiKey missing from the Deployment'
+if "$HELM" template payments "$CHARTS_DIR/payments" --set-string image.tag="$TAG" >/dev/null 2>&1; then
+    fail 'payments: rendered with no paymentProvider.baseUrl; a deploy that forgot it must fail here, not at start'
+fi
+if "$HELM" template payments "$CHARTS_DIR/payments" --set-string image.tag="$TAG" \
+    --set paymentProvider.enabled=false --set paymentProvider.apiKeySecretRef=null \
+    --set-string paymentProvider.baseUrl=https://psp.example.invalid/ >/dev/null 2>&1; then
+    fail 'payments: rendered an address with the capability off; a setting nothing reads must be refused'
+fi
+if "$HELM" template payments "$CHARTS_DIR/payments" --set-string image.tag="$TAG" \
+    --set paymentProvider.enabled=false --set paymentProvider.apiKeySecretRef=null \
+    --set-string paymentProvider.baseUrl= >/dev/null 2>&1; then
+    fail 'payments: rendered with the capability off and cleared; the host registers it unconditionally'
+fi
+pass 'paymentProvider renders both keys and refuses an empty address or an address while off'
 
 # --------------------------------------------------------------------------
 section 'Probes — three per workload (§13.5)'
@@ -972,7 +1016,7 @@ section 'The canary track (§15.5, ADR-022)'
 for chart in $SERVICE_CHARTS; do
     "$HELM" template "$chart-canary" "$CHARTS_DIR/$chart" --set-string "image.tag=$TAG" \
         --set canary.enabled=true --set autoscaling.enabled=false \
-        $GATEWAY_OVERLAY >"$OUT/$chart-canary.yaml"
+        $GATEWAY_OVERLAY $(overlay_for "$chart") >"$OUT/$chart-canary.yaml"
     pass "$chart renders a canary"
 
     name="$(awk '/^workload:/ { w = 1 } w && /^  name: / { sub(/^  name: /, ""); print; exit }' \

@@ -12,7 +12,9 @@ common/      the library chart: every template, once
 catalog/     ┐
 ordering/    │
 inventory/   │ Chart.yaml + values.yaml + one-line templates that include
-web-bff/     ┘ the library's. The values ARE the per-service decisions.
+payments/    │ the library's. The values ARE the per-service decisions.
+web-bff/     ┘ Payments carries one template more: the guard on the one
+             capability its host registers unconditionally.
 gateway/     the same, plus edge-config.yaml — the two keys no service has
              (§15.3), in a template only this chart carries
 platform/    the umbrella — one dependency per service chart and no values
@@ -93,9 +95,18 @@ helm upgrade --install platform deploy/helm/platform \
     --set-string catalog.image.tag="$CATALOG_SHA" \
     --set-string ordering.image.tag="$ORDERING_SHA" \
     --set-string inventory.image.tag="$INVENTORY_SHA" \
+    --set-string payments.image.tag="$PAYMENTS_SHA" \
+    --set-string payments.paymentProvider.baseUrl="$PSP_BASE_URL" \
     --set-string gateway.image.tag="$GATEWAY_SHA" \
     --set-string web-bff.image.tag="$BFF_SHA"
 ```
+
+**Payments' provider address is in that command for the same reason the values
+file is below it**: the chart ships no default a cluster could use — §3.2's
+provider is a real third party and Compose's simulator is not one — so the
+render is refused until an environment names it. It sits on the command line
+here beside the tags; an environment that keeps it in `staging.yaml` under
+`payments.paymentProvider.baseUrl` is the same fact in the other place.
 
 **The values file is not optional in that command**, and leaving it out is a
 render failure rather than a default: the gateway ships

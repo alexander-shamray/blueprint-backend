@@ -18,7 +18,7 @@ on:
         description: 'Which deployable to roll (a key in deploy/canary/canary.json)'
         required: true
         type: choice
-        options: [catalog-api, ordering-api, inventory-api, gateway, web-bff]
+        options: [catalog-api, ordering-api, inventory-api, payments-api, gateway, web-bff]
       tag:
         description: 'Image tag to promote. §15.3 refuses an empty one rather than rolling :latest.'
         required: true

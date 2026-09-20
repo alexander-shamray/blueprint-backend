@@ -1,0 +1,11 @@
+apiVersion: v2
+name: payments
+description: >-
+  Payments (§4.1) — its API and migrator hook, behind the payments-admin
+  route (§10.2), and the one service that calls a third party (§3.2).
+type: application
+version: 0.1.0
+dependencies:
+  - name: commerce-common
+    version: 0.1.0
+    repository: file://../common

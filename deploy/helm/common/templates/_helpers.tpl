@@ -287,6 +287,19 @@ implied.
 Identity__Client__ClientId: {{ include "commerce.require" (list .Values.identity.clientId "identity.clientId is required when identity.clientCredentials: Web.Bff binds ServiceIdentityOptions unconditionally and ValidateOnStart refuses to boot without it (§15.4).") | quote }}
 Identity__Client__Scope: {{ include "commerce.require" (list .Values.identity.scope "identity.scope is required when identity.clientCredentials: it becomes the audience every service validates (§11.5), and ServiceIdentityOptions marks it [Required].") | quote }}
 {{- end }}
+{{- if (.Values.paymentProvider).enabled }}
+{{- /*
+The provider's address (§3.2's one third party). Config, not a Secret: an
+address is not a credential. Required, and refused at render when empty,
+because the host's own refusal is at start — a clean render followed by a pod
+that will not start is the shape every guard in this file exists to refuse.
+
+`(.Values.paymentProvider).enabled` rather than the dotted form: the four other
+charts carry no such block, and the parenthesised form reads a missing map as
+empty where the dotted one fails the render.
+*/}}
+PaymentProvider__BaseUrl: {{ include "commerce.require" (list .Values.paymentProvider.baseUrl "paymentProvider.baseUrl is required when paymentProvider.enabled: AddPaymentProvider reads it eagerly and throws naming the key, so the host does not start (§15.4).") | quote }}
+{{- end }}
 {{- end -}}
 
 {{- /*
@@ -361,6 +374,9 @@ database its host unconditionally resolves.
 {{- if and .Values.identity.clientId (not .Values.identity.clientCredentials) }}
 {{- fail "identity.clientCredentials is false but identity.clientId is set. Web.Bff binds ServiceIdentityOptions unconditionally and ValidateOnStart refuses to boot without all three values (§15.4) — so this is a render that succeeds and a pod that never starts." }}
 {{- end }}
+{{- if and (or (.Values.paymentProvider).apiKeySecretRef (.Values.paymentProvider).baseUrl) (not (.Values.paymentProvider).enabled) }}
+{{- fail "paymentProvider.enabled is false but a paymentProvider setting is set. AddPaymentProvider reads both provider keys eagerly (§15.4), so this renders cleanly and the host does not start. A capability is a fact about the code, not an environment setting." }}
+{{- end }}
 {{- if .Values.database.enabled }}
 {{- /*
 The RUNTIME connection string (DML only) — §7.1's split identity. The migrator
@@ -422,5 +438,12 @@ the duplicate write hardest to reproduce.
     secretKeyRef:
       name: {{ include "commerce.require" (list .Values.identity.clientSecretRef.name "identity.clientSecretRef.name is required when identity.clientCredentials. The secret is a reference, never a value (§15.3).") | quote }}
       key: {{ include "commerce.require" (list .Values.identity.clientSecretRef.key "identity.clientSecretRef.key is required when identity.clientCredentials.") | quote }}
+{{- end }}
+{{- if (.Values.paymentProvider).enabled }}
+- name: PaymentProvider__ApiKey
+  valueFrom:
+    secretKeyRef:
+      name: {{ include "commerce.require" (list .Values.paymentProvider.apiKeySecretRef.name "paymentProvider.apiKeySecretRef.name is required when paymentProvider.enabled. The key is a reference, never a value (§15.3).") | quote }}
+      key: {{ include "commerce.require" (list .Values.paymentProvider.apiKeySecretRef.key "paymentProvider.apiKeySecretRef.key is required when paymentProvider.enabled.") | quote }}
 {{- end }}
 {{- end -}}
