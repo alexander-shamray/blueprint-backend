@@ -85,7 +85,7 @@
       "serviceName": "Payments.Api",
       "chart": "payments",
       "signals": ["consume"],
-      "httpExemption": "Payments' HTTP surface is one admin read, behind the payments:admin policy at the gateway and in the service, and an operator's occasional call cannot be relied on to reach minimumRequests in a dwell, so a declared http signal would roll healthy releases back for quiet. Its commands and events arrive on the broker and are judged by consume, and an admin request that fails is still counted by the gateway's http signal, which proxies it. The provider call §3.2 gives this service is outbound and is judged by neither: it is Payments' own client, not a server the canary's series describe."
+      "httpExemption": "Payments' HTTP surface is one admin read, behind the payments:admin policy at the gateway and in the service, and an operator's occasional call cannot be relied on to reach minimumRequests in a dwell, so a declared http signal would roll healthy releases back for quiet. Its commands and events arrive on the broker and are judged by consume, and an admin request that fails is still counted by the gateway's http signal, which proxies it. The provider call §3.2 gives this service has no signal of its own — http measures inbound server requests, not Payments' outbound client — but it is not unjudged: AuthorisePaymentHandler awaits it inside the registered command consumer without catching, so a provider fault surfaces as a consume fault and is counted there."
     },
     "gateway": { "serviceName": "Gateway.Api", "chart": "gateway", "signals": ["http"] },
     "web-bff": { "serviceName": "Web.Bff", "chart": "web-bff", "signals": ["http"] }
