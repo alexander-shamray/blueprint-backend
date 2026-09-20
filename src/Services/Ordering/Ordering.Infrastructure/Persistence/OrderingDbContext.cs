@@ -3,6 +3,7 @@ using Common.Infrastructure.Inbox;
 using Common.Infrastructure.Outbox;
 using MassTransit;
 using Microsoft.EntityFrameworkCore;
+using Ordering.Application;
 using Ordering.Domain.Orders;
 
 namespace Ordering.Infrastructure.Persistence;
@@ -123,7 +124,7 @@ public sealed class OrderingDbContext(DbContextOptions<OrderingDbContext> option
     /// </summary>
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {
-        configurationBuilder.Properties<decimal>().HavePrecision(19, 4);
+        configurationBuilder.Properties<decimal>().HavePrecision(OrderAmounts.Precision, OrderAmounts.Scale);
         configurationBuilder.Properties<string>().HaveMaxLength(400);
         configurationBuilder.Properties<DateTimeOffset>().HaveColumnType("datetimeoffset(7)");
     }

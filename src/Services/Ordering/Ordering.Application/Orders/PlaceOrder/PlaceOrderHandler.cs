@@ -40,6 +40,15 @@ public sealed class PlaceOrderHandler(
         if (missing.Length > 0)
             return Result.Failure<Guid>(OrderErrors.ProductsUnavailable(missing));
 
+        // The first point that holds both the quantities and their prices, and
+        // therefore the last one before the order exists. Past the ceiling the
+        // endpoint would succeed and publish OrderPlaced, and the saga instance
+        // and every consumer recording the total would then fail on an order
+        // already in flight — a page rather than a refusal.
+        decimal total = command.Items.Sum(i => priceList[new ProductId(i.ProductId)].Amount * i.Quantity);
+        if (total >= OrderAmounts.Ceiling)
+            return Result.Failure<Guid>(OrderErrors.TotalBeyondCeiling);
+
         IEnumerable<(ProductId Product, int Quantity, Money UnitPrice)> items =
             command.Items.Select(i =>
             {

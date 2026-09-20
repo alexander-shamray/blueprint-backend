@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using Ordering.Application;
 
 namespace Ordering.Infrastructure.Persistence;
 
@@ -59,7 +60,7 @@ internal sealed class ProductPriceConfiguration : IEntityTypeConfiguration<Produ
             .IsFixedLength()
             .IsUnicode(false);
 
-        builder.Property(p => p.Amount).HasPrecision(19, 4);
+        builder.Property(p => p.Amount).HasPrecision(OrderAmounts.Precision, OrderAmounts.Scale);
 
         // The default is §6.6's, and it is what lets that chapter's MERGE
         // omit the column on the insert branch if it ever wants to.

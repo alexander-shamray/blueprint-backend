@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using Ordering.Application;
 using Ordering.Domain.Orders;
 
 namespace Ordering.Infrastructure.Persistence;
@@ -38,7 +39,9 @@ internal sealed class OrderLineConfiguration : IEntityTypeConfiguration<OrderLin
             l => l.UnitPrice,
             price =>
             {
-                price.Property(m => m.Amount).HasColumnName("UnitPriceAmount").HasPrecision(19, 4);
+                price.Property(m => m.Amount)
+                    .HasColumnName("UnitPriceAmount")
+                    .HasPrecision(OrderAmounts.Precision, OrderAmounts.Scale);
                 price.Property(m => m.Currency).HasColumnName("UnitPriceCurrency").HasMaxLength(3);
             });
 

@@ -1,5 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
+using Common.Contracts.Ordering.V1;
+using Ordering.Application;
 using Ordering.Application.Orders;
 using Ordering.Application.Orders.PlaceOrder;
 using Ordering.TestSupport;
@@ -40,6 +42,12 @@ namespace Ordering.Api.Tests;
 public sealed class PlaceOrderTests(ServiceFixture fixture) : IAsyncLifetime
 {
     private static readonly Guid Caller = Guid.Parse("33333333-3333-3333-3333-333333333333");
+
+    /// <summary>
+    /// A whole unit below the ceiling, so one of it is storable and
+    /// <c>OrderLimits.MaxQuantity</c> of it is not.
+    /// </summary>
+    private static readonly decimal LargestStorableAmount = OrderAmounts.Ceiling - 1m;
 
     public async ValueTask InitializeAsync() => await fixture.ResetAsync();
 
@@ -122,6 +130,36 @@ public sealed class PlaceOrderTests(ServiceFixture fixture) : IAsyncLifetime
         await SeedPriceAsync(product, 19.99m, "USD");
 
         (await PlaceAsync(product)).StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
+    }
+
+    [Fact]
+    public async Task An_order_past_the_money_columns_ceiling_is_refused_rather_than_placed()
+    {
+        // Catalog admits a unit price just under OrderAmounts.Ceiling and
+        // OrderLimits.MaxQuantity multiplies it far past it, so the validator
+        // passes an order no money column here can record. Refused before the
+        // aggregate exists, because after it the endpoint has succeeded and
+        // OrderPlaced is out, and the saga insert and every consumer storing
+        // the total fail on an order already in flight.
+        Guid product = Guid.CreateVersion7();
+        await SeedPriceAsync(product, LargestStorableAmount, "EUR");
+
+        HttpResponseMessage response = await PlaceAsync(product, quantity: OrderLimits.MaxQuantity);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
+    }
+
+    [Fact]
+    public async Task An_order_whose_total_the_money_columns_still_hold_is_placed()
+    {
+        // The bound refuses what the column cannot hold and nothing short of
+        // it, so the largest total the column takes is still an order.
+        Guid product = Guid.CreateVersion7();
+        await SeedPriceAsync(product, LargestStorableAmount, "EUR");
+
+        HttpResponseMessage response = await PlaceAsync(product);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
     }
 
     [Fact]
