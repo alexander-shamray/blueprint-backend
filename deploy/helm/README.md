@@ -132,8 +132,10 @@ gateway:
     trustedNetworks: [ "10.42.0.0/16" ]   # the ingress controller's pod CIDRs
 payments:
   paymentProvider:
-    # §3.2's provider, per cluster. An absolute HTTPS address; the chart
-    # refuses anything its host would refuse at startup.
+    # §3.2's provider, per cluster. An absolute HTTPS address: the chart
+    # refuses the shapes an operator plausibly writes that the host would
+    # reject, which is narrower than the host's own parse and says so in
+    # `commerce.requireUrl`.
     baseUrl: https://psp.staging.example.com/
 ```
 

@@ -214,7 +214,7 @@ makes [§14.2](14-local-development.md)'s "Compose runs in CI" true.
 
 The second is the Helm tree (PR-23). A workflow path-filtered to
 `deploy/helm/**` runs `deploy/helm/smoke.sh`, which resolves the charts'
-`file://` dependencies, lints each one, and then renders all five and asserts
+`file://` dependencies, lints each one, and then renders every one and asserts
 what comes out: three probes per workload, a memory limit and no CPU limit, the
 hook annotations of [§7.4](07-persistence.md), the ConfigMap/Secret split of
 §15.4, and one client secret in the whole platform (§11.5). Rendering only — no
@@ -644,7 +644,7 @@ drift the one rule exists to close — a later edit to either side has nothing t
 grep against. So each carries the keys the surrounding argument turns on and
 names what it leaves out; the files themselves are the one `values.yaml` per
 deployable chart, and `deploy/helm/smoke.sh` is what holds them to the claims
-made here. `platform/values.yaml` is the fifth file in that tree and is
+made here. `platform/values.yaml` is the one file in that tree that is
 deliberately not one of them — it holds `{}`, and says at length why a value
 there would silently win over the subchart that owns it.
 
@@ -1343,7 +1343,7 @@ naming the stable replica count that would satisfy the step. At §15.3's
 is unreachable until the stable track is scaled to **19** — which the rollout
 does, deliberately and before anything rolls, rather than quietly serving five
 times the blast radius under a label that says 5%. `autoscaling.maxReplicas` is
-20 on the three service charts, so on those 19 plus one canary is exactly the
+20 on every chart but one, so on those 19 plus one canary is exactly the
 ceiling. **The gateway's is 30** — every external request passes through it —
 so there 19 is simply what 5% needs rather than all the chart allows, and its
 autoscaler can still climb past the canary's stable count during a dwell. The
