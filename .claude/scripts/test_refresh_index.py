@@ -17,7 +17,26 @@ from unittest import mock
 SCRIPTS = Path(__file__).resolve().parent
 HOOK = SCRIPTS.parent / "hooks" / "refresh-index.py"
 SETTINGS = SCRIPTS.parent / "settings.json"
+EXAMPLE = (SCRIPTS.parent / "skills" / "codebase-index" / "examples" / "hooks"
+           / "settings.json")
 CACHE = Path(".claude") / "cache" / "codebase-index"
+
+# What settings.json has to run, spelled once. Matched whole, because
+# `not-refresh-index.py` and `refresh-index.py.disabled` both contain the
+# file's name and neither of them runs it -- and the hook swallows every
+# failure, so a registration broken that way is green everywhere else.
+COMMAND = 'py -3.12 "${CLAUDE_PROJECT_DIR}/.claude/hooks/refresh-index.py"'
+
+
+def entries_running_the_hook(settings: Path) -> list:
+    """The PostToolUse entries of `settings` that run this hook, and no others."""
+    document = json.loads(settings.read_text(encoding="utf-8"))
+    return [
+        entry
+        for entry in document.get("hooks", {}).get("PostToolUse", [])
+        if any(hook.get("type") == "command" and hook.get("command") == COMMAND
+               for hook in entry.get("hooks", []))
+    ]
 
 
 def _load():
@@ -232,13 +251,7 @@ class RefreshIndex(unittest.TestCase):
         The entries are narrowed to the ones that run this hook before their
         matchers are read. Asking for a command and for a matcher separately
         is satisfied by a second entry that has one and not the other."""
-        entries = json.loads(SETTINGS.read_text(encoding="utf-8"))["hooks"].get(
-            "PostToolUse", [])
-        mine = [
-            entry for entry in entries
-            if any("refresh-index.py" in hook.get("command", "")
-                   for hook in entry.get("hooks", []))
-        ]
+        mine = entries_running_the_hook(SETTINGS)
 
         # Split before comparing: `"Edit" in "NotebookEdit|MultiEdit"` is
         # true, so a matcher that had lost plain Edit would satisfy a
@@ -249,9 +262,26 @@ class RefreshIndex(unittest.TestCase):
             for alternative in entry.get("matcher", "").split("|")
         }
 
-        self.assertTrue(mine, entries)
+        self.assertTrue(mine, f"nothing in {SETTINGS} runs the hook")
         for tool in ("Edit", "Write", "MultiEdit", "NotebookEdit"):
             self.assertIn(tool, matched, mine)
+
+
+class DocumentedConfiguration(unittest.TestCase):
+    """The example carries the installed block, which only a test can keep true.
+
+    `docs/harness-boundaries.md` says the two are the same block, and Claude
+    Code never reads anything under `examples/` -- so a divergence costs
+    nothing at the moment it happens and everything to whoever copies it.
+    """
+
+    def test_the_example_is_the_installed_block(self):
+        self.assertEqual(
+            entries_running_the_hook(SETTINGS), entries_running_the_hook(EXAMPLE))
+
+    def test_the_example_runs_this_hook_at_all(self):
+        """The subject, because two empty lists are equal."""
+        self.assertTrue(entries_running_the_hook(EXAMPLE))
 
 
 class RestoresWhatItPatched(unittest.TestCase):
