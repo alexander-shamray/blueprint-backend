@@ -63,12 +63,26 @@ nothing more.
 {{- $url := include "commerce.require" (list $value $message) -}}
 {{- /*
 One regex rather than a parse, because Helm has no URL type. Read left to
-right it is: HTTPS, then an authority holding no `@` — which is what excludes
-user information — then an optional path, and `?` and `#` excluded throughout
-so a query or fragment cannot appear anywhere.
+right: HTTPS, a host, an optional numeric port, an optional path. The host
+class excludes `@`, `:`, `[`, `]` and space as well as `/?#`, which is what
+refuses user information, a non-numeric port, an empty host and an IPv6
+literal — `https://:443/`, `https://host:bad/` and `https://[::1/` all
+satisfied a looser class and are all rejected by `Uri.TryCreate`.
+
+The host+port half is `edge-config.yaml`'s origin grammar, which arrived at
+this character class over several review rounds; the optional path is this
+helper's own, because an authority URL is a base address and an origin is not.
+
+**Deliberately a SUBSET of what the hosts accept, not a copy of it**, for the
+reason that guard states: the host's rule is `Uri.TryCreate` and a template
+cannot construct a Uri, so claiming equivalence would be the more dangerous
+error — the next shape this misses would be read as accepted. An IPv6 literal
+is refused outright rather than half-checked, on the same terms. What it does
+promise is narrower and enough: every address an operator plausibly writes
+that the host would reject is refused here instead of at startup.
 */}}
-{{- if not (regexMatch "^https://[^/@?#]+(/[^?#]*)?$" $url) }}
-{{- fail (printf "%s The value is not an absolute HTTPS address with no user information, query or fragment, which is what the host parses it as before it will start (§15.4)." $message) }}
+{{- if not (regexMatch "^https://[^/?#@:\\[\\] ]+(:[0-9]+)?(/[^?#]*)?$" $url) }}
+{{- fail (printf "%s The value is not an HTTPS address this chart will accept: a host, optionally a numeric port, and optionally a path. User information, a query, a fragment, a non-numeric port and IPv6 literals are refused here rather than at startup (§15.4)." $message) }}
 {{- end }}
 {{- $url -}}
 {{- end -}}

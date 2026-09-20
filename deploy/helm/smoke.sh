@@ -859,8 +859,10 @@ section 'Non-blank is not an address either'
 # guard is a claim about what it refuses.
 for bad in 'keycloak:8080/realms/commerce' 'ftp://id.example.com/realms' \
     'http://id.example.com/realms/commerce' 'https://u:p@id.example.com/realms' \
-    'https://id.example.com/realms?x' 'https://id.example.com/realms#f'; do
-    refuses "an authority of '$bad' fails the render" 'not an absolute HTTPS address' \
+    'https://id.example.com/realms?x' 'https://id.example.com/realms#f' \
+    'https://:443/realms' 'https://id.example.com:bad/realms' \
+    'https://[::1/realms'; do
+    refuses "an authority of '$bad' fails the render" 'HTTPS address this chart will accept' \
         $GATEWAY_OVERLAY --set-string "identity.authority=$bad"
 done
 
@@ -880,10 +882,22 @@ refuses_payments() {
 
 for bad in 'psp.example.invalid' 'ftp://psp.example.invalid/' \
     'http://psp.example.invalid/' 'https://user:key@psp.example.invalid/' \
-    'https://psp.example.invalid/?x' 'https://psp.example.invalid/#f'; do
+    'https://psp.example.invalid/?x' 'https://psp.example.invalid/#f' \
+    'https://:443/' 'https://psp.example.invalid:bad/' \
+    'https://[::1/'; do
     refuses_payments "a provider address of '$bad' fails the render" \
-        'not an absolute HTTPS address' \
+        'HTTPS address this chart will accept' \
         --set-string "paymentProvider.baseUrl=$bad"
+done
+
+# And the other direction, because a guard that only ever refuses is
+# indistinguishable from one that refuses everything: the shapes an operator
+# legitimately writes must still render.
+for good in 'https://psp.example.invalid/' 'https://psp.example.invalid:8443/v1/' \
+    'https://psp.example.invalid'; do
+    check "a provider address of '$good' renders" \
+        "$HELM" template payments "$CHARTS_DIR/payments" --set-string "image.tag=$TAG" \
+        --set-string "paymentProvider.baseUrl=$good"
 done
 
 # The origin guard has to reject what Program.cs rejects, or it is theatre:
