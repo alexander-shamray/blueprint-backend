@@ -131,7 +131,7 @@ already uses for `admin/admin` and the broker's service accounts:
 
 | User | Password | Holds |
 |---|---|---|
-| `demo` | `demo` | `catalog:write`, `orders:write`, `orders:cancel` |
+| `demo` | `demo` | `catalog:write`, `orders:write`, `orders:cancel`, `inventory:admin`, `payments:admin` |
 | `browser` | `browser` | nothing — the account that proves a refusal |
 
 `orders:admin` is grantable and held by **nobody**, deliberately: it overrides
@@ -280,6 +280,8 @@ export Identity__Authority='http://localhost:8080/realms/commerce'
 export ReverseProxy__Clusters__catalog__Destinations__d1__Address='http://localhost:5102/'
 export ReverseProxy__Clusters__ordering__Destinations__d1__Address='http://localhost:5101/'
 export ReverseProxy__Clusters__web-bff__Destinations__d1__Address='http://localhost:5200/'
+export ReverseProxy__Clusters__inventory__Destinations__d1__Address='http://localhost:5103/'
+export ReverseProxy__Clusters__payments__Destinations__d1__Address='http://localhost:5104/'
 dotnet run --project src/Gateway/Gateway.Api
 ```
 

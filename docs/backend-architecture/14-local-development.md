@@ -258,6 +258,7 @@ services:
       catalog-api: { condition: service_started }
       inventory-api: { condition: service_started }
       ordering-api: { condition: service_started }
+      payments-api: { condition: service_started }
       web-bff: { condition: service_started }
 
   # The one host with client credentials, because it is the one host that calls

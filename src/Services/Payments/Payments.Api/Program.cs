@@ -1,3 +1,5 @@
+using Payments.Api;
+using Payments.Api.Endpoints;
 using Payments.Application;
 using Payments.Infrastructure;
 using Payments.Infrastructure.Provider;
@@ -25,11 +27,12 @@ builder.Services.AddPaymentProvider(builder.Configuration, builder.Environment);
 // Appendix C's OpenAPI deliverable: document only, no UI.
 builder.Services.AddOpenApi();
 
-// This service registers no permission policy, because it names no endpoint
-// that needs one; the first slice brings both together (§11.4). A policy
-// registered before an endpoint names it is an unused registration, and an
-// endpoint naming one nobody registered throws on the first request that
-// reaches it, never at startup.
+// RequirePermission rather than RequireClaim("permission", …): the claim type
+// is PermissionClaim.Type, and spelling the literal here would be a fourth
+// place that has to agree with it (§11.4).
+builder.Services
+    .AddAuthorizationBuilder()
+    .AddPolicy(PaymentsPermissions.Admin, p => p.RequirePermission(PaymentsPermissions.Admin));
 
 WebApplication app = builder.Build();
 
@@ -52,9 +55,7 @@ app.UseAuthorization();           // §11.4 — evaluates the permission policie
 app.MapCommonHealthEndpoints();   // §13.5 — anonymous; kubelet carries no token
 app.MapOpenApi();
 
-// This service maps no endpoint of its own yet. The first one goes here,
-// behind RequireAuthorization at the group (§11.4) — fail closed, and let
-// any deliberately public endpoint say AllowAnonymous out loud.
+app.MapPaymentEndpoints();        // §11.4 — the group fails closed
 
 app.Run();
 

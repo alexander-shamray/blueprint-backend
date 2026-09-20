@@ -143,6 +143,13 @@ the subset a resource would need.
         "RateLimiterPolicy": "authenticated",
         "Transforms": [ { "PathRemovePrefix": "/api" } ]
       },
+      "payments-admin": {
+        "ClusterId": "payments",
+        "Match": { "Path": "/api/v1/payments/{**catch-all}" },
+        "AuthorizationPolicy": "payments:admin",
+        "RateLimiterPolicy": "authenticated",
+        "Transforms": [ { "PathRemovePrefix": "/api" } ]
+      },
       "web-bff": {
         "ClusterId": "web-bff",
         "Match": { "Path": "/bff/{**catch-all}" },
@@ -172,6 +179,9 @@ the subset a resource would need.
       "inventory": {
         "Destinations": { "d1": { "Address": "http://inventory-api:8080/" } }
       },
+      "payments": {
+        "Destinations": { "d1": { "Address": "http://payments-api:8080/" } }
+      },
       "web-bff": {
         "Destinations": { "d1": { "Address": "http://web-bff:8080/" } }
       }
@@ -190,7 +200,8 @@ registered separately.
 are checked when YARP loads this configuration — `AuthorizationPolicy` through
 `IAuthorizationPolicyProvider`, `RateLimiterPolicy` through the limiter's
 options. `authenticated` comes from `AddCommonWebDefaults`
-([§13.2](13-observability.md)) and `inventory:admin` from the gateway's own
+([§13.2](13-observability.md)) and the two permission policies,
+`inventory:admin` and `payments:admin`, from the gateway's own
 `Program.cs` (§4.2).
 
 **`anonymous` is the exception, because YARP reserves it.** It is the proxy's

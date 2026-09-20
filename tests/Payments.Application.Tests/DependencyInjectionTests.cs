@@ -1,6 +1,7 @@
 using Common.Application;
 using Common.Contracts.Ordering.V1;
 using Microsoft.Extensions.DependencyInjection;
+using Payments.Application.Admin.GetPayment;
 using Payments.Application.Intents.AuthorisePayment;
 using Payments.Application.Orders.RecordOrderCancelled;
 using Payments.Application.Orders.RecordOrderPlaced;
@@ -168,7 +169,7 @@ public class DependencyInjectionTests
     {
         // The scan is public-only (§6.2); a handler it misses registers as
         // nothing rather than as something wrong, so every slice adds its
-        // rows here. No validator row yet: neither command below has one.
+        // rows here. No validator row yet: no command below has one.
         ServiceCollection services = new();
 
         services.AddPaymentsApplication();
@@ -183,5 +184,12 @@ public class DependencyInjectionTests
             d.ServiceType == typeof(IIntegrationEventHandler<OrderCancelled>));
         services.ShouldContain(d =>
             d.ServiceType == typeof(ICommandHandler<AuthorisePaymentCommand, Result>));
+
+        // The query side of the same scan, which had no subject until the read
+        // slice arrived: IQueryHandler is in PluggableInterfaces.All, so a
+        // miss here would be an endpoint that cannot resolve its handler on
+        // the first request that reaches it.
+        services.ShouldContain(d =>
+            d.ServiceType == typeof(IQueryHandler<GetPaymentQuery, PaymentView?>));
     }
 }
