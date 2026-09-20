@@ -1,34 +1,75 @@
 #!/usr/bin/env python3
-"""Refresh the code index after an edit, without making the edit wait.
+"""Refresh the code index of the checkout that was edited.
 
-Claude Code runs no `update` of its own, so between an edit and the query
-that reports the index stale it describes a tree that has moved.
-
-Spawned detached and never waited on, because it runs on every edit; its
-streams go nowhere; and it returns 0 whatever happens, because an index
-that cannot refresh is not a reason to fail the edit it followed.
+Nothing runs `update` on its own, so between an edit and the query that
+reports the index stale it describes a tree that has moved. The checkout is
+the event's `cwd` walked up to its root, because `/branch` moves a session
+into a sibling worktree while `CLAUDE_PROJECT_DIR` names the one it left.
+Detached and never waited on, and it returns 0 whatever happens: it runs on
+every edit, and an index that cannot refresh is no reason to fail one.
 """
 
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 import sys
 from pathlib import Path
 
+# Where the CLI keeps a checkout's index. A checkout without one is not
+# stale, it is unindexed, and building one per throwaway worktree is a cost
+# nobody asked this hook for -- so it is left alone rather than initialised.
+CACHE = Path(".claude") / "cache" / "codebase-index"
+
+
+def checkout_root(start: Path) -> Path | None:
+    """The checkout `start` sits in, by the `.git` at or above it."""
+    try:
+        candidates = (start, *start.parents)
+    except OSError:
+        return None
+    for candidate in candidates:
+        if (candidate / ".git").exists():
+            return candidate
+    return None
+
+
+def target(event: dict) -> Path | None:
+    """The indexed checkout to refresh, preferring the one that was edited.
+
+    The event's `cwd` first and `CLAUDE_PROJECT_DIR` second, because the two
+    differ exactly when it matters: in a sibling worktree the first is the
+    tree that changed and the second is the tree that did not.
+    """
+    for value in (event.get("cwd"), os.environ.get("CLAUDE_PROJECT_DIR")):
+        if not value:
+            continue
+        root = checkout_root(Path(str(value)))
+        if root is not None and (root / CACHE).is_dir():
+            return root
+    return None
+
 
 def main() -> int:
-    root = os.environ.get("CLAUDE_PROJECT_DIR") or str(Path(__file__).resolve().parents[2])
+    try:
+        event = json.loads(sys.stdin.read() or "{}")
+    except (json.JSONDecodeError, OSError, UnicodeDecodeError):
+        event = {}
+
+    root = target(event if isinstance(event, dict) else {})
+    if root is None:
+        return 0
 
     # CBX_NO_SKILL_AUTO_UPDATE, because an unpinned newer package rewrites the
     # tracked files under .claude/skills/codebase-index/ when it runs. The
-    # `cbx` wrapper sets it; this calls the CLI directly, so it sets it here.
+    # `cbx` wrapper sets it; this calls the CLI, so it sets it here.
     environment = dict(os.environ, CBX_NO_SKILL_AUTO_UPDATE="1", PYTHONSAFEPATH="1")
 
     try:
         subprocess.Popen(
             ["codebase-index", "update"],
-            cwd=root,
+            cwd=str(root),
             env=environment,
             stdin=subprocess.DEVNULL,
             stdout=subprocess.DEVNULL,
@@ -36,8 +77,8 @@ def main() -> int:
             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         )
     except OSError:
-        # The CLI is not installed, or not on this PATH. Nothing to report to:
-        # see the docstring on why this stays silent.
+        # The CLI is absent from this PATH. See the docstring on why an index
+        # that cannot refresh is not allowed to fail the edit.
         pass
     return 0
 
