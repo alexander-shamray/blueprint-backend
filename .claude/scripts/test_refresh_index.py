@@ -339,6 +339,28 @@ class OneRefreshAtATime(Base):
         self.assertFalse(moved)
         self.assertEqual("the-replacement", self.mod.holder(root))
 
+    def test_a_stamp_that_cannot_be_written_is_not_a_claim(self):
+        """Otherwise the lock sits there with nobody able to prove they hold
+        it, and every refresh waits out the stale window."""
+        root = self.checkout("main")
+
+        with mock.patch.object(self.mod.os, "write", side_effect=OSError("full")):
+            claimed = self.mod.claim(root)
+
+        self.assertIsNone(claimed)
+        self.assertFalse((root / self.mod.LOCK).exists())
+
+    def test_half_a_stamp_is_not_a_claim_either(self):
+        """A short write leaves a stamp nobody matches, which is the same
+        outcome by a quieter route."""
+        root = self.checkout("main")
+
+        with mock.patch.object(self.mod.os, "write", return_value=3):
+            claimed = self.mod.claim(root)
+
+        self.assertIsNone(claimed)
+        self.assertFalse((root / self.mod.LOCK).exists())
+
     def test_a_worker_whose_lock_was_taken_stops(self):
         """And does not release, because the lock is the successor's now."""
         root = self.checkout("main")

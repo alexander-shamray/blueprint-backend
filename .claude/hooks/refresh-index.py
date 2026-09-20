@@ -182,12 +182,23 @@ def claim(root: Path) -> str | None:
             continue
         except OSError:
             return None
+        marker = stamp.encode("utf-8")
         try:
-            os.write(handle, stamp.encode("utf-8"))
+            written = os.write(handle, marker)
         except OSError:
-            pass
+            written = 0
         finally:
             os.close(handle)
+        if written != len(marker):
+            # A lock nobody can prove they hold is worse than no lock: the
+            # worker started for it reads a stamp that is not its own, stops
+            # without releasing, and every refresh waits for the stale
+            # window. Short counts as failed for the same reason.
+            try:
+                lock.unlink()
+            except OSError:
+                pass
+            return None
         return stamp
     return None
 
