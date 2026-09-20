@@ -25,10 +25,10 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
         ("using Catalog.Application.Products.PublishProduct;\n", ""),
         (
             "        // Explicit rather than scanned, beside the dispatcher it serves —\n"
-            "        // §4.2's registration sample is the shape. §7.5's real dispatcher\n"
-            "        // since PR-14; the NullDomainEventDispatcher that dropped every\n"
-            "        // ProductPublishedDomainEvent between PR-10 and here is deleted, not\n"
-            "        // disabled, so nothing can register it back by accident.\n",
+            "        // §4.2's registration sample is the shape. §7.5's real dispatcher,\n"
+            "        // and no null one beside it: a dispatcher that drops every domain\n"
+            "        // event is deleted rather than disabled, so nothing can register it\n"
+            "        // back by accident.\n",
             "        // Explicit rather than scanned, beside the dispatcher it serves —\n"
             "        // §4.2's registration sample is the shape. It stages nothing until\n"
             "        // this service has an aggregate raising domain events, and needs no\n"
@@ -127,11 +127,11 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
         ),
         (
             "    Domain, Common.Application and Common.Contracts — the §4.2 dependency\n"
-            "    table's second row, complete since PR-14. Contracts arrives with the §9.3\n"
-            "    mapper, which is the only type here that names one: the allow-list turns a\n"
-            "    domain event into a public record, so the layer that owns the allow-list\n"
-            "    is the layer that pays for the reference. §4.3's one assembly that crosses\n"
-            "    a service boundary, and it crosses at the mapper.\n",
+            "    table's second row. Contracts arrives with the §9.3 mapper, which is the\n"
+            "    only type here that names one: the allow-list turns a domain event into a\n"
+            "    public record, so the layer that owns the allow-list is the layer that\n"
+            "    pays for the reference. §4.3's one assembly that crosses a service\n"
+            "    boundary, and it crosses at the mapper.\n",
             "    Domain and Common.Application — the §4.2 dependency table's second row,\n"
             "    minus Common.Contracts. The §9.3 mapper is the only type that would name\n"
             "    a contract, and its allow-list is empty until this service publishes\n"
@@ -152,35 +152,6 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
         ),
     ),
     "src/Services/Catalog/Catalog.Infrastructure/Catalog.Infrastructure.csproj": (
-        (
-            "    <!-- §9.4's outbox: the entity this assembly maps, the type map, the\n"
-            "         metrics and the dispatcher it hosts. PR-14's edge, and the reason\n"
-            "         Common.Infrastructure stopped being a project no service referenced.\n"
-            "         §8's Redis helpers ride in on this same reference and are now used\n"
-            "         rather than merely available — AddRedisConnections and\n"
-            "         RedisIdempotencyStore are wired in DependencyInjection.cs. This\n"
-            "         comment said they were \"still nobody's dependency\" and that the first\n"
-            "         service to wire them would need no new reference; the second half was\n"
-            "         right and is why nothing here changed but the sentence. -->\n",
-            # THE RENDERED SERVICE DOES WIRE REDIS, and this comment said it did
-            # not. DependencyInjection.cs is a template file and no edit removes
-            # `services.AddRedisConnections(configuration)`, so a scaffolded
-            # service registers the connections, the lock factory and §8.5's
-            # store on the day it is created — which is why its compose block
-            # carries both ConnectionStrings__Redis* keys and why it starts at
-            # all. AddRedisConnections reads both eagerly and throws naming the
-            # missing one.
-            #
-            # Redis is therefore part of the empty-service BASELINE rather than
-            # something a first slice adds, and the text below now says so. The
-            # wrong version was not merely stale prose: it described the one
-            # arrangement under which a rendered service would fail to start.
-            "    <!-- §9.4's outbox: the entity this assembly maps, the type map, the\n"
-            "         metrics and the dispatcher it hosts. §8's Redis helpers ride in on\n"
-            "         the same reference and are wired from the start — the connections,\n"
-            "         the lock factory and §8.5's idempotency store — so a first cache\n"
-            "         read costs no new reference and no new registration. -->\n",
-        ),
         (
             "    <!-- typeof(ProductPublished).Assembly, the Broker lane's half of\n"
             "         MessageTypeSource. Transitive through Catalog.Application, named\n"
@@ -231,19 +202,6 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
             "        services.AddSingleton<OutboxJson>();\n",
         ),
         ("using System.Text.Json.Serialization;\n", ""),
-    ),
-    "src/Services/Catalog/Catalog.Infrastructure/Persistence/CatalogDbContext.cs": (
-        (
-            "        // Landed before its first find (PR-08) so that PR-10 added an\n"
-            "        // IEntityTypeConfiguration<T> and not also the line that discovers\n"
-            "        // it; ProductConfiguration is what it finds today. §7.2 puts mapping\n"
-            "        // in these classes and never in attributes on domain types, which\n"
-            "        // would put EF Core in Catalog.Domain.\n",
-            "        // Here before its first find, so that the first entity adds an\n"
-            "        // IEntityTypeConfiguration<T> and not also the line that discovers\n"
-            "        // it. §7.2 puts mapping in these classes and never in attributes on\n"
-            "        // domain types, which would put EF Core in Catalog.Domain.\n",
-        ),
     ),
     "src/Services/Catalog/Catalog.Api/Catalog.Api.csproj": (
         (

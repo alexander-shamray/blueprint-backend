@@ -46,55 +46,31 @@ internal sealed class IdempotencyMarkerConfiguration : IEntityTypeConfiguration<
             // identity; neither is promised to be ASCII by anything.
             .UseCollation("Latin1_General_BIN2");
 
-        // Stamped by the database and never by a pod (#167, ADR-038). Both
-        // ends of the comparison the purge makes are then the one clock: this
-        // default writes the row, and RetentionPurgeService computes its cutoff
-        // with SYSDATETIMEOFFSET() in the same statement that reads it. The
-        // marker is the only one of the three retention tables that gets this,
-        // because it is the only one whose window is a correctness setting —
-        // the outbox's and the inbox's stay on the registered TimeProvider a
-        // test host can substitute (§9.5).
-        //
-        // What makes the default reachable is ValueGenerated.OnAdd over it: EF
-        // omits a property still holding its sentinel from the insert and reads
-        // the generated value back, so a marker constructed WITH a timestamp
-        // still writes it — which is what lets a fixture stage one at a
-        // controlled age.
-        //
-        // The call below is REDUNDANT and is made anyway. EF's relational
-        // convention derives OnAdd from a store default, measured on this
-        // solution rather than read off the documentation: two properties in
-        // Ordering's model configure a default and nothing else, and the
-        // snapshot records ValueGeneratedOnAdd beside each. Spelling it here
-        // states the behaviour the sentinel argument above depends on at the
-        // one site that depends on it, rather than leaving a correctness
-        // property to a convention a later EF version could narrow.
+        // Stamped by the database and never by a pod (ADR-038), so the purge
+        // compares one clock at both ends: this default writes the row, and
+        // RetentionPurgeService cuts off with SYSDATETIMEOFFSET() in the same
+        // statement that reads it. The marker alone gets this, because its
+        // window is the only one that is a correctness setting; the outbox's
+        // and the inbox's stay on the registered TimeProvider (§9.5).
+        // ValueGeneratedOnAdd makes the default reachable while a marker
+        // constructed with a timestamp still writes it, which is what lets a
+        // fixture stage one at a controlled age. Spelt out rather than left to
+        // EF's convention, because a correctness property should not move.
         builder
             .Property(marker => marker.CommittedAt)
             .HasDefaultValueSql("SYSDATETIMEOFFSET()")
             .ValueGeneratedOnAdd();
 
-        // What RetentionPurgeService's DELETE identifies a row by (#173,
-        // ADR-041). It is unique and monotonic per database, immutable for the
-        // life of a row nothing updates, and reads no clock — which is what the
-        // (Key, CommittedAt) pair before it was standing in for. That pair
-        // distinguished two writes under one key BY CONSTRUCTION and nothing
-        // enforced it: a datetimeoffset(7) carries no uniqueness, so a
-        // replacement stamped at the selected row's exact tick was matched by a
-        // stale delete and removed with its claim still live.
-        //
-        // A SHADOW property, because nothing in C# reads this column through
-        // the model — the one reader is the purge's own SQL, over Dapper, which
-        // never consults it. The name comes from the entity rather than a
-        // literal here, so the two statements that have to agree about it —
-        // this mapping and that SQL — agree by construction, and a service that
-        // omits this line fails its own purge rather than drifting quietly.
-        // Required, because a shadow byte[] is optional by convention and the
-        // column never is: SQL Server stamps a rowversion on every insert and
-        // on every update, including the rows an ALTER TABLE adds it to. Left
-        // optional it would render `nullable: true` and hand the purge a
-        // MarkerCandidate whose version could be null — a state the database
-        // cannot produce, modelled anyway.
+        // What RetentionPurgeService's DELETE identifies a row by (ADR-041):
+        // unique and monotonic per database, immutable for a row nothing
+        // updates, and reading no clock — unlike the (Key, CommittedAt) pair
+        // it replaced, where datetimeoffset(7) carries no uniqueness and a
+        // replacement stamped at the selected row's tick was matched by a
+        // stale delete and removed with its claim still live. A shadow
+        // property, because the only reader is the purge's own Dapper SQL; the
+        // name comes from the entity so the mapping and that SQL agree by
+        // construction. Required, because a shadow byte[] is optional by
+        // convention and this column never is.
         builder
             .Property<byte[]>(IdempotencyMarker.RowVersionColumn)
             .IsRowVersion()

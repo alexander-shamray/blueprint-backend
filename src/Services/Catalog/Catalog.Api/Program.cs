@@ -20,7 +20,7 @@ builder.AddCommonWebDefaults();                 // §13.2
 builder.Services.AddCatalogApplication();       // §6.2
 builder.Services.AddCatalogInfrastructure(builder.Configuration);   // §4.2, §7.1
 
-// PR-07's OpenAPI deliverable (Appendix C): document only, no UI.
+// Appendix C's OpenAPI deliverable: document only, no UI.
 builder.Services.AddOpenApi();
 
 // §9.7's server half. The interceptor is what keeps a malformed request from
@@ -56,8 +56,8 @@ app.UseExceptionHandler();        // §10.5 — catches every fault below it
 app.UseCorrelationId();           // §10.4 — above everything else that logs
 
 // §10.5's promise applied to the statuses no handler produces: a challenge and
-// a forbid are written by the middleware below and carry no body, so the
-// platform's one error shape had two holes in it until PR-17 measured a 401.
+// a forbid are written by the middleware below and carry no body, so without
+// this the platform's one error shape would have two holes in it.
 app.UseStatusCodePages();         // §10.5 — 401 and 403 as problem+json
 app.UseAuthentication();          // §11.3 — populates HttpContext.User
 app.UseAuthorization();           // §11.4 — evaluates the permission policies

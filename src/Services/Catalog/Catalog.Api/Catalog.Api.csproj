@@ -10,7 +10,7 @@
   -->
 
   <ItemGroup>
-    <!-- PR-07's OpenAPI deliverable (Appendix C): document only, no UI. -->
+    <!-- Appendix C's OpenAPI deliverable: document only, no UI. -->
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
     <!-- The server half of §9.7's one synchronous hop. Grpc.AspNetCore brings
          Grpc.Tools and Google.Protobuf with it, which is why neither is named

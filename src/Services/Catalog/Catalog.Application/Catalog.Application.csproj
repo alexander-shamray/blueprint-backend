@@ -4,11 +4,11 @@
     Settings come from Directory.Build.props (§4.4).
 
     Domain, Common.Application and Common.Contracts — the §4.2 dependency
-    table's second row, complete since PR-14. Contracts arrives with the §9.3
-    mapper, which is the only type here that names one: the allow-list turns a
-    domain event into a public record, so the layer that owns the allow-list
-    is the layer that pays for the reference. §4.3's one assembly that crosses
-    a service boundary, and it crosses at the mapper.
+    table's second row. Contracts arrives with the §9.3 mapper, which is the
+    only type here that names one: the allow-list turns a domain event into a
+    public record, so the layer that owns the allow-list is the layer that
+    pays for the reference. §4.3's one assembly that crosses a service
+    boundary, and it crosses at the mapper.
   -->
 
   <ItemGroup>
