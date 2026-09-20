@@ -827,13 +827,19 @@ container form of an unused registration — and it is why no chart carried the
 two Redis connection strings for as long as nothing called
 `AddRedisConnections`.
 
-**Catalog and Ordering now do**, because §8.5's `IdempotencyBehavior` claims a
-`{service}:idem:` key before any protected command runs, so both charts carry a
-`redis:` block on `broker`'s shape — one Secret, but two distinct keys where the
-broker needs one — and §15.4's column is unconditional for them. The gateway,
-the BFF and Payments declare `redis.enabled: false` — written down rather than
-omitted, because a capability is a claim a chart makes rather than one to infer
-from a missing key.
+**Catalog, Ordering and Inventory now do**, because §8.5's
+`IdempotencyBehavior` claims a `{service}:idem:` key before any protected
+command runs, so each of those charts carries a `redis:` block on `broker`'s
+shape — one Secret, but two distinct keys where the broker needs one — and
+§15.4's column is unconditional for them. The gateway, the BFF and Payments
+declare `redis.enabled: false` — written down rather than omitted, because a
+capability is a claim a chart makes rather than one to infer from a missing
+key.
+
+Neither list is restated anywhere else, and `deploy/helm/smoke.sh` is what
+holds both to the charts: it reads each service's source for a call to
+`AddRedisConnections` and asserts that chart declares `redis` — in **both**
+directions, so a chart that stops calling it and keeps the block fails too.
 
 **Both keys are required together even though only the coordination one is read
 today**, and the reason is the code's rather than the chart's:
