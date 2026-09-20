@@ -380,15 +380,17 @@ section 'paymentProvider is a capability, and its address is required'
 PAYMENTS_RENDER=$("$HELM" template payments "$CHARTS_DIR/payments" \
     --set-string image.tag="$TAG" \
     --set-string paymentProvider.baseUrl=https://psp.example.invalid/)
-grep -q 'PaymentProvider__BaseUrl: "https://psp.example.invalid/"' <<<"$PAYMENTS_RENDER" \
-    || fail 'payments: PaymentProvider__BaseUrl missing from the ConfigMap'
-# The NAME alone would pass on a literal `value:`, which is the one way this
-# key can be wrong: §15.4 puts it in the Secret column, and a credential
-# rendered into a ConfigMap is readable by anyone with namespace read access
-# and unencrypted at rest. So the reference structure is the subject, and the
-# ConfigMap is asserted not to carry it — a gate watching only the name stops
-# covering the thing it was added for the moment the value moves.
 printf '%s\n' "$PAYMENTS_RENDER" >"$OUT/payments-capability.yaml"
+# Both keys are asserted by PLACEMENT and not by presence, because §15.4 puts
+# them in different Kinds and a global grep proves neither: the address would
+# satisfy one that moved it into the pod environment, and the credential would
+# satisfy one that rendered it as a literal. A gate watching only the name
+# stops covering the thing it was added for the moment the value moves.
+check 'payments: PaymentProvider__BaseUrl is in the ConfigMap' \
+    awk '/^kind: ConfigMap$/ { in_cm = 1 }
+         /^---$/ { in_cm = 0 }
+         in_cm && /^ *PaymentProvider__BaseUrl: "https:\/\/psp\.example\.invalid\/"$/ { found = 1 }
+         END { exit found ? 0 : 1 }' "$OUT/payments-capability.yaml"
 check 'payments: PaymentProvider__ApiKey comes from a secretKeyRef, not a literal' \
     awk '/^ *- name: PaymentProvider__ApiKey$/ { at = NR }
          at && NR == at + 1 && /^ *valueFrom:$/ { vf = 1 }
