@@ -18,6 +18,7 @@ from __future__ import annotations
 import contextlib
 import io
 import json
+import os
 import re
 import tempfile
 import unittest
@@ -1708,6 +1709,22 @@ class ImageSourceTests(unittest.TestCase):
             any("without the workload whose image it is" in f for f in failures),
             failures)
 
+    def test_an_http_only_workload_is_not_held_to_message_series(self) -> None:
+        """series_read() spans every signal the plan defines, so holding one
+        image to all of them refuses a gateway image for lacking a MassTransit
+        meter it has no reason to carry. The tree registers a meter, because
+        one with no registration file at all fails check 5 for being
+        unreadable and would answer this question without scoping anything."""
+        tree = self._tree("/healthz/live")
+        web = tree / "src" / "BuildingBlocks" / "Common.Web"
+        web.mkdir(parents=True)
+        (web / "ObservabilityExtensions.cs").write_text(
+            '.AddMeter("Commerce.Messaging")\n', encoding="utf-8")
+
+        failures = canary.check(canary.load_plan(), source=tree, workload="gateway")
+
+        self.assertEqual([], [f for f in failures if "MassTransit" in f], failures)
+
     def test_check_reads_its_charts_from_the_root(self) -> None:
         """The other half of the split. The chart is installed from the
         checkout, so it is judged there — a source tree with no deploy/ at
@@ -1800,6 +1817,32 @@ class RolloutBindingTests(unittest.TestCase):
 
         self.assertTrue(canary._rollout_reads_the_image_source(self._workflow(commented)))
 
+    def test_a_near_miss_variable_is_not_the_binding(self) -> None:
+        """The near miss, and the exports are left correct on purpose: with
+        them renamed too the export check reports the fault and this one
+        never has to. `--source "$OLD_IMAGE_SOURCE"` passes a different tree
+        while containing the flag and the name, so a substring test reads it
+        as bound. The whole argument is matched instead."""
+        near = self.shipped.replace('"$IMAGE_SOURCE"', '"$OLD_IMAGE_SOURCE"')
+
+        failures = canary._rollout_reads_the_image_source(self._workflow(near))
+
+        self.assertTrue(
+            any("read_prometheus.py" in f for f in failures), failures)
+
+    def test_a_dropped_installed_source_fails_on_its_own(self) -> None:
+        """The stable track's tree is a second argument and goes missing the
+        same way the first one can."""
+        without = "\n".join(
+            line for line in self.shipped.splitlines()
+            if line.strip() != '--installed-source "$INSTALLED_SOURCE" \\'
+        )
+
+        failures = canary._rollout_reads_the_image_source(self._workflow(without))
+
+        self.assertEqual(1, len(failures), failures)
+        self.assertIn("--installed-source", failures[0])
+
     def test_a_continuation_is_read_as_one_invocation(self) -> None:
         """The flag is never on the line the command is named on."""
         lines = ["  run: |", "    python read_prometheus.py \\", '      --source "$IMAGE_SOURCE"']
@@ -1808,6 +1851,95 @@ class RolloutBindingTests(unittest.TestCase):
             ['python read_prometheus.py --source "$IMAGE_SOURCE"'],
             canary._invocations(lines, "read_prometheus.py"),
         )
+
+
+class InstalledTagTests(unittest.TestCase):
+    """The stable track's tag is read from the release, not assumed."""
+
+    def test_the_tag_is_read(self) -> None:
+        self.assertEqual("a" * 40, canary.installed_tag({"image": {"tag": "a" * 40}}))
+
+    def test_a_release_with_no_tag_is_refused(self) -> None:
+        """Every chart requires the tag, so a release without one is not a
+        default to fall back on — it is a release whose revision cannot be
+        read, and the baseline's probe routes come from that revision."""
+        for values in ({}, {"image": {}}, {"image": {"tag": "   "}}, {"image": {"tag": 7}}):
+            with self.subTest(values=values):
+                with self.assertRaises(canary.PlanError):
+                    canary.installed_tag(values)
+
+
+class TrackSourceTests(unittest.TestCase):
+    """Each track's probe exclusion is scanned from its own image (ADR-050)."""
+
+    @staticmethod
+    def _tree(route: str) -> Path:
+        return service_tree({"Svc.Api/Health.cs": f'app.MapHealthChecks("{route}");\n'})
+
+    def _expressions(self, **trees) -> list[str]:
+        """Every PromQL `read` emits, with the fetch replaced."""
+        seen: list[str] = []
+        original = read_prometheus.query
+        read_prometheus.query = lambda _base, expression: seen.append(expression) or 1.0
+        try:
+            read_prometheus.read(
+                "http://prometheus.invalid", "catalog-api", "10m",
+                canary.load_plan(), **trees)
+        finally:
+            read_prometheus.query = original
+        return seen
+
+    def test_each_track_reads_the_routes_of_the_image_it_runs(self) -> None:
+        """The defect round two found: one exclusion for both tracks filters
+        the stable track's probes by the candidate's routes, so a probe the
+        stable image serves and the candidate does not is counted as its
+        business traffic."""
+        seen = self._expressions(
+            candidate=self._tree("/healthz/live"), installed=self._tree("/health/ready"))
+
+        canary_side = [e for e in seen if 'deployment_track="canary"' in e and "http_route" in e]
+        stable_side = [e for e in seen if 'deployment_track="stable"' in e and "http_route" in e]
+
+        self.assertTrue(canary_side and stable_side, seen)
+        self.assertTrue(all("/healthz/live" in e for e in canary_side), canary_side)
+        self.assertTrue(all("/health/ready" in e for e in stable_side), stable_side)
+        self.assertFalse(any("/health/ready" in e for e in canary_side), canary_side)
+
+    def test_an_absent_installed_tree_falls_back_to_the_candidate(self) -> None:
+        """Stated rather than assumed: the gate path has one tree, and the
+        rollout is held to supplying both by check 12."""
+        seen = self._expressions(candidate=self._tree("/healthz/live"))
+
+        self.assertTrue(all("/healthz/live" in e for e in seen if "http_route" in e), seen)
+
+    def test_main_carries_both_trees_into_read(self) -> None:
+        """Without this, dropping either argument from main() leaves every
+        other test green and silently restores the checkout's routes."""
+        seen: dict[str, Path] = {}
+
+        def spy(_base, _workload, _window, _plan, candidate=None, installed=None):
+            seen.update(candidate=candidate, installed=installed)
+            return {}
+
+        original_read, original_url = read_prometheus.read, os.environ.get("PROMETHEUS_URL")
+        read_prometheus.read = spy
+        os.environ["PROMETHEUS_URL"] = "http://prometheus.invalid"
+        try:
+            with tempfile.TemporaryDirectory() as out,                     contextlib.redirect_stdout(io.StringIO()):
+                read_prometheus.main([
+                    "read_prometheus.py", "--workload", "catalog-api", "--window", "10m",
+                    "--source", "candidate-tree", "--installed-source", "stable-tree",
+                    "--out", str(Path(out) / "readings.json"),
+                ])
+        finally:
+            read_prometheus.read = original_read
+            if original_url is None:
+                del os.environ["PROMETHEUS_URL"]
+            else:
+                os.environ["PROMETHEUS_URL"] = original_url
+
+        self.assertEqual(Path("candidate-tree"), seen["candidate"])
+        self.assertEqual(Path("stable-tree"), seen["installed"])
 
 
 if __name__ == "__main__":

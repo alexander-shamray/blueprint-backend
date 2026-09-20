@@ -49,7 +49,19 @@ WORKFLOW = ROOT / WORKFLOW_PATH
 # Named here because check 12 asserts the workflow uses both, and a gate whose
 # subject is spelled twice is a gate that stops agreeing with itself.
 IMAGE_SOURCE = "IMAGE_SOURCE"
+INSTALLED_SOURCE = "INSTALLED_SOURCE"
 SOURCE_FLAG = "--source"
+INSTALLED_FLAG = "--installed-source"
+
+
+def _argument(flag: str, variable: str) -> str:
+    """The whole argument check 12 looks for, spelled once.
+
+    Whole, because a flag and a name found anywhere on the line are also
+    found in `--source "$OLD_IMAGE_SOURCE"`, which passes a different tree
+    and would leave the check green while the binding was gone.
+    """
+    return f'{flag} "${variable}"'
 
 # The two verdicts, and there are deliberately only two.
 #
@@ -212,6 +224,24 @@ def image_revision(tag: str) -> str:
             "read from whatever the runner happened to check out"
         )
     return tag
+
+
+def installed_tag(values: dict) -> str:
+    """The image tag the running release was installed with.
+
+    `helm get values --all` is the only place the revision behind the stable
+    track's probe routes can be read, because that track serves whatever it
+    was installed with and no input names it. Every chart requires the tag
+    (§15.3), so a release without one is one this rollout cannot reason
+    about rather than a default to fall back on.
+    """
+    tag = values.get("image", {}).get("tag")
+    if not isinstance(tag, str) or not tag.strip():
+        raise PlanError(
+            "the installed release names no image.tag, so the revision its "
+            "probe routes come from cannot be read (ADR-050)"
+        )
+    return tag.strip()
 
 
 def _ceil_div(numerator: int, denominator: int) -> int:
@@ -515,13 +545,10 @@ def check(plan_document: dict, root: Path = ROOT, source: Path | None = None,
     thresholds = entries(plan_document.get("thresholds", {}))
     workloads = entries(plan_document.get("workloads", {}))
 
-    # A tag names ONE workload's image. The other workloads are running images
-    # built from other revisions, so judging their plan entries against this
-    # one answers a question nobody asked and refuses rollouts that are fine:
-    # CI builds an image only for a service a commit changed, so an Ordering
-    # image legitimately predates a Catalog-only registration change. Each
-    # workload is therefore read from its own tree, and only the rolled one
-    # has an image here.
+    # A tag names one workload's image, so only that workload is read from it
+    # (ADR-050). The others are running images built from other revisions,
+    # and judging their plan entries against this one refuses rollouts that
+    # are fine.
     if source is None:
         trees = dict.fromkeys(workloads, root)
         source = root
@@ -593,7 +620,7 @@ def check(plan_document: dict, root: Path = ROOT, source: Path | None = None,
     hosts = _host_assemblies(root)
     if not workloads:
         failures.append("workloads is empty: the rollout has nothing to deploy")
-    for name, workload in sorted(workloads.items()):
+    for name, entry in sorted(workloads.items()):
         # 4a. The key is a Helm release name, and two shells read it as one.
         #     `deploy.yml` passes it to `helm upgrade` and `realm.yml`'s
         #     scheduled job reads it off `workloads` one line at a time, then
@@ -610,7 +637,7 @@ def check(plan_document: dict, root: Path = ROOT, source: Path | None = None,
                 "letters, digits and hyphens, starting and ending with a letter "
                 "or digit, at most 53 characters"
             )
-        service_name = workload.get("serviceName")
+        service_name = entry.get("serviceName")
         known = _host_assemblies(trees[name])
         if service_name not in known:
             failures.append(
@@ -619,9 +646,9 @@ def check(plan_document: dict, root: Path = ROOT, source: Path | None = None,
                 f"from ApplicationName, so it must be one of: "
                 f"{', '.join(sorted(known))}"
             )
-        if not _chart_exists(workload.get("chart"), root):
+        if not _chart_exists(entry.get("chart"), root):
             failures.append(
-                f"workloads.{name}.chart is {workload.get('chart')!r}, which is "
+                f"workloads.{name}.chart is {entry.get('chart')!r}, which is "
                 "not a chart under deploy/helm"
             )
 
@@ -630,8 +657,16 @@ def check(plan_document: dict, root: Path = ROOT, source: Path | None = None,
     #    a meter Common.Web registers, at the MassTransit version the series
     #    table was verified against. A name nothing vouches for matches no
     #    series and rolls every canary back.
-    failures += _metrics_are_vouched_for(sorted(series_read()), root, source)
+    failures += _metrics_are_vouched_for(sorted(series_read()), root, root)
     failures += _masstransit_pin_is_verified(root)
+
+    #    The rolled workload's own signals are vouched for against its image
+    #    too, and only its own: series_read() spans every signal the plan
+    #    defines, so a gateway image that receives no messages would be
+    #    refused for lacking a MassTransit meter it has no reason to carry.
+    if workload in trees and trees[workload] is not root:
+        failures += _metrics_are_vouched_for(
+            sorted(_workload_series(workloads[workload])), root, trees[workload])
 
     # 6. The gate's own subject. Checks 3, 4 and 5 all compare against
     #    something parsed out of another file, and a parser that quietly
@@ -750,6 +785,17 @@ def _series_of(signal: str) -> dict[str, str]:
         "faults": by_instrument[(f"{instrument}.errors", "total")][0],
         "bucket": bucket,
         "unit": unit,
+    }
+
+
+def _workload_series(workload: dict) -> set[str]:
+    """Every series the templates read for the signals this workload declares."""
+    return {
+        name
+        for signal in workload.get("signals", [])
+        if signal in SIGNALS
+        for role, name in _series_of(signal).items()
+        if role != "unit"
     }
 
 
@@ -1337,17 +1383,19 @@ def _rollout_reads_the_image_source(workflow: Path = WORKFLOW) -> list[str]:
     live = [line for line in text.splitlines() if not line.lstrip().startswith("#")]
 
     failures = []
-    if not any(f"{IMAGE_SOURCE}=" in line and "GITHUB_ENV" in line for line in live):
-        failures.append(
-            f"no step exports {IMAGE_SOURCE} into GITHUB_ENV, so the rollout has "
-            "no image tree to read and ADR-050's binding is not in force"
-        )
-
-    def bound(run: str) -> bool:
-        return SOURCE_FLAG in run and IMAGE_SOURCE in run
+    for variable in (IMAGE_SOURCE, INSTALLED_SOURCE):
+        # The name is matched whole. `IMAGE_SOURCE=` is also inside
+        # `OLD_IMAGE_SOURCE=`, so a consistent rename would satisfy a
+        # substring test while exporting a different tree.
+        assignment = re.compile(rf"(?<![A-Za-z0-9_]){variable}=")
+        if not any(assignment.search(line) and "GITHUB_ENV" in line for line in live):
+            failures.append(
+                f"no step exports {variable} into GITHUB_ENV, so the rollout has "
+                "no tree to read it from and ADR-050's binding is not in force"
+            )
 
     # Every reading, because one unbound query is a whole rung judged against
-    # the wrong request set.
+    # the wrong request set, and both tracks are read here.
     readings = _invocations(live, "read_prometheus.py")
     if not readings:
         failures.append(
@@ -1355,20 +1403,24 @@ def _rollout_reads_the_image_source(workflow: Path = WORKFLOW) -> list[str]:
             "own subject is missing rather than satisfied"
         )
     for run in readings:
-        if not bound(run):
-            failures.append(
-                f"a read_prometheus.py run takes no {SOURCE_FLAG} {IMAGE_SOURCE}, "
-                "so its probe exclusion is the checkout's routes and not the "
-                "image's (ADR-050)"
-            )
+        for flag, variable, track in (
+            (SOURCE_FLAG, IMAGE_SOURCE, "the candidate"),
+            (INSTALLED_FLAG, INSTALLED_SOURCE, "the stable track"),
+        ):
+            if _argument(flag, variable) not in run:
+                failures.append(
+                    f"a read_prometheus.py run takes no {_argument(flag, variable)}, "
+                    f"so {track}'s probe exclusion is the checkout's routes and "
+                    "not that image's (ADR-050)"
+                )
 
     # One, not every: the `check` job runs the same command against the
     # checkout on a pull request, where there is no image and no tag.
-    if not any(bound(run) for run in _invocations(live, "canary.py check")):
+    gate = _argument(SOURCE_FLAG, IMAGE_SOURCE)
+    if not any(gate in run for run in _invocations(live, "canary.py check")):
         failures.append(
-            f"no `canary.py check` run takes {SOURCE_FLAG} {IMAGE_SOURCE}, so the "
-            "plan is never held against the source the deployed image was built "
-            "from (ADR-050)"
+            f"no `canary.py check` run takes {gate}, so the plan is never held "
+            "against the source the deployed image was built from (ADR-050)"
         )
     return failures
 
@@ -1392,6 +1444,12 @@ def main(argv: list[str]) -> int:
 
     revision = sub.add_parser("revision", help="the commit an image tag names")
     revision.add_argument("--value", required=True)
+
+    installed = sub.add_parser(
+        "installed-tag", help="the tag the running release was installed with")
+    installed.add_argument(
+        "--values", required=True, type=Path,
+        help="a `helm get values --all -o json` document")
 
     # The workflow asks this BEFORE the first step, because §15.5's 5% is not
     # expressible at §15.3's replicaCount of 3 and scaling up is the operator's
@@ -1437,6 +1495,18 @@ def main(argv: list[str]) -> int:
     except PlanError as error:
         print(f"canary: {error}", file=sys.stderr)
         return 1
+
+    if args.command == "installed-tag":
+        try:
+            document = json.loads(args.values.read_text(encoding="utf-8"))
+            print(installed_tag(document))
+        except (OSError, json.JSONDecodeError) as error:
+            print(f"canary: {args.values} is not readable JSON: {error}", file=sys.stderr)
+            return 1
+        except PlanError as error:
+            print(f"canary: {error}", file=sys.stderr)
+            return 1
+        return 0
 
     if args.command == "revision":
         try:

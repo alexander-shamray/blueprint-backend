@@ -2,20 +2,34 @@
 
 **Decision.** [§15.5](../15-cicd-deployment.md)'s rollout resolves the
 dispatched image tag to a commit and reads **every fact it derives from
-`src/` out of that commit's tree**, never out of the runner's checkout. An
+`src/` for the workload it is rolling out of that commit's tree**, never
+out of the runner's checkout. An
 image tag is a forty-character lower-case commit object name, because
 [§15.2](../15-cicd-deployment.md) builds both of a service's images with the
 commit as the tag; the rollout refuses a tag that is not one, a commit this
 repository does not hold, and a commit that is not an ancestor of the ref it
 is rolling from. That commit's `src/` is extracted to a tree the job passes
-as `--source` to `canary.py check` and `read_prometheus.py`, and it is what
-the probe exclusion, the consumer and saga registration scans
-([ADR-047](ADR-047-the-canary-judges-each-workload-on-the-signals-it-receives.md))
-and the entry-assembly check read. **Everything else stays the checkout's**:
-the chart, [§13.6](../13-observability.md)'s thresholds, the rollout plan,
-and the deciding code itself. `canary.py check` runs a second time inside the
+as `--source`, beside the `--workload` it belongs to, and that workload's
+probe exclusion, its consumer and saga registration scans
+([ADR-047](ADR-047-the-canary-judges-each-workload-on-the-signals-it-receives.md)),
+its entry assembly and the series its declared signals read are taken from
+it. **The other workloads are read from the checkout**, because they are
+running images built from other revisions and this tag says nothing about
+them; a `--source` given without a `--workload` is refused rather than
+applied to all of them.
+
+**Each track is judged on the probe routes of the image that track is
+running.** The canary serves the candidate, and the stable track serves
+what it was installed with, so the rollout reads that release's tag out of
+`helm get values` and resolves it the same way. One exclusion for both
+would filter the stable track's probes by the candidate's routes, which is
+the mismatch this decision exists to remove, one track over.
+
+**Everything else stays the checkout's**: the chart,
+[§13.6](../13-observability.md)'s thresholds, the rollout plan, and the
+deciding code itself. `canary.py check` runs a second time inside the
 rollout job against the image's tree, and a check over `deploy.yml`'s own
-text asserts that the flag and the exported path are still there.
+text asserts that both trees are still exported and still passed.
 
 **Why.** The workflow checked out `main` and deployed whatever the tag named,
 so every source-derived fact described one revision and the running pods
@@ -42,7 +56,14 @@ step already gives: a job that runs its own gates from an arbitrary ref gates
 nothing. Only the *subject* moves, and only `src/`, because the chart and the
 alerts describe what this rollout installs rather than what the image is.
 
-**Consequences.** The checkout needs full history, so the rollout pays a
+**Consequences.** A release whose installed tag names no commit this branch
+carries stops the rollout, because the baseline half of the comparison
+cannot be read; that is a new requirement on what is already deployed, and
+the alternative is judging the stable track by routes that are not its own.
+Holding one image to every workload in the plan was the first shape of this
+decision and it was wrong in the same way, one level up: it refused an
+Ordering rollout for a Catalog registration the Ordering image predates.
+The checkout needs full history, so the rollout pays a
 complete fetch it did not before; the alternative is a shallow clone that
 cannot resolve any tag but the head's, which is the one case this decision
 has nothing to catch. **A refusal costs a dispatch, not a rollout**: every

@@ -282,6 +282,28 @@ jobs:
           echo "CHECKED_AUTHORITY=${KEYCLOAK_BASE_URL}/realms/${KEYCLOAK_REALM}" \
             >> "$GITHUB_ENV"
 
+      # The other half of the comparison. The stable track serves the image
+      # it was installed with, so its probe routes are that image's and not
+      # the candidate's (ADR-050). Read from the release, because no input
+      # names it, and refused rather than guessed: a rollout that cannot tell
+      # what the track it is measuring against serves has no baseline.
+      - name: The stable track's facts come from the image it is running
+        run: |
+          set -euo pipefail
+          helm get values "$WORKLOAD" -n "$NAMESPACE" --all -o json \
+            > "$RUNNER_TEMP/stable.json"
+          TAG=$(python deploy/canary/canary.py installed-tag --values "$RUNNER_TEMP/stable.json")
+          REVISION=$(python deploy/canary/canary.py revision --value "$TAG")
+          if ! git cat-file -e "$REVISION^{commit}" 2>/dev/null; then
+            echo "::error::The installed release serves $REVISION, which is not a commit in this repository, so the stable track's probe routes cannot be read."
+            exit 1
+          fi
+          mkdir -p "$RUNNER_TEMP/installed-source"
+          git archive "$REVISION" src | tar -x -C "$RUNNER_TEMP/installed-source"
+          echo "INSTALLED_SOURCE=$RUNNER_TEMP/installed-source" >> "$GITHUB_ENV"
+        env:
+          WORKLOAD: ${{ inputs.workload }}
+
       - name: The first rung has a price, and it is paid before anything rolls
         run: |
           set -euo pipefail
@@ -492,6 +514,7 @@ jobs:
               --workload "$WORKLOAD" \
               --window "${CANARY_DWELL_MINUTES}m" \
               --source "$IMAGE_SOURCE" \
+              --installed-source "$INSTALLED_SOURCE" \
               --out readings.json
 
             if ! python deploy/canary/canary.py analyse --workload "$WORKLOAD" --readings readings.json; then
