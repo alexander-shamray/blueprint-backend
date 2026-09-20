@@ -362,8 +362,11 @@ the design working rather than a gap: what an operator needs from the row is
 what to *do*, and the row says it.
 
 1. **Find out whether Payments already refunded it. This decides which
-   branch you are in, and never on its own that you should pay.** Look for
-   a `PaymentRefunded` for this order, or read the provider's own console.
+   branch you are in, and never on its own that you should pay.** Read
+   `GET /api/v1/payments/{orderId}` through the gateway with a
+   `payments:admin` token: a `refund` in the answer means Payments voided it,
+   and `intent.status` says whether there was anything to void. The provider's
+   own console is the second source, for when Payments is itself the question.
    This is the same act on both codes and neither answer is the expected
    one — see above — so the check is the work, not a formality before the
    refund.

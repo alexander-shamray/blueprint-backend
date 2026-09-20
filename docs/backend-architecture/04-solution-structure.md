@@ -962,14 +962,15 @@ builder.Services
 builder.Services.AddRateLimiter(/* §10.3 */);
 
 // Every policy §10.2's routes name that Common.Web does not already register.
-// "authenticated" comes from AddCommonWebDefaults; this one is the gateway's
-// own, and it is a permission check rather than a role check for the reason
+// "authenticated" comes from AddCommonWebDefaults; these two are the gateway's
+// own, and each is a permission check rather than a role check for the reason
 // §11.4 gives. A route naming a policy nobody registered fails CLOSED and
 // loudly: the config load throws out of MapReverseProxy() below, naming the
 // policy and the route, so the process does not start (§10.2).
 builder.Services
     .AddAuthorizationBuilder()
-    .AddPolicy(GatewayPermissions.InventoryAdmin, p => p.RequirePermission(GatewayPermissions.InventoryAdmin));
+    .AddPolicy(GatewayPermissions.InventoryAdmin, p => p.RequirePermission(GatewayPermissions.InventoryAdmin))
+    .AddPolicy(GatewayPermissions.PaymentsAdmin, p => p.RequirePermission(GatewayPermissions.PaymentsAdmin));
 
 // Both of the following are conditional on the deployment shape, and each is
 // REQUIRED once switched on. "Off" and "on but unconfigured" are different
