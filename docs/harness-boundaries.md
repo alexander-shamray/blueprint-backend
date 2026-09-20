@@ -119,21 +119,28 @@ extra command runs, write redirections, and `graph` / `clean` / `init` /
 The `cbx` wrapper is the other half — whitelist and
 `CBX_NO_SKILL_AUTO_UPDATE=1` — and is not a substitute for the hook.
 
-**That hook is owed, and it is the one residual on this list the session
-cannot close.** `settings.json` carries `PreToolUse` guards and no
-`PostToolUse` entry, so nothing runs `update` after an edit: the index is
-refreshed only when a query reports it stale and `SKILL.md`'s instruction
-is followed, which makes freshness a property of having asked rather than
-of having edited. The command belongs in `settings.json`, which denies its
-own editing, so it is the owner's edit with the deny lifted and the
-ordering rule below applies — it goes last.
+**`PostToolUse` runs `.claude/hooks/refresh-index.py` after every edit**,
+because otherwise the index is refreshed only when a query reports it stale
+and `SKILL.md`'s instruction is followed — freshness as a property of having
+asked rather than of having edited. The hook spawns the CLI detached,
+discards both streams and always returns 0: it runs on every edit, so it may
+not make one wait, and an index that cannot refresh is not a reason to fail
+the edit that provoked it.
 
-`examples/hooks/settings.json` holds the block to copy. It sits under
-`examples/`, which Claude Code does not read, so it documents the fix and
-is not the fix; it calls `cbx` rather than the bare CLI, because the
-wrapper already exports `CBX_NO_SKILL_AUTO_UPDATE=1` and refuses every
-subcommand but the safe ones, and it backgrounds the call so an edit never
-waits on an index.
+**Neither spelling of the command that the skill and its issue proposed runs
+on Windows**, which a probe found rather than a reading did.
+`CBX_NO_SKILL_AUTO_UPDATE=1 codebase-index update` is a POSIX env-var prefix.
+`bash .../cbx update` reaches the WSL launcher for a process spawned outside
+Git Bash and dies with `execvpe(/bin/bash)`, into a discarded stream. So the
+hook is a `py -3.12` invocation of a file here, like the `PreToolUse` three,
+which is the one form that needs no shell — and it exports
+`CBX_NO_SKILL_AUTO_UPDATE=1` itself, since it calls the CLI rather than the
+`cbx` wrapper that would have set it.
+
+`examples/hooks/settings.json` carries the same block. It sits under
+`examples/`, which Claude Code does not read, so it documents the wiring
+rather than being it — and a second spelling there would be the copy that
+stops agreeing with the file that runs.
 
 **`settings.json`'s own entry self-locks, and that is a working constraint, not
 a curiosity.** Once it denies itself, the session cannot edit it again —
