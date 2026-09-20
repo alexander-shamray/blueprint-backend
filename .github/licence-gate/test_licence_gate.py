@@ -361,6 +361,39 @@ class ChapterPins(unittest.TestCase):
         self.assertIn("Dapper", findings[0])
         self.assertIn("2.1.66", findings[0])
 
+    def test_the_attribute_order_does_not_decide_it(self):
+        findings = chapters_with(
+            "04-solution-structure.md",
+            '    <PackageVersion Version="2.1.66" Include="Dapper" />\n')
+        self.assertEqual(len(findings), 1)
+        self.assertIn("Dapper", findings[0])
+        self.assertIn("2.1.66", findings[0])
+
+    def test_single_quotes_are_the_same_pin(self):
+        findings = chapters_with(
+            "04-solution-structure.md",
+            "    <PackageVersion Include='Dapper' Version='2.1.66' />\n")
+        self.assertEqual(len(findings), 1)
+        self.assertIn("Dapper", findings[0])
+        self.assertIn("2.1.66", findings[0])
+
+    def test_one_tag_may_quote_its_two_attributes_differently(self):
+        findings = chapters_with(
+            "04-solution-structure.md",
+            '    <PackageVersion Version=\'2.1.66\' Include="Dapper" />\n')
+        self.assertEqual(len(findings), 1)
+        self.assertIn("Dapper", findings[0])
+        self.assertIn("2.1.66", findings[0])
+
+    def test_two_tags_are_not_one_pin(self):
+        # The pair is read inside a single tag: an Include in one element and a
+        # Version in another are the central-management form the chapters are
+        # free to print, and pairing them across the gap would refuse it.
+        findings = chapters_with(
+            "04-solution-structure.md",
+            '<PackageReference Include="Dapper" />\n<PackageVersion Version="2.1.66" />\n')
+        self.assertEqual(findings, [])
+
     def test_a_chapter_that_cites_the_file_is_not(self):
         findings = chapters_with(
             "04-solution-structure.md",

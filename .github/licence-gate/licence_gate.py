@@ -2,10 +2,11 @@
 """Fail the build on a package pin whose licence has not been cleared.
 
 Appendix B registers what is cleared and `Directory.Packages.props` is what
-CI restores; Section 4.4 asks for a check that the two agree. Three other ways
-a package reaches a restore uncleared are read too: a project pinning its own
-version, one opting out of central management, and a chapter printing a pin,
-which makes the version a second owner the next raise has to edit.
+CI restores; Section 4.4 asks for a check that the two agree. Two ways a
+package reaches a restore around that file are read with it: a project
+pinning its own version, and one opting out of central management. The
+chapters are read for a different fault — a pin printed there restores
+nothing, but it gives the version a second owner the next raise must edit.
 """
 
 from __future__ import annotations
@@ -82,6 +83,13 @@ SKIPPED_DIRECTORIES = frozenset({"obj", "bin", ".git"})
 # so including it costs nothing and a stray `PackageReference` written there is
 # caught rather than being the one file the check declines to read.
 PROJECT_SUFFIXES = (".csproj", ".props", ".targets")
+
+# An MSBuild tag, and the two attributes that make a pin of it read one tag at
+# a time rather than as one ordered pattern. Either attribute may be written
+# first and either quote character is legal, so a pattern fixing the order and
+# the quotes reads one spelling of the pair and passes the rest of them.
+TAG = re.compile(r"<[A-Za-z][^<>]*>")
+PIN_ATTRIBUTE = re.compile(r"""\b(Include|Version)\s*=\s*(?:"([^"]*)"|'([^']*)')""")
 
 
 def local_name(element: ElementTree.Element) -> str:
@@ -248,19 +256,23 @@ def chapter_pins(chapters: Path) -> list[str]:
 
     docs/change-locality.md section 2 gives a version one owner and names
     Appendix B as the single exception, so that file is passed over and every
-    other is read. The shape is MSBuild's attribute pair, which is what a
-    transcription of the props file looks like; a version named in prose, as
-    Appendix B names one, is a different claim and not this gate's.
+    other is read. The shape is MSBuild's attribute pair, taken from one tag
+    at a time so that neither the order of the two attributes nor the quote
+    character around them decides whether the pair is seen; a version named in
+    prose, as Appendix B names one, is a different claim and not this gate's.
     """
     findings = []
     for path in sorted(chapters.rglob("*.md")):
         if path.name == "appendix-b-licences.md":
             continue
-        text = path.read_text(encoding="utf-8")
-        for identity, version in re.findall(r'Include="([^"]+)"\s+Version="([^"]+)"', text):
-            findings.append(
-                f"{path.name} prints a pin: {identity} {version}. "
-                f"Directory.Packages.props owns the version; cite the file instead")
+        for tag in TAG.findall(path.read_text(encoding="utf-8")):
+            attributes: dict[str, str] = {}
+            for name, double_quoted, single_quoted in PIN_ATTRIBUTE.findall(tag):
+                attributes.setdefault(name, double_quoted or single_quoted)
+            if "Include" in attributes and "Version" in attributes:
+                findings.append(
+                    f"{path.name} prints a pin: {attributes['Include']} {attributes['Version']}. "
+                    f"Directory.Packages.props owns the version; cite the file instead")
     return findings
 
 
@@ -379,7 +391,8 @@ def main(argv: list[str] | None = None) -> int:
     # thing that fails, and stdout encoding on a runner is not ours to assume.
     print(f"Licence gate: {len(pins)} pinned package(s). Every one registered and "
           f"licence-cleared. {len(projects)} MSBuild file(s) pin nothing of their own, "
-          f"and no chapter prints a version.")
+          f"and no chapter writes a version the file owns as an MSBuild "
+          f"Include/Version pair.")
     return 0
 
 

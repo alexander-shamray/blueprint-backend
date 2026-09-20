@@ -98,13 +98,10 @@
     <PackageVersion Include="Grpc.Net.ClientFactory" Version="2.71.0" />
     <PackageVersion Include="Grpc.AspNetCore" Version="2.71.0" />
     <PackageVersion Include="Grpc.Tools" Version="2.71.0" />
-    <!-- 3.30.2, not §4.4's printed 3.29.3, and the chapter was amended in this
-         change. Grpc.AspNetCore 2.71.0 floors this at 3.30.2; with
-         CentralPackageTransitivePinningEnabled the lower pin is a package
-         DOWNGRADE rather than a floor NuGet quietly raises, so NU1109 fails
-         the restore and the three rows above are unbuildable without it. The
-         blueprint's number was written from the outside and is the one thing
-         here that could only be found by compiling it. -->
+    <!-- Grpc.AspNetCore 2.71.0 floors this at 3.30.2; with
+         CentralPackageTransitivePinningEnabled a lower pin is a package
+         downgrade rather than a floor NuGet quietly raises, so NU1109 fails
+         the restore. -->
     <PackageVersion Include="Google.Protobuf" Version="3.30.2" />
     <!-- §11.3's JWT bearer handler, referenced by Common.Web. Not carried by
          Microsoft.AspNetCore.App — the shared framework has the authentication
