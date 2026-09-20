@@ -52,7 +52,7 @@ Directory.*.props            shared MSBuild settings and ADR-019's analyser poli
 deploy/canary/               §15.5's ladder, its arithmetic and its verdict
 deploy/keycloak/             §11's realm obligations, over any realm
 deploy/compose/              §14.1's model: an index, the shared baseline, one file per unit under services/
-deploy/helm/                 §15.3's charts — one library chart, four users
+deploy/helm/                 §15.3's charts — one library chart, one user per deployable
 deploy/observability/        §13.8's dashboards, §13.6's rules, §13.7's k6 run
 tools/new-service/           §4.5's scaffold, with Catalog as its template
 src/BuildingBlocks/          Common.Domain, .Application, .Contracts, .Infrastructure, .Web

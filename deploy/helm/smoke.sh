@@ -30,8 +30,18 @@ CIDR='{10.42.0.0/16}'
 GATEWAY_OVERLAY="--set ingress.trustedNetworks=$CIDR"
 PLATFORM_OVERLAY="--set gateway.ingress.trustedNetworks=$CIDR"
 
-SERVICE_CHARTS="catalog ordering inventory gateway web-bff"
-MIGRATOR_CHARTS="catalog ordering inventory"
+# Payments' required provider address (§15.4). Per chart, not for all: on any
+# other chart it is a setting with the capability off, which the library's
+# coherence guard refuses. So it cannot ride GATEWAY_OVERLAY, which every
+# chart receives.
+overlay_for() {
+    case "$1" in
+        payments) printf '%s' "--set-string paymentProvider.baseUrl=https://psp.example.invalid/" ;;
+    esac
+}
+
+SERVICE_CHARTS="catalog ordering inventory payments gateway web-bff"
+MIGRATOR_CHARTS="catalog ordering inventory payments"
 DATABASELESS_CHARTS="gateway web-bff"
 
 # Every path outside deploy/helm that this script reads, declared once beside
@@ -44,6 +54,7 @@ src/BFF/Web.Bff
 src/Services/Catalog
 src/Services/Ordering
 src/Services/Inventory
+src/Services/Payments
 src/BuildingBlocks/Common.Web/HealthCheckExtensions.cs
 .gitattributes
 deploy/canary/canary.json
@@ -87,6 +98,22 @@ check() {
 count() { grep -c "$1" "$2" 2>/dev/null || true; }
 
 section() { printf '\n%s\n' "$1"; }
+
+refuses_foreign() {
+    # refuses_foreign <chart> <label> <needle> <helm args...> — `refuses`'s
+    # shape over a NAMED chart, because these assertions are about a
+    # capability reaching a chart that does not own it and so cannot all be
+    # made against the gateway. Defined here with the other helpers rather
+    # than beside `refuses`, which sits below its first caller.
+    local chart="$1" label="$2" needle="$3"
+    shift 3
+    if "$HELM" template "$chart" "$CHARTS_DIR/$chart" --set-string "image.tag=$TAG" \
+        $GATEWAY_OVERLAY $(overlay_for "$chart") "$@" >"$OUT/foreign-$chart.txt" 2>&1; then
+        fail "$label — it rendered instead"
+    else
+        check "$label" grep -q "$needle" "$OUT/foreign-$chart.txt"
+    fi
+}
 
 # --------------------------------------------------------------------------
 section 'The gate covers every chart on disk'
@@ -315,9 +342,11 @@ for chart in $SERVICE_CHARTS platform; do
         --set-string "catalog.image.tag=$TAG" \
         --set-string "ordering.image.tag=$TAG" \
         --set-string "inventory.image.tag=$TAG" \
+        --set-string "payments.image.tag=$TAG" \
+        --set-string "payments.paymentProvider.baseUrl=https://psp.example.invalid/" \
         --set-string "gateway.image.tag=$TAG" \
         --set-string "web-bff.image.tag=$TAG" \
-        $GATEWAY_OVERLAY $PLATFORM_OVERLAY
+        $GATEWAY_OVERLAY $(overlay_for "$chart") $PLATFORM_OVERLAY
 done
 
 # --------------------------------------------------------------------------
@@ -328,7 +357,7 @@ section 'A deploy that cannot name its tag fails (§15.3)'
 # the one tag §15.3 forbids by name. This is the assertion that the empty
 # default is a refusal rather than a hole.
 for chart in $SERVICE_CHARTS; do
-    if "$HELM" template "$chart" "$CHARTS_DIR/$chart" $GATEWAY_OVERLAY \
+    if "$HELM" template "$chart" "$CHARTS_DIR/$chart" $GATEWAY_OVERLAY $(overlay_for "$chart") \
         >"$OUT/untagged-$chart.txt" 2>&1; then
         fail "$chart renders WITHOUT a tag — it must not"
     elif grep -q 'image.tag is required' "$OUT/untagged-$chart.txt"; then
@@ -343,17 +372,65 @@ section 'Rendering'
 # --------------------------------------------------------------------------
 for chart in $SERVICE_CHARTS; do
     "$HELM" template "$chart" "$CHARTS_DIR/$chart" --set-string "image.tag=$TAG" \
-        $GATEWAY_OVERLAY >"$OUT/$chart.yaml"
+        $GATEWAY_OVERLAY $(overlay_for "$chart") >"$OUT/$chart.yaml"
     pass "$chart renders"
 done
 "$HELM" template platform "$CHARTS_DIR/platform" \
     --set-string "catalog.image.tag=$TAG" \
     --set-string "ordering.image.tag=$TAG" \
     --set-string "inventory.image.tag=$TAG" \
+    --set-string "payments.image.tag=$TAG" \
+    --set-string "payments.paymentProvider.baseUrl=https://psp.example.invalid/" \
     --set-string "gateway.image.tag=$TAG" \
     --set-string "web-bff.image.tag=$TAG" \
     $PLATFORM_OVERLAY >"$OUT/platform.yaml"
 pass 'platform renders'
+
+# --------------------------------------------------------------------------
+section 'paymentProvider is a capability, and its address is required'
+# --------------------------------------------------------------------------
+# Both keys are read eagerly by AddPaymentProvider, so every state below that
+# renders cleanly is a pod that will not start. Asserted in both directions:
+# supplied, the two keys land in the right Kind; absent or contradicted, the
+# render is refused rather than deferred to the cluster.
+PAYMENTS_RENDER=$("$HELM" template payments "$CHARTS_DIR/payments" \
+    --set-string image.tag="$TAG" \
+    --set-string paymentProvider.baseUrl=https://psp.example.invalid/)
+printf '%s\n' "$PAYMENTS_RENDER" >"$OUT/payments-capability.yaml"
+# Both keys are asserted by PLACEMENT and not by presence, because §15.4 puts
+# them in different Kinds and a global grep proves neither: the address would
+# satisfy one that moved it into the pod environment, and the credential would
+# satisfy one that rendered it as a literal. A gate watching only the name
+# stops covering the thing it was added for the moment the value moves.
+check 'payments: PaymentProvider__BaseUrl is in the ConfigMap' \
+    awk '/^kind: ConfigMap$/ { in_cm = 1 }
+         /^---$/ { in_cm = 0 }
+         in_cm && /^ *PaymentProvider__BaseUrl: "https:\/\/psp\.example\.invalid\/"$/ { found = 1 }
+         END { exit found ? 0 : 1 }' "$OUT/payments-capability.yaml"
+check 'payments: PaymentProvider__ApiKey comes from a secretKeyRef, not a literal' \
+    awk '/^ *- name: PaymentProvider__ApiKey$/ { at = NR }
+         at && NR == at + 1 && /^ *valueFrom:$/ { vf = 1 }
+         vf && NR == at + 2 && /^ *secretKeyRef:$/ { found = 1 }
+         END { exit found ? 0 : 1 }' "$OUT/payments-capability.yaml"
+check 'payments: no ConfigMap carries PaymentProvider__ApiKey' \
+    awk '/^kind: ConfigMap$/ { in_cm = 1 }
+         /^---$/ { in_cm = 0 }
+         in_cm && /PaymentProvider__ApiKey/ { found = 1 }
+         END { exit found ? 1 : 0 }' "$OUT/payments-capability.yaml"
+if "$HELM" template payments "$CHARTS_DIR/payments" --set-string image.tag="$TAG" >/dev/null 2>&1; then
+    fail 'payments: rendered with no paymentProvider.baseUrl; a deploy that forgot it must fail here, not at start'
+fi
+if "$HELM" template payments "$CHARTS_DIR/payments" --set-string image.tag="$TAG" \
+    --set paymentProvider.enabled=false --set paymentProvider.apiKeySecretRef=null \
+    --set-string paymentProvider.baseUrl=https://psp.example.invalid/ >/dev/null 2>&1; then
+    fail 'payments: rendered an address with the capability off; a setting nothing reads must be refused'
+fi
+if "$HELM" template payments "$CHARTS_DIR/payments" --set-string image.tag="$TAG" \
+    --set paymentProvider.enabled=false --set paymentProvider.apiKeySecretRef=null \
+    --set-string paymentProvider.baseUrl= >/dev/null 2>&1; then
+    fail 'payments: rendered with the capability off and cleared; the host registers it unconditionally'
+fi
+pass 'paymentProvider renders both keys and refuses an empty address or an address while off'
 
 # --------------------------------------------------------------------------
 section 'Probes — three per workload (§13.5)'
@@ -557,6 +634,27 @@ check 'exactly one workload in the platform holds a client secret' \
     test "$(count 'Identity__Client__ClientSecret' "$OUT/platform.yaml")" -eq 1
 check 'and it is the BFF' \
     test "$(count 'Identity__Client__ClientSecret' "$OUT/web-bff.yaml")" -eq 1
+
+# The two assertions above read the DEFAULT render, and Helm accepts values a
+# chart's values.yaml never declares — so they establish what the charts ship
+# and nothing about what an environment file can add. A credential-bearing
+# capability turned on where the code does not have it puts one service's
+# Secret in another service's pod, which is the one misconfiguration here
+# that moves a credential rather than stalling a pod.
+for chart in $SERVICE_CHARTS; do
+    [ "$chart" = payments ] || refuses_foreign "$chart" \
+        "the provider capability is refused on $chart" 'only payments registers a provider' \
+        --set paymentProvider.enabled=true \
+        --set-string paymentProvider.baseUrl=https://psp.example.invalid/ \
+        --set-string paymentProvider.apiKeySecretRef.name=payments-provider \
+        --set-string paymentProvider.apiKeySecretRef.key=api-key
+    [ "$chart" = web-bff ] || refuses_foreign "$chart" \
+        "the BFF's client credentials are refused on $chart" 'one host that calls a peer' \
+        --set identity.clientCredentials=true \
+        --set-string identity.clientId=x --set-string identity.scope=y \
+        --set-string identity.clientSecretRef.name=web-bff-identity \
+        --set-string identity.clientSecretRef.key=secret
+done
 
 # --------------------------------------------------------------------------
 section 'The edge keys belong to the gateway alone (§15.4)'
@@ -789,6 +887,71 @@ refuses 'a whitespace-only OTLP endpoint fails the render' 'observability.otlpEn
 refuses 'a whitespace-only workload name fails the render' 'workload.name is required' \
     $GATEWAY_OVERLAY --set-string 'workload.name= '
 
+# --------------------------------------------------------------------------
+section 'Non-blank is not an address either'
+# --------------------------------------------------------------------------
+# The hosts parse both of these before they will start, and each rejects far
+# more than the empty string — an absolute HTTPS address, no user information,
+# no query, no fragment. Under a presence check every value below renders,
+# begins a rollout and dies in the new pod, which is what `commerce.requireUrl`
+# moves to render time. Asserted per rejected shape rather than once, because a
+# guard is a claim about what it refuses.
+for bad in 'keycloak:8080/realms/commerce' 'ftp://id.example.com/realms' \
+    'http://id.example.com/realms/commerce' 'https://u:p@id.example.com/realms' \
+    'https://id.example.com/realms?x' 'https://id.example.com/realms#f' \
+    'https://:443/realms' 'https://id.example.com:bad/realms' \
+    'https://[::1/realms'; do
+    refuses "an authority of '$bad' fails the render" 'HTTPS address this chart will accept' \
+        $GATEWAY_OVERLAY --set-string "identity.authority=$bad"
+done
+
+# The port's range is a separate refusal with its own message, because the
+# digits satisfy the shape and it is `Uri.TryCreate` that draws the bound.
+for bad in 'https://id.example.com:65536/realms' 'https://id.example.com:0/realms'; do
+    refuses "an authority on port '${bad##*:}' fails the render" 'outside 1-65535' \
+        $GATEWAY_OVERLAY --set-string "identity.authority=$bad"
+done
+
+# The same guard on the other key it protects, which needs the payments chart
+# rather than the gateway: `refuses` renders the gateway, which has no
+# capability to carry an address at all.
+refuses_payments() {
+    local label="$1" needle="$2"
+    shift 2
+    if "$HELM" template payments "$CHARTS_DIR/payments" --set-string "image.tag=$TAG" \
+        "$@" >"$OUT/payments-bad-url.txt" 2>&1; then
+        fail "$label — it rendered instead"
+    else
+        check "$label" grep -q "$needle" "$OUT/payments-bad-url.txt"
+    fi
+}
+
+for bad in 'psp.example.invalid' 'ftp://psp.example.invalid/' \
+    'http://psp.example.invalid/' 'https://user:key@psp.example.invalid/' \
+    'https://psp.example.invalid/?x' 'https://psp.example.invalid/#f' \
+    'https://:443/' 'https://psp.example.invalid:bad/' \
+    'https://[::1/'; do
+    refuses_payments "a provider address of '$bad' fails the render" \
+        'HTTPS address this chart will accept' \
+        --set-string "paymentProvider.baseUrl=$bad"
+done
+
+for bad in 'https://psp.example.invalid:65536/' 'https://psp.example.invalid:0/'; do
+    refuses_payments "a provider address on port '${bad%/}' fails the render" \
+        'outside 1-65535' \
+        --set-string "paymentProvider.baseUrl=$bad"
+done
+
+# And the other direction, because a guard that only ever refuses is
+# indistinguishable from one that refuses everything: the shapes an operator
+# legitimately writes must still render.
+for good in 'https://psp.example.invalid/' 'https://psp.example.invalid:8443/v1/' \
+    'https://psp.example.invalid'; do
+    check "a provider address of '$good' renders" \
+        "$HELM" template payments "$CHARTS_DIR/payments" --set-string "image.tag=$TAG" \
+        --set-string "paymentProvider.baseUrl=$good"
+done
+
 # The origin guard has to reject what Program.cs rejects, or it is theatre:
 # each of these renders, begins a rollout, and crashes the new pod otherwise.
 refuses 'an origin carrying userinfo fails the render' 'is not a browser origin' \
@@ -972,7 +1135,7 @@ section 'The canary track (§15.5, ADR-022)'
 for chart in $SERVICE_CHARTS; do
     "$HELM" template "$chart-canary" "$CHARTS_DIR/$chart" --set-string "image.tag=$TAG" \
         --set canary.enabled=true --set autoscaling.enabled=false \
-        $GATEWAY_OVERLAY >"$OUT/$chart-canary.yaml"
+        $GATEWAY_OVERLAY $(overlay_for "$chart") >"$OUT/$chart-canary.yaml"
     pass "$chart renders a canary"
 
     name="$(awk '/^workload:/ { w = 1 } w && /^  name: / { sub(/^  name: /, ""); print; exit }' \

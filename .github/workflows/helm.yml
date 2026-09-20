@@ -24,6 +24,7 @@ on:
       - 'src/Services/Catalog/**'
       - 'src/Services/Ordering/**'
       - 'src/Services/Inventory/**'
+      - 'src/Services/Payments/**'
       - 'src/BuildingBlocks/Common.Web/HealthCheckExtensions.cs'
       - 'deploy/canary/**'
   push:
@@ -37,6 +38,7 @@ on:
       - 'src/Services/Catalog/**'
       - 'src/Services/Ordering/**'
       - 'src/Services/Inventory/**'
+      - 'src/Services/Payments/**'
       - 'src/BuildingBlocks/Common.Web/HealthCheckExtensions.cs'
       - 'deploy/canary/**'
 

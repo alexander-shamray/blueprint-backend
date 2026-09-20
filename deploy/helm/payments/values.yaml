@@ -1,0 +1,144 @@
+# Payments, and the fourth chart cut from this shape. One port and no gRPC,
+# like the chart beside it; what is its own is §3.2's provider, the one call
+# this platform makes outside itself.
+
+workload:
+  # §10.2's route file dials `http://payments-api:8080/` as a literal, so this
+  # value is that string — _helpers.tpl argues why it is not release-derived.
+  name: payments-api
+
+replicaCount: 3
+
+# §15.5's canary track, and OFF is what every ordinary release means.
+#
+# Turned on, this chart renders the SECOND of two Deployments answering to the
+# one Service: its objects take a `-canary` suffix, its pods carry
+# `app.kubernetes.io/track: canary`, and the Service, Ingress, HPA and
+# PodDisruptionBudget are suppressed because the stable release owns those
+# names (ADR-022). The share of traffic it serves is its replica count over
+# the total, which is why `deploy/canary/canary.py` does the arithmetic.
+#
+# Set by the rollout, not by an operator: `deploy/canary/` drives it.
+canary:
+  enabled: false
+
+image:
+  # Registry namespace only. Each workload appends its own name, so the chart
+  # can reference both the API and the migrator (§7.4) from one tag.
+  registry: registry.example.com/commerce
+  api: payments-api
+  migrator: payments-migrator
+  # Supplied by CI, never "latest"; both images share it. Deliberately empty
+  # rather than a default: a deploy that cannot name its tag must fail, not
+  # roll something. A config-only deploy reads the running value back (§15.1)
+  # instead of falling through to this.
+  tag: ""
+  pullPolicy: IfNotPresent
+
+ports:
+  - name: http
+    containerPort: 8080
+
+resources:
+  requests: { cpu: 100m, memory: 256Mi }
+  limits:   { memory: 512Mi }          # No CPU limit — §15.3.
+
+migrationJob:
+  resources:
+    requests: { cpu: 50m, memory: 128Mi }
+    limits:   { memory: 256Mi }
+
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 20
+  targetCPUUtilizationPercentage: 70
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 2
+
+# Two receive endpoints and an outbox dispatcher to drain, and one thing the
+# other charts do not have: a provider call already in flight, bounded by
+# ProviderHop.TotalRequestTimeout. Neither number is written here — the value
+# must exceed the host's HostOptions.ShutdownTimeout, and _deployment.tpl
+# carries the argument for the margin.
+terminationGracePeriodSeconds: 45
+
+probes:
+  probePort: http
+  liveness:  { path: /health/live,  initialDelaySeconds: 10, periodSeconds: 10 }
+  readiness: { path: /health/ready, initialDelaySeconds: 5,  periodSeconds: 5 }
+  startup:   { path: /health/startup, failureThreshold: 30,  periodSeconds: 2 }
+
+service:
+  # True: the gateway dials this workload by name (§10.2's payments-admin
+  # route). False is the worker case (§15.3).
+  enabled: true
+
+ingress:
+  # False, and written down rather than omitted (§15.3). Payments is reached
+  # through the gateway (§10.2); an Ingress here would be a second door past
+  # the edge's rate limiting, CORS policy and forwarded-header handling.
+  enabled: false
+
+identity:
+  # The authority, to validate incoming JWTs (§11.2) — and nothing else.
+  # Identity:Client is what a host presents when it CALLS a peer (§11.5), and
+  # Payments calls no peer: the one call it makes outside itself is §3.2's
+  # provider, which is authenticated by its own key below and not by a token
+  # from this realm.
+  authority: https://id.example.com/realms/commerce
+  # False, and written down rather than absent: §15.4's
+  # required-for-some-hosts category is a claim a chart has to make, not one to
+  # infer from a missing key. Exactly one chart in the platform sets it true.
+  clientCredentials: false
+
+database:
+  enabled: true
+  # GetConnectionString("Payments") at runtime, "PaymentsMigrator" in the hook.
+  connectionName: Payments
+  runtimeSecretRef:
+    name: payments-database
+    key: connection-string
+  migratorSecretRef:
+    name: payments-migrator-secret
+    key: connection-string
+
+# The bus (§9). One Secret per service, never a shared one: a single broker
+# principal is what makes queue arrival a boundary in name only (§9.4), since
+# anything able to reach the broker could publish onto another service's queue
+# and be mapped as system-initiated.
+#
+# The Secret this names must carry a connection string for the `payments-svc`
+# account, whose permissions deploy/compose/rabbitmq/definitions.json declares
+# and `check_permissions.py` holds to the code. Provisioning it on a deployed
+# broker is an obligation stated and not checked — §15.4's division.
+broker:
+  enabled: true
+  secretRef:
+    name: payments-rabbitmq
+    key: connection-string
+
+# No Redis (§8.1): Payments caches nothing and takes no §8.5 key, because it
+# has no HTTP write command. Declared rather than omitted, as the gateway and
+# the BFF declare it (§15.3): a capability is a claim a chart makes.
+redis:
+  enabled: false
+
+# §3.2's provider. The address is an environment value with no default a
+# cluster could use — the simulator is Compose's, never a cluster's — so the
+# capability refuses to render without one. Both keys are read eagerly by
+# AddPaymentProvider, which is why the chart beside this file refuses the
+# capability being switched off at all.
+paymentProvider:
+  enabled: true
+  baseUrl: ""
+  apiKeySecretRef:
+    name: payments-provider
+    key: api-key
+
+observability:
+  otlpEndpoint: http://otel-collector.observability:4317
+
+extraConfigMaps: []
