@@ -1352,18 +1352,37 @@ def _dispatch_options_match_workloads(workloads: dict) -> list[str]:
 ARCHIVED = re.compile(
     r'git\s+archive\s+"?(?P<revision>[^"\s]+)"?\s+src\b[^\n]*?-C\s+"?(?P<into>[^"\s]+)"?')
 
-# The revisions that are not the one the tag resolved to. Archiving any
-# of these is the defect with the binding's own spelling on it.
-CHECKOUT_REVISIONS = frozenset({"HEAD", "$GITHUB_SHA", "${GITHUB_SHA}"})
+# The revision every archive has to be of, and the assignment that has to
+# have produced it. Named rather than denied: a list of spellings that are
+# not the right one admits the next spelling nobody listed, which is the
+# enumeration failure this repository keeps re-finding.
+RESOLVED_REVISION = "$REVISION"
+ASSIGNS_REVISION = re.compile(r"(?<![A-Za-z0-9_])REVISION=")
+RESOLVES_REVISION = re.compile(
+    r"(?<![A-Za-z0-9_])REVISION=\$\(\s*python\s+\S*canary\.py\s+revision\b")
 
 
-def _archived(live: list[str]) -> dict[str, str]:
-    """Each tree an archive writes, and the revision it was taken from."""
+def _resolved_above(live: list[str], index: int) -> bool:
+    """Whether the nearest REVISION= above `index` came from the tag.
+
+    The nearest one, because each archive runs in its own step and takes
+    the value that step set: an archive of the right variable, assigned
+    from the wrong thing, is the same tree by a longer route.
+    """
+    for line in reversed(live[:index]):
+        if ASSIGNS_REVISION.search(line):
+            return bool(RESOLVES_REVISION.search(line))
+    return False
+
+
+def _archived(live: list[str]) -> dict[str, tuple[str, bool]]:
+    """Each tree an archive writes, its revision, and where that came from."""
     found = {}
-    for line in live:
+    for index, line in enumerate(live):
         match = ARCHIVED.search(line)
         if match:
-            found[match.group("into")] = match.group("revision")
+            found[match.group("into")] = (
+                match.group("revision"), _resolved_above(live, index))
     return found
 
 
@@ -1440,12 +1459,20 @@ def _rollout_reads_the_image_source(workflow: Path = WORKFLOW) -> list[str]:
                 "writes, so the rollout reads a tree nothing took from the "
                 "image's revision (ADR-050)"
             )
-        elif archived[exported] in CHECKOUT_REVISIONS:
-            failures.append(
-                f"{variable} is archived from {archived[exported]} rather than "
-                "the revision the tag resolved to, so it is the checkout under "
-                "another name (ADR-050)"
-            )
+        else:
+            revision, resolved = archived[exported]
+            if revision != RESOLVED_REVISION:
+                failures.append(
+                    f"{variable} is archived from {revision} rather than "
+                    f"{RESOLVED_REVISION}, so the tree is not the one the tag "
+                    "resolved to (ADR-050)"
+                )
+            elif not resolved:
+                failures.append(
+                    f"{variable} is archived from {RESOLVED_REVISION}, which "
+                    "the step above it does not set from `canary.py revision`, "
+                    "so the name is right and the value is not (ADR-050)"
+                )
 
     # Every reading, because one unbound query is a whole rung judged against
     # the wrong request set, and both tracks are read here.

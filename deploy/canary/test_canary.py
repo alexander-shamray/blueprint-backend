@@ -1868,11 +1868,14 @@ class RolloutBindingTests(unittest.TestCase):
         self.assertTrue(any("no `git archive` writes" in f for f in failures),
                         failures)
 
-    def test_a_tree_archived_from_the_checkout_fails(self) -> None:
-        """The other half: the path is the archive's, and the archive is of
-        the checkout. The export is then correct about a tree that is the
-        wrong revision."""
-        for revision in ("HEAD", "$GITHUB_SHA"):
+    def test_a_tree_archived_from_another_revision_fails(self) -> None:
+        """The other half: the path is the archive's and the archive is of
+        something else. The export is then correct about the wrong tree.
+
+        The comparison is positive, so the cases are not a list of spellings
+        that are wrong: an unrelated variable is refused exactly as `HEAD`
+        is, which a denylist of checkout spellings could not do."""
+        for revision in ("HEAD", "$GITHUB_SHA", "$OTHER_REVISION", "v1.2.3"):
             with self.subTest(revision=revision):
                 swapped = self.shipped.replace(
                     'git archive "$REVISION" src', f"git archive {revision} src")
@@ -1881,8 +1884,22 @@ class RolloutBindingTests(unittest.TestCase):
                     self._workflow(swapped))
 
                 self.assertTrue(
-                    any("rather than the revision the tag resolved to" in f
+                    any(f"rather than {canary.RESOLVED_REVISION}" in f
                         for f in failures), failures)
+
+    def test_the_right_name_with_the_wrong_value_fails(self) -> None:
+        """One level deeper, and the last place the binding can be true in
+        name only: the archive is of the expected variable, and the step
+        sets that variable from the checkout rather than from the tag."""
+        swapped = self.shipped.replace(
+            'REVISION=$(python deploy/canary/canary.py revision --value "$TAG")',
+            "REVISION=$GITHUB_SHA", 1)
+
+        failures = canary._rollout_reads_the_image_source(self._workflow(swapped))
+
+        self.assertTrue(
+            any("does not set from `canary.py revision`" in f for f in failures),
+            failures)
 
     def test_a_gate_run_without_its_workload_fails(self) -> None:
         """A tree handed over without the workload it answers for is a
