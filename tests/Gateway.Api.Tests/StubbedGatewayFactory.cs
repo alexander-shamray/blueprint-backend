@@ -17,7 +17,8 @@ public class StubbedGatewayFactory(string destination) : GatewayFactory
     /// Unsealed so <c>ForwardedHeadersTests</c>' factory can layer §4.2's
     /// ingress settings on top of these: a test that needs both a reachable
     /// destination and a trusted proxy would otherwise restate the cluster
-    /// overrides, which is four literals waiting to disagree with these four.
+    /// overrides, which is a second set of literals waiting to disagree with
+    /// this one.
     /// </summary>
     protected override IEnumerable<KeyValuePair<string, string>> AdditionalSettings =>
     [
@@ -25,6 +26,7 @@ public class StubbedGatewayFactory(string destination) : GatewayFactory
         new("ReverseProxy:Clusters:catalog:HealthCheck:Active:Enabled", "false"),
         new("ReverseProxy:Clusters:ordering:Destinations:d1:Address", destination),
         new("ReverseProxy:Clusters:inventory:Destinations:d1:Address", destination),
+        new("ReverseProxy:Clusters:payments:Destinations:d1:Address", destination),
         new("ReverseProxy:Clusters:web-bff:Destinations:d1:Address", destination)
     ];
 }

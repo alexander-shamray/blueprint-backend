@@ -161,6 +161,35 @@ public sealed class ProxiedRouteTests(StubDestination stub) : IClassFixture<Stub
     }
 
     /// <summary>
+    /// The same pair for <c>payments-admin</c>, and the path is asserted rather
+    /// than only the status: the negative test beside this one is answered
+    /// before YARP forwards anything, so a cluster pointed at the wrong
+    /// destination or a strip that removed the wrong prefix would pass the
+    /// suite on the 403 alone.
+    /// </summary>
+    [Fact]
+    public async Task The_payments_admin_route_forwards_the_stripped_path_to_its_cluster()
+    {
+        using StubbedGatewayFactory factory = new(stub.Address);
+        using HttpClient client = factory.CreateClient();
+
+        Guid order = Guid.CreateVersion7();
+
+        using HttpRequestMessage request = new(HttpMethod.Get, $"/api/v1/payments/{order}");
+        request.Headers.Add(TestAuthHandler.UserHeader, "018f4c2e");
+        request.Headers.Add(TestAuthHandler.PermissionsHeader, GatewayPermissions.PaymentsAdmin);
+
+        HttpResponseMessage response = await client.SendAsync(request, TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+
+        // Last() is safe here where it needs a comment elsewhere in this class:
+        // the order id is fresh per run, so no other test can have put this
+        // path in the stub's log.
+        stub.ReceivedPaths.Last().ShouldBe($"/v1/payments/{order}");
+    }
+
+    /// <summary>
     /// Neither catalog route names PUT — <c>catalog-public</c> is GET alone
     /// and <c>catalog-write</c> is POST alone (§10.2 and §11.2) — so PUT is
     /// what now probes the fallback/405 boundary this test used to probe with

@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using Payments.Application.Admin.GetPayment;
+using Payments.Domain.Intents;
 using Payments.TestSupport;
 using Shouldly;
 using Xunit;
@@ -52,6 +53,28 @@ public sealed class PaymentEndpointsTests(ServiceFixture fixture) : IAsyncLifeti
             $"/v1/payments/{order}", TestContext.Current.CancellationToken);
 
         view!.Intent.ShouldBeNull();
+        view.Refund.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task A_declined_intent_reads_its_reason_and_no_reference()
+    {
+        // The other half of the intent projection: a decline carries a reason
+        // and no provider reference, where an authorisation carries the
+        // reverse. Both are nullable columns read positionally out of one
+        // joined row, so a pair swapped in the SELECT or the record would
+        // satisfy the authorised case above and be wrong here.
+        Guid order = Guid.CreateVersion7();
+        await SeedDeclinedAsync(order);
+
+        using HttpClient client = Admin();
+
+        PaymentView? view = await client.GetFromJsonAsync<PaymentView>(
+            $"/v1/payments/{order}", TestContext.Current.CancellationToken);
+
+        view!.Intent!.Status.ShouldBe("Declined");
+        view.Intent.DeclineReason.ShouldBe(DeclineReasons.OrderCancelled);
+        view.Intent.Reference.ShouldBeNull();
         view.Refund.ShouldBeNull();
     }
 
@@ -127,4 +150,20 @@ public sealed class PaymentEndpointsTests(ServiceFixture fixture) : IAsyncLifeti
             order,
             authorised ? 1 : 0,
             refunded ? 1 : 0);
+
+    /// <summary>
+    /// A placed order whose intent was declined: no reference, a reason, and
+    /// ADR-049's own reason rather than a provider code, because that is the
+    /// one this service mints itself.
+    /// </summary>
+    private Task SeedDeclinedAsync(Guid order) =>
+        fixture.ExecuteAsync(
+            """
+            INSERT INTO payments.PaymentOrders (OrderId, CustomerId, TotalAmount, Currency, PlacedAt)
+            VALUES ({0}, NEWID(), 42.10, 'EUR', SYSDATETIMEOFFSET());
+            INSERT INTO payments.PaymentIntents (OrderId, Status, Amount, Currency, DeclineReason, CreatedAt)
+            VALUES ({0}, 'Declined', 42.10, 'EUR', {1}, SYSDATETIMEOFFSET());
+            """,
+            order,
+            DeclineReasons.OrderCancelled);
 }
