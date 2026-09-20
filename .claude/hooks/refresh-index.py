@@ -34,11 +34,13 @@ LOCK = CACHE / "refresh.lock"
 PENDING = CACHE / "refresh.pending"
 
 # A worker killed before it releases would block every later refresh, so a
-# lock this old is taken rather than waited on. Longer than any real update
-# and shorter than a working session.
+# lock this old is taken rather than waited on. The worker beats its lock
+# before every update and no update may outlive REFRESH_TIMEOUT, so a live
+# worker's lock is never this old -- which is what makes a stale one safe to
+# take rather than a guess about how long work should need.
 STALE_SECONDS = 900
 
-# An update that cannot finish is not allowed to hold the lock for ever.
+# Below STALE_SECONDS by construction, for the reason above.
 REFRESH_TIMEOUT = 600
 
 
@@ -108,26 +110,59 @@ def request(root: Path) -> None:
         pass
 
 
-def claim(root: Path) -> bool:
-    """Take the refresh lock, or report that somebody else holds it."""
+def claim(root: Path) -> str | None:
+    """Take the refresh lock, and answer with the token that proves it.
+
+    The token is what makes a takeover safe: without one a worker whose lock
+    was taken as stale would release its successor's on the way out, and a
+    third edit would then run beside that successor.
+    """
     lock = root / LOCK
+    token = f"{os.getpid()}:{time.time_ns()}"
     try:
         handle = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
     except FileExistsError:
         try:
             if time.time() - lock.stat().st_mtime < STALE_SECONDS:
-                return False
+                return None
             lock.unlink()
             handle = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
         except OSError:
-            return False
+            return None
+    except OSError:
+        return None
+    try:
+        os.write(handle, token.encode("utf-8"))
+    except OSError:
+        pass
+    finally:
+        os.close(handle)
+    return token
+
+
+def holder(root: Path) -> str | None:
+    """The token in the lock, or None when there is no readable lock."""
+    try:
+        return (root / LOCK).read_text(encoding="utf-8").strip()
+    except OSError:
+        return None
+
+
+def beat(root: Path, token: str) -> bool:
+    """Say the worker is alive, and answer whether it still owns the lock."""
+    if holder(root) != token:
+        return False
+    try:
+        os.utime(root / LOCK, None)
     except OSError:
         return False
-    os.close(handle)
     return True
 
 
-def release(root: Path) -> None:
+def release(root: Path, token: str) -> None:
+    """Let go of our own lock, and of no other."""
+    if holder(root) != token:
+        return
     try:
         (root / LOCK).unlink()
     except OSError:
@@ -170,24 +205,32 @@ def refresh(root: Path) -> None:
             return
 
 
-def work(root: Path) -> int:
+def work(root: Path, token: str) -> int:
     """Refresh until no request is outstanding, then let the lock go."""
     while True:
+        if not beat(root, token):
+            # The lock was taken from us as stale, so this work is the new
+            # owner's. Releasing here would unlink their lock and let a
+            # third edit run beside them.
+            return 0
         if take_request(root):
             refresh(root)
             continue
-        release(root)
+        release(root, token)
         # A request made between the take above and this release found the
         # lock held and left a marker rather than a worker, so it is picked
         # up here instead of waiting for whatever edit comes next.
-        if (root / PENDING).exists() and claim(root):
-            continue
+        if (root / PENDING).exists():
+            regained = claim(root)
+            if regained:
+                token = regained
+                continue
         return 0
 
 
 def main() -> int:
-    if len(sys.argv) > 2 and sys.argv[1] == "--worker":
-        return work(Path(sys.argv[2]))
+    if len(sys.argv) > 3 and sys.argv[1] == "--worker":
+        return work(Path(sys.argv[2]), sys.argv[3])
 
     try:
         event = json.loads(sys.stdin.read() or "{}")
@@ -199,7 +242,8 @@ def main() -> int:
         return 0
 
     request(root)
-    if not claim(root):
+    token = claim(root)
+    if token is None:
         # Somebody is refreshing this checkout already. The marker above is
         # what makes them run again, rather than this edit starting a second
         # update against the same index.
@@ -207,7 +251,8 @@ def main() -> int:
 
     try:
         subprocess.Popen(
-            [sys.executable, "-P", str(Path(__file__).resolve()), "--worker", str(root)],
+            [sys.executable, "-P", str(Path(__file__).resolve()),
+             "--worker", str(root), token],
             cwd=str(root),
             stdin=subprocess.DEVNULL,
             stdout=subprocess.DEVNULL,
@@ -216,7 +261,7 @@ def main() -> int:
         )
     except OSError:
         # No worker started, so the lock must not be left behind it.
-        release(root)
+        release(root, token)
     return 0
 
 
