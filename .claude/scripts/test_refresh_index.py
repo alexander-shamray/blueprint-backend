@@ -9,6 +9,8 @@ the edit landed in, exactly one refresh owns it, or none of them run.
 import importlib.util
 import json
 import shutil
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -23,7 +25,7 @@ CACHE = Path(".claude") / "cache" / "codebase-index"
 
 # What settings.json has to run, spelled once. Matched whole, because
 # `not-refresh-index.py` and `refresh-index.py.disabled` both contain the
-# file's name and neither of them runs it -- and the hook swallows every
+# file's name and neither of them runs it — and the hook swallows every
 # failure, so a registration broken that way is green everywhere else.
 COMMAND = 'py -3.12 "${CLAUDE_PROJECT_DIR}/.claude/hooks/refresh-index.py"'
 
@@ -70,6 +72,10 @@ class Base(unittest.TestCase):
         self.ran = []
         self.tmp = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
+        # Kept before the patch below, because the hook's `subprocess` is the
+        # interpreter's own: a test that needs to start a real process has to
+        # hold the real function rather than the stand-in.
+        self.start_process = subprocess.Popen
         self.patch(mock.patch.object(
             self.mod.subprocess, "Popen",
             side_effect=lambda *a, **k: self.spawned.append((a, k))))
@@ -104,10 +110,15 @@ class Base(unittest.TestCase):
         return self.run_hook(json.dumps(event), project_dir)
 
     def worker_roots(self):
-        """The checkout each spawned worker was pointed at.
+        """The checkout each spawned worker was pointed at."""
+        return [Path(arguments[0][-1]) for arguments, _ in self.spawned]
 
-        Second from the end, because the stamp it owns follows it."""
-        return [Path(arguments[0][-2]) for arguments, _ in self.spawned]
+    def hold(self, root):
+        """Hold the lock the way a worker does, for as long as the test runs."""
+        handle = open(root / self.mod.LOCK, "a+b")
+        self.addCleanup(handle.close)
+        self.assertTrue(self.mod.grab(handle), "the lock was already held")
+        return handle
 
 
 class ChoosingTheCheckout(Base):
@@ -215,39 +226,17 @@ class OneRefreshAtATime(Base):
     are discarded.
     """
 
-    def test_a_second_edit_starts_no_second_worker(self):
-        root = self.checkout("main")
-
-        self.run_event({"cwd": str(root)})
-        self.run_event({"cwd": str(root)})
-
-        self.assertEqual([root], self.worker_roots())
-
-    def test_a_second_edit_leaves_its_request_behind(self):
-        """The marker is what makes the worker already running pick the edit
-        up, rather than the edit being dropped with the lock held."""
-        root = self.checkout("main")
-
-        self.run_event({"cwd": str(root)})
-        self.run_event({"cwd": str(root)})
-
-        self.assertTrue((root / self.mod.PENDING).exists())
-
-    def claimed(self, root):
-        """The stamp the hook's own claim wrote, as a worker would receive it."""
-        return self.mod.holder(root)
-
     def test_the_worker_refreshes_once_for_one_request(self):
         root = self.checkout("main")
         self.run_event({"cwd": str(root)})
 
-        self.assertEqual(0, self.mod.work(root, self.claimed(root)))
+        self.assertEqual(0, self.mod.work(root))
 
         self.assertEqual(1, len(self.ran))
-        self.assertFalse((root / self.mod.LOCK).exists())
 
     def test_the_worker_runs_again_for_a_request_made_while_it_worked(self):
-        """The window the marker exists for: an edit arriving mid-refresh."""
+        """The marker is what makes an edit arriving mid-refresh reach the
+        worker already running rather than starting a second."""
         root = self.checkout("main")
         self.run_event({"cwd": str(root)})
 
@@ -259,145 +248,95 @@ class OneRefreshAtATime(Base):
         self.patch(mock.patch.object(
             self.mod.subprocess, "run", side_effect=refresh_and_edit))
 
-        self.mod.work(root, self.claimed(root))
+        self.mod.work(root)
 
         self.assertEqual(2, len(self.ran))
 
-    def test_a_request_made_as_the_lock_is_dropped_is_not_lost(self):
-        """The narrow window the re-claim exists for: `take_request` has
-        already said no, and the edit lands before the lock is gone. Its
-        hook finds the lock still held and leaves a marker rather than a
-        worker, so the one finishing has to look once more."""
+    def test_a_worker_that_cannot_take_the_lock_does_nothing(self):
+        """Its marker belongs to whoever holds the lock, and taking it would
+        be the second update against one index that the lock exists to stop."""
         root = self.checkout("main")
-        self.run_event({"cwd": str(root)})
-        stamp = self.claimed(root)
-        letting_go = self.mod.release
-        once = []
-
-        def edit_as_it_lets_go(target, owned):
-            if not once:
-                once.append(True)
-                self.mod.request(target)
-            letting_go(target, owned)
-
-        self.patch(mock.patch.object(
-            self.mod, "release", side_effect=edit_as_it_lets_go))
-
-        self.mod.work(root, stamp)
-
-        self.assertEqual(2, len(self.ran))
-
-    def test_a_worker_that_never_released_is_not_waited_on_for_ever(self):
-        root = self.checkout("main")
-        (root / self.mod.LOCK).write_text("", encoding="utf-8")
-        import os
-        stale = self.mod.time.time() - self.mod.STALE_SECONDS - 60
-        os.utime(root / self.mod.LOCK, (stale, stale))
-
-        self.run_event({"cwd": str(root)})
-
-        self.assertEqual([root], self.worker_roots())
-
-    def test_a_live_worker_keeps_its_lock_from_going_stale(self):
-        """A worker may run several updates, and the lock's age is what
-        another claimant judges it by — so the worker beats it before each
-        one and a live lock never looks abandoned."""
-        root = self.checkout("main")
-        self.run_event({"cwd": str(root)})
-        stamp = self.claimed(root)
-        import os
-        stale = self.mod.time.time() - self.mod.STALE_SECONDS - 60
-        os.utime(root / self.mod.LOCK, (stale, stale))
-
-        self.assertTrue(self.mod.beat(root, stamp))
-
-        self.assertIsNone(self.mod.claim(root), "a beaten lock was taken as stale")
-
-    def test_only_one_of_two_claimants_takes_a_stale_lock(self):
-        """Both read it as stale in the same moment. With an unlink the
-        second removes the first's replacement — a live lock — so the take
-        is a rename, and only one rename of a source can succeed."""
-        root = self.checkout("main")
-        lock = root / self.mod.LOCK
-        lock.write_text("dead-worker", encoding="utf-8")
-
-        first = self.mod.take_aside(lock, "dead-worker")
-        second = self.mod.take_aside(lock, "dead-worker")
-
-        self.assertTrue(first)
-        self.assertFalse(second, "both claimants took the same stale lock")
-
-    def test_a_live_lock_taken_by_mistake_is_put_back(self):
-        """The window the identity check closes: the file renamed may be a
-        replacement made between one claimant's look and its own rename."""
-        root = self.checkout("main")
-        lock = root / self.mod.LOCK
-        lock.write_text("the-replacement", encoding="utf-8")
-
-        moved = self.mod.take_aside(lock, "the-one-i-judged-stale")
-
-        self.assertFalse(moved)
-        self.assertEqual("the-replacement", self.mod.holder(root))
-
-    def test_a_stamp_that_cannot_be_written_is_not_a_claim(self):
-        """Otherwise the lock sits there with nobody able to prove they hold
-        it, and every refresh waits out the stale window."""
-        root = self.checkout("main")
-
-        with mock.patch.object(self.mod.os, "write", side_effect=OSError("full")):
-            claimed = self.mod.claim(root)
-
-        self.assertIsNone(claimed)
-        self.assertFalse((root / self.mod.LOCK).exists())
-
-    def test_half_a_stamp_is_not_a_claim_either(self):
-        """A short write leaves a stamp nobody matches, which is the same
-        outcome by a quieter route."""
-        root = self.checkout("main")
-
-        with mock.patch.object(self.mod.os, "write", return_value=3):
-            claimed = self.mod.claim(root)
-
-        self.assertIsNone(claimed)
-        self.assertFalse((root / self.mod.LOCK).exists())
-
-    def test_a_worker_whose_lock_was_taken_stops(self):
-        """And does not release, because the lock is the successor's now."""
-        root = self.checkout("main")
-        self.run_event({"cwd": str(root)})
-        stamp = self.claimed(root)
-        (root / self.mod.LOCK).write_text("somebody-else", encoding="utf-8")
         self.mod.request(root)
+        self.hold(root)
 
-        self.assertEqual(0, self.mod.work(root, stamp))
+        self.assertEqual(0, self.mod.work(root))
 
         self.assertEqual([], self.ran)
-        self.assertEqual("somebody-else", self.mod.holder(root))
+        self.assertTrue((root / self.mod.PENDING).exists())
 
-    def test_release_lets_go_of_nothing_it_does_not_own(self):
+    def test_a_held_lock_is_reported_busy_and_starts_no_worker(self):
         root = self.checkout("main")
-        self.run_event({"cwd": str(root)})
-        (root / self.mod.LOCK).write_text("somebody-else", encoding="utf-8")
+        self.hold(root)
 
-        self.mod.release(root, "ours")
-
-        self.assertEqual("somebody-else", self.mod.holder(root))
-
-    def test_an_update_cannot_outlive_the_stale_window(self):
-        """What makes a stale lock safe to take rather than a guess: the
-        worker beats before every update, and no update may run longer."""
-        self.assertLess(self.mod.REFRESH_TIMEOUT, self.mod.STALE_SECONDS)
-
-    def test_a_worker_that_will_not_start_does_not_keep_the_lock(self):
-        """Otherwise one failed spawn blocks every later refresh until the
-        lock goes stale."""
-        root = self.checkout("main")
-        self.patch(mock.patch.object(
-            self.mod.subprocess, "Popen", side_effect=OSError("no interpreter")))
+        self.assertTrue(self.mod.busy(root))
 
         self.assertEqual(0, self.run_event({"cwd": str(root)}))
+        self.assertEqual([], self.spawned)
+        self.assertTrue((root / self.mod.PENDING).exists())
 
-        self.assertFalse((root / self.mod.LOCK).exists())
+    def test_an_unheld_lock_is_not_busy(self):
+        root = self.checkout("main")
+
+        self.assertFalse(self.mod.busy(root))
+
+    def test_real_workers_do_not_overlap(self):
+        """Processes rather than calls, because sequential calls cannot show
+        a lock failing: every earlier shape of this lock passed a sequential
+        suite and lost a race between two claimants."""
+        root = self.checkout("main")
+        self.mod.request(root)
+        ledger = self.tmp / "ledger.txt"
+        ledger.write_text("", encoding="utf-8")
+        child = self.tmp / "child.py"
+        child.write_text(CHILD.format(hook=HOOK, root=root, ledger=ledger),
+                         encoding="utf-8")
+
+        workers = [
+            self.start_process([sys.executable, str(child), f"w{index}"])
+            for index in range(4)
+        ]
+        for worker in workers:
+            worker.wait(timeout=120)
+
+        lines = [line for line in ledger.read_text(encoding="utf-8").splitlines() if line]
+        depth = 0
+        for line in lines:
+            depth += 1 if line.endswith(" in") else -1
+            self.assertLessEqual(depth, 1, lines)
+        self.assertEqual(2, sum(1 for line in lines if line.endswith(" in")), lines)
+        self.assertFalse((root / self.mod.PENDING).exists(), lines)
+
+
+# The worker each process in the case above runs: it refreshes slowly enough
+# for an overlap to be visible, and asks for one more refresh the first time
+# so the drain has something to pick up.
+CHILD = '''
+import importlib.util, pathlib, sys, time
+
+spec = importlib.util.spec_from_file_location("refresh_index", r"{hook}")
+mod = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(mod)
+
+root = pathlib.Path(r"{root}")
+ledger = pathlib.Path(r"{ledger}")
+me = sys.argv[1]
+once = []
+
+
+def loud_refresh(_root):
+    with open(ledger, "a", encoding="utf-8") as out:
+        out.write(f"{{me}} in\\n")
+    time.sleep(0.3)
+    with open(ledger, "a", encoding="utf-8") as out:
+        out.write(f"{{me}} out\\n")
+    if not once:
+        once.append(True)
+        mod.request(root)
+
+
+mod.refresh = loud_refresh
+sys.exit(mod.work(root))
+'''
 
 
 class Refreshing(Base):

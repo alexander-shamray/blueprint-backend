@@ -15,33 +15,50 @@ import json
 import os
 import subprocess
 import sys
-import time
 from pathlib import Path
 
 # Where the CLI keeps a checkout's index. A checkout without one is not
 # stale, it is unindexed, and building one per throwaway worktree is a cost
-# nobody asked this hook for — so it is left alone rather than
-# initialised.
+# nobody asked this hook for — so it is left alone rather than initialised.
 CACHE = Path(".claude") / "cache" / "codebase-index"
 
 # `codebase-index update` does not serialise: overlapping runs against one
 # checkout leave a single winner and `database is locked` for the rest, and
 # the loser may be the run carrying the newest edit. Discarded streams make
-# that silent, so the lock is what keeps the index honest rather than what
-# keeps the machine quiet. The marker is how an edit arriving mid-run
-# reaches the worker already running.
+# that silent, so this lock is what keeps the index honest.
+
+# The operating system holds it, on an open descriptor, and releases it when
+# the worker exits however it exits. A lock file read as data needs a
+# staleness rule; a staleness rule needs a takeover; and a takeover between
+# two claimants needs the very serialisation being asked for. The marker
+# beside it is how an edit arriving mid-run reaches the worker running.
 LOCK = CACHE / "refresh.lock"
 PENDING = CACHE / "refresh.pending"
 
-# A worker killed before it releases would block every later refresh, so a
-# lock this old is taken rather than waited on. The worker beats its lock
-# before every update and no update may outlive REFRESH_TIMEOUT, so a live
-# worker's lock is never this old -- which is what makes a stale one safe to
-# take rather than a guess about how long work should need.
-STALE_SECONDS = 900
-
-# Below STALE_SECONDS by construction, for the reason above.
+# An update that cannot finish is not allowed to hold the lock for ever.
 REFRESH_TIMEOUT = 600
+
+if sys.platform == "win32":
+    import msvcrt
+
+    def grab(handle) -> bool:
+        """Take the lock on `handle`, or answer that somebody else has it."""
+        try:
+            handle.seek(0)
+            msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+        except OSError:
+            return False
+        return True
+else:
+    import fcntl
+
+    def grab(handle) -> bool:
+        """Take the lock on `handle`, or answer that somebody else has it."""
+        try:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            return False
+        return True
 
 
 def checkout_root(start: Path) -> Path | None:
@@ -110,120 +127,6 @@ def request(root: Path) -> None:
         pass
 
 
-def holder(root: Path) -> str | None:
-    """The stamp in the lock, or None when there is no readable lock."""
-    try:
-        return (root / LOCK).read_text(encoding="utf-8").strip()
-    except OSError:
-        return None
-
-
-def take_aside(lock: Path, expected: str | None) -> bool:
-    """Move a stale lock out of the way, and say whether we moved that one.
-
-    A rename rather than an unlink, because two callers can read one lock as
-    stale at the same moment: only one rename of a given source can succeed,
-    so the loser cannot remove the winner's replacement. And the mover reads
-    what it moved, because the file it renamed may be a replacement created
-    between its own look and its own rename -- a live lock, which it puts
-    back rather than keeping.
-    """
-    aside = lock.with_name(f"{lock.name}.{os.getpid()}.{time.time_ns()}")
-    try:
-        os.rename(lock, aside)
-    except OSError:
-        return False
-    try:
-        moved = aside.read_text(encoding="utf-8").strip()
-    except OSError:
-        moved = None
-    if moved != expected:
-        try:
-            os.rename(aside, lock)
-        except OSError:
-            # The replacement's owner has already made another, which is the
-            # outcome this branch wanted anyway: somebody live holds the lock.
-            try:
-                aside.unlink()
-            except OSError:
-                pass
-        return False
-    try:
-        aside.unlink()
-    except OSError:
-        pass
-    return True
-
-
-def claim(root: Path) -> str | None:
-    """Take the refresh lock, and answer with the stamp that proves it.
-
-    The stamp is what makes a takeover safe: without one a worker whose lock
-    was taken as stale would release its successor's on the way out, and a
-    third edit would then run beside that successor.
-    """
-    lock = root / LOCK
-    stamp = f"{os.getpid()}:{time.time_ns()}"
-    for again in (False, True):
-        try:
-            handle = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-        except FileExistsError:
-            # Only once. A second refusal means somebody holds it now,
-            # whether or not this call is the one that cleared the last.
-            if again:
-                return None
-            standing = holder(root)
-            try:
-                if time.time() - lock.stat().st_mtime < STALE_SECONDS:
-                    return None
-            except OSError:
-                continue
-            take_aside(lock, standing)
-            continue
-        except OSError:
-            return None
-        marker = stamp.encode("utf-8")
-        try:
-            written = os.write(handle, marker)
-        except OSError:
-            written = 0
-        finally:
-            os.close(handle)
-        if written != len(marker):
-            # A lock nobody can prove they hold is worse than no lock: the
-            # worker started for it reads a stamp that is not its own, stops
-            # without releasing, and every refresh waits for the stale
-            # window. Short counts as failed for the same reason.
-            try:
-                lock.unlink()
-            except OSError:
-                pass
-            return None
-        return stamp
-    return None
-
-
-def beat(root: Path, stamp: str) -> bool:
-    """Say the worker is alive, and answer whether it still owns the lock."""
-    if holder(root) != stamp:
-        return False
-    try:
-        os.utime(root / LOCK, None)
-    except OSError:
-        return False
-    return True
-
-
-def release(root: Path, stamp: str) -> None:
-    """Let go of our own lock, and of no other."""
-    if holder(root) != stamp:
-        return
-    try:
-        (root / LOCK).unlink()
-    except OSError:
-        pass
-
-
 def take_request(root: Path) -> bool:
     """Consume an outstanding request, if there is one."""
     try:
@@ -231,6 +134,23 @@ def take_request(root: Path) -> bool:
         return True
     except OSError:
         return False
+
+
+def busy(root: Path) -> bool:
+    """Whether a worker already holds this checkout's lock.
+
+    Advisory, and deliberately so: a worker may start between this answer
+    and the spawn it saves. That costs one process which takes no lock and
+    exits at once, because the lock the worker itself takes is the one that
+    decides. Getting this wrong cannot produce two refreshes, only two
+    starts.
+    """
+    try:
+        handle = open(root / LOCK, "a+b")
+    except OSError:
+        return False
+    with handle:
+        return not grab(handle)
 
 
 def refresh(root: Path) -> None:
@@ -260,32 +180,29 @@ def refresh(root: Path) -> None:
             return
 
 
-def work(root: Path, stamp: str) -> int:
-    """Refresh until no request is outstanding, then let the lock go."""
-    while True:
-        if not beat(root, stamp):
-            # The lock was taken from us as stale, so this work is the new
-            # owner's. Releasing here would unlink their lock and let a
-            # third edit run beside them.
-            return 0
-        if take_request(root):
-            refresh(root)
-            continue
-        release(root, stamp)
-        # A request made between the take above and this release found the
-        # lock held and left a marker rather than a worker, so it is picked
-        # up here instead of waiting for whatever edit comes next.
-        if (root / PENDING).exists():
-            regained = claim(root)
-            if regained:
-                stamp = regained
-                continue
+def work(root: Path) -> int:
+    """Refresh until no request is outstanding, holding the lock throughout.
+
+    The lock is held for the whole drain rather than per update, so an edit
+    arriving mid-run reaches this worker through the marker instead of
+    starting a second one. A worker that cannot take it has nothing to do:
+    the marker it was started for belongs to whoever holds the lock.
+    """
+    try:
+        handle = open(root / LOCK, "a+b")
+    except OSError:
         return 0
+    with handle:
+        if not grab(handle):
+            return 0
+        while take_request(root):
+            refresh(root)
+    return 0
 
 
 def main() -> int:
-    if len(sys.argv) > 3 and sys.argv[1] == "--worker":
-        return work(Path(sys.argv[2]), sys.argv[3])
+    if len(sys.argv) > 2 and sys.argv[1] == "--worker":
+        return work(Path(sys.argv[2]))
 
     try:
         event = json.loads(sys.stdin.read() or "{}")
@@ -296,18 +213,15 @@ def main() -> int:
     if root is None:
         return 0
 
+    # The marker first, so a worker that is already draining finds this edit
+    # whether or not the spawn below happens.
     request(root)
-    stamp = claim(root)
-    if stamp is None:
-        # Somebody is refreshing this checkout already. The marker above is
-        # what makes them run again, rather than this edit starting a second
-        # update against the same index.
+    if busy(root):
         return 0
 
     try:
         subprocess.Popen(
-            [sys.executable, "-P", str(Path(__file__).resolve()),
-             "--worker", str(root), stamp],
+            [sys.executable, "-P", str(Path(__file__).resolve()), "--worker", str(root)],
             cwd=str(root),
             stdin=subprocess.DEVNULL,
             stdout=subprocess.DEVNULL,
@@ -315,8 +229,9 @@ def main() -> int:
             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         )
     except OSError:
-        # No worker started, so the lock must not be left behind it.
-        release(root, stamp)
+        # Nothing to undo: no lock was taken here, and the marker stays for
+        # the next edit or the worker already running.
+        pass
     return 0
 
 
