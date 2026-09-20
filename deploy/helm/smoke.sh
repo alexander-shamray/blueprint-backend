@@ -99,6 +99,22 @@ count() { grep -c "$1" "$2" 2>/dev/null || true; }
 
 section() { printf '\n%s\n' "$1"; }
 
+refuses_foreign() {
+    # refuses_foreign <chart> <label> <needle> <helm args...> — `refuses`'s
+    # shape over a NAMED chart, because these assertions are about a
+    # capability reaching a chart that does not own it and so cannot all be
+    # made against the gateway. Defined here with the other helpers rather
+    # than beside `refuses`, which sits below its first caller.
+    local chart="$1" label="$2" needle="$3"
+    shift 3
+    if "$HELM" template "$chart" "$CHARTS_DIR/$chart" --set-string "image.tag=$TAG" \
+        $GATEWAY_OVERLAY $(overlay_for "$chart") "$@" >"$OUT/foreign-$chart.txt" 2>&1; then
+        fail "$label — it rendered instead"
+    else
+        check "$label" grep -q "$needle" "$OUT/foreign-$chart.txt"
+    fi
+}
+
 # --------------------------------------------------------------------------
 section 'The gate covers every chart on disk'
 # --------------------------------------------------------------------------
@@ -618,6 +634,27 @@ check 'exactly one workload in the platform holds a client secret' \
     test "$(count 'Identity__Client__ClientSecret' "$OUT/platform.yaml")" -eq 1
 check 'and it is the BFF' \
     test "$(count 'Identity__Client__ClientSecret' "$OUT/web-bff.yaml")" -eq 1
+
+# The two assertions above read the DEFAULT render, and Helm accepts values a
+# chart's values.yaml never declares — so they establish what the charts ship
+# and nothing about what an environment file can add. A credential-bearing
+# capability turned on where the code does not have it puts one service's
+# Secret in another service's pod, which is the one misconfiguration here
+# that moves a credential rather than stalling a pod.
+for chart in $SERVICE_CHARTS; do
+    [ "$chart" = payments ] || refuses_foreign "$chart" \
+        "the provider capability is refused on $chart" 'only payments registers a provider' \
+        --set paymentProvider.enabled=true \
+        --set-string paymentProvider.baseUrl=https://psp.example.invalid/ \
+        --set-string paymentProvider.apiKeySecretRef.name=payments-provider \
+        --set-string paymentProvider.apiKeySecretRef.key=api-key
+    [ "$chart" = web-bff ] || refuses_foreign "$chart" \
+        "the BFF's client credentials are refused on $chart" 'one host that calls a peer' \
+        --set identity.clientCredentials=true \
+        --set-string identity.clientId=x --set-string identity.scope=y \
+        --set-string identity.clientSecretRef.name=web-bff-identity \
+        --set-string identity.clientSecretRef.key=secret
+done
 
 # --------------------------------------------------------------------------
 section 'The edge keys belong to the gateway alone (§15.4)'

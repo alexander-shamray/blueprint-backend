@@ -442,6 +442,27 @@ database its host unconditionally resolves.
 {{- if and (or (.Values.paymentProvider).apiKeySecretRef (.Values.paymentProvider).baseUrl) (not (.Values.paymentProvider).enabled) }}
 {{- fail "paymentProvider.enabled is false but a paymentProvider setting is set. AddPaymentProvider reads both provider keys eagerly (§15.4), so this renders cleanly and the host does not start. A capability is a fact about the code, not an environment setting." }}
 {{- end }}
+{{- /*
+The other direction, and the one that moves a CREDENTIAL rather than stalling
+a pod. Helm accepts values a chart's `values.yaml` never declares, so
+`--set paymentProvider.enabled=true` on any chart here renders that chart's
+pod with a `secretKeyRef` to Payments' provider Secret — a host that never
+calls `AddPaymentProvider`, holding the credential of one that does. The same
+is true of the BFF's client secret under `identity.clientCredentials`.
+
+Both blocks already say a capability is a fact about the code; until now they
+only enforced it downwards. These two enforce it upwards, and they name the
+owning chart because that is the fact: `AddPaymentProvider` is in
+`Payments.Api/Program.cs` and `ServiceIdentityOptions` is bound by `Web.Bff`
+alone (§9.7, ADR-017). A second chart growing either is a design change, and
+a design change edits this line.
+*/}}
+{{- if and (.Values.paymentProvider).enabled (ne .Chart.Name "payments") }}
+{{- fail (printf "paymentProvider.enabled is true on the %s chart, and only payments registers a provider (§3.2). This would mount the provider's Secret into a pod that never reads it — a credential crossing a service boundary, which no value in an environment file may do." .Chart.Name) }}
+{{- end }}
+{{- if and .Values.identity.clientCredentials (ne .Chart.Name "web-bff") }}
+{{- fail (printf "identity.clientCredentials is true on the %s chart, and the BFF is the one host that calls a peer synchronously (§9.7, ADR-017). This would mount the BFF's client secret into a pod that never presents it — a credential crossing a service boundary, which no value in an environment file may do." .Chart.Name) }}
+{{- end }}
 {{- if .Values.database.enabled }}
 {{- /*
 The RUNTIME connection string (DML only) — §7.1's split identity. The migrator
