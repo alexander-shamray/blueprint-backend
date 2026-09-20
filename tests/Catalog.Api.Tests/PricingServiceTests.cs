@@ -16,9 +16,9 @@ namespace Catalog.Api.Tests;
 /// <remarks>Over <c>TestServer</c>: it is the right instrument for what the
 /// application decides, and what the server decides — that a cleartext
 /// endpoint must be declared <c>Http2</c> before a gRPC client can reach it —
-/// is asserted against a real Kestrel in <c>Web.Bff.Tests</c>.
-/// <c>TestServer.CreateHandler()</c> bypasses the network, so the h2c
-/// negotiation this host would otherwise need never happens.</remarks>
+/// belongs against a real Kestrel instead. <c>TestServer.CreateHandler()</c>
+/// bypasses the network, so the h2c negotiation this host would otherwise
+/// need never happens.</remarks>
 [Collection(nameof(IntegrationCollection))]
 public sealed class PricingServiceTests(ServiceFixture fixture) : IAsyncLifetime
 {

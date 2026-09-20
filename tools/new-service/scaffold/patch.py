@@ -698,16 +698,16 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
         ("using System.Text.Json;\n", ""),
     ),
     "tests/Catalog.Api.Tests/Catalog.Api.Tests.csproj": (
-        # PricingServiceTests is Catalog's and does not travel, so the package
-        # it named goes with it. A reference nothing in the rendered project
-        # uses is the unused-dependency claim CLAUDE.md rules out, one file
-        # type over.
+        # The gRPC client package is Catalog's, because the pricing RPC is,
+        # and it leaves with the suite that calls it. A reference nothing in
+        # the rendered project uses is the unused-dependency claim CLAUDE.md
+        # rules out, one file type over.
         (
-            "    <!-- GrpcChannel and Grpc.Core's StatusCode, which PricingServiceTests uses\n"
-            "         to call the gRPC server over loopback. Carried transitively through\n"
-            "         Catalog.Api; named here on the same honesty rule Web.Bff.Tests states,\n"
-            "         because a project that names a type declares the package rather than\n"
-            "         relying on a production csproj it does not control. -->\n"
+            "    <!-- GrpcChannel and Grpc.Core's StatusCode, for calling the gRPC server\n"
+            "         over loopback. Carried transitively through Catalog.Api; named here\n"
+            "         on the register's honesty rule, because a project that names a type\n"
+            "         declares the package rather than relying on a production csproj it\n"
+            "         does not control. -->\n"
             "    <PackageReference Include=\"Grpc.Net.ClientFactory\" />\n",
             "",
         ),

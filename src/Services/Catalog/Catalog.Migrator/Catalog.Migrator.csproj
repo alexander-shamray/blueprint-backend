@@ -3,8 +3,8 @@
   <!--
     Settings come from Directory.Build.props (§4.4).
 
-    The fifth of §4.1's five projects, and the §7.4 job host rather than a
-    shell: every service owns a database and ADR-007 forbids migrating at
+    §4.1's migrator project, and the §7.4 job host rather than a shell:
+    every service owns a database and ADR-007 forbids migrating at
     application startup, so the schema is applied by a process with no network
     listener and no user input, holding the one identity that has DDL (§7.1).
   -->

@@ -63,9 +63,9 @@ internal sealed class IdempotencyMarkerConfiguration : IEntityTypeConfiguration<
 
         // What RetentionPurgeService's DELETE identifies a row by (ADR-041):
         // unique and monotonic per database, immutable for a row nothing
-        // updates, and reading no clock — unlike the (Key, CommittedAt) pair
-        // it replaced, where datetimeoffset(7) carries no uniqueness and a
-        // replacement stamped at the selected row's tick was matched by a
+        // updates, and reading no clock. A (Key, CommittedAt) pair cannot do
+        // that job, because datetimeoffset(7) carries no uniqueness and a
+        // replacement stamped at the selected row's tick would be matched by a
         // stale delete and removed with its claim still live. A shadow
         // property, because the only reader is the purge's own Dapper SQL; the
         // name comes from the entity so the mapping and that SQL agree by

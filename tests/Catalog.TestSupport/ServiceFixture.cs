@@ -25,8 +25,8 @@ namespace Catalog.TestSupport;
 /// A real SQL Server migrated by the real migrator, a real RabbitMQ, and
 /// §8.1's two Redis servers (ADR-010, §12.4) — each the image §14.1's
 /// Compose file runs, so a test and a developer machine cannot disagree
-/// about the engine. §4.1's home: the two suites it serves cannot reference
-/// each other.
+/// about the engine. §4.1's home: the suites it serves cannot reference each
+/// other.
 /// </summary>
 /// <remarks>§7.1's two database identities collapse here — the container's
 /// <c>sa</c> holds DML and DDL — but not its two configuration keys, which
@@ -647,10 +647,10 @@ public sealed class ServiceFixture : IAsyncLifetime
     /// purge pass can meet between its <c>SELECT</c> and its <c>DELETE</c>.
     /// </summary>
     /// <remarks>Preserving the timestamp is the whole of it: a replacement
-    /// stamped at a fresh instant is caught by the <c>(Key, CommittedAt)</c>
-    /// pair the delete identified a row by before ADR-041's rowversion, which
-    /// SQL Server generates and this helper cannot carry across — that a
-    /// replacement gets a new one is the property under test.</remarks>
+    /// stamped at a fresh instant is a different row to any key that includes
+    /// <c>CommittedAt</c>, so only an identical one stages the collision. The
+    /// <c>rowversion</c> cannot be carried across, and that a replacement gets
+    /// a new one is the property under test.</remarks>
     public Task ReplaceIdempotencyMarkerAsync(string key) =>
         ExecuteAsync(
             """

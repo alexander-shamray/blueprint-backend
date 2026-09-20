@@ -82,9 +82,9 @@ public class ArchitectureTests
     }
 
     /// <summary>
-    /// The five projects §4.1 gives a service, anchored one type each. This
-    /// suite is the only one that can see all five: it references the Api,
-    /// which carries Application, Domain and Infrastructure, and
+    /// Every project §4.1 gives a service, anchored one type each. This suite
+    /// is the only one that can see them all: it references the Api, which
+    /// carries Application, Domain and Infrastructure, and
     /// <c>Catalog.TestSupport</c>, which carries the Migrator.
     /// </summary>
     /// <remarks>Both gates below read emitted references: a forbidden
@@ -117,15 +117,15 @@ public class ArchitectureTests
     public void No_project_in_this_service_references_another_service()
     {
         // §4.2's "must never reference: another service's projects" — the
-        // Infrastructure, Migrator and Api rows say it. The other two rows do
+        // Infrastructure, Migrator and Api rows say it. The remaining rows do
         // not, and do not need to: their allow-lists cannot admit a foreign
-        // assembly at all, which is why this gate judges all five and expects
-        // to be redundant on two. It is also §4.3 from the other side:
-        // exactly one assembly may cross a service boundary, and
-        // Common.Contracts is a building block rather than a service, so it is
-        // admitted by the Common prefix and needs no exception of its own.
-        // Prefixes rather than service names, which is what makes it cover
-        // Inventory, Payments, Shipping and Notifications before any exists.
+        // assembly at all, which is why this gate judges every assembly §4.1
+        // gives a service and is redundant wherever an allow-list already
+        // covers one. It is also §4.3 from the other side: exactly one
+        // assembly may cross a service boundary, and Common.Contracts is a
+        // building block rather than a service, so it is admitted by the
+        // Common prefix and needs no exception of its own. Prefixes rather
+        // than service names, so it covers a service that does not exist yet.
         string self = typeof(Program).Assembly.GetName().Name!.Split('.')[0];
 
         foreach (Assembly assembly in ServiceAssemblies)

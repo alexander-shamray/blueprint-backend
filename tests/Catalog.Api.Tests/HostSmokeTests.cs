@@ -16,24 +16,21 @@ namespace Catalog.Api.Tests;
 /// <remarks>§13.5's rule is that a host with a connection string has a
 /// readiness check and one without does not, and both registrations throw on
 /// a missing key — so supplying the strings is not a workaround. They name
-/// hosts that cannot resolve, because these tests are about wiring;
-/// <c>DatabaseSmokeTests</c> is where real ones answer.</remarks>
+/// hosts that cannot resolve on purpose, because these tests are about the
+/// wiring and not about the engines behind it.</remarks>
 public class HostSmokeTests(HostSmokeTests.UnreachableInfrastructureFactory factory)
     : IClassFixture<HostSmokeTests.UnreachableInfrastructureFactory>
 {
     /// <summary>
     /// A parameterless factory, because that is what <c>IClassFixture</c> can
     /// construct. <c>.invalid</c> is reserved and never resolves, so both
-    /// checks fail on NXDOMAIN rather than on a timeout — and
+    /// checks fail on NXDOMAIN rather than on a timeout, and
     /// <c>Connect Timeout=1</c> bounds the case where a resolver answers
-    /// anyway. The bus needs no such bound: <c>WaitUntilStarted</c> is false
-    /// (the registration argues it), so the host never waits on the broker at
-    /// all.
+    /// anyway. The bus needs no such bound: <c>WaitUntilStarted</c> is false.
     /// </summary>
     // The two literals both factories below take. Declared once because they
-    // are the same host under two authentication schemes, and a pair that
-    // drifted would make the two suites disagree about which deployment they
-    // are describing.
+    // are the same host under two schemes, and a pair that drifted would
+    // leave the factories describing different deployments.
     private const string UnreachableSql =
         "Server=catalog-sql.invalid,1433;Database=Catalog;User Id=sa;" +
         "Password=not-a-real-password;Encrypt=False;Connect Timeout=1";

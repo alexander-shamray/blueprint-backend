@@ -13,18 +13,14 @@ using Xunit;
 namespace Catalog.Api.Tests;
 
 /// <summary>
-/// §8.5's durable marker against a real engine. The property is atomicity with
-/// the command's own transaction, and nothing short of a database can show it:
-/// a fake unit of work commits nothing, so "the marker rolled back with the
-/// work" and "the marker was never written" look the same from every assertion
-/// a double can make.
+/// §8.5's durable marker against a real engine. The property is atomicity
+/// with the command's own transaction, and nothing short of a database can
+/// show it: a fake unit of work commits nothing, so "the marker rolled back
+/// with the work" and "the marker was never written" look the same.
 /// </summary>
-/// <remarks>
-/// These tests require Docker and are deliberately not skipped without it, on
-/// <c>DatabaseSmokeTests</c>' terms — <see cref="IntegrationCollection"/>
-/// carries the category, and joining the collection is what puts them in the
-/// half that needs a daemon.
-/// </remarks>
+/// <remarks>Docker is required and deliberately not skipped without it:
+/// <see cref="IntegrationCollection"/> carries the category, and joining the
+/// collection is what puts them in the half that needs a daemon.</remarks>
 [Collection(nameof(IntegrationCollection))]
 public class IdempotencyMarkerTests(ServiceFixture fixture)
 {
@@ -98,15 +94,12 @@ public class IdempotencyMarkerTests(ServiceFixture fixture)
     [Fact]
     public async Task A_committed_marker_is_stamped_by_the_database_and_not_left_at_its_sentinel()
     {
-        // CommittedAt's database-stamped invariant, and the one nothing else
-        // in this suite can see. It is a store default (ADR-038): EF omits a
-        // property still holding its sentinel from the INSERT, so
-        // SYSDATETIMEOFFSET() supplies the column. Every other test that reads
-        // it stages markers with an explicit timestamp, so all of them stay
-        // green if EF ever sends the sentinel instead. The assertion is the
-        // sentinel rather than a value because nothing here can prove which
-        // clock wrote a plausible timestamp — only that the column was not
-        // left at 0001-01-01, which would make every marker purgeable the
+        // CommittedAt's database-stamped invariant. It is a store default
+        // (ADR-038): EF omits a property still holding its sentinel from the
+        // INSERT, so SYSDATETIMEOFFSET() supplies the column. The assertion is
+        // the sentinel rather than a value because nothing here can prove
+        // which clock wrote a plausible timestamp — only that the column was
+        // not left at 0001-01-01, which would make every marker purgeable the
         // moment it is written and retire §8.5's guarantee.
         string key = Key();
         Guid id = Guid.CreateVersion7();

@@ -31,10 +31,10 @@ public class EndpointSecurityTests(HostSmokeTests.UnreachableInfrastructureFacto
         // here. The failure it catches is a test convenience reaching
         // production wiring — a scheme registered in Common.Web "for the
         // fixtures", or a ConfigureAuthentication override deleted as dead
-        // code — after which every authorization test in the repository still
-        // passes and any caller can name any subject and any permission. No
-        // Authorization header at all, so nothing is fetched from the
-        // authority: .invalid never resolves, and a challenge needs no keys.
+        // code — after which any caller could name any subject and any
+        // permission. No Authorization header at all, so nothing is fetched
+        // from the authority: .invalid never resolves, and a challenge needs
+        // no keys.
         using HttpClient client = factory.CreateClient();
 
         HttpRequestMessage request = new(HttpMethod.Post, "/v1/catalog/products")

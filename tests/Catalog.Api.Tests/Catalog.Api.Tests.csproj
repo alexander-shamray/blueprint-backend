@@ -37,11 +37,11 @@
          fake by hand means stubbing an interface with a dozen members nobody
          calls. -->
     <PackageReference Include="NSubstitute" />
-    <!-- GrpcChannel and Grpc.Core's StatusCode, which PricingServiceTests uses
-         to call the gRPC server over loopback. Carried transitively through
-         Catalog.Api; named here on the same honesty rule Web.Bff.Tests states,
-         because a project that names a type declares the package rather than
-         relying on a production csproj it does not control. -->
+    <!-- GrpcChannel and Grpc.Core's StatusCode, for calling the gRPC server
+         over loopback. Carried transitively through Catalog.Api; named here
+         on the register's honesty rule, because a project that names a type
+         declares the package rather than relying on a production csproj it
+         does not control. -->
     <PackageReference Include="Grpc.Net.ClientFactory" />
   </ItemGroup>
 

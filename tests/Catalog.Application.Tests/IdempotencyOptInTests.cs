@@ -74,8 +74,7 @@ public class IdempotencyOptInTests
         // `typeof(Result).IsAssignableFrom(result)` would be the constraint's
         // own question, and §8.5 says in as many words that a gate written
         // that way "would pass a command the behaviour cannot serve and leave
-        // it to fail on first use". All three assertions below are the
-        // chapter's.
+        // it to fail on first use". The assertions below are the chapter's.
         (Type Command, Type Result)[] candidates =
         [
             .. Commands()

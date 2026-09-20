@@ -18,8 +18,8 @@ namespace Catalog.Api.Tests;
 /// service boundary and §4.3 keeps <c>Common.Contracts</c> as its one
 /// exception. Here and not in <c>Platform.IntegrationTests</c> because
 /// verification needs the provider running, which <c>ServiceFixture</c>
-/// already gives it. Provider behaviour no consumer relies on stays in
-/// <c>PricingServiceTests</c>.</remarks>
+/// already gives it. What the contract does not ask for is not asserted
+/// here.</remarks>
 [Collection(nameof(IntegrationCollection))]
 public sealed class PricingContractVerificationTests(ServiceFixture fixture) : IAsyncLifetime
 {

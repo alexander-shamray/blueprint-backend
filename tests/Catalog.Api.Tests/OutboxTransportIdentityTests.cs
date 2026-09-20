@@ -16,10 +16,9 @@ namespace Catalog.Api.Tests;
 /// header and inbox key are one GUID, and <c>DeliverAsync</c> copying the
 /// row's ids onto the published context is the hop that makes them agree.
 /// </summary>
-/// <remarks>Nothing else covers those two lines — the dispatcher's other
-/// Broker test stays green with the assignments deleted. A substitute for
-/// <c>IPublishEndpoint</c> rather than a harness, because §12.4 runs the real
-/// host against the real broker and a harness would replace it.</remarks>
+/// <remarks>A substitute for <c>IPublishEndpoint</c> rather than a harness,
+/// because §12.4 runs the real host against the real broker on purpose and a
+/// harness would replace the bus configuration under test.</remarks>
 [Collection(nameof(IntegrationCollection))]
 public sealed class OutboxTransportIdentityTests(ServiceFixture fixture) : IAsyncLifetime
 {
