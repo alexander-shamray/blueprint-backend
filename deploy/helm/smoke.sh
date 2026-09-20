@@ -382,8 +382,23 @@ PAYMENTS_RENDER=$("$HELM" template payments "$CHARTS_DIR/payments" \
     --set-string paymentProvider.baseUrl=https://psp.example.invalid/)
 grep -q 'PaymentProvider__BaseUrl: "https://psp.example.invalid/"' <<<"$PAYMENTS_RENDER" \
     || fail 'payments: PaymentProvider__BaseUrl missing from the ConfigMap'
-grep -q 'name: PaymentProvider__ApiKey' <<<"$PAYMENTS_RENDER" \
-    || fail 'payments: PaymentProvider__ApiKey missing from the Deployment'
+# The NAME alone would pass on a literal `value:`, which is the one way this
+# key can be wrong: §15.4 puts it in the Secret column, and a credential
+# rendered into a ConfigMap is readable by anyone with namespace read access
+# and unencrypted at rest. So the reference structure is the subject, and the
+# ConfigMap is asserted not to carry it — a gate watching only the name stops
+# covering the thing it was added for the moment the value moves.
+printf '%s\n' "$PAYMENTS_RENDER" >"$OUT/payments-capability.yaml"
+check 'payments: PaymentProvider__ApiKey comes from a secretKeyRef, not a literal' \
+    awk '/^ *- name: PaymentProvider__ApiKey$/ { at = NR }
+         at && NR == at + 1 && /^ *valueFrom:$/ { vf = 1 }
+         vf && NR == at + 2 && /^ *secretKeyRef:$/ { found = 1 }
+         END { exit found ? 0 : 1 }' "$OUT/payments-capability.yaml"
+check 'payments: no ConfigMap carries PaymentProvider__ApiKey' \
+    awk '/^kind: ConfigMap$/ { in_cm = 1 }
+         /^---$/ { in_cm = 0 }
+         in_cm && /PaymentProvider__ApiKey/ { found = 1 }
+         END { exit found ? 1 : 0 }' "$OUT/payments-capability.yaml"
 if "$HELM" template payments "$CHARTS_DIR/payments" --set-string image.tag="$TAG" >/dev/null 2>&1; then
     fail 'payments: rendered with no paymentProvider.baseUrl; a deploy that forgot it must fail here, not at start'
 fi
