@@ -866,6 +866,13 @@ for bad in 'keycloak:8080/realms/commerce' 'ftp://id.example.com/realms' \
         $GATEWAY_OVERLAY --set-string "identity.authority=$bad"
 done
 
+# The port's range is a separate refusal with its own message, because the
+# digits satisfy the shape and it is `Uri.TryCreate` that draws the bound.
+for bad in 'https://id.example.com:65536/realms' 'https://id.example.com:0/realms'; do
+    refuses "an authority on port '${bad##*:}' fails the render" 'outside 1-65535' \
+        $GATEWAY_OVERLAY --set-string "identity.authority=$bad"
+done
+
 # The same guard on the other key it protects, which needs the payments chart
 # rather than the gateway: `refuses` renders the gateway, which has no
 # capability to carry an address at all.
@@ -887,6 +894,12 @@ for bad in 'psp.example.invalid' 'ftp://psp.example.invalid/' \
     'https://[::1/'; do
     refuses_payments "a provider address of '$bad' fails the render" \
         'HTTPS address this chart will accept' \
+        --set-string "paymentProvider.baseUrl=$bad"
+done
+
+for bad in 'https://psp.example.invalid:65536/' 'https://psp.example.invalid:0/'; do
+    refuses_payments "a provider address on port '${bad%/}' fails the render" \
+        'outside 1-65535' \
         --set-string "paymentProvider.baseUrl=$bad"
 done
 

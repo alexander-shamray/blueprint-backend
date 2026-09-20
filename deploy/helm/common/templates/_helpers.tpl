@@ -84,6 +84,21 @@ that the host would reject is refused here instead of at startup.
 {{- if not (regexMatch "^https://[^/?#@:\\[\\] ]+(:[0-9]+)?(/[^?#]*)?$" $url) }}
 {{- fail (printf "%s The value is not an HTTPS address this chart will accept: a host, optionally a numeric port, and optionally a path. User information, a query, a fragment, a non-numeric port and IPv6 literals are refused here rather than at startup (§15.4)." $message) }}
 {{- end }}
+{{- /*
+The port's RANGE, which the digits above do not bound: `:65536` is numeric,
+matches, and is rejected by `Uri.TryCreate` — so it renders, rolls and dies in
+the new pod. `edge-config.yaml` bounds its own port for the same reason and
+this is that test; what is deliberately NOT copied from it is the
+canonical-spelling check, because that one exists for an origin compared as
+text and a base address is parsed, so `:08443` is accepted by the host here.
+*/}}
+{{- $port := regexFind ":[0-9]+$" (regexFind "^https://[^/]+" $url) }}
+{{- if $port }}
+{{- $n := atoi (trimPrefix ":" $port) }}
+{{- if or (lt $n 1) (gt $n 65535) }}
+{{- fail (printf "%s Its port is outside 1-65535, which the host's own parse rejects (§15.4)." $message) }}
+{{- end }}
+{{- end }}
 {{- $url -}}
 {{- end -}}
 
