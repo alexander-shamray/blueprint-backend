@@ -252,6 +252,30 @@ class OneRefreshAtATime(Base):
 
         self.assertEqual(2, len(self.ran))
 
+    def test_a_request_made_as_the_lock_is_released_is_not_lost(self):
+        """The window: the worker has already looked and found nothing, and
+        the edit lands before the descriptor closes. Its hook sees `busy` as
+        true and leaves a marker rather than a worker, so the one finishing
+        has to look once more after letting go."""
+        root = self.checkout("main")
+        looks = []
+        looking = self.mod.take_request
+
+        def look_then_edit(target):
+            answer = looking(target)
+            looks.append(answer)
+            if len(looks) == 1 and not answer:
+                self.mod.request(target)
+            return answer
+
+        self.patch(mock.patch.object(
+            self.mod, "take_request", side_effect=look_then_edit))
+
+        self.mod.work(root)
+
+        self.assertEqual(1, len(self.ran))
+        self.assertFalse((root / self.mod.PENDING).exists())
+
     def test_a_worker_that_cannot_take_the_lock_does_nothing(self):
         """Its marker belongs to whoever holds the lock, and taking it would
         be the second update against one index that the lock exists to stop."""

@@ -188,16 +188,24 @@ def work(root: Path) -> int:
     starting a second one. A worker that cannot take it has nothing to do:
     the marker it was started for belongs to whoever holds the lock.
     """
-    try:
-        handle = open(root / LOCK, "a+b")
-    except OSError:
-        return 0
-    with handle:
-        if not grab(handle):
+    while True:
+        try:
+            handle = open(root / LOCK, "a+b")
+        except OSError:
             return 0
-        while take_request(root):
-            refresh(root)
-    return 0
+        with handle:
+            if not grab(handle):
+                return 0
+            while take_request(root):
+                refresh(root)
+        # The lock is gone by here, and that is the point. A request made
+        # between the last look above and this release found `busy` true and
+        # left a marker rather than a worker, so it is taken now instead of
+        # waiting for whatever edit comes next. Another worker may have taken
+        # the lock in between, and then the grab above fails and this returns:
+        # the marker is theirs.
+        if not (root / PENDING).exists():
+            return 0
 
 
 def main() -> int:
