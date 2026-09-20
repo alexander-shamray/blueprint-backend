@@ -11,6 +11,7 @@ thing that touches disk.
 """
 
 import contextlib
+import importlib.util
 import io
 import re
 import shutil
@@ -37,6 +38,21 @@ from new_service import (
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+def comment_gate_module():
+    """The comment gate, imported from its own tree.
+
+    Its PATTERNS own which words count as history; a second copy here would be
+    the one that stops agreeing with it.
+    """
+    path = REPO_ROOT / ".github" / "comment-gate" / "comment_gate.py"
+    spec = importlib.util.spec_from_file_location("comment_gate", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 MIGRATION_ID = "20260809120000"
 # The outbox migration's id, one minute on — the script derives it, and spelling
 # it out here rather than calling next_migration_id keeps the assertion
@@ -478,48 +494,39 @@ class GeneratedGuidanceIsTrue(unittest.TestCase):
         self.assertNotIn("forbidden reference in Yankee before being trusted", gate)
         self.assertIn("see the service this one was scaffolded from", gate)
 
-    def test_no_generated_file_claims_this_service_did_something_in_a_past_pr(self):
-        """A PR number may cite the plan; it may not narrate this service's past.
+    def test_no_generated_file_carries_a_history_this_service_has_not_got(self):
+        """A service rendered today has no past, so nothing in it may narrate one.
 
-        `until PR-14`, `PR-22's deliverable`, `does not exist until PR-15` are
-        all true of any service — they cite Appendix C. `Yankee acquired
-        both in PR-08` and `the model had no entity types until PR-10` are not:
-        the service was created today and did none of it.
-
-        The two are not separable by pattern, so this is an allow-list, like
-        the domain gate's. A new co-occurrence of the service name and a PR
-        number fails here and forces the same decision: plan citation, or false
-        history. Copilot raised this class twice — five sites, then three more
-        it found beside them.
-
-        **It is proximity, not comprehension.** A PR number more than ~170
-        characters from any mention of the service escapes it, so this narrows
-        the class rather than closing it; the named assertions below are what
-        pin the sites actually found. Said plainly because a guard that is
-        described as exhaustive stops being read.
+        The template is Catalog itself, so a word the comment gate calls
+        history reaches every service that follows. The patterns are that
+        gate's own, imported rather than restated, and read by name with
+        the count asserted so a rename there fails here. Emphasis is its
+        fifth and is left to the churn plan's sweep. Whole files rather
+        than comment tokens, so a match in a string literal fails too:
+        the alternative is a second lexer to keep in step with the gate's.
         """
-        allowed = (
-            "PR-07's OpenAPI deliverable",          # Appendix C's row for the host
-            "category is PR-22's",                  # Testcontainers categories
-            "Appendix C's PR-09 test",              # names the test's origin, not the service's
-            "drift PR-08 forbids",                  # a rule, cited like an ADR
+        wanted = (
+            "an issue or pull request number",
+            "a delivery-plan row",
+            "a reviewer",
+            "history",
         )
-        # Spelt to survive comment wrapping: the entry above was written as
-        # "the snapshot drift PR-08 forbids" and matched nothing, because the
-        # comment breaks between "snapshot" and "drift". The guard caught its
-        # own allow-list, which is the right way round.
+        gate = comment_gate_module()
+        patterns = [(name, pattern) for name, pattern, _ in gate.PATTERNS if name in wanted]
+        self.assertEqual(
+            len(wanted), len(patterns),
+            "the comment gate renamed or dropped a pattern this guard reads by name")
+
         for path, text in self.rendered.created.items():
             body = text.replace("\r\n", "\n")
-            for match in re.finditer(r"PR-\d+", body):
-                window = body[max(0, match.start() - 170) : match.end() + 170]
-                if "Yankee" not in window:
+            for name, pattern in patterns:
+                match = pattern.search(body)
+                if match is None:
                     continue
-                self.assertTrue(
-                    any(phrase in window for phrase in allowed),
-                    f"{path}: '{match.group(0)}' sits beside the service name outside the "
-                    f"allow-list — plan citation, or a history this service has not got?\n"
-                    f"{window}",
-                )
+                self.fail(
+                    f"{path} names {name} ({match.group(0)!r}) — a service rendered today "
+                    f"inherits it as its own history:\n"
+                    f"{body[max(0, match.start() - 170) : match.end() + 170]}")
 
     def test_the_fixture_does_not_claim_a_consumer_that_does_not_reference_it(self):
         # The scaffold drops the application suite's TestSupport reference —
