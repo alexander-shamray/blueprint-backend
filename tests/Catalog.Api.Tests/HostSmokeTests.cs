@@ -11,7 +11,7 @@ namespace Catalog.Api.Tests;
 /// <summary>
 /// The host builds under <c>ValidateOnBuild</c> and answers what an empty
 /// service can already be asked: the probes (§13.5) and the OpenAPI document
-/// (Appendix C). One factory for the class, since each test sends one request.
+/// (Appendix C). One factory for the class, since nothing mutates the host.
 /// </summary>
 /// <remarks>§13.5's rule is that a host with a connection string has a
 /// readiness check and one without does not, and both registrations throw on

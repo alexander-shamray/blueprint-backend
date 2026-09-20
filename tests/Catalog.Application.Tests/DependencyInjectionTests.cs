@@ -202,9 +202,8 @@ public class DependencyInjectionTests
 
         // The pricing slice. The scan is public-only (§6.2), so an internal
         // handler, a rename or a missed IQueryHandler<,> registers as nothing
-        // and fails on the first gRPC call rather than at startup —
-        // ValidateOnBuild never constructs the dispatcher's handler map, and
-        // the suites that would catch it need a Docker daemon.
+        // and fails on the first gRPC call rather than at startup:
+        // ValidateOnBuild never constructs the dispatcher's handler map.
         services.ShouldContain(d =>
             d.ServiceType == typeof(IQueryHandler<GetPricesQuery, IReadOnlyList<ProductPriceDto>>));
     }

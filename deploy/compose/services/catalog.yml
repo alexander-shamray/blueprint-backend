@@ -55,13 +55,13 @@ services:
       # identity belongs to the BFF alone (§9.7, §11.5).
       Identity__Authority: "http://keycloak:8080/realms/commerce"
       OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4317"
-      # §8.1's two connections. Both are required even though only the
-      # coordination one is read today: AddRedisConnections is one call by
-      # design (§8.2), so a service either has Redis or does not, and it
-      # reads both eagerly and throws naming the missing one — which is what
-      # makes an absent key a host that will not start rather than a cache
-      # silently reading the database. §8.5's IdempotencyBehavior is the
-      # reader, claiming a {service}:idem: key before any command runs.
+      # §8.1's two connections. Both keys are required whether or not a
+      # service reads both: AddRedisConnections is one call by design (§8.2),
+      # so a service either has Redis or does not, and it reads both eagerly
+      # and throws naming the missing one — which is what makes an absent key
+      # a host that will not start rather than a cache silently reading the
+      # database. §8.5's IdempotencyBehavior reads the coordination one,
+      # claiming a {service}:idem: key before any command runs.
       # 6379 on both: the ports differ only on the host side (6379/6380),
       # and inside the network each container listens on Redis's own port,
       # so naming 6380 here would reach nothing.

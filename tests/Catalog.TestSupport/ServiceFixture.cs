@@ -162,12 +162,12 @@ public sealed class ServiceFixture : IAsyncLifetime
         // §14.1's built image. Catalog needs the per-service accounts and not
         // ADR-021's delayed-exchange plugin: it runs no saga and schedules
         // nothing, so the build would buy it only the one thing it cannot use.
-        // Not building is also what keeps two test hosts off one build
+        // Not building also keeps concurrent test hosts off one build
         // context — Testcontainers writes that context to a tar named after
         // the image, and separate processes instantiating this fixture would
-        // race on that file. The two mapped paths must match the Dockerfile's
-        // COPY targets; `check_permissions.py` asserts the two agree rather
-        // than leaving it to a reader.
+        // race on that file. The mapped paths must match the Dockerfile's
+        // COPY targets; `check_permissions.py` asserts they agree rather than
+        // leaving it to a reader.
         _rabbit = new RabbitMqBuilder()
             .WithImage("rabbitmq:4.1-management-alpine")
             .WithUsername("catalog-svc")

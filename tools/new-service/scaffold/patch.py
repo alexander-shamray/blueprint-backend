@@ -127,14 +127,13 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
         ),
         (
             "    Domain, Common.Application and Common.Contracts — the §4.2 dependency\n"
-            "    table's second row. Contracts arrives with the §9.3 mapper, which is the\n"
-            "    only type here that names one: the allow-list turns a domain event into a\n"
-            "    public record, so the layer that owns the allow-list is the layer that\n"
-            "    pays for the reference. §4.3's one assembly that crosses a service\n"
-            "    boundary, and it crosses at the mapper.\n",
+            "    table's second row. Contracts arrives with the §9.3 mapper: its\n"
+            "    allow-list turns a domain event into a public record, so the layer that\n"
+            "    owns the allow-list is the layer that pays for the reference. §4.3's one\n"
+            "    assembly that crosses a service boundary, and it crosses at the mapper.\n",
             "    Domain and Common.Application — the §4.2 dependency table's second row,\n"
-            "    minus Common.Contracts. The §9.3 mapper is the only type that would name\n"
-            "    a contract, and its allow-list is empty until this service publishes\n"
+            "    minus Common.Contracts. The §9.3 mapper is where a contract would be\n"
+            "    named, and its allow-list is empty until this service publishes\n"
             "    something — so the reference joins with the first entry in it, and not\n"
             "    before. §4.3's one assembly that crosses a service boundary; it crosses\n"
             "    at the mapper or nowhere.\n",
@@ -513,20 +512,19 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
             "\n"
             "        // The pricing slice. The scan is public-only (§6.2), so an internal\n"
             "        // handler, a rename or a missed IQueryHandler<,> registers as nothing\n"
-            "        // and fails on the first gRPC call rather than at startup —\n"
-            "        // ValidateOnBuild never constructs the dispatcher's handler map, and\n"
-            "        // the suites that would catch it need a Docker daemon.\n"
+            "        // and fails on the first gRPC call rather than at startup:\n"
+            "        // ValidateOnBuild never constructs the dispatcher's handler map.\n"
             "        services.ShouldContain(d =>\n"
             "            d.ServiceType == typeof(IQueryHandler<GetPricesQuery, IReadOnlyList<ProductPriceDto>>));\n"
             "    }\n"
             "}\n",
             "\n"
-            "    // Two tests are missing here, and they come back separately rather\n"
+            "    // A handler assertion and a validator assertion come back separately rather\n"
             "    // than together. The first handler of either kind earns the one that\n"
-            "    // asserts the §6.2 scan produced a registration; the first validator\n"
-            "    // earns the one that asserts the validator scan found it. Both scans\n"
-            "    // fail silently when lost, which is why neither is left implicit —\n"
-            "    // and a query-only slice needs the first and not the second.\n"
+            "    // asserts the §6.2 scan produced a registration; the first validator earns\n"
+            "    // the one that asserts the validator scan found it. Both scans fail\n"
+            "    // silently when lost, which is why neither is left implicit — and a\n"
+            "    // query-only slice needs the handler one alone.\n"
             "}\n",
         ),
     ),

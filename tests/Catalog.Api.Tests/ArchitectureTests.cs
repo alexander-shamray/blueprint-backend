@@ -82,10 +82,9 @@ public class ArchitectureTests
     }
 
     /// <summary>
-    /// Every project §4.1 gives a service, anchored one type each. This suite
-    /// is the only one that can see them all: it references the Api, which
-    /// carries Application, Domain and Infrastructure, and
-    /// <c>Catalog.TestSupport</c>, which carries the Migrator.
+    /// Every project §4.1 gives a service, anchored one type each: the Api
+    /// reference carries Application, Domain and Infrastructure, and the
+    /// <c>Catalog.TestSupport</c> one carries the Migrator.
     /// </summary>
     /// <remarks>Both gates below read emitted references: a forbidden
     /// <c>ProjectReference</c> nothing uses emits nothing, so they are late
@@ -104,12 +103,12 @@ public class ArchitectureTests
     /// Whether a referenced assembly is one of this repository's own rather
     /// than a package.
     /// </summary>
-    /// <remarks>Not a list of service names: the scaffold renames every casing
-    /// of the template's name after applying its patches, so a list naming
-    /// <c>Catalog</c> would reach the new service with it replaced rather than
-    /// joined. Strong-naming stands in — no project here is signed and Dapper
-    /// is the one unsigned package, named below — and a second unsigned package
-    /// fails the gate loudly rather than opening a hole quietly.</remarks>
+    /// <remarks>Not a list of service names: the scaffold renames every
+    /// casing of the template's name after applying its patches, so a list
+    /// naming <c>Catalog</c> would reach the new service with it replaced
+    /// rather than joined. Strong-naming stands in, since no project here is
+    /// signed, and an unsigned package fails the gate loudly rather than
+    /// opening a hole quietly.</remarks>
     private static bool IsFirstParty(AssemblyName reference) =>
         reference.GetPublicKeyToken() is null or [] && reference.Name != "Dapper";
 

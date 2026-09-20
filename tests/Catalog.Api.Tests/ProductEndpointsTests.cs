@@ -16,8 +16,8 @@ namespace Catalog.Api.Tests;
 /// rule is that a fixture handing out a blanket claim set makes the §11.4
 /// policies untestable and, worse, makes them look tested — the endpoints are
 /// reached, the assertions pass, and the one behaviour nobody exercises is
-/// the refusal. So the two tests asserting a refusal grant nothing and the
-/// wrong thing respectively.</remarks>
+/// the refusal. So a refusal is asserted both with nothing granted and with
+/// the wrong thing granted.</remarks>
 [Collection(nameof(IntegrationCollection))]
 public sealed class ProductEndpointsTests(ServiceFixture fixture) : IAsyncLifetime
 {

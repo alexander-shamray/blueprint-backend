@@ -149,9 +149,8 @@ public sealed class PricingServiceTests(ServiceFixture fixture) : IAsyncLifetime
     /// configuration in which the handler's normalisation does anything.
     /// </summary>
     /// <remarks><c>ToUpperInvariant</c> exists for a deployment whose
-    /// collation is case-sensitive, and every fixture here runs SQL Server's
-    /// case-insensitive default, so nothing else can tell it from a no-op.
-    /// The collation is changed on the column for one test and restored in a
+    /// collation is case-sensitive, which SQL Server's default is not. The
+    /// collation is changed on the column for this test and restored in a
     /// <c>finally</c>: <c>IntegrationCollection</c> runs serially, and
     /// <c>Respawn</c> resets rows and not schema.</remarks>
     [Fact]
