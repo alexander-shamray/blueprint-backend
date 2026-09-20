@@ -44,10 +44,11 @@ public sealed class PlaceOrderTests(ServiceFixture fixture) : IAsyncLifetime
     private static readonly Guid Caller = Guid.Parse("33333333-3333-3333-3333-333333333333");
 
     /// <summary>
-    /// A whole unit below the ceiling, so one of it is storable and
-    /// <c>OrderLimits.MaxQuantity</c> of it is not.
+    /// The largest amount this service records: <c>Money.Of</c> rounds to two
+    /// places, so the step below the ceiling is a hundredth rather than the
+    /// ten-thousandth the column's scale would allow.
     /// </summary>
-    private static readonly decimal LargestStorableAmount = OrderAmounts.Ceiling - 1m;
+    private static readonly decimal LargestStorableAmount = OrderAmounts.Ceiling - 0.01m;
 
     public async ValueTask InitializeAsync() => await fixture.ResetAsync();
 
@@ -145,6 +146,21 @@ public sealed class PlaceOrderTests(ServiceFixture fixture) : IAsyncLifetime
         await SeedPriceAsync(product, LargestStorableAmount, "EUR");
 
         HttpResponseMessage response = await PlaceAsync(product, quantity: OrderLimits.MaxQuantity);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
+    }
+
+    [Fact]
+    public async Task An_order_whose_total_is_exactly_the_ceiling_is_refused()
+    {
+        // The ceiling is the first amount a money column cannot hold, so the
+        // refusal is inclusive of it. Two of half the ceiling reach it to the
+        // hundredth, which is the one total a bound written with > would let
+        // through while every larger order was still refused.
+        Guid product = Guid.CreateVersion7();
+        await SeedPriceAsync(product, OrderAmounts.Ceiling / 2m, "EUR");
+
+        HttpResponseMessage response = await PlaceAsync(product, quantity: 2);
 
         response.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
     }
