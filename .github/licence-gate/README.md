@@ -2,8 +2,8 @@
 
 **The claim: every package `Directory.Packages.props` pins has a licence
 somebody cleared, no project steps past that file by the `PackageReference`
-and central-management forms listed below, and no chapter prints a version
-the file owns.**
+and central-management forms listed below, and no chapter writes a version
+the file owns as an MSBuild `Include`/`Version` pair.**
 [§4.4](../../docs/backend-architecture/04-solution-structure.md) states the
 rule; this file owns what the gate reads to enforce it, what it refuses, and
 where its claim stops — which is narrower than "no package reaches a restore

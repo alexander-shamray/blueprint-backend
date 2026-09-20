@@ -345,11 +345,12 @@ class ReadAllowed(unittest.TestCase):
 
 
 class ChapterPins(unittest.TestCase):
-    """The rule the transcription check was standing in for.
+    """A chapter printing a pin is a second owner of the version.
 
-    Comparing a chapter's copy of the props file made every pin raise edit a
-    chapter, which the locality contract forbids in two places. The check now
-    refuses the copy itself.
+    `docs/change-locality.md` §2 keeps every package version in
+    `Directory.Packages.props`, Appendix B excepted, and Class E's row keeps
+    a dependency change out of the chapters that use the package. A pin in a
+    chapter contradicts both, so the gate refuses it rather than comparing it.
     """
 
     PIN = '    <PackageVersion Include="Dapper" Version="2.1.66" />\n'
