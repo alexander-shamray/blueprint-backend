@@ -19,7 +19,8 @@ from pathlib import Path
 
 # Where the CLI keeps a checkout's index. A checkout without one is not
 # stale, it is unindexed, and building one per throwaway worktree is a cost
-# nobody asked this hook for -- so it is left alone rather than initialised.
+# nobody asked this hook for — so it is left alone rather than
+# initialised.
 CACHE = Path(".claude") / "cache" / "codebase-index"
 
 
@@ -36,19 +37,21 @@ def checkout_root(start: Path) -> Path | None:
 
 
 def target(event: dict) -> Path | None:
-    """The indexed checkout to refresh, preferring the one that was edited.
+    """The indexed checkout to refresh, which is the one that was edited.
 
-    The event's `cwd` first and `CLAUDE_PROJECT_DIR` second, because the two
-    differ exactly when it matters: in a sibling worktree the first is the
-    tree that changed and the second is the tree that did not.
+    The event's `cwd` decides alone whenever it has one. In a sibling
+    worktree it is the tree that changed and `CLAUDE_PROJECT_DIR` is the tree
+    that did not, so trying the variable when that tree turns out to be
+    unindexed refreshes the wrong checkout rather than none. The variable
+    answers only when the event is silent.
     """
-    for value in (event.get("cwd"), os.environ.get("CLAUDE_PROJECT_DIR")):
-        if not value:
-            continue
-        root = checkout_root(Path(str(value)))
-        if root is not None and (root / CACHE).is_dir():
-            return root
-    return None
+    named = event.get("cwd") or os.environ.get("CLAUDE_PROJECT_DIR")
+    if not named:
+        return None
+    root = checkout_root(Path(str(named)))
+    if root is None or not (root / CACHE).is_dir():
+        return None
+    return root
 
 
 def main() -> int:

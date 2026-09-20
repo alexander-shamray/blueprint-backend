@@ -80,9 +80,9 @@ class RefreshIndex(unittest.TestCase):
         return self.run_hook(json.dumps(event), project_dir)
 
     def test_the_events_cwd_decides_the_checkout(self):
-        """The finding this file exists for: `/branch` moves the session into
-        a sibling worktree, so the tree that changed is the event's and not
-        the one CLAUDE_PROJECT_DIR still names."""
+        """`/branch` moves the session into a sibling worktree, so the tree
+        that changed is the event's and not the one `CLAUDE_PROJECT_DIR`
+        still names. `guard-edit-target.anchors` owns the distinction."""
         edited = self.checkout("worktree")
         original = self.checkout("main")
 
@@ -109,10 +109,15 @@ class RefreshIndex(unittest.TestCase):
 
     def test_an_unindexed_checkout_is_left_alone(self):
         """Unindexed is not stale. Building an index per throwaway worktree
-        is a cost this hook was never asked for."""
-        bare = self.checkout("fresh", indexed=False)
+        is a cost this hook was never asked for.
 
-        self.assertEqual(0, self.run_event({"cwd": str(bare)}))
+        `CLAUDE_PROJECT_DIR` names an indexed checkout here because the real
+        hook always receives one: without it the assertion passes on a hook
+        that falls through and refreshes the tree that did not change."""
+        bare = self.checkout("fresh", indexed=False)
+        indexed = self.checkout("main")
+
+        self.assertEqual(0, self.run_event({"cwd": str(bare)}, indexed))
 
         self.assertEqual([], self.spawned)
 
@@ -152,25 +157,31 @@ class RefreshIndex(unittest.TestCase):
         self.assertEqual([], self.spawned)
 
     def test_settings_calls_it_on_every_edit(self):
-        """Every verdict above is silent if settings never runs the file."""
+        """Every verdict above is silent if settings never runs the file.
+
+        The entries are narrowed to the ones that run this hook before their
+        matchers are read. Asking for a command and for a matcher separately
+        is satisfied by a second entry that has one and not the other."""
         entries = json.loads(SETTINGS.read_text(encoding="utf-8"))["hooks"].get(
             "PostToolUse", [])
-        commands = [
-            hook["command"] for entry in entries for hook in entry.get("hooks", [])
+        mine = [
+            entry for entry in entries
+            if any("refresh-index.py" in hook.get("command", "")
+                   for hook in entry.get("hooks", []))
         ]
-        matchers = [entry.get("matcher", "") for entry in entries]
 
-        self.assertTrue(any("refresh-index.py" in c for c in commands), commands)
+        self.assertTrue(mine, entries)
         for tool in ("Edit", "Write", "MultiEdit", "NotebookEdit"):
-            self.assertTrue(any(tool in m for m in matchers), matchers)
+            self.assertTrue(
+                any(tool in entry.get("matcher", "") for entry in mine), mine)
 
 
 class RestoresWhatItPatched(unittest.TestCase):
     """The canary, and it sorts after the suite above on purpose.
 
     A leaked patch is invisible to the file that leaks it and fatal to every
-    file loaded after it, which is how the first version of this suite passed
-    alone and produced 76 errors under `discover`.
+    file loaded after it, so the suite that would notice has to be one that
+    runs later.
     """
 
     def test_the_interpreters_modules_are_as_they_were(self):
