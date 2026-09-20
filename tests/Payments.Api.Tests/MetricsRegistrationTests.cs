@@ -177,7 +177,8 @@ public class MetricsRegistrationTests
     }
 
     /// <summary>
-    /// The regression test for the defect CI found and this machine did not.
+    /// Two <see cref="OutboxMetrics"/> on one meter name stay isolated: only
+    /// the instance a listener enabled is collected.
     /// </summary>
     /// <remarks>
     /// A <see cref="MeterListener"/> is process-wide, so a filter on
