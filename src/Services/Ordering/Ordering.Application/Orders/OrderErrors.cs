@@ -73,6 +73,12 @@ public static class OrderErrors
     public static readonly Error NotAwaitingStock =
         Error.Rule("order.not_awaiting_stock", "The order is not awaiting stock.");
 
+    // 422 for the same reason as ProductsUnavailable: the request was
+    // well-formed, and what it asks for is beyond what OrderAmounts.Ceiling
+    // says this service can record.
+    public static readonly Error TotalBeyondCeiling =
+        Error.Rule("order.total_beyond_ceiling", "The order's total is beyond what this service can record.");
+
     // 422, not 400: the request was well-formed and the validator passed it.
     // The products are unpriceable, which is a fact about this service's state
     // and not something the caller phrased wrongly.

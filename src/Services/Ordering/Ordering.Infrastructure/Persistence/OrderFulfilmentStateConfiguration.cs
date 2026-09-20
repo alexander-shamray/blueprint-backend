@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using Ordering.Application;
 using Ordering.Infrastructure.Messaging;
 
 namespace Ordering.Infrastructure.Persistence;
@@ -49,7 +50,7 @@ internal sealed class OrderFulfilmentStateConfiguration : IEntityTypeConfigurati
             .IsUnicode(false)
             .IsRequired();
 
-        builder.Property(s => s.Total).HasPrecision(19, 4);
+        builder.Property(s => s.Total).HasPrecision(OrderAmounts.Precision, OrderAmounts.Scale);
 
         // The expand half of §7.4's expand/contract, and the only reason this
         // column is still mapped at all (ADR-028, #63). The instance no longer
