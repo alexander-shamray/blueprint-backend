@@ -16,6 +16,14 @@ namespace Payments.Api.Tests;
 [Collection(nameof(IntegrationCollection))]
 public sealed class PaymentEndpointsTests(ServiceFixture fixture) : IAsyncLifetime
 {
+    // Four distinct instants rather than four SYSDATETIMEOFFSET() calls, an
+    // hour and a day apart so no two can be confused: stamps seeded at the
+    // same moment make a crossed pair indistinguishable from a correct one.
+    private static readonly DateTimeOffset Placed = new(2026, 3, 1, 10, 0, 0, TimeSpan.Zero);
+    private static readonly DateTimeOffset Cancelled = new(2026, 3, 2, 11, 0, 0, TimeSpan.Zero);
+    private static readonly DateTimeOffset IntentCreated = new(2026, 3, 3, 12, 0, 0, TimeSpan.Zero);
+    private static readonly DateTimeOffset Voided = new(2026, 3, 4, 13, 0, 0, TimeSpan.Zero);
+
     public async ValueTask InitializeAsync() => await fixture.ResetAsync();
 
     public ValueTask DisposeAsync() => ValueTask.CompletedTask;
@@ -42,14 +50,14 @@ public sealed class PaymentEndpointsTests(ServiceFixture fixture) : IAsyncLifeti
         view.Intent.Amount.ShouldBe(42.10m);
         view.Intent.Currency.ShouldBe("EUR");
 
-        // Every timestamp, because four of them are read out of one joined row
-        // and three share a type: a pair crossed between the SELECT and the
-        // Row record leaves each one populated and each one wrong, which an
-        // assertion on a single stamp cannot see.
-        view.Order.PlacedAt.ShouldNotBeNull();
-        view.Order.CancelledAt.ShouldNotBeNull();
-        view.Intent.CreatedAt.ShouldNotBe(default);
-        view.Refund.VoidedAt.ShouldNotBe(default);
+        // Each timestamp against the instant that seeded it, not against being
+        // populated. Four stamps come out of one joined row and three share a
+        // type, so crossing a pair leaves every one of them set — which is why
+        // the seed uses four distinct instants and this asserts the values.
+        view.Order.PlacedAt.ShouldBe(Placed);
+        view.Order.CancelledAt.ShouldBe(Cancelled);
+        view.Intent.CreatedAt.ShouldBe(IntentCreated);
+        view.Refund.VoidedAt.ShouldBe(Voided);
     }
 
     [Fact]
@@ -153,17 +161,21 @@ public sealed class PaymentEndpointsTests(ServiceFixture fixture) : IAsyncLifeti
         fixture.ExecuteAsync(
             """
             INSERT INTO payments.PaymentOrders (OrderId, CustomerId, TotalAmount, Currency, PlacedAt, CancelledAt)
-            VALUES ({0}, NEWID(), 42.10, 'EUR', SYSDATETIMEOFFSET(), CASE WHEN {2} = 1 THEN SYSDATETIMEOFFSET() END);
+            VALUES ({0}, NEWID(), 42.10, 'EUR', {3}, CASE WHEN {2} = 1 THEN {4} END);
             IF {1} = 1
                 INSERT INTO payments.PaymentIntents (OrderId, Status, Amount, Currency, Reference, CreatedAt)
-                VALUES ({0}, 'Authorised', 42.10, 'EUR', 'psp_x', SYSDATETIMEOFFSET());
+                VALUES ({0}, 'Authorised', 42.10, 'EUR', 'psp_x', {5});
             IF {2} = 1
                 INSERT INTO payments.Refunds (OrderId, Reference, Amount, Currency, VoidedAt)
-                VALUES ({0}, 'psp_x', 42.10, 'EUR', SYSDATETIMEOFFSET());
+                VALUES ({0}, 'psp_x', 42.10, 'EUR', {6});
             """,
             order,
             authorised ? 1 : 0,
-            refunded ? 1 : 0);
+            refunded ? 1 : 0,
+            Placed,
+            Cancelled,
+            IntentCreated,
+            Voided);
 
     /// <summary>
     /// A placed order whose intent was declined: no reference, a reason, and
@@ -174,10 +186,12 @@ public sealed class PaymentEndpointsTests(ServiceFixture fixture) : IAsyncLifeti
         fixture.ExecuteAsync(
             """
             INSERT INTO payments.PaymentOrders (OrderId, CustomerId, TotalAmount, Currency, PlacedAt)
-            VALUES ({0}, NEWID(), 42.10, 'EUR', SYSDATETIMEOFFSET());
+            VALUES ({0}, NEWID(), 42.10, 'EUR', {2});
             INSERT INTO payments.PaymentIntents (OrderId, Status, Amount, Currency, DeclineReason, CreatedAt)
-            VALUES ({0}, 'Declined', 42.10, 'EUR', {1}, SYSDATETIMEOFFSET());
+            VALUES ({0}, 'Declined', 42.10, 'EUR', {1}, {3});
             """,
             order,
-            DeclineReasons.OrderCancelled);
+            DeclineReasons.OrderCancelled,
+            Placed,
+            IntentCreated);
 }
