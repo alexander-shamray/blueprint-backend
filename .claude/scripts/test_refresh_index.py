@@ -299,9 +299,9 @@ class OneRefreshAtATime(Base):
         self.assertEqual([root], self.worker_roots())
 
     def test_a_live_worker_keeps_its_lock_from_going_stale(self):
-        """The takeover was unsound: the mtime was written once, at claim,
-        while a worker may run several updates. One still refreshing after
-        the stale window had its lock unlinked from under it."""
+        """A worker may run several updates, and the lock's age is what
+        another claimant judges it by — so the worker beats it before each
+        one and a live lock never looks abandoned."""
         root = self.checkout("main")
         self.run_event({"cwd": str(root)})
         stamp = self.claimed(root)
@@ -312,6 +312,32 @@ class OneRefreshAtATime(Base):
         self.assertTrue(self.mod.beat(root, stamp))
 
         self.assertIsNone(self.mod.claim(root), "a beaten lock was taken as stale")
+
+    def test_only_one_of_two_claimants_takes_a_stale_lock(self):
+        """Both read it as stale in the same moment. With an unlink the
+        second removes the first's replacement — a live lock — so the take
+        is a rename, and only one rename of a source can succeed."""
+        root = self.checkout("main")
+        lock = root / self.mod.LOCK
+        lock.write_text("dead-worker", encoding="utf-8")
+
+        first = self.mod.take_aside(lock, "dead-worker")
+        second = self.mod.take_aside(lock, "dead-worker")
+
+        self.assertTrue(first)
+        self.assertFalse(second, "both claimants took the same stale lock")
+
+    def test_a_live_lock_taken_by_mistake_is_put_back(self):
+        """The window the identity check closes: the file renamed may be a
+        replacement made between one claimant's look and its own rename."""
+        root = self.checkout("main")
+        lock = root / self.mod.LOCK
+        lock.write_text("the-replacement", encoding="utf-8")
+
+        moved = self.mod.take_aside(lock, "the-one-i-judged-stale")
+
+        self.assertFalse(moved)
+        self.assertEqual("the-replacement", self.mod.holder(root))
 
     def test_a_worker_whose_lock_was_taken_stops(self):
         """And does not release, because the lock is the successor's now."""

@@ -110,6 +110,51 @@ def request(root: Path) -> None:
         pass
 
 
+def holder(root: Path) -> str | None:
+    """The stamp in the lock, or None when there is no readable lock."""
+    try:
+        return (root / LOCK).read_text(encoding="utf-8").strip()
+    except OSError:
+        return None
+
+
+def take_aside(lock: Path, expected: str | None) -> bool:
+    """Move a stale lock out of the way, and say whether we moved that one.
+
+    A rename rather than an unlink, because two callers can read one lock as
+    stale at the same moment: only one rename of a given source can succeed,
+    so the loser cannot remove the winner's replacement. And the mover reads
+    what it moved, because the file it renamed may be a replacement created
+    between its own look and its own rename -- a live lock, which it puts
+    back rather than keeping.
+    """
+    aside = lock.with_name(f"{lock.name}.{os.getpid()}.{time.time_ns()}")
+    try:
+        os.rename(lock, aside)
+    except OSError:
+        return False
+    try:
+        moved = aside.read_text(encoding="utf-8").strip()
+    except OSError:
+        moved = None
+    if moved != expected:
+        try:
+            os.rename(aside, lock)
+        except OSError:
+            # The replacement's owner has already made another, which is the
+            # outcome this branch wanted anyway: somebody live holds the lock.
+            try:
+                aside.unlink()
+            except OSError:
+                pass
+        return False
+    try:
+        aside.unlink()
+    except OSError:
+        pass
+    return True
+
+
 def claim(root: Path) -> str | None:
     """Take the refresh lock, and answer with the stamp that proves it.
 
@@ -119,33 +164,32 @@ def claim(root: Path) -> str | None:
     """
     lock = root / LOCK
     stamp = f"{os.getpid()}:{time.time_ns()}"
-    try:
-        handle = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-    except FileExistsError:
+    for again in (False, True):
         try:
-            if time.time() - lock.stat().st_mtime < STALE_SECONDS:
-                return None
-            lock.unlink()
             handle = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        except FileExistsError:
+            # Only once. A second refusal means somebody holds it now,
+            # whether or not this call is the one that cleared the last.
+            if again:
+                return None
+            standing = holder(root)
+            try:
+                if time.time() - lock.stat().st_mtime < STALE_SECONDS:
+                    return None
+            except OSError:
+                continue
+            take_aside(lock, standing)
+            continue
         except OSError:
             return None
-    except OSError:
-        return None
-    try:
-        os.write(handle, stamp.encode("utf-8"))
-    except OSError:
-        pass
-    finally:
-        os.close(handle)
-    return stamp
-
-
-def holder(root: Path) -> str | None:
-    """The stamp in the lock, or None when there is no readable lock."""
-    try:
-        return (root / LOCK).read_text(encoding="utf-8").strip()
-    except OSError:
-        return None
+        try:
+            os.write(handle, stamp.encode("utf-8"))
+        except OSError:
+            pass
+        finally:
+            os.close(handle)
+        return stamp
+    return None
 
 
 def beat(root: Path, stamp: str) -> bool:
