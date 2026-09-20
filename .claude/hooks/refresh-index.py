@@ -1,14 +1,12 @@
 #!/usr/bin/env python3
-"""Refresh the local code index after an edit, without making the edit wait.
+"""Refresh the code index after an edit, without making the edit wait.
 
-Claude Code runs no `update` of its own, so between an edit and the next
-query that notices `stale: true` the index describes a tree that has moved
-(#240). This is the PostToolUse half of that.
+Claude Code runs no `update` of its own, so between an edit and the query
+that reports the index stale it describes a tree that has moved.
 
-Spawned detached and never waited on, because it runs on every edit. Its
-output goes nowhere, because a PostToolUse hook's streams are not a report
-anybody reads. It always exits 0: an index that cannot refresh is not a
-reason to fail the edit that provoked it.
+Spawned detached and never waited on, because it runs on every edit; its
+streams go nowhere; and it returns 0 whatever happens, because an index
+that cannot refresh is not a reason to fail the edit it followed.
 """
 
 from __future__ import annotations
