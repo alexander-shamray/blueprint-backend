@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Common.Contracts.Payments.V1;
 using Payments.Application;
 using Payments.Application.Provider;
 using Polly;
@@ -50,7 +51,7 @@ internal sealed class HttpPaymentProvider(HttpClient http, ProviderMetrics metri
         // The body must agree with its status, and each verdict must carry what
         // it is a verdict about. A contradiction is a provider this adapter does
         // not understand — a fault, never an authorisation or a decline.
-        // Longer than ProviderLimits is refused here rather than at the insert:
+        // Longer than either width is refused here rather than at the insert:
         // a verdict that cannot be recorded would leave money authorised with
         // no PaymentAuthorised committed for it.
         if (response.StatusCode == HttpStatusCode.PaymentRequired)
@@ -61,7 +62,7 @@ internal sealed class HttpPaymentProvider(HttpClient http, ProviderMetrics metri
         }
 
         return answer is { Status: "approved", Reference: { } reference }
-               && Recordable(reference, ProviderLimits.MaxReferenceLength)
+               && Recordable(reference, PaymentLimits.MaxReferenceLength)
             ? new AuthorisationResult.Authorised(reference)
             : throw Unavailable("The provider approved with a body that is not an approval.");
     }
