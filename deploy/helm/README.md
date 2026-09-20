@@ -96,17 +96,25 @@ helm upgrade --install platform deploy/helm/platform \
     --set-string ordering.image.tag="$ORDERING_SHA" \
     --set-string inventory.image.tag="$INVENTORY_SHA" \
     --set-string payments.image.tag="$PAYMENTS_SHA" \
-    --set-string payments.paymentProvider.baseUrl="$PSP_BASE_URL" \
     --set-string gateway.image.tag="$GATEWAY_SHA" \
     --set-string web-bff.image.tag="$BFF_SHA"
 ```
 
-**Payments' provider address is in that command for the same reason the values
-file is below it**: the chart ships no default a cluster could use — §3.2's
+**Payments' provider address is required and is deliberately NOT on that
+command line.** The chart ships no default a cluster could use — §3.2's
 provider is a real third party and Compose's simulator is not one — so the
-render is refused until an environment names it. It sits on the command line
-here beside the tags; an environment that keeps it in `staging.yaml` under
-`payments.paymentProvider.baseUrl` is the same fact in the other place.
+render is refused until an environment names it, and the values file is where
+it belongs.
+
+`--set-string` is the wrong door for it, and this is the hazard
+`.github/workflows/deploy.yml` already spells out for the image tag: Helm
+parses the value with `strvals`, where **a comma separates assignments**. A
+tag survives that because `commerce.tag`'s alphabet has no comma and the
+workflow validates it before Helm sees it; a URL path may legitimately carry
+one, so `https://psp.example/region,blue` is not one assignment but two — and
+the second is whatever follows the comma. Escaping would work and would have
+to be remembered at every call site. A values file is parsed as YAML and has
+no such rule.
 
 **The values file is not optional in that command**, and leaving it out is a
 render failure rather than a default: the gateway ships
@@ -122,6 +130,11 @@ gateway:
   ingress:
     host: api.staging.example.com
     trustedNetworks: [ "10.42.0.0/16" ]   # the ingress controller's pod CIDRs
+payments:
+  paymentProvider:
+    # §3.2's provider, per cluster. An absolute HTTPS address; the chart
+    # refuses anything its host would refuse at startup.
+    baseUrl: https://psp.staging.example.com/
 ```
 
 ## What is deliberately not here
