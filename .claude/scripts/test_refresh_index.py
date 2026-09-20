@@ -3,7 +3,7 @@
 The hook suppresses every failure on purpose, so its exit status says
 nothing: a wrong checkout, an absent CLI and a hook nothing calls all look
 like success. The invariant held here is that the tree refreshed is the one
-the edit landed in, or none of them.
+the edit landed in, exactly one refresh owns it, or none of them run.
 """
 
 import importlib.util
@@ -28,6 +28,13 @@ CACHE = Path(".claude") / "cache" / "codebase-index"
 COMMAND = 'py -3.12 "${CLAUDE_PROJECT_DIR}/.claude/hooks/refresh-index.py"'
 
 
+def _load():
+    spec = importlib.util.spec_from_file_location("refresh_index", HOOK)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def entries_running_the_hook(settings: Path) -> list:
     """The PostToolUse entries of `settings` that run this hook, and no others."""
     document = json.loads(settings.read_text(encoding="utf-8"))
@@ -37,13 +44,6 @@ def entries_running_the_hook(settings: Path) -> list:
         if any(hook.get("type") == "command" and hook.get("command") == COMMAND
                for hook in entry.get("hooks", []))
     ]
-
-
-def _load():
-    spec = importlib.util.spec_from_file_location("refresh_index", HOOK)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
 
 
 class _Stdin:
@@ -56,7 +56,7 @@ class _Stdin:
         return self.body
 
 
-class RefreshIndex(unittest.TestCase):
+class Base(unittest.TestCase):
     """Every patch below is undone by addCleanup, and that is load-bearing.
 
     `subprocess`, `os` and `sys` inside the hook are the interpreter's own
@@ -67,11 +67,15 @@ class RefreshIndex(unittest.TestCase):
     def setUp(self):
         self.mod = _load()
         self.spawned = []
+        self.ran = []
         self.tmp = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
         self.patch(mock.patch.object(
             self.mod.subprocess, "Popen",
             side_effect=lambda *a, **k: self.spawned.append((a, k))))
+        self.patch(mock.patch.object(
+            self.mod.subprocess, "run",
+            side_effect=lambda *a, **k: self.ran.append((a, k))))
 
     def patch(self, patcher):
         patcher.start()
@@ -93,22 +97,28 @@ class RefreshIndex(unittest.TestCase):
         else:
             self.mod.os.environ["CLAUDE_PROJECT_DIR"] = str(project_dir)
         self.patch(mock.patch.object(self.mod.sys, "stdin", _Stdin(body)))
+        self.patch(mock.patch.object(self.mod.sys, "argv", ["refresh-index.py"]))
         return self.mod.main()
 
     def run_event(self, event, project_dir=None):
         return self.run_hook(json.dumps(event), project_dir)
 
+    def worker_roots(self):
+        """The checkout each spawned worker was pointed at."""
+        return [Path(arguments[0][-1]) for arguments, _ in self.spawned]
+
+
+class ChoosingTheCheckout(Base):
     def test_the_events_cwd_decides_the_checkout(self):
         """`/branch` moves the session into a sibling worktree, so the tree
         that changed is the event's and not the one `CLAUDE_PROJECT_DIR`
-        still names. `guard-edit-target.anchors` owns the distinction."""
+        still names."""
         edited = self.checkout("worktree")
         original = self.checkout("main")
 
         self.assertEqual(0, self.run_event({"cwd": str(edited)}, original))
 
-        self.assertEqual(1, len(self.spawned))
-        self.assertEqual(str(edited), self.spawned[0][1]["cwd"])
+        self.assertEqual([edited], self.worker_roots())
 
     def test_the_edited_file_decides_over_the_session_directory(self):
         """`guard-edit-target` admits an edit against the session's tree or
@@ -122,7 +132,7 @@ class RefreshIndex(unittest.TestCase):
         self.run_event({"cwd": str(session),
                         "tool_input": {"file_path": str(touched)}})
 
-        self.assertEqual(str(edited), self.spawned[0][1]["cwd"])
+        self.assertEqual([edited.resolve()], self.worker_roots())
 
     def test_a_relative_edit_climbing_out_lands_in_the_other_checkout(self):
         """`guard-edit-target` admits a non-link `..` path, and the session's
@@ -135,7 +145,7 @@ class RefreshIndex(unittest.TestCase):
         self.run_event({"cwd": str(session),
                         "tool_input": {"file_path": "../original/src/Thing.cs"}})
 
-        self.assertEqual(str(edited.resolve()), self.spawned[0][1]["cwd"])
+        self.assertEqual([edited.resolve()], self.worker_roots())
 
     def test_a_relative_edit_is_resolved_against_the_session_directory(self):
         session = self.checkout("worktree")
@@ -144,14 +154,14 @@ class RefreshIndex(unittest.TestCase):
         self.run_event({"cwd": str(session),
                         "tool_input": {"file_path": "src/Thing.cs"}})
 
-        self.assertEqual(str(session), self.spawned[0][1]["cwd"])
+        self.assertEqual([session.resolve()], self.worker_roots())
 
     def test_an_event_naming_no_file_falls_back_to_the_directory(self):
         session = self.checkout("worktree")
 
         self.run_event({"cwd": str(session), "tool_input": {}})
 
-        self.assertEqual(str(session), self.spawned[0][1]["cwd"])
+        self.assertEqual([session], self.worker_roots())
 
     def test_a_nested_cwd_walks_up_to_its_checkout(self):
         edited = self.checkout("worktree")
@@ -160,14 +170,14 @@ class RefreshIndex(unittest.TestCase):
 
         self.run_event({"cwd": str(deep)})
 
-        self.assertEqual(str(edited), self.spawned[0][1]["cwd"])
+        self.assertEqual([edited], self.worker_roots())
 
     def test_the_project_dir_is_the_fallback(self):
         original = self.checkout("main")
 
         self.run_event({}, original)
 
-        self.assertEqual(str(original), self.spawned[0][1]["cwd"])
+        self.assertEqual([original], self.worker_roots())
 
     def test_an_unindexed_checkout_is_left_alone(self):
         """Unindexed is not stale. Building an index per throwaway worktree
@@ -188,63 +198,167 @@ class RefreshIndex(unittest.TestCase):
 
         self.assertEqual([], self.spawned)
 
+    def test_a_body_that_is_not_an_event_is_silent(self):
+        self.assertEqual(0, self.run_hook("<html>not json</html>"))
+
+        self.assertEqual([], self.spawned)
+
+
+class OneRefreshAtATime(Base):
+    """`codebase-index update` does not serialise, so this has to.
+
+    Overlapping runs against one checkout leave a single winner and
+    `database is locked` for the rest, and the loser may be the run carrying
+    the newest edit — a stale index, said nothing about, because the streams
+    are discarded.
+    """
+
+    def test_a_second_edit_starts_no_second_worker(self):
+        root = self.checkout("main")
+
+        self.run_event({"cwd": str(root)})
+        self.run_event({"cwd": str(root)})
+
+        self.assertEqual([root], self.worker_roots())
+
+    def test_a_second_edit_leaves_its_request_behind(self):
+        """The marker is what makes the worker already running pick the edit
+        up, rather than the edit being dropped with the lock held."""
+        root = self.checkout("main")
+
+        self.run_event({"cwd": str(root)})
+        self.run_event({"cwd": str(root)})
+
+        self.assertTrue((root / self.mod.PENDING).exists())
+
+    def test_the_worker_refreshes_once_for_one_request(self):
+        root = self.checkout("main")
+        self.run_event({"cwd": str(root)})
+
+        self.assertEqual(0, self.mod.work(root))
+
+        self.assertEqual(1, len(self.ran))
+        self.assertFalse((root / self.mod.LOCK).exists())
+
+    def test_the_worker_runs_again_for_a_request_made_while_it_worked(self):
+        """The window the marker exists for: an edit arriving mid-refresh."""
+        root = self.checkout("main")
+        self.run_event({"cwd": str(root)})
+
+        def refresh_and_edit(*_a, **_k):
+            self.ran.append(("refresh", {}))
+            if len(self.ran) == 1:
+                self.mod.request(root)
+
+        self.patch(mock.patch.object(
+            self.mod.subprocess, "run", side_effect=refresh_and_edit))
+
+        self.mod.work(root)
+
+        self.assertEqual(2, len(self.ran))
+
+    def test_a_request_made_as_the_lock_is_dropped_is_not_lost(self):
+        """The narrow window the re-claim exists for: `take_request` has
+        already said no, and the edit lands before the lock is gone. Its
+        hook finds the lock still held and leaves a marker rather than a
+        worker, so the one finishing has to look once more."""
+        root = self.checkout("main")
+        self.run_event({"cwd": str(root)})
+        letting_go = self.mod.release
+        once = []
+
+        def edit_as_it_lets_go(target):
+            if not once:
+                once.append(True)
+                self.mod.request(target)
+            letting_go(target)
+
+        self.patch(mock.patch.object(
+            self.mod, "release", side_effect=edit_as_it_lets_go))
+
+        self.mod.work(root)
+
+        self.assertEqual(2, len(self.ran))
+
+    def test_a_worker_that_never_released_is_not_waited_on_for_ever(self):
+        root = self.checkout("main")
+        (root / self.mod.LOCK).write_text("", encoding="utf-8")
+        import os
+        stale = self.mod.time.time() - self.mod.STALE_SECONDS - 60
+        os.utime(root / self.mod.LOCK, (stale, stale))
+
+        self.run_event({"cwd": str(root)})
+
+        self.assertEqual([root], self.worker_roots())
+
+    def test_a_worker_that_will_not_start_does_not_keep_the_lock(self):
+        """Otherwise one failed spawn blocks every later refresh until the
+        lock goes stale."""
+        root = self.checkout("main")
+        self.patch(mock.patch.object(
+            self.mod.subprocess, "Popen", side_effect=OSError("no interpreter")))
+
+        self.assertEqual(0, self.run_event({"cwd": str(root)}))
+
+        self.assertFalse((root / self.mod.LOCK).exists())
+
+
+class Refreshing(Base):
     def test_the_call_is_the_cli_with_auto_update_off(self):
         """An unpinned newer package rewrites the tracked skill when it runs,
         and this calls the CLI rather than the wrapper that would stop it."""
-        self.run_event({"cwd": str(self.checkout("main"))})
+        root = self.checkout("main")
 
-        arguments, keywords = self.spawned[0]
+        self.mod.refresh(root)
+
+        arguments, keywords = self.ran[0]
         self.assertEqual(["codebase-index", "update"], arguments[0])
         self.assertEqual("1", keywords["env"]["CBX_NO_SKILL_AUTO_UPDATE"])
-        self.assertEqual(1, len(self.spawned), "the fallback ran as well")
+        self.assertEqual(1, len(self.ran), "the fallback ran as well")
 
-    def test_nothing_is_waited_on_and_no_stream_is_kept(self):
-        """It runs on every edit, so it may not make one wait, and a hook's
-        streams are not a report anybody reads."""
-        self.run_event({"cwd": str(self.checkout("main"))})
+    def test_no_stream_is_kept(self):
+        """A hook's output is not a report anybody reads."""
+        root = self.checkout("main")
 
-        keywords = self.spawned[0][1]
+        self.mod.refresh(root)
+
+        keywords = self.ran[0][1]
         for stream in ("stdin", "stdout", "stderr"):
             self.assertEqual(self.mod.subprocess.DEVNULL, keywords[stream])
 
     def test_a_missing_console_script_falls_back_to_the_module(self):
         """`py -3.12 -m pip` is a supported install and need not put the
         console script on PATH, which is why both `cbx` wrappers fall back
-        the same way. Swallowing the error instead leaves those sessions
-        never refreshing, and saying nothing about it."""
+        the same way."""
         attempts = []
 
         def absent_script(command, **keywords):
             attempts.append(command)
             if command[0] == "codebase-index":
                 raise OSError("no such executable")
-            self.spawned.append(((command,), keywords))
+            self.ran.append(((command,), keywords))
 
         self.patch(mock.patch.object(
-            self.mod.subprocess, "Popen", side_effect=absent_script))
+            self.mod.subprocess, "run", side_effect=absent_script))
 
-        self.assertEqual(0, self.run_event({"cwd": str(self.checkout("main"))}))
+        self.mod.refresh(self.checkout("main"))
 
         self.assertEqual(2, len(attempts), attempts)
         self.assertEqual(
             [self.mod.sys.executable, "-P", "-m", "codebase_index", "update"],
             attempts[1])
-        self.assertEqual(1, len(self.spawned))
 
     def test_neither_form_running_is_silent(self):
         """An index that cannot refresh is not a reason to fail the edit."""
         self.patch(mock.patch.object(
-            self.mod.subprocess, "Popen", side_effect=OSError("nothing runnable")))
+            self.mod.subprocess, "run", side_effect=OSError("nothing runnable")))
 
-        self.assertEqual(0, self.run_event({"cwd": str(self.checkout("main"))}))
+        self.mod.refresh(self.checkout("main"))
 
-        self.assertEqual([], self.spawned)
+        self.assertEqual([], self.ran)
 
-    def test_a_body_that_is_not_an_event_is_silent(self):
-        self.assertEqual(0, self.run_hook("<html>not json</html>"))
 
-        self.assertEqual([], self.spawned)
-
+class Registration(Base):
     def test_settings_calls_it_on_every_edit(self):
         """Every verdict above is silent if settings never runs the file.
 
@@ -271,7 +385,7 @@ class DocumentedConfiguration(unittest.TestCase):
     """The example carries the installed block, which only a test can keep true.
 
     `docs/harness-boundaries.md` says the two are the same block, and Claude
-    Code never reads anything under `examples/` -- so a divergence costs
+    Code never reads anything under `examples/` — so a divergence costs
     nothing at the moment it happens and everything to whoever copies it.
     """
 
@@ -285,7 +399,7 @@ class DocumentedConfiguration(unittest.TestCase):
 
 
 class RestoresWhatItPatched(unittest.TestCase):
-    """The canary, and it sorts after the suite above on purpose.
+    """The canary, and it sorts after the suites above on purpose.
 
     A leaked patch is invisible to the file that leaks it and fatal to every
     file loaded after it, so the suite that would notice has to be one that
@@ -298,6 +412,7 @@ class RestoresWhatItPatched(unittest.TestCase):
         import sys as real_sys
 
         self.assertFalse(isinstance(real_subprocess.Popen, mock.MagicMock))
+        self.assertFalse(isinstance(real_subprocess.run, mock.MagicMock))
         self.assertNotIsInstance(real_os.environ, dict)
         self.assertTrue(hasattr(real_sys.stdin, "fileno"))
 
