@@ -2,11 +2,11 @@
   "hooks": {
     "PostToolUse": [
       {
-        "matcher": "Edit|Write|MultiEdit|NotebookEdit",
+        "matcher": "Edit|Write|NotebookEdit|MultiEdit",
         "hooks": [
           {
             "type": "command",
-            "command": "bash .claude/skills/codebase-index/scripts/cbx update --quiet >/dev/null 2>&1 &",
+            "command": "py -3.12 \"${CLAUDE_PROJECT_DIR}/.claude/hooks/refresh-index.py\"",
             "timeout": 5
           }
         ]
