@@ -222,14 +222,16 @@ deploy/compose/              §14.1's model: `docker-compose.yml` is an index
                              definitions are imported, so a stale volume keeps
                              it and `down -v` is what makes the removal true
 deploy/helm/                 §15.3's charts. `common/` is a LIBRARY chart
-                             holding every template once; Catalog, Ordering
-                             and the BFF are values plus one-line includes,
-                             the gateway adds `edge-config.yaml` for the two
-                             keys no service has, and `platform/` is the
-                             umbrella. `smoke.sh` renders every chart but
-                             the library, which renders nothing, and asserts
-                             what comes out — it reaches no cluster, and
-                             says so
+                             holding every template once, and a deployable's
+                             chart is values plus one-line includes. Two
+                             carry a template of their own: the gateway's
+                             `edge-config.yaml`, for the two keys no service
+                             has, and Payments' `capabilities.yaml`, which
+                             refuses the one capability its host registers
+                             unconditionally. `platform/` is the umbrella.
+                             `smoke.sh` renders every chart but the library,
+                             which renders nothing, and asserts what comes
+                             out — it reaches no cluster, and says so
 deploy/observability/        §13.8's dashboards, §13.6's alert rules and
                              §13.7's k6 SLO run. TWO rule files, and the split
                              is the point: `platform-alerts.yaml` is loaded,

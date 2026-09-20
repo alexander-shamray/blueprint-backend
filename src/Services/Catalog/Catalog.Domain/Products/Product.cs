@@ -58,10 +58,10 @@ public sealed class Product : AggregateRoot<ProductId>
         var product = new Product(ProductId.New(), name, thumbnailUrl, price, now);
 
         // Staged on the Broker lane by §9.3's allow-list, in the same
-        // transaction as the product. It was dropped by a null dispatcher
-        // between PR-10 and PR-14 and raised anyway — the aggregate must not
-        // teach the defect of not raising — which is what let the outbox pick
-        // it up without touching this line (§5.5).
+        // transaction as the product. Raised whether or not anything is
+        // dispatching it, because the aggregate must not teach the defect of
+        // not raising: the outbox picks it up without this line changing
+        // (§5.5).
         product.Raise(new ProductPublishedDomainEvent(product.Id, name, thumbnailUrl, price, now));
 
         return product;

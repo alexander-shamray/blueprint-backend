@@ -716,6 +716,7 @@ class SignalTests(unittest.TestCase):
         }
 
         self.assertEqual(declared["inventory-api"], {"consume"})
+        self.assertEqual(declared["payments-api"], {"consume"})
         self.assertEqual(declared["ordering-api"], {"http", "consume", "saga"})
         self.assertEqual(declared["gateway"], {"http"})
         self.assertEqual(declared["web-bff"], {"http"})
@@ -754,6 +755,7 @@ class ConsumerScanTests(unittest.TestCase):
         self.assertTrue(found["inventory-api"])
         self.assertTrue(found["ordering-api"])
         self.assertTrue(found["catalog-api"])
+        self.assertTrue(found["payments-api"])
         self.assertFalse(found["gateway"])
         self.assertFalse(found["web-bff"])
 
@@ -955,7 +957,7 @@ class SagaScanTests(unittest.TestCase):
         }
 
         self.assertTrue(found["ordering-api"])
-        for name in ("catalog-api", "inventory-api", "gateway", "web-bff"):
+        for name in ("catalog-api", "inventory-api", "payments-api", "gateway", "web-bff"):
             self.assertFalse(found[name], name)
 
     def test_a_saga_is_not_a_consumer_to_the_consume_scan(self) -> None:
@@ -1574,8 +1576,16 @@ class FetchTests(unittest.TestCase):
         self.assertFalse(any("$SERVICE" in e for e in asked), asked)
 
     def test_an_unknown_workload_is_refused(self) -> None:
+        """The name is deliberately not a service's. Spelled as one a service
+        could take, this test passes until that service joins the plan and
+        then reaches the network instead of the refusal it asserts — which is
+        what `payments-api` did here. The absence is asserted first, so the
+        fixture cannot go stale silently a second time."""
+        unknown = "no-such-workload"
+        self.assertNotIn(unknown, canary.entries(canary.load_plan()["workloads"]))
+
         with self.assertRaises(KeyError):
-            read_prometheus.read("http://x", "payments-api", "10m", canary.load_plan())
+            read_prometheus.read("http://x", unknown, "10m", canary.load_plan())
 
 
 class CommentTests(unittest.TestCase):

@@ -25,21 +25,16 @@ public class EndpointSecurityTests(HostSmokeTests.UnreachableInfrastructureFacto
     [Fact]
     public async Task Forged_identity_headers_do_not_authenticate()
     {
-        // PR-16's first security deliverable (Appendix C): a forged header
-        // without a token is a 401. The headers are TestAuthHandler's own,
-        // which is what makes the test worth running — this host registers
-        // only the production JWT scheme, so the headers every other suite in
-        // this assembly authenticates with are just bytes here.
-        //
-        // The failure it catches is a test convenience reaching production
-        // wiring: a scheme registered in Common.Web "for the fixtures", or a
-        // ConfigureAuthentication override deleted as dead code. Every
-        // authorization test in the repository would still pass, and any
-        // caller could name any subject and any permission.
-        //
-        // No Authorization header at all, so nothing is fetched from the
-        // authority — .invalid never resolves, and a challenge does not need
-        // the signing keys.
+        // Appendix C's first security deliverable: a forged header without a
+        // token is a 401. The headers are TestAuthHandler's own, and this host
+        // registers only the production JWT scheme, so they are just bytes
+        // here. The failure it catches is a test convenience reaching
+        // production wiring — a scheme registered in Common.Web "for the
+        // fixtures", or a ConfigureAuthentication override deleted as dead
+        // code — after which any caller could name any subject and any
+        // permission. No Authorization header at all, so nothing is fetched
+        // from the authority: .invalid never resolves, and a challenge needs
+        // no keys.
         using HttpClient client = factory.CreateClient();
 
         HttpRequestMessage request = new(HttpMethod.Post, "/v1/catalog/products")

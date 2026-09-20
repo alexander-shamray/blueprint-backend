@@ -7,8 +7,8 @@ namespace Catalog.Infrastructure.Persistence;
 /// <summary>
 /// §7.2's pattern: configuration in a class, never in attributes on the domain
 /// type — which would put EF Core in <c>Catalog.Domain</c>, past the gate.
-/// Found by the <c>ApplyConfigurationsFromAssembly</c> line PR-08 landed for
-/// exactly this file.
+/// Found by <c>CatalogDbContext</c>'s
+/// <c>ApplyConfigurationsFromAssembly</c> call.
 /// </summary>
 internal sealed class ProductConfiguration : IEntityTypeConfiguration<Product>
 {

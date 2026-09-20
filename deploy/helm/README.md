@@ -12,7 +12,9 @@ common/      the library chart: every template, once
 catalog/     ┐
 ordering/    │
 inventory/   │ Chart.yaml + values.yaml + one-line templates that include
-web-bff/     ┘ the library's. The values ARE the per-service decisions.
+payments/    │ the library's. The values ARE the per-service decisions.
+web-bff/     ┘ Payments carries one template more: the guard on the one
+             capability its host registers unconditionally.
 gateway/     the same, plus edge-config.yaml — the two keys no service has
              (§15.3), in a template only this chart carries
 platform/    the umbrella — one dependency per service chart and no values
@@ -93,9 +95,26 @@ helm upgrade --install platform deploy/helm/platform \
     --set-string catalog.image.tag="$CATALOG_SHA" \
     --set-string ordering.image.tag="$ORDERING_SHA" \
     --set-string inventory.image.tag="$INVENTORY_SHA" \
+    --set-string payments.image.tag="$PAYMENTS_SHA" \
     --set-string gateway.image.tag="$GATEWAY_SHA" \
     --set-string web-bff.image.tag="$BFF_SHA"
 ```
+
+**Payments' provider address is required and is deliberately NOT on that
+command line.** The chart ships no default a cluster could use — §3.2's
+provider is a real third party and Compose's simulator is not one — so the
+render is refused until an environment names it, and the values file is where
+it belongs.
+
+`--set-string` is the wrong door for it, and this is the hazard
+`.github/workflows/deploy.yml` already spells out for the image tag: Helm
+parses the value with `strvals`, where **a comma separates assignments**. A
+tag survives that because `commerce.tag`'s alphabet has no comma and the
+workflow validates it before Helm sees it; a URL path may legitimately carry
+one, so `https://psp.example/region,blue` is not one assignment but two — and
+the second is whatever follows the comma. Escaping would work and would have
+to be remembered at every call site. A values file is parsed as YAML and has
+no such rule.
 
 **The values file is not optional in that command**, and leaving it out is a
 render failure rather than a default: the gateway ships
@@ -111,6 +130,13 @@ gateway:
   ingress:
     host: api.staging.example.com
     trustedNetworks: [ "10.42.0.0/16" ]   # the ingress controller's pod CIDRs
+payments:
+  paymentProvider:
+    # §3.2's provider, per cluster. An absolute HTTPS address: the chart
+    # refuses the shapes an operator plausibly writes that the host would
+    # reject, which is narrower than the host's own parse and says so in
+    # `commerce.requireUrl`.
+    baseUrl: https://psp.staging.example.com/
 ```
 
 ## What is deliberately not here

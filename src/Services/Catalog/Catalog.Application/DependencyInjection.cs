@@ -19,10 +19,10 @@ public static class DependencyInjection
         services.AddDispatcher();
 
         // Explicit rather than scanned, beside the dispatcher it serves —
-        // §4.2's registration sample is the shape. §7.5's real dispatcher
-        // since PR-14; the NullDomainEventDispatcher that dropped every
-        // ProductPublishedDomainEvent between PR-10 and here is deleted, not
-        // disabled, so nothing can register it back by accident.
+        // §4.2's registration sample is the shape. §7.5's real dispatcher,
+        // and no null one beside it: a dispatcher that drops every domain
+        // event is deleted rather than disabled, so nothing can register it
+        // back by accident.
         services.AddDomainEventDispatcher();
 
         // The allow-list of §9.3, and the one registration that decides what
