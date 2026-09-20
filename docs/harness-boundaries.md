@@ -119,6 +119,22 @@ extra command runs, write redirections, and `graph` / `clean` / `init` /
 The `cbx` wrapper is the other half — whitelist and
 `CBX_NO_SKILL_AUTO_UPDATE=1` — and is not a substitute for the hook.
 
+**That hook is owed, and it is the one residual on this list the session
+cannot close.** `settings.json` carries `PreToolUse` guards and no
+`PostToolUse` entry, so nothing runs `update` after an edit: the index is
+refreshed only when a query reports it stale and `SKILL.md`'s instruction
+is followed, which makes freshness a property of having asked rather than
+of having edited. The command belongs in `settings.json`, which denies its
+own editing, so it is the owner's edit with the deny lifted and the
+ordering rule below applies — it goes last.
+
+`examples/hooks/settings.json` holds the block to copy. It sits under
+`examples/`, which Claude Code does not read, so it documents the fix and
+is not the fix; it calls `cbx` rather than the bare CLI, because the
+wrapper already exports `CBX_NO_SKILL_AUTO_UPDATE=1` and refuses every
+subcommand but the safe ones, and it backgrounds the call so an edit never
+waits on an index.
+
 **`settings.json`'s own entry self-locks, and that is a working constraint, not
 a curiosity.** Once it denies itself, the session cannot edit it again —
 including to undo the edit. So a change to it is one edit that lands complete,
