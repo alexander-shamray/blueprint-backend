@@ -22,6 +22,7 @@ tests/Ordering.Api.Tests/HostSmokeTests.cs | connection-string-password | da3fd0
 tests/Ordering.Api.Tests/MessageTypeMapValidatorTests.cs | connection-string-password | da3fd0c5abaa | The same unusable fixture in Ordering's validator suite.
 tests/Ordering.Api.Tests/MetricsRegistrationTests.cs | connection-string-password | da3fd0c5abaa | The same unusable fixture in the metrics registration suite.
 tests/Inventory.Api.Tests/MetricsRegistrationTests.cs | connection-string-password | da3fd0c5abaa | The same unusable fixture in Inventory's metrics registration suite.
+tests/Payments.Api.Tests/MetricsRegistrationTests.cs | connection-string-password | da3fd0c5abaa | The same unusable fixture in Payments' metrics registration suite.
 tests/Ordering.Api.Tests/MessagingRegistrationTests.cs | credential-assignment | 9d8e49ea1c49 | A broker URI pointing at a hostname that does not resolve.
 tests/Common.Web.Tests/RealmImportTests.cs | credential-assignment | eb26d4a9a0ef | The suite pinning the realm export's documented local client default.
 tests/Common.Web.Tests/RealmImportTests.cs | connection-string-password | 4b7870187707 | A C# local of that name assigned the result of a call, not a value.

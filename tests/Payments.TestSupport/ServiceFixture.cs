@@ -122,6 +122,13 @@ public sealed class ServiceFixture : IAsyncLifetime
     public CommitFault FailNextCommit() => Factory.CommitFaults.Arm();
 
     /// <summary>
+    /// Holds the host's next authorisation open after the provider has
+    /// answered and before its unit commits, once. Disposing the returned gate
+    /// releases it.
+    /// </summary>
+    public ProviderGate PauseNextAuthorisation() => Factory.ProviderGates.PauseNextAuthorisation();
+
+    /// <summary>
     /// Messages a queue holds, read from the broker itself, or zero when it
     /// does not exist yet — MassTransit declares an <c>_error</c> queue on its
     /// first fault, and a fault's arrival there is an outcome no table shows.
@@ -270,6 +277,12 @@ public sealed class ServiceFixture : IAsyncLifetime
 
         await _respawner.ResetAsync(connection);
 
+        // The mappings as well as the log: a stub a test adds outlives a log
+        // reset, so re-reading the simulator's own mappings (§14.1) is what
+        // leaves every test the same provider to start from.
+        Provider.ResetMappings();
+        Provider.ReadStaticMappings(SimulatorMappings.Directory());
+        Provider.ResetScenarios();
         Provider.ResetLogEntries();
     }
 

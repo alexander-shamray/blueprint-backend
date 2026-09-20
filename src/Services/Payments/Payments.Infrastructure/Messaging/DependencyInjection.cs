@@ -84,7 +84,14 @@ public static class DependencyInjection
                     EventsQueue,
                     e =>
                     {
-                        e.UseMessageRetry(RetryPolicy.Standard);
+                        e.UseMessageRetry(r =>
+                        {
+                            // A provider's 409 on the void key is terminal: the same key
+                            // and different figures is a defect no retry fixes (§9.8).
+                            r.Ignore<PaymentMismatchException>();
+
+                            RetryPolicy.Standard(r);
+                        });
 
                         // Inbox outside the in-memory outbox (§9.8): the other nesting commits
                         // the inbox row before the buffered sends have flushed.

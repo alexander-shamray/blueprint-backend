@@ -1,7 +1,9 @@
 using Payments.Application.Orders;
 using Payments.Domain.Intents;
+using Payments.Domain.Refunds;
 using Payments.Infrastructure.Idempotency;
 using Payments.Infrastructure.Messaging;
+using Payments.Infrastructure.Observability;
 using Payments.Infrastructure.Persistence;
 using Common.Application;
 using Common.Contracts;
@@ -9,6 +11,7 @@ using Common.Infrastructure.Idempotency;
 using Common.Infrastructure.Inbox;
 using Common.Infrastructure.Messaging;
 using Common.Infrastructure.Outbox;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -51,8 +54,9 @@ public static class DependencyInjection
         services.AddScoped<IUnitOfWork, EfUnitOfWork>();                     // §6.3
         services.AddScoped<IPaymentOrderStore, SqlPaymentOrderStore>();      // §3.2, §6.3
 
-        // §5.6's repository registration for the first aggregate.
+        // §5.6's repository registration for each aggregate.
         services.AddScoped<IPaymentIntentRepository, PaymentIntentRepository>();
+        services.AddScoped<IRefundRepository, RefundRepository>();
 
         // §8.5's durable half. Only this one has to land on the transaction
         // EfUnitOfWork opens — it resolves the DbContext alias above, which is
@@ -112,6 +116,33 @@ public static class DependencyInjection
         // §13.3's messaging instruments, on the Commerce.Messaging meter
         // AddObservability already collects; the class owns the list.
         services.AddSingleton<MessagingMetrics>();
+
+        // §13.6's per-lane outbox gauges, and the stats type behind them. Both
+        // singletons: the gauges are callbacks the Meter holds, and a second
+        // instance would mean two sets of instruments on one meter.
+        //
+        // OutboxStats gets its own connection factory with the bounded connect
+        // timeout its own constant argues, because it runs inside gauge
+        // callbacks and a command timeout bounds only the statement. The
+        // runtime key, because it reads the same data plane (§7.1); only the
+        // timeout differs, so no query path inherits it.
+        string metricsConnectionString =
+            new SqlConnectionStringBuilder(configuration.GetConnectionString("Payments"))
+            {
+                ConnectTimeout = OutboxStats.ConnectTimeoutSeconds
+            }.ConnectionString;
+
+        services.AddSingleton<IOutboxStats>(sp => new OutboxStats(
+            new SqlConnectionFactory(metricsConnectionString),
+            sp.GetRequiredService<OutboxTable>()));
+        services.AddSingleton<OutboxMetrics>();
+
+        // Singleton registration alone is lazy: instruments appear on first
+        // resolve, which for a class nothing injects is never, and
+        // ValidateOnBuild cannot check it because nothing depends on a metrics
+        // class (§6.2). Registered before the bus and the dispatcher, so the
+        // instruments exist before the first message is delivered against them.
+        services.AddHostedService<MetricsInitialiser>();
 
         // §2: no Redis. RetentionPurgeService still resolves IIdempotencyStore
         // unconditionally for ADR-039's marker purge, so this service registers
