@@ -830,10 +830,10 @@ two Redis connection strings for as long as nothing called
 **Catalog and Ordering now do**, because §8.5's `IdempotencyBehavior` claims a
 `{service}:idem:` key before any protected command runs, so both charts carry a
 `redis:` block on `broker`'s shape — one Secret, but two distinct keys where the
-broker needs one — and §15.4's column is unconditional for them. The gateway and
-the BFF declare `redis.enabled: false` — written down rather than omitted,
-because a capability is a claim a chart makes rather than one to infer from a
-missing key.
+broker needs one — and §15.4's column is unconditional for them. The gateway,
+the BFF and Payments declare `redis.enabled: false` — written down rather than
+omitted, because a capability is a claim a chart makes rather than one to infer
+from a missing key.
 
 **Both keys are required together even though only the coordination one is read
 today**, and the reason is the code's rather than the chart's:
