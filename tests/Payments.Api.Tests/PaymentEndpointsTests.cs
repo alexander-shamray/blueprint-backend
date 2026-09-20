@@ -32,10 +32,24 @@ public sealed class PaymentEndpointsTests(ServiceFixture fixture) : IAsyncLifeti
             $"/v1/payments/{order}", TestContext.Current.CancellationToken);
 
         view.ShouldNotBeNull();
-        view.Order.CancelledAt.ShouldNotBeNull();
+        view.OrderId.ShouldBe(order);
         view.Intent!.Status.ShouldBe("Authorised");
         view.Intent.Reference.ShouldBe("psp_x");
+        view.Intent.DeclineReason.ShouldBeNull();
         view.Refund!.Reference.ShouldBe("psp_x");
+
+        // The money, and the currency the char(3) column round-trips.
+        view.Intent.Amount.ShouldBe(42.10m);
+        view.Intent.Currency.ShouldBe("EUR");
+
+        // Every timestamp, because four of them are read out of one joined row
+        // and three share a type: a pair crossed between the SELECT and the
+        // Row record leaves each one populated and each one wrong, which an
+        // assertion on a single stamp cannot see.
+        view.Order.PlacedAt.ShouldNotBeNull();
+        view.Order.CancelledAt.ShouldNotBeNull();
+        view.Intent.CreatedAt.ShouldNotBe(default);
+        view.Refund.VoidedAt.ShouldNotBe(default);
     }
 
     [Fact]
