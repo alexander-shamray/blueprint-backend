@@ -46,11 +46,11 @@ def pins_doc(body: str) -> str:
     return f"<Project>\n  <ItemGroup>\n{body}  </ItemGroup>\n</Project>\n"
 
 
-def compare(props_text: str, chapter_text: str) -> list[str]:
+def chapters_with(name: str, text: str) -> list[str]:
+    """The gate's reading of a one-file blueprint tree."""
     with tempfile.TemporaryDirectory() as directory:
-        path = Path(directory) / "04-solution-structure.md"
-        path.write_text(chapter_text, encoding="utf-8")
-        return licence_gate.compare_sample(props_text, licence_gate.read_chapter_sample(path))
+        (Path(directory) / name).write_text(text, encoding="utf-8")
+        return licence_gate.chapter_pins(Path(directory))
 
 
 def read_pins(document: str) -> set[str]:
@@ -344,47 +344,47 @@ class ReadAllowed(unittest.TestCase):
         self.assertEqual(self.allowed("MIT\n    # GPL-3.0\n"), {"MIT"})
 
 
-class CompareSample(unittest.TestCase):
-    def sample(self, body: str) -> str:
-        return f"## 4.4 Pinning\n\n```xml\n<Project>\n  <PropertyGroup>\n" \
-               f"    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>\n" \
-               f"  </PropertyGroup>\n{body}</Project>\n```\n"
+class ChapterPins(unittest.TestCase):
+    """The rule the transcription check was standing in for.
 
-    def test_passes_when_the_chapter_prints_what_the_props_file_pins(self):
-        body = '    <PackageVersion Include="Dapper" Version="2.1.66" />\n'
-        self.assertEqual(compare(pins_doc(body), self.sample(body)), [])
+    Comparing a chapter's copy of the props file made every pin raise edit a
+    chapter, which the locality contract forbids in two places. The check now
+    refuses the copy itself.
+    """
 
-    def test_fails_when_the_chapter_prints_a_different_version(self):
-        props = '    <PackageVersion Include="Dapper" Version="2.1.66" />\n'
-        stale = '    <PackageVersion Include="Dapper" Version="2.1.35" />\n'
-        findings = compare(pins_doc(props), self.sample(stale))
+    PIN = '    <PackageVersion Include="Dapper" Version="2.1.66" />\n'
+
+    def test_a_chapter_printing_a_pin_is_a_finding(self):
+        findings = chapters_with("04-solution-structure.md", self.PIN)
         self.assertEqual(len(findings), 1)
-        self.assertIn("props pins 2.1.66", findings[0])
-        self.assertIn("prints 2.1.35", findings[0])
+        self.assertIn("Dapper", findings[0])
+        self.assertIn("2.1.66", findings[0])
 
-    def test_fails_when_the_chapter_omits_a_pin(self):
-        props = ('    <PackageVersion Include="Dapper" Version="2.1.66" />\n'
-                 '    <PackageVersion Include="Scrutor" Version="6.1.0" />\n')
-        findings = compare(pins_doc(props), self.sample(
-            '    <PackageVersion Include="Dapper" Version="2.1.66" />\n'))
+    def test_a_chapter_that_cites_the_file_is_not(self):
+        findings = chapters_with(
+            "04-solution-structure.md",
+            "`Directory.Packages.props` pins every package version once.\n")
+        self.assertEqual(findings, [])
+
+    def test_the_floor_trap_is_not_a_pin(self):
+        # Section 4.4 quotes `Version="8.*"` to say what not to write. It
+        # carries no Include, which is what keeps an illustration of the
+        # forbidden form from reading as the forbidden form.
+        findings = chapters_with(
+            "04-solution-structure.md", 'Writing `Version="8.*"` means a restore can drift.\n')
+        self.assertEqual(findings, [])
+
+    def test_appendix_b_is_the_contract_s_one_exception(self):
+        # docs/change-locality.md section 2 names it, because there the
+        # version is the decision rather than a copy of one.
+        findings = chapters_with("appendix-b-licences.md", self.PIN)
+        self.assertEqual(findings, [])
+
+    def test_every_chapter_is_read_and_not_only_the_one_that_used_to_print_them(self):
+        # The gate-coverage rule: a check aimed at one filename stops
+        # covering the copy that lands in the next chapter along.
+        findings = chapters_with("09-messaging.md", self.PIN)
         self.assertEqual(len(findings), 1)
-        self.assertIn("Scrutor", findings[0])
-        self.assertIn("prints nothing", findings[0])
-
-    def test_fails_when_the_chapter_has_no_sample_at_all(self):
-        findings = compare(pins_doc(""), "")
-        self.assertEqual(len(findings), 1)
-        self.assertIn("no central package management sample", findings[0])
-
-    def test_finds_the_sample_among_other_xml_blocks(self):
-        text = ("```xml\n<Project>\n  <PackageReference Include=\"Nothing\" />\n</Project>\n```\n"
-                + self.sample('    <PackageVersion Include="Dapper" Version="2.1.66" />\n'))
-        with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "04-solution-structure.md"
-            path.write_text(text, encoding="utf-8")
-            block = licence_gate.read_chapter_sample(path)
-        self.assertIn("ManagePackageVersionsCentrally", block)
-        self.assertIn("Dapper", block)
 
 
 class RealRepository(unittest.TestCase):

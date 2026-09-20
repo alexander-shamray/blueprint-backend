@@ -1,8 +1,9 @@
 # The licence gate
 
 **The claim: every package `Directory.Packages.props` pins has a licence
-somebody cleared, and no project steps past that file by the
-`PackageReference` and central-management forms listed below.**
+somebody cleared, no project steps past that file by the `PackageReference`
+and central-management forms listed below, and no chapter prints a version
+the file owns.**
 [§4.4](../../docs/backend-architecture/04-solution-structure.md) states the
 rule; this file owns what the gate reads to enforce it, what it refuses, and
 where its claim stops — which is narrower than "no package reaches a restore
@@ -26,10 +27,12 @@ uncleared", for the reason under *What it does not claim*.
   but `true`. A shared `.props` does either for every project that imports
   it — every project, for `Directory.Build.props` — which is why the scan
   reaches past the projects.
-- The fenced `Directory.Packages.props` sample in §4.4, which it compares
-  with the real file, identity and version both. The failure it reports is
-  against the chapter, because the file is what CI restores and the chapter
-  is what a reader believes.
+- Every chapter and appendix under `docs/backend-architecture/`, for an
+  MSBuild `Include`/`Version` pair — a pin printed into the blueprint.
+  [`docs/change-locality.md`](../../docs/change-locality.md) §2 gives a
+  version one owner and names Appendix B as the single exception, so that
+  file is passed over and every other is read. A version named in prose, as
+  Appendix B names one, is a different claim and not this gate's.
 
 Everything it reads is text, so nothing needs restoring first, and that is
 what lets [§15.1](../../docs/backend-architecture/15-cicd-deployment.md) put
@@ -67,9 +70,11 @@ it ahead of the build.
   a gap in the gate rather than a decision, and closing it is a change to
   `licence_gate.py` and its suite.
 - **Whether a version is current or safe.** It asks where a `Version` is
-  written, and whether §4.4's sample prints the one the props file pins, and
-  nothing else about it — so currency and vulnerability scanning are a
-  separate obligation, and nothing here meets it.
+  written and nothing else about it, so currency and vulnerability scanning
+  are a separate obligation and nothing here meets it.
+- **A pin printed in prose.** The chapter check reads MSBuild's attribute
+  pair, which is what a transcription of the props file looks like. A
+  sentence naming a version in words passes, and the reviewer carries it.
 
 ## How it runs
 
