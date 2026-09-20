@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash .claude/skills/codebase-index/scripts/cbx update >/dev/null 2>&1 &",
+            "command": "bash .claude/skills/codebase-index/scripts/cbx update --quiet >/dev/null 2>&1 &",
             "timeout": 5
           }
         ]
