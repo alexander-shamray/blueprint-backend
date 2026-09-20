@@ -498,10 +498,10 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
             "    [Fact]\n"
             "    public void AddCatalogApplication_registers_the_slice_handlers()\n"
             "    {\n"
-            "        // The §6.2 scan found nothing until PR-10; these are the registrations\n"
-            "        // it produces, so the scan itself is testable. Every slice adds a row\n"
-            "        // here — the scan is public-only, and a handler it misses registers as\n"
-            "        // nothing at all rather than as something wrong.\n"
+            "        // These are the registrations §6.2's scan produces, so the scan itself\n"
+            "        // is testable. Every slice adds a row here — the scan is public-only,\n"
+            "        // and a handler it misses registers as nothing at all rather than as\n"
+            "        // something wrong.\n"
             "        ServiceCollection services = new();\n"
             "\n"
             "        services.AddCatalogApplication();\n"
@@ -511,11 +511,11 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
             "        services.ShouldContain(d =>\n"
             "            d.ServiceType == typeof(IQueryHandler<GetProductsQuery, CursorPage<ProductSummaryDto>>));\n"
             "\n"
-            "        // PR-19's third slice. The scan is public-only (§6.2), so an internal\n"
+            "        // The pricing slice. The scan is public-only (§6.2), so an internal\n"
             "        // handler, a rename or a missed IQueryHandler<,> registers as nothing\n"
             "        // and fails on the first gRPC call rather than at startup —\n"
-            "        // ValidateOnBuild never constructs the dispatcher's handler map.\n"
-            "        // PricingServiceTests would catch it, but only in the Docker suite.\n"
+            "        // ValidateOnBuild never constructs the dispatcher's handler map, and\n"
+            "        // the suites that would catch it need a Docker daemon.\n"
             "        services.ShouldContain(d =>\n"
             "            d.ServiceType == typeof(IQueryHandler<GetPricesQuery, IReadOnlyList<ProductPriceDto>>));\n"
             "    }\n"
@@ -624,21 +624,6 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
         ("using Common.Domain;\n", ""),
     ),
     "tests/Catalog.TestSupport/ServiceFixture.cs": (
-        (
-            "    /// this context's <c>HasDefaultSchema</c>, and is no part of what PR-08\n"
-            "    /// claims.\n",
-            "    /// this context's <c>HasDefaultSchema</c>, and is no part of what this\n"
-            "    /// fixture claims.\n",
-        ),
-        (
-            "/// the engine. §12.4's name and §4.1's home: the fixture serves\n"
-            "/// <c>Catalog.Application.Tests</c> and <c>Catalog.Api.Tests</c>, which\n"
-            "/// cannot reference each other — each declares its own\n",
-            "/// the engine. §12.4's name and §4.1's home: the fixture serves\n"
-            "/// <c>Catalog.Api.Tests</c> today, and the application suite the moment that\n"
-            "/// suite gains a handler test — the two cannot reference each other, so each\n"
-            "/// declares its own\n",
-        ),
         # A rendered service starts with no consumer and no receive endpoint,
         # so it never needs the harness-only broker widening below: that
         # widening belongs with a service's first consumer, and arrives with
@@ -734,23 +719,17 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
         # pricing types the Protobuf item above already left with the .proto.
         (
             "  <ItemGroup>\n"
-            "    <!-- PR-26's consumer-driven contract, LINKED rather than referenced — the\n"
+            "    <!-- The consumer-driven contract, linked rather than referenced — the\n"
             "         same relationship pricing.proto already has, one level up. The .proto\n"
             "         is Catalog's because Catalog serves the RPC; this file is Web.Bff's\n"
-            "         because only a consumer can say what it needs, and it is compiled into\n"
-            "         this suite so the provider can be held to it.\n"
-            "\n"
-            "         A FILE and not an assembly, so no project dependency is created and\n"
-            "         §4.3 is untouched: Common.Contracts is still the only assembly that\n"
-            "         crosses a service boundary, and a test helper is expressly not it —\n"
-            "         which is why Gateway.Api.Tests carries its own copy of Catalog's\n"
-            "         TestAuthHandler rather than referencing one.\n"
-            "\n"
-            "         The cost is a build-time path into another suite's tree, and unlike the\n"
-            "         .proto it is paid once: no Dockerfile builds a test project, so there\n"
-            "         is no COPY line to keep in step with it. -->\n"
-            "    <Compile Include=\"..\\Web.Bff.TestSupport\\PricingContract.cs\""
-            " Link=\"Contract\\PricingContract.cs\" />\n"
+            "         because only a consumer can say what it needs, and it is compiled\n"
+            "         into this suite so the provider can be held to it. A file and not an\n"
+            "         assembly, so no project dependency is created and §4.3 is untouched:\n"
+            "         Common.Contracts is still the only assembly that crosses a service\n"
+            "         boundary, and a test helper is expressly not it. The cost is a\n"
+            "         build-time path into another suite's tree, paid once — no Dockerfile\n"
+            "         builds a test project, so there is no COPY line to keep in step. -->\n"
+            "    <Compile Include=\"..\\Web.Bff.TestSupport\\PricingContract.cs\" Link=\"Contract\\PricingContract.cs\" />\n"
             "  </ItemGroup>\n"
             "\n",
             "",
@@ -778,16 +757,6 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
             "        typeof(Product).Assembly,\n",
             "        typeof(AssemblyMarker).Assembly,\n",
         ),
-        (
-            "/// Vacuously green from PR-07 until PR-10's first endpoint — a rule\n"
-            "/// introduced before the violations exist is a constraint, not a backlog\n"
-            "/// item — and judging real types since.\n",
-            "/// Vacuously green until this service maps its first endpoint: a rule\n"
-            "/// introduced before the violations exist is a constraint, not a backlog\n"
-            "/// item. The rule was observed failing against a deliberately added\n"
-            "/// forbidden reference before it was trusted — in the service this one\n"
-            "/// was scaffolded from, not here, where there is nothing yet to judge.\n",
-        ),
         # The whole gate travels now, and that is the point of the shape it
         # arrived at: it selects the entire assembly and subtracts the
         # composition root from the FAILURES, so it says something true about a
@@ -805,12 +774,6 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
         ),
     ),
     "tests/Catalog.Api.Tests/HostSmokeTests.cs": (
-        (
-            "/// string has a readiness check and a host without one does not; Catalog\n"
-            "/// acquired the SQL pair in PR-08 and the bus pair in PR-13, and both\n",
-            "/// string has a readiness check and a host without one does not; this\n"
-            "/// service has both pairs from its first commit, and both\n",
-        ),
         # The production-scheme host survives the copy — every service wants
         # one — but two claims in its comment are Catalog's rather than the
         # mechanism's. "The one host in the repository" is false the moment a
@@ -841,41 +804,8 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
         ),
     ),
     "tests/Catalog.Api.Tests/TransientFaultInjection.cs": (
-        (
-            "/// of the retry defect is assertable before PR-10's first aggregate exists.\n",
-            "/// of the retry defect is assertable before this service has an aggregate.\n",
-        ),
     ),
     "tests/Catalog.TestSupport/CatalogApiFactory.cs": (
-        # The override still matters — it is what a service's first endpoint
-        # test will use — but the Catalog source names EndpointSecurityTests as
-        # the suite that reads it, and the scaffold omits that file. A generated
-        # comment pointing at a suite the service has not got is the same class
-        # of false claim as one scheduling a landed PR, which is what the
-        # Catalog text used to say and what GeneratedGuidanceIsTrue caught.
-        (
-            "    /// Virtual, and the one override matters. A host that keeps the production\n"
-            "    /// scheme is the only thing that can prove <see cref=\"TestAuthHandler\"/>'s\n"
-            "    /// headers mean nothing to a real deployment, which is what\n"
-            "    /// <c>EndpointSecurityTests</c> reads it for. A flag would say the same\n"
-            "    /// thing; a method says it at the site that makes the decision, which is\n"
-            "    /// where the argument for it belongs.\n",
-            "    /// Virtual, and the one override matters. A host that keeps the production\n"
-            "    /// scheme is the only thing that can prove <see cref=\"TestAuthHandler\"/>'s\n"
-            "    /// headers mean nothing to a real deployment, so it arrives with the first\n"
-            "    /// endpoint there is anything to forge against. A flag would say the same\n"
-            "    /// thing; a method says it at the site that makes the decision, which is\n"
-            "    /// where the argument for it belongs.\n",
-        ),
-    ),
-    "tests/Catalog.TestSupport/Catalog.TestSupport.csproj": (
-        (
-            "    other\". PR-08 gave the fixture one consumer; PR-10's handler tests are the\n"
-            "    second, which is the condition §4.1 named for this project to exist.\n",
-            "    other\". The API suite is its consumer today; the application suite becomes\n"
-            "    the second with its first handler test, which is the condition §4.1 names\n"
-            "    for this project to exist.\n",
-        ),
     ),
     # StockLevelConsumer.cs is OMITTED: a rendered service subscribes to
     # nothing, so these registrations of it are removed and the rest of the
@@ -927,14 +857,6 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
         ),
     ),
     "tests/Catalog.Api.Tests/DatabaseSmokeTests.cs": (
-        (
-            "/// PR-08's deliverables against a real engine: the migrator applies the schema\n",
-            "/// The persistence layer against a real engine: the migrator applies the schema\n",
-        ),
-        (
-            "        // PR-10's first aggregate. Observed red against a Clear()-less\n",
-            "        // this service has an aggregate. Observed red against a Clear()-less\n",
-        ),
         (
             "        schema.ShouldBe(1, \"InitialCreate's hand-written EnsureSchema creates it; "
             "AddProducts' is a no-op after it\");\n"

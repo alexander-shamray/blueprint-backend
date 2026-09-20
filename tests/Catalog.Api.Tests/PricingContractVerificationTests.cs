@@ -11,38 +11,15 @@ using PricingGrpc = Catalog.Pricing.V1.Pricing;
 namespace Catalog.Api.Tests;
 
 /// <summary>
-/// The provider's half of PR-26: every expectation <c>Web.Bff</c> wrote down in
-/// <see cref="PricingContract"/>, verified against the real Catalog.
+/// The provider's half of the consumer-driven contract: every expectation
+/// <c>Web.Bff</c> wrote down in <see cref="PricingContract"/>, verified here.
 /// </summary>
-/// <remarks>
-/// <para>
-/// <b>The expectations are the consumer's and this file does not restate
-/// one.</b> <c>PricingContract</c> is linked in from <c>tests/Web.Bff.TestSupport</c>
-/// rather than referenced, exactly as <c>pricing.proto</c> is linked into
-/// <c>Web.Bff</c> — so no assembly crosses a service boundary and §4.3 keeps
-/// <c>Common.Contracts</c> as its one exception. Everything below is the
-/// plumbing that realises a state, asks the question and hands the answer back
-/// to the consumer's own verification.
-/// </para>
-/// <para>
-/// <b>Not in <c>Platform.IntegrationTests</c>, which §4.1 calls the only suite
-/// that references every service, and the reason is what a provider
-/// verification needs.</b> It needs the provider running: a migrated SQL Server,
-/// a broker for the bus to connect to and the real host over them. That is
-/// <c>ServiceFixture</c>, and it is already here — homing this in the platform
-/// suite would give a sixth project a container set (§12.4's stated price) to
-/// run six tests that Catalog's own suite can run for nothing. §12.6's contract
-/// tests stay where they are; those are about the shape of the contract
-/// assembly, and this is about one service honouring one consumer.
-/// </para>
-/// <para>
-/// <b>What Catalog does beyond the contract is still <c>PricingServiceTests</c>'
-/// job.</b> The malformed id, the non-canonical GUID and the anonymous caller
-/// are provider-owned behaviour that no consumer relies on, and moving them here
-/// would turn a consumer-driven contract into an inventory of everything the
-/// provider happens to do.
-/// </para>
-/// </remarks>
+/// <remarks>Linked in rather than referenced, so no assembly crosses a
+/// service boundary and §4.3 keeps <c>Common.Contracts</c> as its one
+/// exception. Here and not in <c>Platform.IntegrationTests</c> because
+/// verification needs the provider running, which <c>ServiceFixture</c>
+/// already gives it. Provider behaviour no consumer relies on stays in
+/// <c>PricingServiceTests</c>.</remarks>
 [Collection(nameof(IntegrationCollection))]
 public sealed class PricingContractVerificationTests(ServiceFixture fixture) : IAsyncLifetime
 {

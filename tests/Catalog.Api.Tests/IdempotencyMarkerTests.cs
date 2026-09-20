@@ -98,23 +98,16 @@ public class IdempotencyMarkerTests(ServiceFixture fixture)
     [Fact]
     public async Task A_committed_marker_is_stamped_by_the_database_and_not_left_at_its_sentinel()
     {
-        // #167's property, and the one nothing else in this suite can see.
-        // CommittedAt is a store default (ADR-038): MarkAsync constructs the
-        // row without a timestamp, EF omits a property still holding its
-        // sentinel from the INSERT, and SYSDATETIMEOFFSET() supplies the
-        // column. Every other test that reads this column stages its markers
-        // with an explicit timestamp — the escape hatch the entity keeps for a
-        // fixture — so all of them stay green if EF ever sends the sentinel
-        // instead, and the tests above this one count rows without looking at
-        // what is in them.
-        //
-        // **The assertion is the sentinel rather than a value, and it has to
-        // be.** Nothing here can prove WHICH clock wrote a plausible
-        // timestamp; what it can prove is that the column was not left at
-        // 0001-01-01, which is the state a regression produces and the one
-        // that makes every marker older than any window the purge can be
-        // given — purgeable the moment it is written, with §8.5's guarantee
-        // retired and the whole suite still green.
+        // CommittedAt's database-stamped invariant, and the one nothing else
+        // in this suite can see. It is a store default (ADR-038): EF omits a
+        // property still holding its sentinel from the INSERT, so
+        // SYSDATETIMEOFFSET() supplies the column. Every other test that reads
+        // it stages markers with an explicit timestamp, so all of them stay
+        // green if EF ever sends the sentinel instead. The assertion is the
+        // sentinel rather than a value because nothing here can prove which
+        // clock wrote a plausible timestamp — only that the column was not
+        // left at 0001-01-01, which would make every marker purgeable the
+        // moment it is written and retire §8.5's guarantee.
         string key = Key();
         Guid id = Guid.CreateVersion7();
 
@@ -202,17 +195,15 @@ public class IdempotencyMarkerTests(ServiceFixture fixture)
     [Fact]
     public async Task The_row_the_purge_deletes_is_identified_by_a_database_generated_rowversion()
     {
-        // The subject is WHAT THE DELETE IS LOOKING AT, not what a purge pass
+        // The subject is what the delete is looking at, not what a purge pass
         // found — RetentionPurgeTests covers the behaviour, and it would go on
         // passing if this column quietly stopped being a rowversion, because a
         // plain binary(8) nobody updates still differs between two rows within
-        // a single test. What must be true is that the DATABASE generates it,
-        // since that is the whole of #173: a value the application could write
-        // is a value a replacement could carry.
-        //
-        // Read from the model and from sys.columns rather than restated, for
-        // the reason the width above is: a claim written in a test and a claim
-        // written in a configuration agree until one of them is edited.
+        // a single test. What must be true is that the database generates it,
+        // because a value the application could write is a value a replacement
+        // could carry. Read from the model and from sys.columns rather than
+        // restated, for the reason the width above is: a claim in a test and a
+        // claim in a configuration agree until one of them is edited.
         await using AsyncServiceScope scope = fixture.Factory.Services.CreateAsyncScope();
         CatalogDbContext db = scope.ServiceProvider.GetRequiredService<CatalogDbContext>();
 
@@ -230,7 +221,7 @@ public class IdempotencyMarkerTests(ServiceFixture fixture)
         version.ValueGenerated.ShouldBe(
             ValueGenerated.OnAddOrUpdate,
             "a version the application supplies is a version a replacement could be given, which " +
-            "is the identity-by-construction #173 was filed against");
+            "breaks the identity-by-construction this column exists to give the row");
 
         version.IsConcurrencyToken.ShouldBeTrue("IsRowVersion() is what sets both, and both matter");
 

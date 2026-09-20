@@ -12,26 +12,14 @@ using Xunit;
 namespace Catalog.Api.Tests;
 
 /// <summary>
-/// §9.1's single-identity rule, checked where it is actually kept: on the
-/// transport. Body, row, broker header and inbox key are one GUID, and
-/// <c>DeliverAsync</c> copying the row's ids onto the published context is the
-/// hop that makes the last two agree with the first two.
+/// §9.1's single-identity rule, checked on the transport: body, row, broker
+/// header and inbox key are one GUID, and <c>DeliverAsync</c> copying the
+/// row's ids onto the published context is the hop that makes them agree.
 /// </summary>
-/// <remarks>
-/// <b>Nothing else covers those two lines.</b> The dispatcher's other Broker
-/// test asserts that publishing returned and the row completed, and both stay
-/// green with the assignments deleted — §12.4 justified the gap by pointing at
-/// §9.5's inbox tests, which dedupe on <c>context.MessageId</c> and so would
-/// catch it end to end, except that they arrive with PR-15 and this ships now.
-/// <para>
-/// A substitute for <c>IPublishEndpoint</c> rather than a harness: §12.4
-/// refuses to bolt an <c>ITestHarness</c> onto this fixture, because it runs
-/// the real host against the real broker on purpose and a harness would
-/// replace the bus configuration the other tests exist to exercise. Capturing
-/// the pipe costs one registration in one factory, disturbs nothing else, and
-/// asserts the same thing.
-/// </para>
-/// </remarks>
+/// <remarks>Nothing else covers those two lines — the dispatcher's other
+/// Broker test stays green with the assignments deleted. A substitute for
+/// <c>IPublishEndpoint</c> rather than a harness, because §12.4 runs the real
+/// host against the real broker and a harness would replace it.</remarks>
 [Collection(nameof(IntegrationCollection))]
 public sealed class OutboxTransportIdentityTests(ServiceFixture fixture) : IAsyncLifetime
 {

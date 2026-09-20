@@ -52,7 +52,7 @@ public class IdempotencyOptInTests
     [Fact]
     public void Every_idempotent_command_declares_a_stable_operation_name()
     {
-        // #114. The key's middle segment must not be derivable from the type,
+        // The key's middle segment must not be derivable from the type,
         // because a rename then changes a live key and a rolling deployment
         // serves both spellings at once. The compiler already refuses a
         // command that supplies no OperationName; what it cannot refuse is one
@@ -69,13 +69,13 @@ public class IdempotencyOptInTests
     [Fact]
     public void Idempotent_commands_return_a_result_shape_the_behaviour_rebuilds()
     {
-        // §8.5's gate, and it is written to what the BEHAVIOUR accepts rather
-        // than to what the container's constraint accepts. An earlier revision
-        // of this test asked `typeof(Result).IsAssignableFrom(result)`, which
-        // is the constraint's own question — and §8.5 says in as many words
-        // that a gate written that way "would pass a command the behaviour
-        // cannot serve and leave it to fail on first use". The chapter
-        // specified all three assertions below; this file implemented one.
+        // §8.5's gate, written to what the behaviour accepts rather than to
+        // what the container's constraint accepts. Asking
+        // `typeof(Result).IsAssignableFrom(result)` would be the constraint's
+        // own question, and §8.5 says in as many words that a gate written
+        // that way "would pass a command the behaviour cannot serve and leave
+        // it to fail on first use". All three assertions below are the
+        // chapter's.
         (Type Command, Type Result)[] candidates =
         [
             .. Commands()

@@ -54,21 +54,16 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- PR-26's consumer-driven contract, LINKED rather than referenced — the
+    <!-- The consumer-driven contract, linked rather than referenced — the
          same relationship pricing.proto already has, one level up. The .proto
          is Catalog's because Catalog serves the RPC; this file is Web.Bff's
-         because only a consumer can say what it needs, and it is compiled into
-         this suite so the provider can be held to it.
-
-         A FILE and not an assembly, so no project dependency is created and
-         §4.3 is untouched: Common.Contracts is still the only assembly that
-         crosses a service boundary, and a test helper is expressly not it —
-         which is why Gateway.Api.Tests carries its own copy of Catalog's
-         TestAuthHandler rather than referencing one.
-
-         The cost is a build-time path into another suite's tree, and unlike the
-         .proto it is paid once: no Dockerfile builds a test project, so there
-         is no COPY line to keep in step with it. -->
+         because only a consumer can say what it needs, and it is compiled
+         into this suite so the provider can be held to it. A file and not an
+         assembly, so no project dependency is created and §4.3 is untouched:
+         Common.Contracts is still the only assembly that crosses a service
+         boundary, and a test helper is expressly not it. The cost is a
+         build-time path into another suite's tree, paid once — no Dockerfile
+         builds a test project, so there is no COPY line to keep in step. -->
     <Compile Include="..\Web.Bff.TestSupport\PricingContract.cs" Link="Contract\PricingContract.cs" />
   </ItemGroup>
 

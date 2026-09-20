@@ -468,10 +468,15 @@ class GeneratedGuidanceIsTrue(unittest.TestCase):
         gate = self.claim("tests/Yankee.Domain.Tests/ArchitectureTests.cs")
         self.assertNotIn("the ones Yankee added", gate)
 
-    def test_the_endpoints_gate_says_where_it_was_observed_red(self):
+    def test_the_endpoints_gate_points_at_the_template_for_what_it_cannot_show(self):
+        # The gate is vacuous until the service maps an endpoint, and the
+        # comment saying so must send the reader to the template rather than
+        # describe a thing this service has done. The negative is the half
+        # that matters: a claim carrying the new service's name is a history
+        # it has not got.
         gate = self.claim("tests/Yankee.Api.Tests/ArchitectureTests.cs")
         self.assertNotIn("forbidden reference in Yankee before being trusted", gate)
-        self.assertIn("the service this one\n/// was scaffolded from", gate)
+        self.assertIn("see the service this one was scaffolded from", gate)
 
     def test_no_generated_file_claims_this_service_did_something_in_a_past_pr(self):
         """A PR number may cite the plan; it may not narrate this service's past.

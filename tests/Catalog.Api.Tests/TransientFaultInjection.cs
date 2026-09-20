@@ -25,8 +25,8 @@ public sealed class MarkerRetryingStrategy(ExecutionStrategyDependencies depende
 }
 
 /// <summary>
-/// A tracked entity over the fixture's probe table, so the identity-map half
-/// of the retry defect is assertable before PR-10's first aggregate exists.
+/// A tracked entity over the fixture's probe table, isolating the identity-map
+/// half of the retry defect from the service's production entities.
 /// </summary>
 public sealed class TrackedProbe
 {
@@ -40,8 +40,8 @@ public sealed class TrackedProbe
 /// <c>DbContextOptions</c> — and nothing else's. The production model and its
 /// migration snapshot never see the entity: a test table mapped in
 /// <c>CatalogDbContext</c> itself would make the next <c>migrations add</c>
-/// generate DDL for a table only the fixture creates, which is the snapshot
-/// drift PR-08 forbids.
+/// generate DDL for a table only the fixture creates, leaving the migration
+/// snapshot describing a schema the running service never has.
 /// </summary>
 public sealed class ProbeModelCustomizer(ModelCustomizerDependencies dependencies)
     : ModelCustomizer(dependencies)

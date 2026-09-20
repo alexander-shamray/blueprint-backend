@@ -69,20 +69,15 @@ public class AuthorizationPolicyTests(HostSmokeTests.UnreachableInfrastructureFa
     [Fact]
     public async Task The_shared_authenticated_policy_is_registered_by_common_web()
     {
-        // Not named by any Catalog endpoint — the group uses the default policy
-        // — so the test above cannot see it. It exists for the gateway's route
-        // file (§10.2), which resolves it through this same provider when YARP
-        // loads the configuration, and refuses to start when it cannot: the
-        // load throws out of MapReverseProxy() naming the policy and the route,
-        // so the process does not come up at all.
-        //
-        // This comment said the opposite until PR-17 measured it — a silent
-        // per-route drop leaving the gateway healthy — which is what four
-        // blueprint sites also said. The correction runs the reassuring way and
-        // does not weaken the reason for this test: the gateway fails at
-        // deployment rather than in production, and a name it cannot resolve
-        // still costs a deployment. PR-17 binds it; asserting it here is what
-        // makes that binding safe to write.
+        // Not named by any Catalog endpoint — the group uses the default
+        // policy — so the test above cannot see it. It exists for the
+        // gateway's route file (§10.2), which resolves it through this same
+        // provider when YARP loads the configuration and refuses to start when
+        // it cannot: the load throws out of MapReverseProxy() naming the policy
+        // and the route, so the process does not come up at all. The gateway
+        // therefore fails at deployment rather than in production, and a name
+        // it cannot resolve still costs a deployment — which is what asserting
+        // the registration here makes safe to write.
         IAuthorizationPolicyProvider policies =
             factory.Services.GetRequiredService<IAuthorizationPolicyProvider>();
 
@@ -95,9 +90,9 @@ public class AuthorizationPolicyTests(HostSmokeTests.UnreachableInfrastructureFa
         // §10.2's catalog-public route is GET-only and names `anonymous`,
         // so the listing is public by design rather than by omission — and the
         // pairing is what makes that readable. One endpoint carrying
-        // IAllowAnonymous and the other carrying a policy is the whole of
-        // PR-16's decision about this service, asserted where a future edit to
-        // either line would be caught.
+        // IAllowAnonymous and the other carrying a policy is the whole of that
+        // decision, asserted where a future edit to either line would be
+        // caught.
         Endpoint listing = Single("GetProducts");
         Endpoint publish = Single("PublishProduct");
 
@@ -141,25 +136,16 @@ public class AuthorizationPolicyTests(HostSmokeTests.UnreachableInfrastructureFa
                     .Select(p => (Endpoint: e, Command: p.ParameterType)))
         ];
 
-        // **The gate's own subject, and a floor was not enough.** This used to
-        // assert only ShouldNotBeEmpty, which establishes that the selector
-        // found SOMETHING and not that it found everything — while the test is
-        // named for every command declaring the interface. With a second
-        // idempotent command, an endpoint binding a request DTO instead of the
-        // command (a shape this codebase permits) becomes invisible here and
-        // the floor still passes, so exactly the endpoint that stopped being
-        // covered is the one nothing reports.
-        //
-        // So the subject is the AGREEMENT between two independently derived
-        // sets: every idempotent command this service's Application assembly
-        // declares, and every one reachable through an endpoint. It fails from
-        // either side — a command with no endpoint, or a selector that stopped
-        // matching one.
-        //
-        // A broker-only idempotent command would fail this, and that is the
-        // design rather than a limitation: §8.5's subject is equally shared for
-        // a message-borne command, so one arriving is a decision to take and
-        // not a case to widen the gate for silently.
+        // The subject is the agreement between two independently derived sets:
+        // every idempotent command this service's Application assembly
+        // declares, and every one reachable through an endpoint. A floor
+        // asserting only that the selector found something would pass while an
+        // endpoint binding a request DTO instead of the command (a shape this
+        // codebase permits) went uncovered, so the gate fails from either side
+        // — a command with no endpoint, or a selector that stopped matching
+        // one. A broker-only idempotent command fails it by design: §8.5's
+        // subject is equally shared for a message-borne command, so one
+        // arriving is a decision to take rather than a case to widen this for.
         Type[] declared =
         [
             .. typeof(Catalog.Application.DependencyInjection).Assembly

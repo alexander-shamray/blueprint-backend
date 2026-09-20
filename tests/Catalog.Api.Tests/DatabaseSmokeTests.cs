@@ -14,24 +14,15 @@ using Xunit;
 namespace Catalog.Api.Tests;
 
 /// <summary>
-/// PR-08's deliverables against a real engine: the migrator applies the schema
-/// and reports it, the readiness check of §13.5 answers from a database that is
-/// actually up, and <c>EfUnitOfWork</c> commits and rolls back the way §6.3
+/// The persistence layer against a real engine: the migrator applies the
+/// schema and reports it, §13.5's readiness check answers from a database
+/// that is up, and <c>EfUnitOfWork</c> commits and rolls back the way §6.3
 /// says it does.
 /// </summary>
-/// <remarks>
-/// These tests require Docker and are deliberately not skipped without it.
-/// ADR-010 already made real infrastructure non-optional, and a skip would let
-/// CI go green on a runner whose daemon had broken.
-/// <para>
-/// They <i>are</i> categorised, which is the opposite of a skip rather than a
-/// softer version of it: <see cref="IntegrationCollection"/> carries
-/// <c>[Trait("Category", "Integration")]</c> and xUnit applies it to every
-/// test in the collection, so joining the collection is what puts these in the
-/// half that needs a daemon. Selected out they do not run; selected in they
-/// need Docker exactly as before. Neither state reports a pass without one.
-/// </para>
-/// </remarks>
+/// <remarks>ADR-010 makes real infrastructure non-optional, so a missing
+/// Docker daemon fails these rather than skipping them, and joining
+/// <see cref="IntegrationCollection"/> is what puts them in the half a
+/// selector can leave out — never the half that passes without one.</remarks>
 [Collection(nameof(IntegrationCollection))]
 public class DatabaseSmokeTests(ServiceFixture fixture)
 {
@@ -95,8 +86,8 @@ public class DatabaseSmokeTests(ServiceFixture fixture)
         // starts while the bus connects in the background and a 503 in the
         // first moments is the designed behaviour — Kubernetes holds traffic
         // until the flip, which is exactly what this asserts. It is also "the
-        // bus connects" (Appendix C, PR-13) proven against a real broker
-        // rather than inferred from the in-memory harness.
+        // bus connects" (Appendix C) proven against a real broker rather than
+        // inferred from the in-memory harness.
         using HttpClient client = fixture.Factory.CreateClient();
 
         HttpStatusCode status = HttpStatusCode.ServiceUnavailable;
@@ -144,7 +135,8 @@ public class DatabaseSmokeTests(ServiceFixture fixture)
         // the reason it is there: TransactionBehavior declining to SaveChanges
         // covers everything EF tracks, and covers nothing that ExecuteRawAsync
         // has already sent down the connection. Only the rollback takes that
-        // back, so this is the route PR-09's behaviour cannot test for itself.
+        // back, so this is the route TransactionBehavior cannot test for
+        // itself.
         Guid id = Guid.CreateVersion7();
 
         await using AsyncServiceScope scope = fixture.Factory.Services.CreateAsyncScope();
@@ -167,11 +159,10 @@ public class DatabaseSmokeTests(ServiceFixture fixture)
     [Fact]
     public async Task The_behaviour_leaves_no_row_when_a_handler_writes_raw_and_then_fails()
     {
-        // Appendix C's PR-09 test, on the full §6.3 stack: the real behaviour
-        // over the scope's real unit of work and the registered dispatcher,
-        // with a handler that writes through ExecuteRawAsync and then rejects.
-        // PR-08 proved EfUnitOfWork's half from the port; this proves the
-        // behaviour is what opens the unit and declines the commit.
+        // The full §6.3 stack: the real behaviour over the scope's real unit
+        // of work and the registered dispatcher, with a handler that writes
+        // through ExecuteRawAsync and then rejects. This proves the behaviour
+        // is what opens the unit and declines the commit.
         Guid id = Guid.CreateVersion7();
 
         await using AsyncServiceScope scope = fixture.Factory.Services.CreateAsyncScope();
@@ -225,10 +216,10 @@ public class DatabaseSmokeTests(ServiceFixture fixture)
     [Fact]
     public async Task A_transient_fault_retries_the_whole_unit_and_commits_it_once()
     {
-        // PR #15's finding, the unmanaged half: the strategy re-runs the
-        // whole delegate, and attempt 1's work must not survive into the
-        // commit — here the raw write, rolled back with its transaction. The
-        // tracked half is the test below.
+        // The unmanaged half: the strategy re-runs the whole delegate, and
+        // attempt 1's work must not survive into the commit — here the raw
+        // write, rolled back with its transaction. The tracked half is the
+        // test below.
         Guid id = Guid.CreateVersion7();
         int attempts = 0;
 
@@ -261,10 +252,8 @@ public class DatabaseSmokeTests(ServiceFixture fixture)
         // tracker: EF keeps it across a rollback, so without the Clear()
         // attempt 2 reads attempt 1's already-mutated instance back out of
         // the identity map and the domain method applies twice into one
-        // commit. Copilot asked for exactly this test on PR #18;
-        // ProbeModelCustomizer is what makes a tracked entity possible before
-        // PR-10's first aggregate. Observed red against a Clear()-less
-        // EfUnitOfWork before it was trusted.
+        // commit. ProbeModelCustomizer is what makes a tracked entity
+        // possible without mapping one into the production model.
         Guid id = Guid.CreateVersion7();
 
         await using ServiceProvider provider = BuildFaultInjectingProvider();
@@ -349,7 +338,7 @@ public class DatabaseSmokeTests(ServiceFixture fixture)
     [Fact]
     public async Task HasActiveTransaction_is_false_outside_the_unit_and_true_inside_it()
     {
-        // The guard PR-09's behaviour reads to avoid opening a second
+        // The guard TransactionBehavior reads to avoid opening a second
         // transaction on a nested dispatch. It is one property and it is
         // invisible until something depends on it, which is why it is pinned
         // here rather than discovered there.

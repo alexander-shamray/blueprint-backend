@@ -112,7 +112,7 @@ public class MessagingRegistrationTests
     [Fact]
     public async Task The_harness_waits_for_the_stated_timeouts_rather_than_MassTransits_defaults()
     {
-        // The defect this replaced was invisible from the smoke below: with
+        // Not visible from the smoke below: with
         // SetTestTimeouts deleted that test still passes on an idle machine
         // and fails only on a loaded runner, so a deletion would come back as
         // a flake rather than as a red test. Asserted here it fails at once —
@@ -161,9 +161,9 @@ public class MessagingRegistrationTests
     [Fact]
     public void Registration_adds_the_bus_and_its_hosted_service()
     {
-        // Descriptors, not a built provider — the PR-12 shape. Building would
-        // start nothing (the bus starts with the host), but a provider is a
-        // heavier claim than the test makes.
+        // Descriptors, not a built provider. Building would start nothing
+        // (the bus starts with the host), but a provider is a heavier claim
+        // than the test makes.
         ServiceCollection services = new();
 
         services.AddMassTransitMessaging(Configuration());
