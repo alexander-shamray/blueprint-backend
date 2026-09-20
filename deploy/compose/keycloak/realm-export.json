@@ -424,6 +424,15 @@
           "attributes": {}
         },
         {
+          "id": "9d3e1b7a-4c50-4f86-b2d9-7e6a0c85f314",
+          "name": "payments:admin",
+          "description": "Read what Payments holds for an order through the gateway's payments-admin route (§10.2) — the order-review runbook's first step. Granted to demo locally, beside inventory:admin, because it guards a route with no ownership check to override (§14.1).",
+          "composite": false,
+          "clientRole": true,
+          "containerId": "e55a8854-8088-495c-8db4-331d4b5eb68e",
+          "attributes": {}
+        },
+        {
           "id": "3f9c2e81-7d64-4a05-b1e8-5c0a9f27d4b6",
           "name": "orders:write",
           "description": "Place an order (§11.4). Required by POST /v1/orders and granted to demo, so the inner loop the compose README documents actually works.",
@@ -2675,7 +2684,8 @@
           "catalog:write",
           "orders:write",
           "orders:cancel",
-          "inventory:admin"
+          "inventory:admin",
+          "payments:admin"
         ]
       },
       "realmRoles": [

@@ -144,4 +144,24 @@ public sealed class GatewayPipelineTests(GatewayFactory factory) : IClassFixture
         response.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
         await ShouldBeProblemJson(response);
     }
+
+    /// <summary>
+    /// The second permission policy the gateway registers, asserted separately
+    /// from the first: the two resolve through the same provider, and a route
+    /// that named a policy nobody registered would refuse every caller rather
+    /// than only this one.
+    /// </summary>
+    [Fact]
+    public async Task The_payments_admin_route_refuses_an_authenticated_caller_without_the_permission()
+    {
+        using HttpClient client = factory.CreateClient();
+
+        using HttpRequestMessage request = new(HttpMethod.Get, $"/api/v1/payments/{Guid.CreateVersion7()}");
+        request.Headers.Add(TestAuthHandler.UserHeader, "018f4c2e");
+
+        HttpResponseMessage response = await client.SendAsync(request, TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
+        await ShouldBeProblemJson(response);
+    }
 }

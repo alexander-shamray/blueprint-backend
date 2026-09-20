@@ -68,6 +68,7 @@ public sealed class RouteConfigurationTests(GatewayFactory factory) : IClassFixt
             ["catalog"] = "/v1/catalog/products",
             ["ordering"] = "/v1/orders",
             ["inventory"] = "/v1/inventory",
+            ["payments"] = "/v1/payments",
 
             // The BFF is a second namespace rather than a service under the
             // first (§10.2), so /bff is stripped whole and everything it serves
