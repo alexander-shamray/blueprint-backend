@@ -69,20 +69,32 @@ def main() -> int:
     # `cbx` wrapper sets it; this calls the CLI, so it sets it here.
     environment = dict(os.environ, CBX_NO_SKILL_AUTO_UPDATE="1", PYTHONSAFEPATH="1")
 
-    try:
-        subprocess.Popen(
-            ["codebase-index", "update"],
-            cwd=str(root),
-            env=environment,
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
-        )
-    except OSError:
-        # The CLI is absent from this PATH. See the docstring on why an index
-        # that cannot refresh is not allowed to fail the edit.
-        pass
+    # The console script first, then the module through this interpreter,
+    # which is the pinned one because settings.json runs this file with it.
+    # `py -3.12 -m pip` is a supported install and leaves the script in a
+    # directory that need not be on PATH, so both `cbx` wrappers fall back
+    # the same way. `-P` keeps a checkout's own codebase_index.py off the
+    # import path.
+    for command in (
+        ["codebase-index", "update"],
+        [sys.executable, "-P", "-m", "codebase_index", "update"],
+    ):
+        try:
+            subprocess.Popen(
+                command,
+                cwd=str(root),
+                env=environment,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+            )
+            return 0
+        except OSError:
+            continue
+
+    # Neither form is runnable here. See the docstring on why an index that
+    # cannot refresh is not allowed to fail the edit.
     return 0
 
 

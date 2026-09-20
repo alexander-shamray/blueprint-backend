@@ -134,6 +134,7 @@ class RefreshIndex(unittest.TestCase):
         arguments, keywords = self.spawned[0]
         self.assertEqual(["codebase-index", "update"], arguments[0])
         self.assertEqual("1", keywords["env"]["CBX_NO_SKILL_AUTO_UPDATE"])
+        self.assertEqual(1, len(self.spawned), "the fallback ran as well")
 
     def test_nothing_is_waited_on_and_no_stream_is_kept(self):
         """It runs on every edit, so it may not make one wait, and a hook's
@@ -144,12 +145,38 @@ class RefreshIndex(unittest.TestCase):
         for stream in ("stdin", "stdout", "stderr"):
             self.assertEqual(self.mod.subprocess.DEVNULL, keywords[stream])
 
-    def test_a_missing_executable_is_silent(self):
-        """An index that cannot refresh is not a reason to fail the edit."""
+    def test_a_missing_console_script_falls_back_to_the_module(self):
+        """`py -3.12 -m pip` is a supported install and need not put the
+        console script on PATH, which is why both `cbx` wrappers fall back
+        the same way. Swallowing the error instead leaves those sessions
+        never refreshing, and saying nothing about it."""
+        attempts = []
+
+        def absent_script(command, **keywords):
+            attempts.append(command)
+            if command[0] == "codebase-index":
+                raise OSError("no such executable")
+            self.spawned.append(((command,), keywords))
+
         self.patch(mock.patch.object(
-            self.mod.subprocess, "Popen", side_effect=OSError("no such executable")))
+            self.mod.subprocess, "Popen", side_effect=absent_script))
 
         self.assertEqual(0, self.run_event({"cwd": str(self.checkout("main"))}))
+
+        self.assertEqual(2, len(attempts), attempts)
+        self.assertEqual(
+            [self.mod.sys.executable, "-P", "-m", "codebase_index", "update"],
+            attempts[1])
+        self.assertEqual(1, len(self.spawned))
+
+    def test_neither_form_running_is_silent(self):
+        """An index that cannot refresh is not a reason to fail the edit."""
+        self.patch(mock.patch.object(
+            self.mod.subprocess, "Popen", side_effect=OSError("nothing runnable")))
+
+        self.assertEqual(0, self.run_event({"cwd": str(self.checkout("main"))}))
+
+        self.assertEqual([], self.spawned)
 
     def test_a_body_that_is_not_an_event_is_silent(self):
         self.assertEqual(0, self.run_hook("<html>not json</html>"))
