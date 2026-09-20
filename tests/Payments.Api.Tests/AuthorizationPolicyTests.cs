@@ -8,24 +8,15 @@ using Xunit;
 namespace Payments.Api.Tests;
 
 /// <summary>
-/// §11.4's callout, executed: "enumerate the endpoint policy names from
-/// <c>EndpointDataSource</c> in a test and require each to resolve through
-/// <c>IAuthorizationPolicyProvider</c>."
+/// §11.4's callout, executed: enumerate the endpoint policy names from
+/// <c>EndpointDataSource</c> and require each to resolve through
+/// <c>IAuthorizationPolicyProvider</c>. A policy name is a reference nothing
+/// checks — misspell it and there is no compiler error and no
+/// <c>ValidateOnBuild</c> failure, only an <c>InvalidOperationException</c> on
+/// the first request that reaches the endpoint. Read off the built endpoints
+/// rather than a list beside the registrations, which would be a third place
+/// to keep in step, agreeing with itself while disagreeing with the host.
 /// </summary>
-/// <remarks>
-/// A policy name is a reference and nothing checks it.
-/// <c>RequireAuthorization(PaymentsPermissions.Admin)</c> takes a string —
-/// misspell it, or register the policy in a helper the host never calls, and
-/// there is no compiler error, no <c>ValidateOnBuild</c> failure and no
-/// startup warning. The endpoint throws <c>InvalidOperationException</c> the
-/// first time an operator reads a payment, which is to say in production, on
-/// the path that matters.
-///
-/// This reads the names off the built endpoints rather than from a list
-/// beside the registrations, which is the whole point: a list would be a
-/// third place to keep in step, and it would agree with itself while
-/// disagreeing with the host.
-/// </remarks>
 public class AuthorizationPolicyTests(HostSmokeTests.UnreachableInfrastructureFactory factory)
     : IClassFixture<HostSmokeTests.UnreachableInfrastructureFactory>
 {

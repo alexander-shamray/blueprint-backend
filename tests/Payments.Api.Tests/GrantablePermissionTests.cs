@@ -6,25 +6,15 @@ using Xunit;
 namespace Payments.Api.Tests;
 
 /// <summary>
-/// Every permission Payments requires is one somebody can be granted.
+/// Every permission Payments requires is one somebody can be granted — §11.4's
+/// rule in its second direction, since a permission something requires and the
+/// realm cannot grant is a path nobody can reach. Asserted here rather than
+/// trusted from Inventory's pass, because <c>payments:admin</c> is a role of
+/// its own in the realm's <c>commerce-api</c> client. <c>RealmImportTests</c>
+/// cannot make this check: it compares against literals, being a building
+/// block that cannot reference a host to read its constants, so the check has
+/// to run from the side owning the constant.
 /// </summary>
-/// <remarks>
-/// <para>
-/// §11.4 states the rule in both directions and this is the second one: a
-/// permission something requires and the realm cannot grant is a path
-/// nobody can reach — worth checking again here rather than trusted from
-/// Inventory's own pass, because <c>payments:admin</c> is a role of its own
-/// in the realm's <c>commerce-api</c> client, and this service is the first
-/// to require it.
-/// </para>
-/// <para>
-/// <c>RealmImportTests</c> in <c>Common.Web.Tests</c> asserts the same realm's
-/// role list is closed and could not catch this — it compares against literals
-/// because that assembly is a building block and cannot reference a host to
-/// read its constants. The check has to run from the side that owns the
-/// constant, which is here.
-/// </para>
-/// </remarks>
 public sealed class GrantablePermissionTests
 {
     /// <summary>The client that owns the permission roles (§11.5).</summary>
