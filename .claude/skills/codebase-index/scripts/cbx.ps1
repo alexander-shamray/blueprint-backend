@@ -1,7 +1,7 @@
 # Windows PowerShell wrapper around the installed `codebase-index` CLI.
 # Mirrors scripts/cbx: whitelist, then PATH CLI, then py -3.12, then python -m.
 # Python fallbacks pass -P / PYTHONSAFEPATH so a checkout codebase_index.py
-# is not imported. The wrappers are auto-approved.
+# is not imported.
 param(
     [Parameter(Mandatory = $true, Position = 0)]
     [string]$Subcommand,

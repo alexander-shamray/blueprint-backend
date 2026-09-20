@@ -8,6 +8,10 @@ allowed-tools: Bash(bash .claude/skills/codebase-index/scripts/cbx search:*), Ba
 
 Use the local index before reading repository files.
 
+The wrappers need the `codebase-index` package on the interpreter
+`docs/testing.md` pins (`py -3.12 -m pip install codebase-index`).
+If they exit 127, the index is unavailable this session; use Grep/Glob.
+
 The operating principle is **Find → Trace → Verify → Predict**:
 
 - **Find** the implementation with ranked retrieval.
