@@ -1,7 +1,7 @@
 ---
 description: Start from a clean main, fork a worktree where one can be forked, branch, commit, push and open a PR, loop the external reviews — Grok until two consecutive clean passes, Copilot until one — then merge the PR and tear the workspace down. Decides for itself rather than stopping to ask
 argument-hint: "[what the change does] — omit and each step derives its own"
-allowed-tools: Read, Grep, Glob, Write, Skill, Agent(review-grok-triager), EnterWorktree, ExitWorktree, Bash(git status:*), Bash(git diff:*), Bash(git branch --list:*), Bash(git branch --show-current), Bash(git branch -a), Bash(git log:*), Bash(git cherry:*), Bash(git fetch origin:*), Bash(bash .claude/scripts/git-branch-create.sh:*), Bash(bash .claude/scripts/git-worktree-fork.sh:*), Bash(bash .claude/scripts/git-switch-existing.sh:*), Bash(git rev-parse:*), Bash(git worktree list:*), Bash(ls:*), Bash(git add:*), Bash(git commit:*), Bash(bash .claude/scripts/git-unstage.sh:*), Bash(git push -u origin:*), Bash(git push origin:*), Bash(wc:*), Bash(gh pr create:*), Bash(bash .claude/scripts/pr-state.sh:*), Bash(bash .claude/scripts/pr-for-branch.sh:*), Bash(gh pr checks:*), Bash(gh pr merge --rebase:*), Bash(git pull --ff-only), Bash(git merge-base --is-ancestor:*), Bash(git worktree remove:*), Bash(git worktree prune:*), Bash(rm -f suggestions.md), Bash(bash .claude/scripts/grok-ledger.sh:*), Bash(bash .claude/scripts/copilot-request.sh:*), Bash(bash .claude/scripts/copilot-request-count.sh:*), Bash(bash .claude/scripts/pr-review-comments.sh:*), Bash(bash .claude/scripts/pr-review-bodies.sh:*), Bash(bash .claude/scripts/pr-issue-comments.sh:*), Bash(bash .claude/scripts/pr-review-threads.sh:*), Bash(bash .claude/scripts/grok-review.sh:*), Bash(sleep:*), Bash(bash .claude/scripts/pr-locality.sh:*)
+allowed-tools: Read, Grep, Glob, Write, Skill, Agent(review-grok-triager), EnterWorktree, ExitWorktree, Bash(git status:*), Bash(git diff:*), Bash(git branch --list:*), Bash(git branch --show-current), Bash(git branch -a), Bash(git log:*), Bash(git cherry:*), Bash(git fetch origin:*), Bash(bash .claude/scripts/git-branch-create.sh:*), Bash(bash .claude/scripts/git-worktree-fork.sh:*), Bash(bash .claude/scripts/git-switch-existing.sh:*), Bash(bash .claude/scripts/git-rebase-onto-main.sh:*), Bash(git rev-parse:*), Bash(git worktree list:*), Bash(ls:*), Bash(git add:*), Bash(git commit:*), Bash(bash .claude/scripts/git-unstage.sh:*), Bash(git push -u origin:*), Bash(git push origin:*), Bash(wc:*), Bash(gh pr create:*), Bash(bash .claude/scripts/pr-state.sh:*), Bash(bash .claude/scripts/pr-for-branch.sh:*), Bash(gh pr checks:*), Bash(gh pr merge --rebase:*), Bash(git pull --ff-only), Bash(git merge-base --is-ancestor:*), Bash(git worktree remove:*), Bash(git worktree prune:*), Bash(rm -f suggestions.md), Bash(bash .claude/scripts/grok-ledger.sh:*), Bash(bash .claude/scripts/copilot-request.sh:*), Bash(bash .claude/scripts/copilot-request-count.sh:*), Bash(bash .claude/scripts/pr-review-comments.sh:*), Bash(bash .claude/scripts/pr-review-bodies.sh:*), Bash(bash .claude/scripts/pr-issue-comments.sh:*), Bash(bash .claude/scripts/pr-review-threads.sh:*), Bash(bash .claude/scripts/grok-review.sh:*), Bash(sleep:*), Bash(bash .claude/scripts/pr-locality.sh:*)
 ---
 
 Take the working tree from wherever it is to a merged PR. Description:
@@ -1273,8 +1273,11 @@ because asking failed.
 
    **A fast-forward that will not fast-forward is divergence**, which is
    another session's history against this one's, and it stops the chain for
-   the reason an unmergeable PR does — force-pushing is denied here and is the
-   only thing that would resolve it.
+   the reason an unmergeable PR does. The rebase helper below does not resolve
+   it and is not meant to: it refuses a remote carrying commits this checkout
+   lacks, which is exactly this case. A lease would be satisfied here — those
+   commits have been fetched — and the other session's work would still be
+   gone, so the refusal is the helper's own rather than git's.
 
    **Non-empty is not a stop, because there is an obvious right answer.** The
    run goes back: commit — **scoped**, always — push, and re-enter both review
@@ -1314,6 +1317,26 @@ because asking failed.
    read said yes. That failure is loud and it lands *before* the teardown, so
    the workspace is intact when the chain stops: report the refusal rather
    than reaching for another method.
+
+   **What resolves it is a branch update, and a branch update is a rebase.**
+
+   ```bash
+   bash .claude/scripts/git-rebase-onto-main.sh <branch> start
+   ```
+
+   It replays the branch onto `origin/main` and publishes the result under a
+   lease. **A conflict leaves the rebase in progress on purpose**, because the
+   resolution belongs in the replayed commit rather than in a merge commit:
+   resolve, `git add`, then the same helper with `continue`, or `abort` to put
+   the branch back. There is no clean-case exception — a merge-forward makes a
+   merge commit whether or not it conflicted, and an exception is the rule
+   nobody remembers at the moment it matters.
+
+   **It rewrites the branch's SHAs, so the verdict above no longer describes
+   the head.** Go back to the checks rather than to the merge: the gates were
+   satisfied for a commit that no longer exists. And kept to, this is what
+   keeps step 0's merge read a guard rather than a routine case — a branch
+   that is only ever rebased never carries a merge commit at all.
 
    **Read `state` on every pass of the poll, before `mergeable`.** A PR closed
    or merged elsewhere while the review loops ran — and those loops are the
