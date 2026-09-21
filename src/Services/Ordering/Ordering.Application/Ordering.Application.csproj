@@ -4,20 +4,11 @@
     Settings come from Directory.Build.props (§4.4).
 
     Domain, Common.Application and Common.Contracts — the §4.2 dependency
-    table's second row.
-
-    This comment said "minus Common.Contracts", on the reasoning that §9.3's
-    mapper is the only type that would name a contract and its allow-list is
-    empty until this service publishes something. The reasoning was sound and
-    the conclusion stopped being true the moment the cancellation endpoint
-    needed to parse a wire reason code: CancelReasons is a contract vocabulary
-    (§9.6), it lives in Common.Contracts.Ordering.V1, and PR-18 first copied
-    the five constants into Application to avoid taking the reference. That is
-    the second table CancellationReasons' own remark warns about — a second
-    thing to forget when a reason is added — traded for an unused-reference
-    argument that does not survive a type which IS used. §4.3's one assembly
-    that crosses a service boundary crosses here, at the vocabulary, ahead of
-    the mapper rather than at it.
+    table's second row. Contracts is paid for at the vocabulary as well as
+    at the §9.3 mapper: CancellationReasons parses the wire reason codes
+    CancelReasons declares (§9.6), and the mapper's allow-list turns a
+    domain event into a public record. §4.3's one assembly that crosses a
+    service boundary, and it crosses at both.
   -->
 
   <ItemGroup>

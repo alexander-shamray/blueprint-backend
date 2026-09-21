@@ -66,10 +66,10 @@ public sealed class OrderingDbContext(DbContextOptions<OrderingDbContext> option
     {
         modelBuilder.HasDefaultSchema("ordering");
 
-        // Here before its first find, so that the first entity adds an
-        // IEntityTypeConfiguration<T> and not also the line that discovers
-        // it. §7.2 puts mapping in these classes and never in attributes on
-        // domain types, which would put EF Core in Ordering.Domain.
+        // Assembly scanning, so that adding an entity costs an
+        // IEntityTypeConfiguration<T> and nothing in this file. §7.2 puts
+        // mapping in these classes and never in attributes on domain types,
+        // which would put EF Core in Ordering.Domain.
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(OrderingDbContext).Assembly);
 
         // §9.6's transactional outbox (ADR-032), and the one part of this
