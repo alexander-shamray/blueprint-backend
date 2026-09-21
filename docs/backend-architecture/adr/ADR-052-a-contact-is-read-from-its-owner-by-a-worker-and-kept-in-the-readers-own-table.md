@@ -21,28 +21,42 @@ worker's progress and nothing else.
 **The answer is kept in a table in the reader's own database**, never in
 Redis: [ADR-006](ADR-006-redis-for-cache-and-coordination-never-as-a-store-of-record.md)
 forbids a load-bearing value there, and a TTL expires during exactly the
-outage the copy exists to survive. Shipping's row is keyed by the order and
-holds the address; Notifications' is keyed by the customer and holds the
-mailbox, the locale and the instant it was fetched — and **nothing else the
-owner offered**, because Keycloak's user representation carries a name and
-attributes nobody asked for. Every read has four outcomes and the worker
-takes exactly one:
+outage the copy exists to survive. Shipping's contact row is keyed by the
+order and holds the address and the customer's id; Notifications' is keyed
+by the customer and holds the mailbox, the locale and the instant it was
+fetched — and **nothing else the owner offered**, because Keycloak's user
+representation carries a name and attributes nobody asked for. **An absent
+locale is an answer and not a fault**: the realm ships with
+internationalisation off, so today every answer lacks one, and what such a
+customer is sent is decided with Notifications' languages and not here.
 
-| The row | The owner | The worker |
+Two rows are in play and the table keeps them apart: the **contact row**
+is the copy, and the **work's row** is the shipment or the notification
+waiting on it. Every read has one of five outcomes:
+
+| The contact row | The owner | The worker |
 |---|---|---|
 | present and fresh | not asked | proceeds; no call is made |
-| absent or no longer fresh | answers | stores the answer, proceeds |
-| absent or no longer fresh | unreachable | proceeds on a row younger than the stale ceiling; otherwise leaves the work **where it already is, in its row**, for a later pass with a backoff |
-| any | answers that there is no such order, user or mailbox | records a terminal outcome on the row and stops; nothing is retried |
+| absent or no longer fresh | answers with the value | stores the answer, proceeds |
+| absent or no longer fresh | unreachable, or failing as a server does | proceeds on a contact row younger than the stale ceiling; otherwise leaves the work **where it already is, in the work's row**, for a later pass with a backoff |
+| any | refuses the credential — a 401 or a 403 | never proceeds on a stale row; leaves the work in its row with a backoff, and logs and counts a defect, because a revoked grant is somebody's decision and not an outage |
+| any | answers that the value does not exist | records a terminal outcome on the work's row, deletes the contact row, and stops; nothing is retried |
 
-**The numbers are two, they are Notifications', and they are settings that
-refuse.** A mailbox younger than `ContactOptions.Freshness` — fifteen
-minutes — is served without a call; past it the owner is asked, and only
-while the owner cannot answer is an older row served, up to
+**"Does not exist" is wider than a 404.** For Ordering it is no such order,
+an order that is cancelled, and an order whose address erasure has cleared.
+For Keycloak it is no such user, a user with no email, and **a disabled
+user** — an account taken back from somebody is most often that, and
+Keycloak still answers with its mailbox. An unverified email is not one of
+them: the realm ships with `verifyEmail` off, so the flag says nothing here.
+
+**The freshness numbers are two, they are Notifications', and they are
+settings that refuse.** A mailbox younger than `ContactOptions.Freshness` —
+fifteen minutes — is served without a call; past it the owner is asked, and
+only while the owner cannot answer is an older row served, up to
 `ContactOptions.StaleCeiling`, twenty-four hours. Start-up refuses a ceiling
 below the freshness rather than clamping it, as `RetentionPolicy` does.
-Shipping has neither number: Ordering exposes nothing that changes an
-order's address after it is placed, so an address once read is never stale.
+Shipping has neither number: Ordering exposes nothing that changes an order's
+address after it is placed, so an address once read is never stale.
 
 **Two credentials are minted, and each is sized by what it reads when it is
 stolen.** Shipping's client holds one client role on `commerce-api`,
@@ -62,29 +76,42 @@ user's profile in the realm and no credential.
 reads the realm and its client list, and a service account's roles are in
 neither document; reading them would cost the realm-check credential
 `view-users`, which `docs/secrets.md` argues it must not hold. So the token
-client reads the roles out of the access token it was issued, as
-`read_admin.py` reads its own, and refuses to use a token carrying any role
-beyond the ones this record names — a realm that granted more fails the
-worker loudly in any environment, where a wider gate would have had to be
-trusted with more to say so. Each secret takes a rotation row in
-`docs/secrets.md`, and each client is proved both ways against a token
-Keycloak issued: accepted with the grant, refused without.
+client reads, out of the access token it was issued, the one claim its grant
+lives in — `permission` for Shipping, `resource_access.realm-management.roles`
+for Notifications — and refuses a token whose set there is not exactly the one
+this record names. `read_admin.py` reads the same claim of its own token for a
+floor; this is the ceiling beside it. Keycloak's default roles, in
+`realm_access` and on the `account` client, are in every token the realm
+issues and are outside the check, named here so that nobody widens it to them.
+A realm that granted more fails the worker loudly in any environment, where a
+wider gate would have had to be trusted with more to say so. Each secret takes
+a rotation row in `docs/secrets.md`, and each client is proved both ways
+against a token Keycloak issued: accepted with the grant, refused without.
 
-**The read never leaves the deployment**, and neither table outlives its
-use. Shipping's address is a table of its own beside `Shipments`, not
-columns on it, and carries the customer's id for one purpose: Shipping
-deletes a row a retention window after its shipment reaches a terminal
-state, Notifications deletes a contact row unread for its window, both
-windows are deployment values, and
+**Neither table outlives its use.** Shipping's address is a table of its
+own beside `Shipments`, not columns on it, and carries the customer's id
+for erasure's sake alone. Shipping deletes a contact row a retention window
+after its shipment reaches a terminal state, Notifications deletes one not
+refreshed for its window, and both windows are deployment values.
 [§11.7](../11-identity-authorization.md)'s erasure consumer — owed with
-that extension, like the rest of it — deletes the subject's rows in both
-tables, which is that section's *delete* and leaves the shipment's own
-record whole.
+that extension, like the rest of it — deletes the subject's contact rows,
+which is that section's *delete* and leaves the shipment's own record
+whole, **and marks the subject's waiting work terminal**, because a worker
+that finds no contact row asks the owner again. That is also why the
+extension must erase at the owner first: Keycloak is no participant in
+§11.7's choreography, and a mailbox still held there is re-read by the next
+event for that customer. Both halves are owed with the extension and are
+stated here so that it is designed against them.
 
 **Why.** The address and the mailbox cannot arrive by event — ADR-035 took
 the one off the bus and the other was never on it — and no service may read
 another's database. What is left is a call, and the only open question is
 who pays for it being slow or down.
+
+ADR-035 declined to choose "before a consumer exists to state what it
+needs". Two now do, in one month, and they ask the same question; deciding
+it in each service's own pull request is how the platform comes to hold two
+answers to it.
 
 A call inside the consumer makes the message pay. `UseMessageRetry` holds
 the delivery and the endpoint's slot for its whole ladder, so a dead owner
@@ -134,7 +161,8 @@ code that posts a client secret is the wrong thing to have three of.
 **Notifications, the service
 [ADR-036](ADR-036-the-broker-has-a-per-service-identity.md) picked as the
 estate's least valuable, holds a grant that reads every user.** No narrower
-one exists on the pinned image; the realm check holds it to exactly that,
+one exists on the pinned image; the client's own check holds it to exactly
+that,
 and the alternative — Keycloak pushing profile changes onto the bus — is an
 identity-provider extension this platform does not have and would put a
 mailbox on the wire ADR-035 cleared.
@@ -170,12 +198,15 @@ builds it, and the list is written out for ADR-051's reason:
 | [§2.2](../02-architecture-at-a-glance.md) | One synchronous edge, drawn from the BFF |
 | [§3.2](../03-bounded-contexts.md) | Rows for Shipping and Notifications that reach nothing but the broker |
 | [§9.1](../09-messaging.md) | That Shipping "should not call back" for an address |
-| [§9.7](../09-messaging.md) | The pricing hop as the platform's one synchronous call between its services |
+| [§4.1](../04-solution-structure.md) | The BFF as "the ONLY host that calls a service", and no building block holding the identity types |
+| [§9.7](../09-messaging.md) | The pricing hop as the platform's one synchronous call between its services, and `Web.Bff` as "the only one holding client credentials" |
 | [§11.5](../11-identity-authorization.md) | One host in the table of realm objects, and "the platform's only permitted synchronous hop" |
 | [§12](../12-test-strategy.md) | One suite that runs a real Keycloak, for one client |
 | [§14.1](../14-local-development.md) | One client secret among the Compose defaults |
 | [§15.2](../15-cicd-deployment.md) and [§15.4](../15-cicd-deployment.md) | "One client secret in the whole platform", and an inventory row marked BFF only |
 | `docs/secrets.md` | The BFF as "the only host that calls a peer synchronously" |
+| `docs/repo-map.md` and `CLAUDE.md` | The BFF as the one synchronous caller, and the only holder of client credentials |
+| `realm-export.json` | The `web-bff` client's description as the only one holding client credentials, and a realm with internationalisation off, so no user has a locale to read |
 
 ---
 
