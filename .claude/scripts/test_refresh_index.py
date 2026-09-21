@@ -41,9 +41,8 @@ def _load():
 def entries_running_the_hook(settings: Path) -> dict:
     """The entries of `settings` that run this hook, keyed by hook event.
 
-    Every event rather than the one this started with: a read fixed to
-    PostToolUse compares two files that agree there and disagree everywhere
-    else, and stays green while the newest surface goes uncovered.
+    Every event, because a read naming one compares two registrations that
+    agree there and are free to disagree anywhere else.
     """
     document = json.loads(settings.read_text(encoding="utf-8"))
     running = {}
@@ -552,11 +551,7 @@ class Registration(Base):
             self.assertIn(tool, matched, mine)
 
     def test_settings_refreshes_at_session_start(self):
-        """The moves no edit makes: a merge, a switch or a pull.
-
-        Named here rather than left to the example's equality check, which
-        two files both missing the event satisfy as readily as two carrying
-        it."""
+        """The moves no edit makes: a merge, a switch or a pull."""
         self.assertIn("SessionStart", entries_running_the_hook(SETTINGS))
 
 

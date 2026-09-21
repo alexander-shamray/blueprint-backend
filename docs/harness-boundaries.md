@@ -135,12 +135,11 @@ index is left alone, because unindexed is not stale.
 
 **`SessionStart` runs the same script, for the moves no edit makes.** A merge,
 a switch or a pull rewrites the tree with no tool event behind it, so a session
-opening onto one of those reads an index describing the tree it replaced —
-fifty-one files behind, on the day this was added. The event names no file,
-which is what the `cwd` fallback above is for, and the spawn is the same
-detached one, so a session start waits for nothing. What is left to a query's
-stale report is the tree that moves mid-session, and that is the one a person
-is present for.
+opening onto one of those reads an index describing the tree it replaced. The
+event names no file, which is what the `cwd` fallback above is for, and the
+spawn is the same detached one, so a session start waits for nothing. What is
+left to a query's stale report is the tree that moves mid-session, and that is
+the one a person is present for.
 
 **A hook command needs no shell, and that is a constraint rather than a
 preference.** An env-var prefix — `VAR=1 cmd` — is POSIX syntax that `cmd`
