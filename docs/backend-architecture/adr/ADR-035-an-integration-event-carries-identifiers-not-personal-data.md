@@ -113,6 +113,11 @@ untouched: it never crosses a service boundary, and `ordering.Orders`
 legitimately stores the address of the order it belongs to — §11.7 governs what
 travels, not what a service holds about its own data.
 
+> **The open question is answered by
+> [ADR-052](ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)**,
+> which takes the read back to Ordering and moves it out of the consumer, so
+> that it is a worker's call and not the ADR-017 exception expected above.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)

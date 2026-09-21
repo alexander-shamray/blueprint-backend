@@ -1306,6 +1306,17 @@ the platform, and both are meant to stay at one. "Every host gets the full
 identity block" is the natural-looking generalisation and the wrong one; so is
 reading this section and concluding the services talk to each other.
 
+> **Two more hosts are decided, and neither is built.**
+> [ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)
+> gives Shipping a client that reads a delivery address from Ordering and
+> Notifications one that reads a mailbox from Keycloak, because
+> [ADR-035](adr/ADR-035-an-integration-event-carries-identifiers-not-personal-data.md)
+> left neither value a way to arrive by event. The argument above is why
+> that took a record rather than a registration: the count of hosts holding
+> a client secret is the count of synchronous couplings, and it moves only
+> by a decision that says what each new secret reads when it is stolen.
+> Each client joins the table below with the service that uses it.
+
 Mechanically this is a `DelegatingHandler` attached to every outbound client
 (§9.7), so no call site has to remember it:
 

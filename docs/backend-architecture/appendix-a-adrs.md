@@ -58,6 +58,7 @@ decision looks wrong.
 | **ADR-049** | [A cancellation Payments has recorded declines the authorisation that follows](adr/ADR-049-a-cancellation-payments-has-recorded-declines-the-authorisation-that-follows.md) |
 | **ADR-050** | [The rollout reads the image's facts from the image's revision](adr/ADR-050-the-rollout-reads-the-images-facts-from-its-revision.md) |
 | **ADR-051** | [The buyer's order read is a projection in the BFF](adr/ADR-051-the-buyers-order-read-is-a-projection-in-the-bff.md) |
+| **ADR-052** | [A contact is read from its owner by a worker, and kept in the reader's own table](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md) |
 
 ---
 
