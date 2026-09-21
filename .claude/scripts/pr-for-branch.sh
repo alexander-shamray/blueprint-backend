@@ -1,17 +1,18 @@
 #!/usr/bin/env bash
-# List the pull requests for one branch — number, state, url — and nothing
-# else. Read-only, fixed field set.
+# List the pull requests for one branch — number, state, url, headRefOid —
+# and nothing else. Read-only, fixed field set.
 #
 # `gh pr list --json reviews,comments` returns the review bodies and issue
 # comments of every pull request at once, so a `gh pr list` grant held to find
 # a branch's PR bypasses the author-filtering feed helpers. The field set is
-# fixed here instead.
-#
+# fixed here instead. `headRefOid` is in it because /ship step 0 compares the
+# tip with the head a MERGED row records, and a sha carries nothing an author
+# wrote.
+set -euo pipefail
 # The branch is optional and defaults to the checkout's current branch. When
 # given it is shape-checked, because it reaches an argument position: a value
 # starting with `-` would be read as a flag, and `gh pr list` has flags that
 # change what is returned.
-set -euo pipefail
 branch="${1:-}"
 if [ -z "$branch" ]; then
   branch=$(git branch --show-current)
@@ -40,7 +41,7 @@ repo=$(gh repo view --json nameWithOwner --jq .nameWithOwner) ||
 # pull request precisely when its owner cannot be established.
 [ -n "$repo" ] ||
   { echo "this checkout's repository resolved to nothing" >&2; exit 2; }
-gh pr list --state all --head "$branch" --json number,state,url,headRepository |
+gh pr list --state all --head "$branch" --json number,state,url,headRepository,headRefOid |
   jq --arg repo "$repo" \
     '[ .[] | select((.headRepository.nameWithOwner // "") == $repo)
-       | {number, state, url} ]'
+       | {number, state, url, headRefOid} ]'
