@@ -60,16 +60,10 @@ class EveryBlankedDirectoryIsNamedAtTheRoot(unittest.TestCase):
 
     The failure this refuses is invisible in `git status` and visible only in
     the index: scratch competes with code in every search result until
-    somebody measures the index and asks why.
+    somebody measures the index and asks why. A blanked directory is untracked
+    by construction, so a fresh checkout has no subject here and this passes
+    vacuously; the control below is what keeps the walk honest instead.
     """
-
-    def test_the_walk_reaches_at_least_one_directory(self):
-        # A walk that finds nothing passes the next test for free, and a check
-        # that has stopped looking at its subject is what ADR-010 refuses.
-        self.assertTrue(
-            blanking_directories(REPO),
-            "no directory carries a bare '*' ignore file: the walk is broken",
-        )
 
     def test_each_of_them_is_excluded_by_the_root_file(self):
         for directory in blanking_directories(REPO):
@@ -83,8 +77,10 @@ class EveryBlankedDirectoryIsNamedAtTheRoot(unittest.TestCase):
 class TheCheckFailsWhereTheRootRuleIsAbsent(unittest.TestCase):
     """The positive control the check needs to mean anything.
 
-    Without it, a check that never reports and a check that cannot report
-    read the same on a green run.
+    It plants a blanked directory, so the walk is asserted to find one
+    somewhere whatever the checkout holds, and asserts the check reports it
+    when the root file does not name it. Without that, a check that never
+    reports and a check that cannot report read the same on a green run.
     """
 
     def scratch_repository(self, root_rule):
