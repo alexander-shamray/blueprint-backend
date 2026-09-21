@@ -12,6 +12,7 @@ import unittest
 
 from review_helpers import (
     SCRIPTS,
+    code_lines,
     setUpModule,
     run_bash,
 )
@@ -56,7 +57,10 @@ class TheFlagsAreTheScriptsOwn(unittest.TestCase):
     repository answers such cases with a helper (`docs/harness-boundaries.md`).
     """
 
-    source = HELPER.read_text(encoding="utf-8")
+    # The executable lines only. An assertion made against the whole file
+    # passes on a comment that mentions the guard, so deleting the guard would
+    # not fail it — which is `code_lines`' own argument.
+    source = "\n".join(code_lines(HELPER.read_text(encoding="utf-8")))
 
     def test_there_is_exactly_one_push_and_it_carries_an_expected_value(self):
         pushes = [ln.strip() for ln in self.source.splitlines() if ln.strip().startswith("git push")]
@@ -72,8 +76,16 @@ class TheFlagsAreTheScriptsOwn(unittest.TestCase):
         for spelling in ("--force ", "--force\n", "--force=", " -f ", "--force-if-includes"):
             self.assertNotIn(spelling, commands, f"{spelling!r} would discard without a lease")
 
-    def test_main_is_refused_by_name_in_the_source(self):
-        self.assertIn('[ "$branch" != main ]', self.source)
+    def test_the_push_leases_against_the_value_the_guard_approved(self):
+        # Re-reading the remote ref in `publish` would lease against whatever a
+        # fetch had since made of it, with the whole replay in between — the
+        # lease would then name the commits the guard refused.
+        self.assertIn('lease="$approved_lease"', self.source)
+        reads = [ln.strip() for ln in self.source.splitlines()
+                 if 'rev-parse "refs/remotes/origin/$branch"' in ln]
+        self.assertEqual(
+            reads, ['approved_lease=$(git rev-parse "refs/remotes/origin/$branch")'],
+            "the remote tip is read once, by the guard, and that value is what forces")
 
 
 class TheHelperRefusesBeforeItRewrites(unittest.TestCase):
@@ -103,16 +115,31 @@ class TheHelperRefusesBeforeItRewrites(unittest.TestCase):
         self.at("git checkout -q main")
         self.assertEqual(3, self.helper("main").returncode)
 
+    def test_main_is_refused_however_it_is_spelled(self):
+        # One string compare is one spelling, and this host's filesystem is
+        # case-insensitive: `git branch Main` answers that it already exists.
+        for spelling in ("main", "Main", "MAIN", "heads/main", "refs/heads/main",
+                         "origin/main", "refs/remotes/origin/main"):
+            result = self.helper(spelling)
+            self.assertEqual(3, result.returncode, f"{spelling!r}: {result.stderr}")
+
     def test_naming_another_branch_does_not_act_on_it(self):
-        before = self.head()
+        # The guard is the refusal, not the exit code: `publish` exits 4 as
+        # well, and would have rebased the other branch on the way there.
         self.at("git checkout -qb feat/other")
-        self.assertEqual(4, self.helper("feat/x").returncode)
-        self.at("git checkout -q feat/x")
-        self.assertEqual(before, self.head())
+        other_before = self.at("git rev-parse feat/other").stdout.strip()
+        result = self.helper("feat/x")
+        self.assertEqual(4, result.returncode)
+        self.assertIn("only ever touches the current branch", result.stderr)
+        self.assertEqual(other_before, self.at("git rev-parse feat/other").stdout.strip(),
+                         "the branch in hand was replayed on the way to the refusal")
 
     def test_a_detached_head_is_refused(self):
         self.at("git checkout -q --detach HEAD")
-        self.assertEqual(4, self.helper("feat/x").returncode)
+        result = self.helper("feat/x")
+        self.assertEqual(4, result.returncode)
+        self.assertIn("detached HEAD", result.stderr,
+                      "the equality check below exits 4 too, so the code alone proves nothing")
 
     def test_a_dirty_tree_is_refused(self):
         self.at("echo uncommitted >> b.txt")
@@ -136,6 +163,30 @@ class TheHelperRefusesBeforeItRewrites(unittest.TestCase):
     def test_continue_and_abort_refuse_when_no_rebase_is_running(self):
         self.assertEqual(9, self.helper("feat/x", "continue").returncode)
         self.assertEqual(9, self.helper("feat/x", "abort").returncode)
+
+    def test_a_rebase_this_helper_did_not_start_is_not_published(self):
+        # An interactive rebase dropping the branch's commits passes every
+        # other check in `continue`: the published tip is what it started
+        # from, so the divergence guard is satisfied and the result — which
+        # holds none of the branch's work — would be forced over it.
+        published = self.at("git rev-parse refs/remotes/origin/feat/x").stdout.strip()
+        self.at('GIT_SEQUENCE_EDITOR="sed -i 1s/^pick/break/" '
+                'git rebase -i refs/remotes/origin/main')
+        result = self.helper("feat/x", "continue")
+        self.assertEqual(9, result.returncode, result.stderr)
+        self.assertIn("not started by this helper", result.stderr)
+        self.assertEqual(published, self.at("git rev-parse refs/remotes/origin/feat/x").stdout.strip(),
+                         "the remote still carries the branch's published work")
+        self.at("git rebase --abort")
+
+    def test_a_rebase_that_never_started_is_not_called_a_conflict(self):
+        # Every other way `git rebase` can fail leaves no state, and reporting
+        # it as a conflict sends the caller to a `continue` with nothing to do.
+        self.at('printf "#!/bin/sh\\nexit 1\\n" > "$(git rev-parse --git-path hooks)/pre-rebase" '
+                '&& chmod +x "$(git rev-parse --git-path hooks)/pre-rebase"')
+        result = self.helper("feat/x")
+        self.assertEqual(11, result.returncode, result.stderr)
+        self.assertIn("did not start", result.stderr)
 
 
 class AConflictIsTheCaseRebaseIsHereFor(unittest.TestCase):
@@ -190,6 +241,18 @@ class AConflictIsTheCaseRebaseIsHereFor(unittest.TestCase):
                          self.at("git rev-parse refs/remotes/origin/feat/x").stdout.strip(),
                          "the remote carries what was replayed")
 
+    def test_continue_fails_closed_when_the_starting_commit_is_unreadable(self):
+        # The lease alone would not stop this: another session's commits that
+        # this checkout has fetched satisfy it. Skipping the check that does
+        # would leave the only force push in the repository unguarded.
+        self.assertEqual(8, self.helper("start").returncode)
+        self.at('rm -f "$(git rev-parse --git-path rebase-merge)"/orig-head '
+                '"$(git rev-parse --git-path rebase-merge)"/head')
+        self.at('echo resolved > a.txt && git add a.txt')
+        result = self.helper("continue")
+        self.assertEqual(9, result.returncode, result.stderr)
+        self.assertIn("divergence", result.stderr)
+
     def test_abort_puts_the_branch_back_and_publishes_nothing(self):
         before = self.at("git rev-parse HEAD").stdout.strip()
         remote_before = self.at("git rev-parse refs/remotes/origin/feat/x").stdout.strip()
@@ -199,6 +262,49 @@ class AConflictIsTheCaseRebaseIsHereFor(unittest.TestCase):
         self.assertEqual("no", self.rebase_running())
         self.assertEqual(before, self.at("git rev-parse HEAD").stdout.strip())
         self.assertEqual(remote_before, self.at("git rev-parse refs/remotes/origin/feat/x").stdout.strip())
+
+
+class ALegacyMergeForwardIsNotSilentlyDropped(unittest.TestCase):
+    """A rebase drops merge commits, and a branch made under the old policy
+    has one. Where that merge carries content neither parent has, replaying
+    loses it before the push, which no lease can see."""
+
+    def setUp(self):
+        self.root = run_bash(FIXTURE).stdout.strip()
+        self.addCleanup(lambda: run_bash('rm -rf "$R"', R=self.root))
+        self.work = self.root + "/work"
+
+    def at(self, script):
+        return run_bash('cd "$W" && ' + script, W=self.work)
+
+    def helper(self, mode="start", branch="feat/x"):
+        return run_bash('cd "$W" && bash "$H" "$B" "$M"',
+                        W=self.work, H=str(HELPER), B=branch, M=mode)
+
+    def merge_forward(self):
+        self.at('git checkout -q main && echo later > d.txt && git add -A '
+                '&& git commit -qm "main moved again" && git push -q origin main '
+                '&& git checkout -q feat/x && git merge --no-edit -q main')
+
+    def test_a_merge_carrying_its_own_content_stops_the_run(self):
+        self.merge_forward()
+        self.at('echo only-here > resolved-by-hand.txt && git add -A '
+                '&& git commit -q --amend --no-edit && git push -q -f origin feat/x')
+        before = self.at("git rev-parse HEAD").stdout.strip()
+
+        result = self.helper()
+        self.assertEqual(10, result.returncode, result.stderr)
+        self.assertEqual(before, self.at("git rev-parse HEAD").stdout.strip(), "nothing was replayed")
+        self.assertEqual("only-here\n", self.at("cat resolved-by-hand.txt").stdout)
+
+    def test_an_ordinary_merge_forward_is_flattened_without_complaint(self):
+        # Its content is in its parents, so dropping it loses nothing.
+        self.merge_forward()
+        self.at('git push -q -f origin feat/x')
+        result = self.helper()
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual("", self.at("git log --merges --format=%H origin/main..HEAD").stdout,
+                         "the merge is gone and the branch is a line")
 
 
 class TheHelperPublishesWhatItRebased(unittest.TestCase):
