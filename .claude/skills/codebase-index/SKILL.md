@@ -42,6 +42,14 @@ named `codebase-index`; do not invoke that console script directly.
 | Describe X and its neighbourhood | `bash .claude/skills/codebase-index/scripts/cbx describe "X" --json` |
 | Is what I read earlier still true? | `bash .claude/skills/codebase-index/scripts/cbx verify --session <tag> --json` |
 
+**Pass `--limit 3`.** The default is ten and no configuration file changes
+it — `cli.py` and the MCP server both hardcode it — so the seven results past
+the third arrive whether or not they are read. On this corpus three ranks
+find the implementation a question asks for as often as ten do, for a third
+of the tokens. Widen to `--limit 5` when the question is which chapter owns
+a rule: those answers sit at ranks five to ten, and a grep over
+`docs/backend-architecture/` beats both. `explain` takes no `--limit`.
+
 Use `search --mode symbol` for exact symbol work, `--mode fts` for text and
 error messages, and the default `hybrid` mode for mixed questions. Use pure
 `vector` mode only when embeddings are enabled and exact vocabulary is unknown.
@@ -94,9 +102,13 @@ Verdict states and citing evidence in notes: [references/memory.md](references/m
 - **low** or no results — follow `fallback_suggestions`, then use a narrow
   Grep/Glob fallback.
 
-On `refs` and `impact`, inspect `coverage`. If `coverage.partial` is true, an
-empty result is inconclusive; confirm with targeted Grep before saying that
-nothing references the target.
+On `refs` and `impact`, an empty result is inconclusive whatever `coverage`
+reports. The C# graph carries call edges but not every use: a registration
+like `services.AddScoped<IFoo, Foo>()` is recorded against neither name, so
+`impact "Foo" --direction up` answers with no dependents and
+`coverage.partial: false` while four composition roots name it. Confirm with a
+targeted Grep before saying that nothing references the target, and never
+report an empty graph result as an absence.
 
 Edges carry `confidence`:
 
