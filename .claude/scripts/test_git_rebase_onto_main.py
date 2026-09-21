@@ -81,11 +81,12 @@ class TheFlagsAreTheScriptsOwn(unittest.TestCase):
         # fetch had since made of it, with the whole replay in between — the
         # lease would then name the commits the guard refused.
         self.assertIn('lease="$approved_lease"', self.source)
-        reads = [ln.strip() for ln in self.source.splitlines()
-                 if 'rev-parse "refs/remotes/origin/$branch"' in ln]
         self.assertEqual(
-            reads, ['approved_lease=$(git rev-parse "refs/remotes/origin/$branch")'],
-            "the remote tip is read once, by the guard, and that value is what forces")
+            1, self.source.count('approved_lease=$(git rev-parse "refs/remotes/origin/$branch")'),
+            "one place reads the remote tip into a lease, and it is the guard")
+        for line in self.source.splitlines():
+            self.assertNotRegex(line.strip(), r'^lease=\$\(git rev-parse',
+                                "a lease built from a fresh read names whatever a fetch has since made of it")
 
 
 class TheHelperRefusesBeforeItRewrites(unittest.TestCase):
@@ -109,7 +110,7 @@ class TheHelperRefusesBeforeItRewrites(unittest.TestCase):
     def test_it_takes_a_branch_and_a_mode(self):
         one = run_bash('cd "$W" && bash "$H" feat/x', W=self.work, H=str(HELPER))
         self.assertEqual(2, one.returncode)
-        self.assertEqual(2, self.helper("feat/x", "publish").returncode, "an unknown mode is refused")
+        self.assertEqual(2, self.helper("feat/x", "land").returncode, "an unknown mode is refused")
 
     def test_main_is_refused_even_while_main_is_checked_out(self):
         self.at("git checkout -q main")
@@ -333,6 +334,39 @@ class TheHelperPublishesWhatItRebased(unittest.TestCase):
         self.assertEqual(after, self.at("git rev-parse refs/remotes/origin/feat/x").stdout.strip())
         self.assertEqual("", self.at("git log --oneline HEAD..origin/main").stdout,
                          "and the branch now holds everything main does")
+
+    def test_configuration_cannot_change_what_the_replay_does(self):
+        # Both settings are the caller's, and both break a stated guarantee:
+        # one keeps the merge commits this helper exists to be rid of, the
+        # other force-updates other local branches' refs as a side effect.
+        self.at("git config rebase.rebaseMerges true && git config rebase.updateRefs true")
+        self.at('git checkout -q main && echo later > d.txt && git add -A '
+                '&& git commit -qm "main moved again" && git push -q origin main '
+                '&& git checkout -q feat/x && git merge --no-edit -q main '
+                '&& git push -q -f origin feat/x')
+        self.assertEqual(0, self.helper().returncode)
+        self.assertEqual("", self.at("git log --merges --format=%H origin/main..HEAD").stdout,
+                         "rebase.rebaseMerges would have kept the merge")
+
+    def test_a_push_that_fails_leaves_a_retry_that_works(self):
+        # The replay finishes and the push does not, taking the rebase state
+        # with it: `start` then reads the rewritten tip as non-ancestral and
+        # `continue` finds no rebase, so without the record nothing can reach
+        # the branch again.
+        # A `pre-push` hook, because the fetch has to succeed for the replay to
+        # happen at all — a broken remote fails earlier and proves nothing.
+        hooks = 'h="$(git rev-parse --git-path hooks)"; mkdir -p "$h"'
+        self.at(hooks + '; printf "#!/bin/sh\\nexit 1\\n" > "$h/pre-push"; chmod +x "$h/pre-push"')
+        self.assertNotEqual(0, self.helper().returncode, "the push must fail for this to mean anything")
+        rewritten = self.at("git rev-parse HEAD").stdout.strip()
+        self.assertEqual("", self.at("git log --oneline HEAD..origin/main").stdout,
+                         "the replay did finish; only the push did not")
+
+        self.assertEqual(9, self.helper("start").returncode, "start refuses while a replay waits")
+        self.at(hooks + '; rm -f "$h/pre-push"')
+        result = self.helper("publish")
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual(rewritten, self.at("git rev-parse refs/remotes/origin/feat/x").stdout.strip())
 
     def test_a_second_run_changes_nothing_and_does_not_force(self):
         self.assertEqual(0, self.helper().returncode)

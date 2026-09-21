@@ -6,22 +6,23 @@
 # is clean, and the remote carries nothing the work did not start from.
 # `.claude/settings.json` denies the raw force push, and that deny is untouched.
 
-# Three modes, because a conflict is the case rebase is here for. `start`
+# Four modes, because a conflict is the case rebase is here for. `start`
 # leaves a conflicted rebase in progress rather than aborting it: backing out
 # would send the caller to the merge commit this repository stopped making, so
 # the resolution lands in the replayed commit and the history stays a line.
-# `continue` publishes once the caller has resolved and staged, and `abort` is
+# `continue` publishes once the caller has resolved and staged. `publish` is
+# the retry when the replay finished and only the push failed, and `abort` is
 # the way back out without a raw `git rebase` grant.
 set -euo pipefail
 
 [ "$#" -eq 2 ] ||
-  { echo "usage: git-rebase-onto-main.sh <branch> <start|continue|abort>" >&2; exit 2; }
+  { echo "usage: git-rebase-onto-main.sh <branch> <start|continue|publish|abort>" >&2; exit 2; }
 branch="$1"
 mode="$2"
 
 case "$mode" in
-  start|continue|abort) ;;
-  *) echo "mode must be start, continue or abort, not: $mode" >&2; exit 2 ;;
+  start|continue|publish|abort) ;;
+  *) echo "mode must be start, continue, publish or abort, not: $mode" >&2; exit 2 ;;
 esac
 case "$branch" in
   -*) echo "branch name may not start with '-'" >&2; exit 2 ;;
@@ -92,6 +93,13 @@ require_remote_branch() {
 # of it, with the whole replay in between, so the lease would name the very
 # commits this check refused.
 approved_lease=""
+
+# It is written down as well as held, because the push can fail after the
+# replay has finished and taken the rebase state with it. Without the record
+# `start` then refuses the rewritten branch as non-ancestral and `continue`
+# finds no rebase, so the only granted way to publish is shut. git removes
+# nothing here, so `publish` clears it on success and `abort` on the way out.
+pending=$(git rev-parse --git-path claude-rebase-pending)
 require_remote_carries_nothing_new() {
   approved_lease=$(git rev-parse "refs/remotes/origin/$branch")
   git merge-base --is-ancestor "$approved_lease" "$1" ||
@@ -113,11 +121,18 @@ publish() {
     { echo "no lease was approved, so nothing here may force" >&2; exit 7; }
   head=$(git rev-parse HEAD)
   if [ "$head" = "$lease" ]; then
+    rm -f "$pending"
     echo "already published at $head; nothing to force"
     exit 0
   fi
   git push --force-with-lease="$branch:$lease" origin "$branch"
+  rm -f "$pending"
   echo "published $branch at $head"
+}
+
+# Written before the replay, so it survives a push that fails after it.
+remember_lease() {
+  printf '%s %s\n' "$branch" "$approved_lease" > "$pending"
 }
 
 # A rebase drops merge commits, and a merge can carry content that is in
@@ -166,6 +181,9 @@ case "$mode" in
   start)
     [ "$in_progress" -eq 0 ] ||
       { echo "a rebase is already in progress; finish it with 'continue' or leave it with 'abort'" >&2; exit 9; }
+    [ ! -f "$pending" ] ||
+      { echo "a replay from an earlier run is waiting to be published; run 'publish', or 'abort' to discard it" >&2
+        exit 9; }
     current=$(git branch --show-current)
     [ -n "$current" ] ||
       { echo "detached HEAD: there is no branch to publish" >&2; exit 4; }
@@ -183,8 +201,13 @@ case "$mode" in
     require_remote_branch
     require_remote_carries_nothing_new "$(git rev-parse HEAD)"
     require_no_merge_invented_anything
+    remember_lease
 
-    git rebase "refs/remotes/origin/main" || conflicted
+    # The flags are spelled rather than inherited. `rebase.rebaseMerges` would
+    # keep the merge commits this helper exists to be rid of, and
+    # `rebase.updateRefs` would force-update other local branches' refs as a
+    # side effect — both from configuration this script does not own.
+    git rebase --no-rebase-merges --no-update-refs "refs/remotes/origin/main" || conflicted
     publish
     ;;
 
@@ -212,6 +235,7 @@ case "$mode" in
       { echo "the rebase state names no starting commit, so divergence cannot be judged: 'abort' and start again" >&2
         exit 9; }
     require_remote_carries_nothing_new "$started_from"
+    remember_lease
 
     # The message is the replayed commit's own. An editor would stop the run on
     # a terminal nothing is attached to, so it is answered rather than opened.
@@ -219,7 +243,34 @@ case "$mode" in
     publish
     ;;
 
+  publish)
+    # The retry path. The replay finished and the push did not, so the rebase
+    # state is gone and nothing else here can reach the branch: `start` reads
+    # the rewritten tip as non-ancestral and `continue` finds no rebase.
+    [ "$in_progress" -eq 0 ] ||
+      { echo "a rebase is still in progress; finish it with 'continue'" >&2; exit 9; }
+    [ -f "$pending" ] ||
+      { echo "no replay is waiting to be published" >&2; exit 9; }
+    read -r recorded_branch recorded_lease < "$pending"
+    [ "$recorded_branch" = "$branch" ] ||
+      { echo "the waiting replay is $recorded_branch, not $branch" >&2; exit 4; }
+    require_remote_branch
+    # The remote must still be where the guard left it. If it moved, this lease
+    # was approved against a tip that no longer exists and re-approving it here
+    # would be the re-read this helper exists to avoid.
+    [ "$(git rev-parse "refs/remotes/origin/$branch")" = "$recorded_lease" ] ||
+      { echo "origin/$branch has moved since the replay was approved: 'abort' the record and start again" >&2
+        exit 7; }
+    approved_lease="$recorded_lease"
+    publish
+    ;;
+
   abort)
+    if [ "$in_progress" -eq 0 ] && [ -f "$pending" ]; then
+      rm -f "$pending"
+      echo "cleared the waiting replay; $branch is left where it is and nothing was published"
+      exit 0
+    fi
     [ "$in_progress" -eq 1 ] ||
       { echo "no rebase is in progress: 'abort' has nothing to undo" >&2; exit 9; }
     [ "$rebase_branch" = "$branch" ] ||
@@ -227,6 +278,7 @@ case "$mode" in
     [ -f "$state/started-by-this-helper" ] ||
       { echo "this rebase was not started by this helper, so it is not this helper's to undo" >&2; exit 9; }
     git rebase --abort
+    rm -f "$pending"
     echo "aborted; $branch is where it was and nothing was published"
     ;;
 esac
