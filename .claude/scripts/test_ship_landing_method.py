@@ -151,7 +151,8 @@ class TheMergeHelperRefusesWhatTheGrantAdmitted(unittest.TestCase):
         stub.write_text(NEWLINE.join((
             "#!/usr/bin/env bash",
             'if [ "$1 $2" = "repo view" ]; then printf "%s" "$STUB_OWNER"; exit "${STUB_OWNER_EXIT:-0}"; fi',
-            'if [ "$1 $2" = "pr view" ]; then printf "%s" "$*" > "$STUB_LOG.view"; printf "%s" "$STUB_VIEW"; exit 0; fi',
+            'if [ "$1 $2" = "pr view" ]; then printf "%s" "$*" > "$STUB_LOG.view"; '
+            'printf "%s" "$STUB_VIEW"; exit 0; fi',
             'if [ "$1 $2" = "pr merge" ]; then printf "%s" "$*" > "$STUB_LOG"; exit 0; fi',
             'echo "unexpected gh call: $*" >&2; exit 9',
             "")), encoding="utf-8", newline=NEWLINE)
@@ -189,12 +190,16 @@ class TheMergeHelperRefusesWhatTheGrantAdmitted(unittest.TestCase):
                          self.log.read_text(encoding="utf-8"))
 
     def test_the_binding_read_is_aimed_at_this_repository_and_asks_in_order(self):
-        # The stub prints one fixed row, so the field order is read from what
-        # was asked: a swapped list would bind the branch to the oid's column.
-        self.run_helper("7", self.OID)
+        # The stub prints one fixed row, so the column order is read from what
+        # was asked. The jq array decides it, not the `--json` list: a swapped
+        # array would bind the branch to the oid's column.
+        result = self.run_helper("7", self.OID)
+        self.assertEqual(0, result.returncode, result.stderr)
         asked = Path(str(self.log) + ".view").read_text(encoding="utf-8")
         self.assertIn("pr view 7 --repo acme/widgets", asked)
-        self.assertIn("--json headRefName,headRefOid,isCrossRepository,baseRefName", asked)
+        self.assertIn("[.headRefName, .headRefOid, (.isCrossRepository|tostring), .baseRefName] | @tsv", asked)
+        fields = asked.split("--json ", 1)[1].split(" ", 1)[0].split(",")
+        self.assertEqual({"headRefName", "headRefOid", "isCrossRepository", "baseRefName"}, set(fields))
 
     def test_a_trailing_flag_has_nowhere_to_go(self):
         self.assert_refused(self.run_helper("7", self.OID, "--admin"), "usage:")
