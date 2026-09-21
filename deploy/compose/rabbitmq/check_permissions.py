@@ -51,12 +51,12 @@ CONTRACTS = ROOT / "src" / "BuildingBlocks" / "Common.Contracts"
 DOCKERFILE = HERE / "Dockerfile"
 TESTS = ROOT / "tests"
 
-# Found, never listed. A constant naming the fixtures covers only the ones it
-# names, and a gate that stops covering the newest surface without a word is
-# the failure CLAUDE.md calls this repository's most-repeated. The glob is the
-# subject, so check 6 fails when it resolves to nothing rather than reporting
-# a pass over an empty set.
-FIXTURE_GLOB = "*.TestSupport/ServiceFixture.cs"
+# Found by what a file constructs, not by where it sits or what it is called.
+# A name in a constant covers the files it names and no others, and a gate
+# that stops covering the newest surface without a word is the failure
+# CLAUDE.md calls this repository's most-repeated. A fixture under any name,
+# anywhere under tests/, starts a broker by constructing one.
+BROKER_CONTAINER = re.compile(r"\bnew\s+RabbitMqBuilder\s*\(")
 
 # EVERY PATH OUTSIDE deploy/compose/rabbitmq THAT THIS SCRIPT READS, declared
 # once, on deploy/helm/smoke.sh's terms and check.py's. The workflow's filters
@@ -387,35 +387,131 @@ def main() -> int:
     return report()
 
 
-# A C# line comment and a URL's `//` are the same two characters, so a string
-# literal is matched first and what falls outside one is what may be dropped.
-_COMMENT_OR_STRING = re.compile(
-    r'@"(?:[^"]|"")*"|"(?:\\.|[^"\\])*"|//[^\n]*|/\*.*?\*/', re.S)
+# A builder alone is not the broker's: a fixture that builds a stub service's
+# image while pulling a stock broker would otherwise be excused from mapping
+# the configuration its own broker never loads. The chain has to name §14.1's
+# context, and it is read within one statement, so a builder elsewhere in the
+# file cannot stand in for this one.
+BUILDER = re.compile(r"\bnew\s+ImageFromDockerfileBuilder\s*\(")
+BROKER_CONTEXT = re.compile(
+    r"\bWithDockerfileDirectory\s*\(\s*BrokerContextPath\s*\(\s*\)\s*\)")
 
-# A call rather than the name anywhere in the file: prose or a literal naming
-# the builder would otherwise excuse a fixture from mapping the configuration.
-BUILDS_IMAGE = re.compile(r"\bnew\s+ImageFromDockerfileBuilder\s*\(")
+
+def _string_end(text: str, start: int) -> int:
+    """The index just past the literal opening at `start`."""
+    limit = len(text)
+    i = start
+    verbatim = False
+    while i < limit and text[i] in "@$":
+        verbatim = verbatim or text[i] == "@"
+        i += 1
+    opening = 0
+    while i < limit and text[i] == '"':
+        opening += 1
+        i += 1
+    if opening >= 3:
+        # A raw literal ends on a run of quotes at least as long as its own.
+        run = 0
+        while i < limit:
+            run = run + 1 if text[i] == '"' else 0
+            i += 1
+            if run >= opening:
+                return i
+        return limit
+    if opening != 1:
+        return i
+    while i < limit:
+        if text[i] == "\\" and not verbatim:
+            i += 2
+        elif text[i] != '"':
+            i += 1
+        elif verbatim and i + 1 < limit and text[i + 1] == '"':
+            i += 2
+        else:
+            return i + 1
+    return limit
+
+
+def _char_end(text: str, start: int) -> int:
+    """The index just past the char literal opening at `start`."""
+    limit = len(text)
+    i = start + 1
+    while i < limit:
+        if text[i] == "\\":
+            i += 2
+        elif text[i] == "'":
+            return i + 1
+        else:
+            i += 1
+    return limit
+
+
+def _opens_string(text: str, start: int) -> bool:
+    """Whether the `@` or `$` at `start` prefixes a literal."""
+    i = start
+    while i < len(text) and text[i] in "@$":
+        i += 1
+    return i < len(text) and text[i] == '"'
 
 
 def code_only(text: str, *, keep_strings: bool = True) -> str:
     """The fixture with its comments dropped, and its literals on request.
 
-    The mapping regex reads the paths out of a literal and needs them kept;
-    the builder search wants a call, and a literal spelling one out is not
-    one, so it asks for them masked.
+    The mapping regex reads the container paths out of a literal and needs
+    them kept; a search for a call wants them masked, because a literal
+    spelling a call out is not one. The scan runs left to right because a
+    pattern cannot tell a char literal from the start of a string: a lone
+    quote inside one opens a string that runs to the next quote in the file,
+    and inverts which half of it counts as code.
     """
-    def keep(match: re.Match[str]) -> str:
-        token = match.group()
-        if token.startswith("/"):
-            return " "
-        return token if keep_strings else '""'
+    out = []
+    limit = len(text)
+    i = held = 0
+    while i < limit:
+        here = text[i]
+        if here == "/" and i + 1 < limit and text[i + 1] in "/*":
+            if text[i + 1] == "/":
+                end = text.find("\n", i)
+                end = limit if end < 0 else end
+            else:
+                end = text.find("*/", i + 2)
+                end = limit if end < 0 else end + 2
+            out.append(text[held:i])
+            out.append(" ")
+            i = held = end
+        elif here == "'":
+            end = _char_end(text, i)
+            out.append(text[held:i])
+            # Masked either way: nothing reads a char literal's content, and a
+            # quote inside one is what breaks a pattern that tries.
+            out.append("' '")
+            i = held = end
+        elif here == '"' or (here in "@$" and _opens_string(text, i)):
+            end = _string_end(text, i)
+            out.append(text[held:i])
+            out.append(text[i:end] if keep_strings else '""')
+            i = held = end
+        else:
+            i += 1
+    out.append(text[held:])
+    return "".join(out)
 
-    return _COMMENT_OR_STRING.sub(keep, text)
+
+def builds_the_broker(code: str) -> bool:
+    """Whether one statement builds §14.1's image from its own context."""
+    for match in BUILDER.finditer(code):
+        end = code.find(";", match.end())
+        statement = code[match.end():end if end >= 0 else len(code)]
+        if BROKER_CONTEXT.search(statement):
+            return True
+    return False
 
 
 def broker_fixtures() -> list[Path]:
-    """Every service's test fixture, found rather than enumerated."""
-    return sorted(TESTS.glob(FIXTURE_GLOB))
+    """Every test file that starts a broker, found by what it constructs."""
+    return sorted(
+        path for path in TESTS.rglob("*.cs")
+        if BROKER_CONTAINER.search(code_only(read(path), keep_strings=False)))
 
 
 def check_fixture_matches_dockerfile() -> None:
@@ -431,14 +527,20 @@ def check_fixture_matches_dockerfile() -> None:
     """
     dockerfile = read(DOCKERFILE)
 
+    declared = len(re.findall(r"^COPY\b", dockerfile, re.M))
     copies = dict(re.findall(r"^COPY\s+(\S+)\s+(\S+)\s*$", dockerfile, re.M))
     if not copies:
         fail("Dockerfile: no COPY lines found — the pattern, not the file")
         return
+    if len(copies) != declared:
+        fail(f"Dockerfile: {declared} COPY line(s) and {len(copies)} read — the "
+             f"pattern, not the file. A line it cannot parse is a file nothing "
+             f"asks a fixture to map")
+        return
 
     fixtures = broker_fixtures()
     if not fixtures:
-        fail(f"tests/: `{FIXTURE_GLOB}` matched no fixture — the glob, not the tree. "
+        fail(f"tests/: no file constructs a broker — the search, not the tree. "
              f"Check 6 has no subject and would otherwise report a pass over nothing")
         return
 
@@ -452,10 +554,11 @@ def check_fixture_matches_dockerfile() -> None:
             text))
         if mapped:
             mapping[name] = mapped
-        elif not BUILDS_IMAGE.search(code_only(raw, keep_strings=False)):
+        elif not builds_the_broker(code_only(raw, keep_strings=False)):
             fail(f"{name}: maps none of the broker's configuration and builds no "
-                 f"image either, so its broker starts with none of the definitions "
-                 f"— no vhost, no per-service account and nothing to enforce")
+                 f"image from its context either, so its broker starts with none of "
+                 f"the definitions — no vhost, no per-service account, nothing to "
+                 f"enforce")
 
     if not mapping:
         fail(f"no fixture under tests/ maps the broker's configuration. Either every "
@@ -470,12 +573,14 @@ def check_fixture_matches_dockerfile() -> None:
                      f"does not map it. That fixture runs the STOCK image, so a file "
                      f"only the Dockerfile carries is a file its broker does not have")
                 continue
-            # The Dockerfile names the file; WithResourceMapping names the directory.
-            want = target.rsplit("/", 1)[0] + "/"
-            if mapped[source] != want:
+            # WithResourceMapping names the directory and keeps the file's own
+            # name, so the path it lands at is rebuilt rather than trimmed off
+            # the Dockerfile's: a COPY that renames is drift the directory alone
+            # cannot show.
+            want = mapped[source].rstrip("/") + "/" + source.rsplit("/", 1)[-1]
+            if want != target:
                 fail(f"`{source}`: the Dockerfile puts it at `{target}` and {name} "
-                     f"maps it into `{mapped[source]}`. One of the two brokers is not "
-                     f"reading it")
+                     f"puts it at `{want}`. One of the two brokers is not reading it")
 
         for source in sorted(set(mapped) - set(copies)):
             fail(f"{name} maps `{source}` and the Dockerfile does not COPY it, so the "

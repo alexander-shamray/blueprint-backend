@@ -24,6 +24,7 @@ from __future__ import annotations
 import copy
 import importlib.util
 import json
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -61,16 +62,23 @@ def run_against(definitions: dict) -> list[str]:
         gate.failures = original_failures
 
 
+# The whole chain check 6 looks for. A planted fragment that stops at the
+# constructor is refused for want of the context whichever way the scan goes,
+# so a case built on one would pass without exercising the mask at all.
+CHAIN = ("new ImageFromDockerfileBuilder()"
+         ".WithDockerfileDirectory(BrokerContextPath())")
+
+
 def fixture_text(name: str) -> str:
     return (gate.TESTS / name / "ServiceFixture.cs").read_text(encoding="utf-8")
 
 
-def run_over_fixtures(files: dict[str, str]) -> list[str]:
+def run_over_fixtures(files: dict[str, str], dockerfile: str = "") -> list[str]:
     """Run check 6 with the fixture set replaced, and return its failures.
 
     Keyed by the directory under `tests/`, so a case reads as the tree it
-    describes. Everything else the check opens is the real file: the
-    Dockerfile these are compared against is the one that ships, so a COPY
+    describes. Everything else the check opens is the real file, and the
+    Dockerfile is the one that ships unless a case passes its own: a COPY
     genuinely moved fails here too.
     """
     original_read = gate.read
@@ -80,6 +88,9 @@ def run_over_fixtures(files: dict[str, str]) -> list[str]:
         gate.TESTS / name / "ServiceFixture.cs": text
         for name, text in files.items()
     }
+    fixtures = sorted(paths)
+    if dockerfile:
+        paths[gate.DOCKERFILE] = dockerfile
 
     def fake_read(path: Path) -> str:
         if Path(path) in paths:
@@ -87,7 +98,7 @@ def run_over_fixtures(files: dict[str, str]) -> list[str]:
         return original_read(path)
 
     gate.read = fake_read
-    gate.broker_fixtures = lambda: sorted(paths)
+    gate.broker_fixtures = lambda: fixtures
     gate.failures = []
     try:
         gate.check_fixture_matches_dockerfile()
@@ -96,6 +107,7 @@ def run_over_fixtures(files: dict[str, str]) -> list[str]:
         gate.read = original_read
         gate.broker_fixtures = original_fixtures
         gate.failures = original_failures
+
 
 def real() -> dict:
     return json.loads((HERE / "definitions.json").read_text(encoding="utf-8"))
@@ -294,27 +306,46 @@ class TheFixtureCheckLooksAtEveryFixture(unittest.TestCase):
     """Check 6's subject: what it is looking at, not what it found.
 
     A case over the result cannot see a reach that has narrowed to whatever a
-    constant happens to name, so the glob is asserted against the tree on its
-    own, apart from any mapping.
+    constant happens to name, so the search is asserted against the tree on
+    its own, apart from any mapping. The expectation is spelled by a plain
+    substring over every `.cs` file under `tests/`, which shares neither the
+    pattern nor the scanner with the code it judges: two spellings of one
+    convention would agree with each other while both missed a fixture.
     """
 
-    def test_the_glob_reaches_every_fixture_in_the_tree(self):
+    def test_the_search_reaches_every_file_that_starts_a_broker(self):
         expected = {
-            path.name for path in gate.TESTS.glob("*.TestSupport")
-            if (path / "ServiceFixture.cs").exists()
+            path for path in gate.TESTS.rglob("*.cs")
+            if "RabbitMqBuilder" in path.read_text(encoding="utf-8")
         }
-        self.assertTrue(expected, "no fixture on disk: the case, not the gate")
-        found = {path.parent.name for path in gate.broker_fixtures()}
-        self.assertEqual(expected, found)
+        self.assertTrue(expected, "no broker fixture on disk: the case, not the gate")
+        self.assertEqual(expected, set(gate.broker_fixtures()))
+
+    def test_a_fixture_under_another_name_is_still_found(self):
+        # The narrowing a filename constant cannot report: a broker fixture
+        # that is neither `*.TestSupport` nor `ServiceFixture.cs`. Planted in
+        # a temporary tree, because a case that writes into the checkout it is
+        # judging leaves the next check reading its leftovers.
+        original_tests = gate.TESTS
+        with tempfile.TemporaryDirectory() as tmp:
+            planted = Path(tmp) / "Platform.IntegrationTests" / "BrokerHarness.cs"
+            planted.parent.mkdir(parents=True)
+            planted.write_text(fixture_text("Catalog.TestSupport"), encoding="utf-8")
+            gate.TESTS = Path(tmp)
+            try:
+                self.assertEqual([planted], gate.broker_fixtures())
+            finally:
+                gate.TESTS = original_tests
 
     def test_the_real_fixtures_pass(self):
         # The positive control the mutations below are evidence against.
+        original_failures = gate.failures
         gate.failures = []
         try:
             gate.check_fixture_matches_dockerfile()
             self.assertEqual([], gate.failures)
         finally:
-            gate.failures = []
+            gate.failures = original_failures
 
     def test_a_drift_outside_the_first_fixture_is_refused(self):
         # A mapping moved in a fixture other than the first: the case a
@@ -330,44 +361,136 @@ class TheFixtureCheckLooksAtEveryFixture(unittest.TestCase):
             any("Inventory.TestSupport" in f for f in failures),
             f"a moved mapping outside the named fixture went unreported: {failures}")
 
-    def test_a_fixture_that_neither_maps_nor_builds_is_refused(self):
-        # Its broker starts with no definitions and seeds `guest`, which is
-        # the silent green this check exists for.
-        neither = fixture_text("Catalog.TestSupport").replace(
-            "WithResourceMapping", "WithNothingAtAll")
-        failures = run_over_fixtures({"Catalog.TestSupport": neither})
+    def refuses(self, fixture: str, saying: str, because: str) -> None:
+        """One unmapped fixture, and the branch the failure has to come from.
 
+        The fixture's name alone does not say which branch fired — several
+        carry it — so every case here names the sentence it expects.
+        """
+        failures = run_over_fixtures({"Catalog.TestSupport": fixture})
         self.assertTrue(
-            any("Catalog.TestSupport" in f for f in failures),
-            f"a fixture configuring nothing was accepted: {failures}")
+            any(saying in f for f in failures),
+            f"{because}: {failures}")
+
+    def unmapped(self, prefix: str = "") -> str:
+        """Catalog's fixture with its mappings gone, under an optional header."""
+        return prefix + fixture_text("Catalog.TestSupport").replace(
+            "WithResourceMapping", "WithNothing")
+
+    def test_a_fixture_that_neither_maps_nor_builds_is_refused(self):
+        # Its broker starts with none of the definitions, which is the silent
+        # green this check exists for.
+        self.refuses(self.unmapped(), "builds no image from its context",
+                     "a fixture configuring nothing was accepted")
 
     def test_a_fixture_naming_the_builder_in_prose_only_is_refused(self):
-        # A comment is not a built image, and the fixture below maps nothing,
-        # so its broker has none of the definitions whatever the prose says.
-        prose = "// new ImageFromDockerfileBuilder()\n" + fixture_text(
-            "Catalog.TestSupport").replace("WithResourceMapping", "WithNothing")
-        failures = run_over_fixtures({"Catalog.TestSupport": prose})
-
-        self.assertTrue(
-            any("Catalog.TestSupport" in f for f in failures),
-            f"a commented-out builder excused a fixture that maps nothing: {failures}")
+        # A comment is not a call, whatever the prose says.
+        self.refuses(self.unmapped("// " + CHAIN + "\n"),
+                     "builds no image from its context",
+                     "a commented-out builder excused a fixture that maps nothing")
 
     def test_a_fixture_naming_the_builder_in_a_literal_only_is_refused(self):
         # A string is not a call either. The mapping regex reads the paths out
         # of the literals, so only the builder search masks them.
-        literal = 'const string B = "new ImageFromDockerfileBuilder(";\n' + fixture_text(
-            "Catalog.TestSupport").replace("WithResourceMapping", "WithNothing")
-        failures = run_over_fixtures({"Catalog.TestSupport": literal})
+        self.refuses(
+            self.unmapped('const string B = "' + CHAIN + '";\n'),
+            "builds no image from its context",
+            "a literal naming the builder excused a fixture that maps nothing")
+
+    def test_a_fixture_naming_the_builder_type_without_building_is_refused(self):
+        # The shape the two cases above cannot tell apart from a call: the type
+        # in live code, constructing nothing.
+        self.refuses(
+            self.unmapped("System.Type t = typeof(ImageFromDockerfileBuilder);\n"),
+            "builds no image from its context",
+            "naming the type excused a fixture that maps nothing")
+
+    def test_a_fixture_building_some_other_image_is_refused(self):
+        # A builder is not the broker's builder. This one runs a stock broker
+        # with none of the definitions while building a service's image.
+        self.refuses(
+            self.unmapped("IFutureDockerImage app = new ImageFromDockerfileBuilder()\n"
+                          "    .WithDockerfileDirectory(AppContextPath()).Build();\n"),
+            "builds no image from its context",
+            "a builder for another image excused a fixture that maps nothing")
+
+    def test_a_char_literal_does_not_open_a_string(self):
+        # A lone quote inside a char literal opened one that ran to the next
+        # quote in the file, which inverted which half of it counted as code.
+        self.refuses(
+            self.unmapped('private static string U(string v) => v.Trim(\'"\');\n'
+                          'const string B = "' + CHAIN + '";\n'),
+            "builds no image from its context",
+            "a char literal let a string stand in for a call")
+
+    def test_a_raw_literal_is_masked_whole(self):
+        # A raw literal's body was masked only while its own quotes were even.
+        self.refuses(
+            self.unmapped('const string N = """\n'
+                          '    Ordering builds with "ImageFromDockerfileBuilder.\n'
+                          '    Not us: ' + CHAIN + ' is its route.\n'
+                          '    """;\n'),
+            "builds no image from its context",
+            "a raw literal leaked its body into the code")
+
+    def test_a_commented_out_mapping_is_not_a_mapping(self):
+        # The other half of the same scan: a mapping behind `//` is not one,
+        # and reading it as one is a broker configured by nothing.
+        commented = fixture_text("Catalog.TestSupport").replace(
+            "            .WithResourceMapping", "            // .WithResourceMapping")
+        self.refuses(commented, "builds no image from its context",
+                     "a commented-out mapping was counted as a real one")
+
+    def test_a_fixture_that_stops_mapping_one_file_is_refused(self):
+        # The drift the wrong-directory case cannot show: a file the image
+        # carries and the test broker does not.
+        dropped = fixture_text("Catalog.TestSupport").replace(
+            '"20-commerce.conf"', '"nothing.conf"')
+        self.refuses(dropped, "does not map it",
+                     "a file the fixture stopped mapping went unreported")
+
+    def test_a_fixture_mapping_a_file_the_image_lacks_is_refused(self):
+        # The mirror, from the same mutation: a file the test broker carries
+        # and the image does not.
+        dropped = fixture_text("Catalog.TestSupport").replace(
+            '"20-commerce.conf"', '"nothing.conf"')
+        self.refuses(dropped, "the Dockerfile does not COPY it",
+                     "a mapping of a file the image lacks went unreported")
+
+    def test_a_copy_that_renames_the_file_is_refused(self):
+        # The image would hold `renamed.conf` and the test broker
+        # `20-commerce.conf`. RabbitMQ loads the definitions by the path the
+        # configuration names, so a renamed copy boots with none of them —
+        # the directory alone cannot show it, because the directory agrees.
+        renaming = gate.read(gate.DOCKERFILE).replace(
+            "COPY 20-commerce.conf /etc/rabbitmq/conf.d/20-commerce.conf",
+            "COPY 20-commerce.conf /etc/rabbitmq/conf.d/renamed.conf")
+        failures = run_over_fixtures(
+            {"Catalog.TestSupport": fixture_text("Catalog.TestSupport")}, renaming)
 
         self.assertTrue(
-            any("Catalog.TestSupport" in f for f in failures),
-            f"a literal naming the builder excused a fixture that maps nothing: {failures}")
+            any("renamed.conf" in f for f in failures),
+            f"a COPY that renames the file reported a pass: {failures}")
 
-    def test_a_glob_matching_nothing_is_refused(self):
+    def test_a_copy_the_pattern_cannot_read_is_refused(self):
+        # The Dockerfile side of the same failure the fixtures had: a third
+        # COPY nothing parses is a file no fixture is ever asked to map.
+        unparsed = gate.read(gate.DOCKERFILE).replace(
+            "COPY definitions.json /etc/rabbitmq/definitions.json",
+            "COPY definitions.json /etc/rabbitmq/definitions.json\n"
+            "COPY --chmod=644 30-extra.conf /etc/rabbitmq/conf.d/30-extra.conf")
+        failures = run_over_fixtures(
+            {"Catalog.TestSupport": fixture_text("Catalog.TestSupport")}, unparsed)
+
+        self.assertTrue(
+            any("the pattern, not the file" in f for f in failures),
+            f"a COPY line the pattern cannot read went unreported: {failures}")
+
+    def test_a_search_matching_nothing_is_refused(self):
         failures = run_over_fixtures({})
 
         self.assertTrue(
-            any("the glob, not the tree" in f for f in failures),
+            any("the search, not the tree" in f for f in failures),
             f"an empty fixture set reported a pass: {failures}")
 
 
