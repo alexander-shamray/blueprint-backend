@@ -124,16 +124,22 @@ the checkout the **edited path** belongs to, resolved before it is walked.
 `cwd` answers when the event names no file and `CLAUDE_PROJECT_DIR` when it
 names neither, and the three differ exactly when it matters: an edit is
 admitted against the session's tree or the one it forked from, so only the
-file's own path says which of them changed. Otherwise the index is refreshed
-only when a query reports it stale and `SKILL.md`'s instruction is followed
-— freshness as a property of having asked rather than of having edited. The
-hook spawns the CLI detached, discards both streams and always returns 0: it
-runs on every edit, so it may not make one wait, and an index that cannot
-refresh is not a reason to fail the edit that provoked it. The exit status is
-the one thing it does keep, and a request whose update failed goes back rather
-than counting as served: contention is what fails here, the streams that would
-have said so are gone, and the loser may be the run carrying the newest edit.
-A checkout with no index is left alone, because unindexed is not stale.
+file's own path says which of them changed. The hook spawns the CLI detached,
+discards both streams and always returns 0: it runs on every edit, so it may
+not make one wait, and an index that cannot refresh is not a reason to fail
+the edit that provoked it. The exit status is the one thing it does keep, and
+a request whose update failed goes back rather than counting as served:
+contention is what fails here, the streams that would have said so are gone,
+and the loser may be the run carrying the newest edit. A checkout with no
+index is left alone, because unindexed is not stale.
+
+**`SessionStart` runs the same script, for the moves no edit makes.** A merge,
+a switch or a pull rewrites the tree with no tool event behind it, so a session
+opening onto one of those reads an index describing the tree it replaced. The
+event names no file, which is what the `cwd` fallback above is for, and the
+spawn is the same detached one, so a session start waits for nothing. What is
+left to a query's stale report is the tree that moves mid-session, and that is
+the one a person is present for.
 
 **A hook command needs no shell, and that is a constraint rather than a
 preference.** An env-var prefix — `VAR=1 cmd` — is POSIX syntax that `cmd`

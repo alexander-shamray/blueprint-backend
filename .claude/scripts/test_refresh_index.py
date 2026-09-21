@@ -38,15 +38,24 @@ def _load():
     return module
 
 
-def entries_running_the_hook(settings: Path) -> list:
-    """The PostToolUse entries of `settings` that run this hook, and no others."""
+def entries_running_the_hook(settings: Path) -> dict:
+    """The entries of `settings` that run this hook, keyed by hook event.
+
+    Every event, because a read naming one compares two registrations that
+    agree there and are free to disagree anywhere else.
+    """
     document = json.loads(settings.read_text(encoding="utf-8"))
-    return [
-        entry
-        for entry in document.get("hooks", {}).get("PostToolUse", [])
-        if any(hook.get("type") == "command" and hook.get("command") == COMMAND
-               for hook in entry.get("hooks", []))
-    ]
+    running = {}
+    for event, entries in (document.get("hooks") or {}).items():
+        matched = [
+            entry
+            for entry in entries
+            if any(hook.get("type") == "command" and hook.get("command") == COMMAND
+                   for hook in entry.get("hooks", []))
+        ]
+        if matched:
+            running[event] = matched
+    return running
 
 
 class _Completed:
@@ -526,7 +535,7 @@ class Registration(Base):
         The entries are narrowed to the ones that run this hook before their
         matchers are read. Asking for a command and for a matcher separately
         is satisfied by a second entry that has one and not the other."""
-        mine = entries_running_the_hook(SETTINGS)
+        mine = entries_running_the_hook(SETTINGS).get("PostToolUse", [])
 
         # Split before comparing: `"Edit" in "NotebookEdit|MultiEdit"` is
         # true, so a matcher that had lost plain Edit would satisfy a
@@ -540,6 +549,10 @@ class Registration(Base):
         self.assertTrue(mine, f"nothing in {SETTINGS} runs the hook")
         for tool in ("Edit", "Write", "MultiEdit", "NotebookEdit"):
             self.assertIn(tool, matched, mine)
+
+    def test_settings_refreshes_at_session_start(self):
+        """The moves no edit makes: a merge, a switch or a pull."""
+        self.assertIn("SessionStart", entries_running_the_hook(SETTINGS))
 
 
 class DocumentedConfiguration(unittest.TestCase):
