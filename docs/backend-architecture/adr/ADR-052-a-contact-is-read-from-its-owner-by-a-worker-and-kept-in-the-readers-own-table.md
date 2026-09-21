@@ -215,8 +215,8 @@ exception's text.
 
 **The pull request that builds each service amends the places that say the
 BFF is alone**, as ADR-051 left its list to the pull request that builds
-it. The list is written out for ADR-051's reason, and three rows are gates
-that go red, which are the rows a builder must not learn from CI:
+it. The list is written out for ADR-051's reason, and the rows marked
+**asserted** are gates that go red, which a builder must not learn from CI:
 
 | Owner | What it says today |
 |---|---|
@@ -231,6 +231,8 @@ that go red, which are the rows a builder must not learn from CI:
 | `deploy/helm/common/templates/_helpers.tpl` | `identity.clientCredentials` refused on any chart but `web-bff`, by a `fail` that names the chart — **asserted**: a second credentialed chart does not render until that comparison moves |
 | `deploy/helm/smoke.sh` | "exactly one chart declares client credentials", "exactly one workload in the platform holds a client secret", "and it is the BFF", and a loop requiring every other chart to refuse the key — all **asserted** |
 | `tests/Web.Bff.Tests/RealmClientTests.cs` | `It_is_the_only_service_account_client_in_the_realm`, **asserted** over the realm export: the first new client turns it red until the expected set names it |
+| `tests/Common.Web.Tests/RealmImportTests.cs` | `No_client_ships_a_secret_but_the_one_whose_grant_needs_one`, **asserted**: any client but `web-bff` that ships a secret turns it red until the credentialed set names it. And `The_permission_vocabulary_is_a_closed_set_of_client_roles`, **asserted** as the whole set: `orders:delivery-address` turns it red until the list names it |
+| `tests/Web.Bff.Tests/KeycloakIdentityTests.cs` | A comment that the permission vocabulary "belongs to people, not to hosts", which is why Catalog's gRPC service asks for authentication and no permission. Shipping's client is the first host to hold one, because its read crosses subjects and an authenticated caller alone would let the BFF's client make it |
 | `deploy/helm/catalog/` | "the platform's one gRPC server" in `Chart.yaml`; in `values.yaml`, the second port as "the BFF's one synchronous hop" |
 | `deploy/compose/README.md` | The BFF as "the only host that mints one of its own" |
 | `docs/runbooks/latency.md` | "exactly one synchronous hop in this platform" |
