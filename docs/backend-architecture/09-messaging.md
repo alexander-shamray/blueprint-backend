@@ -125,6 +125,11 @@ bought to avoid.
 > where the code that needs the address will be in front of whoever chooses it.
 > A postal address is personal data under GDPR Art. 4, and §11.7's erasure
 > choreography has no way to reach it on any of those three surfaces.
+>
+> **Shipping does call back, and not from a consumer.**
+> [ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)
+> has a worker read the address from Ordering over a row of its own, so no
+> message waits on the call that sentence warned against.
 
 ## 9.2 Versioning
 
