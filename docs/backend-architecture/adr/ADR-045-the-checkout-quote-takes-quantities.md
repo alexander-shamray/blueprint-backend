@@ -184,6 +184,20 @@ it holds cross-boundary facts about each, and this is one.
   is now a `POST` with a body, which is no longer something a reader can paste
   into a browser.
 
+> **The `Web.Bff` consequence above is superseded by
+> [ADR-051](ADR-051-the-buyers-order-read-is-a-projection-in-the-bff.md),
+> and nothing here has been edited.** An ADR is superseded and never
+> rewritten: the decision this record took — the quote takes quantities,
+> and `v1` changes in place — is untouched and still binding, and so is
+> the reason `OrderLimits` crosses at all.
+>
+> **What moved is the prohibition, not the boundary it protects.** The
+> BFF now consumes three of Ordering's published integration contracts,
+> because ADR-051 serves the buyer's order read from a projection rather
+> than from a fan-out. Reaching across §4.2 through a project reference
+> is still refused; a published contract is the supported way across, and
+> the reference itself still carries `OrderLimits` and nothing else.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)

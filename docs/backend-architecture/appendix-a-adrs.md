@@ -57,6 +57,7 @@ decision looks wrong.
 | **ADR-048** | [A reservation row is kept for as long as its order](adr/ADR-048-a-reservation-row-is-kept-for-as-long-as-its-order.md) |
 | **ADR-049** | [A cancellation Payments has recorded declines the authorisation that follows](adr/ADR-049-a-cancellation-payments-has-recorded-declines-the-authorisation-that-follows.md) |
 | **ADR-050** | [The rollout reads the image's facts from the image's revision](adr/ADR-050-the-rollout-reads-the-images-facts-from-its-revision.md) |
+| **ADR-051** | [The buyer's order read is a projection in the BFF](adr/ADR-051-the-buyers-order-read-is-a-projection-in-the-bff.md) |
 
 ---
 

@@ -1168,6 +1168,191 @@ Where the line goes is stated with the rest of the pipeline in §4.2:
 outermost, above `UseExceptionHandler`, so nothing below it can answer without
 the header.
 
+## 10.7 The buyer's order read
+
+[ADR-051](adr/ADR-051-the-buyers-order-read-is-a-projection-in-the-bff.md)
+decides where this read is served from: a projection `Web.Bff` owns, and no
+synchronous call. What follows is its wire contract, which the one consumer
+helped write and builds against.
+
+Two routes, because a list and a detail answer different questions and §10.1's
+rule is that the screen's question is the whole of the request:
+
+| | Path |
+|---|---|
+| Client calls | `/bff/v1/orders?cursor=&limit=` |
+| Gateway matches | `/bff/{**catch-all}` |
+| Gateway strips | `/bff` |
+| Service receives | `/v1/orders` |
+| Service maps | `MapGroup("/v1/orders")` |
+
+The detail route is that group's `/{id:guid}`. Neither needs a gateway change:
+§10.2's `web-bff` route already matches the whole `/bff` namespace. The path
+repeats Ordering's `/v1/orders` deliberately — §10.2 strips a different prefix
+to reach each, and `/api` and `/bff` are the two namespaces that distinction
+exists to keep apart.
+
+**The subject is bound from the principal and never from the request** —
+§11.4's rule, which §6.5 states for a read in the words that matter here: a
+customer a caller could name returns a page of somebody else's history. An
+order another buyer owns answers **404 rather than 403**, as cancel already
+does, because 403 confirms that the order exists.
+
+The list returns `CursorPage<T>`; pagination is mandatory and cursor-based by
+default (§6.5, ADR-016), and `limit` is clamped server-side.
+
+### The status a buyer is shown
+
+A closed vocabulary, for the reason §10.5 gives for `Error`'s: a client that
+switches on a string needs the set enumerable and stable, and an open set
+makes every unknown member a rendering fault met in production.
+
+| Status | Reached by |
+|---|---|
+| `placed` | `OrderPlaced` |
+| `confirmed` | `OrderConfirmed` |
+| `dispatched` | `ShipmentDispatched` |
+| `delivered` | `ShipmentDelivered` |
+| `cancelled` | `OrderCancelled`, below |
+| `out_of_stock` | `OrderCancelled`, below |
+| `declined` | `OrderCancelled`, below |
+
+**The status is the highest-ranked member the projection has absorbed, never
+the latest one.** Rank descends as the table reads, `delivered` highest and
+`placed` lowest, with the three `OrderCancelled` members sharing one rank
+because one event decides between them. §9.4 orders nothing between
+consumers, so `ShipmentDispatched` arriving before `OrderConfirmed` is
+ordinary rather than exotic, and a redelivery of either is ordinary too.
+Ranking rather than overwriting is what makes both harmless. §6.6 buys the
+same property for `ordering.OrderSummaries` with `UpdatedAt < @OccurredAt`,
+and **that guard cannot be copied here**: its timestamps are minted by
+Ordering's one clock, while these are minted by four hosts. A rank is
+monotonic without a clock, which is why this projection uses one.
+
+A cancellation therefore outranks a despatch, and the case is real rather
+than defensive. `Order.Cancel` refuses once the order is `Shipped`, so an
+`OrderCancelled` on the wire is proof the order was cancelled before
+despatch; §9.6's compensation can still leave a `ShipmentDispatched` behind
+it, which is the interleaving `MarkOrderShippedHandler` answers without
+shipping anything. Showing the later event would tell a buyer their cancelled
+order is on its way.
+
+#### Which cancellation a buyer is told about
+
+**Keyed on `Origin` first and `Reason` second**, because `Reason` alone is
+wrong. `Order.Cancel` records the origin and never checks it, and the cancel
+endpoint accepts all five reason codes — so a buyer may cancel with the
+saga's own vocabulary, and a `Reason`-only map answers a buyer who typed
+`payment_declined` by telling them their card was refused.
+
+| `Origin` | `Reason` | Status |
+|---|---|---|
+| `user` | any | `cancelled` |
+| `workflow` | `out_of_stock`, `stock_timeout` | `out_of_stock` |
+| `workflow` | `payment_declined`, `payment_timeout` | `declined` |
+| `workflow` | `customer_request` | `cancelled` |
+| absent | any | `cancelled` |
+
+`Origin` is optional and additive under §9.2: absent means the payload
+predates the field, which an error queue or a replay can deliver at any time.
+It reads as `cancelled` because that is the member that claims least — an
+absent origin is no evidence that the platform refused anything, and
+inventing a refusal is the harmful direction of a wrong guess.
+
+The two collapses are the platform's distinctions rather than the buyer's:
+stock that was never there and stock that did not answer in time are both
+`out_of_stock`, and an authorisation declined and one that timed out are both
+`declined`. Payments' own decline reasons never travel — they are the
+provider's codes and an open set (ADR-049) — so they stop at the service that
+owns them.
+
+**Neither the saga's states nor `OrderStatus` reaches the client**, and the
+two do not agree with one another in any case (§9.6, §5.4). `AwaitingStock`
+and `AwaitingPayment` are both `placed` to a buyer, which is also forced:
+`OrderStockConfirmedDomainEvent` is not on Ordering's publish allow-list, so
+no consumer can tell them apart. `Compensating` has no buyer meaning at all —
+what the buyer is owed is the outcome it works towards, and that arrives as
+`OrderCancelled`.
+
+> **`dispatched` and `delivered` wait on Shipping.** No service publishes
+> `ShipmentDispatched` or `ShipmentDelivered` yet; §3.2 assigns them to
+> Shipping, which is specified after this contract is agreed. Until it ships,
+> the reachable set is the other five and the routes are honest about
+> carrying no shipment. This is the timing the issue asked for — the contract
+> settled before the spec, so the spec is written against it.
+
+### The fields both routes carry
+
+- **`asOf`**, the BFF's own clock at the last write to this order's row. One
+  value from one clock, which is what makes it well defined when four streams
+  feed the row; it says when the projection last learned something and **not**
+  that nothing has happened since. §6.6 requires the API to expose staleness
+  rather than hide it, and the BFF has no write model to read a consistent
+  status from the way §6.6's own remedy assumes.
+- **`refunded`**, a flag and a timestamp beside the status rather than a
+  member of it. `Refund.Voided` has one caller, the handler for
+  `OrderCancelled`, and it runs only where an authorisation exists — so every
+  refund follows a cancellation, and a refund as a status would overwrite the
+  `out_of_stock` and `declined` distinction the table above exists to draw.
+- **`cancellable`**, **a hint and not an authority.** Only Ordering knows:
+  the rule is `Order.Cancel`'s, the field is computed from a projection that
+  lags it, and during the window between a despatch reaching the saga and
+  reaching this queue the hint reads `true` while the command would answer
+  422. The client keeps its `order.already_shipped` handling and uses the
+  field to choose what to offer, never to predict what will be accepted.
+- **A timestamp per status reached**, so a timeline is drawn from facts rather
+  than from arithmetic on the client. Every event named above carries
+  `OccurredAt`. They come from four hosts, so they order a timeline a person
+  reads and never a decision the code makes — the rank above is what decides.
+- **Money as the server's numbers**, an amount and a currency per line and in
+  total. The client formats and never computes: §10.1's rule against
+  aggregating a figure the client has to redo is the same rule one field down.
+
+The detail route adds the quantity and unit price each line was placed with,
+and the payment outcome where there is one to give — an authorisation or a
+refund. A declined payment has none: `PaymentDeclined` carries only a reason
+that may not travel, so the order's own status is what says so.
+
+**`productName` is nullable, and the null is not an edge case.** The name is
+resolved on read from Catalog's stream, not snapshotted with the line, so a
+product published before this projection's queue was declared has no name to
+resolve — the broker drops what no queue is bound for. §6.6 documents the
+same gap for `ordering.Products`, including that the rebuild procedure does
+not exist yet and that `PriceChanged` is no back door because it carries no
+name. Here the consequence is softer than Ordering's 422 and quieter for it:
+a blank line in order history with no error anywhere, which is why the
+contract names it rather than leaving a client to meet it.
+
+### An order the projection cannot yet attribute
+
+Five of the eight events carry an order id and no customer: both shipment
+events and all three payment events, the last by ADR-028's decision that a
+money movement carries no subject. They are attributed by joining to a row
+one of Ordering's three events created, and §9.4 does not promise that one
+did.
+
+**So the projection inserts on a missing row rather than dropping the event**
+— §6.6's own remedy, whose absence it names as a defect that leaves an order
+reading one status for ever with no error anywhere — **and a row with no
+owner is never returned by either route.** It is invisible to everyone until
+an Ordering event supplies the customer, and if none ever arrives it stays
+invisible. That is the correct failure: an unattributable order shown to the
+wrong buyer is the one outcome this contract must not produce, and §11.4's
+subject rule is not satisfied by a best guess. ADR-051's rebuild replays from
+the broker's retention window, so an order whose `OrderPlaced` has aged out
+and whose `ShipmentDelivered` has not is exactly such a row.
+
+> **What this asks of Shipping, and it is one thing.** The shipment half of
+> the detail route is as rich as Shipping's published events, and §3.2 gives
+> it two that carry an order id and a tracking number between them. So a
+> buyer sees despatch, delivery and a number to take to the carrier, and a
+> **tracking feed needs an event that does not exist yet**. Shipping's spec
+> decides that and nothing else here: either it publishes tracking as it
+> arrives, and the detail route grows a list that is additive, or it does not
+> and the two milestones are the timeline. What the spec is **not** asked for
+> is a read endpoint — ADR-051 exists so that it is not, and §3.2, §4.1, §13
+> and §15 all describe a Shipping that has none.
+
 ---
 
 [← §9 Messaging](09-messaging.md) · [Index](README.md) · [§11 Identity →](11-identity-authorization.md)
