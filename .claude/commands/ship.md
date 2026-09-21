@@ -1345,7 +1345,10 @@ because asking failed.
    Kept to, this is also what keeps step 0's merge read a guard rather than a
    routine case: a branch that is only ever rebased never carries a merge
    commit at all. A branch that already carries one from before this rule is
-   what the helper refuses, because a replay would drop it.
+   read rather than refused outright: a replay drops every merge, so the
+   helper stops only where the merge holds something neither parent does — a
+   conflict resolved while merging — and flattens an ordinary merge-forward,
+   whose content its parents already carry.
 
    **Read `state` on every pass of the poll, before `mergeable`.** A PR closed
    or merged elsewhere while the review loops ran — and those loops are the
