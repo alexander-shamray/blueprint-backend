@@ -176,31 +176,16 @@ public sealed class ServiceFixture : IAsyncLifetime
     // ValueTask, not Task: xUnit v3 redefined IAsyncLifetime (§12.4).
     public async ValueTask InitializeAsync()
     {
-        // §14.1's broker CONFIGURATION on the stock image, rather than
+        // §14.1's broker configuration on the stock image, rather than
         // §14.1's built image. Inventory needs the per-service accounts and
-        // does not need ADR-021's delayed-exchange plugin: it runs no saga and
-        // schedules nothing, so the only thing the build would buy it is the
-        // one thing it cannot use.
-        //
-        // **NOT BUILDING IS THE FIX, AND RENAMING THE IMAGE WAS NOT.**
-        // Testcontainers writes the build context to a tar named after the
-        // image, so two processes building one name race on that file. Naming
-        // the image per FIXTURE looked like enough and was measured green
-        // locally — but the axis is the PROCESS, and this fixture has two
-        // consumers: `Inventory.Api.Tests` and `Inventory.Application.Tests` run as
-        // separate test hosts and both instantiate it. CI failed all 60 and all
-        // 11 of them, in 128 ms and 51 ms, with "Cannot locate specified
-        // Dockerfile" — the loser reading a tar the winner had not finished
-        // writing. A fixture fault wearing a suite-wide failure, again.
-        //
-        // Ordering's fixture still builds, because the plugin leaves it no
-        // choice, and it has exactly one consumer today. That is a premise
-        // about who calls it, so it is written down where the next caller will
-        // read it rather than assumed.
-        //
-        // The two mapped paths must match the Dockerfile's COPY targets. They
-        // are the second copy of those paths, and `check_permissions.py`
-        // asserts the two agree rather than leaving it to a reader.
+        // not ADR-021's delayed-exchange plugin: it runs no saga and
+        // schedules nothing, so the build would buy it only the one thing it
+        // cannot use. Not building also keeps concurrent test hosts off one
+        // build context — Testcontainers writes that context to a tar named
+        // after the image, and separate processes instantiating this fixture
+        // would race on that file. The mapped paths must match the
+        // Dockerfile's COPY targets; `check_permissions.py` asserts they
+        // agree rather than leaving it to a reader.
         _rabbit = new RabbitMqBuilder()
             .WithImage("rabbitmq:4.1-management-alpine")
             .WithUsername("inventory-svc")

@@ -160,31 +160,12 @@ public class ArchitectureTests
     /// Whether a referenced assembly is one of this repository's own rather
     /// than a package.
     /// </summary>
-    /// <remarks>
-    /// <b>A list of service names would have been the obvious instrument and
-    /// is the wrong one here</b>, because the scaffold renders this file:
-    /// <c>new_service.py</c> applies its patches and <i>then</i> renames every
-    /// casing of the template's name, so a list naming <c>Inventory</c> reaches
-    /// the new service with <c>Inventory</c> replaced rather than joined —
-    /// silently dropping the one service a scaffolded service is most likely
-    /// to reference by accident. No spelling of the patch survives that,
-    /// because the rename is what the patch output is fed through.
-    /// <para>
-    /// So the predicate is a measured property instead. Every package this
-    /// platform pins is strong-named and none of this repository's own
-    /// projects is — checked across all five of Inventory's assemblies and all
-    /// five of Ordering's, which between them reference thirty-odd packages.
-    /// <b>Dapper is the one unsigned package in the graph</b> and is named for
-    /// that reason alone.
-    /// </para>
-    /// <para>
-    /// A second unsigned package would be misread as first-party and fail the
-    /// gate below. That is the direction this has to fail in: the failure
-    /// names an assembly nobody expected and is fixed by a line here with an
-    /// argument beside it, where the alternative predicate would have opened a
-    /// hole and said nothing.
-    /// </para>
-    /// </remarks>
+    /// <remarks>Not a list of service names: the scaffold renames every
+    /// casing of the template's name after applying its patches, so a list
+    /// naming the template would reach the new service with it replaced
+    /// rather than joined. Strong-naming stands in, since no project here is
+    /// signed, and an unsigned package fails the gate loudly rather than
+    /// opening a hole quietly.</remarks>
     private static bool IsFirstParty(AssemblyName reference) =>
         reference.GetPublicKeyToken() is null or [] && reference.Name != "Dapper";
 
