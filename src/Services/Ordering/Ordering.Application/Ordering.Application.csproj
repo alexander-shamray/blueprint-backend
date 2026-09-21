@@ -4,11 +4,9 @@
     Settings come from Directory.Build.props (§4.4).
 
     Domain, Common.Application and Common.Contracts — the §4.2 dependency
-    table's second row. Common.Contracts is reached from two places here,
-    not the usual one: §9.3's mapper turns a domain event into a public
-    record, and CancellationReasons parses the wire reason codes
-    CancelReasons declares (§9.6). §4.3's one assembly that crosses a
-    service boundary crosses at the vocabulary as well as at the mapper.
+    table's second row. Common.Contracts is §4.3's one assembly that
+    crosses a service boundary, and it is crossed here for §9.6's wire
+    vocabulary as well as for §9.3's mapper.
   -->
 
   <ItemGroup>
