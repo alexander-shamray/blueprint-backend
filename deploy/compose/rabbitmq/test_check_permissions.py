@@ -61,6 +61,42 @@ def run_against(definitions: dict) -> list[str]:
         gate.failures = original_failures
 
 
+def fixture_text(name: str) -> str:
+    return (gate.TESTS / name / "ServiceFixture.cs").read_text(encoding="utf-8")
+
+
+def run_over_fixtures(files: dict[str, str]) -> list[str]:
+    """Run check 6 with the fixture set replaced, and return its failures.
+
+    Keyed by the directory under `tests/`, so a case reads as the tree it
+    describes. Everything else the check opens is the real file: the
+    Dockerfile these are compared against is the one that ships, so a COPY
+    genuinely moved fails here too.
+    """
+    original_read = gate.read
+    original_failures = gate.failures
+    original_fixtures = gate.broker_fixtures
+    paths = {
+        gate.TESTS / name / "ServiceFixture.cs": text
+        for name, text in files.items()
+    }
+
+    def fake_read(path: Path) -> str:
+        if Path(path) in paths:
+            return paths[Path(path)]
+        return original_read(path)
+
+    gate.read = fake_read
+    gate.broker_fixtures = lambda: sorted(paths)
+    gate.failures = []
+    try:
+        gate.check_fixture_matches_dockerfile()
+        return list(gate.failures)
+    finally:
+        gate.read = original_read
+        gate.broker_fixtures = original_fixtures
+        gate.failures = original_failures
+
 def real() -> dict:
     return json.loads((HERE / "definitions.json").read_text(encoding="utf-8"))
 
@@ -252,6 +288,66 @@ class AScaffoldedServiceIsNotRefused(unittest.TestCase):
         self.assertFalse(
             any("owned contracts" in f or "vacuously" in f for f in failures),
             f"the gate refused a correctly scaffolded service: {failures}")
+
+
+class TheFixtureCheckLooksAtEveryFixture(unittest.TestCase):
+    """Check 6's subject, which is the half that went wrong.
+
+    The check named one fixture in a constant and kept passing as three more
+    arrived from the scaffold. A case over what it FOUND could not see that;
+    only a case over what it is LOOKING AT can, so the first test here is
+    about the glob and not about any mapping.
+    """
+
+    def test_the_glob_reaches_every_fixture_in_the_tree(self):
+        expected = {
+            path.name for path in gate.TESTS.glob("*.TestSupport")
+            if (path / "ServiceFixture.cs").exists()
+        }
+        self.assertTrue(expected, "no fixture on disk: the case, not the gate")
+        found = {path.parent.name for path in gate.broker_fixtures()}
+        self.assertEqual(expected, found)
+
+    def test_the_real_fixtures_pass(self):
+        # The positive control the mutations below are evidence against.
+        gate.failures = []
+        try:
+            gate.check_fixture_matches_dockerfile()
+            self.assertEqual([], gate.failures)
+        finally:
+            gate.failures = []
+
+    def test_a_drift_outside_the_first_fixture_is_refused(self):
+        # A mapping moved in a fixture other than the first: the case a
+        # check reading one named fixture cannot report.
+        drifted = fixture_text("Inventory.TestSupport").replace(
+            '"/etc/rabbitmq/conf.d/"', '"/etc/rabbitmq/"')
+        failures = run_over_fixtures({
+            "Catalog.TestSupport": fixture_text("Catalog.TestSupport"),
+            "Inventory.TestSupport": drifted,
+        })
+
+        self.assertTrue(
+            any("Inventory.TestSupport" in f for f in failures),
+            f"a moved mapping outside the named fixture went unreported: {failures}")
+
+    def test_a_fixture_that_neither_maps_nor_builds_is_refused(self):
+        # Its broker starts with no definitions and seeds `guest`, which is
+        # the silent green this check exists for.
+        neither = fixture_text("Catalog.TestSupport").replace(
+            "WithResourceMapping", "WithNothingAtAll")
+        failures = run_over_fixtures({"Catalog.TestSupport": neither})
+
+        self.assertTrue(
+            any("Catalog.TestSupport" in f for f in failures),
+            f"a fixture configuring nothing was accepted: {failures}")
+
+    def test_a_glob_matching_nothing_is_refused(self):
+        failures = run_over_fixtures({})
+
+        self.assertTrue(
+            any("the glob, not the tree" in f for f in failures),
+            f"an empty fixture set reported a pass: {failures}")
 
 
 if __name__ == "__main__":

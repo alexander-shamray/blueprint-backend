@@ -16,7 +16,7 @@ on:
       - '.github/workflows/broker-permissions.yml'
       - 'src/Services/**'
       - 'src/BuildingBlocks/Common.Contracts/**'
-      - 'tests/Catalog.TestSupport/**'
+      - 'tests/**'
   push:
     branches: [main]
     paths:
@@ -24,7 +24,7 @@ on:
       - '.github/workflows/broker-permissions.yml'
       - 'src/Services/**'
       - 'src/BuildingBlocks/Common.Contracts/**'
-      - 'tests/Catalog.TestSupport/**'
+      - 'tests/**'
 
 permissions:
   contents: read

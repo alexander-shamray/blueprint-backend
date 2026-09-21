@@ -49,7 +49,15 @@ WORKFLOW = ROOT / WORKFLOW_PATH
 SERVICES = ROOT / "src" / "Services"
 CONTRACTS = ROOT / "src" / "BuildingBlocks" / "Common.Contracts"
 DOCKERFILE = HERE / "Dockerfile"
-CATALOG_FIXTURE = ROOT / "tests" / "Catalog.TestSupport" / "ServiceFixture.cs"
+TESTS = ROOT / "tests"
+
+# The fixtures are found, never listed. A constant naming one of them covered
+# the only fixture that existed when check 6 was written and kept passing as
+# three more arrived from the scaffold — a gate that stops covering the
+# newest surface without a word, which is the failure CLAUDE.md names as this
+# repository's most-repeated. The glob is the subject, and check 6 fails when
+# it resolves to nothing rather than reporting a pass over an empty set.
+FIXTURE_GLOB = "*.TestSupport/ServiceFixture.cs"
 
 # EVERY PATH OUTSIDE deploy/compose/rabbitmq THAT THIS SCRIPT READS, declared
 # once, on deploy/helm/smoke.sh's terms and check.py's. The workflow's filters
@@ -61,7 +69,7 @@ CATALOG_FIXTURE = ROOT / "tests" / "Catalog.TestSupport" / "ServiceFixture.cs"
 SOURCE_INPUTS = [
     "src/Services",
     "src/BuildingBlocks/Common.Contracts",
-    "tests/Catalog.TestSupport",
+    "tests",
 ]
 
 # A service's broker account is its name plus this suffix, and the contract
@@ -185,7 +193,7 @@ def contract_prefixes() -> set[str]:
 
 
 def main() -> int:
-    for path in (DEFINITIONS, WORKFLOW, SERVICES, CONTRACTS, DOCKERFILE, CATALOG_FIXTURE):
+    for path in (DEFINITIONS, WORKFLOW, SERVICES, CONTRACTS, DOCKERFILE, TESTS):
         if not path.exists():
             fail(f"missing: {path.relative_to(ROOT).as_posix()}")
     if failures:
@@ -380,54 +388,72 @@ def main() -> int:
     return report()
 
 
+def broker_fixtures() -> list[Path]:
+    """Every service's test fixture, found rather than enumerated."""
+    return sorted(TESTS.glob(FIXTURE_GLOB))
+
+
 def check_fixture_matches_dockerfile() -> None:
     """The configuration files reach the broker two ways; they must agree.
 
-    §14.1's image COPYs `definitions.json` and `20-commerce.conf` into place.
-    Catalog's fixture does NOT build that image — it maps the same two files
-    onto the stock one, because it needs the accounts and not ADR-021's plugin,
-    and because building put two test processes in a race for one build-context
-    tar.
-
-    **That makes the container paths a second copy**, and a second copy is what
-    this repository keeps having to gate. A mapping that drifted would not fail
-    loudly: RabbitMQ boots without the definitions, seeds `guest` on an empty
-    database, and Catalog's suite passes against the single shared
-    administrator #44 exists to remove — green, and testing nothing.
+    §14.1's image COPYs the definitions and the configuration into place, and
+    a fixture that maps them onto the stock image instead carries a second
+    copy of those paths (ADR-036). Drift between the two does not fail
+    loudly: the broker boots with no definitions, seeds the shared
+    administrator account, and the suite passes against it — green, and
+    testing nothing. A fixture that neither maps nor builds is that same
+    broker, so it fails here rather than passing for want of a mapping.
     """
     dockerfile = read(DOCKERFILE)
-    fixture = read(CATALOG_FIXTURE)
 
     copies = dict(re.findall(r"^COPY\s+(\S+)\s+(\S+)\s*$", dockerfile, re.M))
     if not copies:
         fail("Dockerfile: no COPY lines found — the pattern, not the file")
         return
 
-    mapped = dict(re.findall(
-        r'WithResourceMapping\(\s*new FileInfo\(Path\.Combine\(BrokerContextPath\(\),\s*"([^"]+)"\)\),\s*"([^"]+)"',
-        fixture))
-    if not mapped:
-        fail("Catalog.TestSupport/ServiceFixture.cs: no WithResourceMapping calls found. "
-             "Either the fixture stopped mapping the broker's configuration — in which "
-             "case it runs a broker with no accounts — or this pattern went stale")
+    fixtures = broker_fixtures()
+    if not fixtures:
+        fail(f"tests/: `{FIXTURE_GLOB}` matched no fixture — the glob, not the tree. "
+             f"Check 6 has no subject and would otherwise report a pass over nothing")
         return
 
-    for source, target in sorted(copies.items()):
-        if source not in mapped:
-            fail(f"Dockerfile COPYs `{source}` into the broker image and Catalog's "
-                 f"fixture does not map it. That fixture runs the STOCK image, so a "
-                 f"file only the Dockerfile carries is a file its broker does not have")
-            continue
-        # The Dockerfile names the file; WithResourceMapping names the directory.
-        want = target.rsplit("/", 1)[0] + "/"
-        if mapped[source] != want:
-            fail(f"`{source}`: the Dockerfile puts it at `{target}` and Catalog's "
-                 f"fixture maps it into `{mapped[source]}`. One of the two brokers is "
-                 f"not reading it")
+    mapping = {}
+    for path in fixtures:
+        name = path.relative_to(ROOT).as_posix()
+        text = read(path)
+        mapped = dict(re.findall(
+            r'WithResourceMapping\(\s*new FileInfo\(Path\.Combine\(BrokerContextPath\(\),\s*"([^"]+)"\)\),\s*"([^"]+)"',
+            text))
+        if mapped:
+            mapping[name] = mapped
+        elif "ImageFromDockerfileBuilder" not in text:
+            fail(f"{name}: maps none of the broker's configuration and builds no "
+                 f"image either, so its broker starts with no definitions and seeds "
+                 f"`guest` — green, and testing nothing")
 
-    for source in sorted(set(mapped) - set(copies)):
-        fail(f"Catalog's fixture maps `{source}` and the Dockerfile does not COPY it, "
-             f"so the Compose broker and the test broker disagree about what they hold")
+    if not mapping:
+        fail(f"no fixture under tests/ maps the broker's configuration. Either every "
+             f"one of them now builds the image — in which case ADR-036's stock-image "
+             f"route is gone — or this pattern went stale")
+        return
+
+    for name, mapped in sorted(mapping.items()):
+        for source, target in sorted(copies.items()):
+            if source not in mapped:
+                fail(f"Dockerfile COPYs `{source}` into the broker image and {name} "
+                     f"does not map it. That fixture runs the STOCK image, so a file "
+                     f"only the Dockerfile carries is a file its broker does not have")
+                continue
+            # The Dockerfile names the file; WithResourceMapping names the directory.
+            want = target.rsplit("/", 1)[0] + "/"
+            if mapped[source] != want:
+                fail(f"`{source}`: the Dockerfile puts it at `{target}` and {name} "
+                     f"maps it into `{mapped[source]}`. One of the two brokers is not "
+                     f"reading it")
+
+        for source in sorted(set(mapped) - set(copies)):
+            fail(f"{name} maps `{source}` and the Dockerfile does not COPY it, so the "
+                 f"Compose broker and that test broker disagree about what they hold")
 
 
 def check_source_inputs_covers_reads() -> None:
