@@ -1243,6 +1243,14 @@ product names and images, which live in Catalog and are not in the Ordering
 database at all. Joining across services is impossible; calling Catalog per row
 is an N+1 over the network.
 
+> **That screen is served from the BFF now, and the escalation below is still
+> the worked example.** [ADR-051](adr/ADR-051-the-buyers-order-read-is-a-projection-in-the-bff.md)
+> puts the buyer's order history in a projection `Web.Bff` owns, because the
+> screen also needs payment and shipment facts Ordering does not hold. It
+> meets this same trigger for this same reason one host out, with Catalog's
+> stream feeding the names. What follows is read as the progression it
+> demonstrates, not as a plan for Ordering's next release.
+
 The upgrade adds denormalised tables inside Ordering's own database, kept
 current by projections. Two of them serve the history query, one serves
 `PlaceOrder`, and a fourth — `ordering.ProductWithdrawals` — is a watermark
