@@ -184,8 +184,8 @@ public sealed class ServiceFixture : IAsyncLifetime
         // build context — Testcontainers writes that context to a tar named
         // after the image, and separate processes instantiating this fixture
         // would race on that file. The mapped paths must match the
-        // Dockerfile's COPY targets; `check_permissions.py` asserts they
-        // agree rather than leaving it to a reader.
+        // Dockerfile's COPY targets, and nothing asserts it for this fixture:
+        // `check_permissions.py` reads Catalog's.
         _rabbit = new RabbitMqBuilder()
             .WithImage("rabbitmq:4.1-management-alpine")
             .WithUsername("inventory-svc")
