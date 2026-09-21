@@ -213,9 +213,10 @@ that each is one table, named, with a window and an erasure path written
 beside its creation, and that neither value is ever a log attribute or an
 exception's text.
 
-**The pull request that builds each service amends every place that says
-the BFF is alone**, as ADR-051 left its list to the pull request that
-builds it, and the list is written out for ADR-051's reason:
+**The pull request that builds each service amends the places that say the
+BFF is alone**, as ADR-051 left its list to the pull request that builds
+it. The list is written out for ADR-051's reason, and one row is a gate
+that goes red, which is the row a builder must not learn from CI:
 
 | Owner | What it says today |
 |---|---|
@@ -224,9 +225,14 @@ builds it, and the list is written out for ADR-051's reason:
 | [§4.1](../04-solution-structure.md) | The BFF as "the ONLY host that calls a service", and no building block holding the identity types |
 | [§9.7](../09-messaging.md) | The pricing hop as the platform's one synchronous call between its services, and `Web.Bff` as "the only one holding client credentials" |
 | [§11.5](../11-identity-authorization.md) | One host in the table of realm objects, and "the platform's only permitted synchronous hop" |
-| [§12](../12-test-strategy.md) | One suite that runs a real Keycloak, for one client |
-| [§14.1](../14-local-development.md) | One client secret among the Compose defaults |
-| [§15.2](../15-cicd-deployment.md) and [§15.4](../15-cicd-deployment.md) | "One client secret in the whole platform", and an inventory row marked BFF only |
+| [§12](../12-test-strategy.md) and [ADR-023](ADR-023-the-consumer-driven-contract-is-a-linked-file-not-pact.md) | One suite that runs a real Keycloak, for one client; and a linked-file contract that "covers one relationship", so whether `DeliveryAddresses.Get` earns a second is judged with Shipping |
+| [§14.1](../14-local-development.md) and [§14.2](../14-local-development.md) | One client secret among the Compose defaults, and the BFF as "the only host that calls a peer synchronously" |
+| [§15.1](../15-cicd-deployment.md) and [§15.4](../15-cicd-deployment.md) | "one client secret in the whole platform", and three inventory rows marked BFF only |
+| `deploy/helm/smoke.sh` | "exactly one chart declares client credentials", **asserted**: the second credentialed chart fails the Helm workflow until the count moves |
+| `deploy/helm/catalog/` | "the platform's one gRPC server", in its chart and its values |
+| `deploy/compose/README.md` | The BFF as "the only host that mints one of its own" |
+| `docs/runbooks/latency.md` | "exactly one synchronous hop in this platform" |
+| `src/BFF/Web.Bff/` and `tools/new-service/scaffold/render.py` | Comments that call the BFF the one credentialed host and the one synchronous caller |
 | [§11.7](../11-identity-authorization.md) | One simultaneous erasure broadcast, with no reader sequenced after its owner, and Shipping's step drawn as anonymising a recipient on the `Shipment` |
 | `docs/secrets.md` | The BFF as "the only host that calls a peer synchronously" |
 | `docs/repo-map.md` and `CLAUDE.md` | The BFF as the one synchronous caller — in `docs/repo-map.md` also the only holder of client credentials — and Catalog as the one gRPC server |
