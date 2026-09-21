@@ -15,6 +15,7 @@ import json
 import os
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 # Where the CLI keeps a checkout's index. A checkout without one is not
@@ -37,6 +38,14 @@ PENDING = CACHE / "refresh.pending"
 
 # An update that cannot finish is not allowed to hold the lock for ever.
 REFRESH_TIMEOUT = 600
+
+# A failed update is retried, because the failure worth retrying is the one
+# this lock cannot prevent: the CLI errors rather than waits when another
+# update holds the index, and the skill's documented `cbx update` runs
+# outside the lock entirely. The bound is what keeps a detached worker off
+# a broken install, and giving up is not final — the request goes back.
+REFRESH_ATTEMPTS = 3
+RETRY_PAUSE = 5
 
 if sys.platform == "win32":
     import msvcrt
@@ -153,8 +162,8 @@ def busy(root: Path) -> bool:
         return not grab(handle)
 
 
-def refresh(root: Path) -> None:
-    """One update, waited on, because the worker is already detached.
+def refresh(root: Path) -> bool:
+    """One update, waited on and answered, because the streams are gone.
 
     The console script first, then the module through this interpreter:
     `py -3.12 -m pip` is a supported install and leaves the script in a
@@ -169,15 +178,45 @@ def refresh(root: Path) -> None:
         [sys.executable, "-P", "-m", "codebase_index", "update"],
     ):
         try:
-            subprocess.run(
+            done = subprocess.run(
                 command, cwd=str(root), env=environment,
                 stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL, timeout=REFRESH_TIMEOUT, check=False)
-            return
+            return done.returncode == 0
         except OSError:
             continue
         except subprocess.TimeoutExpired:
-            return
+            return False
+    return False
+
+
+def refreshed(root: Path) -> bool:
+    """One request's update, tried again while it keeps failing.
+
+    The pause is what makes a retry worth anything: an update that answered
+    a contended index answers the same one immediately afterwards.
+    """
+    for attempt in range(REFRESH_ATTEMPTS):
+        if refresh(root):
+            return True
+        if attempt + 1 < REFRESH_ATTEMPTS:
+            time.sleep(RETRY_PAUSE)
+    return False
+
+
+def drain(root: Path) -> bool:
+    """Every outstanding request, refreshed; false when one was given up on.
+
+    The request is put back rather than dropped, so the edit behind it is
+    carried by the next worker instead of waiting for an edit that happens
+    to arrive. Returning here rather than looping on it is what keeps a put
+    back request from becoming a spin against an install that cannot work.
+    """
+    while take_request(root):
+        if not refreshed(root):
+            request(root)
+            return False
+    return True
 
 
 def work(root: Path) -> int:
@@ -196,8 +235,8 @@ def work(root: Path) -> int:
         with handle:
             if not grab(handle):
                 return 0
-            while take_request(root):
-                refresh(root)
+            if not drain(root):
+                return 0
         # The lock is gone by here, and that is the point. A request made
         # between the last look above and this release found `busy` true and
         # left a marker rather than a worker, so it is taken now instead of

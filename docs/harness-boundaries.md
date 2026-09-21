@@ -128,10 +128,12 @@ file's own path says which of them changed. Otherwise the index is refreshed
 only when a query reports it stale and `SKILL.md`'s instruction is followed
 — freshness as a property of having asked rather than of having edited. The
 hook spawns the CLI detached, discards both streams and always returns 0: it
-runs on every
-edit, so it may not make one wait, and an index that cannot refresh is not a
-reason to fail the edit that provoked it. A checkout with no index is left
-alone, because unindexed is not stale.
+runs on every edit, so it may not make one wait, and an index that cannot
+refresh is not a reason to fail the edit that provoked it. The exit status is
+the one thing it does keep, and a request whose update failed goes back rather
+than counting as served: contention is what fails here, the streams that would
+have said so are gone, and the loser may be the run carrying the newest edit.
+A checkout with no index is left alone, because unindexed is not stale.
 
 **A hook command needs no shell, and that is a constraint rather than a
 preference.** An env-var prefix — `VAR=1 cmd` — is POSIX syntax that `cmd`

@@ -12,6 +12,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -48,6 +49,13 @@ def entries_running_the_hook(settings: Path) -> list:
     ]
 
 
+class _Completed:
+    """`subprocess.run`'s answer, with only the field the hook reads."""
+
+    def __init__(self, returncode):
+        self.returncode = returncode
+
+
 class _Stdin:
     """`sys.stdin` for one call, with only the method the hook uses."""
 
@@ -79,9 +87,14 @@ class Base(unittest.TestCase):
         self.patch(mock.patch.object(
             self.mod.subprocess, "Popen",
             side_effect=lambda *a, **k: self.spawned.append((a, k))))
+        self.run_status = 0
         self.patch(mock.patch.object(
-            self.mod.subprocess, "run",
-            side_effect=lambda *a, **k: self.ran.append((a, k))))
+            self.mod.subprocess, "run", side_effect=self.record_run))
+
+    def record_run(self, *arguments, **keywords):
+        """The update as the hook meets it: recorded, and answered."""
+        self.ran.append((arguments, keywords))
+        return _Completed(self.run_status)
 
     def patch(self, patcher):
         patcher.start()
@@ -244,6 +257,7 @@ class OneRefreshAtATime(Base):
             self.ran.append(("refresh", {}))
             if len(self.ran) == 1:
                 self.mod.request(root)
+            return _Completed(0)
 
         self.patch(mock.patch.object(
             self.mod.subprocess, "run", side_effect=refresh_and_edit))
@@ -276,6 +290,52 @@ class OneRefreshAtATime(Base):
         self.assertEqual(1, len(self.ran))
         self.assertFalse((root / self.mod.PENDING).exists())
 
+    def test_a_failed_update_keeps_its_request(self):
+        """A request marked served by an update that failed is an edit that
+        never reaches the index: the streams are discarded, so nothing else
+        would ever say so."""
+        root = self.checkout("main")
+        self.run_status = 1
+        self.mod.request(root)
+        self.patch(mock.patch.object(self.mod.time, "sleep", lambda _pause: None))
+
+        self.assertEqual(0, self.mod.work(root))
+
+        self.assertEqual(self.mod.REFRESH_ATTEMPTS, len(self.ran))
+        self.assertTrue((root / self.mod.PENDING).exists())
+
+    def test_a_retry_that_works_serves_the_request(self):
+        """Contention is transient, which is the whole reason to try again."""
+        root = self.checkout("main")
+        self.mod.request(root)
+        self.patch(mock.patch.object(self.mod.time, "sleep", lambda _pause: None))
+
+        def fail_once(*arguments, **keywords):
+            self.ran.append((arguments, keywords))
+            return _Completed(1 if len(self.ran) == 1 else 0)
+
+        self.patch(mock.patch.object(
+            self.mod.subprocess, "run", side_effect=fail_once))
+
+        self.mod.work(root)
+
+        self.assertEqual(2, len(self.ran))
+        self.assertFalse((root / self.mod.PENDING).exists())
+
+    def test_the_attempts_are_spaced_and_the_last_is_not_followed(self):
+        """An update that answered a contended index answers the same one if
+        it is started again at once."""
+        root = self.checkout("main")
+        self.run_status = 1
+        self.mod.request(root)
+        pauses = []
+        self.patch(mock.patch.object(self.mod.time, "sleep", pauses.append))
+
+        self.mod.work(root)
+
+        self.assertEqual(
+            [self.mod.RETRY_PAUSE] * (self.mod.REFRESH_ATTEMPTS - 1), pauses)
+
     def test_a_worker_that_cannot_take_the_lock_does_nothing(self):
         """Its marker belongs to whoever holds the lock, and taking it would
         be the second update against one index that the lock exists to stop."""
@@ -303,26 +363,48 @@ class OneRefreshAtATime(Base):
 
         self.assertFalse(self.mod.busy(root))
 
-    def test_real_workers_do_not_overlap(self):
-        """Processes rather than calls, because sequential calls cannot show
-        a lock failing: every earlier shape of this lock passed a sequential
-        suite and lost a race between two claimants."""
+    def test_a_lock_holder_is_the_only_worker_that_refreshes(self):
+        """Processes rather than calls, because a lock refuses a claimant in
+        another process and nothing else. The second request is made while
+        the first refresh is still running: that is the only moment at which
+        two workers could both have something to do, and a case that never
+        reaches it cannot tell a lock from no lock at all."""
         root = self.checkout("main")
-        self.mod.request(root)
         ledger = self.tmp / "ledger.txt"
         ledger.write_text("", encoding="utf-8")
+        release = self.tmp / "release"
         child = self.tmp / "child.py"
-        child.write_text(CHILD.format(hook=HOOK, root=root, ledger=ledger),
-                         encoding="utf-8")
+        child.write_text(
+            CHILD.format(hook=HOOK, root=root, ledger=ledger, release=release,
+                         holder=HOLDER),
+            encoding="utf-8")
 
-        workers = [
+        def recorded():
+            return [line
+                    for line in ledger.read_text(encoding="utf-8").splitlines()
+                    if line]
+
+        self.mod.request(root)
+        holder = self.start_process([sys.executable, str(child), HOLDER])
+        deadline = time.time() + 60
+        while not recorded():
+            self.assertLess(time.time(), deadline, "the holder never refreshed")
+            time.sleep(0.02)
+
+        self.mod.request(root)
+        latecomers = [
             self.start_process([sys.executable, str(child), f"w{index}"])
-            for index in range(4)
+            for index in range(1, 4)
         ]
-        for worker in workers:
-            worker.wait(timeout=120)
+        for worker in latecomers:
+            worker.wait(timeout=60)
+        while_held = recorded()
 
-        lines = [line for line in ledger.read_text(encoding="utf-8").splitlines() if line]
+        release.write_text("", encoding="utf-8")
+        holder.wait(timeout=60)
+        lines = recorded()
+
+        self.assertEqual([HOLDER + " in"], while_held, while_held)
         depth = 0
         for line in lines:
             depth += 1 if line.endswith(" in") else -1
@@ -331,10 +413,13 @@ class OneRefreshAtATime(Base):
         self.assertFalse((root / self.mod.PENDING).exists(), lines)
 
 
-# The worker each process in the case above runs: it refreshes slowly enough
-# for an overlap to be visible, and asks for one more refresh the first time
-# so the drain has something to pick up.
-CHILD = '''
+HOLDER = "w0"
+
+# The worker each process in the case above runs. Only the holder waits, and
+# for two reasons: it has to still be refreshing when the others arrive, and
+# a claimant that got through has to be able to say so without the case
+# discovering it through a timeout.
+CHILD = """
 import importlib.util, pathlib, sys, time
 
 spec = importlib.util.spec_from_file_location("refresh_index", r"{hook}")
@@ -343,24 +428,28 @@ spec.loader.exec_module(mod)
 
 root = pathlib.Path(r"{root}")
 ledger = pathlib.Path(r"{ledger}")
+release = pathlib.Path(r"{release}")
 me = sys.argv[1]
-once = []
 
 
-def loud_refresh(_root):
+def note(what):
     with open(ledger, "a", encoding="utf-8") as out:
-        out.write(f"{{me}} in\\n")
-    time.sleep(0.3)
-    with open(ledger, "a", encoding="utf-8") as out:
-        out.write(f"{{me}} out\\n")
-    if not once:
-        once.append(True)
-        mod.request(root)
+        print(me, what, file=out)
 
 
-mod.refresh = loud_refresh
+def held_refresh(_root):
+    note("in")
+    if me == "{holder}":
+        deadline = time.time() + 30
+        while not release.exists() and time.time() < deadline:
+            time.sleep(0.02)
+    note("out")
+    return True
+
+
+mod.refresh = held_refresh
 sys.exit(mod.work(root))
-'''
+"""
 
 
 class Refreshing(Base):
@@ -375,6 +464,18 @@ class Refreshing(Base):
         self.assertEqual(["codebase-index", "update"], arguments[0])
         self.assertEqual("1", keywords["env"]["CBX_NO_SKILL_AUTO_UPDATE"])
         self.assertEqual(1, len(self.ran), "the fallback ran as well")
+
+    def test_a_failing_update_is_not_a_refresh(self):
+        """The status is the only thing left that says the index moved, so
+        it is the thing the caller is given."""
+        self.run_status = 1
+
+        self.assertFalse(self.mod.refresh(self.checkout("main")))
+
+    def test_a_working_update_is_a_refresh(self):
+        """The subject, because a function that always answered false would
+        satisfy the case above."""
+        self.assertTrue(self.mod.refresh(self.checkout("main")))
 
     def test_no_stream_is_kept(self):
         """A hook's output is not a report anybody reads."""
@@ -397,6 +498,7 @@ class Refreshing(Base):
             if command[0] == "codebase-index":
                 raise OSError("no such executable")
             self.ran.append(((command,), keywords))
+            return _Completed(0)
 
         self.patch(mock.patch.object(
             self.mod.subprocess, "run", side_effect=absent_script))
@@ -413,8 +515,7 @@ class Refreshing(Base):
         self.patch(mock.patch.object(
             self.mod.subprocess, "run", side_effect=OSError("nothing runnable")))
 
-        self.mod.refresh(self.checkout("main"))
-
+        self.assertFalse(self.mod.refresh(self.checkout("main")))
         self.assertEqual([], self.ran)
 
 
