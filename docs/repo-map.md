@@ -91,6 +91,17 @@ docs/runbooks/               NOT one per alert: §13.8's ownership split makes
                              directory disagree
 docs/superpowers/            one frozen spec + plan per PR, written before it
 
+TODO.md                      the user's task list — the open pull requests,
+                             the issues each closes, and the open issues
+                             with no pull request yet, beside PLAN.md, the
+                             intent it is the one-line view of. Both are
+                             gitignored and never committed: a tracked list
+                             is main's view of itself and needs a pull
+                             request and two review loops to move, which is
+                             slower than the thing it describes.
+                             `CLAUDE.md`'s *Working in this repo* carries
+                             the one rule that keeps it current, and no
+                             command, helper or gate reads either file
 global.json                  SDK pin (§4.4)
 .config/dotnet-tools.json    dotnet-ef, pinned to the EF Core version —
                              `dotnet tool restore` is the whole setup
