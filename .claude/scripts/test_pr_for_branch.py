@@ -36,7 +36,7 @@ class OnlyThisCheckoutsPullRequestsSurvive(unittest.TestCase):
     OWNER = "acme/widgets"
 
     ROWS = """[
-      {"number": 1, "state": "OPEN", "url": "u1", "headRefOid": "aaa1",
+      {"number": 1, "state": "OPEN", "url": "u1", "headRefOid": "aaa1", "baseRefName": "main",
        "headRepository": {"nameWithOwner": "acme/widgets"}},
       {"number": 2, "state": "OPEN", "url": "u2",
        "headRepository": {"nameWithOwner": "mallory/widgets"}},
@@ -97,20 +97,23 @@ class OnlyThisCheckoutsPullRequestsSurvive(unittest.TestCase):
 
     def test_the_shape_is_the_fixed_field_set(self):
         got = json.loads(self.run_helper().stdout)
-        self.assertEqual({"number", "state", "url", "headRefOid"}, set(got[0]))
+        self.assertEqual({"number", "state", "url", "headRefOid", "baseRefName"}, set(got[0]))
 
     def test_the_head_is_the_rows_own(self):
         # /ship step 0 compares this value with the tip, so a projection that
         # named the field and dropped the value would keep every workspace.
         got = json.loads(self.run_helper().stdout)
         self.assertEqual("aaa1", got[0]["headRefOid"])
+        self.assertEqual("main", got[0]["baseRefName"])
 
     def test_the_head_is_asked_for(self):
         # The stub answers any field list, so the request is read from source:
         # a field jq projects and `gh` was never asked for comes back null.
         source = self.HELPER.read_text(encoding="utf-8")
         listed = next(ln for ln in source.splitlines() if ln.startswith("gh pr list"))
-        self.assertIn("headRefOid", listed.split("--json", 1)[1])
+        asked = listed.split("--json", 1)[1]
+        self.assertIn("headRefOid", asked)
+        self.assertIn("baseRefName", asked)
 
     def test_an_unresolvable_owner_stops_the_helper(self):
         result = self.run_helper(owner="")

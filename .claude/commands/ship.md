@@ -103,7 +103,7 @@ that reaches a merge — so the rows below say what is owed *between* them:
 | On a branch, tree clean and pushed | `/pr`, then the review loops |
 | On a branch with an open PR | The review loops (steps 5–6), Grok before Copilot — and, if the tree is dirty, checks, `/commit` **scoped to the implementation paths** and a push first, so the reviewers read what the PR will actually carry. Never unscoped while `suggestions.md` is on disk: that file is Grok's working state, and the unscoped form sweeps untracked files into the commit |
 | On a branch whose PR was **closed unmerged** | **Stop.** Somebody decided this branch does not land, and the open-PR read cannot see that: with no open PR the *clean and pushed* row would send the run to `/pr`, which refuses only an **open** one — so the chain would open a replacement and merge it, overriding a deliberate closure with no human in the loop. Report the closed PR and its number |
-| On a branch whose PR is **already merged** | **Step 0 alone, and then the run is over.** `pr-state.sh` reporting `MERGED` is the check, and it comes before the review loops rather than after them — re-requesting a review on a merged PR spends a round of somebody's budget on a branch nobody can change. With nothing left in the workspace, step 0's teardown is a complete one (switch, pull, remove, prune); with a dirty tree or commits made after the merge the branch is **not** finished, step 0 stays put and tears nothing down, and the run still ends here. Either way step 7 has nothing left to do: there is no PR to merge |
+| On a branch whose PR is **already merged** | **Step 0 alone, and then the run is over.** `pr-for-branch.sh` returning a `MERGED` row is what classifies this row — not step 0's finished predicate, which also asks for a clean tree and a tip equal to that row's `headRefOid` — and the classification comes before the review loops rather than after them — re-requesting a review on a merged PR spends a round of somebody's budget on a branch nobody can change. Where the predicate holds, step 0's teardown is a complete one (switch, pull, remove, prune); with a dirty tree, or a tip that is not that `headRefOid` — commits made after the merge, or a checkout behind it — the branch is **not** finished, step 0 stays put and tears nothing down, and the run still ends here. Either way step 7 has nothing left to do: there is no PR to merge |
 
 **Step 0's teardown targets a worktree that is already finished; step 7's
 targets the one this run just merged. Exactly one of them owns any given
@@ -323,6 +323,7 @@ because asking failed.
    git status --short                         # empty: nothing uncommitted
    git rev-parse HEAD                         # the tip, for the row below
    bash .claude/scripts/pr-for-branch.sh <branch>   # a row with state MERGED
+                                                   # and baseRefName main
                                                    # whose headRefOid equals
                                                    # that tip: it landed, and
                                                    # this checkout holds
@@ -337,6 +338,12 @@ because asking failed.
    `MERGED` row. Anything committed since moves the tip, whatever its patch
    looks like and whether or not it is a merge — there is no shape of
    post-landing work that survives this read.
+
+   **The row's `baseRefName` must be `main`, because landed means landed
+   there.** A stacked pull request merged into another branch has a `MERGED`
+   row whose head is the tip, and `main` holds none of it. The helper
+   publishes the base and does not filter on it, since the resume table reads
+   the same rows for a question that has no base in it.
 
    **No comparison of content can stand here, and the two obvious ones fail
    in opposite directions.** A range read over `origin/main..HEAD` cannot see
@@ -363,21 +370,24 @@ because asking failed.
    directory somebody removes by hand, named in the report. Admitting it
    takes the landed head's object in this checkout, which a deleted remote
    branch no longer serves, and a second pair of ancestry reads that are only
-   sound where the helper returns exactly one row, filtered to base `main`
-   with a stale merged row dropped. This repository's helper returns every
-   row the branch name has ever had, so the form taken is the one read, and
-   step 5's fast-forward is what keeps the state rare.
+   sound where the helper returns exactly one row, with a stale merged row
+   dropped. This repository's helper returns every row the branch name has
+   ever had, so the form taken is the one read, and step 5's fast-forward is
+   what keeps the state rare.
 
    **The row count is why the read says *a* row, not *the* row.** A branch
    name used twice has two `MERGED` rows, and equality against either head is
    the same claim about this tip: it is a commit a pull request landed. A row
-   from an earlier use cannot match a tip the later use moved.
+   from an earlier use cannot match a tip the later use moved, and a tip reset
+   back to an earlier landed head matches that row and reads finished, which
+   is right: the checkout holds exactly what that pull request landed.
 
    **A branch updated after its last push reads unfinished too**, because the
    tip is no longer the head GitHub recorded. Step 7's gate makes that a
    state this chain does not produce — it refuses to merge with anything in
    the workspace the remote head lacks — and a landing made by hand past it
-   Stays, which is the direction the predicate is allowed to be wrong in.
+   Stays, at step 7 and here alike, which is the direction the predicate is
+   allowed to be wrong in.
 
    **Every read exits 0 whatever it finds, and that is deliberate.**
    `pr-state.sh` on a branch with no PR exits non-zero, and *forked but never
@@ -416,12 +426,13 @@ because asking failed.
    merely tolerated, and note that `/branch` step 4 stops on an occupied slug
    anyway, so it cannot silently collide with a later branch.
 
-   **The tree check is the one that bites earliest.** A worktree forked
-   minutes ago and edited is level with `origin/main` and has no PR. Without
-   the tree read step 0 would leave it, `git worktree remove` would refuse the
-   dirty tree and so the directory survives, and the session would be on
-   `main` with step 1 about to refuse a branch that already exists. The guard
-   that saves the files is not the guard that saves the run.
+   **The tree read is the one identity cannot replace.** Uncommitted edits
+   beside a landed tip do not move it, so the tip and the `headRefOid` still
+   agree. Without the tree read step 0 would leave the worktree,
+   `git worktree remove` would refuse the dirty tree and so the directory
+   survives, and the session would be on `main` with the edits in a directory
+   nobody is in. The guard that saves the files is not the guard that saves
+   the run.
 
    **The reads are a conjunction, and a merged PR exempts a workspace from
    none of them.** A merged PR with **uncommitted edits** beside it, or with
@@ -562,10 +573,11 @@ because asking failed.
    ```
 
    **One definition, read at both sites, and it is the predicate above rather
-   than a second spelling of it.** The predicate asks for a merged PR itself,
-   so the only worktree this removes is one whose work is on `main`, and an
-   unused or abandoned one is kept by the Stay row before this line is ever
-   reached.
+   than a second spelling of it.** The predicate asks for a pull request
+   merged into `main` itself, so the only worktree this removes is one whose
+   tip landed there, and an unused or abandoned one is never reached. At this
+   site the tip is `git rev-parse <branch>` rather than `HEAD`, because the
+   session is not in that worktree, and the tree half is git's refusal below.
 
    Without `-f` that command **refuses a worktree holding uncommitted or
    untracked files**, which is the guard rather than an inconvenience — the
@@ -573,11 +585,10 @@ because asking failed.
    remove is left where it is and named in the report; do not reach for `-f`,
    which is the one spelling that discards somebody's work.
 
-   > **One grant in this file is wider than the operation it buys, and it is
+   > **A grant in this file is wider than the operation it buys, and that is
    > a known residual rather than an oversight.**
    > `docs/harness-boundaries.md` keeps the inventory; this callout keeps the
-   > argument for the one that bites hardest here, and states no total of its
-   > own.
+   > argument for `git worktree remove`, and states no total of its own.
    >
    > An **allow** rule cannot exclude a *trailing* flag — true of the allow
    > side only: a deny takes `*` at any position. So
@@ -591,7 +602,7 @@ because asking failed.
    > bind the path to `secsweep-` plus six characters directly under the temp
    > root, and therefore refuse a PR worktree by design — the detach helper by
    > *creating* the only path it hands to git, which is stronger than checking
-   > one a caller supplied. One more is owed here; until someone with the
+   > one a caller supplied. A helper is owed here too; until someone with the
    > `Edit(.claude/scripts/**)` deny lifted writes it, the rule is carried by
    > this file, like the `[` placement rule in `docs/style-guide.md`.
    >
@@ -1373,8 +1384,11 @@ because asking failed.
      gives: somebody decided this branch does not land.
    - **`MERGED`** means another route got there first. Skip the merge — there
      is nothing left to merge — verify it the way the teardown does, from
-     `state` and `mergeCommit`, and go straight to the workspace half of this
-     step.
+     `state` and `mergeCommit`, then ask step 0's predicate with the
+     `headRefOid` that read returned. A clean tree whose tip is that head goes
+     to the teardown below; anything else Stays, reports what the workspace
+     holds, and ends the run, because this exit is taken before the workspace
+     gate has looked.
 
    **A loop that can only exit on success is not a poll, it is a wait**, and
    the difference only shows when the thing being waited on stops existing.
@@ -1440,11 +1454,10 @@ because asking failed.
    discards the thing two earlier steps spent their effort producing. Rebase
    keeps every one of them, which is why it is the method and squash is not.
 
-   **What rebase costs is the branch's own SHAs**, and exactly one read
-   depended on them: step 0's finished predicate, which reads identity
-   against the pull request's own head for that reason. Nothing else here
-   judges arrival by ancestry — the workspace
-   gate above runs before the landing, and the containment check below runs
+   **What rebase costs is the branch's own SHAs, and no read here depends on
+   them.** Step 0's finished predicate compares the tip with the pull
+   request's own head, which no landing method rewrites; the workspace gate
+   above runs before the landing, and the containment check below runs
    against the oid the remote reports rather than against a local commit.
 
    **The merge is `gh`'s, not a push.** `.claude/settings.json` denies every

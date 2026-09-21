@@ -150,8 +150,8 @@ class TheMergeHelperRefusesWhatTheGrantAdmitted(unittest.TestCase):
         stub = self.bin / "gh"
         stub.write_text(NEWLINE.join((
             "#!/usr/bin/env bash",
-            'if [ "$1 $2" = "repo view" ]; then printf "%s" "$STUB_OWNER"; exit 0; fi',
-            'if [ "$1 $2" = "pr view" ]; then printf "%s" "$STUB_VIEW"; exit 0; fi',
+            'if [ "$1 $2" = "repo view" ]; then printf "%s" "$STUB_OWNER"; exit "${STUB_OWNER_EXIT:-0}"; fi',
+            'if [ "$1 $2" = "pr view" ]; then printf "%s" "$*" > "$STUB_LOG.view"; printf "%s" "$STUB_VIEW"; exit 0; fi',
             'if [ "$1 $2" = "pr merge" ]; then printf "%s" "$*" > "$STUB_LOG"; exit 0; fi',
             'echo "unexpected gh call: $*" >&2; exit 9',
             "")), encoding="utf-8", newline=NEWLINE)
@@ -163,8 +163,9 @@ class TheMergeHelperRefusesWhatTheGrantAdmitted(unittest.TestCase):
     def view(self, branch="feat/x", oid=None, cross="false", base="main"):
         return TAB.join((branch, oid or self.OID, cross, base))
 
-    def run_helper(self, *args, view=None, owner="acme/widgets"):
+    def run_helper(self, *args, view=None, owner="acme/widgets", owner_exit="0"):
         env = {
+            "STUB_OWNER_EXIT": owner_exit,
             **os.environ,
             "PATH": str(self.bin) + os.pathsep + os.environ["PATH"],
             "STUB_OWNER": owner,
@@ -186,6 +187,14 @@ class TheMergeHelperRefusesWhatTheGrantAdmitted(unittest.TestCase):
         self.assertEqual(0, result.returncode, result.stderr)
         self.assertEqual(f"pr merge --rebase --repo acme/widgets --match-head-commit {self.OID} 7",
                          self.log.read_text(encoding="utf-8"))
+
+    def test_the_binding_read_is_aimed_at_this_repository_and_asks_in_order(self):
+        # The stub prints one fixed row, so the field order is read from what
+        # was asked: a swapped list would bind the branch to the oid's column.
+        self.run_helper("7", self.OID)
+        asked = Path(str(self.log) + ".view").read_text(encoding="utf-8")
+        self.assertIn("pr view 7 --repo acme/widgets", asked)
+        self.assertIn("--json headRefName,headRefOid,isCrossRepository,baseRefName", asked)
 
     def test_a_trailing_flag_has_nowhere_to_go(self):
         self.assert_refused(self.run_helper("7", self.OID, "--admin"), "usage:")
@@ -220,6 +229,7 @@ class TheMergeHelperRefusesWhatTheGrantAdmitted(unittest.TestCase):
 
     def test_an_unresolvable_repository_stops_the_helper(self):
         self.assert_refused(self.run_helper("7", self.OID, owner=""), "resolved to nothing")
+        self.assert_refused(self.run_helper("7", self.OID, owner_exit="1"), "cannot resolve this checkout")
 
 
 class TheStepZeroReadsAreTheOnesTheProseArgues(unittest.TestCase):
@@ -236,8 +246,15 @@ class TheStepZeroReadsAreTheOnesTheProseArgues(unittest.TestCase):
         fenced = fenced_lines(SHIP)
         rows = [i for i, ln in enumerate(fenced) if ln.startswith(ROW_READ)]
         self.assertTrue(rows, "step 0 no longer asks for the branch's pull requests")
-        self.assertTrue(any("headRefOid" in " ".join(fenced[i:i + 8]) for i in rows),
+        windows = [" ".join(fenced[i:i + 8]) for i in rows]
+        self.assertTrue(any("headRefOid" in w for w in windows),
                         "the row is read, and the head it is read for is not named")
+        # An OPEN row's head equals the tip on every pushed branch, so a read
+        # that names the head and not the state removes live work.
+        self.assertTrue(any("MERGED" in w and "headRefOid" in w for w in windows),
+                        "the head is compared, and the state it must carry is not named")
+        self.assertTrue(any("baseRefName main" in w for w in windows),
+                        "a stacked pull request merged elsewhere would read as landed")
 
     def test_no_retired_content_read_is_performed_anywhere(self):
         for line in fenced_lines(SHIP):
@@ -246,8 +263,9 @@ class TheStepZeroReadsAreTheOnesTheProseArgues(unittest.TestCase):
 
     def test_the_helper_publishes_the_head_the_predicate_compares(self):
         code = " ".join(code_lines(LOOKUP_HELPER))
-        self.assertRegex(code, r"--json [a-zA-Z,]*headRefOid", "the field is never asked for")
-        self.assertRegex(code, r"\{[^}]*headRefOid[^}]*\}", "and never projected")
+        for field in ("headRefOid", "baseRefName"):
+            self.assertRegex(code, r"--json [a-zA-Z,]*" + field, f"{field} is never asked for")
+            self.assertRegex(code, r"\{[^}]*" + field + r"[^}]*\}", f"{field} is never projected")
 
 
 class TheFinishedPredicateSurvivesTheLandingMethod(unittest.TestCase):
@@ -256,7 +274,8 @@ class TheFinishedPredicateSurvivesTheLandingMethod(unittest.TestCase):
     The repositories are built rather than described, because the claim is
     about what git answers and not about what the flags are documented to mean.
     The rows are what `pr-for-branch.sh` publishes, recorded at the push the
-    pull request merged, which is when GitHub records them.
+    pull request merged, which is when GitHub records them. `finished` is a
+    model of the prose, and the class above pins the prose it models.
     """
 
     def setUp(self):
@@ -285,13 +304,15 @@ class TheFinishedPredicateSurvivesTheLandingMethod(unittest.TestCase):
     def tip(self, ref="HEAD"):
         return git(self.work, "rev-parse", ref).strip()
 
-    def row(self, state, number=1):
+    def row(self, state, number=1, base="main"):
         """The row a pull request carries for the head it has right now."""
-        return {"number": number, "state": state, "url": f"u{number}", "headRefOid": self.tip()}
+        return {"number": number, "state": state, "url": f"u{number}", "headRefOid": self.tip(),
+                "baseRefName": base}
 
     def finished(self, rows):
-        """Step 0's commit reads: the tip is the head a MERGED row records."""
-        return any(r["state"] == "MERGED" and r["headRefOid"] == self.tip() for r in rows)
+        """Step 0's commit reads: the tip is the head a row MERGED into main records."""
+        return any(r["state"] == "MERGED" and r["baseRefName"] == "main" and r["headRefOid"] == self.tip()
+                   for r in rows)
 
     def unlanded(self, branch):
         """The `+` lines of `git cherry`: the retired patch read."""
@@ -360,6 +381,14 @@ class TheFinishedPredicateSurvivesTheLandingMethod(unittest.TestCase):
         self.assertFalse(self.finished([self.row("OPEN")]))
         self.assertFalse(self.finished([]), "and neither is a branch that never opened one")
 
+    def test_a_pull_request_merged_into_another_branch_has_not_landed(self):
+        # A stacked pull request: merged, its head the tip, and none of it on
+        # `main`.
+        git(self.work, "checkout", "-b", "feat/stacked")
+        self.commit("n.txt", "fourteen", "stacked work")
+        self.assertEqual(len(self.behind("feat/stacked")), 1, "main holds none of it")
+        self.assertFalse(self.finished([self.row("MERGED", base="feat/parent")]))
+
     def test_a_commit_after_the_landing_keeps_the_workspace_whatever_its_patch(self):
         # The case the patch read got wrong: `main` already carries this
         # patch, so `git cherry` reads clean while the tip holds a commit the
@@ -372,6 +401,7 @@ class TheFinishedPredicateSurvivesTheLandingMethod(unittest.TestCase):
         self.commit("g.txt", "seven", "a fix made on main")
         git(self.work, "push", "origin", "main")
         git(self.work, "checkout", "feat/after")
+        self.assert_really_rebased("feat/after")
         git(self.work, "cherry-pick", "main")
         git(self.work, "fetch", "origin")
 
@@ -392,6 +422,7 @@ class TheFinishedPredicateSurvivesTheLandingMethod(unittest.TestCase):
         git(self.work, "add", "--all")
         git(self.work, "commit", "--amend", "--no-edit")
         self.land_by_rebase("feat/evil")
+        self.assert_really_rebased("feat/evil")
 
         self.assertEqual(self.unlanded("feat/evil"), [], "the patch read is clear, and it is wrong")
         self.assertFalse(self.finished(rows))
