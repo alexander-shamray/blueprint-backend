@@ -695,7 +695,9 @@ because asking failed.
    ```
 
    A refused fast-forward is divergence rather than staleness, and it stops
-   the chain: resolving it needs a force-push, which is denied here.
+   the chain. Step 7's rebase helper does not resolve it: it refuses a remote
+   carrying commits this checkout did not start from, which is this case, and
+   a lease would be satisfied by them because they have been fetched.
 
    1. **`/review-branch`, run by Grok, not by you** — the second opinion is
       the point, and a review run by the author's own model is not one:
@@ -1332,11 +1334,18 @@ because asking failed.
    merge commit whether or not it conflicted, and an exception is the rule
    nobody remembers at the moment it matters.
 
-   **It rewrites the branch's SHAs, so the verdict above no longer describes
-   the head.** Go back to the checks rather than to the merge: the gates were
-   satisfied for a commit that no longer exists. And kept to, this is what
-   keeps step 0's merge read a guard rather than a routine case — a branch
-   that is only ever rebased never carries a merge commit at all.
+   **It rewrites the branch's SHAs, so every verdict above describes a commit
+   that no longer exists** — and a conflict resolved during the replay changes
+   the content the reviewers read, not merely its sha. So this takes the same
+   route the non-empty gate above takes: re-enter **both** review loops for
+   whatever each has left of its own ceiling, then return to the **top of this
+   step**. Going back to the checks alone would merge a head no reviewer has
+   seen, which is the thing every loop in this command exists to prevent.
+
+   Kept to, this is also what keeps step 0's merge read a guard rather than a
+   routine case: a branch that is only ever rebased never carries a merge
+   commit at all. A branch that already carries one from before this rule is
+   what the helper refuses, because a replay would drop it.
 
    **Read `state` on every pass of the poll, before `mergeable`.** A PR closed
    or merged elsewhere while the review loops ran — and those loops are the
