@@ -129,6 +129,13 @@ them.
 | 6 | Every integration event is idempotent on the consumer side. | At-least-once delivery corrupts data on the first redelivery. |
 | 7 | Contracts are versioned and additive. | Any deploy becomes a lockstep deploy of everything. |
 
+> **Principle 4 has one stated departure.**
+> [ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)
+> has a worker read a delivery address and a mailbox from their owners with
+> no user waiting, because
+> [ADR-035](adr/ADR-035-an-integration-event-carries-identifiers-not-personal-data.md)
+> keeps both off the bus; no consumer and no request waits on the call.
+
 ## 2.4 The consistency model
 
 This is the single biggest adjustment for teams arriving from a monolith:

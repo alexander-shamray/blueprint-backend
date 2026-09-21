@@ -9,6 +9,13 @@ three hours with no service having missed its own target.
 locally, which means designing for staleness in the UI. That is the intended
 trade.
 
+> **Two values are fetched rather than delivered, and nothing here has been
+> edited.** [ADR-052](ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)
+> reads a delivery address and a mailbox from their owners, because
+> [ADR-035](ADR-035-an-integration-event-carries-identifiers-not-personal-data.md)
+> keeps both off the bus. The read is made by a worker over a row and never
+> inside a consumer, so the exception this record asks for is not spent.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)
