@@ -62,6 +62,8 @@ public class MessageTypeMapValidatorTests
     /// </remarks>
     private static async Task<Exception> RefusalAsync()
     {
+        Exception? refusal = null;
+
         for (int attempt = 0; attempt < StartAttempts; attempt++)
         {
             // The same assembly twice, which is the realistic way two entries
@@ -69,7 +71,7 @@ public class MessageTypeMapValidatorTests
             // already named. Every type in it then appears under one FullName.
             using DuplicateTypeSourceFactory factory = new();
 
-            Exception refusal = (await Record.ExceptionAsync(() => factory.StartAsync()))
+            refusal = (await Record.ExceptionAsync(() => factory.StartAsync()))
                 .ShouldNotBeNull("a duplicate persisted name must stop the host, not the first message");
 
             if (refusal is not ObjectDisposedException { ObjectName: nameof(IServiceProvider) })
@@ -78,7 +80,8 @@ public class MessageTypeMapValidatorTests
 
         throw new InvalidOperationException(
             "Every host started here reported a disposed provider, so none of them said why it " +
-            "refused to start.");
+            "refused to start.",
+            refusal);
     }
 
     private sealed class DuplicateTypeSourceFactory() : InventoryApiFactory(
