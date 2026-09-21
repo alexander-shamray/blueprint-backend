@@ -388,19 +388,29 @@ def main() -> int:
 
 
 # A C# line comment and a URL's `//` are the same two characters, so a string
-# is matched first and kept, and only what falls outside one is dropped.
+# literal is matched first and what falls outside one is what may be dropped.
 _COMMENT_OR_STRING = re.compile(
     r'@"(?:[^"]|"")*"|"(?:\\.|[^"\\])*"|//[^\n]*|/\*.*?\*/', re.S)
 
-# A declaration rather than the name anywhere in the file: prose naming the
-# builder would otherwise excuse a fixture from mapping the configuration.
+# A call rather than the name anywhere in the file: prose or a literal naming
+# the builder would otherwise excuse a fixture from mapping the configuration.
 BUILDS_IMAGE = re.compile(r"\bnew\s+ImageFromDockerfileBuilder\s*\(")
 
 
-def code_only(text: str) -> str:
-    """The fixture with its comments dropped and its string literals kept."""
-    return _COMMENT_OR_STRING.sub(
-        lambda m: " " if m.group().startswith("/") else m.group(), text)
+def code_only(text: str, *, keep_strings: bool = True) -> str:
+    """The fixture with its comments dropped, and its literals on request.
+
+    The mapping regex reads the paths out of a literal and needs them kept;
+    the builder search wants a call, and a literal spelling one out is not
+    one, so it asks for them masked.
+    """
+    def keep(match: re.Match[str]) -> str:
+        token = match.group()
+        if token.startswith("/"):
+            return " "
+        return token if keep_strings else '""'
+
+    return _COMMENT_OR_STRING.sub(keep, text)
 
 
 def broker_fixtures() -> list[Path]:
@@ -435,13 +445,14 @@ def check_fixture_matches_dockerfile() -> None:
     mapping = {}
     for path in fixtures:
         name = path.relative_to(ROOT).as_posix()
-        text = code_only(read(path))
+        raw = read(path)
+        text = code_only(raw)
         mapped = dict(re.findall(
             r'WithResourceMapping\(\s*new FileInfo\(Path\.Combine\(BrokerContextPath\(\),\s*"([^"]+)"\)\),\s*"([^"]+)"',
             text))
         if mapped:
             mapping[name] = mapped
-        elif not BUILDS_IMAGE.search(text):
+        elif not BUILDS_IMAGE.search(code_only(raw, keep_strings=False)):
             fail(f"{name}: maps none of the broker's configuration and builds no "
                  f"image either, so its broker starts with none of the definitions "
                  f"— no vhost, no per-service account and nothing to enforce")

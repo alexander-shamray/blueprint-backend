@@ -352,6 +352,17 @@ class TheFixtureCheckLooksAtEveryFixture(unittest.TestCase):
             any("Catalog.TestSupport" in f for f in failures),
             f"a commented-out builder excused a fixture that maps nothing: {failures}")
 
+    def test_a_fixture_naming_the_builder_in_a_literal_only_is_refused(self):
+        # A string is not a call either. The mapping regex reads the paths out
+        # of the literals, so only the builder search masks them.
+        literal = 'const string B = "new ImageFromDockerfileBuilder(";\n' + fixture_text(
+            "Catalog.TestSupport").replace("WithResourceMapping", "WithNothing")
+        failures = run_over_fixtures({"Catalog.TestSupport": literal})
+
+        self.assertTrue(
+            any("Catalog.TestSupport" in f for f in failures),
+            f"a literal naming the builder excused a fixture that maps nothing: {failures}")
+
     def test_a_glob_matching_nothing_is_refused(self):
         failures = run_over_fixtures({})
 
