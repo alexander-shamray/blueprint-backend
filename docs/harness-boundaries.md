@@ -119,6 +119,37 @@ extra command runs, write redirections, and `graph` / `clean` / `init` /
 The `cbx` wrapper is the other half — whitelist and
 `CBX_NO_SKILL_AUTO_UPDATE=1` — and is not a substitute for the hook.
 
+**`PostToolUse` runs `.claude/hooks/refresh-index.py` after every edit**, over
+the checkout the **edited path** belongs to, resolved before it is walked.
+`cwd` answers when the event names no file and `CLAUDE_PROJECT_DIR` when it
+names neither, and the three differ exactly when it matters: an edit is
+admitted against the session's tree or the one it forked from, so only the
+file's own path says which of them changed. Otherwise the index is refreshed
+only when a query reports it stale and `SKILL.md`'s instruction is followed
+— freshness as a property of having asked rather than of having edited. The
+hook spawns the CLI detached, discards both streams and always returns 0: it
+runs on every edit, so it may not make one wait, and an index that cannot
+refresh is not a reason to fail the edit that provoked it. The exit status is
+the one thing it does keep, and a request whose update failed goes back rather
+than counting as served: contention is what fails here, the streams that would
+have said so are gone, and the loser may be the run carrying the newest edit.
+A checkout with no index is left alone, because unindexed is not stale.
+
+**A hook command needs no shell, and that is a constraint rather than a
+preference.** An env-var prefix — `VAR=1 cmd` — is POSIX syntax that `cmd`
+and PowerShell do not run, and a bare `bash` is whatever `PATH` resolves
+first, which on Windows may be Git Bash or the WSL launcher: different
+programs, with different filesystems. Either way the failure lands in the
+redirect and reports nothing. So the form here is `py -3.12` over a file, as
+the `PreToolUse` guards beside it are, and the file sets its own environment
+— `CBX_NO_SKILL_AUTO_UPDATE=1`, which it owes because it calls the CLI
+rather than the `cbx` wrapper that would have set it.
+
+`examples/hooks/settings.json` carries the same block. It sits under
+`examples/`, which Claude Code does not read, so it documents the wiring
+rather than being it — and a second spelling there would be the copy that
+stops agreeing with the file that runs.
+
 **`settings.json`'s own entry self-locks, and that is a working constraint, not
 a curiosity.** Once it denies itself, the session cannot edit it again —
 including to undo the edit. So a change to it is one edit that lands complete,

@@ -93,11 +93,17 @@ jobs:
   # another case is the same directory there and a different string on Linux —
   # the guard asks the filesystem rather than the platform.
 
-  # One module rather than the whole `discover`, and that is a property of the
-  # module rather than a preference: the guard's own suite needs nothing but
-  # Python and a filesystem, where the suite beside it needs `bash`, `grep`,
-  # `git` and `jq` on PATH. Widening this job to the directory would adopt that
-  # whole toolchain on every platform in the matrix.
+  # The index hook's lock is the second thing here a Linux runner cannot
+  # judge. `msvcrt.locking` and `fcntl.flock` are different primitives, the
+  # job above runs only the second, and the hook is invoked through Windows
+  # `py` by `settings.json` — so a regression in the branch this repository's
+  # own sessions take would merge green.
+
+  # A module each rather than the whole `discover`, and that is a property of
+  # the modules rather than a preference: both need nothing but Python and a
+  # filesystem, where the suite beside them needs `bash`, `grep`, `git` and
+  # `jq` on PATH. Widening this job to the directory would adopt that whole
+  # toolchain on every platform in the matrix.
   edit-target-guard:
     strategy:
       fail-fast: false
@@ -117,6 +123,11 @@ jobs:
       # exists.
       - name: Test the edit-target guard
         run: python -m unittest discover -s .claude/scripts -p "test_edit_target_guard.py" -v
+
+      # `-v` here for the same reason: the lock's platform branch is chosen at
+      # import, and a green run that named no case would not say which.
+      - name: Test the index hook
+        run: python -m unittest discover -s .claude/scripts -p "test_refresh_index.py" -v
 
   # The style guide's comment rule over the lines a pull request adds. Stdlib
   # Python over text and git, so it sits beside the licence gate rather than
