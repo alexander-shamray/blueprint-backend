@@ -103,7 +103,7 @@ that reaches a merge — so the rows below say what is owed *between* them:
 | On a branch, tree clean and pushed | `/pr`, then the review loops |
 | On a branch with an open PR | The review loops (steps 5–6), Grok before Copilot — and, if the tree is dirty, checks, `/commit` **scoped to the implementation paths** and a push first, so the reviewers read what the PR will actually carry. Never unscoped while `suggestions.md` is on disk: that file is Grok's working state, and the unscoped form sweeps untracked files into the commit |
 | On a branch whose PR was **closed unmerged** | **Stop.** Somebody decided this branch does not land, and the open-PR read cannot see that: with no open PR the *clean and pushed* row would send the run to `/pr`, which refuses only an **open** one — so the chain would open a replacement and merge it, overriding a deliberate closure with no human in the loop. Report the closed PR and its number |
-| On a branch whose PR is **already merged** | **Step 0 alone, and then the run is over.** `pr-for-branch.sh` returning a `MERGED` row is what classifies this row — not step 0's finished predicate, which also asks for a clean tree and a tip equal to that row's `headRefOid` — and the classification comes before the review loops rather than after them — re-requesting a review on a merged PR spends a round of somebody's budget on a branch nobody can change. Where the predicate holds, step 0's teardown is a complete one (switch, pull, remove, prune); with a dirty tree, or a tip that is not that `headRefOid` — commits made after the merge, or a checkout behind it — the branch is **not** finished, step 0 stays put and tears nothing down, and the run still ends here. Either way step 7 has nothing left to do: there is no PR to merge |
+| On a branch whose PR is **already merged** | **Step 0 alone, and then the run is over.** `pr-for-branch.sh`'s newest row reading `MERGED` is what classifies this row — not step 0's finished predicate, which also asks for a clean tree, a base of `main` and a tip equal to a merged row's `headRefOid` — and the classification comes before the review loops rather than after them — re-requesting a review on a merged PR spends a round of somebody's budget on a branch nobody can change. Where the predicate holds, step 0's teardown is a complete one (switch, pull, remove, prune); with a dirty tree, or a tip that is not that `headRefOid` — commits made after the merge, or a checkout behind it — the branch is **not** finished, step 0 stays put and tears nothing down, and the run still ends here. Either way step 7 has nothing left to do: there is no PR to merge |
 
 **Step 0's teardown targets a worktree that is already finished; step 7's
 targets the one this run just merged. Exactly one of them owns any given
@@ -398,12 +398,14 @@ because asking failed.
    **It is not filtered to merged, and the read above must do that itself.**
    The helper fixes `--state all`, because the resume table one section up
    needs the other states from the same call. So **look for a row whose
-   `state` is `MERGED`, and compare that row's `headRefOid`** — a non-empty
-   result means a pull request exists, which is true of an OPEN one too, and
-   an OPEN row's head equals the tip on every pushed branch. Treating that as
-   "it landed" would classify an unmerged branch as finished and tear the
-   workspace down. `pr-state.sh` keeps its job one section up, in the resume
-   table, where the question is *which* state and there is a PR to ask about.
+   `state` is `MERGED` and whose `baseRefName` is `main`, and compare that
+   row's `headRefOid`** — a non-empty result means a pull request exists,
+   which is true of an OPEN one too, and an OPEN row's head equals the tip on
+   every pushed branch. Treating that as "it landed" would classify an
+   unmerged branch as finished and tear the workspace down. The resume table
+   one section up reads the same rows for a different question, *which* state
+   the newest row carries; `pr-state.sh` is step 7's read, where there is a PR
+   number to ask about.
 
    **A branch that is clean, holds nothing `origin/main` lacks and was never
    merged is *unused*, not finished — and the difference is what makes an
@@ -454,9 +456,9 @@ because asking failed.
    of one.** There is nothing to ship — the PR has landed, and the uncommitted
    edits or the later commits belong to whatever comes next. Nor may either be
    adopted onto this branch, tempting as step 1's already-on-a-branch override
-   makes it: a second PR cut from a merged branch leaves `pr-state.sh`
-   answering `MERGED` from the *first* one on every later resume, so the branch
-   becomes unreadable to this command permanently. Report what the workspace
+   makes it: a second PR cut from a merged branch leaves the name carrying a
+   merged row beside the open one, so every later read of it has to work out
+   which use it is asking about. Report what the workspace
    still holds and the directory holding it, and end there. **That is not one
    of the six stops** — nothing failed and nothing is being asked; it is a run
    that found nothing to do, and saying so is the whole of what it owes.
@@ -1384,11 +1386,11 @@ because asking failed.
      gives: somebody decided this branch does not land.
    - **`MERGED`** means another route got there first. Skip the merge — there
      is nothing left to merge — verify it the way the teardown does, from
-     `state` and `mergeCommit`, then ask step 0's predicate with the
-     `headRefOid` that read returned. A clean tree whose tip is that head goes
-     to the teardown below; anything else Stays, reports what the workspace
-     holds, and ends the run, because this exit is taken before the workspace
-     gate has looked.
+     `state` and `mergeCommit`, then ask step 0's predicate as step 0 asks
+     it, through `pr-for-branch.sh <branch>`, because `pr-state.sh` publishes
+     no base. Where it holds, the run goes to the teardown below; anything
+     else Stays, reports what the workspace holds, and ends the run, because
+     this exit is taken before the workspace gate has looked.
 
    **A loop that can only exit on success is not a poll, it is a wait**, and
    the difference only shows when the thing being waited on stops existing.
