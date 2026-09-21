@@ -298,7 +298,7 @@ class CopilotFeedHelpersAreTheOnlyIntake(unittest.TestCase):
         "gh pr create",
         "gh pr diff",
         "gh pr checks",
-        "gh pr merge --merge",
+        "gh pr merge --rebase",
         "gh issue create",
     }
 

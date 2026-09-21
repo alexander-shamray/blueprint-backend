@@ -1,7 +1,7 @@
 ---
 description: Start from a clean main, fork a worktree where one can be forked, branch, commit, push and open a PR, loop the external reviews — Grok until two consecutive clean passes, Copilot until one — then merge the PR and tear the workspace down. Decides for itself rather than stopping to ask
 argument-hint: "[what the change does] — omit and each step derives its own"
-allowed-tools: Read, Grep, Glob, Write, Skill, Agent(review-grok-triager), EnterWorktree, ExitWorktree, Bash(git status:*), Bash(git diff:*), Bash(git branch --list:*), Bash(git branch --show-current), Bash(git branch -a), Bash(git log:*), Bash(git fetch origin:*), Bash(bash .claude/scripts/git-branch-create.sh:*), Bash(bash .claude/scripts/git-worktree-fork.sh:*), Bash(bash .claude/scripts/git-switch-existing.sh:*), Bash(git rev-parse:*), Bash(git worktree list:*), Bash(ls:*), Bash(git add:*), Bash(git commit:*), Bash(bash .claude/scripts/git-unstage.sh:*), Bash(git push -u origin:*), Bash(git push origin:*), Bash(wc:*), Bash(gh pr create:*), Bash(bash .claude/scripts/pr-state.sh:*), Bash(bash .claude/scripts/pr-for-branch.sh:*), Bash(gh pr checks:*), Bash(gh pr merge --merge:*), Bash(git pull --ff-only), Bash(git merge-base --is-ancestor:*), Bash(git worktree remove:*), Bash(git worktree prune:*), Bash(rm -f suggestions.md), Bash(bash .claude/scripts/grok-ledger.sh:*), Bash(bash .claude/scripts/copilot-request.sh:*), Bash(bash .claude/scripts/copilot-request-count.sh:*), Bash(bash .claude/scripts/pr-review-comments.sh:*), Bash(bash .claude/scripts/pr-review-bodies.sh:*), Bash(bash .claude/scripts/pr-issue-comments.sh:*), Bash(bash .claude/scripts/pr-review-threads.sh:*), Bash(bash .claude/scripts/grok-review.sh:*), Bash(sleep:*), Bash(bash .claude/scripts/pr-locality.sh:*)
+allowed-tools: Read, Grep, Glob, Write, Skill, Agent(review-grok-triager), EnterWorktree, ExitWorktree, Bash(git status:*), Bash(git diff:*), Bash(git branch --list:*), Bash(git branch --show-current), Bash(git branch -a), Bash(git log:*), Bash(git cherry:*), Bash(git fetch origin:*), Bash(bash .claude/scripts/git-branch-create.sh:*), Bash(bash .claude/scripts/git-worktree-fork.sh:*), Bash(bash .claude/scripts/git-switch-existing.sh:*), Bash(git rev-parse:*), Bash(git worktree list:*), Bash(ls:*), Bash(git add:*), Bash(git commit:*), Bash(bash .claude/scripts/git-unstage.sh:*), Bash(git push -u origin:*), Bash(git push origin:*), Bash(wc:*), Bash(gh pr create:*), Bash(bash .claude/scripts/pr-state.sh:*), Bash(bash .claude/scripts/pr-for-branch.sh:*), Bash(gh pr checks:*), Bash(gh pr merge --rebase:*), Bash(git pull --ff-only), Bash(git merge-base --is-ancestor:*), Bash(git worktree remove:*), Bash(git worktree prune:*), Bash(rm -f suggestions.md), Bash(bash .claude/scripts/grok-ledger.sh:*), Bash(bash .claude/scripts/copilot-request.sh:*), Bash(bash .claude/scripts/copilot-request-count.sh:*), Bash(bash .claude/scripts/pr-review-comments.sh:*), Bash(bash .claude/scripts/pr-review-bodies.sh:*), Bash(bash .claude/scripts/pr-issue-comments.sh:*), Bash(bash .claude/scripts/pr-review-threads.sh:*), Bash(bash .claude/scripts/grok-review.sh:*), Bash(sleep:*), Bash(bash .claude/scripts/pr-locality.sh:*)
 ---
 
 Take the working tree from wherever it is to a merged PR. Description:
@@ -321,11 +321,29 @@ because asking failed.
    ```bash
    git fetch origin main                      # or the next read is stale
    git status --short                         # empty: nothing uncommitted
-   git log origin/main..HEAD                  # empty: nothing main lacks
+   git cherry origin/main HEAD                # no `+` line: main carries
+                                              # every patch this branch holds
    bash .claude/scripts/pr-for-branch.sh <branch>   # a row with state MERGED:
                                                    # it landed. Any other row
                                                    # is a PR, not a merge.
    ```
+
+   **The second read is by patch rather than by ancestry, because step 7
+   lands the branch with `--rebase`.** That replays the branch's commits onto
+   `main` with new SHAs, so the branch's own commits are never in `main` and
+   `git log origin/main..HEAD` is never empty on a branch that landed — a
+   predicate built on it classifies every merged branch as unfinished and
+   keeps every worktree for ever, without erroring anywhere. `git cherry`
+   compares patch ids instead, printing `-` for a commit `main` already
+   carries under another SHA and `+` for one it does not, so **finished means
+   no `+` line**. It answers the same on a branch landed by a merge commit,
+   where the range is empty and so is the output.
+
+   **A conflict resolved while landing changes the patch**, and that commit
+   reads `+` on a branch that did land. Step 0 then Stays, which is the safe
+   half of the answer: the directory survives until somebody removes it by
+   hand, where the other error removes the only checkout of work nobody has
+   read. The predicate is allowed to be wrong in one direction only.
 
    **Every read exits 0 whatever it finds, and that is deliberate.**
    `pr-state.sh` on a branch with no PR exits non-zero, and *forked but never
@@ -342,11 +360,11 @@ because asking failed.
    `pr-state.sh` keeps its job one section up, in the resume table, where the
    question is *which* state and there is a PR to ask about.
 
-   **The merge read is not redundant with `origin/main..HEAD`, and the
-   difference is the whole of the next paragraph.** Merging does empty that
-   range, so the two agree on a landed branch; where they part is a branch
-   that never carried anything, which satisfies the first two reads without a
-   PR ever having existed.
+   **The merge read is not redundant with `git cherry`, and the difference is
+   the whole of the next paragraph.** Landing does empty that output, so the
+   two agree on a landed branch; where they part is a branch that never
+   carried anything, which satisfies the first two reads without a PR ever
+   having existed.
 
    **A branch that is clean, level with `origin/main` and never merged is
    *unused*, not finished — and the difference is what makes an interrupted
@@ -530,11 +548,11 @@ because asking failed.
    > An **allow** rule cannot exclude a *trailing* flag — true of the allow
    > side only: a deny takes `*` at any position. Both grants below are
    > allows, so — `Bash(git worktree remove:*)` admits the `-f` this file
-   > forbids, and `Bash(gh pr merge --merge:*)` admits a trailing `--admin`,
+   > forbids, and `Bash(gh pr merge --rebase:*)` admits a trailing `--admin`,
    > which merges past the failing checks step 7 treats as a hard stop.
-   > Pinning `--merge` at the front does close the *method* — `gh` refuses two
-   > of `--merge`, `--squash` and `--rebase` together — so that half is real;
-   > the bypass half is not.
+   > Pinning `--rebase` at the front does close the *method* — `gh` refuses
+   > two of `--merge`, `--squash` and `--rebase` together — so that half is
+   > real; the bypass half is not.
    >
    > Every comparable case in this repository is fixed by a helper that spells
    > its own flags, and the two that exist (`git-worktree-detach.sh`,
@@ -1304,11 +1322,11 @@ because asking failed.
    stale-artefact trap step 6's `commit` oid exists for. Wait for the run on
    the pushed head rather than reading whichever finished last.
 
-   Then merge with a merge commit, which is this repository's shape — every
-   entry in `git log --merges` reads `Merge pull request #n from …`:
+   Then land the branch by rebase, which puts each of `/commit`'s commits on
+   `main` as its own — no merge commit, and no squash:
 
    ```bash
-   gh pr merge --merge <n> --match-head-commit <oid>
+   gh pr merge --rebase <n> --match-head-commit <oid>
    ```
 
    **Never `--admin`.** The grant admits it, for the reason step 0's callout
@@ -1335,16 +1353,23 @@ because asking failed.
    produced it.
 
    **The flag comes before the number, and that is about the grant rather than
-   about `gh`.** The frontmatter permits `Bash(gh pr merge --merge:*)`, and a
-   permission rule is a prefix match — `gh pr merge <n> --merge` does not start
-   with it and is simply denied. `gh` itself accepts either order (cobra
+   about `gh`.** The frontmatter permits `Bash(gh pr merge --rebase:*)`, and a
+   permission rule is a prefix match — `gh pr merge <n> --rebase` does not
+   start with it and is simply denied. `gh` itself accepts either order (cobra
    intersperses flags and positionals), so writing it flag-first costs nothing
    and keeps the narrow grant usable.
 
-   `--squash` and `--rebase` are not alternatives to choose between here. The
-   commits are the argument — `/commit` splits them so a reviewer can accept
-   one and reject the next, and `/pr` writes its body from them — so squashing
-   discards the thing two earlier steps spent their effort producing.
+   `--squash` is not an alternative to choose between here. The commits are
+   the argument — `/commit` splits them so a reviewer can accept one and
+   reject the next, and `/pr` writes its body from them — so squashing
+   discards the thing two earlier steps spent their effort producing. Rebase
+   keeps every one of them, which is why it is the method and squash is not.
+
+   **What rebase costs is the branch's own SHAs**, and exactly one read
+   depended on them: step 0's finished predicate, which asks `git cherry` for
+   that reason. Nothing else here judges arrival by ancestry — the workspace
+   gate above runs before the landing, and the containment check below runs
+   against the oid the remote reports rather than against a local commit.
 
    **The merge is `gh`'s, not a push.** `.claude/settings.json` denies every
    push to `main` and that deny is untouched: the branch is merged on the
@@ -1379,6 +1404,14 @@ because asking failed.
    on, and that the merge is in its history. The check is the only guard
    between a pull that silently did nothing and a report that says the merge
    arrived.
+
+   **A rebase landing still has an oid, and it is the last replayed commit on
+   `main` rather than a merge commit.** Containment is what line 5 asks and
+   containment is what holds, so the check is unchanged; what changed is that
+   the oid names a commit with one parent, and that the branch's local copy of
+   it carries a different SHA. Were the remote ever to answer with an oid
+   `main` does not contain, line 5 fails loudly — the direction this chain
+   wants to be wrong in.
 
    **Verify first.** Removing the worktree is the one step in this chain that
    destroys something, and doing it on an assumed merge is how an unmerged
