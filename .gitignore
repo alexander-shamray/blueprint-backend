@@ -1,4 +1,8 @@
+# Session and subagent scratch, not source. Both are named here, at the root,
+# because the code index reads the ignore files its own configuration names
+# and never a nested one — so a nested rule leaves the directory indexed.
 .remember/
+.superpowers/
 
 # Claude Code — shared config is committed, per-developer overrides are not.
 .claude/settings.local.json
@@ -65,3 +69,9 @@ __pycache__/
 # the CI job both run it before anything else.
 deploy/helm/*/charts/
 deploy/helm/*/Chart.lock
+
+# The user's local task list, kept current by Claude (CLAUDE.md, Working in
+# this repo), and the plan it is the one-line view of. Local by design: they
+# change too often to go through a PR.
+/TODO.md
+/PLAN.md
