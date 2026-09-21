@@ -298,7 +298,6 @@ class CopilotFeedHelpersAreTheOnlyIntake(unittest.TestCase):
         "gh pr create",
         "gh pr diff",
         "gh pr checks",
-        "gh pr merge --rebase",
         "gh issue create",
     }
 
@@ -339,7 +338,7 @@ class CopilotFeedHelpersAreTheOnlyIntake(unittest.TestCase):
             grant for path in COMMANDS.glob("*.md")
             for grant in self.granted_bash(path) if grant.startswith("gh ")
         ]
-        self.assertGreater(len(seen), 4)
+        self.assertGreater(len(seen), 3)
         for banned in ("gh pr view", "gh pr list", "gh api"):
             self.assertNotIn(banned, self.GH_GRANTS_THAT_CANNOT_REACH_A_FEED)
 

@@ -1,7 +1,7 @@
 ---
 description: Start from a clean main, fork a worktree where one can be forked, branch, commit, push and open a PR, loop the external reviews — Grok until two consecutive clean passes, Copilot until one — then merge the PR and tear the workspace down. Decides for itself rather than stopping to ask
 argument-hint: "[what the change does] — omit and each step derives its own"
-allowed-tools: Read, Grep, Glob, Write, Skill, Agent(review-grok-triager), EnterWorktree, ExitWorktree, Bash(git status:*), Bash(git diff:*), Bash(git branch --list:*), Bash(git branch --show-current), Bash(git branch -a), Bash(git log:*), Bash(git cherry:*), Bash(git fetch origin:*), Bash(bash .claude/scripts/git-branch-create.sh:*), Bash(bash .claude/scripts/git-worktree-fork.sh:*), Bash(bash .claude/scripts/git-switch-existing.sh:*), Bash(bash .claude/scripts/git-rebase-onto-main.sh:*), Bash(git rev-parse:*), Bash(git worktree list:*), Bash(ls:*), Bash(git add:*), Bash(git commit:*), Bash(bash .claude/scripts/git-unstage.sh:*), Bash(git push -u origin:*), Bash(git push origin:*), Bash(wc:*), Bash(gh pr create:*), Bash(bash .claude/scripts/pr-state.sh:*), Bash(bash .claude/scripts/pr-for-branch.sh:*), Bash(gh pr checks:*), Bash(gh pr merge --rebase:*), Bash(git pull --ff-only), Bash(git merge-base --is-ancestor:*), Bash(git worktree remove:*), Bash(git worktree prune:*), Bash(rm -f suggestions.md), Bash(bash .claude/scripts/grok-ledger.sh:*), Bash(bash .claude/scripts/copilot-request.sh:*), Bash(bash .claude/scripts/copilot-request-count.sh:*), Bash(bash .claude/scripts/pr-review-comments.sh:*), Bash(bash .claude/scripts/pr-review-bodies.sh:*), Bash(bash .claude/scripts/pr-issue-comments.sh:*), Bash(bash .claude/scripts/pr-review-threads.sh:*), Bash(bash .claude/scripts/grok-review.sh:*), Bash(sleep:*), Bash(bash .claude/scripts/pr-locality.sh:*)
+allowed-tools: Read, Grep, Glob, Write, Skill, Agent(review-grok-triager), EnterWorktree, ExitWorktree, Bash(git status:*), Bash(git diff:*), Bash(git branch --list:*), Bash(git branch --show-current), Bash(git branch -a), Bash(git log:*), Bash(git fetch origin:*), Bash(bash .claude/scripts/git-branch-create.sh:*), Bash(bash .claude/scripts/git-worktree-fork.sh:*), Bash(bash .claude/scripts/git-switch-existing.sh:*), Bash(bash .claude/scripts/git-rebase-onto-main.sh:*), Bash(git rev-parse:*), Bash(git worktree list:*), Bash(ls:*), Bash(git add:*), Bash(git commit:*), Bash(bash .claude/scripts/git-unstage.sh:*), Bash(git push -u origin:*), Bash(git push origin:*), Bash(wc:*), Bash(gh pr create:*), Bash(bash .claude/scripts/pr-state.sh:*), Bash(bash .claude/scripts/pr-for-branch.sh:*), Bash(gh pr checks:*), Bash(bash .claude/scripts/gh-pr-merge.sh:*), Bash(git pull --ff-only), Bash(git merge-base --is-ancestor:*), Bash(git worktree remove:*), Bash(git worktree prune:*), Bash(rm -f suggestions.md), Bash(bash .claude/scripts/grok-ledger.sh:*), Bash(bash .claude/scripts/copilot-request.sh:*), Bash(bash .claude/scripts/copilot-request-count.sh:*), Bash(bash .claude/scripts/pr-review-comments.sh:*), Bash(bash .claude/scripts/pr-review-bodies.sh:*), Bash(bash .claude/scripts/pr-issue-comments.sh:*), Bash(bash .claude/scripts/pr-review-threads.sh:*), Bash(bash .claude/scripts/grok-review.sh:*), Bash(sleep:*), Bash(bash .claude/scripts/pr-locality.sh:*)
 ---
 
 Take the working tree from wherever it is to a merged PR. Description:
@@ -314,49 +314,70 @@ because asking failed.
    shape a sweep's worktree has), and the only thing step 0 owes it is to keep
    the checkout where it is.
 
-   **Finished means this branch's work has landed — all four of these, with
+   **Finished means this branch's work has landed — all three of these, with
    no limbs and no exceptions.** Everything else is either unfinished or
    unused, and both of those Stay.
 
    ```bash
-   git fetch origin main                      # or the next read is stale
+   git fetch origin main                      # or the teardown's base is stale
    git status --short                         # empty: nothing uncommitted
-   git cherry origin/main HEAD                # no `+` line: every ordinary
-                                              # commit here is upstream
-   git log --merges --cc --format="" origin/main..HEAD
-                                              # empty: and no merge commit
-                                              # carries content of its own
-   bash .claude/scripts/pr-for-branch.sh <branch>   # a row with state MERGED:
-                                                   # it landed. Any other row
-                                                   # is a PR, not a merge.
+   git rev-parse HEAD                         # the tip, for the row below
+   bash .claude/scripts/pr-for-branch.sh <branch>   # a row with state MERGED
+                                                   # whose headRefOid equals
+                                                   # that tip: it landed, and
+                                                   # this checkout holds
+                                                   # nothing since. A MERGED
+                                                   # row with any other
+                                                   # headRefOid is later work.
    ```
 
-   **The second read is by patch rather than by ancestry, because step 7
-   lands the branch with `--rebase`.** That replays the branch's commits onto
-   `main` with new SHAs, so the branch's own commits are never in `main` and
-   `git log origin/main..HEAD` is never empty on a branch that landed — a
-   predicate built on it classifies every merged branch as unfinished and
-   keeps every worktree for ever, without erroring anywhere. `git cherry`
-   compares patch ids instead, printing `-` for a commit `main` already
-   carries under another SHA and `+` for one it does not, so **finished means
-   no `+` line**. It answers the same on a branch landed by a merge commit,
-   where the range is empty and so is the output.
+   **The question is identity, not content: is this still the commit the
+   pull request landed?** `pr-for-branch.sh` publishes each row's
+   `headRefOid`, and finished means `git rev-parse HEAD` equals the one on a
+   `MERGED` row. Anything committed since moves the tip, whatever its patch
+   looks like and whether or not it is a merge — there is no shape of
+   post-landing work that survives this read.
 
-   **`git cherry` says nothing about merge commits, and that is why there is
-   a fourth read.** It prints a line only for a commit with one parent, so a
-   merge-forward of `main` into the branch is invisible to it — and a merge
-   can carry content that exists in neither parent: a conflict resolution, or
-   an edit made while resolving one. A branch whose ordinary commits had all
-   landed would read finished with that content nowhere else, and the worktree
-   holding it would be removed. `--cc` is the combined diff, which shows only
-   what differs from *every* parent, so an ordinary merge-forward prints
-   nothing and a merge that invented something prints it.
+   **No comparison of content can stand here, and the two obvious ones fail
+   in opposite directions.** A range read over `origin/main..HEAD` cannot see
+   a rebase landing at all: step 7 lands with `--rebase`, the replay gives the
+   branch's commits new SHAs, so the range is never empty, no landed branch is
+   ever finished, and every worktree is kept — wrong the safe way, costing a
+   directory nobody removes. A patch-id comparison does answer for a rebase
+   landing and then answers the wrong question: `git cherry` reports a commit
+   whose patch `main` already carries as `-`, and omits merge commits
+   outright, so it calls a workspace finished while it holds a commit made
+   after the landing, and needs a second read over the range's merges to see
+   a resolution recorded only in one. Step 0's response to finished is to
+   remove the worktree, so that is wrong the unsafe way, and a predicate
+   patched by a second predicate is the shape to leave rather than extend.
 
-   **A conflict resolved while landing changes the patch**, and that commit
-   reads `+` on a branch that did land. Step 0 then Stays, which is the safe
-   half of the answer: the directory survives until somebody removes it by
-   hand, where the other error removes the only checkout of work nobody has
-   read. The predicate is allowed to be wrong in one direction only.
+   **Identity is also method-agnostic, which is why it is the right read
+   rather than the safer one.** Merge, squash or rebase, the head a pull
+   request merged is the head it merged, so the landing method never reaches
+   this predicate.
+
+   **A checkout *behind* that head is kept as well, and that is the cost of
+   one read.** A clean HEAD that is an ancestor of the landed `headRefOid`
+   holds nothing the landing lacked, so keeping it is wrong — the safe way: a
+   directory somebody removes by hand, named in the report. Admitting it
+   takes the landed head's object in this checkout, which a deleted remote
+   branch no longer serves, and a second pair of ancestry reads that are only
+   sound where the helper returns exactly one row, filtered to base `main`
+   with a stale merged row dropped. This repository's helper returns every
+   row the branch name has ever had, so the form taken is the one read, and
+   step 5's fast-forward is what keeps the state rare.
+
+   **The row count is why the read says *a* row, not *the* row.** A branch
+   name used twice has two `MERGED` rows, and equality against either head is
+   the same claim about this tip: it is a commit a pull request landed. A row
+   from an earlier use cannot match a tip the later use moved.
+
+   **A branch updated after its last push reads unfinished too**, because the
+   tip is no longer the head GitHub recorded. Step 7's gate makes that a
+   state this chain does not produce — it refuses to merge with anything in
+   the workspace the remote head lacks — and a landing made by hand past it
+   Stays, which is the direction the predicate is allowed to be wrong in.
 
    **Every read exits 0 whatever it finds, and that is deliberate.**
    `pr-state.sh` on a branch with no PR exits non-zero, and *forked but never
@@ -367,17 +388,12 @@ because asking failed.
    **It is not filtered to merged, and the read above must do that itself.**
    The helper fixes `--state all`, because the resume table one section up
    needs the other states from the same call. So **look for a row whose
-   `state` is `MERGED`** — a non-empty result means a pull request exists,
-   which is true of an OPEN one too, and treating that as "it landed" would
-   classify an unmerged branch as finished and tear the workspace down.
-   `pr-state.sh` keeps its job one section up, in the resume table, where the
-   question is *which* state and there is a PR to ask about.
-
-   **The merge read is not redundant with `git cherry`, and the difference is
-   the whole of the next paragraph.** Landing does empty that output, so the
-   two agree on a landed branch; where they part is a branch that never
-   carried anything, which satisfies the first two reads without a PR ever
-   having existed.
+   `state` is `MERGED`, and compare that row's `headRefOid`** — a non-empty
+   result means a pull request exists, which is true of an OPEN one too, and
+   an OPEN row's head equals the tip on every pushed branch. Treating that as
+   "it landed" would classify an unmerged branch as finished and tear the
+   workspace down. `pr-state.sh` keeps its job one section up, in the resume
+   table, where the question is *which* state and there is a PR to ask about.
 
    **A branch that is clean, holds nothing `origin/main` lacks and was never
    merged is *unused*, not finished — and the difference is what makes an
@@ -407,21 +423,20 @@ because asking failed.
    `main` with step 1 about to refuse a branch that already exists. The guard
    that saves the files is not the guard that saves the run.
 
-   **The four reads are a conjunction, and a merged PR exempts a workspace
-   from none of them.** A merged PR with **uncommitted edits** beside it, or
-   with **clean commits made after the merge**, is not finished. Read as
-   finished, either ends identically: step 0 exits the worktree, the resume
-   table's merged-PR row ends the run, and the work is left where nothing will
-   look at it again — the edits in a directory nobody is in, or the commits on
-   a branch no later run will name. All four reads ask one question about one
-   thing — **does this workspace hold anything `main` does not** — and nothing
-   about a PR's state exempts a workspace from being asked.
+   **The reads are a conjunction, and a merged PR exempts a workspace from
+   none of them.** A merged PR with **uncommitted edits** beside it, or with
+   **clean commits made after the merge**, is not finished. Read as finished,
+   either ends identically: step 0 exits the worktree, the resume table's
+   merged-PR row ends the run, and the work is left where nothing will look at
+   it again — the edits in a directory nobody is in, or the commits on a
+   branch no later run will name. The reads ask one question about one
+   thing — **is this workspace exactly what the pull request landed** — and
+   nothing about a PR's state exempts a workspace from being asked.
 
-   **That is narrower than *is there work here*, and the difference is
-   deliberate.** A commit made after the merge whose patch `main` already
-   carries reads `-`, and the workspace is called finished. Nothing is lost
-   when it is, because the content is upstream; the promise is containment
-   rather than emptiness, and the two part company exactly there.
+   **That is *is there work here*, asked without reading the work.** A commit
+   made after the merge moves the tip whether or not `main` already carries
+   its patch, so the workspace is kept and the report names it; the predicate
+   never has to decide whether what it found matters.
 
    **So a merged PR with work beside it is unfinished, the second row keeps
    the session in it, and that is a run with nothing owed rather than the start
@@ -455,8 +470,8 @@ because asking failed.
    `/branch` produces every time `main` was dirty, which is every time a change
    is already half-written when the chain starts. The reads above answer
    which row applies, and they are needed **together**: the PR state alone
-   cannot see a branch that never opened one, and the patch read alone cannot
-   see one whose PR is merged.
+   cannot see work committed after the merge, and the tip alone says nothing
+   until a merged row names the head to compare it with.
 
    **`ExitWorktree` with `keep`, never `remove`.** The remove form only works
    on a worktree this session *created* — `EnterWorktree({name})`. `/branch`
@@ -558,44 +573,43 @@ because asking failed.
    remove is left where it is and named in the report; do not reach for `-f`,
    which is the one spelling that discards somebody's work.
 
-   > **Some grants in this file are wider than the operations they buy, and
-   > every one is a known residual rather than an oversight.**
+   > **One grant in this file is wider than the operation it buys, and it is
+   > a known residual rather than an oversight.**
    > `docs/harness-boundaries.md` keeps the inventory; this callout keeps the
-   > argument for the two that bite hardest here, and states no total of its
+   > argument for the one that bites hardest here, and states no total of its
    > own.
    >
    > An **allow** rule cannot exclude a *trailing* flag — true of the allow
-   > side only: a deny takes `*` at any position. Both grants below are
-   > allows, so — `Bash(git worktree remove:*)` admits the `-f` this file
-   > forbids, and `Bash(gh pr merge --rebase:*)` admits a trailing `--admin`,
-   > which merges past the failing checks step 7 treats as a hard stop.
-   > Pinning `--rebase` at the front does close the *method* — `gh` refuses
-   > two of `--merge`, `--squash` and `--rebase` together — so that half is
-   > real; the bypass half is not.
+   > side only: a deny takes `*` at any position. So
+   > `Bash(git worktree remove:*)` admits the `-f` this file forbids.
    >
    > Every comparable case in this repository is fixed by a helper that spells
-   > its own flags, and the two that exist (`git-worktree-detach.sh`,
-   > `git-worktree-drop.sh`) bind the path to `secsweep-` plus six characters
-   > directly under the temp root, and therefore refuse a PR worktree by
-   > design — the detach helper by *creating* the only path it hands to git,
-   > which is stronger than checking one a caller supplied. Two more are owed
-   > here; until someone with the `Edit(.claude/scripts/**)` deny lifted writes
-   > them, both rules are carried by this file, like the `[` placement rule in
-   > `docs/style-guide.md`.
+   > its own flags. Step 7's merge is one: `gh-pr-merge.sh` replaced a raw
+   > `gh pr merge --rebase` grant whose prefix admitted a trailing `--admin`,
+   > and it takes a number and an oid and nothing else. The two worktree
+   > helpers that exist (`git-worktree-detach.sh`, `git-worktree-drop.sh`)
+   > bind the path to `secsweep-` plus six characters directly under the temp
+   > root, and therefore refuse a PR worktree by design — the detach helper by
+   > *creating* the only path it hands to git, which is stronger than checking
+   > one a caller supplied. One more is owed here; until someone with the
+   > `Edit(.claude/scripts/**)` deny lifted writes it, the rule is carried by
+   > this file, like the `[` placement rule in `docs/style-guide.md`.
    >
-   > **The deny is why they cannot simply be written now, and it is the same
-   > control that makes a helper worth having.** A session that could add
-   > `.claude/scripts/gh-pr-merge.sh` could also edit the one it is about to
-   > invoke, which would make every fixed endpoint in this chain a fiction. So
-   > the debt is real and it is the repo owner's to pay, deliberately.
+   > **The deny is why it cannot simply be written in passing, and it is the
+   > same control that makes a helper worth having.** A session that could
+   > add a helper under `.claude/scripts/` could also edit the one it is about
+   > to invoke, which would make every fixed endpoint in this chain a fiction.
+   > So a helper arrives as the repo owner's change to a reviewed file, with
+   > the raw grant withdrawn beside it, and the debt is theirs to pay,
+   > deliberately.
    >
    > **What stands in the meantime is visibility, not prevention, and calling
    > it anything else would be the overclaim.** Step 7 reports the **literal**
-   > `gh pr merge` and `git worktree remove` invocations it ran, flags
-   > included. That is the same substitute this chain accepts for the human
-   > gate it does without — a decision taken here is written where the person
-   > who would have been asked can find it — applied to the two commands that
-   > can bypass a gate rather than merely take a judgement.
+   > merge and `git worktree remove` invocations it ran, flags included. That
+   > is the same substitute this chain accepts for the human gate it does
+   > without — a decision taken here is written where the person who would
+   > have been asked can find it — applied to the command that can discard
+   > work rather than merely take a judgement.
 
    Deleting the merged **branch** is not part of this. `git branch -d` is
    denied in `.claude/settings.json`, deliberately, and a merged branch costs
@@ -1342,9 +1356,8 @@ because asking failed.
    step**. Going back to the checks alone would merge a head no reviewer has
    seen, which is the thing every loop in this command exists to prevent.
 
-   Kept to, this is also what keeps step 0's merge read a guard rather than a
-   routine case: a branch that is only ever rebased never carries a merge
-   commit at all. A branch that already carries one from before this rule is
+   Kept to, a branch that is only ever rebased never carries a merge commit
+   at all. A branch that already carries one from before this rule is
    read rather than refused outright: a replay drops every merge, so the
    helper stops only where the merge holds something neither parent does — a
    conflict resolved while merging — and flattens an ordinary merge-forward,
@@ -1387,21 +1400,29 @@ because asking failed.
    `main` as its own — no merge commit, and no squash:
 
    ```bash
-   gh pr merge --rebase <n> --match-head-commit <oid>
+   bash .claude/scripts/gh-pr-merge.sh <n> <oid>
    ```
 
-   **Never `--admin`.** The grant admits it, for the reason step 0's callout
-   argues at length, and it is the one flag that turns the check gate above
-   into a formality — a PR merged past failing checks by a chain whose report
-   says the checks gated it. The invocation goes into the report verbatim so
-   that claim is checkable rather than trusted.
+   **The helper spells `gh pr merge --rebase --match-head-commit <oid>`
+   itself, and no raw `gh pr merge` grant stands beside it.** A permission
+   rule is a prefix match, so a grant pinned to `--rebase` still admitted a
+   trailing `--admin` — the one flag that turns the check gate above into a
+   formality, a PR merged past failing checks by a chain whose report says
+   the checks gated it. The helper takes two arguments and no flags, so there
+   is nowhere to put one. The invocation still goes into the report verbatim.
 
    **`--match-head-commit` is what binds the merge to the head whose checks
-   were read.** Without it the green verdict and the merge are two reads of a
-   moving target: a push landing between them merges a commit whose checks
-   never ran, and the rule above — wait for the run on the pushed head —
-   would have been satisfied by a commit that is no longer the head. **It is
-   the only guard in this step that fails closed**, and it costs one argument.
+   were read, which is why the oid is a required argument and not an option.**
+   Without it the green verdict and the merge are two reads of a moving
+   target: a push landing between them merges a commit whose checks never
+   ran, and the rule above — wait for the run on the pushed head — would have
+   been satisfied by a commit that is no longer the head. **It is the only
+   guard in this step that fails closed.**
+
+   **The number is checked against the checkout as well.** An oid binds the
+   merge to a head, and the caller supplies both, so any open PR named with
+   its own head would pass. The helper refuses a PR that is not for the
+   checked-out branch, from this repository, into `main`, with that head.
 
    **The oid comes from the `pr-state.sh` read that returned a *known*
    mergeability** — the last one of the poll above, not the first. **A push
@@ -1413,13 +1434,6 @@ because asking failed.
    the two waits differ only in whether they run before or after the gate that
    produced it.
 
-   **The flag comes before the number, and that is about the grant rather than
-   about `gh`.** The frontmatter permits `Bash(gh pr merge --rebase:*)`, and a
-   permission rule is a prefix match — `gh pr merge <n> --rebase` does not
-   start with it and is simply denied. `gh` itself accepts either order (cobra
-   intersperses flags and positionals), so writing it flag-first costs nothing
-   and keeps the narrow grant usable.
-
    `--squash` is not an alternative to choose between here. The commits are
    the argument — `/commit` splits them so a reviewer can accept one and
    reject the next, and `/pr` writes its body from them — so squashing
@@ -1427,8 +1441,9 @@ because asking failed.
    keeps every one of them, which is why it is the method and squash is not.
 
    **What rebase costs is the branch's own SHAs**, and exactly one read
-   depended on them: step 0's finished predicate, which asks `git cherry` for
-   that reason. Nothing else here judges arrival by ancestry — the workspace
+   depended on them: step 0's finished predicate, which reads identity
+   against the pull request's own head for that reason. Nothing else here
+   judges arrival by ancestry — the workspace
    gate above runs before the landing, and the containment check below runs
    against the oid the remote reports rather than against a local commit.
 
@@ -1534,9 +1549,9 @@ interruption, so a run that took decisions and lists none of them has not
 reported — it has hidden. A run that took none says so in one line.
 
 **Then the merge and the workspace.** Whether the PR merged and its merge oid,
-the literal `gh pr merge` and `git worktree remove` lines that ran, flags and
-all, because those two grants admit a flag this file forbids and a report is
-the only place the forbidding is checkable; or which of the two gates stopped
+the literal `gh-pr-merge.sh` and `git worktree remove` lines that ran, flags
+and all, because the second grant admits a flag this file forbids and a report
+is the only place the forbidding is checkable; or which of the two gates stopped
 it; that `main` was pulled, the HEAD it is now at, and that that HEAD contains
 the merge oid — containment rather than equality, because a PR merging in
 between leaves `main` at a later descendant and nothing is wrong; the worktree

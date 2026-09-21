@@ -481,11 +481,14 @@ Ordinals are kept even where an entry is closed, so a cross-reference to "the
 fourth" still lands, and each entry says its own state. Read the entries; do
 not count them here.
 
-Two are `/ship`'s:
+Two are `/ship`'s, and one of them is closed:
 `Bash(git worktree remove:*)` admits the `-f` that discards work, and
-`Bash(gh pr merge --rebase:*)` admits a trailing `--admin` that merges past
-failing checks. Helpers are owed for both; until someone with the
-`Edit(.claude/scripts/**)` deny lifted writes them, `/ship` carries them by
+`Bash(gh pr merge --rebase:*)` admitted a trailing `--admin` that merges past
+failing checks. The second is withdrawn: `gh-pr-merge.sh` takes a number and a
+head oid, spells `--rebase --match-head-commit` itself, and refuses a pull
+request that is not the checked-out branch's own, from this repository, into
+`main`. A helper is still owed for the first; until someone with the
+`Edit(.claude/scripts/**)` deny lifted writes it, `/ship` carries it by
 reporting its literal invocations, flags and all.
 
 **Two more sat in the sweep command files rather than in this paragraph, and
