@@ -483,7 +483,7 @@ not count them here.
 
 Two are `/ship`'s:
 `Bash(git worktree remove:*)` admits the `-f` that discards work, and
-`Bash(gh pr merge --merge:*)` admits a trailing `--admin` that merges past
+`Bash(gh pr merge --rebase:*)` admits a trailing `--admin` that merges past
 failing checks. Helpers are owed for both; until someone with the
 `Edit(.claude/scripts/**)` deny lifted writes them, `/ship` carries them by
 reporting its literal invocations, flags and all.

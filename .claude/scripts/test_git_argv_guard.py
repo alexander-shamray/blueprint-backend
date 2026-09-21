@@ -901,6 +901,7 @@ class TheGitArgvGuard(unittest.TestCase):
             "git merge-base origin/main HEAD",
             "git rev-parse --show-toplevel",
             "git rev-list --count origin/main..HEAD",
+            "git cherry origin/main HEAD",
             "git fetch origin",
             "git pull --ff-only",
             "git add -A",
