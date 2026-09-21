@@ -74,15 +74,16 @@ scope, as §11.5 requires of `web-bff`, since the `permission` claim exists
 only through that scope's mapper. Ordering serves it as a gRPC method,
 `DeliveryAddresses.Get`, because [§9.7](../09-messaging.md) makes gRPC the
 transport between services and this is the second such call. The method
-requires that permission, **skips the ownership check on purpose** — a
-service account's subject owns no order — and answers the address and
-nothing else. A gRPC method's path is its service's name, which the
-gateway's catch-all route for `/v1/orders` cannot match, and a gateway test
-says no route reaches it. Notifications' client does not take that scope,
-and holds `view-users` on `realm-management` — with the two query roles
-that role composes, and nothing else — the narrowest grant the pinned
-Keycloak offers without a preview feature; a stolen secret reads every
-user's profile in the realm and no credential.
+requires that permission, **skips the ownership check on purpose** — a service
+account's subject owns no order — and answers the address and nothing else. A
+gRPC method's path is `/<package>.<service>/<method>` and it is served on a
+second, HTTP/2-only port, as §9.7 asks of Catalog's; no route in the gateway's
+file matches that path and no cluster dials that port, and a gateway test says
+so. Notifications' client does not take that scope, and holds `view-users` on
+`realm-management` — with the two query roles that role composes, and nothing
+else — the narrowest grant the pinned Keycloak offers without a preview
+feature; a stolen secret reads every user's profile in the realm and no
+credential.
 
 **Each client holds itself to its grant, because the realm gate cannot.**
 [ADR-042](ADR-042-the-deployed-realm-is-checked-at-deploy-time.md)'s check
@@ -221,14 +222,15 @@ builds it, and the list is written out for ADR-051's reason:
 | [§2.2](../02-architecture-at-a-glance.md) | One synchronous edge, drawn from the BFF |
 | [§3.2](../03-bounded-contexts.md) | Rows for Shipping and Notifications that reach nothing but the broker |
 | [§4.1](../04-solution-structure.md) | The BFF as "the ONLY host that calls a service", and no building block holding the identity types |
-| [§9.7](../09-messaging.md) | The pricing hop as the platform's one synchronous call between its services, `Web.Bff` as "the only one holding client credentials", and Catalog as the one gRPC server |
+| [§9.7](../09-messaging.md) | The pricing hop as the platform's one synchronous call between its services, and `Web.Bff` as "the only one holding client credentials" |
 | [§11.5](../11-identity-authorization.md) | One host in the table of realm objects, and "the platform's only permitted synchronous hop" |
 | [§12](../12-test-strategy.md) | One suite that runs a real Keycloak, for one client |
 | [§14.1](../14-local-development.md) | One client secret among the Compose defaults |
 | [§15.2](../15-cicd-deployment.md) and [§15.4](../15-cicd-deployment.md) | "One client secret in the whole platform", and an inventory row marked BFF only |
-| [§11.7](../11-identity-authorization.md) | One simultaneous erasure broadcast, with no reader sequenced after its owner |
+| [§11.7](../11-identity-authorization.md) | One simultaneous erasure broadcast, with no reader sequenced after its owner, and Shipping's step drawn as anonymising a recipient on the `Shipment` |
 | `docs/secrets.md` | The BFF as "the only host that calls a peer synchronously" |
-| `docs/repo-map.md` and `CLAUDE.md` | The BFF as the one synchronous caller, and the only holder of client credentials |
+| `docs/repo-map.md` and `CLAUDE.md` | The BFF as the one synchronous caller — in `docs/repo-map.md` also the only holder of client credentials — and Catalog as the one gRPC server |
+| `deploy/helm/ordering/values.yaml` | One port, and "Ordering serves no gRPC", argued from ADR-017's one hop |
 | `realm-export.json` | The `web-bff` client's description as the only one holding client credentials, and a realm with internationalisation off, so no user has a locale to read |
 
 ---
