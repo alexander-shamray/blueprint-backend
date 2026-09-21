@@ -314,15 +314,18 @@ because asking failed.
    shape a sweep's worktree has), and the only thing step 0 owes it is to keep
    the checkout where it is.
 
-   **Finished means this branch's work has landed — all three of these, with
+   **Finished means this branch's work has landed — all four of these, with
    no limbs and no exceptions.** Everything else is either unfinished or
    unused, and both of those Stay.
 
    ```bash
    git fetch origin main                      # or the next read is stale
    git status --short                         # empty: nothing uncommitted
-   git cherry origin/main HEAD                # no `+` line: main carries
-                                              # every patch this branch holds
+   git cherry origin/main HEAD                # no `+` line: every ordinary
+                                              # commit here is upstream
+   git log --merges --cc --format="" origin/main..HEAD
+                                              # empty: and no merge commit
+                                              # carries content of its own
    bash .claude/scripts/pr-for-branch.sh <branch>   # a row with state MERGED:
                                                    # it landed. Any other row
                                                    # is a PR, not a merge.
@@ -338,6 +341,16 @@ because asking failed.
    carries under another SHA and `+` for one it does not, so **finished means
    no `+` line**. It answers the same on a branch landed by a merge commit,
    where the range is empty and so is the output.
+
+   **`git cherry` says nothing about merge commits, and that is why there is
+   a fourth read.** It prints a line only for a commit with one parent, so a
+   merge-forward of `main` into the branch is invisible to it — and a merge
+   can carry content that exists in neither parent: a conflict resolution, or
+   an edit made while resolving one. A branch whose ordinary commits had all
+   landed would read finished with that content nowhere else, and the worktree
+   holding it would be removed. `--cc` is the combined diff, which shows only
+   what differs from *every* parent, so an ordinary merge-forward prints
+   nothing and a merge that invented something prints it.
 
    **A conflict resolved while landing changes the patch**, and that commit
    reads `+` on a branch that did land. Step 0 then Stays, which is the safe
@@ -366,15 +379,15 @@ because asking failed.
    carried anything, which satisfies the first two reads without a PR ever
    having existed.
 
-   **A branch that is clean, level with `origin/main` and never merged is
-   *unused*, not finished — and the difference is what makes an interrupted
-   run resumable.** `/branch` forks a worktree and enters it; a run interrupted
-   there leaves a branch with no commits, no PR and a pristine tree. Under a
-   predicate asking only *does this hold work*, that reads as finished: step 0
-   removes the worktree, keeps the branch — `git branch -d` is denied — and
-   step 1 then hands `git-worktree-fork.sh` a name that already exists, which
-   it refuses. A stop with no defect behind it, and the workspace deleted on
-   the way to it.
+   **A branch that is clean, holds nothing `origin/main` lacks and was never
+   merged is *unused*, not finished — and the difference is what makes an
+   interrupted run resumable.** `/branch` forks a worktree and enters it; a
+   run interrupted there leaves a branch with no commits, no PR and a pristine
+   tree. Under a predicate asking only *does this hold work*, that reads as
+   finished: step 0 removes the worktree, keeps the branch — `git branch -d`
+   is denied — and step 1 then hands `git-worktree-fork.sh` a name that
+   already exists, which it refuses. A stop with no defect behind it, and the
+   workspace deleted on the way to it.
 
    So an unused workspace is **kept and adopted**: step 0's Stay row takes it,
    and step 1 skips the fork because the branch is already there. An empty
@@ -394,15 +407,21 @@ because asking failed.
    `main` with step 1 about to refuse a branch that already exists. The guard
    that saves the files is not the guard that saves the run.
 
-   **The three reads are a conjunction, and a merged PR exempts a workspace
+   **The four reads are a conjunction, and a merged PR exempts a workspace
    from none of them.** A merged PR with **uncommitted edits** beside it, or
    with **clean commits made after the merge**, is not finished. Read as
    finished, either ends identically: step 0 exits the worktree, the resume
    table's merged-PR row ends the run, and the work is left where nothing will
    look at it again — the edits in a directory nobody is in, or the commits on
-   a branch no later run will name. All three reads ask one question about one
-   thing — *is there work here* — and nothing about a PR's state exempts a
-   workspace from being asked.
+   a branch no later run will name. All four reads ask one question about one
+   thing — **does this workspace hold anything `main` does not** — and nothing
+   about a PR's state exempts a workspace from being asked.
+
+   **That is narrower than *is there work here*, and the difference is
+   deliberate.** A commit made after the merge whose patch `main` already
+   carries reads `-`, and the workspace is called finished. Nothing is lost
+   when it is, because the content is upstream; the promise is containment
+   rather than emptiness, and the two part company exactly there.
 
    **So a merged PR with work beside it is unfinished, the second row keeps
    the session in it, and that is a run with nothing owed rather than the start
@@ -436,7 +455,7 @@ because asking failed.
    `/branch` produces every time `main` was dirty, which is every time a change
    is already half-written when the chain starts. The reads above answer
    which row applies, and they are needed **together**: the PR state alone
-   cannot see a branch that never opened one, and the commit count alone cannot
+   cannot see a branch that never opened one, and the patch read alone cannot
    see one whose PR is merged.
 
    **`ExitWorktree` with `keep`, never `remove`.** The remove form only works
@@ -1288,6 +1307,13 @@ because asking failed.
    red `main` is not a recommended option**, and a conflicted branch is a
    question about the caller's tree that this chain cannot answer. Either one
    stops here and is reported as what it is.
+
+   **`MERGEABLE` is GitHub's answer about a merge commit, and the step below
+   asks for a rebase**, which replays each commit and can conflict where
+   merging the same branch would not. So the landing may be refused after this
+   read said yes. That failure is loud and it lands *before* the teardown, so
+   the workspace is intact when the chain stops: report the refusal rather
+   than reaching for another method.
 
    **Read `state` on every pass of the poll, before `mergeable`.** A PR closed
    or merged elsewhere while the review loops ran — and those loops are the
