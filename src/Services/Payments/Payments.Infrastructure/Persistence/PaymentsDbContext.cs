@@ -58,10 +58,10 @@ public sealed class PaymentsDbContext(DbContextOptions<PaymentsDbContext> option
     {
         modelBuilder.HasDefaultSchema("payments");
 
-        // Here before its first find, so that the first entity adds an
-        // IEntityTypeConfiguration<T> and not also the line that discovers
-        // it. §7.2 puts mapping in these classes and never in attributes on
-        // domain types, which would put EF Core in Payments.Domain.
+        // Assembly scanning, so that adding an entity costs an
+        // IEntityTypeConfiguration<T> and nothing in this file. §7.2 puts
+        // mapping in these classes and never in attributes on domain types,
+        // which would put EF Core in Payments.Domain.
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(PaymentsDbContext).Assembly);
     }
 
