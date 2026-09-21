@@ -12,6 +12,18 @@
           }
         ]
       }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "py -3.12 \"${CLAUDE_PROJECT_DIR}/.claude/hooks/refresh-index.py\"",
+            "timeout": 5,
+            "statusMessage": "refreshing the code index"
+          }
+        ]
+      }
     ]
   }
 }
