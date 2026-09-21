@@ -176,20 +176,15 @@ public sealed class ServiceFixture : IAsyncLifetime
     // ValueTask, not Task: xUnit v3 redefined IAsyncLifetime (§12.4).
     public async ValueTask InitializeAsync()
     {
-        // §14.1's broker configuration on the stock image, rather than
-        // §14.1's built image. Inventory needs the per-service accounts and
-        // not ADR-021's delayed-exchange plugin: it runs no saga and
-        // schedules nothing, so the build would buy it only the one thing it
-        // cannot use. Not building also keeps concurrent test hosts off one
-        // build context — Testcontainers writes that context to a tar named
-        // after the image, and separate processes instantiating this fixture
-        // would race on that file. The mapped paths must match the
-        // Dockerfile's COPY targets, and nothing asserts it for this fixture:
-        // `check_permissions.py` reads Catalog's.
+        // §14.1's broker configuration on the stock image rather than its
+        // built one, by ADR-036's route for a service that runs no saga.
         _rabbit = new RabbitMqBuilder()
             .WithImage("rabbitmq:4.1-management-alpine")
             .WithUsername("inventory-svc")
             .WithPassword("local-dev-inventory")
+            // A second copy of the Dockerfile's COPY targets, and nothing
+            // holds the two to each other here: `check_permissions.py`
+            // reads Catalog's fixture.
             .WithResourceMapping(
                 new FileInfo(Path.Combine(BrokerContextPath(), "definitions.json")),
                 "/etc/rabbitmq/")
