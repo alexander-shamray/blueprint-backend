@@ -103,7 +103,7 @@ that reaches a merge — so the rows below say what is owed *between* them:
 | On a branch, tree clean and pushed | `/pr`, then the review loops |
 | On a branch with an open PR | The review loops (steps 5–6), Grok before Copilot — and, if the tree is dirty, checks, `/commit` **scoped to the implementation paths** and a push first, so the reviewers read what the PR will actually carry. Never unscoped while `suggestions.md` is on disk: that file is Grok's working state, and the unscoped form sweeps untracked files into the commit |
 | On a branch whose PR was **closed unmerged** | **Stop.** Somebody decided this branch does not land, and the open-PR read cannot see that: with no open PR the *clean and pushed* row would send the run to `/pr`, which refuses only an **open** one — so the chain would open a replacement and merge it, overriding a deliberate closure with no human in the loop. Report the closed PR and its number |
-| On a branch whose PR is **already merged** | **Step 0 alone, and then the run is over.** `pr-for-branch.sh`'s newest row reading `MERGED` is what classifies this row — not step 0's finished predicate, which also asks for a clean tree, a base of `main` and a tip equal to a merged row's `headRefOid` — and the classification comes before the review loops rather than after them — re-requesting a review on a merged PR spends a round of somebody's budget on a branch nobody can change. Where the predicate holds, step 0's teardown is a complete one (switch, pull, remove, prune); with a dirty tree, or a tip that is not that `headRefOid` — commits made after the merge, or a checkout behind it — the branch is **not** finished, step 0 stays put and tears nothing down, and the run still ends here. Either way step 7 has nothing left to do: there is no PR to merge |
+| On a branch whose PR is **already merged** | **Step 0 alone, and then the run is over.** `pr-for-branch.sh`'s newest row reading `MERGED` is what classifies this row — not step 0's finished predicate, which also asks for a clean tree, a base of `main` and a tip equal to a merged row's `headRefOid` — and the classification comes before the review loops rather than after them — re-requesting a review on a merged PR spends a round of somebody's budget on a branch nobody can change. Where the predicate holds, step 0's teardown is a complete one (switch, pull, remove, prune); with a dirty tree, a row merged into a branch other than `main`, or a tip that is not that `headRefOid` — commits made after the merge, or a checkout behind it — the branch is **not** finished, step 0 stays put and tears nothing down, and the run still ends here. Either way step 7 has nothing left to do: there is no PR to merge |
 
 **Step 0's teardown targets a worktree that is already finished; step 7's
 targets the one this run just merged. Exactly one of them owns any given
@@ -334,10 +334,10 @@ because asking failed.
 
    **The question is identity, not content: is this still the commit the
    pull request landed?** `pr-for-branch.sh` publishes each row's
-   `headRefOid`, and finished means `git rev-parse HEAD` equals the one on a
-   `MERGED` row. Anything committed since moves the tip, whatever its patch
-   looks like and whether or not it is a merge — there is no shape of
-   post-landing work that survives this read.
+   `headRefOid`, and the commit half of finished is `git rev-parse HEAD`
+   equalling the one on a row `MERGED` into `main`. Anything committed since
+   moves the tip, whatever its patch looks like and whether or not it is a
+   merge — there is no shape of post-landing work that survives this read.
 
    **The row's `baseRefName` must be `main`, because landed means landed
    there.** A stacked pull request merged into another branch has a `MERGED`
