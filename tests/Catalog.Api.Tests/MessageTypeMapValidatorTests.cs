@@ -27,19 +27,16 @@ namespace Catalog.Api.Tests;
 /// </remarks>
 public class MessageTypeMapValidatorTests
 {
+    // Five starts, because a run that loses the race below five times over
+    // has something other than a race wrong with it.
+    private const int StartAttempts = 5;
+
     [Fact]
     public async Task A_duplicate_persisted_name_stops_the_host_from_starting()
     {
-        // The same assembly twice, which is the realistic way two entries
-        // collide — a test host adding one the production registration
-        // already named. Every type in it then appears under one FullName.
-        using DuplicateTypeSourceFactory factory = new();
+        Exception refusal = await RefusalAsync();
 
-        Exception? failure = await Record.ExceptionAsync(() => factory.StartAsync());
-
-        failure
-            .ShouldNotBeNull("a duplicate persisted name must stop the host, not the first message")
-            .Message.ShouldContain("cannot distinguish");
+        refusal.Message.ShouldContain("cannot distinguish");
     }
 
     [Fact]
@@ -51,6 +48,37 @@ public class MessageTypeMapValidatorTests
         using HostSmokeTests.UnreachableInfrastructureFactory factory = new();
 
         await Should.NotThrowAsync(factory.StartAsync);
+    }
+
+    /// <summary>
+    /// Starts hosts whose type source names one assembly twice until one
+    /// reports why it refused to start, and returns that exception.
+    /// </summary>
+    /// <remarks>
+    /// A failed start disposes the provider <c>WebApplicationFactory</c> is
+    /// still reading, and the loser of that race reports the disposal rather
+    /// than the reason. Only a failed start disposes it, so asking again can
+    /// lose the reason and never invent a refusal.
+    /// </remarks>
+    private static async Task<Exception> RefusalAsync()
+    {
+        for (int attempt = 0; attempt < StartAttempts; attempt++)
+        {
+            // The same assembly twice, which is the realistic way two entries
+            // collide — a test host adding one the production registration
+            // already named. Every type in it then appears under one FullName.
+            using DuplicateTypeSourceFactory factory = new();
+
+            Exception refusal = (await Record.ExceptionAsync(() => factory.StartAsync()))
+                .ShouldNotBeNull("a duplicate persisted name must stop the host, not the first message");
+
+            if (refusal is not ObjectDisposedException { ObjectName: nameof(IServiceProvider) })
+                return refusal;
+        }
+
+        throw new InvalidOperationException(
+            "Every host started here reported a disposed provider, so none of them said why it " +
+            "refused to start.");
     }
 
     private sealed class DuplicateTypeSourceFactory() : CatalogApiFactory(
