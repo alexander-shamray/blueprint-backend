@@ -215,8 +215,8 @@ exception's text.
 
 **The pull request that builds each service amends the places that say the
 BFF is alone**, as ADR-051 left its list to the pull request that builds
-it. The list is written out for ADR-051's reason, and one row is a gate
-that goes red, which is the row a builder must not learn from CI:
+it. The list is written out for ADR-051's reason, and three rows are gates
+that go red, which are the rows a builder must not learn from CI:
 
 | Owner | What it says today |
 |---|---|
@@ -228,8 +228,10 @@ that goes red, which is the row a builder must not learn from CI:
 | [§12](../12-test-strategy.md) and [ADR-023](ADR-023-the-consumer-driven-contract-is-a-linked-file-not-pact.md) | One suite that runs a real Keycloak, for one client; and a linked-file contract that "covers one relationship", so whether `DeliveryAddresses.Get` earns a second is judged with Shipping |
 | [§14.1](../14-local-development.md) and [§14.2](../14-local-development.md) | One client secret among the Compose defaults, and the BFF as "the only host that calls a peer synchronously" |
 | [§15.1](../15-cicd-deployment.md) and [§15.4](../15-cicd-deployment.md) | "one client secret in the whole platform", and three inventory rows marked BFF only |
-| `deploy/helm/smoke.sh` | "exactly one chart declares client credentials", **asserted**: the second credentialed chart fails the Helm workflow until the count moves |
-| `deploy/helm/catalog/` | "the platform's one gRPC server", in its chart and its values |
+| `deploy/helm/common/templates/_helpers.tpl` | `identity.clientCredentials` refused on any chart but `web-bff`, by a `fail` that names the chart — **asserted**: a second credentialed chart does not render until that comparison moves |
+| `deploy/helm/smoke.sh` | "exactly one chart declares client credentials", "exactly one workload in the platform holds a client secret", "and it is the BFF", and a loop requiring every other chart to refuse the key — all **asserted** |
+| `tests/Web.Bff.Tests/RealmClientTests.cs` | `It_is_the_only_service_account_client_in_the_realm`, **asserted** over the realm export: the first new client turns it red until the expected set names it |
+| `deploy/helm/catalog/` | "the platform's one gRPC server" in `Chart.yaml`; in `values.yaml`, the second port as "the BFF's one synchronous hop" |
 | `deploy/compose/README.md` | The BFF as "the only host that mints one of its own" |
 | `docs/runbooks/latency.md` | "exactly one synchronous hop in this platform" |
 | `src/BFF/Web.Bff/` and `tools/new-service/scaffold/render.py` | Comments that call the BFF the one credentialed host and the one synchronous caller |
