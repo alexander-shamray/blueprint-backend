@@ -504,6 +504,19 @@ the tool's own `--help` found something every time it was done. That they were
 inventoried in a command file and not here is the same drift this paragraph
 warns about, running the other way.
 
+**A fifth was opened deliberately rather than found**, and it is the only
+force push in the repository. Branch updates are rebases, so a branch's
+published commits are rewritten, and `.claude/settings.json` denies
+`git push --force` and `--force-with-lease` alike. **That deny is untouched.**
+`git-rebase-onto-main.sh` carries the flags itself, takes one branch name that
+has to equal the one checked out, refuses `main` by name before it reads the
+checkout at all, refuses a remote holding commits this checkout lacks, and
+leases the push against the commit the same run read. **A rule could have
+bought none of that**: a permission pattern matches the text of a command, and
+every guard in that list is a fact about the checkout. Which is the general
+form — where the safety is a property of the state rather than of the words,
+the grant has to be a helper.
+
 The third is `Bash(git fetch origin:*)`, which no longer admits a URL but still
 admits a trailing flag; `--upload-pack`, `--receive-pack` and `--exec` are
 denied by name, so what is left is the flag nobody has enumerated yet. The
