@@ -159,9 +159,8 @@ public class ArchitectureTests
     /// <remarks>Not a list of service names: the scaffold renames every
     /// casing of the template's name after applying its patches, so a list
     /// naming the template would reach the new service with it replaced
-    /// rather than joined. Strong-naming stands in, since no project here is
-    /// signed, and an unsigned package fails the gate loudly rather than
-    /// opening a hole quietly.</remarks>
+    /// rather than joined. Strong-naming stands in instead, on §4.2's
+    /// argument about what a second unsigned package would cost.</remarks>
     private static bool IsFirstParty(AssemblyName reference) =>
         reference.GetPublicKeyToken() is null or [] && reference.Name != "Dapper";
 
