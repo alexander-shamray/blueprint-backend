@@ -51,12 +51,11 @@ CONTRACTS = ROOT / "src" / "BuildingBlocks" / "Common.Contracts"
 DOCKERFILE = HERE / "Dockerfile"
 TESTS = ROOT / "tests"
 
-# The fixtures are found, never listed. A constant naming one of them covered
-# the only fixture that existed when check 6 was written and kept passing as
-# three more arrived from the scaffold — a gate that stops covering the
-# newest surface without a word, which is the failure CLAUDE.md names as this
-# repository's most-repeated. The glob is the subject, and check 6 fails when
-# it resolves to nothing rather than reporting a pass over an empty set.
+# Found, never listed. A constant naming the fixtures covers only the ones it
+# names, and a gate that stops covering the newest surface without a word is
+# the failure CLAUDE.md calls this repository's most-repeated. The glob is the
+# subject, so check 6 fails when it resolves to nothing rather than reporting
+# a pass over an empty set.
 FIXTURE_GLOB = "*.TestSupport/ServiceFixture.cs"
 
 # EVERY PATH OUTSIDE deploy/compose/rabbitmq THAT THIS SCRIPT READS, declared
@@ -388,6 +387,22 @@ def main() -> int:
     return report()
 
 
+# A C# line comment and a URL's `//` are the same two characters, so a string
+# is matched first and kept, and only what falls outside one is dropped.
+_COMMENT_OR_STRING = re.compile(
+    r'@"(?:[^"]|"")*"|"(?:\\.|[^"\\])*"|//[^\n]*|/\*.*?\*/', re.S)
+
+# A declaration rather than the name anywhere in the file: prose naming the
+# builder would otherwise excuse a fixture from mapping the configuration.
+BUILDS_IMAGE = re.compile(r"\bnew\s+ImageFromDockerfileBuilder\s*\(")
+
+
+def code_only(text: str) -> str:
+    """The fixture with its comments dropped and its string literals kept."""
+    return _COMMENT_OR_STRING.sub(
+        lambda m: " " if m.group().startswith("/") else m.group(), text)
+
+
 def broker_fixtures() -> list[Path]:
     """Every service's test fixture, found rather than enumerated."""
     return sorted(TESTS.glob(FIXTURE_GLOB))
@@ -399,8 +414,8 @@ def check_fixture_matches_dockerfile() -> None:
     §14.1's image COPYs the definitions and the configuration into place, and
     a fixture that maps them onto the stock image instead carries a second
     copy of those paths (ADR-036). Drift between the two does not fail
-    loudly: the broker boots with no definitions, seeds the shared
-    administrator account, and the suite passes against it — green, and
+    loudly: the broker boots with none of the definitions, and the suite
+    passes against a default account holding every permission — green, and
     testing nothing. A fixture that neither maps nor builds is that same
     broker, so it fails here rather than passing for want of a mapping.
     """
@@ -420,16 +435,16 @@ def check_fixture_matches_dockerfile() -> None:
     mapping = {}
     for path in fixtures:
         name = path.relative_to(ROOT).as_posix()
-        text = read(path)
+        text = code_only(read(path))
         mapped = dict(re.findall(
             r'WithResourceMapping\(\s*new FileInfo\(Path\.Combine\(BrokerContextPath\(\),\s*"([^"]+)"\)\),\s*"([^"]+)"',
             text))
         if mapped:
             mapping[name] = mapped
-        elif "ImageFromDockerfileBuilder" not in text:
+        elif not BUILDS_IMAGE.search(text):
             fail(f"{name}: maps none of the broker's configuration and builds no "
-                 f"image either, so its broker starts with no definitions and seeds "
-                 f"`guest` — green, and testing nothing")
+                 f"image either, so its broker starts with none of the definitions "
+                 f"— no vhost, no per-service account and nothing to enforce")
 
     if not mapping:
         fail(f"no fixture under tests/ maps the broker's configuration. Either every "

@@ -291,12 +291,11 @@ class AScaffoldedServiceIsNotRefused(unittest.TestCase):
 
 
 class TheFixtureCheckLooksAtEveryFixture(unittest.TestCase):
-    """Check 6's subject, which is the half that went wrong.
+    """Check 6's subject: what it is looking at, not what it found.
 
-    The check named one fixture in a constant and kept passing as three more
-    arrived from the scaffold. A case over what it FOUND could not see that;
-    only a case over what it is LOOKING AT can, so the first test here is
-    about the glob and not about any mapping.
+    A case over the result cannot see a reach that has narrowed to whatever a
+    constant happens to name, so the glob is asserted against the tree on its
+    own, apart from any mapping.
     """
 
     def test_the_glob_reaches_every_fixture_in_the_tree(self):
@@ -341,6 +340,17 @@ class TheFixtureCheckLooksAtEveryFixture(unittest.TestCase):
         self.assertTrue(
             any("Catalog.TestSupport" in f for f in failures),
             f"a fixture configuring nothing was accepted: {failures}")
+
+    def test_a_fixture_naming_the_builder_in_prose_only_is_refused(self):
+        # A comment is not a built image, and the fixture below maps nothing,
+        # so its broker has none of the definitions whatever the prose says.
+        prose = "// new ImageFromDockerfileBuilder()\n" + fixture_text(
+            "Catalog.TestSupport").replace("WithResourceMapping", "WithNothing")
+        failures = run_over_fixtures({"Catalog.TestSupport": prose})
+
+        self.assertTrue(
+            any("Catalog.TestSupport" in f for f in failures),
+            f"a commented-out builder excused a fixture that maps nothing: {failures}")
 
     def test_a_glob_matching_nothing_is_refused(self):
         failures = run_over_fixtures({})
