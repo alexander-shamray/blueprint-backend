@@ -64,10 +64,10 @@ public sealed class InventoryDbContext(DbContextOptions<InventoryDbContext> opti
     {
         modelBuilder.HasDefaultSchema("inventory");
 
-        // Here before its first find, so that the first entity adds an
-        // IEntityTypeConfiguration<T> and not also the line that discovers
-        // it. §7.2 puts mapping in these classes and never in attributes on
-        // domain types, which would put EF Core in Inventory.Domain.
+        // Assembly scanning, so that adding an entity costs an
+        // IEntityTypeConfiguration<T> and nothing in this file. §7.2 puts
+        // mapping in these classes and never in attributes on domain types,
+        // which would put EF Core in Inventory.Domain.
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(InventoryDbContext).Assembly);
     }
 
