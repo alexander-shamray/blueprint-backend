@@ -8,6 +8,7 @@ anything — is owned elsewhere and cited from here by name, never restated.
 
 | | |
 |---|---|
+| `TODO.md` (gitignored, local) | Open PRs and issues, for the user; every task change edits it |
 | [`docs/change-locality.md`](docs/change-locality.md) | The operating contract: the trust order, the one rule, the change classes and their touch sets |
 | [`docs/change-locality-plan.md`](docs/change-locality-plan.md) | The PRs that make the contract fully true |
 | [`docs/churn-plan.md`](docs/churn-plan.md) | Where the corpus churns, measured on a named commit, and the refactor sequence that reduces it |
@@ -178,6 +179,14 @@ The contract's §6 lists what locality leaves in force; these are the rest.
 - **Uncommitted work in the tree belongs in the PR being worked on**, in its
   own commit with a body that argues it. **Never revert it to clean the tree**;
   if it does not belong here, say so and ask rather than decide by deleting.
+- **The task list is `TODO.md` at the main checkout's root: gitignored,
+  local, never committed.** It is for the user, and it lists open PRs
+  (with the issues each closes) and open issues with no PR. Update it the
+  moment this session opens, merges or closes a PR, or files, closes or
+  reopens an issue. From a sibling worktree, edit the main checkout's copy,
+  not one in the worktree. When in doubt, rebuild it from
+  `gh pr list --limit 1000` and `gh issue list --limit 1000`, because the
+  default of 30 truncates silently.
 
 ## Available commands
 
