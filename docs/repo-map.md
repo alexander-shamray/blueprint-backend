@@ -162,9 +162,8 @@ coverage.runsettings         the report filtered to `.*\.Domain\.dll$` (§12.9)
                              rebuild the solution on every typo fix in a
                              description
 .github/workflows/broker-permissions.yml  ADR-036's broker ACL, reaching
-                             outside its own tree: src/Services/**,
-                             Common.Contracts and Catalog.TestSupport,
-                             declared as SOURCE_INPUTS in
+                             outside its own tree, over the paths
+                             SOURCE_INPUTS declares in
                              check_permissions.py. Split from compose.yml
                              rather than added to it, because that smoke
                              pulls gigabytes and builds every image while

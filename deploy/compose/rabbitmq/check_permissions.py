@@ -49,7 +49,14 @@ WORKFLOW = ROOT / WORKFLOW_PATH
 SERVICES = ROOT / "src" / "Services"
 CONTRACTS = ROOT / "src" / "BuildingBlocks" / "Common.Contracts"
 DOCKERFILE = HERE / "Dockerfile"
-CATALOG_FIXTURE = ROOT / "tests" / "Catalog.TestSupport" / "ServiceFixture.cs"
+TESTS = ROOT / "tests"
+
+# Found by what a file constructs, not by where it sits or what it is called.
+# A name in a constant covers the files it names and no others, and a gate
+# that stops covering the newest surface without a word is the failure
+# CLAUDE.md calls this repository's most-repeated. A fixture under any name,
+# anywhere under tests/, starts a broker by constructing one.
+BROKER_CONTAINER = re.compile(r"\bnew\s+RabbitMqBuilder\s*\(")
 
 # EVERY PATH OUTSIDE deploy/compose/rabbitmq THAT THIS SCRIPT READS, declared
 # once, on deploy/helm/smoke.sh's terms and check.py's. The workflow's filters
@@ -61,7 +68,7 @@ CATALOG_FIXTURE = ROOT / "tests" / "Catalog.TestSupport" / "ServiceFixture.cs"
 SOURCE_INPUTS = [
     "src/Services",
     "src/BuildingBlocks/Common.Contracts",
-    "tests/Catalog.TestSupport",
+    "tests",
 ]
 
 # A service's broker account is its name plus this suffix, and the contract
@@ -185,7 +192,7 @@ def contract_prefixes() -> set[str]:
 
 
 def main() -> int:
-    for path in (DEFINITIONS, WORKFLOW, SERVICES, CONTRACTS, DOCKERFILE, CATALOG_FIXTURE):
+    for path in (DEFINITIONS, WORKFLOW, SERVICES, CONTRACTS, DOCKERFILE, TESTS):
         if not path.exists():
             fail(f"missing: {path.relative_to(ROOT).as_posix()}")
     if failures:
@@ -380,54 +387,204 @@ def main() -> int:
     return report()
 
 
+# A builder alone is not the broker's: a fixture that builds a stub service's
+# image while pulling a stock broker would otherwise be excused from mapping
+# the configuration its own broker never loads. The chain has to name §14.1's
+# context, and it is read within one statement, so a builder elsewhere in the
+# file cannot stand in for this one.
+BUILDER = re.compile(r"\bnew\s+ImageFromDockerfileBuilder\s*\(")
+BROKER_CONTEXT = re.compile(
+    r"\bWithDockerfileDirectory\s*\(\s*BrokerContextPath\s*\(\s*\)\s*\)")
+
+
+def _string_end(text: str, start: int) -> int:
+    """The index just past the literal opening at `start`."""
+    limit = len(text)
+    i = start
+    verbatim = False
+    while i < limit and text[i] in "@$":
+        verbatim = verbatim or text[i] == "@"
+        i += 1
+    opening = 0
+    while i < limit and text[i] == '"':
+        opening += 1
+        i += 1
+    if opening >= 3:
+        # A raw literal ends on a run of quotes at least as long as its own.
+        run = 0
+        while i < limit:
+            run = run + 1 if text[i] == '"' else 0
+            i += 1
+            if run >= opening:
+                return i
+        return limit
+    if opening != 1:
+        return i
+    while i < limit:
+        if text[i] == "\\" and not verbatim:
+            i += 2
+        elif text[i] != '"':
+            i += 1
+        elif verbatim and i + 1 < limit and text[i + 1] == '"':
+            i += 2
+        else:
+            return i + 1
+    return limit
+
+
+def _char_end(text: str, start: int) -> int:
+    """The index just past the char literal opening at `start`."""
+    limit = len(text)
+    i = start + 1
+    while i < limit:
+        if text[i] == "\\":
+            i += 2
+        elif text[i] == "'":
+            return i + 1
+        else:
+            i += 1
+    return limit
+
+
+def _opens_string(text: str, start: int) -> bool:
+    """Whether the `@` or `$` at `start` prefixes a literal."""
+    i = start
+    while i < len(text) and text[i] in "@$":
+        i += 1
+    return i < len(text) and text[i] == '"'
+
+
+def code_only(text: str, *, keep_strings: bool = True) -> str:
+    """The fixture with its comments dropped, and its literals on request.
+
+    The mapping regex reads the container paths out of a literal and needs
+    them kept; a search for a call wants them masked, because a literal
+    spelling a call out is not one. The scan runs left to right because a
+    pattern cannot tell a char literal from the start of a string: a lone
+    quote inside one opens a string that runs to the next quote in the file,
+    and inverts which half of it counts as code.
+    """
+    out = []
+    limit = len(text)
+    i = held = 0
+    while i < limit:
+        here = text[i]
+        if here == "/" and i + 1 < limit and text[i + 1] in "/*":
+            if text[i + 1] == "/":
+                end = text.find("\n", i)
+                end = limit if end < 0 else end
+            else:
+                end = text.find("*/", i + 2)
+                end = limit if end < 0 else end + 2
+            out.append(text[held:i])
+            out.append(" ")
+            i = held = end
+        elif here == "'":
+            end = _char_end(text, i)
+            out.append(text[held:i])
+            # Masked either way: nothing reads a char literal's content, and a
+            # quote inside one is what breaks a pattern that tries.
+            out.append("' '")
+            i = held = end
+        elif here == '"' or (here in "@$" and _opens_string(text, i)):
+            end = _string_end(text, i)
+            out.append(text[held:i])
+            out.append(text[i:end] if keep_strings else '""')
+            i = held = end
+        else:
+            i += 1
+    out.append(text[held:])
+    return "".join(out)
+
+
+def builds_the_broker(code: str) -> bool:
+    """Whether one statement builds §14.1's image from its own context."""
+    for match in BUILDER.finditer(code):
+        end = code.find(";", match.end())
+        statement = code[match.end():end if end >= 0 else len(code)]
+        if BROKER_CONTEXT.search(statement):
+            return True
+    return False
+
+
+def broker_fixtures() -> list[Path]:
+    """Every test file that starts a broker, found by what it constructs."""
+    return sorted(
+        path for path in TESTS.rglob("*.cs")
+        if BROKER_CONTAINER.search(code_only(read(path), keep_strings=False)))
+
+
 def check_fixture_matches_dockerfile() -> None:
     """The configuration files reach the broker two ways; they must agree.
 
-    §14.1's image COPYs `definitions.json` and `20-commerce.conf` into place.
-    Catalog's fixture does NOT build that image — it maps the same two files
-    onto the stock one, because it needs the accounts and not ADR-021's plugin,
-    and because building put two test processes in a race for one build-context
-    tar.
-
-    **That makes the container paths a second copy**, and a second copy is what
-    this repository keeps having to gate. A mapping that drifted would not fail
-    loudly: RabbitMQ boots without the definitions, seeds `guest` on an empty
-    database, and Catalog's suite passes against the single shared
-    administrator #44 exists to remove — green, and testing nothing.
+    §14.1's image COPYs the definitions and the configuration into place, and
+    a fixture that maps them onto the stock image instead carries a second
+    copy of those paths (ADR-036). Drift between the two does not fail
+    loudly: the broker boots with none of the definitions, and the suite
+    passes against a default account holding every permission — green, and
+    testing nothing. A fixture that neither maps nor builds is that same
+    broker, so it fails here rather than passing for want of a mapping.
     """
     dockerfile = read(DOCKERFILE)
-    fixture = read(CATALOG_FIXTURE)
 
+    declared = len(re.findall(r"^COPY\b", dockerfile, re.M))
     copies = dict(re.findall(r"^COPY\s+(\S+)\s+(\S+)\s*$", dockerfile, re.M))
     if not copies:
         fail("Dockerfile: no COPY lines found — the pattern, not the file")
         return
-
-    mapped = dict(re.findall(
-        r'WithResourceMapping\(\s*new FileInfo\(Path\.Combine\(BrokerContextPath\(\),\s*"([^"]+)"\)\),\s*"([^"]+)"',
-        fixture))
-    if not mapped:
-        fail("Catalog.TestSupport/ServiceFixture.cs: no WithResourceMapping calls found. "
-             "Either the fixture stopped mapping the broker's configuration — in which "
-             "case it runs a broker with no accounts — or this pattern went stale")
+    if len(copies) != declared:
+        fail(f"Dockerfile: {declared} COPY line(s) and {len(copies)} read — the "
+             f"pattern, not the file. A line it cannot parse is a file nothing "
+             f"asks a fixture to map")
         return
 
-    for source, target in sorted(copies.items()):
-        if source not in mapped:
-            fail(f"Dockerfile COPYs `{source}` into the broker image and Catalog's "
-                 f"fixture does not map it. That fixture runs the STOCK image, so a "
-                 f"file only the Dockerfile carries is a file its broker does not have")
-            continue
-        # The Dockerfile names the file; WithResourceMapping names the directory.
-        want = target.rsplit("/", 1)[0] + "/"
-        if mapped[source] != want:
-            fail(f"`{source}`: the Dockerfile puts it at `{target}` and Catalog's "
-                 f"fixture maps it into `{mapped[source]}`. One of the two brokers is "
-                 f"not reading it")
+    fixtures = broker_fixtures()
+    if not fixtures:
+        fail(f"tests/: no file constructs a broker — the search, not the tree. "
+             f"Check 6 has no subject and would otherwise report a pass over nothing")
+        return
 
-    for source in sorted(set(mapped) - set(copies)):
-        fail(f"Catalog's fixture maps `{source}` and the Dockerfile does not COPY it, "
-             f"so the Compose broker and the test broker disagree about what they hold")
+    mapping = {}
+    for path in fixtures:
+        name = path.relative_to(ROOT).as_posix()
+        raw = read(path)
+        text = code_only(raw)
+        mapped = dict(re.findall(
+            r'WithResourceMapping\(\s*new FileInfo\(Path\.Combine\(BrokerContextPath\(\),\s*"([^"]+)"\)\),\s*"([^"]+)"',
+            text))
+        if mapped:
+            mapping[name] = mapped
+        elif not builds_the_broker(code_only(raw, keep_strings=False)):
+            fail(f"{name}: maps none of the broker's configuration and builds no "
+                 f"image from its context either, so its broker starts with none of "
+                 f"the definitions — no vhost, no per-service account, nothing to "
+                 f"enforce")
+
+    if not mapping:
+        fail(f"no fixture under tests/ maps the broker's configuration. Either every "
+             f"one of them now builds the image — in which case ADR-036's stock-image "
+             f"route is gone — or this pattern went stale")
+        return
+
+    for name, mapped in sorted(mapping.items()):
+        for source, target in sorted(copies.items()):
+            if source not in mapped:
+                fail(f"Dockerfile COPYs `{source}` into the broker image and {name} "
+                     f"does not map it. That fixture runs the STOCK image, so a file "
+                     f"only the Dockerfile carries is a file its broker does not have")
+                continue
+            # WithResourceMapping names the directory and keeps the file's own
+            # name, so the path it lands at is rebuilt rather than trimmed off
+            # the Dockerfile's: a COPY that renames is drift the directory alone
+            # cannot show.
+            want = mapped[source].rstrip("/") + "/" + source.rsplit("/", 1)[-1]
+            if want != target:
+                fail(f"`{source}`: the Dockerfile puts it at `{target}` and {name} "
+                     f"puts it at `{want}`. One of the two brokers is not reading it")
+
+        for source in sorted(set(mapped) - set(copies)):
+            fail(f"{name} maps `{source}` and the Dockerfile does not COPY it, so the "
+                 f"Compose broker and that test broker disagree about what they hold")
 
 
 def check_source_inputs_covers_reads() -> None:
