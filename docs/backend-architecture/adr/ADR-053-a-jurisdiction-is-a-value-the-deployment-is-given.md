@@ -6,23 +6,25 @@ personal data and card data. HIPAA and SOC 2 are untouched — no health data is
 handled and no attestation is sought — and each earns its own record on the day
 that changes. It is written before Shipping and Notifications put personal data
 in new places and send the first messages a regulator would read. The platform
-is built for the United Kingdom and Kazakhstan with the third country left
-unnamed on purpose — a decision about where it runs and none about the domain,
-which the READMEs still call illustrative — and four rules hold it open:
+is built for the United Kingdom and Kazakhstan with a third country left unnamed
+on purpose — a decision about where it runs and none about the domain, which the
+READMEs still call illustrative — and four rules hold it open:
 
 1. **No type, no template and no branch names a country.** What a jurisdiction
    varies is handed to a deployment as configuration: the languages a customer
-   message must be rendered in — a **set**, because Kazakhstan's is two — the
+   message must be rendered in — a **set**, because Kazakhstan's holds two — the
    time zone its dates are rendered in, and each statutory window. A service
    that reads any of them binds a single options class, validated at start as
    [§15.4](../15-cicd-deployment.md) validates `ServiceIdentityOptions`, and
    that class passes the test §15.4 sets for one, since every member differs
    between deployments. §15.4's sentence that `ServiceIdentityOptions` is the
-   only options type in the solution is amended by this class and by
+   only options type in the solution, and its callout's close that
+   `Identity:Client` is the only thing there that earns one, are amended by this
+   class; whether
    [ADR-052](ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)'s
-   `ContactOptions`; its separate claim that `Identity:Client` is the only thing
-   there holding a per-environment secret stands, because neither new class
-   holds one. Each required member joins that section's inventory table on the
+   `ContactOptions` is another is that record's to say, since it refuses at
+   start as `RetentionPolicy` does, which is the registered shape below and not
+   a binding. Each required member joins that section's inventory table on the
    terms it states. The refusal is `[Required]`, and a stated bound wherever the
    value has one, on the bound class — so a missing or impossible value is
    §15.4's failure at start and never a clamped one. `RetentionPolicy` refuses
@@ -34,10 +36,10 @@ which the READMEs still call illustrative — and four rules hold it open:
    is the precedent and already argues it: it checks presence and the shape of
    an ISO 3166-1 alpha-2 code, and refuses to learn a postcode format or to ask
    `RegionInfo`.
-2. **A made-up jurisdiction proves rule 1.** A test deployment whose values are
-   invented — an address country of `ZZ`, which `Address` already constructs,
-   its own language set, zone and windows — is configuration, and the suite of
-   each service that binds the options passes under it with no line of code
+2. **A made-up jurisdiction proves rule 1.** A test deployment's invented values
+   — an address country of `ZZ`, which `Address` already constructs, its own
+   language set, zone and windows — are configuration, and the suite of each
+   service that binds the options passes under them with no line of code
    changed. The third country is then a values file and a template set.
 3. **Personal data stays in the deployment that collected it.** Residency is met
    by **a deployment per jurisdiction** — its own databases, realm, broker and
@@ -54,8 +56,8 @@ which the READMEs still call illustrative — and four rules hold it open:
    version, the languages it was rendered in, the outcome and the times, the
    customer's id rather than the mailbox, and never the body. On erasure the id
    is replaced as §11.7 replaces an order's, and the row, then holding nothing
-   personal, lives for the statutory window; §11.7's rule that a notification
-   log row is deleted outright is amended to this.
+   personal, lives for the statutory window; §11.7's erasure rule is amended
+   with it.
    [ADR-052](ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)
    sorts a reader's waiting work by whether §11.7 deletes or keeps the record
    and puts Notifications on the deleting side; with the row kept, a
@@ -67,11 +69,12 @@ which the READMEs still call illustrative — and four rules hold it open:
 
 **Card data never arrives, and that is now a decision rather than an accident.**
 `AuthorisationRequest` carries an order, a payer, an amount and a currency, and
-Payments keeps only a provider's reference, so no component here ever receives a
-card number. Whether that puts a merchant outside PCI DSS scope is counsel's,
-like every cell below; a self-assessment and the provider's attestation are owed
-regardless. A contract, a column or a log line that would hold a card number, an
-expiry or a verification code is a new ADR before it is a pull request.
+of the provider's answer Payments records a reference or a decline code, so no
+component here ever receives a card number. Whether that puts a merchant outside
+PCI DSS scope is counsel's, like every cell below; a self-assessment and the
+provider's attestation are owed regardless. A contract, a column or a log line
+that would hold a card number, an expiry or a verification code is a new ADR
+before it is a pull request.
 
 **Why.** §11.7 says of regulated data "decide before handling … not after",
 and no record did. The cost of deciding late is specific here: a country

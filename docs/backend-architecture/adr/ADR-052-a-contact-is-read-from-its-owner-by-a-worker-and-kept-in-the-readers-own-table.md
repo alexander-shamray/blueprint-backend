@@ -247,9 +247,9 @@ it. The list is written out for ADR-051's reason, and the rows marked
 [ADR-053](ADR-053-a-jurisdiction-is-a-value-the-deployment-is-given.md)**, which
 keeps a notification log row with its customer id replaced, so a notification's
 waiting work takes the terminal mark rather than the delete. The clause under
-**Neither table outlives its use** that puts Notifications on the deleting side
-stands as written because it was true when it was written, and the record that
-moved it is ADR-053.
+**Neither table outlives its use** keys the side to §11.7's own choice; what
+moved is its example, which put Notifications on the deleting side, and ADR-053
+is the record that moved it.
 
 ---
 
