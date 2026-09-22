@@ -435,7 +435,7 @@ dotnet build Platform.slnx
 dotnet test tests/Ordering.Api.Tests --filter "FullyQualifiedName~KestrelEndpointTests"
 ```
 
-Expected: 0 warnings, 4 passing. The comment gate reads no `.md` file, so the
+Expected: 0 warnings, 2 passing. The comment gate reads no `.md` file, so the
 README's two rewritten blocks are held to `docs/style-guide.md`'s *Comments*
 section by a reader and by nothing else — which is why each is written out
 above at its finished length rather than left to be shortened later. Then:
@@ -1114,7 +1114,26 @@ case written before this client existed has to learn it does:
         client_list = [browser(), mobile(), worker()]
 ```
 
-and the new cases:
+`WhatTheGateHolds` does not go through `realm()`: its `realm_with_secrets`
+writes a two-client document of its own, because every field in it is there to
+be looked for in the output. Step 3 makes a third client mandatory, and
+`test_the_fields_every_check_reads_do_survive` asserts the whole verdict —
+`check_realm(held, realm_check.DEPLOYED, 300) == []` — so that document gains
+one too. The fixture, not a fourth copy of the shape, and it carries nothing
+credential-shaped for the projection to drop:
+
+```python
+            }, worker()],
+        }
+```
+
+Neither case in that class has to learn the client either: the redaction one
+iterates `MARKERS`, which this client adds none of, and the projection one
+reads `held["clients"][0]`, which is still the browser client. What it does
+add is that the projection has to keep `serviceAccountsEnabled`, `enabled` and
+`optionalClientScopes` — exactly the fields Step 3 put into `CLIENT_FIELDS`.
+
+Then the new cases:
 
 ```python
 class TheWorkerClient(Fixture):

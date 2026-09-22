@@ -173,7 +173,8 @@ PR-6).
 - Modify: `src/Services/Shipping/Shipping.Infrastructure/DependencyInjection.cs`
   — the binding, beside the consumer
 - Modify: `tests/Shipping.TestSupport/ShippingWorkerFactory.cs` — the two
-  settings and their invented defaults, after PR-5's `addressSourceBaseUrl`
+  settings and their invented defaults, after PR-5's `addressSourceBaseUrl`,
+  and the `UnreachableAuthority` block that counts the solution's options types
 - Test: `tests/Shipping.Worker.Tests/JurisdictionOptionsTests.cs`
 
 **Interfaces:**
@@ -457,7 +458,61 @@ references `Shipping.Infrastructure` for PR-5's
 `AddressRegistration.BaseUrlKey`, so the constant is reachable and no
 reference is added.
 
-- [ ] **Step 6: Run; commit**
+- [ ] **Step 6: The factory's own claim about §15.4's count**
+
+The same file carries a rendered claim that this task makes false. PR-1 copied
+`tests/Catalog.TestSupport/CatalogApiFactory.cs`'s `UnreachableAuthority`
+block into `ShippingWorkerFactory`, and it argues that the host binds nothing
+`ValidateDataAnnotations` could check. That stopped being true of this host
+when PR-5 bound `ServiceIdentityOptions`, and step 4 above binds a second
+class. The summary and its `<remarks>` are one sixteen-line comment run, which
+is already past the gate's ten, so the two are replaced together rather than
+the stale sentence corrected in place. Before:
+
+```csharp
+    /// <summary>
+    /// The authority every host over this <c>Program</c> must name (§11.3).
+    /// Deliberately fake and deliberately unreachable — <c>.invalid</c> is
+    /// reserved and never resolves, so a test that accidentally dials the
+    /// authority fails loudly rather than reaching a real identity provider.
+    /// </summary>
+    /// <remarks>
+    /// Required rather than optional for the same reason both connection
+    /// strings are: <c>AddJwtAuthentication</c> reads this key eagerly and
+    /// throws naming it, so a service host that cannot name its identity
+    /// provider does not start. §12.4 attributed that failure to
+    /// <c>ValidateOnStart</c> and <c>OptionsValidationException</c>, and the
+    /// chapter was amended — §15.4 keeps <c>ServiceIdentityOptions</c> as the
+    /// solution's only options type, so there is nothing here for
+    /// <c>ValidateDataAnnotations</c> to check.
+    /// </remarks>
+```
+
+After, which is `tests/Payments.TestSupport/PaymentsApiFactory.cs`'s form for
+the same constant — ten lines, the authority's own argument and nothing about
+how many options types the solution has:
+
+```csharp
+    /// <summary>
+    /// The authority every host over this <c>Program</c> must name (§11.3).
+    /// Deliberately fake and deliberately unreachable — <c>.invalid</c> is
+    /// reserved and never resolves, so a test that accidentally dials the
+    /// authority fails loudly rather than reaching a real identity provider.
+    /// Required rather than optional for the same reason both connection
+    /// strings are: <c>AddJwtAuthentication</c> reads this key eagerly and
+    /// throws naming it, so a host that cannot name its identity provider
+    /// does not start.
+    /// </summary>
+```
+
+The count is dropped rather than raised to two. §15.4 owns it, Task 9 amends
+it there, and a corrected copy here would be a further place to correct the
+next time the number moves — which is what `docs/change-locality.md` asks a
+mention to avoid. The four copies in other services' test support are left
+alone for the opposite reason: each is still true of the host it is written
+about, and none is in this touch set.
+
+- [ ] **Step 7: Run; commit**
 
 ```bash
 dotnet build Platform.slnx
@@ -471,10 +526,11 @@ git add src/Services/Shipping/Shipping.Infrastructure tests/Shipping.TestSupport
 git commit -m "feat(shipping): ShippingJurisdictionOptions binds the two statutory windows"
 ```
 
-The body argues the two decisions a reviewer would question: why the members
+The body argues the three decisions a reviewer would question: why the members
 are nullable — so `[Required]` can see a missing key that a `TimeSpan` would
-bind to zero — and why a statutory window is refused rather than clamped and
-does not join `RetentionPolicy`, citing ADR-053.
+bind to zero — why a statutory window is refused rather than clamped and
+does not join `RetentionPolicy`, citing ADR-053, and why the factory's
+rendered remark about §15.4's count was cut rather than raised to two.
 
 ---
 
@@ -903,6 +959,9 @@ git commit -m "feat(shipping): ApplyTrackingPageCommand applies a carrier page b
 - Modify: `src/Services/Shipping/Shipping.Infrastructure/DependencyInjection.cs`
   — `services.AddScoped<TrackingClaims>();` and
   `services.AddHostedService<TrackingWorker>();`, beside PR-5's two
+- Modify: `tests/Shipping.TestSupport/ShippingWorkerFactory.cs` — the tracking
+  worker's descriptor removed and re-registered, as PR-5 does the fulfilment
+  worker's
 - Modify: `tests/Shipping.TestSupport/ServiceFixture.cs` — the tracking pass
   helper and the row readers, beside PR-5's `RunFulfilmentPassAsync`
 - Test: `tests/Shipping.Worker.Tests/TrackingWorkerTests.cs`
@@ -1967,6 +2026,9 @@ git commit -m "feat(shipping): the mapper's two entries, and nothing else on the
 - Modify: `src/Services/Shipping/Shipping.Infrastructure/DependencyInjection.cs`
 - Modify: `src/Services/Shipping/Shipping.Infrastructure/Persistence/SqlDeliveryAddressStore.cs`
   — the one sentence in its summary that this pass makes false
+- Modify: `tests/Shipping.TestSupport/ShippingWorkerFactory.cs` — the
+  retention service's descriptor removed and re-registered, as both workers'
+  are
 - Modify: `tests/Shipping.TestSupport/ServiceFixture.cs` — one pass driven,
   and the five readers and arrangers these tests need: `DeliveredAsync`,
   `VoidedWithTrackingAsync`, `AgeTerminalAsync`, `AddressCountAsync` and
@@ -2392,9 +2454,20 @@ registered `FulfilmentWorker` and Task 3 registered `TrackingWorker`:
         services.AddHostedService<ShippingRetentionService>();
 ```
 
-and `ShippingWorkerFactory` removes that descriptor and adds
-`services.AddSingleton<ShippingRetentionService>();`, exactly as it does for
-the other two. `ServiceFixture` gains
+and, in `ShippingWorkerFactory`, the same two lines the other two hosted
+services already take, one type over:
+
+```csharp
+                ServiceDescriptor retention = services.Single(d =>
+                    d.ServiceType == typeof(IHostedService) &&
+                    d.ImplementationType == typeof(ShippingRetentionService));
+                services.Remove(retention);
+
+                services.AddSingleton<ShippingRetentionService>();
+```
+
+`Shipping.Infrastructure.Retention` is already imported there, for Task 1
+step 5's two `UseSetting` calls. `ServiceFixture` gains
 
 ```csharp
     public Task<(int Addresses, int TrackingEvents)> PurgeShippingRetentionAsync() =>
@@ -2594,11 +2667,72 @@ public sealed class WaitingGaugeTests(ServiceFixture fixture) : IAsyncLifetime
 
 `ReadWaitingGauge` is the fixture's `MeterListener` over **this host's** meter
 — never one matched by name, because a listener is process-wide and another
-host's carrier would count into it. PR-2's `HttpCarrierGatewayTests` already
-carries that shape and PR-5's `RefusedCount` copied it; copy it again rather
-than match on the meter's name. `double` and not `long`, because
+host's gauge would be enabled with it and its callback run against a container
+that may be gone. **The shape is `MetricsRegistrationTests`' outbox-gauge
+listener**, which PR-1 renders into `tests/Shipping.Worker.Tests`, and not
+PR-2's `UnavailableCount` or PR-5's `RefusedCount`: those two count a
+`Counter<long>` as it is recorded and never call
+`RecordObservableInstruments()`, and an observable gauge publishes nothing
+until a listener asks it to. `double` and not `long`, because
 `CreateObservableGauge` over `Measurement<double>` is `OutboxMetrics`' shape
 and the listener sees what the callback produced.
+
+```csharp
+    /// <summary>
+    /// Spec section 11's waiting gauge, read once per call: one entry per
+    /// state the callback reported, with the value it produced. An observable
+    /// gauge is published on demand, so this asks for a collection rather than
+    /// waiting for one, and the filter is on the meter instance and never on
+    /// its name. The instrument name is written out rather than shared with
+    /// the registration, which would make the reading agree with itself
+    /// whatever the gauge is called.
+    /// </summary>
+    public IReadOnlyList<(string State, double Value)> ReadWaitingGauge()
+    {
+        // Resolved before the listener starts: the gauge is created in the
+        // metrics type's constructor, so a listener attached first sees no
+        // instrument published and reports an empty list instead of a failure.
+        Factory.Services.GetRequiredService<ShipmentMetrics>();
+        Meter mine = Factory.Services.GetRequiredService<IMeterFactory>().Create(CarrierMetrics.MeterName);
+
+        List<(string State, double Value)> measured = [];
+        using MeterListener listener = new();
+
+        listener.InstrumentPublished = (instrument, l) =>
+        {
+            if (ReferenceEquals(instrument.Meter, mine) && instrument.Name == "shipping.shipments.waiting")
+                l.EnableMeasurementEvents(instrument);
+        };
+        listener.SetMeasurementEventCallback<double>(
+            (_, value, tags, _) => measured.Add((StateOf(tags), value)));
+
+        listener.Start();
+        listener.RecordObservableInstruments();
+
+        return measured;
+    }
+
+    /// <summary>
+    /// The <c>state</c> tag a measurement carries, or the empty string where
+    /// it carries none — which no assertion matches, so a tag renamed fails
+    /// the assertion that reads it rather than being silently dropped.
+    /// </summary>
+    private static string StateOf(ReadOnlySpan<KeyValuePair<string, object?>> tags)
+    {
+        foreach (KeyValuePair<string, object?> tag in tags)
+        {
+            if (tag.Key == "state")
+                return tag.Value?.ToString() ?? "";
+        }
+
+        return "";
+    }
+```
+
+with three `using` lines added to the fixture in sorted position, each only
+where the file does not already carry one: `System.Diagnostics.Metrics`,
+`Shipping.Infrastructure.Carrier` for `CarrierMetrics.MeterName`, and
+`Shipping.Infrastructure.Observability` for `ShipmentMetrics`.
 
 `SetAttemptsAsync` goes on the fixture beside it, in `SetOutboxAttemptsAsync`'s
 shape one table over — a single statement over the column both workers write,
@@ -3725,10 +3859,15 @@ The two paragraphs above it in that section — that §15.4 is blunt about this,
 and that an options type needs a member differing between environments — are
 unchanged, because the rule is what they state and only the count moved.
 
-Everything else in the corpus that mentions the count — the four test-support
-and `Common.Web.Tests` comments arguing why *their* host binds nothing — stays.
-Each is true of the host it is written about, none is in this touch set, and
+Everything else in the corpus that mentions the count stays: the four
+other copies — `Catalog.TestSupport`, `Inventory.TestSupport`,
+`Ordering.TestSupport` and `Common.Web.Tests` — argue why *their* host binds
+nothing, each is true of the host it is written about, none is in this touch
+set, and
 `docs/change-locality.md` is explicit about a stale restatement met in passing.
+Shipping's own copy is not among them: PR-1 rendered the same block into
+`ShippingWorkerFactory`, where it is false of this host, and Task 1 step 6
+rewrites it.
 
 - [ ] **Step 5: Run the document checks**
 
@@ -3786,9 +3925,11 @@ and says which restatements were corrected and which were deliberately left.
 - [ ] `git fetch origin main` then
   `py -3.12 .github/comment-gate/comment_gate.py --base origin/main` — exit 0.
   The blocks it judges are the deleted `CarrierMetrics` remark, the rendered
-  mapper's replaced comment and `SqlDeliveryAddressStore`'s replaced summary,
-  and a touched block counts whole — which is why each of the three is
-  replaced rather than corrected beside its stale half.
+  mapper's replaced comment, `SqlDeliveryAddressStore`'s replaced summary and
+  `ShippingWorkerFactory`'s rendered authority block, and a touched block
+  counts whole — which is why each of the four is replaced rather than
+  corrected beside its stale half, and why the last of them, already sixteen
+  lines, comes back as ten.
 - [ ] `py -3.12 .github/locality-gate/locality_gate.py --base origin/main` after
   the PR body exists — exit 0, with the class row spelled `A+D+E` and the touch
   set paths only.

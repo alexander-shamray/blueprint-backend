@@ -776,13 +776,16 @@ and `kind: PodDisruptionBudget` and **no** `Service`, `Ingress` or
 
 Expected from `smoke.sh`: the whole capability section passes, and in the
 credential section so do the named-set assertion over the values files, the
-worker's source assertion and the BFF's own count. Four assertions are still
+worker's source assertion and the BFF's own count. Five assertions are still
 red, and every one of them is Task 3's — the chart-list check, because
 `SERVICE_CHARTS` does not name `shipping` yet; `and the other is the worker`,
-because `$OUT/shipping.yaml` is written by the render loop over that list; and
-the platform-wide count of two and the two-different-Secrets assertion, because
+because `$OUT/shipping.yaml` is written by the render loop over that list; the
+platform-wide count of two and the two-different-Secrets assertion, because
 `$OUT/platform.yaml` is the umbrella render and the umbrella gains the subchart
-in Task 3 too.
+in Task 3 too; and `SOURCE_INPUTS declares src/Services/Shipping, which this
+script reads`, because the source assertion that passed two sentences up is a
+new `$ROOT/` read and the scan over this script's own reads finds it before the
+list Task 3 step 2 adds it to.
 
 - [ ] **Step 5: Commit**
 
@@ -1064,8 +1067,9 @@ restores the Deployment's own count. Nothing here changes.
         options: [catalog-api, ordering-api, inventory-api, payments-api, shipping-worker, gateway, web-bff]
 ```
 
-The `options` list moves with the workload it names, and the sentence Task 4
-corrects a few lines below it stays where it is: check 8 matches menu and map
+The `options` list moves with the workload it names, and the comment Task 4
+corrects — far below it, in the first-rung step rather than in the
+`workflow_dispatch` inputs — stays where it is: check 8 matches menu and map
 against each other in both directions, so a workload declared without its
 option is a gate this task's commit would leave red, while a comment about
 what `maxReplicas` bounds is read by no gate at all.
@@ -1110,6 +1114,8 @@ red naming the one it left behind.
 - Modify: `deploy/canary/test_canary.py` — one docstring's claim about
   `maxReplicas`
 - Modify: `.github/workflows/deploy.yml` — one sentence in the first-rung step
+- Modify: `docs/backend-architecture/15-cicd-deployment.md` — §15.5's
+  sentence about what `maxReplicas` bounds, the fourth place it is claimed
 
 - [ ] **Step 1: The README the umbrella's caller reads**
 
@@ -1147,10 +1153,12 @@ shipping:
     trackingRetention: "90.00:00:00"
 ```
 
-- [ ] **Step 2: The `maxReplicas` claim, in the three places that make it**
+- [ ] **Step 2: The `maxReplicas` claim, in the four places that make it**
 
-A worker with no autoscaler is a chart `maxReplicas` does not bound, and three
-files say otherwise in the same words. One step, because they are one claim.
+A worker with no autoscaler is a chart `maxReplicas` does not bound, and four
+files say otherwise in the same words. One step, because they are one claim —
+and §15.5 is the owner the other three are restating, so it moves with them
+rather than a PR later.
 
 `test_canary.py`'s `test_five_percent_is_expressible_at_nineteen` docstring
 says 20 is "the service charts' maxReplicas". Before:
@@ -1210,8 +1218,36 @@ The third is `deploy.yml`'s first-rung step, whose comment says `maxReplicas`
 "is exactly this 19 plus one canary on the service charts". It becomes "…on
 the charts that autoscale, higher on the gateway, and not a bound at all on a
 worker, which sets its replica count directly". The block stays inside the
-gate's limit, and the dispatch `options` a few lines above it are Task 3's and
-are already on disk.
+gate's limit, and the dispatch `options` in this workflow's inputs are Task 3's
+and are already on disk — a different step some three hundred lines above, not
+a neighbouring line.
+
+The fourth is §15.5 itself, in the paragraph about the weights being ceilings.
+The claim starts partway through its line, so what is quoted here starts there
+too. Before:
+
+> `autoscaling.maxReplicas` is
+> 20 on every chart but one, so on those 19 plus one canary is exactly the
+> ceiling. **The gateway's is 30** — every external request passes through
+> it — so there 19 is simply what 5% needs rather than all the chart allows,
+> and its autoscaler can still climb past the canary's stable count during a
+> dwell. The 19 is a property of the weight, not of every HPA.
+
+After:
+
+> `autoscaling.maxReplicas` is
+> 20 on every chart that autoscales but one, so on those 19 plus one canary is
+> exactly the ceiling. **The gateway's is 30** — every external request passes
+> through it — so there 19 is simply what 5% needs rather than all the chart
+> allows, and its autoscaler can still climb past the canary's stable count
+> during a dwell. **A worker's chart does not autoscale at all**, and §15.3
+> says why, so no `maxReplicas` bounds it: the first rung scales its Deployment
+> and there is no floor to raise with it. The 19 is a property of the weight,
+> not of every HPA.
+
+The closing sentence is kept for the reason the docstring's is: it says what 19
+means wherever the ceiling is not 19 plus one, which is now true in two
+directions rather than one.
 
 - [ ] **Step 3: Run the gates this task's files answer to**
 
@@ -1223,18 +1259,21 @@ py -3.12 deploy/canary/canary.py check
 Expected: both green, and unchanged from Task 3 step 6 — the suite because
 only a docstring moved, and `canary.py check` because `canary.json` still
 parses and its workload set still matches the menu Task 3 settled. `smoke.sh`
-is not rerun here: nothing this task edits is a file it reads.
+is not rerun here: nothing this task edits is a file it reads. §15.5's
+paragraph is audited by the `/check-links` and `/validate-blueprint` run at the
+end of Task 6, which is the next task to edit that chapter, rather than twice.
 
 - [ ] **Step 4: Commit**
 
 ```bash
-git add deploy/helm/README.md deploy/canary .github/workflows/deploy.yml
+git add deploy/helm/README.md deploy/canary .github/workflows/deploy.yml \
+        docs/backend-architecture/15-cicd-deployment.md
 git commit -m "docs: the umbrella's README names Shipping, and maxReplicas stops standing for every chart"
 ```
 
-The body says which three files restated the one claim and why the count is
-widened rather than qualified: a number that is true of five charts and false
-of the sixth is read by whoever has just met the sixth.
+The body says which four files carried the one claim, which of them owns it,
+and why the count is widened rather than qualified: a number that is true of
+five charts and false of the sixth is read by whoever has just met the sixth.
 
 ---
 
@@ -1245,6 +1284,8 @@ of the sixth is read by whoever has just met the sixth.
   and `QueueBacklogGrowing`
 - Modify: `deploy/observability/check.py` — one `SHARED_RUNBOOKS` entry, and
   `EXTERNAL_METRICS`' description of `rabbitmq_queue_messages`
+- Modify: `deploy/observability/README.md` — the sentence that counts the
+  rules, the runbooks and the declared sharers
 - Create: `docs/runbooks/queue-backlog.md`
 - Modify: `docs/runbooks/README.md` — the index row
 - Modify: `docs/backend-architecture/13-observability.md` — §13.6's two rows
@@ -1338,7 +1379,13 @@ Expected, and this is the red step:
 ```
 DeliveryLag: runbook_url names queue-backlog.md, which is not in docs/runbooks
 QueueBacklogGrowing: runbook_url names queue-backlog.md, which is not in docs/runbooks
+docs/runbooks/queue-backlog.md: claimed by more than one alert — DeliveryLag, QueueBacklogGrowing. Add it to SHARED_RUNBOOKS with a reason, or give one of them its own procedure
 ```
+
+Three and not two: check 1 records the claim whether or not the file exists, so
+the sharing check behind it fires in the same run as the two absences. Step 2
+closes all three at once — the runbook and the `SHARED_RUNBOOKS` entry are one
+edit for that reason, not two.
 
 - [ ] **Step 2: The runbook, and the declared sharing**
 
@@ -1510,6 +1557,28 @@ error-rate pair is one declared sharer and §13.6's backlog pair is the other,
 each with its reason beside it in that file, so a third is argued for there
 rather than added."
 
+`deploy/observability/README.md` states the same pairing, and states it by
+counting, so it goes false with the two rules above and the runbook they share.
+Before:
+
+> **The pairing is not one-to-one and this check does not require it to be.**
+> Fourteen rules name thirteen runbooks: §13.8's ownership split makes error
+> rate two rules over one procedure, declared with its reason in
+> `SHARED_RUNBOOKS`.
+
+After:
+
+> **The pairing is not one-to-one and this check does not require it to be.**
+> §13.8's ownership split and §13.6's backlog pair each put two rules over one
+> procedure, and `SHARED_RUNBOOKS` is where each is declared with its reason.
+
+The numerals go rather than move, which is what the two paragraphs above it in
+that file already argue for every other count in the gate: a total in front of
+a claim records how stale the sentence is. The sentence after it — why
+conditions and alerts are counted by nobody there and only paired — is
+unchanged, and is the reason the corrected form cites the two sharers rather
+than saying how many rules there now are.
+
 - [ ] **Step 4: Run the gate**
 
 ```bash
@@ -1554,7 +1623,8 @@ git commit -m "feat(deploy): §13.6 gains a queue-backlog rule and a delivery-la
 ```
 
 The body argues why both are tickets, why the backlog rule needs both halves,
-why the two share a procedure, and what the runbook says is still owed.
+why the two share a procedure, what the runbook says is still owed, and why the
+gate's own README stopped counting rather than counted again.
 
 ---
 
@@ -1864,8 +1934,11 @@ carries the delivery-lag panel this PR's first rule reads.
   callout under it move in Task 6 step 1, §15.1's description of what
   `smoke.sh` asserts and the `deploy/helm/web-bff/values.yaml` comment that
   repeats it in Task 6 step 4, and the two Helm rows themselves in Tasks 1 and
-  3. The class row stays one letter: `deploy/helm/web-bff/values.yaml` is
-  inside `deploy/helm/**`, which the touch set already carries.
+  3. §15.5's own sentence about what `maxReplicas` bounds moves in Task 4 step
+  2, with the three files that restate it, because a worker with no autoscaler
+  is what makes it false. The class row stays one letter:
+  `deploy/helm/web-bff/values.yaml` is inside `deploy/helm/**`, which the touch
+  set already carries.
 
 **Type and name consistency.** The chart directory is `shipping` and the
 workload `shipping-worker`; the canary map's `serviceName` is
@@ -1885,7 +1958,8 @@ and 4 under those spellings; `AUTOSCALED_CHARTS`, `FIXED_REPLICA_CHARTS`,
 `CREDENTIALED_CHARTS` and the moved, overlay-carrying `refuses_chart` are
 produced by Tasks 1 and 3 and consumed in Tasks 1 and 3; `queue-backlog.md`,
 `DeliveryLag` and `QueueBacklogGrowing` are produced by Task 5 and named by
-`SHARED_RUNBOOKS`, §13.6, §13.9 and the runbook index in the same task.
+`SHARED_RUNBOOKS`, §13.6, §13.9, `deploy/observability/README.md` and the
+runbook index in the same task.
 
 **Deliberately left to a later PR.**
 

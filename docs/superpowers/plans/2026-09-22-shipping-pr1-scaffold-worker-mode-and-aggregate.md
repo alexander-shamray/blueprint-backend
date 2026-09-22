@@ -633,13 +633,8 @@ class Names:
         mechanism: Python's alternation is ordered, so `Catalog.Api` is tried
         at a position before `Catalog` is, and a host rename run as a SECOND
         pass would be a pass that can see the first one's output. One
-        alternation cannot re-enter its own.
-
-        The compounds and never a bare `Api`: that token is in `AddOpenApi`,
-        `MapOpenApi`, `Microsoft.AspNetCore.OpenApi` and
-        `IApiDescriptionProvider`, none of which is this service's host — so
-        the needles are the three places the template spells the host as part
-        of a name it owns, and nowhere else.
+        alternation cannot re-enter its own — and the needles are the three
+        compounds rather than a bare `Api`, a token `AddOpenApi` also holds.
         """
         return {
             f"{TEMPLATE}.{API_HOST}": f"{self.pascal}.{self.host}",
@@ -2927,7 +2922,8 @@ py -3.12 -m unittest discover -s deploy/compose/rabbitmq
 py -3.12 deploy/compose/rabbitmq/check_permissions.py
 py -3.12 deploy/observability/check.py
 py -3.12 -m unittest discover -s .github/comment-gate
-py -3.12 .github/comment-gate/comment_gate.py
+git fetch origin main
+py -3.12 .github/comment-gate/comment_gate.py --base origin/main
 py -3.12 -m unittest discover -s .github/licence-gate
 py -3.12 .github/licence-gate/licence_gate.py
 ```
