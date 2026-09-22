@@ -64,7 +64,8 @@ PR-6).
   **E** is the `.csproj` under
   `tests/Platform.IntegrationTests/`, which gains `Testcontainers.MsSql`,
   `Testcontainers.RabbitMq`, `Testcontainers.Redis`, `MassTransit`,
-  `Microsoft.Extensions.DependencyInjection.Abstractions`
+  `Microsoft.Extensions.DependencyInjection.Abstractions`, `Respawn` and
+  `Microsoft.Data.SqlClient`
   and project references to `Ordering.TestSupport` and `Inventory.TestSupport` —
   every package already pinned in `Directory.Packages.props`, so **no
   `Version=` attribute, no `Directory.Packages.props` change and no Appendix B

@@ -34,7 +34,7 @@ client secret's places), 12 (PR-4's five tests) and 13 (the chapters that move).
 ## Global Constraints
 
 - The blueprint wins over the spec; the spec wins over this plan.
-- **Class A+D.** Touch set: `src/Services/Ordering/**`,
+- **Class A+D+E.** Touch set: `src/Services/Ordering/**`,
   `tests/Ordering.Api.Tests/**`, `tests/Common.Web.Tests/RealmImportTests.cs`,
   `tests/Web.Bff.Tests/**`, `tests/Gateway.Api.Tests/**`,
   `deploy/compose/keycloak/realm-export.json`, `deploy/compose/README.md`,
@@ -56,17 +56,22 @@ client secret's places), 12 (PR-4's five tests) and 13 (the chapters that move).
   closed sets; the realm, the realm gate and the README that owns its claim,
   the Compose README that owns the host-run port recipe, the two charts,
   `smoke.sh`'s listener comparison, the two secret-scan entries, the three
-  chapters and the two maps are D. **No Class E letter is
-  owed**, and that is a judgement rather than an omission: the three project
-  files this PR edits — `Ordering.Api.csproj`, `Ordering.Application.csproj`
-  and `tests/Ordering.Api.Tests/Ordering.Api.Tests.csproj`
-  — are inside Class A's `src/Services/**` and `tests/**`, no pin moves in
-  `Directory.Packages.props`, no project joins `Platform.slnx`, and no
-  Appendix B row is added, because `Grpc.AspNetCore`, `Grpc.Net.ClientFactory`
-  and `Dapper` are all pinned and all already registered.
-- **`A+D` is an ordinary two-letter class**, so `.github/locality-gate` needs
-  no change and this plan carries no "three classes" note. `A+D+E` is the one
-  three-member cell the gate admits and this PR does not need it.
+  chapters and the two maps are D. **The E letter is owed for three new
+  package references**: `Ordering.Api.csproj` takes `Grpc.AspNetCore`,
+  `Ordering.Application.csproj` takes `Dapper` and
+  `tests/Ordering.Api.Tests/Ordering.Api.Tests.csproj` takes
+  `Grpc.Net.ClientFactory`, none of them with a `Version=`. A reference a
+  project did not have is `docs/change-locality.md`'s "add a package" whether
+  or not the pin already exists, and PR-2 spells the same edit the same way.
+  No pin moves in `Directory.Packages.props`, no project joins
+  `Platform.slnx`, and no Appendix B row moves, because `Grpc.AspNetCore`,
+  `Grpc.Net.ClientFactory` and `Dapper` are all pinned and all already
+  registered. The touch set does not grow for the letter: the three files sit
+  inside `src/Services/**` and `tests/**`, which E reaches again as
+  `**/*.csproj`.
+- **`A+D+E` is the one three-member cell the class row accepts**, and
+  `.github/locality-gate/locality_gate.py` admits it today, so no gate change
+  is owed and the row is spelled exactly that way.
 - Depends on **PR-3b having merged**, so `ITokenCache`, `CachingTokenClient`,
   `ClientCredentialsHandler` and `ServiceIdentityOptions` are already in
   `Common.Infrastructure` and no later PR has to move them out from under a
@@ -2034,10 +2039,38 @@ The row after `web-bff`'s:
 | Client `shipping-worker` | Service accounts enabled, `commerce-api` a **default** client scope, the client role `orders:delivery-address` on its service account | The second synchronous coupling, and the first grant a host holds ([ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)). The role is what the `permission` mapper emits for a service account, so without it the token is valid and the read is 403 |
 ```
 
-The callout above the table ends "Each client joins the table below with the
-service that uses it." — amend to "Shipping's joined it with Ordering's method
-rather than with Shipping, because the grant is the address owner's to serve;
-Notifications' is still owed."
+**The callout above the table moves at both ends**, because this pull request
+builds one of the two hosts it calls unbuilt, and amending the closing
+sentence alone would leave the opener counting the other way. Its opener
+reads today:
+
+> **Two more hosts are decided, and neither is built.**
+> [ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)
+> gives Shipping a client that reads a delivery address from Ordering and
+> Notifications one that reads a mailbox from Keycloak, because
+> [ADR-035](adr/ADR-035-an-integration-event-carries-identifiers-not-personal-data.md)
+> left neither value a way to arrive by event.
+
+and becomes:
+
+> **One more host is decided and not built.** Shipping's client is minted
+> here, in the pull request that gives Ordering the method it reads, and is
+> first used by the pull request that gives Shipping's worker
+> [ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)'s
+> address read; Notifications' is still owed, and reads a mailbox from
+> Keycloak, because
+> [ADR-035](adr/ADR-035-an-integration-event-carries-identifiers-not-personal-data.md)
+> left neither value a way to arrive by event.
+
+The middle of the callout — that the count of hosts holding a client secret is
+the count of synchronous couplings, and that it moves only by a decision
+saying what each new secret reads when it is stolen — is the argument this
+pull request relies on, and not a word of it moves. The callout's closing
+sentence, "Each client joins the table below with the service that uses it.",
+becomes "Shipping's joined it with Ordering's method rather than with
+Shipping, because the grant is the address owner's to serve." The clause
+naming what Notifications is still owed goes to the opener with the count and
+is not repeated here.
 
 **The section's three counting sentences move with the table**, because the
 row, the count and the prose are one claim and splitting them across pull
@@ -2482,7 +2515,7 @@ Publishing 8081 temporarily is the alternative, and it is not committed.
 Record the reply, and the `PermissionDenied` a `demo` token gets, in the PR
 body.
 
-- [ ] PR body: `| Class | A+D |`, touch set from the Global Constraints, one
+- [ ] PR body: `| Class | A+D+E |`, touch set from the Global Constraints, one
   path per cell and the reasons under the table. Then `/ship`.
 
 ## Self-review
@@ -2496,7 +2529,7 @@ body.
   the query behind it (Task 2), the permission (Task 4), the realm's role and
   client (Task 3), `realm_check.py`'s predicate (Task 3), the gateway test
   (Task 5), `docs/secrets.md`'s rows (Task 7), the Keycloak-issued-token tests
-  in both directions (Task 6). Class A+D, and no Shipping path is touched.
+  in both directions (Task 6). Class A+D+E, and no Shipping path is touched.
 - Section 9's address port, read from the server's side — ADR-052's five
   outcomes: the answer (Task 4's third test), `NotFound` for each of the three
   facts that mean "does not exist" (Task 2's handler, Task 4's three tests),
@@ -2512,7 +2545,9 @@ body.
   token holding every user permission, and the address with the client's
   (Task 4); a token Keycloak issued to `shipping-worker` accepted and one
   issued to a client without the role refused (Task 6).
-- Section 13's chapters — §11.5's table of realm objects and the three
+- Section 13's chapters — §11.5's table of realm objects, both ends of the
+  callout above it (its opener, which counts two hosts decided and neither
+  built, and its closing sentence) and the three
   sentences that count its hosts, `docs/secrets.md`'s rotation sentence, both
   halves of the client-secret procedure and its local-default row, §15.4's
   required-for-some-hosts paragraph and its three client rows,

@@ -555,8 +555,9 @@ value was arrived at, names issues and stresses words, and the comment gate
 fails an added line inside such a block. Each comment here says one reason and
 cites its owner — `_helpers.tpl`, §13.6, §15.3, ADR-052, ADR-053 — or is cut.
 When done,
-`grep -n -iE "ordering|PR-|#[0-9]|\*\*" deploy/helm/shipping/values.yaml`
-prints nothing.
+`grep -n -iE "PR-|#[0-9]|\*\*" deploy/helm/shipping/values.yaml`
+prints nothing, and the only occurrences of *ordering* are the `addressSource`
+block's two, which name ADR-052's address owner on purpose.
 
 ```yaml
 # Shipping, and the first chart in this tree with no front door. §3.2 gives it
@@ -1636,7 +1637,7 @@ rule PR-5's Task 6 step 3 argues. This PR is what makes those rows true rather
 than what states them; only the two above, written before that rule was
 settled, still need the spelling.
 
-`Identity__Client__ClientSecret`'s *Where* column, which says
+`Identity__Client__ClientSecret`'s *Source* column, which says
 "`web-bff-identity` secret; one per host", names the second:
 "`web-bff-identity` and `shipping-identity`; one per host, never shared —
 two hosts on one grant is one host able to act as the other (§11.5)".
@@ -1662,9 +1663,9 @@ After:
 
 *A client secret*'s steps 3 and 4 are already per host — PR-4 rewrote both in
 the change that put a second host in that procedure, and neither is touched
-again here. The step no pull request has reached is **step 2**, which names one
-vault entry because until this chart there was one Secret to name. It gains the
-second:
+again here. The step no pull request has reached is **step 2**, which names no
+vault entry at all, because until this chart there was one Secret and naming it
+was redundant. With two, it has to say which:
 
 > 2. Update the vault entry — `web-bff-identity` for the BFF,
 >    `shipping-identity` for Shipping's worker. Each chart names its own under
