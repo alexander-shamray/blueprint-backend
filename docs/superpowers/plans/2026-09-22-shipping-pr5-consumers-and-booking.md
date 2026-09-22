@@ -2200,7 +2200,6 @@ in a compilation is CS0436.
 - Create: `src/Services/Shipping/Shipping.Infrastructure/Fulfilment/FulfilmentWorker.cs`
 - Modify: `src/Services/Shipping/Shipping.Infrastructure/DependencyInjection.cs`
 - Modify: `tests/Shipping.TestSupport/ShippingWorkerFactory.cs` — the hosted service
-- Test: `tests/Shipping.Domain.Tests/ShipmentTests.cs` — `ReleaseClaim`
 
 **Interfaces:**
 - Consumes: `IDeliveryAddressSource`, `IDeliveryAddressStore`,
@@ -2223,7 +2222,7 @@ public sealed class FulfilmentWorker : BackgroundService
 }
 ```
 
-- [ ] **Step 1: Write the failing lease arithmetic and domain tests**
+- [ ] **Step 1: Write the failing lease arithmetic test**
 
 In `tests/Shipping.Worker.Tests/DeliveryAddressSourceTests.cs`'s inequality
 test's file, one more assertion — the lease above both hops, which section 4
@@ -2251,25 +2250,19 @@ both constants the assertion reads:
     }
 ```
 
-and in `tests/Shipping.Domain.Tests/ShipmentTests.cs`:
+**`ReleaseClaim` takes no domain test, and the columns are why.** PR-1 leaves
+`Attempts` at zero and `LockedUntil` null on a new shipment, and no member of
+the aggregate sets either — `FulfilmentClaims.ClaimSql` and `FailSql` are what
+write them. A unit test over `For` plus `ReleaseClaim` would therefore assert
+two values that were already clear before the call and would stay green with
+the member's body emptied. The postcondition is asserted in Task 5 instead,
+over a row a pass has really leased: the recovery leg reads `Attempts` back as
+zero and the booking leg reads `LockedUntil` back as null.
 
-```csharp
-    [Fact]
-    public void Releasing_a_claim_drops_the_lease_and_resets_the_backoff()
-    {
-        Shipment shipment = Shipment.For(ShipmentId.New(), new OrderId(Guid.CreateVersion7()), Now);
+- [ ] **Step 2: Run to see it fail**
 
-        shipment.ReleaseClaim();
-
-        shipment.LockedUntil.ShouldBeNull();
-        shipment.Attempts.ShouldBe(0, "the next wait is the row's first again, not the last failure's");
-    }
-```
-
-- [ ] **Step 2: Run to see them fail**
-
-Run: `dotnet test tests/Shipping.Domain.Tests --filter "FullyQualifiedName~ShipmentTests"`
-Expected: compile failure on `ReleaseClaim`.
+Run: `dotnet test tests/Shipping.Worker.Tests --filter "FullyQualifiedName~DeliveryAddressSourceTests"`
+Expected: compile failure on `FulfilmentWorker`.
 
 - [ ] **Step 3: Write the aggregate's release**
 
@@ -2644,8 +2637,7 @@ dotnet test tests/Shipping.Worker.Tests --filter "FullyQualifiedName~DeliveryAdd
 Expected: green, 0 warnings.
 
 ```bash
-git add src/Services/Shipping tests/Shipping.TestSupport tests/Shipping.Domain.Tests \
-        tests/Shipping.Worker.Tests
+git add src/Services/Shipping tests/Shipping.TestSupport tests/Shipping.Worker.Tests
 git commit -m "feat(shipping): the fulfilment worker claims a shipment, reads its address and books it"
 ```
 
@@ -3011,6 +3003,8 @@ public sealed class ShipmentFulfilmentTests(ServiceFixture fixture) : IAsyncLife
 
         (await StatusAsync(order)).ShouldBe("Booked");
         (await ReferenceAsync(order)).ShouldBe("crr_SIM-OK");
+        (await LockedUntilAsync(order)).ShouldBeNull(
+            "the pass that claimed the row released it through Shipment.ReleaseClaim");
         BookingBody().ShouldContain("ә ғ қ ң ө ұ ү һ і", Case.Sensitive,
             "nvarchar end to end: a Cyrillic code page anywhere in the path would answer question marks");
         BookingBody().ShouldContain("Алматы");
@@ -3220,9 +3214,10 @@ binding assertion cannot pass against a queue the host never declared.
 
 The helpers are Payments' endpoint helpers one service over: `PublishAsync`
 onto the bus with a drain, `Confirmed`/`Cancelled` building the contracts,
-`StatusAsync`/`ReferenceAsync`/`ReasonAsync`/`AttemptsAsync`/`ShipmentIdAsync`
-reading one column with `fixture.ScalarAsync`, `ClearBackoffAsync` setting
-`NextAttemptAt` to `SYSDATETIMEOFFSET()`,
+`StatusAsync`/`ReferenceAsync`/`ReasonAsync`/`AttemptsAsync`/`LockedUntilAsync`/
+`ShipmentIdAsync` reading one column with `fixture.ScalarAsync` (the lease read
+is `ScalarAsync<DateTimeOffset?>`, because a row a pass has released answers
+null), `ClearBackoffAsync` setting `NextAttemptAt` to `SYSDATETIMEOFFSET()`,
 `BookingCalls`/`BookingBody`/`BookingKeys`/`CancelKeys` reading
 `fixture.Carrier.LogEntries`, `DespatchAsync` recording a `Collected` tracking
 event through the repository — PR-6 brings the worker that would — and
@@ -4250,7 +4245,10 @@ ADR-023 and ADR-052 are not edited.
   `Pending`→`Unfulfillable` (the owner's `NoSuchOrder` and the carrier's
   refusal), `Pending`→`Voided` (cancel then despatch), `Booked`+cancel and the
   carrier's two answers → Tasks 4 and 5. `ReleaseClaim` is Task 4's addition
-  to the aggregate, which PR-1 left to the worker that runs it.
+  to the aggregate, which PR-1 left to the worker that runs it, and it is
+  proved in Task 5 rather than in a domain test: the two columns it clears are
+  written by the claim statement and by nothing on the aggregate, so only a row
+  a pass has leased can tell a release from a shipment that was never claimed.
 - Section 6's two interleavings and the too-late case → Task 5, one test each,
   plus the tombstone at the Application layer in Task 1.
 - Section 7 — the `DeliveryAddresses` table, `IDeliveryAddressStore`, the
@@ -4281,9 +4279,10 @@ ADR-023 and ADR-052 are not edited.
   be rewritten there. PR-7 gives the first alert that reads it.
 - Section 12 — both consumers against a fake store in both orders (Task 1); the
   mapper registry (Task 1); the owner taken away, the crash between the
-  carrier's answer and the commit, a pass that throws, a lapsed lease, both
-  interleavings and `SIM-LATE`, the Kazakh round trip, the log export and the
-  readiness-set assertion (Task 5); the lease inequality (Task 4). **Two
+  carrier's answer and the commit, a pass that throws, a lapsed lease, the
+  lease a booking pass drops on its way out, both interleavings and `SIM-LATE`,
+  the Kazakh round trip, the log export and the readiness-set assertion
+  (Task 5); the lease inequality (Task 4). **Two
   workers overlapping and the carrier that is down are Task 5's second suite**,
   with a host per test: the section asks for the overlap "staged, not two
   passes back to back", and the only staging signal that is true while the row
