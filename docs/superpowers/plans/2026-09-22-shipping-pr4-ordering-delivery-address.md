@@ -1,0 +1,2111 @@
+# Shipping PR-4 — a delivery address is read under orders:delivery-address — Implementation Plan
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** Give Ordering the gRPC method ADR-052 decides —
+`DeliveryAddresses.Get`, on a second HTTP/2-only port, behind
+`orders:delivery-address` — and give the realm the `shipping-worker` client
+that holds that one role, so the reader Shipping's PR-5 builds has an owner to
+ask. Nothing calls it yet, and no Shipping path moves.
+
+**Architecture:** Ordering grows the transport surface Catalog already has, in
+Catalog's shape: a `.proto` the service owns, a `Grpc/` adapter that parses,
+dispatches and projects, a second Kestrel endpoint declared `Http2` because a
+cleartext endpoint cannot serve HTTP/1.1 and h2c at once, and §6.5's read side
+behind it — one Dapper query over `ordering.Orders`. The differences from
+Catalog are both ADR-052's: the method requires a **permission** rather than
+bare authentication, because the read crosses subjects and an authenticated
+caller alone would let the BFF's client make it; and the ownership check is
+skipped on purpose, because a service account's subject owns no order. The
+realm half is a client role on `commerce-api`, a confidential service-account
+client that takes `commerce-api` as a **default** scope, and the service
+account user that holds the role — the only route by which the `permission`
+claim's mapper emits anything for a host.
+
+**Tech Stack:** `Grpc.AspNetCore` (pinned, used by Catalog), Dapper (pinned,
+used by Catalog and Payments), Keycloak realm export, stdlib Python 3.12 for
+the realm gate, xUnit with Shouldly and Testcontainers.
+
+**Spec:** `docs/superpowers/specs/2026-09-22-shipping-service-design.md`,
+sections 2 (the bullet that gives Ordering the method), 3 (the PR's row and its
+order), 9 (the address port's contract, read from the server's side), 10 (the
+client secret's places), 12 (PR-4's five tests) and 13 (the chapters that move).
+
+## Global Constraints
+
+- The blueprint wins over the spec; the spec wins over this plan.
+- **Class A+D.** Touch set: `src/Services/Ordering/**`,
+  `tests/Ordering.Api.Tests/**`, `tests/Common.Web.Tests/RealmImportTests.cs`,
+  `tests/Web.Bff.Tests/**`, `tests/Gateway.Api.Tests/**`,
+  `deploy/compose/keycloak/realm-export.json`, `deploy/keycloak/realm_check.py`,
+  `deploy/keycloak/test_realm_check.py`, `deploy/helm/ordering/values.yaml`,
+  `deploy/helm/catalog/Chart.yaml`, `deploy/helm/catalog/values.yaml`,
+  `.github/secret-scan/allowed/deploy.txt`,
+  `docs/backend-architecture/11-identity-authorization.md`,
+  `docs/backend-architecture/15-cicd-deployment.md`, `docs/secrets.md`,
+  `docs/repo-map.md`, `CLAUDE.md`.
+  Why each, since the row above is paths only: Ordering's slice and the four
+  suites that read what it changes are A — `tests/**` is Class A's, and
+  `RealmImportTests` is the one building-block test that owns the realm's
+  closed sets; the realm, the realm gate, the two charts, the secret-scan
+  entry, the three chapters and the two maps are D. **No Class E letter is
+  owed**, and that is a judgement rather than an omission: the two project
+  files this PR edits — `Ordering.Api.csproj` and
+  `Ordering.Application.csproj`
+  — are inside Class A's `src/Services/**`, no pin moves in
+  `Directory.Packages.props`, no project joins `Platform.slnx`, and no
+  Appendix B row is added, because `Grpc.AspNetCore` and `Dapper` are both
+  pinned and both already registered.
+- **`A+D` is an ordinary two-letter class**, so `.github/locality-gate` needs
+  no change and this plan carries no "three classes" note. `A+D+E` is the one
+  three-member cell the gate admits and this PR does not need it.
+- Depends on **PR-3b having merged**, so `ITokenCache`, `CachingTokenClient`,
+  `ClientCredentialsHandler` and `ServiceIdentityOptions` are already in
+  `Common.Infrastructure` and no later PR has to move them out from under a
+  second consumer. Nothing in this plan compiles against them: PR-4 is the
+  **server** side, and the client is PR-5's. It depends on **no Shipping
+  path**, which is what lets a second session take it beside PR-1 and PR-2
+  (spec, section 3).
+- **Ordering serves the method; nothing dials it in this PR.** No
+  `AddressSource__BaseUrl`, no `Identity__Client__*` on a Shipping host, no
+  Compose edit under `deploy/compose/services/` — spec section 10 assigns
+  those keys to PR-5, and a Compose unit under `services/` is a Shipping path
+  this PR may not touch.
+- **ADR-052 is the governing record**, and its closing table is the list of
+  places that must move. Every row of it this PR turns red is named in a task
+  below with the task that turns it green; every row it leaves for a later PR
+  is named in *Self-review*.
+- Comments say why and cite the owner — a section, an ADR or a symbol, never a
+  pull request or a test — and no comment block runs past ten lines. Explicit
+  local types, file-scoped namespaces with a blank line after, braces on two
+  or more statements, 120 columns for code and 80 for prose. British spelling.
+  `py -3.12`, never `python`.
+- Every step that adds behaviour writes its test first.
+
+---
+
+### Task 1: `delivery_addresses.proto` and Ordering's second port
+
+**Files:**
+- Create: `src/Services/Ordering/Ordering.Api/Protos/delivery_addresses.proto`
+- Create: `src/Services/Ordering/Ordering.Api/appsettings.json` — the
+  service's
+  first, and the second in any service
+- Modify: `src/Services/Ordering/Ordering.Api/Ordering.Api.csproj` —
+  `Grpc.AspNetCore` and the `Protobuf` item
+- Test: `tests/Ordering.Api.Tests/KestrelEndpointTests.cs`
+- Modify: `tests/Ordering.Api.Tests/Ordering.Api.Tests.csproj` —
+  `Grpc.Net.ClientFactory`, for Task 4's channel
+
+**Interfaces:**
+- Produces, generated from the `.proto` into `Ordering.Delivery.V1`:
+
+```csharp
+// The generated halves, named here because every later task spells them.
+public sealed class GetDeliveryAddressRequest { public string OrderId { get; set; } }
+
+public sealed class GetDeliveryAddressReply
+{
+    public string CustomerId { get; set; }
+    public string Line1 { get; set; }
+    public string Line2 { get; set; }
+    public string City { get; set; }
+    public string PostalCode { get; set; }
+    public string Country { get; set; }
+}
+
+public static class DeliveryAddresses
+{
+    public abstract class DeliveryAddressesBase { /* Get */ }
+    public sealed class DeliveryAddressesClient { /* GetAsync */ }
+}
+```
+
+- [ ] **Step 1: Write the failing endpoint test**
+
+`tests/Ordering.Api.Tests/KestrelEndpointTests.cs`:
+
+```csharp
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Shouldly;
+using Xunit;
+
+namespace Ordering.Api.Tests;
+
+/// <summary>
+/// The two Kestrel endpoints, read off the host's own configuration rather
+/// than off the file: that is the text the server binds, and a second reader
+/// would be asserting against itself (§9.7, ADR-052).
+/// </summary>
+/// <remarks>
+/// Catalog's own <c>appsettings.json</c> carries the measurement this rests
+/// on: a cleartext endpoint at the default <c>Http1AndHttp2</c> answers a
+/// client asking for HTTP/2 exactly — which <c>Grpc.Net.Client</c> does — with
+/// <c>HTTP_1_1_REQUIRED</c>, and an <c>Http2</c>-only endpoint answers an
+/// HTTP/1.1 request with a 400. So neither value is a preference, and neither
+/// failure is visible to a suite driving <c>TestServer</c>. The REST endpoint
+/// is asserted beside it because this section OVERRIDES the image's own port
+/// configuration: declaring only the gRPC one would take 8080 away from
+/// §10.2's cluster destination and from the Compose port mapping.
+/// </remarks>
+public sealed class KestrelEndpointTests(HostSmokeTests.UnreachableInfrastructureFactory factory)
+    : IClassFixture<HostSmokeTests.UnreachableInfrastructureFactory>
+{
+    private IConfiguration Configuration => factory.Services.GetRequiredService<IConfiguration>();
+
+    [Fact]
+    public void The_rest_surface_stays_on_8080_over_http1()
+    {
+        Configuration["Kestrel:Endpoints:Rest:Url"].ShouldBe("http://0.0.0.0:8080");
+        Configuration["Kestrel:Endpoints:Rest:Protocols"].ShouldBe("Http1");
+    }
+
+    [Fact]
+    public void The_grpc_surface_is_8081_and_http2_only()
+    {
+        Configuration["Kestrel:Endpoints:Grpc:Url"].ShouldBe("http://0.0.0.0:8081");
+        Configuration["Kestrel:Endpoints:Grpc:Protocols"].ShouldBe(
+            "Http2",
+            "a cleartext endpoint at Http1AndHttp2 refuses a client asking for HTTP/2 exactly, " +
+            "so the address read would fail at the connection (§9.7)");
+    }
+}
+```
+
+- [ ] **Step 2: Run to see it fail**
+
+```bash
+dotnet test tests/Ordering.Api.Tests --filter "FullyQualifiedName~KestrelEndpointTests"
+```
+
+Expected: four `ShouldBe` failures, each reporting `null` — the host has no
+`appsettings.json`, so the section does not exist.
+
+- [ ] **Step 3: Write the proto**
+
+`Protos/delivery_addresses.proto`:
+
+```proto
+syntax = "proto3";
+
+// Ordering owns this file, because Ordering serves the RPC — pricing.proto's
+// rule, one service over. Shipping LINKS it rather than copying it (§4.3), as
+// Web.Bff links pricing.proto: one contract, two generated halves, and no
+// assembly crosses the boundary.
+package ordering.delivery.v1;
+
+// Both halves generate into this namespace, in their own assemblies. The
+// method's path is /ordering.delivery.v1.DeliveryAddresses/Get, which is what
+// the gateway's route file must not match (ADR-052).
+option csharp_namespace = "Ordering.Delivery.V1";
+
+// The platform's second synchronous hop, and the first one no user is waiting
+// on (ADR-052): a Shipping worker claims a shipment row under a lease, asks
+// for that order's address and commits the answer. It is not a screen's call
+// and it is not made inside a consumer, so ADR-017's one-hop exception is not
+// spent by it.
+service DeliveryAddresses {
+  // One order, never a batch. The caller resolves one shipment per pass, so a
+  // fan-out would be a request shape nothing produces — the opposite of
+  // GetPrices, where an order form holds a handful of products at once.
+  rpc Get (GetDeliveryAddressRequest) returns (GetDeliveryAddressReply);
+}
+
+message GetDeliveryAddressRequest {
+  // A GUID in its canonical text form, for pricing.proto's reason: 36 readable
+  // bytes beat 16 unreadable ones in every log line and every grpcurl
+  // transcript this call will be debugged from.
+  string order_id = 1;
+}
+
+message GetDeliveryAddressReply {
+  // The order's customer, carried for the reader's erasure row and for nothing
+  // else (ADR-052). Shipping keys its copy by the order and holds this beside
+  // it so §11.7's erasure consumer can delete by subject; the shipment's own
+  // record holds neither.
+  string customer_id = 1;
+
+  // Address.Of's five parts, in its own spelling (§5.3). Nothing else of the
+  // order travels: not its status, not its total, not its lines. A reader that
+  // needed one of those would be reading an order rather than an address.
+  string line1 = 2;
+
+  // EMPTY, never absent: proto3 has no null string, and Address.Line2 is
+  // optional — an order placed without a second line answers "" here, and a
+  // reader stores that as the absence it is rather than as a blank line.
+  string line2 = 3;
+  string city = 4;
+  string post_code = 5;
+
+  // ISO 3166-1 alpha-2, upper-cased by Address.Of. SHAPE and not membership:
+  // the producer checks two ASCII letters and deliberately not the assigned
+  // set, so ZZ arrives here and whoever ships the parcel is the layer that
+  // knows (Address's own remarks).
+  string country = 6;
+}
+```
+
+**`post_code`, not `postal_code`.** The generated C# property is `PostCode`
+either way once the underscore is dropped, and the field name is a contract
+both halves compile against; it is named here once and every later reference in
+this plan spells it the same. The domain's property stays `PostalCode`,
+because identifiers keep their real spelling.
+
+- [ ] **Step 4: The csproj and the settings file**
+
+In `Ordering.Api.csproj`, beside `Microsoft.AspNetCore.OpenApi`:
+
+```xml
+    <!-- The server half of ADR-052's address read. Grpc.AspNetCore brings
+         Grpc.Tools and Google.Protobuf with it, which is why neither is named
+         here — Appendix B registers all four as one row because they ship and
+         version as one thing. -->
+    <PackageReference Include="Grpc.AspNetCore" />
+```
+
+and a new `ItemGroup`:
+
+```xml
+  <ItemGroup>
+    <!-- Ordering owns the contract because Ordering serves it. Shipping
+         compiles this same file as a Client, by link (§4.3).
+
+         BOTH halves, not Server alone, and for Catalog.Api's reason: the suite
+         drives the service over the real pipeline, which needs a client, and
+         generating one in the test project would put a second copy of every
+         message type in a compilation that already references this assembly —
+         CS0436, an error under ADR-019. -->
+    <Protobuf Include="Protos\delivery_addresses.proto" GrpcServices="Both" />
+  </ItemGroup>
+```
+
+`Ordering.Api/appsettings.json`:
+
+```jsonc
+{
+  // The second appsettings.json in a service, and it exists for Catalog's one
+  // reason: ADR-052's gRPC method cannot share a port with §10.2's REST
+  // surface, and the per-endpoint protocol is not something an environment
+  // variable can say. Catalog.Api's own copy carries the measurement.
+  //
+  // This section OVERRIDES the container image's own port configuration:
+  // ASPNETCORE_HTTP_PORTS and ASPNETCORE_URLS both lose to Kestrel:Endpoints
+  // and neither produces a warning, so 8080 has to be declared here or it
+  // stops existing — and §10.2's `ordering` cluster dials exactly that.
+  "Kestrel": {
+    "Endpoints": {
+      // §10.2's cluster destination and the health probes. Http1 explicitly
+      // rather than by default, so a reader comparing the two entries does not
+      // have to know that cleartext Http1AndHttp2 behaves as Http1 anyway.
+      "Rest": {
+        "Url": "http://0.0.0.0:8080",
+        "Protocols": "Http1"
+      },
+      // ADR-052's read, and nothing else reaches it. Not exposed by the
+      // gateway (§10.2 routes HTTP), not published by the Compose block, and
+      // not a second public surface — a cluster-internal port on the same
+      // footing as the SQL one, which is why the RPC on it authorises (§11.2).
+      "Grpc": {
+        "Url": "http://0.0.0.0:8081",
+        "Protocols": "Http2"
+      }
+    }
+  }
+}
+```
+
+In `Ordering.Api.Tests.csproj`, beside `NSubstitute`:
+
+```xml
+    <!-- GrpcChannel and Grpc.Core's StatusCode, for calling the gRPC server
+         over loopback. Carried transitively through Ordering.Api; named here
+         on the register's honesty rule, because a project that names a type
+         declares the package rather than relying on a production csproj it
+         does not control. -->
+    <PackageReference Include="Grpc.Net.ClientFactory" />
+```
+
+- [ ] **Step 5: Run; commit**
+
+```bash
+dotnet build Platform.slnx
+dotnet test tests/Ordering.Api.Tests --filter "FullyQualifiedName~KestrelEndpointTests"
+```
+
+Expected: 0 warnings, 4 passing. Then:
+
+```bash
+git add src/Services/Ordering/Ordering.Api tests/Ordering.Api.Tests
+git commit -m "feat(ordering): delivery_addresses.proto and an Http2-only second port"
+```
+
+---
+
+### Task 2: `GetDeliveryAddressQuery`
+
+**Files:**
+- Modify: `src/Services/Ordering/Ordering.Application/Ordering.Application.csproj`
+  — `<PackageReference Include="Dapper" />`, and the comment standing in its
+  place cut
+- Create: `Ordering.Application/Orders/GetDeliveryAddress/GetDeliveryAddressQuery.cs`
+- Create: `.../GetDeliveryAddress/DeliveryAddressView.cs`
+- Create: `.../GetDeliveryAddress/GetDeliveryAddressHandler.cs`
+
+**Interfaces:**
+- Consumes: `Common.Application.IQuery<T>`, `IQueryHandler<TQuery, TResult>`,
+  `IDbConnectionFactory.Create()` — all as declared.
+- Produces:
+
+```csharp
+public sealed record GetDeliveryAddressQuery(Guid OrderId) : IQuery<DeliveryAddressView?>;
+
+public sealed record DeliveryAddressView(
+    Guid CustomerId,
+    string Line1,
+    string? Line2,
+    string City,
+    string PostalCode,
+    string Country);
+```
+
+- [ ] **Step 1: Write the handler**
+
+The query is tested over the transport in Task 4, which is where its SQL meets
+the migrated schema; there is no in-memory stand-in for Dapper worth writing,
+and the three answers it collapses are stated on the wire rather than in the
+view.
+
+`GetDeliveryAddressHandler.cs`:
+
+```csharp
+using System.Data;
+using Common.Application;
+using Dapper;
+
+namespace Ordering.Application.Orders.GetDeliveryAddress;
+
+/// <summary>
+/// §6.5's read side over <c>ordering.Orders</c>: where one order ships, for
+/// the worker ADR-052 gives the read to. No status, no total, no lines — a
+/// caller that needed one of those would be reading an order.
+/// </summary>
+/// <remarks>
+/// <b>Three different facts answer <c>null</c>, and ADR-052 makes that the
+/// contract rather than a simplification.</b> No such order, an order that is
+/// cancelled, and an order whose address erasure has cleared are all "does not
+/// exist" to the reader, so the client maps one status and never reads an
+/// order's state. Collapsing them here is what keeps that promise: a view that
+/// distinguished them would put the distinction on the wire.
+/// </remarks>
+public sealed class GetDeliveryAddressHandler(IDbConnectionFactory connections)
+    : IQueryHandler<GetDeliveryAddressQuery, DeliveryAddressView?>
+{
+    // Cancelled is compared as text because §7.2 persists the status by name.
+    // The filter is in the statement rather than in the branch below so the
+    // cancelled row never leaves the database.
+    private const string Sql =
+        """
+        SELECT o.CustomerId,
+               o.ShipToLine1 AS Line1,
+               o.ShipToLine2 AS Line2,
+               o.ShipToCity AS City,
+               o.ShipToPostalCode AS PostalCode,
+               o.ShipToCountry AS Country
+        FROM ordering.Orders o
+        WHERE o.Id = @OrderId
+            AND o.Status <> 'Cancelled';
+        """;
+
+    public async Task<DeliveryAddressView?> HandleAsync(GetDeliveryAddressQuery query, CancellationToken ct)
+    {
+        using IDbConnection connection = connections.Create();
+
+        DeliveryAddressView? address = await connection.QuerySingleOrDefaultAsync<DeliveryAddressView>(
+            new CommandDefinition(Sql, new { query.OrderId }, cancellationToken: ct));
+
+        // The erasure case, designed against before the consumer that produces
+        // it exists (ADR-052). §11.7's extension clears an erased subject's
+        // address in place and leaves the order's own record whole, so the row
+        // survives with nothing to ship to — and an answer of five blank
+        // strings is a parcel addressed to nowhere rather than an absence.
+        return string.IsNullOrWhiteSpace(address?.Line1) ? null : address;
+    }
+}
+```
+
+`GetDeliveryAddressQuery.cs` and `DeliveryAddressView.cs` as in *Interfaces*.
+`DeliveryAddressView`'s summary: "The five parts of `Address` plus the order's
+customer, which the reader keeps for erasure's sake alone (ADR-052)."
+
+In `Ordering.Application.csproj`, the block that reads
+
+```xml
+    <!-- Dapper is not here yet: §6.5's read side uses it directly, and this
+         project has no query handler to use it. It joins with the first
+         one — an unused package reference is a claim this project would
+         not be making. -->
+```
+
+is cut and replaced by the reference it was holding a place for:
+
+```xml
+    <!-- §6.5's read side, used directly by the first query handler this
+         project has. Centrally pinned and already in Appendix B. -->
+    <PackageReference Include="Dapper" />
+```
+
+- [ ] **Step 2: Build; commit with Task 4**
+
+```bash
+dotnet build Platform.slnx
+```
+
+Expected: 0 warnings. Nothing resolves the handler yet — `AddPluggableFrom`
+scans this assembly for `IQueryHandler<,>` implementations, so registration is
+automatic and the first resolution is Task 4's.
+
+---
+
+### Task 3: The realm's role, the `shipping-worker` client, and the gate
+
+This task lands **before** the permission constant, and the order is
+deliberate: `GrantablePermissionTests` reflects over `OrderingPermissions` and
+asserts the realm can grant every name it finds, so a constant added before its
+role would leave one commit red.
+
+**Files:**
+- Modify: `deploy/compose/keycloak/realm-export.json` — the
+  `orders:delivery-address` client role, the `shipping-worker` client, and its
+  service-account user
+- Modify: `tests/Common.Web.Tests/RealmImportTests.cs` — the closed role set,
+  the credentialed-client set, and a new assertion over the service account
+- Modify: `tests/Web.Bff.Tests/RealmClientTests.cs` —
+  `It_is_the_only_service_account_client_in_the_realm`, renamed and widened
+- Modify: `deploy/keycloak/realm_check.py` — `WORKER_CLIENT`,
+  `check_worker_client`, and the three fields the projection has to keep for it
+- Modify: `deploy/keycloak/test_realm_check.py` — a `worker()` fixture and one
+  negative case per limb
+- Modify: `.github/secret-scan/allowed/deploy.txt` — the new local default
+
+**Gates this step turns red, and what turns them green:** ADR-052 marks
+`RealmImportTests.No_client_ships_a_secret_but_the_one_whose_grant_needs_one`,
+`RealmImportTests.The_permission_vocabulary_is_a_closed_set_of_client_roles` and
+`RealmClientTests.It_is_the_only_service_account_client_in_the_realm` as
+**asserted** — each goes red on the realm edit and green on the test edit in
+this same task. The secret scan goes red on the new literal and green on the
+allow-list entry, also here.
+
+- [ ] **Step 1: Write the failing test edits**
+
+In `RealmImportTests`, the closed set gains one name:
+
+```csharp
+        roles.ShouldBe(
+            [
+                "catalog:write",
+                "inventory:admin",
+                "payments:admin",
+                "orders:write",
+                "orders:cancel",
+                "orders:admin",
+                "orders:delivery-address"
+            ],
+            ignoreOrder: true);
+```
+
+The credentialed-client constants become a set, because there are two:
+
+```csharp
+    /// <summary>
+    /// The clients whose grant requires both sides to agree on a secret
+    /// (§11.5, ADR-052), and the documented local-development value each
+    /// agrees on.
+    /// </summary>
+    /// <remarks>
+    /// A client-credentials flow is two parties holding the same string, one
+    /// of which is a committed file, so a Keycloak-generated secret would
+    /// leave the realm and the deployment disagreeing. Pinning each value
+    /// keeps the rule strong: a generated secret fails here, and so does a
+    /// real one. Two entries rather than one since ADR-052 gave the platform a
+    /// second synchronous coupling; a third is Notifications' and is not
+    /// decided by a test.
+    /// </remarks>
+    private static readonly Dictionary<string, string> DocumentedLocalSecrets =
+        new(StringComparer.Ordinal)
+        {
+            ["web-bff"] = "local-dev-secret",
+            ["shipping-worker"] = "local-dev-shipping-secret"
+        };
+
+    [Fact]
+    public void No_client_ships_a_secret_but_the_ones_whose_grants_need_one()
+    {
+        foreach (JsonElement client in Root.GetProperty("clients").EnumerateArray())
+        {
+            string clientId = client.GetProperty("clientId").GetString()!;
+            bool ships = client.TryGetProperty("secret", out JsonElement secret);
+
+            if (!DocumentedLocalSecrets.TryGetValue(clientId, out string? documented))
+            {
+                // §11.6 and the local-development carve-out: Compose's
+                // documented defaults are deliberate, and a randomly generated
+                // secret is not one of them. Keycloak regenerates on import.
+                ships.ShouldBeFalse($"'{clientId}' ships a secret and needs none");
+
+                continue;
+            }
+
+            ships.ShouldBeTrue(
+                $"'{clientId}' authenticates with the client-credentials grant, so the realm and " +
+                "the deployment have to hold the same value (§11.5)");
+
+            // The documented default and nothing else. The matching half lives
+            // in the host's own Compose unit, which a building block's suite
+            // may not read.
+            secret.GetString().ShouldBe(
+                documented,
+                "a secret in a committed realm must be the documented local default, " +
+                "never a generated or real one (§11.6)");
+        }
+
+        // Not vacuous: with a set that named a client the realm does not hold,
+        // every branch above would take the first arm and assert nothing about
+        // the credential this platform actually ships.
+        string[] present =
+        [
+            .. Root.GetProperty("clients").EnumerateArray()
+                .Select(c => c.GetProperty("clientId").GetString()!)
+        ];
+
+        foreach (string credentialed in DocumentedLocalSecrets.Keys)
+            present.ShouldContain(credentialed);
+    }
+```
+
+and a new assertion, which is the static half of the grant ADR-052 says each
+client holds itself to:
+
+```csharp
+    [Fact]
+    public void The_worker_service_account_holds_exactly_the_role_its_grant_names()
+    {
+        // The `permission` mapper is oidc-usermodel-client-role-mapper, so a
+        // service account's claim comes from the client roles assigned to its
+        // own user — which a realm export carries as a user with
+        // serviceAccountClientId. Without that user the client authenticates
+        // and its token carries no permission at all, which reads at the
+        // reader as PermissionDenied and at the realm as nothing wrong.
+        JsonElement account = Root.GetProperty("users").EnumerateArray()
+            .Single(u => u.TryGetProperty("serviceAccountClientId", out JsonElement client) &&
+                         client.GetString() == "shipping-worker");
+
+        string[] granted =
+        [
+            .. account.GetProperty("clientRoles").GetProperty(Audience).EnumerateArray()
+                .Select(r => r.GetString()).OfType<string>()
+        ];
+
+        // Exactly, not ShouldContain. ADR-052 sizes this credential by what it
+        // reads when it is stolen, and a second role here is a second thing it
+        // reads — which is the decision that record exists to hold.
+        granted.ShouldBe(["orders:delivery-address"]);
+    }
+```
+
+In `RealmClientTests`, the name is now false and moves with the assertion:
+
+```csharp
+    /// <summary>The second client ADR-052 mints, and the reader of Ordering's address.</summary>
+    private const string WorkerClient = "shipping-worker";
+
+    [Fact]
+    public void The_service_account_clients_are_exactly_the_hosts_that_call_a_peer()
+    {
+        string[] serviceAccounts =
+        [
+            .. Realm.RootElement
+                .GetProperty("clients")
+                .EnumerateArray()
+                .Where(c =>
+                    c.TryGetProperty("serviceAccountsEnabled", out JsonElement enabled) &&
+                    enabled.GetBoolean())
+                .Select(c => c.GetProperty("clientId").GetString()!)
+        ];
+
+        // §11.5 makes the number of hosts holding a client secret the number of
+        // synchronous couplings in the platform, and ADR-052 moved it from one
+        // to two by deciding what the second one reads when it is stolen. Over-
+        // supply has no failing test to catch it — which is what this is — so a
+        // third name appearing here is a third coupling or a credential nothing
+        // sends. Notifications' client is decided and not built.
+        serviceAccounts.ShouldBe([ClientId, WorkerClient], ignoreOrder: true);
+    }
+```
+
+Run both suites and see them fail:
+
+```bash
+dotnet test tests/Common.Web.Tests tests/Web.Bff.Tests --filter "Category!=Integration"
+```
+
+Expected: `The_permission_vocabulary_is_a_closed_set_of_client_roles` reports a
+missing `orders:delivery-address`;
+`No_client_ships_a_secret_but_the_ones_whose_grants_need_one` fails its new
+non-vacuity loop on an absent `shipping-worker`;
+`The_worker_service_account_holds_exactly_the_role_its_grant_names` throws from
+`Single`; and
+`The_service_account_clients_are_exactly_the_hosts_that_call_a_peer`
+reports one name where two are expected.
+
+- [ ] **Step 2: The realm**
+
+In `roles.client.commerce-api`, after `orders:admin`, a new object in the
+existing shape with a **fresh** `id` GUID and `containerId` copied from
+`orders:admin`'s:
+
+```jsonc
+        {
+          "id": "6b0f2d94-8a17-4e53-9c26-0d4a71e3b85f",
+          "name": "orders:delivery-address",
+          "description": "Read one order's delivery address over gRPC (ADR-052). Held by the shipping-worker service account and by no person: the read crosses subjects, so the method skips the ownership check and an authenticated caller alone would be too many.",
+          "composite": false,
+          "clientRole": true,
+          "containerId": "e55a8854-8088-495c-8db4-331d4b5eb68e",
+          "attributes": {}
+        }
+```
+
+The description is 254 characters or fewer —
+`No_role_description_exceeds_what_keycloak_can_store` is the gate, and
+Keycloak's
+`ROLE.DESCRIPTION` throws rather than truncating.
+
+In `clients`, after `web-bff` and before `mobile-app`:
+
+```jsonc
+    {
+      "id": "7c5a1d38-9e02-4b6f-8134-2fa6c0d75e91",
+      "clientId": "shipping-worker",
+      "name": "Shipping worker",
+      "description": "The second host that calls a service synchronously (ADR-052): a Shipping worker reading one order's delivery address. Service accounts only, holding orders:delivery-address and nothing else.",
+      "surrogateAuthRequired": false,
+      "enabled": true,
+      "alwaysDisplayInConsole": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "local-dev-shipping-secret",
+      "redirectUris": [],
+      "webOrigins": [],
+      "notBefore": 0,
+      "bearerOnly": false,
+      "consentRequired": false,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "publicClient": false,
+      "frontchannelLogout": false,
+      "protocol": "openid-connect",
+      "attributes": {
+        "realm_client": "false",
+        "backchannel.logout.session.required": "true",
+        "backchannel.logout.revoke.offline.tokens": "false"
+      },
+      "authenticationFlowBindingOverrides": {},
+      "fullScopeAllowed": true,
+      "nodeReRegistrationTimeout": -1,
+      "defaultClientScopes": [
+        "web-origins",
+        "acr",
+        "profile",
+        "roles",
+        "basic",
+        "email",
+        "commerce-api"
+      ],
+      "optionalClientScopes": [
+        "address",
+        "phone",
+        "organization",
+        "offline_access",
+        "microprofile-jwt"
+      ],
+      "access": {
+        "view": true,
+        "configure": true,
+        "manage": true
+      }
+    },
+```
+
+`commerce-api` is a **default** scope and appears in no optional list: a
+client-credentials token requests no scope explicitly, so an optional one is
+silently absent and the token carries neither the audience nor the `permission`
+claim (§11.5).
+
+In `users`, after `browser`:
+
+```jsonc
+    {
+      "username": "service-account-shipping-worker",
+      "enabled": true,
+      "serviceAccountClientId": "shipping-worker",
+      "clientRoles": {
+        "commerce-api": [
+          "orders:delivery-address"
+        ]
+      }
+    }
+```
+
+The `permission` mapper is Keycloak's *User Client Role* mapper, so this user
+is the only thing that puts the role into the client's token. No password and
+no email: a service account's user is not a login.
+
+```bash
+dotnet test tests/Common.Web.Tests tests/Web.Bff.Tests --filter "Category!=Integration"
+```
+
+Expected: green.
+
+- [ ] **Step 3: The realm gate's predicate**
+
+`realm_check.py` reads the realm and its client list, and ADR-052 is explicit
+that a service account's roles are in **neither** document — reading them
+would
+widen this gate's credential past the `view-clients`-only grant
+`docs/secrets.md` argues for. So the predicate is not about the grant. It is
+about everything else a stolen secret's blast radius depends on, all of which
+the client object states.
+
+Beside `MOBILE_CLIENT`:
+
+```python
+# The address reader ADR-052 mints, named for the same reason the two above
+# are: its obligations are properties of one client and cannot be checked
+# without finding it. Notifications' client is decided and unbuilt, so it is
+# deliberately not here — a gate that required a client nobody deploys would
+# fail every realm.
+WORKER_CLIENT = "shipping-worker"
+```
+
+`CLIENT_FIELDS` gains the three keys the new check reads, because `judged`
+projects the document down to exactly what the checks read and a field absent
+from that tuple is a check that always sees `None`:
+
+```python
+CLIENT_FIELDS = ("clientId", "enabled", "standardFlowEnabled", "implicitFlowEnabled",
+                 "directAccessGrantsEnabled", "serviceAccountsEnabled", "publicClient",
+                 "redirectUris", "defaultClientScopes", "optionalClientScopes", "webOrigins")
+```
+
+and `FLAGS` gains the two it compares by identity, so a hand-edited `"true"` is
+refused rather than read as off:
+
+```python
+FLAGS = (
+    "implicitFlowEnabled",
+    "standardFlowEnabled",
+    "directAccessGrantsEnabled",
+    "serviceAccountsEnabled",
+    "enabled",
+)
+```
+
+In `check_realm`, beside the browser and mobile lookups:
+
+```python
+    worker = [c for c in clients if isinstance(c, dict) and c.get("clientId") == WORKER_CLIENT]
+    if len(worker) != 1:
+        problems.append(
+            f"the realm declares the address reader {WORKER_CLIENT!r} "
+            f"{len(worker)} time(s), expected exactly one. ADR-052 sizes that "
+            "client by what it reads when its secret is stolen, and every "
+            "obligation below is a property of the client object")
+```
+
+and, after the mobile block:
+
+```python
+    if worker:
+        problems += check_worker_client(worker[0])
+```
+
+The check itself, after `check_mobile_client`:
+
+```python
+def check_worker_client(client: dict) -> list[str]:
+    """ADR-052's ceiling on the address reader, as far as a realm document reaches.
+
+    The grant itself is out of reach, and that is the record's own finding
+    rather than a gap here: a service account's roles live on its user, which
+    is in neither the realm representation this gate is handed nor the client
+    list `read_admin.py` fetches, and reading them would widen the realm-check
+    credential past the `view-clients`-only grant `docs/secrets.md` argues for.
+    So the client holds itself to the role out of its own token, and what is
+    left for this file is everything else the blast radius of a stolen secret
+    depends on: that the client is confidential, that it mints tokens for
+    itself alone, and that it carries the scope whose mapper writes the
+    `permission` claim at all.
+    """
+    problems: list[str] = []
+
+    if client.get("enabled") is not True:
+        problems.append(
+            f"client {WORKER_CLIENT!r} is disabled. Every obligation below "
+            "then holds because the client mints nothing, and the address read "
+            "fails as a refused credential in whichever environment imported "
+            "this realm")
+
+    if client.get("publicClient") is not False:
+        problems.append(
+            f"client {WORKER_CLIENT!r} has publicClient="
+            f"{client.get('publicClient')!r}. A public client presents no "
+            "secret, so the grant ADR-052 gives this reader is one Keycloak "
+            "refuses outright")
+
+    if client.get("serviceAccountsEnabled") is not True:
+        problems.append(
+            f"client {WORKER_CLIENT!r} has service accounts disabled. Keycloak "
+            "refuses the client-credentials grant with unauthorized_client, "
+            "which reaches the worker as a refused credential — ADR-052's "
+            "fourth row, a defect somebody must see rather than an outage")
+
+    for flag, what in (("standardFlowEnabled", "an authorization-code flow"),
+                       ("directAccessGrantsEnabled", "a password grant"),
+                       ("implicitFlowEnabled", "an implicit flow")):
+        if client.get(flag) is not False:
+            problems.append(
+                f"client {WORKER_CLIENT!r} has {flag}={client.get(flag)!r}, "
+                f"which gives it {what}. Its secret is a deployment value, so "
+                "the blast radius of that secret leaking has to stay one order's "
+                "address and never a token for a person in this realm (ADR-052)")
+
+    defaults = client.get("defaultClientScopes")
+    defaults = defaults if isinstance(defaults, list) else []
+    optional = client.get("optionalClientScopes")
+    optional = optional if isinstance(optional, list) else []
+
+    if "commerce-api" not in defaults:
+        problems.append(
+            f"client {WORKER_CLIENT!r} does not hold commerce-api as a default "
+            "client scope. A client-credentials token requests no scope by "
+            "name, so the audience mapper never runs and the permission claim "
+            "is never written — the read is refused with nothing in this "
+            "file's other checks to say why (§11.5)")
+
+    if "commerce-api" in optional:
+        problems.append(
+            f"client {WORKER_CLIENT!r} also holds commerce-api as an OPTIONAL "
+            "scope. Keycloak's admin console will create that state and it "
+            "resolves in the wrong direction for a grant that names no scope")
+
+    return problems
+```
+
+`main`'s closing line needs no edit: it counts clients and reports the
+lifetime, and neither number is a claim about this check.
+
+- [ ] **Step 4: The gate's own tests**
+
+In `test_realm_check.py`, a fixture beside `browser()` and `mobile()`:
+
+```python
+def worker(**overrides) -> dict:
+    """A compliant `shipping-worker`: confidential, service accounts on, no
+    interactive flow, and commerce-api as a default scope and not an optional
+    one."""
+    client = {
+        "clientId": realm_check.WORKER_CLIENT,
+        "enabled": True,
+        "standardFlowEnabled": False,
+        "implicitFlowEnabled": False,
+        "directAccessGrantsEnabled": False,
+        "serviceAccountsEnabled": True,
+        "publicClient": False,
+        "defaultClientScopes": [
+            "web-origins", "acr", "profile", "roles", "basic", "email", "commerce-api"],
+        "optionalClientScopes": ["address", "phone", "organization"],
+        "webOrigins": [],
+    }
+    client.update(overrides)
+    return client
+```
+
+`realm()` appends it on the same terms it already appends `mobile()`, so no
+case written before this client existed has to learn it does:
+
+```python
+    if clients:
+        client_list = list(clients)
+        if not any(isinstance(c, dict) and c.get("clientId") == realm_check.MOBILE_CLIENT
+                   for c in client_list):
+            client_list.append(mobile())
+        if not any(isinstance(c, dict) and c.get("clientId") == realm_check.WORKER_CLIENT
+                   for c in client_list):
+            client_list.append(worker())
+    else:
+        client_list = [browser(), mobile(), worker()]
+```
+
+and the new cases:
+
+```python
+class TheWorkerClient(Fixture):
+    def worker_problems(self, **overrides) -> list[str]:
+        return self.problems(realm(browser(), worker(**overrides)))
+
+    def test_a_missing_worker_is_caught_rather_than_passed(self):
+        """The vacuous half: every check below is a property of one client."""
+        document = realm(browser(), mobile())
+        document["clients"] = [c for c in document["clients"]
+                               if c.get("clientId") != realm_check.WORKER_CLIENT]
+        self.assertIn("shipping-worker", self.one(document))
+
+    def test_a_public_worker_is_caught(self):
+        self.assertIn("publicClient", self.one(realm(browser(), worker(publicClient=True))))
+
+    def test_service_accounts_turned_off_is_caught(self):
+        self.assertIn("service accounts disabled",
+                      self.one(realm(browser(), worker(serviceAccountsEnabled=False))))
+
+    def test_a_disabled_worker_is_caught(self):
+        self.assertIn("disabled", self.one(realm(browser(), worker(enabled=False))))
+
+    def test_each_interactive_flow_is_caught_on_its_own(self):
+        for flag in ("standardFlowEnabled", "directAccessGrantsEnabled", "implicitFlowEnabled"):
+            with self.subTest(flag=flag):
+                found = self.problems(realm(browser(), worker(**{flag: True})))
+                # implicitFlowEnabled is also caught by check_implicit_flow,
+                # which judges every client — two findings there, one for the
+                # others, and both name the flag.
+                self.assertTrue(any(flag in problem for problem in found), found)
+
+    def test_an_optional_audience_scope_is_caught(self):
+        found = self.one(realm(browser(), worker(
+            defaultClientScopes=["basic"], optionalClientScopes=["commerce-api"])))
+        self.assertIn("default client scope", found)
+
+    def test_a_missing_audience_scope_is_caught(self):
+        self.assertIn("default client scope",
+                      self.one(realm(browser(), worker(defaultClientScopes=["basic"]))))
+
+    def test_a_string_service_account_flag_is_refused_rather_than_read_as_on(self):
+        """The flag joined FLAGS, so a hand-edited "true" is refused."""
+        self.assertIn("boolean", self.one(realm(browser(), worker(serviceAccountsEnabled="true"))))
+```
+
+`test_an_optional_audience_scope_is_caught` expects exactly one problem, so the
+default list it passes omits `commerce-api` — the two limbs are one finding
+apart and `self.one` would otherwise see two.
+
+```bash
+py -3.12 -m unittest discover -s deploy/keycloak
+py -3.12 deploy/keycloak/realm_check.py check --kind local --realm deploy/compose/keycloak/realm-export.json
+```
+
+Suite first, then the gate against the realm this task just edited. Expected:
+both exit 0.
+
+- [ ] **Step 5: The secret scan**
+
+```bash
+py -3.12 .github/secret-scan/secret_scan.py
+```
+
+Expected: one new finding on `deploy/compose/keycloak/realm-export.json`, rule
+`credential-assignment`, for `local-dev-shipping-secret`. Take the fingerprint
+**from the scan's own output** — it is a sha256 over the finding and cannot be
+written in advance — and add one line to
+`.github/secret-scan/allowed/deploy.txt`, beside the existing realm-export
+entries:
+
+```
+deploy/compose/keycloak/realm-export.json | credential-assignment | <fingerprint> | ADR-052's second client, and §14.1's local default for it.
+```
+
+Re-run the scan; expected: clean, and no unmatched allow-list entry.
+
+- [ ] **Step 6: Commit**
+
+```bash
+dotnet test tests/Common.Web.Tests tests/Web.Bff.Tests --filter "Category!=Integration"
+git add deploy/compose/keycloak/realm-export.json deploy/keycloak .github/secret-scan/allowed/deploy.txt \
+        tests/Common.Web.Tests/RealmImportTests.cs tests/Web.Bff.Tests/RealmClientTests.cs
+git commit -m "feat(ordering): the realm gains orders:delivery-address and the shipping-worker client"
+```
+
+---
+
+### Task 4: The permission, the policy and `DeliveryAddressService`
+
+**Files:**
+- Modify: `src/Services/Ordering/Ordering.Api/OrderingPermissions.cs` — the
+  third constant, and the remark that says there are two
+- Modify: `src/Services/Ordering/Ordering.Api/Program.cs` — the policy and
+  `MapGrpcService`
+- Create: `src/Services/Ordering/Ordering.Api/Grpc/DeliveryAddressService.cs`
+- Test: `tests/Ordering.Api.Tests/DeliveryAddressServiceTests.cs`
+- Modify: `tests/Ordering.Api.Tests/AuthorizationPolicyTests.cs` — the
+  non-vacuity list
+
+**Interfaces:**
+- Consumes: `GetDeliveryAddressQuery`, `DeliveryAddressView` (Task 2);
+  `DeliveryAddresses.DeliveryAddressesBase`, `GetDeliveryAddressRequest`,
+  `GetDeliveryAddressReply` (Task 1); `IDispatcher.QueryAsync`.
+- Produces: `OrderingPermissions.DeliveryAddress = "orders:delivery-address"`.
+
+- [ ] **Step 1: Write the failing tests**
+
+`tests/Ordering.Api.Tests/DeliveryAddressServiceTests.cs`:
+
+```csharp
+using Grpc.Core;
+using Grpc.Net.Client;
+using Ordering.Api;
+using Ordering.Delivery.V1;
+using Ordering.TestSupport;
+using Shouldly;
+using Xunit;
+
+namespace Ordering.Api.Tests;
+
+/// <summary>
+/// ADR-052's method over the real pipeline: authentication, the permission
+/// policy, the dispatcher and Dapper on a real database.
+/// </summary>
+/// <remarks>
+/// Over <c>TestServer</c>, which is the right instrument for what the
+/// application decides; what the server decides — that a cleartext endpoint
+/// must be declared <c>Http2</c> before a gRPC client can reach it — belongs
+/// against a real Kestrel and is <c>KestrelEndpointTests</c>' subject instead.
+/// <c>TestServer.CreateHandler()</c> bypasses the network, so the h2c
+/// negotiation this host would otherwise need never happens.
+/// </remarks>
+[Collection(nameof(IntegrationCollection))]
+public sealed class DeliveryAddressServiceTests(ServiceFixture fixture) : IAsyncLifetime
+{
+    private GrpcChannel _channel = null!;
+
+    public async ValueTask InitializeAsync()
+    {
+        _channel = GrpcChannel.ForAddress(
+            fixture.Factory.Server.BaseAddress,
+            new GrpcChannelOptions { HttpHandler = fixture.Factory.Server.CreateHandler() });
+
+        await fixture.ResetAsync();
+    }
+
+    public ValueTask DisposeAsync()
+    {
+        _channel.Dispose();
+
+        return ValueTask.CompletedTask;
+    }
+
+    private DeliveryAddresses.DeliveryAddressesClient Addresses => new(_channel);
+
+    /// <summary>
+    /// The principal a validated <c>shipping-worker</c> token becomes (§11.3),
+    /// as call metadata.
+    /// </summary>
+    /// <remarks>
+    /// Passed per call rather than baked into the channel, for
+    /// <c>PricingServiceTests</c>' reason: a default grant is how a suite ends
+    /// up proving a policy is applied while never once arriving without it.
+    /// </remarks>
+    private static Metadata Worker() =>
+    [
+        new Metadata.Entry(TestAuthHandler.UserHeader, "service-account-shipping-worker"),
+        new Metadata.Entry(TestAuthHandler.PermissionsHeader, OrderingPermissions.DeliveryAddress)
+    ];
+
+    /// <summary>
+    /// A person holding every permission this service's vocabulary can grant a
+    /// person, including the admin claim that overrides the ownership check.
+    /// </summary>
+    /// <remarks>
+    /// <c>orders:admin</c> is spelt as a literal because §11.4 keeps it out of
+    /// <c>OrderingPermissions</c>: it is a claim <c>CancelOrderHandler</c>
+    /// reads and not a policy an endpoint names.
+    /// </remarks>
+    private static Metadata EveryUserPermission() =>
+    [
+        new Metadata.Entry(TestAuthHandler.UserHeader, Guid.CreateVersion7().ToString()),
+        new Metadata.Entry(
+            TestAuthHandler.PermissionsHeader,
+            $"{OrderingPermissions.Write} {OrderingPermissions.Cancel} orders:admin")
+    ];
+
+    private static GetDeliveryAddressRequest For(Guid orderId) => new() { OrderId = orderId.ToString() };
+
+    private static async Task<StatusCode> StatusOfAsync(Func<Task<GetDeliveryAddressReply>> call)
+    {
+        RpcException thrown = await Should.ThrowAsync<RpcException>(call);
+
+        return thrown.StatusCode;
+    }
+
+    [Fact]
+    public async Task A_caller_with_no_token_is_Unauthenticated()
+    {
+        // No principal: the channel with no metadata. Without this the whole
+        // credential mechanism ADR-052 mints could be missing and every other
+        // test here would still be green.
+        StatusCode status = await StatusOfAsync(
+            () => Addresses
+                .GetAsync(For(Guid.CreateVersion7()), cancellationToken: TestContext.Current.CancellationToken)
+                .ResponseAsync);
+
+        status.ShouldBe(StatusCode.Unauthenticated);
+    }
+
+    [Fact]
+    public async Task A_person_holding_every_user_permission_is_PermissionDenied()
+    {
+        // The half the first test cannot make: a host that stopped routing
+        // answers Unauthenticated to everything, so "no token is refused" is
+        // satisfiable by a service that is not there. This one says the
+        // permission is doing the work — orders:delivery-address belongs to a
+        // host and to no person (ADR-052), so even the admin claim is refused.
+        Guid order = await fixture.SeedOrderAsync(Guid.CreateVersion7());
+
+        StatusCode status = await StatusOfAsync(
+            () => Addresses
+                .GetAsync(For(order), EveryUserPermission(), cancellationToken: TestContext.Current.CancellationToken)
+                .ResponseAsync);
+
+        status.ShouldBe(StatusCode.PermissionDenied);
+    }
+
+    [Fact]
+    public async Task The_client_reads_the_address_and_the_customer_and_nothing_else()
+    {
+        Guid customer = Guid.CreateVersion7();
+        Guid order = await fixture.SeedOrderAsync(customer);
+
+        GetDeliveryAddressReply reply = await Addresses.GetAsync(
+            For(order),
+            Worker(),
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        // SeedOrderAsync's address, field for field.
+        reply.CustomerId.ShouldBe(customer.ToString());
+        reply.Line1.ShouldBe("1 Test Street");
+        reply.Line2.ShouldBe("", "proto3 has no null string, so an absent second line is empty");
+        reply.City.ShouldBe("Almaty");
+        reply.PostCode.ShouldBe("050000");
+        reply.Country.ShouldBe("KZ");
+
+        // Nothing of the order travels. A reply that grew a status or a total
+        // would make the reader able to decide things ADR-052 keeps here.
+        reply.ToString().ShouldNotContain("AwaitingStock");
+        reply.ToString().ShouldNotContain("19.99");
+    }
+
+    [Fact]
+    public async Task An_order_that_does_not_exist_is_NotFound()
+    {
+        StatusCode status = await StatusOfAsync(
+            () => Addresses
+                .GetAsync(
+                    For(Guid.CreateVersion7()),
+                    Worker(),
+                    cancellationToken: TestContext.Current.CancellationToken)
+                .ResponseAsync);
+
+        status.ShouldBe(StatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task A_cancelled_order_is_NotFound_rather_than_an_address()
+    {
+        // ADR-052's "does not exist is wider than a missing record": all three
+        // cases answer NotFound so the client maps a status and never reads an
+        // order's state.
+        Guid order = await fixture.SeedOrderAsync(Guid.CreateVersion7());
+        await fixture.ExecuteAsync(
+            "UPDATE ordering.Orders SET Status = 'Cancelled' WHERE Id = {0};", order);
+
+        StatusCode status = await StatusOfAsync(
+            () => Addresses
+                .GetAsync(For(order), Worker(), cancellationToken: TestContext.Current.CancellationToken)
+                .ResponseAsync);
+
+        status.ShouldBe(StatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task An_order_whose_address_erasure_has_cleared_is_NotFound()
+    {
+        // §11.7's extension is owed and this is what it will produce: the
+        // order's own record whole and its address gone. Written as raw SQL
+        // because no consumer produces it yet, which is exactly ADR-052's
+        // instruction to design against it rather than meet it later.
+        Guid order = await fixture.SeedOrderAsync(Guid.CreateVersion7());
+        await fixture.ExecuteAsync(
+            """
+            UPDATE ordering.Orders
+            SET ShipToLine1 = '', ShipToLine2 = NULL, ShipToCity = '', ShipToPostalCode = '', ShipToCountry = ''
+            WHERE Id = {0};
+            """,
+            order);
+
+        StatusCode status = await StatusOfAsync(
+            () => Addresses
+                .GetAsync(For(order), Worker(), cancellationToken: TestContext.Current.CancellationToken)
+                .ResponseAsync);
+
+        status.ShouldBe(StatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task A_malformed_order_id_is_InvalidArgument()
+    {
+        RpcException thrown = await Should.ThrowAsync<RpcException>(
+            () => Addresses
+                .GetAsync(
+                    new GetDeliveryAddressRequest { OrderId = "not-a-guid" },
+                    Worker(),
+                    cancellationToken: TestContext.Current.CancellationToken)
+                .ResponseAsync);
+
+        // Untranslated this is Unknown, which rides grpc-status on an HTTP 200
+        // and would reach the worker as neither an answer nor a transient
+        // fault — so the shipment would back off for ever on a request that
+        // can never succeed.
+        thrown.StatusCode.ShouldBe(StatusCode.InvalidArgument);
+
+        // The field, never the value: it is a caller-supplied string arriving
+        // in a message that reaches the logs, and §13.4's redactor cannot see a
+        // value interpolated into one.
+        thrown.Status.Detail.ShouldContain("order_id");
+        thrown.Status.Detail.ShouldNotContain("not-a-guid");
+    }
+}
+```
+
+In `AuthorizationPolicyTests.Every_policy_an_endpoint_names_resolves`, the
+non-vacuity list gains the third name — the gRPC endpoint carries the service
+class's `[Authorize]` metadata, so it is read off `EndpointDataSource` with the
+other two:
+
+```csharp
+        named.ShouldContain(OrderingPermissions.Write);
+        named.ShouldContain(OrderingPermissions.Cancel);
+        named.ShouldContain(
+            OrderingPermissions.DeliveryAddress,
+            "ADR-052's method is the first in this service behind a policy no endpoint route names");
+```
+
+- [ ] **Step 2: Run to see them fail**
+
+```bash
+dotnet test tests/Ordering.Api.Tests --filter "FullyQualifiedName~DeliveryAddressServiceTests"
+```
+
+Expected: compile failure on `OrderingPermissions.DeliveryAddress` and on
+`Ordering.Delivery.V1.DeliveryAddresses` having no registered implementation —
+then, once the constant exists but the service is unmapped, `Unimplemented` on
+every call.
+
+- [ ] **Step 3: Write the permission, the service and the policy**
+
+`OrderingPermissions.cs` gains the constant, and the remark that counted two
+is corrected rather than appended to:
+
+```csharp
+    /// <para>
+    /// <b>Three entries, and the third is not an endpoint's.</b>
+    /// <c>orders:delivery-address</c> guards
+    /// <see cref="Grpc.DeliveryAddressService"/>, the gRPC method ADR-052 gives
+    /// this service — so a permission's home is still "what this service
+    /// requires", and a transport other than HTTP does not change whose
+    /// vocabulary it is. A fourth, <c>orders:read</c>, is deliberately absent
+    /// until there is a read endpoint to require it.
+    /// </para>
+    /// <para>
+    /// <b>It belongs to a host and to no person, which is the one place this
+    /// service departs from §11.4's usual reading.</b> The read crosses
+    /// subjects — a worker's service account owns no order — so the method
+    /// skips the ownership check on purpose and an authenticated caller alone
+    /// would let any client the realm holds make it. ADR-052 argues both
+    /// halves; the realm grants the role to one service account and to neither
+    /// development login.
+    /// </para>
+```
+
+```csharp
+    public const string Write = "orders:write";
+    public const string Cancel = "orders:cancel";
+    public const string DeliveryAddress = "orders:delivery-address";
+```
+
+`Grpc/DeliveryAddressService.cs`:
+
+```csharp
+using Common.Application;
+using Grpc.Core;
+using Microsoft.AspNetCore.Authorization;
+using Ordering.Application.Orders.GetDeliveryAddress;
+using Ordering.Delivery.V1;
+
+namespace Ordering.Api.Grpc;
+
+/// <summary>
+/// The server half of ADR-052's address read. A transport adapter and nothing
+/// else: parse, dispatch, project onto the reply — the same job
+/// <c>OrderEndpoints</c> does for HTTP, under the same §4.2 gate.
+/// </summary>
+/// <remarks>
+/// <b>A permission, where Catalog's gRPC service asks only for
+/// authentication.</b> Catalog serves the same data its anonymous product
+/// listing publishes, so a token there proves the credentials mechanism is
+/// real and a permission would be a role in permission's clothing. This method
+/// answers with somebody's address, and an authenticated caller alone is every
+/// client the realm holds — including the BFF's, which has no business here.
+/// </remarks>
+/// <remarks>
+/// <b>No ownership check, on purpose.</b> §11.4's subject rule compares the
+/// token's subject with the aggregate's customer; a service account's subject
+/// owns no order, so the comparison has no true answer rather than a false
+/// one. The grant is what bounds this instead, which is why ADR-052 sizes it
+/// by what it reads when the secret is stolen.
+/// </remarks>
+/// <remarks>
+/// No alias is needed for the generated type, unlike <c>PricingService</c>'s:
+/// the bare name <c>DeliveryAddresses</c> resolves through the <c>using</c>
+/// because no enclosing namespace of this file has a member by that name.
+/// </remarks>
+[Authorize(OrderingPermissions.DeliveryAddress)]
+internal sealed class DeliveryAddressService(IDispatcher dispatcher) : DeliveryAddresses.DeliveryAddressesBase
+{
+    public override async Task<GetDeliveryAddressReply> Get(
+        GetDeliveryAddressRequest request,
+        ServerCallContext context)
+    {
+        // TryParseExact with "D", not TryParse: the contract says a GUID in its
+        // canonical text form, and TryParse also accepts the N, B and P
+        // formats. Accepting more than the contract states is how two ends stop
+        // agreeing about what the contract is.
+        if (!Guid.TryParseExact(request.OrderId, "D", out Guid orderId))
+            throw new RpcException(new Status(StatusCode.InvalidArgument, "order_id is not a GUID."));
+
+        DeliveryAddressView? address = await dispatcher.QueryAsync(
+            new GetDeliveryAddressQuery(orderId),
+            context.CancellationToken);
+
+        // One status for three facts (ADR-052): no such order, a cancelled
+        // one, and one whose address erasure has cleared. The detail says no
+        // more than the status, so a caller cannot recover the distinction the
+        // handler deliberately collapsed.
+        if (address is null)
+            throw new RpcException(new Status(StatusCode.NotFound, "No delivery address for that order."));
+
+        return new GetDeliveryAddressReply
+        {
+            CustomerId = address.CustomerId.ToString(),
+            Line1 = address.Line1,
+            // proto3 has no null string; the absence of a second line is "".
+            Line2 = address.Line2 ?? string.Empty,
+            City = address.City,
+            PostCode = address.PostalCode,
+            Country = address.Country
+        };
+    }
+}
+```
+
+In `Program.cs`, beside `AddOpenApi`:
+
+```csharp
+// ADR-052's server half. No interceptor: this service has no validator on the
+// query, so nothing throws a ValidationException for one to translate — the
+// only caller-supplied value is parsed above the dispatcher and refused there.
+builder.Services.AddGrpc();
+```
+
+the policy joins the builder:
+
+```csharp
+    .AddPolicy(OrderingPermissions.Cancel, p => p.RequirePermission(OrderingPermissions.Cancel))
+    .AddPolicy(OrderingPermissions.DeliveryAddress, p => p.RequirePermission(OrderingPermissions.DeliveryAddress));
+```
+
+and the service is mapped after the endpoints:
+
+```csharp
+// ADR-052. Reachable only on the Http2 endpoint appsettings.json declares —
+// gRPC needs HTTP/2, and mapping it says nothing about which port serves it.
+// The [Authorize] is on the service class, not here, so it travels with the
+// type rather than with this line.
+app.MapGrpcService<DeliveryAddressService>();
+```
+
+with `using Ordering.Api.Grpc;` at the top of the file.
+
+The second comment block in `Program.cs` — "Two policies, one per
+endpoint" —
+is corrected in place, to "Three policies. Two are an endpoint's; the third is
+ADR-052's gRPC method's, which is a policy an endpoint does not name because
+the method is not an endpoint route."
+
+- [ ] **Step 4: Run; commit**
+
+```bash
+dotnet build Platform.slnx
+dotnet test tests/Ordering.Api.Tests
+```
+
+Expected: 0 warnings, green — including `GrantablePermissionTests`, which
+reflects over `OrderingPermissions` and finds the role Task 3 put in the realm.
+
+```bash
+git add src/Services/Ordering tests/Ordering.Api.Tests
+git commit -m "feat(ordering): DeliveryAddresses.Get under orders:delivery-address"
+```
+
+---
+
+### Task 5: No route reaches the method
+
+ADR-052: "no route in the gateway's file matches that path and no cluster dials
+that port, and a gateway test says so." Catalog has had the first property
+since PR-19 and nothing asserted it; this is the assertion, written over both
+servers so it cannot pass for one and be silent about the other.
+
+**Files:**
+- Create: `tests/Gateway.Api.Tests/GrpcPathTests.cs`
+
+- [ ] **Step 1: Write the failing test**
+
+```csharp
+using System.Net;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Shouldly;
+using Xunit;
+
+namespace Gateway.Api.Tests;
+
+/// <summary>
+/// The edge reaches no gRPC method, from both ends: no route matches a method
+/// path, and no cluster dials a gRPC port (§9.7, ADR-052).
+/// </summary>
+/// <remarks>
+/// §10.2 routes HTTP and the two gRPC surfaces are cluster-internal, on the
+/// same footing as the SQL port. Neither half is visible to any other suite:
+/// the services' own tests call their methods directly, and
+/// <c>RouteConfigurationTests</c> asserts what the route file <i>does</i>
+/// carry. A route added under a path like these would publish an
+/// authenticated-only internal call to the internet with nothing else in this
+/// repository to say so.
+/// </remarks>
+public sealed class GrpcPathTests(GatewayFactory factory) : IClassFixture<GatewayFactory>
+{
+    /// <summary>
+    /// Every gRPC method the platform serves, spelt as
+    /// <c>/&lt;package&gt;.&lt;service&gt;/&lt;method&gt;</c>.
+    /// </summary>
+    /// <remarks>
+    /// By hand, one line per method, on <c>ServiceGroups</c>' terms: reading
+    /// them from the services would mean this project referencing every host,
+    /// which is the coupling §10.1 exists to prevent in test clothing.
+    /// </remarks>
+    private static readonly string[] MethodPaths =
+    [
+        "/catalog.pricing.v1.Pricing/GetPrices",
+        "/ordering.delivery.v1.DeliveryAddresses/Get"
+    ];
+
+    /// <summary>The ports the two gRPC endpoints bind (§9.7, ADR-052).</summary>
+    private const string GrpcPort = ":8081";
+
+    [Theory]
+    [MemberData(nameof(Methods))]
+    public async Task No_route_matches_a_grpc_method_path(string path)
+    {
+        using HttpClient client = factory.CreateClient();
+
+        HttpResponseMessage response = await client.PostAsync(
+            path,
+            new ByteArrayContent([]),
+            TestContext.Current.CancellationToken);
+
+        // 404 and specifically not 401: an unmatched path has no endpoint, so
+        // no policy runs on it. A 401 here would mean a route DID match and
+        // the caller was merely unauthenticated, which is a published path
+        // behind a token rather than no path at all.
+        response.StatusCode.ShouldBe(
+            HttpStatusCode.NotFound,
+            $"'{path}' is a gRPC method and §10.2 routes HTTP (ADR-052)");
+    }
+
+    public static TheoryData<string> Methods()
+    {
+        TheoryData<string> data = [];
+
+        foreach (string path in MethodPaths)
+            data.Add(path);
+
+        return data;
+    }
+
+    [Fact]
+    public void No_cluster_dials_a_grpc_port()
+    {
+        IConfiguration configuration = factory.Services.GetRequiredService<IConfiguration>();
+
+        (string Cluster, string Address)[] destinations =
+        [
+            .. configuration.GetSection("ReverseProxy:Clusters").GetChildren()
+                .SelectMany(cluster => cluster.GetSection("Destinations").GetChildren()
+                    .Select(destination => (Cluster: cluster.Key, Address: destination["Address"] ?? string.Empty)))
+        ];
+
+        // The guard the loop below rests on: over an empty set it passes and
+        // says nothing, which is what a renamed configuration section produces.
+        destinations.ShouldNotBeEmpty();
+
+        foreach ((string cluster, string address) in destinations)
+        {
+            address.ShouldNotContain(
+                GrpcPort,
+                Case.Sensitive,
+                $"cluster '{cluster}' dials a gRPC port; the proxy speaks HTTP/1.1 to its destinations " +
+                "and an Http2-only endpoint answers that with a 400 (§9.7)");
+        }
+    }
+}
+```
+
+- [ ] **Step 2: Run**
+
+```bash
+dotnet test tests/Gateway.Api.Tests --filter "FullyQualifiedName~GrpcPathTests"
+```
+
+Expected: **green on the first run**, and that is the point rather than a
+problem — this is a property the route file already has and nothing asserted.
+Prove it by mutation rather than by the run: add a temporary route matching
+`/{**catch-all}` to `src/Gateway/Gateway.Api/appsettings.json`, see
+`No_route_matches_a_grpc_method_path` fail on both paths, and revert it. Do the
+same for the second test by pointing the `catalog` cluster at
+`http://catalog-api:8081/`. A test that has never once failed is a test whose
+subject is unproven.
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add tests/Gateway.Api.Tests/GrpcPathTests.cs
+git commit -m "test(gateway): no route matches a gRPC method path and no cluster dials one"
+```
+
+---
+
+### Task 6: The client, proved both ways against a token Keycloak issued
+
+ADR-052: "each client is proved both ways against a token Keycloak issued:
+accepted with the grant, refused without." The realm assertions of Task 3 are
+static; this is the live half, and it is the only place the `permission`
+mapper, the default scope and the service-account role assignment are exercised
+together.
+
+**Files:**
+- Modify: `tests/Web.Bff.Tests/KeycloakFixture.cs` — the worker's client id
+  and
+  secret as constants beside the realm's
+- Modify: `tests/Web.Bff.Tests/KeycloakIdentityTests.cs` — two tests, a
+  rename, a corrected comment and a second route on the minimal host
+
+- [ ] **Step 1: Write the failing tests**
+
+In `KeycloakFixture`, beside `Realm`:
+
+```csharp
+    /// <summary>
+    /// ADR-052's second credentialed client and the documented local default
+    /// it authenticates with (§14.1). Here rather than in each test class for
+    /// the reason the admin pair above is: the realm file and this fixture are
+    /// the two halves that have to agree.
+    /// </summary>
+    public const string WorkerClient = "shipping-worker";
+    public const string WorkerSecret = "local-dev-shipping-secret";
+```
+
+In `KeycloakIdentityTests`, the minimal host gains the policy and a second
+route. `ServiceValidatingTheRealm` becomes:
+
+```csharp
+    /// <summary>
+    /// The permission ADR-052 gives the address reader, spelt as a literal.
+    /// </summary>
+    /// <remarks>
+    /// <c>OrderingPermissions.DeliveryAddress</c> is the owner and this suite
+    /// may not reference Ordering to read it — <c>RealmClientTests</c>' own
+    /// asymmetry, one constant over. The realm's closed-set assertion in
+    /// <c>Common.Web.Tests</c> and <c>GrantablePermissionTests</c> in
+    /// <c>Ordering.Api.Tests</c> are what tie the two spellings together.
+    /// </remarks>
+    private const string DeliveryAddress = "orders:delivery-address";
+
+    private async Task<WebApplication> ServiceValidatingTheRealm()
+    {
+        // Development, because the container speaks plain HTTP:
+        // AddJwtAuthentication refuses a non-https authority outside
+        // Development and RequireHttpsMetadata would stop the discovery
+        // document being fetched at all (§11.3). Both are the same rule, and
+        // the container is the case they carve out.
+        WebApplicationBuilder builder = WebApplication.CreateBuilder(new WebApplicationOptions
+        {
+            EnvironmentName = Environments.Development
+        });
+
+        builder.Logging.ClearProviders();
+        builder.WebHost.UseTestServer();
+        builder.Configuration[AuthenticationExtensions.AuthorityKey] = keycloak.Authority;
+
+        // The platform's own registration, not a copy of it. A hand-rolled
+        // AddJwtBearer here would validate whatever this file decided to
+        // validate and prove nothing about what a service does.
+        builder.AddJwtAuthentication();
+
+        // RequirePermission, not RequireClaim: the claim type is Common.Web's
+        // (§11.4), so this policy and the one Ordering registers cannot drift
+        // apart about where a permission lives in a token.
+        builder.Services
+            .AddAuthorizationBuilder()
+            .AddPolicy(DeliveryAddress, p => p.RequirePermission(DeliveryAddress));
+
+        WebApplication app = builder.Build();
+        app.UseAuthentication();
+        app.UseAuthorization();
+        app.MapGet("/protected", () => Results.Ok()).RequireAuthorization();
+        app.MapGet("/address", () => Results.Ok()).RequireAuthorization(DeliveryAddress);
+
+        await app.StartAsync(TestContext.Current.CancellationToken);
+
+        return app;
+    }
+```
+
+The comment ADR-052 names is **cut and rewritten**, and the test renamed for
+the client it is actually about:
+
+```csharp
+    [Fact]
+    public async Task The_BFF_service_account_carries_no_permission_claim()
+    {
+        (_, string token) = await keycloak.ClientCredentialsAsync(BffClient, BffSecret);
+
+        JwtSecurityToken jwt = Tokens.ReadJwtToken(token);
+
+        // §11.4's vocabulary is a person's by default, and this client is the
+        // case that holds: the BFF's hop reads what a product listing already
+        // publishes, so Catalog's gRPC service asks for authentication and
+        // deliberately not a permission. ADR-052 names the exception rather
+        // than widening the rule — a host holds one only where the read
+        // crosses subjects, and this one does not.
+        jwt.Claims.ShouldNotContain(c => c.Type == PermissionClaim.Type);
+    }
+
+    [Fact]
+    public async Task The_worker_client_is_issued_exactly_the_grant_the_record_names()
+    {
+        (bool granted, string token) = await keycloak.ClientCredentialsAsync(
+            KeycloakFixture.WorkerClient,
+            KeycloakFixture.WorkerSecret);
+
+        granted.ShouldBeTrue(
+            "the realm must hold shipping-worker with service accounts enabled (ADR-052)");
+
+        JwtSecurityToken jwt = Tokens.ReadJwtToken(token);
+
+        // The audience first: without it the permission below is carried in a
+        // token no service validates, and the read fails for the other reason.
+        jwt.Audiences.ShouldContain(AuthenticationExtensions.Audience);
+
+        // EXACTLY, not ShouldContain. ADR-052 sizes this credential by what it
+        // reads when it is stolen and makes the client refuse a token whose set
+        // here is wider than the one role — so a realm that granted more has to
+        // fail somewhere, and this is the assertion that says the realm did
+        // not. Keycloak's own defaults live in realm_access and on the account
+        // client, which this mapper does not read.
+        string[] permissions =
+        [
+            .. jwt.Claims.Where(c => c.Type == PermissionClaim.Type).Select(c => c.Value)
+        ];
+
+        permissions.ShouldBe(["orders:delivery-address"]);
+    }
+
+    [Fact]
+    public async Task A_service_requiring_the_permission_accepts_the_worker_and_refuses_the_BFF()
+    {
+        (_, string worker) = await keycloak.ClientCredentialsAsync(
+            KeycloakFixture.WorkerClient,
+            KeycloakFixture.WorkerSecret);
+        (_, string bff) = await keycloak.ClientCredentialsAsync(BffClient, BffSecret);
+
+        await using WebApplication service = await ServiceValidatingTheRealm();
+        using HttpClient client = service.GetTestClient();
+
+        (await StatusOfAsync(client, worker)).ShouldBe(HttpStatusCode.OK);
+
+        // The refusal, and the BFF rather than an unrelated client on purpose:
+        // its token carries the same issuer, the same signing key AND the same
+        // audience, so a 403 here can only be the permission doing the work.
+        // An unrelated client would be refused at the audience and prove
+        // nothing about the grant (ADR-052).
+        (await StatusOfAsync(client, bff)).ShouldBe(HttpStatusCode.Forbidden);
+    }
+
+    private static async Task<HttpStatusCode> StatusOfAsync(HttpClient client, string token)
+    {
+        using HttpRequestMessage request = new(HttpMethod.Get, "/address");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        using HttpResponseMessage response = await client.SendAsync(
+            request,
+            TestContext.Current.CancellationToken);
+
+        return response.StatusCode;
+    }
+```
+
+The class's own `<remarks>` gains one sentence, because its subject widened:
+"Since ADR-052 the realm holds two credentialed clients, and the second is
+proved both ways here — a grant is a claim about what a token carries, and
+only a real Keycloak carries one."
+
+- [ ] **Step 2: Run to see them fail**
+
+```bash
+dotnet test tests/Web.Bff.Tests --filter "FullyQualifiedName~KeycloakIdentityTests"
+```
+
+This class is in `KeycloakCollection`, which carries
+`[Trait("Category", "Integration")]` — it needs a running Docker daemon and is
+never skipped without one (§12.4). Expected, **with Task 3's realm reverted**
+as a mutation check: `granted` false and a 401 where a 403 is expected. With
+Task 3 in place: green.
+
+- [ ] **Step 3: Prove the negative half is not vacuous**
+
+Temporarily delete the `service-account-shipping-worker` user from the realm
+export, re-run, and expect
+`The_worker_client_is_issued_exactly_the_grant_the_record_names` to fail with
+an empty permission set and
+`A_service_requiring_the_permission_accepts_the_worker_and_refuses_the_BFF` to
+answer 403 for both tokens. Restore the user. This is the only mutation that
+tells a realm which grants the role from one that merely holds it.
+
+- [ ] **Step 4: Commit**
+
+```bash
+dotnet test tests/Web.Bff.Tests
+git add tests/Web.Bff.Tests
+git commit -m "test(identity): shipping-worker's grant is proved both ways against a real Keycloak"
+```
+
+---
+
+### Task 7: The chapters, the two charts, and the two maps
+
+**Files:**
+- Modify: `docs/backend-architecture/11-identity-authorization.md` — §11.5's
+  table of realm objects and the callout above it
+- Modify: `docs/backend-architecture/15-cicd-deployment.md` — §15.1's
+  sentence
+  and §15.4's required-for-some-hosts paragraph and three rows
+- Modify: `docs/secrets.md` — the rotation sentence, the client-secret
+  procedure and the local-development exception table
+- Modify: `docs/repo-map.md` — Catalog's and Ordering's rows
+- Modify: `CLAUDE.md` — the tree's Catalog and Ordering lines
+- Modify: `deploy/helm/ordering/values.yaml` — the header comment and the
+  second port
+- Modify: `deploy/helm/catalog/Chart.yaml` and `deploy/helm/catalog/values.yaml`
+  — the two "one gRPC server" claims
+
+- [ ] **Step 1: §11.5's table of realm objects**
+
+The row after `web-bff`'s:
+
+```
+| Client `shipping-worker` | Service accounts enabled, `commerce-api` a **default** client scope, the client role `orders:delivery-address` on its service account | The second synchronous coupling, and the first grant a host holds ([ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)). The role is what the `permission` mapper emits for a service account, so without it the token is valid and the read is 403 |
+```
+
+The callout above the table ends "Each client joins the table below with the
+service that uses it." — amend to "Shipping's joined it with Ordering's method
+rather than with Shipping, because the grant is the address owner's to serve;
+Notifications' is still owed."
+
+- [ ] **Step 2: §15.1 and §15.4**
+
+In §15.1, "and one client secret in the whole platform (§11.5)" becomes "and
+two client secrets in the whole platform (§11.5, ADR-052)".
+
+In §15.4, the third paragraph's "which in this blueprint is **every host except
+the BFF**" becomes "which in this blueprint is the BFF and, since
+[ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md),
+Shipping's worker — every other host reaches its peers over the broker and
+reads local projections". The sentence "One set of credentials in the whole
+platform is what "async by default" looks like in the secrets inventory." is
+cut and replaced by "Two sets, and the count is the point: it is the number of
+synchronous couplings in the platform, and it moved by a decision that said
+what the second one reads when it is stolen."
+
+The three rows' Required column names the obligation's shape rather than
+today's snapshot, because §15.4's own rule is that **a key joins when a host's
+code reads it** and Shipping's host reads none of these until the pull request
+that gives it the address read:
+
+```
+| `Identity__Client__ClientId` | Config | Helm `identity.clientId` | ✓ **for a host that calls a peer** — the BFF ([§9.7](09-messaging.md), [§11.5](11-identity-authorization.md)), and Shipping's worker from the pull request that gives it ADR-052's address read |
+| `Identity__Client__Scope` | Config | Helm `identity.scope` | ✓ **for a host that calls a peer**, as above |
+| `Identity__Client__ClientSecret` | Secret | `web-bff-identity` secret; one per host | ✓ **for a host that calls a peer**, as above |
+```
+
+- [ ] **Step 3: `docs/secrets.md`**
+
+The *Rotation* opening sentence gains the second host:
+
+"**A running host holds a datastore credential, or the credential of an
+outbound call it makes itself** — `Identity__Client__ClientSecret`, for the
+BFF
+and, since [ADR-052](backend-architecture/adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md),
+for Shipping's worker, the two hosts that call a peer synchronously (§9.7,
+§11.5, ADR-017), and `PaymentProvider__ApiKey`, for Payments' provider behind
+§3.2's anti-corruption layer (§15.4)."
+
+*A client secret*'s step 4 is per host rather than the BFF's alone:
+
+"4. Confirm the host is authenticating. For the BFF that is pricing calls to
+Catalog succeeding; for Shipping's worker it is shipments leaving `Pending`,
+and `shipping.address.refused` staying flat — ADR-052 counts a refused
+credential separately from an outage for exactly this moment."
+
+The local-development exception table gains a row, in the PR that mints the
+secret:
+
+```
+| Shipping worker client secret | `local-dev-shipping-secret`, in the realm export; the seam in front of it arrives with the host that reads it |
+```
+
+and the paragraph below the table, which explains which rows carry a `${…}`
+seam, gains one clause: "Shipping's client secret has no variable in front of
+it yet for a reason of sequence rather than of design — the realm holds the
+value from the change that minted the client, and the Compose seam arrives with
+the host that posts it."
+
+- [ ] **Step 4: The two maps**
+
+`docs/repo-map.md`:
+
+```
+src/Services/Catalog/        §4.1's project set — Domain, Application,
+                             Infrastructure, Migrator, Api. The first real
+                             service, the scaffold's template, and the first
+                             of the platform's two gRPC servers
+```
+
+and Ordering's row gains a final clause: "…and, since ADR-052,
+`DeliveryAddresses.Get` on a second HTTP/2-only port — the address a Shipping
+worker reads, behind a permission no person holds".
+
+`CLAUDE.md`'s tree:
+
+```
+src/Services/Catalog/        §4.1's five projects; the first gRPC server
+src/Services/Ordering/       the same five, plus §5's aggregate, §9.6's saga
+                             and ADR-052's gRPC address read
+```
+
+- [ ] **Step 5: The two charts**
+
+`deploy/helm/ordering/values.yaml`'s header and `ports`:
+
+```yaml
+# Ordering, and the chart §15.3 prints. Two ports since ADR-052: §10.2's REST
+# surface, and the HTTP/2-only endpoint that serves DeliveryAddresses.Get to a
+# Shipping worker. A cleartext Kestrel endpoint cannot serve HTTP/1.1 and h2c
+# at once — measured, and argued in Ordering.Api/appsettings.json.
+```
+
+```yaml
+ports:
+  - name: http
+    containerPort: 8080
+  # 8081 is cluster-internal: no route reaches it (§10.2 routes HTTP, and
+  # Gateway.Api.Tests asserts it), the Ingress is disabled, and the RPC on it
+  # requires orders:delivery-address (ADR-052).
+  - name: grpc
+    containerPort: 8081
+```
+
+**It lands here rather than in PR-7, and the reason is whose chart it is.**
+PR-7 ships *Shipping's* chart; Ordering's belongs to Ordering's slice, and the
+statement it makes — "Ordering serves no gRPC" — stops being true in this
+pull
+request and in no other. `probes.probePort` stays `http`: the health endpoints
+are on the REST surface, and an HTTP/2-only endpoint answers an HTTP/1.1 probe
+with a 400, which reads as a dead pod.
+
+`deploy/helm/catalog/Chart.yaml`'s description: "Catalog (§4.1) — its API,
+its
+migrator hook, and the first of the platform's two gRPC servers (§9.7,
+ADR-052)." `deploy/helm/catalog/values.yaml`'s `ports` comment keeps its
+measurement and loses its claim of uniqueness: "…so Catalog declares a second,
+HTTP/2-only endpoint for the BFF's synchronous hop (§9.7). Ordering declares
+one of its own for ADR-052's address read."
+
+**No Helm gate goes red.** `smoke.sh`'s credential assertions count charts
+declaring `clientCredentials: true` and workloads rendering
+`Identity__Client__ClientSecret`; neither chart gains one here, and Shipping has
+no chart until PR-7. `_helpers.tpl`'s `fail` naming `web-bff` is untouched for
+the same reason. Both are PR-7's, which is where the credentialed chart
+arrives, and this plan says so rather than leaving a builder to learn it from
+CI.
+
+- [ ] **Step 6: Audit; commit**
+
+```bash
+bash deploy/helm/smoke.sh
+py -3.12 deploy/observability/check.py
+```
+
+Expected: both clean — the first because no credential capability moved, the
+second because no alert or runbook did. Then run `/check-links` and
+`/validate-blueprint`.
+
+```bash
+git add docs deploy/helm CLAUDE.md
+git commit -m "docs: §11.5's realm table, §15.4's client rows and the two maps name the second credentialed host"
+```
+
+---
+
+### Task 8: Verification and the PR
+
+- [ ] `dotnet build Platform.slnx` — 0 warnings.
+- [ ] `dotnet test Platform.slnx` — green, with a running Docker daemon. The
+  three container suites this PR touches are `Ordering.Api.Tests`,
+  `Web.Bff.Tests`' Keycloak collection and `Common.Web.Tests`.
+- [ ] The gates none of the above runs, each on its own:
+
+```bash
+py -3.12 -m unittest discover -s deploy/keycloak
+py -3.12 deploy/keycloak/realm_check.py check --kind local --realm deploy/compose/keycloak/realm-export.json
+py -3.12 .github/secret-scan/secret_scan.py
+py -3.12 .github/comment-gate/comment_gate.py
+bash deploy/helm/smoke.sh
+```
+
+- [ ] Under Compose, with the realm imported fresh (`docker compose down -v`
+  first, because Keycloak imports once): fetch a `shipping-worker` token and
+  call the method by hand.
+
+```bash
+TOKEN=$(curl -s -d grant_type=client_credentials -d client_id=shipping-worker \
+  -d client_secret=local-dev-shipping-secret \
+  http://localhost:8080/realms/commerce/protocol/openid-connect/token | jq -r .access_token)
+grpcurl -plaintext -H "authorization: Bearer $TOKEN" \
+  -d '{"order_id":"<a placed order>"}' \
+  localhost:5101 ordering.delivery.v1.DeliveryAddresses/Get
+```
+
+The Compose unit publishes 8080 only, so 8081 is reachable from another
+container and not from the host — run `grpcurl` from a container on the
+Compose network, or publish the port temporarily and do not commit that. Record
+the reply, and the `PermissionDenied` a `demo` token gets, in the PR body.
+
+- [ ] PR body: `| Class | A+D |`, touch set from the Global Constraints, one
+  path per cell and the reasons under the table. Then `/ship`.
+
+## Self-review
+
+**Spec coverage.**
+
+- Section 2's bullet — Ordering gains `DeliveryAddresses.Get` under
+  `orders:delivery-address`, and the realm gains `shipping-worker` holding that
+  one role → Tasks 1, 3 and 4.
+- Section 3's row — `delivery_addresses.proto` and its service (Tasks 1, 4),
+  the query behind it (Task 2), the permission (Task 4), the realm's role and
+  client (Task 3), `realm_check.py`'s predicate (Task 3), the gateway test
+  (Task 5), `docs/secrets.md`'s rows (Task 7), the Keycloak-issued-token tests
+  in both directions (Task 6). Class A+D, and no Shipping path is touched.
+- Section 9's address port, read from the server's side — ADR-052's five
+  outcomes: the answer (Task 4's third test), `NotFound` for each of the three
+  facts that mean "does not exist" (Task 2's handler, Task 4's three tests),
+  `Unauthenticated` and `PermissionDenied` (Task 4). The transient and refused
+  classifications are the *client's* mapping and are PR-5's.
+- Section 10's client secret — minted in the realm with its documented local
+  default and its `docs/secrets.md` rows (Tasks 3 and 7). Of the five
+  places, the
+  inventory is met here; Compose and the fixture arrive with the host that
+  reads the key (PR-5) and the chart's with the chart (PR-7).
+- Section 12's five tests — `Unauthenticated`, `PermissionDenied` with a
+  user's
+  token holding every user permission, and the address with the client's
+  (Task 4); a token Keycloak issued to `shipping-worker` accepted and one
+  issued to a client without the role refused (Task 6).
+- Section 13's chapters — §11.5's table of realm objects, `docs/secrets.md`'s
+  rotation and local-default rows, §15.4's client rows → Task 7.
+
+**Gates this PR turns red, and the task that turns each green.**
+
+| Gate | Red because | Green in |
+|---|---|---|
+| `RealmImportTests.The_permission_vocabulary_is_a_closed_set_of_client_roles` | `orders:delivery-address` is a seventh role | Task 3, step 1 |
+| `RealmImportTests.No_client_ships_a_secret_but_the_one_whose_grant_needs_one` | a second client ships one; renamed to `…_the_ones_whose_grants_need_one` | Task 3, step 1 |
+| `RealmClientTests.It_is_the_only_service_account_client_in_the_realm` | a second service-account client; renamed to `The_service_account_clients_are_exactly_the_hosts_that_call_a_peer` | Task 3, step 1 |
+| `Ordering.Api.Tests.GrantablePermissionTests` | reflection finds a constant the realm cannot grant | Task 3, which lands the role before Task 4 adds the constant |
+| `.github/secret-scan` | a new local default in the realm export | Task 3, step 5 |
+| `deploy/keycloak/realm_check.py` | its new predicate requires exactly one `shipping-worker` | Task 3, steps 2–3 |
+| `KeycloakIdentityTests.The_service_account_carries_no_permission_claim` | its comment says the vocabulary "belongs to people, not to hosts"; renamed to `The_BFF_service_account_carries_no_permission_claim` and the comment cut and rewritten | Task 6, step 1 |
+
+`_helpers.tpl`'s `fail` and `smoke.sh`'s four credential assertions are
+**PR-7's**, and this PR turns neither red: they are about a chart declaring
+client credentials, Shipping has no chart until PR-7, and no chart here gains
+the capability.
+
+**Type consistency.** `GetDeliveryAddressRequest`, `GetDeliveryAddressReply`
+and `DeliveryAddresses.DeliveryAddressesBase` are produced by Task 1 and
+consumed by Tasks 4 and 5 under those spellings; the reply's `post_code` field
+is generated as `PostCode` and is spelt that way in every consumer.
+`GetDeliveryAddressQuery` and `DeliveryAddressView` are produced by Task 2 and
+consumed by Task 4; `DeliveryAddressView.PostalCode` keeps the domain's
+spelling and is mapped onto `PostCode` in one place.
+`OrderingPermissions.DeliveryAddress` is produced by Task 4 and read by Task 4's
+tests and by `GrantablePermissionTests` through reflection;
+`KeycloakFixture.WorkerClient` and `.WorkerSecret` are produced by Task 6 and
+read in the same task. `realm_check.WORKER_CLIENT` and `check_worker_client`
+are produced and consumed in Task 3. The realm's `shipping-worker` and
+`local-dev-shipping-secret` are written once in Task 3 and named as literals in
+`RealmImportTests`, `RealmClientTests` and `KeycloakFixture`, each with a
+comment saying why the suite cannot read the owner's constant.
+
+**Left to a later PR.**
+
+- **Every caller.** `IDeliveryAddressSource`, `AddressHop`, the generated
+  client, `ClientCredentialsHandler` inside its resilience pipeline and
+  `shipping.address.refused` are PR-5's. So are the three `Identity__Client__*`
+  keys and `AddressSource__BaseUrl` on Shipping's Compose unit and test
+  fixture, `.env.example`'s `SHIPPING_CLIENT_SECRET`, and a
+  `RealmClientTests`-shaped assertion that the realm and that unit hold the
+  same secret — the host that owns the client id is the side that makes it.
+- **§9.7's sentence** that the pricing hop is the platform's one synchronous
+  call between its services, **§2.2's diagram**, **`deploy/compose/README.md`**
+  and **`docs/runbooks/latency.md`** all describe a *call*, and no code makes
+  the second one until PR-5. Spec section 13 assigns §2.2 to PR-5, and the
+  other three go with it.
+- **§4.1's tree comment and `ServiceOptions`' remark** about the one host with
+  client credentials are PR-3's, per spec section 13.
+- **Whether `DeliveryAddresses.Get` earns a linked-file contract** of
+  ADR-023's kind is ADR-052's explicit "judged with Shipping": only a consumer
+  can author one, and there is none until PR-5.
+- **§11.7's erasure consumer**, which is what will actually clear an address in
+  place. This PR designs against it — the handler's blank-address branch and
+  its test — and builds none of it, because §11.7's extension is owed whole.
+- **`deploy/helm/shipping`**, the `carrier` and client-credentials
+  capabilities, and `smoke.sh`'s lists: PR-7's.
