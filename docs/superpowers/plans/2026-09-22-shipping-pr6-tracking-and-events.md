@@ -301,8 +301,10 @@ public sealed class JurisdictionOptionsTests
             .AddInMemoryCollection(
                 new Dictionary<string, string?>
                 {
-                    ["Jurisdiction:AddressRetention"] = ShippingWorkerFactory.InventedAddressRetention,
-                    ["Jurisdiction:TrackingRetention"] = ShippingWorkerFactory.InventedTrackingRetention
+                    [$"{ShippingJurisdictionOptions.SectionName}:AddressRetention"] =
+                        ShippingWorkerFactory.InventedAddressRetention,
+                    [$"{ShippingJurisdictionOptions.SectionName}:TrackingRetention"] =
+                        ShippingWorkerFactory.InventedTrackingRetention
                 })
             .Build());
 
