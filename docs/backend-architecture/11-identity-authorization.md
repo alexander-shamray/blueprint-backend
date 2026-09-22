@@ -1560,9 +1560,9 @@ Rules for each service's consumer:
   financial record preserved. A notification log row has its customer id
   replaced and keeps the rest, because
   [ADR-053](adr/ADR-053-a-jurisdiction-is-a-value-the-deployment-is-given.md)
-  makes it evidence of what was said. Which a record takes is the owning
-  service's call, recorded as an ADR where one has been; nobody else makes
-  it.
+  makes it evidence of what was said. Which of the two a record takes is the
+  owning service's call, recorded in an ADR where one has been made; nobody
+  else makes it.
 - **Write an audit record** of what was erased and when. That record itself
   contains no personal data — a subject ID hash, a timestamp, a count.
 - **Idempotent.** The message is delivered at least once, and a second erasure
