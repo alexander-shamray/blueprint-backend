@@ -59,8 +59,8 @@ PR-6).
   Infrastructure projects for exactly that. **D** is the Compose unit and the
   three documents. **E** is the `.csproj` under
   `tests/Platform.IntegrationTests/`, which gains `Testcontainers.MsSql`,
-  `Testcontainers.RabbitMq`,
-  `Testcontainers.Redis`, `MassTransit`, `Microsoft.Extensions.DependencyInjection`
+  `Testcontainers.RabbitMq`, `Testcontainers.Redis`, `MassTransit`,
+  `Microsoft.Extensions.DependencyInjection.Abstractions`
   and project references to `Ordering.TestSupport` and `Inventory.TestSupport` —
   every package already pinned in `Directory.Packages.props`, so **no
   `Version=` attribute, no `Directory.Packages.props` change and no Appendix B
@@ -121,21 +121,25 @@ PR-6).
   booked shipment awaiting its poll, and one whose cancellation the carrier
   has not answered — only become a waiting population with the tracking
   worker, so a gauge landing in PR-5 would have been rewritten here. Task 6
-  adds it, on PR-2's `Shipping.Carrier` meter through
+  adds it, on PR-2's `Shipping.Outbound` meter through
   `CarrierMetrics.MeterName`, in PR-5's `AddressMetrics` shape: a class of its
   own on the one meter rather than a second instrument bolted to
   `CarrierMetrics`' constructor.
 - **No new meter.** §13.2's export names meters one by one and PR-2 already
-  added `.AddMeter("Shipping.Carrier")` and its entry in
+  added `.AddMeter("Shipping.Outbound")` and its entry in
   `tests/Common.Web.Tests/ObservabilityTests.cs`. This PR adds an instrument to
   that meter and touches neither file.
 - **No new alert rule and no runbook.** §13.6's two rules and the runbook they
   share are PR-7's, on the spec's section 3 row; a rule here would name a chart
   that does not exist.
-- **Four of `docs/secrets.md`'s five places do not apply.** The two keys this
-  PR adds are configuration and not credentials, so they take no rotation row
-  and no local-development exception row; they take Compose, §15.4's inventory
-  and the test fixture, and the chart's place is PR-7's.
+- **One of `docs/secrets.md`'s five places does not apply, and one is
+  deferred.** The two keys this PR adds are configuration and not credentials,
+  so they take no rotation row and no local-development exception row — but
+  those are not among the five. Three of the five are this pull request's:
+  Compose, §15.4's inventory and the test fixture. The Aspire row is the one
+  that does not apply, because §14.2 is not adopted. The Helm values row is
+  deferred to PR-7, because a values name written before the chart exists is a
+  second thing to reconcile.
 - **The blueprint's vocabulary**: despatch and despatched in prose,
   `Dispatched` in identifiers, because the contract is `ShipmentDispatched`.
 - Comments say why and cite the owner — a section, an ADR or a symbol, never a
@@ -201,18 +205,14 @@ using Xunit;
 namespace Shipping.Worker.Tests;
 
 /// <summary>
-/// ADR-053 rule 1, from the side that matters: a statutory window is a value
-/// the deployment is given, and a missing or impossible one is §15.4's failure
-/// at start rather than a number this service picks for a regulator.
+/// ADR-053 rule 1, from the side that matters: a statutory window is a value the
+/// deployment is given, and a missing or impossible one is §15.4's failure at
+/// start rather than a number this service picks for a regulator.
 /// </summary>
 /// <remarks>
-/// <b>Both halves are needed and neither is the other's duplicate.</b>
-/// <c>[Required]</c> catches the key nobody supplied; the range catches the
-/// key supplied as <c>00:00:00</c>, which <c>[Required]</c> cannot see because
-/// a bound <c>TimeSpan</c> is never null — the trap that makes a stated bound
-/// part of the rule rather than decoration. The exception type is not asserted
-/// on the host half, because a host that refuses to start races its own
-/// disposal and the real exception is sometimes destroyed rather than wrapped.
+/// <c>[Required]</c> catches the key nobody supplied; the range catches the key
+/// supplied as <c>00:00:00</c>, which a bound <c>TimeSpan</c> hides from it. A
+/// host refusing to start races its disposal, so no exception type is asserted.
 /// </remarks>
 public sealed class JurisdictionOptionsTests
 {
@@ -334,16 +334,9 @@ namespace Shipping.Infrastructure.Retention;
 /// so it holds no language set and no time zone.
 /// </summary>
 /// <remarks>
-/// <b>It passes §15.4's test for an options type</b>, which is whether any
-/// member would differ between Compose, the fixture and production: ADR-053
-/// rule 2 gives the test deployment its own invented windows, so both members
-/// differ in all three.
-/// <para>
-/// <b>Neither window joins <c>RetentionPolicy</c>.</b> That record's windows
-/// are housekeeping and one of them is §8.5's guarantee; these are statutory,
-/// and ADR-053 says a statutory window never joins them. The two ceilings agree
-/// at ten years by separate arguments rather than by sharing a constant.
-/// </para>
+/// It passes §15.4's test — every member differs between Compose, the fixture
+/// and production, which ADR-053 rule 2 arranges. Neither window joins
+/// <c>RetentionPolicy</c>'s housekeeping ones, which ADR-053 keeps apart.
 /// </remarks>
 public sealed class ShippingJurisdictionOptions
 {
@@ -484,6 +477,7 @@ does not join `RetentionPolicy`, citing ADR-053.
   PR-5 added `ReleaseClaim` into that file rather than beside it, so a second
   file here would make this service's aggregate the only partial one in the
   solution to save nothing.
+- Create: `src/Services/Shipping/Shipping.Application/Shipments/ShipmentErrors.cs`
 - Create: `src/Services/Shipping/Shipping.Application/Tracking/ApplyTrackingPageCommand.cs`
 - Create: `src/Services/Shipping/Shipping.Application/Tracking/ApplyTrackingPageHandler.cs`
 - Test: `tests/Shipping.Domain.Tests/ShipmentPollTests.cs`
@@ -500,10 +494,13 @@ does not join `RetentionPolicy`, citing ADR-053.
 
 ```csharp
 namespace Shipping.Domain.Shipments;
-public sealed class Shipment            // PR-1's type; one member added
+public sealed class Shipment            // exists; one member added here
 {
     public void PollApplied(DateTimeOffset nextPollAt);
 }
+
+namespace Shipping.Application.Shipments;
+public static class ShipmentErrors { public static readonly Error NotFound; }
 
 namespace Shipping.Application.Tracking;
 public sealed record ApplyTrackingPageCommand(
@@ -681,7 +678,7 @@ public class ApplyTrackingPageHandlerTests
         Result result = await Handle(new FakeShipments(null), ShipmentId.New(), []);
 
         result.IsFailure.ShouldBeTrue();
-        result.Error.Code.ShouldBe("shipment.not_found");
+        result.Error.ShouldBe(ShipmentErrors.NotFound);
     }
 
     private static Shipment Booked()
@@ -701,15 +698,14 @@ public class ApplyTrackingPageHandlerTests
             TestContext.Current.CancellationToken);
 
     /// <summary>
-    /// <c>IShipmentRepository</c>, whole: three members, and the two this
-    /// handler never calls throw rather than answering, so a handler that
-    /// started reading by order would fail here rather than pass.
+    /// <c>IShipmentRepository</c>, whole: the two members this handler never
+    /// calls throw rather than answering, so a handler that started reading by
+    /// order would fail here rather than pass.
     /// </summary>
     /// <remarks>
-    /// Nested inside this class deliberately, because this assembly already
-    /// holds a <c>FakeShipments</c> that records what was added and this one
-    /// answers one shipment: two doubles for two questions, not one shared
-    /// helper, on the rule the Payments suites follow.
+    /// Nested deliberately: this assembly already holds a <c>FakeShipments</c>
+    /// that records what was added, and this one answers one shipment — two
+    /// doubles for two questions rather than one shared helper.
     /// </remarks>
     private sealed class FakeShipments(Shipment? shipment) : IShipmentRepository
     {
@@ -731,8 +727,8 @@ dotnet test tests/Shipping.Domain.Tests --filter "FullyQualifiedName~ShipmentPol
 dotnet test tests/Shipping.Application.Tests --filter "FullyQualifiedName~ApplyTrackingPageHandlerTests"
 ```
 
-Expected: compile failure on `PollApplied`, `ApplyTrackingPageCommand` and
-`ApplyTrackingPageHandler`.
+Expected: compile failure on `PollApplied`, `ShipmentErrors`,
+`ApplyTrackingPageCommand` and `ApplyTrackingPageHandler`.
 
 - [ ] **Step 4: Add the one domain member**
 
@@ -740,24 +736,14 @@ In `Shipment.cs`, below `Record` and beside PR-5's `ReleaseClaim`:
 
 ```csharp
     /// <summary>
-    /// A tracking pass has been applied to this shipment. The claim is
-    /// released, the failed-pass counter is cleared, and the next poll is due
-    /// at <paramref name="nextPollAt"/> — unless the shipment is terminal, in
-    /// which case there is nothing further to learn and it is never polled
-    /// again (spec, section 4).
+    /// A tracking pass has been applied: the claim released, the failed-pass
+    /// counter cleared, the next poll due at <paramref name="nextPollAt"/>
+    /// unless the shipment is terminal (spec, section 4).
     /// </summary>
     /// <remarks>
-    /// The release is <see cref="ReleaseClaim"/>'s and not a second copy of its
-    /// two assignments: one row, one lease, one counter, and two members that
-    /// drop them differently is the drift that makes a lease outlive a pass.
-    /// <para>
-    /// <c>Attempts</c> counts consecutive failed passes over this row whichever
-    /// worker took them — the fulfilment worker's <c>FulfilmentClaims.FailSql</c>
-    /// and the tracking worker's <c>TrackingClaims.FailSql</c> increment the same
-    /// column. A carrier that is down fails the booking and the poll alike, so
-    /// one counter is what the shared ladder wants and what the waiting gauge
-    /// reads.
-    /// </para>
+    /// The release is <see cref="ReleaseClaim"/>'s rather than a second copy, so
+    /// no second member drops the lease differently. <c>Attempts</c> counts
+    /// failed passes whichever worker took them: one carrier fails both.
     /// </remarks>
     public void PollApplied(DateTimeOffset nextPollAt)
     {
@@ -766,7 +752,36 @@ In `Shipment.cs`, below `Record` and beside PR-5's `ReleaseClaim`:
     }
 ```
 
-- [ ] **Step 5: Write the command and its handler**
+- [ ] **Step 5: Write the catalogue, the command and its handler**
+
+`ShipmentErrors.cs` — this service's first `Error`, and therefore its
+catalogue. `Error`'s own remarks make the catalogue the rule rather than a
+convention: `Code` is a metric dimension, so its value set has to be closed and
+readable in one file, and an `Error` constructed at the call site is a value set
+nobody can enumerate. `ReservationErrors` and `OrderErrors` are the two this
+one is written to look like:
+
+```csharp
+using Common.Application;
+
+namespace Shipping.Application.Shipments;
+
+/// <summary>
+/// The catalogue. Every <see cref="Error"/> this service can return is
+/// constructed here and nowhere else, which is what keeps <c>Code</c> a bounded
+/// set rather than whatever string the nearest handler happened to type.
+/// </summary>
+/// <remarks>
+/// No shipment id and no order id appears in a code below: an id interpolated
+/// into a metric dimension is a cardinality incident, and the description is
+/// the member written for a person.
+/// </remarks>
+public static class ShipmentErrors
+{
+    public static readonly Error NotFound =
+        Error.NotFound("shipment.not_found", "No shipment under that identifier.");
+}
+```
 
 `ApplyTrackingPageCommand.cs`:
 
@@ -804,20 +819,11 @@ namespace Shipping.Application.Tracking;
 /// Applies one carrier page through the aggregate and schedules the next poll.
 /// </summary>
 /// <remarks>
-/// <b>The page is applied by rank and not by arrival.</b> The carrier's key
-/// orders nothing (spec, section 5), and the aggregate is monotonic, so a
-/// reversed page reaches the same terminal state either way — but the events
-/// raised inside one unit of work are read in the order they were raised, and
-/// a delivery ahead of its despatch is a timeline no consumer can make sense
-/// of. Sorting here is what makes that hold within a page as well as across
-/// pages.
-/// <para>
-/// The read is <c>IShipmentRepository.GetAsync(ShipmentId, …)</c>, which
-/// <c>Include</c>s the tracking events. That is load-bearing rather than
-/// incidental: <c>Shipment.Record</c> deduplicates on <c>CarrierEventId</c>
-/// over the loaded collection, so a read without them would store a repeated
-/// page a second time and raise its events again (§5.2).
-/// </para>
+/// Applied by rank, not by arrival: the carrier's key orders nothing (spec,
+/// section 5) and the aggregate is monotonic, but events raised in one unit of
+/// work are read in the order raised, and a delivery ahead of its despatch is a
+/// timeline no consumer can read. The read <c>Include</c>s the tracking events
+/// because <c>Shipment.Record</c> deduplicates over the loaded ones (§5.2).
 /// </remarks>
 public sealed class ApplyTrackingPageHandler(IShipmentRepository shipments, TimeProvider clock)
     : ICommandHandler<ApplyTrackingPageCommand, Result>
@@ -830,7 +836,7 @@ public sealed class ApplyTrackingPageHandler(IShipmentRepository shipments, Time
         // a cancellation that committed first, and a throw from a worker is a
         // row retried for ever (spec, section 5).
         if (shipment is null)
-            return Result.Failure(new Error("shipment.not_found", "No shipment under that identifier."));
+            return Result.Failure(ShipmentErrors.NotFound);
 
         DateTimeOffset now = clock.GetUtcNow();
 
@@ -1105,13 +1111,19 @@ public sealed class TrackingWorkerTests(ServiceFixture fixture) : IAsyncLifetime
         // like to a poll: nothing about the row is wrong.
         await fixture.SetCarrierReferenceAsync(shipment.Id, "crr_down");
 
+        // Captured before the pass, because FailSql stamps NextPollAt from
+        // SYSDATETIMEOFFSET() at the moment of the update: an instant read
+        // after the pass is already later than the one the ladder was added to,
+        // and the assertion would be against a deadline that has moved.
+        DateTimeOffset before = DateTimeOffset.UtcNow;
+
         (await Worker().ProcessBatchAsync(TestContext.Current.CancellationToken)).ShouldBe(0);
 
         (await fixture.StatusAsync(shipment.Id)).ShouldBe("Booked", "an outage is never an answer");
         (await fixture.AttemptsAsync(shipment.Id)).ShouldBe(1);
         (await fixture.LockedUntilAsync(shipment.Id)).ShouldBeNull("a backed-off row is released, not held");
-        (await fixture.NextPollAtAsync(shipment.Id)).ShouldNotBeNull().ShouldBeGreaterThan(
-            DateTimeOffset.UtcNow.AddSeconds(5),
+        (await fixture.NextPollAtAsync(shipment.Id)).ShouldNotBeNull().ShouldBeGreaterThanOrEqualTo(
+            before.AddSeconds(5),
             "the dispatcher's ladder is 2^min(Attempts, 8) x 5 s, so the first backoff is at least five seconds");
     }
 
@@ -1119,24 +1131,30 @@ public sealed class TrackingWorkerTests(ServiceFixture fixture) : IAsyncLifetime
     public async Task A_pass_that_throws_leaves_the_host_running()
     {
         // The claim itself failing — the database unreachable — is the case
-        // ExecuteAsync's filter exists for. Driven through the loop rather than
+        // ExecuteAsync's filter exists for. Driven through the loop and not
         // through ProcessBatchAsync, because what is under test is the catch
-        // around the pass and not the pass.
+        // around the pass rather than the pass.
         using ShippingWorkerFactory broken = new(
             "Server=sql.invalid;Database=Shipping;User Id=x;Password=x;TrustServerCertificate=true",
             "amqp://shipping-svc:x@rabbit.invalid:5672");
 
         TrackingWorker worker = broken.Services.GetRequiredService<TrackingWorker>();
 
-        await Should.NotThrowAsync(() => worker.ProcessBatchAsync(TestContext.Current.CancellationToken)
-            .ContinueWith(_ => Task.CompletedTask, TaskScheduler.Default));
+        await worker.StartAsync(TestContext.Current.CancellationToken);
+        await Task.Delay(CarrierHop.TrackingPollInterval * 2, TestContext.Current.CancellationToken);
+
+        // ExecuteTask is the loop, and a faulted one is the host on its way
+        // down: the default BackgroundServiceExceptionBehavior stops it.
+        worker.ExecuteTask!.IsFaulted.ShouldBeFalse();
+
+        await worker.StopAsync(TestContext.Current.CancellationToken);
     }
 
     private TrackingWorker Worker() => fixture.Factory.Services.GetRequiredService<TrackingWorker>();
 }
 ```
 
-The fixture helpers this needs — `BookedAsync(postalCode)`, `StatusAsync`,
+The fixture helpers this needs — `BookedAsync`, `StatusAsync`,
 `NextPollAtAsync`, `AttemptsAsync`, `LockedUntilAsync`,
 `SetCarrierReferenceAsync`, `RequestCancellationAsync`,
 `ClaimForTrackingAsync`, `ClaimForFulfilmentAsync`, `ExpireLeasesAsync` — go on
@@ -1148,11 +1166,14 @@ because Tasks 5, 6 and 7 read the same columns; PR-5's
 `AttemptsAsync` over `fixture.ScalarAsync`, and those stay where they are
 rather than being re-pointed by this pull request.
 
-`BookedAsync(postalCode, country = "KZ")` is the one that is not a single
-statement: it seeds `fixture.Ordering.Addresses` with an address carrying that
-postal code, publishes `OrderConfirmed`, and runs **PR-5's**
-`RunFulfilmentPassAsync()` — so the row reaches `Booked` through the fulfilment
-worker and this suite books nothing by hand. The lease lengths are read from
+`BookedAsync(postalCode, country = "KZ", line1 = null, city = null)` is the one
+that is not a single statement: it seeds `fixture.Ordering.Addresses` with an
+address carrying that postal code, publishes `OrderConfirmed`, runs **PR-5's**
+`RunFulfilmentPassAsync()`, and answers the aggregate it reads back — so the
+row reaches `Booked` through the fulfilment worker and this suite books nothing
+by hand. The two optional address parts default to the ASCII address every test
+in this task is indifferent to; Task 5 is what needs a Kazakh-script line in the
+table the purge reads, and passes them by name. The lease lengths are read from
 the constants that own them, never written out:
 
 ```csharp
@@ -1234,14 +1255,9 @@ namespace Shipping.Infrastructure.Tracking;
 /// </summary>
 /// <remarks>
 /// Raw statements rather than the repository: the claim is an atomic
-/// select-and-lease one statement cannot express through the change tracker,
-/// and the failure path runs when the aggregate was never loaded.
-/// <para>
-/// A second class rather than a parameter on the first. Both statements name
-/// their population and their schedule column in their own text, and a class
-/// taking a <c>WHERE</c> clause and a column name would hold two SQL
-/// statements that still have to be read separately to be understood.
-/// </para>
+/// select-and-lease the change tracker cannot express, and the failure path runs
+/// when the aggregate was never loaded. A second class rather than a parameter
+/// on the first: each statement names its own population and schedule column.
 /// </remarks>
 internal sealed class TrackingClaims(IDbConnectionFactory connections)
 {
@@ -1350,21 +1366,10 @@ namespace Shipping.Infrastructure.Tracking;
 /// carrier what has happened to each booked shipment and applies the answer.
 /// </summary>
 /// <remarks>
-/// <b><c>FulfilmentWorker</c>'s shape, which is <c>OutboxDispatcher</c>'s, and
-/// the shape is the point.</b> The claim is atomic and leases the rows, so a
-/// second replica skips them and a pod killed mid-call strands nothing; each
-/// row succeeds or fails on its own, so one carrier reference the carrier has
-/// never heard of does not stop the rest; and the loop's filter asks the token
-/// rather than the exception's type, because no host sets
-/// <c>BackgroundServiceExceptionBehavior</c> and the default turns one escaped
-/// exception into a stopped host.
-/// <para>
-/// It is a second loop rather than a branch of the fulfilment worker's because
-/// booking is paced by new orders and tracking by the carrier's rate limit, and
-/// one loop would make the slower the other's ceiling. The two share one
-/// <c>LockedUntil</c> and one <c>Attempts</c> on the row, and
-/// <see cref="TrackingClaims"/> is where that sharing is argued.
-/// </para>
+/// <c>FulfilmentWorker</c>'s shape, which is <c>OutboxDispatcher</c>'s: the claim
+/// leases its rows, each row fails alone, and the loop's filter asks the token
+/// because no host sets <c>BackgroundServiceExceptionBehavior</c>. A second loop
+/// rather than a branch, because the two are paced by different things.
 /// </remarks>
 public sealed class TrackingWorker(
     IServiceScopeFactory scopes,
@@ -1377,17 +1382,14 @@ public sealed class TrackingWorker(
     public const int ClaimBatchSize = 20;
 
     /// <summary>
-    /// How long a claim holds the rows it leased. Above both
-    /// <see cref="PassBudget"/> and <c>CarrierHop.TotalRequestTimeout</c>, which
-    /// is what keeps a row this pass is still calling about out of the next
-    /// pass's claim — this worker's and the fulfilment worker's alike, because
-    /// the lease is one column and both claims respect it.
+    /// How long a claim holds the rows it leased. Above <see cref="PassBudget"/>
+    /// and <c>CarrierHop.TotalRequestTimeout</c>, which keeps a row still being
+    /// called about out of either worker's next claim — the lease is one column.
     /// </summary>
     /// <remarks>
-    /// Shorter than <c>FulfilmentWorker.LeaseSeconds</c>, and the two are not
-    /// one constant: that pass makes two hops and this one makes one, so each
-    /// lease bounds its own worst case. Neither is a bound on the other,
-    /// because a row is released by the pass that took it.
+    /// Shorter than <c>FulfilmentWorker.LeaseSeconds</c> and not one constant
+    /// with it: that pass makes two hops and this one makes one, so each lease
+    /// bounds its own worst case.
     /// </remarks>
     public const int LeaseSeconds = 45;
 
@@ -1441,9 +1443,10 @@ public sealed class TrackingWorker(
     }
 
     /// <summary>
-    /// One claim-and-poll pass. Returns the number of shipments whose page was
-    /// applied. Public so tests drive it directly instead of racing a timer —
-    /// the same seam <c>OutboxDispatcher.ProcessBatchAsync</c> offers (§12.4).
+    /// One claim-and-poll pass. Returns the number of shipments whose page the
+    /// handler applied — a claimed row whose command refused is not one. Public
+    /// so tests drive it directly instead of racing a timer, the same seam
+    /// <c>OutboxDispatcher.ProcessBatchAsync</c> offers (§12.4).
     /// </summary>
     public async Task<int> ProcessBatchAsync(CancellationToken ct)
     {
@@ -1469,8 +1472,8 @@ public sealed class TrackingWorker(
 
             try
             {
-                await PollAsync(work, ct);
-                applied++;
+                if (await PollAsync(work, ct))
+                    applied++;
             }
             catch (Exception ex) when (!ct.IsCancellationRequested)
             {
@@ -1489,6 +1492,7 @@ public sealed class TrackingWorker(
 
     /// <summary>
     /// One shipment's page: read outside any transaction, applied inside one.
+    /// Answers whether the handler applied it.
     /// </summary>
     /// <remarks>
     /// The call is made before the unit of work opens, which is the whole of
@@ -1496,7 +1500,7 @@ public sealed class TrackingWorker(
     /// is a lock nothing downstream can wait out. The claim is what makes that
     /// safe — the row is this pass's until the lease lapses.
     /// </remarks>
-    private async Task PollAsync(TrackingWork work, CancellationToken ct)
+    private async Task<bool> PollAsync(TrackingWork work, CancellationToken ct)
     {
         await using AsyncServiceScope scope = scopes.CreateAsyncScope();
 
@@ -1512,9 +1516,15 @@ public sealed class TrackingWorker(
         // the same unit of work as the page it applied: the lease is dropped by
         // the commit that used it, never by a second statement that could land
         // on its own.
-        await scope.ServiceProvider.GetRequiredService<IDispatcher>().SendAsync(
+        Result result = await scope.ServiceProvider.GetRequiredService<IDispatcher>().SendAsync(
             new ApplyTrackingPageCommand(new ShipmentId(work.Id), page, nextPollAt),
             ct);
+
+        // A refusal is not an applied page, and the caller's count says so:
+        // ShipmentErrors.NotFound is the row a cancellation voided while this
+        // pass held it, and §6.3's behaviour rolled the unit back rather than
+        // moving anything.
+        return result.IsSuccess;
     }
 }
 ```
@@ -1848,7 +1858,10 @@ git commit -m "feat(shipping): the mapper's two entries, and nothing else on the
 - Modify: `src/Services/Shipping/Shipping.Infrastructure/DependencyInjection.cs`
 - Modify: `src/Services/Shipping/Shipping.Infrastructure/Persistence/SqlDeliveryAddressStore.cs`
   — the one sentence in its summary that this pass makes false
-- Modify: `tests/Shipping.TestSupport/ServiceFixture.cs` — one pass, driven
+- Modify: `tests/Shipping.TestSupport/ServiceFixture.cs` — one pass driven,
+  and the five readers and arrangers these tests need: `DeliveredAsync`,
+  `VoidedWithTrackingAsync`, `AgeTerminalAsync`, `AddressCountAsync` and
+  `TrackingEventCountAsync`
 - Test: `tests/Shipping.Worker.Tests/ShippingRetentionTests.cs`
 
 **Interfaces:**
@@ -1875,6 +1888,17 @@ public sealed class ShippingRetentionService : BackgroundService
     public static readonly TimeSpan Interval = TimeSpan.FromHours(1);
     public const int BatchSize = 500;
     public Task<(int Addresses, int TrackingEvents)> PurgeAsync(CancellationToken ct);
+}
+
+namespace Shipping.TestSupport;
+public sealed class ServiceFixture                  // exists; five members added here
+{
+    public Task<Shipment> DeliveredAsync(string? line1 = null, string? city = null);
+    public Task<Shipment> VoidedWithTrackingAsync();
+    public Task AgeTerminalAsync(ShipmentId id, TimeSpan age);
+    public Task<int> AddressCountAsync(OrderId orderId);
+    public Task<int> TrackingEventCountAsync(ShipmentId id);
+    public Task<(int Addresses, int TrackingEvents)> PurgeShippingRetentionAsync();
 }
 ```
 
@@ -2025,18 +2049,14 @@ using Microsoft.Extensions.Options;
 namespace Shipping.Infrastructure.Retention;
 
 /// <summary>
-/// ADR-053's two statutory windows, applied. An address is deleted its window
-/// after its shipment turns terminal; a shipment's tracking events are deleted
-/// theirs after delivery. The shipment's own record survives both.
+/// ADR-053's two statutory windows, applied: an address is deleted its window
+/// after its shipment turns terminal, a shipment's tracking events theirs after
+/// delivery, and the shipment's own record survives both.
 /// </summary>
 /// <remarks>
-/// <b>Its own hosted service, and not a branch of a worker's tick.</b> A purge
-/// is measured in days and a poll in seconds; a failed purge is logged and
-/// retried next hour while a failed poll backs one row off; and a pass that
-/// deletes thousands of rows does not fit the budget a poll is given. It is
-/// <c>RetentionPurgeService</c>'s shape for the same reasons that service has
-/// it, and it is separate from that one because these windows are statutory and
-/// <c>RetentionPolicy</c>'s are housekeeping (ADR-053).
+/// Its own hosted service, not a branch of a worker's tick: a purge is measured
+/// in days and a poll in seconds. Separate from <c>RetentionPurgeService</c>
+/// because these windows are statutory and its are housekeeping (ADR-053).
 /// </remarks>
 public sealed class ShippingRetentionService : BackgroundService
 {
@@ -2135,13 +2155,11 @@ public sealed class ShippingRetentionService : BackgroundService
     /// Every address whose shipment turned terminal before <paramref name="before"/>.
     /// </summary>
     /// <remarks>
-    /// <b>Selected then deleted by identity, rather than deleted by a join.</b>
-    /// A join in the <c>DELETE</c> holds locks on <c>Shipments</c>, which is the
-    /// table both workers claim from with <c>UPDLOCK</c> — a purge and a claim
-    /// blocking each other is an outage that reads as a slow carrier. Selecting
-    /// the keys first and deleting by them keeps the purge off the claim's path
-    /// entirely, which is the shape <c>RetentionPurgeService</c> takes for its
-    /// markers and the reason ADR-052 asks for a delete by identity here.
+    /// Selected then deleted by identity rather than deleted by a join: a join in
+    /// the <c>DELETE</c> holds locks on <c>Shipments</c>, the table both workers
+    /// claim from with <c>UPDLOCK</c>, and a purge blocking a claim reads as a
+    /// slow carrier. It is <c>RetentionPurgeService</c>'s shape and the delete by
+    /// identity ADR-052 asks for.
     /// </remarks>
     private static async Task<int> PurgeAddressesAsync(
         IDbConnection connection,
@@ -2271,7 +2289,89 @@ the other two. `ServiceFixture` gains
             TestContext.Current.CancellationToken);
 ```
 
-beside `RunFulfilmentPassAsync` and `RunTrackingPassAsync`.
+beside `RunFulfilmentPassAsync` and `RunTrackingPassAsync`, and the five
+arrangers and readers Step 1's tests are written against, beside Task 3's
+`ClaimForTrackingAsync` and `RequestCancellationAsync`. Each is on the fixture
+rather than in the suite for Task 3's reason: Tasks 5, 6 and 7 read the same
+columns.
+
+```csharp
+    /// <summary>
+    /// A shipment the carrier has delivered, with its address row and its
+    /// tracking events in place: booked through the fulfilment worker and then
+    /// polled once, so the state and the rows are the workers' own.
+    /// </summary>
+    /// <remarks>
+    /// "050000" is the simulator's delivered script (spec, section 9). The two
+    /// optional parts carry a non-ASCII address into the table the purge reads.
+    /// </remarks>
+    public async Task<Shipment> DeliveredAsync(string? line1 = null, string? city = null)
+    {
+        Shipment shipment = await BookedAsync("050000", line1: line1, city: city);
+
+        await RunTrackingPassAsync();
+
+        return shipment;
+    }
+
+    /// <summary>
+    /// A voided shipment that already carries a tracking event. It is the one
+    /// shape that separates ADR-053's two clocks — terminal, so its address is
+    /// due, and never delivered, so its feed is not.
+    /// </summary>
+    /// <remarks>
+    /// The tracking row is written here rather than polled for: every simulator
+    /// script either promotes the shipment out of the cancellable population or
+    /// is refused whole (spec, section 9).
+    /// </remarks>
+    public async Task<Shipment> VoidedWithTrackingAsync()
+    {
+        Shipment shipment = await BookedAsync("SIM-TRANSIT");
+
+        await ExecuteAsync(
+            """
+            INSERT INTO shipping.TrackingEvents (ShipmentId, CarrierEventId, Status, OccurredAt, RecordedAt)
+            VALUES ({0}, 'evt-in-transit', 'InTransit', SYSDATETIMEOFFSET(), SYSDATETIMEOFFSET());
+            """,
+            shipment.Id.Value);
+
+        await RequestCancellationAsync(shipment.Id);
+        await RunFulfilmentPassAsync();
+
+        return shipment;
+    }
+
+    /// <summary>
+    /// Moves a terminal shipment's clock back, so a window measured in days can
+    /// be crossed inside a test. <c>TerminalAt</c> and not the row's creation,
+    /// because ADR-053's two clocks both start there — and set absolutely, so a
+    /// test may age one row twice without compounding.
+    /// </summary>
+    public Task AgeTerminalAsync(ShipmentId id, TimeSpan age) =>
+        ExecuteAsync(
+            "UPDATE shipping.Shipments SET TerminalAt = DATEADD(second, {0}, SYSDATETIMEOFFSET()) WHERE Id = {1};",
+            -(int)age.TotalSeconds,
+            id.Value);
+
+    /// <summary>
+    /// How many delivery addresses are held for one order — one or none, since
+    /// the table is keyed by the order (spec, section 7).
+    /// </summary>
+    public Task<int> AddressCountAsync(OrderId orderId) =>
+        ScalarAsync<int>(
+            "SELECT Value = COUNT(*) FROM shipping.DeliveryAddresses WHERE OrderId = {0};",
+            orderId.Value);
+
+    /// <summary>How many tracking events a shipment still holds.</summary>
+    public Task<int> TrackingEventCountAsync(ShipmentId id) =>
+        ScalarAsync<int>(
+            "SELECT Value = COUNT(*) FROM shipping.TrackingEvents WHERE ShipmentId = {0};",
+            id.Value);
+```
+
+`BookedAsync` grows the two optional address parts in Task 3 rather than here,
+because that is where it is written; `DeliveredAsync` is the only caller that
+passes them.
 
 - [ ] **Step 6: Run; commit**
 
@@ -2445,21 +2545,14 @@ using Shipping.Infrastructure.Carrier;
 namespace Shipping.Infrastructure.Observability;
 
 /// <summary>
-/// §11's third instrument, on the same meter as the carrier's and the
-/// address's: shipments past their first failed pass, by state.
+/// §11's gauge over shipments past their first failed pass, by state, on the
+/// same meter as the carrier's and the address's instruments.
 /// </summary>
 /// <remarks>
 /// <c>CarrierMetrics.MeterName</c> rather than a string of its own, so §13.2's
-/// one <c>AddMeter</c> line covers all three; <c>IMeterFactory</c> caches by
-/// name, so the classes hold one meter between them. A class of its own for
-/// <c>AddressMetrics</c>' reason and one more: this one reads the database, so
-/// it takes <c>OutboxMetrics</c>' shape — an <c>IShipmentStats</c> and a
-/// contained read — which a class about the carrier's HTTP hop should not.
-/// <para>
-/// Singleton, eagerly constructed by <c>MetricsInitialiser</c>: the gauge is a
-/// callback the <see cref="Meter"/> holds, so an instance never built is an
-/// instrument that does not exist, and nothing else injects this type.
-/// </para>
+/// one <c>AddMeter</c> line covers them. A class of its own because this one
+/// reads the database, in <c>OutboxMetrics</c>' shape; a singleton built eagerly
+/// by <c>MetricsInitialiser</c>, since the gauge is a callback the meter holds.
 /// </remarks>
 public sealed class ShipmentMetrics
 {
@@ -2508,8 +2601,13 @@ the render left and PR-5's `AddSingleton<AddressMetrics>()`:
         // timeout bounds only the statement. One argument and not two, because
         // shipping.Shipments is this service's own table and is spelled inside
         // the type, where OutboxStats takes the registered OutboxTable.
+        //
+        // Through a factory rather than as a built instance, exactly as
+        // OutboxStats is: the class holds a MemoryCache and is IDisposable, and
+        // the container disposes what it constructed and never what it was
+        // handed.
         services.AddSingleton<IShipmentStats>(
-            new ShipmentStats(new SqlConnectionFactory(metricsConnectionString)));
+            _ => new ShipmentStats(new SqlConnectionFactory(metricsConnectionString)));
         services.AddSingleton<ShipmentMetrics>();
 ```
 
@@ -2610,7 +2708,19 @@ In `ServiceFixture.InitializeAsync`, the factory construction gains nothing:
 under a jurisdiction that does not exist and no test opts in.
 
 Add one line of comment above the factory construction saying so, citing
-ADR-053 rule 2, and nothing else.
+ADR-053 rule 2.
+
+The fixture gains one reader, which is the only thing above this suite needs
+that no earlier task wrote — the carrier's reference, read the way Task 3's
+`StatusAsync` and Task 5's counts read their columns:
+
+```csharp
+    /// <summary>The reference the carrier answered a booking with, or null.</summary>
+    public Task<string?> CarrierReferenceAsync(ShipmentId id) =>
+        ScalarAsync<string?>(
+            "SELECT Value = CarrierReference FROM shipping.Shipments WHERE Id = {0};",
+            id.Value);
+```
 
 - [ ] **Step 3: Run; commit**
 
@@ -3089,6 +3199,8 @@ and says which restatements were corrected and which were deliberately left.
 Task 2 and consumed by Task 2's handler alone.
 `ApplyTrackingPageCommand(ShipmentId, IReadOnlyList<CarrierEvent>,
 DateTimeOffset)` is produced by Task 2 and consumed by Task 3's worker.
+`ShipmentErrors.NotFound` is produced by Task 2, returned by its handler and
+read by Task 3's pass count and by Task 2's own suite.
 `TrackingWork`, `TrackingClaims.ClaimAsync/FailAsync/ReleaseAsync` and
 `TrackingWorker.ClaimBatchSize`, `LeaseSeconds`, `PassBudget` and
 `ProcessBatchAsync` are produced by Task 3 and consumed by its own suite and by
@@ -3099,7 +3211,18 @@ DateTimeOffset)` is produced by Task 2 and consumed by Task 3's worker.
 `ShippingWorkerFactory.InventedAddressRetention` and
 `InventedTrackingRetention` are produced by Task 1 and consumed by Tasks 1 and
 7. `IShipmentStats.WaitingCount(string)` and `ShipmentMetrics` are produced by
-Task 6 and consumed by `MetricsInitialiser`. `PlatformFixture.Ordering()`,
+Task 6 and consumed by `MetricsInitialiser`. On `ServiceFixture`,
+`BookedAsync(postalCode, country, line1, city)`, `StatusAsync`,
+`NextPollAtAsync`, `AttemptsAsync`, `LockedUntilAsync`,
+`SetCarrierReferenceAsync`, `RequestCancellationAsync`,
+`ClaimForTrackingAsync`, `ClaimForFulfilmentAsync`, `ExpireLeasesAsync` and
+`RunTrackingPassAsync` are Task 3's; `DeliveredAsync`,
+`VoidedWithTrackingAsync`, `AgeTerminalAsync`, `AddressCountAsync`,
+`TrackingEventCountAsync` and `PurgeShippingRetentionAsync` are Task 5's;
+`ReadWaitingGauge` and `SetAttemptsAsync` are Task 6's; and
+`CarrierReferenceAsync` is Task 7's. Each is written in the task that first
+needs it, and no later task consumes one no task wrote.
+`PlatformFixture.Ordering()`,
 `Inventory()`, `SeedConfirmedSagaAsync`, `SeedHeldReservationAsync`,
 `SagaRowsAsync`, `FulfilledReservationsAsync` and `ErrorQueueDepthAsync` are
 produced and consumed inside Task 8.
@@ -3117,7 +3240,7 @@ the spec's prose where the two differ:
   `MetricsInitialiser` and the `OutboxStats`/`OutboxMetrics` pair.
 - PR-2's: `ICarrierGateway.GetEventsAsync`, `CarrierEvent`,
   `CarrierHop.TrackingPollInterval`, `CarrierHop.TotalRequestTimeout`,
-  `CarrierMetrics.MeterName` (`"Shipping.Carrier"`), `SimulatorMappings`.
+  `CarrierMetrics.MeterName` (`"Shipping.Outbound"`), `SimulatorMappings`.
 - PR-5's: `Shipping.Application.Shipments.IShipmentRepository` with
   **`GetAsync(ShipmentId, …)`** — there is no `GetForUpdateAsync`, and Task 2
   reads through `GetAsync`; `Shipment.ReleaseClaim()`, which `PollApplied`
@@ -3137,8 +3260,8 @@ the spec's prose where the two differ:
   (PR-7). The delivery-lag and queue-backlog alerts read what this PR starts
   publishing, and a rule naming a chart that does not exist is a gate failure
   rather than an alert.
-- **The `carrier` and `jurisdiction` Helm capabilities**, which is the fifth of
-  `docs/secrets.md`'s places for these two keys and cannot exist before the
+- **The `carrier` and `jurisdiction` Helm capabilities**, which are
+  `docs/secrets.md`'s third place for these two keys and cannot exist before the
   chart.
 - **A webhook, a tracking event on the bus, and a second carrier adapter** —
   spec sections 1 and 14 refuse all three, and the port is the seam a second

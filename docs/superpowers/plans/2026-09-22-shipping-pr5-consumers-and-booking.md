@@ -47,14 +47,28 @@ the tombstone), 9 (the address port and its adapter), 10
   `.github/secret-scan/allowed/deploy.txt`,
   `docs/backend-architecture/02-architecture-at-a-glance.md`,
   `docs/backend-architecture/03-bounded-contexts.md`,
+  `docs/backend-architecture/04-solution-structure.md`,
   `docs/backend-architecture/09-messaging.md`,
+  `docs/backend-architecture/11-identity-authorization.md`,
+  `docs/backend-architecture/12-test-strategy.md`,
+  `docs/backend-architecture/14-local-development.md`,
   `docs/backend-architecture/15-cicd-deployment.md`, `docs/secrets.md`,
-  `docs/runbooks/latency.md`.
+  `docs/runbooks/latency.md`, `docs/repo-map.md`, `CLAUDE.md`,
+  `tools/new-service/scaffold/render.py`.
   Why each, since the row above is paths only: the service's own code and its
   suites are A; `Platform.slnx` and the `*.csproj` files this PR edits — the
   gRPC client packages in `Shipping.Infrastructure`, the JWT reader, and the
   new stub library — are E; the Compose model, CI's filter, the secret scan's
-  allow-list, the four chapters and the two documents are D.
+  allow-list, the chapters, the runbook, `docs/repo-map.md`, `CLAUDE.md` and
+  the scaffold's drop list are D. The last four arrived with the spec's
+  section 13, which assigns each of ADR-052's remaining rows to a pull
+  request: §4.1's tree comment, §11.7's erasure step, §12's sentence, §14.1's
+  and §14.2's, the BFF halves of `docs/repo-map.md` and `CLAUDE.md`, and
+  `render.py`'s two one-synchronous-hop comments are this one's, and each is
+  false the moment this PR's worker calls a peer. Class D's row in
+  `docs/change-locality.md` reaches the documents, `CLAUDE.md` and the tools
+  tree the touch set declares, so every added path is inside the class and the
+  row stays `A+D+E`.
 - **The locality gate admits `A+D+E` today** —
   `.github/locality-gate/locality_gate.py` names it as the one three-member
   class and reads it as its three members, while `classes.yml` owns only the
@@ -178,7 +192,7 @@ public class ShipmentConsumerTests
     {
         Guid order = Order();
 
-        await Confirm().HandleAsync(new CreateShipmentCommand(order, Now), TestContext.Current.CancellationToken);
+        await Confirm().HandleAsync(new CreateShipmentCommand(order), TestContext.Current.CancellationToken);
 
         Shipment shipment = _shipments.Added.ShouldHaveSingleItem();
         shipment.OrderId.ShouldBe(new OrderId(order));
@@ -190,9 +204,9 @@ public class ShipmentConsumerTests
     public async Task A_redelivered_confirmation_writes_no_second_shipment()
     {
         Guid order = Order();
-        await Confirm().HandleAsync(new CreateShipmentCommand(order, Now), TestContext.Current.CancellationToken);
+        await Confirm().HandleAsync(new CreateShipmentCommand(order), TestContext.Current.CancellationToken);
 
-        await Confirm().HandleAsync(new CreateShipmentCommand(order, Now), TestContext.Current.CancellationToken);
+        await Confirm().HandleAsync(new CreateShipmentCommand(order), TestContext.Current.CancellationToken);
 
         _shipments.Added.Count.ShouldBe(1, "§3.2 gives one shipment per confirmed order");
     }
@@ -201,10 +215,9 @@ public class ShipmentConsumerTests
     public async Task A_cancellation_after_a_confirmation_voids_the_pending_shipment()
     {
         Guid order = Order();
-        await Confirm().HandleAsync(new CreateShipmentCommand(order, Now), TestContext.Current.CancellationToken);
+        await Confirm().HandleAsync(new CreateShipmentCommand(order), TestContext.Current.CancellationToken);
 
-        await Void().HandleAsync(
-            new VoidShipmentCommand(order, Now.AddMinutes(1)), TestContext.Current.CancellationToken);
+        await Void().HandleAsync(new VoidShipmentCommand(order), TestContext.Current.CancellationToken);
 
         _shipments.Added.ShouldHaveSingleItem().Status.ShouldBe(ShipmentStatus.Voided);
     }
@@ -214,7 +227,7 @@ public class ShipmentConsumerTests
     {
         Guid order = Order();
 
-        await Void().HandleAsync(new VoidShipmentCommand(order, Now), TestContext.Current.CancellationToken);
+        await Void().HandleAsync(new VoidShipmentCommand(order), TestContext.Current.CancellationToken);
 
         Shipment tombstone = _shipments.Added.ShouldHaveSingleItem();
         tombstone.OrderId.ShouldBe(new OrderId(order));
@@ -225,10 +238,9 @@ public class ShipmentConsumerTests
     public async Task The_late_confirmation_finds_the_tombstone_and_does_nothing()
     {
         Guid order = Order();
-        await Void().HandleAsync(new VoidShipmentCommand(order, Now), TestContext.Current.CancellationToken);
+        await Void().HandleAsync(new VoidShipmentCommand(order), TestContext.Current.CancellationToken);
 
-        await Confirm().HandleAsync(
-            new CreateShipmentCommand(order, Now.AddMinutes(1)), TestContext.Current.CancellationToken);
+        await Confirm().HandleAsync(new CreateShipmentCommand(order), TestContext.Current.CancellationToken);
 
         _shipments.Added.Count.ShouldBe(1);
         _shipments.Added[0].Status.ShouldBe(
@@ -240,10 +252,9 @@ public class ShipmentConsumerTests
     public async Task A_second_cancellation_moves_nothing()
     {
         Guid order = Order();
-        await Void().HandleAsync(new VoidShipmentCommand(order, Now), TestContext.Current.CancellationToken);
+        await Void().HandleAsync(new VoidShipmentCommand(order), TestContext.Current.CancellationToken);
 
-        await Void().HandleAsync(
-            new VoidShipmentCommand(order, Now.AddHours(1)), TestContext.Current.CancellationToken);
+        await Void().HandleAsync(new VoidShipmentCommand(order), TestContext.Current.CancellationToken);
 
         _shipments.Added.Count.ShouldBe(1, "a superseded arrival returns rather than throwing");
     }
@@ -257,19 +268,18 @@ public class ShipmentConsumerTests
         delivered.Record("e1", TrackingStatus.Delivered, Now, Now);
         _shipments.Seed(delivered);
 
-        await Void().HandleAsync(
-            new VoidShipmentCommand(order, Now.AddHours(1)), TestContext.Current.CancellationToken);
+        await Void().HandleAsync(new VoidShipmentCommand(order), TestContext.Current.CancellationToken);
 
         delivered.Status.ShouldBe(ShipmentStatus.Delivered);
         delivered.CancellationRequestedAt.ShouldBeNull();
     }
 
     [Fact]
-    public void Each_handler_maps_the_contract_and_nothing_else()
+    public async Task Each_handler_maps_the_contract_and_nothing_else()
     {
         // The contract half, separately: a handler that read the wrong member
         // would still satisfy every assertion above, because they all build
-        // the command by hand.
+        // the command by hand, and OrderId and CustomerId are both a Guid.
         OrderConfirmed confirmed = new()
         {
             MessageId = Guid.CreateVersion7(),
@@ -283,10 +293,9 @@ public class ShipmentConsumerTests
         };
 
         RecordingDispatcher dispatcher = new();
-        new OrderConfirmedHandler(dispatcher).HandleAsync(confirmed, TestContext.Current.CancellationToken);
+        await new OrderConfirmedHandler(dispatcher).HandleAsync(confirmed, TestContext.Current.CancellationToken);
 
-        dispatcher.Sent.ShouldHaveSingleItem()
-            .ShouldBe(new CreateShipmentCommand(confirmed.OrderId, Now));
+        dispatcher.Sent.ShouldHaveSingleItem().ShouldBe(new CreateShipmentCommand(confirmed.OrderId));
     }
 }
 ```
@@ -363,9 +372,7 @@ namespace Shipping.Application.Orders.RecordOrderConfirmed;
 public sealed class OrderConfirmedHandler(IDispatcher dispatcher) : IIntegrationEventHandler<OrderConfirmed>
 {
     public async Task HandleAsync(OrderConfirmed integrationEvent, CancellationToken ct) =>
-        await dispatcher.SendAsync(
-            new CreateShipmentCommand(integrationEvent.OrderId, integrationEvent.OccurredAt),
-            ct);
+        await dispatcher.SendAsync(new CreateShipmentCommand(integrationEvent.OrderId), ct);
 }
 ```
 
@@ -374,8 +381,17 @@ using Common.Application;
 
 namespace Shipping.Application.Orders.RecordOrderConfirmed;
 
-public sealed record CreateShipmentCommand(Guid OrderId, DateTimeOffset ConfirmedAt) : ICommand<Result>;
+public sealed record CreateShipmentCommand(Guid OrderId) : ICommand<Result>;
 ```
+
+**Neither command carries the event's `OccurredAt`, and that is the decision
+rather than an omission.** Both handlers take the instant from `TimeProvider`,
+as every other writer in this service does — the fulfilment worker, the
+tracking worker and the retention pass alike — so a second member would be one
+the aggregate never sees, and a test asserting it would be proving a value
+nothing reads. The instant that matters to a reader of the row is when this
+service recorded the fact, and the event's own `OccurredAt` is already on the
+message the consumer logs.
 
 ```csharp
 using Common.Application;
@@ -409,10 +425,10 @@ public sealed class CreateShipmentHandler(IShipmentRepository shipments, TimePro
 ```
 
 `OrderCancelledHandler` is the same shape over `OrderCancelled`, dispatching
-`VoidShipmentCommand(integrationEvent.OrderId, integrationEvent.OccurredAt)`,
-with the summary "Voids a shipment that has not been booked and records the
-request against one that has (spec, sections 5 and 6); the carrier is told by
-a worker and never from here (spec, section 4)." `VoidShipmentHandler`:
+`VoidShipmentCommand(integrationEvent.OrderId)`, with the summary "Voids a
+shipment that has not been booked and records the request against one that has
+(spec, sections 5 and 6); the carrier is told by a worker and never from here
+(spec, section 4)." `VoidShipmentHandler`:
 
 ```csharp
 using Common.Application;
@@ -766,19 +782,13 @@ namespace Shipping.Application.Addresses;
 
 /// <summary>
 /// The delivery address this service keeps for one order (spec, section 7): a
-/// table of its own beside <c>Shipments</c>, so erasure and retention each
-/// delete a row and leave the shipment's record whole (ADR-052).
+/// table of its own beside <c>Shipments</c>, so erasure and retention delete a
+/// row and leave the shipment's record whole (ADR-052).
 /// </summary>
 /// <remarks>
-/// Raw statements through a port, following <c>IUnitOfWork.ExecuteRawAsync</c>'s
-/// rule for a table with no aggregate behaviour; a port rather than that
-/// member because <see cref="GetAsync"/> returns what it read.
-/// <para>
-/// §11.7's erasure is a <c>DELETE ... WHERE CustomerId = @CustomerId</c> and
-/// is not a member here: the consumer that issues it arrives with that
-/// section's extension, and <see cref="SaveAsync"/> carries the customer for
-/// no other purpose.
-/// </para>
+/// Raw statements through a port rather than <c>IUnitOfWork.ExecuteRawAsync</c>,
+/// because <see cref="GetAsync"/> returns what it read. §11.7's erasure deletes
+/// by customer; <see cref="SaveAsync"/> carries the customer for that alone.
 /// </remarks>
 public interface IDeliveryAddressStore
 {
@@ -893,10 +903,9 @@ namespace Shipping.Infrastructure.Persistence;
 /// </summary>
 /// <remarks>
 /// On its own connection, unlike <c>IUnitOfWork.ExecuteRawAsync</c>'s callers:
-/// the worker writes this row before it calls the carrier and commits the
-/// shipment afterwards (spec, section 4), so there is no unit of work open to
-/// enlist in — and joining one would hold a transaction across a third party's
-/// latency, which is the thing that design exists to avoid.
+/// the worker writes this row before it calls the carrier (spec, section 4),
+/// so there is no unit of work to enlist in — and joining one would hold a
+/// transaction across a third party's latency.
 /// </remarks>
 internal sealed class SqlDeliveryAddressStore(IDbConnectionFactory connections) : IDeliveryAddressStore
 {
@@ -1080,7 +1089,7 @@ public static class DependencyInjection { public const string BaseUrlKey = "Addr
 ```
 
 - Produces: `Shipping.OrderingStub.StubOrdering` with `Address`, `Addresses`,
-  `Statuses`, `Calls` and `Tokens`; `ShippingWorkerFactory`'s
+  `Fail`, `AbortNextCalls`, `Calls` and `Tokens`; `ShippingWorkerFactory`'s
   `addressSourceBaseUrl` parameter and `Tokens` property.
 
 - [ ] **Step 1: Write the stub**
@@ -1092,20 +1101,14 @@ public static class DependencyInjection { public const string BaseUrlKey = "Addr
 <Project Sdk="Microsoft.NET.Sdk">
 
   <!--
-    NOT a test project (§4.1), and not a second TestSupport either: it holds
-    one stub server and references nothing of Shipping's.
-
-    Its own library rather than Shipping.TestSupport, for Web.Bff.TestSupport's
-    reason. Shipping.Infrastructure compiles delivery_addresses.proto as a
-    CLIENT, so generating the SERVER half into a project that also references
+    Not a test project (§4.1) and not a second TestSupport: it holds one stub
+    server and references nothing of Shipping's. Its own library for
+    Web.Bff.TestSupport's reason — Shipping.Infrastructure compiles
+    delivery_addresses.proto as a client, so generating the server half beside
     it would put every message type in one compilation twice, and CS0436 is an
-    error under ADR-019. A project that references both halves must not NAME a
-    generated type — it drives this stub through the surface below instead.
-
-    Generating the server half into Shipping.Infrastructure would avoid the
-    split and is refused: §3.2 gives Shipping no API at all, and an abstract
-    gRPC service base in its production assembly is a surface the service is
-    defined not to have.
+    error under ADR-019. Generating that half into Shipping.Infrastructure is
+    refused too: §3.2 gives Shipping no API, and a gRPC service base in its
+    production assembly is a surface the service is defined not to have.
   -->
 
   <PropertyGroup>
@@ -1168,15 +1171,10 @@ public sealed record StubAddress(
 /// Ordering's <c>DeliveryAddresses.Get</c> (ADR-052).
 /// </summary>
 /// <remarks>
-/// A real server rather than a substituted client, for the reason the BFF's
-/// stub Catalog states: everything interesting about this hop is what the
-/// SERVER decides — the h2c negotiation, the bearer token that survives to the
-/// wire, the status that becomes a refusal rather than a backoff.
-/// <para>
-/// <c>Http2</c> explicitly, because a cleartext endpoint at the default
-/// answers a client asking for HTTP/2 exactly with <c>HTTP_1_1_REQUIRED</c> —
-/// the measurement that gave Ordering a second Kestrel endpoint.
-/// </para>
+/// A real server rather than a substituted client: everything interesting about
+/// this hop is what the server decides — the h2c negotiation, the bearer token
+/// on the wire, the status that becomes a refusal rather than a backoff.
+/// <c>Http2</c> explicitly: a cleartext default answers <c>HTTP_1_1_REQUIRED</c>.
 /// </remarks>
 public sealed class StubOrdering : IAsyncLifetime
 {
@@ -1208,6 +1206,16 @@ public sealed class StubOrdering : IAsyncLifetime
         foreach (StatusCode status in statuses)
             _statuses.Enqueue(status);
     }
+
+    /// <summary>How many of the next calls to abort instead of replying.</summary>
+    /// <remarks>
+    /// A transport fault, unlike <see cref="Fail"/>: a gRPC status rides an HTTP
+    /// 200 with <c>grpc-status</c> in the trailers and
+    /// <c>AddStandardResilienceHandler</c> hands it back, while an aborted
+    /// connection is an <c>HttpRequestException</c> it retries — so only this
+    /// exercises <c>AddressHop</c>'s retry.
+    /// </remarks>
+    public int AbortNextCalls { get; set; }
 
     public async ValueTask InitializeAsync()
     {
@@ -1242,6 +1250,14 @@ public sealed class StubOrdering : IAsyncLifetime
 
             Guid order = Guid.Parse(request.OrderId);
             stub._calls.Enqueue(order);
+
+            if (stub.AbortNextCalls > 0)
+            {
+                stub.AbortNextCalls--;
+                context.GetHttpContext().Abort();
+
+                throw new RpcException(new Status(StatusCode.Aborted, "connection aborted"));
+            }
 
             if (stub._statuses.TryDequeue(out StatusCode status))
                 throw new RpcException(new Status(status, "stubbed"));
@@ -1387,7 +1403,7 @@ public sealed class DeliveryAddressSourceTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task A_transient_status_is_retried_and_then_thrown_uncounted()
+    public async Task A_transient_status_is_thrown_uncounted_after_exactly_one_call()
     {
         using RefusedCount counted = CountRefused();
         Guid order = KnownOrder();
@@ -1397,13 +1413,23 @@ public sealed class DeliveryAddressSourceTests : IAsyncLifetime
             Source().GetAsync(new OrderId(order), TestContext.Current.CancellationToken));
 
         counted.Value.ShouldBe(0, "an outage is not a decision anybody took");
+
+        // One, not three: two of the queued statuses are still in the stub. A
+        // gRPC status travels as an HTTP 200 with grpc-status in the trailers,
+        // so AddStandardResilienceHandler sees a successful response and hands
+        // it straight back. UpstreamRetryTests is where both halves of that are
+        // measured.
+        _ordering.Calls.Count.ShouldBe(1);
     }
 
     [Fact]
-    public async Task A_transient_status_that_clears_inside_the_budget_answers()
+    public async Task A_transport_fault_is_retried_inside_the_budget_and_the_call_recovers()
     {
         Guid order = KnownOrder();
-        _ordering.Fail(StatusCode.Unavailable);
+
+        // An aborted connection, which is the shape an owner that is genuinely
+        // down produces and the one thing AddressHop's retry covers.
+        _ordering.AbortNextCalls = 1;
 
         AddressLookup lookup = await Source().GetAsync(new OrderId(order), TestContext.Current.CancellationToken);
 
@@ -1530,14 +1556,13 @@ namespace Shipping.Infrastructure.Addresses;
 
 /// <summary>
 /// The address call's budget, in <c>PricingHop</c>'s shape and inside §9.7's
-/// bands, because Ordering is a peer rather than a third party behind an
-/// anti-corruption layer.
+/// bands: Ordering is a peer, not a third party behind an anti-corruption layer.
 /// </summary>
 /// <remarks>
 /// Public for the reason <c>CarrierHop</c> is (§4.2): read from another
 /// assembly, and one modifier commits less than an <c>InternalsVisibleTo</c>.
 /// The fulfilment worker's lease sits above this total and the carrier's
-/// together, which is the inequality section 4 asks a test to hold.
+/// together (spec, section 4).
 /// </remarks>
 public static class AddressHop
 {
@@ -1638,9 +1663,7 @@ namespace Shipping.Infrastructure.Addresses;
 /// <remarks>
 /// A decorator rather than a change to <c>CachingTokenClient</c>: the grant is
 /// this service's and that building block is every host's. Keycloak's default
-/// roles live in <c>realm_access</c> and on the <c>account</c> client, which
-/// this claim does not carry, and are outside the check by that record's own
-/// instruction.
+/// roles sit in <c>realm_access</c>, which this claim does not carry (ADR-052).
 /// </remarks>
 internal sealed partial class GrantCheckedTokenCache(
     ITokenCache inner,
@@ -1771,10 +1794,23 @@ internal sealed class GrpcDeliveryAddressSource(
 }
 ```
 
-Every transient status — `Unavailable`, `DeadlineExceeded`, `Internal`, a
+Every transient outcome — `Unavailable`, `DeadlineExceeded`, `Internal`, a
 refused connection, an open circuit — escapes as `RpcException` and the
-worker's backoff owns it. That is deliberate and is what the transient test
-asserts: no second exception type is invented for a case nothing branches on.
+worker's backoff owns it. That is deliberate and is what the two transient
+tests assert: no second exception type is invented for a case nothing branches
+on.
+
+**What the pipeline retries is narrower than the configuration reads, and this
+plan does not widen it.** `AddStandardResilienceHandler` judges an
+`HttpResponseMessage`, and a gRPC status arrives as an HTTP 200 with
+`grpc-status` in the trailers — so a refusal Ordering *decides* is asked for
+exactly once, whatever `AddressHop.MaxRetryAttempts` says, and what the retry
+covers is the transport fault an owner that is genuinely down produces. The
+obvious widening is `ServiceConfig` retry on the channel, and it is refused for
+the reason §9.7 exists: it sits outside the `HttpClient`, so each of its
+attempts would draw a fresh `TotalRequestTimeout` and the budgets would stop
+nesting. One mechanism, and two tests that say which half of the split each
+outcome falls in.
 
 - [ ] **Step 6: Write the registration**
 
@@ -2014,8 +2050,17 @@ hand, because the substitution above means no other test reaches this class:
 [InlineData(new[] { "orders:delivery-address", "orders:write" })]
 public async Task A_token_whose_grant_is_not_exactly_the_one_record_names_is_refused(string[] permissions)
 {
-    AddressMetrics metrics = new(new DefaultMeterFactory());
-    GrantCheckedTokenCache tokens = new(new FixedTokenCache(Jwt(permissions)), metrics, NullLogger<…>.Instance);
+    // The factory has to outlive the collection: a Meter disposed with its
+    // factory publishes nothing. MetricsRegistrationTests takes this shape for
+    // the same reason, and the type it hands back is the framework's.
+    using IMeterFactory factory = new ServiceCollection()
+        .AddMetrics()
+        .BuildServiceProvider()
+        .GetRequiredService<IMeterFactory>();
+
+    AddressMetrics metrics = new(factory);
+    GrantCheckedTokenCache tokens = new(
+        new FixedTokenCache(Jwt(permissions)), metrics, NullLogger<GrantCheckedTokenCache>.Instance);
 
     AddressSourceRefusedException thrown = await Should.ThrowAsync<AddressSourceRefusedException>(
         () => tokens.GetAsync("commerce-api", TestContext.Current.CancellationToken));
@@ -2050,6 +2095,10 @@ public async Task A_refused_client_credential_is_a_refusal_and_a_transport_fault
 `permission` claim per element — no signing credentials, because the class
 reads the token and deliberately never validates it. `FixedTokenCache` is a
 file-local `ITokenCache` answering with one string or throwing one exception.
+`Cache(…)` is the same two lines as the theory's, over one token or one
+exception, and it builds its `IMeterFactory` the same way:
+`DefaultMeterFactory` is `internal` to `Microsoft.Extensions.Diagnostics` and
+cannot be constructed from a test at all.
 Add `System.IdentityModel.Tokens.Jwt` to
 `tests/Shipping.Worker.Tests/Shipping.Worker.Tests.csproj` on the same honesty
 rule, and a `ProjectReference` to `tests/Shipping.OrderingStub`.
@@ -2293,17 +2342,14 @@ using Shipping.Infrastructure.Carrier;
 namespace Shipping.Infrastructure.Fulfilment;
 
 /// <summary>
-/// Spec section 4's first worker: it claims a shipment under a lease, reads
-/// the address through <see cref="IDeliveryAddressSource"/>, books with
-/// <see cref="ICarrierGateway"/>, and services a booked shipment whose
-/// cancellation the carrier has not answered yet.
+/// Spec section 4's first worker: it claims a shipment under a lease, reads its
+/// address through <see cref="IDeliveryAddressSource"/>, books with
+/// <see cref="ICarrierGateway"/>, and services an unanswered cancellation.
 /// </summary>
 /// <remarks>
-/// The call is made OUTSIDE any unit of work, between the claim and the
-/// commit, which is what keeps a third party's latency off a transaction. The
-/// crash that doubles the call is the one between the carrier's answer and the
-/// commit; the next pass repeats the call under the same key and receives the
-/// first answer.
+/// The call sits outside any unit of work, between the claim and the commit, so
+/// no transaction spans a third party's latency; a crash between the carrier's
+/// answer and the commit repeats the call under the same key.
 /// </remarks>
 public sealed class FulfilmentWorker(IServiceScopeFactory scopes, ILogger<FulfilmentWorker> log) : BackgroundService
 {
@@ -2991,11 +3037,32 @@ BFF's:
 replacing PR-4's placeholder text, which said the seam arrives with the host
 that reads it. This is that host.
 
+**The paragraph below that table carries the same claim a second time and goes
+with it.** PR-4 added the clause "Shipping's client secret has no variable in
+front of it yet for a reason of sequence rather than of design — the realm
+holds the value from the change that minted the client, and the Compose seam
+arrives with the host that posts it" to *Not every row carries a variable in
+front of it*. The row above now has its variable, so the clause is **deleted**
+rather than corrected: what remains in that paragraph — the broker's
+credentials, Keycloak's bootstrap admin and the provider key — is the whole of
+what still has no seam, and a sentence explaining why one row used to be on
+that list is the sentence the next review finds stale.
+
 - [ ] **Step 4: `deploy/compose/README.md`**
 
-The BFF paragraph says it is "the one host that needs more than an authority".
-It is not, since ADR-052. Amend that sentence and add Shipping's own host-run
-block after Payments':
+Two sentences in that file say the BFF is alone, and both are amended here
+because both are false the moment this host exists.
+
+The host-port table's Web BFF row ends "a token needed, and the only host that
+mints one of its own ([§11.5])". It becomes "a token needed, and one of the two
+hosts that mint one of their own
+([§11.5](../../docs/backend-architecture/11-identity-authorization.md),
+ADR-052)". The row is a table cell rather than prose, so it is corrected in
+place and nothing is added to it.
+
+The BFF paragraph below says it is "the one host that needs more than an
+authority". It is not, since ADR-052. Amend that sentence and add Shipping's
+own host-run block after Payments':
 
 ```bash
 export ASPNETCORE_ENVIRONMENT=Development
@@ -3045,13 +3112,25 @@ git commit -m "feat(shipping): the worker's address and client-credential keys, 
 
 ---
 
-### Task 7: The chapters and the two documents
+### Task 7: The chapters, the documents and the scaffold's comments
+
+Every step below is one row of the spec's section 13, which is the table that
+says which pull request takes each of ADR-052's places. Nothing here restates
+a row's wording and nothing edits ADR-052 itself: an ADR is superseded, never
+rewritten.
 
 **Files:**
 - Modify: `docs/backend-architecture/03-bounded-contexts.md` — §3.2's Consumes cell
 - Modify: `docs/backend-architecture/02-architecture-at-a-glance.md` — §2.2's diagram
-- Modify: `docs/backend-architecture/09-messaging.md` — §9.7's sentence
+- Modify: `docs/backend-architecture/09-messaging.md` — §9.7's two sentences
 - Modify: `docs/runbooks/latency.md` — the slow-peer branch
+- Modify: `docs/backend-architecture/04-solution-structure.md` — §4.1's tree comment
+- Modify: `docs/backend-architecture/11-identity-authorization.md` — §11.7's erasure diagram
+- Modify: `docs/backend-architecture/12-test-strategy.md` — §12.6's *Two things it does not do*
+- Modify: `docs/backend-architecture/14-local-development.md` — §14.1's and §14.2's comments
+- Modify: `docs/repo-map.md` — the `src/BFF/Web.Bff/` entry
+- Modify: `CLAUDE.md` — the tree's `src/BFF/Web.Bff/` line
+- Modify: `tools/new-service/scaffold/render.py` — the drop list's two hop comments
 
 - [ ] **Step 1: §3.2's Consumes cell**
 
@@ -3088,7 +3167,10 @@ The three bulleted details below the diagram are unchanged and gain no fourth:
 §2.3's callout already records ADR-052's departure from Principle 4, and a
 second statement of it here would be a copy to correct later.
 
-- [ ] **Step 3: §9.7's sentence**
+- [ ] **Step 3: §9.7's two sentences**
+
+ADR-052's row for this chapter names both the hop count and the registration
+paragraph, and they are two sentences rather than one. The first:
 
 Replace:
 
@@ -3109,41 +3191,379 @@ with:
 
 Wrap at 80 columns. The paragraph's last sentence about fan-out is unchanged.
 
+The second is further down the section, where §9.7 says which composition root
+registers an outbound client. The clause about Payments comes with it, because
+"the other outbound client" counts the clients and a third has just arrived.
+Replace:
+
+> For a peer call, the BFF's `Program.cs` (§4.1) is the one composition root
+> that registers any of this — `Web.Bff` is the only host in this blueprint
+> that calls a peer synchronously, which makes it the only one holding client
+> credentials (§11.5), and §4.2's helper deliberately registers none of it.
+> The other outbound client is Payments' provider hop, `ProviderHop`, behind
+> §3.2's anti-corruption layer, which Payments registers for itself.
+
+with:
+
+> For a peer call, the caller's own `Program.cs` (§4.1) registers it and
+> §4.2's helper deliberately registers none of it, so a host that holds client
+> credentials is a host that calls a peer (§11.5). `Web.Bff` registers the
+> pricing hop; Shipping's worker registers the address read
+> [ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)
+> gives it, off every request path. The outbound clients of the other kind are
+> the third-party ones behind §3.2's anti-corruption layers — Payments'
+> `ProviderHop` and Shipping's `CarrierHop` — each registered by the service
+> that owns its layer.
+
+**`CarrierHop` is named here, and this is the pull request that corrects the
+count of outbound clients**, because it is the pull request that gives the
+platform its second peer call and therefore the one rewriting this paragraph.
+The sentence replaced says "the other outbound client is Payments' provider
+hop", which counts them; PR-2 gave Shipping a carrier hop and left the count
+alone, so the paragraph has been wrong since that merge. Correcting it inside
+the rewrite this step already owes is one edit rather than two, and it leaves
+§9.7's paragraph true rather than true about peers and wrong about third
+parties.
+
+`PricingHop`'s own paragraph below is unchanged and keeps every number in it.
+The address read's budget is `AddressHop`, which Task 3 writes beside the
+adapter inside §9.7's bands; §9.7 prints neither hop's numbers and this step
+adds none.
+
 - [ ] **Step 4: `docs/runbooks/latency.md`**
 
 Its *A slow peer* branch opens "There is exactly one synchronous hop in this
-platform". Replace that sentence with one that keeps the operator's
-instruction and corrects the count:
+platform", and the sentence after it is the operator's instruction. **Replace
+the paragraph**, not the first sentence alone — the count and the instruction
+are one paragraph and a half-replaced one reads as two voices — keeping every
+word of the instruction and correcting only what ADR-052 made false:
 
 > There is one synchronous hop on a request path — BFF → Catalog for pricing
 > ([§9.7](../backend-architecture/09-messaging.md), ADR-017) — and it is the
 > only one that can make an HTTP request wait. If the BFF is the service
 > alerting, check Catalog's own p99 first, then the resilience handler's
-> timeout hierarchy. Shipping's worker calls Ordering for an address
-> (ADR-052), and a slow answer there shows up as a shipment that has not
-> booked rather than as latency: nothing is waiting on it, and the row backs
-> off.
+> timeout hierarchy — `ServiceOptions.OperationTimeout` is 20 s and a request
+> sitting near it is a peer that has stopped answering rather than one that is
+> merely slow. Shipping's worker calls Ordering for an address (ADR-052), and
+> a slow answer there shows up as a shipment that has not booked rather than
+> as latency: nothing is waiting on it, and the row backs off.
 
 The paragraph below it, "Everything else crosses the broker", keeps its point
 and its sentence about a command handler blocking on a message.
 
-- [ ] **Step 5: Run the document checks and commit**
+- [ ] **Step 5: §4.1's tree comment**
+
+Spec section 13 splits §4.1's row: PR-3b took the identity half and left this
+one, saying so in its own Task 4 step 3. So the sentence to replace is the one
+PR-3b leaves behind, not the one on `main` today. Before:
+
+```
+│   └── Web.Bff/                        Aggregation for the web client (§10.1).
+│                                       The ONLY host that calls a service
+│                                       synchronously (§9.7); it binds
+│                                       Identity:Client, and the grant's code is
+│                                       Common.Infrastructure's (§11.5, ADR-052)
+```
+
+After:
+
+```
+│   └── Web.Bff/                        Aggregation for the web client (§10.1).
+│                                       The only host that calls a service
+│                                       synchronously on a request path (§9.7,
+│                                       ADR-052); it binds Identity:Client, and
+│                                       the grant's code is
+│                                       Common.Infrastructure's (§11.5)
+```
+
+The capital ONLY goes with the claim it was emphasising. §4.1's tree already
+names `Shipping/` and its five projects, so nothing is added to it here and
+Appendix C gains no row.
+
+- [ ] **Step 6: §11.7's erasure diagram**
+
+ADR-052's row for §11.7 names Shipping's step, and spec section 7 is why it is
+wrong: the `Shipments` row holds no personal data, and the address lives in
+`DeliveryAddresses` as a copy of the owner's value. In the erasure sequence
+diagram, replace:
+
+```
+    S->>S: anonymise Shipment recipient
+```
+
+with:
+
+```
+    S->>S: delete DeliveryAddresses row
+```
+
+Nothing else in that diagram moves — Ordering's step and Notifications' are
+each the owning service's call, and §11.7 says so. The rules below it need no
+edit either: *Delete or anonymise, per record* already closes with "The
+delete's example is the contact row a reader keeps for its owner's value
+(ADR-052)", which is this row and this step, so a second statement of it is
+the copy the next review finds stale. The callout further down that says the
+erasure consumer is owed whole stays, and this PR builds none of it.
+
+- [ ] **Step 7: §12.6's sentence, and ADR-023 gains no edit**
+
+Spec section 13 assigns this one with its reason: the `.proto` linked into
+`Shipping.Infrastructure` is ADR-023's own form, so the address read is the
+second relationship that record said would be judged once Shipping had a
+consumer. This is that consumer. ADRs are superseded and never rewritten, so
+**ADR-023 is not edited here** and nothing is appended to it. Before:
+
+> **Two things it does not do.** It covers one relationship, because the
+> platform has one synchronous hop; a second would be the same conditional
+> judgement again rather than an automatic second contract.
+
+After:
+
+> **Two things it does not do.** It covers the pricing hop and not the address
+> read
+> [ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)
+> gives Shipping's worker, which is the second relationship
+> [ADR-023](adr/ADR-023-the-consumer-driven-contract-is-a-linked-file-not-pact.md)
+> said would be judged once a consumer existed. The worker links Ordering's own
+> `.proto`, so it already has the artefact that record calls the contract; a
+> provider-side verification suite beside it is the same conditional judgement
+> again rather than an automatic second contract, and it is not owed by the
+> mechanism.
+
+The sentence after it — about crossing a repository boundary, and Pact being
+the answer if the BFF were extracted — is unchanged. This PR writes no
+verification suite against `DeliveryAddresses.Get`: the judgement the chapter
+now records is the judgement, and a suite added later is its own change with
+its own argument.
+
+- [ ] **Step 8: §14.1's and §14.2's comments**
+
+ADR-052's row names both sections, and three comments in that chapter carry
+the claim. §14.1's Ordering block, before:
+
+```yaml
+      # The authority, to validate inbound tokens (§11.2). No Identity__Client__*:
+      # Ordering calls no peer synchronously — prices come from a local
+      # projection (§6.4) and the rest goes over the broker. Only the BFF holds
+      # client credentials (§9.7, §11.5).
+```
+
+after:
+
+```yaml
+      # The authority, to validate inbound tokens (§11.2). No Identity__Client__*:
+      # Ordering calls no peer synchronously — prices come from a local
+      # projection (§6.4) and the rest goes over the broker. A host holds
+      # client credentials when it calls a peer (§9.7, §11.5, ADR-052).
+```
+
+§14.1's `web-bff` block, before:
+
+```yaml
+  # The one host with client credentials, because it is the one host that calls
+  # a peer synchronously (§9.7). Everything else here has the authority only.
+  # Named web-bff, matching the Aspire resource (§14.2) and the YARP
+  # destination (§10.2) — the gateway resolves the destination by hostname, so
+  # the container name IS the routing configuration.
+```
+
+after:
+
+```yaml
+  # A host with client credentials, because it calls a peer synchronously
+  # (§9.7); Shipping's worker is the other, on ADR-052's address read, and
+  # everything else here has the authority only. Named web-bff, matching the
+  # Aspire resource (§14.2) and the YARP destination (§10.2) — the gateway
+  # resolves the destination by hostname, so the container name IS the routing
+  # configuration.
+```
+
+§14.2's AppHost sample, before:
+
+```csharp
+// The only resource with a callerClientId, matching Compose (§14.1): the BFF
+// is the only host that calls a peer synchronously (§9.7). If a second one
+// ever appears, ADR-017's hop budget is the thing to check first.
+```
+
+after:
+
+```csharp
+// The only resource with a callerClientId, and the only one this model needs:
+// a host that calls a peer holds client credentials (§9.7, §11.5), and the
+// second such host is Shipping's worker, which this sample does not run
+// (ADR-052). If a third appears, ADR-017's hop budget is the thing to check.
+```
+
+Four lines, six and four — each inside the comment gate's limit and each citing
+an owner rather than copying its argument, and the gate does not read Markdown,
+so the limit here is the style guide's rather than CI's. §14.1's
+printed Compose model gains no Shipping block: Task 6 edits the unit file,
+which is what §14.1 describes, and the chapter prints a sample rather than the
+tree.
+
+- [ ] **Step 9: `docs/repo-map.md`'s BFF entry**
+
+Spec section 13 splits this file: PR-4 takes the gRPC-server half, on the
+Catalog entry, and this PR takes the BFF's. Before:
+
+```
+src/BFF/Web.Bff/             the third host, and the ONE that calls a peer
+                             synchronously (§9.7, ADR-017) — which is what
+                             makes it the only one holding client credentials
+                             (§11.5). Same shape as the gateway
+```
+
+After:
+
+```
+src/BFF/Web.Bff/             the third host, and the one that calls a peer
+                             synchronously on a request path (§9.7, ADR-017)
+                             — it holds client credentials because of it, as
+                             every caller of a peer does (§11.5, ADR-052).
+                             Same shape as the gateway
+```
+
+The `src/Services/Catalog/` entry's "the platform's one gRPC server" is not
+touched here: PR-4 is the pull request that makes it false, and section 13
+says so.
+
+- [ ] **Step 10: `CLAUDE.md`'s tree line**
+
+The same split, in the file that tells an agent how to act here. Before:
+
+```
+src/BFF/Web.Bff/             the third host, and the one synchronous caller
+```
+
+After:
+
+```
+src/BFF/Web.Bff/             the third host, and the one caller on a request path
+```
+
+`src/Services/Catalog/`'s "the one gRPC server" on the line below is PR-4's,
+and nothing else in `CLAUDE.md` moves: the file is a primer, and the rule it
+would otherwise restate is ADR-052's.
+
+- [ ] **Step 11: The scaffold's two drop-list comments**
+
+`tools/new-service/scaffold/render.py` argues its drop list in comments, and
+**two** of its blocks say the platform has exactly one synchronous hop. Both
+are rewritten whole rather than corrected clause by clause: each names a
+delivery-plan row, which the comment gate bans on any line this PR adds, and a
+block is judged whole — so a one-clause fix would add a line to a block that
+fails on its other lines.
+
+The first heads `OMITTED` and argues the drop of Catalog's pricing hop. It
+runs fifteen lines, which is over the gate's limit on its own. Before:
+
+```python
+        # PR-19's pricing hop, whole. §9.7 permits exactly one synchronous
+        # downstream call in the platform and Catalog is the callee, so a
+        # service scaffolded from it inherits a gRPC server nobody calls,
+        # a contract nobody consumes and a second Kestrel endpoint serving
+        # neither. The .proto is Catalog's own API rather than a shape
+        # every service has.
+        #
+        # appsettings.json goes with it because it exists ONLY for that
+        # hop: it declares the Http2 endpoint gRPC needs, and a cleartext
+        # port cannot serve HTTP/1.1 and h2c at once. Omitting it returns
+        # the service to the container image's own port configuration,
+        # which is what every other host here uses — and NOT omitting it
+        # would be worse than redundant, because that file overrides
+        # ASPNETCORE_HTTP_PORTS, so a service inheriting it would silently
+        # stop listening on whatever its deployment set.
+```
+
+After:
+
+```python
+        # The pricing hop, whole. §9.7's synchronous calls are the BFF's to
+        # Catalog and Shipping's to Ordering (ADR-052), so a service
+        # scaffolded from Catalog inherits a gRPC server nobody calls, a
+        # contract nobody consumes and a second Kestrel endpoint serving
+        # neither. appsettings.json goes with it because it exists only for
+        # that hop: it declares the Http2 endpoint gRPC needs, and a
+        # cleartext port cannot serve HTTP/1.1 and h2c at once. It also
+        # overrides ASPNETCORE_HTTP_PORTS, so a service inheriting it would
+        # silently stop listening on whatever its deployment set.
+```
+
+Nine lines, no delivery-plan row, no emphasis, and both callers named rather
+than counted. The three dropped paths under it are unchanged.
+
+The second is further down the same set, where the drop of Catalog's contract
+verification is argued in a comment whose middle clause reads "§9.7 permits
+exactly one synchronous hop and this is it". Before:
+
+```python
+        # PR-26's provider verification, which leaves for a third reason on
+        # top of that pair: it is one named consumer's expectations of one
+        # named provider. Web.Bff asks Catalog for prices (§9.7 permits
+        # exactly one synchronous hop and this is it), so a scaffolded
+        # service inherits neither the RPC nor anyone consuming it — and a
+        # contract copied to a service no consumer calls is an expectation
+        # nobody holds, which is the one thing a consumer-driven contract
+        # must never become. The csproj patch in PATCHES drops the linked
+        # PricingContract.cs with it, for the same reason.
+```
+
+After:
+
+```python
+        # The provider verification leaves for a third reason on top of that
+        # pair: it is one named consumer's expectations of one named provider.
+        # Web.Bff asks Catalog for prices, which is §9.7's one synchronous hop
+        # on a request path (ADR-017, ADR-052), so a scaffolded service
+        # inherits neither the RPC nor anyone consuming it — and a contract
+        # copied to a service no consumer calls is an expectation nobody
+        # holds, which is the one thing a consumer-driven contract must never
+        # become. The csproj patch in PATCHES drops the linked
+        # PricingContract.cs with it, for the same reason.
+```
+
+Nine lines again, no delivery-plan row, no emphasis, and the owner cited
+rather than copied. Every dropped path in the file is unchanged, so the
+scaffold drops the same files it dropped before and the rendered output is
+byte-identical:
+
+```bash
+py -3.12 -m unittest discover -s tools/new-service
+```
+
+is the check, and it must stay green without a change to an expectation — a
+comment edit that moved the rendered text would mean the block was inside a
+template literal rather than beside one.
+
+- [ ] **Step 12: Run the document checks and commit**
 
 ```bash
 py -3.12 -m unittest discover -s deploy/observability
 py -3.12 deploy/observability/check.py
 ```
 
-then `/check-links` and `/validate-blueprint`, because three chapters changed.
+with the scaffold's own suite from step 11 already green, then `/check-links`
+and `/validate-blueprint`, which the procedure owes for every chapter this task
+edited. Run the comment gate before pushing, because this task adds comment
+lines to `render.py` and the gate judges an added line as its whole block:
 
 ```bash
-git add docs/backend-architecture docs/runbooks/latency.md
-git commit -m "docs: §3.2's Consumes cell and §2.2's edges follow Shipping's first work"
+git fetch origin main
+py -3.12 .github/comment-gate/comment_gate.py --base origin/main
+```
+
+```bash
+git add docs/backend-architecture docs/runbooks/latency.md docs/repo-map.md \
+        CLAUDE.md tools/new-service/scaffold/render.py
+git commit -m "docs: the chapters and documents that said the BFF is the only synchronous caller"
 ```
 
 The body names the second synchronous call, says why it costs no hop of
-ADR-017's budget, and points at §2.3's callout as the place that already
-records the departure.
+ADR-017's budget, points at §2.3's callout as the place that already records
+the departure, and names the spec's section 13 as the table that assigned each
+of these places to this pull request. It does not restate ADR-052's rows, and
+ADR-023 and ADR-052 are not edited.
 
 ---
 
@@ -3167,8 +3587,14 @@ records the departure.
 - [ ] `py -3.12 -m unittest discover -s .github/licence-gate` and
   `py -3.12 .github/licence-gate/licence_gate.py` — both exit 0. No pin moved
   and no Appendix B row is owed; the gate is what says so.
+- [ ] `py -3.12 -m unittest discover -s tools/new-service` — green. Task 7 step
+  11 edits `render.py`, and the suite reads the rendered text, so a green run
+  is what says the comment was beside a template literal rather than inside
+  one.
 - [ ] `git fetch origin main` then
   `py -3.12 .github/comment-gate/comment_gate.py --base origin/main` — exit 0.
+  This PR adds comment lines to `render.py`, and the gate judges an added line
+  as its whole block.
 - [ ] `docker build -f src/Services/Shipping/Shipping.Worker/Dockerfile .` and
   the same for `Shipping.Migrator` — the two new `COPY` lines are what this
   proves, and Grpc.Tools reporting a missing `.proto` under
@@ -3223,7 +3649,7 @@ records the departure.
   Keycloak row is Task 3's grant-check suite.
 - Section 10 — `AddressSource__BaseUrl`, the three `Identity__Client__*` keys,
   and the client secret's Compose and fixture places → Tasks 3 and 6.
-- Section 11 — `shipping.address.refused` on the `Shipping.Carrier` meter, and
+- Section 11 — `shipping.address.refused` on the `Shipping.Outbound` meter, and
   no log line holding an address → Tasks 3 and 5. **`shipping.shipments.waiting`
   lands in PR-6, and that is this plan's answer to the question section 11
   leaves open**: the gauge is over rows past their first backoff **by state**,
@@ -3237,10 +3663,24 @@ records the departure.
   a lapsed lease, both interleavings and `SIM-LATE`, the Kazakh round trip, the
   log export and the readiness-set assertion (Task 5); the lease inequality
   (Task 4).
-- Section 13 — §3.2's Consumes cell and §2.2's diagram → Task 7, with §9.7's
-  sentence, `deploy/compose/README.md` and `docs/runbooks/latency.md` beside
-  them, which PR-4's *Left to a later PR* assigns here because they describe a
-  call no code made until this PR.
+- Section 13 — every row that table gives this pull request, and no other.
+  §3.2's Consumes cell (Task 7 step 1), §2.2's diagram (step 2), §9.7's two
+  sentences (step 3), `docs/runbooks/latency.md` (step 4), §4.1's tree
+  comment's "ONLY host that calls a service" half (step 5), §11.7's erasure
+  step (step 6), §12's sentence with ADR-023 left unedited (step 7), §14.1's
+  and §14.2's (step 8), the BFF halves of `docs/repo-map.md` and `CLAUDE.md`
+  (steps 9 and 10), and `render.py`'s two one-synchronous-hop comments (step
+  11); `deploy/compose/README.md`'s two places are Task 6 step 4, where the
+  Compose seam they describe is written. The gRPC-server halves of
+  `docs/repo-map.md` and `CLAUDE.md` are PR-4's, §4.1's identity half and
+  **every comment under `src/BFF/Web.Bff/`, both halves,** are PR-3b's — this
+  PR's class is `A+D+E` and its touch set therefore names one service's paths
+  and no host's — §15.1 and §15.3's credentials sentence are PR-7's, and
+  §15.4's "one options type" sentence is PR-6's — none of them is in the touch
+  set. The class row stays `A+D+E`: §4.1, §11.7, §12 and §14 are chapters,
+  `docs/repo-map.md`, `CLAUDE.md` and `tools/new-service/scaffold/render.py`
+  are the documents, `CLAUDE.md` and the tools tree Class D names, and the
+  reasons sit under the table rather than inside its cells.
 
 **Type consistency.** `IShipmentRepository.GetByOrderAsync/GetAsync/Add`,
 `CreateShipmentCommand`, `VoidShipmentCommand`,
@@ -3305,14 +3745,3 @@ CarrierCancelled/CarrierRefusedCancellation`, `ShipmentId`, `OrderId`,
   server side; it is refused here because §3.2 gives Shipping no API and an
   abstract gRPC service base in its production assembly is a surface the
   service is defined not to have.
-
-**Where the spec and the tree disagree, and which is wrong.** Spec section 7
-says `DeliveryAddresses` "carries `CustomerId`, copied from `OrderConfirmed`".
-No code can do that: §7's own `Shipments` column list gives the consumer
-nowhere to keep a customer between the confirmation and the address read, and
-ADR-052 puts `customer_id` on `GetDeliveryAddressReply` precisely so the reader
-has it — PR-4's proto carries the field with that comment. The blueprint wins,
-so this plan takes the value from the reply, and the value is the same
-customer either way: the reply answers for the order the event confirmed. The
-spec's sentence is the one that is wrong, and it is a wording correction rather
-than a decision to reopen.

@@ -45,15 +45,31 @@ the order 3 → 4) and 13 (§4.1's tree comment and `ServiceOptions`' remark).
   `src/BuildingBlocks/Common.Web/ServiceOptions.cs`, `src/BFF/Web.Bff/**`,
   `tests/Common.Infrastructure.Tests/**`, `tests/Web.Bff.Tests/**`,
   `docs/backend-architecture/04-solution-structure.md`,
-  `.github/secret-scan/allowed/tests.txt`. Why each: the two building
+  `.github/secret-scan/allowed/tests.txt`
+  — paths only, comma-separated, no prose inside a cell and no trailing stop,
+  because the gate strips a token's backticks only when the token ends in one.
+  Why each: the two building
   blocks and their suites, the BFF as the one host whose wiring this proves,
   and §4.1's one tree comment are B — `docs/change-locality.md`'s section 3
-  says crossing two building-block projects is B rather than A. The
+  says crossing two building-block projects is B rather than A. The BFF's own
+  comments are in the set for the same reason its wiring is, and they are here
+  rather than in PR-5 because that PR is Shipping's `A+D+E` slice, whose touch
+  set section 3 restricts to the one service's paths: no `A+D+E` pull request
+  can reach a host's tree, and Class B's set is the only one that does. The
   allow-list is D: the secret scan keys an accepted finding by path, and two
   of the moving test files carry four of them, so a file that moves and an
   entry that does not is a build failure on the entry that now matches
   nothing. PR-3b depends on PR-3a having merged, and each carries its own
   body, class row and touch set.
+- **PR-3a lands a package reference no type uses, for exactly one merge, and
+  that is argued rather than hidden.** `Ordering.Application.csproj`'s Dapper
+  block states this repository's rule — an unused package reference is a claim
+  a project would not be making — and the rule is answered, not waived: the
+  claim PR-3a makes is made true by PR-3b, which is the next change to that
+  project file. The split is the locality gate's doing, since a pin is Class
+  E's whole touch set and the move is Class B, and the honest reading is that
+  the two-pull-request sequence is one change the gate makes somebody spell in
+  two. The csproj comment says so at the reference.
 - Depends on nothing. PR-1 and PR-2 touch no path in the set above, and this
   PR touches no Shipping path; it may land before or after either.
 - `Platform.slnx` is unchanged: no project is added or removed.
@@ -122,7 +138,14 @@ beside `Microsoft.Extensions.Options`:
 ```xml
     <!-- IHttpClientFactory, which the token client fetches §11.5's grant over
          by name rather than over a captured HttpClient: a singleton that held
-         one would keep its handler past the factory's rotation. -->
+         one would keep its handler past the factory's rotation.
+
+         No type here resolves it yet, which Ordering.Application.csproj's
+         Dapper block calls a claim a project would not be making. That rule
+         holds and is answered rather than waived: the claim is made true by
+         the change that moves the token client in, and the locality gate is
+         what splits the two — a pin is Class E's whole touch set and the move
+         is Class B. -->
     <PackageReference Include="Microsoft.Extensions.Http" />
 ```
 
@@ -161,7 +184,6 @@ set; PR-3b starts from `main` after it merges.
 - Move: `src/BFF/Web.Bff/Identity/ClientCredentialsHandler.cs` → the same
 - Move: `src/BFF/Web.Bff/Identity/ServiceIdentityOptions.cs` → the same
 - Create: `src/BuildingBlocks/Common.Infrastructure/Identity/AuthorityKeyName.cs`
-- Modify: `src/BuildingBlocks/Common.Infrastructure/Common.Infrastructure.csproj`
 - Modify: `src/BFF/Web.Bff/Web.Bff.csproj` — the project reference
 - Modify: `src/BFF/Web.Bff/Dockerfile` — the restore-layer `COPY`
 - Modify: `src/BFF/Web.Bff/Program.cs` — the `using`, one comment, one
@@ -337,9 +359,32 @@ unchanged, because the parameter is captured rather than passed:
         $"than the authority '{authorityKey.Name}' names (§11.3).";
 ```
 
-Every other line of the file, `Failure`'s reference to
+Every other code line of the file, `Failure`'s reference to
 `ServiceIdentityOptions.SectionName` included, is untouched: that type moved
-with it.
+with it. The class doc is the exception, and it is the next edit.
+
+Its block runs thirteen lines and carries `<b>`, so the comment gate judges it
+whole on the namespace line this step already changes, and its last clause is
+one of the places ADR-052 made false — "turn one synchronous hop into two"
+counts the platform's hops from inside a building block that now serves more
+than one caller. It is rewritten here rather than in Task 4, because this is
+the task that moves the file and the gate judges it at its new path:
+
+```csharp
+/// <summary>
+/// §11.5's client-credentials grant, cached. A singleton, because the token it
+/// holds is the host's own and not a caller's: a scoped cache would fetch one
+/// per inbound call and add a hop to every call the host makes (ADR-052).
+/// </summary>
+/// <remarks>
+/// It fetches over its own named client, which carries no
+/// <see cref="ClientCredentialsHandler"/>: one that did would attach a token to
+/// every token fetch, and the recursion ends only in a stack overflow.
+/// </remarks>
+```
+
+Ten lines, no emphasis, the owner cited rather than copied, and no pull request
+or test named. `HttpClientName`'s own one-line doc below it is untouched.
 
 - [ ] **Step 6: Rewrite `ServiceIdentityOptions`' remark**
 
@@ -639,16 +684,26 @@ git commit -m "refactor(identity): the token-source suites move to Common.Infras
 
 ---
 
-### Task 4: The two remarks that move with the types
+### Task 4: The remarks and the BFF's own comments
 
 **Files:**
 - Modify: `src/BuildingBlocks/Common.Web/ServiceOptions.cs`
 - Modify: `docs/backend-architecture/04-solution-structure.md`
+- Modify: `src/BFF/Web.Bff/Web.Bff.csproj`, `src/BFF/Web.Bff/PricingHop.cs`,
+  `src/BFF/Web.Bff/Program.cs`,
+  `src/BFF/Web.Bff/Endpoints/CheckoutEndpoints.cs`,
+  `src/BFF/Web.Bff/Dockerfile` — the comments that say the BFF is alone
 
-Spec section 13 gives PR-3 exactly these two: §4.1's tree comment and
-`ServiceOptions`' remark, both about the one host with client credentials.
-Nothing else in the corpus moves here, and section 13 says which PR each of
-the others is.
+Spec section 13 gives PR-3b §4.1's identity half, `ServiceOptions`' remark and
+**every comment under `src/BFF/Web.Bff/`, both the credentialed-host half and
+the one-synchronous-caller half.** The two halves are not split, and the
+reason is the class system rather than taste: PR-5 is Shipping's `A+D+E`
+slice, and `docs/change-locality.md` §3 says that class's touch set names the
+one service's paths and the files outside the slice it edits — the BFF is a
+host, not that service, so PR-5 cannot reach `src/BFF/**` at all. Class B's
+set does, this PR is Class B, and it is rewriting the BFF's identity wiring
+anyway. Nothing else in the corpus moves here, and section 13 says which PR
+each of the others is.
 
 - [ ] **Step 1: `ServiceOptions`' remark**
 
@@ -702,15 +757,219 @@ The `tests/Web.Bff.Tests/` entry is left alone: it says "§9.7's hop and
 `OptionsValidationTests`, `PricingCredentialsTests` and the one real Keycloak,
 so the sentence is true as it stands.
 
-- [ ] **Step 3: Leave the rest**
+- [ ] **Step 3: The BFF's own comments, both halves**
 
-ADR-052's consequences table lists every place that says the BFF is alone, and
-assigns them to "the pull request that builds each service" —
-`docs/repo-map.md`, `docs/secrets.md`, §9.7, §11.5, §14.1, §15.1, §15.4, the
-Helm helper and `smoke.sh` among them. None is in this PR's touch set, and
-`docs/change-locality.md` is explicit about a stale restatement met in
-passing: leave it. In particular **§15.4's sentence that the solution has one
-options type is ADR-053's and moves in Shipping's PR-6**, not here.
+Seven blocks in `src/BFF/Web.Bff/` say the platform has one synchronous caller
+or one synchronous hop. Each is rewritten **whole** rather than corrected
+clause by clause: several are already over the comment gate's ten-line limit,
+and a block is judged whole on any line a pull request adds, so a one-clause
+fix would fail on the lines it did not touch. Every replacement below is ten
+lines or fewer, carries no `**…**` and no `<b>`, cites ADR-052, §9.7 or §11.5
+rather than restating them, and names no pull request and no test.
+`CachingTokenClient`'s class doc is the eighth and is Task 2 step 5's, because
+that is the task that moves the file and the gate judges it at its new path.
+
+`src/BFF/Web.Bff/Web.Bff.csproj`, the head of the file — eleven lines,
+counting the blank one inside the comment's extent. Before:
+
+```xml
+  <!--
+    Settings come from Directory.Build.props (§4.4).
+
+    One project, like the gateway and for the same reason: §10.1 gives the BFF
+    no domain and no database, so there is nothing for an Application or an
+    Infrastructure layer to hold. Program.cs is the whole composition root.
+
+    What it has that the gateway does not is an outbound call — the one
+    synchronous hop the platform permits (§9.7, ADR-017) — and that single fact
+    is why every package below is here and nowhere else.
+  -->
+```
+
+After:
+
+```xml
+  <!--
+    Settings come from Directory.Build.props (§4.4).
+
+    One project, like the gateway and for the same reason: §10.1 gives the BFF
+    no domain and no database, so there is nothing for an Application or an
+    Infrastructure layer to hold. Program.cs is the whole composition root.
+    What it has that the gateway does not is an outbound call — a synchronous
+    hop to a peer (§9.7, ADR-017, ADR-052) — and that is why every package
+    below is here and nowhere else.
+  -->
+```
+
+`src/BFF/Web.Bff/PricingHop.cs`, the class doc. Before:
+
+```csharp
+/// <summary>
+/// The platform's one synchronous downstream hop, named in one place (§9.7,
+/// ADR-017).
+/// </summary>
+```
+
+After:
+
+```csharp
+/// <summary>
+/// This host's synchronous downstream hop, named in one place (§9.7, ADR-017);
+/// it is not the platform's only one (ADR-052).
+/// </summary>
+```
+
+`src/BFF/Web.Bff/Program.cs`, over the exception handler. Before:
+
+```csharp
+// The BFF's own error translation, beside the two AddCommonProblemDetails
+// already registers. It is here rather than in Common.Web because it is about
+// an outbound call, and this is the only host that makes one (§9.7).
+```
+
+After:
+
+```csharp
+// The BFF's own error translation, beside the two AddCommonProblemDetails
+// already registers. It is here rather than in Common.Web because it is about
+// this host's outbound call (§9.7), which is the BFF's own shape (ADR-052).
+```
+
+`Program.cs`, over the correlation handler. Before:
+
+```csharp
+// §10.4's outbound half, and the platform's only place for it: this is the one
+// synchronous hop (§9.7, ADR-017), so it is the one call that could carry an ID
+// across a process boundary and was not. Events already do — §9.1's envelope
+// has the member — so the gap was exactly this edge.
+//
+// Inside the pipeline like the handler above, though for a weaker reason: the
+// value does not change between attempts, so the position is uniformity rather
+// than correctness. Outside it would work too.
+```
+
+After:
+
+```csharp
+// §10.4's outbound half: a synchronous hop (§9.7, ADR-017, ADR-052) is a call
+// that could carry an ID across a process boundary and did not. Events already
+// do — §9.1's envelope has the member — so the gap was this edge.
+//
+// Inside the pipeline like the handler above, though for a weaker reason: the
+// value does not change between attempts, so the position is uniformity rather
+// than correctness. Outside it would work too.
+```
+
+`Program.cs`, over `MapCommonHealthEndpoints` — thirteen lines, and its second
+paragraph is history, which the gate refuses outright. The §9.7 clause inside
+it survives the move, but the block comes under the limit in the same edit.
+Before:
+
+```csharp
+// No readiness check is registered anywhere in this host, so /health/ready
+// reports ready immediately — which §13.5 says is correct for exactly two
+// hosts, the gateway and this one, because neither owns a database. The rule
+// that separates that from "readiness was never wired up" is whether the host
+// has a connection string, and this one has none.
+//
+// The argument used to live only in this comment, and a comment is not a
+// mechanism: MapCommonHealthEndpoints now refuses to start a host with an
+// empty readiness set unless the host says the set is empty on purpose, which
+// is what the argument above amounts to. Catalog's synchronous hop (§9.7) is
+// deliberately NOT a readiness dependency — a BFF that reports unready when
+// Catalog is down takes itself out of rotation for a fault it is meant to
+// degrade around (§13.5).
+```
+
+After:
+
+```csharp
+// No readiness check is registered in this host, so /health/ready reports ready
+// immediately — §13.5's answer for a host that owns no database, and the rule
+// that separates it from "readiness was never wired up" is whether the host has
+// a connection string. This one has none, and MapCommonHealthEndpoints refuses
+// to start a host with an empty readiness set unless it says so on purpose.
+//
+// Catalog's synchronous hop (§9.7) is deliberately not a readiness dependency:
+// a BFF that reports unready when Catalog is down takes itself out of rotation
+// for a fault it is meant to degrade around (§13.5).
+```
+
+`src/BFF/Web.Bff/Endpoints/CheckoutEndpoints.cs`, before the validator call.
+Before:
+
+```csharp
+                    // Before the hop, always. A request that cannot produce
+                    // anything must not spend the platform's one synchronous
+                    // hop finding that out — and the throw is how the 400 gets
+                    // its field keys, because Common.Web's
+                    // ValidationExceptionHandler is what turns a
+                    // ValidationException into §10.5's ValidationProblemDetails.
+```
+
+After:
+
+```csharp
+                    // Before the hop, always. A request that cannot produce
+                    // anything must not spend a synchronous hop finding that
+                    // out (§9.7) — and the throw is how the 400 gets its field
+                    // keys, because Common.Web's ValidationExceptionHandler
+                    // turns a ValidationException into §10.5's
+                    // ValidationProblemDetails.
+```
+
+`src/BFF/Web.Bff/Dockerfile`, over the final stage — fifteen lines, whose
+second paragraph is the file's own history. The comment gate reads no
+Dockerfile, so nothing here fails CI; the style guide's *Comments* section
+reaches it anyway, and this is the pull request in whose touch set the file
+sits. Before:
+
+```dockerfile
+# -extra, like every other image here. §15.2 argued the suffix from
+# Microsoft.Data.SqlClient, which refuses to open a connection under
+# globalization-invariant mode — and this host, like the gateway, opens no
+# connection at all (§9.7's one hop is gRPC). It takes the variant anyway, for
+# the second reason that chapter gives: one base image across the platform, so
+# what a host does with a culture-sensitive comparison never depends on which
+# suffix somebody picked for its image.
+#
+# This file shipped as plain chiselled and argued its way there — no SQL, and
+# the one culture-sensitive thing it does, parsing the price off the wire,
+# names InvariantCulture at both ends. Every clause true and the conclusion
+# still wrong: §15.2 had already decided this host's suffix BY NAME, and the
+# uniformity it buys is precisely that nobody has to redo that analysis before
+# adding a date format or a sort. ICU and tzdata are the whole difference; no
+# shell, no root.
+```
+
+After:
+
+```dockerfile
+# -extra, like every other image here. §15.2 argued the suffix from
+# Microsoft.Data.SqlClient, which refuses to open a connection under
+# globalization-invariant mode — and this host, like the gateway, opens no
+# database connection at all; its hop is gRPC (§9.7, ADR-052). It takes the
+# variant anyway, for the second reason that chapter gives: one base image
+# across the platform, so what a host does with a culture-sensitive comparison
+# never depends on which suffix somebody picked for its image. ICU and tzdata
+# are the whole difference; no shell, no root.
+```
+
+The `COPY` this step does not touch is Task 2 step 7's, and the comment above
+it about NETSDK1004 stays exactly as it is.
+
+- [ ] **Step 4: Leave the rest**
+
+ADR-052's closing table lists every place that says the BFF is alone, and the
+spec's section 13 is now the table that says which pull request takes each
+row. This PR takes three of them and no others: §4.1's identity half above,
+`ServiceOptions`' remark, and every comment under `src/BFF/Web.Bff/`. Every
+remaining row is another pull request's by that table, none is in this PR's
+touch set, and `docs/change-locality.md` is explicit about a stale restatement
+met in passing: leave it. In particular **§15.4's sentence that the solution
+has one options type is ADR-053's and moves in Shipping's PR-6**, and §4.1's
+"ONLY host that calls a service synchronously" stays true until PR-5 gives the
+platform a second caller.
 
 Two of those are worth a check rather than a change, because they read the
 tree and would go red if this PR had moved the wrong thing:
@@ -725,20 +984,24 @@ and `deploy/helm/smoke.sh` requires exactly that — and the second prints
 nothing. `tools/new-service` needs no change at all: it names no `Identity`
 path and renders no host that holds one.
 
-- [ ] **Step 4: Run the document checks**
+- [ ] **Step 5: Run the document checks**
 
 ```bash
 py -3.12 .github/licence-gate/licence_gate.py
+git fetch origin main
+py -3.12 .github/comment-gate/comment_gate.py --base origin/main
 ```
 
-then `/check-links` and `/validate-blueprint`, because a chapter changed.
+then `/check-links` and `/validate-blueprint`, because a chapter changed. The
+comment gate runs here rather than only at the end, because step 3 rewrote
+seven blocks that were over its limit and it judges each of them whole.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
 git add src/BuildingBlocks/Common.Web/ServiceOptions.cs \
-        docs/backend-architecture/04-solution-structure.md
-git commit -m "refactor(identity): the remark and the tree entry follow the grant"
+        docs/backend-architecture/04-solution-structure.md src/BFF/Web.Bff
+git commit -m "refactor(identity): the remarks and the BFF's comments follow the grant"
 ```
 
 ---
@@ -757,19 +1020,22 @@ git commit -m "refactor(identity): the remark and the tree entry follow the gran
   `py -3.12 .github/secret-scan/secret_scan.py` — both exit 0.
 - [ ] `git fetch origin main` then
   `py -3.12 .github/comment-gate/comment_gate.py --base origin/main` — exit 0.
-  The two rewritten doc comments are the blocks it judges; every other block
-  in the moved files is unchanged and a renamed file is judged on its changed
-  lines alone.
+  The rewritten blocks are what it judges — `ServiceOptions`',
+  `ServiceIdentityOptions`', `CachingTokenClient`' and Task 4 step 3's seven
+  under `src/BFF/Web.Bff/` — and every block neither task touched is unchanged,
+  a renamed file being judged on its changed lines alone.
 - [ ] `dotnet restore Platform.slnx`, `dotnet build Platform.slnx`, then
   `py -3.12 .github/output-gate/output_gate.py` — exit 0, because the BFF's
   publish output gained a building block's assemblies.
 - [ ] `docker build -f src/BFF/Web.Bff/Dockerfile .` — the restore layer's new
   `COPY` is what this proves, and NETSDK1004 naming `Common.Infrastructure` is
   what a missing line looks like.
-- [ ] PR body: `| Class | B+D+E |` and the touch set from the Global
-  Constraints. The body says what the class row cannot: that the locality
-  gate admits no such row today, and names the Class D change that has to land
-  first. Then `/ship`.
+- [ ] PR body: `| Class | B+D |` and PR-3b's touch set from the Global
+  Constraints, paths only and comma-separated, with the reasons under the
+  table. Every path in it is inside B ∪ D as `classes.yml` draws them —
+  `src/BFF/**` covers `Web.Bff.csproj`, so no Class E letter is owed and none
+  is admitted: `locality_gate.py` accepts one letter, two distinct letters, or
+  `A+D+E`, and refuses anything else outright. Then `/ship`.
 
 ## Self-review
 
@@ -780,18 +1046,23 @@ git commit -m "refactor(identity): the remark and the tree entry follow the gran
   `Common.Infrastructure` with their tests → Tasks 2 and 3, with the table in
   each naming what moves and what stays and why.
 - Section 2's second sentence — `ServiceOptions`' remark and §4.1's tree
-  comment move with them → Task 4.
+  comment move with them → Task 4, whose step 3 takes the BFF's own comments
+  as well, both halves of section 13's row.
 - Section 3's PR-3 row — the four types and their tests out of `Web.Bff`, the
   BFF re-pointed, no behaviour moved → Tasks 2 and 3; the "no behaviour"
   claim is discharged by Task 2 step 11, which runs the moved suites
   unchanged in their old home before they move.
 - Section 3's order — 3 → 4, touching no Shipping path → the touch set names
   none, and the Global Constraints say the PR depends on nothing.
-- Section 13's PR-3 line → Task 4, and its PR-6 line is why Task 4 step 3
-  refuses §15.4's sentence.
+- Section 13's PR-3b rows — §4.1's identity half, Appendix B's row and every
+  comment under `src/BFF/Web.Bff/` → Tasks 1, 2 and 4; its PR-6 line is why
+  Task 4 step 4 refuses §15.4's sentence, and its PR-5 line is why §4.1's
+  "ONLY host that calls a service" stays. The `src/BFF/Web.Bff/` row is not
+  split between this PR and PR-5, because `docs/change-locality.md` §3 keeps
+  an `A+D+E` touch set to the one service's paths and PR-5 is that class.
 - ADR-052's consequence that the identity types move to a building block →
-  Task 2; its list of everything else that says the BFF is alone → Task 4
-  step 3, left to the pull requests that record names.
+  Task 2; every other row of its closing table → Task 4 step 4, left to the
+  pull request section 13 assigns it to.
 
 **Type consistency.** `ITokenCache`, `CachingTokenClient.HttpClientName`,
 `ClientCredentialsHandler`, `ServiceIdentityOptions.SectionName` and
@@ -817,6 +1088,8 @@ from `Web.Bff` and from test projects.
   in the moved code inspects a token it was issued.
 - **§15.4's "only options type" sentence and its callout**, ADR-053's, moved
   by PR-6 when `ShippingJurisdictionOptions` becomes the second.
-- **Every other sentence in ADR-052's table** — §9.7, §11.5, §14.1, §15.1,
-  `docs/repo-map.md`, `docs/secrets.md`, the Helm helper, `smoke.sh` and
-  `RealmClientTests` — each owed by the pull request that makes it false.
+- **Every other row of ADR-052's table** — §9.7, §11.5, §12, §14.1, §14.2,
+  §15.1, §11.7, `docs/repo-map.md`, `docs/secrets.md`, the Helm helper,
+  `smoke.sh`, `RealmClientTests` and `RealmImportTests` among them — each owed
+  by the pull request the spec's section 13 assigns it to, which is in every
+  case the one that makes it false.

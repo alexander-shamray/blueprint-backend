@@ -41,18 +41,22 @@ and the scaffold's suite), 13 (§4.5's sentence and §2's) and 14.
 - **Class A+D+E.** Touch set: `src/Services/Shipping/**`, `tests/Shipping.*`,
   `src/Services/Catalog/**`, `tests/Catalog.Api.Tests/**`,
   `src/BuildingBlocks/Common.Web/ObservabilityExtensions.cs`,
-  `tests/Common.Web.Tests/ObservabilityTests.cs`, `Platform.slnx` and the
-  rendered `*.csproj` files, `tools/new-service/**`, `deploy/compose/**`,
+  `tests/Common.Web.Tests/ObservabilityTests.cs`, `Platform.slnx`,
+  `tools/new-service/**`, `deploy/compose/**`,
   `deploy/observability/check.py`, `.github/secret-scan/allowed/**`,
   `.github/workflows/ci.yml`,
-  `docs/backend-architecture/02-architecture-at-a-glance.md` and
-  `docs/backend-architecture/04-solution-structure.md`.
+  `docs/backend-architecture/02-architecture-at-a-glance.md`,
+  `docs/backend-architecture/04-solution-structure.md`
+  — paths only, comma-separated, no prose inside the cell and no trailing
+  stop: the gate splits the cell on commas, strips a token's backticks only
+  when the token ends in one, and refuses a token that is not a path.
   Reasons, since the row above is paths only: A is the service's code and the
   template's, D is the scaffold, the Compose model, the observability gate and
-  the two chapters, E is the projects the render adds to `Platform.slnx`.
-  `Common.Web` and its suite are the one `AddMeter` line a service's meter
-  owes §13.2, which is why they are here and why nothing else in that assembly
-  moves.
+  the two chapters, E is `Platform.slnx` and the `*.csproj` files the render
+  writes, which are inside the two Shipping trees already named and so need no
+  token of their own. `Common.Web` and its suite are the one `AddMeter` line a
+  service's meter owes §13.2, which is why they are here and why nothing else
+  in that assembly moves.
 - **The locality gate admits `A+D+E` today** — `locality_gate.py` names it as
   the one three-member class and reads it as its three members — so this PR
   needs no contract change before it can merge, unlike Payments' and
@@ -61,8 +65,12 @@ and the scaffold's suite), 13 (§4.5's sentence and §2's) and 14.
   port allocation it does **not** need: a worker publishes no port, so 5105 is
   not taken here.
 - No new package: no `Directory.Packages.props` change, no Appendix B row.
-  Every package the gauges need — `Dapper`, `Microsoft.Extensions.Caching.Memory`
-  — is already referenced by `Catalog.Infrastructure` or arrives with it.
+  `Dapper` is already `Catalog.Infrastructure`'s.
+  `Microsoft.Extensions.Caching.Memory` arrives there transitively through
+  `Common.Infrastructure`'s `HybridCache`, and Task 1 gives it the **direct**
+  reference Ordering's and Payments' copies argue for: a project that names a
+  type declares the package, and both of those csprojs say so at the same
+  line.
 - Shipping reaches **no** Redis key and registers no `IConnectionMultiplexer`
   (spec, section 1). A rendered line that exists only to feed Redis is cut,
   not commented out.
@@ -86,6 +94,8 @@ and the scaffold's suite), 13 (§4.5's sentence and §2's) and 14.
 - Create: `src/Services/Catalog/Catalog.Infrastructure/Observability/OutboxMetrics.cs`
 - Create: `src/Services/Catalog/Catalog.Infrastructure/Observability/MetricsInitialiser.cs`
 - Modify: `src/Services/Catalog/Catalog.Infrastructure/DependencyInjection.cs`
+- Modify: `src/Services/Catalog/Catalog.Infrastructure/Catalog.Infrastructure.csproj`
+  — the direct `Microsoft.Extensions.Caching.Memory` reference
 - Modify: `src/BuildingBlocks/Common.Web/ObservabilityExtensions.cs` — one
   `AddMeter` line
 - Modify: `tests/Common.Web.Tests/ObservabilityTests.cs` — one entry in
@@ -188,6 +198,22 @@ with `using Catalog.Infrastructure.Observability;` and
 `using Microsoft.Data.SqlClient;` added to the file's `using` block in sorted
 position.
 
+`OutboxStats` names `MemoryCache`, so `Catalog.Infrastructure.csproj` gains
+the direct reference Ordering's and Payments' copies already carry, beside
+`Microsoft.Extensions.Configuration.Abstractions`:
+
+```xml
+    <!-- §13.6's OutboxStats holds its snapshot in a MemoryCache.
+         Common.Infrastructure's HybridCache reference carries the package
+         transitively; the direct reference states the direct use, as the
+         SqlClient line above does. -->
+    <PackageReference Include="Microsoft.Extensions.Caching.Memory" />
+```
+
+No `Version=`: the pin is `Directory.Packages.props`' and does not move, so
+no Class E work beyond the reference itself, and no Appendix B row — the
+package is registered there already.
+
 - [ ] **Step 4: The meter line and the test that pins it**
 
 `src/BuildingBlocks/Common.Web/ObservabilityExtensions.cs`, ahead of the
@@ -209,8 +235,11 @@ owed, and the test probes each name it holds.
 
 - [ ] **Step 5: The registration suite, copied and re-pointed**
 
-Copy `tests/Ordering.Api.Tests/MetricsRegistrationTests.cs` to
-`tests/Catalog.Api.Tests/MetricsRegistrationTests.cs`, change the namespace to
+Copy `tests/Payments.Api.Tests/MetricsRegistrationTests.cs` to
+`tests/Catalog.Api.Tests/MetricsRegistrationTests.cs` — Payments' and not
+Ordering's, because it is the copy that carries the provider registration and
+`TestEnvironment`, which is the shape a service with a third registration
+needs and the shape this step strips — change the namespace to
 `Catalog.Api.Tests`, the `using`s to `Catalog.Application`,
 `Catalog.Infrastructure` and `Catalog.Infrastructure.Observability`, and the
 `BuildServices()` helper to Catalog's two registration calls over
@@ -242,7 +271,7 @@ configuration that reaches nothing:
     }
 ```
 
-Drop every assertion naming `OrderMetrics` or a provider, so
+Drop every assertion naming `ProviderMetrics` or the provider registration, so
 `The_metrics_selector_actually_selects_something` reads:
 
 ```csharp
@@ -254,8 +283,8 @@ Drop every assertion naming `OrderMetrics` or a provider, so
 and `TestEnvironment` leaves with the provider registration it existed for.
 Everything else — the forced/registered both-directions test, the per-lane
 collection over a real `IMeterFactory`, the foreign-meter isolation test and
-the contained-failure test — travels unchanged: all four are about the
-mechanism rather than about Ordering.
+the contained-failure test — travels unchanged: each is about the mechanism
+rather than about Payments.
 
 - [ ] **Step 6: Delete the exemption and run both gates**
 
@@ -334,8 +363,10 @@ def update_observability_meters(repo_root: Path, names: Names) -> str:
             f"adds the line and never a second copy of it")
 
     require_once(text, SHARED_METERS, OBSERVABILITY)
-    padded = line.ljust(51) + "# §13.6 per-lane\n"
-    return restore(text.replace(SHARED_METERS, padded + "\n" + SHARED_METERS), newline)
+    padded = line.ljust(67) + "// §13.6 per-lane\n"
+    # Before the blank line, so the new meter joins the service-prefixed
+    # group instead of opening the shared one (§4.1's order, §13.2's export).
+    return restore(text.replace("\n" + SHARED_METERS, padded + "\n" + SHARED_METERS), newline)
 ```
 
 and in `new_service.py`'s `plan`, one more entry in `updated`, with the import
@@ -345,9 +376,13 @@ beside the others:
         OBSERVABILITY: update_observability_meters(repo_root, names),
 ```
 
-The `ljust(51)` puts the trailing comment in the column the block already uses;
-IDE0055 governs C# whitespace and a ragged column here would be a failed build
-in the assembly this writes into.
+The comment is a C# `//` and not a Python `#`: the line is written into
+`ObservabilityExtensions.cs`, and a `#` there is a preprocessor directive that
+does not compile. `ljust(67)` puts it in the column the block already uses —
+read the column off the neighbouring `AddMeter` lines rather than off this
+plan, and if they have moved, the number moves with them. IDE0055 governs C#
+whitespace, and a ragged column here would be a failed build in the assembly
+this writes into.
 
 - [ ] **Step 9: The `SCAN_REASONS` row the copied suite owes**
 
@@ -455,8 +490,12 @@ class RendersAWorker(unittest.TestCase):
     def test_the_fixture_and_the_entry_point_follow_the_host(self):
         factory = f"tests/{PROBE}.TestSupport/{PROBE}WorkerFactory.cs"
         self.assertIn(factory, self.rendered.created)
+        # `public class`, not `public sealed`: the template's CatalogApiFactory
+        # is unsealed, so a render cannot produce a sealed one and an
+        # assertion asking for it would fail on the template rather than on
+        # the mode this suite is about.
         self.assertIn(
-            f"public sealed class {PROBE}WorkerFactory", self.rendered.created[factory])
+            f"public class {PROBE}WorkerFactory", self.rendered.created[factory])
         dockerfile = f"src/Services/{PROBE}/{PROBE}.Worker/Dockerfile"
         self.assertIn(
             f'ENTRYPOINT ["dotnet", "{PROBE}.Worker.dll"]', self.rendered.created[dockerfile])
@@ -594,8 +633,8 @@ class Names:
         pass would be a pass that can see the first one's output. One
         alternation cannot re-enter its own.
 
-        **The compounds and not a bare `Api`.** That token is in
-        `AddOpenApi`, `MapOpenApi`, `Microsoft.AspNetCore.OpenApi` and
+        The compounds and never a bare `Api`: that token is in `AddOpenApi`,
+        `MapOpenApi`, `Microsoft.AspNetCore.OpenApi` and
         `IApiDescriptionProvider`, none of which is this service's host — so
         the needles are the three places the template spells the host as part
         of a name it owns, and nowhere else.
@@ -833,12 +872,13 @@ key for a file nothing copies is an anchor guarding nothing exactly as a
 `PATCHES` key would be:
 
 ```python
-    if (inert := set(PATCHES) | set(WORKER_PATCHES) - set(copied)):
+    if (inert := (set(PATCHES) | set(WORKER_PATCHES)) - set(copied)):
 ```
 
-written as `(set(PATCHES) | set(WORKER_PATCHES)) - set(copied)`, parenthesised:
-`|` binds tighter than `-` in Python, so the unparenthesised form is a
-different set and would pass on a key it should refuse.
+The parentheses are load-bearing: `-` binds tighter than `|` in Python, so
+`set(PATCHES) | set(WORKER_PATCHES) - set(copied)` is a different set — every
+`PATCHES` key, plus whatever `WORKER_PATCHES` adds — and the check would pass
+on a key it exists to refuse.
 
 - [ ] **Step 7: The command line, and the refusal split**
 
@@ -880,6 +920,36 @@ in `plan`, replacing the old `WORKER_SERVICES` refusal:
             f"§4.1 gives {name} no Domain project and this script renders one. That is a "
             f"second mode, and it joins with the PR that builds the first such host.")
 ```
+
+**Four edits the refusals above do not make, and without any one of them
+`plan` cannot render a worker at all.** They are named here rather than left
+to be discovered, because each fails late and in a way that reads as
+something else:
+
+- `plan`'s own signature becomes
+  `plan(repo_root, name, port, migration_id, host=API_HOST)`, with
+  `port: int | None`. The default keeps every existing caller and every
+  existing test passing an API render.
+- The import at the top of `new_service.py` —
+  `from scaffold import TEMPLATE, Names, ScaffoldError` — becomes
+  `from scaffold import API_HOST, HOSTS, TEMPLATE, WORKER_HOST, Names, ScaffoldError`.
+  Step 3 puts the three host names in `scaffold/__init__.py`, and this module,
+  its `main` and the suite spell them bare.
+- `names = Names(name)` becomes `names = Names(name, host)`. Without it the
+  rename maps `Catalog.Api` onto `<Name>.Api` whatever `--worker` said, and
+  the render produces an API-named host project, namespace, Compose key,
+  entry point and fixture while every refusal above passes.
+- The port range check, which reads `if port not in PORTS:` and raises for
+  `port=None` before any host refusal is reached, becomes
+
+```python
+    if port is not None and port not in PORTS:
+        raise ScaffoldError(f"port {port} is outside 1–65535 and Docker cannot publish it")
+```
+
+  and the three host refusals go **above** it, so a missing `--port` on an API
+  render is answered by the message naming `--port` rather than by a range
+  error about `None`.
 
 and in `main`:
 
@@ -1330,10 +1400,15 @@ become:
 `shipping-` admits `shipping-events` when PR-5 declares it. `write` admits
 Shipping's own contract exchanges — `Common.Contracts.Shipping.V1` already
 holds `ShipmentDispatched` and `ShipmentDelivered` (§3.2) — and the bare
-`Common.Contracts:` interface exchange, and no other context's. The rendered
-grant carried `Common\.Contracts(\.Shipping\.V1:|\.Inventory\.V1:|:)` on
-`configure` and `read`, which is Catalog's consumption of Inventory's stock
-levels wearing Shipping's name; it goes with this edit.
+`Common.Contracts:` interface exchange, and no other context's. The render
+copies `catalog-svc`'s three patterns, so what arrives names Inventory's
+contracts in two of them and in two different shapes: `configure` carries the
+grouped `Common\.Contracts(\.Shipping\.V1:|\.Inventory\.V1:|:)`, and `read`
+carries two ungrouped alternatives,
+`Common\.Contracts\.Shipping\.V1:|Common\.Contracts\.Inventory\.V1:`. Both are
+Catalog's consumption of Inventory's stock levels wearing Shipping's name, and
+both go with this edit; `ordering-svc`'s and `payments-svc`'s shape — a bare
+`Common\.Contracts` on `configure` and `read` — is what the three above are.
 
 - [ ] **Step 3: Run the gate and its suite again**
 
@@ -1683,7 +1758,7 @@ public class ShuffledTrackingFeedTests
         }
     }
 
-    /// <summary>Every ordering of the feed — Heap's algorithm, recursively.</summary>
+    /// <summary>Every ordering of the feed, by recursive selection.</summary>
     private static IEnumerable<T[]> Permutations<T>(T[] items)
     {
         if (items.Length <= 1)
@@ -1749,9 +1824,8 @@ namespace Shipping.Domain.Shipments;
 /// <remarks>
 /// The order of the first four is the rank the tracking feed promotes by
 /// (spec, section 5): a carrier page orders nothing, so an arrival may only
-/// move the shipment forward. The two terminal-by-cancellation members sit
-/// last precisely because they are not on that ladder — nothing promotes into
-/// them, and <c>Promotes</c> on the aggregate compares only the first four.
+/// move the shipment forward. The terminal-by-cancellation members sit last
+/// because nothing promotes into them, and promotion compares rank alone.
 /// </remarks>
 public enum ShipmentStatus
 {
@@ -1808,15 +1882,13 @@ namespace Shipping.Domain.Shipments;
 
 /// <summary>
 /// One fact the carrier reported about a shipment (spec, section 5). An entity
-/// of <see cref="Shipment"/> and not an aggregate root: it is reached only
-/// through the shipment, which owns every invariant about it.
+/// of <see cref="Shipment"/>, reached only through it.
 /// </summary>
 /// <remarks>
-/// Not an <c>Entity&lt;TId&gt;</c>, because its identity is
-/// <c>(ShipmentId, CarrierEventId)</c> and that base type keys on a single
-/// struct. The key is the carrier's own id, which is what makes a repeated
-/// page free — and it orders nothing, which is why the shipment's state
-/// machine is monotonic by rank rather than by arrival.
+/// Not an <c>Entity&lt;TId&gt;</c>: its identity is
+/// <c>(ShipmentId, CarrierEventId)</c> and that base type keys on one struct.
+/// The carrier's own id is what makes a repeated page free, and it orders
+/// nothing — which is why the state machine is monotonic by rank.
 /// </remarks>
 public sealed class TrackingEvent
 {
@@ -1893,25 +1965,14 @@ using Shipping.Domain.Shipments.Events;
 namespace Shipping.Domain.Shipments;
 
 /// <summary>
-/// §3.2's aggregate: one shipment per confirmed order, which is all
-/// <c>OrderConfirmed</c> can mean while an order has one address. The states
-/// and the only moves between them are the spec's section 5 table.
+/// §3.2's aggregate: one shipment per confirmed order, and the spec's
+/// section 5 table is its states and the only moves between them.
 /// </summary>
 /// <remarks>
-/// <b>Every operation returns whether it moved the shipment, and every
-/// superseded arrival returns <c>false</c> rather than throwing.</b> A fact
-/// already superseded — a <c>Collected</c> after a <c>Delivered</c>, a second
-/// <c>OrderCancelled</c>, a cancellation of a delivered shipment — thrown from
-/// a worker is a row retried for ever, and thrown from a consumer is a
-/// redelivery loop and then <c>_error</c>. The line a reader wants is written
-/// by the caller: this assembly references Common.Domain and the framework
-/// (§4.2), so the domain cannot log and does not pretend to.
-/// <para>
-/// The backoff, the lease and the poll schedule are properties here and
-/// behaviour in neither: they are the two workers' bookkeeping (spec, section
-/// 4), the columns belong to this row, and the operations that claim and
-/// release arrive with the workers that run them.
-/// </para>
+/// Every operation returns whether it moved the shipment; a superseded
+/// arrival returns <c>false</c> rather than throwing, because a throw is a
+/// row retried for ever in a worker and a redelivery loop in a consumer. The
+/// backoff, the lease and the poll schedule are properties and no behaviour.
 /// </remarks>
 public sealed class Shipment : AggregateRoot<ShipmentId>
 {
@@ -2627,9 +2688,19 @@ class EveryGateSeesTheWorkerRender(unittest.TestCase):
         gate = load_scan_gate(REPO_ROOT)
         covers = new_service.allow_list_trees(REPO_ROOT, gate)
         for path in self.paths:
+            # A file at the repository root is outside every tree the
+            # allow-list declares, and that is the design: each .txt names the
+            # directory it may suppress a finding in, and Platform.slnx — the
+            # one root file a render updates — holds nothing to suppress.
+            if "/" not in path:
+                continue
             self.assertTrue(
                 any(gate.covers_path(prefix, path) for prefix in covers),
                 f"no allow-list file covers {path}, so an entry for it would have nowhere to go")
+
+        # Not vacuous: without this the loop above would pass over a render
+        # that produced nothing but root files.
+        self.assertTrue([p for p in self.paths if "/" in p])
 
     def test_the_comment_gate_reads_every_rendered_source_file(self):
         gate = gate_module("comment-gate", "comment_gate.py")

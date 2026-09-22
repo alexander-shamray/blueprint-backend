@@ -95,20 +95,38 @@ runbook) and 13 (§13.6 and §15.3).
   windows; `commerce.env` gains `Carrier__ApiKey` from a `secretKeyRef`, three
   coherence guards and one upward guard, and its `identity.clientCredentials`
   comparison names two charts
-- Modify: `deploy/helm/smoke.sh` — the capability section, and the four
-  credential assertions ADR-052 marks **asserted**
+- Modify: `deploy/helm/smoke.sh` — `refuses_chart` moved up beside the other
+  helpers and given the per-chart overlay, `overlay_for`'s `shipping` case, the
+  capability section, and the four credential assertions ADR-052 marks
+  **asserted**
 
 - [ ] **Step 1: Write the failing smoke assertions**
 
-Two edits, both red until Task 2 creates the chart.
+Three edits, all red until Task 2 creates the chart.
 
-First, `refuses_chart` learns the per-chart overlay, because every negative
-test below renders a chart whose capabilities are required and would otherwise
-fail on the wrong value. The helper's own `--set` arguments come after the
-overlay, so a case overriding one of them still wins — Helm takes the last
-assignment:
+**First, `refuses_chart` moves up beside `refuses_foreign`**, to the block of
+helpers at the head of the file. It sits today below its first caller, and the
+section this step adds calls it from inside `Rendering` — some five hundred
+lines earlier — where the name is not bound yet and `set -euo pipefail` turns
+that into an aborted run rather than a failed assertion. `refuses_foreign`'s
+own comment already states the layout this restores: defined with the other
+helpers rather than beside the first call. The `refuses_chart catalog …` calls
+stay exactly where they are and keep working, because a definition above a
+caller is what the move produces.
+
+**Second, the helper learns the per-chart overlay** in the same move, because
+every negative test below renders a chart whose capabilities are required and
+would otherwise fail on the wrong value. The helper's own `--set` arguments
+come after the overlay, so a case overriding one of them still wins — Helm
+takes the last assignment. The comment above the definition travels with it,
+and its one clause about where `refuses` sits is corrected by the move rather
+than left pointing the wrong way:
 
 ```bash
+# A capability is a fact about the code, not an environment setting. Each of
+# these renders cleanly and produces a pod that will not start, and each has to
+# be aimed at a chart that has the capability — `refuses` below renders the
+# gateway, which owns no database and no migrator.
 refuses_chart() {
     # refuses_chart <chart> <label> <needle> <helm args...>
     local chart="$1" label="$2" needle="$3"
@@ -122,7 +140,20 @@ refuses_chart() {
 }
 ```
 
-Second, a new section after the `paymentProvider` one, inside `Rendering`:
+`overlay_for` gains its `shipping` case in the same step, beside Payments',
+because the helper above reads it and the section below renders the chart with
+it — a case added later would leave every assertion here failing on a cleared
+carrier address rather than on the value each one names:
+
+```bash
+        shipping) printf '%s' "--set-string carrier.baseUrl=https://carrier.example.invalid/ --set-string jurisdiction.addressRetention=30.00:00:00 --set-string jurisdiction.trackingRetention=90.00:00:00" ;;
+```
+
+`addressSource.baseUrl` is deliberately absent from it: the address owner's
+Service name and port are routing configuration the chart ships a default for,
+rather than an environment's choice.
+
+**Third, a new section after the `paymentProvider` one, inside `Rendering`:**
 
 ```bash
 # --------------------------------------------------------------------------
@@ -195,10 +226,12 @@ case asserts.
 bash deploy/helm/smoke.sh
 ```
 
-Expected: the run aborts before the new section — `SERVICE_CHARTS` still
-matches the directories, but `helm template shipping` fails under `set -e` in
-the section above, because `deploy/helm/shipping` does not exist. That is the
-red step; the section turns green at the end of Task 2.
+Expected: the run aborts **inside** the new section, on its first line.
+`SERVICE_CHARTS` still matches the directories on disk — `shipping` is in
+neither — so every section before this one passes, and then
+`helm template shipping "$CHARTS_DIR/shipping"` fails under `set -e` because
+`deploy/helm/shipping` does not exist. That is the red step; the section turns
+green at the end of Task 2.
 
 - [ ] **Step 3: Write the library templates**
 
@@ -282,6 +315,22 @@ these is a design change, not a configuration change." — the sentence survives
 and its subject does not, so it becomes "A third chart growing these is a
 design change, not a configuration change; ADR-052 is the record that made it
 two."
+
+**Three more sentences in that file name `Web.Bff` as the whole of the set**,
+and each is read by somebody whose render has just failed, so each is amended
+in this step rather than left to the next reader to disbelieve. The block
+comment's "They belong to the one host that calls a peer synchronously (§9.7,
+ADR-017)" becomes "They belong to the two hosts that call a peer synchronously
+— the BFF (§9.7, ADR-017) and Shipping's worker (ADR-052)". The
+`commerce.require` message on `Identity__Client__ClientId` becomes
+"identity.clientId is required when identity.clientCredentials: the hosts that
+declare it bind ServiceIdentityOptions unconditionally and ValidateOnStart
+refuses to boot without it (§15.4)." And the downward coherence guard beside
+the others — "identity.clientCredentials is false but identity.clientId is
+set. Web.Bff binds ServiceIdentityOptions unconditionally …" — takes the
+same correction, because it now fires on two charts and names one. The
+`identity.scope` message and the two `clientSecretRef` messages name no host
+and stay exactly as they are.
 
 `commerce.env`'s secret half gains, after `PaymentProvider__ApiKey`:
 
@@ -505,10 +554,11 @@ podDisruptionBudget:
   enabled: true
   minAvailable: 2
 
-# Two receive endpoints, an outbox dispatcher and two workers to drain, each
-# with a call in flight bounded by CarrierHop.TotalRequestTimeout and
-# AddressHop.TotalRequestTimeout. No number is written here: the value must
-# exceed HostOptions.ShutdownTimeout, and _deployment.tpl carries the argument.
+# One receive endpoint, an outbox dispatcher and three hosted services to
+# drain — fulfilment, tracking and retention — with a call in flight bounded by
+# CarrierHop.TotalRequestTimeout and AddressHop.TotalRequestTimeout. No number
+# is taken from those here: the value must exceed HostOptions.ShutdownTimeout,
+# and _deployment.tpl carries the argument.
 terminationGracePeriodSeconds: 45
 
 probes:
@@ -531,8 +581,8 @@ identity:
   # The authority, to validate incoming JWTs (§11.2) — and, since ADR-052, the
   # issuer this host asks for its own token.
   authority: https://id.example.com/realms/commerce
-  # True, and the second chart in the platform to say so (ADR-052). The worker
-  # presents this grant to read a delivery address from its owner; all three
+  # True: the worker presents this grant to read a delivery address from its
+  # owner (ADR-052), which is what a host declaring it is saying. All three
   # values are required by ValidateOnStart (§15.4).
   clientCredentials: true
   clientId: shipping-worker
@@ -674,8 +724,8 @@ chart keeps the three templates whose values are off.
 
 **Files:**
 - Modify: `deploy/helm/smoke.sh` — `SERVICE_CHARTS`, `MIGRATOR_CHARTS`,
-  `SOURCE_INPUTS`, `overlay_for`, the two umbrella override lists, the
-  autoscaling section and its new partition, and the worker-shape section
+  `SOURCE_INPUTS`, the two umbrella override lists, the autoscaling section and
+  its new partition, and the worker-shape section
 - Modify: `.github/workflows/helm.yml` — both `paths:` lists
 
 - [ ] **Step 1: Run it to see the list fail**
@@ -696,7 +746,9 @@ MIGRATOR_CHARTS="catalog ordering inventory payments shipping"
 
 `DATABASELESS_CHARTS` is unchanged: Shipping owns a database and a migrator.
 
-`overlay_for` gains the worker's required values, beside Payments':
+`overlay_for` already carries the worker's required values — Task 1 Step 1 put
+the case there beside Payments', with the helper that reads it, because the
+capability section cannot go green without it. It reads:
 
 ```bash
 overlay_for() {
@@ -707,9 +759,7 @@ overlay_for() {
 }
 ```
 
-`addressSource.baseUrl` is deliberately absent from that overlay: it has a
-default the chart ships, because the address owner's Service name and port are
-routing configuration rather than an environment's choice.
+and the lists below are what this task adds.
 
 `SOURCE_INPUTS` gains `src/Services/Shipping` after `src/Services/Payments`,
 and `.github/workflows/helm.yml` gains `'src/Services/Shipping/**'` in both its
@@ -849,7 +899,8 @@ git commit -m "feat(deploy): the smoke gate covers the worker chart, its capabil
 - Modify: `deploy/helm/platform/Chart.yaml` — a `shipping` dependency
 - Modify: `deploy/helm/README.md` — the tree fence, the umbrella command, the
   required-values paragraph and the environment example
-- Modify: `deploy/canary/canary.json` — the `shipping-worker` workload
+- Modify: `deploy/canary/canary.json` — the `shipping-worker` workload, and
+  the `$comment`'s claim about `maxReplicas`
 - Modify: `deploy/canary/test_canary.py` — one docstring's claim about
   `maxReplicas`
 - Modify: `.github/workflows/deploy.yml` — the dispatch `options`, and one
@@ -932,6 +983,22 @@ every chart that autoscales — not the gateway's, which is 30 because every
 external request passes through it, and not the worker's, which sets a replica
 count instead (§15.3)."
 
+`canary.json`'s own `$comment` makes the same claim about the same number and
+is the third copy of it, so it is corrected in the same edit rather than left
+as the one a reader of this file meets first. The three lines reading "§15.3's
+autoscaling.maxReplicas is 20 on the service charts, exactly 19 stable plus one
+canary. The gateway's is 30, so there the 19 is what the weight costs rather
+than all the chart allows." become:
+
+```json
+    "That count is 19, and the charts that autoscale already permit it:",
+    "§15.3's autoscaling.maxReplicas is 20 on them, exactly 19 stable plus one",
+    "canary. The gateway's is 30, so there the 19 is what the weight costs",
+    "rather than all the chart allows, and the worker's chart sets a replica",
+    "count with no autoscaler at all, so no maxReplicas bounds it and the",
+    "rollout's first rung is what scales its stable track (§15.3).",
+```
+
 - [ ] **Step 3: The deploy menu**
 
 `deploy.yml`'s `options` becomes
@@ -973,7 +1040,8 @@ git commit -m "feat(deploy): Shipping joins the umbrella, the canary map and the
 **Files:**
 - Modify: `deploy/observability/alerts/platform-alerts.yaml` — `DeliveryLag`
   and `QueueBacklogGrowing`
-- Modify: `deploy/observability/check.py` — one `SHARED_RUNBOOKS` entry
+- Modify: `deploy/observability/check.py` — one `SHARED_RUNBOOKS` entry, and
+  `EXTERNAL_METRICS`' description of `rabbitmq_queue_messages`
 - Create: `docs/runbooks/queue-backlog.md`
 - Modify: `docs/runbooks/README.md` — the index row
 - Modify: `docs/backend-architecture/13-observability.md` — §13.6's two rows
@@ -1082,11 +1150,22 @@ QueueBacklogGrowing: runbook_url names queue-backlog.md, which is not in docs/ru
         "first three steps and drift on the fourth.",
 ```
 
+`EXTERNAL_METRICS` in the same file describes `rabbitmq_queue_messages` as read
+by "§13.6's error-queue and skipped-queue alerts both". This rule is a third
+reader, and the entry is the only prose in the file that says who reads that
+series, so the clause becomes "§13.6's error-queue, skipped-queue and
+queue-backlog alerts read it". Replaced rather than appended to, because a list
+that names two and then says "and one more" is the shape that goes stale next.
+
 `docs/runbooks/queue-backlog.md`, in `error-rate.md`'s form — a header table,
 what it means for a user, the branch, the queries with real names, the
 lookalike, how to close it, and what it does not cover:
 
-```markdown
+The block below is fenced with **four** backticks, because the runbook it holds
+opens `promql` and `bash` fences of its own and a three-backtick outer fence
+would close at the first of them:
+
+````markdown
 # Runbook — queue backlog and delivery lag
 
 | | |
@@ -1200,7 +1279,7 @@ sum by (queue) (rate(rabbitmq_queue_messages{queue!~".+_(error|skipped)"}[10m]))
 ```
 
 If that has collapsed too, the incident is upstream and is not over.
-```
+````
 
 - [ ] **Step 3: The two chapter tables and the index**
 
@@ -1276,13 +1355,15 @@ why the two share a procedure, and what the runbook says is still owed.
 
 ---
 
-### Task 6: §15.3, §15.4 and `docs/secrets.md`
+### Task 6: §15.1, §15.3, §15.4 and `docs/secrets.md`
 
 **Files:**
 - Modify: `docs/backend-architecture/15-cicd-deployment.md`
+- Modify: `deploy/helm/web-bff/values.yaml` — the chart comment that carries
+  §15.3's credentials sentence
 - Modify: `docs/secrets.md`
 
-- [ ] **Step 1: §15.3's two sentences**
+- [ ] **Step 1: §15.3's sentences, and the credentials one**
 
 The Redis sentence. Before:
 
@@ -1327,6 +1408,45 @@ If §15.3 prints a values block per chart it prints none for Shipping beyond the
 two keys it already prints: the chapter prints the shapes, and the rest of
 Shipping's is Ordering's plus the capability blocks `_helpers.tpl`'s comments
 argue.
+
+The credentials sentence, which stands above §15.3's printed `web-bff` values
+block and is ADR-052's row for this chapter. Before:
+
+> Exactly one chart in the platform carries client credentials, and the
+> asymmetry is the design rather than an oversight:
+
+After:
+
+> The charts whose host calls a peer carry client credentials and no other
+> chart does, and which charts those are is the design rather than an
+> oversight
+> ([ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)):
+
+Named rather than counted, for the reason Task 1 step 4's own comment gives: a
+count is satisfied by the wrong charts, and which host holds a grant is the
+whole claim. The printed block below it stays the BFF's — the chapter prints
+one shape and `deploy/helm/shipping/values.yaml` is the second instance.
+
+The callout that closes that block. Before:
+
+> **A second chart setting `identity.clientCredentials: true` is a design
+> change, not a configuration change.** It means a host started calling a peer
+> synchronously, which is ADR-017's budget being spent — so the review question
+> is not "does the secret exist" but "why is this call not an event".
+
+After:
+
+> **A further chart setting `identity.clientCredentials: true` is a design
+> change, not a configuration change.** It means another host started calling a
+> peer synchronously, which is ADR-017's budget being spent — so the review
+> question is not "does the secret exist" but "why is this call not an event".
+> ADR-052 is where that question was answered for Shipping's worker, so a
+> review of this chart cites that record rather than arguing it again.
+
+"A second" becomes "A further" because the second chart is now on disk and
+rendered by this PR, which is what turns the callout's own arithmetic stale;
+the question it asks is unchanged, because it is the question and not the
+count that the callout exists for.
 
 - [ ] **Step 2: §15.4's rows, which the chart makes concrete**
 
@@ -1385,13 +1505,66 @@ number of hosts since ADR-052. Step 2 and step 3 become per host:
 
 Step 4 is PR-4's and is already per host; nothing else in the file moves.
 
-- [ ] **Step 4: Audit; commit**
+- [ ] **Step 4: §15.1's sentence, and the chart comment that repeats it**
+
+§15.1 describes what `smoke.sh` asserts, and Task 1 step 4 changed the
+assertion, so the description moves in the same PR or one of them is wrong.
+Before:
+
+> The second is the Helm tree (PR-23). A workflow path-filtered to
+> `deploy/helm/**` runs `deploy/helm/smoke.sh`, which resolves the charts'
+> `file://` dependencies, lints each one, and then renders every one and
+> asserts what comes out: three probes per workload, a memory limit and no CPU
+> limit, the hook annotations of [§7.4](07-persistence.md), the
+> ConfigMap/Secret split of §15.4, and one client secret in the whole platform
+> (§11.5).
+
+After:
+
+> The second is the Helm tree (PR-23). A workflow path-filtered to
+> `deploy/helm/**` runs `deploy/helm/smoke.sh`, which resolves the charts'
+> `file://` dependencies, lints each one, and then renders every one and
+> asserts what comes out: three probes per workload, a memory limit and no CPU
+> limit, the hook annotations of [§7.4](07-persistence.md), the
+> ConfigMap/Secret split of §15.4, and a client secret on each of the charts
+> whose host calls a peer and on none of the others (§11.5,
+> [ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)).
+
+The sentence after it — rendering only, no cluster reached — is unchanged. The
+`(PR-23)` in the first sentence is [Appendix C](appendix-c-delivery-plan.md)'s
+row and stays: it is prose in a chapter, not a comment, and the comment gate
+does not read Markdown.
+
+The same sentence is a comment at the head of `deploy/helm/web-bff/values.yaml`,
+which is inside this PR's `deploy/helm/**`. Before:
+
+```yaml
+# Exactly one chart in the platform carries client credentials, and the
+# asymmetry is the design rather than an oversight (§15.3).
+```
+
+After:
+
+```yaml
+# The charts whose host calls a peer carry client credentials and no other
+# chart does; which charts those are is the design rather than an oversight
+# (§15.3, ADR-052).
+```
+
+Three lines, no emphasis and nothing named but the owners, because the comment
+gate reads `.yaml`. `deploy/helm/shipping/values.yaml` does not repeat the
+rule: its own identity block cites ADR-052 and §15.4 for why the worker holds
+a grant, and a second copy of §15.3's sentence there is the copy the next
+review finds stale.
+
+- [ ] **Step 5: Audit; commit**
 
 Run `/check-links` and `/validate-blueprint`.
 
 ```bash
-git add docs/backend-architecture/15-cicd-deployment.md docs/secrets.md
-git commit -m "docs: §15.3 names Shipping among the charts with no Redis, and §15.4 names the chart values that mount its keys"
+git add docs/backend-architecture/15-cicd-deployment.md docs/secrets.md \
+        deploy/helm/web-bff/values.yaml
+git commit -m "docs: §15.3 names Shipping's chart, and §15.1 names the charts that carry client credentials"
 ```
 
 ---
@@ -1465,8 +1638,15 @@ carries the delivery-lag panel this PR's first rule reads.
   said in the runbook — delivery lag stops when a consumer starts, and
   `shipping.shipments.waiting` is the signal for a worker's wait (Task 5).
 - Section 13 — §13.6 gains the two rules (Task 5), §15.3 names Shipping among
-  the charts with no Redis (Task 6), and the chart's place is `docs/secrets.md`'s
-  fifth for the carrier key and the client secret (Task 6).
+  the charts with no Redis (Task 6 step 1), and the chart's place is
+  `docs/secrets.md`'s third for the carrier key and the client secret (Task 6
+  step 3). Section 13's table gives this PR §15.1 as well, and the row it lists
+  as `_helpers.tpl` and `smoke.sh` — so §15.3's credentials sentence and the
+  callout under it move in Task 6 step 1, §15.1's description of what
+  `smoke.sh` asserts and the `deploy/helm/web-bff/values.yaml` comment that
+  repeats it in Task 6 step 4, and the two Helm rows themselves in Tasks 1 and
+  3. The class row stays one letter: `deploy/helm/web-bff/values.yaml` is
+  inside `deploy/helm/**`, which the touch set already carries.
 
 **Type and name consistency.** The chart directory is `shipping` and the
 workload `shipping-worker`; the canary map's `serviceName` is
@@ -1483,8 +1663,8 @@ three `Identity__Client__*` — every one of them §15.4's spelling and the
 host's. The values keys `carrier`, `addressSource`, `jurisdiction` and
 `identity.clientCredentials` are produced by Task 1 and consumed by Tasks 2, 3
 and 4 under those spellings; `AUTOSCALED_CHARTS`, `FIXED_REPLICA_CHARTS`,
-`CREDENTIALED_CHARTS`, `in_configmap` and the widened `refuses_chart` are
-produced by Tasks 1 and 3 and consumed in Task 3; `queue-backlog.md`,
+`CREDENTIALED_CHARTS` and the moved, overlay-carrying `refuses_chart` are
+produced by Tasks 1 and 3 and consumed in Tasks 1 and 3; `queue-backlog.md`,
 `DeliveryLag` and `QueueBacklogGrowing` are produced by Task 5 and named by
 `SHARED_RUNBOOKS`, §13.6, §13.9 and the runbook index in the same task.
 
