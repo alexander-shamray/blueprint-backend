@@ -59,6 +59,7 @@ decision looks wrong.
 | **ADR-050** | [The rollout reads the image's facts from the image's revision](adr/ADR-050-the-rollout-reads-the-images-facts-from-its-revision.md) |
 | **ADR-051** | [The buyer's order read is a projection in the BFF](adr/ADR-051-the-buyers-order-read-is-a-projection-in-the-bff.md) |
 | **ADR-052** | [A contact is read from its owner by a worker, and kept in the reader's own table](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md) |
+| **ADR-053** | [A jurisdiction is a value the deployment is given](adr/ADR-053-a-jurisdiction-is-a-value-the-deployment-is-given.md) |
 
 ---
 

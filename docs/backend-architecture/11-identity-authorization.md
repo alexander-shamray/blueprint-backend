@@ -1514,6 +1514,12 @@ defines the seams and the rules that apply *if* the extension is enabled.
 | **Personal data erasure** | `PersonalDataDeleteRequestedV1` in `Common.Contracts` | Not published in the baseline. The consumer shape is defined below so services are built ready for it |
 | **PCI / HIPAA / SOC 2** | — | Decide before handling regulated data, not after. Record the constraints as an ADR |
 
+> **Decision — a jurisdiction is a value the deployment is given.** See
+> [ADR-053](adr/ADR-053-a-jurisdiction-is-a-value-the-deployment-is-given.md),
+> the compliance row's record. It amends one rule below: a notification log
+> row is anonymised rather than deleted, so what was said to a customer stays
+> as evidence.
+
 ### Personal data erasure under database-per-service
 
 GDPR Article 17 erasure is genuinely hard here: there is no central customer
@@ -1539,7 +1545,7 @@ sequenceDiagram
     B->>N: consume (inbox)
     B->>S: consume (inbox)
     O->>O: anonymise Orders.CustomerId, purge address
-    N->>N: delete NotificationLog rows
+    N->>N: anonymise NotificationLog rows
     S->>S: anonymise Shipment recipient
     O->>B: PersonalDataDeleteCompletedV1 {RequestId, "ordering"}
     N->>B: PersonalDataDeleteCompletedV1 {RequestId, "notifications"}
@@ -1551,8 +1557,10 @@ Rules for each service's consumer:
 
 - **Delete or anonymise, per record.** An order that must be retained for tax
   law is anonymised — customer identifiers replaced, address cleared, the
-  financial record preserved. A notification log row is deleted outright. The
-  owning service makes that call; nobody else can.
+  financial record preserved. A notification log row loses its customer id
+  and keeps the rest, because
+  [ADR-053](adr/ADR-053-a-jurisdiction-is-a-value-the-deployment-is-given.md)
+  keeps it as evidence. The owning service makes that call; nobody else can.
 - **Write an audit record** of what was erased and when. That record itself
   contains no personal data — a subject ID hash, a timestamp, a count.
 - **Idempotent.** The message is delivered at least once, and a second erasure
