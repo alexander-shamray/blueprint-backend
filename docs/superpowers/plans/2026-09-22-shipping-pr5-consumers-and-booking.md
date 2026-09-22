@@ -723,21 +723,23 @@ public sealed class DeliveryAddressStoreTests(ServiceFixture fixture) : IAsyncLi
     }
 
     [Fact]
-    public async Task A_second_read_of_the_same_order_answers_the_first_write()
+    public async Task A_second_save_for_the_same_order_leaves_one_row_holding_the_later_address()
     {
         OrderId order = new(Guid.CreateVersion7());
         Guid customer = Guid.CreateVersion7();
+        DeliveryAddress later = Kazakh with { Line2 = "пәтер 13" };
         await SaveAsync(order, customer, Kazakh);
 
-        // The pass that crashed between the answer and the commit repeats the
-        // write (spec, section 4), so the statement has to be an upsert rather
-        // than an insert — otherwise the retry fails on the primary key and
-        // the shipment never books.
-        await SaveAsync(order, customer, Kazakh);
+        // The port is idempotent per order (spec, section 4): a caller that
+        // saves twice ends with one row rather than a primary-key failure,
+        // and the row answers the later save, because the address is the
+        // owner's fact about the order and the later fetch is the fresher.
+        await SaveAsync(order, customer, later);
 
         (await fixture.ScalarAsync<int>(
             "SELECT Value = COUNT(*) FROM shipping.DeliveryAddresses WHERE OrderId = {0}", order.Value))
             .ShouldBe(1);
+        (await ReadAsync(order)).ShouldBe(later);
     }
 
     [Fact]
@@ -917,10 +919,12 @@ public static class AddressLimits
 }
 ```
 
-`SqlDeliveryAddressStore` is `SqlPaymentOrderStore`'s shape, with one
-difference argued in the file: the write runs on its own connection rather
+`SqlDeliveryAddressStore` is `SqlPaymentOrderStore`'s shape, with two
+differences argued in the file: the write runs on its own connection rather
 than on the unit of work's transaction, because the worker writes it before
-the booking and outside any unit:
+the booking and outside any unit; and the update carries no lock hints,
+because on an autocommitting connection a hint spans one statement and not
+the batch, and the worker's lease has already kept two writers off one order:
 
 ```csharp
 using System.Data;
@@ -944,12 +948,17 @@ namespace Shipping.Infrastructure.Persistence;
 /// </remarks>
 internal sealed class SqlDeliveryAddressStore(IDbConnectionFactory connections) : IDeliveryAddressStore
 {
-    // UPDLOCK with HOLDLOCK on the update: the pass that repeats after a crash
-    // meets the key-range lock rather than the primary key, so it updates the
-    // first write's row instead of failing its insert (spec, section 4).
+    // No lock hints, because no two writers of one row ever overlap: the only
+    // writer is the fulfilment worker, whose claim leases the shipment for
+    // longer than a pass can run, and an order has one shipment (spec,
+    // section 5). The pass that repeats after a crash reads this row before
+    // it writes, so the update-then-insert shape is for a caller that saves
+    // twice for one order: it ends with one row holding the later save rather
+    // than a primary-key failure. Each statement autocommits on this
+    // connection, so a hint would end with the update and span nothing.
     private const string SaveSql =
         """
-        UPDATE shipping.DeliveryAddresses WITH (UPDLOCK, HOLDLOCK)
+        UPDATE shipping.DeliveryAddresses
         SET CustomerId = @CustomerId, Line1 = @Line1, Line2 = @Line2, City = @City,
             PostalCode = @PostalCode, Country = @Country, FetchedAt = @FetchedAt
         WHERE OrderId = @OrderId;
@@ -2338,8 +2347,11 @@ public sealed class FulfilmentWorker : BackgroundService
 - [ ] **Step 1: Write the failing lease arithmetic test**
 
 In `tests/Shipping.Worker.Tests/DeliveryAddressSourceTests.cs`'s inequality
-test's file, one more assertion — the lease above both hops, which section 4
-asks a test to hold. The file gains
+test's file, one more assertion — the lease above the longest pass a row can
+take, which section 4 asks a test to hold. That pass is three calls, not two:
+the address read, the booking, and the compensating cancel when the commit
+refused the booking, 4.5 + 19 + 19 = 42.5 seconds against a 60-second lease.
+The file gains
 `using Shipping.Infrastructure.Fulfilment;` in sorted position, below
 `using Shipping.Infrastructure.Carrier;` and above
 `using Shipping.OrderingStub;`, because `FulfilmentWorker` is the owner of
@@ -2347,28 +2359,40 @@ both constants the assertion reads:
 
 ```csharp
     [Fact]
-    public void The_lease_outlives_both_hops_a_pass_can_make()
+    public void The_lease_outlives_the_longest_pass_a_row_can_take()
     {
-        TimeSpan pass = AddressHop.TotalRequestTimeout + CarrierHop.TotalRequestTimeout;
+        // Three calls on one row is the worst pass: the address read, the
+        // booking, and the compensating cancel when the commit refused the
+        // booking (spec, section 6). The recovery leg is one carrier call.
+        TimeSpan pass = AddressHop.TotalRequestTimeout + 2 * CarrierHop.TotalRequestTimeout;
 
-        pass.ShouldBeLessThan(
+        (pass * FulfilmentWorker.ClaimBatchSize).ShouldBeLessThan(
             TimeSpan.FromSeconds(FulfilmentWorker.LeaseSeconds),
             "a lease that lapsed mid-pass would let a second replica claim a row this one is still booking");
 
-        // And the pass fits §15.3's thirty-second drain — HostOptions.
-        // ShutdownTimeout's default, which that section fixes the grace period
-        // against — which is what decides the batch size: N rows would be N
-        // times the worst case above.
-        (pass * FulfilmentWorker.ClaimBatchSize).ShouldBeLessThan(TimeSpan.FromSeconds(30));
+        // §15.3's thirty-second drain — HostOptions.ShutdownTimeout's default,
+        // which that section fixes the grace period against — is met by the
+        // token and not by the budget: every call in a pass takes the stopping
+        // token, so a stop cuts the pass short. What the budget still has to
+        // fit is one call, the longest of them, which is all a stop can find
+        // in flight.
+        CarrierHop.TotalRequestTimeout.ShouldBeLessThan(TimeSpan.FromSeconds(30));
     }
 ```
 
+The lease assertion multiplies by `ClaimBatchSize` because the lease is
+stamped at the claim and the rows are fulfilled in turn: the last row of a
+batch of N waits N − 1 passes before its own begins, so the lease has to
+outlive N worst passes, and at 42.5 seconds against 60 only one fits.
+
 **`ReleaseClaim` takes no domain test, and the columns are why.** PR-1 leaves
-`Attempts` at zero and `LockedUntil` null on a new shipment, and no member of
-the aggregate sets either — `FulfilmentClaims.ClaimSql` and `FailSql` are what
-write them. A unit test over `For` plus `ReleaseClaim` would therefore assert
-two values that were already clear before the call and would stay green with
-the member's body emptied. The postcondition is asserted in Task 5 instead,
+`Attempts` at zero and `LockedUntil` null on a new shipment, and `ReleaseClaim`
+is the one member of the aggregate that touches either — it clears them, and
+nothing in the domain writes a non-default value into either.
+`FulfilmentClaims.ClaimSql` and `FailSql` are the only writes that do. A unit
+test over `For` plus `ReleaseClaim` would therefore assert two values that
+were already clear before the call and would stay green with the member's
+body emptied. The postcondition is asserted in Task 5 instead,
 over a row a pass has really leased: the recovery leg reads `Attempts` back as
 zero and the booking leg reads `LockedUntil` back as null.
 
@@ -2522,15 +2546,16 @@ public sealed class FulfilmentWorker(IServiceScopeFactory scopes, ILogger<Fulfil
 {
     /// <summary>
     /// How many rows one claim leases: one, and the number is the arithmetic:
-    /// a row costs up to both hops' totals, a pass has to fit §15.3's
-    /// thirty-second drain, and more throughput is more replicas — which is
-    /// what the lease makes safe (spec, section 4).
+    /// a row costs up to three calls' totals, the lease is stamped at the
+    /// claim and has to outlive every row's turn, and more throughput is more
+    /// replicas — which is what the lease makes safe (spec, section 4).
     /// </summary>
     public const int ClaimBatchSize = 1;
 
     /// <summary>
-    /// How long a claim holds the row it leased. Longer than both hops
-    /// together, so a slow pass is not re-claimed underneath itself, and short
+    /// How long a claim holds the row it leased. Longer than the three calls
+    /// a pass can make — the address read, the booking and the compensating
+    /// cancel — so a slow pass is not re-claimed underneath itself, and short
     /// enough that a replica killed mid-call releases its row within the
     /// minute.
     /// </summary>
@@ -2918,10 +2943,80 @@ another's, which is the same rule `QueueDepthAsync` is copied under below.
 message, its state's values and its exception's `ToString()`, registered by
 the factory. `RecordingLoggerProvider` in `Common.Web.Tests` records scopes
 only, which is a different claim, and §4.3 gives a test helper no licence to
-cross an assembly boundary. **`ResetAsync` clears it**, with
-`CapturedLogs.Clear();` beside the three lines that reset the server: a suite
-that asserts what a pass did not log would otherwise be asserting it over every
-pass that ran before it in the collection.
+cross an assembly boundary. Written whole, because the part a copy gets wrong
+is the store: lines arrive from the bus's consumer threads and both workers at
+once, so it is a `ConcurrentQueue<string>`, and `Everything` snapshots it so an
+assertion never enumerates a collection a writer is growing:
+
+```csharp
+using System.Collections.Concurrent;
+using Microsoft.Extensions.Logging;
+
+namespace Shipping.TestSupport;
+
+/// <summary>
+/// Every line the host logs, exported whole: the formatted message, each value
+/// the state carries, and the exception's <c>ToString()</c>. §11 says no line
+/// holds an address as an attribute or inside an exception's text, and a
+/// search over formatted messages alone would miss the structured half.
+/// </summary>
+/// <remarks>
+/// A <see cref="ConcurrentQueue{T}"/>, because entries arrive from the bus's
+/// consumer threads and both workers at once; <see cref="Everything"/> copies.
+/// </remarks>
+public sealed class CapturedLogs : ILoggerProvider
+{
+    private readonly ConcurrentQueue<string> _lines = new();
+
+    /// <summary>Every line captured so far, copied at the read.</summary>
+    public IReadOnlyCollection<string> Everything => _lines.ToArray();
+
+    /// <summary>Drops what earlier passes logged; the fixture's reset calls it.</summary>
+    public void Clear() => _lines.Clear();
+
+    public ILogger CreateLogger(string categoryName) => new Logger(_lines);
+
+    public void Dispose()
+    {
+    }
+
+    private sealed class Logger(ConcurrentQueue<string> lines) : ILogger
+    {
+        public IDisposable? BeginScope<TState>(TState state)
+            where TState : notnull => null;
+
+        // No filtering of its own: what the host's rules let through is what
+        // a deployment's exporter receives, and that is what is searched.
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter)
+        {
+            lines.Enqueue(formatter(state, exception));
+
+            // The structured half: LoggerMessage.Define hands the state over as
+            // the template's name-value pairs, which an exporter writes as
+            // attributes rather than into the message (§11).
+            if (state is IReadOnlyList<KeyValuePair<string, object?>> values)
+            {
+                foreach (KeyValuePair<string, object?> value in values)
+                    lines.Enqueue($"{value.Key}={value.Value}");
+            }
+
+            if (exception is not null)
+                lines.Enqueue(exception.ToString());
+        }
+    }
+}
+```
+
+**`ResetAsync` clears it**, with `CapturedLogs.Clear();` beside the three
+lines that reset the server: a suite that asserts what a pass did not log would
+otherwise be asserting it over every pass that ran before it in the collection.
 
 **Both are reached through `ShippingWorkerFactory`**, which is what installs
 them, so the two properties and the two lines that install them are written

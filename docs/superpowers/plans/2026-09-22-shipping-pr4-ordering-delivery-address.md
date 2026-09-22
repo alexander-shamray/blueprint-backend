@@ -1523,10 +1523,11 @@ other two:
 dotnet test tests/Ordering.Api.Tests --filter "FullyQualifiedName~DeliveryAddressServiceTests"
 ```
 
-Expected: compile failure on `OrderingPermissions.DeliveryAddress` and on
-`Ordering.Delivery.V1.DeliveryAddresses` having no registered implementation —
-then, once the constant exists but the service is unmapped, `Unimplemented` on
-every call.
+Expected: compile failure on `OrderingPermissions.DeliveryAddress` alone —
+the `Ordering.Delivery.V1.DeliveryAddresses` types exist from Task 1's proto,
+and a service nobody maps is not a compile error. Then, once the constant
+exists but no `MapGrpcService` names the service, `Unimplemented` on every
+call.
 
 - [ ] **Step 3: Write the permission, the service and the policy**
 
@@ -1825,7 +1826,8 @@ together.
   and
   secret as constants beside the realm's
 - Modify: `tests/Web.Bff.Tests/KeycloakIdentityTests.cs` — two tests, a
-  rename, a corrected comment and a second route on the minimal host
+  rename, a corrected comment, the class doc rewritten whole and a second
+  route on the minimal host
 - Modify: `.github/secret-scan/allowed/tests.txt` — the fixture's new
   credential-shaped constant
 
@@ -1982,10 +1984,32 @@ the client it is actually about:
     }
 ```
 
-The class's own `<remarks>` gains one sentence, because its subject widened:
-"Since ADR-052 the realm holds two credentialed clients, and the second is
-proved both ways here — a grant is a claim about what a token carries, and
-only a real Keycloak carries one."
+The class's own doc block is rewritten whole, because its subject widened and
+because the block as it stands cannot take another line: it runs twenty lines
+from `/// <summary>` to `/// </remarks>`, with `<b>` in its second paragraph,
+and the comment gate judges an added line as its whole block (Global
+Constraints). Every one of those twenty lines is replaced, in the same shape
+PR-1's Task 3 gives the template — the block's first line and its length are
+the anchor, and the After replaces exactly those lines. Its third sentence
+also goes with the block: "every service would reject the platform's one
+permitted synchronous hop" is the §11.5 sentence Task 7 Step 1 amends, and
+the hop this PR adds makes it untrue. After:
+
+```csharp
+/// <summary>
+/// §11.5's whole argument, against a real Keycloak because realm configuration
+/// compiles the same right or wrong: the scope becomes an audience, the
+/// audience is what a service validates, and neither is granted to a client
+/// the realm merely holds. The negative half matters more: a mapper that put
+/// the audience on every token would pass the first test and hand the
+/// platform to any client in the realm. Since ADR-052 the realm holds two
+/// credentialed clients, and the second is proved both ways here — a grant is
+/// a claim about what a token carries, and only a real Keycloak carries one.
+/// </summary>
+```
+
+Ten lines, no emphasis, and `[Collection(nameof(KeycloakCollection))]` follows
+it as before.
 
 - [ ] **Step 2: Run to see them fail**
 
@@ -1996,8 +2020,10 @@ dotnet test tests/Web.Bff.Tests --filter "FullyQualifiedName~KeycloakIdentityTes
 This class is in `KeycloakCollection`, which carries
 `[Trait("Category", "Integration")]` — it needs a running Docker daemon and is
 never skipped without one (§12.4). Expected, **with Task 3's realm reverted**
-as a mutation check: `granted` false and a 401 where a 403 is expected. With
-Task 3 in place: green.
+as a mutation check: `granted` false in the grant test, and in the service
+test a 401 where 200 is expected — Keycloak refuses the unknown client, the
+fixture hands back an empty token, and the host challenges it before the
+BFF's 403 line is reached. With Task 3 in place: green.
 
 - [ ] **Step 3: Prove the negative half is not vacuous**
 
