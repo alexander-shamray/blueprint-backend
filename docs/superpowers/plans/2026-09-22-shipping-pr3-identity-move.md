@@ -398,11 +398,12 @@ leak, and `Identity:Authority` — so nothing else moves with it.
 other code line of the file is untouched. The class doc is the last edit.
 
 Its block runs thirteen lines and carries `<b>`, so the comment gate judges it
-whole on the namespace line this step already changes, and its last clause is
-one of the places ADR-052 made false — "turn one synchronous hop into two"
-counts the platform's hops from inside a building block that now serves more
-than one caller. It is rewritten here rather than in Task 4, because this is
-the task that moves the file and the gate judges it at its new path:
+whole once this step rewrites it, and it comes out at ten lines with no
+emphasis. Its last clause is one of the places ADR-052 made false — "turn one
+synchronous hop into two" counts the platform's hops from inside a building
+block that now serves more than one caller. It is rewritten here rather than in
+Task 4, because this is the task that moves the file and the gate judges it at
+its new path:
 
 ```csharp
 /// <summary>
@@ -1078,8 +1079,9 @@ git commit -m "refactor(identity): the remarks and the BFF's comments follow the
   under `src/BFF/Web.Bff/` — and every block neither task touched is unchanged,
   a renamed file being judged on its changed lines alone.
 - [ ] `dotnet restore Platform.slnx`, `dotnet build Platform.slnx`, then
-  `py -3.12 .github/output-gate/output_gate.py` — exit 0, because the BFF's
-  publish output gained a building block's assemblies.
+  `py -3.12 .github/output-gate/output_gate.py` — exit 0. A build ran in this
+  tree and this gate is not in `Platform.slnx`, so nothing above has asked
+  whether that build left a `bin/` or an `obj/` under `src/` or `tests/`.
 - [ ] `docker build -f src/BFF/Web.Bff/Dockerfile .` — the restore layer's new
   `COPY` is what this proves, and NETSDK1004 naming `Common.Infrastructure` is
   what a missing line looks like.

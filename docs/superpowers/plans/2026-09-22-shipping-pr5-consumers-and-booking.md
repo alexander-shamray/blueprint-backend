@@ -2644,6 +2644,7 @@ as what keeps section 6's "never booked" true.
 - Create: `tests/Shipping.TestSupport/ShipmentCommitFaults.cs`
 - Create: `tests/Shipping.TestSupport/CapturedLogs.cs`
 - Test: `tests/Shipping.Worker.Tests/ShipmentFulfilmentTests.cs`
+- Test: `tests/Shipping.Worker.Tests/FulfilmentFaultTests.cs`
 - Modify: `tests/Shipping.Worker.Tests/HostSmokeTests.cs` — the readiness set
 
 **Interfaces:**
@@ -2652,7 +2653,8 @@ as what keeps section 6's "never booked" true.
   script of PR-2's section 9 table.
 - Produces: `ServiceFixture.Carrier`, `.Ordering`, `.FailNextCommit()`,
   `.RunFulfilmentPassAsync()`, `.CapturedLogs`, `.QueueDepthAsync(queue)`,
-  `.BindingsAsync(queue)`.
+  `.BindingsAsync(queue)`, `.NewWorkerHost(carrierBaseUrl)` and
+  `ServiceFixture.CarrierAnswers(server, path, statusCode, method, delay)`.
 
 - [ ] **Step 1: Extend the fixture**
 
@@ -2697,12 +2699,116 @@ service stages no outbox row yet and firing on an inbox write would make
 message, its state's values and its exception's `ToString()`, registered by
 the factory. `RecordingLoggerProvider` in `Common.Web.Tests` records scopes
 only, which is a different claim, and §4.3 gives a test helper no licence to
-cross an assembly boundary.
+cross an assembly boundary. **`ResetAsync` clears it**, with
+`CapturedLogs.Clear();` beside the three lines that reset the server: a suite
+that asserts what a pass did not log would otherwise be asserting it over every
+pass that ran before it in the collection.
 
-`BindingsAsync(string queue)` runs
-`rabbitmqctl list_bindings --quiet --no-table-headers source_name destination_name`
-through the container, as `QueueDepthAsync` runs `list_queues`, and returns
-the source exchanges bound to that destination.
+**`QueueDepthAsync(string queue)` is written here and not taken from
+anywhere.** `tests/Payments.TestSupport/ServiceFixture.cs` holds the only one
+in the repository, and §4.3 gives no test-support assembly licence to reach
+another's, so this is that helper copied one service over — the same rule and
+the same wording as this fixture's broker-context locator:
+
+```csharp
+    /// <summary>
+    /// Messages a queue holds, read from the broker itself, or zero when it
+    /// does not exist yet — MassTransit declares an <c>_error</c> queue on its
+    /// first fault, and a fault's arrival there is an outcome no table shows.
+    /// </summary>
+    public async Task<int> QueueDepthAsync(string queue)
+    {
+        ExecResult result = await _rabbit!.ExecAsync(
+            ["rabbitmqctl", "list_queues", "--quiet", "--no-table-headers", "name", "messages"],
+            TestContext.Current.CancellationToken);
+
+        if (result.ExitCode != 0)
+        {
+            throw new InvalidOperationException(
+                $"Could not list the broker's queues (exit {result.ExitCode}). stderr: {result.Stderr}");
+        }
+
+        foreach (string line in result.Stdout.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+        {
+            string[] columns = line.Split('\t', StringSplitOptions.TrimEntries);
+            if (columns.Length == 2 && columns[0] == queue)
+                return int.Parse(columns[1], System.Globalization.CultureInfo.InvariantCulture);
+        }
+
+        return 0;
+    }
+```
+
+`BindingsAsync(string queue)` is that shape over
+`rabbitmqctl list_bindings --quiet --no-table-headers source_name destination_name`,
+returning the source exchanges bound to that destination.
+
+**Two more members, and both are on the fixture because Step 2 splits a suite
+off that cannot share this one's host.** `NewWorkerHost` is what that suite
+builds per test, and `CarrierAnswers` is how a test scripts an answer the
+simulator's own directory does not carry:
+
+```csharp
+    /// <summary>
+    /// A second worker host over these containers and this Ordering stub,
+    /// answered by a carrier the caller started. A resilience pipeline belongs
+    /// to a host, so a suite whose cases fill the breaker takes one of these
+    /// per test (<c>CarrierHop</c>).
+    /// </summary>
+    public ShippingWorkerFactory NewWorkerHost(string carrierBaseUrl) =>
+        new(
+            ConnectionString,
+            _rabbit!.GetConnectionString(),
+            carrierBaseUrl,
+            addressSourceBaseUrl: Ordering.Address.ToString());
+
+    /// <summary>
+    /// Makes one carrier server answer one path with one status code, after an
+    /// optional delay, until the returned handle is disposed.
+    /// </summary>
+    /// <remarks>
+    /// A mapping on a running server rather than a file under
+    /// deploy/compose/carrier-simulator: that directory is the postal-code
+    /// script Compose and this fixture share (spec, section 9), and an answer
+    /// nobody can reach from a checkout is no part of it. An
+    /// <c>ExactMatcher</c> at priority 0, because the directory's own mappings
+    /// sit at 1 and its catch-all at 10. The server is a parameter and not
+    /// <see cref="Carrier"/>, because the suites that script an answer are the
+    /// ones running a host of their own.
+    /// </remarks>
+    public static IDisposable CarrierAnswers(
+        WireMockServer server,
+        string path,
+        int statusCode,
+        string method = "GET",
+        TimeSpan? delay = null)
+    {
+        Guid id = Guid.CreateVersion7();
+        IResponseBuilder answer = Response.Create().WithStatusCode(statusCode);
+
+        server
+            .Given(Request.Create().WithPath(new ExactMatcher(path)).UsingMethod(method))
+            .AtPriority(0)
+            .WithGuid(id)
+            .RespondWith(delay is null ? answer : answer.WithDelay(delay.Value));
+
+        return new CarrierMapping(server, id);
+    }
+
+    /// <summary>
+    /// Removes one mapping and leaves the rest. <c>ResetAsync</c> resets the
+    /// whole server between tests and is the backstop; this is what keeps a
+    /// mapping from outliving the assertion it was added for inside one.
+    /// </summary>
+    private sealed class CarrierMapping(WireMockServer server, Guid id) : IDisposable
+    {
+        public void Dispose() => server.DeleteMapping(id);
+    }
+```
+
+with `using WireMock.Matchers;`, `using WireMock.RequestBuilders;`,
+`using WireMock.ResponseBuilders;` and `using WireMock.Server;` on the file.
+PR-6's tracking suites consume these by name and define nothing of their own.
 
 - [ ] **Step 2: Write the failing container tests**
 
@@ -2824,18 +2930,6 @@ public sealed class ShipmentFulfilmentTests(ServiceFixture fixture) : IAsyncLife
     }
 
     [Fact]
-    public async Task A_carrier_that_is_down_backs_the_row_off_and_keeps_it()
-    {
-        Guid order = await ConfirmAsync(Kazakh with { PostalCode = "SIM-DOWN" });
-
-        await fixture.RunFulfilmentPassAsync();
-
-        (await StatusAsync(order)).ShouldBe("Pending");
-        (await AttemptsAsync(order)).ShouldBe(1);
-        (await NextAttemptDelayAsync(order)).ShouldBeGreaterThanOrEqualTo(TimeSpan.FromSeconds(5));
-    }
-
-    [Fact]
     public async Task A_crash_between_the_carriers_answer_and_the_commit_books_once_at_the_carrier()
     {
         Guid order = await ConfirmAsync(Kazakh);
@@ -2856,28 +2950,6 @@ public sealed class ShipmentFulfilmentTests(ServiceFixture fixture) : IAsyncLife
         (await ReferenceAsync(order)).ShouldBe("crr_SIM-OK");
         (await fixture.ScalarAsync<int>(
             "SELECT Value = COUNT(*) FROM shipping.DeliveryAddresses WHERE OrderId = {0}", order)).ShouldBe(1);
-    }
-
-    [Fact]
-    public async Task Two_passes_overlapping_claim_one_row_once()
-    {
-        Guid order = await ConfirmAsync(Kazakh with { PostalCode = "SIM-SLOW" });
-
-        // Staged, not two passes back to back: the first is inside the
-        // carrier's budget when the second claims, which is the only ordering
-        // that says anything about READPAST.
-        Task<int> first = fixture.RunFulfilmentPassAsync();
-        await WaitUntil(() => BookingCalls() >= 1);
-        (await fixture.RunFulfilmentPassAsync()).ShouldBe(0, "the second pass skipped a leased row");
-
-        // Zero for the first pass too: the stalled booking gives up inside
-        // CarrierHop's total and the row's catch backs it off rather than
-        // letting the fault out of the pass.
-        (await first).ShouldBe(0);
-
-        (await StatusAsync(order)).ShouldBe("Pending");
-        (await AttemptsAsync(order)).ShouldBe(1, "one pass failed on the row, and the other never took it");
-        BookingCalls().ShouldBe(1, "the second pass reached no carrier at all");
     }
 
     [Fact]
@@ -2987,17 +3059,217 @@ public sealed class ShipmentFulfilmentTests(ServiceFixture fixture) : IAsyncLife
 
 The helpers are Payments' endpoint helpers one service over: `PublishAsync`
 onto the bus with a drain, `Confirmed`/`Cancelled` building the contracts,
-`StatusAsync`/`ReferenceAsync`/`ReasonAsync`/`AttemptsAsync`/
-`NextAttemptDelayAsync`/`ShipmentIdAsync` reading one column with
-`fixture.ScalarAsync`, `ClearBackoffAsync` setting `NextAttemptAt` to
-`SYSDATETIMEOFFSET()`, `BookingCalls`/`BookingBody`/`BookingKeys`/`CancelKeys`
-reading `fixture.Carrier.LogEntries`, `DespatchAsync` recording a `Collected`
-tracking event through the repository — PR-6 brings the worker that would —
-and `ConfirmAsync` seeding the stub and publishing `OrderConfirmed`.
-`WaitUntil(Func<bool>)` is the last of them: it polls its predicate to a
-deadline and throws when it lapses, which is what lets the overlapping-pass
-test stage its second claim while the first is still inside the carrier's
-budget rather than sleeping a guess.
+`StatusAsync`/`ReferenceAsync`/`ReasonAsync`/`AttemptsAsync`/`ShipmentIdAsync`
+reading one column with `fixture.ScalarAsync`, `ClearBackoffAsync` setting
+`NextAttemptAt` to `SYSDATETIMEOFFSET()`,
+`BookingCalls`/`BookingBody`/`BookingKeys`/`CancelKeys` reading
+`fixture.Carrier.LogEntries`, `DespatchAsync` recording a `Collected` tracking
+event through the repository — PR-6 brings the worker that would — and
+`ConfirmAsync` seeding the stub and publishing `OrderConfirmed`.
+
+**Every case that ends in a carrier fault is a second suite with a host of its
+own, and the breaker is why.** `CarrierHop.CircuitBreakerMinimumThroughput` is
+four attempts inside a sixty-second window, with a thirty-second break, because
+it is sized to a worker's call rate rather than to an endpoint's — PR-2 splits
+`CarrierFaultTests` off `HttpCarrierGatewayTests` for exactly this and argues
+it there. One booking answered 503 is `CarrierHop.MaxRetryAttempts + 1` failed
+attempts, two such cases fill the window, and every booking in the same class
+after them is refused without a request leaving the process: the journal would
+report the previous test's traffic and each assertion would be about the shared
+pipeline rather than about the carrier. `ResetAsync` cannot undo it, because
+the pipeline belongs to the host and not to the database. So
+`tests/Shipping.Worker.Tests/FulfilmentFaultTests.cs` builds a
+`ShippingWorkerFactory` and a carrier server per test over this fixture's
+containers — the cost §12.4 asks to justify, and building one host rather than
+one SQL Server is what makes it payable:
+
+```csharp
+using Common.Contracts.Ordering.V1;
+using MassTransit;
+using Microsoft.Extensions.DependencyInjection;
+using Shipping.Infrastructure.Carrier;
+using Shipping.Infrastructure.Fulfilment;
+using Shipping.OrderingStub;
+using Shipping.TestSupport;
+using Shouldly;
+using WireMock.Server;
+using Xunit;
+
+namespace Shipping.Worker.Tests;
+
+/// <summary>
+/// The two fulfilment cases that end in a carrier fault, each over a host of
+/// its own because the breaker they fill is sized to open (<c>CarrierHop</c>).
+/// The database, the broker and the Ordering stub stay the collection's.
+/// </summary>
+[Collection(nameof(IntegrationCollection))]
+public sealed class FulfilmentFaultTests : IAsyncLifetime
+{
+    /// <summary>
+    /// Short of <c>CarrierHop.AttemptTimeout</c> on purpose: the answer has to
+    /// reach the journal before the overlapping pass can be staged on it, and
+    /// the attempt that follows is the window that pass claims in.
+    /// </summary>
+    private static readonly TimeSpan StallPerAttempt = TimeSpan.FromSeconds(3);
+
+    private readonly ServiceFixture _fixture;
+    private readonly WireMockServer _carrier = WireMockServer.Start();
+    private readonly ShippingWorkerFactory _host;
+
+    public FulfilmentFaultTests(ServiceFixture fixture)
+    {
+        _fixture = fixture;
+        _carrier.ReadStaticMappings(SimulatorMappings.Directory());
+        _host = fixture.NewWorkerHost(_carrier.Urls[0] + "/");
+    }
+
+    public ValueTask InitializeAsync() => new(_fixture.ResetAsync());
+
+    public ValueTask DisposeAsync()
+    {
+        _host.Dispose();
+        _carrier.Stop();
+
+        return ValueTask.CompletedTask;
+    }
+
+    [Fact]
+    public async Task A_carrier_that_is_down_backs_the_row_off_and_keeps_it()
+    {
+        Guid order = await ConfirmAsync("SIM-DOWN");
+
+        (await PassAsync()).ShouldBe(0);
+
+        (await StatusAsync(order)).ShouldBe("Pending");
+        (await AttemptsAsync(order)).ShouldBe(1);
+        (await NextAttemptDelayAsync(order)).ShouldBeGreaterThanOrEqualTo(TimeSpan.FromSeconds(5));
+        BookingCalls().ShouldBe(CarrierHop.MaxRetryAttempts + 1, "the pipeline retries a 503 inside the one call");
+    }
+
+    [Fact]
+    public async Task Two_passes_overlapping_claim_one_row_once()
+    {
+        Guid order = await ConfirmAsync("050000");
+
+        // The journal is what the second pass is staged on, so the answer is
+        // delayed by less than an attempt's timeout: WireMock.Net writes its
+        // log entry once the response is produced, and a stall past the timeout
+        // would leave the count at zero until the row had already been released.
+        using IDisposable stalled = ServiceFixture.CarrierAnswers(
+            _carrier, "/v1/shipments", 503, method: "POST", delay: StallPerAttempt);
+
+        Task<int> first = PassAsync();
+        await WaitUntil(() => Task.FromResult(BookingCalls() >= 1));
+        (await PassAsync()).ShouldBe(0, "the second pass skipped a leased row");
+
+        // Zero for the first pass too: the booking gives up inside CarrierHop's
+        // total and the row's catch backs it off rather than letting the fault
+        // out of the pass.
+        (await first).ShouldBe(0);
+
+        (await StatusAsync(order)).ShouldBe("Pending");
+        (await AttemptsAsync(order)).ShouldBe(1, "one pass failed on the row, and the other never took it");
+        BookingCalls().ShouldBe(
+            CarrierHop.MaxRetryAttempts + 1, "every request in the journal belongs to the first pass");
+    }
+
+    private Task<int> PassAsync() =>
+        _host.Services.GetRequiredService<FulfilmentWorker>()
+            .RunOnceAsync(TestContext.Current.CancellationToken);
+
+    private int BookingCalls() =>
+        _carrier.LogEntries.Count(e => e.RequestMessage!.Path == "/v1/shipments");
+
+    // The address the stub will answer with and the event that creates the
+    // shipment, in one helper: the postal code is the only part a case here
+    // varies, and it is what the simulator scripts (spec, section 9).
+    private async Task<Guid> ConfirmAsync(string postalCode)
+    {
+        Guid order = Guid.CreateVersion7();
+        _fixture.Ordering.Addresses[order] =
+            new StubAddress(Guid.CreateVersion7(), "1 Abay Avenue", null, "Almaty", postalCode, "KZ");
+
+        await _fixture.Factory.Services.GetRequiredService<IPublishEndpoint>().Publish(
+            new OrderConfirmed
+            {
+                MessageId = Guid.CreateVersion7(),
+                CorrelationId = order,
+                OccurredAt = DateTimeOffset.UtcNow,
+                OrderId = order,
+                CustomerId = Guid.CreateVersion7(),
+                TotalAmount = 10m,
+                Currency = "KZT",
+                Lines = [new ConfirmedLine(Guid.CreateVersion7(), 1, 10m)]
+            },
+            TestContext.Current.CancellationToken);
+
+        // The drain: a pass run before the consumer commits claims nothing, and
+        // the assertions that follow would then be about an empty table.
+        await WaitUntil(async () => await ShipmentCountAsync(order) == 1);
+
+        return order;
+    }
+
+    private Task<int> ShipmentCountAsync(Guid order) =>
+        _fixture.ScalarAsync<int>("SELECT Value = COUNT(*) FROM shipping.Shipments WHERE OrderId = {0}", order);
+
+    private Task<string> StatusAsync(Guid order) =>
+        _fixture.ScalarAsync<string>("SELECT Value = Status FROM shipping.Shipments WHERE OrderId = {0}", order);
+
+    private Task<int> AttemptsAsync(Guid order) =>
+        _fixture.ScalarAsync<int>("SELECT Value = Attempts FROM shipping.Shipments WHERE OrderId = {0}", order);
+
+    private async Task<TimeSpan> NextAttemptDelayAsync(Guid order)
+    {
+        int seconds = await _fixture.ScalarAsync<int>(
+            """
+            SELECT Value = DATEDIFF(second, SYSDATETIMEOFFSET(), NextAttemptAt)
+            FROM shipping.Shipments
+            WHERE OrderId = {0}
+            """,
+            order);
+
+        return TimeSpan.FromSeconds(seconds);
+    }
+
+    /// <summary>
+    /// Polls to a deadline and throws when it lapses, which is what stages a
+    /// pass on something another pass has already done rather than on a sleep.
+    /// </summary>
+    private static async Task WaitUntil(Func<Task<bool>> predicate)
+    {
+        DateTimeOffset deadline = DateTimeOffset.UtcNow + CarrierHop.TotalRequestTimeout;
+
+        while (DateTimeOffset.UtcNow < deadline)
+        {
+            if (await predicate())
+                return;
+
+            await Task.Delay(TimeSpan.FromMilliseconds(50), TestContext.Current.CancellationToken);
+        }
+
+        throw new TimeoutException("The staged condition did not hold inside the carrier's total budget.");
+    }
+}
+```
+
+`ConfirmAsync` and the four column readers are the sibling suite's, copied
+rather than shared — the rule the Payments suites follow and the one this task
+already applies to its two connection-string literals: a private helper crosses
+no class in either file, and hoisting four one-line reads onto the fixture
+would make two suites' arrangements move together for no reason but their
+shape.
+
+**The overlap is staged on the journal and not on `BookingCalls()` alone being
+non-zero after a stall past the budget**, which is what makes the case say
+anything about `READPAST`: a mapping delayed past `CarrierHop.AttemptTimeout`
+produces no log entry until the attempt has already timed out, so a wait on it
+would return after the first pass had failed the row and released it, and the
+second pass would be claiming a free row rather than a leased one. Delayed
+under the timeout, the first entry lands while the retry is still in flight,
+and the second pass runs inside that attempt. The journal is then
+`CarrierHop.MaxRetryAttempts + 1` requests — the same arithmetic PR-2's own
+503 case asserts — and every one of them is the first pass's.
 
 - [ ] **Step 3: The readiness set**
 
@@ -3031,12 +3303,15 @@ dotnet test tests/Shipping.Worker.Tests
 Expected: green with a running Docker daemon; without one the container half
 fails on `Failed to connect to Docker endpoint`, which is the daemon and not
 the suite. Two tests are slow by design and the cost is named here rather than
-found. The `SIM-SLOW` test takes about nineteen seconds, because that is
-`CarrierHop.TotalRequestTimeout`. The one that starts the loop takes about
-seven, because `PeriodicTimer` fires its first tick one
-`CarrierHop.FulfilmentTick` after the loop starts, and a loop that has not
+found. The overlapping-pass test takes about eight seconds: two answers stalled
+`StallPerAttempt` each, with the pipeline's own retry delay between them, which
+is what keeps the row in flight while the second pass claims. The one that
+starts the loop takes about seven, because `PeriodicTimer` fires its first tick
+one `CarrierHop.FulfilmentTick` after the loop starts, and a loop that has not
 ticked proves nothing about the catch inside it. §12.4's trade is the fidelity
-against the seconds, and both of these are the fidelity.
+against the seconds, and both of these are the fidelity. `FulfilmentFaultTests`
+pays a host per test on top, and no container: the factory is built over the
+collection's SQL Server and broker.
 
 ```bash
 git add tests/Shipping.TestSupport tests/Shipping.Worker.Tests
@@ -3045,7 +3320,9 @@ git commit -m "test(shipping): the fulfilment worker over SQL Server, RabbitMQ a
 
 The body lists what each test is the only witness of: the claim's `READPAST`,
 the lease that lapses, the idempotency key across a failed commit, both of
-section 6's interleavings, and the log export that finds no address.
+section 6's interleavings, and the log export that finds no address. It also
+argues the split — a breaker sized to open cannot be shared, so the two cases
+that fill it take a host each — and the staging the overlapping pass rests on.
 
 ---
 
@@ -3179,9 +3456,30 @@ hosts that mint one of their own
 ADR-052)". The row is a table cell rather than prose, so it is corrected in
 place and nothing is added to it.
 
-The BFF paragraph below says it is "the one host that needs more than an
-authority". It is not, since ADR-052. Amend that sentence and add Shipping's
-own host-run block after Payments':
+The BFF paragraph below carries two stale claims in one sentence, and both are
+replaced together rather than one of them corrected. Before:
+
+```markdown
+The BFF is excluded too, and it is the one host that needs more than an
+authority — §15.4 marks `Identity__Client__*` BFF-only, `ValidateOnStart`
+refuses to boot without all three, and its own hop needs Catalog's **gRPC**
+port rather than its REST one:
+```
+
+After:
+
+```markdown
+The BFF is excluded too, and it is one of the two hosts that need more than an
+authority — §15.4's three `Identity__Client__*` rows are required of a host
+that calls a peer, which since ADR-052 is the BFF and Shipping's worker,
+`ValidateOnStart` refuses to boot without all three, and its own hop needs
+Catalog's **gRPC** port rather than its REST one:
+```
+
+The second clause is the one a reader of §15.4 would find false first: PR-4
+rewrote those three rows to name the obligation's shape rather than one host,
+so a sentence here still calling them BFF-only contradicts the table it cites.
+Then add Shipping's own host-run block after Payments':
 
 ```bash
 export ASPNETCORE_ENVIRONMENT=Development
@@ -3785,10 +4083,15 @@ ADR-023 and ADR-052 are not edited.
   be rewritten there. PR-7 gives the first alert that reads it.
 - Section 12 — both consumers against a fake store in both orders (Task 1); the
   mapper registry (Task 1); the owner taken away, the crash between the
-  carrier's answer and the commit, two workers overlapping, a pass that throws,
-  a lapsed lease, both interleavings and `SIM-LATE`, the Kazakh round trip, the
-  log export and the readiness-set assertion (Task 5); the lease inequality
-  (Task 4).
+  carrier's answer and the commit, a pass that throws, a lapsed lease, both
+  interleavings and `SIM-LATE`, the Kazakh round trip, the log export and the
+  readiness-set assertion (Task 5); the lease inequality (Task 4). **Two
+  workers overlapping and the carrier that is down are Task 5's second suite**,
+  with a host per test: the section asks for the overlap "staged, not two
+  passes back to back", and the only staging signal that is true while the row
+  is still leased is a carrier answer delayed under `CarrierHop.AttemptTimeout`
+  — which is a fault, and a fault fills a breaker the rest of the collection
+  would then be refused by.
 - Section 13 — every row that table gives this pull request, and no other.
   §3.2's Consumes cell (Task 7 step 1), §2.2's diagram (step 2), §9.7's two
   sentences (step 3), `docs/runbooks/latency.md` (step 4), §4.1's tree
@@ -3821,9 +4124,13 @@ spellings by PR-6 —
 `GrantCheckedTokenCache`, `DependencyInjection.BaseUrlKey`,
 `FulfilmentWork`, `FulfilmentClaims`, `FulfilmentWorker.ClaimBatchSize` and
 `.LeaseSeconds` and `.RunOnceAsync`, `Shipment.ReleaseClaim`,
-`StubOrdering`/`StubAddress`, and `ShippingWorkerFactory`'s
-`addressSourceBaseUrl` and `Tokens` are produced and consumed under those
-spellings within this plan. Everything consumed from earlier PRs is spelt as
+`StubOrdering`/`StubAddress`, `ServiceFixture.QueueDepthAsync`/`.BindingsAsync`/
+`.NewWorkerHost` and the static `ServiceFixture.CarrierAnswers`, and
+`ShippingWorkerFactory`'s `addressSourceBaseUrl` and `Tokens` are produced and
+consumed under those spellings within this plan. `QueueDepthAsync` and
+`CarrierAnswers` are written here rather than assumed: the first exists only in
+`Payments.TestSupport` today, and the second is consumed by PR-6, which defines
+neither. Everything consumed from earlier PRs is spelt as
 those plans produce it: `Shipment.For/Book/MarkUnfulfillable/Cancel/
 CarrierCancelled/CarrierRefusedCancellation`, `ShipmentId`, `OrderId`,
 `ShipmentStatus`, `ICarrierGateway.BookAsync/CancelAsync`, `BookingRequest`,

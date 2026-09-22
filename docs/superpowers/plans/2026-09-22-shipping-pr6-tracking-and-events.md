@@ -112,10 +112,11 @@ PR-6).
     the three `Identity__Client__*` settings; and `ServiceFixture` with
     **`Carrier`, a `WireMockServer` started over `SimulatorMappings.Directory()`
     — PR-5 declares it with that type and puts `WireMock.Net` on
-    `Shipping.TestSupport.csproj` for it, which is what Task 3's
-    `CarrierAnswers` builds on** — `Ordering`, `CapturedLogs`, `FailNextCommit()`,
-    `RunFulfilmentPassAsync()`, `QueueDepthAsync`, `BindingsAsync`, beside
-    PR-1's `ScalarAsync`, `ExecuteAsync`, `ColumnsAsync` and `ResetAsync`.
+    `Shipping.TestSupport.csproj` for it** — `Ordering`, `CapturedLogs`,
+    `FailNextCommit()`, `RunFulfilmentPassAsync()`, `QueueDepthAsync`,
+    `BindingsAsync`, `NewWorkerHost(carrierBaseUrl)` and the static
+    `CarrierAnswers(server, path, statusCode, method, delay)`, beside PR-1's
+    `ScalarAsync`, `ExecuteAsync`, `ColumnsAsync` and `ResetAsync`.
   - **`tests/Shipping.OrderingStub`**, a library that is not a test project,
     holding `StubOrdering` and `StubAddress`. Nothing here names a generated
     type, which is the rule that project exists to keep.
@@ -343,9 +344,10 @@ namespace Shipping.Infrastructure.Retention;
 /// so it holds no language set and no time zone.
 /// </summary>
 /// <remarks>
-/// It passes §15.4's test — every member differs between Compose, the fixture
-/// and production, which ADR-053 rule 2 arranges. Neither window joins
-/// <c>RetentionPolicy</c>'s housekeeping ones, which ADR-053 keeps apart.
+/// It passes §15.4's test: both windows are a statute's, so a developer's stack
+/// is given ADR-053 rule 2's invented ones and a deployment its own. Neither
+/// window joins <c>RetentionPolicy</c>'s housekeeping ones, which ADR-053 keeps
+/// apart.
 /// </remarks>
 public sealed class ShippingJurisdictionOptions
 {
@@ -903,16 +905,17 @@ git commit -m "feat(shipping): ApplyTrackingPageCommand applies a carrier page b
   — `services.AddScoped<TrackingClaims>();` and
   `services.AddHostedService<TrackingWorker>();`, beside PR-5's two
 - Modify: `tests/Shipping.TestSupport/ServiceFixture.cs` — the tracking pass
-  helper, the row readers and `CarrierAnswers`, beside PR-5's
-  `RunFulfilmentPassAsync`
+  helper and the row readers, beside PR-5's `RunFulfilmentPassAsync`
 - Test: `tests/Shipping.Worker.Tests/TrackingWorkerTests.cs`
+- Test: `tests/Shipping.Worker.Tests/TrackingFaultTests.cs`
 
 **Interfaces:**
 - Consumes: `ICarrierGateway.GetEventsAsync`, `CarrierEvent`, `CarrierHop`
   (PR-2); `ApplyTrackingPageCommand` (Task 2); `IDbConnectionFactory`,
   `OutboxDispatcher.BackoffBaseSeconds`, `OutboxDispatcher.BackoffAttemptCap`;
   `FulfilmentClaims` and `FulfilmentWork`, as the shape this file copies and
-  the neighbour it is registered beside (PR-5).
+  the neighbour it is registered beside, and `ServiceFixture.NewWorkerHost`
+  and the static `ServiceFixture.CarrierAnswers` (PR-5).
 - Produces:
 
 ```csharp
@@ -965,7 +968,9 @@ released by the pass that took it and never by the clock of the other.
 `tests/Shipping.Worker.Tests/TrackingWorkerTests.cs`, over PR-5's
 `ServiceFixture` — its SQL Server container, its in-process carrier simulator
 over `SimulatorMappings.Directory()`, and its Ordering stub — so the postal
-codes below are section 9's script and no second WireMock.Net is started:
+codes below are section 9's script and no second WireMock.Net is started. The
+one case that ends in an outage is the sibling suite below, for the reason that
+paragraph gives:
 
 ```csharp
 using Microsoft.Extensions.DependencyInjection;
@@ -981,8 +986,8 @@ namespace Shipping.Worker.Tests;
 
 /// <summary>
 /// The second worker against a real database and the simulator's own mappings:
-/// what one pass claims, what it leaves, and what a failing carrier does to a
-/// row (spec, sections 4 and 9).
+/// what one pass claims, what it leaves, and which rows it will not take
+/// (spec, sections 4 and 9).
 /// </summary>
 [Collection(nameof(IntegrationCollection))]
 public sealed class TrackingWorkerTests(ServiceFixture fixture) : IAsyncLifetime
@@ -1112,36 +1117,6 @@ public sealed class TrackingWorkerTests(ServiceFixture fixture) : IAsyncLifetime
     }
 
     [Fact]
-    public async Task A_failing_carrier_backs_the_row_off_and_leaves_it()
-    {
-        Shipment shipment = await fixture.BookedAsync("SIM-TRANSIT");
-
-        // The row is repointed at a reference this test makes the simulator
-        // answer 503 on, which is what the carrier being down looks like to a
-        // poll: nothing about the row is wrong. The mapping is registered here
-        // and not in the simulator's directory — that directory is the
-        // postal-code script a person at the keyboard drives (spec, section 9),
-        // and a dead events feed is no script.
-        await fixture.SetCarrierReferenceAsync(shipment.Id, "crr_down");
-        using IDisposable down = fixture.CarrierAnswers("/v1/shipments/crr_down/events", 503);
-
-        // Captured before the pass, because FailSql stamps NextPollAt from
-        // SYSDATETIMEOFFSET() at the moment of the update: an instant read
-        // after the pass is already later than the one the ladder was added to,
-        // and the assertion would be against a deadline that has moved.
-        DateTimeOffset before = DateTimeOffset.UtcNow;
-
-        (await Worker().ProcessBatchAsync(TestContext.Current.CancellationToken)).ShouldBe(0);
-
-        (await fixture.StatusAsync(shipment.Id)).ShouldBe("Booked", "an outage is never an answer");
-        (await fixture.AttemptsAsync(shipment.Id)).ShouldBe(1);
-        (await fixture.LockedUntilAsync(shipment.Id)).ShouldBeNull("a backed-off row is released, not held");
-        (await fixture.NextPollAtAsync(shipment.Id)).ShouldNotBeNull().ShouldBeGreaterThanOrEqualTo(
-            before.AddSeconds(5),
-            "the dispatcher's ladder is 2^min(Attempts, 8) x 5 s, so the first backoff is at least five seconds");
-    }
-
-    [Fact]
     public async Task A_pass_that_throws_leaves_the_host_running()
     {
         // The claim itself failing — the database unreachable — is the case
@@ -1178,12 +1153,12 @@ public sealed class TrackingWorkerTests(ServiceFixture fixture) : IAsyncLifetime
 }
 ```
 
-The fixture helpers this needs — `BookedAsync`, `StatusAsync`,
+The fixture helpers this task needs — `BookedAsync`, `StatusAsync`,
 `NextPollAtAsync`, `AttemptsAsync`, `LockedUntilAsync`,
 `SetCarrierReferenceAsync`, `RequestCancellationAsync`,
-`ClaimForTrackingAsync`, `ClaimForFulfilmentAsync`, `ExpireLeasesAsync` and
-`CarrierAnswers` — go on `ServiceFixture` beside PR-5's
-`RunFulfilmentPassAsync`. All but the last are a single
+`ClaimForTrackingAsync`, `ClaimForFulfilmentAsync` and `ExpireLeasesAsync` —
+go on `ServiceFixture` beside PR-5's
+`RunFulfilmentPassAsync`. All but `BookedAsync` are a single
 `ExecuteAsync` or `ScalarAsync` over `shipping.Shipments`, in
 `SetOutboxAttemptsAsync`'s shape. **On the fixture and not in this file**,
 because Tasks 5, 6 and 7 read the same columns; PR-5's
@@ -1238,56 +1213,109 @@ the constants that own them, never written out:
             id.Value);
 ```
 
-`CarrierAnswers` is the one that touches no database. It adds a mapping to the
-WireMock.Net server PR-5's fixture already runs in process, for the life of the
-handle it returns:
+**`CarrierAnswers` is PR-5's and is taken by name**, as `Carrier` and
+`RunFulfilmentPassAsync` are: that plan puts
+`ServiceFixture.CarrierAnswers(server, path, statusCode, method = "GET",
+delay = null)` on the fixture as a static, with the `ExactMatcher` at priority
+0 and the handle that removes the mapping again. This task adds a second caller
+and no member, and the call below leaves the method at its default, because an
+events feed is a `GET`.
+
+**The one case that ends in a carrier fault is a suite of its own, for PR-5's
+reason and not a new one.** A 503 answered to a poll is
+`CarrierHop.MaxRetryAttempts + 1` failed attempts inside one call, and
+`CarrierHop.CircuitBreakerMinimumThroughput` is four in a sixty-second window
+with a thirty-second break — so the case leaves the collection's pipeline
+holding failures that outlast the rest of this class, and a test after it would
+be refused without a request leaving the process. `ResetAsync` cannot reach a
+pipeline the host owns. PR-5 splits `FulfilmentFaultTests` off for exactly
+this and writes `NewWorkerHost` for it; this task takes both by name:
 
 ```csharp
-    /// <summary>
-    /// Makes the simulator answer one path with one status code until the
-    /// returned handle is disposed.
-    /// </summary>
-    /// <remarks>
-    /// A mapping on the running server rather than a file under
-    /// deploy/compose/carrier-simulator: that directory is the postal-code
-    /// script Compose and this fixture share (spec, section 9), and a feed
-    /// nobody can reach from a checkout is not part of it. An
-    /// <c>ExactMatcher</c> at priority 0, because the directory's own event
-    /// feeds sit at 1 and its catch-all at 10.
-    /// </remarks>
-    public IDisposable CarrierAnswers(string path, int statusCode)
+using Microsoft.Extensions.DependencyInjection;
+using Shipping.Domain.Shipments;
+using Shipping.Infrastructure.Tracking;
+using Shipping.TestSupport;
+using Shouldly;
+using WireMock.Server;
+using Xunit;
+
+namespace Shipping.Worker.Tests;
+
+/// <summary>
+/// The poll's transient row, over a host of its own because the breaker it
+/// fills is sized to open (<c>CarrierHop</c>). The database, the broker and
+/// the Ordering stub stay the collection's.
+/// </summary>
+[Collection(nameof(IntegrationCollection))]
+public sealed class TrackingFaultTests : IAsyncLifetime
+{
+    private readonly ServiceFixture _fixture;
+    private readonly WireMockServer _carrier = WireMockServer.Start();
+    private readonly ShippingWorkerFactory _host;
+
+    public TrackingFaultTests(ServiceFixture fixture)
     {
-        Guid id = Guid.CreateVersion7();
-
-        Carrier
-            .Given(Request.Create().WithPath(new ExactMatcher(path)).UsingGet())
-            .AtPriority(0)
-            .WithGuid(id)
-            .RespondWith(Response.Create().WithStatusCode(statusCode));
-
-        return new CarrierMapping(Carrier, id);
+        _fixture = fixture;
+        _carrier.ReadStaticMappings(SimulatorMappings.Directory());
+        _host = fixture.NewWorkerHost(_carrier.Urls[0] + "/");
     }
 
-    /// <summary>
-    /// Removes one mapping and leaves the rest. <c>ResetAsync</c> resets the
-    /// whole server between tests and is the backstop; this is what keeps a
-    /// mapping from outliving the assertion it was added for inside one.
-    /// </summary>
-    private sealed class CarrierMapping(WireMockServer server, Guid id) : IDisposable
+    public ValueTask InitializeAsync() => new(_fixture.ResetAsync());
+
+    public ValueTask DisposeAsync()
     {
-        public void Dispose() => server.DeleteMapping(id);
+        _host.Dispose();
+        _carrier.Stop();
+
+        return ValueTask.CompletedTask;
     }
+
+    [Fact]
+    public async Task A_failing_carrier_backs_the_row_off_and_leaves_it()
+    {
+        // Booked through the collection's own host and then repointed at a
+        // reference this host answers 503 on, which is what the carrier being
+        // down looks like to a poll: nothing about the row is wrong. The
+        // mapping is registered here and not in the simulator's directory —
+        // that directory is the postal-code script a person at the keyboard
+        // drives (spec, section 9), and a dead events feed is no script.
+        Shipment shipment = await _fixture.BookedAsync("SIM-TRANSIT");
+        await _fixture.SetCarrierReferenceAsync(shipment.Id, "crr_down");
+        using IDisposable down = ServiceFixture.CarrierAnswers(
+            _carrier, "/v1/shipments/crr_down/events", 503);
+
+        // Captured before the pass, because FailSql stamps NextPollAt from
+        // SYSDATETIMEOFFSET() at the moment of the update: an instant read
+        // after the pass is already later than the one the ladder was added to,
+        // and the assertion would be against a deadline that has moved.
+        DateTimeOffset before = DateTimeOffset.UtcNow;
+
+        (await Worker().ProcessBatchAsync(TestContext.Current.CancellationToken)).ShouldBe(0);
+
+        (await _fixture.StatusAsync(shipment.Id)).ShouldBe("Booked", "an outage is never an answer");
+        (await _fixture.AttemptsAsync(shipment.Id)).ShouldBe(1);
+        (await _fixture.LockedUntilAsync(shipment.Id)).ShouldBeNull("a backed-off row is released, not held");
+        (await _fixture.NextPollAtAsync(shipment.Id)).ShouldNotBeNull().ShouldBeGreaterThanOrEqualTo(
+            before.AddSeconds(5),
+            "the dispatcher's ladder is 2^min(Attempts, 8) x 5 s, so the first backoff is at least five seconds");
+    }
+
+    private TrackingWorker Worker() => _host.Services.GetRequiredService<TrackingWorker>();
+}
 ```
 
-with `using WireMock.Matchers;`, `using WireMock.RequestBuilders;`,
-`using WireMock.ResponseBuilders;` and `using WireMock.Server;` on the file.
-`Carrier` is PR-5's `WireMockServer` property and gains no member here.
+`BookedAsync` runs the collection's fulfilment pass against the collection's
+carrier, and that is the point: the host this suite builds is the one that
+polls, so the row it polls was booked through a pipeline this test's failures
+never reach.
 
 - [ ] **Step 2: Run to see them fail**
 
-Run: `dotnet test tests/Shipping.Worker.Tests --filter "FullyQualifiedName~TrackingWorkerTests"`
+Run: `dotnet test tests/Shipping.Worker.Tests --filter "FullyQualifiedName~Tracking"`
 Expected: compile failure on `TrackingWorker`, `TrackingClaims` and the new
-fixture helpers.
+fixture helpers. The filter is the prefix and not the class, because this step
+wrote two suites.
 
 - [ ] **Step 3: Write the claim, in `FulfilmentClaims`' shape**
 
@@ -1645,13 +1673,13 @@ run underneath every assertion in this suite.
 
 ```bash
 dotnet build Platform.slnx
-dotnet test tests/Shipping.Worker.Tests --filter "FullyQualifiedName~TrackingWorkerTests"
+dotnet test tests/Shipping.Worker.Tests --filter "FullyQualifiedName~Tracking"
 ```
 
 Expected: 0 warnings, green, Docker running.
 `A_pass_that_throws_leaves_the_host_running` takes about thirty-two seconds and
-the cost is named here rather than found, as PR-5 names its nineteen-second
-one: `CarrierHop.TrackingPollInterval` is the loop's period, a loop that has
+the cost is named here rather than found, as PR-5 names its overlapping pass's:
+`CarrierHop.TrackingPollInterval` is the loop's period, a loop that has
 not ticked says nothing about the catch inside it, and the interval is a
 latency number §13.7 fixes rather than one a test may lower. §12.4's trade is
 the fidelity against the seconds, and this is the fidelity.
@@ -1663,7 +1691,9 @@ git commit -m "feat(shipping): the tracking worker claims under a lease and poll
 
 The body argues the two numbers: why the lease is above both the hop's total
 and the pass budget, and why the pass is bounded by a budget rather than by its
-batch — a pass that outlives §15.3's drain is killed mid-row.
+batch — a pass that outlives §15.3's drain is killed mid-row. It also says why
+the failing carrier took a host of its own, which is the breaker and not the
+database.
 
 ---
 
@@ -2019,8 +2049,12 @@ public sealed class ShippingRetentionTests(ServiceFixture fixture) : IAsyncLifet
     [Fact]
     public async Task An_address_outlives_a_live_shipment_and_not_a_terminal_one_past_its_window()
     {
-        Shipment live = await fixture.BookedAsync("050000");
+        // The live row is arranged second, and the order is the arrangement:
+        // DeliveredAsync runs a tracking pass, and that claim takes every
+        // Booked row whose poll is due — a shipment booked before it would be
+        // delivered by it and stop being the live one this asserts over.
         Shipment terminal = await fixture.DeliveredAsync();
+        Shipment live = await fixture.BookedAsync("050000");
         await fixture.AgeTerminalAsync(terminal.Id, TimeSpan.FromDays(12));
 
         (int addresses, _) = await fixture.PurgeShippingRetentionAsync();
@@ -3084,7 +3118,10 @@ The two values are the same strings as `ShippingWorkerFactory`'s
 `InventedAddressRetention` and `InventedTrackingRetention`, and deliberately
 not read from them: a Compose file names no C# constant, and ADR-053 rule 2's
 point is that the made-up jurisdiction is supplied by each deployment rather
-than compiled in anywhere.
+than compiled in anywhere. **That the two stacks with no jurisdiction carry the
+same pair is not a failure of §15.4's rule**, which asks for a member that
+differs between environments: a statutory window differs wherever a deployment
+has a statute, and neither of these two does.
 
 They are configuration and not credentials, so they take no `.env.example`
 entry — PR-5's `SHIPPING_CLIENT_SECRET` line there is untouched — no
@@ -3140,10 +3177,10 @@ The callout's close reads today:
 and becomes:
 
 > `Identity:Client` earns its options type by holding a secret that must differ
-> per environment, and `Jurisdiction` earns one because ADR-053 rule 2 gives the
-> test deployment its own invented windows — so both of its members differ
-> between Compose, the fixture and production, which is more than this callout
-> asks.
+> per environment, and `Jurisdiction` earns one because a statutory window is a
+> fact about where a deployment runs: ADR-053 rule 2 gives a developer's stack
+> invented ones precisely because it is no jurisdiction, and a deployment that
+> is one supplies its own.
 
 - [ ] **Step 4: The two restatements that cite it by value**
 
@@ -3327,8 +3364,9 @@ Task 6 and consumed by `MetricsInitialiser`. On `ServiceFixture`,
 `BookedAsync(postalCode, country, line1, city)`, `StatusAsync`,
 `NextPollAtAsync`, `AttemptsAsync`, `LockedUntilAsync`,
 `SetCarrierReferenceAsync`, `RequestCancellationAsync`,
-`ClaimForTrackingAsync`, `ClaimForFulfilmentAsync`, `ExpireLeasesAsync`,
-`CarrierAnswers` and `RunTrackingPassAsync` are Task 3's; `DeliveredAsync`,
+`ClaimForTrackingAsync`, `ClaimForFulfilmentAsync`, `ExpireLeasesAsync` and
+`RunTrackingPassAsync` are Task 3's, and `NewWorkerHost` and `CarrierAnswers`
+are PR-5's, consumed by Task 3's second suite; `DeliveredAsync`,
 `VoidedWithTrackingAsync`, `AgeTerminalAsync`, `AddressCountAsync`,
 `TrackingEventCountAsync` and `PurgeShippingRetentionAsync` are Task 5's;
 `ReadWaitingGauge` and `SetAttemptsAsync` are Task 6's; and

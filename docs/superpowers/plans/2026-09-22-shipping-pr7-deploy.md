@@ -205,7 +205,7 @@ refuses_chart shipping 'a plain-HTTP carrier address fails the render' \
     'HTTPS address this chart will accept' \
     --set-string 'carrier.baseUrl=http://carrier.example.invalid/'
 refuses_chart shipping 'a carrier setting with the capability off fails the render' \
-    'carrier.enabled is false' --set carrier.enabled=false
+    'but a carrier setting is set' --set carrier.enabled=false
 refuses_chart shipping 'the carrier capability off and cleared fails the render' \
     'carrier.enabled is false on the shipping chart' \
     --set carrier.enabled=false --set carrier.apiKeySecretRef=null \
@@ -216,7 +216,7 @@ refuses_chart shipping 'a cleared retention window fails the render' \
     'jurisdiction.addressRetention is required' \
     --set-string 'jurisdiction.addressRetention='
 refuses_chart shipping 'a jurisdiction the capability is off for fails the render' \
-    'jurisdiction.enabled is false' --set jurisdiction.enabled=false
+    'but a jurisdiction window is set' --set jurisdiction.enabled=false
 pass 'the worker chart renders four capabilities and refuses each half state'
 ```
 
@@ -225,6 +225,18 @@ matrix, and only one: `commerce.requireUrl` is a single helper and
 `refuses_payments` already exercises every shape it rejects. What is new here
 is that the carrier's address goes through it at all, which is what that one
 case asserts.
+
+**Two of those needles are the second half of a message and not its first, and
+that is the whole of what makes the case about the guard it names.** Two guards
+refuse a capability switched off on this chart — the library's coherence guard,
+which fires while a setting is still present, and Task 3's own
+`capabilities.yaml`, which is what is left once every setting is cleared — and
+both messages open with `carrier.enabled is false`. A needle matching that
+prefix passes on whichever guard the render reaches first, so the library's
+half of `commerce.env` could be deleted with the suite still green. `but a
+carrier setting is set` and `but a jurisdiction window is set` belong to the
+library's messages alone, and `on the shipping chart` to the chart's own, so
+each case now fails when its own guard goes.
 
 - [ ] **Step 2: Run it, expect red**
 
@@ -396,9 +408,17 @@ the render.
 
 - [ ] **Step 4: The four credential assertions ADR-052 marks asserted**
 
-In `smoke.sh`'s first section, the count becomes a set. Before:
+In `smoke.sh`'s first section, the count becomes a set. **The comment above it
+is part of the block and goes with it**, because its closing sentence is the
+claim this step makes false — a replacement that left it standing would put two
+contradictory paragraphs in one run of comment lines, which is what the comment
+gate counts as one block. Before:
 
 ```bash
+# Read from the values files rather than from a render, and asserted here: a
+# second chart setting it renders nothing at all, so under `set -e` the run
+# would abort in the render section before this reported. ADR-017's budget is
+# one synchronous hop, so it is one chart (§11.5).
 credentialed="$(grep -l 'clientCredentials: true' "$CHARTS_DIR"/*/values.yaml | wc -l | tr -d ' ')"
 check "exactly one chart declares client credentials (found $credentialed)" \
     test "$credentialed" -eq 1
@@ -1583,17 +1603,19 @@ After:
 | 3. Helm values | `deploy/helm/<chart>/values.yaml`, inside the capability block that makes the key conditional where the chart has one; the umbrella holds no values of its own, so its caller passes the same value under the subchart's name (§15.3) |
 ```
 
-*A client secret*'s procedure is the BFF's throughout and has been the wrong
-number of hosts since ADR-052. Step 2 and step 3 become per host:
+*A client secret*'s steps 3 and 4 are already per host — PR-4 rewrote both in
+the change that put a second host in that procedure, and neither is touched
+again here. The step no pull request has reached is **step 2**, which names one
+vault entry because until this chart there was one Secret to name. It gains the
+second:
 
 > 2. Update the vault entry — `web-bff-identity` for the BFF,
 >    `shipping-identity` for Shipping's worker. Each chart names its own under
 >    `identity.clientSecretRef`, and they are never one Secret.
-> 3. Wait for External Secrets to reconcile, then restart that host's pods —
->    configuration is read at startup, so a reconciled Secret does not reach a
->    running process.
 
-Step 4 is PR-4's and is already per host; nothing else in the file moves.
+Nothing else in the file moves. Steps 1 and 5 are Keycloak's and name no host,
+and the bold sentence under the list is about a step's position rather than
+about whose pods it restarts.
 
 - [ ] **Step 4: §15.1's sentence, and the chart comment that repeats it**
 
