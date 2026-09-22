@@ -38,24 +38,30 @@ client secret's places), 12 (PR-4's five tests) and 13 (the chapters that move).
   `tests/Ordering.Api.Tests/**`, `tests/Common.Web.Tests/RealmImportTests.cs`,
   `tests/Web.Bff.Tests/**`, `tests/Gateway.Api.Tests/**`,
   `deploy/compose/keycloak/realm-export.json`, `deploy/keycloak/realm_check.py`,
-  `deploy/keycloak/test_realm_check.py`, `deploy/helm/ordering/values.yaml`,
+  `deploy/keycloak/test_realm_check.py`, `deploy/keycloak/README.md`,
+  `deploy/helm/ordering/values.yaml`,
   `deploy/helm/catalog/Chart.yaml`, `deploy/helm/catalog/values.yaml`,
   `.github/secret-scan/allowed/deploy.txt`,
+  `.github/secret-scan/allowed/tests.txt`,
   `docs/backend-architecture/11-identity-authorization.md`,
   `docs/backend-architecture/15-cicd-deployment.md`, `docs/secrets.md`,
-  `docs/repo-map.md`, `CLAUDE.md`.
-  Why each, since the row above is paths only: Ordering's slice and the four
+  `docs/repo-map.md`, `CLAUDE.md`
+  — paths only, comma-separated, no prose inside the cell and no trailing
+  stop: the gate strips a token's backticks only when the token ends in one,
+  and refuses the row outright otherwise.
+  Why each: Ordering's slice and the four
   suites that read what it changes are A — `tests/**` is Class A's, and
   `RealmImportTests` is the one building-block test that owns the realm's
-  closed sets; the realm, the realm gate, the two charts, the secret-scan
-  entry, the three chapters and the two maps are D. **No Class E letter is
-  owed**, and that is a judgement rather than an omission: the two project
-  files this PR edits — `Ordering.Api.csproj` and
-  `Ordering.Application.csproj`
-  — are inside Class A's `src/Services/**`, no pin moves in
+  closed sets; the realm, the realm gate and the README that owns its claim,
+  the two charts, the two secret-scan entries, the three chapters and the two
+  maps are D. **No Class E letter is
+  owed**, and that is a judgement rather than an omission: the three project
+  files this PR edits — `Ordering.Api.csproj`, `Ordering.Application.csproj`
+  and `tests/Ordering.Api.Tests/Ordering.Api.Tests.csproj`
+  — are inside Class A's `src/Services/**` and `tests/**`, no pin moves in
   `Directory.Packages.props`, no project joins `Platform.slnx`, and no
-  Appendix B row is added, because `Grpc.AspNetCore` and `Dapper` are both
-  pinned and both already registered.
+  Appendix B row is added, because `Grpc.AspNetCore`, `Grpc.Net.ClientFactory`
+  and `Dapper` are all pinned and all already registered.
 - **`A+D` is an ordinary two-letter class**, so `.github/locality-gate` needs
   no change and this plan carries no "three classes" note. `A+D+E` is the one
   three-member cell the gate admits and this PR does not need it.
@@ -76,7 +82,11 @@ client secret's places), 12 (PR-4's five tests) and 13 (the chapters that move).
   below with the task that turns it green; every row it leaves for a later PR
   is named in *Self-review*.
 - Comments say why and cite the owner — a section, an ADR or a symbol, never a
-  pull request or a test — and no comment block runs past ten lines. Explicit
+  pull request or a test — and no comment block runs past ten lines. **The
+  comment gate judges an edited line as its whole block**, so a doc comment
+  this PR touches has to come out at ten lines or fewer with no `<b>` and no
+  `**…**`, however long it was before; the blocks it does not touch stay as
+  they are. Explicit
   local types, file-scoped namespaces with a blank line after, braces on two
   or more statements, 120 columns for code and 80 for prose. British spelling.
   `py -3.12`, never `python`.
@@ -135,19 +145,13 @@ namespace Ordering.Api.Tests;
 
 /// <summary>
 /// The two Kestrel endpoints, read off the host's own configuration rather
-/// than off the file: that is the text the server binds, and a second reader
-/// would be asserting against itself (§9.7, ADR-052).
+/// than off the file: that is the text the server binds (§9.7, ADR-052).
 /// </summary>
 /// <remarks>
-/// Catalog's own <c>appsettings.json</c> carries the measurement this rests
-/// on: a cleartext endpoint at the default <c>Http1AndHttp2</c> answers a
-/// client asking for HTTP/2 exactly — which <c>Grpc.Net.Client</c> does — with
-/// <c>HTTP_1_1_REQUIRED</c>, and an <c>Http2</c>-only endpoint answers an
-/// HTTP/1.1 request with a 400. So neither value is a preference, and neither
-/// failure is visible to a suite driving <c>TestServer</c>. The REST endpoint
-/// is asserted beside it because this section OVERRIDES the image's own port
-/// configuration: declaring only the gRPC one would take 8080 away from
-/// §10.2's cluster destination and from the Compose port mapping.
+/// Catalog's <c>appsettings.json</c> carries the measurement: a cleartext
+/// endpoint at <c>Http1AndHttp2</c> refuses a client asking for HTTP/2
+/// exactly, and an <c>Http2</c>-only one refuses HTTP/1.1. The REST entry is
+/// asserted beside it because this section overrides the image's own ports.
 /// </remarks>
 public sealed class KestrelEndpointTests(HostSmokeTests.UnreachableInfrastructureFactory factory)
     : IClassFixture<HostSmokeTests.UnreachableInfrastructureFactory>
@@ -179,8 +183,10 @@ public sealed class KestrelEndpointTests(HostSmokeTests.UnreachableInfrastructur
 dotnet test tests/Ordering.Api.Tests --filter "FullyQualifiedName~KestrelEndpointTests"
 ```
 
-Expected: four `ShouldBe` failures, each reporting `null` — the host has no
-`appsettings.json`, so the section does not exist.
+Expected: both tests fail, each on its first `ShouldBe` and each reporting
+`null` — the host has no `appsettings.json`, so the section does not exist.
+Shouldly throws on the first assertion in a test, so the second `ShouldBe` in
+each is not reached until the first passes.
 
 - [ ] **Step 3: Write the proto**
 
@@ -387,15 +393,12 @@ namespace Ordering.Application.Orders.GetDeliveryAddress;
 
 /// <summary>
 /// §6.5's read side over <c>ordering.Orders</c>: where one order ships, for
-/// the worker ADR-052 gives the read to. No status, no total, no lines — a
-/// caller that needed one of those would be reading an order.
+/// the worker ADR-052 gives the read to. No status, no total, no lines.
 /// </summary>
 /// <remarks>
-/// <b>Three different facts answer <c>null</c>, and ADR-052 makes that the
-/// contract rather than a simplification.</b> No such order, an order that is
-/// cancelled, and an order whose address erasure has cleared are all "does not
-/// exist" to the reader, so the client maps one status and never reads an
-/// order's state. Collapsing them here is what keeps that promise: a view that
+/// No such order, a cancelled order and an order whose address erasure has
+/// cleared all answer <c>null</c>, which ADR-052 makes the contract: the
+/// client maps one status and never reads an order's state. A view that
 /// distinguished them would put the distinction on the wire.
 /// </remarks>
 public sealed class GetDeliveryAddressHandler(IDbConnectionFactory connections)
@@ -476,8 +479,8 @@ role would leave one commit red.
 
 **Files:**
 - Modify: `deploy/compose/keycloak/realm-export.json` — the
-  `orders:delivery-address` client role, the `shipping-worker` client, and its
-  service-account user
+  `orders:delivery-address` client role, the `shipping-worker` client, its
+  service-account user, and `web-bff`'s description
 - Modify: `tests/Common.Web.Tests/RealmImportTests.cs` — the closed role set,
   the credentialed-client set, and a new assertion over the service account
 - Modify: `tests/Web.Bff.Tests/RealmClientTests.cs` —
@@ -486,15 +489,19 @@ role would leave one commit red.
   `check_worker_client`, and the three fields the projection has to keep for it
 - Modify: `deploy/keycloak/test_realm_check.py` — a `worker()` fixture and one
   negative case per limb
+- Modify: `deploy/keycloak/README.md` — the new obligation, and the projection
+  bullet that says the client scopes are not in the judged object
 - Modify: `.github/secret-scan/allowed/deploy.txt` — the new local default
+- Modify: `.github/secret-scan/allowed/tests.txt` — the same value's finding in
+  `RealmImportTests`
 
 **Gates this step turns red, and what turns them green:** ADR-052 marks
 `RealmImportTests.No_client_ships_a_secret_but_the_one_whose_grant_needs_one`,
 `RealmImportTests.The_permission_vocabulary_is_a_closed_set_of_client_roles` and
 `RealmClientTests.It_is_the_only_service_account_client_in_the_realm` as
 **asserted** — each goes red on the realm edit and green on the test edit in
-this same task. The secret scan goes red on the new literal and green on the
-allow-list entry, also here.
+this same task. The secret scan goes red on the two new literals and green on
+the two allow-list entries, also here.
 
 - [ ] **Step 1: Write the failing test edits**
 
@@ -514,28 +521,40 @@ In `RealmImportTests`, the closed set gains one name:
             ignoreOrder: true);
 ```
 
-The credentialed-client constants become a set, because there are two:
+The credentialed-client constants become a set, because there are two. **Each
+value keeps a constant of its own with a credential-shaped name**, and that is
+not a stylistic choice: `.github/secret-scan` reports
+`DocumentedLocalSecret = "local-dev-secret"` as a `credential-assignment`, and
+`.github/secret-scan/allowed/tests.txt` already carries the accepted finding
+for it. Folding the value into a dictionary entry makes that finding vanish,
+and an allow-list entry matching nothing fails the build (the README beside
+the lists):
 
 ```csharp
     /// <summary>
     /// The clients whose grant requires both sides to agree on a secret
-    /// (§11.5, ADR-052), and the documented local-development value each
-    /// agrees on.
+    /// (§11.5, ADR-052), and the documented local default each agrees on.
     /// </summary>
     /// <remarks>
     /// A client-credentials flow is two parties holding the same string, one
-    /// of which is a committed file, so a Keycloak-generated secret would
-    /// leave the realm and the deployment disagreeing. Pinning each value
-    /// keeps the rule strong: a generated secret fails here, and so does a
-    /// real one. Two entries rather than one since ADR-052 gave the platform a
-    /// second synchronous coupling; a third is Notifications' and is not
-    /// decided by a test.
+    /// of which is a committed file, so a generated secret would leave the
+    /// realm and the deployment disagreeing. Pinning each value keeps the
+    /// rule strong: a generated secret fails here, and so does a real one.
     /// </remarks>
+    private const string CredentialClient = "web-bff";
+
+    private const string DocumentedLocalSecret = "local-dev-secret";
+
+    /// <summary>ADR-052's second credentialed client, and its own default.</summary>
+    private const string WorkerCredentialClient = "shipping-worker";
+
+    private const string DocumentedLocalWorkerSecret = "local-dev-shipping-secret";
+
     private static readonly Dictionary<string, string> DocumentedLocalSecrets =
         new(StringComparer.Ordinal)
         {
-            ["web-bff"] = "local-dev-secret",
-            ["shipping-worker"] = "local-dev-shipping-secret"
+            [CredentialClient] = DocumentedLocalSecret,
+            [WorkerCredentialClient] = DocumentedLocalWorkerSecret
         };
 
     [Fact]
@@ -676,10 +695,11 @@ existing shape with a **fresh** `id` GUID and `containerId` copied from
         }
 ```
 
-The description is 254 characters or fewer —
-`No_role_description_exceeds_what_keycloak_can_store` is the gate, and
-Keycloak's
-`ROLE.DESCRIPTION` throws rather than truncating.
+The description stays inside Keycloak's `ROLE.DESCRIPTION` column, whose bound
+is `RealmImportTests.No_role_description_exceeds_what_keycloak_can_store`'s
+`keycloakDescriptionLimit` and is written down nowhere else; an over-long value
+throws on import rather than truncating, so run that test rather than count
+characters against a number copied into this plan.
 
 In `clients`, after `web-bff` and before `mobile-app`:
 
@@ -737,6 +757,24 @@ In `clients`, after `web-bff` and before `mobile-app`:
       }
     },
 ```
+
+And `web-bff`'s own `description` stops saying it is alone — ADR-052's table
+names this file for exactly that, and the client this step adds is what makes
+the sentence false. It reads today:
+
+> The one host that calls a service synchronously (§9.7), and therefore the
+> only one holding client credentials (§11.5). Service accounts only: no
+> browser flow, and nothing can obtain a token as a person through it.
+
+and becomes:
+
+> One of the two hosts that call a service synchronously and hold client
+> credentials (§9.7, §11.5, ADR-052). Service accounts only: no browser flow,
+> and nothing can obtain a token as a person through it.
+
+The realm's `internationalizationEnabled` is the other half of ADR-052's row
+for this file and is **not** touched here: no user has a locale to read, that
+is Notifications' question, and this pull request mints no reader of one.
 
 `commerce-api` is a **default** scope and appears in no optional list: a
 client-credentials token requests no scope explicitly, so an optional one is
@@ -837,16 +875,12 @@ The check itself, after `check_mobile_client`:
 def check_worker_client(client: dict) -> list[str]:
     """ADR-052's ceiling on the address reader, as far as a realm document reaches.
 
-    The grant itself is out of reach, and that is the record's own finding
-    rather than a gap here: a service account's roles live on its user, which
-    is in neither the realm representation this gate is handed nor the client
-    list `read_admin.py` fetches, and reading them would widen the realm-check
-    credential past the `view-clients`-only grant `docs/secrets.md` argues for.
-    So the client holds itself to the role out of its own token, and what is
-    left for this file is everything else the blast radius of a stolen secret
-    depends on: that the client is confidential, that it mints tokens for
-    itself alone, and that it carries the scope whose mapper writes the
-    `permission` claim at all.
+    The grant itself is out of reach and that record says so: a service
+    account's roles live on its user, which is in neither the realm
+    representation this gate is handed nor the client list `read_admin.py`
+    fetches. What is left here is the rest of a stolen secret's blast radius —
+    that the client is confidential, mints tokens for itself alone, and carries
+    the scope whose mapper writes the `permission` claim at all.
     """
     problems: list[str] = []
 
@@ -906,7 +940,40 @@ def check_worker_client(client: dict) -> list[str]:
 `main`'s closing line needs no edit: it counts clients and reports the
 lifetime, and neither number is a claim about this check.
 
-- [ ] **Step 4: The gate's own tests**
+- [ ] **Step 4: The README that owns the gate's claim**
+
+`deploy/keycloak/README.md` is where this gate's claim lives —
+`docs/change-locality.md` gives a gate's README that job and forbids the claim
+being stated anywhere else — so a new predicate that is not in it is a check
+nobody can find. Two edits, and the second is the one easy to miss.
+
+Under *What it asserts*, after the `mobile-app` bullet:
+
+```markdown
+- **`shipping-worker`'s own shape**, as far as a client object reaches: one
+  such client, confidential, service accounts on, no interactive flow, and
+  `commerce-api` a default client scope and not an optional one — cited rather
+  than enumerated here, because
+  [ADR-052](../../docs/backend-architecture/adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)
+  argues each of them and `check_worker_client` is the list.
+```
+
+Under *What it does not check*, the bullet beginning "**Everything else in the
+realm**" says the client scopes are not in the judged object at all. Step 3
+put `defaultClientScopes` and `optionalClientScopes` into `CLIENT_FIELDS`, so
+that clause is corrected in place rather than appended to: the two scope
+**lists** are now in the projection, for the one obligation above that reads
+them, while the scopes' own definitions, their mappers and the audience mapper
+still are not. The rest of the bullet — the permission vocabulary, the two
+development logins, every client secret, and why no message here can leak a
+credential — is unchanged.
+
+Under *What it asserts*, the grant itself stays out: say once, and only here,
+that `check_worker_client` reaches the client object and not the service
+account's roles, and that the token client's own check is the other half
+(ADR-052).
+
+- [ ] **Step 5: The gate's own tests**
 
 In `test_realm_check.py`, a fixture beside `browser()` and `mobile()`:
 
@@ -982,22 +1049,35 @@ class TheWorkerClient(Fixture):
                 self.assertTrue(any(flag in problem for problem in found), found)
 
     def test_an_optional_audience_scope_is_caught(self):
+        """The default list keeps commerce-api, so only the optional limb fires."""
         found = self.one(realm(browser(), worker(
-            defaultClientScopes=["basic"], optionalClientScopes=["commerce-api"])))
-        self.assertIn("default client scope", found)
+            optionalClientScopes=["address", "commerce-api"])))
+        self.assertIn("OPTIONAL", found)
 
     def test_a_missing_audience_scope_is_caught(self):
         self.assertIn("default client scope",
                       self.one(realm(browser(), worker(defaultClientScopes=["basic"]))))
 
     def test_a_string_service_account_flag_is_refused_rather_than_read_as_on(self):
-        """The flag joined FLAGS, so a hand-edited "true" is refused."""
-        self.assertIn("boolean", self.one(realm(browser(), worker(serviceAccountsEnabled="true"))))
+        """The flag joined FLAGS, so a hand-edited "true" is refused.
+
+        Two findings and not one, so `self.problems` rather than `self.one`:
+        `check_flags_are_booleans` refuses the string, and the identity test
+        in `check_worker_client` sees a value that is not `True`. Both are
+        asserted, because a case naming one would stay green if the other
+        limb were deleted.
+        """
+        found = self.problems(realm(browser(), worker(serviceAccountsEnabled="true")))
+        self.assertTrue(any("boolean" in problem for problem in found), found)
+        self.assertTrue(any("service accounts disabled" in problem for problem in found), found)
 ```
 
-`test_an_optional_audience_scope_is_caught` expects exactly one problem, so the
-default list it passes omits `commerce-api` — the two limbs are one finding
-apart and `self.one` would otherwise see two.
+`Fixture.one` asserts exactly one problem, so a case that trips two limbs has
+to say so. Two do: the string flag above, which `check_flags_are_booleans`
+and `check_worker_client` both see; and an audience scope held as optional
+*and* missing from the defaults, which is why the optional case leaves the
+default list alone and the missing-scope case leaves the optional list alone.
+Each then names one limb, and neither can pass for the other's reason.
 
 ```bash
 py -3.12 -m unittest discover -s deploy/keycloak
@@ -1007,30 +1087,44 @@ py -3.12 deploy/keycloak/realm_check.py check --kind local --realm deploy/compos
 Suite first, then the gate against the realm this task just edited. Expected:
 both exit 0.
 
-- [ ] **Step 5: The secret scan**
+- [ ] **Step 6: The secret scan**
 
 ```bash
 py -3.12 .github/secret-scan/secret_scan.py
 ```
 
-Expected: one new finding on `deploy/compose/keycloak/realm-export.json`, rule
-`credential-assignment`, for `local-dev-shipping-secret`. Take the fingerprint
-**from the scan's own output** — it is a sha256 over the finding and cannot be
-written in advance — and add one line to
-`.github/secret-scan/allowed/deploy.txt`, beside the existing realm-export
-entries:
+Expected: two new findings, rule `credential-assignment` — one on
+`deploy/compose/keycloak/realm-export.json` and one on
+`tests/Common.Web.Tests/RealmImportTests.cs`, both for
+`local-dev-shipping-secret`. Take each fingerprint **from the scan's own
+output** — it is a sha256 over the finding and cannot be written in advance —
+and add one line to `.github/secret-scan/allowed/deploy.txt`, beside the
+existing realm-export entries:
 
 ```
 deploy/compose/keycloak/realm-export.json | credential-assignment | <fingerprint> | ADR-052's second client, and §14.1's local default for it.
 ```
 
+and one to `.github/secret-scan/allowed/tests.txt`, beside the other
+`RealmImportTests.cs` entries:
+
+```
+tests/Common.Web.Tests/RealmImportTests.cs | credential-assignment | <fingerprint> | The suite pinning the realm export's second documented local client default.
+```
+
+The entry that is already there for `local-dev-secret` still matches, because
+Step 1 keeps `DocumentedLocalSecret` a constant with its own name and value;
+an entry that stopped matching would fail the build on the entry rather than
+on the code.
+
 Re-run the scan; expected: clean, and no unmatched allow-list entry.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
 dotnet test tests/Common.Web.Tests tests/Web.Bff.Tests --filter "Category!=Integration"
-git add deploy/compose/keycloak/realm-export.json deploy/keycloak .github/secret-scan/allowed/deploy.txt \
+git add deploy/compose/keycloak/realm-export.json deploy/keycloak \
+        .github/secret-scan/allowed/deploy.txt .github/secret-scan/allowed/tests.txt \
         tests/Common.Web.Tests/RealmImportTests.cs tests/Web.Bff.Tests/RealmClientTests.cs
 git commit -m "feat(ordering): the realm gains orders:delivery-address and the shipping-worker client"
 ```
@@ -1075,12 +1169,10 @@ namespace Ordering.Api.Tests;
 /// policy, the dispatcher and Dapper on a real database.
 /// </summary>
 /// <remarks>
-/// Over <c>TestServer</c>, which is the right instrument for what the
-/// application decides; what the server decides — that a cleartext endpoint
-/// must be declared <c>Http2</c> before a gRPC client can reach it — belongs
-/// against a real Kestrel and is <c>KestrelEndpointTests</c>' subject instead.
-/// <c>TestServer.CreateHandler()</c> bypasses the network, so the h2c
-/// negotiation this host would otherwise need never happens.
+/// Over <c>TestServer</c>: <c>CreateHandler()</c> bypasses the network, so
+/// the h2c negotiation a real Kestrel would need never happens here.
+/// Whether the endpoint is declared <c>Http2</c> is the server's decision
+/// and belongs against a real Kestrel (§9.7).
 /// </remarks>
 [Collection(nameof(IntegrationCollection))]
 public sealed class DeliveryAddressServiceTests(ServiceFixture fixture) : IAsyncLifetime
@@ -1110,9 +1202,9 @@ public sealed class DeliveryAddressServiceTests(ServiceFixture fixture) : IAsync
     /// as call metadata.
     /// </summary>
     /// <remarks>
-    /// Passed per call rather than baked into the channel, for
-    /// <c>PricingServiceTests</c>' reason: a default grant is how a suite ends
-    /// up proving a policy is applied while never once arriving without it.
+    /// Passed per call rather than baked into the channel: a default grant is
+    /// how a suite ends up proving a policy is applied while never once
+    /// arriving without it.
     /// </remarks>
     private static Metadata Worker() =>
     [
@@ -1311,28 +1403,26 @@ every call.
 
 - [ ] **Step 3: Write the permission, the service and the policy**
 
-`OrderingPermissions.cs` gains the constant, and the remark that counted two
-is corrected rather than appended to:
+`OrderingPermissions.cs` gains the constant, and the doc comment that counts
+two entries is **replaced whole** rather than appended to. The comment gate
+judges a block by its whole run once any line in it is touched, and that block
+runs well past ten lines today, so a `<para>` added to it is a finding on
+everything above it as well. What the shorter block loses is argument its
+owners already carry — §11.4 for the claim-against-policy distinction, and
+`AuthorizationPolicyTests` for the not-registered-at-all half — which is the
+form the style guide asks for anyway:
 
 ```csharp
-    /// <para>
-    /// <b>Three entries, and the third is not an endpoint's.</b>
-    /// <c>orders:delivery-address</c> guards
-    /// <see cref="Grpc.DeliveryAddressService"/>, the gRPC method ADR-052 gives
-    /// this service — so a permission's home is still "what this service
-    /// requires", and a transport other than HTTP does not change whose
-    /// vocabulary it is. A fourth, <c>orders:read</c>, is deliberately absent
-    /// until there is a read endpoint to require it.
-    /// </para>
-    /// <para>
-    /// <b>It belongs to a host and to no person, which is the one place this
-    /// service departs from §11.4's usual reading.</b> The read crosses
-    /// subjects — a worker's service account owns no order — so the method
-    /// skips the ownership check on purpose and an authenticated caller alone
-    /// would let any client the realm holds make it. ADR-052 argues both
-    /// halves; the realm grants the role to one service account and to neither
-    /// development login.
-    /// </para>
+/// <summary>
+/// Ordering's permission vocabulary (§11.4): the strings are the contract with
+/// the realm's claim mapper (§11.5), and <c>Program.cs</c> registers a policy
+/// per name. <c>orders:delivery-address</c> guards
+/// <see cref="Grpc.DeliveryAddressService"/>, ADR-052's gRPC method; it
+/// belongs to a host and to no person, because the read crosses subjects and
+/// the method skips the ownership check. <c>orders:read</c> is absent until a
+/// read endpoint requires it, and <c>orders:admin</c> is a claim
+/// <c>CancelOrderHandler</c> checks against a loaded aggregate (§11.4).
+/// </summary>
 ```
 
 ```csharp
@@ -1353,29 +1443,14 @@ using Ordering.Delivery.V1;
 namespace Ordering.Api.Grpc;
 
 /// <summary>
-/// The server half of ADR-052's address read. A transport adapter and nothing
-/// else: parse, dispatch, project onto the reply — the same job
-/// <c>OrderEndpoints</c> does for HTTP, under the same §4.2 gate.
+/// The server half of ADR-052's address read: parse, dispatch, project onto
+/// the reply — the job <c>OrderEndpoints</c> does for HTTP, under §4.2's gate.
 /// </summary>
 /// <remarks>
-/// <b>A permission, where Catalog's gRPC service asks only for
-/// authentication.</b> Catalog serves the same data its anonymous product
-/// listing publishes, so a token there proves the credentials mechanism is
-/// real and a permission would be a role in permission's clothing. This method
-/// answers with somebody's address, and an authenticated caller alone is every
-/// client the realm holds — including the BFF's, which has no business here.
-/// </remarks>
-/// <remarks>
-/// <b>No ownership check, on purpose.</b> §11.4's subject rule compares the
-/// token's subject with the aggregate's customer; a service account's subject
-/// owns no order, so the comparison has no true answer rather than a false
-/// one. The grant is what bounds this instead, which is why ADR-052 sizes it
-/// by what it reads when the secret is stolen.
-/// </remarks>
-/// <remarks>
-/// No alias is needed for the generated type, unlike <c>PricingService</c>'s:
-/// the bare name <c>DeliveryAddresses</c> resolves through the <c>using</c>
-/// because no enclosing namespace of this file has a member by that name.
+/// A permission where Catalog's gRPC service asks only for authentication,
+/// because this answers with somebody's address and an authenticated caller
+/// alone is every client the realm holds. No ownership check either: a
+/// service account's subject owns no order, so the grant bounds it (§11.4).
 /// </remarks>
 [Authorize(OrderingPermissions.DeliveryAddress)]
 internal sealed class DeliveryAddressService(IDispatcher dispatcher) : DeliveryAddresses.DeliveryAddressesBase
@@ -1444,11 +1519,21 @@ app.MapGrpcService<DeliveryAddressService>();
 
 with `using Ordering.Api.Grpc;` at the top of the file.
 
-The second comment block in `Program.cs` — "Two policies, one per
-endpoint" —
-is corrected in place, to "Three policies. Two are an endpoint's; the third is
-ADR-052's gRPC method's, which is a policy an endpoint does not name because
-the method is not an endpoint route."
+The comment block above that builder counts two policies and is corrected in
+place. It has to come out at ten lines or fewer whole, because the gate judges
+the run and not the sentence:
+
+```csharp
+// RequirePermission rather than RequireClaim("permission", …): the claim type
+// is PermissionClaim.Type, and spelling the literal here would be a fourth
+// place that has to agree with it (§11.4).
+//
+// One policy per name in OrderingPermissions; ADR-052's is a gRPC method's and
+// no endpoint route names it. There is deliberately no orders:admin policy —
+// that string is a *claim*, read by CancelOrderHandler against a loaded
+// aggregate, and §11.4 is emphatic that a policy nobody registered resolves
+// to nothing.
+```
 
 - [ ] **Step 4: Run; commit**
 
@@ -1494,12 +1579,9 @@ namespace Gateway.Api.Tests;
 /// </summary>
 /// <remarks>
 /// §10.2 routes HTTP and the two gRPC surfaces are cluster-internal, on the
-/// same footing as the SQL port. Neither half is visible to any other suite:
-/// the services' own tests call their methods directly, and
-/// <c>RouteConfigurationTests</c> asserts what the route file <i>does</i>
-/// carry. A route added under a path like these would publish an
-/// authenticated-only internal call to the internet with nothing else in this
-/// repository to say so.
+/// same footing as the SQL port. A route added under a path like these would
+/// publish an authenticated-only internal call to the internet with nothing
+/// else in this repository to say so.
 /// </remarks>
 public sealed class GrpcPathTests(GatewayFactory factory) : IClassFixture<GatewayFactory>
 {
@@ -1617,6 +1699,8 @@ together.
   secret as constants beside the realm's
 - Modify: `tests/Web.Bff.Tests/KeycloakIdentityTests.cs` — two tests, a
   rename, a corrected comment and a second route on the minimal host
+- Modify: `.github/secret-scan/allowed/tests.txt` — the fixture's new
+  credential-shaped constant
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -1642,10 +1726,8 @@ route. `ServiceValidatingTheRealm` becomes:
     /// </summary>
     /// <remarks>
     /// <c>OrderingPermissions.DeliveryAddress</c> is the owner and this suite
-    /// may not reference Ordering to read it — <c>RealmClientTests</c>' own
-    /// asymmetry, one constant over. The realm's closed-set assertion in
-    /// <c>Common.Web.Tests</c> and <c>GrantablePermissionTests</c> in
-    /// <c>Ordering.Api.Tests</c> are what tie the two spellings together.
+    /// may not reference Ordering to read it; the realm's closed role set is
+    /// what ties the two spellings together (§11.4, §11.5).
     /// </remarks>
     private const string DeliveryAddress = "orders:delivery-address";
 
@@ -1800,11 +1882,32 @@ an empty permission set and
 answer 403 for both tokens. Restore the user. This is the only mutation that
 tells a realm which grants the role from one that merely holds it.
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 4: The secret scan, for the fixture's new constant**
+
+`KeycloakFixture.WorkerSecret` is a credential-shaped name assigned a literal,
+so the scan reports it as `credential-assignment` and the render refuses
+without an entry. That file carries none today — the BFF's default lives in
+`KeycloakIdentityTests.cs` — so this is a new path in the allow-list:
+
+```bash
+py -3.12 .github/secret-scan/secret_scan.py
+```
+
+Take the fingerprint from the scan's own output and add one line to
+`.github/secret-scan/allowed/tests.txt`, beside the other `Web.Bff.Tests`
+entries:
+
+```
+tests/Web.Bff.Tests/KeycloakFixture.cs | credential-assignment | <fingerprint> | ADR-052's second local client default, held where the fixture and the realm meet.
+```
+
+Re-run; expected: exit 0 and no unmatched entry.
+
+- [ ] **Step 5: Commit**
 
 ```bash
 dotnet test tests/Web.Bff.Tests
-git add tests/Web.Bff.Tests
+git add tests/Web.Bff.Tests .github/secret-scan/allowed/tests.txt
 git commit -m "test(identity): shipping-worker's grant is proved both ways against a real Keycloak"
 ```
 
@@ -1814,10 +1917,10 @@ git commit -m "test(identity): shipping-worker's grant is proved both ways again
 
 **Files:**
 - Modify: `docs/backend-architecture/11-identity-authorization.md` — §11.5's
-  table of realm objects and the callout above it
-- Modify: `docs/backend-architecture/15-cicd-deployment.md` — §15.1's
-  sentence
-  and §15.4's required-for-some-hosts paragraph and three rows
+  table of realm objects, the callout above it, and the section's two prose
+  sentences that count one host
+- Modify: `docs/backend-architecture/15-cicd-deployment.md` — §15.4's
+  required-for-some-hosts paragraph and three rows
 - Modify: `docs/secrets.md` — the rotation sentence, the client-secret
   procedure and the local-development exception table
 - Modify: `docs/repo-map.md` — Catalog's and Ordering's rows
@@ -1840,10 +1943,37 @@ service that uses it." — amend to "Shipping's joined it with Ordering's method
 rather than with Shipping, because the grant is the address owner's to serve;
 Notifications' is still owed."
 
-- [ ] **Step 2: §15.1 and §15.4**
+**The section's two prose sentences move with the table**, because the row,
+the count and the prose are one claim and splitting them across pull requests
+leaves the paragraph arguing against its own table. ADR-052's §11.5 row names
+both halves; the spec's section 13 assigns the pair here.
 
-In §15.1, "and one client secret in the whole platform (§11.5)" becomes "and
-two client secrets in the whole platform (§11.5, ADR-052)".
+The paragraph after the grant's opening reads today:
+
+> **In this blueprint that is exactly one host: the BFF** (§9.7). The gateway
+> forwards the caller's token unchanged rather than exchanging it for one of
+> its own; Ordering and Catalog exchange events over the broker and read local
+> projections ([§6.4](06-cqrs.md), ADR-002), so neither ever presents itself to
+> the other.
+
+and becomes:
+
+> **In this blueprint that is two hosts: the BFF** (§9.7) **and Shipping's
+> worker** ([ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)).
+> The gateway forwards the caller's token unchanged rather than exchanging it
+> for one of its own; every other service exchanges events over the broker and
+> reads local projections ([§6.4](06-cqrs.md), ADR-002), so none of them ever
+> presents itself to another.
+
+The sentence in *The scope has to become an audience* — "Catalog would reject
+the platform's only permitted synchronous hop, at the one moment there is no
+user to blame it on." — becomes "Catalog would reject a synchronous hop the
+platform does permit, at the one moment there is no user to blame it on." The
+paragraph below it, which says the BFF's service-account client needs the
+scope assigned as default, gains "and so does Shipping's, for the same reason
+and by the same mapper (ADR-052)".
+
+- [ ] **Step 2: §15.4**
 
 In §15.4, the third paragraph's "which in this blueprint is **every host except
 the BFF**" becomes "which in this blueprint is the BFF and, since
@@ -1936,9 +2066,9 @@ src/Services/Ordering/       the same five, plus §5's aggregate, §9.6's saga
 ports:
   - name: http
     containerPort: 8080
-  # 8081 is cluster-internal: no route reaches it (§10.2 routes HTTP, and
-  # Gateway.Api.Tests asserts it), the Ingress is disabled, and the RPC on it
-  # requires orders:delivery-address (ADR-052).
+  # 8081 is cluster-internal: no route reaches it (§10.2 routes HTTP), the
+  # Ingress is disabled, and the RPC on it requires orders:delivery-address
+  # (ADR-052).
   - name: grpc
     containerPort: 8081
 ```
@@ -1997,27 +2127,42 @@ git commit -m "docs: §11.5's realm table, §15.4's client rows and the two maps
 py -3.12 -m unittest discover -s deploy/keycloak
 py -3.12 deploy/keycloak/realm_check.py check --kind local --realm deploy/compose/keycloak/realm-export.json
 py -3.12 .github/secret-scan/secret_scan.py
-py -3.12 .github/comment-gate/comment_gate.py
+git fetch origin main
+py -3.12 .github/comment-gate/comment_gate.py --base origin/main
 bash deploy/helm/smoke.sh
 ```
+
+`--base` is required and has no default: the gate reads the pull request's own
+diff, so without it the run refuses rather than passing on nothing.
 
 - [ ] Under Compose, with the realm imported fresh (`docker compose down -v`
   first, because Keycloak imports once): fetch a `shipping-worker` token and
   call the method by hand.
 
+**The probe runs in-network, and that is not a convenience.**
+`deploy/compose/services/ordering.yml` maps `127.0.0.1:5101` to the container's
+8080 — the Http1 REST endpoint — and publishes 8081 nowhere, so `grpcurl`
+against `localhost:5101` would reach the REST surface and fail at the protocol
+rather than at the method. Dial the container port from a container on the
+Compose network instead:
+
 ```bash
-TOKEN=$(curl -s -d grant_type=client_credentials -d client_id=shipping-worker \
+TOKEN=$(docker compose -f deploy/compose/docker-compose.yml exec -T ordering-api \
+  curl -s -d grant_type=client_credentials -d client_id=shipping-worker \
   -d client_secret=local-dev-shipping-secret \
-  http://localhost:8080/realms/commerce/protocol/openid-connect/token | jq -r .access_token)
-grpcurl -plaintext -H "authorization: Bearer $TOKEN" \
+  http://keycloak:8080/realms/commerce/protocol/openid-connect/token | jq -r .access_token)
+docker run --rm --network deploy_default -v "$PWD/src/Services/Ordering/Ordering.Api/Protos:/protos:ro" \
+  fullstorydev/grpcurl -plaintext -H "authorization: Bearer $TOKEN" \
+  -import-path /protos -proto delivery_addresses.proto \
   -d '{"order_id":"<a placed order>"}' \
-  localhost:5101 ordering.delivery.v1.DeliveryAddresses/Get
+  ordering-api:8081 ordering.delivery.v1.DeliveryAddresses/Get
 ```
 
-The Compose unit publishes 8080 only, so 8081 is reachable from another
-container and not from the host — run `grpcurl` from a container on the
-Compose network, or publish the port temporarily and do not commit that. Record
-the reply, and the `PermissionDenied` a `demo` token gets, in the PR body.
+Take the network name from `docker compose ... config` rather than from this
+plan; reflection is not registered, which is why the `.proto` is mounted.
+Publishing 8081 temporarily is the alternative, and it is not committed.
+Record the reply, and the `PermissionDenied` a `demo` token gets, in the PR
+body.
 
 - [ ] PR body: `| Class | A+D |`, touch set from the Global Constraints, one
   path per cell and the reasons under the table. Then `/ship`.
@@ -2049,8 +2194,13 @@ the reply, and the `PermissionDenied` a `demo` token gets, in the PR body.
   token holding every user permission, and the address with the client's
   (Task 4); a token Keycloak issued to `shipping-worker` accepted and one
   issued to a client without the role refused (Task 6).
-- Section 13's chapters — §11.5's table of realm objects, `docs/secrets.md`'s
-  rotation and local-default rows, §15.4's client rows → Task 7.
+- Section 13's chapters — §11.5's table of realm objects and its two prose
+  sentences, `docs/secrets.md`'s rotation and local-default rows, §15.4's
+  client rows, `docs/repo-map.md`'s and `CLAUDE.md`'s gRPC-server halves and
+  the two Catalog chart claims → Task 7. ADR-052's `realm-export.json` row —
+  `web-bff`'s description as the only client holding credentials — is Task 3
+  step 2, in the same edit that adds the second such client; the realm's
+  internationalisation half of that row is left alone, and Task 3 says why.
 
 **Gates this PR turns red, and the task that turns each green.**
 
@@ -2060,7 +2210,7 @@ the reply, and the `PermissionDenied` a `demo` token gets, in the PR body.
 | `RealmImportTests.No_client_ships_a_secret_but_the_one_whose_grant_needs_one` | a second client ships one; renamed to `…_the_ones_whose_grants_need_one` | Task 3, step 1 |
 | `RealmClientTests.It_is_the_only_service_account_client_in_the_realm` | a second service-account client; renamed to `The_service_account_clients_are_exactly_the_hosts_that_call_a_peer` | Task 3, step 1 |
 | `Ordering.Api.Tests.GrantablePermissionTests` | reflection finds a constant the realm cannot grant | Task 3, which lands the role before Task 4 adds the constant |
-| `.github/secret-scan` | a new local default in the realm export | Task 3, step 5 |
+| `.github/secret-scan` | a new local default in the realm export and in `RealmImportTests`, and the fixture's own constant | Task 3, step 6, and Task 6, step 4 |
 | `deploy/keycloak/realm_check.py` | its new predicate requires exactly one `shipping-worker` | Task 3, steps 2–3 |
 | `KeycloakIdentityTests.The_service_account_carries_no_permission_claim` | its comment says the vocabulary "belongs to people, not to hosts"; renamed to `The_BFF_service_account_carries_no_permission_claim` and the comment cut and rewritten | Task 6, step 1 |
 
@@ -2098,7 +2248,14 @@ comment saying why the suite cannot read the owner's constant.
   call between its services, **§2.2's diagram**, **`deploy/compose/README.md`**
   and **`docs/runbooks/latency.md`** all describe a *call*, and no code makes
   the second one until PR-5. Spec section 13 assigns §2.2 to PR-5, and the
-  other three go with it.
+  other three go with it — as do §12's sentence, §14.1's and §14.2's, §11.7's
+  erasure step, and the BFF halves of `docs/repo-map.md` and `CLAUDE.md`.
+- **§15.1's "one client secret in the whole platform"**, which spec section 13
+  assigns to **PR-7**: that sentence describes what `smoke.sh` asserts, and
+  `smoke.sh`'s credential assertions do not move until a second credentialed
+  chart renders. Amending the sentence here would leave it disagreeing with
+  the gate it describes for three pull requests. §15.4's rows are this PR's,
+  because they are the inventory rather than the gate.
 - **§4.1's tree comment and `ServiceOptions`' remark** about the one host with
   client credentials are PR-3's, per spec section 13.
 - **Whether `DeliveryAddresses.Get` earns a linked-file contract** of

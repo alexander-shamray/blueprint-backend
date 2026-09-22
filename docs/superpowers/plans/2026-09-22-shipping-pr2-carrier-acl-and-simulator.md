@@ -26,7 +26,7 @@ B), `System.Diagnostics.Metrics`.
 sections 1 (who the carrier is), 3, 4 (the idempotency keys), 9 (the carrier
 port, its answer table, the bounds on a stranger's input, `CarrierHop` and the
 simulator's postal-code script), 10 (`Carrier__BaseUrl` and `Carrier__ApiKey`),
-11 (the `Shipping.Carrier` meter and its `AddMeter` line), 12 (the adapter's
+11 (the `Shipping.Outbound` meter and its `AddMeter` line), 12 (the adapter's
 suite) and 13 (§15.4's two rows).
 
 ## Global Constraints
@@ -36,7 +36,10 @@ suite) and 13 (§15.4's two rows).
   `src/BuildingBlocks/Common.Web/ObservabilityExtensions.cs`,
   `tests/Common.Web.Tests/ObservabilityTests.cs`, `deploy/compose/**`,
   `.gitattributes`, `.github/secret-scan/allowed/deploy.txt`,
-  `docs/backend-architecture/15-cicd-deployment.md`, `docs/secrets.md`.
+  `docs/backend-architecture/15-cicd-deployment.md`, `docs/secrets.md`
+  — paths only, comma-separated, no prose inside the cell and no trailing
+  stop: the gate strips a token's backticks only when the token ends in one,
+  so a full stop after the last path refuses the row.
   Why each: the service's own code and tests are A; the two package
   references (`Microsoft.Extensions.Http.Resilience` and
   `Microsoft.Extensions.Hosting.Abstractions` in `Shipping.Infrastructure`,
@@ -138,11 +141,15 @@ public sealed class CarrierUnavailableException : Exception { /* the three stand
 public static class CarrierLimits
 {
     public const int MaxReferenceLength = ShipmentLimits.MaxCarrierReferenceLength;
-    public const int MaxTrackingNumberLength = 100;
-    public const int MaxReasonLength = 100;
-    public const int MaxCarrierEventIdLength = 100;
+    public const int MaxTrackingNumberLength = ShipmentLimits.MaxTrackingNumberLength;
+    public const int MaxReasonLength = ShipmentLimits.MaxUnfulfillableReasonLength;
+    public const int MaxCarrierEventIdLength = ShipmentLimits.MaxCarrierEventIdLength;
 }
 ```
+
+Every member is PR-1's `ShipmentLimits` and no member is a number: the widths
+belong to the columns, and a literal here would be a second owner that drifts
+the first time one of them moves.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -226,11 +233,10 @@ namespace Shipping.Application.Carrier;
 /// </summary>
 /// <remarks>
 /// A transient fault throws <see cref="CarrierUnavailableException"/> and is
-/// never a <see cref="BookingResult"/> or a
-/// <see cref="CancellationResult"/>, so "the carrier is down" cannot reach a
-/// shipment as a refusal (spec, section 9). Each call that writes carries its
-/// request's idempotency key, which is what lets a worker's pass be repeated
-/// whole after the carrier has answered and before the commit.
+/// never a <see cref="BookingResult"/> or <see cref="CancellationResult"/>, so
+/// "the carrier is down" cannot reach a shipment as a refusal (spec, section
+/// 9). Each call that writes carries its idempotency key, which is what lets a
+/// worker's pass repeat whole after the carrier answered and before the commit.
 /// </remarks>
 public interface ICarrierGateway
 {
@@ -621,11 +627,13 @@ The mappings are proved by Task 3's tests, which load this directory.
   `LocalCarrierApiKey` as constants
 - Create: `tests/Shipping.TestSupport/SimulatorMappings.cs`
 - Test: `tests/Shipping.Worker.Tests/HttpCarrierGatewayTests.cs`
+- Test: `tests/Shipping.Worker.Tests/CarrierFaultTests.cs` — the rows that end
+  in a fault, each over a host of its own
 
 **Interfaces:**
 - Consumes: Task 1's port; Task 2's mapping directory.
 - Produces: `CarrierHop`'s numbers; `CarrierMetrics.MeterName` of
-  `Shipping.Carrier` with `Counter<long> shipping.carrier.unavailable`;
+  `Shipping.Outbound` with `Counter<long> shipping.carrier.unavailable`;
   `IServiceCollection AddCarrierGateway(IConfiguration, IHostEnvironment)`
   with `DependencyInjection.BaseUrlKey` and `ApiKeyKey`;
   `SimulatorMappings.Directory()`; the factory's two new parameters.
@@ -710,8 +718,9 @@ public sealed class HttpCarrierGatewayTests : IClassFixture<HttpCarrierGatewayTe
 
     /// <summary>
     /// One server and one host for the class: a host over an unreachable
-    /// broker can take seconds to stop, so only a test that needs different
-    /// settings builds its own.
+    /// broker can take seconds to stop, so only a test that needs a pipeline
+    /// of its own builds one. Every case that leaves the breaker with a
+    /// failure to remember is in <c>CarrierFaultTests</c> instead.
     /// </summary>
     public sealed class CarrierHost : IDisposable
     {
@@ -835,37 +844,6 @@ public sealed class HttpCarrierGatewayTests : IClassFixture<HttpCarrierGatewayTe
     }
 
     [Fact]
-    public async Task A_503_is_retried_in_the_client_then_thrown_as_unavailable_and_counted_per_attempt()
-    {
-        using UnavailableCount counted = CountUnavailable();
-
-        await Should.ThrowAsync<CarrierUnavailableException>(() =>
-            Carrier().BookAsync(Booking("SIM-DOWN"), TestContext.Current.CancellationToken));
-
-        Calls("/v1/shipments").ShouldBe(CarrierHop.MaxRetryAttempts + 1);
-        counted.Value.ShouldBe(CarrierHop.MaxRetryAttempts + 1, "one per failing attempt, not one per call");
-    }
-
-    [Theory]
-    [InlineData(408)]
-    [InlineData(429)]
-    [InlineData(500)]
-    public async Task A_timeout_a_throttle_or_a_server_fault_is_retried_then_thrown_as_unavailable(int status)
-    {
-        // Stubbed rather than scripted: section 9's table names all three and
-        // the simulator scripts one, so without this a branch that dropped
-        // either of the others would leave the suite green.
-        _server.Given(Request.Create().WithPath("/v1/shipments").UsingPost())
-            .AtPriority(0)
-            .RespondWith(Response.Create().WithStatusCode(status));
-
-        await Should.ThrowAsync<CarrierUnavailableException>(() =>
-            Carrier().BookAsync(Booking("050000"), TestContext.Current.CancellationToken));
-
-        Calls("/v1/shipments").ShouldBe(CarrierHop.MaxRetryAttempts + 1);
-    }
-
-    [Fact]
     public async Task A_refused_connection_is_unavailable_rather_than_a_refusal()
     {
         using ShippingWorkerFactory dead = new(UnreachableSql, UnreachableRabbit, "http://carrier.invalid/");
@@ -873,19 +851,6 @@ public sealed class HttpCarrierGatewayTests : IClassFixture<HttpCarrierGatewayTe
         await Should.ThrowAsync<CarrierUnavailableException>(() => dead.Services.CreateScope().ServiceProvider
             .GetRequiredService<ICarrierGateway>()
             .BookAsync(Booking("050000"), TestContext.Current.CancellationToken));
-    }
-
-    [Fact]
-    public async Task A_stalled_carrier_is_unavailable_within_the_total_budget_and_its_timeouts_count()
-    {
-        using UnavailableCount counted = CountUnavailable();
-        DateTimeOffset started = DateTimeOffset.UtcNow;
-
-        await Should.ThrowAsync<CarrierUnavailableException>(() =>
-            Carrier().BookAsync(Booking("SIM-SLOW"), TestContext.Current.CancellationToken));
-
-        (DateTimeOffset.UtcNow - started).ShouldBeLessThan(CarrierHop.TotalRequestTimeout + TimeSpan.FromSeconds(2));
-        counted.Value.ShouldBeGreaterThanOrEqualTo(1, "an attempt timeout is the carrier's, counted by OnTimeout");
     }
 
     [Fact]
@@ -917,27 +882,6 @@ public sealed class HttpCarrierGatewayTests : IClassFixture<HttpCarrierGatewayTe
             "a breaker that forgets its failures while open reopens on the first error after it closes");
         CarrierHop.CircuitBreakerSamplingDuration.ShouldBeGreaterThanOrEqualTo(CarrierHop.AttemptTimeout * 2,
             "the library validates this pair at startup, and a host that will not start is not a budget");
-    }
-
-    [Fact]
-    public async Task An_open_circuit_makes_no_call_at_all()
-    {
-        // Two calls fill the window: the breaker sits inside the retry, so one
-        // call is MaxRetryAttempts + 1 attempts against the minimum throughput.
-        CancellationToken ct = TestContext.Current.CancellationToken;
-        for (int i = 0; i < 2; i++)
-        {
-            await Should.ThrowAsync<CarrierUnavailableException>(() => Carrier().BookAsync(Booking("SIM-DOWN"), ct));
-        }
-
-        int before = Calls("/v1/shipments");
-
-        await Should.ThrowAsync<CarrierUnavailableException>(() => Carrier().BookAsync(Booking("SIM-DOWN"), ct));
-
-        // The half that makes it a breaker rather than a slow failure: once
-        // open it refuses without a request leaving this process, which is what
-        // stops a worker hammering a carrier that is already down.
-        Calls("/v1/shipments").ShouldBe(before);
     }
 
     [Fact]
@@ -1149,8 +1093,10 @@ public sealed class HttpCarrierGatewayTests : IClassFixture<HttpCarrierGatewayTe
         if (starts)
             production.Services.GetRequiredService<ICarrierGateway>().ShouldNotBeNull();
         else
+        {
             Should.Throw<InvalidOperationException>(() => production.Services)
                 .Message.ShouldContain("plain HTTP outside Development");
+        }
     }
 
     [Fact]
@@ -1199,9 +1145,135 @@ public const string UnreachableCarrier = "http://carrier.invalid/";
 public const string LocalCarrierApiKey = "local-dev-carrier";
 ```
 
+**The rows that end in a fault get a host each, and that is the breaker's
+doing.** `CarrierHop.CircuitBreakerMinimumThroughput` is sized to a worker's
+call rate rather than to an endpoint's, so a handful of failed attempts fills
+the sampling window — and the break outlasts the rest of a class's run. Behind
+one `IClassFixture` the 503 case and the first stubbed status row alone would
+open it, and every test after them would be refused without a request leaving
+the process: `Calls(...)` would report the previous test's traffic and the
+assertions would be about the fixture rather than about the carrier. Payments'
+`ProviderHost` is shared safely because its breaker keeps the library's default
+minimum throughput, which no suite reaches; a breaker asserted able to open
+cannot be. So `tests/Shipping.Worker.Tests/CarrierFaultTests.cs` builds a
+`CarrierHost` per test — the cost §12.4 asks to justify, paid here because it
+is what makes each row's answer the row's:
+
+```csharp
+using System.Diagnostics.Metrics;
+using Microsoft.Extensions.DependencyInjection;
+using Shipping.Application.Carrier;
+using Shipping.Infrastructure.Carrier;
+using Shipping.TestSupport;
+using Shouldly;
+using WireMock.RequestBuilders;
+using WireMock.ResponseBuilders;
+using WireMock.Server;
+using Xunit;
+
+namespace Shipping.Worker.Tests;
+
+/// <summary>
+/// Section 9's transient rows, each over a host of its own because the
+/// breaker they fill is sized to open (<c>CarrierHop</c>).
+/// </summary>
+public sealed class CarrierFaultTests : IDisposable
+{
+    private readonly HttpCarrierGatewayTests.CarrierHost _host = new();
+
+    public CarrierFaultTests() =>
+        _host.Server.ReadStaticMappings(SimulatorMappings.Directory());
+
+    public void Dispose() => _host.Dispose();
+
+    private WireMockServer Server => _host.Server;
+
+    private ICarrierGateway Carrier() =>
+        _host.Factory.Services.CreateScope().ServiceProvider.GetRequiredService<ICarrierGateway>();
+
+    private int Calls(string path) =>
+        Server.LogEntries.Count(e => e.RequestMessage!.Path == path);
+
+    private static BookingRequest Booking(string postalCode) =>
+        new(ShipmentId.New(), new DeliveryAddress("1 Abay Avenue", null, "Almaty", postalCode, "KZ"));
+
+    [Fact]
+    public async Task A_503_is_retried_in_the_client_then_thrown_as_unavailable_and_counted_per_attempt()
+    {
+        using UnavailableCount counted = CountUnavailable();
+
+        await Should.ThrowAsync<CarrierUnavailableException>(() =>
+            Carrier().BookAsync(Booking("SIM-DOWN"), TestContext.Current.CancellationToken));
+
+        Calls("/v1/shipments").ShouldBe(CarrierHop.MaxRetryAttempts + 1);
+        counted.Value.ShouldBe(CarrierHop.MaxRetryAttempts + 1, "one per failing attempt, not one per call");
+    }
+
+    [Theory]
+    [InlineData(408)]
+    [InlineData(429)]
+    [InlineData(500)]
+    public async Task A_timeout_a_throttle_or_a_server_fault_is_retried_then_thrown_as_unavailable(int status)
+    {
+        // Stubbed rather than scripted: section 9's table names all three and
+        // the simulator scripts one, so without this a branch that dropped
+        // either of the others would leave the suite green.
+        Server.Given(Request.Create().WithPath("/v1/shipments").UsingPost())
+            .AtPriority(0)
+            .RespondWith(Response.Create().WithStatusCode(status));
+
+        await Should.ThrowAsync<CarrierUnavailableException>(() =>
+            Carrier().BookAsync(Booking("050000"), TestContext.Current.CancellationToken));
+
+        Calls("/v1/shipments").ShouldBe(CarrierHop.MaxRetryAttempts + 1);
+    }
+
+    [Fact]
+    public async Task A_stalled_carrier_is_unavailable_within_the_total_budget_and_its_timeouts_count()
+    {
+        using UnavailableCount counted = CountUnavailable();
+        DateTimeOffset started = DateTimeOffset.UtcNow;
+
+        await Should.ThrowAsync<CarrierUnavailableException>(() =>
+            Carrier().BookAsync(Booking("SIM-SLOW"), TestContext.Current.CancellationToken));
+
+        (DateTimeOffset.UtcNow - started).ShouldBeLessThan(CarrierHop.TotalRequestTimeout + TimeSpan.FromSeconds(2));
+        counted.Value.ShouldBeGreaterThanOrEqualTo(1, "an attempt timeout is the carrier's, counted by OnTimeout");
+    }
+
+    [Fact]
+    public async Task An_open_circuit_makes_no_call_at_all()
+    {
+        // The breaker sits inside the retry, so one call is
+        // MaxRetryAttempts + 1 attempts against the minimum throughput, and a
+        // fresh host is what makes that arithmetic this test's alone.
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        while (Calls("/v1/shipments") < CarrierHop.CircuitBreakerMinimumThroughput)
+        {
+            await Should.ThrowAsync<CarrierUnavailableException>(() => Carrier().BookAsync(Booking("SIM-DOWN"), ct));
+        }
+
+        int before = Calls("/v1/shipments");
+
+        await Should.ThrowAsync<CarrierUnavailableException>(() => Carrier().BookAsync(Booking("SIM-DOWN"), ct));
+
+        // The half that makes it a breaker rather than a slow failure: once
+        // open it refuses without a request leaving this process, which is
+        // what stops a worker hammering a carrier that is already down.
+        Calls("/v1/shipments").ShouldBe(before);
+    }
+}
+```
+
+`CountUnavailable` and its `UnavailableCount` are the same pair
+`HttpCarrierGatewayTests` declares, reading this class's own host rather than a
+meter matched by name; hoist them into a small `internal static` helper beside
+the two suites rather than writing them twice, and keep the
+`count.Enabled.ShouldBeTrue(…)` guard, without which a zero proves nothing.
+
 - [ ] **Step 2: Run to see them fail**
 
-Run: `dotnet test tests/Shipping.Worker.Tests --filter "FullyQualifiedName~HttpCarrierGatewayTests"`
+Run: `dotnet test tests/Shipping.Worker.Tests --filter "FullyQualifiedName~Carrier"`
 Expected: compile failure on `CarrierHop`, `CarrierMetrics`,
 `Shipping.Infrastructure.Carrier.DependencyInjection` and the factory's two
 new parameters.
@@ -1215,15 +1287,13 @@ namespace Shipping.Infrastructure.Carrier;
 
 /// <summary>
 /// The carrier call's budget and the two intervals a worker runs at, in one
-/// class because section 4's arithmetic is over several of them at once: the
-/// total sits under <c>ServiceOptions.OperationTimeout</c>, and each worker's
-/// lease sits above the total.
+/// class because section 4's arithmetic spans them: the total sits under
+/// <c>ServiceOptions.OperationTimeout</c>, each lease above the total.
 /// </summary>
 /// <remarks>
-/// Public for the reason <c>Program</c> is (§4.2): read from another
-/// assembly, and one modifier commits less than an <c>InternalsVisibleTo</c>.
-/// Every retry inside the budget is safe only because a call that writes
-/// carries its idempotency key (spec, section 4).
+/// Public for the reason <c>Program</c> is (§4.2): one modifier commits less
+/// than an <c>InternalsVisibleTo</c>. Retrying inside the budget is safe only
+/// because a call that writes carries its idempotency key (spec, section 4).
 /// </remarks>
 public static class CarrierHop
 {
@@ -1309,21 +1379,18 @@ using System.Diagnostics.Metrics;
 namespace Shipping.Infrastructure.Carrier;
 
 /// <summary>
-/// One attempt that met a failing carrier: a fault rather than an answer,
-/// whether the pipeline saw it or the adapter read it from the body. A fact
-/// about the carrier rather than a shipment, so §13.3's claim rule does not
-/// reach it — a pass that rolls back still met a failing carrier.
+/// One attempt that met a failing carrier: a fault rather than an answer.
+/// §13.3's claim rule does not reach it — a pass that rolls back still met
+/// a failing carrier.
 /// </summary>
 /// <remarks>
-/// The meter carries two more instruments once the code that can produce them
-/// exists: <c>shipping.address.refused</c>, which the address adapter raises,
-/// and <c>shipping.shipments.waiting</c>, the gauge over rows past their first
-/// backoff. Registering the meter here is what lets them be collected the day
-/// they arrive (§13.2).
+/// The meter is named for the work that leaves this service and not for the
+/// carrier: the other two instruments it will carry are the address
+/// adapter's and the waiting gauge's (§13.2).
 /// </remarks>
 public sealed class CarrierMetrics
 {
-    public const string MeterName = "Shipping.Carrier";
+    public const string MeterName = "Shipping.Outbound";
 
     private readonly Counter<long> _unavailable;
 
@@ -1785,10 +1852,10 @@ git commit -m "feat(shipping): the carrier adapter, its budget, its breaker and 
 ### Task 4: The meter's export, the simulator in Compose, §15.4 and docs/secrets.md
 
 **Files:**
-- Modify: `tests/Common.Web.Tests/ObservabilityTests.cs` — `Shipping.Carrier`
+- Modify: `tests/Common.Web.Tests/ObservabilityTests.cs` — `Shipping.Outbound`
   joins the `Required` list; written first and seen to fail
 - Modify: `src/BuildingBlocks/Common.Web/ObservabilityExtensions.cs` —
-  `.AddMeter("Shipping.Carrier")` in the service-prefixed group
+  `.AddMeter("Shipping.Outbound")` in the service-prefixed group
 - Modify: `deploy/compose/services/shipping.yml` — the `carrier-simulator`
   service, and `Carrier__BaseUrl` / `Carrier__ApiKey` on the worker with
   `depends_on: carrier-simulator: { condition: service_started }`
@@ -1803,14 +1870,14 @@ git commit -m "feat(shipping): the carrier adapter, its budget, its breaker and 
 
 - [ ] **Step 1: The meter**
 
-Add `"Shipping.Carrier"` to `ObservabilityTests`' `Required` list, after
+Add `"Shipping.Outbound"` to `ObservabilityTests`' `Required` list, after
 `"Payments.Outbox"`. Run
 `dotnet test tests/Common.Web.Tests --filter "FullyQualifiedName~ObservabilityTests"`
 and see `Every_meter_an_alert_reads_from_is_collected` fail. Then add the line
 to `ObservabilityExtensions`, beside Payments':
 
 ```csharp
-                .AddMeter("Shipping.Carrier")                      // §3.2's carrier
+                .AddMeter("Shipping.Outbound")                     // §3.2's carrier, and the address read
 ```
 
 and see it pass. The test holds its own copy of the list on purpose, which is
@@ -1972,7 +2039,8 @@ git commit -m "feat(shipping): the simulator runs beside the worker, its meter i
   URL — each have a test, and the last has one on the type as well as on an
   answer.
 - Section 9's `CarrierHop`, breaker included and asserted able to open →
-  Task 3.
+  Task 3, in `CarrierFaultTests` with a host per test, because a breaker
+  sized to open cannot sit behind a shared fixture.
 - Section 9's simulator and its postal-code script → Task 2, every row of the
   table a mapping and every mapping exercised by Task 3 or by Task 4's
   `curl`.
