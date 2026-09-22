@@ -7,7 +7,8 @@ it. `ITokenCache`, `CachingTokenClient`, `ClientCredentialsHandler` and
 `ServiceIdentityOptions` leave `Web.Bff`, their tests leave `Web.Bff.Tests`,
 and the BFF goes on binding `Identity:Client` and registering all four from
 its own composition root. **No behaviour moves**: every assertion that held
-before this PR holds after it, in the suite it moves to.
+before this PR holds after it, in the suite it moves to, save the one that read
+the authority key's literal and now reads the name the test registered.
 
 **Architecture:** the four types land in
 `src/BuildingBlocks/Common.Infrastructure/Identity/`, namespace
@@ -591,9 +592,10 @@ dotnet test tests/Common.Infrastructure.Tests --filter "Category!=Integration"
 ```
 
 Expected: the build is green with 0 warnings, and the BFF suite is green
-including the two token suites, which are still in it. **That green is this
-PR's proof that no behaviour moved**: the assertions have not changed, only
-the namespace they compile against.
+including the two token suites, which are still in it. **That green is this PR's
+proof that no behaviour moved**: one assertion changed in step 9, from the
+authority key's literal to the name the test registered, and every other
+compiles against a new namespace and nothing else.
 
 - [ ] **Step 11: Commit**
 
@@ -1124,12 +1126,13 @@ git commit -m "refactor(identity): the remarks and the BFF's comments follow the
   comment move with them → Task 4, whose step 3 takes the BFF's own comments
   as well, both halves of section 13's row.
 - Section 3's PR-3 row — the four types and their tests out of `Web.Bff`, the
-  BFF re-pointed, no behaviour moved → Tasks 2 and 3; the "no behaviour"
-  claim is discharged by Task 2 step 10, which runs the moved suites
-  unchanged in their old home before they move. Its one stated exception is
-  `Failure`'s diagnostic string, rewritten in Task 2 step 5 because a count of
-  the platform's credential sets cannot be made from a building block; the
-  Global Constraints carry the carve-out and no assertion reads the sentence.
+  BFF re-pointed, no behaviour moved → Tasks 2 and 3; the "no behaviour" claim
+  is discharged by Task 2 step 10, which runs the moved suites in their old home
+  before they move. Its two stated exceptions are `Failure`'s diagnostic string,
+  rewritten in Task 2 step 5 because a count of the platform's credential sets
+  cannot be made from a building block and read by no assertion, and the one
+  assertion that read the authority key's literal, re-pointed in Task 2 step 9
+  at the name the test registered; the Global Constraints carry both carve-outs.
 - Section 3's order — 3 → 4, touching no Shipping path → the touch set names
   none, and the Global Constraints say the PR depends on nothing.
 - Section 13's PR-3b rows — §4.1's identity half, Appendix B's row and every

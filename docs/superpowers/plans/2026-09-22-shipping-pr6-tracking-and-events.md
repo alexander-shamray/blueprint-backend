@@ -628,12 +628,12 @@ public class ShipmentPollTests
 
 **The release is asserted where a row has really been claimed, and not here.**
 `Shipment.For` and `Book` leave `Attempts` at zero and `LockedUntil` null, and
-no member of the aggregate sets either — only the claim and failure statements
-do. A domain assertion that the two are clear after `PollApplied` therefore
-holds whether or not `PollApplied` calls `ReleaseClaim`, and would go on
-holding with that call deleted. `TrackingClaims.ClaimSql` stamps the lease in
-the same pass that applies the page, so the postcondition is asserted in
-Task 3, over a row the pass actually leased.
+no member of the aggregate sets either — only the claim, failure and release
+statements do. A domain assertion that the two are clear after `PollApplied`
+therefore holds whether or not `PollApplied` calls `ReleaseClaim`, and would go
+on holding with that call deleted. `TrackingClaims.ClaimSql` stamps the lease in
+the same pass that applies the page, so the postcondition is asserted in Task 3,
+over a row the pass actually leased.
 
 - [ ] **Step 2: Write the failing handler test**
 
@@ -3087,8 +3087,9 @@ reusing the `metricsConnectionString` the render already composes for
 its `ArgumentNullException.ThrowIfNull` guard — the file's own remark says
 membership asks "can this service run for an hour without constructing it", and
 nothing injects this type at all. The constructor arrives here with the five
-parameters PR-2 and PR-5 left it, and leaves with six; the `using` block
-already names `Shipping.Infrastructure.Observability`, this type's namespace.
+parameters PR-2 and PR-5 left it, and leaves with six; the file sits in
+`Shipping.Infrastructure.Observability`, this type's namespace, so no `using`
+is owed.
 Before:
 
 ```csharp
@@ -3403,7 +3404,7 @@ public sealed class DespatchFanOutTests(PlatformFixture fixture) : IClassFixture
     };
 
     private static Task PublishAsync(IServiceProvider host, ShipmentDispatched message) =>
-        host.GetRequiredService<IPublishEndpoint>().Publish(
+        host.GetRequiredService<IBus>().Publish(
             message,
             c =>
             {

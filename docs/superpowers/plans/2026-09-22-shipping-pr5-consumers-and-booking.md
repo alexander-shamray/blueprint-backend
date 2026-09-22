@@ -1514,13 +1514,13 @@ public sealed class DeliveryAddressSourceTests : IAsyncLifetime
 }
 ```
 
-`RefusedCount` is `HttpCarrierGatewayTests`' `UnavailableCount` with
+`RefusedCount` is `UnavailableCounter`'s `UnavailableCount` with
 `"shipping.address.refused"` as the instrument name, and `CountRefused()`
-resolves `AddressMetrics` and then `IMeterFactory.Create(CarrierMetrics.MeterName)`
-— this host's meter, never one matched by name. It asserts `Enabled`, so a
-zero can never be produced by a listener that attached to nothing. One extra
-assertion belongs with it, because two classes now put instruments on one
-meter:
+resolves `AddressMetrics` and then
+`IMeterFactory.Create(CarrierMetrics.MeterName)` — this host's meter, never one
+matched by name. It asserts `Enabled`, so a zero can never be produced by a
+listener that attached to nothing. One extra assertion belongs with it, because
+two classes now put instruments on one meter:
 
 ```csharp
     [Fact]
@@ -3467,7 +3467,7 @@ public sealed class FulfilmentFaultTests : IAsyncLifetime
         _fixture.Ordering.Addresses[order] =
             new StubAddress(Guid.CreateVersion7(), "1 Abay Avenue", null, "Almaty", postalCode, "KZ");
 
-        await _fixture.Factory.Services.GetRequiredService<IPublishEndpoint>().Publish(
+        await _fixture.Factory.Services.GetRequiredService<IBus>().Publish(
             new OrderConfirmed
             {
                 MessageId = Guid.CreateVersion7(),
