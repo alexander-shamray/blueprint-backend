@@ -157,6 +157,22 @@ carrier address rather than on the value each one names:
 Service name and port are routing configuration the chart ships a default for,
 rather than an environment's choice.
 
+The comment above `overlay_for` names one chart and one value, and the
+function now serves two charts and four values, so its first line moves with
+the case — the rest of the block stands.
+
+Before, `deploy/helm/smoke.sh:33`:
+
+```bash
+# Payments' required provider address (§15.4). Per chart, not for all: on any
+```
+
+After:
+
+```bash
+# The required per-chart values a render cannot supply for every chart (§15.4):
+```
+
 **Third, a new section of its own after the `paymentProvider` one** — which is
 itself a section rather than part of `Rendering`, so this is the section that
 follows it and not a block inside another:
@@ -925,7 +941,7 @@ is replaced rather than kept beside the real one — a second render of a chart
 that never sets the key proves nothing this one does not.
 
 **The section holds more than the surrogate, so the heading has to split
-rather than move.** Below the five surrogate checks sit seven refusals that are
+rather than move.** Below the four surrogate checks sit seven refusals that are
 the gateway's and not the worker's — two written as `if` blocks, because they
 predate the helper, and five as `refuses` calls: no `trustedNetworks`, no CORS
 origins, a blank trusted network, a blank origin, an origin with a trailing

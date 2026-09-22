@@ -1724,7 +1724,7 @@ public sealed partial class GrantCheckedTokenCache(
 
     // Compiled once rather than parsed per call; CA1848 is enforced by ADR-019.
     // Neither message names the token or the secret (§13.4).
-        [LoggerMessage(EventId = 1, Level = LogLevel.Error,
+    [LoggerMessage(EventId = 1, Level = LogLevel.Error,
         Message = "The token this host was issued does not carry exactly its one grant (ADR-052).")]
     private static partial void GrantIsWrong(ILogger logger);
 
@@ -1761,7 +1761,7 @@ public sealed partial class GrantCheckedTokenCache(
         // signature says nothing about that.
         if (!granted.SequenceEqual(Grant, StringComparer.Ordinal))
         {
-                        metrics.Refused();
+            metrics.Refused();
             GrantIsWrong(log);
 
             throw new AddressSourceRefusedException(
