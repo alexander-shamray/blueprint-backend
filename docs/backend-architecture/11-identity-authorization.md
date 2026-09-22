@@ -1516,9 +1516,7 @@ defines the seams and the rules that apply *if* the extension is enabled.
 
 > **Decision — a jurisdiction is a value the deployment is given.** See
 > [ADR-053](adr/ADR-053-a-jurisdiction-is-a-value-the-deployment-is-given.md),
-> the compliance row's record. It amends one rule below: a notification log
-> row is anonymised rather than deleted, so what was said to a customer stays
-> as evidence.
+> the compliance row's record, which amends the erasure rule below.
 
 ### Personal data erasure under database-per-service
 
