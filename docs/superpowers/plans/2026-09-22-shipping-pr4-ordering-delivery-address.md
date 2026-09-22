@@ -2479,14 +2479,15 @@ git fetch origin main
 py -3.12 .github/comment-gate/comment_gate.py --base origin/main
 ```
 
-Expected: all clean — the first because the widened comparison sees both
-charts, the second because no alert or runbook moved, and the third because
-`smoke.sh` is a `.sh` file the gate reads and its two rewritten blocks come out
-at nine lines and one. A bare `#` line does not end a block — the gate's own
-README defines one as a run of lines holding nothing but comment — so the
-section header's argument is written as a single nine-line block rather than as
-two halves around a blank comment. Then run `/check-links` and
-`/validate-blueprint`.
+Expected: all clean — the first because the widened comparison sees both charts,
+the second because no alert or runbook moved, and the third because `smoke.sh`
+is a `.sh` file the gate reads and its two rewritten blocks come out at ten
+lines and one. A bare `#` line does not end a block — the gate's own README
+defines one as a run of lines holding nothing but comment — so the section
+header's argument is written as a single nine-line block rather than as two
+halves around a blank comment, and the `# ----` rule above it is comment too,
+which is where the tenth line comes from: exactly the limit, not over it. Then
+run `/check-links` and `/validate-blueprint`.
 
 ```bash
 git add docs deploy/helm CLAUDE.md
