@@ -4,11 +4,11 @@
 [§11.7](../11-identity-authorization.md)'s compliance row asks for, covering
 personal data and card data. HIPAA and SOC 2 are untouched — no health data is
 handled and no attestation is sought — and each earns its own record on the day
-one is. It is written before Shipping and Notifications put personal data in new
-places and send the first messages a regulator would read. The platform is built
-for the United Kingdom and Kazakhstan with the third country left unnamed on
-purpose — a decision about where it runs and none about the domain, which the
-READMEs still call illustrative — and four rules hold it open:
+that changes. It is written before Shipping and Notifications put personal data
+in new places and send the first messages a regulator would read. The platform
+is built for the United Kingdom and Kazakhstan with the third country left
+unnamed on purpose — a decision about where it runs and none about the domain,
+which the READMEs still call illustrative — and four rules hold it open:
 
 1. **No type, no template and no branch names a country.** What a jurisdiction
    varies is handed to a deployment as configuration: the languages a customer
@@ -17,20 +17,22 @@ READMEs still call illustrative — and four rules hold it open:
    that reads any of them binds a single options class, validated at start as
    [§15.4](../15-cicd-deployment.md) validates `ServiceIdentityOptions`, and
    that class passes the test §15.4 sets for one, since every member differs
-   between deployments. §15.4's sentence that `Identity:Client` is the only
-   thing in the solution that differs per environment is amended by this class
-   and by
+   between deployments. §15.4's sentence that `ServiceIdentityOptions` is the
+   only options type in the solution is amended by this class and by
    [ADR-052](ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)'s
-   `ContactOptions`, and each required member joins that section's inventory
-   table on the terms it states. The refusal is `[Required]` and a range on the
-   bound class, so a missing or impossible value is §15.4's failure at start and
-   never a clamped one. `RetentionPolicy` refuses rather than clamps too, by a
-   throwing setter on a constant rather than by binding, and its windows are
-   housekeeping but for the one that is §8.5's guarantee; none of them is
-   statutory, and none of these is its. A template missing for a required
-   language fails the host at start, not the send at night. `Address` is the
-   precedent and already argues it: it checks presence and the shape of an ISO
-   3166-1 alpha-2 code, and refuses to learn a postcode format or to ask
+   `ContactOptions`; its separate claim that `Identity:Client` is the only thing
+   there holding a per-environment secret stands, because neither new class
+   holds one. Each required member joins that section's inventory table on the
+   terms it states. The refusal is `[Required]`, and a stated bound wherever the
+   value has one, on the bound class — so a missing or impossible value is
+   §15.4's failure at start and never a clamped one. `RetentionPolicy` refuses
+   rather than clamps too, by a throwing `init` setter on a record each service
+   registers rather than by binding, and its windows are housekeeping but for
+   the one that is §8.5's guarantee; none of `RetentionPolicy`'s windows is
+   statutory, and no statutory window is one of its. A template missing for a
+   required language fails the host at start, not the send at night. `Address`
+   is the precedent and already argues it: it checks presence and the shape of
+   an ISO 3166-1 alpha-2 code, and refuses to learn a postcode format or to ask
    `RegionInfo`.
 2. **A made-up jurisdiction proves rule 1.** A test deployment whose values are
    invented — an address country of `ZZ`, which `Address` already constructs,
@@ -103,7 +105,7 @@ inclusive flag or a breakdown, so no VAT receipt can be rendered from what
 the platform holds; a consent record — the realm ships with registration
 off and its terms action disabled; a fiscal-receipt integration; and the
 residency decision itself, since `deploy/helm` charts no stateful workload
-and the region of every store is whoever runs it.
+and the region of every store is chosen by whoever runs it.
 
 **`Money` is the standing counter-example.** Catalog's and Ordering's `Money.Of`
 each round every currency to the same fixed exponent, right for the pound and
@@ -116,8 +118,8 @@ three; until it exists nothing new copies the literal.
 
 **The log store is where rule 3 runs out.** [§13.4](../13-observability.md)
 sends a customer's id to the log, which
-[ADR-035](ADR-035-an-integration-event-carries-identifiers-not-personal-data.md) already calls
-personal data, §11.7's erasure reaches no log, and nothing under
+[ADR-035](ADR-035-an-integration-event-carries-identifiers-not-personal-data.md)
+already calls personal data, §11.7's erasure reaches no log, and nothing under
 `deploy/observability` states a retention. A stated lifetime for the log
 store is owed, and so is the procedure for a personal-data incident — the
 one event here with a statutory clock on it. No alert fires for it, and
