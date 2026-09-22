@@ -771,15 +771,23 @@ is `None`, with the reason stated where the loop was:
         f"| {names.pascal} worker | — (no published port) | "
         f"§3.2 gives it no API; §13.5's `/health/live` and `/health/ready` are its "
         f"only listener and answer inside the container |\n"
-        if port is None
+                if port is None
         else f"| {names.pascal} API | http://localhost:{port} | "
+             # The token note is not decoration: ADR-030 fallback policy covers
+             # MapOpenApi, so a rendered service document answers 401 to an
+             # anonymous request exactly as Catalog and Ordering do. A row
+             # that omitted it would re-introduce the claim the README was
+             # corrected to remove, once per scaffolded service.
              f"`/health/live`, `/health/ready`, "
              f"`/openapi/v1.json` (needs a token — see below) |\n"
     )
 ```
 
-The row is written rather than omitted for the reason §15.3 writes
-`service.enabled: false` down: an absence is not a decision anybody can read.
+The API arm keeps the comment the function carries today, moved with it: it
+is the one place that says why the token note exists, and nothing else would
+notice it gone. The row is written rather than omitted for the reason §15.3
+writes `service.enabled: false` down: an absence is not a decision anybody
+can read.
 
 - [ ] **Step 6: The worker patches**
 

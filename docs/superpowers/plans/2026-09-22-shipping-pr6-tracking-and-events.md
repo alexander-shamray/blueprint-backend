@@ -2600,6 +2600,24 @@ than match on the meter's name. `double` and not `long`, because
 `CreateObservableGauge` over `Measurement<double>` is `OutboxMetrics`' shape
 and the listener sees what the callback produced.
 
+`SetAttemptsAsync` goes on the fixture beside it, in `SetOutboxAttemptsAsync`'s
+shape one table over — a single statement over the column both workers write,
+so a test says which row is past its first backoff instead of failing a pass to
+arrive at one:
+
+```csharp
+    /// <summary>
+    /// Seeds a prior attempt count through the same column the workers write,
+    /// which is what puts a row past its first backoff. Explicit rather than
+    /// hidden in a builder, so no state carries between tests (§12.8).
+    /// </summary>
+    public Task SetAttemptsAsync(ShipmentId id, int attempts) =>
+        ExecuteAsync(
+            "UPDATE shipping.Shipments SET Attempts = {0} WHERE Id = {1};",
+            attempts,
+            id.Value);
+```
+
 Run it now:
 `dotnet test tests/Shipping.Worker.Tests --filter "FullyQualifiedName~WaitingGaugeTests"` —
 expected, a compile failure on `Shipping.Infrastructure.Observability`'s new

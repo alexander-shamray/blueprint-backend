@@ -229,7 +229,7 @@ case asserts.
 **Two of those needles are the second half of a message and not its first, and
 that is the whole of what makes the case about the guard it names.** Two guards
 refuse a capability switched off on this chart — the library's coherence guard,
-which fires while a setting is still present, and Task 3's own
+which fires while a setting is still present, and Task 2's own
 `capabilities.yaml`, which is what is left once every setting is cleared — and
 both messages open with `carrier.enabled is false`. A needle matching that
 prefix passes on whichever guard the render reaches first, so the library's
@@ -772,8 +772,17 @@ and `kind: PodDisruptionBudget` and **no** `Service`, `Ingress` or
 `shipping-worker-migrate-test` as the Job; `Carrier__BaseUrl`,
 `AddressSource__BaseUrl` and both `Jurisdiction__*` keys in the ConfigMap;
 `Carrier__ApiKey` and `Identity__Client__ClientSecret` as `secretKeyRef`s; no
-`Redis` line. `smoke.sh` now passes the capability and credential sections and
-fails on the chart lists, which is Task 3.
+`Redis` line.
+
+Expected from `smoke.sh`: the whole capability section passes, and in the
+credential section so do the named-set assertion over the values files, the
+worker's source assertion and the BFF's own count. Four assertions are still
+red, and every one of them is Task 3's — the chart-list check, because
+`SERVICE_CHARTS` does not name `shipping` yet; `and the other is the worker`,
+because `$OUT/shipping.yaml` is written by the render loop over that list; and
+the platform-wide count of two and the two-different-Secrets assertion, because
+`$OUT/platform.yaml` is the umbrella render and the umbrella gains the subchart
+in Task 3 too.
 
 - [ ] **Step 5: Commit**
 
@@ -788,14 +797,17 @@ chart keeps the three templates whose values are off.
 
 ---
 
-### Task 3: `smoke.sh`'s lists, and the two partitions
+### Task 3: Every list that names the chart, and the two partitions
 
 **Files:**
 - Modify: `deploy/helm/smoke.sh` — `SERVICE_CHARTS`, `MIGRATOR_CHARTS`,
   `SOURCE_INPUTS`, the two umbrella override lists, the autoscaling section and
   its new partition, the new worker-shape section, and the retitled heading
   over the gateway's seven conditional refusals
+- Modify: `deploy/helm/platform/Chart.yaml` — a `shipping` dependency
+- Modify: `deploy/canary/canary.json` — the `shipping-worker` workload
 - Modify: `.github/workflows/helm.yml` — both `paths:` lists
+- Modify: `.github/workflows/deploy.yml` — the dispatch `options`
 
 - [ ] **Step 1: Run it to see the list fail**
 
@@ -804,7 +816,9 @@ bash deploy/helm/smoke.sh
 ```
 
 Expected: the first section fails — `SERVICE_CHARTS` does not match the chart
-directories on disk, which now include `shipping`.
+directories on disk, which now include `shipping` — and the three credential
+assertions Task 2 step 4 left red are still red, because the two renders they
+read are the ones this task's lists produce.
 
 - [ ] **Step 2: Edit every list**
 
@@ -996,39 +1010,14 @@ coverage:
     # what a canary release must not own, and it is true of every chart.
 ```
 
-- [ ] **Step 5: Run every gate that reads a list**
+- [ ] **Step 5: The umbrella, the canary map and the dispatch menu**
 
-```bash
-bash deploy/helm/smoke.sh
-```
-
-Expected: every section green for all seven charts and the umbrella, including
-the new capability section, the two credential set assertions, both autoscaling
-loops and the worker-shape section.
-
-- [ ] **Step 6: Commit**
-
-```bash
-git add deploy/helm/smoke.sh .github/workflows/helm.yml
-git commit -m "feat(deploy): the smoke gate covers the worker chart, its capabilities and its fixed replica count"
-```
-
----
-
-### Task 4: The umbrella, the canary map and the deploy menu
-
-**Files:**
-- Modify: `deploy/helm/platform/Chart.yaml` — a `shipping` dependency
-- Modify: `deploy/helm/README.md` — the tree fence, the umbrella command, the
-  required-values paragraph and the environment example
-- Modify: `deploy/canary/canary.json` — the `shipping-worker` workload, and
-  the `$comment`'s claim about `maxReplicas`
-- Modify: `deploy/canary/test_canary.py` — one docstring's claim about
-  `maxReplicas`
-- Modify: `.github/workflows/deploy.yml` — the dispatch `options`, and one
-  sentence in the first-rung step
-
-- [ ] **Step 1: The umbrella and the README**
+Three lists outside `smoke.sh` name this chart or its workload, and the run
+below reads every one of them, so they move with `SERVICE_CHARTS` rather than
+after it: the umbrella's dependency names are reconciled against that list in
+both directions, the canary map is grepped once per chart in it, and the
+dispatch menu is matched to the canary map by `canary.py` check 8. Left to a
+later task, each would be a red assertion in the run this task ends on.
 
 `platform/Chart.yaml`, after `payments`:
 
@@ -1039,7 +1028,94 @@ git commit -m "feat(deploy): the smoke gate covers the worker chart, its capabil
 ```
 
 `platform/values.yaml` needs nothing: it holds `{}` and argues why, and the
-per-environment overlay is the caller's.
+per-environment overlay is the caller's — which is why Shipping's three
+required values reach the umbrella render on step 2's command line rather than
+from a file.
+
+`canary.json`, after `payments-api`:
+
+```json
+    "shipping-worker": {
+      "serviceName": "Shipping.Worker",
+      "chart": "shipping",
+      "signals": ["consume"],
+      "httpExemption": "Shipping has no HTTP surface at all (§3.2, ADR-051): its chart renders no Service, no route reaches it, and its only listener is §13.5's health endpoint, which the http templates exclude by route. A declared http signal would read a series that is empty by construction, and an empty result rolls every rung back, so the rollout could only ever fail. Its events arrive on the broker and are judged by consume. The two workers are where this service's risk sits and neither is a consumer, so the carrier and address calls carry no canary signal of their own — §13.6's delivery-lag and queue-backlog rules and shipping.shipments.waiting are what watch them, and docs/runbooks/queue-backlog.md says so."
+    },
+```
+
+`serviceName` is the entry assembly, which §13.2 takes `service.name` from —
+`Shipping.Worker`, never the chart's `shipping` or the workload's
+`shipping-worker`. No `consumeExemption`, because the signal is declared; no
+`sagaExemption`, because §9.6's saga is Ordering's and an exemption for a
+service that registers none is refused by check 9.
+
+**The first rung is not expressible at three replicas, and that is the tool
+working rather than a gap this PR closes.** `canary.py plan` refuses 5% against
+three stable pods and names the count that would work, exactly as it does for
+any chart at its default; the rollout's own step then scales the stable track
+to that count before anything rolls, and with no HPA there is no floor to
+raise — `deploy.yml`'s `if [ -n "$FLOOR" ]` already states
+`autoscaling.enabled: false` as a supported configuration and the cleanup
+restores the Deployment's own count. Nothing here changes.
+
+`deploy.yml`'s `options` becomes
+
+```yaml
+        options: [catalog-api, ordering-api, inventory-api, payments-api, shipping-worker, gateway, web-bff]
+```
+
+The `options` list moves with the workload it names, and the sentence Task 4
+corrects a few lines below it stays where it is: check 8 matches menu and map
+against each other in both directions, so a workload declared without its
+option is a gate this task's commit would leave red, while a comment about
+what `maxReplicas` bounds is read by no gate at all.
+
+- [ ] **Step 6: Run every gate that reads a list**
+
+```bash
+bash deploy/helm/smoke.sh
+py -3.12 -m unittest discover -s deploy/canary
+py -3.12 deploy/canary/canary.py check
+```
+
+Expected: `smoke.sh` green in every section, for all seven charts and the
+umbrella — the new capability section, all four credential assertions, both
+autoscaling loops, the worker-shape section, and `shipping appears in
+deploy/canary/canary.json`; the canary suite green; and `canary.py check`
+accepting the plan — check 4 resolving `Shipping.Worker` as an entry assembly
+and `shipping` as a chart directory, check 8 matching the dispatch menu to the
+workload set, and check 9 finding the `AddConsumer` calls PR-5 registered.
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add deploy/helm/smoke.sh deploy/helm/platform/Chart.yaml deploy/canary/canary.json \
+        .github/workflows/helm.yml .github/workflows/deploy.yml
+git commit -m "feat(deploy): the worker joins the smoke gate's lists, the umbrella, the canary map and the deploy menu"
+```
+
+The body argues why the lists move together: each is read against another in
+both directions, so a commit that carried one of them alone would leave a gate
+red naming the one it left behind.
+
+---
+
+### Task 4: The umbrella's README, and what `maxReplicas` no longer bounds
+
+**Files:**
+- Modify: `deploy/helm/README.md` — the tree fence, the umbrella command, the
+  required-values paragraph and the environment example
+- Modify: `deploy/canary/canary.json` — the `$comment`'s claim about
+  `maxReplicas`
+- Modify: `deploy/canary/test_canary.py` — one docstring's claim about
+  `maxReplicas`
+- Modify: `.github/workflows/deploy.yml` — one sentence in the first-rung step
+
+- [ ] **Step 1: The README the umbrella's caller reads**
+
+The dependency itself is Task 3's, with the list the gate reconciles it
+against; what is left here is the file that tells a caller what the seventh
+subchart now requires of them.
 
 `README.md`: `shipping/` joins the bracketed group in the tree fence, and the
 group's note becomes "Payments and Shipping each carry one template more: the
@@ -1071,33 +1147,10 @@ shipping:
     trackingRetention: "90.00:00:00"
 ```
 
-- [ ] **Step 2: The canary map**
+- [ ] **Step 2: The `maxReplicas` claim, in the three places that make it**
 
-`canary.json`, after `payments-api`:
-
-```json
-    "shipping-worker": {
-      "serviceName": "Shipping.Worker",
-      "chart": "shipping",
-      "signals": ["consume"],
-      "httpExemption": "Shipping has no HTTP surface at all (§3.2, ADR-051): its chart renders no Service, no route reaches it, and its only listener is §13.5's health endpoint, which the http templates exclude by route. A declared http signal would read a series that is empty by construction, and an empty result rolls every rung back, so the rollout could only ever fail. Its events arrive on the broker and are judged by consume. The two workers are where this service's risk sits and neither is a consumer, so the carrier and address calls carry no canary signal of their own — §13.6's delivery-lag and queue-backlog rules and shipping.shipments.waiting are what watch them, and docs/runbooks/queue-backlog.md says so."
-    },
-```
-
-`serviceName` is the entry assembly, which §13.2 takes `service.name` from —
-`Shipping.Worker`, never the chart's `shipping` or the workload's
-`shipping-worker`. No `consumeExemption`, because the signal is declared; no
-`sagaExemption`, because §9.6's saga is Ordering's and an exemption for a
-service that registers none is refused by check 9.
-
-**The first rung is not expressible at three replicas, and that is the tool
-working rather than a gap this PR closes.** `canary.py plan` refuses 5% against
-three stable pods and names the count that would work, exactly as it does for
-any chart at its default; the rollout's own step then scales the stable track
-to that count before anything rolls, and with no HPA there is no floor to
-raise — `deploy.yml`'s `if [ -n "$FLOOR" ]` already states
-`autoscaling.enabled: false` as a supported configuration and the cleanup
-restores the Deployment's own count. Nothing here changes.
+A worker with no autoscaler is a chart `maxReplicas` does not bound, and three
+files say otherwise in the same words. One step, because they are one claim.
 
 `test_canary.py`'s `test_five_percent_is_expressible_at_nineteen` docstring
 says 20 is "the service charts' maxReplicas". Before:
@@ -1153,39 +1206,35 @@ They become:
     "rollout's first rung is what scales its stable track (§15.3).",
 ```
 
-- [ ] **Step 3: The deploy menu**
+The third is `deploy.yml`'s first-rung step, whose comment says `maxReplicas`
+"is exactly this 19 plus one canary on the service charts". It becomes "…on
+the charts that autoscale, higher on the gateway, and not a bound at all on a
+worker, which sets its replica count directly". The block stays inside the
+gate's limit, and the dispatch `options` a few lines above it are Task 3's and
+are already on disk.
 
-`deploy.yml`'s `options` becomes
-
-```yaml
-        options: [catalog-api, ordering-api, inventory-api, payments-api, shipping-worker, gateway, web-bff]
-```
-
-and the first-rung step's comment, which says `maxReplicas` "is exactly this 19
-plus one canary on the service charts", becomes "…on the charts that
-autoscale, higher on the gateway, and not a bound at all on a worker, which
-sets its replica count directly". The block stays inside the gate's limit.
-
-- [ ] **Step 4: Run every gate that reads a list**
+- [ ] **Step 3: Run the gates this task's files answer to**
 
 ```bash
-bash deploy/helm/smoke.sh
 py -3.12 -m unittest discover -s deploy/canary
 py -3.12 deploy/canary/canary.py check
 ```
 
-Expected: `smoke.sh` green, including `shipping appears in
-deploy/canary/canary.json`; the canary suite green; and `canary.py check`
-accepting the plan — check 4 resolving `Shipping.Worker` as an entry assembly
-and `shipping` as a chart directory, check 8 matching the dispatch menu to the
-workload set, and check 9 finding the `AddConsumer` calls PR-5 registered.
+Expected: both green, and unchanged from Task 3 step 6 — the suite because
+only a docstring moved, and `canary.py check` because `canary.json` still
+parses and its workload set still matches the menu Task 3 settled. `smoke.sh`
+is not rerun here: nothing this task edits is a file it reads.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 4: Commit**
 
 ```bash
-git add deploy/helm/platform deploy/helm/README.md deploy/canary .github/workflows/deploy.yml
-git commit -m "feat(deploy): Shipping joins the umbrella, the canary map and the deploy choice"
+git add deploy/helm/README.md deploy/canary .github/workflows/deploy.yml
+git commit -m "docs: the umbrella's README names Shipping, and maxReplicas stops standing for every chart"
 ```
+
+The body says which three files restated the one claim and why the count is
+widened rather than qualified: a number that is true of five charts and false
+of the sixth is read by whoever has just met the sixth.
 
 ---
 
@@ -1787,9 +1836,9 @@ carries the delivery-lag panel this PR's first rule reads.
 
 - Section 3's PR-7 row — `deploy/helm/shipping` with `service.enabled: false`
   and `redis.enabled: false` (Task 2), the library chart's `carrier` and
-  client-credentials capabilities (Task 1), the umbrella (Task 4),
-  `smoke.sh`'s lists (Task 3), `deploy.yml`'s option and the canary map
-  (Task 4), §13.6's two rules with the one runbook they share (Task 5).
+  client-credentials capabilities (Task 1), `smoke.sh`'s lists, the umbrella,
+  `deploy.yml`'s option and the canary map (Task 3), §13.6's two rules with the
+  one runbook they share (Task 5).
 - Section 10 — the chart is Ordering's less the Service, with
   `ingress.enabled: false` written down as §15.3 asks and `redis.enabled:
   false` (Task 2); the carrier's two keys on the `paymentProvider` pattern,
@@ -1798,7 +1847,7 @@ carries the delivery-lag panel this PR's first rule reads.
   turned green by naming a set rather than one chart (Task 1); autoscaling off,
   three replicas, and §13.6's backlog rule as the signal (Tasks 2, 5); the
   canary row declaring `consume` and carrying an `httpExemption` as Inventory's
-  does (Task 4); no port published and no Compose health check — the probes
+  does (Task 3); no port published and no Compose health check — the probes
   over the health endpoint on the container port are the chart's, asserted by
   `smoke.sh`'s probe section and the worker-shape section (Tasks 2, 3). The
   readiness-set assertion is **PR-5's** and is argued in Global Constraints.
