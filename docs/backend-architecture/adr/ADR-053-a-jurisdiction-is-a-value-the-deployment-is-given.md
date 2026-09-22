@@ -50,11 +50,12 @@ READMEs still call illustrative — and four rules hold it open:
    by **a deployment per jurisdiction** — its own databases, realm, broker and
    log store — which database-per-service and per-environment chart values
    already permit. §11.7's `TenantId` is **not** that seam: tenancy shares a
-   store, and residency forbids exactly that. So no synchronous read and no
-   integration event leaves a deployment. Every third party that is shown
-   personal data — a carrier, a mail relay — is a chart value and never a
-   constant, and its service's design names it as a processor with the country
-   it runs in.
+   store, and residency forbids exactly that. So no synchronous read between
+   this platform's services and no integration event crosses from one deployment
+   to another. A third party is the one thing outside it: every third party that
+   is shown personal data — a carrier, a mail relay, and the payment provider
+   below — is a chart value and never a constant, and its service's design names
+   it as a processor with the country it runs in.
 4. **What was said to a customer is kept as evidence, not as a copy.** A message
    template is versioned as [§9.2](../09-messaging.md) versions a contract — a
    new version beside the old — and a version is retired not when nothing sends
@@ -129,7 +130,7 @@ sent to the provider and refuses a command amount with more places than it — s
 A minor-unit table keyed by ISO 4217 code is owed as the one source of all
 three; until it exists nothing new copies the literal.
 
-**The log store is where these rules stop.** [§13.4](../13-observability.md)
+**Erasure and retention stop at the log store.** [§13.4](../13-observability.md)
 sends a customer's id to the log, and
 [ADR-035](ADR-035-an-integration-event-carries-identifiers-not-personal-data.md)
 already calls that identifier personal data; §11.7's erasure reaches no log, and

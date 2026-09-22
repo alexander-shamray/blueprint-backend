@@ -1559,8 +1559,10 @@ Rules for each service's consumer:
   replaced and keeps the rest, because
   [ADR-053](adr/ADR-053-a-jurisdiction-is-a-value-the-deployment-is-given.md)
   makes it evidence of what was said. Which of the two a record takes is the
-  owning service's call; nobody else decides, and ADR-053 is where the
-  notification log's was taken.
+    owning service's call; nobody else decides, and ADR-053 is where the
+  notification log's was taken. The delete's example is the contact row a
+  reader keeps for another service's value
+  ([ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)).
 - **Write an audit record** of what was erased and when. That record itself
   contains no personal data — a subject ID hash, a timestamp, a count.
 - **Idempotent.** The message is delivered at least once, and a second erasure
