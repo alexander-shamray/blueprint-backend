@@ -699,10 +699,12 @@ carrier:
     name: shipping-carrier
     key: api-key
 
-# ADR-052's address owner, and the one address here with a default: the host
-# and the port are routing configuration, literal in src/, and the same in
-# every cluster — `ordering-api`'s HTTP/2-only endpoint. Plain http, because
-# TLS terminates at the Ingress (§10.1) and every hop past it says so.
+# ADR-052's address owner: the host and the port are routing configuration —
+# `ordering-api`'s HTTP/2-only endpoint, the same in every cluster — so this is
+# the one address the chart defaults rather than requires; the host reads it
+# from `AddressSource:BaseUrl` and refuses to start without it (§15.4). Plain
+# http, because TLS terminates at the Ingress (§10.1) and every hop past it
+# says so.
 addressSource:
   enabled: true
   baseUrl: http://ordering-api:8081
@@ -1542,7 +1544,8 @@ After:
 > two keys**, which is what this paragraph is about; Shipping's chart differs
 > in more than them, and the next paragraph says how.
 
-and a new paragraph after it:
+and a new paragraph immediately after it, before *Both keys are still written
+down rather than left absent*:
 
 > **A worker's replica count is a decision and not a copy.** CPU utilisation is
 > the wrong signal for a host that waits on a queue and on a third party — it

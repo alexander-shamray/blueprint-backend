@@ -122,9 +122,9 @@ and after `Microsoft.Extensions.Http.Resilience`:
     <PackageVersion Include="Microsoft.Extensions.Http" Version="10.0.0" />
 ```
 
-The version is the one every other `Microsoft.Extensions.*` row in that file
-carries. Copy it from the neighbouring rows rather than from this plan; a pin
-written from a document is a pin with two owners.
+The version is the one the neighbouring `Microsoft.Extensions.*` rows carry.
+Copy it from those rows rather than from this plan; a pin written from a
+document is a pin with two owners.
 
 - [ ] **Step 2: Add the register row**
 

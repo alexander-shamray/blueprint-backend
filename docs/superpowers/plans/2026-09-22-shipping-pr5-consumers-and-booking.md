@@ -923,9 +923,9 @@ than on the unit of work's transaction, because the worker writes it before
 the booking and outside any unit:
 
 ```csharp
+using System.Data;
 using Common.Application;
 using Dapper;
-using Microsoft.Data.SqlClient;
 using Shipping.Application.Addresses;
 using Shipping.Application.Carrier;
 using Shipping.Domain.Shipments;
@@ -976,7 +976,7 @@ internal sealed class SqlDeliveryAddressStore(IDbConnectionFactory connections) 
         DateTimeOffset fetchedAt,
         CancellationToken ct)
     {
-        using SqlConnection connection = (SqlConnection)connections.Create();
+        using IDbConnection connection = connections.Create();
 
         await connection.ExecuteAsync(new CommandDefinition(
             SaveSql,
@@ -996,7 +996,7 @@ internal sealed class SqlDeliveryAddressStore(IDbConnectionFactory connections) 
 
     public async Task<DeliveryAddress?> GetAsync(OrderId orderId, CancellationToken ct)
     {
-        using SqlConnection connection = (SqlConnection)connections.Create();
+        using IDbConnection connection = connections.Create();
 
         Row? row = await connection.QuerySingleOrDefaultAsync<Row>(new CommandDefinition(
             GetSql, new { OrderId = orderId.Value }, cancellationToken: ct));
@@ -1017,10 +1017,7 @@ registered in `AddShippingInfrastructure`:
 ```
 
 `IDbConnectionFactory` and `SqlConnectionFactory` are the scaffold's, already
-registered on the `Shipping` runtime connection string (§6.5). Replace the
-cast with whatever `Create()` already returns if the rendered factory declares
-`SqlConnection` directly; the cast exists only because the port is typed as
-`IDbConnection`.
+registered on the `Shipping` runtime connection string (§6.5).
 
 - [ ] **Step 4: Generate the migration**
 
@@ -1325,12 +1322,14 @@ a generated type.
 the real host, with no container:
 
 ```csharp
+using System.Diagnostics.Metrics;
 using Grpc.Core;
 using Microsoft.Extensions.DependencyInjection;
 using Shipping.Application.Addresses;
 using Shipping.Application.Carrier;
 using Shipping.Domain.Shipments;
 using Shipping.Infrastructure.Addresses;
+using Shipping.Infrastructure.Carrier;
 using Shipping.OrderingStub;
 using Shipping.TestSupport;
 using Shouldly;
@@ -1687,6 +1686,7 @@ public sealed class AddressMetrics
 using System.IdentityModel.Tokens.Jwt;
 using Common.Infrastructure.Identity;
 using Microsoft.Extensions.Logging;
+using Shipping.Application.Addresses;
 
 namespace Shipping.Infrastructure.Addresses;
 
@@ -1856,7 +1856,6 @@ with the section renamed and no API key:
 using Common.Infrastructure.Identity;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Http.Resilience;
 using Ordering.Delivery.V1;
 using Polly;
@@ -1865,8 +1864,9 @@ using Shipping.Application.Addresses;
 namespace Shipping.Infrastructure.Addresses;
 
 /// <summary>
-/// ADR-052's client, apart from <c>AddShippingInfrastructure</c> because its
-/// scheme rule needs the host's environment, which that method is not given.
+/// ADR-052's client, apart from <c>AddShippingInfrastructure</c> because it
+/// parses its base address at registration and refuses to start without one,
+/// which is a rule about §15.4's key rather than about persistence.
 /// </summary>
 public static class DependencyInjection
 {
@@ -1875,8 +1875,7 @@ public static class DependencyInjection
 
     public static IServiceCollection AddDeliveryAddressSource(
         this IServiceCollection services,
-        IConfiguration configuration,
-        IHostEnvironment environment)
+        IConfiguration configuration)
     {
         // Eager, as the carrier's address is: a worker that cannot name the
         // owner of its addresses does not start, rather than failing its first
@@ -1901,10 +1900,9 @@ public static class DependencyInjection
                 $"{BaseUrlKey} carries user information; this host authenticates with §11.5's grant alone.");
         }
 
-        // Cleartext HTTP/2 inside the cluster is the platform's model (§10.1),
-        // so no https rule applies here as it does to the carrier: the hop
-        // never leaves the deployment (ADR-053).
-        ArgumentNullException.ThrowIfNull(environment);
+        // No https rule as the carrier has: cleartext HTTP/2 inside the cluster
+        // is the platform's model (§10.1), and the hop never leaves the
+        // deployment (ADR-053).
 
         services.AddSingleton<AddressMetrics>();
         services.AddScoped<IDeliveryAddressSource, GrpcDeliveryAddressSource>();
@@ -1982,7 +1980,7 @@ builder.Services
 builder.Services.AddSingleton(new AuthorityKeyName(AuthenticationExtensions.AuthorityKey));
 
 // ADR-052's read; its address is read, and its scheme checked, eagerly.
-builder.Services.AddDeliveryAddressSource(builder.Configuration, builder.Environment);
+builder.Services.AddDeliveryAddressSource(builder.Configuration);
 ```
 
 `GrantCheckedTokenCache` is written `public` in step 5 above and is not

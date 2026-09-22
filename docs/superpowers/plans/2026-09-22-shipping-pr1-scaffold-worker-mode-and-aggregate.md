@@ -2754,7 +2754,9 @@ class EveryGateSeesTheWorkerRender(unittest.TestCase):
 
     def test_the_comment_gate_reads_every_rendered_source_file(self):
         gate = gate_module("comment-gate", "comment_gate.py")
-        sources = [p for p in self.rendered.created if p.endswith((".cs", ".csproj", ".yml", ".json"))]
+        # No .json: comment_gate declares a reader per suffix and JSON is not
+        # one of them, because a JSON document has nowhere to carry a comment.
+        sources = [p for p in self.rendered.created if p.endswith((".cs", ".csproj", ".yml"))]
         self.assertTrue(sources)
         for path in sources:
             self.assertIn(
