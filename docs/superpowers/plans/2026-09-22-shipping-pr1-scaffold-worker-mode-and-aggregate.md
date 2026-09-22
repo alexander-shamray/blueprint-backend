@@ -40,6 +40,8 @@ and the scaffold's suite), 13 (§4.5's sentence and §2's) and 14.
 - The blueprint wins over the spec; the spec wins over this plan.
 - **Class A+D+E.** Touch set: `src/Services/Shipping/**`, `tests/Shipping.*`,
   `src/Services/Catalog/**`, `tests/Catalog.Api.Tests/**`,
+  `tests/Catalog.Application.Tests/**`, `tests/Catalog.Domain.Tests/**`,
+  `tests/Catalog.TestSupport/**`,
   `src/BuildingBlocks/Common.Web/ObservabilityExtensions.cs`,
   `tests/Common.Web.Tests/ObservabilityTests.cs`, `Platform.slnx`,
   `tools/new-service/**`, `deploy/compose/**`,
@@ -56,7 +58,9 @@ and the scaffold's suite), 13 (§4.5's sentence and §2's) and 14.
   writes, which are inside the two Shipping trees already named and so need no
   token of their own. `Common.Web` and its suite are the one `AddMeter` line a
   service's meter owes §13.2, which is why they are here and why nothing else
-  in that assembly moves.
+  in that assembly moves. All four Catalog test trees are named rather than the
+  one, because the template the scaffold copies is nine projects and Task 3
+  reaches the comments in seven of them.
 - **The locality gate admits `A+D+E` today** — `locality_gate.py` names it as
   the one three-member class and reads it as its three members — so this PR
   needs no contract change before it can merge, unlike Payments' and
@@ -81,7 +85,10 @@ and the scaffold's suite), 13 (§4.5's sentence and §2's) and 14.
   a comment this PR writes or touches has to come out at ten lines or fewer
   with no `<b>` and no `**…**`, however long it was before — and a file this PR
   creates is all added lines, so every block in it is judged. The blocks it
-  neither adds nor touches stay as they are.
+  neither adds nor touches stay as they are. **The render creates every file it
+  writes**, so the template's blocks are judged too even where Catalog's own
+  copy is untouched, which is what Task 3 is and why it comes before the render
+  rather than after it.
 - Explicit local types, file-scoped namespaces, braces on two statements or
   more, one space before `=`, `=>` and `{`, 120 columns, British spelling.
 - `py -3.12`, never `python`, for anything Python.
@@ -346,11 +353,89 @@ Copy `tests/Payments.Api.Tests/MetricsRegistrationTests.cs` to
 `tests/Catalog.Api.Tests/MetricsRegistrationTests.cs` — Payments' and not
 Ordering's, because it is the copy that carries the provider registration and
 `TestEnvironment`, which is the shape a service with a third registration
-needs and the shape this step strips — change the namespace to
-`Catalog.Api.Tests`, the `using`s to `Catalog.Application`,
-`Catalog.Infrastructure` and `Catalog.Infrastructure.Observability`, and the
-`BuildServices()` helper to Catalog's two registration calls over
-configuration that reaches nothing:
+needs and the shape this step strips — and make exactly the edits below. Step
+7 renders this copy into every service after Catalog, so a line of Payments
+surviving here is a line every later service is rendered with.
+
+The namespace. Before:
+
+```csharp
+namespace Payments.Api.Tests;
+```
+
+After:
+
+```csharp
+namespace Catalog.Api.Tests;
+```
+
+The `using` block: three re-pointed, and two that go. The provider namespace
+has nothing to resolve to in Catalog, and `FileProviders` is read only by the
+`TestEnvironment` this step removes. Before:
+
+```csharp
+using System.Diagnostics.Metrics;
+using Payments.Application;
+using Payments.Infrastructure;
+using Payments.Infrastructure.Observability;
+using Payments.Infrastructure.Provider;
+using Common.Application;
+using Common.Infrastructure.Messaging;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.FileProviders;
+using Microsoft.Extensions.Hosting;
+```
+
+After:
+
+```csharp
+using System.Diagnostics.Metrics;
+using Catalog.Application;
+using Catalog.Infrastructure;
+using Catalog.Infrastructure.Observability;
+using Common.Application;
+using Common.Infrastructure.Messaging;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+```
+
+`Microsoft.Extensions.Hosting` stays: `IHostedService` is the type the
+initialiser's registration test asks for, and it outlives the environment.
+
+`BuildServices`' doc block counts the helpers and argues from the third one.
+Catalog has two, and the type that argument turns on does not exist here.
+Before:
+
+```csharp
+    /// <summary>
+    /// All three registration helpers, over configuration that reaches
+    /// nothing (§12.4's .invalid convention).
+    /// </summary>
+    /// <remarks>
+    /// <c>AddPaymentProvider</c> is the third, and leaving it out would make
+    /// this test agree with a <see cref="MetricsInitialiser"/> that forgot
+    /// <see cref="ProviderMetrics"/>: the types are split across all three.
+    /// </remarks>
+```
+
+After:
+
+```csharp
+    /// <summary>
+    /// Both registration helpers, over configuration that reaches nothing
+    /// (§12.4's .invalid convention).
+    /// </summary>
+    /// <remarks>
+    /// Leaving either out would make this test agree with a
+    /// <see cref="MetricsInitialiser"/> that forgot whatever the missing one
+    /// registers: the metrics types are split across both.
+    /// </remarks>
+```
+
+The helper itself becomes Catalog's two registration calls over configuration
+that reaches nothing:
 
 ```csharp
     private static ServiceCollection BuildServices()
@@ -378,20 +463,71 @@ configuration that reaches nothing:
     }
 ```
 
-Drop every assertion naming `ProviderMetrics` or the provider registration, so
-`The_metrics_selector_actually_selects_something` reads:
+The selector test loses its provider line. Before:
 
 ```csharp
-        registered.ShouldContain(typeof(OutboxMetrics));
-        registered.ShouldContain(typeof(MessagingMetrics));
+        registered.ShouldContain(typeof(RequestMetrics));
+        registered.ShouldContain(typeof(ProviderMetrics));
+```
+
+After:
+
+```csharp
         registered.ShouldContain(typeof(RequestMetrics));
 ```
 
-and `TestEnvironment` leaves with the provider registration it existed for.
+`A_foreign_meter_of_the_same_name_is_not_collected` opens by naming the
+registration a host would have used instead of the two calls below it.
+Before:
+
+```csharp
+        // AddMetrics() and AddLogging() because a host adds both, not
+        // AddPaymentsInfrastructure: OutboxMetrics takes an IMeterFactory and
+        // an ILogger, and this container is assembled by hand.
+```
+
+After:
+
+```csharp
+        // AddMetrics() and AddLogging() because a host adds both, not
+        // AddCatalogInfrastructure: OutboxMetrics takes an IMeterFactory and
+        // an ILogger, and this container is assembled by hand.
+```
+
+`TestEnvironment` leaves with the provider registration it existed for, and
+its doc block with it. Delete the span from
+
+```csharp
+    /// <summary>
+    /// A minimal <see cref="IHostEnvironment"/>: <c>AddPaymentProvider</c>
+```
+
+through
+
+```csharp
+        public IFileProvider ContentRootFileProvider { get; set; } = new NullFileProvider();
+    }
+```
+
+inclusive, which is what leaves the `FileProviders` using above with nothing
+to resolve.
+
 Everything else — the forced/registered both-directions test, the per-lane
 collection over a real `IMeterFactory`, the foreign-meter isolation test and
 the contained-failure test — travels unchanged: each is about the mechanism
 rather than about Payments.
+
+One grep closes the step, beside the comment gate Step 11 runs:
+
+```bash
+grep -rniE "payment|ProviderMetrics|FileProvider" tests/Catalog.Api.Tests/MetricsRegistrationTests.cs
+```
+
+Expected: no match. Not a bare `provider`, which matches
+`BuildServiceProvider` and the comment that calls a built container one —
+the framework's word in both, and neither Payments'. The file as prescribed
+above was judged by `comment_gate.judge` with every line marked added: zero
+findings.
 
 - [ ] **Step 6: Delete the exemption and run both gates**
 
@@ -546,7 +682,7 @@ created. The gate reads `origin/main...HEAD` and takes each file's text from
 `git show HEAD:<path>`, so it sees a created file only once it is committed —
 run before the commit it would judge no added line and pass by reading
 nothing, which is the fail-open shape this repository keeps finding. That is
-why it is here rather than beside Step 10's gates, and Task 10 runs it again
+why it is here rather than beside Step 10's gates, and Task 11 runs it again
 over everything the branch has by then.
 
 The body says the exemption was a decision about the template rather than
@@ -1230,7 +1366,7 @@ Prose at 80 columns.
 Run `/check-links` and `/validate-blueprint`; `docs/change-locality.md`'s
 procedure owes the audit after any chapter edit, and a finding is fixed here.
 The test counts in §4.5 and in the scaffold README move with Task 1's added
-suite and are remeasured in Task 10, not guessed here.
+suite and are remeasured in Task 11, not guessed here.
 
 ```bash
 git add tools/new-service docs/backend-architecture/04-solution-structure.md
@@ -1243,7 +1379,891 @@ than went.
 
 ---
 
-### Task 3: Render Shipping and prove the empty worker
+### Task 3: The template's comments come under the gate
+
+**Files:**
+- Modify: `src/Services/Catalog/Catalog.Api/Catalog.Api.csproj`,
+  `src/Services/Catalog/Catalog.Api/Program.cs`,
+  `src/Services/Catalog/Catalog.Application/DependencyInjection.cs`,
+  `src/Services/Catalog/Catalog.Infrastructure/DependencyInjection.cs`,
+  `src/Services/Catalog/Catalog.Infrastructure/Persistence/CatalogDbContext.cs`,
+  `src/Services/Catalog/Catalog.Infrastructure/Persistence/InboxMessageConfiguration.cs`,
+  `src/Services/Catalog/Catalog.Infrastructure/Persistence/OutboxMessageConfiguration.cs`,
+  `src/Services/Catalog/Catalog.Infrastructure/Persistence/OutboxPublisher.cs`,
+  `src/Services/Catalog/Catalog.Migrator/MigrationRunner.cs`
+- Modify: the five template migrations under
+  `src/Services/Catalog/Catalog.Infrastructure/Persistence/Migrations/` whose
+  names end `_InitialCreate.cs`, `_AddOutbox.cs`,
+  `_AddOutboxRetentionIndex.cs`, `_AddIdempotencyMarkers.cs` and
+  `_IdempotencyMarkerCommittedAtDefault.cs` — the hand-authored doc block
+  only, never the `.Designer.cs` or the snapshot
+- Modify: `tests/Catalog.Api.Tests/ArchitectureTests.cs`,
+  `tests/Catalog.Api.Tests/HostSmokeTests.cs`,
+  `tests/Catalog.Api.Tests/InboxFilterTests.cs`,
+  `tests/Catalog.Api.Tests/IntegrationCollection.cs`,
+  `tests/Catalog.Api.Tests/MessageTypeMapValidatorTests.cs`,
+  `tests/Catalog.Api.Tests/MessagingRegistrationTests.cs`,
+  `tests/Catalog.Api.Tests/OutboxDispatcherTests.cs`,
+  `tests/Catalog.Application.Tests/ArchitectureTests.cs`,
+  `tests/Catalog.Application.Tests/IdempotencyOptInTests.cs`,
+  `tests/Catalog.Domain.Tests/ArchitectureTests.cs`,
+  `tests/Catalog.TestSupport/CatalogApiFactory.cs`,
+  `tests/Catalog.TestSupport/Outbox/OutboxRows.cs`,
+  `tests/Catalog.TestSupport/ServiceFixture.cs`,
+  `tests/Catalog.TestSupport/TestAuthHandler.cs`
+- Modify: `tools/new-service/scaffold/patch.py` — the anchors that quote a
+  comment this task rewrites, the four migration tables that become empty, and
+  the three replacements that render a block over ten lines
+- Modify: `tools/new-service/scaffold/render.py` — `ASSEMBLY_MARKER`
+
+**Interfaces:** none. Every edit is a comment or a patch string; no signature,
+no registration and no assertion moves, so nothing later in this plan or in any
+later Shipping plan changes shape because of it.
+
+**Why here, before the render.** `.github/comment-gate/comment_gate.py` judges
+a pull request's added lines, and a created file is all added lines — so every
+comment block in the rendered service is judged whole, however long it has
+been in Catalog. Task 4 creates the whole of `src/Services/Shipping` and
+`tests/Shipping.*` from the template, and `.github/workflows/ci.yml` runs the
+gate on every pull request. The gate's own rule is `BLOCK_LIMIT = 10` and the
+`PATTERNS` list, and its README states the half this task is on the wrong side
+of: the corpus is brought under the rule by the change that touches it.
+
+The durable fix is Catalog's template rather than the rendered tree, and that
+is the whole argument for doing it here. `render.py`'s `COPIED` set copies
+forty-eight files verbatim and `classify` copies the template's migrations
+beside them; §4.5 renders all of them into every service after this one, so a
+block cut in Shipping alone is a block the sixth service is handed again.
+
+**Where the After comes from.** Payments' tree passes the gate as it stands —
+every file below has a Payments counterpart with zero findings, because that
+service's own pull request cut the rendered copies by hand. So each After is
+Payments' block with `Payments` changed back to `Catalog`, and the four places
+that deviate say why. Three blocks have no Payments counterpart at all, and
+those are written out fresh.
+
+- [ ] **Step 1: Measure the template**
+
+```bash
+py -3.12 - <<'PY'
+import importlib.util, sys
+from pathlib import Path
+
+root = Path.cwd()
+spec = importlib.util.spec_from_file_location(
+    "gate", root / ".github/comment-gate/comment_gate.py")
+gate = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(gate)
+sys.path.insert(0, str(root / "tools/new-service"))
+from scaffold.render import MIGRATION_LABELS, classify
+
+findings = 0
+for relative in sorted(classify(root, MIGRATION_LABELS)):
+    if gate.reader_for(relative) is None:
+        continue
+    text = (root / relative).read_text(encoding="utf-8-sig")
+    added = set(range(1, len(gate._line_starts(text)) + 1))
+    for path, line, message in gate.judge(relative, text, added):
+        print(f"{path}:{line}: {message}")
+        findings += 1
+print(findings)
+PY
+```
+
+Expected: 58 — thirty-five in the files `COPIED` names and twenty-three in the
+five migrations. Every one is either a block over ten lines or an emphasised
+span, and the lists in Steps 2 and 3 are that output, grouped.
+
+- [ ] **Step 2: The copied projects and suites**
+
+Thirty-two blocks, by file. Each heading gives the block's first line and the
+number of lines it replaces; the After replaces exactly those lines and nothing
+around them.
+
+`Catalog.Api/Catalog.Api.csproj`, line 23, 13 lines. No Payments counterpart —
+that service serves no gRPC contract, so its copy has this `ItemGroup` and this
+comment removed entirely. Written fresh:
+
+```xml
+    <!-- Catalog owns the contract because Catalog serves it. Web.Bff compiles
+         this same file as a Client, by link — see that reference and
+         pricing.proto's own header. Both halves, not Server alone: this
+         project's own suite drives PricingService over the real pipeline and
+         needs a client, and generating one in the test project would put a
+         second copy of every message type in a compilation that already
+         references this assembly, where CS0436 is an error under ADR-019. The
+         choice is a generated client nothing in production calls or a
+         transport adapter no test can reach, and an untested adapter is the
+         worse of the two. -->
+```
+
+`Catalog.Api/Program.cs`, line 31, 12 lines. No Payments counterpart — that
+service registers real policies, so its block is about them. Written fresh, and
+the named suite goes because the guide's *Comments* section does not want one:
+
+```csharp
+// Catalog's permission policies (§11.4). Deliberately not inside either helper
+// above: Application knows nothing about HTTP, and Common.Web must not know
+// Catalog's names. One policy, because one endpoint names one — the write
+// path. §11.4's callout is about the opposite mistake: a name an endpoint uses
+// and nobody registered throws on the first request that reaches it, never at
+// startup, and the endpoint metadata is what a gate reads to assert both
+// directions. RequirePermission rather than RequireClaim("permission", …): the
+// claim type is Common.Web's (§11.4), so a policy here and the resource-level
+// check behind ICurrentUser cannot drift apart.
+```
+
+`Catalog.Application/DependencyInjection.cs`, line 42, 11 lines. Payments':
+
+```csharp
+        // Ordered, explicit, not scanned — registration order is pipeline
+        // order (§6.3), and all four seats are filled.
+        //
+        // Idempotency sits INSIDE validation and OUTSIDE the transaction, and
+        // both neighbours are load-bearing. Inside validation, because a
+        // malformed command must be refused without claiming a key — a 400
+        // that burned the caller's CommandId for 24 hours would make a typo
+        // unretryable. Outside the transaction, because the claim has to be
+        // held before any work starts, and a claim taken inside the
+        // transaction would be released by a rollback it knows nothing about.
+```
+
+`Catalog.Infrastructure/DependencyInjection.cs`, line 131, 13 lines. Payments':
+
+```csharp
+        // The poll loop of §9.4. AddHostedService<T>, not a factory over a
+        // registered singleton: the generic overload records an
+        // ImplementationType, which is what §12.4's fixture matches on to
+        // remove only this hosted service without also removing MassTransit's
+        // bus, itself a hosted service RemoveAll<IHostedService>() would stop.
+        //
+        // Registered after the bus and before the purge: hosted services stop
+        // in reverse, so the dispatcher drains into a transport still up, and
+        // registering it before the bus would let a deploy stop the broker
+        // underneath a dispatcher still claiming rows.
+```
+
+`Catalog.Infrastructure/Persistence/CatalogDbContext.cs`, line 8, 15 lines.
+Payments':
+
+```csharp
+/// <summary>
+/// Catalog's write-side context (§7.2). Sealed, and an implementation
+/// detail of this assembly — §6.3 rejects an <c>IApplicationDbContext</c>
+/// exposing <c>DbSet&lt;T&gt;</c>, which puts EF Core in an Application
+/// signature while appearing to respect the boundary. Public rather than
+/// internal, because the rule is that the context never leaves
+/// Infrastructure by reference — enforced by the architecture gates, not by
+/// the access modifier.
+/// </summary>
+```
+
+`Catalog.Infrastructure/Persistence/InboxMessageConfiguration.cs`, line 26,
+20 lines. Payments':
+
+```csharp
+        // nvarchar, like the outbox's MessageType column one file over, for
+        // the same reason: narrowing a column that is half a key lets an
+        // encoding decide whether a message is delivered. AMQP 0-9-1 allows a
+        // queue name up to 255 bytes of UTF-8, so two names differing only
+        // outside the code page would collide in the key below and suppress a
+        // message as an already-handled duplicate, silently.
+        //
+        // InboxMessage.EndpointMaxLength, not a literal 300: the entity is
+        // what both services map, so the width is its to state and the
+        // chapter's to cite.
+```
+
+The same file, line 50, 13 lines. Payments':
+
+```csharp
+            // Binary collation, because this column is half a key rather than
+            // text: SQL Server's default is case-insensitive, and a broker's
+            // queue names are not — `orders` and `Orders` would collide under
+            // it, and the second is dropped as a duplicate on an endpoint that
+            // never saw it. BIN2 rather than a CS_AS collation, because an
+            // endpoint address is matched exactly and linguistic comparison
+            // (accents, width) has no meaning over it.
+```
+
+`Catalog.Infrastructure/Persistence/OutboxMessageConfiguration.cs`, line 34,
+21 lines. Payments':
+
+```csharp
+        // Unicode, and bounded at MessageTypeMap.MaxNameLength, not a literal
+        // 300: the map refuses a longer name at startup, and two independent
+        // numbers would let the guard and the column drift into disagreeing
+        // about what fits. Not varchar: C# permits Unicode identifiers, so a
+        // domain event named in another language is a legal type, and a
+        // storage choice does not get to narrow what the domain may call
+        // something. The cost is 300 bytes per unprocessed row, not paid by
+        // the claim's index, which covers OccurredAt and includes only Lane,
+        // Attempts and LockedUntil.
+```
+
+The same file, line 59, 11 lines. Payments':
+
+```csharp
+        // The one deliberate exception to §7.2's max-length convention. A
+        // payload is a contract or a domain event of unknown size, and a
+        // truncated one is a row that cannot be delivered and cannot be read.
+        // HasColumnType alone fixes the DDL but leaves MaxLength at the
+        // convention's 400 in the model, so the property is cleared as well —
+        // otherwise the generated migration says both `nvarchar(max)` and
+        // `maxLength: 400` in the same line. A container test stages a
+        // payload past 400 characters and reads it back.
+```
+
+The same file, line 105, 11 lines. Payments':
+
+```csharp
+        // The retention purge's index, and it has to be a second one: the
+        // filtered index above is `WHERE ProcessedAt IS NULL`, which excludes
+        // by construction every row the purge's own DELETE targets, and
+        // without this the hourly purge scans the whole table. Filtered the
+        // other way for the same reason its twin is, so it stays the size of
+        // the undeleted backlog rather than the table; nothing is included,
+        // since the delete needs only the clustered key it already has.
+```
+
+`Catalog.Infrastructure/Persistence/OutboxPublisher.cs`, line 6, 11 lines.
+Payments':
+
+```csharp
+/// <summary>
+/// §9.3's publisher port over the command's own <c>DbContext</c>, which is
+/// what makes the outbox row part of the same transaction as the state
+/// change that raised it. Scoped, for the same reason. It calls no
+/// transport and opens no connection: the row is added to the tracker and
+/// travels out on <c>TransactionBehavior</c>'s single <c>SaveChanges</c>,
+/// so a publish here, or a second connection, would be the dual write the
+/// outbox exists to eliminate.
+/// </summary>
+```
+
+`Catalog.Migrator/MigrationRunner.cs`, line 7, 13 lines. Payments':
+
+```csharp
+/// <summary>
+/// <c>Database.Migrate()</c> and nothing else (§7.4), plus the exit code
+/// that makes it a job. A type rather than a few lines in
+/// <c>Program.cs</c>: the exit-code contract is the whole interface between
+/// this process and §7.4's <c>backoffLimit: 2</c> — a swallowed exception
+/// makes the Job succeed against an unmigrated database — so it is worth a
+/// test, which top-level statements are not callable for; CA1848 also wants
+/// the log messages compiled once, which needs fields.
+/// </summary>
+```
+
+`tests/Catalog.Api.Tests/ArchitectureTests.cs`, line 153, 18 lines. Payments':
+
+```csharp
+        // §4.2's rows say what each project MAY reference, and no row names
+        // the Migrator: Domain takes Common.Domain, Application takes its
+        // own Domain and the Common pair, Infrastructure takes Domain and
+        // Application, and the Api takes Application and Infrastructure —
+        // the migrator is a leaf (§7.4) that references and is not
+        // referenced. The cross-service gate above stays silent about an
+        // Api -> Migrator edge, since it subtracts everything under this
+        // service's own prefix; skipped as a subject here rather than
+        // special-cased, since an assembly does not reference itself.
+```
+
+The same file, line 190, 15 lines. Payments':
+
+```csharp
+        // §4.2's narrowest row, and the only one whose "must never" is a
+        // sentence rather than a list: "anything it does not need to apply a
+        // migration". A deny-list cannot enforce that, so this row gets the
+        // allow-list treatment the Domain row gets. No Application, so the
+        // migrator cannot dispatch; no MassTransit and no Redis, so a
+        // migration job with reasons to fail unrelated to migrations is a
+        // build failure rather than a paragraph; no ASP.NET, because it is a
+        // job host (§7.4), not a second composition root; and no Common.*
+        // at all, since it resolves a DbContext and calls
+        // Database.Migrate() with none of the building blocks on that path.
+```
+
+`tests/Catalog.Api.Tests/HostSmokeTests.cs`, line 40, 12 lines. Payments':
+
+```csharp
+    /// <summary>
+    /// The same unreachable host with the <c>TestAuthHandler</c> scheme the
+    /// base factory installs, so a caller can authenticate: the
+    /// production-scheme factory can only prove a caller is challenged, and
+    /// whether the document still generates needs one who gets through —
+    /// this is the cheapest, since generating it reaches no dependency.
+    /// </summary>
+```
+
+`tests/Catalog.Api.Tests/InboxFilterTests.cs`, line 72, 12 lines. Payments',
+with the assembly name changed back:
+
+```csharp
+    /// <summary>
+    /// Clears the change tracker on the service's context, which is the
+    /// first thing <c>EfUnitOfWork.ExecuteAsync</c> does on every attempt
+    /// (§7.5). The line rather than the type, because <c>EfUnitOfWork</c> is
+    /// internal to <c>Catalog.Infrastructure</c> and registering it here
+    /// would need an <c>InternalsVisibleTo</c> for one call; what has to be
+    /// reproduced is the interaction, on the same context the filter writes
+    /// through.
+    /// </summary>
+```
+
+`tests/Catalog.Api.Tests/IntegrationCollection.cs`, line 6, 15 lines, and the
+`<b>` spans on lines 13 and 14 are inside it. Payments':
+
+```csharp
+/// <summary>
+/// §12.4's per-assembly declaration: xUnit resolves collections within an
+/// assembly, so a test project that needs containers declares its own over
+/// the shared <see cref="ServiceFixture"/>. The category sits here rather
+/// than on each member class:
+/// xUnit v3 applies a collection's traits to every test in it, so joining
+/// the collection is carrying the category, with no per-class attribute for
+/// a new test class to forget.
+/// </summary>
+```
+
+`tests/Catalog.Api.Tests/MessageTypeMapValidatorTests.cs`, line 10, 18 lines.
+Payments':
+
+```csharp
+/// <summary>
+/// §9.4 promises that two staged types sharing a <c>FullName</c> fail the
+/// host rather than the first message, and <c>MessageTypeMapValidator</c>
+/// is the only thing that makes it true — the map is registered through a
+/// factory, and a factory is lazy. Without this test, deleting that
+/// validator leaves the whole suite green: nothing else resolves the map
+/// before the dispatcher claims a row, so the regression would surface on
+/// a background thread in a host already serving traffic. No containers:
+/// the constructor throws before anything else starts.
+/// </summary>
+```
+
+`tests/Catalog.Api.Tests/MessagingRegistrationTests.cs`, line 39, 14 lines.
+Payments':
+
+```csharp
+    /// <summary>
+    /// The bound that decides the assertions below, stated rather than
+    /// inherited: it runs from the last bus activity, and MassTransit's
+    /// default of 1.2 seconds is a developer machine's budget, not a
+    /// saturated CI runner's. 30 s is generous enough for a smoke that
+    /// asserts only positives and so never waits it out, while still
+    /// failing a genuine composition defect in one bounded wait.
+    /// </summary>
+```
+
+The same file, line 55, 15 lines. Payments':
+
+```csharp
+    /// <summary>
+    /// The harness's other bound, stated for the same reason and
+    /// deliberately larger: an assertion ends at the earliest applicable
+    /// bound, not the inactivity one alone, and leaving this one inherited
+    /// would let a number the test never states decide the wait. 60 s
+    /// rather than a matching 30 s so it never fires first — equal values
+    /// would leave the two bounds racing, and which one failed would be a
+    /// detail of how long the publish took.
+    /// </summary>
+```
+
+The same file, line 79, 12 lines. Payments':
+
+```csharp
+    /// <summary>
+    /// One registration, shared by the smoke and by the guard that asserts
+    /// its timeout, deliberately: a guard building its own harness would
+    /// keep passing with <c>SetTestTimeouts</c> deleted from the smoke,
+    /// precisely the deletion it exists to catch. <c>SetTestTimeouts</c>
+    /// comes first because it is the only call in the chain returning
+    /// <c>IBusRegistrationConfigurator</c>; <c>AddConsumer&lt;T&gt;</c>
+    /// returns a consumer configurator, so the other order does not compile.
+    /// </summary>
+```
+
+`tests/Catalog.Api.Tests/OutboxDispatcherTests.cs`, line 161, 11 lines. No
+Payments counterpart — the render drops this whole test and Payments' copy
+never had it. Written fresh, and the block is still Catalog's to cut, because
+the gate reads the template as well as the render:
+
+```csharp
+        // The Broker half of DeliverAsync, against the real RabbitMQ the
+        // fixture runs. Everything else here exercises the Local lane, so
+        // without this a failure in payload deserialisation, type resolution
+        // or the publish call would ship while the staging tests and the
+        // direct-bus smoke both stayed green. What is asserted is that the row
+        // completed, not what reached the transport: §12.4 refuses the latter
+        // deliberately, since observing the headers needs a test harness and
+        // this fixture runs the real host against the real broker. Publishing
+        // without throwing and marking the row processed is the part this
+        // suite owns.
+```
+
+`tests/Catalog.Application.Tests/ArchitectureTests.cs`, line 25, 24 lines.
+Payments':
+
+```csharp
+        // §4.2's second row read as the allow-list it is: EF Core, ASP.NET,
+        // Redis and MassTransit are excluded by not appearing, and so is
+        // another service's assembly (§4.3). Dapper is the read side of
+        // §6.5 — query handlers use it directly and never EF — and
+        // System.Data.Common comes with it, since IDbConnectionFactory
+        // hands back a DbConnection. Common.Domain is listed because this
+        // gate reads assembly references, where the mapper's IDomainEvent
+        // puts it here whether or not a csproj says so. A subset check, not
+        // an equality, so adding an entry is a decision written down.
+```
+
+`tests/Catalog.Application.Tests/IdempotencyOptInTests.cs`, line 8, 16 lines,
+with the `<b>` span on line 12 inside it. Payments':
+
+```csharp
+/// <summary>
+/// §8.5's opt-in gate. <c>IdempotencyBehavior</c> is constrained to
+/// <see cref="IIdempotentCommand"/>, and the container silently omits an
+/// open-generic registration whose constraints the closed type does not
+/// satisfy: a command that carries a <c>CommandId</c> and forgets the
+/// interface is dispatched unprotected, with no error and no warning, and a
+/// retry runs the whole command a second time. The shape of the command is
+/// read, not the author's intent: a <c>CommandId</c> member is a claim
+/// that retrying is safe, the one signal that needs no memory.
+/// </summary>
+```
+
+The same file, line 154, 32 lines — the longest block in the copied set.
+Payments' is the base, and this copy deviates from it by one sentence: Catalog
+is the template, so the reason the near miss is named by shape rather than by
+type belongs here, where the rendering happens, more than it belongs in a
+rendered service:
+
+```csharp
+        // §8.5 names one dispatch as outside every argument it makes: a
+        // command sent from inside a command handler lands in its parent's
+        // open transaction, so this behaviour completes a claim for 24 hours
+        // against work the outer transaction may still roll back, and a retry
+        // then replays a success for a row that does not exist. Deliberately
+        // not caught: an IIntegrationEventHandler that dispatches, since
+        // §9.5's InboxFilter opens no transaction before the consumer returns,
+        // so that dispatch is an entry point. Named by shape, not by type,
+        // because §4.5 renders this file into every service. Reach is
+        // constructor parameters, where every handler here takes its own.
+```
+
+`tests/Catalog.Domain.Tests/ArchitectureTests.cs`, line 18, 14 lines. Payments'
+is seven lines and names its own allow-list, which is two entries; Catalog's is
+four, so the argument for the two extra entries is kept and the rest is
+Payments' wording:
+
+```csharp
+        // The dependency table's rule is an allow-list — "Common.Domain and
+        // nothing else" — so the gate is one too, and an exact one: a
+        // blacklist only bans what someone thought to name, and a System.*
+        // prefix still passes System.Data.SqlClient or a serialiser. Each BCL
+        // assembly earns its line: System.Collections with the first domain
+        // event, whose generated record equality goes through
+        // EqualityComparer<T>, and System.Linq with the first value object
+        // doing enumerable logic over owned values — domain work, not an I/O
+        // dependency. System.Text.Json is the extension the table forbids by
+        // name.
+```
+
+`tests/Catalog.TestSupport/CatalogApiFactory.cs`, line 28, 16 lines. Payments'
+ten-line form, verbatim:
+
+```csharp
+    /// <summary>
+    /// The authority every host over this <c>Program</c> must name (§11.3).
+    /// Deliberately fake and deliberately unreachable — <c>.invalid</c> is
+    /// reserved and never resolves, so a test that accidentally dials the
+    /// authority fails loudly rather than reaching a real identity provider.
+    /// Required rather than optional for the same reason both connection
+    /// strings are: <c>AddJwtAuthentication</c> reads this key eagerly and
+    /// throws naming it, so a host that cannot name its identity provider
+    /// does not start.
+    /// </summary>
+```
+
+The same file, line 80, 13 lines. Payments', with the registration helper's
+name changed back:
+
+```csharp
+                // Remove only the outbox dispatcher, not every hosted
+                // service: MassTransit registers its bus as one, and
+                // RemoveAll<IHostedService>() would stop the broker and
+                // silently disable every consumption test. Left running it
+                // polls every 500 ms and drains rows underneath assertions
+                // about them — tests that want it call
+                // fixture.ProcessOutboxBatchAsync() explicitly.
+                // AddCatalogInfrastructure uses AddHostedService<T> rather
+                // than a factory overload for exactly this match: a factory
+                // registration leaves ImplementationType null.
+```
+
+`tests/Catalog.TestSupport/Outbox/OutboxRows.cs`, line 7, seven lines — under
+the limit, and the finding is the `<b>` span on line 9. Payments' is the same
+block with the emphasis dropped:
+
+```csharp
+/// <summary>
+/// Ordinary factories over <see cref="OutboxMessage"/>, staged through the
+/// real <see cref="MessageTypeMap"/> and <see cref="OutboxJson"/>
+/// resolved from the fixture's provider (§12.4). Doubles for either would let
+/// a test stage a row the running host cannot read back, which is the one
+/// thing these builders exist to prove does not happen.
+/// </summary>
+```
+
+`tests/Catalog.TestSupport/ServiceFixture.cs`, line 503, 11 lines. Payments':
+
+```csharp
+    /// <summary>
+    /// One pass under a policy of the test's own, for the batching edges the
+    /// registered one cannot show: a batch of 5,000 would need 10,001 rows
+    /// before a second batch ran at all. Constructed rather than resolved,
+    /// because the policy is a constructor argument and the service composes
+    /// a statement per table from the same registered tables either way, so
+    /// what varies is the batching and nothing else.
+    /// </summary>
+```
+
+The same file, line 571, 12 lines. Payments':
+
+```csharp
+    /// <summary>
+    /// The system clock plus a fixed offset, which is what a test skewing
+    /// one end of a two-clock comparison needs. Hand-written rather than
+    /// <c>FakeTimeProvider</c>: that package is pinned centrally, but this
+    /// project does not reference it, and a frozen clock is not wanted
+    /// here either — the pass compares against rows staged in real time,
+    /// so the substitute has to keep running and simply run ahead.
+    /// </summary>
+```
+
+`tests/Catalog.TestSupport/TestAuthHandler.cs`, line 11, 12 lines. Payments',
+with the factory's name changed back — and the named suite goes with it, which
+is Payments' wording and the guide's rule at once:
+
+```csharp
+/// <summary>
+/// §12.4's test scheme. Tests state who they are in headers, so
+/// authorization runs against a real principal rather than being switched
+/// off — the policies of §11.4 are exercised, not bypassed. Installed by
+/// <see cref="CatalogApiFactory.ConfigureAuthentication"/>, which a test
+/// may override off — a host still carrying the production scheme is the
+/// only one that can prove these headers mean nothing.
+/// </summary>
+```
+
+- [ ] **Step 3: The template's five migrations**
+
+`classify` copies these by shape rather than by a `COPIED` entry, so they are
+inside "every file the render copies" and outside the set Step 2 lists. Only
+the hand-authored doc block moves; the `.Designer.cs` beside each and the model
+snapshot are machine-owned and are not touched. All five are Payments'
+counterpart verbatim, and each of them is already written for a service rather
+than for Catalog, which is why four patch-table entries fall away below.
+
+`…_InitialCreate.cs`, line 5, 21 lines, with three delivery-plan rows inside
+it:
+
+```csharp
+/// <summary>
+/// This service's first migration. EF generates an empty <c>Up</c> for a
+/// model with no entity types, so the schema below is hand-written, which
+/// §7.4 permits: DDL EF cannot generate rides along in the same transaction,
+/// applied by the same job, versioned by the same history. Hand-authored
+/// like the rest of the repository, unlike the machine-owned
+/// <c>.Designer.cs</c> and model snapshot beside it, which are left exactly
+/// as the tool wrote them — an edited snapshot feeds a wrong migration.
+/// </summary>
+```
+
+`…_AddOutbox.cs`, line 5, 14 lines:
+
+```csharp
+/// <summary>
+/// §9.4's outbox table, generated from <see cref="OutboxMessageConfiguration"/>
+/// — the configuration is the source of truth, and only this file's dress
+/// is hand-authored (file-scoped namespace, this comment, the field CA1861
+/// asks for); the <c>.Designer.cs</c> and snapshot beside it are
+/// machine-owned and untouched. <c>IX_Outbox_Unprocessed</c> is filtered and
+/// covering, sized to the backlog rather than the table, because the
+/// dispatcher claims twice a second and only reads rows with a null
+/// <c>ProcessedAt</c>.
+/// </summary>
+```
+
+`…_AddOutboxRetentionIndex.cs`, line 5, 24 lines, with two emphasised spans:
+
+```csharp
+/// <summary>
+/// The index §9.4's retention purge deletes through, generated from
+/// <see cref="OutboxMessageConfiguration"/> — the configuration is the
+/// source of truth, and only this file's dress is hand-authored; the
+/// <c>.Designer.cs</c> and snapshot beside it are untouched. A second index
+/// exists because the two predicates are complements:
+/// <c>IX_Outbox_Unprocessed</c> excludes by construction every row the
+/// purge targets, and this one is filtered the other way for the same
+/// reason — sized to the backlog, not the table.
+/// </summary>
+```
+
+`…_AddIdempotencyMarkers.cs`, line 5, 33 lines, with five emphasised spans and
+a delivery-plan row:
+
+```csharp
+/// <summary>
+/// §8.5's idempotency markers, generated from
+/// <see cref="IdempotencyMarkerConfiguration"/> on <c>AddInbox</c>'s terms
+/// — the configuration is the source of truth, and only this file's dress
+/// is hand-authored; the <c>.Designer.cs</c> and snapshot are untouched.
+/// This table is the one place in the schema where a missing row is a
+/// correctness failure, not a lost record: it says a command committed,
+/// and it is what refuses the retry of an attempt whose acknowledgement
+/// was lost.
+/// </summary>
+```
+
+`…_IdempotencyMarkerCommittedAtDefault.cs`, line 5, 42 lines — the longest in
+the template — with seven emphasised spans:
+
+```csharp
+/// <summary>
+/// §8.5's marker gains a <c>SYSDATETIMEOFFSET()</c> default on
+/// <c>CommittedAt</c>, generated from
+/// <see cref="IdempotencyMarkerConfiguration"/> on
+/// <c>AddIdempotencyMarkers</c>' terms, which argues the default's why
+/// (ADR-038); only this file's dress is hand-authored, and the
+/// <c>.Designer.cs</c> and snapshot are untouched. The outbox and the inbox
+/// are deliberately not altered the same way: their windows are
+/// housekeeping, where this one purges the row that refuses a duplicate.
+/// </summary>
+```
+
+`…_AddInbox.cs` and `…_AddIdempotencyMarkerRowVersion.cs` are already inside
+the limit and carry no emphasis, so neither moves.
+
+Four of the five migration patch tables in `patch.py` exist only to strip
+Catalog's name and a delivery-plan row out of the blocks above, and every
+needle they hold is a span this step has just rewritten into the
+service-neutral form. They become empty, each saying so where it stood:
+
+```python
+# Empty, because the template's block is already written for a service rather
+# than for Catalog — there is nothing left here to rename. It stays a tuple:
+# the dispatch in render_projects appends it by name, and the next edit that
+# does need one adds an entry rather than a table.
+INITIAL_CREATE_PATCHES: tuple[tuple[str, str], ...] = ()
+```
+
+and the same for `OUTBOX_MIGRATION_PATCHES`,
+`RETENTION_INDEX_MIGRATION_PATCHES` and `IDEMPOTENCY_MIGRATION_PATCHES`.
+`INBOX_MIGRATION_PATCHES` stays exactly as it is: its block is untouched here
+and its one anchor still matches.
+
+- [ ] **Step 4: The scaffold's own strings**
+
+`patch.py`'s needles are quotations of the template, so a needle that quotes a
+block Step 2 rewrote no longer matches and `require_once` stops the run. Four
+entries are in that position, and each takes the new text of the block it
+quotes: `Catalog.Api/Catalog.Api.csproj`'s second entry, `Catalog.Api/
+Program.cs`'s fifth, `tests/Catalog.Api.Tests/OutboxDispatcherTests.cs`'s
+first, and `tests/Catalog.Domain.Tests/ArchitectureTests.cs`'s second. The
+last of those quotes only the tail of the old block, so its needle is widened
+to the whole new block plus the two lines of code under it, and its
+replacement becomes:
+
+```python
+        "        // The dependency table's rule is an allow-list — \"Common.Domain and\n"
+        "        // nothing else\" — so the gate is one too, and an exact one: a\n"
+        "        // blacklist only bans what someone thought to name, and a System.*\n"
+        "        // prefix still passes System.Data.SqlClient or a serialiser. Two\n"
+        "        // entries, because two is what an empty domain references; the two\n"
+        "        // that usually follow are System.Collections, with the first domain\n"
+        "        // event whose generated record equality goes through\n"
+        "        // EqualityComparer<T>, and System.Linq, with the first value object\n"
+        "        // doing enumerable logic over owned values — domain work, not an I/O\n"
+        "        // dependency.\n"
+        "        string[] allowed = [\"Common.Domain\", \"System.Runtime\"];\n"
+        "\n"
+        "        IEnumerable<string> referenced = typeof(AssemblyMarker).Assembly\n"
+```
+
+Three replacements render a block over ten lines into the service, and a
+replacement is text the gate judges in the rendered file exactly as a copied
+line is. `Catalog.Api/Program.cs`'s fifth entry writes eleven lines; it becomes
+
+```csharp
+// This service registers no permission policy, because it names no endpoint
+// that needs one. The first slice brings both together (§11.4):
+//
+//     builder.Services
+//         .AddAuthorizationBuilder()
+//         .AddPolicy(<Service>Permissions.Write, p => p.RequirePermission(…));
+//
+// A policy registered before an endpoint names it is unused; an endpoint
+// naming one nobody registered throws on the first request that reaches it,
+// never at startup, and the slice brings the gate that enumerates both.
+```
+
+and Task 2's `WORKER_PATCHES` entry for the same file quotes those eleven lines
+as its needle, so it takes these ten instead — the replacement it writes is
+unchanged.
+
+`Catalog.Application/Integration/CatalogIntegrationEventMapper.cs`'s second
+entry writes thirteen lines; it becomes
+
+```csharp
+    // The allow-list, empty until this service publishes something: every
+    // domain event it raises is local-only while this dictionary is, which is
+    // the correct state for a service with no contracts rather than a gap,
+    // because §9.3 makes translation opt-in. An entry is one line —
+    //
+    //     [typeof(OrderPlacedDomainEvent)] = e => ToContract((OrderPlacedDomainEvent)e)
+    //
+    // with one private ToContract method beside it, the contract living in
+    // Common.Contracts under a versioned namespace (§9.2), carrying primitives
+    // only, and taking its MessageId and CorrelationId from the mapper (§9.1).
+```
+
+above the `Registry` line it already writes.
+
+`Catalog.Infrastructure/DependencyInjection.cs`'s fourth entry adds five lines
+on top of a template block of eight, which renders thirteen. Payments' rendered
+copy says the same thing in two, and this takes that shape:
+
+```csharp
+        // §9.4's two anchors are this service's contracts and its domain;
+        // IIntegrationEvent and AssemblyMarker stand in until it has either.
+```
+
+above the two lines of `MessageTypeSource` registration it already writes.
+
+`Catalog.Application/DependencyInjection.cs`'s third entry is the fourth of
+this kind and the one that is not visible in either file alone: it replaces one
+line of code with eight lines of comment, immediately under a four-line comment
+in the template, and the gate sees one block of twelve. Payments' rendered copy
+merges the two into nine. So the needle grows to take the template's four-line
+comment with the code line, and the replacement becomes those nine lines plus
+the assembly-wide registration:
+
+```csharp
+        // §4.2's sample line, spelt over the assembly rather than over a type
+        // in it: IValidator<T> is not in PluggableInterfaces.All because it is
+        // FluentValidation's own contract — its own scanner knows its own
+        // conventions, and a second scan would drift from it — and there is no
+        // validator yet to anchor on; this static class cannot be a type
+        // argument. Move to AddValidatorsFromAssemblyContaining<TFirstValidator>()
+        // with the first one, and add the registration test that guards it:
+        // ValidationBehavior takes IEnumerable<IValidator<T>> and asks nobody
+        // when that sequence comes back empty.
+        services.AddValidatorsFromAssembly(typeof(DependencyInjection).Assembly);
+```
+
+Last, `render.py`'s `ASSEMBLY_MARKER` is a literal the gate never reads and a
+rendered file it always does — fourteen comment lines, written into every
+service that has no aggregate yet. Task 7 deletes Shipping's copy, so this one
+is for the service after it:
+
+```python
+ASSEMBLY_MARKER = """namespace Catalog.Domain;
+
+/// <summary>
+/// The <c>typeof</c> anchor §4.2's architecture gates need, and nothing else:
+/// a gate that reasons about an assembly has to name a type inside it, and
+/// this project has none until its first aggregate. Written to be deleted —
+/// when that aggregate lands, re-anchor the architecture gates in
+/// <c>Catalog.Domain.Tests</c> and <c>Catalog.Application.Tests</c> on it and
+/// remove this file, because a marker left in place after the first aggregate
+/// means those gates judge an empty type rather than the model.
+/// </summary>
+public sealed class AssemblyMarker;
+"""
+```
+
+- [ ] **Step 5: The gate over the template, and over a render**
+
+```bash
+cd tools/new-service && py -3.12 -m unittest
+cd ../.. && dotnet build Platform.slnx
+dotnet test tests/Catalog.Api.Tests --filter "Category!=Integration"
+```
+
+Expected: the scaffold's suite green — it is what fails first on a needle that
+no longer matches — 0 warnings, and Catalog's own tests unchanged, because
+nothing but comments moved.
+
+Then the two measurements. The first is Step 1's script again, and its expected
+output is now `0`. **It is the check, and it is not the same check CI runs**:
+`comment_gate.py` judges the lines a branch changed, so once this task has
+landed the template can grow a twelve-line block in any later pull request that
+does not touch it and no gate will say so. This snippet judges the template
+whole, which is the only way the claim "the render is clean" survives the
+change after this one.
+
+The second judges what the render actually writes, which is the template plus
+the patch tables plus `ASSEMBLY_MARKER` — the strings of Step 4, which the gate
+cannot see in `patch.py` and does see in the rendered service:
+
+```bash
+py -3.12 - <<'PY'
+import importlib.util, sys
+from pathlib import Path
+
+root = Path.cwd()
+spec = importlib.util.spec_from_file_location(
+    "gate", root / ".github/comment-gate/comment_gate.py")
+gate = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(gate)
+sys.path.insert(0, str(root / "tools/new-service"))
+import new_service
+
+rendered = new_service.plan(root, "Probe", 5199, "20260101000000")
+findings = 0
+for relative, text in sorted(rendered.created.items()):
+    if gate.reader_for(relative) is None:
+        continue
+    added = set(range(1, len(gate._line_starts(text)) + 1))
+    for path, line, message in gate.judge(relative, text, added):
+        print(f"{path}:{line}: {message}")
+        findings += 1
+print(findings)
+PY
+```
+
+Expected: `0`. `plan` returns text and writes nothing, so this leaves the tree
+clean and needs no undo. Only `created` is judged: the files a render *updates*
+are shared files whose own headers this pull request does not add, and a header
+block the branch never touches is not a block the gate judges.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add src/Services/Catalog tests/Catalog.Api.Tests tests/Catalog.Application.Tests \
+        tests/Catalog.Domain.Tests tests/Catalog.TestSupport tools/new-service
+git commit -m "docs(catalog): the template's comment blocks come under the gate's limit"
+```
+
+The touch set gains nothing: `src/Services/Catalog/**` and
+`tools/new-service/**` are already in the Global Constraints row, and the three
+Catalog test trees join `tests/Catalog.Api.Tests/**` there in the same change,
+which is the one edit this task makes to that row. The class does not move
+either — these are Class A in Catalog's tree and Class D in the scaffold, and
+the row already reads `A+D+E`.
+
+The body says the gate judges a created file's every block, that a render is a
+created file, and that the template is where the cut is durable because §4.5
+renders it into every service after this one; that Payments' tree is the source
+of every block replaced and the four deviations are named; and that the four
+migration patch tables are empty because the blocks they renamed no longer name
+Catalog.
+
+---
+
+### Task 4: Render Shipping and prove the empty worker
 
 **Files:**
 - Create (by the script): `src/Services/Shipping/**`, `tests/Shipping.*/**`,
@@ -1329,9 +2349,15 @@ The body says this is the worker mode's first dogfood, names the host as
 Redis because §2 gives Shipping none and widen the broker grant because PR-5's
 queue will need it.
 
+Every file in this commit is a created file, so the comment gate judges every
+block in all of them. Nothing here is expected to need cutting, because Task 3
+cut the template they were rendered from; if the gate names one, the finding is
+against the template and the fix belongs there rather than in the rendered
+copy, or every service after this one inherits it again.
+
 ---
 
-### Task 4: Shipping has no Redis, and §2 says so
+### Task 5: Shipping has no Redis, and §2 says so
 
 **Files:**
 - Modify: `src/Services/Shipping/Shipping.Infrastructure/DependencyInjection.cs`
@@ -1407,7 +2433,8 @@ public sealed class NoRedisTests
         // type is still loadable, because Common.Infrastructure carries the
         // package.
         Type multiplexer = Type.GetType("StackExchange.Redis.IConnectionMultiplexer, StackExchange.Redis")
-            ?? throw new InvalidOperationException("StackExchange.Redis did not load; the assertions below would prove nothing.");
+            ?? throw new InvalidOperationException(
+                "StackExchange.Redis did not load; the assertions below would prove nothing.");
         IKeyedServiceProvider keyed = (IKeyedServiceProvider)services;
 
         services.GetService(multiplexer).ShouldBeNull();
@@ -1535,7 +2562,7 @@ git commit -m "feat(shipping): no Redis, because two workers lease rows in SQL a
 
 ---
 
-### Task 5: The broker account a receive endpoint will need
+### Task 6: The broker account a receive endpoint will need
 
 **Files:**
 - Modify: `deploy/compose/rabbitmq/definitions.json` — `shipping-svc`'s three
@@ -1606,7 +2633,7 @@ contract namespace it has no business reading.
 
 ---
 
-### Task 6: `Shipment`, `TrackingEvent` and the state machine
+### Task 7: `Shipment`, `TrackingEvent` and the state machine
 
 **Files:**
 - Create: `src/Services/Shipping/Shipping.Domain/Shipments/ShipmentId.cs`
@@ -2005,10 +3032,10 @@ namespace Shipping.Domain.Shipments;
 /// <c>Unfulfillable</c> and <c>Delivered</c> are terminal.
 /// </summary>
 /// <remarks>
-/// The order of the first four is the rank the tracking feed promotes by
-/// (spec, section 5): a carrier page orders nothing, so an arrival may only
-/// move the shipment forward. The terminal-by-cancellation members sit last
-/// because nothing promotes into them, and promotion compares rank alone.
+/// Every arrival may only move the shipment forward: a carrier page orders
+/// nothing (spec, section 5), so each operation guards on the states it may
+/// move from rather than on a comparison of members. Their order is not a
+/// contract either — the column stores the name (§7.2).
 /// </remarks>
 public enum ShipmentStatus
 {
@@ -2412,7 +3439,7 @@ rank rather than by arrival, because the carrier's key orders nothing.
 
 ---
 
-### Task 7: The `Shipments` and `TrackingEvents` tables
+### Task 8: The `Shipments` and `TrackingEvents` tables
 
 **Files:**
 - Create: `src/Services/Shipping/Shipping.Infrastructure/Persistence/ShipmentConfiguration.cs`
@@ -2744,7 +3771,7 @@ unique index as the place §3.2's one-shipment-per-order rule is actually held.
 
 ---
 
-### Task 8: CI's filter, outputs, matrix legs and the `images` job's `if:`
+### Task 9: CI's filter, outputs, matrix legs and the `images` job's `if:`
 
 **Files:**
 - Modify: `.github/workflows/ci.yml` — the `changes` job's `outputs` and
@@ -2818,7 +3845,7 @@ git commit -m "ci: build and filter Shipping's worker and migrator images"
 
 ---
 
-### Task 9: The scaffold's suite asserts each gate enumerates the render
+### Task 10: The scaffold's suite asserts each gate enumerates the render
 
 **Files:**
 - Modify: `tools/new-service/test_new_service.py`
@@ -2971,7 +3998,7 @@ names the mutation each assertion was checked by.
 
 ---
 
-### Task 10: The platform up, the counts remeasured, and whole-solution verification
+### Task 11: The platform up, the counts remeasured, and whole-solution verification
 
 - [ ] **Step 1: Bring the platform up**
 
@@ -3069,6 +4096,18 @@ Expected: 0 warnings; every suite green; every gate exits 0. A gate with a
 suite is tested and then run, and none of these is in `Platform.slnx`, so a
 green solution says nothing about them.
 
+**The comment gate's run is the one worth stating an expectation for rather
+than assuming.** By here the branch has created every file under
+`src/Services/Shipping` and `tests/Shipping.*`, so the diff marks all of them
+added and the gate judges every comment block in the rendered service, not only
+the ones later tasks edited. It exits 0 because Task 3 cut the template's
+blocks, the template's migrations and the three patch replacements that
+rendered a block over the limit — and Task 3 Step 5 measured both the template
+and a render, so a failure here is something a later task wrote, not something
+the scaffold copied. Run it with `git fetch origin main` immediately before, as
+above: the gate reads `origin/main...HEAD`, and a stale ref judges the wrong
+span.
+
 **This plan's own text** carries a Compose-shaped fixture password and an
 `amqp://` literal inside its code blocks, which §15.1's scan reports against
 `docs/superpowers/plans/`. If the scan names this file, add the entry to
@@ -3086,7 +4125,7 @@ git commit -m "docs: §4.5's counts, remeasured against a render carrying the me
 
 The PR body carries `| Class | A+D+E |` and the touch set from the Global
 Constraints, the dogfood evidence (the three probe suites' counts, and the
-Shipping suites' counts after Task 7), the sentence that no Helm chart is owed
+Shipping suites' counts after Task 8), the sentence that no Helm chart is owed
 until PR-7 because `smoke.sh` checks its chart list against the charts on disk
 in both directions, and then `/ship`.
 
@@ -3094,15 +4133,16 @@ in both directions, and then `/ship`.
 
 **Spec coverage.**
 
-- Section 1, Redis: Task 4 (the render strips `AddRedisConnections`, and §2's
+- Section 1, Redis: Task 5 (the render strips `AddRedisConnections`, and §2's
   sentence gains Shipping).
 - Section 2, the worker mode joins `tools/new-service` and `Shipping` comes off
   the refusal: Task 2. The outbox gauges in the template and Catalog's
-  `OUTBOX_METRICS_EXEMPT` entry deleted: Task 1.
-- Section 3, PR-1's row: Tasks 1–10. CI joins PR-1 (Task 8); Helm does not, on
+  `OUTBOX_METRICS_EXEMPT` entry deleted: Task 1. The template's comment blocks
+  brought under the gate's limit before anything renders them: Task 3.
+- Section 3, PR-1's row: Tasks 1–11. CI joins PR-1 (Task 9); Helm does not, on
   the Inventory spec's argument, which is why no `deploy/helm/**` path is in
   the touch set.
-- Section 5, the aggregate: Task 6 — `Shipment` keyed by `ShipmentId` with
+- Section 5, the aggregate: Task 7 — `Shipment` keyed by `ShipmentId` with
   `OrderId` unique, `TrackingEvent` keyed by `(ShipmentId, CarrierEventId)`,
   `TrackingStatus` closed over `Collected`, `InTransit`, `Delivered` and
   `Unrecognised`, every row of the state table the aggregate's surface can
@@ -3111,20 +4151,20 @@ in both directions, and then `/ship`.
   tombstone and are the consumers' branches, not the aggregate's: `For` yields
   `Pending` and no `OrderConfirmed` operation exists for the late arrival to
   be a no-op of, so they are driven from the Application tests that land with
-  the consumers (PR-5), and Task 6 step 1 says so. The spec's table is not
+  the consumers (PR-5), and Task 7 step 1 says so. The spec's table is not
   changed for this: it is the specification of the behaviour, and where the
   behaviour lands is this plan's to state.
-- Section 7, persistence: Task 7 — schema `shipping`, both column lists, and
+- Section 7, persistence: Task 8 — schema `shipping`, both column lists, and
   `AddShipments` with `TrackingEvents` in it.
 - Section 8, the broker account `shipping-svc` in `ordering-svc`'s shape under
-  a `shipping-` prefix: Task 5.
-- Section 10, PR-1's keys and no published port: Tasks 2, 3, 4 and 10. The
+  a `shipping-` prefix: Task 6.
+- Section 10, PR-1's keys and no published port: Tasks 2, 4, 5 and 11. The
   render carries `ConnectionStrings__Shipping`,
   `ConnectionStrings__ShippingMigrator`, `ConnectionStrings__RabbitMq`,
-  `Identity__Authority` and `OTEL_EXPORTER_OTLP_ENDPOINT`, and Task 4 removes
+  `Identity__Authority` and `OTEL_EXPORTER_OTLP_ENDPOINT`, and Task 5 removes
   the two Redis keys.
-- Section 12, the Domain suite and the scaffold's suite: Tasks 6 and 9.
-- Section 13, §4.5's sentence and §2's: Tasks 2 and 4.
+- Section 12, the Domain suite and the scaffold's suite: Tasks 7 and 10.
+- Section 13, §4.5's sentence and §2's: Tasks 2 and 5.
 
 **Type consistency.** `ShipmentId`, `OrderId`, `ShipmentStatus`,
 `TrackingStatus`, `ShipmentLimits`, `TrackingEvent`, `Shipment` with
@@ -3152,6 +4192,14 @@ integration events through the outbox, `ShippingJurisdictionOptions` and the
 retention pass (PR-6). The chart, the canary row and §13.6's two rules
 (PR-7).
 
+Also left: every comment block in Catalog that the scaffold does not copy.
+`render.py`'s `OMITTED` names them — the endpoints, the aggregate, the gRPC
+hop and the suites that drive them — and none of them is rendered into another
+service, so cutting them buys one file rather than every service after this
+one. They are the corpus, and the corpus is `docs/churn-plan.md`'s sweeps to
+bring under the rule, not this pull request's; the gate agrees, because a block
+this branch neither adds nor touches is a block it does not judge.
+
 **Where the copies come from.** Task 1 takes the four Observability files and
 the registration suite from Payments rather than from Ordering, and the two
 reasons are one. Ordering's carry `<b>` and doc blocks well past ten lines;
@@ -3161,6 +4209,29 @@ this one. Payments' carry a provider half no other service has, which Steps 2
 and 5 strip, and the stripping is written out as Before and After rather than
 described. Step 11 runs the gate after the commit, because a run before it
 would read none of the created files.
+
+Task 3 is the same argument over the rest of the template, and Payments is
+again where the After comes from: that service's tree passes the gate as it
+stands, so every block replaced there is Payments' with the name changed back,
+and the four that deviate say why. The two tasks do not overlap. Task 1's five
+files are new to Catalog and arrive already clean, and Task 3 touches none of
+them; Task 3's subject is the blocks the template has carried since before the
+gate existed, which Task 1 neither adds nor reads. One block is worth naming
+across plans: `tests/Catalog.TestSupport/CatalogApiFactory.cs`'s authority
+comment becomes Payments' ten-line form here, so PR-6's Task 1 Step 6 will find
+the rendered `ShippingWorkerFactory` already at ten lines and has nothing to
+cut there.
+
+**What the gate covers by the end, and what it does not.** Task 11 runs
+`comment_gate.py` over `origin/main...HEAD`, and by then the branch has created
+the whole of `src/Services/Shipping` and `tests/Shipping.*` — every line added,
+so every comment block in them judged. Task 3 is what makes that run exit 0: it
+brings the template's copied files, the template's migrations and the three
+patch-table replacements that render a long block under the limit, and Task 3
+Step 5 measures both the template and a render rather than trusting the branch
+to notice. `AssemblyMarker.cs` is created by Task 4 and deleted by Task 7, so
+the branch's diff never lists it and the gate never judges it — its block is
+cut in Task 3 all the same, for the service rendered after this one.
 
 **Beyond the spec's minimum, with the reason.** `ShipmentsSchemaTests` is not
 named in section 12's PR-1 list. It is here because the aggregate lands with

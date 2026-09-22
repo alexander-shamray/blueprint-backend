@@ -934,7 +934,9 @@ public sealed class HttpCarrierGatewayTests : IClassFixture<HttpCarrierGatewayTe
     public async Task A_carrier_that_has_already_collected_the_parcel_answers_too_late()
     {
         CancellationResult result = await Carrier()
-            .CancelAsync(new CancellationRequest(ShipmentId.New(), "crr_SIM-LATE"), TestContext.Current.CancellationToken);
+            .CancelAsync(
+                new CancellationRequest(ShipmentId.New(), "crr_SIM-LATE"),
+                TestContext.Current.CancellationToken);
 
         result.ShouldBe(new CancellationResult.TooLate());
         Calls("/v1/shipments/crr_SIM-LATE/cancel").ShouldBe(1, "section 9: too late is an answer, not a fault");
@@ -1029,7 +1031,8 @@ public sealed class HttpCarrierGatewayTests : IClassFixture<HttpCarrierGatewayTe
     [InlineData(200, "{\"status\":\"pending\"}", true)]
     [InlineData(202, "{\"status\":\"cancelled\"}", true)]
     [InlineData(409, "{\"status\":\"cancelled\"}", true)]
-    public async Task A_cancel_answered_with_anything_else_is_the_carrier_being_wrong(int status, string body, bool throws)
+    public async Task A_cancel_answered_with_anything_else_is_the_carrier_being_wrong(
+        int status, string body, bool throws)
     {
         _server.Given(Request.Create().WithPath("/v1/shipments/*/cancel").UsingPost())
             .AtPriority(0)
@@ -1055,7 +1058,8 @@ public sealed class HttpCarrierGatewayTests : IClassFixture<HttpCarrierGatewayTe
             .RespondWith(Response.Create().WithStatusCode(201).WithBody(
                 $"{{\"status\":\"booked\",\"reference\":\"{reference}\",\"trackingNumber\":\"t\"}}"));
 
-        Func<Task<BookingResult>> call = () => Carrier().BookAsync(Booking("050000"), TestContext.Current.CancellationToken);
+        Func<Task<BookingResult>> call = () => Carrier()
+            .BookAsync(Booking("050000"), TestContext.Current.CancellationToken);
 
         if (accepted)
             (await call()).ShouldBe(new BookingResult.Booked(reference, "t"));
@@ -1067,10 +1071,11 @@ public sealed class HttpCarrierGatewayTests : IClassFixture<HttpCarrierGatewayTe
     public async Task An_event_id_longer_than_its_key_is_refused_with_the_page()
     {
         string id = new('e', CarrierLimits.MaxCarrierEventIdLength + 1);
+        string page =
+            $"{{\"events\":[{{\"id\":\"{id}\",\"status\":\"collected\",\"occurredAt\":\"2026-01-02T09:00:00Z\"}}]}}";
         _server.Given(Request.Create().WithPath("/v1/shipments/crr_x/events").UsingGet())
             .AtPriority(0)
-            .RespondWith(Response.Create().WithStatusCode(200).WithBody(
-                $"{{\"events\":[{{\"id\":\"{id}\",\"status\":\"collected\",\"occurredAt\":\"2026-01-02T09:00:00Z\"}}]}}"));
+            .RespondWith(Response.Create().WithStatusCode(200).WithBody(page));
 
         await Should.ThrowAsync<CarrierUnavailableException>(() =>
             Carrier().GetEventsAsync("crr_x", TestContext.Current.CancellationToken));
@@ -1120,7 +1125,8 @@ public sealed class HttpCarrierGatewayTests : IClassFixture<HttpCarrierGatewayTe
     public void Outside_development_only_an_https_carrier_is_accepted(string address, bool starts)
     {
         using ShippingWorkerFactory factory = new(UnreachableSql, UnreachableRabbit, address);
-        using WebApplicationFactory<Program> production = factory.WithWebHostBuilder(b => b.UseEnvironment("Production"));
+        using WebApplicationFactory<Program> production =
+            factory.WithWebHostBuilder(b => b.UseEnvironment("Production"));
 
         if (starts)
             production.Services.GetRequiredService<ICarrierGateway>().ShouldNotBeNull();

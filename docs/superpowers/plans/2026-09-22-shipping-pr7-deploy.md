@@ -1275,9 +1275,12 @@ py -3.12 deploy/canary/canary.py check
 Expected: both green, and unchanged from Task 3 step 6 — the suite because
 only a docstring moved, and `canary.py check` because `canary.json` still
 parses and its workload set still matches the menu Task 3 settled. `smoke.sh`
-is not rerun here: nothing this task edits is a file it reads. §15.5's
-paragraph is audited by the `/check-links` and `/validate-blueprint` run at the
-end of Task 6, which is the next task to edit that chapter, rather than twice.
+is not rerun here: the one file it reads that this task edits is
+`deploy/canary/canary.json`, and what it reads there is the `"chart"` of each
+entry, which this task does not touch — only the `$comment` beside them.
+§15.5's paragraph is audited by the `/check-links` and `/validate-blueprint`
+run at the end of Task 6, which is the next task to edit that chapter, rather
+than twice.
 
 - [ ] **Step 4: Commit**
 
@@ -1960,13 +1963,16 @@ py -3.12 -m unittest discover -s deploy/canary
 py -3.12 deploy/canary/canary.py check
 py -3.12 deploy/observability/check.py
 py -3.12 -m unittest discover -s .github/comment-gate
-py -3.12 .github/comment-gate/comment_gate.py
+git fetch origin main
+py -3.12 .github/comment-gate/comment_gate.py --base origin/main
 ```
 
-Expected: all green. The comment gate is run here rather than left to CI
-because this PR writes comments into the charts' `.yaml` files, `smoke.sh` and
-a workflow's `run:` block, and it judges an added line as its whole block —
-including the four blocks Task 6 step 4 shortens.
+Expected: all green. `--base` is required and the fetch is what makes the ref
+it names resolve, so the gate judges this branch's added lines rather than
+refusing the arguments. It is run here rather than left to CI because this PR
+writes comments into the charts' `.yaml` files, `smoke.sh` and a workflow's
+`run:` block, and it judges an added line as its whole block — including the
+four blocks Task 6 step 4 shortens.
 
 - [ ] **The dashboards key on the host, not on a name**
 
