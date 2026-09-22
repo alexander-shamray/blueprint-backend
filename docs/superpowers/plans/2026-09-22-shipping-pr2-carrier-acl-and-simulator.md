@@ -626,6 +626,8 @@ The mappings are proved by Task 3's tests, which load this directory.
   `string? carrierApiKey = null` beside it, with `UnreachableCarrier` and
   `LocalCarrierApiKey` as constants
 - Create: `tests/Shipping.TestSupport/SimulatorMappings.cs`
+- Create: `tests/Shipping.Worker.Tests/UnavailableCounter.cs` — the counter
+  reader both carrier suites use
 - Test: `tests/Shipping.Worker.Tests/HttpCarrierGatewayTests.cs`
 - Test: `tests/Shipping.Worker.Tests/CarrierFaultTests.cs` — the rows that end
   in a fault, each over a host of its own
@@ -636,7 +638,9 @@ The mappings are proved by Task 3's tests, which load this directory.
   `Shipping.Outbound` with `Counter<long> shipping.carrier.unavailable`;
   `IServiceCollection AddCarrierGateway(IConfiguration, IHostEnvironment)`
   with `DependencyInjection.BaseUrlKey` and `ApiKeyKey`;
-  `SimulatorMappings.Directory()`; the factory's two new parameters.
+  `SimulatorMappings.Directory()`; the factory's two new parameters;
+  `UnavailableCounter.Of(IServiceProvider)` and the `UnavailableCount` it
+  returns, read by both carrier suites.
 
 - [ ] **Step 1: Write the failing adapter tests**
 
@@ -683,10 +687,74 @@ public static class SimulatorMappings
 }
 ```
 
-`tests/Shipping.Worker.Tests/HttpCarrierGatewayTests.cs`:
+Both carrier suites read the same counter, and neither may read it by name, so
+the reader is written once and takes the host's provider as a parameter. One
+suite keeps a host for the class and the other a host per test, which is
+exactly why the provider is an argument rather than a field the helper closes
+over. `tests/Shipping.Worker.Tests/UnavailableCounter.cs`:
 
 ```csharp
 using System.Diagnostics.Metrics;
+using Microsoft.Extensions.DependencyInjection;
+using Shipping.Infrastructure.Carrier;
+using Shouldly;
+
+namespace Shipping.Worker.Tests;
+
+/// <summary>
+/// One host's <c>shipping.carrier.unavailable</c> counter, never one matched
+/// by name: a <c>MeterListener</c> is process-wide, so another host's carrier
+/// would count into it. The provider is the caller's because the two suites
+/// keep their hosts differently.
+/// </summary>
+internal static class UnavailableCounter
+{
+    public static UnavailableCount Of(IServiceProvider services)
+    {
+        services.GetRequiredService<CarrierMetrics>();
+        Meter mine = services.GetRequiredService<IMeterFactory>().Create(CarrierMetrics.MeterName);
+        UnavailableCount count = new(mine);
+        count.Enabled.ShouldBeTrue("no counter on this host's meter was enabled, so a zero would prove nothing");
+        return count;
+    }
+}
+
+internal sealed class UnavailableCount : IDisposable
+{
+    private readonly MeterListener _listener = new();
+    private long _counted;
+
+    public UnavailableCount(Meter mine)
+    {
+        _listener.InstrumentPublished = (instrument, l) =>
+        {
+            if (ReferenceEquals(instrument.Meter, mine) && instrument.Name == "shipping.carrier.unavailable")
+            {
+                l.EnableMeasurementEvents(instrument);
+                Enabled = true;
+            }
+        };
+        _listener.SetMeasurementEventCallback<long>((_, value, _, _) => Interlocked.Add(ref _counted, value));
+        _listener.Start();
+    }
+
+    public bool Enabled { get; private set; }
+
+    public long Value => Interlocked.Read(ref _counted);
+
+    public void Dispose() => _listener.Dispose();
+}
+```
+
+`GetRequiredService<CarrierMetrics>()` before the meter is resolved is the
+half that is easy to lose: the counter is created in the metrics type's
+constructor, and a listener that starts before anything instantiated it sees
+no instrument published and `Enabled` stays false — which the guard turns into
+a failure rather than a silent zero.
+
+`tests/Shipping.Worker.Tests/HttpCarrierGatewayTests.cs`:
+
+```csharp
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
@@ -764,43 +832,6 @@ public sealed class HttpCarrierGatewayTests : IClassFixture<HttpCarrierGatewayTe
 
     private int Calls(string path) =>
         _server.LogEntries.Count(e => e.RequestMessage!.Path == path);
-
-    // This host's meter, never one matched by name: a MeterListener is
-    // process-wide, and another host's carrier would count into it.
-    private UnavailableCount CountUnavailable()
-    {
-        _factory.Services.GetRequiredService<CarrierMetrics>();
-        Meter mine = _factory.Services.GetRequiredService<IMeterFactory>().Create(CarrierMetrics.MeterName);
-        UnavailableCount count = new(mine);
-        count.Enabled.ShouldBeTrue("no counter on this host's meter was enabled, so a zero would prove nothing");
-        return count;
-    }
-
-    private sealed class UnavailableCount : IDisposable
-    {
-        private readonly MeterListener _listener = new();
-        private long _counted;
-
-        public UnavailableCount(Meter mine)
-        {
-            _listener.InstrumentPublished = (instrument, l) =>
-            {
-                if (ReferenceEquals(instrument.Meter, mine) && instrument.Name == "shipping.carrier.unavailable")
-                {
-                    l.EnableMeasurementEvents(instrument);
-                    Enabled = true;
-                }
-            };
-            _listener.SetMeasurementEventCallback<long>((_, value, _, _) => Interlocked.Add(ref _counted, value));
-            _listener.Start();
-        }
-
-        public bool Enabled { get; private set; }
-
-        public long Value => Interlocked.Read(ref _counted);
-
-        public void Dispose() => _listener.Dispose();
-    }
 
     [Fact]
     public async Task An_ordinary_address_books_and_the_key_is_the_shipments()
@@ -1072,7 +1103,7 @@ public sealed class HttpCarrierGatewayTests : IClassFixture<HttpCarrierGatewayTe
     [Fact]
     public async Task The_callers_own_cancellation_is_not_counted_against_the_carrier()
     {
-        using UnavailableCount counted = CountUnavailable();
+        using UnavailableCount counted = UnavailableCounter.Of(_factory.Services);
         using CancellationTokenSource cancelled = new();
         await cancelled.CancelAsync();
 
@@ -1160,9 +1191,9 @@ cannot be. So `tests/Shipping.Worker.Tests/CarrierFaultTests.cs` builds a
 is what makes each row's answer the row's:
 
 ```csharp
-using System.Diagnostics.Metrics;
 using Microsoft.Extensions.DependencyInjection;
 using Shipping.Application.Carrier;
+using Shipping.Domain.Shipments;
 using Shipping.Infrastructure.Carrier;
 using Shipping.TestSupport;
 using Shouldly;
@@ -1200,7 +1231,7 @@ public sealed class CarrierFaultTests : IDisposable
     [Fact]
     public async Task A_503_is_retried_in_the_client_then_thrown_as_unavailable_and_counted_per_attempt()
     {
-        using UnavailableCount counted = CountUnavailable();
+        using UnavailableCount counted = UnavailableCounter.Of(_host.Factory.Services);
 
         await Should.ThrowAsync<CarrierUnavailableException>(() =>
             Carrier().BookAsync(Booking("SIM-DOWN"), TestContext.Current.CancellationToken));
@@ -1231,7 +1262,7 @@ public sealed class CarrierFaultTests : IDisposable
     [Fact]
     public async Task A_stalled_carrier_is_unavailable_within_the_total_budget_and_its_timeouts_count()
     {
-        using UnavailableCount counted = CountUnavailable();
+        using UnavailableCount counted = UnavailableCounter.Of(_host.Factory.Services);
         DateTimeOffset started = DateTimeOffset.UtcNow;
 
         await Should.ThrowAsync<CarrierUnavailableException>(() =>
@@ -1265,11 +1296,9 @@ public sealed class CarrierFaultTests : IDisposable
 }
 ```
 
-`CountUnavailable` and its `UnavailableCount` are the same pair
-`HttpCarrierGatewayTests` declares, reading this class's own host rather than a
-meter matched by name; hoist them into a small `internal static` helper beside
-the two suites rather than writing them twice, and keep the
-`count.Enabled.ShouldBeTrue(…)` guard, without which a zero proves nothing.
+`UnavailableCounter.Of` is the helper above, and the provider it is given is
+this class's own host — the one built for this test — rather than a meter
+matched by name. Nothing else about the counter is repeated here.
 
 - [ ] **Step 2: Run to see them fail**
 
@@ -2062,7 +2091,10 @@ consumed by Task 3 under those spellings; `CarrierHop`, `CarrierMetrics.
 MeterName`, `DependencyInjection.BaseUrlKey`, `DependencyInjection.ApiKeyKey`,
 `SimulatorMappings.Directory()` and `ShippingWorkerFactory`'s two new
 parameters are produced by Task 3 and read by Tasks 3 and 4.
-`TrackingStatus` and `ShipmentId` are PR-1's and are only consumed.
+`UnavailableCounter.Of` and `UnavailableCount` are produced by Task 3 and read
+by both carrier suites in the same task, one passing the class fixture's
+provider and the other its per-test host's. `TrackingStatus` and `ShipmentId`
+are PR-1's and are only consumed.
 
 **Left to a later PR.**
 

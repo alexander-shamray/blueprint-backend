@@ -108,9 +108,18 @@ Each rides in the PR that makes it true; section 14 lists them by PR.
   rather than assumed.** `Common.Web` is the easier home — it already carries
   the framework reference `IHttpClientFactory` rides in, and every host
   references it — but the next two consumers of these types are
-  `Shipping.Infrastructure`'s address adapter and Notifications', and §4.2
-  lets an Infrastructure project reference `Common.Infrastructure` and not
-  `Common.Web`, which is a host block. The cost is a `Web.Bff` →
+  `Shipping.Infrastructure`'s address adapter and Notifications', and
+  `Common.Web` is the host block: §4.1's tree calls it "Host defaults" and
+  "Referenced by every host", and every reference to it in the solution is a
+  host's. The edge the other way already exists — every `*.Infrastructure`
+  project references `Common.Infrastructure` and none references `Common.Web`
+  — so the grant's new home needs no new kind of edge and its alternative
+  would introduce one. **§4.2's table says none of this, and no gate enforces
+  it**: the `*.Infrastructure` row forbids another service's projects and
+  nothing else, and the architecture suites cover Domain, Application and the
+  composition root, not this. The convention is what §4.1 states and what the
+  solution does, which is why it is argued here rather than cited as a rule.
+  The cost is a `Web.Bff` →
   `Common.Infrastructure` edge no host draws today, dragging MassTransit,
   Redis, Dapper and `HybridCache` into the BFF's restore; it is accepted and
   written down as `Common.Web.csproj` writes down Gateway.Api's EF Core
@@ -577,7 +586,7 @@ that record wrote the list out and why this table finishes it.
 | §3.2 | 5 |
 | §4.1 | 3b for the identity types; 5 for the tree comment's "ONLY host that calls a service" |
 | §9.7 | 5, both sentences |
-| §11.5 | 4, the table of realm objects and both prose sentences |
+| §11.5 | 4, the table of realm objects and the three sentences that count its hosts |
 | §12 and ADR-023 | 5, and ADR-023 gains no edit |
 | §14.1 and §14.2 | 5 |
 | §15.1 and §15.4 | 7 for §15.1; §15.4's rows and sentence are below |
@@ -589,7 +598,7 @@ that record wrote the list out and why this table finishes it.
 | `deploy/helm/catalog/` | 4 |
 | `deploy/compose/README.md` | 5 |
 | `docs/runbooks/latency.md` | 5 |
-| `src/BFF/Web.Bff/` and `render.py` | 3b for every comment under `src/BFF/Web.Bff/`, both halves; 5 for `render.py`'s two |
+| `src/BFF/Web.Bff/` and `render.py` | 3b for every comment under `src/BFF/Web.Bff/`, both halves, and the one diagnostic string that says the same; 5 for `render.py`'s two |
 | §11.7 | 5 |
 | `docs/secrets.md` | 4 |
 | `docs/repo-map.md` and `CLAUDE.md` | 4 for the gRPC-server halves; 5 for the BFF's |
@@ -598,10 +607,13 @@ that record wrote the list out and why this table finishes it.
 
 **The assignments that are not obvious, and why.**
 
-- **§11.5's two prose sentences go to PR-4 with §11.5's table**, not to PR-5
+- **§11.5's counting sentences go to PR-4 with §11.5's table**, not to PR-5
   with the other synchronous-hop sentences: the section's table row, its
   count of hosts and its prose make one claim, and splitting them across two
-  pull requests leaves the paragraph arguing against its own table.
+  pull requests leaves the paragraph arguing against its own table. There are
+  three, not two — the sentence that fixes the count at one stands between
+  the paragraph that names the hosts and the callout that already argues what
+  moving the count costs, and it is the easiest of the three to leave behind.
 - **§15.1 goes to PR-7.** That sentence describes what `smoke.sh` asserts,
   and `smoke.sh` is PR-7's; the sentence and the assertion move together or
   one of them is wrong for three pull requests.
@@ -636,7 +648,10 @@ that record wrote the list out and why this table finishes it.
   the BFF is not alone — so the sentence a rewritten comment would have to
   stop making is one PR-3b can make false and PR-5 cannot reach.
   `render.py` stays with PR-5 because the tools tree is Class D's, which that
-  PR's touch set declares.
+  PR's touch set declares. The diagnostic string in `CachingTokenClient`'s
+  refusal goes with the comments for the same reason and one more: it counts
+  the platform's credential sets, which a building block cannot do, and PR-3b
+  is the only pull request whose class reaches the file it moves to.
 
 **The places outside that table.**
 

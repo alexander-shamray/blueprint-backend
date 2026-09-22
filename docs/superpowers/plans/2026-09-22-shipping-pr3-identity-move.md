@@ -73,10 +73,15 @@ the order 3 → 4) and 13 (§4.1's tree comment and `ServiceOptions`' remark).
 - Depends on nothing. PR-1 and PR-2 touch no path in the set above, and this
   PR touches no Shipping path; it may land before or after either.
 - `Platform.slnx` is unchanged: no project is added or removed.
-- **No behaviour moves.** Every message string, every status mapping, every
-  cached-token rule and every registration lifetime is what it was. The one
-  new type is a carrier for a name the building block may not write down, and
-  it exists so that the two refusal messages stay word for word what they are.
+- **No behaviour moves**, with one stated exception. Every status mapping,
+  every cached-token rule and every registration lifetime is what it was, and
+  the one new type is a carrier for a name the building block may not write
+  down, so the two discovery refusals stay word for word what they are. The
+  exception is a single diagnostic string in `CachingTokenClient.Failure`,
+  which counted the platform's credential sets from inside a host that held
+  the only one; a building block cannot make that count and ADR-052 gives a
+  second host a set. Task 2 step 5 rewrites it and argues it, and no assertion
+  reads it.
 - Comments say why and cite the owner. **The comment gate judges an edited
   line as its whole block**, so a doc comment this PR edits must come out at
   ten lines or fewer with no `<b>` and no `**…**`; the blocks it does not
@@ -238,7 +243,7 @@ exactly these four and nothing else, so the directory is gone after this task:
 | File | Where it goes | Why |
 |---|---|---|
 | `ITokenCache.cs` | moves, unchanged but its namespace | the port `ClientCredentialsHandler` holds; no host type in it |
-| `CachingTokenClient.cs` | moves, with the `Common.Web` dependency turned into a carried value | §11.5's grant itself — ADR-052's "the code that posts a client secret" |
+| `CachingTokenClient.cs` | moves, with the `Common.Web` dependency turned into a carried value and one diagnostic string corrected | §11.5's grant itself — ADR-052's "the code that posts a client secret"; the string counted credential sets from inside the host that held the only one |
 | `ClientCredentialsHandler.cs` | moves, unchanged but its namespace | the same mechanism's outbound half; names only `ITokenCache` and the options |
 | `ServiceIdentityOptions.cs` | moves, with its remark rewritten | it is no longer in a host, so a remark saying "this is the only host that binds it" is false where it stands |
 | `Program.cs`'s registrations | **stay** | §4.2 makes `Program.cs` the only composition root, and §15.3's argument is that a binding every host inherits is a credential every host is gated on |
@@ -359,9 +364,38 @@ unchanged, because the parameter is captured rather than passed:
         $"than the authority '{authorityKey.Name}' names (§11.3).";
 ```
 
-Every other code line of the file, `Failure`'s reference to
-`ServiceIdentityOptions.SectionName` included, is untouched: that type moved
-with it. The class doc is the exception, and it is the next edit.
+One more code line moves, and it is a string rather than a comment, which is
+why no gate would have found it. `Failure` tells an operator what a refused
+token means, and it says it by counting the platform's credential sets:
+
+```csharp
+        return $"The token endpoint refused this host's client credentials with {code}{detail}. " +
+            $"'{ServiceIdentityOptions.SectionName}' is the only credential set in the platform (§11.5), " +
+            "so this is a deployment fault rather than a caller's.";
+```
+
+becomes:
+
+```csharp
+        return $"The token endpoint refused this host's client credentials with {code}{detail}. " +
+            $"'{ServiceIdentityOptions.SectionName}' is this host's credential set (§11.5), " +
+            "so this is a deployment fault rather than a caller's.";
+```
+
+A count of the platform's credential sets was a true sentence in a host that
+held the only one. In a building block it is a claim about every host that
+links it, and ADR-052 gives a second host a set of its own — so the sentence
+would be emitted, falsely, by the host it is least likely to be read for. The
+correction is to say what the type knows: the section this host binds, which
+is what an operator has to go and fix either way. §13 gives the string to
+nobody, because it is neither a comment nor a chapter, and this is the only
+pull request whose class reaches the file; leaving it would leave a defect no
+later slice is allowed to touch. No test asserts the wording — the suite's
+message assertions are `401`, `unauthorized_client`, the token that must not
+leak, and `Identity:Authority` — so nothing else moves with it.
+
+`Failure` stays `static`: it reads the constant, not the carried name. Every
+other code line of the file is untouched. The class doc is the last edit.
 
 Its block runs thirteen lines and carries `<b>`, so the comment gate judges it
 whole on the namespace line this step already changes, and its last clause is
@@ -734,7 +768,17 @@ carries it, one file over, where the binding it argues about is.
 
 - [ ] **Step 2: §4.1's tree comment**
 
-Two entries in the tree change. `Common.Infrastructure` gains the mechanism:
+Two entries in the tree change, and both keep the tree's own columns: the
+prefix each entry carries says where it sits, and the comment starts at the
+same column for every line of the block. `Common.Infrastructure` gains the
+mechanism. Before:
+
+```
+│   │   ├── Common.Infrastructure/      Outbox, inbox, idempotency markers,
+│   │   │                               EF conventions, Redis
+```
+
+After:
 
 ```
 │   │   ├── Common.Infrastructure/      Outbox, inbox, idempotency markers,
@@ -742,14 +786,23 @@ Two entries in the tree change. `Common.Infrastructure` gains the mechanism:
 │   │   │                               client-credentials grant (ADR-052)
 ```
 
-and the BFF keeps the hop and loses the claim that the code is its:
+and the BFF keeps the hop and loses the claim that the code is its. Before:
 
 ```
-│   └── Web.Bff/                        Aggregation for the web client (§10.1).
-│                                       The ONLY host that calls a service
-│                                       synchronously (§9.7); it binds
-│                                       Identity:Client, and the grant's code is
-│                                       Common.Infrastructure's (§11.5, ADR-052)
+│   │   └── Web.Bff/                    Aggregation for the web client (§10.1).
+│   │                                   The ONLY host that calls a service
+│   │                                   synchronously (§9.7), and therefore the
+│   │                                   only one with client credentials (§11.5)
+```
+
+After:
+
+```
+│   │   └── Web.Bff/                    Aggregation for the web client (§10.1).
+│   │                                   The ONLY host that calls a service
+│   │                                   synchronously (§9.7); it binds
+│   │                                   Identity:Client, and the grant's code is
+│   │                                   Common.Infrastructure's (§11.5, ADR-052)
 ```
 
 The `tests/Web.Bff.Tests/` entry is left alone: it says "§9.7's hop and
@@ -1051,7 +1104,10 @@ git commit -m "refactor(identity): the remarks and the BFF's comments follow the
 - Section 3's PR-3 row — the four types and their tests out of `Web.Bff`, the
   BFF re-pointed, no behaviour moved → Tasks 2 and 3; the "no behaviour"
   claim is discharged by Task 2 step 11, which runs the moved suites
-  unchanged in their old home before they move.
+  unchanged in their old home before they move. Its one stated exception is
+  `Failure`'s diagnostic string, rewritten in Task 2 step 5 because a count of
+  the platform's credential sets cannot be made from a building block; the
+  Global Constraints carry the carve-out and no assertion reads the sentence.
 - Section 3's order — 3 → 4, touching no Shipping path → the touch set names
   none, and the Global Constraints say the PR depends on nothing.
 - Section 13's PR-3b rows — §4.1's identity half, Appendix B's row and every

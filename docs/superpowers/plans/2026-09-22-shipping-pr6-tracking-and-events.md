@@ -49,6 +49,7 @@ PR-6).
   `tests/Shipping.Worker.Tests/**`, `tests/Shipping.TestSupport/**`,
   `tests/Platform.IntegrationTests/**`,
   `deploy/compose/services/shipping.yml`,
+  `.github/secret-scan/allowed/tests.txt`,
   `docs/backend-architecture/15-cicd-deployment.md`,
   `docs/backend-architecture/11-identity-authorization.md`,
   `docs/secrets.md`.
@@ -56,8 +57,11 @@ PR-6).
   and its four suites, and the cross-service suite that holds two services to
   each other — `Platform.IntegrationTests` is where §4.3's one-assembly rule is
   already spent on purpose, and it already references two services'
-  Infrastructure projects for exactly that. **D** is the Compose unit and the
-  three documents. **E** is the `.csproj` under
+  Infrastructure projects for exactly that. **D** is the Compose unit, the
+  three documents, and the secret scan's allow-list, which is declared because
+  a new test file is what a new finding would be reported against and a row
+  there is the only way one is closed — Task 10 says why none is expected.
+  **E** is the `.csproj` under
   `tests/Platform.IntegrationTests/`, which gains `Testcontainers.MsSql`,
   `Testcontainers.RabbitMq`, `Testcontainers.Redis`, `MassTransit`,
   `Microsoft.Extensions.DependencyInjection.Abstractions`
@@ -106,7 +110,10 @@ PR-6).
     string? carrierApiKey = null, string addressSourceBaseUrl =
     UnreachableAddressSource)`**, with `Tokens` (a `RecordingTokenCache`) and
     the three `Identity__Client__*` settings; and `ServiceFixture` with
-    `Carrier`, `Ordering`, `CapturedLogs`, `FailNextCommit()`,
+    **`Carrier`, a `WireMockServer` started over `SimulatorMappings.Directory()`
+    — PR-5 declares it with that type and puts `WireMock.Net` on
+    `Shipping.TestSupport.csproj` for it, which is what Task 3's
+    `CarrierAnswers` builds on** — `Ordering`, `CapturedLogs`, `FailNextCommit()`,
     `RunFulfilmentPassAsync()`, `QueueDepthAsync`, `BindingsAsync`, beside
     PR-1's `ScalarAsync`, `ExecuteAsync`, `ColumnsAsync` and `ResetAsync`.
   - **`tests/Shipping.OrderingStub`**, a library that is not a test project,
@@ -138,8 +145,10 @@ PR-6).
   those are not among the five. Three of the five are this pull request's:
   Compose, §15.4's inventory and the test fixture. The Aspire row is the one
   that does not apply, because §14.2 is not adopted. The Helm values row is
-  deferred to PR-7, because a values name written before the chart exists is a
-  second thing to reconcile.
+  deferred to PR-7, because that place is a file inside a chart that does not
+  exist yet. **The key's name is not deferred with it**: Task 9 step 2 writes
+  `jurisdiction.addressRetention` and `jurisdiction.trackingRetention` into
+  §15.4's Source column, under PR-5's Task 6 step 3 rule.
 - **The blueprint's vocabulary**: despatch and despatched in prose,
   `Dispatched` in identifiers, because the contract is `ShipmentDispatched`.
 - Comments say why and cite the owner — a section, an ADR or a symbol, never a
@@ -894,7 +903,8 @@ git commit -m "feat(shipping): ApplyTrackingPageCommand applies a carrier page b
   — `services.AddScoped<TrackingClaims>();` and
   `services.AddHostedService<TrackingWorker>();`, beside PR-5's two
 - Modify: `tests/Shipping.TestSupport/ServiceFixture.cs` — the tracking pass
-  helper and the row readers, beside PR-5's `RunFulfilmentPassAsync`
+  helper, the row readers and `CarrierAnswers`, beside PR-5's
+  `RunFulfilmentPassAsync`
 - Test: `tests/Shipping.Worker.Tests/TrackingWorkerTests.cs`
 
 **Interfaces:**
@@ -1106,10 +1116,14 @@ public sealed class TrackingWorkerTests(ServiceFixture fixture) : IAsyncLifetime
     {
         Shipment shipment = await fixture.BookedAsync("SIM-TRANSIT");
 
-        // The reference the row was booked under is repointed at a path the
-        // simulator answers 503 on, which is what the carrier being down looks
-        // like to a poll: nothing about the row is wrong.
+        // The row is repointed at a reference this test makes the simulator
+        // answer 503 on, which is what the carrier being down looks like to a
+        // poll: nothing about the row is wrong. The mapping is registered here
+        // and not in the simulator's directory — that directory is the
+        // postal-code script a person at the keyboard drives (spec, section 9),
+        // and a dead events feed is no script.
         await fixture.SetCarrierReferenceAsync(shipment.Id, "crr_down");
+        using IDisposable down = fixture.CarrierAnswers("/v1/shipments/crr_down/events", 503);
 
         // Captured before the pass, because FailSql stamps NextPollAt from
         // SYSDATETIMEOFFSET() at the moment of the update: an instant read
@@ -1140,8 +1154,18 @@ public sealed class TrackingWorkerTests(ServiceFixture fixture) : IAsyncLifetime
 
         TrackingWorker worker = broken.Services.GetRequiredService<TrackingWorker>();
 
+        // The pass itself throws, which is what the catch below is about and
+        // what a carrier outage would never produce: that is caught per row.
+        await Should.ThrowAsync<Exception>(
+            () => worker.ProcessBatchAsync(TestContext.Current.CancellationToken));
+
         await worker.StartAsync(TestContext.Current.CancellationToken);
-        await Task.Delay(CarrierHop.TrackingPollInterval * 2, TestContext.Current.CancellationToken);
+
+        // One tick and a margin, not two ticks: PeriodicTimer fires first one
+        // whole interval after the loop starts, so one is what the assertion
+        // needs and the second is thirty seconds bought for nothing.
+        await Task.Delay(
+            CarrierHop.TrackingPollInterval + TimeSpan.FromSeconds(2), TestContext.Current.CancellationToken);
 
         // ExecuteTask is the loop, and a faulted one is the host on its way
         // down: the default BackgroundServiceExceptionBehavior stops it.
@@ -1157,8 +1181,9 @@ public sealed class TrackingWorkerTests(ServiceFixture fixture) : IAsyncLifetime
 The fixture helpers this needs — `BookedAsync`, `StatusAsync`,
 `NextPollAtAsync`, `AttemptsAsync`, `LockedUntilAsync`,
 `SetCarrierReferenceAsync`, `RequestCancellationAsync`,
-`ClaimForTrackingAsync`, `ClaimForFulfilmentAsync`, `ExpireLeasesAsync` — go on
-`ServiceFixture` beside PR-5's `RunFulfilmentPassAsync`, each a single
+`ClaimForTrackingAsync`, `ClaimForFulfilmentAsync`, `ExpireLeasesAsync` and
+`CarrierAnswers` — go on `ServiceFixture` beside PR-5's
+`RunFulfilmentPassAsync`. All but the last are a single
 `ExecuteAsync` or `ScalarAsync` over `shipping.Shipments`, in
 `SetOutboxAttemptsAsync`'s shape. **On the fixture and not in this file**,
 because Tasks 5, 6 and 7 read the same columns; PR-5's
@@ -1212,6 +1237,51 @@ the constants that own them, never written out:
             "UPDATE shipping.Shipments SET CancellationRequestedAt = SYSDATETIMEOFFSET() WHERE Id = {0};",
             id.Value);
 ```
+
+`CarrierAnswers` is the one that touches no database. It adds a mapping to the
+WireMock.Net server PR-5's fixture already runs in process, for the life of the
+handle it returns:
+
+```csharp
+    /// <summary>
+    /// Makes the simulator answer one path with one status code until the
+    /// returned handle is disposed.
+    /// </summary>
+    /// <remarks>
+    /// A mapping on the running server rather than a file under
+    /// deploy/compose/carrier-simulator: that directory is the postal-code
+    /// script Compose and this fixture share (spec, section 9), and a feed
+    /// nobody can reach from a checkout is not part of it. An
+    /// <c>ExactMatcher</c> at priority 0, because the directory's own event
+    /// feeds sit at 1 and its catch-all at 10.
+    /// </remarks>
+    public IDisposable CarrierAnswers(string path, int statusCode)
+    {
+        Guid id = Guid.CreateVersion7();
+
+        Carrier
+            .Given(Request.Create().WithPath(new ExactMatcher(path)).UsingGet())
+            .AtPriority(0)
+            .WithGuid(id)
+            .RespondWith(Response.Create().WithStatusCode(statusCode));
+
+        return new CarrierMapping(Carrier, id);
+    }
+
+    /// <summary>
+    /// Removes one mapping and leaves the rest. <c>ResetAsync</c> resets the
+    /// whole server between tests and is the backstop; this is what keeps a
+    /// mapping from outliving the assertion it was added for inside one.
+    /// </summary>
+    private sealed class CarrierMapping(WireMockServer server, Guid id) : IDisposable
+    {
+        public void Dispose() => server.DeleteMapping(id);
+    }
+```
+
+with `using WireMock.Matchers;`, `using WireMock.RequestBuilders;`,
+`using WireMock.ResponseBuilders;` and `using WireMock.Server;` on the file.
+`Carrier` is PR-5's `WireMockServer` property and gains no member here.
 
 - [ ] **Step 2: Run to see them fail**
 
@@ -1579,6 +1649,12 @@ dotnet test tests/Shipping.Worker.Tests --filter "FullyQualifiedName~TrackingWor
 ```
 
 Expected: 0 warnings, green, Docker running.
+`A_pass_that_throws_leaves_the_host_running` takes about thirty-two seconds and
+the cost is named here rather than found, as PR-5 names its nineteen-second
+one: `CarrierHop.TrackingPollInterval` is the loop's period, a loop that has
+not ticked says nothing about the catch inside it, and the interval is a
+latency number §13.7 fixes rather than one a test may lower. §12.4's trade is
+the fidelity against the seconds, and this is the fidelity.
 
 ```bash
 git add src/Services/Shipping tests/Shipping.TestSupport tests/Shipping.Worker.Tests
@@ -1612,9 +1688,14 @@ batch — a pass that outlives §15.3's drain is killed mid-row.
 **What PR-5 left here, and what happens to it.** PR-5 created this suite with
 one test — that `ShippingIntegrationEventMapper.RegisteredEvents` is empty,
 because nothing in that pull request promoted a shipment — and added
-`public static IReadOnlyCollection<Type> RegisteredEvents => Registry.Keys;` to
-the rendered mapper for it to read. That test goes false here and is **deleted
-and replaced**, not left beside its contradiction; `RegisteredEvents` stays and
+`internal static IReadOnlyCollection<Type> RegisteredEvents => Registry.Keys;`
+to the rendered mapper for it to read, together with the
+`InternalsVisibleTo Include="Shipping.Application.Tests"` in
+`Shipping.Application.csproj` that lets the suite see it. Both are PR-5's and
+neither is re-declared here: the mapper is an `internal sealed class` and the
+member follows it, so nothing in this pull request widens either. That test
+goes false here and is **deleted and replaced**, not left beside its
+contradiction; `RegisteredEvents` stays and
 `The_registry_is_exactly_the_publishes_column` below is what now reads it, so
 the member PR-5 added keeps its only caller and the registry is still asserted
 as a whole rather than one mapping at a time.
@@ -1789,9 +1870,8 @@ internal sealed class ShippingIntegrationEventMapper : IIntegrationEventMapper
     /// The allow-list as a whole, so a suite can assert what is in
     /// <see cref="Registry"/> rather than what one <see cref="Map"/> returned:
     /// an entry nobody noticed is invisible to a call over a hand-written list.
-    /// Carried in exactly the form every other service's mapper carries it.
     /// </summary>
-    public static IReadOnlyCollection<Type> RegisteredEvents => Registry.Keys;
+    internal static IReadOnlyCollection<Type> RegisteredEvents => Registry.Keys;
 
     public IReadOnlyList<object> Map(IReadOnlyList<IDomainEvent> domainEvents)
     {
@@ -3018,13 +3098,14 @@ reason, so PR-5's entry for this file is the only one it has.
 After the two `PaymentProvider__*` rows:
 
 ```markdown
-| `Jurisdiction__AddressRetention` | Config | ConfigMap | ✓ — **Shipping only**; ADR-053's statutory window for a delivery address, and the host refuses to start without it |
-| `Jurisdiction__TrackingRetention` | Config | ConfigMap | ✓ — **Shipping only**; ADR-053's statutory window for a shipment's tracking events |
+| `Jurisdiction__AddressRetention` | Config | Helm `jurisdiction.addressRetention` → ConfigMap | ✓ — **Shipping only**; ADR-053's statutory window for a delivery address, and the host refuses to start without it |
+| `Jurisdiction__TrackingRetention` | Config | Helm `jurisdiction.trackingRetention` → ConfigMap | ✓ — **Shipping only**; ADR-053's statutory window for a shipment's tracking events |
 ```
 
-The Source column says ConfigMap and names no Helm key, because the chart is
-PR-7's and a values name written before the chart exists is a second thing to
-reconcile.
+**The Source column names the Helm key although the chart is PR-7's**, under
+the rule PR-5's Task 6 step 3 states and argues for `AddressSource__BaseUrl`.
+PR-7 therefore rewrites neither of these two rows; what it owes them is the
+chart that renders the spelling they already carry.
 
 - [ ] **Step 3: The sentence and the callout's close**
 
@@ -3071,18 +3152,39 @@ false with Step 3. Each is corrected to cite the owner and keep its own
 argument — which is what `docs/change-locality.md` asks of a mention.
 
 `docs/backend-architecture/11-identity-authorization.md`, in the paragraph
-about the authority being read eagerly:
+about the authority being read eagerly. Before:
+
+> It is deliberately **not** an
+> options type with `ValidateOnStart` — [§15.4](15-cicd-deployment.md) makes
+> `ServiceIdentityOptions` the only options type in the solution and argues why,
+> and a second bag bound to a section holding one value is the shape that rule
+> forbids.
+
+After:
 
 > It is deliberately **not** an options type with `ValidateOnStart` —
 > [§15.4](15-cicd-deployment.md) admits one only where a member would differ
 > between Compose, the fixture and production, and a bag bound to a section
 > holding one value is the shape that rule forbids.
 
-`docs/secrets.md`, in *Before adding an options type at all*:
+The sentence before it — the posture `AddSqlServer` and
+`AddMassTransitMessaging` already take — and the one after it, about §12.4's
+fixture comment, are both unchanged: neither counts the options types.
+
+`docs/secrets.md`, in *Before adding an options type at all*. Before:
+
+> `Identity:Client` is the only options type in the solution, and it earns that
+> by holding a secret that must differ per environment.
+
+After:
 
 > `Identity:Client` earns its options type by holding a secret that must differ
 > per environment; §15.4's inventory is where every type that has earned one is
 > listed.
+
+The two paragraphs above it in that section — that §15.4 is blunt about this,
+and that an options type needs a member differing between environments — are
+unchanged, because the rule is what they state and only the count moved.
 
 Everything else in the corpus that mentions the count — the four test-support
 and `Common.Web.Tests` comments arguing why *their* host binds nothing — stays.
@@ -3125,9 +3227,19 @@ and says which restatements were corrected and which were deliberately left.
   first, which is `docs/testing.md`'s order and the only way a red gate means
   the tree rather than the gate.
 - [ ] `py -3.12 -m unittest discover -s .github/secret-scan` then
-  `py -3.12 .github/secret-scan/secret_scan.py` — both exit 0. The broker
-  password in `PlatformFixture` is §14.1's local-development default and takes
-  the allow-list entry the two service fixtures already have, re-pathed.
+  `py -3.12 .github/secret-scan/secret_scan.py` — both exit 0. **No allow-list
+  row is written from this plan, and none is expected.** The broker password in
+  `PlatformFixture` is §14.1's local-development default, written the way
+  `Ordering.TestSupport` and `Inventory.TestSupport` write theirs — a
+  `.WithPassword("…")` argument on the container builder, and an interpolated
+  connection string for the second account — and `credential-assignment` fires
+  only where a credential-shaped **name** is assigned a quoted literal, which
+  neither shape is. Neither of those two fixtures carries a row in
+  `.github/secret-scan/allowed/tests.txt` today, and that absence is the
+  measurement rather than an oversight to copy. A finding the gate does report
+  is closed by a row in that file carrying the digest the gate computed and
+  never one written from here — which is why the path is in the touch set and
+  why the gate is run before the row is believed to be unnecessary.
 - [ ] `py -3.12 -m unittest discover -s .github/pipeline-gate` then
   `py -3.12 .github/pipeline-gate/pipeline_gate.py` — both exit 0. No service
   directory is added here, so the filter written in PR-1 still covers it.
@@ -3215,8 +3327,8 @@ Task 6 and consumed by `MetricsInitialiser`. On `ServiceFixture`,
 `BookedAsync(postalCode, country, line1, city)`, `StatusAsync`,
 `NextPollAtAsync`, `AttemptsAsync`, `LockedUntilAsync`,
 `SetCarrierReferenceAsync`, `RequestCancellationAsync`,
-`ClaimForTrackingAsync`, `ClaimForFulfilmentAsync`, `ExpireLeasesAsync` and
-`RunTrackingPassAsync` are Task 3's; `DeliveredAsync`,
+`ClaimForTrackingAsync`, `ClaimForFulfilmentAsync`, `ExpireLeasesAsync`,
+`CarrierAnswers` and `RunTrackingPassAsync` are Task 3's; `DeliveredAsync`,
 `VoidedWithTrackingAsync`, `AgeTerminalAsync`, `AddressCountAsync`,
 `TrackingEventCountAsync` and `PurgeShippingRetentionAsync` are Task 5's;
 `ReadWaitingGauge` and `SetAttemptsAsync` are Task 6's; and

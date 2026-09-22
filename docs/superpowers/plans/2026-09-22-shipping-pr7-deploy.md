@@ -37,13 +37,16 @@ runbook) and 13 (§13.6 and §15.3).
 - The blueprint wins over the spec; the spec wins over this plan.
 - **Class D.** Touch set: `deploy/helm/**`, `deploy/canary/**`,
   `deploy/observability/**`, `docs/runbooks/queue-backlog.md`,
+  `docs/runbooks/README.md`,
   `docs/backend-architecture/13-observability.md`,
   `docs/backend-architecture/15-cicd-deployment.md`, `docs/secrets.md`,
   `.github/workflows/deploy.yml`, `.github/workflows/helm.yml`.
   Reasons, since the row above is paths only: the chart, the library chart and
   the smoke gate are `deploy/helm`; the workload map and its suite are
   `deploy/canary`; the two rules and `SHARED_RUNBOOKS` are
-  `deploy/observability`; the runbook is the procedure those two rules share;
+  `deploy/observability`; the runbook is the procedure those two rules share
+  and `docs/runbooks/README.md` is its index, which the gate reads in both
+  directions, so the row arrives with the file;
   §13.6 and §13.9's tables are the chapter `check.py` reads; §15.3 and §15.4
   are the chart chapter and the inventory; `docs/secrets.md` is where the
   Helm place of a required key is stated; and the two workflows are the gate
@@ -105,14 +108,15 @@ runbook) and 13 (§13.6 and §15.3).
 Three edits, all red until Task 2 creates the chart.
 
 **First, `refuses_chart` moves up beside `refuses_foreign`**, to the block of
-helpers at the head of the file. It sits today below its first caller, and the
-section this step adds calls it from inside `Rendering` — some five hundred
-lines earlier — where the name is not bound yet and `set -euo pipefail` turns
-that into an aborted run rather than a failed assertion. `refuses_foreign`'s
-own comment already states the layout this restores: defined with the other
+helpers at the head of the file. It is defined today immediately above the
+`refuses_chart catalog …` calls it was written for, near the end of the file,
+and the section this step adds calls it some five hundred and thirty lines
+earlier — where the name is not bound yet, and `set -euo pipefail` turns that
+into an aborted run rather than a failed assertion. `refuses_foreign`'s own
+comment already states the layout this restores: defined with the other
 helpers rather than beside the first call. The `refuses_chart catalog …` calls
-stay exactly where they are and keep working, because a definition above a
-caller is what the move produces.
+stay exactly where they are and keep working, because a definition further
+above a caller is still a definition above it.
 
 **Second, the helper learns the per-chart overlay** in the same move, because
 every negative test below renders a chart whose capabilities are required and
@@ -153,7 +157,9 @@ carrier address rather than on the value each one names:
 Service name and port are routing configuration the chart ships a default for,
 rather than an environment's choice.
 
-**Third, a new section after the `paymentProvider` one, inside `Rendering`:**
+**Third, a new section of its own after the `paymentProvider` one** — which is
+itself a section rather than part of `Rendering`, so this is the section that
+follows it and not a block inside another:
 
 ```bash
 # --------------------------------------------------------------------------
@@ -316,7 +322,7 @@ and its subject does not, so it becomes "A third chart growing these is a
 design change, not a configuration change; ADR-052 is the record that made it
 two."
 
-**Three more sentences in that file name `Web.Bff` as the whole of the set**,
+**Four more sentences in that file name `Web.Bff` as the whole of the set**,
 and each is read by somebody whose render has just failed, so each is amended
 in this step rather than left to the next reader to disbelieve. The block
 comment's "They belong to the one host that calls a peer synchronously (§9.7,
@@ -331,6 +337,45 @@ set. Web.Bff binds ServiceIdentityOptions unconditionally …" — takes the
 same correction, because it now fires on two charts and names one. The
 `identity.scope` message and the two `clientSecretRef` messages name no host
 and stay exactly as they are.
+
+**The fourth is the comment block immediately above the upward guards** — the
+one this step adds for the carrier and the one it rewrites for the client
+credentials. It argues why an upward guard names an owning chart at all, and
+then names the wrong set. Before:
+
+```
+{{- /*
+…
+Both blocks already say a capability is a fact about the code; until now they
+only enforced it downwards. These two enforce it upwards, and they name the
+owning chart because that is the fact: `AddPaymentProvider` is in
+`Payments.Api/Program.cs` and `ServiceIdentityOptions` is bound by `Web.Bff`
+alone (§9.7, ADR-017). A second chart growing either is a design change, and
+a design change edits this line.
+*/}}
+```
+
+After:
+
+```
+{{- /*
+…
+Both blocks already say a capability is a fact about the code; until now they
+only enforced it downwards. These three enforce it upwards, and they name the
+owning charts because that is the fact: `AddPaymentProvider` is in
+`Payments.Api/Program.cs`, `AddCarrierGateway` is in
+`Shipping.Worker/Program.cs`, and `ServiceIdentityOptions` is bound by those
+two hosts that call a peer (§9.7, ADR-052). A further chart growing any of
+them is a design change, and a design change edits this line.
+*/}}
+```
+
+The lines above it in the same block — the paragraph about Helm accepting
+values a chart never declares, and the `secretKeyRef` a `--set` would mount —
+are unchanged: that argument is about the mechanism and is still exactly true.
+**"These two" becomes "these three" in the same edit**, because the carrier's
+guard is the third and the sentence counts them. The comment gate does not
+read `.tpl`, so this step is the only thing that reaches any of it.
 
 `commerce.env`'s secret half gains, after `PaymentProvider__ApiKey`:
 
@@ -978,17 +1023,49 @@ raise — `deploy.yml`'s `if [ -n "$FLOOR" ]` already states
 restores the Deployment's own count. Nothing here changes.
 
 `test_canary.py`'s `test_five_percent_is_expressible_at_nineteen` docstring
-says 20 is "the service charts' maxReplicas". It becomes "the maxReplicas of
-every chart that autoscales — not the gateway's, which is 30 because every
-external request passes through it, and not the worker's, which sets a replica
-count instead (§15.3)."
+says 20 is "the service charts' maxReplicas". Before:
+
+```python
+    def test_five_percent_is_expressible_at_nineteen(self) -> None:
+        """And 19 + 1 is 20, which is the service charts' maxReplicas
+        exactly — not the gateway's, which is 30 because every external request
+        passes through it. The 19 is what the weight costs, and only on those
+        charts is it also all the chart allows."""
+```
+
+After:
+
+```python
+    def test_five_percent_is_expressible_at_nineteen(self) -> None:
+        """And 19 + 1 is 20, which is the maxReplicas of every chart that
+        autoscales — not the gateway's, which is 30 because every external
+        request passes through it, and not the worker's, which sets a replica
+        count instead (§15.3). The 19 is what the weight costs, and only on
+        those charts is it also all the chart allows."""
+```
+
+**The closing sentence is kept and not dropped.** It is the one that says what
+19 means where `maxReplicas` is higher, which is the whole reason the gateway
+is named in the sentence before it; widening the subject from "the service
+charts" to "every chart that autoscales" makes *those charts* a more exact
+referent rather than an unanswered one. The comment gate reads a Python
+docstring, and five lines with no emphasis and nothing named but the owner is
+inside its limit.
 
 `canary.json`'s own `$comment` makes the same claim about the same number and
 is the third copy of it, so it is corrected in the same edit rather than left
-as the one a reader of this file meets first. The three lines reading "§15.3's
-autoscaling.maxReplicas is 20 on the service charts, exactly 19 stable plus one
-canary. The gateway's is 30, so there the 19 is what the weight costs rather
-than all the chart allows." become:
+as the one a reader of this file meets first. The claim runs across **four**
+array elements and starts partway through the first, so the whole of what is
+replaced is these four lines:
+
+```json
+    "That count is 19, and the charts already permit it: §15.3's",
+    "autoscaling.maxReplicas is 20 on the service charts, exactly 19",
+    "stable plus one canary. The gateway's is 30, so there the 19 is what the",
+    "weight costs rather than all the chart allows.",
+```
+
+They become:
 
 ```json
     "That count is 19, and the charts that autoscale already permit it:",
@@ -1427,6 +1504,24 @@ count is satisfied by the wrong charts, and which host holds a grant is the
 whole claim. The printed block below it stays the BFF's — the chapter prints
 one shape and `deploy/helm/shipping/values.yaml` is the second instance.
 
+**Its first line counts the charts, though, and it is inside the paragraph this
+step is amending**, so leaving it would put the contradiction two lines below
+its own correction. Before:
+
+```yaml
+# deploy/helm/web-bff/values.yaml — the only chart with an Identity:Client
+```
+
+After:
+
+```yaml
+# deploy/helm/web-bff/values.yaml — one of the two charts with an Identity:Client
+```
+
+The rest of that block — the authority, the `ValidateOnStart` comment, the
+switch's own key and the `clientSecretRef` — is unchanged: every line of it is
+true of the BFF, which is the chart the block prints.
+
 The callout that closes that block. Before:
 
 > **A second chart setting `identity.clientCredentials: true` is a design
@@ -1450,29 +1545,24 @@ count that the callout exists for.
 
 - [ ] **Step 2: §15.4's rows, which the chart makes concrete**
 
-Four rows and one column gain the Helm spelling they could not carry before a
-chart existed. The carrier's two, written by PR-2:
+Two rows and one column gain the Helm spelling they did not carry. The
+carrier's two, written by PR-2:
 
 ```markdown
 | `Carrier__BaseUrl` | Config | Helm `carrier.baseUrl` → ConfigMap | ✓ — **Shipping only**; the carrier's address, and the host refuses to start without it |
 | `Carrier__ApiKey` | Secret | Helm `carrier.apiKeySecretRef` → External Secrets | ✓ — **Shipping only**; the carrier's credential, and the host refuses to start without it |
 ```
 
-The jurisdiction windows, written by PR-6:
+**PR-6's two jurisdiction rows are not rewritten here, and neither is PR-5's
+`AddressSource__BaseUrl`.** All three already name their Helm key, under the
+rule PR-5's Task 6 step 3 argues. This PR is what makes those rows true rather
+than what states them; only the two above, written before that rule was
+settled, still need the spelling.
 
-```markdown
-| `Jurisdiction__AddressRetention` | Config | Helm `jurisdiction.addressRetention` → ConfigMap | ✓ — **Shipping only**; ADR-053's statutory window for a delivery address, and the host refuses to start without it |
-| `Jurisdiction__TrackingRetention` | Config | Helm `jurisdiction.trackingRetention` → ConfigMap | ✓ — **Shipping only**; ADR-053's statutory window for a shipment's tracking events |
-```
-
-and `Identity__Client__ClientSecret`'s *Where* column, which says
+`Identity__Client__ClientSecret`'s *Where* column, which says
 "`web-bff-identity` secret; one per host", names the second:
 "`web-bff-identity` and `shipping-identity`; one per host, never shared —
 two hosts on one grant is one host able to act as the other (§11.5)".
-
-`AddressSource__BaseUrl`'s row already reads `Helm addressSource.baseUrl`: PR-5
-wrote the obligation the way §15.4's own rule asks, and this PR is what makes
-it true rather than what states it.
 
 - [ ] **Step 3: `docs/secrets.md`'s two chart rows**
 
