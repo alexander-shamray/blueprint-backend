@@ -60,7 +60,7 @@ and the scaffold's suite), 13 (§4.5's sentence and §2's) and 14.
   service's meter owes §13.2, which is why they are here and why nothing else
   in that assembly moves. All four Catalog test trees are named rather than the
   one, because the template the scaffold copies is nine projects and Task 3
-  reaches the comments in seven of them.
+  reaches the comments in eight of them.
 - **The locality gate admits `A+D+E` today** — `locality_gate.py` names it as
   the one three-member class and reads it as its three members — so this PR
   needs no contract change before it can merge, unlike Payments' and
@@ -1412,8 +1412,9 @@ than went.
   `tests/Catalog.TestSupport/ServiceFixture.cs`,
   `tests/Catalog.TestSupport/TestAuthHandler.cs`
 - Modify: `tools/new-service/scaffold/patch.py` — the anchors that quote a
-  comment this task rewrites, the four migration tables that become empty, and
-  the three replacements that render a block over ten lines
+  comment this task rewrites, the four migration tables that become empty, the
+  `WORKER_PATCHES` needle that quotes a shortened replacement, and the three
+  replacements that render a block over ten lines
 - Modify: `tools/new-service/scaffold/render.py` — `ASSEMBLY_MARKER`
 
 **Interfaces:** none. Every edit is a comment or a patch string; no signature,
@@ -1438,7 +1439,7 @@ block cut in Shipping alone is a block the sixth service is handed again.
 **Where the After comes from.** Payments' tree passes the gate as it stands —
 every file below has a Payments counterpart with zero findings, because that
 service's own pull request cut the rendered copies by hand. So each After is
-Payments' block with `Payments` changed back to `Catalog`, and the four places
+Payments' block with `Payments` changed back to `Catalog`, and the two places
 that deviate say why. Three blocks have no Payments counterpart at all, and
 those are written out fresh.
 
@@ -1853,9 +1854,9 @@ rendered service:
 ```
 
 `tests/Catalog.Domain.Tests/ArchitectureTests.cs`, line 18, 14 lines. Payments'
-is seven lines and names its own allow-list, which is two entries; Catalog's is
-four, so the argument for the two extra entries is kept and the rest is
-Payments' wording:
+is seven lines and names its own allow-list, which is three entries; Catalog's
+is four, so the argument for the two entries an empty domain does not have is
+kept and the rest is Payments' wording:
 
 ```csharp
         // The dependency table's rule is an allow-list — "Common.Domain and
@@ -4213,7 +4214,7 @@ would read none of the created files.
 Task 3 is the same argument over the rest of the template, and Payments is
 again where the After comes from: that service's tree passes the gate as it
 stands, so every block replaced there is Payments' with the name changed back,
-and the four that deviate say why. The two tasks do not overlap. Task 1's five
+and the two that deviate say why. The two tasks do not overlap. Task 1's five
 files are new to Catalog and arrive already clean, and Task 3 touches none of
 them; Task 3's subject is the blocks the template has carried since before the
 gate existed, which Task 1 neither adds nor reads. One block is worth naming
