@@ -618,6 +618,8 @@ The mappings are proved by Task 3's tests, which load this directory.
 - Create: `src/Services/Shipping/Shipping.Infrastructure/Carrier/CarrierAnswerBuffer.cs`
 - Create: `src/Services/Shipping/Shipping.Infrastructure/Carrier/HttpCarrierGateway.cs`
 - Create: `src/Services/Shipping/Shipping.Infrastructure/Carrier/DependencyInjection.cs`
+- Modify: `src/Services/Shipping/Shipping.Infrastructure/Observability/MetricsInitialiser.cs`
+  — `CarrierMetrics` joins the constructor, with its guard
 - Modify: `src/Services/Shipping/Shipping.Worker/Program.cs` —
   `builder.Services.AddCarrierGateway(builder.Configuration, builder.Environment);`
 - Modify: `tests/Shipping.Worker.Tests/Shipping.Worker.Tests.csproj` —
@@ -629,6 +631,9 @@ The mappings are proved by Task 3's tests, which load this directory.
 - Create: `tests/Shipping.TestSupport/SimulatorMappings.cs`
 - Create: `tests/Shipping.Worker.Tests/UnavailableCounter.cs` — the counter
   reader both carrier suites use
+- Modify: `tests/Shipping.Worker.Tests/MetricsRegistrationTests.cs` —
+  `BuildServices()` runs `AddCarrierGateway` too, and the selector test names
+  `CarrierMetrics`
 - Test: `tests/Shipping.Worker.Tests/HttpCarrierGatewayTests.cs`
 - Test: `tests/Shipping.Worker.Tests/CarrierFaultTests.cs` — the rows that end
   in a fault, each over a host of its own
@@ -639,6 +644,7 @@ The mappings are proved by Task 3's tests, which load this directory.
   `Shipping.Outbound` with `Counter<long> shipping.carrier.unavailable`;
   `IServiceCollection AddCarrierGateway(IConfiguration, IHostEnvironment)`
   with `DependencyInjection.BaseUrlKey` and `ApiKeyKey`;
+  `MetricsInitialiser(OutboxMetrics, MessagingMetrics, RequestMetrics, CarrierMetrics)`;
   `SimulatorMappings.Directory()`; the factory's two new parameters;
   `UnavailableCounter.Of(IServiceProvider)` and the `UnavailableCount` it
   returns, read by both carrier suites.
@@ -1311,12 +1317,126 @@ public sealed class CarrierFaultTests : IDisposable
 this class's own host — the one built for this test — rather than a meter
 matched by name. Nothing else about the counter is repeated here.
 
+**The registration suite learns about the third registration.** §13.6 asks
+that every metrics type be constructed at start-up, and
+`tests/Shipping.Worker.Tests/MetricsRegistrationTests.cs` — PR-1's render of
+the template's — is the test whose subject is that rule: it takes every
+`*Metrics` type `BuildServices()` registers and asserts each is a parameter of
+`MetricsInitialiser` or has a stated reason not to be, and that every
+parameter is registered. `CarrierMetrics` is registered by `AddCarrierGateway`
+and nothing but the typed client and the counter handler inject it, so a
+Shipping that has booked nothing would publish no `shipping.carrier.unavailable`
+series where §13.6 wants zero — and the test cannot see it until
+`BuildServices()` runs the registration that adds it. The suite takes back the
+shape PR-1 stripped from Payments' copy, because this is the service with a
+third registration that shape was for.
+
+The `using` block gains the carrier namespace beside the service's others, and
+`FileProviders`, which `TestEnvironment` reads, back in the sorted position
+PR-1 removed it from:
+
+```csharp
+using System.Diagnostics.Metrics;
+using Shipping.Application;
+using Shipping.Infrastructure;
+using Shipping.Infrastructure.Carrier;
+using Shipping.Infrastructure.Observability;
+using Common.Application;
+using Common.Infrastructure.Messaging;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.FileProviders;
+using Microsoft.Extensions.Hosting;
+```
+
+`BuildServices()` gains the two carrier keys and the third call, and its doc
+block counts three again:
+
+```csharp
+    /// <summary>
+    /// All three registration helpers, over configuration that reaches
+    /// nothing (§12.4's .invalid convention).
+    /// </summary>
+    /// <remarks>
+    /// <c>AddCarrierGateway</c> is the third, and leaving it out would make
+    /// this test agree with a <see cref="MetricsInitialiser"/> that forgot
+    /// <see cref="CarrierMetrics"/>: the types are split across all three.
+    /// </remarks>
+    private static ServiceCollection BuildServices()
+    {
+        IConfiguration configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(
+                new Dictionary<string, string?>
+                {
+                    ["ConnectionStrings:Shipping"] =
+                        "Server=shipping-sql.invalid;Database=Shipping;User Id=sa;Password=not-a-real-password",
+                    ["ConnectionStrings:RabbitMq"] = "amqp://guest:guest@shipping-rabbit.invalid:5672",
+                    // Both read eagerly by AddCarrierGateway, which throws
+                    // naming the missing one — the same reason the bus key
+                    // above is here, and unreachable on the same convention.
+                    // HTTPS because the environment below is not Development,
+                    // which is the rule that helper applies.
+                    [CarrierRegistration.BaseUrlKey] = "https://shipping-carrier.invalid",
+                    [CarrierRegistration.ApiKeyKey] = "not-a-real-key"
+                })
+            .Build();
+
+        ServiceCollection services = new();
+        services.AddShippingApplication();
+        services.AddShippingInfrastructure(configuration);
+        services.AddCarrierGateway(configuration, new TestEnvironment());
+
+        return services;
+    }
+
+    /// <summary>
+    /// A minimal <see cref="IHostEnvironment"/>: <c>AddCarrierGateway</c>
+    /// reads only <see cref="IHostEnvironment.EnvironmentName"/>, through
+    /// <c>IsDevelopment()</c>.
+    /// </summary>
+    /// <remarks>
+    /// Production rather than Development, because the stricter branch is the
+    /// one a registration defect would be found under — and the address above
+    /// is HTTPS so that this choice costs nothing here.
+    /// </remarks>
+    private sealed class TestEnvironment : IHostEnvironment
+    {
+        public string ApplicationName { get; set; } = "Shipping.Worker.Tests";
+
+        public string EnvironmentName { get; set; } = Environments.Production;
+
+        public string ContentRootPath { get; set; } = string.Empty;
+
+        public IFileProvider ContentRootFileProvider { get; set; } = new NullFileProvider();
+    }
+```
+
+with the file's own
+`using CarrierRegistration = Shipping.Infrastructure.Carrier.DependencyInjection;`
+alias, as the factory carries — the two key names are read from the class that
+owns them and never spelled a second time. The `Password=` literal is the one
+PR-1's allow-list row already accepts under `connection-string-password`, and
+the key literal is Payments' shape, which its copy carries with no row of its
+own; Task 5 runs the scan rather than assuming either. The selector test gains
+the fourth type, so a selector that silently dropped the carrier's could not
+pass:
+
+```csharp
+        registered.ShouldContain(typeof(RequestMetrics));
+        registered.ShouldContain(typeof(CarrierMetrics));
+```
+
 - [ ] **Step 2: Run to see them fail**
 
 Run: `dotnet test tests/Shipping.Worker.Tests --filter "FullyQualifiedName~Carrier"`
 Expected: compile failure on `CarrierHop`, `CarrierMetrics`,
 `Shipping.Infrastructure.Carrier.DependencyInjection` and the factory's two
-new parameters.
+new parameters. The registration suite is in the same assembly and fails to
+compile with them; once step 3 gives it `CarrierMetrics` and step 5 the
+registration, and before step 5's initialiser edit lands,
+`Every_metrics_type_is_forced_or_has_a_stated_reason_not_to_be` fails on
+"add it to MetricsInitialiser, or to NotForced with a reason" — which is the
+red that proves the suite sees the carrier's type.
 
 - [ ] **Step 3: Write the budget, the meter and the two handlers**
 
@@ -1860,6 +1980,46 @@ than switched off. `WebApplicationFactory` runs the host as Development by
 default, which is what lets every test reach the in-process server over plain
 HTTP.
 
+`CarrierMetrics` joins `MetricsInitialiser`, in
+`Shipping.Infrastructure/Observability/MetricsInitialiser.cs`. The file's own
+remark states the membership rule — "can this service run for an hour without
+constructing it" — and a Shipping with no order to book constructs this type
+never. The `using` block gains `using Shipping.Infrastructure.Carrier;` in
+sorted position, and the constructor takes the fourth parameter in the shape
+Payments' takes `ProviderMetrics`. Before:
+
+```csharp
+    public MetricsInitialiser(OutboxMetrics outbox, MessagingMetrics messaging, RequestMetrics requests)
+    {
+        ArgumentNullException.ThrowIfNull(outbox);
+        ArgumentNullException.ThrowIfNull(messaging);
+        ArgumentNullException.ThrowIfNull(requests);
+    }
+```
+
+After:
+
+```csharp
+    public MetricsInitialiser(
+        OutboxMetrics outbox,
+        MessagingMetrics messaging,
+        RequestMetrics requests,
+        CarrierMetrics carrier)
+    {
+        ArgumentNullException.ThrowIfNull(outbox);
+        ArgumentNullException.ThrowIfNull(messaging);
+        ArgumentNullException.ThrowIfNull(requests);
+        ArgumentNullException.ThrowIfNull(carrier);
+    }
+```
+
+Registration order is not a concern: the hosted service resolves its
+parameters when the host starts, after every `Add…` in `Program.cs` has run,
+so `AddCarrierGateway` following `AddShippingInfrastructure` there is enough.
+The parameter is what makes a `Program.cs` that dropped the carrier
+registration a host that does not start; the guard is the file's own reason,
+a read of a parameter the sample never reads.
+
 In `Shipping.Infrastructure.csproj`, beside the existing references:
 
 ```xml
@@ -1876,6 +2036,10 @@ In `Shipping.Infrastructure.csproj`, beside the existing references:
 Run: `dotnet test tests/Shipping.Worker.Tests --filter "FullyQualifiedName~HttpCarrierGatewayTests"`
 Expected: green. The stalled test takes about nineteen seconds by design, and
 the open-circuit test about four.
+
+Then `dotnet test tests/Shipping.Worker.Tests --filter "FullyQualifiedName~MetricsRegistrationTests"`
+— green in both directions: `CarrierMetrics` is registered by the third call
+and forced by the fourth parameter.
 
 Then `dotnet test Platform.slnx --filter "Category!=Integration"` — green, and
 `dotnet build Platform.slnx` — 0 warnings.
@@ -2091,7 +2255,9 @@ git commit -m "feat(shipping): the simulator runs beside the worker, its meter i
 - Section 11's meter, its first instrument and the `AddMeter` line → Tasks 3
   and 4; `shipping.address.refused` and `shipping.shipments.waiting` arrive
   with PR-5's address adapter and PR-6's gauge, and `CarrierMetrics`' remarks
-  say so.
+  say so. §13.6's forced construction → Task 3, where `CarrierMetrics` joins
+  `MetricsInitialiser` and the registration suite's `BuildServices()` runs
+  the registration that adds it, so the both-directions test can see it.
 - Section 12's adapter suite, the inequality, the opened circuit and the
   hostile page → Task 3.
 - Section 13's §15.4 rows → Task 4.
@@ -2106,7 +2272,9 @@ MeterName`, `DependencyInjection.BaseUrlKey`, `DependencyInjection.ApiKeyKey`,
 parameters are produced by Task 3 and read by Tasks 3 and 4.
 `UnavailableCounter.Of` and `UnavailableCount` are produced by Task 3 and read
 by both carrier suites in the same task, one passing the class fixture's
-provider and the other its per-test host's. `TrackingStatus` and `ShipmentId`
+provider and the other its per-test host's. `MetricsInitialiser` leaves Task 3
+with four parameters — PR-1's three and `CarrierMetrics` — which is the
+signature PR-5 and PR-6 each extend by one. `TrackingStatus` and `ShipmentId`
 are PR-1's and are only consumed.
 
 **Left to a later PR.**

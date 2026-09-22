@@ -1078,6 +1078,8 @@ designed against.
 - Create: `src/Services/Shipping/Shipping.Infrastructure/Addresses/GrpcDeliveryAddressSource.cs`
 - Create: `src/Services/Shipping/Shipping.Infrastructure/Addresses/GrantCheckedTokenCache.cs`
 - Create: `src/Services/Shipping/Shipping.Infrastructure/Addresses/DependencyInjection.cs`
+- Modify: `src/Services/Shipping/Shipping.Infrastructure/Observability/MetricsInitialiser.cs`
+  — `AddressMetrics` joins the constructor, with its guard
 - Modify: `src/Services/Shipping/Shipping.Infrastructure/Shipping.Infrastructure.csproj`
 - Modify: `src/Services/Shipping/Shipping.Worker/Program.cs`
 - Create: `tests/Shipping.OrderingStub/Shipping.OrderingStub.csproj`
@@ -1086,6 +1088,9 @@ designed against.
 - Modify: `tests/Shipping.TestSupport/ShippingWorkerFactory.cs`,
   `tests/Shipping.TestSupport/Shipping.TestSupport.csproj`
 - Create: `tests/Shipping.TestSupport/RecordingTokenCache.cs`
+- Modify: `tests/Shipping.Worker.Tests/MetricsRegistrationTests.cs` —
+  `BuildServices()` runs `AddDeliveryAddressSource` too, and the selector test
+  names `AddressMetrics`
 - Test: `tests/Shipping.Worker.Tests/DeliveryAddressSourceTests.cs`
 - Test: `tests/Shipping.Worker.Tests/GrantCheckedTokenCacheTests.cs`
 - Modify: `tests/Shipping.Worker.Tests/Shipping.Worker.Tests.csproj`
@@ -1531,11 +1536,70 @@ meter:
     }
 ```
 
+**And the registration suite learns about the fourth registration**, for the
+reason PR-2 gave it the third: `MetricsRegistrationTests` asserts that every
+`*Metrics` type `BuildServices()` registers is a parameter of
+`MetricsInitialiser` or has a stated reason not to be, and it can only judge a
+type the collection it builds contains. `AddressMetrics` is registered by
+`AddDeliveryAddressSource` and constructed only when the grant check or the
+adapter first resolves it — the first address read — so a Shipping with no
+order to ship would publish no `shipping.address.refused` series where §13.6
+wants zero. In `tests/Shipping.Worker.Tests/MetricsRegistrationTests.cs`, the
+`using` block gains `using Shipping.Infrastructure.Addresses;` beside PR-2's
+`Shipping.Infrastructure.Carrier`, and the file's own
+`using AddressRegistration = Shipping.Infrastructure.Addresses.DependencyInjection;`
+alias beside PR-2's `CarrierRegistration`, because two registration classes
+share one simple name. `BuildServices()` gains the key and the call, and its
+doc block counts four:
+
+```csharp
+    /// <summary>
+    /// All four registration helpers, over configuration that reaches
+    /// nothing (§12.4's .invalid convention).
+    /// </summary>
+    /// <remarks>
+    /// Leaving any out would make this test agree with a
+    /// <see cref="MetricsInitialiser"/> that forgot whatever the missing one
+    /// registers: the metrics types are split across all four.
+    /// </remarks>
+```
+
+```csharp
+                    [CarrierRegistration.BaseUrlKey] = "https://shipping-carrier.invalid",
+                    [CarrierRegistration.ApiKeyKey] = "not-a-real-key",
+                    // Read eagerly by AddDeliveryAddressSource on the carrier
+                    // key's terms; plain HTTP because that helper applies no
+                    // scheme rule (§10.1), and unreachable on the same convention.
+                    [AddressRegistration.BaseUrlKey] = "http://shipping-ordering.invalid"
+```
+
+```csharp
+        services.AddCarrierGateway(configuration, new TestEnvironment());
+        services.AddDeliveryAddressSource(configuration);
+```
+
+The selector test gains the fifth type:
+
+```csharp
+        registered.ShouldContain(typeof(CarrierMetrics));
+        registered.ShouldContain(typeof(AddressMetrics));
+```
+
+`AddDeliveryAddressSource` registers `ClientCredentialsHandler` into the gRPC
+client's pipeline without registering the handler, which `Program.cs` does;
+nothing here builds that client, and the one test that builds a provider
+resolves `OutboxMetrics` alone, so the collection is judged and never
+validated.
+
 - [ ] **Step 3: Run to see them fail**
 
 Run: `dotnet test tests/Shipping.Worker.Tests --filter "FullyQualifiedName~DeliveryAddressSourceTests"`
 Expected: compile failure on `Shipping.Application.Addresses`,
-`Shipping.Infrastructure.Addresses` and the factory's new parameter.
+`Shipping.Infrastructure.Addresses` and the factory's new parameter. The
+registration suite fails to compile with them; once step 5 gives it
+`AddressMetrics` and step 6 the registration, and before step 6's initialiser
+edit lands, `Every_metrics_type_is_forced_or_has_a_stated_reason_not_to_be`
+fails on "add it to MetricsInitialiser, or to NotForced with a reason".
 
 - [ ] **Step 4: Write the port and the budget**
 
@@ -1990,6 +2054,52 @@ builder.Services.AddSingleton(new AuthorityKeyName(AuthenticationExtensions.Auth
 builder.Services.AddDeliveryAddressSource(builder.Configuration);
 ```
 
+`AddressMetrics` joins `MetricsInitialiser`, in
+`Shipping.Infrastructure/Observability/MetricsInitialiser.cs`, as PR-2 put
+`CarrierMetrics` there: the file's own remark asks whether the service can run
+for an hour without constructing the type, and a Shipping with no order to
+ship constructs this one never. The `using` block gains
+`using Shipping.Infrastructure.Addresses;` in sorted position, and the
+constructor takes a fifth parameter with its guard. Before:
+
+```csharp
+    public MetricsInitialiser(
+        OutboxMetrics outbox,
+        MessagingMetrics messaging,
+        RequestMetrics requests,
+        CarrierMetrics carrier)
+    {
+        ArgumentNullException.ThrowIfNull(outbox);
+        ArgumentNullException.ThrowIfNull(messaging);
+        ArgumentNullException.ThrowIfNull(requests);
+        ArgumentNullException.ThrowIfNull(carrier);
+    }
+```
+
+After:
+
+```csharp
+    public MetricsInitialiser(
+        OutboxMetrics outbox,
+        MessagingMetrics messaging,
+        RequestMetrics requests,
+        CarrierMetrics carrier,
+        AddressMetrics addresses)
+    {
+        ArgumentNullException.ThrowIfNull(outbox);
+        ArgumentNullException.ThrowIfNull(messaging);
+        ArgumentNullException.ThrowIfNull(requests);
+        ArgumentNullException.ThrowIfNull(carrier);
+        ArgumentNullException.ThrowIfNull(addresses);
+    }
+```
+
+Order in `Program.cs` is not a concern: `AddDeliveryAddressSource` runs after
+`AddShippingInfrastructure`, and the hosted service resolves its parameters
+when the host starts, after every registration has run. The parameter is what
+makes a `Program.cs` that dropped the address registration a host that does
+not start.
+
 `GrantCheckedTokenCache` is written `public` in step 5 above and is not
 widened here, because `Program.cs` in `Shipping.Worker` constructs it: the
 composition root is another assembly, and `CarrierHop` and `ProviderHop`
@@ -2172,11 +2282,14 @@ container is not started twice to say it again.
 dotnet build Platform.slnx
 dotnet test tests/Shipping.Worker.Tests --filter "FullyQualifiedName~DeliveryAddressSourceTests"
 dotnet test tests/Shipping.Worker.Tests --filter "FullyQualifiedName~GrantCheckedTokenCacheTests"
+dotnet test tests/Shipping.Worker.Tests --filter "FullyQualifiedName~MetricsRegistrationTests"
 py -3.12 .github/licence-gate/licence_gate.py
 ```
 
 Expected: green, 0 warnings, the gate exits 0 — every package is pinned and
-registered already.
+registered already. The registration suite is green in both directions:
+`AddressMetrics` is registered by the fourth call and forced by the fifth
+parameter.
 
 ```bash
 git add src/Services/Shipping tests/Shipping.OrderingStub tests/Shipping.TestSupport \
@@ -3294,11 +3407,20 @@ public sealed class FulfilmentFaultTests : IAsyncLifetime
     {
         Guid order = await ConfirmAsync("SIM-DOWN");
 
+        // Captured before the pass, because FailSql stamps NextAttemptAt from
+        // SYSDATETIMEOFFSET() at the moment of the update: a delay computed
+        // after the pass is measured from a later instant than the one the
+        // ladder was added to, and would read short by however long the pass
+        // and the reads before it took.
+        DateTimeOffset before = DateTimeOffset.UtcNow;
+
         (await PassAsync()).ShouldBe(0);
 
         (await StatusAsync(order)).ShouldBe("Pending");
         (await AttemptsAsync(order)).ShouldBe(1);
-        (await NextAttemptDelayAsync(order)).ShouldBeGreaterThanOrEqualTo(TimeSpan.FromSeconds(5));
+        (await NextAttemptAtAsync(order)).ShouldBeGreaterThanOrEqualTo(
+            before.AddSeconds(5),
+            "the dispatcher's ladder is 2^min(Attempts, 8) x 5 s, so the first backoff is at least five seconds");
         BookingCalls().ShouldBe(CarrierHop.MaxRetryAttempts + 1, "the pipeline retries a 503 inside the one call");
     }
 
@@ -3375,18 +3497,13 @@ public sealed class FulfilmentFaultTests : IAsyncLifetime
     private Task<int> AttemptsAsync(Guid order) =>
         _fixture.ScalarAsync<int>("SELECT Value = Attempts FROM shipping.Shipments WHERE OrderId = {0}", order);
 
-    private async Task<TimeSpan> NextAttemptDelayAsync(Guid order)
-    {
-        int seconds = await _fixture.ScalarAsync<int>(
-            """
-            SELECT Value = DATEDIFF(second, SYSDATETIMEOFFSET(), NextAttemptAt)
-            FROM shipping.Shipments
-            WHERE OrderId = {0}
-            """,
-            order);
-
-        return TimeSpan.FromSeconds(seconds);
-    }
+    // The instant itself and not a DATEDIFF from the SQL clock: DATEDIFF counts
+    // the boundaries of its unit crossed, so a five-second backoff read across
+    // a second boundary answers four, and the assertion is made against the
+    // instant captured before the pass instead.
+    private Task<DateTimeOffset> NextAttemptAtAsync(Guid order) =>
+        _fixture.ScalarAsync<DateTimeOffset>(
+            "SELECT Value = NextAttemptAt FROM shipping.Shipments WHERE OrderId = {0}", order);
 
     /// <summary>
     /// Polls to a deadline and throws when it lapses, which is what stages a
@@ -4270,7 +4387,10 @@ ADR-023 and ADR-052 are not edited.
 - Section 10 — `AddressSource__BaseUrl`, the three `Identity__Client__*` keys,
   and the client secret's Compose and fixture places → Tasks 3 and 6.
 - Section 11 — `shipping.address.refused` on the `Shipping.Outbound` meter, and
-  no log line holding an address → Tasks 3 and 5. **`shipping.shipments.waiting`
+  no log line holding an address → Tasks 3 and 5; §13.6's forced construction
+  → Task 3, where `AddressMetrics` joins `MetricsInitialiser` as PR-2's
+  `CarrierMetrics` did and the registration suite's `BuildServices()` runs the
+  registration that adds it. **`shipping.shipments.waiting`
   lands in PR-6, and that is this plan's answer to the question section 11
   leaves open**: the gauge is over rows past their first backoff **by state**,
   and two of the states a row waits in — a booked shipment awaiting its poll,
@@ -4335,6 +4455,9 @@ CarrierCancelled/CarrierRefusedCancellation`, `ShipmentId`, `OrderId`,
 `BookingResult.Booked/Refused`, `CancellationRequest`,
 `CancellationResult.Cancelled/TooLate`, `DeliveryAddress`,
 `CarrierHop.FulfilmentTick/TotalRequestTimeout`, `CarrierMetrics.MeterName`,
+`MetricsInitialiser`'s four-parameter constructor and the registration
+suite's `CarrierRegistration` alias and `TestEnvironment`, which Task 3
+extends by one parameter and one call,
 `SimulatorMappings.Directory()`, `ITokenCache`, `CachingTokenClient.HttpClientName`,
 `ClientCredentialsHandler`, `ServiceIdentityOptions.SectionName`,
 `AuthorityKeyName`, and PR-4's `GetDeliveryAddressRequest.OrderId` and

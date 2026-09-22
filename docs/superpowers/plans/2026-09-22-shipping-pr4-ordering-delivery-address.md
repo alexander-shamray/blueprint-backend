@@ -764,7 +764,8 @@ In `RealmClientTests`, the name is now false and moves with the assertion:
 Run both suites and see them fail:
 
 ```bash
-dotnet test tests/Common.Web.Tests tests/Web.Bff.Tests --filter "Category!=Integration"
+dotnet test tests/Common.Web.Tests --filter "Category!=Integration"
+dotnet test tests/Web.Bff.Tests --filter "Category!=Integration"
 ```
 
 Expected: `The_permission_vocabulary_is_a_closed_set_of_client_roles` reports a
@@ -900,7 +901,8 @@ is the only thing that puts the role into the client's token. No password and
 no email: a service account's user is not a login.
 
 ```bash
-dotnet test tests/Common.Web.Tests tests/Web.Bff.Tests --filter "Category!=Integration"
+dotnet test tests/Common.Web.Tests --filter "Category!=Integration"
+dotnet test tests/Web.Bff.Tests --filter "Category!=Integration"
 ```
 
 Expected: green.
@@ -1246,7 +1248,8 @@ Re-run the scan; expected: clean, and no unmatched allow-list entry.
 - [ ] **Step 7: Commit**
 
 ```bash
-dotnet test tests/Common.Web.Tests tests/Web.Bff.Tests --filter "Category!=Integration"
+dotnet test tests/Common.Web.Tests --filter "Category!=Integration"
+dotnet test tests/Web.Bff.Tests --filter "Category!=Integration"
 git add deploy/compose/keycloak/realm-export.json deploy/keycloak \
         .github/secret-scan/allowed/deploy.txt .github/secret-scan/allowed/tests.txt \
         tests/Common.Web.Tests/RealmImportTests.cs tests/Web.Bff.Tests/RealmClientTests.cs
@@ -2436,7 +2439,8 @@ fi
 Four things in that block are the file's own idioms rather than choices, and
 each is load-bearing:
 
-- **`src_of` already exists**, a hundred lines up, and it is declared there as
+- **`src_of` already exists**, defined once near the top of the file where the
+  per-chart source checks begin, and it is declared there as
   data because the gateway and the BFF are not under `src/Services`. Reusing it
   is what keeps one mapping rather than two that can disagree.
 - **`--include=appsettings.json` matches the basename exactly**, so
