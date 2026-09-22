@@ -77,6 +77,11 @@ and the scaffold's suite), 13 (§4.5's sentence and §2's) and 14.
 - **The blueprint's vocabulary**: despatch and despatched in prose,
   `Dispatched` in identifiers, because the contract is `ShipmentDispatched`.
 - Comments say why and cite the owner. No history, no PR names, no test named.
+  **The comment gate judges an added or an edited line as its whole block**, so
+  a comment this PR writes or touches has to come out at ten lines or fewer
+  with no `<b>` and no `**…**`, however long it was before — and a file this PR
+  creates is all added lines, so every block in it is judged. The blocks it
+  neither adds nor touches stay as they are.
 - Explicit local types, file-scoped namespaces, braces on two statements or
   more, one space before `=`, `=>` and `{`, 120 columns, British spelling.
 - `py -3.12`, never `python`, for anything Python.
@@ -90,6 +95,8 @@ and the scaffold's suite), 13 (§4.5's sentence and §2's) and 14.
 
 **Files:**
 - Create: `src/Services/Catalog/Catalog.Infrastructure/Observability/IOutboxStats.cs`
+  — this and the three below from Payments' copy, which is the set the comment
+  gate passes
 - Create: `src/Services/Catalog/Catalog.Infrastructure/Observability/OutboxStats.cs`
 - Create: `src/Services/Catalog/Catalog.Infrastructure/Observability/OutboxMetrics.cs`
 - Create: `src/Services/Catalog/Catalog.Infrastructure/Observability/MetricsInitialiser.cs`
@@ -130,46 +137,136 @@ py -3.12 deploy/observability/check.py
 Expected: exit 0, with Catalog exempt. This is the baseline, not a failure;
 the assertion this task inverts is the one in Step 6.
 
-- [ ] **Step 2: Copy the four Observability files from Ordering**
+- [ ] **Step 2: Copy the four Observability files from Payments**
 
-`src/Services/Ordering/Ordering.Infrastructure/Observability/` holds the
-version with no provider in it, which is the one every service has. Copy
-`IOutboxStats.cs`, `OutboxStats.cs`, `OutboxMetrics.cs` and
-`MetricsInitialiser.cs` to
-`src/Services/Catalog/Catalog.Infrastructure/Observability/`, changing the
-namespace to `Catalog.Infrastructure.Observability` and, in `OutboxMetrics`,
-the two strings that name the service:
+`src/Services/Payments/Payments.Infrastructure/Observability/` is the source,
+not Ordering's. Ordering's four carry twenty-two emphasised spans and six doc
+blocks between thirteen and thirty-two lines; a created file is all added
+lines, so
+the comment gate judges every block in it whole, and Step 7 renders whichever
+copy this task chooses into every service after this one. Payments' four are
+the set the gate passes, and what they carry beyond the others is a provider
+half this step strips. Copy `IOutboxStats.cs`, `OutboxStats.cs`,
+`OutboxMetrics.cs` and `MetricsInitialiser.cs` to
+`src/Services/Catalog/Catalog.Infrastructure/Observability/` and make exactly
+the edits below.
+
+The namespace, in all four. Before:
 
 ```csharp
-    /// <summary>
-    /// The contract with §13.2's <c>AddMeter</c>. An instrument on an
-    /// unregistered meter is collected by nothing, so this constant and the
-    /// <c>AddMeter("Catalog.Outbox")</c> line in <c>ObservabilityExtensions</c>
-    /// must be the same string.
-    /// </summary>
+namespace Payments.Infrastructure.Observability;
+```
+
+After:
+
+```csharp
+namespace Catalog.Infrastructure.Observability;
+```
+
+`OutboxMetrics.cs`, the meter name. Its doc comment above the constant names
+no service — it says this name and the one `ObservabilityExtensions` registers
+must be the same string — so the constant is the whole edit. Before:
+
+```csharp
+    public const string MeterName = "Payments.Outbox";
+```
+
+After:
+
+```csharp
     public const string MeterName = "Catalog.Outbox";
 ```
 
-Three comments in the copy still name Ordering, and Payments' copy of the
-same four files shows what each becomes. `MetricsInitialiser`'s `<para>` about
-`OrderMetrics` goes whole: it argues a type Ordering has not built and names a
-delivery-plan row, which the comment gate refuses and which the scaffold would
-otherwise render into every later service. `OutboxStats`' remark that
-`AddOrderingInfrastructure` builds the connection string names
-`AddCatalogInfrastructure` instead, and its clause that §13.6 writes
-`ordering.OutboxMessages` "because it is a chapter about Ordering" becomes the
-observation that the chapter's example names one schema and this type reads
-the registered `OutboxTable`. The code names no service — `OutboxStats`
-composes its SQL from `OutboxTable` and reads `OutboxDispatcher.MaxAttempts`,
-and `MetricsInitialiser` takes only `Common.Application` and
-`Common.Infrastructure.Messaging` types — so after those three edits the grep
-is the check:
+`OutboxStats.cs`, the one comment in it that names a service. This copy never
+writes a schema literal: the SQL is composed from the registered `OutboxTable`
+and the comment above the composition argues that without naming one, so
+`ConnectTimeoutSeconds`' summary is the only line to change. Before:
 
-```bash
-grep -rn "Ordering" src/Services/Catalog/Catalog.Infrastructure/Observability/
+```csharp
+    /// <c>AddPaymentsInfrastructure</c> builds this type's connection string
 ```
 
-Expected: no match.
+After:
+
+```csharp
+    /// <c>AddCatalogInfrastructure</c> builds this type's connection string
+```
+
+`MetricsInitialiser.cs` carries the provider half, which is Payments' alone.
+The `using` goes. Before:
+
+```csharp
+using Microsoft.Extensions.Hosting;
+using Payments.Infrastructure.Provider;
+```
+
+After:
+
+```csharp
+using Microsoft.Extensions.Hosting;
+```
+
+The class remarks use `ProviderMetrics` as the worked example of a type
+nothing constructs on a quiet service, and this copy does not have one.
+`RequestMetrics` takes its place, line for line, so the block stays at the ten
+lines it is now. Before:
+
+```csharp
+/// it". <see cref="ProviderMetrics"/> is the worked example: the adapter
+/// injects it, so a Payments that has authorised nothing would report nothing
+/// where §13.6 wants zero. Public for the reason <c>Program</c> is (§4.2).
+```
+
+After:
+
+```csharp
+/// it". <see cref="RequestMetrics"/> is the worked example: §6.3's
+/// <c>LoggingBehavior</c> injects it, so a service with no traffic would
+/// report nothing where §13.6 wants zero. Public, as <c>Program</c> is (§4.2).
+```
+
+And the constructor loses the parameter and its guard, which puts the three
+that remain on one line at 104 columns — the shape Ordering's copy has, and
+the signature the *Interfaces* list above states. Before:
+
+```csharp
+    public MetricsInitialiser(
+        OutboxMetrics outbox,
+        MessagingMetrics messaging,
+        RequestMetrics requests,
+        ProviderMetrics provider)
+    {
+        ArgumentNullException.ThrowIfNull(outbox);
+        ArgumentNullException.ThrowIfNull(messaging);
+        ArgumentNullException.ThrowIfNull(requests);
+        ArgumentNullException.ThrowIfNull(provider);
+    }
+```
+
+After:
+
+```csharp
+    public MetricsInitialiser(OutboxMetrics outbox, MessagingMetrics messaging, RequestMetrics requests)
+    {
+        ArgumentNullException.ThrowIfNull(outbox);
+        ArgumentNullException.ThrowIfNull(messaging);
+        ArgumentNullException.ThrowIfNull(requests);
+    }
+```
+
+Nothing else in the four names a service: `OutboxStats` composes its SQL from
+`OutboxTable` and reads `OutboxDispatcher.MaxAttempts`, and every type the
+other three take comes from `Common.Application` or
+`Common.Infrastructure.Messaging`. Two checks close this step — the grep here,
+and the comment gate, which Step 11 runs because it reads committed files:
+
+```bash
+grep -rniE "payment|provider|ordering" src/Services/Catalog/Catalog.Infrastructure/Observability/
+```
+
+Expected: no match. The four files as prescribed above were judged by
+`comment_gate.judge` with every line marked added: zero findings, against
+twenty-nine for the same four taken from Ordering.
 
 - [ ] **Step 3: Register them in Catalog's Infrastructure**
 
@@ -433,19 +530,31 @@ Expected: all green. `test_a_rendered_service_passes_the_secret_scan` is the
 one that would fail on a missing row, and it is the reason Step 9 precedes
 this.
 
-- [ ] **Step 11: Commit**
+- [ ] **Step 11: Commit, then the comment gate over what this task created**
 
 ```bash
 git add src/Services/Catalog tests/Catalog.Api.Tests src/BuildingBlocks/Common.Web \
         tests/Common.Web.Tests tools/new-service deploy/observability/check.py \
         .github/secret-scan/allowed/tests.txt
 git commit -m "feat(catalog): the template registers §13.6's outbox gauges, and the exemption goes"
+git fetch origin main
+py -3.12 .github/comment-gate/comment_gate.py --base origin/main
 ```
 
+Expected: exit 0, over a file count that includes the five files Steps 2 and 5
+created. The gate reads `origin/main...HEAD` and takes each file's text from
+`git show HEAD:<path>`, so it sees a created file only once it is committed —
+run before the commit it would judge no added line and pass by reading
+nothing, which is the fail-open shape this repository keeps finding. That is
+why it is here rather than beside Step 10's gates, and Task 10 runs it again
+over everything the branch has by then.
+
 The body says the exemption was a decision about the template rather than
-about Catalog, names the fifth service as what forced it, and says the render
-now writes the `AddMeter` line because a gauge on an unregistered meter is
-collected by nothing.
+about Catalog, names the fifth service as what forced it, says the render now
+writes the `AddMeter` line because a gauge on an unregistered meter is
+collected by nothing, and says the four Observability files came from Payments
+because Ordering's carry blocks the comment gate refuses and the scaffold
+renders whichever copy is chosen into every later service.
 
 ---
 
@@ -775,7 +884,7 @@ is `None`, with the reason stated where the loop was:
     row = (
         f"| {names.pascal} worker | — (no published port) | "
         f"§3.2 gives it no API; §13.5's `/health/live` and `/health/ready` are its "
-                f"only listener and answer inside the container |\n"
+        f"only listener and answer inside the container |\n"
         if port is None
         else f"| {names.pascal} API | http://localhost:{port} | "
              # The token note is not decoration: ADR-030 fallback policy covers
@@ -3042,6 +3151,16 @@ the lease and backoff operations over the columns this PR creates, the two
 integration events through the outbox, `ShippingJurisdictionOptions` and the
 retention pass (PR-6). The chart, the canary row and §13.6's two rules
 (PR-7).
+
+**Where the copies come from.** Task 1 takes the four Observability files and
+the registration suite from Payments rather than from Ordering, and the two
+reasons are one. Ordering's carry `<b>` and doc blocks well past ten lines;
+a created file is all added lines, so the comment gate judges every block in
+it, and Step 7 renders whichever copy Task 1 chooses into every service after
+this one. Payments' carry a provider half no other service has, which Steps 2
+and 5 strip, and the stripping is written out as Before and After rather than
+described. Step 11 runs the gate after the commit, because a run before it
+would read none of the created files.
 
 **Beyond the spec's minimum, with the reason.** `ShipmentsSchemaTests` is not
 named in section 12's PR-1 list. It is here because the aggregate lands with
