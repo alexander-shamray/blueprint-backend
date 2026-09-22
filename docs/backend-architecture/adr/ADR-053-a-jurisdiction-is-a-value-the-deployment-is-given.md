@@ -17,12 +17,12 @@ READMEs still call illustrative — and four rules hold it open:
    that reads any of them binds a single options class, validated at start as
    [§15.4](../15-cicd-deployment.md) validates `ServiceIdentityOptions`, and
    that class passes the test §15.4 sets for one because rule 2 gives the test
-   deployment its own language set, zone and windows, so every member differs
-   across Compose, the fixture and production as that section asks. §15.4's
-   sentence that `ServiceIdentityOptions` is the only options type in the
-   solution, and its callout's close that `Identity:Client` is the only thing
-   there that earns one, are amended by this class; whether `ContactOptions`,
-   which
+   deployment its own language set, zone and windows, so no member is the same
+   in Compose, in the fixture and in production, which is more than that section
+   asks. §15.4's sentence that `ServiceIdentityOptions` is the only options type
+   in the solution, and its callout's close that `Identity:Client` is the only
+   thing there that earns one, are amended by this class; whether
+   `ContactOptions`, which
    [ADR-052](ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)
    owes with Notifications, is another is that record's to say, because it
    describes that class as refusing at start the way `RetentionPolicy` does — a
@@ -36,7 +36,7 @@ READMEs still call illustrative — and four rules hold it open:
    setter on a record each service registers rather than by binding, and its
    windows are housekeeping but for the one that is
    [§8.5](../08-caching-redis.md)'s guarantee; none of `RetentionPolicy`'s
-   windows is statutory, and no statutory window is one of its. A template
+   windows is statutory, and a statutory window never becomes one. A template
    missing for a required language fails the host at start, not the send at
    night. `Address` is the precedent and already argues it: it checks presence
    and the shape of an ISO 3166-1 alpha-2 code, and refuses to learn a postcode
@@ -51,9 +51,10 @@ READMEs still call illustrative — and four rules hold it open:
    log store — which database-per-service and per-environment chart values
    already permit. §11.7's `TenantId` is **not** that seam: tenancy shares a
    store, and residency forbids exactly that. So no synchronous read and no
-   message leaves a deployment. Every third party that is shown personal data —
-   a carrier, a mail relay — is a chart value and never a constant, and its
-   service's design names it as a processor with the country it runs in.
+   integration event leaves a deployment. Every third party that is shown
+   personal data — a carrier, a mail relay — is a chart value and never a
+   constant, and its service's design names it as a processor with the country
+   it runs in.
 4. **What was said to a customer is kept as evidence, not as a copy.** A message
    template is versioned as [§9.2](../09-messaging.md) versions a contract — a
    new version beside the old — and a version is retired not when nothing sends
