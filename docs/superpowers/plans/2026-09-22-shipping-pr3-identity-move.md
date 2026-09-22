@@ -513,11 +513,12 @@ which moves it above `using Common.Web;` in the sorted block. The comment over
 the registrations says the mechanism lives here, and it no longer does:
 
 ```csharp
-// §9.7, §11.5 — the client-credentials registrations, in the one host that
-// makes them. The types are Common.Infrastructure.Identity's (ADR-052) and
-// the binding is each host's own: "the gateway needs no client credentials"
-// is true by CONSTRUCTION, because the gateway binds Identity:Client nowhere
-// and therefore demands it nowhere (§15.4).
+// §9.7, §11.5 — this host's client-credentials registrations. The types are
+// Common.Infrastructure.Identity's (ADR-052) and the binding is each host's
+// own: "the gateway needs no client credentials" is true by CONSTRUCTION,
+// because the gateway binds Identity:Client nowhere and therefore demands it
+// nowhere (§15.4). A binding hoisted into Common.Web would re-impose it on
+// every host.
 builder.Services.AddTransient<ClientCredentialsHandler>();
 builder.Services.AddSingleton<ITokenCache, CachingTokenClient>();
 ```
@@ -780,8 +781,9 @@ public static class ServiceOptions
 ```
 
 The sentence about a binding hoisted into `Common.Web` re-imposing a
-credential on every host is not lost: `ServiceIdentityOptions`' own remark
-carries it, one file over, where the binding it argues about is.
+credential on every host is not lost: Task 2 step 8 puts the argument in
+`Program.cs`'s comment over the registrations, which is where the binding it
+argues about now is.
 
 **`a type`, not `the type`, and the article is the whole point.** Step 6 of
 Task 2 forbids writing §15.4's count of options types into a file this plan
@@ -1128,7 +1130,7 @@ git commit -m "refactor(identity): the remarks and the BFF's comments follow the
   as well, both halves of section 13's row.
 - Section 3's PR-3 row — the four types and their tests out of `Web.Bff`, the
   BFF re-pointed, no behaviour moved → Tasks 2 and 3; the "no behaviour"
-  claim is discharged by Task 2 step 11, which runs the moved suites
+  claim is discharged by Task 2 step 10, which runs the moved suites
   unchanged in their old home before they move. Its one stated exception is
   `Failure`'s diagnostic string, rewritten in Task 2 step 5 because a count of
   the platform's credential sets cannot be made from a building block; the

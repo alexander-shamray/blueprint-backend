@@ -2643,6 +2643,9 @@ as what keeps section 6's "never booked" true.
   `WireMock.Net`, which this task is the first thing in that project to name
 - Create: `tests/Shipping.TestSupport/ShipmentCommitFaults.cs`
 - Create: `tests/Shipping.TestSupport/CapturedLogs.cs`
+- Modify: `tests/Shipping.TestSupport/ShippingWorkerFactory.cs` — the two
+  properties those files are reached through, and the two lines that install
+  them on every host over this factory
 - Test: `tests/Shipping.Worker.Tests/ShipmentFulfilmentTests.cs`
 - Test: `tests/Shipping.Worker.Tests/FulfilmentFaultTests.cs`
 - Modify: `tests/Shipping.Worker.Tests/HostSmokeTests.cs` — the readiness set
@@ -2654,7 +2657,9 @@ as what keeps section 6's "never booked" true.
 - Produces: `ServiceFixture.Carrier`, `.Ordering`, `.FailNextCommit()`,
   `.RunFulfilmentPassAsync()`, `.CapturedLogs`, `.QueueDepthAsync(queue)`,
   `.BindingsAsync(queue)`, `.NewWorkerHost(carrierBaseUrl)` and
-  `ServiceFixture.CarrierAnswers(server, path, statusCode, method, delay)`.
+  `ServiceFixture.CarrierAnswers(server, path, statusCode, method, delay)`;
+  `ShippingWorkerFactory.CommitFaults` and `.CapturedLogs`, which the two
+  fixture members above read.
 
 - [ ] **Step 1: Extend the fixture**
 
@@ -2703,6 +2708,50 @@ cross an assembly boundary. **`ResetAsync` clears it**, with
 `CapturedLogs.Clear();` beside the three lines that reset the server: a suite
 that asserts what a pass did not log would otherwise be asserting it over every
 pass that ran before it in the collection.
+
+**Both are reached through `ShippingWorkerFactory`**, which is what installs
+them, so the two properties and the two lines that install them are written
+here in `PaymentsApiFactory`'s shape. The properties, beside the `Tokens`
+Task 3 put on the same class:
+
+```csharp
+    /// <summary>
+    /// The host's commit fault, disarmed until a test arms it. Installed on
+    /// every host over this factory, because a disarmed interceptor changes
+    /// nothing and one host per seam would be a container set per seam.
+    /// </summary>
+    public ShipmentCommitFaults CommitFaults { get; } = new();
+
+    /// <summary>
+    /// The host's log, captured. Added to the providers the host configures
+    /// rather than replacing them, so what a test reads is what a deployment
+    /// would write (spec, section 11).
+    /// </summary>
+    public CapturedLogs CapturedLogs { get; } = new();
+```
+
+and, in `ConfigureWebHost`, one line on the builder chain and one block after
+the `ConfigureServices` block:
+
+```csharp
+            .ConfigureLogging(logging => logging.AddProvider(CapturedLogs))
+```
+
+```csharp
+            .ConfigureTestServices(services =>
+                services.ConfigureDbContext<ShippingDbContext>(o => o.AddInterceptors(CommitFaults)));
+```
+
+with `using Microsoft.AspNetCore.TestHost;`,
+`using Microsoft.Extensions.Logging;` and
+`using Shipping.Infrastructure.Persistence;` added in sorted position.
+`ConfigureTestServices` rather than the block above it for the reason Payments'
+factory takes it: the interceptor is added to options the host's own
+registration builds, and this callback is the one that runs after it.
+
+`ServiceFixture` reads both — `public CommitFault FailNextCommit() =>
+Factory.CommitFaults.Arm();` and `public CapturedLogs CapturedLogs =>
+Factory.CapturedLogs;` — so a suite names the fixture and never the factory.
 
 **`QueueDepthAsync(string queue)` is written here and not taken from
 anywhere.** `tests/Payments.TestSupport/ServiceFixture.cs` holds the only one
@@ -4121,9 +4170,10 @@ spellings by PR-6 —
 `.LeaseSeconds` and `.RunOnceAsync`, `Shipment.ReleaseClaim`,
 `StubOrdering`/`StubAddress`, `ServiceFixture.QueueDepthAsync`/`.BindingsAsync`/
 `.NewWorkerHost` and the static `ServiceFixture.CarrierAnswers`, and
-`ShippingWorkerFactory`'s `addressSourceBaseUrl` and `Tokens` are produced and
-consumed under those spellings within this plan. `QueueDepthAsync` and
-`CarrierAnswers` are written here rather than assumed: the first exists only in
+`ShippingWorkerFactory`'s `addressSourceBaseUrl`, `Tokens`, `CommitFaults` and
+`CapturedLogs` are produced and consumed under those spellings within this
+plan. `QueueDepthAsync` and `CarrierAnswers` are written here rather than
+assumed: the first exists only in
 `Payments.TestSupport` today, and the second is consumed by PR-6, which defines
 neither. Everything consumed from earlier PRs is spelt as
 those plans produce it: `Shipment.For/Book/MarkUnfulfillable/Cancel/

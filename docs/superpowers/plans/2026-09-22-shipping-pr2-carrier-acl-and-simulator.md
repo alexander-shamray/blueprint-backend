@@ -2041,9 +2041,11 @@ git commit -m "feat(shipping): the simulator runs beside the worker, its meter i
 - [ ] `dotnet test Platform.slnx` — green, with a Docker daemon running.
 - [ ] `py -3.12 -m unittest discover -s .github/secret-scan` then
   `py -3.12 .github/secret-scan/secret_scan.py` — both exit 0.
-- [ ] `py -3.12 .github/comment-gate/comment_gate.py` against the branch —
-  exit 0; no comment block added here runs past ten lines, names a pull
-  request or a test, or stresses a word.
+- [ ] `git fetch origin main` then
+  `py -3.12 .github/comment-gate/comment_gate.py --base origin/main` — exit 0;
+  the gate takes the base branch as a required argument, and no comment block
+  added here runs past ten lines, names a pull request or a test, or stresses
+  a word.
 - [ ] `git ls-files --eol deploy/compose/carrier-simulator` reports `lf` for
   every file, so the declaration in `.gitattributes` took effect.
 - [ ] PR body: `| Class | A+D+E |`, the touch set as paths alone with the
