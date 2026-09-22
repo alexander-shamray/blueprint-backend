@@ -3831,7 +3831,8 @@ the rewrite this step already owes is one edit rather than two, and it leaves
 §9.7's paragraph true rather than true about peers and wrong about third
 parties.
 
-`PricingHop`'s own paragraph below is unchanged and keeps every number in it.
+The rest of that paragraph — `PricingHop`'s address, the h2c port and the code
+block under it — is unchanged, and this step adds no number to it.
 The address read's budget is `AddressHop`, which Task 3 writes beside the
 adapter inside §9.7's bands; §9.7 prints neither hop's numbers and this step
 adds none.
