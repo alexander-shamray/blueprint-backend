@@ -40,7 +40,7 @@ suite) and 13 (§15.4's two rows).
   — paths only, comma-separated, no prose inside the cell and no trailing
   stop: the gate strips a token's backticks only when the token ends in one,
   so a full stop after the last path refuses the row.
-  Why each: the service's own code and tests are A; the two package
+  Why each: the service's own code and tests are A; the three package
   references (`Microsoft.Extensions.Http.Resilience` and
   `Microsoft.Extensions.Hosting.Abstractions` in `Shipping.Infrastructure`,
   `WireMock.Net` in `Shipping.Worker.Tests`, none with a `Version=`) are E;
@@ -59,9 +59,10 @@ suite) and 13 (§15.4's two rows).
   the worker's `Program`, and `deploy/compose/services/shipping.yml` exists.
   Where PR-1 spelled one of those differently, the spelling moves and nothing
   else in this plan does.
-- No `Directory.Packages.props` change and no Appendix B row: both packages
-  are pinned and listed already. `WireMock.Net` is pinned at `2.12.0` and
-  `Microsoft.Extensions.Http.Resilience` at `10.0.0`.
+- No `Directory.Packages.props` change and no Appendix B row: all three
+  packages are pinned and listed already. `WireMock.Net` is pinned at
+  `2.12.0`, `Microsoft.Extensions.Http.Resilience` at `10.0.0` and
+  `Microsoft.Extensions.Hosting.Abstractions` at `10.0.0`.
 - The simulator's image tag equals `Directory.Packages.props`'s
   `WireMock.Net` pin, so the container and the in-process server are one
   engine at one version.
