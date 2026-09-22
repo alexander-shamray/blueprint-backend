@@ -45,8 +45,11 @@ runbook) and 13 (§13.6 and §15.3).
   the smoke gate are `deploy/helm`; the workload map and its suite are
   `deploy/canary`; the two rules and `SHARED_RUNBOOKS` are
   `deploy/observability`; the runbook is the procedure those two rules share
-  and `docs/runbooks/README.md` is its index, which the gate reads in both
-  directions, so the row arrives with the file;
+  and `docs/runbooks/README.md` is its index, which no gate reads —
+  `check.py` pairs alerts with the files under `docs/runbooks` and with
+  §13.6 and §13.9's tables, and excludes the README by name — so the row
+  arrives with the file on the README's own rule, "one per alert, both
+  ways", rather than on a red check;
   §13.6 and §13.9's tables are the chapter `check.py` reads; §15.3 and §15.4
   are the chart chapter and the inventory; `docs/secrets.md` is where the
   Helm place of a required key is stated; and the two workflows are the gate

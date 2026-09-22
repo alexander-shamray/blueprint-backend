@@ -547,7 +547,7 @@ are `Shipping.Domain.Tests`, `Shipping.Application.Tests` and
     the carrier: the simulator's journal holds two requests under one key
     and the table one reference;
   - both interleavings of section 6, and the `SIM-LATE` case;
-    - the Kazakh-script round trip and the log export of section 11;
+  - the Kazakh-script round trip and the log export of section 11;
   - **the fixture is ADR-053's made-up deployment**: it binds
     `ShippingJurisdictionOptions` from invented windows, an address whose
     country is `ZZ` books at the simulator, and a missing or zero window

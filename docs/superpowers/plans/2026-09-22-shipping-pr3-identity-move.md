@@ -73,23 +73,18 @@ the order 3 → 4) and 13 (§4.1's tree comment and `ServiceOptions`' remark).
 - Depends on nothing. PR-1 and PR-2 touch no path in the set above, and this
   PR touches no Shipping path; it may land before or after either.
 - `Platform.slnx` is unchanged: no project is added or removed.
-- **No behaviour moves**, with one stated exception. Every status mapping,
+- **No behaviour moves**, with two stated exceptions. Every status mapping,
   every cached-token rule and every registration lifetime is what it was, and
   the one new type is a carrier for a name the building block may not write
   down, so the two discovery refusals stay word for word what they are. The
-  exception is a single diagnostic string in `CachingTokenClient.Failure`,
-  which counted the platform's credential sets from inside a host that held
-  the only one; a building block cannot make that count and ADR-052 gives a
-  second host a set. Task 2 step 5 rewrites it and argues it, and no assertion
-  reads it.
-- Comments say why and cite the owner. **The comment gate judges an edited
-  line as its whole block**, so a doc comment this PR edits must come out at
-  ten lines or fewer with no `<b>` and no `**…**`; the blocks it does not
-  touch stay as they are.
-- Explicit local types, file-scoped namespaces with a blank line after, one
-  space before `=`, `=>` and `{`, 120 columns, British spelling. `py -3.12`.
-- `git mv` for every file that moves, so the history follows and the comment
-  gate judges a renamed file on its changed lines alone.
+  first exception is a single diagnostic string in `CachingTokenClient.Failure`,
+  which counted the platform's credential sets from inside a host that held the
+  only one; a building block cannot make that count and ADR-052 gives a second
+  host a set. Task 2 step 5 rewrites it and argues it, and no assertion reads
+  it. The second is the one assertion that read the authority key's literal,
+  `Identity:Authority`: it reads the name the test registered, because the value
+  is the host's to supply and the building block's message carries whatever name
+  it was handed. Task 2 step 9 makes that change.
 
 ---
 

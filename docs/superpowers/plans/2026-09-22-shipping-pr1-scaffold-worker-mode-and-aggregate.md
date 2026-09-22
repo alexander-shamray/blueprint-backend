@@ -1413,7 +1413,7 @@ than went.
   `tests/Catalog.TestSupport/TestAuthHandler.cs`
 - Modify: `tools/new-service/scaffold/patch.py` — the anchors that quote a
   comment this task rewrites, the four migration tables that become empty, the
-  `WORKER_PATCHES` needle that quotes a shortened replacement, and the three
+  `WORKER_PATCHES` needle that quotes a shortened replacement, and the four
   replacements that render a block over ten lines
 - Modify: `tools/new-service/scaffold/render.py` — `ASSEMBLY_MARKER`
 
@@ -1472,8 +1472,8 @@ PY
 ```
 
 Expected: 58 — thirty-five in the files `COPIED` names and twenty-three in the
-five migrations. Every one is either a block over ten lines or an emphasised
-span, and the lists in Steps 2 and 3 are that output, grouped.
+five migrations. Every one is a block over ten lines, an emphasised span or a
+delivery-plan row, and the lists in Steps 2 and 3 are that output, grouped.
 
 - [ ] **Step 2: The copied projects and suites**
 
@@ -2093,9 +2093,10 @@ replacement becomes:
         "        IEnumerable<string> referenced = typeof(AssemblyMarker).Assembly\n"
 ```
 
-Three replacements render a block over ten lines into the service, and a
-replacement is text the gate judges in the rendered file exactly as a copied
-line is. `Catalog.Api/Program.cs`'s fifth entry writes eleven lines; it becomes
+Four replacements render a block over ten lines into the service, three by their
+own text and one where its text meets the template's, and a replacement is text
+the gate judges in the rendered file exactly as a copied line is.
+`Catalog.Api/Program.cs`'s fifth entry writes eleven lines; it becomes
 
 ```csharp
 // This service registers no permission policy, because it names no endpoint
@@ -2165,7 +2166,7 @@ the assembly-wide registration:
 ```
 
 Last, `render.py`'s `ASSEMBLY_MARKER` is a literal the gate never reads and a
-rendered file it always does — fourteen comment lines, written into every
+rendered file it always does — thirteen comment lines, written into every
 service that has no aggregate yet. Task 7 deletes Shipping's copy, so this one
 is for the service after it:
 
@@ -4102,7 +4103,7 @@ than assuming.** By here the branch has created every file under
 `src/Services/Shipping` and `tests/Shipping.*`, so the diff marks all of them
 added and the gate judges every comment block in the rendered service, not only
 the ones later tasks edited. It exits 0 because Task 3 cut the template's
-blocks, the template's migrations and the three patch replacements that
+blocks, the template's migrations and the four patch replacements that
 rendered a block over the limit — and Task 3 Step 5 measured both the template
 and a render, so a failure here is something a later task wrote, not something
 the scaffold copied. Run it with `git fetch origin main` immediately before, as
@@ -4227,7 +4228,7 @@ cut there.
 `comment_gate.py` over `origin/main...HEAD`, and by then the branch has created
 the whole of `src/Services/Shipping` and `tests/Shipping.*` — every line added,
 so every comment block in them judged. Task 3 is what makes that run exit 0: it
-brings the template's copied files, the template's migrations and the three
+brings the template's copied files, the template's migrations and the four
 patch-table replacements that render a long block under the limit, and Task 3
 Step 5 measures both the template and a render rather than trusting the branch
 to notice. `AssemblyMarker.cs` is created by Task 4 and deleted by Task 7, so

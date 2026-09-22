@@ -628,12 +628,12 @@ public class ShipmentPollTests
 
 **The release is asserted where a row has really been claimed, and not here.**
 `Shipment.For` and `Book` leave `Attempts` at zero and `LockedUntil` null, and
-no member of the aggregate sets either — only the claim statement does. A
-domain assertion that the two are clear after `PollApplied` therefore holds
-whether or not `PollApplied` calls `ReleaseClaim`, and would go on holding with
-that call deleted. `TrackingClaims.ClaimSql` stamps the lease in the same pass
-that applies the page, so the postcondition is asserted in Task 3, over a row
-the pass actually leased.
+no member of the aggregate sets either — only the claim and failure statements
+do. A domain assertion that the two are clear after `PollApplied` therefore
+holds whether or not `PollApplied` calls `ReleaseClaim`, and would go on
+holding with that call deleted. `TrackingClaims.ClaimSql` stamps the lease in
+the same pass that applies the page, so the postcondition is asserted in
+Task 3, over a row the pass actually leased.
 
 - [ ] **Step 2: Write the failing handler test**
 
@@ -730,9 +730,10 @@ public class ApplyTrackingPageHandlerTests
     [Fact]
     public async Task A_shipment_that_is_gone_is_a_refusal_and_not_a_throw()
     {
-        // The row was claimed and then voided by a cancellation that committed
-        // first. A throw here is a worker row retried for ever; a refusal rolls
-        // the unit back and the claim lapses.
+        // No code path deletes a shipment, so a null here is the repository's
+        // contract met by a hand or a migration rather than by the service. A
+        // throw from a worker is a row retried for ever; a refusal rolls the
+        // unit back and the claim lapses.
         Result result = await Handle(new FakeShipments(null), ShipmentId.New(), []);
 
         result.IsFailure.ShouldBeTrue();
@@ -890,9 +891,10 @@ public sealed class ApplyTrackingPageHandler(IShipmentRepository shipments, Time
     {
         Shipment? shipment = await shipments.GetAsync(command.ShipmentId, ct);
 
-        // A refusal rather than a throw: the row was claimed and then voided by
-        // a cancellation that committed first, and a throw from a worker is a
-        // row retried for ever (spec, section 5).
+        // A refusal rather than a throw for a row the claim projected and the
+        // read no longer finds: no code path deletes a shipment, so this guards
+        // a hand or a migration, and a throw from a worker is a row retried for
+        // ever (spec, section 5).
         if (shipment is null)
             return Result.Failure(ShipmentErrors.NotFound);
 
@@ -1672,9 +1674,9 @@ public sealed class TrackingWorker(
             ct);
 
         // A refusal is not an applied page, and the caller's count says so:
-        // ShipmentErrors.NotFound is the row a cancellation voided while this
-        // pass held it, and §6.3's behaviour rolled the unit back rather than
-        // moving anything.
+        // ShipmentErrors.NotFound is a row the claim projected and the handler's
+        // read no longer found, which no code path here can cause, and §6.3's
+        // behaviour rolled the unit back rather than moving anything.
         return result.IsSuccess;
     }
 }
@@ -1929,6 +1931,8 @@ its full name back with them:
         (await Worker().ProcessBatchAsync(TestContext.Current.CancellationToken)).ShouldBe(1);
 
         (await fixture.StatusAsync(shipment.Id)).ShouldBe("Dispatched");
+        (await fixture.LockedUntilAsync(shipment.Id)).ShouldBeNull(
+            "the pass that claimed the row released it through Shipment.PollApplied");
         (await fixture.OutboxAsync())
             .Select(row => row.MessageType)
             .ShouldContain(type => type.Contains("ShipmentDispatched", StringComparison.Ordinal));
@@ -2645,6 +2649,8 @@ the table both workers claim from.
 - Modify: `tests/Shipping.Worker.Tests/DeliveryAddressSourceTests.cs` — PR-5's
   `Both_instruments_land_on_the_one_meter_section_13_2_exports`, whose name and
   comment count two instruments this task makes three
+- Modify: `tests/Shipping.Worker.Tests/MetricsRegistrationTests.cs` — the
+  selector test names `ShipmentMetrics`
 - Test: `tests/Shipping.Worker.Tests/WaitingGaugeTests.cs`
 
 **The gauge is this pull request's, and nothing is checked for first.** PR-5's
@@ -3077,10 +3083,61 @@ the render left:
 ```
 
 reusing the `metricsConnectionString` the render already composes for
-`OutboxStats`, and `ShipmentMetrics` joins `MetricsInitialiser`'s constructor
-with its `ArgumentNullException.ThrowIfNull` guard — the file's own remark says
+`OutboxStats`. `ShipmentMetrics` joins `MetricsInitialiser`'s constructor with
+its `ArgumentNullException.ThrowIfNull` guard — the file's own remark says
 membership asks "can this service run for an hour without constructing it", and
-nothing injects this type at all.
+nothing injects this type at all. The constructor arrives here with the five
+parameters PR-2 and PR-5 left it, and leaves with six; the `using` block
+already names `Shipping.Infrastructure.Observability`, this type's namespace.
+Before:
+
+```csharp
+    public MetricsInitialiser(
+        OutboxMetrics outbox,
+        MessagingMetrics messaging,
+        RequestMetrics requests,
+        CarrierMetrics carrier,
+        AddressMetrics addresses)
+    {
+        ArgumentNullException.ThrowIfNull(outbox);
+        ArgumentNullException.ThrowIfNull(messaging);
+        ArgumentNullException.ThrowIfNull(requests);
+        ArgumentNullException.ThrowIfNull(carrier);
+        ArgumentNullException.ThrowIfNull(addresses);
+    }
+```
+
+After:
+
+```csharp
+    public MetricsInitialiser(
+        OutboxMetrics outbox,
+        MessagingMetrics messaging,
+        RequestMetrics requests,
+        CarrierMetrics carrier,
+        AddressMetrics addresses,
+        ShipmentMetrics shipments)
+    {
+        ArgumentNullException.ThrowIfNull(outbox);
+        ArgumentNullException.ThrowIfNull(messaging);
+        ArgumentNullException.ThrowIfNull(requests);
+        ArgumentNullException.ThrowIfNull(carrier);
+        ArgumentNullException.ThrowIfNull(addresses);
+        ArgumentNullException.ThrowIfNull(shipments);
+    }
+```
+
+`MetricsRegistrationTests` needs no new registration call for this one:
+`ShipmentMetrics` is registered by `AddShippingInfrastructure`, which its
+`BuildServices()` has run since PR-1, so the both-directions test goes red the
+moment step 4's registration lands and green with the parameter above. The
+selector test gains the sixth type, so the candidate set is asserted to hold
+every metrics type this service now registers:
+
+```csharp
+        registered.ShouldContain(typeof(AddressMetrics));
+        registered.ShouldContain(typeof(ShipmentMetrics));
+```
 
 `CarrierMetrics`' remark predicts two later instruments on this meter. PR-5
 delivered the first and this task delivers the second, so the prediction has
@@ -3095,11 +3152,13 @@ not corrected by editing one of them.
 dotnet build Platform.slnx
 dotnet test tests/Shipping.Worker.Tests --filter "FullyQualifiedName~WaitingGaugeTests"
 dotnet test tests/Shipping.Worker.Tests --filter "FullyQualifiedName~DeliveryAddressSourceTests"
+dotnet test tests/Shipping.Worker.Tests --filter "FullyQualifiedName~MetricsRegistrationTests"
 py -3.12 deploy/observability/check.py
 ```
 
 Expected: green, and the observability gate exits 0 — the gauge joins a meter
-§13.2 already exports, so no `AddMeter` line is owed and none is added.
+§13.2 already exports, so no `AddMeter` line is owed and none is added. The
+registration suite is green in both directions with six forced types.
 
 ```bash
 git add src/Services/Shipping tests/Shipping.TestSupport tests/Shipping.Worker.Tests
@@ -3524,20 +3583,38 @@ public sealed class PlatformFixture : IAsyncLifetime
     }
 
     /// <summary>A host over these containers, for a test that wants Ordering running.</summary>
-    public OrderingApiFactory Ordering() =>
-        new(
+    public OrderingApiFactory Ordering()
+    {
+        OrderingApiFactory host = new(
             _orderingConnectionString,
             _rabbit!.GetConnectionString(),
             _redisCache.GetConnectionString(),
             _redisCoordination.GetConnectionString());
 
+        // WebApplicationFactory builds and starts its host on the first read of
+        // Services, and the consumer binds its queue in that start. A test that
+        // publishes through the other host never reads this one's Services, so
+        // "running" has to be made true here rather than assumed by the caller.
+        _ = host.Services;
+
+        return host;
+    }
+
     /// <summary>The same, under the second broker account.</summary>
-    public InventoryApiFactory Inventory() =>
-        new(
+    public InventoryApiFactory Inventory()
+    {
+        InventoryApiFactory host = new(
             _inventoryConnectionString,
             _inventoryBroker,
             _redisCache.GetConnectionString(),
             _redisCoordination.GetConnectionString());
+
+        // The same forced start, for the same reason: the fan-out test publishes
+        // through Ordering and reads nothing of Inventory but its table.
+        _ = host.Services;
+
+        return host;
+    }
 
     /// <summary>
     /// §12.4's reset, once per database. Two <c>Respawner</c>s because each
@@ -3812,9 +3889,17 @@ public sealed class PlatformFixture : IAsyncLifetime
 }
 ```
 
-No factory is held: each test disposes the hosts it started, so a class that
-starts one host leaves the other's queues unbound and the fan-out's two halves
-stay separable.
+No factory is held: each test disposes the hosts it started, so in a test that
+starts one host no consumer of the other's is running, and the fan-out's two
+halves stay separable. The separation is in the consumer and not the binding:
+a queue an earlier test bound stays bound on the durable broker, so "unbound"
+is only true of the first run, and what a single-host test proves is that the
+other service's outcome arrives with no consumer of its own running. The two
+factory methods read `Services` before returning for the same reason from the
+other side: `WebApplicationFactory` starts its host on that first read, so a
+factory nobody read would be a host that never bound its queue, and the
+two-host test publishes through Ordering and reads nothing of Inventory but
+its table.
 
 - [ ] **Step 5: Run; commit**
 
@@ -4154,10 +4239,13 @@ the spec's prose where the two differ:
   `ShipmentStatus`, `TrackingStatus`, the two domain events; `ServiceFixture`
   with `ScalarAsync`, `ExecuteAsync`, `ColumnsAsync`, `ResetAsync` and the
   rendered `OutboxAsync`;
-  `MetricsInitialiser` and the `OutboxStats`/`OutboxMetrics` pair.
+  `MetricsInitialiser` and the `OutboxStats`/`OutboxMetrics` pair, and the
+  rendered `MetricsRegistrationTests`, whose both-directions test is what
+  makes Task 6's constructor parameter a red before it is a green.
 - PR-2's: `ICarrierGateway.GetEventsAsync`, `CarrierEvent`,
   `CarrierHop.TrackingPollInterval`, `CarrierHop.TotalRequestTimeout`,
-  `CarrierMetrics.MeterName` (`"Shipping.Outbound"`), `SimulatorMappings`.
+  `CarrierMetrics.MeterName` (`"Shipping.Outbound"`), `SimulatorMappings`,
+  and `CarrierMetrics` as `MetricsInitialiser`'s fourth parameter.
 - PR-5's: `Shipping.Application.Shipments.IShipmentRepository` with
   **`GetAsync(ShipmentId, …)`** — there is no `GetForUpdateAsync`, and Task 2
   reads through `GetAsync`; `Shipment.ReleaseClaim()`, which `PollApplied`
@@ -4169,7 +4257,8 @@ the spec's prose where the two differ:
   `ShippingWorkerFactory`'s five parameters and `ServiceFixture`'s `Carrier`,
   `Ordering`, `CapturedLogs` and `RunFulfilmentPassAsync`, all extended and
   none re-declared; `ShippingIntegrationEventMapper.RegisteredEvents`,
-  which Task 4 keeps and repoints; and
+  which Task 4 keeps and repoints; `AddressMetrics` as `MetricsInitialiser`'s
+  fifth parameter, which Task 6 follows with a sixth; and
   `DeliveryAddressSourceTests`' one-meter test, which Task 6 renames and
   re-comments for the third instrument instead of copying it.
 
