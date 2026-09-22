@@ -591,20 +591,13 @@ public class ShipmentPollTests
     }
 
     [Fact]
-    public void An_applied_page_schedules_the_next_poll_and_clears_the_claim()
+    public void An_applied_page_schedules_the_next_poll()
     {
         Shipment shipment = Booked();
 
         shipment.PollApplied(Now.AddSeconds(30));
 
         shipment.NextPollAt.ShouldBe(Now.AddSeconds(30));
-
-        // The last two are ReleaseClaim's postcondition, asserted again at the
-        // member a caller actually reaches for: a PollApplied that scheduled
-        // the next poll and left the lease standing would hold the row for the
-        // rest of the minute for nothing.
-        shipment.LockedUntil.ShouldBeNull();
-        shipment.Attempts.ShouldBe(0);
     }
 
     [Fact]
@@ -632,6 +625,15 @@ public class ShipmentPollTests
     }
 }
 ```
+
+**The release is asserted where a row has really been claimed, and not here.**
+`Shipment.For` and `Book` leave `Attempts` at zero and `LockedUntil` null, and
+no member of the aggregate sets either — only the claim statement does. A
+domain assertion that the two are clear after `PollApplied` therefore holds
+whether or not `PollApplied` calls `ReleaseClaim`, and would go on holding with
+that call deleted. `TrackingClaims.ClaimSql` stamps the lease in the same pass
+that applies the page, so the postcondition is asserted in Task 3, over a row
+the pass actually leased.
 
 - [ ] **Step 2: Write the failing handler test**
 
@@ -1080,6 +1082,8 @@ public sealed class TrackingWorkerTests(ServiceFixture fixture) : IAsyncLifetime
         (await Worker().ProcessBatchAsync(TestContext.Current.CancellationToken)).ShouldBe(1);
 
         (await fixture.StatusAsync(shipment.Id)).ShouldBe("Dispatched");
+        (await fixture.LockedUntilAsync(shipment.Id)).ShouldBeNull(
+            "the pass that claimed the row released it through Shipment.PollApplied");
     }
 
     [Fact]
@@ -1210,9 +1214,10 @@ go on `ServiceFixture` beside PR-5's
 `ExecuteAsync` or `ScalarAsync` over `shipping.Shipments`, in
 `SetOutboxAttemptsAsync`'s shape. **On the fixture and not in this file**,
 because Tasks 5, 6 and 7 read the same columns; PR-5's
-`ShipmentFulfilmentTests` keeps its own private `StatusAsync` and
-`AttemptsAsync` over `fixture.ScalarAsync`, and those stay where they are
-rather than being re-pointed by this pull request.
+`ShipmentFulfilmentTests` keeps its own private `StatusAsync`, `AttemptsAsync`
+and `LockedUntilAsync` over `fixture.ScalarAsync` — each keyed by the order id
+that suite arranges with, where these are keyed by `ShipmentId` — and those
+stay where they are rather than being re-pointed by this pull request.
 
 `BookedAsync(postalCode, country = "KZ", line1 = null, city = null)` is the one
 that is not a single statement: it seeds `fixture.Ordering.Addresses` with an
@@ -2637,6 +2642,9 @@ the table both workers claim from.
 - Modify: `src/Services/Shipping/Shipping.Infrastructure/Shipping.Infrastructure.csproj`
   — an `InternalsVisibleTo`, argued in the file
 - Modify: `tests/Shipping.TestSupport/ServiceFixture.cs` — `SetAttemptsAsync`
+- Modify: `tests/Shipping.Worker.Tests/DeliveryAddressSourceTests.cs` — PR-5's
+  `Both_instruments_land_on_the_one_meter_section_13_2_exports`, whose name and
+  comment count two instruments this task makes three
 - Test: `tests/Shipping.Worker.Tests/WaitingGaugeTests.cs`
 
 **The gauge is this pull request's, and nothing is checked for first.** PR-5's
@@ -2655,6 +2663,16 @@ covers all three. This task follows PR-5 rather than PR-2's wording: bolting a
 gauge onto `CarrierMetrics` would give a class about the carrier an
 `IShipmentStats` and an `ILogger` in its constructor, which is `OutboxMetrics`'
 shape wearing the carrier's name.
+
+**PR-5's one-meter test is renamed here rather than copied.** That pull request
+wrote `Both_instruments_land_on_the_one_meter_section_13_2_exports` into
+`DeliveryAddressSourceTests`, whose host needs no container, and its comment
+counts the two classes that then shared the meter. A third class makes the name
+and the comment false, so step 1 edits that test where it lives — the treatment
+Task 4 gives PR-5's empty-registry test. A copy in the suite below would leave
+two tests making one assertion, and the copy would carry
+`[Collection(nameof(IntegrationCollection))]` for a claim about `IMeterFactory`
+that no database is party to.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -2698,19 +2716,6 @@ public sealed class WaitingGaugeTests(ServiceFixture fixture) : IAsyncLifetime
         measured.ShouldContain(m => m.State == "Pending" && m.Value == 0,
             "every state reports, because a state missing from a sum reads as a healthy zero");
         healthy.Id.ShouldNotBe(booked.Id);
-    }
-
-    [Fact]
-    public void All_three_instruments_land_on_the_one_meter_section_13_2_exports()
-    {
-        // The factory caches by name, which is what lets CarrierMetrics,
-        // AddressMetrics and ShipmentMetrics each create §11's meter and still
-        // produce one. If it ever stopped, the later classes' instruments would
-        // be on a meter no AddMeter line names and would be collected by
-        // nothing (§13.2).
-        IMeterFactory factory = fixture.Factory.Services.GetRequiredService<IMeterFactory>();
-
-        factory.Create(CarrierMetrics.MeterName).ShouldBeSameAs(factory.Create(CarrierMetrics.MeterName));
     }
 
     /// <summary>
@@ -2779,6 +2784,25 @@ public sealed class WaitingGaugeTests(ServiceFixture fixture) : IAsyncLifetime
         return "";
     }
 }
+```
+
+and in `tests/Shipping.Worker.Tests/DeliveryAddressSourceTests.cs`, PR-5's test
+takes the third instrument's name and comment where it already stands, with its
+assertion and its host unchanged:
+
+```csharp
+    [Fact]
+    public void All_three_instruments_land_on_the_one_meter_section_13_2_exports()
+    {
+        IMeterFactory factory = _factory.Services.GetRequiredService<IMeterFactory>();
+
+        // The factory caches by name, which is what lets CarrierMetrics,
+        // AddressMetrics and ShipmentMetrics each create §11's meter and still
+        // produce one. If it ever stopped, the later classes' instruments would
+        // be on a meter no AddMeter line names and would be collected by
+        // nothing (§13.2).
+        factory.Create(CarrierMetrics.MeterName).ShouldBeSameAs(factory.Create(CarrierMetrics.MeterName));
+    }
 ```
 
 `ReadWaitingGauge` is a `MeterListener` over **the meter this suite built** —
@@ -3070,6 +3094,7 @@ not corrected by editing one of them.
 ```bash
 dotnet build Platform.slnx
 dotnet test tests/Shipping.Worker.Tests --filter "FullyQualifiedName~WaitingGaugeTests"
+dotnet test tests/Shipping.Worker.Tests --filter "FullyQualifiedName~DeliveryAddressSourceTests"
 py -3.12 deploy/observability/check.py
 ```
 
@@ -3948,16 +3973,16 @@ unchanged, because the rule is what they state and only the count moved.
 
 Everything else in the corpus that mentions the count stays. The copies in
 `Inventory.TestSupport`, `Ordering.TestSupport` and `Common.Web.Tests` argue why
-*their* host binds nothing, which is true of each host whatever the total is;
-`Common.Web`'s `ServiceOptions` and `Web.Bff`'s `ServiceIdentityOptions` argue
-which side of §15.4's test their own class falls on, and only the total beside
-that argument goes stale. None is in this touch set, and
-`docs/change-locality.md` is explicit about a stale restatement met in passing.
-`Catalog.TestSupport` is not among them: PR-1's Task 3 replaces that block with
-Payments' ten-line form, which carries no count. Shipping's own copy is not
-either — PR-1 rendered the longer block into `ShippingWorkerFactory`, where it
-is false of this host, and Task 1 step 6 checks that PR-1's template cut
-already removed it, and rewrites it if not.
+*their* host binds nothing, which is true of each host whatever the total is.
+None is in this touch set, and `docs/change-locality.md` is explicit about a
+stale restatement met in passing. `Common.Web`'s `ServiceOptions` and
+`ServiceIdentityOptions`, now `Common.Infrastructure`'s, carried the count too,
+and PR-3b's rewrites of both already dropped it. `Catalog.TestSupport` is not
+among them: PR-1's Task 3 replaces that block with Payments' ten-line form,
+which carries no count. Shipping's own copy is not either: PR-1's Task 3 cuts
+that block in the template before the render, so the rendered
+`ShippingWorkerFactory` should already be at ten lines, and Task 1 step 6 checks
+that and rewrites it if not.
 
 - [ ] **Step 5: Run the document checks**
 
@@ -4044,7 +4069,9 @@ and says which restatements were corrected and which were deliberately left.
   `OutboxDispatcher`'s own constants as PR-5's is; the loop surviving its tick
   and the pass fitting §15.3's drain → Task 3, with the inequality asserted in
   its first test and the two claims' shared `LockedUntil` asserted in the two
-  that follow the lapsed-lease case.
+  that follow the lapsed-lease case. The release is asserted there too, on the
+  despatch test, because `LockedUntil` is clear on a row `For` and `Book` made
+  and only a claimed row can prove that `PollApplied` dropped the lease.
 - Section 5 — `Booked`→`Dispatched` on `Collected`, `Booked`/`Dispatched`→
   `Delivered` on `Delivered` with the despatch raised first when it was never
   raised, `TrackingEvent` keyed `(ShipmentId, CarrierEventId)`, `Unrecognised`
@@ -4069,9 +4096,10 @@ and says which restatements were corrected and which were deliberately left.
 - Section 9 — `GetEventsAsync` and the 404 that is an empty page → Task 2's
   empty-page test and Task 3's poll; the adapter itself is PR-2's.
 - Section 11 — `shipping.shipments.waiting`, on `CarrierMetrics.MeterName` in
-  `AddressMetrics`' shape → Task 6; no log line holding an address → Task 5's
-  assertion over PR-5's `CapturedLogs`, and `TrackingWork`, which projects no
-  address.
+  `AddressMetrics`' shape → Task 6, which renames PR-5's one-meter test to the
+  third instrument rather than writing a second copy of it; no log line
+  holding an address → Task 5's assertion over PR-5's `CapturedLogs`, and
+  `TrackingWork`, which projects no address.
 - Section 12 — the worker legs (the inequality, the staged second pass, the
   lapsed lease, the pass that throws, and the two that hold each worker off a
   row the other has leased), the made-up deployment, and
@@ -4140,8 +4168,10 @@ the spec's prose where the two differ:
   Task 3 copies the shape of and Task 3's suite drives;
   `ShippingWorkerFactory`'s five parameters and `ServiceFixture`'s `Carrier`,
   `Ordering`, `CapturedLogs` and `RunFulfilmentPassAsync`, all extended and
-  none re-declared; and `ShippingIntegrationEventMapper.RegisteredEvents`,
-  which Task 4 keeps and repoints.
+  none re-declared; `ShippingIntegrationEventMapper.RegisteredEvents`,
+  which Task 4 keeps and repoints; and
+  `DeliveryAddressSourceTests`' one-meter test, which Task 6 renames and
+  re-comments for the third instrument instead of copying it.
 
 **Deliberately left to a later PR.**
 
@@ -4158,12 +4188,10 @@ the spec's prose where the two differ:
 - **§11.7's erasure consumer.** Spec section 7 names the path — a `DELETE` from
   `DeliveryAddresses` by `CustomerId` — and that extension brings it; the
   retention pass here deletes on a clock and not on a request.
-- **The code comments that restate §15.4's count** — in
-  `Inventory.TestSupport`, `Ordering.TestSupport` and `Common.Web.Tests`, each
-  arguing why the host it is written about binds nothing, which stays true; and
-  in `Common.Web`'s `ServiceOptions` and `Web.Bff`'s `ServiceIdentityOptions`,
-  each arguing which side of §15.4's test its own class falls on, with only the
-  total beside that argument going stale. `Catalog.TestSupport`'s copy is not
-  listed because PR-1's Task 3 takes that block to Payments' ten-line form.
-  Correcting the rest is owed by whichever pull request next touches those
-  blocks.
+- **The code comments that restate §15.4's count** — in `Inventory.TestSupport`,
+  `Ordering.TestSupport` and `Common.Web.Tests`, each arguing why the host it is
+  written about binds nothing, which stays true. `Catalog.TestSupport`'s copy is
+  not listed because PR-1's Task 3 takes that block to Payments' ten-line form,
+  and `ServiceOptions`' and `ServiceIdentityOptions`' are not because PR-3b's
+  rewrites already dropped the count. Correcting the rest is owed by whichever
+  pull request next touches those blocks.

@@ -1432,7 +1432,7 @@ of: the corpus is brought under the rule by the change that touches it.
 
 The durable fix is Catalog's template rather than the rendered tree, and that
 is the whole argument for doing it here. `render.py`'s `COPIED` set copies
-forty-eight files verbatim and `classify` copies the template's migrations
+the template's files verbatim and `classify` copies its migrations
 beside them; §4.5 renders all of them into every service after this one, so a
 block cut in Shipping alone is a block the sixth service is handed again.
 
@@ -2258,7 +2258,7 @@ the row already reads `A+D+E`.
 The body says the gate judges a created file's every block, that a render is a
 created file, and that the template is where the cut is durable because §4.5
 renders it into every service after this one; that Payments' tree is the source
-of every block replaced and the four deviations are named; and that the four
+of every block replaced and the two deviations are named; and that the four
 migration patch tables are empty because the blocks they renamed no longer name
 Catalog.
 
