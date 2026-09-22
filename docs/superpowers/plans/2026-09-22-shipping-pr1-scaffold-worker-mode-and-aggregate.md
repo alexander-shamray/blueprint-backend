@@ -2726,7 +2726,7 @@ def gate_module(name: str, filename: str):
     path = REPO_ROOT / ".github" / name / filename
     spec = importlib.util.spec_from_file_location(filename.removesuffix(".py"), path)
     module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
+    spec.loader.exec_module(module)
     return module
 ```
 
