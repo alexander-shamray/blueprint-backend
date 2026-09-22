@@ -345,9 +345,7 @@ namespace Shipping.Infrastructure.Retention;
 /// </summary>
 /// <remarks>
 /// It passes §15.4's test: both windows are a statute's, so a developer's stack
-/// is given ADR-053 rule 2's invented ones and a deployment its own. Neither
-/// window joins <c>RetentionPolicy</c>'s housekeeping ones, which ADR-053 keeps
-/// apart.
+/// is given ADR-053 rule 2's invented ones and a deployment its own.
 /// </remarks>
 public sealed class ShippingJurisdictionOptions
 {
@@ -2609,15 +2607,14 @@ types and on `ReadWaitingGauge`/`SetAttemptsAsync`.
 - [ ] **Step 2: Write the stats port and its reader**
 
 `IShipmentStats.cs` and `ShipmentStats.cs` are `IOutboxStats` and `OutboxStats`
-one table over: `internal sealed class ShipmentStats(IDbConnectionFactory
-connections) : IShipmentStats, IDisposable`, Dapper on a connection factory
-built with `ConnectTimeout = OutboxStats.ConnectTimeoutSeconds`, a two-second
-command timeout, and a five-second `MemoryCache` of its own keyed by state,
-each with the same argument that file already makes — a gauge callback runs on
-the collector's thread, a `commandTimeout` starts only once a connection is
-open, and a metrics type that loads the database it measures is a monitor that
-causes the symptom. `OutboxTable` has no counterpart here, so the statement
-spells `shipping.Shipments` as every other statement in this service does.
+one table over, with the same arguments that file already makes — a gauge
+callback runs on the collector's thread, a `commandTimeout` starts only once a
+connection is open, and a metrics type that loads the database it measures is a
+monitor that causes the symptom. The connect half of that bound is the
+registration's: step 4 composes this type's connection string with
+`ConnectTimeout = OutboxStats.ConnectTimeoutSeconds`. `OutboxTable` has no
+counterpart here, so the statement spells `shipping.Shipments` as every other
+statement in this service does.
 
 ```csharp
 namespace Shipping.Infrastructure.Observability;
@@ -2632,13 +2629,71 @@ public interface IShipmentStats
 }
 ```
 
-with the statement
+and the reader:
 
-```sql
-SELECT COUNT(*)
-FROM shipping.Shipments
-WHERE Status = @Status
-    AND Attempts > 0;
+```csharp
+using System.Data;
+using Common.Application;
+using Dapper;
+using Microsoft.Extensions.Caching.Memory;
+
+namespace Shipping.Infrastructure.Observability;
+
+/// <summary>
+/// <see cref="IShipmentStats"/> over one aggregate query, in <c>OutboxStats</c>'
+/// shape and on its arguments: a connection factory rather than a scope, a
+/// bounded command timeout, and a short cache, because a metrics type that
+/// loads the database it measures is a monitor that causes the symptom. A read
+/// that throws surfaces as an absent series, which
+/// <c>ShipmentMetrics.PerState</c> is what makes true.
+/// </summary>
+internal sealed class ShipmentStats(IDbConnectionFactory connections) : IShipmentStats, IDisposable
+{
+    /// <summary>
+    /// Short enough that a stalled state is visible within one export interval,
+    /// long enough that a burst of scrapes is not a burst of queries. One entry
+    /// per state rather than one shared snapshot, so a state nobody asks about
+    /// costs nothing.
+    /// </summary>
+    private static readonly TimeSpan CacheFor = TimeSpan.FromSeconds(5);
+
+    /// <summary>
+    /// A bound on the statement, because this runs inside a gauge callback on
+    /// the metric reader's own thread: a wait here serialises with every other
+    /// callback in the pass and takes unrelated telemetry down with it.
+    /// </summary>
+    private const int CommandTimeoutSeconds = 2;
+
+    /// <summary>
+    /// Rows past their first failed pass, whichever worker took them. Both
+    /// claim paths increment <c>Attempts</c> and <c>Shipment.ReleaseClaim</c>
+    /// clears it, so one column answers for both (spec, section 4).
+    /// </summary>
+    private const string WaitingSql =
+        """
+        SELECT COUNT(*)
+        FROM shipping.Shipments
+        WHERE Status = @Status
+            AND Attempts > 0;
+        """;
+
+    private readonly MemoryCache _cache = new(new MemoryCacheOptions());
+
+    public int WaitingCount(string state) =>
+        _cache.GetOrCreate(state, entry =>
+        {
+            entry.AbsoluteExpirationRelativeToNow = CacheFor;
+            using IDbConnection connection = connections.Create();
+
+            return connection.ExecuteScalar<int>(
+                new CommandDefinition(
+                    WaitingSql,
+                    new { Status = state },
+                    commandTimeout: CommandTimeoutSeconds));
+        });
+
+    public void Dispose() => _cache.Dispose();
+}
 ```
 
 `Attempts > 0` is the predicate and not a lease or a schedule: a row that has
@@ -2694,15 +2749,47 @@ public sealed class ShipmentMetrics
             description: "Shipments past their first failed pass, by state.");
     }
 
-    private static List<Measurement<double>> PerState(IShipmentStats stats, ILogger logger) { /* below */ }
+    /// <summary>
+    /// One measurement per state, read from the enum rather than from a list
+    /// here: a state added to <see cref="ShipmentStatus"/> and forgotten at a
+    /// call site would be a state with no gauge and therefore no alert.
+    /// </summary>
+    /// <remarks>
+    /// The read is contained, because an observable callback that throws does
+    /// not fail alone — <c>MeterListener.RecordObservableInstruments</c> drops
+    /// the rest of the pass with it, as <c>OutboxMetrics.PerLane</c> argues.
+    /// </remarks>
+    private static List<Measurement<double>> PerState(IShipmentStats stats, ILogger logger)
+    {
+        List<Measurement<double>> measurements = [];
+
+        foreach (ShipmentStatus status in Enum.GetValues<ShipmentStatus>())
+        {
+            int waiting;
+
+            try
+            {
+                waiting = stats.WaitingCount(status.ToString());
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                // Every state is dropped, not just this one: half a reading is
+                // worse than none, because a state missing from a
+                // `sum by (state)` reads as a healthy zero rather than no data.
+                GaugeReadFailed(logger, exception);
+                return [];
+            }
+
+            measurements.Add(new Measurement<double>(waiting, Tag(status)));
+        }
+
+        return measurements;
+    }
+
+    private static KeyValuePair<string, object?> Tag(ShipmentStatus status) =>
+        new("state", status.ToString());
 }
 ```
-
-`PerState` is `OutboxMetrics.PerLane`'s method one enum over: it walks
-`Enum.GetValues<ShipmentStatus>()`, tags each measurement `state` with the
-member's own name, and a read that throws drops **every** state's measurement
-rather than one, because half a reading is worse than none — a state missing
-from a `sum by (state)` reads as a healthy zero.
 
 - [ ] **Step 4: Register it, and close `CarrierMetrics`' prediction**
 
@@ -2884,11 +2971,18 @@ git commit -m "test(shipping): the worker suite runs as ADR-053's made-up deploy
     <PackageReference Include="Testcontainers.MsSql" />
     <PackageReference Include="Testcontainers.RabbitMq" />
     <PackageReference Include="Testcontainers.Redis" />
+    <!-- Reset-by-truncation between tests (§12.4), and the open connection it
+         inspects. Named here on the register's honesty rule PR-5 applies: this
+         assembly constructs a Respawner and a SqlConnection itself, whatever
+         the two TestSupport references carry transitively. -->
+    <PackageReference Include="Respawn" />
+    <PackageReference Include="Microsoft.Data.SqlClient" />
   </ItemGroup>
 ```
 
-None carries a `Version=`: every one is pinned in
-`Directory.Packages.props` already, which is why this PR adds no Appendix B
+The package is `Respawn`; `Respawner` is the type step 4's `ResetAsync`
+constructs from it. None of the seven carries a `Version=`: every one is pinned
+in `Directory.Packages.props` already, which is why this PR adds no Appendix B
 row.
 
 - [ ] **Step 2: Write the failing test**
@@ -3022,51 +3116,440 @@ Expected: compile failure — `PlatformFixture` does not exist.
 - [ ] **Step 4: Write the fixture**
 
 `PlatformFixture` is Ordering's `ServiceFixture` with the parts that make it
-one service's removed and the parts that make it two added. Its shape:
+one service's removed and the parts that make it two added: one SQL Server
+holding both databases, one broker holding both accounts, and the two Redis
+servers shared. Four things about it are decisions rather than code, so they
+are said here and cited there.
 
-- **One SQL Server container, two databases.** `Ordering` and `Inventory`, each
-  created by running that service's real migrator through
-  `Ordering.TestSupport.ServiceFixture.RunMigratorAsync` and
-  `Inventory.TestSupport.ServiceFixture.RunMigratorAsync` — the public statics
-  each fixture already exposes, so this suite runs the real §7.4 job host and
-  copies no wiring.
-- **One broker, built from `deploy/compose/rabbitmq`'s Dockerfile**, because
-  Ordering's saga schedules and the delayed-message exchange is in that image
-  and not in the base tag. Its own name —
-  `ashamray-test-broker-platform:4.1-delayed` — and `WithCleanUp(false)`, for
-  the reason Ordering's fixture spells out: the
-  build context is tarred under the image's name, so two suites sharing a name
-  race on a file rather than on Docker.
-- **Two connection strings over that one container**, because the two hosts
-  hold different broker accounts (ADR-036). Ordering's is
-  `_rabbit.GetConnectionString()`; Inventory's is composed from
-  `_rabbit.Hostname` and `_rabbit.GetMappedPublicPort(5672)` with
-  `inventory-svc` and its local-development password, which
-  `definitions.json` already declares. The harness's own write is widened for
-  **both** users, exactly as each service's fixture widens its own, and
-  `configure` and `read` are read back from the imported definitions so the
-  topology is still judged by the scope that deploys.
-- **Two Redis containers**, shared by both hosts, because
-  `AddRedisConnections` reads both keys eagerly and §8.5's behaviour claims a
-  key on protected commands. One pair for two services is honest here: the
-  keys are service-prefixed, and this suite's subject is the bus.
-- **`Ordering()` and `Inventory()`**, each returning a fresh factory over those
-  connections, so a test can bring up one host and not the other.
-- **`ResetAsync()`**, two `Respawner`s over the `ordering` and `inventory`
-  schemas.
-- **`SeedConfirmedSagaAsync(orderId)`**, one `INSERT` into
-  `ordering.OrderFulfilmentStates` with `CurrentState = 'Confirmed'`, and
-  **`SeedHeldReservationAsync(orderId)`**, the stock item and the reservation
-  rows Inventory's own helper writes. Seeded rather than choreographed, and the
-  comment says why: the subject here is one event reaching two services, and
-  arranging it through each service's whole lifecycle would make this suite
-  fail for either service's reasons rather than for the fan-out's.
-- **`SagaRowsAsync`**, **`FulfilledReservationsAsync`** and
-  **`ErrorQueueDepthAsync`**, the last over the broker's management API for
-  queues whose name ends `_error`.
+**The broker is built from `deploy/compose/rabbitmq`'s Dockerfile**, because
+Ordering's saga schedules and the delayed exchange is in that image and not in
+the base tag (ADR-021). **The two accounts are both real**: the container's
+default is `ordering-svc` and Inventory's connection string is composed over
+the same container for `inventory-svc`, which `definitions.json` already
+declares, so ADR-036's split is exercised rather than collapsed. **One Redis
+pair serves two services**, which is honest here — the keys are
+service-prefixed and this suite's subject is the bus. And **both prior states
+are seeded rather than choreographed**: the subject is one event reaching two
+services, and arranging it through each service's whole lifecycle would make
+this suite fail for either service's reasons rather than for the fan-out's.
 
-Each of those is five lines or fewer; none is a second copy of behaviour, and
-the two migrator runners and the two factories are the services' own.
+`tests/Platform.IntegrationTests/PlatformFixture.cs`:
+
+```csharp
+using System.Data.Common;
+using System.Globalization;
+using System.Text.Json;
+using DotNet.Testcontainers.Builders;
+using DotNet.Testcontainers.Containers;
+using DotNet.Testcontainers.Images;
+using Inventory.TestSupport;
+using Microsoft.Data.SqlClient;
+using Ordering.TestSupport;
+using Respawn;
+using Testcontainers.MsSql;
+using Testcontainers.RabbitMq;
+using Testcontainers.Redis;
+using Xunit;
+// Aliased because both assemblies name a ServiceFixture, and this class names
+// a member after each service.
+using InventoryFixture = Inventory.TestSupport.ServiceFixture;
+using OrderingFixture = Ordering.TestSupport.ServiceFixture;
+
+namespace Platform.IntegrationTests;
+
+/// <summary>
+/// One SQL Server, one broker and two Redis servers, over which either real
+/// host can be started (§12.4).
+/// </summary>
+/// <remarks>
+/// The containers are shared and the hosts are not: a test starts whichever
+/// hosts its claim is about, which is what tells a fan-out from a coincidence.
+/// Neither service's own fixture is reused, because §4.3 keeps each inside its
+/// boundary and this assembly is the one §4.3 spends on the crossing.
+/// </remarks>
+public sealed class PlatformFixture : IAsyncLifetime
+{
+    private readonly MsSqlContainer _sql = new MsSqlBuilder()
+        .WithImage("mcr.microsoft.com/mssql/server:2022-latest")
+        .Build();
+
+    /// <summary>
+    /// §8.1's two servers, shared by both hosts: <c>AddRedisConnections</c>
+    /// reads both keys eagerly and §8.5's behaviour claims a key on every
+    /// protected command, so an unreachable default would not do.
+    /// </summary>
+    private readonly RedisContainer _redisCache = new RedisBuilder()
+        .WithImage("redis:7-alpine")
+        .WithCommand("--maxmemory-policy", "allkeys-lru")
+        .Build();
+
+    private readonly RedisContainer _redisCoordination = new RedisBuilder()
+        .WithImage("redis:7-alpine")
+        .WithCommand("--maxmemory-policy", "noeviction")
+        .Build();
+
+    /// <summary>
+    /// Built in <see cref="InitializeAsync"/>, because the image it runs does
+    /// not exist until this fixture builds it.
+    /// </summary>
+    private RabbitMqContainer? _rabbit;
+
+    /// <summary>
+    /// The write each account needs to publish what this suite publishes.
+    /// Copied from each service's fixture rather than shared, because §4.3
+    /// lets no test helper cross a boundary — and widened for both, because
+    /// both hosts publish here.
+    /// </summary>
+    private const string OrderingHarnessWrite =
+        "^(ordering-|inventory-commands|payments-commands|Common\\.Contracts|" +
+        "Ordering\\.Infrastructure\\.Messaging:|MassTransit:)";
+
+    private const string InventoryHarnessWrite =
+        "^(inventory-|Common\\.Contracts|Inventory\\.Infrastructure\\.Messaging:|MassTransit:)";
+
+    private Respawner? _orderingRespawner;
+    private Respawner? _inventoryRespawner;
+    private string _orderingConnectionString = null!;
+    private string _inventoryConnectionString = null!;
+    private string _inventoryBroker = null!;
+
+    // ValueTask, not Task: xUnit v3 redefined IAsyncLifetime (§12.4).
+    public async ValueTask InitializeAsync()
+    {
+        // Its own image name and WithCleanUp(false), for the reason Ordering's
+        // fixture spells out: the build context is tarred under the image's
+        // name, so two suites sharing a name race on a file rather than on
+        // Docker. Every layer but the tag is shared, so this is a cache hit.
+        IFutureDockerImage broker = new ImageFromDockerfileBuilder()
+            .WithDockerfileDirectory(BrokerContextPath())
+            .WithDockerfile("Dockerfile")
+            .WithName("ashamray-test-broker-platform:4.1-delayed")
+            .WithCleanUp(false)
+            .Build();
+
+        // The container's default account is Ordering's; Inventory's is a
+        // second account on the same broker, which the imported definitions
+        // declare with its own permissions (ADR-036). One account for both
+        // hosts would make the grant this suite runs under nobody's.
+        _rabbit = new RabbitMqBuilder()
+            .WithImage(broker)
+            .WithUsername("ordering-svc")
+            .WithPassword("local-dev-ordering")
+            .Build();
+
+        await broker.CreateAsync(TestContext.Current.CancellationToken);
+
+        await Task.WhenAll(
+            _sql.StartAsync(TestContext.Current.CancellationToken),
+            _rabbit.StartAsync(TestContext.Current.CancellationToken),
+            _redisCache.StartAsync(TestContext.Current.CancellationToken),
+            _redisCoordination.StartAsync(TestContext.Current.CancellationToken));
+
+        _inventoryBroker =
+            $"amqp://inventory-svc:local-dev-inventory@{_rabbit.Hostname}:{_rabbit.GetMappedPublicPort(5672)}";
+
+        await WidenWriteForTheHarnessAsync("ordering-svc", OrderingHarnessWrite);
+        await WidenWriteForTheHarnessAsync("inventory-svc", InventoryHarnessWrite);
+
+        _orderingConnectionString = DatabaseNamed("Ordering");
+        _inventoryConnectionString = DatabaseNamed("Inventory");
+
+        await MigrateAsync("Ordering", OrderingFixture.RunMigratorAsync(_orderingConnectionString));
+        await MigrateAsync("Inventory", InventoryFixture.RunMigratorAsync(_inventoryConnectionString));
+    }
+
+    /// <summary>A host over these containers, for a test that wants Ordering running.</summary>
+    public OrderingApiFactory Ordering() =>
+        new(
+            _orderingConnectionString,
+            _rabbit!.GetConnectionString(),
+            _redisCache.GetConnectionString(),
+            _redisCoordination.GetConnectionString());
+
+    /// <summary>The same, under the second broker account.</summary>
+    public InventoryApiFactory Inventory() =>
+        new(
+            _inventoryConnectionString,
+            _inventoryBroker,
+            _redisCache.GetConnectionString(),
+            _redisCoordination.GetConnectionString());
+
+    /// <summary>
+    /// §12.4's reset, once per database. Two <c>Respawner</c>s because each
+    /// reads one connection's schema graph, and they are kept because that
+    /// read is the expensive half rather than the reset.
+    /// </summary>
+    public async Task ResetAsync()
+    {
+        _orderingRespawner = await ResetOneAsync(_orderingConnectionString, "ordering", _orderingRespawner);
+        _inventoryRespawner = await ResetOneAsync(_inventoryConnectionString, "inventory", _inventoryRespawner);
+    }
+
+    private static async Task<Respawner> ResetOneAsync(string connectionString, string schema, Respawner? respawner)
+    {
+        await using SqlConnection connection = new(connectionString);
+        await connection.OpenAsync(TestContext.Current.CancellationToken);
+
+        // dbo is excluded, so EF's migration history survives the truncation.
+        respawner ??= await Respawner.CreateAsync(
+            connection,
+            new RespawnerOptions
+            {
+                DbAdapter = DbAdapter.SqlServer,
+                SchemasToInclude = [schema]
+            });
+
+        await respawner.ResetAsync(connection);
+
+        return respawner;
+    }
+
+    /// <summary>
+    /// The saga row §9.6 leaves in <c>Confirmed</c>, which is the state a
+    /// despatch finalises from. The columns omitted carry defaults, and the
+    /// correlation is the order id because that is what the saga correlates on.
+    /// </summary>
+    public Task SeedConfirmedSagaAsync(Guid orderId) =>
+        ExecuteAsync(
+            _orderingConnectionString,
+            """
+            INSERT INTO ordering.OrderFulfilmentStates
+                (CorrelationId, CurrentState, OrderId, Total, Currency, StartedAt)
+            VALUES (@OrderId, 'Confirmed', @OrderId, 19.99, 'EUR', SYSDATETIMEOFFSET());
+            """,
+            orderId);
+
+    /// <summary>
+    /// The stock and reservation rows a held reservation is, one line over one
+    /// product. <c>Reserved</c> is the held status in
+    /// <c>ReservationStatus</c>'s own spelling, and the unavailable-ids column
+    /// is the empty JSON list its converter writes.
+    /// </summary>
+    public Task SeedHeldReservationAsync(Guid orderId) =>
+        ExecuteAsync(
+            _inventoryConnectionString,
+            """
+            DECLARE @ProductId uniqueidentifier = NEWID();
+
+            INSERT INTO inventory.StockItems (ProductId, Available, Reserved, UpdatedAt)
+            VALUES (@ProductId, 0, 1, SYSDATETIMEOFFSET());
+
+            INSERT INTO inventory.Reservations (OrderId, Status, CreatedAt, UpdatedAt, UnavailableProductIds)
+            VALUES (@OrderId, 'Reserved', SYSDATETIMEOFFSET(), SYSDATETIMEOFFSET(), '[]');
+
+            INSERT INTO inventory.ReservationLines (OrderId, ProductId, Quantity)
+            VALUES (@OrderId, @ProductId, 1);
+            """,
+            orderId);
+
+    /// <summary>Saga rows for one order — one while it runs, none once it finalises.</summary>
+    public Task<int> SagaRowsAsync(Guid orderId) =>
+        ScalarAsync(
+            _orderingConnectionString,
+            "SELECT COUNT(*) FROM ordering.OrderFulfilmentStates WHERE CorrelationId = @OrderId;",
+            orderId);
+
+    /// <summary>Reservations for one order the stock has left.</summary>
+    public Task<int> FulfilledReservationsAsync(Guid orderId) =>
+        ScalarAsync(
+            _inventoryConnectionString,
+            """
+            SELECT COUNT(*)
+            FROM inventory.Reservations
+            WHERE OrderId = @OrderId
+                AND Status = 'Fulfilled';
+            """,
+            orderId);
+
+    /// <summary>
+    /// Messages sitting in every <c>_error</c> queue, read from the broker
+    /// itself. MassTransit declares one on a consumer's first fault, so a
+    /// fault's arrival there is an outcome no table shows.
+    /// </summary>
+    public async Task<int> ErrorQueueDepthAsync()
+    {
+        ExecResult result = await _rabbit!.ExecAsync(
+            ["rabbitmqctl", "list_queues", "--quiet", "--no-table-headers", "name", "messages"],
+            TestContext.Current.CancellationToken);
+
+        if (result.ExitCode != 0)
+        {
+            throw new InvalidOperationException(
+                $"Could not list the broker's queues (exit {result.ExitCode}). stderr: {result.Stderr}");
+        }
+
+        int total = 0;
+
+        foreach (string line in result.Stdout.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+        {
+            string[] columns = line.Split('\t', StringSplitOptions.TrimEntries);
+
+            if (columns.Length == 2 && columns[0].EndsWith("_error", StringComparison.Ordinal))
+                total += int.Parse(columns[1], CultureInfo.InvariantCulture);
+        }
+
+        return total;
+    }
+
+    /// <summary>
+    /// The container hands out a connection to <c>master</c>; each service owns
+    /// a database of its own (§7.1), and its migrator is what creates it.
+    /// </summary>
+    private string DatabaseNamed(string database)
+    {
+        DbConnectionStringBuilder connection = new() { ConnectionString = _sql.GetConnectionString() };
+        connection["Database"] = database;
+
+        return connection.ConnectionString;
+    }
+
+    /// <summary>
+    /// Drives the real §7.4 job host through the public static each fixture
+    /// already exposes, so this suite copies no wiring. A non-zero code throws
+    /// here rather than surfacing as a missing table in every test below.
+    /// </summary>
+    private static async Task MigrateAsync(string service, Task<int> run)
+    {
+        int exitCode = await run;
+
+        if (exitCode != 0)
+            throw new InvalidOperationException($"{service}'s migrator exited {exitCode}.");
+    }
+
+    /// <summary>
+    /// The harness publishes a despatch under each host's own account, which
+    /// the deployed grant refuses (ADR-036). Only the test container's write
+    /// moves; <c>configure</c> and <c>read</c> are read back from the imported
+    /// definitions, so the topology is still judged by the scope that deploys.
+    /// </summary>
+    private async Task WidenWriteForTheHarnessAsync(string user, string write)
+    {
+        (string configure, string read) = ImportedGrant(user);
+
+        ExecResult result = await _rabbit!.ExecAsync(
+            ["rabbitmqctl", "set_permissions", "-p", "/", user, configure, write, read],
+            TestContext.Current.CancellationToken);
+
+        // A silent failure here would surface as every test retrying a refused
+        // publish until its budget ran out, naming a message rather than a
+        // permission.
+        if (result.ExitCode != 0)
+        {
+            throw new InvalidOperationException(
+                $"Could not widen {user}'s broker permissions for the harness "
+                + $"(exit {result.ExitCode}). stdout: {result.Stdout} stderr: {result.Stderr}");
+        }
+    }
+
+    // The mapped file rather than the container, because it is the same text
+    // the broker imported and it can be read before anything starts.
+    private static (string Configure, string Read) ImportedGrant(string user)
+    {
+        string path = Path.Combine(BrokerContextPath(), "definitions.json");
+        using JsonDocument definitions = JsonDocument.Parse(File.ReadAllText(path));
+
+        foreach (JsonElement entry in definitions.RootElement.GetProperty("permissions").EnumerateArray())
+        {
+            if (entry.GetProperty("user").GetString() != user || entry.GetProperty("vhost").GetString() != "/")
+                continue;
+
+            return (entry.GetProperty("configure").GetString()!, entry.GetProperty("read").GetString()!);
+        }
+
+        throw new InvalidOperationException(
+            $"{path} grants {user} nothing on the default vhost, so there is no scope to preserve.");
+    }
+
+    /// <summary>
+    /// <c>deploy/compose/rabbitmq</c>, found by walking up to the directory
+    /// holding <c>Platform.slnx</c>. It throws rather than falling back: a
+    /// fixture that quietly used the stock tag would lose the plugin the saga's
+    /// schedules need, and lose it on whichever machine had the odd layout.
+    /// </summary>
+    private static string BrokerContextPath()
+    {
+        for (DirectoryInfo? dir = new(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
+        {
+            if (!File.Exists(Path.Combine(dir.FullName, "Platform.slnx")))
+                continue;
+
+            string context = Path.Combine(dir.FullName, "deploy", "compose", "rabbitmq");
+            if (!File.Exists(Path.Combine(context, "Dockerfile")))
+            {
+                throw new InvalidOperationException(
+                    $"Found the solution at {dir.FullName} but no Dockerfile at {context} (§14.1, ADR-021).");
+            }
+
+            return context;
+        }
+
+        throw new InvalidOperationException(
+            $"No Platform.slnx above {AppContext.BaseDirectory}; the broker image cannot be built.");
+    }
+
+    /// <summary>
+    /// A statement outside either host, for arranging. ADO rather than either
+    /// <c>DbContext</c>: this assembly holds neither, and a parameter is what
+    /// keeps the order id out of the statement text.
+    /// </summary>
+    private static async Task ExecuteAsync(string connectionString, string sql, Guid orderId)
+    {
+        await using SqlConnection connection = new(connectionString);
+        using SqlCommand command = new(sql, connection);
+        command.Parameters.AddWithValue("@OrderId", orderId);
+
+        await connection.OpenAsync(TestContext.Current.CancellationToken);
+        await command.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
+    }
+
+    /// <summary>One count outside either host, for asserting. Same rule on the parameter.</summary>
+    private static async Task<int> ScalarAsync(string connectionString, string sql, Guid orderId)
+    {
+        await using SqlConnection connection = new(connectionString);
+        using SqlCommand command = new(sql, connection);
+        command.Parameters.AddWithValue("@OrderId", orderId);
+
+        await connection.OpenAsync(TestContext.Current.CancellationToken);
+
+        return (int)(await command.ExecuteScalarAsync(TestContext.Current.CancellationToken))!;
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        // Each teardown runs even when an earlier one throws: a failed SQL
+        // disposal must not leave the broker running for the rest of the job.
+        // The broker is null-guarded because InitializeAsync can throw on
+        // either side of its assignment; the others are field initialisers.
+        try
+        {
+            await _sql.DisposeAsync();
+        }
+        finally
+        {
+            try
+            {
+                if (_rabbit is not null)
+                    await _rabbit.DisposeAsync();
+            }
+            finally
+            {
+                try
+                {
+                    await _redisCache.DisposeAsync();
+                }
+                finally
+                {
+                    await _redisCoordination.DisposeAsync();
+                }
+            }
+        }
+    }
+}
+```
+
+No factory is held: each test disposes the hosts it started, so a class that
+starts one host leaves the other's queues unbound and the fan-out's two halves
+stay separable.
 
 - [ ] **Step 5: Run; commit**
 

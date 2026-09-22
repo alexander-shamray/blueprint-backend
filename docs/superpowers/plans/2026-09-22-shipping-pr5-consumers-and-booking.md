@@ -1699,8 +1699,6 @@ namespace Shipping.Infrastructure.Addresses;
 /// A decorator rather than a change to <c>CachingTokenClient</c>: the grant is
 /// this service's and that building block is every host's. Keycloak's default
 /// roles sit in <c>realm_access</c>, which this claim does not carry (ADR-052).
-/// Public for <c>CarrierHop</c>'s reason (§4.2): the composition root is another
-/// assembly, and one modifier commits less than an <c>InternalsVisibleTo</c>.
 /// </remarks>
 public sealed partial class GrantCheckedTokenCache(
     ITokenCache inner,
@@ -1969,7 +1967,7 @@ builder.Services
     .ValidateDataAnnotations()
     .ValidateOnStart();
 
-// The token client's own transport, which deliberately carries NO
+// The token client's own transport, which deliberately carries no
 // ClientCredentialsHandler: a client that attached a token in order to fetch a
 // token would recurse until the stack ran out.
 string authority = builder.Configuration[AuthenticationExtensions.AuthorityKey]!;
@@ -2394,7 +2392,7 @@ namespace Shipping.Infrastructure.Fulfilment;
 public sealed class FulfilmentWorker(IServiceScopeFactory scopes, ILogger<FulfilmentWorker> log) : BackgroundService
 {
     /// <summary>
-    /// How many rows one claim leases. ONE, and the number is the arithmetic:
+    /// How many rows one claim leases: one, and the number is the arithmetic:
     /// a row costs up to both hops' totals, a pass has to fit §15.3's
     /// thirty-second drain, and more throughput is more replicas — which is
     /// what the lease makes safe (spec, section 4).
@@ -2762,19 +2760,14 @@ simulator's own directory does not carry:
             carrierBaseUrl,
             addressSourceBaseUrl: Ordering.Address.ToString());
 
-    /// <summary>
-    /// Makes one carrier server answer one path with one status code, after an
-    /// optional delay, until the returned handle is disposed.
-    /// </summary>
+    /// <summary>Makes one carrier server answer one path with one status code, after an optional delay.</summary>
     /// <remarks>
-    /// A mapping on a running server rather than a file under
-    /// deploy/compose/carrier-simulator: that directory is the postal-code
-    /// script Compose and this fixture share (spec, section 9), and an answer
-    /// nobody can reach from a checkout is no part of it. An
-    /// <c>ExactMatcher</c> at priority 0, because the directory's own mappings
-    /// sit at 1 and its catch-all at 10. The server is a parameter and not
-    /// <see cref="Carrier"/>, because the suites that script an answer are the
-    /// ones running a host of their own.
+    /// The handle disposes the mapping. A mapping on a running server rather
+    /// than a file under deploy/compose/carrier-simulator: that directory is the
+    /// postal-code script Compose and this fixture share (spec, section 9), and
+    /// an answer nobody can reach from a checkout is no part of it. The server
+    /// is a parameter rather than <see cref="Carrier"/>, because the suites that
+    /// script an answer run a host of their own.
     /// </remarks>
     public static IDisposable CarrierAnswers(
         WireMockServer server,
@@ -3671,7 +3664,7 @@ and its sentence about a command handler blocking on a message.
 - [ ] **Step 5: §4.1's tree comment**
 
 Spec section 13 splits §4.1's row: PR-3b took the identity half and left this
-one, saying so in its own Task 4 step 3. So the sentence to replace is the one
+one, saying so in its own Task 4 step 2. So the sentence to replace is the one
 PR-3b leaves behind, not the one on `main` today. Before:
 
 ```
