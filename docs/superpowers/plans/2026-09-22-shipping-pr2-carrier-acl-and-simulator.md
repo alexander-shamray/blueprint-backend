@@ -1157,7 +1157,10 @@ public sealed class HttpCarrierGatewayTests : IClassFixture<HttpCarrierGatewayTe
 `PaymentsApiFactory`'s terms — defaulted, so every existing caller compiles
 unchanged — and sets them with
 `.UseSetting(CarrierRegistration.BaseUrlKey, carrierBaseUrl)` and
-`.UseSetting(CarrierRegistration.ApiKeyKey, carrierApiKey ?? LocalCarrierApiKey)`:
+`.UseSetting(CarrierRegistration.ApiKeyKey, carrierApiKey ?? LocalCarrierApiKey)`.
+A `using` alias is file-scoped, so the factory's header gains its own
+`using CarrierRegistration = Shipping.Infrastructure.Carrier.DependencyInjection;`,
+as `PaymentsApiFactory.cs` carries `ProviderRegistration`:
 
 ```csharp
 /// <summary>

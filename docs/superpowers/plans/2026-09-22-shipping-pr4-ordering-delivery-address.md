@@ -1146,9 +1146,6 @@ Then the new cases:
 
 ```python
 class TheWorkerClient(Fixture):
-    def worker_problems(self, **overrides) -> list[str]:
-        return self.problems(realm(browser(), worker(**overrides)))
-
     def test_a_missing_worker_is_caught_rather_than_passed(self):
         """The vacuous half: every check below is a property of one client."""
         document = realm(browser(), mobile())
