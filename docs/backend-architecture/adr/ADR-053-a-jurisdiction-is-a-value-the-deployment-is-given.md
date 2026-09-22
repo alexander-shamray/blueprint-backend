@@ -20,22 +20,24 @@ READMEs still call illustrative — and four rules hold it open:
    between deployments. §15.4's sentence that `ServiceIdentityOptions` is the
    only options type in the solution, and its callout's close that
    `Identity:Client` is the only thing there that earns one, are amended by this
-   class; whether
-   [ADR-052](ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)'s
-   `ContactOptions` is another is that record's to say, since it refuses at
-   start as `RetentionPolicy` does, which is the registered shape below and not
-   a binding. Each required member joins that section's inventory table on the
-   terms it states. The refusal is `[Required]`, and a stated bound wherever the
-   value has one, on the bound class — so a missing or impossible value is
-   §15.4's failure at start and never a clamped one. `RetentionPolicy` refuses
-   rather than clamps too, by a throwing `init` setter on a record each service
-   registers rather than by binding, and its windows are housekeeping but for
-   the one that is §8.5's guarantee; none of `RetentionPolicy`'s windows is
-   statutory, and no statutory window is one of its. A template missing for a
-   required language fails the host at start, not the send at night. `Address`
-   is the precedent and already argues it: it checks presence and the shape of
-   an ISO 3166-1 alpha-2 code, and refuses to learn a postcode format or to ask
-   `RegionInfo`.
+   class; whether `ContactOptions`, which
+   [ADR-052](ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)
+   owes with Notifications, is another is that record's to say, because it
+   describes that class as refusing at start the way `RetentionPolicy` does — a
+   registered shape rather than a binding, as two sentences on — and only the
+   record that owns it can say which §15.4 means. Each required member joins
+   that section's inventory table on the terms it states. The refusal is
+   `[Required]`, and a stated bound wherever the value has one, on the bound
+   class — so a missing or impossible value is §15.4's failure at start and
+   never a clamped one.
+   `RetentionPolicy` refuses rather than clamps too, by a throwing `init` setter
+   on a record each service registers rather than by binding, and its windows
+   are housekeeping but for the one that is §8.5's guarantee; none of
+   `RetentionPolicy`'s windows is statutory, and no statutory window is one of
+   its. A template missing for a required language fails the host at start, not
+   the send at night. `Address` is the precedent and already argues it: it
+   checks presence and the shape of an ISO 3166-1 alpha-2 code, and refuses to
+   learn a postcode format or to ask `RegionInfo`.
 2. **A made-up jurisdiction proves rule 1.** A test deployment's invented values
    — an address country of `ZZ`, which `Address` already constructs, its own
    language set, zone and windows — are configuration, and the suite of each
@@ -51,13 +53,14 @@ READMEs still call illustrative — and four rules hold it open:
    service's design names it as a processor with the country it runs in.
 4. **What was said to a customer is kept as evidence, not as a copy.** A message
    template is versioned as [§9.2](../09-messaging.md) versions a contract — a
-   new version beside the old, both in use while a consumer of the old exists —
-   and the record of a send holds the event's id, the template's key and
-   version, the languages it was rendered in, the outcome and the times, the
-   customer's id rather than the mailbox, and never the body. On erasure the id
-   is replaced as §11.7 replaces an order's, and the row, then holding nothing
-   personal, lives for the statutory window; §11.7's erasure rule is amended
-   with it.
+   new version beside the old — and a version is retired not when nothing sends
+   it but when no record of a send still names it, which is the statutory window
+   and not §9.2's deprecation one. The record of a send holds the event's id,
+   the template's key and version, the languages it was rendered in, the outcome
+   and the times, the customer's id rather than the mailbox, and never the body.
+   On erasure the id is replaced as §11.7 replaces an order's, and the row, then
+   holding nothing personal, lives for the statutory window; §11.7's erasure
+   rule is amended with it.
    [ADR-052](ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)
    sorts a reader's waiting work by whether §11.7 deletes or keeps the record
    and puts Notifications on the deleting side; with the row kept, a
@@ -119,15 +122,16 @@ sent to the provider and refuses a command amount with more places than it — s
 A minor-unit table keyed by ISO 4217 code is owed as the one source of all
 three; until it exists nothing new copies the literal.
 
-**The log store is where rule 3 runs out.** [§13.4](../13-observability.md)
+**The log store is where these rules stop.** [§13.4](../13-observability.md)
 sends a customer's id to the log, which
 [ADR-035](ADR-035-an-integration-event-carries-identifiers-not-personal-data.md)
 already calls personal data, §11.7's erasure reaches no log, and nothing under
-`deploy/observability` states a retention. A stated lifetime for the log
-store is owed, and so is the procedure for a personal-data incident — the
-one event here with a statutory clock on it. No alert fires for it, and
-[§13.9](../13-observability.md)'s gate pairs every runbook with one, so
-the procedure is owed beside the extension's Privacy service and not under
+`deploy/observability` states a retention. A stated lifetime for the log store
+is owed, and so is the procedure for a personal-data incident — the one event
+here with a statutory clock on it. No alert names it and none can, since the
+incident has no signal, and
+[§13.9](../13-observability.md)'s gate fails a runbook no alert points at,
+so the procedure is owed beside the extension's Privacy service and not under
 `docs/runbooks/`.
 
 **The realm offers no language today.** It maps a `locale` attribute and
