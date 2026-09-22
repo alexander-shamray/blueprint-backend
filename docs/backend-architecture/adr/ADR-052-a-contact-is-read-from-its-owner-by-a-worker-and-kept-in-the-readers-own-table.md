@@ -243,6 +243,13 @@ it. The list is written out for ADR-051's reason, and the rows marked
 | `deploy/helm/ordering/values.yaml` | One port, and "Ordering serves no gRPC", argued from ADR-017's one hop |
 | `realm-export.json` | The `web-bff` client's description as the only one holding client credentials, and a realm with internationalisation off, so no user has a locale to read |
 
+**Amended by
+[ADR-053](ADR-053-a-jurisdiction-is-a-value-the-deployment-is-given.md)**, which
+keeps a notification log row with its customer id replaced, so a notification's
+waiting work takes the terminal mark rather than the delete. The sentence that
+puts Notifications on the deleting side stands as written because it was true
+when it was written, and the record that moved it is ADR-053.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)

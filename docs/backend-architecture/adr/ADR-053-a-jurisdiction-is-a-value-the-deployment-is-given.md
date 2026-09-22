@@ -1,10 +1,10 @@
 # ADR-053 — A jurisdiction is a value the deployment is given
 
 **Decision.** This is the record
-[§11.7](../11-identity-authorization.md)'s compliance row asks for, for
-personal data and for card data — HIPAA and SOC 2 are untouched, since no health
-data is handled and no attestation is sought, and each is its own record when
-one is — written before Shipping and Notifications put personal data in new
+[§11.7](../11-identity-authorization.md)'s compliance row asks for, covering
+personal data and card data. HIPAA and SOC 2 are untouched — no health data is
+handled and no attestation is sought — and each earns its own record on the day
+one is. It is written before Shipping and Notifications put personal data in new
 places and send the first messages a regulator would read. The platform is built
 for the United Kingdom and Kazakhstan with the third country left unnamed on
 purpose — a decision about where it runs and none about the domain, which the
@@ -14,15 +14,23 @@ READMEs still call illustrative — and four rules hold it open:
    varies is handed to a deployment as configuration: the languages a customer
    message must be rendered in — a **set**, because Kazakhstan's is two — the
    time zone its dates are rendered in, and each statutory window. A service
-   that reads any of them binds one options class, bound and validated at start
-   as [§15.4](../15-cicd-deployment.md) binds `ServiceIdentityOptions`, and it
-   earns one on that section's own test, since every member differs between
-   deployments. Its members are **refused rather than clamped**, as
-   `RetentionPolicy`'s are, and its windows are the statutory ones and never
-   `RetentionPolicy`'s, which are housekeeping. A template missing for a
-   required language fails the host at start, not the send at night. `Address`
-   is the precedent and already argues it: it checks presence and the shape of
-   an ISO 3166-1 alpha-2 code, and refuses to learn a postcode format or to ask
+   that reads any of them binds a single options class, validated at start as
+   [§15.4](../15-cicd-deployment.md) validates `ServiceIdentityOptions`, and
+   that class passes the test §15.4 sets for one, since every member differs
+   between deployments. §15.4's sentence that `Identity:Client` is the only
+   thing in the solution that differs per environment is amended by this class
+   and by
+   [ADR-052](ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)'s
+   `ContactOptions`, and each required member joins that section's inventory
+   table on the terms it states. The refusal is `[Required]` and a range on the
+   bound class, so a missing or impossible value is §15.4's failure at start and
+   never a clamped one. `RetentionPolicy` refuses rather than clamps too, by a
+   throwing setter on a constant rather than by binding, and its windows are
+   housekeeping but for the one that is §8.5's guarantee; none of them is
+   statutory, and none of these is its. A template missing for a required
+   language fails the host at start, not the send at night. `Address` is the
+   precedent and already argues it: it checks presence and the shape of an ISO
+   3166-1 alpha-2 code, and refuses to learn a postcode format or to ask
    `RegionInfo`.
 2. **A made-up jurisdiction proves rule 1.** A test deployment whose values are
    invented — an address country of `ZZ`, which `Address` already constructs,
@@ -57,11 +65,11 @@ READMEs still call illustrative — and four rules hold it open:
 
 **Card data never arrives, and that is now a decision rather than an accident.**
 `AuthorisationRequest` carries an order, a payer, an amount and a currency, and
-Payments keeps a provider's reference, so no card data is in this platform's
-scope. What a merchant still owes — a self-assessment and the provider's
-attestation — is counsel's, like every cell below. A contract, a column or a log
-line that would hold a card number, an expiry or a verification code is a new
-ADR before it is a pull request.
+Payments keeps only a provider's reference, so no component here ever receives a
+card number. Whether that puts a merchant outside PCI DSS scope is counsel's,
+like every cell below; a self-assessment and the provider's attestation are owed
+regardless. A contract, a column or a log line that would hold a card number, an
+expiry or a verification code is a new ADR before it is a pull request.
 
 **Why.** §11.7 says of regulated data "decide before handling … not after",
 and no record did. The cost of deciding late is specific here: a country
@@ -100,11 +108,11 @@ and the region of every store is whoever runs it.
 **`Money` is the standing counter-example.** Catalog's and Ordering's `Money.Of`
 each round every currency to the same fixed exponent, right for the pound and
 the tenge and wrong for a currency with none or three, and Payments names the
-same exponent `PaymentAmounts.MinorUnitPlaces` and scales the integer the
-provider is sent by it — so "open to a third country" is false at those two
-factories and at the constant the provider's wire is scaled by. A minor-unit
-table keyed by ISO 4217 code is owed as the one source of all three; until it
-exists nothing new copies the literal.
+same exponent `PaymentAmounts.MinorUnitPlaces`, which both scales the integer
+sent to the provider and refuses a command amount with more places than it — so
+"open to a third country" is false at those two factories and at that constant.
+A minor-unit table keyed by ISO 4217 code is owed as the one source of all
+three; until it exists nothing new copies the literal.
 
 **The log store is where rule 3 runs out.** [§13.4](../13-observability.md)
 sends a customer's id to the log, which
