@@ -1559,8 +1559,8 @@ Rules for each service's consumer:
   replaced and keeps the rest, because
   [ADR-053](adr/ADR-053-a-jurisdiction-is-a-value-the-deployment-is-given.md)
   makes it evidence of what was said. Which of the two a record takes is the
-  owning service's call, recorded in an ADR where one has been made; nobody
-  else makes it.
+  owning service's call, and an ADR records it wherever one has been taken;
+  nobody else decides.
 - **Write an audit record** of what was erased and when. That record itself
   contains no personal data — a subject ID hash, a timestamp, a count.
 - **Idempotent.** The message is delivered at least once, and a second erasure
