@@ -495,9 +495,12 @@ owns a touched block whole.
 Either way the count is dropped rather than raised to two. §15.4 owns it, Task
 9 amends it there, and a corrected copy here would be a further place to
 correct the next time the number moves — which is what
-`docs/change-locality.md` asks a mention to avoid. The four copies in other
-services' test support are left alone for the opposite reason: each is still
-true of the host it is written about, and none is in this touch set.
+`docs/change-locality.md` asks a mention to avoid. The copies in
+`Inventory.TestSupport`, `Ordering.TestSupport` and `Common.Web.Tests` are left
+alone for the opposite reason: each is still true of the host it is written
+about, and none is in this touch set. `Catalog.TestSupport`'s is not among them
+— PR-1's Task 3 replaces that block with Payments' ten-line form, which is the
+same form this step reads for.
 
 - [ ] **Step 7: Run; commit**
 
@@ -1077,13 +1080,10 @@ public sealed class TrackingWorkerTests(ServiceFixture fixture) : IAsyncLifetime
         (await Worker().ProcessBatchAsync(TestContext.Current.CancellationToken)).ShouldBe(1);
 
         (await fixture.StatusAsync(shipment.Id)).ShouldBe("Dispatched");
-        (await fixture.OutboxAsync())
-            .Select(row => row.MessageType)
-            .ShouldContain(type => type.Contains("ShipmentDispatched", StringComparison.Ordinal));
     }
 
     [Fact]
-    public async Task A_delivered_page_publishes_the_despatch_first_and_stops_the_polling()
+    public async Task A_delivered_page_is_terminal_and_stops_the_polling()
     {
         Shipment shipment = await fixture.BookedAsync("050000");
 
@@ -1092,13 +1092,6 @@ public sealed class TrackingWorkerTests(ServiceFixture fixture) : IAsyncLifetime
         (await fixture.StatusAsync(shipment.Id)).ShouldBe("Delivered");
         (await fixture.NextPollAtAsync(shipment.Id)).ShouldBeNull(
             "a terminal shipment has nothing further to learn");
-
-        // Order, not membership: Ordering's saga finalises on the first and
-        // ADR-051's projection reads both.
-        (await fixture.OutboxAsync())
-            .OrderBy(row => row.OccurredAt)
-            .Select(row => row.MessageType.Split('.')[^1])
-            .ShouldBe(["ShipmentDispatched", "ShipmentDelivered"]);
     }
 
     [Fact]
@@ -1197,6 +1190,16 @@ public sealed class TrackingWorkerTests(ServiceFixture fixture) : IAsyncLifetime
     private TrackingWorker Worker() => fixture.Factory.Services.GetRequiredService<TrackingWorker>();
 }
 ```
+
+**No test here reads the outbox, and the reason is the registry.**
+`DomainEventDispatcher` stages a `Broker` row only for what
+`IIntegrationEventMapper.Map` returns, and PR-5 leaves
+`ShippingIntegrationEventMapper`'s registry empty; Shipping registers no
+projection handler, so there is no `Local` row either. A despatch therefore
+moves a status and writes no row until Task 4 fills that registry. What this
+worker writes is the status, `NextPollAt`, `Attempts` and `LockedUntil`, and
+that is what it is asserted on here — the two rows and their order are Task 4's,
+added to these same two tests once the mapping that stages them exists.
 
 The fixture helpers this task needs — `BookedAsync`, `StatusAsync`,
 `NextPollAtAsync`, `AttemptsAsync`, `LockedUntilAsync`,
@@ -1721,7 +1724,9 @@ dotnet build Platform.slnx
 dotnet test tests/Shipping.Worker.Tests --filter "FullyQualifiedName~Tracking"
 ```
 
-Expected: 0 warnings, green, Docker running.
+Expected: 0 warnings, green, Docker running. Green over the columns the worker
+writes and over no outbox row: the mapper's registry is still PR-5's empty one
+until Task 4, so a despatch here reaches a status and nothing else.
 `A_pass_that_throws_leaves_the_host_running` takes about thirty-two seconds and
 the cost is named here rather than found, as PR-5 names its overlapping pass's:
 `CarrierHop.TrackingPollInterval` is the loop's period, a loop that has
@@ -1751,13 +1756,17 @@ database.
 - Modify: `tests/Shipping.Application.Tests/ShippingIntegrationEventMapperTests.cs`
   — PR-5's `The_registry_is_empty_because_nothing_here_promotes_a_shipment`
   goes, because this is the pull request that promotes one
+- Modify: `tests/Shipping.Worker.Tests/TrackingWorkerTests.cs` — the two outbox
+  assertions Task 3 could not make, and the delivered test's full name with them
 
 **Interfaces:**
 - Consumes: `ShipmentDispatchedDomainEvent`, `ShipmentDeliveredDomainEvent`
   (PR-1); `Common.Contracts.Shipping.V1.ShipmentDispatched` and
   `ShipmentDelivered`, whose members are
   `MessageId`, `CorrelationId`, `OccurredAt`, `OrderId`, `TrackingNumber`, all
-  `required`.
+  `required`; and, in Task 3's suite, `ServiceFixture.BookedAsync`,
+  `StatusAsync`, `NextPollAtAsync` and PR-1's rendered `OutboxAsync`, none of
+  them new here.
 - Produces: §9.3's allow-list for this service, with exactly two entries.
 
 **What PR-5 left here, and what happens to it.** PR-5 created this suite with
@@ -1775,7 +1784,7 @@ contradiction; `RegisteredEvents` stays and
 the member PR-5 added keeps its only caller and the registry is still asserted
 as a whole rather than one mapping at a time.
 
-- [ ] **Step 1: Write the failing test**
+- [ ] **Step 1: Write the failing tests**
 
 ```csharp
 using Common.Application;
@@ -1898,15 +1907,62 @@ public class ShippingIntegrationEventMapperTests
 }
 ```
 
-- [ ] **Step 2: Run to see it fail**
+**And the two assertions Task 3 held back**, in
+`tests/Shipping.Worker.Tests/TrackingWorkerTests.cs`. They are this task's
+because a `Broker` row exists only once the registry above is filled, and they
+stay in that suite because an outbox row is written by a pass against a real
+database rather than by a `Map` — the registry test asserts the allow-list, and
+these two assert that a poll reaches the lane it opens. The delivered test takes
+its full name back with them:
 
-Run: `dotnet test tests/Shipping.Application.Tests --filter "FullyQualifiedName~ShippingIntegrationEventMapperTests"`
+```csharp
+    [Fact]
+    public async Task A_booked_shipment_is_polled_and_a_collected_page_despatches_it()
+    {
+        Shipment shipment = await fixture.BookedAsync("SIM-TRANSIT");
+
+        (await Worker().ProcessBatchAsync(TestContext.Current.CancellationToken)).ShouldBe(1);
+
+        (await fixture.StatusAsync(shipment.Id)).ShouldBe("Dispatched");
+        (await fixture.OutboxAsync())
+            .Select(row => row.MessageType)
+            .ShouldContain(type => type.Contains("ShipmentDispatched", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task A_delivered_page_publishes_the_despatch_first_and_stops_the_polling()
+    {
+        Shipment shipment = await fixture.BookedAsync("050000");
+
+        await Worker().ProcessBatchAsync(TestContext.Current.CancellationToken);
+
+        (await fixture.StatusAsync(shipment.Id)).ShouldBe("Delivered");
+        (await fixture.NextPollAtAsync(shipment.Id)).ShouldBeNull(
+            "a terminal shipment has nothing further to learn");
+
+        // Order, not membership: Ordering's saga finalises on the first and
+        // ADR-051's projection reads both.
+        (await fixture.OutboxAsync())
+            .OrderBy(row => row.OccurredAt)
+            .Select(row => row.MessageType.Split('.')[^1])
+            .ShouldBe(["ShipmentDispatched", "ShipmentDelivered"]);
+    }
+```
+
+- [ ] **Step 2: Run to see them fail**
+
+```bash
+dotnet test tests/Shipping.Application.Tests --filter "FullyQualifiedName~ShippingIntegrationEventMapperTests"
+dotnet test tests/Shipping.Worker.Tests --filter "FullyQualifiedName~TrackingWorkerTests"
+```
+
 Expected: red on the two mapping tests and on the registry test — PR-5 left
 the registry empty, so every `Map` returns nothing and `RegisteredEvents` is
-empty. PR-5's own empty-registry test is deleted in the same edit, so it is
-not in that run: it asserted the truth this pull request ends, and a test
-kept as a comment about history is what the style guide's *Comments* section
-refuses in code.
+empty — and red on the two worker tests above, which now read an outbox that
+no mapping has staged a row into. PR-5's own empty-registry test is deleted in
+the same edit, so it is not in that run: it asserted the truth this pull
+request ends, and a test kept as a comment about history is what the style
+guide's *Comments* section refuses in code.
 
 - [ ] **Step 3: Fill the registry**
 
@@ -1994,13 +2050,17 @@ internal sealed class ShippingIntegrationEventMapper : IIntegrationEventMapper
 ```bash
 dotnet test tests/Shipping.Application.Tests
 dotnet test tests/Shipping.Worker.Tests --filter "FullyQualifiedName~MessageTypeMapValidatorTests"
+dotnet test tests/Shipping.Worker.Tests --filter "FullyQualifiedName~TrackingWorkerTests"
 ```
 
-Expected: green. The type-map validator is what catches a contract the map
-cannot resolve by name, and it now has two to resolve.
+Expected: green, Docker running for the third. The type-map validator is what
+catches a contract the map cannot resolve by name, and it now has two to
+resolve; the worker suite is where the two entries stop being a registry and
+become rows.
 
 ```bash
-git add src/Services/Shipping/Shipping.Application tests/Shipping.Application.Tests
+git add src/Services/Shipping/Shipping.Application tests/Shipping.Application.Tests \
+        tests/Shipping.Worker.Tests
 git commit -m "feat(shipping): the mapper's two entries, and nothing else on the bus"
 ```
 
@@ -3886,15 +3946,18 @@ The two paragraphs above it in that section — that §15.4 is blunt about this,
 and that an options type needs a member differing between environments — are
 unchanged, because the rule is what they state and only the count moved.
 
-Everything else in the corpus that mentions the count stays: the four
-other copies — `Catalog.TestSupport`, `Inventory.TestSupport`,
-`Ordering.TestSupport` and `Common.Web.Tests` — argue why *their* host binds
-nothing, each is true of the host it is written about, none is in this touch
-set, and
+Everything else in the corpus that mentions the count stays. The copies in
+`Inventory.TestSupport`, `Ordering.TestSupport` and `Common.Web.Tests` argue why
+*their* host binds nothing, which is true of each host whatever the total is;
+`Common.Web`'s `ServiceOptions` and `Web.Bff`'s `ServiceIdentityOptions` argue
+which side of §15.4's test their own class falls on, and only the total beside
+that argument goes stale. None is in this touch set, and
 `docs/change-locality.md` is explicit about a stale restatement met in passing.
-Shipping's own copy is not among them: PR-1 rendered the same block into
-`ShippingWorkerFactory`, where it is false of this host, and Task 1 step 6
-rewrites it.
+`Catalog.TestSupport` is not among them: PR-1's Task 3 replaces that block with
+Payments' ten-line form, which carries no count. Shipping's own copy is not
+either — PR-1 rendered the longer block into `ShippingWorkerFactory`, where it
+is false of this host, and Task 1 step 6 checks that PR-1's template cut
+already removed it, and rewrites it if not.
 
 - [ ] **Step 5: Run the document checks**
 
@@ -4000,8 +4063,9 @@ and says which restatements were corrected and which were deliberately left.
   amendment ADR-053 rule 1 assigns to the first pull request to bind such a
   class → Task 9.
 - Section 8 — both events through the outbox via
-  `ShippingIntegrationEventMapper`'s two entries, and the registry test →
-  Task 4.
+  `ShippingIntegrationEventMapper`'s two entries, the registry test, and the two
+  rows a poll stages → Task 4, which adds those two assertions to Task 3's
+  suite because the registry it fills is what makes them true.
 - Section 9 — `GetEventsAsync` and the 404 that is an empty page → Task 2's
   empty-page test and Task 3's poll; the adapter itself is PR-2's.
 - Section 11 — `shipping.shipments.waiting`, on `CarrierMetrics.MeterName` in
@@ -4037,7 +4101,9 @@ adds. On `ServiceFixture`,
 `NextPollAtAsync`, `AttemptsAsync`, `LockedUntilAsync`,
 `SetCarrierReferenceAsync`, `RequestCancellationAsync`,
 `ClaimForTrackingAsync`, `ClaimForFulfilmentAsync`, `ExpireLeasesAsync` and
-`RunTrackingPassAsync` are Task 3's, and `NewWorkerHost` and `CarrierAnswers`
+`RunTrackingPassAsync` are Task 3's — `BookedAsync`, `StatusAsync` and
+`NextPollAtAsync` consumed again by Task 4, beside PR-1's rendered
+`OutboxAsync` — and `NewWorkerHost` and `CarrierAnswers`
 are PR-5's, consumed by Task 3's second suite; `DeliveredAsync`,
 `VoidedWithTrackingAsync`, `AgeTerminalAsync`, `AddressCountAsync`,
 `TrackingEventCountAsync` and `PurgeShippingRetentionAsync` are Task 5's;
@@ -4058,7 +4124,8 @@ the spec's prose where the two differ:
   `Cancel`, `CarrierCancelled`, and `Attempts`, `NextAttemptAt`,
   `LockedUntil`, `NextPollAt`, `TerminalAt`; `ShipmentId`, `OrderId`,
   `ShipmentStatus`, `TrackingStatus`, the two domain events; `ServiceFixture`
-  with `ScalarAsync`, `ExecuteAsync`, `ColumnsAsync`, `ResetAsync`;
+  with `ScalarAsync`, `ExecuteAsync`, `ColumnsAsync`, `ResetAsync` and the
+  rendered `OutboxAsync`;
   `MetricsInitialiser` and the `OutboxStats`/`OutboxMetrics` pair.
 - PR-2's: `ICarrierGateway.GetEventsAsync`, `CarrierEvent`,
   `CarrierHop.TrackingPollInterval`, `CarrierHop.TotalRequestTimeout`,
@@ -4091,8 +4158,12 @@ the spec's prose where the two differ:
 - **§11.7's erasure consumer.** Spec section 7 names the path — a `DELETE` from
   `DeliveryAddresses` by `CustomerId` — and that extension brings it; the
   retention pass here deletes on a clock and not on a request.
-- **The four code comments that restate §15.4's count** — in
-  `Catalog.TestSupport`, `Inventory.TestSupport`, `Ordering.TestSupport` and
-  `Common.Web.Tests`. Each
-  argues why the host it is written about binds nothing, which stays true;
-  correcting them is owed by whichever pull request next touches those blocks.
+- **The code comments that restate §15.4's count** — in
+  `Inventory.TestSupport`, `Ordering.TestSupport` and `Common.Web.Tests`, each
+  arguing why the host it is written about binds nothing, which stays true; and
+  in `Common.Web`'s `ServiceOptions` and `Web.Bff`'s `ServiceIdentityOptions`,
+  each arguing which side of §15.4's test its own class falls on, with only the
+  total beside that argument going stale. `Catalog.TestSupport`'s copy is not
+  listed because PR-1's Task 3 takes that block to Payments' ten-line form.
+  Correcting the rest is owed by whichever pull request next touches those
+  blocks.
