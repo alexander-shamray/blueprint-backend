@@ -1101,18 +1101,6 @@ public sealed class HttpCarrierGatewayTests : IClassFixture<HttpCarrierGatewayTe
     }
 
     [Fact]
-    public async Task An_answer_larger_than_the_bound_is_refused_before_it_is_read()
-    {
-        _server.Given(Request.Create().WithPath("/v1/shipments/crr_x/events").UsingGet())
-            .AtPriority(0)
-            .RespondWith(Response.Create().WithStatusCode(200)
-                .WithBody("{\"events\":[" + new string('x', CarrierHop.MaxAnswerBytes + 1) + "]}"));
-
-        await Should.ThrowAsync<CarrierUnavailableException>(() =>
-            Carrier().GetEventsAsync("crr_x", TestContext.Current.CancellationToken));
-    }
-
-    [Fact]
     public async Task The_callers_own_cancellation_is_not_counted_against_the_carrier()
     {
         using UnavailableCount counted = UnavailableCounter.Of(_factory.Services);
@@ -1200,7 +1188,12 @@ the sampling window — and the break outlasts the rest of a class's run. Behind
 one `IClassFixture` the 503 case and the first stubbed status row alone would
 open it, and every test after them would be refused without a request leaving
 the process: `Calls(...)` would report the previous test's traffic and the
-assertions would be about the fixture rather than about the carrier. Payments'
+assertions would be about the fixture rather than about the carrier. The
+oversize body is such a row too, and the least obvious one:
+`CarrierAnswerBuffer` sits inside the pipeline, so a body past
+`MaxAnswerBytes` is an `HttpRequestException` the retry handles and the
+breaker records, not a refusal the adapter raises after the pipeline has
+answered. Payments'
 `ProviderHost` is shared safely because its breaker keeps the library's default
 minimum throughput, which no suite reaches; a breaker asserted able to open
 cannot be. So `tests/Shipping.Worker.Tests/CarrierFaultTests.cs` builds a
@@ -1290,6 +1283,25 @@ public sealed class CarrierFaultTests : IDisposable
     }
 
     [Fact]
+    public async Task An_answer_larger_than_the_bound_is_refused_before_it_is_read_and_the_attempt_is_retried()
+    {
+        // CarrierAnswerBuffer reads the body inside the attempt, so a body over
+        // the bound fails the attempt rather than the call: the pipeline
+        // retries it and the breaker remembers it, which is why this row is
+        // here and not on the shared host.
+        Server.Given(Request.Create().WithPath("/v1/shipments/crr_x/events").UsingGet())
+            .AtPriority(0)
+            .RespondWith(Response.Create().WithStatusCode(200)
+                .WithBody("{\"events\":[" + new string('x', CarrierHop.MaxAnswerBytes + 1) + "]}"));
+
+        await Should.ThrowAsync<CarrierUnavailableException>(() =>
+            Carrier().GetEventsAsync("crr_x", TestContext.Current.CancellationToken));
+
+        Calls("/v1/shipments/crr_x/events").ShouldBe(CarrierHop.MaxRetryAttempts + 1,
+            "an oversize body is an attempt the pipeline retries, not an answer the adapter refuses");
+    }
+
+    [Fact]
     public async Task An_open_circuit_makes_no_call_at_all()
     {
         // The breaker sits inside the retry, so one call is
@@ -1333,7 +1345,8 @@ third registration that shape was for.
 
 The `using` block gains the carrier namespace beside the service's others, and
 `FileProviders`, which `TestEnvironment` reads, back in the sorted position
-PR-1 removed it from:
+PR-1 removed it from. All fifteen lines, so the four after `Hosting` are seen
+to stay:
 
 ```csharp
 using System.Diagnostics.Metrics;
@@ -1347,6 +1360,10 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
+using Shouldly;
+using Xunit;
 ```
 
 `BuildServices()` gains the two carrier keys and the third call, and its doc
@@ -2033,9 +2050,10 @@ In `Shipping.Infrastructure.csproj`, beside the existing references:
 
 - [ ] **Step 6: Run the adapter tests and the suite**
 
-Run: `dotnet test tests/Shipping.Worker.Tests --filter "FullyQualifiedName~HttpCarrierGatewayTests"`
-Expected: green. The stalled test takes about nineteen seconds by design, and
-the open-circuit test about four.
+Run: `dotnet test tests/Shipping.Worker.Tests --filter "FullyQualifiedName~Carrier"`
+— both carrier suites, since `CarrierFaultTests` is where the rows that fill
+the breaker live. Expected: green. The stalled test takes about nineteen
+seconds by design, and the open-circuit test about four.
 
 Then `dotnet test tests/Shipping.Worker.Tests --filter "FullyQualifiedName~MetricsRegistrationTests"`
 — green in both directions: `CarrierMetrics` is registered by the third call

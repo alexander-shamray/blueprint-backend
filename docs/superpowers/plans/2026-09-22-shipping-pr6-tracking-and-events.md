@@ -628,12 +628,15 @@ public class ShipmentPollTests
 
 **The release is asserted where a row has really been claimed, and not here.**
 `Shipment.For` and `Book` leave `Attempts` at zero and `LockedUntil` null, and
-no member of the aggregate sets either — only the claim, failure and release
-statements do. A domain assertion that the two are clear after `PollApplied`
-therefore holds whether or not `PollApplied` calls `ReleaseClaim`, and would go
-on holding with that call deleted. `TrackingClaims.ClaimSql` stamps the lease in
-the same pass that applies the page, so the postcondition is asserted in Task 3,
-over a row the pass actually leased.
+the one member of the aggregate that touches either is `ReleaseClaim`, which
+clears them; nothing in the domain writes a non-default value into either. The
+only writes that do are the claim and failure statements in SQL, and the
+worker's `ReleaseSql` clears the lease on the budget path. A domain assertion
+that the two are clear after `PollApplied` therefore holds whether or not
+`PollApplied` calls `ReleaseClaim`, and would go on holding with that call
+deleted. `TrackingClaims.ClaimSql` stamps the lease in the same pass that
+applies the page, so the postcondition is asserted in Task 3, over a row the
+pass actually leased.
 
 - [ ] **Step 2: Write the failing handler test**
 
@@ -4108,12 +4111,14 @@ and says which restatements were corrected and which were deliberately left.
 - [ ] `py -3.12 -m unittest discover -s .github/secret-scan` then
   `py -3.12 .github/secret-scan/secret_scan.py` — both exit 0. **No allow-list
   row is written from this plan, and none is expected.** The broker password in
-  `PlatformFixture` is §14.1's local-development default, written the way
-  `Ordering.TestSupport` and `Inventory.TestSupport` write theirs — a
-  `.WithPassword("…")` argument on the container builder, and an interpolated
-  connection string for the second account — and `credential-assignment` fires
-  only where a credential-shaped **name** is assigned a quoted literal, which
-  neither shape is. Neither of those two fixtures carries a row in
+  `PlatformFixture` is §14.1's local-development default, written twice: once
+  the way `Ordering.TestSupport` and `Inventory.TestSupport` write theirs, a
+  `.WithPassword("…")` argument on the container builder, and once as this
+  fixture's own interpolated `amqp://` string for the second account, a shape
+  neither of those fixtures has. `credential-assignment` fires only where a
+  credential-shaped **name** is assigned a quoted literal, which neither shape
+  is, and no rule reads a credential out of a URL. Neither of those two
+  fixtures carries a row in
   `.github/secret-scan/allowed/tests.txt` today, and that absence is the
   measurement rather than an oversight to copy. A finding the gate does report
   is closed by a row in that file carrying the digest the gate computed and

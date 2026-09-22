@@ -14,9 +14,10 @@ filter, outputs, matrix legs and the `images` job's own `if:`.
 template. `Names` gains a host, the rename maps `Catalog.Api` to
 `<Name>.Worker`, `CatalogApi` to `<Name>Worker` and `catalog-api` to
 `<name>-worker` in one pass, and a `WORKER_PATCHES` table drops the OpenAPI
-document and the endpoint guidance an API host carries and a worker never
-will. Kestrel stays bound because §15.3 says the worker's one listener is
-§13.5's health endpoint. Nothing dials it, so the Compose unit publishes no
+document, the endpoint guidance an API host carries and a worker never will,
+and the smoke tests that ask the host for the document. Kestrel stays bound
+because §15.3 says the worker's one listener is §13.5's health endpoint.
+Nothing dials it, so the Compose unit publishes no
 port and the worker mode takes no `--port`. On top of the render this PR
 strips `AddRedisConnections` as Payments' PR-1 did, widens the broker grant to
 `ordering-svc`'s shape under a `shipping-` prefix, and adds the aggregate: a
@@ -369,9 +370,10 @@ After:
 namespace Catalog.Api.Tests;
 ```
 
-The `using` block: three re-pointed, and two that go. The provider namespace
-has nothing to resolve to in Catalog, and `FileProviders` is read only by the
-`TestEnvironment` this step removes. Before:
+The `using` block, all fifteen lines: three re-pointed, two that go, and ten
+that stay as they are. The provider namespace has nothing to resolve to in
+Catalog, and `FileProviders` is read only by the `TestEnvironment` this step
+removes. Before:
 
 ```csharp
 using System.Diagnostics.Metrics;
@@ -385,6 +387,10 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
+using Shouldly;
+using Xunit;
 ```
 
 After:
@@ -399,10 +405,17 @@ using Common.Infrastructure.Messaging;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
+using Shouldly;
+using Xunit;
 ```
 
 `Microsoft.Extensions.Hosting` stays: `IHostedService` is the type the
 initialiser's registration test asks for, and it outlives the environment.
+The two `Logging` lines stay for `AddLogging()` and
+`NullLogger<OutboxMetrics>.Instance`, which the meter tests further down use
+and this step does not touch.
 
 `BuildServices`' doc block counts the helpers and argues from the third one.
 Catalog has two, and the type that argument turns on does not exist here.
@@ -772,6 +785,18 @@ class RendersAWorker(unittest.TestCase):
         # And it is still a web project, for §13.5's endpoint.
         self.assertIn("Microsoft.NET.Sdk.Web", csproj)
 
+    def test_the_host_suite_asks_for_no_openapi_document(self):
+        # The template's smoke suite GETs the document with a caller and
+        # expects 200; on a host that maps none, that request is the 404 the
+        # suite's own unknown-path test asserts, so the copy would be red.
+        smoke = self.rendered.created[f"tests/{PROBE}.Worker.Tests/HostSmokeTests.cs"]
+        self.assertNotIn("/openapi", smoke)
+        self.assertNotIn("OpenApi_document", smoke)
+        # The probe tests and the authenticated factory stay: the patch takes
+        # the two tests and not the file's tail.
+        self.assertIn("An_unknown_path_is_a_404_to_a_caller(", smoke)
+        self.assertIn("class AuthenticatedUnreachableFactory", smoke)
+
     def test_the_compose_pair_is_migrator_and_worker_and_publishes_no_port(self):
         unit = self.rendered.created[WORKER_UNIT]
         declared = [line for line in unit.split("\n") if new_service.SERVICE_KEY.fullmatch(line)]
@@ -1047,12 +1072,12 @@ can read.
 # The edits a WORKER render makes on top of PATCHES, and the order is
 # load-bearing: these are appended to a file's PATCHES tuple, so each anchor is
 # matched against the text the earlier ones already produced. Two of the three
-# below anchor on a PATCHES *replacement* for exactly that reason.
+# Program.cs entries anchor on a PATCHES *replacement* for exactly that reason.
 #
 # §3.2 gives a worker no API, and §15.3 keeps Kestrel bound for §13.5's health
-# endpoint — so what leaves is the OpenAPI document and the endpoint guidance,
-# and what stays is the host, the middleware §11.2 requires of every service,
-# and the probes.
+# endpoint — so what leaves is the OpenAPI document, the endpoint guidance and
+# the smoke tests that ask for the document, and what stays is the host, the
+# middleware §11.2 requires of every service, and the probes.
 WORKER_PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
     "src/Services/Catalog/Catalog.Api/Catalog.Api.csproj": (
         (
@@ -1115,8 +1140,90 @@ WORKER_PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
             "app.MapCommonHealthEndpoints();   // §13.5 — anonymous; kubelet carries no token\n",
         ),
     ),
+    # The smoke suite asks the host for the document with a caller and expects
+    # 200. A host that maps no document answers 404 to that caller — the
+    # suite's own unknown-path test says so — so the two tests that name the
+    # document leave, and the suite's two doc blocks stop describing it. The
+    # authenticated factory stays: the unknown-path test is its other user.
+    "tests/Catalog.Api.Tests/HostSmokeTests.cs": (
+        (
+            "/// The host builds under <c>ValidateOnBuild</c> and answers what an empty\n"
+            "/// service can already be asked: the probes (§13.5) and the OpenAPI document\n"
+            "/// (Appendix C). One factory for the class, since nothing mutates the host.\n",
+            "/// The host builds under <c>ValidateOnBuild</c> and answers what an empty\n"
+            "/// worker can already be asked: the probes (§13.5), which §15.3 makes its one\n"
+            "/// listener. One factory for the class, since nothing mutates the host.\n",
+        ),
+        (
+            "    /// <summary>\n"
+            "    /// The same unreachable host with the <c>TestAuthHandler</c> scheme the\n"
+            "    /// base factory installs, so a caller can authenticate.\n"
+            "    /// </summary>\n"
+            "    /// <remarks>\n"
+            "    /// It exists because <c>AddCommonWebDefaults</c> sets a fallback\n"
+            "    /// authorization policy (§11.4): the OpenAPI document is behind it, so the\n"
+            "    /// production-scheme factory can prove only that a caller is challenged.\n"
+            "    /// Whether the document still generates needs a caller who gets through,\n"
+            "    /// and this is the cheapest one — no container, since generating the\n"
+            "    /// document reaches no dependency.\n"
+            "    /// </remarks>\n",
+            "    /// <summary>\n"
+            "    /// The same unreachable host with the <c>TestAuthHandler</c> scheme the\n"
+            "    /// base factory installs, so a caller can authenticate: the fallback\n"
+            "    /// policy (§11.4) lets the production-scheme factory prove only that a\n"
+            "    /// caller is challenged, and whether an unknown path is still a 404\n"
+            "    /// needs one who gets through — the cheapest, since it reaches nothing.\n"
+            "    /// </summary>\n",
+        ),
+        (
+            "\n"
+            "    [Fact]\n"
+            "    public async Task OpenApi_document_is_not_anonymous()\n"
+            "    {\n"
+            "        // MapOpenApi carries no authorization metadata of its own, so it is\n"
+            "        // reached by the fallback policy AddCommonWebDefaults sets (§11.4).\n"
+            "        // That is the decision rather than an accident: the document\n"
+            "        // enumerates every route and every schema this service has, and §11.2\n"
+            "        // assumes the network inside the cluster is hostile.\n"
+            "        using HttpClient client = factory.CreateClient();\n"
+            "\n"
+            "        HttpResponseMessage response =\n"
+            "            await client.GetAsync(\"/openapi/v1.json\", TestContext.Current.CancellationToken);\n"
+            "\n"
+            "        response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);\n"
+            "    }\n"
+            "\n"
+            "    [Fact]\n"
+            "    public async Task OpenApi_document_is_served_to_a_caller()\n"
+            "    {\n"
+            "        // The half a 401 cannot show. Without this the test above would go on\n"
+            "        // passing if the document stopped generating altogether — every path\n"
+            "        // answers 401 to an anonymous caller, the ones that do not exist\n"
+            "        // included.\n"
+            "        using AuthenticatedUnreachableFactory authenticated = new();\n"
+            "        using HttpClient client = authenticated.CreateClient();\n"
+            "\n"
+            "        using HttpRequestMessage request = new(HttpMethod.Get, \"/openapi/v1.json\");\n"
+            "        request.Headers.Add(TestAuthHandler.UserHeader, Guid.CreateVersion7().ToString());\n"
+            "\n"
+            "        HttpResponseMessage response =\n"
+            "            await client.SendAsync(request, TestContext.Current.CancellationToken);\n"
+            "\n"
+            "        response.StatusCode.ShouldBe(HttpStatusCode.OK);\n"
+            "        response.Content.Headers.ContentType!.MediaType.ShouldBe(\"application/json\");\n"
+            "    }\n",
+            "",
+        ),
+    ),
 }
 ```
+
+The third `HostSmokeTests.cs` needle is the two tests whole, from the blank
+line above the first `[Fact]` to the closing brace of the second, because
+`str.replace` can only remove what it is handed; the file's own closing brace
+follows the needle and is untouched. The second quotes the factory's twelve
+template lines, and Task 3 shortens that block — its Step 4 says what the
+needle takes then.
 
 `render.py` applies them in `render_projects`, after `PATCHES` and before the
 migration-shape tables:
@@ -1413,8 +1520,8 @@ than went.
   `tests/Catalog.TestSupport/TestAuthHandler.cs`
 - Modify: `tools/new-service/scaffold/patch.py` — the anchors that quote a
   comment this task rewrites, the four migration tables that become empty, the
-  `WORKER_PATCHES` needle that quotes a shortened replacement, and the four
-  replacements that render a block over ten lines
+  two `WORKER_PATCHES` needles that quote a block this task shortens, and the
+  four replacements that render a block over ten lines
 - Modify: `tools/new-service/scaffold/render.py` — `ASSEMBLY_MARKER`
 
 **Interfaces:** none. Every edit is a comment or a patch string; no signature,
@@ -2113,7 +2220,10 @@ the gate judges in the rendered file exactly as a copied line is.
 
 and Task 2's `WORKER_PATCHES` entry for the same file quotes those eleven lines
 as its needle, so it takes these ten instead — the replacement it writes is
-unchanged.
+unchanged. The same table's second `HostSmokeTests.cs` needle quotes the
+twelve lines Step 2 cut to seven at line 40, so it takes those seven; its
+replacement, which speaks of the unknown-path test rather than the document,
+is unchanged too.
 
 `Catalog.Application/Integration/CatalogIntegrationEventMapper.cs`'s second
 entry writes thirteen lines; it becomes
@@ -2327,7 +2437,10 @@ dotnet test tests/Common.Web.Tests --filter ObservabilityTests
 One project per invocation: `dotnet test` takes a single project or solution
 argument. Expected: 0 warnings, 0 errors, every test green. The container half
 needs Docker; a failure on `Failed to connect to Docker endpoint` is the
-daemon, not the scaffold.
+daemon, not the scaffold. `Shipping.Worker.Tests`' `HostSmokeTests` runs two
+tests fewer than Catalog's: Task 2's `WORKER_PATCHES` took the two that ask
+for `/openapi/v1.json`, which this host answers with a 404 to a caller, and
+the unknown-path pair and the probes are what remain.
 
 - [ ] **Step 5: Confirm the secret scan accepts the rendered tree**
 
