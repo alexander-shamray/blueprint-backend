@@ -1557,10 +1557,12 @@ Rules for each service's consumer:
 
 - **Delete or anonymise, per record.** An order that must be retained for tax
   law is anonymised — customer identifiers replaced, address cleared, the
-  financial record preserved. A notification log row loses its customer id
-  and keeps the rest, because
+  financial record preserved. A notification log row has its customer id
+  replaced and keeps the rest, because
   [ADR-053](adr/ADR-053-a-jurisdiction-is-a-value-the-deployment-is-given.md)
-  keeps it as evidence. The owning service makes that call; nobody else can.
+  makes it evidence of what was said. Which a record takes is the owning
+  service's call, recorded as an ADR where one has been; nobody else makes
+  it.
 - **Write an audit record** of what was erased and when. That record itself
   contains no personal data — a subject ID hash, a timestamp, a count.
 - **Idempotent.** The message is delivered at least once, and a second erasure
