@@ -36,7 +36,7 @@ READMEs still call illustrative — and four rules hold it open:
    setter on a record each service registers rather than by binding, and its
    windows are housekeeping but for the one that is
    [§8.5](../08-caching-redis.md)'s guarantee; none of `RetentionPolicy`'s
-   windows is statutory, and a statutory window never becomes one. A template
+   windows is statutory, and a statutory window never joins them. A template
    missing for a required language fails the host at start, not the send at
    night. `Address` is the precedent and already argues it: it checks presence
    and the shape of an ISO 3166-1 alpha-2 code, and refuses to learn a postcode
@@ -58,13 +58,13 @@ READMEs still call illustrative — and four rules hold it open:
 4. **What was said to a customer is kept as evidence, not as a copy.** A message
    template is versioned as [§9.2](../09-messaging.md) versions a contract — a
    new version beside the old — and a version is retired not when nothing sends
-   it but when no record of a send still names it, which is the statutory window
-   and not §9.2's deprecation one. The record of a send holds the event's id,
-   the template's key and version, the languages it was rendered in, the outcome
-   and the times, the customer's id rather than the mailbox, and never the body.
-   On erasure the id is replaced as §11.7 replaces an order's, and the row, then
-   holding nothing personal, lives for the statutory window; §11.7's erasure
-   rule is amended with it.
+   it but when no record of a send still names it, which is that record's
+   statutory window and not §9.2's deprecation one. The record of a send holds
+   the event's id, the template's key and version, the languages it was rendered
+   in, the outcome and the times, the customer's id rather than the mailbox, and
+   never the body. On erasure the id is replaced as §11.7 replaces an order's,
+   and the row, then holding nothing personal, lives for the statutory window;
+   §11.7's erasure rule is amended with it.
    [ADR-052](ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)
    sorts a reader's waiting work by whether §11.7 deletes or keeps the record
    and puts Notifications on the deleting side; with the row kept, a
@@ -81,7 +81,10 @@ component here ever receives a card number. Whether that puts a merchant outside
 PCI DSS scope is counsel's, like every cell below; a self-assessment and the
 provider's attestation are owed regardless. A contract, a column or a log line
 that would hold a card number, an expiry or a verification code is a new ADR
-before it is a pull request.
+before it is a pull request. The payer that request carries is the order's
+customer id, so the provider is already the third party rule 3 describes: a
+chart value today, and owed the naming as a processor, with the country it runs
+in, that no service's design yet gives it.
 
 **Why.** §11.7 says of regulated data "decide before handling … not after",
 and no record did. The cost of deciding late is specific here: a country
@@ -127,13 +130,13 @@ A minor-unit table keyed by ISO 4217 code is owed as the one source of all
 three; until it exists nothing new copies the literal.
 
 **The log store is where these rules stop.** [§13.4](../13-observability.md)
-sends a customer's id to the log, which
+sends a customer's id to the log, and
 [ADR-035](ADR-035-an-integration-event-carries-identifiers-not-personal-data.md)
-already calls personal data, §11.7's erasure reaches no log, and nothing under
-`deploy/observability` states a retention. A stated lifetime for the log store
-is owed, and so is the procedure for a personal-data incident — the one event
-here with a statutory clock on it. No alert names it and none can, since the
-incident has no signal, and
+already calls that identifier personal data; §11.7's erasure reaches no log, and
+nothing under `deploy/observability` states a retention. A stated lifetime for
+the log store is owed, and so is the procedure for a personal-data incident —
+the one event here with a statutory clock on it. No alert names it and none can,
+since the incident has no signal, and
 [§13.9](../13-observability.md)'s gate fails a runbook no alert points at,
 so the procedure is owed beside the extension's Privacy service and not under
 `docs/runbooks/`.
