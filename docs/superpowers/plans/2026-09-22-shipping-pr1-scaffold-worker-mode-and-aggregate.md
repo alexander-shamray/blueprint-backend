@@ -1487,7 +1487,20 @@ public sealed record ShipmentDeliveredDomainEvent(
 - [ ] **Step 1: Write the failing domain tests**
 
 `tests/Shipping.Domain.Tests/ShipmentTests.cs` — one test per row of the
-spec's section 5 table, and one per refused arrival:
+spec's section 5 table that the aggregate's surface can reach, and one per
+refused arrival.
+
+**Two rows are not the aggregate's, and this suite does not claim them.** The
+second and third — `— | OrderCancelled | Voided` and
+`Voided | OrderConfirmed | Voided` — are the tombstone, and the tombstone is a
+branch of the consumer rather than a move of the state machine: `For` yields
+`Pending` and always has, there is no `OrderConfirmed` operation for a second
+arrival to be a no-op of, and what the two rows describe is a consumer that
+finds no row and creates a voided one, and a consumer that finds a voided row
+and returns. They land with the consumers, driven from their own Application
+tests, and this plan leaves them uncovered on purpose rather than inventing an
+aggregate operation to hold them. Row 6, `Pending | OrderCancelled | Voided`,
+is the aggregate's and is covered here, by `Cancel`.
 
 ```csharp
 using Common.Domain;
@@ -2267,9 +2280,9 @@ namespace Shipping.Worker.Tests;
 
 /// <summary>
 /// The spec's section 7, against the engine the migrator ran on. The aggregate
-/// lands in this pull request and nothing drives it until PR-5, so this is
-/// what makes the migration real: a table nobody has inserted into is a table
-/// nobody has checked.
+/// lands here and nothing drives it until a later slice, so this is what makes
+/// the migration real: a table nobody has inserted into is a table nobody has
+/// checked.
 /// </summary>
 [Collection(nameof(IntegrationCollection))]
 public sealed class ShipmentsSchemaTests(ServiceFixture fixture) : IAsyncLifetime
@@ -2362,7 +2375,7 @@ public sealed class ShipmentsSchemaTests(ServiceFixture fixture) : IAsyncLifetim
         db.Shipments.Add(shipment);
         // The domain events stay on the aggregate here: §7.5's dispatcher runs
         // inside the unit of work, and this test writes through the context
-        // directly because PR-5 brings the first command that does not.
+        // directly because the first command that does not comes later.
         shipment.ClearDomainEvents();
         await db.SaveChangesAsync(TestContext.Current.CancellationToken);
     }
@@ -2912,8 +2925,15 @@ in both directions, and then `/ship`.
 - Section 5, the aggregate: Task 6 — `Shipment` keyed by `ShipmentId` with
   `OrderId` unique, `TrackingEvent` keyed by `(ShipmentId, CarrierEventId)`,
   `TrackingStatus` closed over `Collected`, `InTransit`, `Delivered` and
-  `Unrecognised`, every row of the state table, "every other arrival is a
-  no-op that logs and returns, never a throw", and the shuffled feed.
+  `Unrecognised`, every row of the state table the aggregate's surface can
+  reach, "every other arrival is a no-op that logs and returns, never a
+  throw", and the shuffled feed. The table's second and third rows are the
+  tombstone and are the consumers' branches, not the aggregate's: `For` yields
+  `Pending` and no `OrderConfirmed` operation exists for the late arrival to
+  be a no-op of, so they are driven from the Application tests that land with
+  the consumers (PR-5), and Task 6 step 1 says so. The spec's table is not
+  changed for this: it is the specification of the behaviour, and where the
+  behaviour lands is this plan's to state.
 - Section 7, persistence: Task 7 — schema `shipping`, both column lists, and
   `AddShipments` with `TrackingEvents` in it.
 - Section 8, the broker account `shipping-svc` in `ordering-svc`'s shape under
@@ -2943,7 +2963,10 @@ to log a superseded arrival.
 `DeliveryAddresses.Get` (PR-4). `shipping-events`, the two consumers,
 `IShipmentRepository` and the fulfilment worker (PR-5) — PR-1 maps the
 aggregate so `migrations add` emits its tables and nothing more, on the
-argument Payments' `PaymentOrderRow` makes one level up. The tracking worker,
+argument Payments' `PaymentOrderRow` makes one level up. The state table's
+second and third rows go with them: the tombstone is a branch of the consumer,
+not a move of the aggregate, and it is proved where that branch is written.
+The tracking worker,
 the lease and backoff operations over the columns this PR creates, the two
 integration events through the outbox, `ShippingJurisdictionOptions` and the
 retention pass (PR-6). The chart, the canary row and §13.6's two rules

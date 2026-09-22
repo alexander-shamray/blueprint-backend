@@ -57,8 +57,9 @@ the tombstone), 9 (the address port and its adapter), 10
   `tools/new-service/scaffold/render.py`.
   Why each, since the row above is paths only: the service's own code and its
   suites are A; `Platform.slnx` and the `*.csproj` files this PR edits — the
-  gRPC client packages in `Shipping.Infrastructure`, the JWT reader, and the
-  new stub library — are E; the Compose model, CI's filter, the secret scan's
+  gRPC client packages in `Shipping.Infrastructure`, the JWT reader, the
+  `InternalsVisibleTo` in `Shipping.Application`, and the new stub library —
+  are E; the Compose model, CI's filter, the secret scan's
   allow-list, the chapters, the runbook, `docs/repo-map.md`, `CLAUDE.md` and
   the scaffold's drop list are D. The last four arrived with the spec's
   section 13, which assigns each of ADR-052's remaining rows to a pull
@@ -93,8 +94,9 @@ the tombstone), 9 (the address port and its adapter), 10
   differently, the spelling moves and nothing else in this plan does.
 - **No `Directory.Packages.props` change and no Appendix B row.**
   `Grpc.Net.ClientFactory`, `Google.Protobuf`, `Grpc.Tools`,
-  `Grpc.AspNetCore` and `System.IdentityModel.Tokens.Jwt` are all pinned and
-  all registered. Each `PackageReference` this PR adds carries no `Version=`.
+  `Grpc.AspNetCore`, `System.IdentityModel.Tokens.Jwt` and `WireMock.Net` are
+  all pinned and all registered. Each `PackageReference` this PR adds carries
+  no `Version=`.
 - **The consumers make no outbound call**, and nothing in this service throws
   into a queue. A superseded arrival is the aggregate's `false`, logged and
   returned.
@@ -128,6 +130,8 @@ the tombstone), 9 (the address port and its adapter), 10
 - Create: `.../RecordOrderCancelled/VoidShipmentCommand.cs`
 - Create: `.../RecordOrderCancelled/VoidShipmentHandler.cs`
 - Create: `src/Services/Shipping/Shipping.Infrastructure/Persistence/ShipmentRepository.cs`
+- Modify: `src/Services/Shipping/Shipping.Application/Shipping.Application.csproj`
+  — the `InternalsVisibleTo` the mapper's registry assertion needs
 - Modify: `src/Services/Shipping/Shipping.Infrastructure/DependencyInjection.cs` — the repository
 - Modify: `src/Services/Shipping/Shipping.Infrastructure/Messaging/DependencyInjection.cs`
 - Test: `tests/Shipping.Application.Tests/ShipmentConsumerTests.cs`
@@ -152,6 +156,12 @@ public interface IShipmentRepository
 
 namespace Shipping.Infrastructure.Messaging;
 public static class DependencyInjection { public const string EventsQueue = "shipping-events"; }
+
+namespace Shipping.Application.Integration;
+internal sealed class ShippingIntegrationEventMapper   // rendered; one member added here
+{
+    internal static IReadOnlyCollection<Type> RegisteredEvents { get; }
+}
 ```
 
 - [ ] **Step 1: Write the failing Application tests**
@@ -322,8 +332,33 @@ public void The_registry_is_empty_because_nothing_here_promotes_a_shipment()
 }
 ```
 
-with `public static IReadOnlyCollection<Type> RegisteredEvents => Registry.Keys;`
-added to the rendered mapper, exactly as Payments' carries it.
+with `internal static IReadOnlyCollection<Type> RegisteredEvents => Registry.Keys;`
+added to the rendered mapper.
+
+**`internal`, and the member is new rather than copied from another service.**
+Every mapper in the solution — Catalog's, Ordering's, Inventory's, Payments' —
+is an `internal sealed class` over a `private static readonly Registry`, and
+none of them exposes the registry at all, so there is no established form to
+follow here and a `public` member on an internal type would widen nothing while
+reading as though it did. The suite reaches the member through an
+`InternalsVisibleTo`, which
+`src/Services/Shipping/Shipping.Application/Shipping.Application.csproj` gains
+in this step, with the argument in the file:
+
+```xml
+  <ItemGroup>
+    <!-- §12's Application suite asserts §9.3's allow-list as a whole, and the
+         mapper holding it is internal because §5.5 makes that registry a
+         construction rather than a surface. Named here rather than widened at
+         the member: one line naming the one assembly that reads it commits
+         less than a public member on a type no other assembly may hold. -->
+    <InternalsVisibleTo Include="Shipping.Application.Tests" />
+  </ItemGroup>
+```
+
+`InternalsVisibleTo` is an MSBuild item the SDK turns into the attribute, so no
+`using` and no `AssemblyInfo.cs` is owed. PR-6 consumes the same member under
+the same modifier when it fills the registry.
 
 - [ ] **Step 2: Run them to see them fail**
 
@@ -1664,8 +1699,10 @@ namespace Shipping.Infrastructure.Addresses;
 /// A decorator rather than a change to <c>CachingTokenClient</c>: the grant is
 /// this service's and that building block is every host's. Keycloak's default
 /// roles sit in <c>realm_access</c>, which this claim does not carry (ADR-052).
+/// Public for <c>CarrierHop</c>'s reason (§4.2): the composition root is another
+/// assembly, and one modifier commits less than an <c>InternalsVisibleTo</c>.
 /// </remarks>
-internal sealed partial class GrantCheckedTokenCache(
+public sealed partial class GrantCheckedTokenCache(
     ITokenCache inner,
     AddressMetrics metrics,
     ILogger<GrantCheckedTokenCache> log) : ITokenCache
@@ -1950,11 +1987,14 @@ builder.Services.AddSingleton(new AuthorityKeyName(AuthenticationExtensions.Auth
 builder.Services.AddDeliveryAddressSource(builder.Configuration, builder.Environment);
 ```
 
-`GrantCheckedTokenCache` is `internal`, so `Program.cs` reaches it through the
-`Shipping.Infrastructure.Addresses` namespace only if the type is made
-`public`. Make it `public sealed partial class`, on the modifier rule
-`CarrierHop` states: the composition root is another assembly, and one
-modifier commits less than an `InternalsVisibleTo`.
+`GrantCheckedTokenCache` is written `public` in step 5 above and is not
+widened here, because `Program.cs` in `Shipping.Worker` constructs it: the
+composition root is another assembly, and `CarrierHop` and `ProviderHop`
+already settle that one modifier commits less than an `InternalsVisibleTo`
+naming a consumer. **That is the opposite call from Task 1's mapper and the
+difference is the consumer**: a type a production host constructs is reached
+by a modifier, and a member only a suite reads is reached by naming the suite —
+widening the second would put a public surface on a type §9.3 keeps closed.
 
 `Shipping.Infrastructure.csproj` gains, beside PR-2's two rows:
 
@@ -2599,6 +2639,8 @@ as what keeps section 6's "never booked" true.
 **Files:**
 - Modify: `tests/Shipping.TestSupport/ServiceFixture.cs` — the carrier
   simulator, the Ordering stub, the reset and the pass helper
+- Modify: `tests/Shipping.TestSupport/Shipping.TestSupport.csproj` —
+  `WireMock.Net`, which this task is the first thing in that project to name
 - Create: `tests/Shipping.TestSupport/ShipmentCommitFaults.cs`
 - Create: `tests/Shipping.TestSupport/CapturedLogs.cs`
 - Test: `tests/Shipping.Worker.Tests/ShipmentFulfilmentTests.cs`
@@ -2618,6 +2660,31 @@ as what keeps section 6's "never booked" true.
 `SimulatorMappings.Directory()`, exactly as Payments' fixture starts its
 provider, and a `StubOrdering` beside it; both are reset in `ResetAsync` — the
 mappings as well as the log, because a stub a test adds outlives a log reset.
+
+**The server is exposed by its own type**, as Payments' fixture exposes
+`Provider`, because a later suite drives it through WireMock.Net's own builders
+rather than only reading its journal:
+
+```csharp
+    /// <summary>
+    /// §3.2's carrier, in process over the same mappings directory Compose
+    /// mounts (spec, section 9), so no test double stands between the adapter
+    /// and a real HTTP hop.
+    /// </summary>
+    public WireMockServer Carrier { get; private set; } = null!;
+```
+
+started with `WireMockServer.Start()` and `ReadStaticMappings(
+SimulatorMappings.Directory())`, and reset per test with `ResetLogEntries()`,
+`ResetMappings()` and a second `ReadStaticMappings` — Payments' fixture's three
+lines, which is also what bounds a mapping a test adds to that test.
+
+**This is what puts `WireMock.Net` on `Shipping.TestSupport.csproj`.** PR-2 put
+the package on `Shipping.Worker.Tests` alone, because until now the only
+in-process server was that suite's own; `SimulatorMappings` names no WireMock
+type, which is why the project compiles today without it. The reference carries
+no `Version=`: the pin is in `Directory.Packages.props` and Payments' own
+TestSupport already takes it, so no Appendix B row is owed.
 `Factory` becomes
 `new ShippingWorkerFactory(ConnectionString, _rabbit.GetConnectionString(), Carrier.Urls[0] + "/", addressSourceBaseUrl: Ordering.Address.ToString())`.
 
@@ -2647,6 +2714,18 @@ public sealed class ShipmentFulfilmentTests(ServiceFixture fixture) : IAsyncLife
 {
     private static readonly DeliveryAddress Kazakh =
         new("Абай даңғылы 1, ә ғ қ ң ө ұ ү һ і", "пәтер 12", "Алматы", "050000", "KZ");
+
+    // The same two literals DeliveryAddressSourceTests declares, copied rather
+    // than shared on the rule the Payments suites follow: a host deliberately
+    // unable to reach anything, for the one test that needs a failing claim.
+    private const string UnreachableSql =
+        "Server=sql.invalid;Database=Shipping;User Id=x;Password=x;TrustServerCertificate=true";
+
+    private const string UnreachableRabbit = "amqp://shipping-svc:x@rabbit.invalid:5672";
+
+    // One tick plus enough for the pass to land, which is the whole of what
+    // the loop assertion below waits on.
+    private static readonly TimeSpan Margin = TimeSpan.FromSeconds(2);
 
     public ValueTask InitializeAsync() => new(fixture.ResetAsync());
 
@@ -2698,7 +2777,13 @@ public sealed class ShipmentFulfilmentTests(ServiceFixture fixture) : IAsyncLife
     public async Task An_owner_that_refuses_leaves_the_shipment_pending_and_nothing_in_an_error_queue()
     {
         Guid order = await ConfirmAsync(Kazakh);
-        fixture.Ordering.Fail(StatusCode.PermissionDenied, StatusCode.PermissionDenied);
+
+        // One refusal, not two, and the count is the arrangement: the stub
+        // dequeues one status per call, the claim takes one row, and a gRPC
+        // status is asked exactly once because it travels as an HTTP 200 with
+        // grpc-status in the trailers. Two queued would make the recovery pass
+        // below consume the second and fail.
+        fixture.Ordering.Fail(StatusCode.PermissionDenied);
 
         (await fixture.RunFulfilmentPassAsync()).ShouldBe(0);
 
@@ -2756,9 +2841,14 @@ public sealed class ShipmentFulfilmentTests(ServiceFixture fixture) : IAsyncLife
         Guid order = await ConfirmAsync(Kazakh);
         using CommitFault fault = fixture.FailNextCommit();
 
-        await Should.ThrowAsync<Exception>(() => fixture.RunFulfilmentPassAsync());
+        // Zero rather than a throw: the pass catches per row and backs it off,
+        // so a failed commit reaches the row's catch and never the caller
+        // (spec, section 4). The counter is what says the catch ran.
+        (await fixture.RunFulfilmentPassAsync()).ShouldBe(0);
+        (await AttemptsAsync(order)).ShouldBe(1);
+
         await ClearBackoffAsync(order);
-        await fixture.RunFulfilmentPassAsync();
+        (await fixture.RunFulfilmentPassAsync()).ShouldBe(1);
 
         fault.Fired.ShouldBeTrue("the first pass booked and then failed its commit");
         BookingCalls().ShouldBe(2, "the retry repeated the call rather than skipping it");
@@ -2779,9 +2869,15 @@ public sealed class ShipmentFulfilmentTests(ServiceFixture fixture) : IAsyncLife
         Task<int> first = fixture.RunFulfilmentPassAsync();
         await WaitUntil(() => BookingCalls() >= 1);
         (await fixture.RunFulfilmentPassAsync()).ShouldBe(0, "the second pass skipped a leased row");
-        await Should.ThrowAsync<Exception>(() => first);
+
+        // Zero for the first pass too: the stalled booking gives up inside
+        // CarrierHop's total and the row's catch backs it off rather than
+        // letting the fault out of the pass.
+        (await first).ShouldBe(0);
 
         (await StatusAsync(order)).ShouldBe("Pending");
+        (await AttemptsAsync(order)).ShouldBe(1, "one pass failed on the row, and the other never took it");
+        BookingCalls().ShouldBe(1, "the second pass reached no carrier at all");
     }
 
     [Fact]
@@ -2798,16 +2894,22 @@ public sealed class ShipmentFulfilmentTests(ServiceFixture fixture) : IAsyncLife
     [Fact]
     public async Task A_pass_that_throws_leaves_the_host_running()
     {
-        // The loop rather than the pass: ExecuteAsync's catch is what stops one
-        // escaped exception becoming a stopped host, and the default
-        // BackgroundServiceExceptionBehavior is what makes that matter.
-        await ConfirmAsync(Kazakh with { PostalCode = "SIM-DOWN" });
-        FulfilmentWorker worker = fixture.Factory.Services.GetRequiredService<FulfilmentWorker>();
+        // The CLAIM failing, and not a row: RunOnceAsync catches per row, so a
+        // carrier outage never reaches ExecuteAsync's catch at all and a test
+        // driven through one would stay green with that catch deleted. An
+        // unreachable database is what makes the pass itself throw.
+        using ShippingWorkerFactory broken = new(UnreachableSql, UnreachableRabbit);
+        FulfilmentWorker worker = broken.Services.GetRequiredService<FulfilmentWorker>();
+
+        await Should.ThrowAsync<Exception>(() => worker.RunOnceAsync(TestContext.Current.CancellationToken));
 
         await worker.StartAsync(TestContext.Current.CancellationToken);
-        await Task.Delay(CarrierHop.FulfilmentTick * 2, TestContext.Current.CancellationToken);
+        await Task.Delay(CarrierHop.FulfilmentTick + Margin, TestContext.Current.CancellationToken);
 
+        // ExecuteTask is the loop, and a faulted one is the host on its way
+        // down: the default BackgroundServiceExceptionBehavior stops it.
         worker.ExecuteTask!.IsFaulted.ShouldBeFalse();
+
         await worker.StopAsync(TestContext.Current.CancellationToken);
     }
 
@@ -2892,6 +2994,10 @@ onto the bus with a drain, `Confirmed`/`Cancelled` building the contracts,
 reading `fixture.Carrier.LogEntries`, `DespatchAsync` recording a `Collected`
 tracking event through the repository — PR-6 brings the worker that would —
 and `ConfirmAsync` seeding the stub and publishing `OrderConfirmed`.
+`WaitUntil(Func<bool>)` is the last of them: it polls its predicate to a
+deadline and throws when it lapses, which is what lets the overlapping-pass
+test stage its second claim while the first is still inside the carrier's
+budget rather than sleeping a guess.
 
 - [ ] **Step 3: The readiness set**
 
@@ -2924,7 +3030,13 @@ dotnet test tests/Shipping.Worker.Tests
 
 Expected: green with a running Docker daemon; without one the container half
 fails on `Failed to connect to Docker endpoint`, which is the daemon and not
-the suite. The `SIM-SLOW` test takes about nineteen seconds by design.
+the suite. Two tests are slow by design and the cost is named here rather than
+found. The `SIM-SLOW` test takes about nineteen seconds, because that is
+`CarrierHop.TotalRequestTimeout`. The one that starts the loop takes about
+seven, because `PeriodicTimer` fires its first tick one
+`CarrierHop.FulfilmentTick` after the loop starts, and a loop that has not
+ticked proves nothing about the catch inside it. §12.4's trade is the fidelity
+against the seconds, and both of these are the fidelity.
 
 ```bash
 git add tests/Shipping.TestSupport tests/Shipping.Worker.Tests
@@ -3021,8 +3133,15 @@ fires is what the `images` job cannot close:
 §15.4's inventory table gains one row, beside `Carrier__BaseUrl`:
 
 ```markdown
-| `AddressSource__BaseUrl` | Config | Helm `addressSource.baseUrl` | ✓ **for Shipping's worker** — ADR-052's address read, checked at start as the carrier's address is |
+| `AddressSource__BaseUrl` | Config | Helm `addressSource.baseUrl` → ConfigMap | ✓ **for Shipping's worker** — ADR-052's address read, checked at start as the carrier's address is |
 ```
+
+**The Source column names the Helm key although no Shipping chart exists yet**,
+and that is the rule rather than an oversight: §15.4's inventory is the
+obligation a deployment is held to, so a row states where the value comes from
+whether or not the chart is on disk. PR-7 renders a key this row already names
+instead of inventing one and reconciling two spellings. PR-6's two
+`Jurisdiction__*` rows follow it.
 
 The three `Identity__Client__*` rows already name Shipping's worker: PR-4
 amended them, and nothing here restates a row that is already true.
@@ -3258,25 +3377,32 @@ one, saying so in its own Task 4 step 3. So the sentence to replace is the one
 PR-3b leaves behind, not the one on `main` today. Before:
 
 ```
-│   └── Web.Bff/                        Aggregation for the web client (§10.1).
-│                                       The ONLY host that calls a service
-│                                       synchronously (§9.7); it binds
-│                                       Identity:Client, and the grant's code is
-│                                       Common.Infrastructure's (§11.5, ADR-052)
+│   │   └── Web.Bff/                    Aggregation for the web client (§10.1).
+│   │                                   The ONLY host that calls a service
+│   │                                   synchronously (§9.7); it binds
+│   │                                   Identity:Client, and the grant's code is
+│   │                                   Common.Infrastructure's (§11.5, ADR-052)
 ```
 
 After:
 
 ```
-│   └── Web.Bff/                        Aggregation for the web client (§10.1).
-│                                       The only host that calls a service
-│                                       synchronously on a request path (§9.7,
-│                                       ADR-052); it binds Identity:Client, and
-│                                       the grant's code is
-│                                       Common.Infrastructure's (§11.5)
+│   │   └── Web.Bff/                    Aggregation for the web client (§10.1).
+│   │                                   The only host that calls a service
+│   │                                   synchronously on a request path (§9.7,
+│   │                                   ADR-052); it binds Identity:Client, and
+│   │                                   the grant's code is
+│   │                                   Common.Infrastructure's (§11.5)
 ```
 
-The capital ONLY goes with the claim it was emphasising. §4.1's tree already
+**The columns are `main`'s and are not to be re-typed.** `Web.Bff/` sits three
+levels in — under `src/` and `BFF/` — so the entry's prefix is `│   │   └── `
+and every continuation line begins `│   │` and pads to the comment column,
+which is one stop further right than a two-level entry's. The *wording* above
+is PR-3b's, as this step already says; the *columns* are the file's, and a
+Before block whose whitespace does not match it character for character is a
+block nobody can apply. The capital ONLY goes with the claim it was
+emphasising. §4.1's tree already
 names `Shipping/` and its five projects, so nothing is added to it here and
 Appendix C gains no row.
 
@@ -3685,6 +3811,9 @@ ADR-023 and ADR-052 are not edited.
 **Type consistency.** `IShipmentRepository.GetByOrderAsync/GetAsync/Add`,
 `CreateShipmentCommand`, `VoidShipmentCommand`,
 `Shipping.Infrastructure.Messaging.DependencyInjection.EventsQueue`,
+`ShippingIntegrationEventMapper.RegisteredEvents` — `internal static`, reached
+by `Shipping.Application.csproj`'s `InternalsVisibleTo` and consumed under both
+spellings by PR-6 —
 `IDeliveryAddressStore.SaveAsync/GetAsync`, `AddressLimits`,
 `IDeliveryAddressSource.GetAsync`, `AddressLookup.Found(Address, CustomerId)`,
 `AddressLookup.NoSuchOrder`, `AddressSourceRefusedException`,

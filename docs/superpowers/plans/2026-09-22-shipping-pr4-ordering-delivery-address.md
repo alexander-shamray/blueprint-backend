@@ -960,13 +960,13 @@ Under *What it asserts*, after the `mobile-app` bullet:
 
 Under *What it does not check*, the bullet beginning "**Everything else in the
 realm**" says the client scopes are not in the judged object at all. Step 3
-put `defaultClientScopes` and `optionalClientScopes` into `CLIENT_FIELDS`, so
-that clause is corrected in place rather than appended to: the two scope
-**lists** are now in the projection, for the one obligation above that reads
-them, while the scopes' own definitions, their mappers and the audience mapper
-still are not. The rest of the bullet — the permission vocabulary, the two
-development logins, every client secret, and why no message here can leak a
-credential — is unchanged.
+put `optionalClientScopes` into `CLIENT_FIELDS` beside the `defaultClientScopes`
+already there, so that clause is corrected in place rather than appended to:
+both scope **lists** are in the projection, for the one obligation above that
+reads them, while the scopes' own definitions, their mappers and the audience
+mapper still are not. The rest of the bullet — the permission vocabulary, the
+two development logins, every client secret, and why no message here can leak
+a credential — is unchanged.
 
 Under *What it asserts*, the grant itself stays out: say once, and only here,
 that `check_worker_client` reaches the client object and not the service
@@ -1917,7 +1917,7 @@ git commit -m "test(identity): shipping-worker's grant is proved both ways again
 
 **Files:**
 - Modify: `docs/backend-architecture/11-identity-authorization.md` — §11.5's
-  table of realm objects, the callout above it, and the section's two prose
+  table of realm objects, the callout above it, and the section's three
   sentences that count one host
 - Modify: `docs/backend-architecture/15-cicd-deployment.md` — §15.4's
   required-for-some-hosts paragraph and three rows
@@ -1943,10 +1943,10 @@ service that uses it." — amend to "Shipping's joined it with Ordering's method
 rather than with Shipping, because the grant is the address owner's to serve;
 Notifications' is still owed."
 
-**The section's two prose sentences move with the table**, because the row,
-the count and the prose are one claim and splitting them across pull requests
-leaves the paragraph arguing against its own table. ADR-052's §11.5 row names
-both halves; the spec's section 13 assigns the pair here.
+**The section's three counting sentences move with the table**, because the
+row, the count and the prose are one claim and splitting them across pull
+requests leaves the paragraph arguing against its own table. ADR-052's §11.5
+row names both halves; the spec's section 13 assigns the pair here.
 
 The paragraph after the grant's opening reads today:
 
@@ -1965,6 +1965,32 @@ and becomes:
 > reads local projections ([§6.4](06-cqrs.md), ADR-002), so none of them ever
 > presents itself to another.
 
+Three lines below that paragraph, and inside the same claim, is the sentence
+that fixes the count at one. It stands between the amended paragraph and the
+callout that already argues what moving the count costs, so leaving it reads
+as the section contradicting itself twice over. It reads today:
+
+> That is not a simplification for the sake of the example — it is what ADR-002
+> and ADR-017 add up to. The mechanism below is worth understanding precisely
+> because the number of hosts using it is the number of synchronous couplings in
+> the platform, and both are meant to stay at one. "Every host gets the full
+> identity block" is the natural-looking generalisation and the wrong one; so is
+> reading this section and concluding the services talk to each other.
+
+and becomes:
+
+> That is not a simplification for the sake of the example — it is what ADR-002
+> and ADR-017 add up to. The mechanism below is worth understanding precisely
+> because the number of hosts using it is the number of synchronous couplings in
+> the platform, and the callout below says what moving that number costs. "Every
+> host gets the full identity block" is the natural-looking generalisation and
+> the wrong one; so is reading this section and concluding the services talk to
+> each other.
+
+The replacement cites the callout rather than repeating its clause, because
+the callout is the owner of what a second secret costs and a second copy three
+lines above it is the restatement `docs/change-locality.md` forbids.
+
 The sentence in *The scope has to become an audience* — "Catalog would reject
 the platform's only permitted synchronous hop, at the one moment there is no
 user to blame it on." — becomes "Catalog would reject a synchronous hop the
@@ -1975,15 +2001,41 @@ and by the same mapper (ADR-052)".
 
 - [ ] **Step 2: §15.4**
 
-In §15.4, the third paragraph's "which in this blueprint is **every host except
-the BFF**" becomes "which in this blueprint is the BFF and, since
-[ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md),
-Shipping's worker — every other host reaches its peers over the broker and
-reads local projections". The sentence "One set of credentials in the whole
-platform is what "async by default" looks like in the secrets inventory." is
-cut and replaced by "Two sets, and the count is the point: it is the number of
-synchronous couplings in the platform, and it moved by a decision that said
-what the second one reads when it is stolen."
+§15.4's third paragraph is amended as a whole and not by its bold phrase, and
+the reason is the grammar. "which in this blueprint is **every host except the
+BFF**" has "one that does not" for its antecedent, so swapping the naming
+clause for the hosts that *do* call a peer inverts the sentence: it would
+declare the keys meaningless for the two hosts that are mandated to hold them.
+The sentence after it names Ordering and Catalog as the whole of the rest,
+which stops being the list once a third service is the exception. Both move
+together. It reads today:
+
+> **Required-for-some-hosts is a third category, and the mistake it invites
+> runs the other way.** `Identity__Client__*` is mandatory for a host that
+> calls another service and meaningless for one that does not — which in this
+> blueprint is **every host except the BFF**. The gateway forwards the caller's
+> token rather than minting its own; Ordering and Catalog talk over the broker
+> and read local projections ([§6.4](06-cqrs.md), ADR-002). One set of
+> credentials in the whole platform is what "async by default" looks like in
+> the secrets inventory.
+
+and becomes:
+
+> **Required-for-some-hosts is a third category, and the mistake it invites
+> runs the other way.** `Identity__Client__*` is mandatory for a host that
+> calls another service and meaningless for one that does not — which in this
+> blueprint is **every host but the BFF and, since
+> [ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md),
+> Shipping's worker**. The gateway forwards the caller's token rather than
+> minting its own; every other service exchanges events over the broker and
+> reads local projections ([§6.4](06-cqrs.md), ADR-002). Two sets of
+> credentials in the whole platform, and the count is the point: it is the
+> number of synchronous couplings, and it moved by a decision that said what
+> the second one reads when it is stolen.
+
+The sentence beginning "Supplying the rest "for consistency" is not harmless
+padding" follows unchanged, and is the reason the paragraph still belongs to
+the over-supply category rather than becoming a second inventory.
 
 The three rows' Required column names the obligation's shape rather than
 today's snapshot, because §15.4's own rule is that **a key joins when a host's
@@ -2008,12 +2060,23 @@ for Shipping's worker, the two hosts that call a peer synchronously (§9.7,
 §11.5, ADR-017), and `PaymentProvider__ApiKey`, for Payments' provider behind
 §3.2's anti-corruption layer (§15.4)."
 
-*A client secret*'s step 4 is per host rather than the BFF's alone:
+*A client secret*'s steps 3 and 4 are per host rather than the BFF's alone,
+and both move: step 3 names the pods to restart and step 4 names the proof
+they came back authenticating, so a procedure that is half one-host sends the
+operator to the wrong deployment and then tells them to watch the wrong
+metric.
+
+"3. Wait for External Secrets to reconcile, then restart the pods of the host
+whose secret this is — configuration is read at startup, so a reconciled
+Secret does not reach a running process."
 
 "4. Confirm the host is authenticating. For the BFF that is pricing calls to
 Catalog succeeding; for Shipping's worker it is shipments leaving `Pending`,
 and `shipping.address.refused` staying flat — ADR-052 counts a refused
 credential separately from an outage for exactly this moment."
+
+The bold sentence under the list — "**Step 3 is the one that gets skipped**" —
+is unchanged: it is about the step's position, not about whose pods it names.
 
 The local-development exception table gains a row, in the PR that mints the
 secret:
@@ -2194,9 +2257,11 @@ body.
   token holding every user permission, and the address with the client's
   (Task 4); a token Keycloak issued to `shipping-worker` accepted and one
   issued to a client without the role refused (Task 6).
-- Section 13's chapters — §11.5's table of realm objects and its two prose
-  sentences, `docs/secrets.md`'s rotation and local-default rows, §15.4's
-  client rows, `docs/repo-map.md`'s and `CLAUDE.md`'s gRPC-server halves and
+- Section 13's chapters — §11.5's table of realm objects and the three
+  sentences that count its hosts, `docs/secrets.md`'s rotation sentence, both
+  halves of the client-secret procedure and its local-default row, §15.4's
+  required-for-some-hosts paragraph and its three client rows,
+  `docs/repo-map.md`'s and `CLAUDE.md`'s gRPC-server halves and
   the two Catalog chart claims → Task 7. ADR-052's `realm-export.json` row —
   `web-bff`'s description as the only client holding credentials — is Task 3
   step 2, in the same edit that adds the second such client; the realm's
