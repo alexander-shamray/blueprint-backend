@@ -2206,7 +2206,11 @@ public sealed class FulfilmentWorker : BackgroundService
 
 In `tests/Shipping.Worker.Tests/DeliveryAddressSourceTests.cs`'s inequality
 test's file, one more assertion — the lease above both hops, which section 4
-asks a test to hold:
+asks a test to hold. The file gains
+`using Shipping.Infrastructure.Fulfilment;` in sorted position, below
+`using Shipping.Infrastructure.Carrier;` and above
+`using Shipping.OrderingStub;`, because `FulfilmentWorker` is the owner of
+both constants the assertion reads:
 
 ```csharp
     [Fact]
