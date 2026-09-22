@@ -84,7 +84,7 @@ way. The scaffold's `AddRedisConnections` is stripped as Payments' was, and
 
 ## 2. Places the blueprint and the tree move
 
-Each rides in the PR that makes it true; section 14 lists them by PR.
+Each rides in the PR that makes it true; section 13 lists them by PR.
 
 - **`tools/new-service` gains a Worker mode**, and `Shipping` comes off the
   scaffold's refusal; `Notifications` stays on it, because §4.1 gives that

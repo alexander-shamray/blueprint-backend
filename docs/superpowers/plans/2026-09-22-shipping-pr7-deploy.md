@@ -1650,6 +1650,11 @@ gate's own README stopped counting rather than counted again.
 - Modify: `docs/backend-architecture/15-cicd-deployment.md`
 - Modify: `deploy/helm/web-bff/values.yaml` — the chart comment that carries
   §15.3's credentials sentence
+- Modify: `deploy/helm/web-bff/Chart.yaml`, `deploy/helm/payments/Chart.yaml` —
+  the descriptions that count the charts
+- Modify: `deploy/helm/catalog/values.yaml`, `deploy/helm/gateway/values.yaml`,
+  `deploy/helm/ordering/values.yaml`, `deploy/helm/payments/values.yaml` — the
+  count above each `clientCredentials: false`
 - Modify: `docs/secrets.md`
 
 - [ ] **Step 1: §15.3's sentences, and the credentials one**
@@ -1810,7 +1815,7 @@ Nothing else in the file moves. Steps 1 and 5 are Keycloak's and name no host,
 and the bold sentence under the list is about a step's position rather than
 about whose pods it restarts.
 
-- [ ] **Step 4: §15.1's sentence, and the chart comment that repeats it**
+- [ ] **Step 4: §15.1's sentence, and the counts the charts carry**
 
 §15.1 describes what `smoke.sh` asserts, and Task 1 step 4 changed the
 assertion, so the description moves in the same PR or one of them is wrong.
@@ -1862,13 +1867,84 @@ rule: its own identity block cites ADR-052 and §15.4 for why the worker holds
 a grant, and a second copy of §15.3's sentence there is the copy the next
 review finds stale.
 
+Two charts make the same claim in their own `description`, which is a value
+rather than a comment and so is read by `helm show chart` and by no gate.
+`deploy/helm/web-bff/Chart.yaml`. Before:
+
+```yaml
+description: >-
+  The BFF (§4.1) — the one host that calls a peer synchronously (§9.7,
+  ADR-017), and therefore the one chart carrying client credentials (§11.5).
+```
+
+After:
+
+```yaml
+description: >-
+  The BFF (§4.1) — one of the hosts that call a peer synchronously (§9.7,
+  ADR-017, ADR-052), and therefore one of the charts carrying client
+  credentials (§11.5).
+```
+
+`deploy/helm/payments/Chart.yaml` counts the other capability, and Task 2's
+`carrier` block is what makes it wrong: Shipping books with a third party of
+its own (§3.2). Before:
+
+```yaml
+description: >-
+  Payments (§4.1) — its API and migrator hook, behind the payments-admin
+  route (§10.2), and the one service that calls a third party (§3.2).
+```
+
+After:
+
+```yaml
+description: >-
+  Payments (§4.1) — its API and migrator hook, behind the payments-admin
+  route (§10.2), and one of the services that call a third party (§3.2).
+```
+
+Both are named rather than recounted, for step 1's reason: "one of two" is the
+same claim carrying a different number, and the chart after this one makes it
+stale again.
+
+Four more `values.yaml` files count the charts in the comment above their own
+`clientCredentials: false`, and this PR is what makes that count wrong while
+holding `deploy/helm/**`. The sentence is cut rather than corrected:
+`_helpers.tpl`'s guard and the set in `smoke.sh` are what hold the rule, and a
+count of what lives in other files is a second copy of a fact with an owner.
+Before, identically in `deploy/helm/catalog/values.yaml`,
+`deploy/helm/gateway/values.yaml`, `deploy/helm/ordering/values.yaml` and
+`deploy/helm/payments/values.yaml`:
+
+```yaml
+  # False, and written down rather than absent: §15.4's
+  # required-for-some-hosts category is a claim a chart has to make, not one to
+  # infer from a missing key. Exactly one chart in the platform sets it true.
+```
+
+After:
+
+```yaml
+  # False, and written down rather than absent: §15.4's
+  # required-for-some-hosts category is a claim a chart has to make, not one to
+  # infer from a missing key.
+```
+
+That is `deploy/helm/inventory/values.yaml`'s block already — it never carried
+the sentence — so every chart declaring the key false reads alike when this
+step is done, and each block stays inside the gate's ten lines.
+
 - [ ] **Step 5: Audit; commit**
 
 Run `/check-links` and `/validate-blueprint`.
 
 ```bash
 git add docs/backend-architecture/15-cicd-deployment.md docs/secrets.md \
-        deploy/helm/web-bff/values.yaml
+        deploy/helm/web-bff/values.yaml deploy/helm/web-bff/Chart.yaml \
+        deploy/helm/payments/Chart.yaml deploy/helm/catalog/values.yaml \
+        deploy/helm/gateway/values.yaml deploy/helm/ordering/values.yaml \
+        deploy/helm/payments/values.yaml
 git commit -m "docs: §15.3 names Shipping's chart, and §15.1 names the charts that carry client credentials"
 ```
 
@@ -1888,8 +1964,9 @@ py -3.12 .github/comment-gate/comment_gate.py
 ```
 
 Expected: all green. The comment gate is run here rather than left to CI
-because this PR adds comments to four `.yaml` files, one `.sh` file and a
-workflow's `run:` block, and it judges an added line as its whole block.
+because this PR writes comments into the charts' `.yaml` files, `smoke.sh` and
+a workflow's `run:` block, and it judges an added line as its whole block —
+including the four blocks Task 6 step 4 shortens.
 
 - [ ] **The dashboards key on the host, not on a name**
 
@@ -1948,13 +2025,15 @@ carries the delivery-lag panel this PR's first rule reads.
   step 3). Section 13's table gives this PR §15.1 as well, and the row it lists
   as `_helpers.tpl` and `smoke.sh` — so §15.3's credentials sentence and the
   callout under it move in Task 6 step 1, §15.1's description of what
-  `smoke.sh` asserts and the `deploy/helm/web-bff/values.yaml` comment that
-  repeats it in Task 6 step 4, and the two Helm rows themselves in Tasks 1 and
-  3. §15.5's own sentence about what `maxReplicas` bounds moves in Task 4 step
-  2, with the three files that restate it, because a worker with no autoscaler
-  is what makes it false. The class row stays one letter:
-  `deploy/helm/web-bff/values.yaml` is inside `deploy/helm/**`, which the touch
-  set already carries.
+  `smoke.sh` asserts moves in Task 6 step 4 with the charts that make the same
+  claim on their own — `web-bff`'s values comment and its description,
+  `payments`'s description, and the count above `clientCredentials: false` in
+  the charts that declare the key false — and the two Helm rows themselves in
+  Tasks 1 and 3. §15.5's own sentence about what `maxReplicas` bounds moves in
+  Task 4 step 2, with the three files that restate it, because a worker with no
+  autoscaler is what makes it false. The class row stays one letter: every
+  chart file Task 6 reaches is inside `deploy/helm/**`, which the touch set
+  already carries.
 
 **Type and name consistency.** The chart directory is `shipping` and the
 workload `shipping-worker`; the canary map's `serviceName` is

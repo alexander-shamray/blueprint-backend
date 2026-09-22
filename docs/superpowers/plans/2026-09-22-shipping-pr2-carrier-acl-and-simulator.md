@@ -1160,7 +1160,8 @@ unchanged — and sets them with
 `.UseSetting(CarrierRegistration.ApiKeyKey, carrierApiKey ?? LocalCarrierApiKey)`.
 A `using` alias is file-scoped, so the factory's header gains its own
 `using CarrierRegistration = Shipping.Infrastructure.Carrier.DependencyInjection;`,
-as `PaymentsApiFactory.cs` carries `ProviderRegistration`:
+as `PaymentsApiFactory.cs` carries `ProviderRegistration`. The two constants
+the parameters default to:
 
 ```csharp
 /// <summary>

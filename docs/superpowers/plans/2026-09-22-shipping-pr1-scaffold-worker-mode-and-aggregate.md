@@ -150,10 +150,20 @@ the two strings that name the service:
     public const string MeterName = "Catalog.Outbox";
 ```
 
-Nothing else in the four files names Ordering: `OutboxStats` composes its SQL
-from the registered `OutboxTable` and reads `OutboxDispatcher.MaxAttempts`, and
-`MetricsInitialiser` names only `Common.Application` and
-`Common.Infrastructure.Messaging` types. Verify that by grep before building:
+Three comments in the copy still name Ordering, and Payments' copy of the
+same four files shows what each becomes. `MetricsInitialiser`'s `<para>` about
+`OrderMetrics` goes whole: it argues a type Ordering has not built and names a
+delivery-plan row, which the comment gate refuses and which the scaffold would
+otherwise render into every later service. `OutboxStats`' remark that
+`AddOrderingInfrastructure` builds the connection string names
+`AddCatalogInfrastructure` instead, and its clause that §13.6 writes
+`ordering.OutboxMessages` "because it is a chapter about Ordering" becomes the
+observation that the chapter's example names one schema and this type reads
+the registered `OutboxTable`. The code names no service — `OutboxStats`
+composes its SQL from `OutboxTable` and reads `OutboxDispatcher.MaxAttempts`,
+and `MetricsInitialiser` takes only `Common.Application` and
+`Common.Infrastructure.Messaging` types — so after those three edits the grep
+is the check:
 
 ```bash
 grep -rn "Ordering" src/Services/Catalog/Catalog.Infrastructure/Observability/
@@ -765,8 +775,8 @@ is `None`, with the reason stated where the loop was:
     row = (
         f"| {names.pascal} worker | — (no published port) | "
         f"§3.2 gives it no API; §13.5's `/health/live` and `/health/ready` are its "
-        f"only listener and answer inside the container |\n"
-                if port is None
+                f"only listener and answer inside the container |\n"
+        if port is None
         else f"| {names.pascal} API | http://localhost:{port} | "
              # The token note is not decoration: ADR-030 fallback policy covers
              # MapOpenApi, so a rendered service document answers 401 to an
