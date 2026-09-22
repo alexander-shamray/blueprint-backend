@@ -16,28 +16,31 @@ READMEs still call illustrative — and four rules hold it open:
    time zone its dates are rendered in, and each statutory window. A service
    that reads any of them binds a single options class, validated at start as
    [§15.4](../15-cicd-deployment.md) validates `ServiceIdentityOptions`, and
-   that class passes the test §15.4 sets for one, since every member differs
-   between deployments. §15.4's sentence that `ServiceIdentityOptions` is the
-   only options type in the solution, and its callout's close that
-   `Identity:Client` is the only thing there that earns one, are amended by this
-   class; whether `ContactOptions`, which
+   that class passes the test §15.4 sets for one because rule 2 gives the test
+   deployment its own language set, zone and windows, so every member differs
+   across Compose, the fixture and production as that section asks. §15.4's
+   sentence that `ServiceIdentityOptions` is the only options type in the
+   solution, and its callout's close that `Identity:Client` is the only thing
+   there that earns one, are amended by this class; whether `ContactOptions`,
+   which
    [ADR-052](ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)
    owes with Notifications, is another is that record's to say, because it
    describes that class as refusing at start the way `RetentionPolicy` does — a
-   registered shape rather than a binding, as two sentences on — and only the
-   record that owns it can say which §15.4 means. Each required member joins
-   that section's inventory table on the terms it states. The refusal is
-   `[Required]`, and a stated bound wherever the value has one, on the bound
-   class — so a missing or impossible value is §15.4's failure at start and
-   never a clamped one.
-   `RetentionPolicy` refuses rather than clamps too, by a throwing `init` setter
-   on a record each service registers rather than by binding, and its windows
-   are housekeeping but for the one that is §8.5's guarantee; none of
-   `RetentionPolicy`'s windows is statutory, and no statutory window is one of
-   its. A template missing for a required language fails the host at start, not
-   the send at night. `Address` is the precedent and already argues it: it
-   checks presence and the shape of an ISO 3166-1 alpha-2 code, and refuses to
-   learn a postcode format or to ask `RegionInfo`.
+   registered shape rather than a binding, as the `RetentionPolicy` sentence
+   below says — and only the record that owns it can say which §15.4 means. Each
+   required member joins that section's inventory table on the terms it states.
+   The refusal is `[Required]`, a non-empty bound on the language set, and a
+   stated bound wherever else the value has one, on the bound class — so a
+   missing or impossible value is §15.4's failure at start and never a clamped
+   one. `RetentionPolicy` refuses rather than clamps too, by a throwing `init`
+   setter on a record each service registers rather than by binding, and its
+   windows are housekeeping but for the one that is
+   [§8.5](../08-caching-redis.md)'s guarantee; none of `RetentionPolicy`'s
+   windows is statutory, and no statutory window is one of its. A template
+   missing for a required language fails the host at start, not the send at
+   night. `Address` is the precedent and already argues it: it checks presence
+   and the shape of an ISO 3166-1 alpha-2 code, and refuses to learn a postcode
+   format or to ask `RegionInfo`.
 2. **A made-up jurisdiction proves rule 1.** A test deployment's invented values
    — an address country of `ZZ`, which `Address` already constructs, its own
    language set, zone and windows — are configuration, and the suite of each
@@ -135,8 +138,8 @@ so the procedure is owed beside the extension's Privacy service and not under
 `docs/runbooks/`.
 
 **The realm offers no language today.** It maps a `locale` attribute and
-ships with internationalisation off and no supported locale, and a consumer
-holds no token to read a claim from, so
+ships with internationalisation off and no supported locale, and no
+customer's token is in hand — the worker's own is a service account's — so
 [ADR-052](ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)'s
 contact row is the only source a message has for one. A customer with no
 language is sent the deployment's whole required set in one message, never
