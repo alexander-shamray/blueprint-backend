@@ -21,7 +21,9 @@ READMEs still call illustrative — and four rules hold it open:
    in Compose, in the fixture and in production, which is more than that section
    asks. §15.4's sentence that `ServiceIdentityOptions` is the only options type
    in the solution, and its callout's close that `Identity:Client` is the only
-   thing there that earns one, are amended by this class; whether
+   thing there that earns one, are amended by this class — the pull request that
+   first binds it amends that sentence and that callout, as ADR-052 leaves its
+   own list to the pull request that builds each service; whether
    `ContactOptions`, which
    [ADR-052](ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)
    owes with Notifications, is another is that record's to say, because it
