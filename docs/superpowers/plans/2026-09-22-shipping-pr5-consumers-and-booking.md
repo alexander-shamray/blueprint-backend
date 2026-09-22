@@ -1178,6 +1178,7 @@ public static class DependencyInjection { public const string BaseUrlKey = "Addr
 
 ```csharp
 using System.Collections.Concurrent;
+using System.Net;
 using Grpc.Core;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -1254,7 +1255,13 @@ public sealed class StubOrdering : IAsyncLifetime
         WebApplicationBuilder builder = WebApplication.CreateSlimBuilder();
 
         builder.Logging.ClearProviders();
-        builder.WebHost.ConfigureKestrel(k => k.ListenLocalhost(0, o => o.Protocols = HttpProtocols.Http2));
+        // Listen rather than ListenLocalhost: the localhost overload refuses
+        // port 0 outright — "dynamic port binding is not supported when binding
+        // to localhost", because it opens two sockets and could not give them
+        // the same OS-assigned port. One loopback address, one port, knowable
+        // after Start.
+        builder.WebHost.ConfigureKestrel(o =>
+            o.Listen(IPAddress.Loopback, 0, listen => listen.Protocols = HttpProtocols.Http2));
         builder.Services.AddGrpc();
         builder.Services.AddSingleton(this);
 
@@ -2695,10 +2702,98 @@ TestSupport already takes it, so no Appendix B row is owed.
 `Factory` becomes
 `new ShippingWorkerFactory(ConnectionString, _rabbit.GetConnectionString(), Carrier.Urls[0] + "/", addressSourceBaseUrl: Ordering.Address.ToString())`.
 
-`ShipmentCommitFaults` is `CommitFaultInterceptor` with one change, argued in
-the file: the qualifying save is one with a `Shipment` modified, because this
-service stages no outbox row yet and firing on an inbox write would make
-`Fired` a claim about nothing.
+`ShipmentCommitFaults` is `CommitFaultInterceptor` with two changes, both
+argued in the file: the qualifying save, and the exception the fault throws.
+Written whole rather than described, because the second change reads as a
+copying slip until the reason is beside it:
+
+```csharp
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
+using Shipping.Domain.Shipments;
+
+namespace Shipping.TestSupport;
+
+/// <summary>
+/// A commit that fails once, on demand, after the unit has moved its shipment
+/// — the one rollback §6.3's execution strategy and the fulfilment pass's
+/// per-row catch exist for, which no real fault produces on cue. Test support
+/// only; the host never registers it.
+/// </summary>
+public sealed class ShipmentCommitFaults : SaveChangesInterceptor
+{
+    private CommitFault? _armed;
+
+    /// <summary>
+    /// Arms the next qualifying save. One fault at a time, because two armed
+    /// at once would leave which of them fired to the order of the saves.
+    /// </summary>
+    public CommitFault Arm()
+    {
+        CommitFault fault = new(this);
+        if (Interlocked.CompareExchange(ref _armed, fault, null) is not null)
+            throw new InvalidOperationException("A commit fault is already armed.");
+
+        return fault;
+    }
+
+    internal void Disarm(CommitFault fault) => Interlocked.CompareExchange(ref _armed, null, fault);
+
+    public override ValueTask<InterceptionResult<int>> SavingChangesAsync(
+        DbContextEventData eventData,
+        InterceptionResult<int> result,
+        CancellationToken cancellationToken = default)
+    {
+        // Only a save that moves a shipment qualifies. This service stages no
+        // outbox row yet, so the condition Payments' interceptor reads is never
+        // true here; an inbox write, a stored address or an arriving shipment
+        // is not the unit whose rollback is being asked for, and firing on one
+        // would make Fired a claim about nothing.
+        bool moving = eventData.Context is not null &&
+            eventData.Context.ChangeTracker.Entries<Shipment>().Any(e => e.State == EntityState.Modified);
+
+        if (!moving)
+            return base.SavingChangesAsync(eventData, result, cancellationToken);
+
+        CommitFault? fault = Interlocked.Exchange(ref _armed, null);
+        if (fault is null)
+            return base.SavingChangesAsync(eventData, result, cancellationToken);
+
+        fault.Fired = true;
+
+        // DbUpdateException rather than the TimeoutException Payments throws,
+        // which SqlServerTransientExceptionDetector accepts: §6.3's execution
+        // strategy would retry the unit whole, and since Arm disarms on fire
+        // the second attempt commits. That is what Payments wants, because its
+        // provider call is inside the unit. Here the carrier call is outside
+        // CommitAsync, so a retried unit would book nothing and commit
+        // cleanly. Non-transient, the exception leaves ExecuteAsync and reaches
+        // the pass's per-row catch, which is the behaviour a crash between the
+        // carrier's answer and the commit actually has.
+        throw new DbUpdateException("Injected commit fault.");
+    }
+}
+
+/// <summary>
+/// One armed fault. Disposing disarms it, so a unit that never reached a
+/// qualifying save cannot leave it primed for whatever runs next.
+/// </summary>
+public sealed class CommitFault : IDisposable
+{
+    private readonly ShipmentCommitFaults _owner;
+
+    internal CommitFault(ShipmentCommitFaults owner) => _owner = owner;
+
+    /// <summary>Whether a save reached the fault and was failed by it.</summary>
+    public bool Fired { get; internal set; }
+
+    public void Dispose() => _owner.Disarm(this);
+}
+```
+
+`CommitFault` travels with it rather than being taken from
+`Payments.TestSupport`: §4.3 gives no test-support assembly licence to reach
+another's, which is the same rule `QueueDepthAsync` is copied under below.
 
 `CapturedLogs` is an `ILoggerProvider` collecting each entry's formatted
 message, its state's values and its exception's `ToString()`, registered by
@@ -2979,9 +3074,11 @@ public sealed class ShipmentFulfilmentTests(ServiceFixture fixture) : IAsyncLife
         Guid order = await ConfirmAsync(Kazakh);
         using CommitFault fault = fixture.FailNextCommit();
 
-        // Zero rather than a throw: the pass catches per row and backs it off,
-        // so a failed commit reaches the row's catch and never the caller
-        // (spec, section 4). The counter is what says the catch ran.
+        // Zero rather than a throw: the fault is not transient, so the
+        // execution strategy hands it on instead of retrying the unit, and the
+        // pass catches per row and backs it off — a failed commit reaches the
+        // row's catch and never the caller (spec, section 4). The counter is
+        // what says the catch ran.
         (await fixture.RunFulfilmentPassAsync()).ShouldBe(0);
         (await AttemptsAsync(order)).ShouldBe(1);
 
@@ -2989,7 +3086,7 @@ public sealed class ShipmentFulfilmentTests(ServiceFixture fixture) : IAsyncLife
         (await fixture.RunFulfilmentPassAsync()).ShouldBe(1);
 
         fault.Fired.ShouldBeTrue("the first pass booked and then failed its commit");
-        BookingCalls().ShouldBe(2, "the retry repeated the call rather than skipping it");
+        BookingCalls().ShouldBe(2, "the second pass repeated the call rather than skipping it");
         BookingKeys().Distinct().ShouldHaveSingleItem().ShouldBe($"book:{await ShipmentIdAsync(order)}");
         (await ReferenceAsync(order)).ShouldBe("crr_SIM-OK");
         (await fixture.ScalarAsync<int>(
@@ -3317,22 +3414,46 @@ and the second pass runs inside that attempt. The journal is then
 
 - [ ] **Step 3: The readiness set**
 
-In `tests/Shipping.Worker.Tests/HostSmokeTests.cs`, Payments' registration
-test with one addition, which is the assertion §10 asks for:
+In `tests/Shipping.Worker.Tests/HostSmokeTests.cs`, the registration test PR-1
+left with two checks in it **gains one line** — the assertion §10 asks
+for — and keeps everything else. Its name does not move, and neither do its
+tag assertions: a set asserted by name says nothing about a check the
+`/health/ready` predicate never selects, and the tags are what make it
+selected. Whole, with the addition last:
 
 ```csharp
     [Fact]
-    public void Ready_probe_reports_the_sql_and_bus_checks_and_no_shared_dependency()
+    public void Ready_probe_reports_the_sql_and_bus_checks()
     {
+        // Registration, read without a network round trip. §13.5's concern is
+        // that "reports ready immediately" and "readiness was never wired up"
+        // are indistinguishable from outside, so the wiring is asserted
+        // directly rather than inferred from a status code.
         HealthCheckServiceOptions options = factory.Services
             .GetRequiredService<IOptions<HealthCheckServiceOptions>>()
             .Value;
 
-        // Two, and the count is the assertion rather than a detail of it: the
-        // carrier, Ordering and Keycloak are shared by every replica, so one
-        // outage would pull every pod and then block the rollout carrying the
-        // fix (§13.5).
+        // Two, and the count is the assertion rather than a detail of it: an
+        // inventory that only ever grows silently is how a readiness check
+        // gets dropped without anything going red.
         options.Registrations.Count.ShouldBe(2);
+
+        HealthCheckRegistration sql = options.Registrations.Single(r => r.Name == "sql");
+        sql.Tags.ShouldContain("ready", "an untagged check is invisible to the /health/ready predicate");
+
+        // Registered by AddMassTransit itself, not by AddShippingInfrastructure
+        // — name and tags read from the 8.5.3 source, asserted here so a
+        // MassTransit major that changes either fails this test rather than a
+        // cluster's readiness.
+        HealthCheckRegistration bus = options.Registrations.Single(r => r.Name == "masstransit-bus");
+        bus.Tags.ShouldContain("ready", "a bus check outside the ready predicate reports to nobody");
+        bus.Tags.ShouldContain("masstransit", "both tags are the documented contract (§13.5), so both are pinned");
+
+        // Which two, and not only how many: the carrier, Ordering and Keycloak
+        // are shared by every replica, so a readiness row for one would pull
+        // every pod on its next outage and then block the rollout carrying the
+        // fix (§13.5). A row that replaced the bus's would leave the count
+        // above still saying two.
         options.Registrations.Select(r => r.Name).ShouldBe(["sql", "masstransit-bus"], ignoreOrder: true);
     }
 ```
@@ -3535,15 +3656,27 @@ export Identity__Client__ClientSecret='local-dev-shipping-secret'
 export Identity__Client__Scope='commerce-api'
 export Carrier__BaseUrl='http://localhost:5191/'
 export Carrier__ApiKey='local-dev-carrier'
-export AddressSource__BaseUrl='http://ordering-api:8081'
+export AddressSource__BaseUrl='http://localhost:8082'
 dotnet run --project src/Services/Shipping/Shipping.Worker
 ```
 
-with the note the BFF's block already carries one dependency over: the address
-leaves the hop pointed at `ordering-api:8081`, which resolves on the Compose
-network and nowhere else, so a host-run worker backs every shipment off until
-a `hosts` entry maps the name — and a host-run `Ordering.Api` does listen on
-8081, because its `appsettings.json` declares both endpoints.
+with the note that this hop is not the BFF's. That block leaves its address at
+`catalog-api:8081` because §9.7 makes an in-cluster address a literal rather
+than a key; this one is a configuration key (§15.4), so a host-run worker
+points it at a host-run Ordering and needs no `hosts` entry. A host-run
+`Ordering.Api` listens on 8082, because the block above moves its h2c endpoint
+off Catalog's — two host processes cannot both hold 8081.
+
+Then run the secret scan and add the findings it reports against
+`deploy/compose/README.md` to `.github/secret-scan/allowed/deploy.txt`, with
+the digests the gate computed. **Four rows, not three**: the broker URL, the
+client secret and the carrier key are each a `credential-assignment`, and so is
+`ConnectionStrings__Shipping` itself, because that rule fingerprints the whole
+assignment — which is why Catalog, Ordering and Payments each already have a
+row of their own at this path. The SQL password inside it is owed nothing: a
+`connection-string-password` row for this file already carries that digest,
+since every recipe here uses §14.1's one local default. Take the gate's digests
+and never one written from this plan.
 
 - [ ] **Step 5: Bring the platform up and watch one order ship**
 

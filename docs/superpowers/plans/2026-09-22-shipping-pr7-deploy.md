@@ -54,9 +54,9 @@ runbook) and 13 (§13.6 and §15.3).
 - **No `src/**` and no `tests/**`, and that is a decision rather than an
   omission.** Spec section 10 asks for a test that the carrier, Ordering and
   Keycloak are not in the readiness set, and that test is **PR-5's**:
-  `tests/Shipping.Worker.Tests/HostSmokeTests.cs`'s
-  `Ready_probe_reports_the_sql_and_bus_checks_and_no_shared_dependency`, which
-  that plan's Task 5 step 3 writes. The readiness set is the host's
+    `tests/Shipping.Worker.Tests/HostSmokeTests.cs`'s
+  `Ready_probe_reports_the_sql_and_bus_checks`, whose name-set assertion that
+  plan's Task 5 step 3 adds. The readiness set is the host's
   registration, and the pull request that adds the last dependency somebody
   would be tempted to put in it is the one that must refuse it — not the one
   that writes the probe's chart values three PRs later. So this PR stays a
