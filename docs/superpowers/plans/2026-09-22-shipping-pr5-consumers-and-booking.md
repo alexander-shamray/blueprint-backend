@@ -2136,13 +2136,15 @@ public async Task A_token_carrying_exactly_the_grant_is_handed_on_unchanged()
 [Fact]
 public async Task A_refused_client_credential_is_a_refusal_and_a_transport_fault_is_not()
 {
+    CancellationToken ct = TestContext.Current.CancellationToken;
+
     // CachingTokenClient's own split, relied on here: InvalidOperationException
     // for a provider that refused this client, HttpRequestException for one
     // that failed as a server does (§11.5).
     await Should.ThrowAsync<AddressSourceRefusedException>(
-        () => Cache(new InvalidOperationException("refused")).GetAsync("commerce-api", default));
+        () => Cache(new InvalidOperationException("refused")).GetAsync("commerce-api", ct));
     await Should.ThrowAsync<HttpRequestException>(
-        () => Cache(new HttpRequestException("down")).GetAsync("commerce-api", default));
+        () => Cache(new HttpRequestException("down")).GetAsync("commerce-api", ct));
 }
 ```
 
@@ -3209,6 +3211,12 @@ public sealed class ShipmentFulfilmentTests(ServiceFixture fixture) : IAsyncLife
     }
 }
 ```
+
+The file carries
+`using MessagingRegistration = Shipping.Infrastructure.Messaging.DependencyInjection;`,
+as Task 3 step 7 does for `AddressRegistration`: the queue name is read from
+the registration that owns it rather than spelled a second time here, so a
+binding assertion cannot pass against a queue the host never declared.
 
 The helpers are Payments' endpoint helpers one service over: `PublishAsync`
 onto the bus with a drain, `Confirmed`/`Cancelled` building the contracts,
