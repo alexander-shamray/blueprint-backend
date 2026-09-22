@@ -1232,6 +1232,8 @@ queue will need it.
   `Testcontainers.Redis` reference if nothing else in the project uses it
 - Modify: `tests/Shipping.Worker.Tests/MetricsRegistrationTests.cs` — the two
   Redis keys leave `BuildServices()`
+- Modify: `tests/Shipping.Worker.Tests/HostSmokeTests.cs` — the readiness
+  registration test, which the render leaves asserting four checks
 - Test: `tests/Shipping.Worker.Tests/NoRedisTests.cs`
 - Modify: `docs/backend-architecture/02-architecture-at-a-glance.md`
 
@@ -1246,12 +1248,13 @@ grep -rn -i "redis\|HybridCache\|IConnectionMultiplexer" src/Services/Shipping t
 ```
 
 Every hit is one of: the `AddRedisConnections` call and its comment; the two
-readiness rows; the Compose unit's two variables, their comment and two
-`depends_on` entries; the factory's parameters, constant and settings; the
-fixture's two containers; the metrics suite's two configuration keys; a
-`using` for `Common.Infrastructure.Redis` or `Testcontainers.Redis`; a test
-whose subject is Redis. A hit of any other kind is a stop: record it and ask,
-rather than cut something the design did not name.
+readiness rows and the two lookups the host's smoke test makes over them; the
+Compose unit's two variables, their comment and two `depends_on` entries; the
+factory's parameters, constant and settings; the fixture's two containers; the
+metrics suite's two configuration keys; a `using` for
+`Common.Infrastructure.Redis` or `Testcontainers.Redis`; a test whose subject
+is Redis. A hit of any other kind is a stop: record it and ask, rather than cut
+something the design did not name.
 
 - [ ] **Step 2: Write the failing test**
 
@@ -1308,6 +1311,16 @@ comment above it, and the two `.AddRedis(...)` readiness rows with the part of
 the readiness comment that argues them — leaving the SQL row and §13.5's
 reason for it. `IIdempotencyMarkerStore` stays: it is the durable marker's EF
 half, the scaffold's migrations create its table, and the purge covers it.
+
+The rendered `HostSmokeTests.cs` asserts that set, so it moves with it:
+`Ready_probe_reports_the_sql_redis_and_bus_checks` becomes
+`Ready_probe_reports_the_sql_and_bus_checks`, the count becomes two, and the
+two `redis-*` lookups go with the part of the comment that argues them. The
+`sql` and `masstransit-bus` lookups keep their tag assertions, because a check
+outside the `/health/ready` predicate reports to nobody and a count says
+nothing about that. The result is `tests/Payments.Api.Tests/HostSmokeTests.cs`
+line for line, and for the reason it is: that service reached the same set by
+the same cut.
 
 `RetentionPurgeService` resolves `IIdempotencyStore` unconditionally for
 ADR-039's marker purge, and the shared one is Redis-backed, so Shipping
@@ -2352,7 +2365,7 @@ public sealed class ShipmentsSchemaTests(ServiceFixture fixture) : IAsyncLifetim
     {
         string[] columns = await fixture.ColumnsAsync("shipping", "TrackingEvents");
 
-        columns.ShouldBe(["CarrierEventId", "OccurredAt", "RecordedAt", "ShipmentId"], ignoreOrder: true);
+        columns.ShouldBe(["CarrierEventId", "OccurredAt", "RecordedAt", "ShipmentId", "Status"], ignoreOrder: true);
 
         (await fixture.ScalarAsync<int>(
             """
@@ -2713,10 +2726,15 @@ def gate_module(name: str, filename: str):
     path = REPO_ROOT / ".github" / name / filename
     spec = importlib.util.spec_from_file_location(filename.removesuffix(".py"), path)
     module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+        spec.loader.exec_module(module)
     return module
+```
 
+The file already has `comment_gate_module()`, the same walk for one gate.
+Reduce it to `return gate_module("comment-gate", "comment_gate.py")` so the
+walk has one owner and its existing caller keeps its name.
 
+```python
 class EveryGateSeesTheWorkerRender(unittest.TestCase):
     """The worker render's projects are inside every gate's own selector."""
 

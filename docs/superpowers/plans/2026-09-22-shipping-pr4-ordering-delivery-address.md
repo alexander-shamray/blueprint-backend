@@ -1098,8 +1098,8 @@ def worker(**overrides) -> dict:
     return client
 ```
 
-`realm()` appends it on the same terms it already appends `mobile()`, so no
-case written before this client existed has to learn it does:
+`realm()` appends it on the same terms it already appends `mobile()`, so a
+case that passes its clients positionally learns nothing:
 
 ```python
     if clients:
@@ -1113,6 +1113,15 @@ case written before this client existed has to learn it does:
     else:
         client_list = [browser(), mobile(), worker()]
 ```
+
+Two cases pass `clients=` as a keyword instead, and `realm()` applies its
+overrides after the list is built, so neither gets the worker appended.
+`test_a_realm_missing_the_mobile_client_is_refused` counts its problems and
+asserts exactly one, the mobile client's absence, and after Step 3 it would
+see two. Amend it to `realm(clients=[browser(), other, worker()])`: its
+subject is the mobile client, so the worker belongs in its document. The
+other, `test_rotation_is_not_checked_without_a_mobile_client`, asserts with
+`any(...)` over the messages rather than a count, and stands as it is.
 
 `WhatTheGateHolds` does not go through `realm()`: its `realm_with_secrets`
 writes a two-client document of its own, because every field in it is there to
