@@ -103,8 +103,8 @@ and the scaffold's suite), 13 (§4.5's sentence and §2's) and 14.
 - Create: `tests/Catalog.Api.Tests/MetricsRegistrationTests.cs`
 - Modify: `.github/secret-scan/allowed/tests.txt` — Catalog's own entry for
   the fixture password in the file above
-- Modify: `tools/new-service/scaffold/render.py` — four entries in `COPIED`,
-  one in `COPY`-adjacent nothing else; the new shared-file writer
+- Modify: `tools/new-service/scaffold/render.py` — five entries in `COPIED`;
+  the new shared-file writer
 - Modify: `tools/new-service/scaffold/verify.py` — one `SCAN_REASONS` row
 - Modify: `tools/new-service/new_service.py` — the new shared file in `plan`
 - Modify: `deploy/observability/check.py` — `OUTBOX_METRICS_EXEMPT` becomes
@@ -551,8 +551,10 @@ and, in `RefusesToRun`, replacing `test_a_service_section_4_1_gives_a_worker`:
 ```python
     def test_a_name_section_4_1_gives_a_worker_is_refused_as_an_api(self):
         # The mode exists now, so the refusal narrows rather than going: an
-        # API render of either name would contradict §4.1 exactly as before.
-        for name in ("Shipping", "Notifications", "SHIPPING"):
+        # API render under this name would contradict §4.1 exactly as before.
+        # Notifications is outside the loop because §4.1 gives it no Domain
+        # project, and the narrower refusal answers it first in either mode.
+        for name in ("Shipping", "SHIPPING"):
             with self.assertRaises(ScaffoldError) as raised:
                 render(name=name)
             self.assertIn("--worker", str(raised.exception))
@@ -911,15 +913,23 @@ in `plan`, replacing the old `WORKER_SERVICES` refusal:
             "--port is required for an API render: a port is an allocation recorded in "
             "§14.1 and deploy/compose/README.md")
 
-    if host == API_HOST and name.lower() in {s.lower() for s in WORKER_ONLY_SERVICES}:
-        raise ScaffoldError(
-            f"§4.1 gives {name} a Worker in place of an Api. Render it with --worker; an "
-            f"API service under this name would contradict the chapter.")
     if name.lower() in {s.lower() for s in UNRENDERABLE_SERVICES}:
         raise ScaffoldError(
             f"§4.1 gives {name} no Domain project and this script renders one. That is a "
             f"second mode, and it joins with the PR that builds the first such host.")
+    if host == API_HOST and name.lower() in {s.lower() for s in WORKER_ONLY_SERVICES}:
+        raise ScaffoldError(
+            f"§4.1 gives {name} a Worker in place of an Api. Render it with --worker; an "
+            f"API service under this name would contradict the chapter.")
 ```
+
+**The narrower refusal goes first, and the order is the whole of what a caller
+reads.** `Notifications` is in both sets — §4.1 gives it a Worker *and* no
+Domain project — so an API render under that name satisfies both conditions,
+and only one of the two messages is worth printing: the one naming what no
+flag can fix. The other way round, the caller is told to pass `--worker`,
+passes it, and is refused again for a reason the first message never
+mentioned.
 
 **Four edits the refusals above do not make, and without any one of them
 `plan` cannot render a worker at all.** They are named here rather than left

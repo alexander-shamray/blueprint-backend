@@ -657,10 +657,12 @@ that record wrote the list out and why this table finishes it.
 
 - **§4.5** loses its sentence that the worker mode is owed, and **§2**
   names Shipping beside Payments as reaching no Redis, in PR-1.
-- **§15.4's inventory** gains the carrier's two rows in PR-2, the client's
-  three in PR-4 and the two jurisdiction windows in PR-6; **§15.4's sentence
-  that the solution has one options type, and its callout's close,** move in
-  PR-6, which binds the second.
+- **§15.4's inventory** gains the carrier's two rows in PR-2, the amendment of
+  the client's three in PR-4, and the two jurisdiction windows in PR-6; the
+  `Identity__Client__*` rows are in the table today as the BFF's alone, and
+  PR-4 is what makes their Required column name the obligation's shape
+  instead. **§15.4's sentence that the solution has one options type, and its
+  callout's close,** move in PR-6, which binds the second.
 - **Appendix B** gains `Microsoft.Extensions.Http`'s row in PR-3a.
 - **`docs/secrets.md`** gains its rotation row and its local-default row in
   PR-4, and its Helm place in PR-7.

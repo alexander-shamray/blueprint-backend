@@ -252,11 +252,14 @@ message GetDeliveryAddressReply {
 }
 ```
 
-**`post_code`, not `postal_code`.** The generated C# property is `PostCode`
-either way once the underscore is dropped, and the field name is a contract
-both halves compile against; it is named here once and every later reference in
-this plan spells it the same. The domain's property stays `PostalCode`,
-because identifiers keep their real spelling.
+**`post_code`, not `postal_code`.** The two spell different C# properties —
+the generator drops the underscore and capitalises what follows, so
+`post_code` becomes `PostCode` and `postal_code` would become `PostalCode` —
+and the field name is a contract both halves compile against, so it is named
+here once and every later reference in this plan spells it the same. The
+domain's property stays `PostalCode`, because identifiers keep their real
+spelling, and Task 4's service maps it onto the reply's `PostCode` in the one
+place the two vocabularies meet.
 
 - [ ] **Step 4: The csproj and the settings file**
 
@@ -2050,15 +2053,38 @@ that gives it the address read:
 
 - [ ] **Step 3: `docs/secrets.md`**
 
-The *Rotation* opening sentence gains the second host:
+The *Rotation* opening sentence gains the second host, by its
+`Identity__Client__ClientSecret` clause and not as a whole sentence. The
+clause
 
-"**A running host holds a datastore credential, or the credential of an
-outbound call it makes itself** — `Identity__Client__ClientSecret`, for the
-BFF
-and, since [ADR-052](backend-architecture/adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md),
-for Shipping's worker, the two hosts that call a peer synchronously (§9.7,
-§11.5, ADR-017), and `PaymentProvider__ApiKey`, for Payments' provider behind
-§3.2's anti-corruption layer (§15.4)."
+```markdown
+`Identity__Client__ClientSecret`, for the
+BFF, the only host that calls a peer synchronously
+([§9.7](backend-architecture/09-messaging.md),
+[§11.5](backend-architecture/11-identity-authorization.md), ADR-017)
+```
+
+becomes
+
+```markdown
+`Identity__Client__ClientSecret`, for the
+BFF and, since
+[ADR-052](backend-architecture/adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md),
+for Shipping's worker — the two hosts that call a peer synchronously
+([§9.7](backend-architecture/09-messaging.md),
+[§11.5](backend-architecture/11-identity-authorization.md), ADR-017)
+```
+
+and every other clause of the sentence is left exactly as found; the line
+breaks above are the file's rather than the clause's, so rewrap the paragraph
+at 80 columns once the substitution is made. **The edit is
+clause-level because the sentence is a list two pull requests append to.** PR-2
+adds the carrier's clause to the same sentence — "and `Carrier__ApiKey`, for
+Shipping's carrier behind §3.2's anti-corruption layer" — and the spec puts
+neither PR first, so a replacement quoting the whole sentence would silently
+drop the carrier whenever PR-2 landed ahead of this one. Where PR-2 has landed,
+its clause is already there and stays; where it has not, it arrives beside this
+one.
 
 *A client secret*'s steps 3 and 4 are per host rather than the BFF's alone,
 and both move: step 3 names the pods to restart and step 4 names the proof
