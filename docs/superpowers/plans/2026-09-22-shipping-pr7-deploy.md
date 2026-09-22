@@ -167,7 +167,7 @@ section 'The worker chart declares four capabilities, and each is required'
 # --------------------------------------------------------------------------
 # Shipping's host reads every key below before it will start (§15.4), so each
 # state that renders cleanly here is a pod that never starts. Asserted by
-# PLACEMENT and not by presence: §15.4 puts the credential and the three
+# placement and not by presence: §15.4 puts the credential and the three
 # addresses in different Kinds, and a global grep proves neither.
 SHIPPING_RENDER=$("$HELM" template shipping "$CHARTS_DIR/shipping" \
     --set-string image.tag="$TAG" $(overlay_for shipping))
@@ -790,7 +790,8 @@ chart keeps the three templates whose values are off.
 **Files:**
 - Modify: `deploy/helm/smoke.sh` — `SERVICE_CHARTS`, `MIGRATOR_CHARTS`,
   `SOURCE_INPUTS`, the two umbrella override lists, the autoscaling section and
-  its new partition, and the worker-shape section
+  its new partition, the new worker-shape section, and the retitled heading
+  over the gateway's seven conditional refusals
 - Modify: `.github/workflows/helm.yml` — both `paths:` lists
 
 - [ ] **Step 1: Run it to see the list fail**
@@ -901,8 +902,50 @@ done
 `Branches no chart takes yet, exercised anyway` rendered Ordering under a name
 nothing dials, because no worker chart existed. One does. The surrogate render
 is replaced rather than kept beside the real one — a second render of a chart
-that never sets the key proves nothing this one does not — and the section's
-other three refusals, which are the gateway's, stay exactly where they are:
+that never sets the key proves nothing this one does not.
+
+**The section holds more than the surrogate, so the heading has to split
+rather than move.** Below the five surrogate checks sit seven refusals that are
+the gateway's and not the worker's — two written as `if` blocks, because they
+predate the helper, and five as `refuses` calls: no `trustedNetworks`, no CORS
+origins, a blank trusted network, a blank origin, an origin with a trailing
+path, an Ingress with no Service, and an Ingress with no TLS. `refuses()`
+itself is defined among them and is called again further down the file, so it
+stays exactly where it is. Retitling the one heading would file all seven under
+a Shipping title; the worker section is therefore inserted above them with a
+heading of its own, and the heading they already sit under is retitled to say
+what they are.
+
+Before — the surrogate, and the heading the gateway's refusals inherit:
+
+```bash
+# --------------------------------------------------------------------------
+section 'Branches no chart takes yet, exercised anyway'
+# --------------------------------------------------------------------------
+# §15.3 specifies `service.enabled: false` for Shipping and Notifications, and
+# neither exists yet, so rendering one chart with the value flipped is what
+# keeps the key from being decorative. Rendered under a name nothing dials,
+# which is the difference between exercising the worker branch and asserting
+# that Ordering, a routed destination, may drop its Service.
+"$HELM" template shipping "$CHARTS_DIR/ordering" --set-string "image.tag=$TAG" \
+    --set-string "workload.name=shipping" \
+    --set service.enabled=false >"$OUT/worker.yaml"
+check 'service.enabled=false renders no Service' \
+    test "$(count '^kind: Service$' "$OUT/worker.yaml")" -eq 0
+check 'and the workload survives' \
+    test "$(count '^kind: Deployment$' "$OUT/worker.yaml")" -eq 1
+# Named separately, because a description is a claim about what the command
+# looks at and the line above counts Deployments alone.
+check 'and so does its migration hook' \
+    test "$(count '^kind: Job$' "$OUT/worker.yaml")" -eq 1
+check 'and the probes still address the container port directly' \
+    test "$(count 'path: /health/ready$' "$OUT/worker.yaml")" -eq 1
+
+# Conditionally required is a real category (§15.4): off is a valid topology,
+```
+
+After — two sections, and the gateway's half starts at the comment the `Before`
+block ends on, unchanged:
 
 ```bash
 # --------------------------------------------------------------------------
@@ -921,12 +964,23 @@ check 'and so does its migration hook' \
     test "$(count '^kind: Job$' "$OUT/shipping.yaml")" -eq 1
 check 'and the probes still address the container port directly' \
     test "$(count 'path: /health/ready$' "$OUT/shipping.yaml")" -eq 1
-# The pair is not independent: an Ingress backend IS this workload's Service,
+# The pair is not independent: an Ingress backend is this workload's Service,
 # so a values copy that turned the route on would install cleanly and answer
 # 503 for every request (_ingress.tpl).
 refuses_chart shipping 'an Ingress on the worker chart fails the render' \
     'ingress.enabled requires service.enabled' --set ingress.enabled=true
+
+# --------------------------------------------------------------------------
+section 'A value the gateway requires only when another is set'
+# --------------------------------------------------------------------------
+# Conditionally required is a real category (§15.4): off is a valid topology,
 ```
+
+The seven refusals, `refuses()` and everything after them keep their text and
+their order; the edit is the heading above them and the section above that.
+`refuses_chart` is already bound here — Task 1 step 1 moved its definition up
+to the helper block at the head of the file, and this call is the second reason
+it had to move.
 
 Then, in the canary loop, one comment beside the four suppressed kinds, because
 three of them are vacuous on this chart and a reader must not read the pass as

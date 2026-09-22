@@ -328,8 +328,24 @@ public sealed record AuthorityKeyName(string Name);
 
 - [ ] **Step 5: Take the `Common.Web` dependency out of `CachingTokenClient`**
 
-Four edits, all on code lines. Drop `using Common.Web;` from the file's
-header. Add the carrier to the primary constructor, after `identity`:
+Five edits, all on code lines. Drop `using Common.Web;` from the file's header
+and add `using Microsoft.Extensions.Logging;` in its sorted place, because
+`Common.Infrastructure` is not a Web SDK project: the file names
+`ILogger<>`, `LogLevel` and `[LoggerMessage]`, and `Web.Bff` supplied that
+namespace implicitly where a plain `Microsoft.NET.Sdk` library does not —
+`Outbox/OutboxDispatcher.cs` imports it by hand for the same reason. The
+header comes out as:
+
+```csharp
+using System.Collections.Concurrent;
+using System.Globalization;
+using System.Net;
+using System.Text.Json;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+```
+
+Add the carrier to the primary constructor, after `identity`:
 
 ```csharp
 public sealed partial class CachingTokenClient(
@@ -755,7 +771,7 @@ namespace Common.Web;
 /// configuration, and are therefore not bound, not validated and not
 /// deployable. §15.4's test is whether a member would differ between
 /// Compose, the fixture and production; nothing here does, and
-/// <c>ServiceIdentityOptions</c> is the type that passes it (§11.5).
+/// <c>ServiceIdentityOptions</c> is a type that passes it (§11.5).
 /// </summary>
 /// <remarks>
 /// It caps a hierarchy that is the platform's and not one host's (§9.7).
@@ -766,6 +782,13 @@ public static class ServiceOptions
 The sentence about a binding hoisted into `Common.Web` re-imposing a
 credential on every host is not lost: `ServiceIdentityOptions`' own remark
 carries it, one file over, where the binding it argues about is.
+
+**`a type`, not `the type`, and the article is the whole point.** Step 6 of
+Task 2 forbids writing §15.4's count of options types into a file this plan
+moves; writing the same count here, as a uniqueness claim about what passes
+§15.4's test, would put it in a file no Shipping pull request after this one
+is allowed to reach — PR-6 binds the second such type and its touch set
+names `Common.Web` nowhere.
 
 - [ ] **Step 2: §4.1's tree comment**
 

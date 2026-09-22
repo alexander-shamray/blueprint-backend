@@ -37,9 +37,10 @@ client secret's places), 12 (PR-4's five tests) and 13 (the chapters that move).
 - **Class A+D.** Touch set: `src/Services/Ordering/**`,
   `tests/Ordering.Api.Tests/**`, `tests/Common.Web.Tests/RealmImportTests.cs`,
   `tests/Web.Bff.Tests/**`, `tests/Gateway.Api.Tests/**`,
-  `deploy/compose/keycloak/realm-export.json`, `deploy/keycloak/realm_check.py`,
+  `deploy/compose/keycloak/realm-export.json`, `deploy/compose/README.md`,
+  `deploy/keycloak/realm_check.py`,
   `deploy/keycloak/test_realm_check.py`, `deploy/keycloak/README.md`,
-  `deploy/helm/ordering/values.yaml`,
+  `deploy/helm/ordering/values.yaml`, `deploy/helm/smoke.sh`,
   `deploy/helm/catalog/Chart.yaml`, `deploy/helm/catalog/values.yaml`,
   `.github/secret-scan/allowed/deploy.txt`,
   `.github/secret-scan/allowed/tests.txt`,
@@ -53,8 +54,9 @@ client secret's places), 12 (PR-4's five tests) and 13 (the chapters that move).
   suites that read what it changes are A — `tests/**` is Class A's, and
   `RealmImportTests` is the one building-block test that owns the realm's
   closed sets; the realm, the realm gate and the README that owns its claim,
-  the two charts, the two secret-scan entries, the three chapters and the two
-  maps are D. **No Class E letter is
+  the Compose README that owns the host-run port recipe, the two charts,
+  `smoke.sh`'s listener comparison, the two secret-scan entries, the three
+  chapters and the two maps are D. **No Class E letter is
   owed**, and that is a judgement rather than an omission: the three project
   files this PR edits — `Ordering.Api.csproj`, `Ordering.Application.csproj`
   and `tests/Ordering.Api.Tests/Ordering.Api.Tests.csproj`
@@ -103,6 +105,8 @@ client secret's places), 12 (PR-4's five tests) and 13 (the chapters that move).
   first, and the second in any service
 - Modify: `src/Services/Ordering/Ordering.Api/Ordering.Api.csproj` —
   `Grpc.AspNetCore` and the `Protobuf` item
+- Modify: `deploy/compose/README.md` — the uniqueness claim over the host-run
+  recipe, and Ordering's own two exports
 - Test: `tests/Ordering.Api.Tests/KestrelEndpointTests.cs`
 - Modify: `tests/Ordering.Api.Tests/Ordering.Api.Tests.csproj` —
   `Grpc.Net.ClientFactory`, for Task 4's channel
@@ -120,7 +124,7 @@ public sealed class GetDeliveryAddressReply
     public string Line1 { get; set; }
     public string Line2 { get; set; }
     public string City { get; set; }
-    public string PostalCode { get; set; }
+    public string PostCode { get; set; }
     public string Country { get; set; }
 }
 
@@ -335,17 +339,104 @@ In `Ordering.Api.Tests.csproj`, beside `NSubstitute`:
     <PackageReference Include="Grpc.Net.ClientFactory" />
 ```
 
-- [ ] **Step 5: Run; commit**
+- [ ] **Step 5: The host-run recipe in `deploy/compose/README.md`**
+
+`deploy/compose/README.md` is where what a `Kestrel:Endpoints` section costs
+outside the container is written down, and it is written as a fact about
+Catalog alone. With step 4's settings file in place, a host-run Ordering binds
+`0.0.0.0:8080` — the port Keycloak publishes — and dies on the message the
+README already quotes, with nothing in the recipe to say why. The claim and
+the recipe both move here, because step 4 is what makes them wrong.
+
+The uniqueness claim first. Before:
+
+```bash
+# Catalog is the ONE service that pins its own ports, and on the host they
+# have to move. Its appsettings.json declares two Kestrel endpoints — 8080 for
+# REST and 8081 for §9.7's gRPC hop, because a cleartext port cannot serve
+# HTTP/1.1 and h2c at once — and 8080 on the host belongs to Keycloak, so a
+# host run without these two lines fails to bind.
+```
+
+After:
+
+```bash
+# Catalog and Ordering each pin their own ports, and on the host both have to
+# move. Each declares two Kestrel endpoints — 8080 for REST and a second for
+# its gRPC surface, because a cleartext port cannot serve HTTP/1.1 and h2c at
+# once — and 8080 on the host belongs to Keycloak, so a host run without these
+# two lines fails to bind.
+```
+
+Five lines to five, no emphasis, and the paragraph below it — the one naming
+the *Failed to bind* message and why it does not say Keycloak and Catalog are
+related — is untouched apart from the project it names. Before:
+
+```markdown
+because the address it names is Keycloak's and the project it names is
+Catalog's, and nothing in that message says the two are related.
+```
+
+After:
+
+```markdown
+because the address it names is Keycloak's and the project it names is the
+one being run, and nothing in that message says the two are related.
+```
+
+Then Ordering's own block, which today ends at `dotnet run`. Before:
+
+```bash
+export ASPNETCORE_ENVIRONMENT=Development
+export ConnectionStrings__Ordering='Server=localhost;Database=Ordering;User Id=sa;Password=Local_Dev_Pa55w0rd!;TrustServerCertificate=True'
+export ConnectionStrings__RabbitMq='amqp://ordering-svc:local-dev-ordering@localhost:5672'
+export Identity__Authority='http://localhost:8080/realms/commerce'
+dotnet run --project src/Services/Ordering/Ordering.Api
+```
+
+After:
+
+```bash
+export ASPNETCORE_ENVIRONMENT=Development
+export ConnectionStrings__Ordering='Server=localhost;Database=Ordering;User Id=sa;Password=Local_Dev_Pa55w0rd!;TrustServerCertificate=True'
+export ConnectionStrings__RabbitMq='amqp://ordering-svc:local-dev-ordering@localhost:5672'
+export Identity__Authority='http://localhost:8080/realms/commerce'
+# The same two exports Catalog needs, for the same reason and at its own
+# numbers: 5101 is the port §14.1 already allocates this service, and 8082
+# rather than 8081 because 8081 is where the block above puts Catalog's h2c
+# listener — two host processes cannot both hold it.
+export Kestrel__Endpoints__Rest__Url='http://localhost:5101'
+export Kestrel__Endpoints__Grpc__Url='http://localhost:8082'
+dotnet run --project src/Services/Ordering/Ordering.Api
+```
+
+`ReverseProxy__Clusters__ordering__Destinations__d1__Address` in the gateway's
+own block further down already dials `http://localhost:5101/`, so the REST
+export lands on the number that block was written against and nothing there
+moves.
+
+**`docker-compose.infra-only.yml`'s comment stays as it is**, and that is a
+judgement rather than an oversight. It makes no uniqueness claim: it says
+Catalog's `appsettings.json` declares `Kestrel:Endpoints` and that the
+invocation belongs in `README.md` rather than in a second copy, both of which
+this step leaves true. Touching it would put a block the comment gate then
+judges whole back through a limit it does not meet today, for a sentence that
+is not wrong.
+
+- [ ] **Step 6: Run; commit**
 
 ```bash
 dotnet build Platform.slnx
 dotnet test tests/Ordering.Api.Tests --filter "FullyQualifiedName~KestrelEndpointTests"
 ```
 
-Expected: 0 warnings, 4 passing. Then:
+Expected: 0 warnings, 4 passing. The comment gate reads no `.md` file, so the
+README's two rewritten blocks are held to `docs/style-guide.md`'s *Comments*
+section by a reader and by nothing else — which is why each is written out
+above at its finished length rather than left to be shortened later. Then:
 
 ```bash
-git add src/Services/Ordering/Ordering.Api tests/Ordering.Api.Tests
+git add src/Services/Ordering/Ordering.Api tests/Ordering.Api.Tests deploy/compose/README.md
 git commit -m "feat(ordering): delivery_addresses.proto and an Http2-only second port"
 ```
 
@@ -1932,6 +2023,8 @@ git commit -m "test(identity): shipping-worker's grant is proved both ways again
   second port
 - Modify: `deploy/helm/catalog/Chart.yaml` and `deploy/helm/catalog/values.yaml`
   — the two "one gRPC server" claims
+- Modify: `deploy/helm/smoke.sh` — the listener comparison, which reads one
+  service's `appsettings.json` and renders one chart
 
 - [ ] **Step 1: §11.5's table of realm objects**
 
@@ -2178,23 +2271,159 @@ measurement and loses its claim of uniqueness: "…so Catalog declares a second,
 HTTP/2-only endpoint for the BFF's synchronous hop (§9.7). Ordering declares
 one of its own for ADR-052's address read."
 
-**No Helm gate goes red.** `smoke.sh`'s credential assertions count charts
-declaring `clientCredentials: true` and workloads rendering
-`Identity__Client__ClientSecret`; neither chart gains one here, and Shipping has
-no chart until PR-7. `_helpers.tpl`'s `fail` naming `web-bff` is untouched for
-the same reason. Both are PR-7's, which is where the credentialed chart
-arrives, and this plan says so rather than leaving a builder to learn it from
-CI.
+**`smoke.sh`'s credential assertions stay green, and that is not the same as
+nothing moving.** Those assertions count charts declaring
+`clientCredentials: true` and workloads rendering
+`Identity__Client__ClientSecret`; neither chart gains one here, and Shipping
+has no chart until PR-7, so they and `_helpers.tpl`'s `fail` naming `web-bff`
+are PR-7's. The section immediately above them is a different matter, and it
+is the next step.
 
-- [ ] **Step 6: Audit; commit**
+- [ ] **Step 6: `smoke.sh` compares every pinned listener, not Catalog's**
+
+*The Service forwards to a port something is listening on* reads its listeners
+out of Catalog's `appsettings.json` and compares them against Catalog's render
+alone. A second service pinning its own ports is therefore covered by nothing:
+the `grpc` port added in step 5 could name 8082, or the settings file could
+name 9090, and the section would report `ok` twice and say nothing about
+either. **A gate that quietly stops covering the newest surface is the failure
+`CLAUDE.md` names**, and the defence is to make the section's subject the set
+of services that pin their own ports rather than the one that did first.
+
+Before:
+
+```bash
+# The routing gate above compares caller URLs with rendered Service ports and
+# never looks at the process behind `targetPort`. Catalog declares its two
+# Kestrel endpoints in its own appsettings.json (§9.7: a cleartext port cannot
+# serve HTTP/1.1 and h2c at once), so moving the h2c listener there would
+# deploy a Service forwarding to a closed port.
+grep -ohE 'http://0\.0\.0\.0:[0-9]+' "$ROOT/src/Services/Catalog/Catalog.Api/appsettings.json" |
+    sed -E 's|.*:([0-9]+)|\1|' | sort -u >"$OUT/listeners.txt"
+
+if [ ! -s "$OUT/listeners.txt" ]; then
+    fail 'no Kestrel endpoints found in Catalog appsettings.json — the parse, not the chart, is wrong'
+else
+    while read -r port; do
+        check "catalog-api listens on $port and the chart declares it" \
+            grep -q "containerPort: $port$" "$OUT/catalog.yaml"
+    done <"$OUT/listeners.txt"
+fi
+
+# And the other direction, so a chart port with nothing behind it is caught too.
+awk '/^kind: Deployment$/ { in_dep = 1 } in_dep && /containerPort:/ { print $2 }' \
+    "$OUT/catalog.yaml" | sort -u >"$OUT/declared.txt"
+missing="$(comm -23 "$OUT/declared.txt" "$OUT/listeners.txt")"
+if [ -z "$missing" ]; then
+    pass 'and declares no port Catalog does not listen on'
+else
+    fail "chart declares port(s) Catalog has no listener for: $(echo "$missing" | tr '\n' ' ')"
+fi
+```
+
+After:
+
+```bash
+# The routing gate above compares caller URLs with rendered Service ports and
+# never looks at the process behind `targetPort`. A service declaring
+# Kestrel:Endpoints owns its ports outright — ASPNETCORE_URLS and
+# ASPNETCORE_HTTP_PORTS both lose to that section (§9.7) — so a listener moved
+# there and not in the chart deploys a Service forwarding to a closed port.
+# Every chart is asked, through src_of, and the number that answered is
+# asserted below: a service that starts pinning its own ports is covered the
+# day it does, and a search that stops finding any fails rather than passing
+# quietly.
+pinned=0
+for chart in $SERVICE_CHARTS; do
+    settings="$(grep -rl '"Kestrel"' --include=appsettings.json "$(src_of "$chart")" || true)"
+    [ -n "$settings" ] || continue
+
+    if [ "$(printf '%s\n' "$settings" | wc -l)" -ne 1 ]; then
+        fail "$chart pins ports in more than one appsettings.json — the search, not the chart, is wrong"
+        continue
+    fi
+
+    pinned=$((pinned + 1))
+    grep -ohE 'http://0\.0\.0\.0:[0-9]+' "$settings" |
+        sed -E 's|.*:([0-9]+)|\1|' | sort -u >"$OUT/$chart-listeners.txt"
+
+    if [ ! -s "$OUT/$chart-listeners.txt" ]; then
+        fail "no Kestrel endpoint parsed out of $settings — the parse, not the chart, is wrong"
+        continue
+    fi
+
+    while read -r port; do
+        check "$chart listens on $port and its chart declares it" \
+            grep -q "containerPort: $port$" "$OUT/$chart.yaml"
+    done <"$OUT/$chart-listeners.txt"
+
+    # And the other direction, so a chart port with nothing behind it is caught too.
+    awk '/^kind: Deployment$/ { in_dep = 1 } in_dep && /containerPort:/ { print $2 }' \
+        "$OUT/$chart.yaml" | sort -u >"$OUT/$chart-declared.txt"
+    missing="$(comm -23 "$OUT/$chart-declared.txt" "$OUT/$chart-listeners.txt")"
+    if [ -z "$missing" ]; then
+        pass "and $chart declares no port it does not listen on"
+    else
+        fail "$chart's chart declares port(s) it has no listener for: $(echo "$missing" | tr '\n' ' ')"
+    fi
+done
+
+if [ "$pinned" -eq 0 ]; then
+    fail 'no chart pins its own Kestrel endpoints — the search, not the charts, is wrong'
+else
+    pass "the listener comparison covered $pinned chart(s) that pin their own endpoints"
+fi
+```
+
+Four things in that block are the file's own idioms rather than choices, and
+each is load-bearing:
+
+- **`src_of` already exists**, a hundred lines up, and it is declared there as
+  data because the gateway and the BFF are not under `src/Services`. Reusing it
+  is what keeps one mapping rather than two that can disagree.
+- **`--include=appsettings.json` matches the basename exactly**, so
+  `appsettings.Development.json` is not read: a development override that
+  moved a port would be a claim about a machine, not about the image the chart
+  deploys. `Gateway.Api`'s `appsettings.json` has no `Kestrel` section and is
+  skipped by the grep, which is the right answer and not an omission.
+- **`|| true` on the `grep -rl`** because `grep` exits 1 on no match and the
+  script runs under `set -e`; without it the first chart that pins nothing
+  ends the run with a success-shaped exit and every section below it unrun.
+- **`comm` needs both sides sorted**, which `sort -u` gives them, and the
+  per-chart file names keep two charts from overwriting each other's — a
+  single `listeners.txt` reused round the loop would compare Ordering's chart
+  against whichever list was written last.
+
+Run it against the tree step 5 leaves, and then break it on purpose: a widened
+gate nobody has seen red is a widened gate nobody has tested, which is the
+same fail-open shape this step exists to close.
+
+```bash
+bash deploy/helm/smoke.sh
+```
+
+Expected, with step 5's two ports in place: `ok` for 8080 and 8081 on each of
+`catalog` and `ordering`, `ok` for the reverse direction on both, and
+`the listener comparison covered 2 chart(s) that pin their own endpoints`.
+Deleting `containerPort: 8081` from `deploy/helm/ordering/values.yaml` and
+re-running must fail the first direction for `ordering`; restore it.
+
+- [ ] **Step 7: Audit; commit**
 
 ```bash
 bash deploy/helm/smoke.sh
 py -3.12 deploy/observability/check.py
+git fetch origin main
+py -3.12 .github/comment-gate/comment_gate.py --base origin/main
 ```
 
-Expected: both clean — the first because no credential capability moved, the
-second because no alert or runbook did. Then run `/check-links` and
+Expected: all clean — the first because the widened comparison sees both
+charts, the second because no alert or runbook moved, and the third because
+`smoke.sh` is a `.sh` file the gate reads and its two rewritten blocks come out
+at nine lines and one. A bare `#` line does not end a block — the gate's own
+README defines one as a run of lines holding nothing but comment — so the
+section header's argument is written as a single nine-line block rather than as
+two halves around a blank comment. Then run `/check-links` and
 `/validate-blueprint`.
 
 ```bash
@@ -2288,7 +2517,13 @@ body.
   halves of the client-secret procedure and its local-default row, §15.4's
   required-for-some-hosts paragraph and its three client rows,
   `docs/repo-map.md`'s and `CLAUDE.md`'s gRPC-server halves and
-  the two Catalog chart claims → Task 7. ADR-052's `realm-export.json` row —
+  the two Catalog chart claims → Task 7. Two places sit outside ADR-052's
+  table and spec section 13 names them there rather than in it: the Compose
+  README's host-run port recipe, which says Catalog is the one service pinning
+  its own ports and gives Ordering no `Kestrel__Endpoints__…__Url` exports →
+  Task 1 step 5; and `smoke.sh`'s listener comparison, which reads one
+  service's `appsettings.json` → Task 7 step 6.
+  ADR-052's `realm-export.json` row —
   `web-bff`'s description as the only client holding credentials — is Task 3
   step 2, in the same edit that adds the second such client; the realm's
   internationalisation half of that row is left alone, and Task 3 says why.
@@ -2309,6 +2544,15 @@ body.
 **PR-7's**, and this PR turns neither red: they are about a chart declaring
 client credentials, Shipping has no chart until PR-7, and no chart here gains
 the capability.
+
+**One gate stays green and is widened anyway, which is the row that matters
+most.** `smoke.sh`'s *The Service forwards to a port something is listening on*
+compares Catalog's `appsettings.json` with Catalog's render, so Ordering's
+second port and its second listener would both land uncovered and the section
+would report `ok` throughout. That is the shape `CLAUDE.md` calls this
+repository's most-repeated failure, and the answer it gives is a check whose
+subject is what the gate is looking at: Task 7 step 6 makes the section loop
+over every chart whose source pins its own endpoints and assert how many did.
 
 **Type consistency.** `GetDeliveryAddressRequest`, `GetDeliveryAddressReply`
 and `DeliveryAddresses.DeliveryAddressesBase` are produced by Task 1 and
@@ -2336,11 +2580,17 @@ comment saying why the suite cannot read the owner's constant.
   `RealmClientTests`-shaped assertion that the realm and that unit hold the
   same secret — the host that owns the client id is the side that makes it.
 - **§9.7's sentence** that the pricing hop is the platform's one synchronous
-  call between its services, **§2.2's diagram**, **`deploy/compose/README.md`**
+  call between its services, **§2.2's diagram**,
+  **`deploy/compose/README.md`'s description of that call**
   and **`docs/runbooks/latency.md`** all describe a *call*, and no code makes
   the second one until PR-5. Spec section 13 assigns §2.2 to PR-5, and the
   other three go with it — as do §12's sentence, §14.1's and §14.2's, §11.7's
   erasure step, and the BFF halves of `docs/repo-map.md` and `CLAUDE.md`.
+  **The Compose README is split, and the split is by fact rather than by
+  file.** Its host-run port recipe is not about a call at all: it says which
+  services pin their own ports and what a host run has to export, and this
+  pull request is what makes both wrong, so Task 1 step 5 takes it. The
+  sentences describing the BFF's hop are untouched here and stay PR-5's.
 - **§15.1's "one client secret in the whole platform"**, which spec section 13
   assigns to **PR-7**: that sentence describes what `smoke.sh` asserts, and
   `smoke.sh`'s credential assertions do not move until a second credentialed

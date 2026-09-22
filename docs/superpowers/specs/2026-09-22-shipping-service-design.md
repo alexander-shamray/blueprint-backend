@@ -671,6 +671,14 @@ that record wrote the list out and why this table finishes it.
 - **§15.3's sentence that exactly one chart carries client credentials**, and
   the callout under it, move in PR-7, which is where the second one renders;
   §15.3 also names Shipping among the charts with no Redis there.
+- **`deploy/compose/README.md`'s host-run port recipe** — the claim that one
+  service pins its own ports, and the exports a host run needs — and
+  **`smoke.sh`'s listener comparison**, which reads that one service's
+  `appsettings.json`, both move in PR-4, which is where a second service
+  declares `Kestrel:Endpoints`. ADR-052's table gives that README's row to
+  PR-5 and `smoke.sh`'s to PR-7, and neither row is this: those are the
+  synchronous call and the credential assertions, and a port recipe is
+  neither.
 - **§13.6** gains the two rules in PR-7.
 - **No contract moves**, and **§10 gains no route**.
 - **Appendix C gains no row.** §4.1's tree already names Shipping.

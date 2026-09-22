@@ -882,6 +882,31 @@ The parentheses are load-bearing: `-` binds tighter than `|` in Python, so
 `PATCHES` key, plus whatever `WORKER_PATCHES` adds — and the check would pass
 on a key it exists to refuse.
 
+**Both names the two blocks above spell are imports `render.py` does not have
+yet**, and they are written out here for the reason step 7 writes out
+`new_service.py`'s: a `NameError` raised halfway through a render reads as a
+missing table rather than as a missing import. Each joins its own line, in
+that line's established order — ALL-CAPS constants alphabetically first, then
+classes, then functions:
+
+```python
+from scaffold import API_HOST, TEMPLATE, Names, ScaffoldError, read, require_once, restore
+from scaffold.patch import (
+    IDEMPOTENCY_MIGRATION_PATCHES,
+    INBOX_MIGRATION_PATCHES,
+    INITIAL_CREATE_PATCHES,
+    OUTBOX_MIGRATION_PATCHES,
+    PATCHES,
+    RETENTION_INDEX_MIGRATION_PATCHES,
+    WORKER_PATCHES,
+)
+```
+
+`API_HOST` comes from `scaffold/__init__.py`, where step 3 puts the three host
+names, and `WORKER_PATCHES` from `patch.py`, where this step defines it.
+`HOSTS` and `WORKER_HOST` stay out: this module compares against one of the
+three and `new_service.py` owns the other two.
+
 - [ ] **Step 7: The command line, and the refusal split**
 
 `new_service.py`:
@@ -2261,6 +2286,8 @@ rank rather than by arrival, because the carrier's key orders nothing.
 - Create (generated): `Shipping.Infrastructure/Persistence/Migrations/<ts>_AddShipments.cs`
   and its designer, and the rewritten `ShippingDbContextModelSnapshot.cs`
 - Test: `tests/Shipping.Worker.Tests/ShipmentsSchemaTests.cs`
+- Modify: `tests/Shipping.Worker.Tests/DatabaseSmokeTests.cs` — the applied
+  count and the name of the last migration, which step 5 moves
 
 **Interfaces:**
 - Produces: `shipping.Shipments(Id uniqueidentifier PK, OrderId uniqueidentifier
