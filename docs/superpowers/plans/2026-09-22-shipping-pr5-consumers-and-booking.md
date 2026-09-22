@@ -1724,9 +1724,9 @@ public sealed partial class GrantCheckedTokenCache(
 
     // Compiled once rather than parsed per call; CA1848 is enforced by ADR-019.
     // Neither message names the token or the secret (§13.4).
-    [LoggerMessage(EventId = 1, Level = LogLevel.Error,
+        [LoggerMessage(EventId = 1, Level = LogLevel.Error,
         Message = "The token this host was issued does not carry exactly its one grant (ADR-052).")]
-    private partial void GrantIsWrong();
+    private static partial void GrantIsWrong(ILogger logger);
 
     public async Task<string> GetAsync(string scope, CancellationToken ct)
     {
@@ -1761,8 +1761,8 @@ public sealed partial class GrantCheckedTokenCache(
         // signature says nothing about that.
         if (!granted.SequenceEqual(Grant, StringComparer.Ordinal))
         {
-            metrics.Refused();
-            GrantIsWrong();
+                        metrics.Refused();
+            GrantIsWrong(log);
 
             throw new AddressSourceRefusedException(
                 $"The realm issued this host {granted.Length} permission(s) where ADR-052 names exactly one.");
@@ -2084,13 +2084,25 @@ permits one assembly to cross a service boundary and a test double is not it.
 - [ ] **Step 8: Write the grant check's own suite**
 
 `tests/Shipping.Worker.Tests/GrantCheckedTokenCacheTests.cs` builds tokens by
-hand, because the substitution above means no other test reaches this class:
+hand, because the substitution above means no other test reaches this class.
+The three grants come through `[MemberData]`, as every array-valued datum in
+`tests/` does: `InlineData`'s parameter is `params object?[]`, a `string[]`
+converts to it by covariance, and the array's elements — not the array — would
+become the theory's arguments, which xUnit's analysers refuse and
+`TreatWarningsAsErrors` turns into a failed build.
 
 ```csharp
+public static TheoryData<string[]> GrantsThatAreNotTheOne()
+{
+    TheoryData<string[]> data = [];
+    data.Add([]);
+    data.Add(["orders:write"]);
+    data.Add(["orders:delivery-address", "orders:write"]);
+    return data;
+}
+
 [Theory]
-[InlineData(new string[0])]
-[InlineData(new[] { "orders:write" })]
-[InlineData(new[] { "orders:delivery-address", "orders:write" })]
+[MemberData(nameof(GrantsThatAreNotTheOne))]
 public async Task A_token_whose_grant_is_not_exactly_the_one_record_names_is_refused(string[] permissions)
 {
     // The factory has to outlive the collection: a Meter disposed with its
