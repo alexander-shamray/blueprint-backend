@@ -1,15 +1,12 @@
 #!/usr/bin/env bash
-# Bring the current branch up to date with origin/main by rebasing it, and
-# publish the result. This is the only force push in this repository, and its
-# guards live here rather than in a permission rule because each is a fact
-# about the checkout: the branch is the one in hand, it is not main, the tree
-# is clean, the remote carries nothing the work did not start from, no merge
-# on the branch holds content neither parent has, a replay that stops with
-# anything staged, unstaged or untracked is reported rather than skipped, a
-# retry publishes only on top of the replay and only while origin itself
-# still holds the leased tip, and no run drops more commits than it set out
-# to replay. This list is the owner.
-# `.claude/settings.json` denies the raw force push, and that deny is untouched.
+# Rebase the current branch onto origin/main and publish it: the only force
+# push here, denied raw in `.claude/settings.json`. Its guards, owned by this
+# list, are facts about the checkout: the branch is the one in hand and not
+# main, the tree is clean, the remote carries nothing the work did not start
+# from, no merge holds content neither parent has, a stop with anything
+# staged, unstaged or untracked is reported rather than skipped, a retry
+# publishes only on the replay and only while origin holds the leased tip,
+# and no run drops more commits than it set out to replay.
 
 # Four modes, because a conflict is the case rebase is here for. `start`
 # leaves a conflicted rebase in progress rather than aborting it: backing out
