@@ -323,16 +323,20 @@ case "$mode" in
         echo "this replay runs on the apply backend, which this helper no longer uses: 'abort' and start again" >&2
         exit 9 ;;
     esac
-    # And HEAD detached at or beyond where the replay stopped: a resolution
-    # the caller committed is theirs, and `--continue` keeps it. Checked out
-    # onto a branch, or reset elsewhere, `--continue` would commit the rest
-    # there and hand `publish` a history this helper never replayed. No move
-    # is suggested, because putting HEAD back is exactly what loses a commit.
+    # And HEAD detached at the stop, or one non-merge commit on it: the
+    # caller's own committed resolution, which `--continue` keeps. Anything
+    # else — another branch, a merge, more commits, a reset — would be carried
+    # into a history this helper never replayed. The refusal names HEAD,
+    # because `abort` leaves a commit made here reachable only by the reflog.
     stopped_at=$(cat "$state/started-by-this-helper")
+    head_now=$(git rev-parse HEAD)
+    parent=$(git rev-parse -q --verify "HEAD^") || parent=""
+    second=$(git rev-parse -q --verify "HEAD^2") || second=""
     if git symbolic-ref -q HEAD > /dev/null || [ -z "$stopped_at" ] ||
-       ! git merge-base --is-ancestor "$stopped_at" HEAD; then
-      echo "HEAD is not where the replay of $branch stopped, ${stopped_at:-an unrecorded commit}, or beyond it," >&2
-      echo "so what the move meant cannot be told from here: 'abort' the replay and start again" >&2
+       { [ "$head_now" != "$stopped_at" ] && { [ "$parent" != "$stopped_at" ] || [ -n "$second" ]; }; }; then
+      echo "HEAD, $head_now, is not where the replay of $branch stopped (${stopped_at:-unrecorded})" >&2
+      echo "nor one commit on it, so what the move meant cannot be told from here: 'abort' the replay" >&2
+      echo "and start again, recovering anything committed here from $head_now first" >&2
       exit 9
     fi
     unmerged=$(git diff --name-only --diff-filter=U)
@@ -370,6 +374,10 @@ case "$mode" in
       { echo "no replay is waiting to be published" >&2; exit 9; }
     [ "$recorded_branch" = "$branch" ] ||
       { echo "the waiting replay is $recorded_branch, not $branch" >&2; exit 4; }
+    current=$(git branch --show-current)
+    [ "$current" = "$branch" ] ||
+      { echo "on ${current:-a detached HEAD}, not $branch: this helper only ever touches the current branch" >&2
+        exit 4; }
     # A record with no head is a run that stopped before one existed, and the
     # replay is what gets republished, never whatever the branch has become.
     [ -n "$recorded_head" ] ||
