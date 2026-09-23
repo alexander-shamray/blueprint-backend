@@ -147,7 +147,7 @@ publish() {
   head=$(git rev-parse HEAD)
   if [ "$head" = "$lease" ]; then
     rm -f "$pending"
-    echo "already published at $head; nothing to force"
+    echo "nothing to force: origin/$branch read $head when it was fetched"
     exit 0
   fi
   git push --force-with-lease="refs/heads/$branch:$lease" origin "refs/heads/$branch:refs/heads/$branch"
@@ -165,12 +165,14 @@ publish() {
 recorded_branch=""
 recorded_lease=""
 recorded_head=""
+recorded_before=""
 read_pending() {
   recorded_branch=""
   recorded_lease=""
   recorded_head=""
+  recorded_before=""
   [ -f "$pending" ] || return 1
-  read -r recorded_branch recorded_lease recorded_head < "$pending" || true
+  read -r recorded_branch recorded_lease recorded_head recorded_before < "$pending" || true
   [ -z "$recorded_branch" ] || return 0
   [ "${1:-}" != abort ] || return 2
   echo "the waiting record is unreadable; run 'abort' to clear it and start again" >&2
@@ -186,9 +188,11 @@ remember_lease() {
 # the push, so the record names the commit this helper produced; a retry
 # never rewrites it, whatever has since been committed on top. A record still
 # holding two fields is a replay that stopped or was abandoned, and without
-# the head `publish` would force whatever HEAD had since become.
+# the head `publish` would force whatever HEAD had since become. The fourth
+# field is the branch's tip before the replay, which is what `abort` puts back
+# when it gives up a replay `publish` could otherwise finish.
 remember_replay() {
-  printf '%s %s %s\n' "$branch" "$approved_lease" "$1" > "$pending"
+  printf '%s %s %s %s\n' "$branch" "$approved_lease" "$1" "$2" > "$pending"
 }
 
 # A rebase drops merge commits, and a merge can carry content that is in
@@ -292,8 +296,9 @@ case "$mode" in
     # side effect — both from configuration this script does not own. The
     # apply backend, `rebase.backend`'s other choice, leaves a commit it never
     # applied looking exactly like one a resolution emptied.
+    before=$(git rev-parse HEAD)
     git rebase --merge --no-rebase-merges --no-update-refs "refs/remotes/origin/main" || stopped
-    remember_replay "$(git rev-parse HEAD)"
+    remember_replay "$(git rev-parse HEAD)" "$before"
     publish
     ;;
 
@@ -334,7 +339,7 @@ case "$mode" in
     # The message is the replayed commit's own. An editor would stop the run on
     # a terminal nothing is attached to, so it is answered rather than opened.
     GIT_EDITOR=true git rebase --continue || stopped
-    remember_replay "$(git rev-parse HEAD)"
+    remember_replay "$(git rev-parse HEAD)" "$started_from"
     publish
     ;;
 
@@ -408,20 +413,30 @@ case "$mode" in
       [ "$current" = "$branch" ] ||
         { echo "on ${current:-a detached HEAD}, not $branch: this helper only ever touches the current branch" >&2
           exit 4; }
-      # A record `publish` can still finish is kept, and one it cannot is
-      # cleared, asked the way `publish` asks it: HEAD descending from the
-      # replay and origin's own tip at the lease. Any other test leaves a
-      # state where each mode names the other, or clears a record `publish`
-      # would have finished. A remote that cannot be asked stops the run
-      # rather than reading as a dead lease.
+      # A record `publish` could finish, asked the way `publish` asks it —
+      # HEAD descending from the replay and origin's own tip at the lease — is
+      # never simply cleared, which would strand the rewritten branch. Where
+      # HEAD is the replay itself, the branch goes back to its tip before the
+      # replay, the state `start` began from, so a push origin keeps refusing
+      # cannot hold every later run hostage. Commits on top are this
+      # checkout's work, and are not reset away. Any record `publish` could
+      # not finish is cleared; a remote that cannot be asked stops the run.
       if [ -n "$recorded_head" ]; then
         remote_now=""
         if git merge-base --is-ancestor "$recorded_head" HEAD; then
           remote_now=$(remote_tip)
         fi
-        [ "$remote_now" != "$recorded_lease" ] ||
-          { echo "the replay of $branch is under HEAD and 'publish' can finish it; refusing to strand it" >&2
-            exit 9; }
+        if [ "$remote_now" = "$recorded_lease" ]; then
+          [ "$(git rev-parse HEAD)" = "$recorded_head" ] && [ -n "$recorded_before" ] ||
+            { echo "commits sit on the replay of $branch, so 'publish' is the way on; to give the replay up," >&2
+              echo "move them off it and run 'abort' again" >&2
+              exit 9; }
+          git reset -q --keep "$recorded_before" ||
+            { echo "cannot put $branch back at $recorded_before; the record is kept" >&2; exit 9; }
+          rm -f "$pending"
+          echo "put $branch back at $recorded_before, where it was before the replay; nothing was published"
+          exit 0
+        fi
       fi
       rm -f "$pending"
       echo "cleared the waiting replay; $branch is left where it is and nothing was published"
