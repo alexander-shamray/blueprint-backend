@@ -235,8 +235,8 @@ stopped() {
       exit 11; }
   # Checked, because an unwritten marker wedges the rebase: `continue` and
   # `abort` both refuse one without it, and no raw `git rebase` is granted.
-  # It holds the commit the replay stopped at, which `continue` requires
-  # HEAD to be at or beyond.
+  # It holds the commit the replay stopped at, where `continue` requires
+  # HEAD to be, or one commit on.
   git rev-parse HEAD > "$now/started-by-this-helper" ||
     { echo "cannot mark $now as this helper's; the replay is left where it is, and" >&2
       echo "'abort' accepts it only if an earlier stop's mark is there, or else by hand" >&2

@@ -813,9 +813,10 @@ class TheHelperPublishesWhatItRebased(unittest.TestCase):
         self.assertIn("cannot ask origin where feat/x is", result.stderr)
 
     def test_publish_refuses_a_replay_that_ended_on_no_branch(self):
-        # `publish()`'s own branch check, reached past every guard in the mode
-        # above it. Its other refusal, an empty lease, has no case: no granted
-        # mode can write a record carrying a head but no lease.
+        # `publish` mode's own branch check, which comes before any read of the
+        # replay. `publish()`'s checks behind it, on the branch and on an
+        # empty lease, are defensive and have no case: every granted path
+        # checks the branch first, and no mode writes a head without a lease.
         self.fail_the_push()
         self.at("git checkout -q --detach HEAD")
         result = self.helper("publish")
