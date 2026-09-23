@@ -127,7 +127,8 @@ class TheFlagsAreTheScriptsOwn(unittest.TestCase):
     def test_there_is_exactly_one_push_and_it_carries_an_expected_value(self):
         pushes = [c for c in git_commands(self.source) if c.startswith("git push")]
         self.assertEqual(
-            pushes, ['git push --force-with-lease="$branch:$lease" origin "$branch"'],
+            pushes, ['git push --force-with-lease="refs/heads/$branch:$lease" '
+                     'origin "refs/heads/$branch:refs/heads/$branch"'],
             "one push, leased against the commit this run read, naming its remote and its refspec")
 
     def test_no_spelling_of_the_unleased_force_appears(self):
@@ -554,6 +555,18 @@ class TheHelperPublishesWhatItRebased(unittest.TestCase):
         self.at(FAIL_PUSH)
         self.assertNotEqual(0, self.helper().returncode, "the push must fail for this to mean anything")
 
+    def move_the_remote(self):
+        # Another session's push, which this checkout has not fetched: its
+        # remote-tracking ref still reads the leased tip.
+        stale = self.remote_tip()
+        moved = run_bash('git clone -q "$R/remote.git" "$R/second" && cd "$R/second" '
+                         '&& git config user.email t@e.invalid && git config user.name T '
+                         '&& git checkout -q feat/x && echo theirs > theirs.txt && git add -A '
+                         '&& git commit -qm "another session" && git push -q origin feat/x',
+                         R=self.root)
+        self.assertEqual(0, moved.returncode, moved.stderr)
+        self.assertEqual(stale, self.remote_tip(), "the tracking ref must still be stale")
+
     def test_a_clean_update_is_replayed_and_published(self):
         before = self.at("git rev-parse HEAD").stdout.strip()
         result = self.helper()
@@ -625,19 +638,33 @@ class TheHelperPublishesWhatItRebased(unittest.TestCase):
         self.assertIn("never finished", result.stderr)
         self.assertEqual(published, self.remote_tip(), "the remote still carries what it had")
 
-    def test_publish_refuses_a_head_that_is_not_the_one_replayed(self):
-        # The retry republishes the replay, and a commit made after it is a
-        # different branch.
+    def test_a_commit_on_top_of_the_replay_is_published_with_it(self):
+        # Refusing it strands the branch: `abort` then clears the record and
+        # `start` reads the rewritten history as another session's commits.
+        self.fail_the_push()
+        self.at('echo extra > extra.txt && git add -A && git commit -qm "after the replay"')
+        refused = self.helper("abort")
+        self.assertEqual(9, refused.returncode, refused.stderr)
+        self.assertIn("refusing to strand it", refused.stderr)
+
+        self.at(ALLOW_PUSH)
+        result = self.helper("publish")
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual(self.at("git rev-parse HEAD").stdout.strip(), self.remote_tip(),
+                         "the replay and the commit on it are what origin carries")
+
+    def test_publish_refuses_a_head_that_does_not_descend_from_the_replay(self):
+        # An amended replay is a rewrite this helper did not make.
         self.fail_the_push()
         published = self.remote_tip()
-        self.at('echo extra > extra.txt && git add -A && git commit -qm "after the replay"')
+        self.at('echo extra > extra.txt && git add -A && git commit -q --amend --no-edit')
         self.at(ALLOW_PUSH)
 
         result = self.helper("publish")
         self.assertEqual(9, result.returncode, result.stderr)
-        self.assertIn("not the commit this helper replayed", result.stderr)
+        self.assertIn("does not descend from", result.stderr)
         self.assertEqual(published, self.remote_tip(),
-                         "the commit made after the replay was not forced over it")
+                         "the amended commit was forced over the published one")
 
     def test_publish_refuses_a_record_naming_another_branch(self):
         self.fail_the_push()
@@ -646,11 +673,21 @@ class TheHelperPublishesWhatItRebased(unittest.TestCase):
         self.assertIn("the waiting replay is feat/x, not feat/other", result.stderr)
 
     def test_publish_refuses_a_remote_that_moved_since_the_lease(self):
+        # Asked of origin, not of the tracking ref, which still reads the lease:
+        # read stale, the push is rejected on every retry.
         self.fail_the_push()
-        self.at("git update-ref refs/remotes/origin/feat/x refs/remotes/origin/main")
+        self.move_the_remote()
+        self.at(ALLOW_PUSH)
         result = self.helper("publish")
         self.assertEqual(7, result.returncode, result.stderr)
         self.assertIn("has moved since the replay was approved", result.stderr)
+
+    def test_publish_refuses_when_origin_cannot_be_asked(self):
+        self.fail_the_push()
+        self.at('git remote set-url origin "$(pwd)/../nowhere.git"')
+        result = self.helper("publish")
+        self.assertEqual(12, result.returncode, result.stderr)
+        self.assertIn("cannot ask origin where feat/x is", result.stderr)
 
     def test_publish_refuses_a_replay_that_ended_on_no_branch(self):
         # `publish()`'s own branch check, reached past every guard in the mode
@@ -714,17 +751,19 @@ class TheHelperPublishesWhatItRebased(unittest.TestCase):
         # `publish` sends a moved remote to `abort`, so `abort` has to take it
         # or each mode names the other and the record is reachable by neither.
         self.fail_the_push()
-        self.at("git update-ref refs/remotes/origin/feat/x refs/remotes/origin/main")
+        self.move_the_remote()
         self.assertEqual(7, self.helper("publish").returncode)
         result = self.helper("abort")
         self.assertEqual(0, result.returncode, result.stderr)
         self.assertIn("cleared the waiting replay", result.stdout)
 
-    def test_abort_clears_a_record_whose_remote_ref_is_gone(self):
-        # A missing remote-tracking ref is a dead lease, asked as absence
-        # rather than inferred from a failed read.
+    def test_abort_clears_a_record_whose_remote_branch_is_gone(self):
+        # Gone from origin while the tracking ref still names it.
         self.fail_the_push()
-        self.at("git update-ref -d refs/remotes/origin/feat/x")
+        run_bash('git -C "$R/remote.git" update-ref -d refs/heads/feat/x', R=self.root)
+        gone = self.helper("publish")
+        self.assertEqual(6, gone.returncode, gone.stderr)
+        self.assertIn("origin has no feat/x any more", gone.stderr)
         result = self.helper("abort")
         self.assertEqual(0, result.returncode, result.stderr)
         self.assertIn("cleared the waiting replay", result.stdout)
@@ -842,6 +881,19 @@ class TheApplyBackendIsDrivenToo(unittest.TestCase):
                       "the conflict after the drop was skipped instead of reported")
         self.assertEqual("yes", self.apply_running(),
                          "the replay was not left in progress for the caller")
+
+    def test_an_untracked_file_stops_the_drop(self):
+        # Neither diff read sees it, and one standing where a later commit
+        # adds a file stops this backend with a tree that looks empty.
+        self.assertEqual(8, self.helper("start").returncode)
+        self.at("echo mine > a.txt && git add a.txt && echo stray > stray.txt")
+
+        result = self.helper("continue")
+        self.assertEqual(14, result.returncode, result.stderr)
+        self.assertIn("untracked files in the tree", result.stderr)
+        self.assertIn("stray.txt", result.stderr, "the caller is told what is in the way")
+        self.assertEqual("yes", self.apply_running(), "the replay was skipped past the file")
+        self.assertEqual("stray\n", self.at("cat stray.txt").stdout)
 
     def test_unstaged_work_is_not_discarded_by_the_drop(self):
         # `--continue` refuses over an unstaged edit and leaves the index at

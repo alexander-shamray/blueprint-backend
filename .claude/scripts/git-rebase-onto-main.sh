@@ -5,8 +5,10 @@
 # about the checkout: the branch is the one in hand, it is not main, the tree
 # is clean, the remote carries nothing the work did not start from, no merge
 # on the branch holds content neither parent has, a replay that stops with
-# anything staged or unstaged is reported rather than skipped, and no run
-# drops more commits than it set out to replay. This list is the owner.
+# anything staged, unstaged or untracked is reported rather than skipped, a
+# retry publishes only on top of the replay and only while origin itself
+# still holds the leased tip, and no run drops more commits than it set out
+# to replay. This list is the owner.
 # `.claude/settings.json` denies the raw force push, and that deny is untouched.
 
 # Four modes, because a conflict is the case rebase is here for. `start`
@@ -92,6 +94,18 @@ if [ -n "$state" ]; then
   done
 fi
 
+# The branch's tip on origin itself, empty when origin has none. `publish`
+# and `abort` ask this rather than the tracking ref, which a rejected push
+# leaves where it was: read stale, `publish` fails at the push on every
+# retry and `abort` keeps a record it cannot finish, each naming the other.
+remote_tip() {
+  local listed
+  listed=$(git ls-remote origin "refs/heads/$branch") ||
+    { echo "cannot ask origin where $branch is, so whether the replay can still be published is unknown" >&2
+      exit 12; }
+  printf '%s\n' "$listed" | awk -v ref="refs/heads/$branch" '$2 == ref { print $1 }'
+}
+
 require_remote_branch() {
   git show-ref --verify --quiet "refs/remotes/origin/$branch" ||
     { echo "origin has no $branch: push it normally first, since there is nothing to force" >&2; exit 6; }
@@ -125,7 +139,9 @@ require_remote_carries_nothing_new() {
 # The lease names an expected value. `--force-with-lease` left bare trusts the
 # remote-tracking ref, which any fetch in the session may have moved, so the
 # `<ref>:<sha>` form names the commit this run read and a push landing in
-# between is refused rather than overwritten.
+# between is refused rather than overwritten. Both sides of the refspec are
+# spelled, so no `remote.origin.push` mapping can send it to another ref the
+# lease does not name.
 publish() {
   local current head lease
   current=$(git branch --show-current)
@@ -141,7 +157,7 @@ publish() {
     exit 0
   fi
   remember_replay "$head"
-  git push --force-with-lease="$branch:$lease" origin "$branch"
+  git push --force-with-lease="refs/heads/$branch:$lease" origin "refs/heads/$branch:refs/heads/$branch"
   rm -f "$pending"
   echo "published $branch at $head"
 }
@@ -209,7 +225,7 @@ require_no_merge_invented_anything() {
 # same state for ever. The branch's own length bounds it, since no run can
 # drop more commits than it set out to replay.
 stopped() {
-  local now unmerged left="" seen=0
+  local now unmerged untracked left="" seen=0
 
   while : ; do
     now=$(current_state) ||
@@ -255,6 +271,17 @@ stopped() {
         echo "which a skip would discard rather than drop an empty commit:" >&2
         git diff --name-only >&2
         echo "stage them or set them aside, then 'continue', or 'abort'" >&2
+        exit 14; }
+    # Untracked files too: neither read above sees them, and one standing
+    # where the next commit adds a file stops the apply backend with a tree
+    # that looks empty, so a skip would drop that commit's whole change.
+    untracked=$(git ls-files --others --exclude-standard) ||
+      { echo "cannot list untracked files, so a skip cannot be judged safe" >&2; exit 14; }
+    [ -z "$untracked" ] ||
+      { echo "the replay of $branch stopped with untracked files in the tree," >&2
+        echo "which may be what stopped it, so nothing is skipped:" >&2
+        printf '%s\n' "$untracked" >&2
+        echo "set them aside, then 'continue', or 'abort'" >&2
         exit 14; }
 
     # Counted against the commit the replay is onto, which git fixed when it
@@ -381,14 +408,22 @@ case "$mode" in
     [ -n "$recorded_head" ] ||
       { echo "the waiting record names no replayed commit, so the rebase never finished: 'abort' and start again" >&2
         exit 9; }
-    [ "$(git rev-parse HEAD)" = "$recorded_head" ] ||
-      { echo "HEAD is not the commit this helper replayed: 'abort' the record and start again" >&2
+    # Commits made on top of the replay are this checkout's own and go with
+    # it. A HEAD that does not descend from it is a rewrite this helper did
+    # not make; clearing the record then leaves the branch where `start`
+    # refuses it too, so the message names the way back first.
+    git merge-base --is-ancestor "$recorded_head" HEAD ||
+      { echo "HEAD does not descend from $recorded_head, the commit this helper replayed:" >&2
+        echo "put that commit back under the branch and run 'publish' again, or 'abort' to give the replay up" >&2
         exit 9; }
-    require_remote_branch
     # The remote must still be where the guard left it. If it moved, this lease
     # was approved against a tip that no longer exists and re-approving it here
     # would be the re-read this helper exists to avoid.
-    [ "$(git rev-parse "refs/remotes/origin/$branch")" = "$recorded_lease" ] ||
+    remote_now=$(remote_tip)
+    [ -n "$remote_now" ] ||
+      { echo "origin has no $branch any more, so there is nothing to force: 'abort' the record and push it normally" >&2
+        exit 6; }
+    [ "$remote_now" = "$recorded_lease" ] ||
       { echo "origin/$branch has moved since the replay was approved: 'abort' the record and start again" >&2
         exit 7; }
     approved_lease="$recorded_lease"
@@ -419,20 +454,19 @@ case "$mode" in
         { echo "on ${current:-a detached HEAD}, not $branch: this helper only ever touches the current branch" >&2
           exit 4; }
       # A record `publish` can still finish is kept, and one it cannot is
-      # cleared: both halves, because `publish` sends a moved remote here, and
-      # refusing on the head alone would leave each mode naming the other.
+      # cleared, asked the way `publish` asks it: HEAD descending from the
+      # replay and origin's own tip at the lease. Any other test leaves a
+      # state where each mode names the other, or clears a record `publish`
+      # would have finished. A remote that cannot be asked stops the run
+      # rather than reading as a dead lease.
       if [ -n "$recorded_head" ]; then
-        head_now=$(git rev-parse HEAD)
-        # Absence and failure are asked apart. Folded into one read, a
-        # rev-parse failing on a ref that exists would look like a dead lease
-        # and clear the record this guard exists to keep.
-        if git show-ref --verify --quiet "refs/remotes/origin/$branch"; then
-          remote_now=$(git rev-parse --verify "refs/remotes/origin/$branch")
-        else
-          remote_now=""
+        descends=0
+        if git merge-base --is-ancestor "$recorded_head" HEAD; then
+          descends=1
         fi
-        [ "$head_now" != "$recorded_head" ] || [ "$remote_now" != "$recorded_lease" ] ||
-          { echo "the replay of $branch is still at HEAD and 'publish' can finish it; refusing to strand it" >&2
+        remote_now=$(remote_tip)
+        [ "$descends" -eq 0 ] || [ "$remote_now" != "$recorded_lease" ] ||
+          { echo "the replay of $branch is under HEAD and 'publish' can finish it; refusing to strand it" >&2
             exit 9; }
       fi
       rm -f "$pending"
