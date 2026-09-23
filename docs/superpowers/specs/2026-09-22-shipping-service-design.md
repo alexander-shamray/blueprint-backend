@@ -234,10 +234,10 @@ address. Its states and the only moves between them:
 
 The second and third rows are §8's tombstone: `OrderCancelled` before
 `OrderConfirmed` creates the shipment already `Voided`, and the late
-confirmation finds it and does nothing. That no-op is a row of the table
-rather than a case of the sentence below, because the two commuting is the
-whole reason the tombstone exists and §12 drives the domain suite from this
-table.
+confirmation finds it and does nothing. That no-op is a row of the table rather
+than a case of the sentence below, because the two commuting is the whole reason
+the tombstone exists and §12 drives the Domain and Application suites from this
+table between them.
 
 **Every other arrival is a no-op that logs and returns, never a throw.** A
 fact already superseded — a `Collected` after `Delivered`, a second
@@ -520,10 +520,12 @@ container tests are `Category=Integration` and never skipped. The suites
 are `Shipping.Domain.Tests`, `Shipping.Application.Tests` and
 `Shipping.Worker.Tests`, with `Shipping.TestSupport` beside them.
 
-- **Domain**: every row of section 5's table, and every refused arrival as
-  a no-op; **the shuffled feed** — every permutation of a shipment's
-  tracking events reaches the same terminal state and raises the same set
-  of events, despatch before delivery.
+- **Domain**: every row of section 5's table the aggregate's surface reaches,
+  and every refused arrival as a no-op; the tombstone's two rows are the
+  consumers' branches and are driven by PR-5's Application suite, in both
+  orders; **the shuffled feed** — every permutation of a shipment's tracking
+  events reaches the same terminal state and raises the same set of events,
+  despatch before delivery.
 - **Application**: both consumers against a fake store, in both orders; the
   mapper registry against the two contracts; the architecture tests.
 - **Worker**, over SQL Server and RabbitMQ containers and an in-process
