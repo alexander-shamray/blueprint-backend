@@ -459,7 +459,7 @@ class AConflictIsTheCaseRebaseIsHereFor(unittest.TestCase):
 
         result = self.helper("continue")
         self.assertEqual(9, result.returncode, result.stderr)
-        self.assertIn("HEAD is not where the replay of feat/x stopped", result.stderr)
+        self.assertIn("is not where the replay of feat/x stopped", result.stderr)
         self.assertIn("'abort' the replay", result.stderr)
         self.assertEqual(other, self.at("git rev-parse feat/other").stdout.strip(), "feat/other was moved")
         self.assertEqual(published, self.at("git ls-remote origin refs/heads/feat/x").stdout.split()[0],
@@ -475,6 +475,20 @@ class AConflictIsTheCaseRebaseIsHereFor(unittest.TestCase):
         self.assertEqual("resolved\n", self.at("git show refs/remotes/origin/feat/x:a.txt").stdout,
                          "the committed resolution did not reach origin")
 
+    def test_more_than_the_callers_resolution_on_the_stop_is_refused(self):
+        # A second commit on the stop is not a resolution of this replay, and
+        # would ride into the publish.
+        published = self.at("git rev-parse refs/remotes/origin/feat/x").stdout.strip()
+        self.assertEqual(8, self.helper("start").returncode)
+        self.at('echo resolved > a.txt && git add a.txt && git commit -qm "resolved by hand" '
+                '&& echo other > other.txt && git add other.txt && git commit -qm "not this replay"')
+        head = self.at("git rev-parse HEAD").stdout.strip()
+        result = self.helper("continue")
+        self.assertEqual(9, result.returncode, result.stderr)
+        self.assertIn("nor one commit on it", result.stderr)
+        self.assertIn(head, result.stderr, "the commit abort would leave behind is not named")
+        self.assertEqual(published, self.at("git ls-remote origin refs/heads/feat/x").stdout.split()[0])
+
     def test_continue_sends_an_unrecorded_stop_to_abort(self):
         # An empty mark, as the previous version wrote, names nowhere to be.
         self.assertEqual(8, self.helper("start").returncode)
@@ -482,7 +496,7 @@ class AConflictIsTheCaseRebaseIsHereFor(unittest.TestCase):
                 '&& echo resolved > a.txt && git add a.txt')
         result = self.helper("continue")
         self.assertEqual(9, result.returncode, result.stderr)
-        self.assertIn("'abort' the replay and start again", result.stderr)
+        self.assertIn("'abort' the replay", result.stderr)
 
     def test_continue_sends_a_replay_whose_remote_branch_went_to_abort(self):
         # Mid-replay there is nothing to push normally, so the way out named
@@ -806,7 +820,7 @@ class TheHelperPublishesWhatItRebased(unittest.TestCase):
         self.at("git checkout -q --detach HEAD")
         result = self.helper("publish")
         self.assertEqual(4, result.returncode, result.stderr)
-        self.assertIn("the replay ended on a detached HEAD", result.stderr)
+        self.assertIn("on a detached HEAD, not feat/x", result.stderr)
 
     def test_an_unreadable_waiting_record_is_refused(self):
         # Refused with a message and an assigned code, in the path that exists
