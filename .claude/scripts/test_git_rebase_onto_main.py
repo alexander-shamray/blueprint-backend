@@ -435,6 +435,18 @@ class AConflictIsTheCaseRebaseIsHereFor(unittest.TestCase):
         self.assertIn("a rebase is already in progress", again.stderr)
         self.assertEqual("yes", self.rebase_running(), "the running rebase was disturbed")
 
+    def test_continue_refuses_an_apply_backend_replay_left_marked(self):
+        # An earlier version's replay: marked as this helper's, on the backend
+        # it no longer uses, where a stop can repeat for ever.
+        self.at('git -c rebase.backend=apply rebase refs/remotes/origin/main; '
+                ': > "$(git rev-parse --git-path rebase-apply)/started-by-this-helper"')
+        self.assertEqual("yes", self.rebase_running(), "the apply replay did not stop")
+        self.addCleanup(lambda: self.at("git rebase --abort"))
+        self.at('echo resolved > a.txt && git add a.txt')
+        result = self.helper("continue")
+        self.assertEqual(9, result.returncode, result.stderr)
+        self.assertIn("apply backend, which this helper no longer uses", result.stderr)
+
     def test_continue_refuses_a_rebase_belonging_to_another_branch(self):
         self.assertEqual(8, self.helper("start").returncode)
         result = self.helper("continue", branch="feat/other")
@@ -705,6 +717,18 @@ class TheHelperPublishesWhatItRebased(unittest.TestCase):
         result = self.helper("publish")
         self.assertEqual(7, result.returncode, result.stderr)
         self.assertIn("has moved since the replay was approved", result.stderr)
+
+    def test_a_push_that_landed_unannounced_is_not_called_a_move(self):
+        # The server took the push and the answer was lost: origin already
+        # holds HEAD, which is the one move that needs nothing further.
+        self.fail_the_push()
+        self.at('git push -q --no-verify -f origin feat/x')
+        result = self.helper("publish")
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertIn("origin already has feat/x", result.stdout)
+        self.assertEqual(
+            "", self.at('cat "$(git rev-parse --git-path claude-rebase-pending)" 2>/dev/null').stdout,
+            "the record outlived the push it was kept for")
 
     def test_publish_refuses_when_origin_cannot_be_asked(self):
         self.fail_the_push()
