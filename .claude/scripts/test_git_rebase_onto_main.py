@@ -459,10 +459,30 @@ class AConflictIsTheCaseRebaseIsHereFor(unittest.TestCase):
 
         result = self.helper("continue")
         self.assertEqual(9, result.returncode, result.stderr)
-        self.assertIn("HEAD has moved since the replay of feat/x stopped", result.stderr)
+        self.assertIn("HEAD is not where the replay of feat/x stopped", result.stderr)
+        self.assertIn("'abort' the replay", result.stderr)
         self.assertEqual(other, self.at("git rev-parse feat/other").stdout.strip(), "feat/other was moved")
         self.assertEqual(published, self.at("git ls-remote origin refs/heads/feat/x").stdout.split()[0],
                          "origin was published over")
+
+    def test_a_resolution_the_caller_committed_is_kept(self):
+        # git allows committing mid-replay, and `--continue` keeps the commit;
+        # refusing it and naming a move back would lose it.
+        self.assertEqual(8, self.helper("start").returncode)
+        self.at('echo resolved > a.txt && git add a.txt && git commit -qm "resolved by hand"')
+        result = self.helper("continue")
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual("resolved\n", self.at("git show refs/remotes/origin/feat/x:a.txt").stdout,
+                         "the committed resolution did not reach origin")
+
+    def test_continue_sends_an_unrecorded_stop_to_abort(self):
+        # An empty mark, as the previous version wrote, names nowhere to be.
+        self.assertEqual(8, self.helper("start").returncode)
+        self.at(': > "$(git rev-parse --git-path rebase-merge)/started-by-this-helper" '
+                '&& echo resolved > a.txt && git add a.txt')
+        result = self.helper("continue")
+        self.assertEqual(9, result.returncode, result.stderr)
+        self.assertIn("'abort' the replay and start again", result.stderr)
 
     def test_continue_sends_a_replay_whose_remote_branch_went_to_abort(self):
         # Mid-replay there is nothing to push normally, so the way out named
