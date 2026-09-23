@@ -43,7 +43,7 @@ def run_bash(script, subject="", **env_extra):
 # negation, or one of the wrappers that takes a command as its argument.
 # Stripped in a loop, because they stack — `if ! GIT_DIR=x git push …`.
 COMMAND_LEAD = re.compile(
-    r"^(?:\w+=\S*|then|else|elif|do|done|if|while|until|!|command|exec|time|eval)\s+")
+    r"^(?:\w+=\S*|then|else|elif|do|done|if|while|until|!|command|exec|time|eval|env|nohup|builtin)\s+")
 
 # A command can begin after any of these. `{` and `}` are not in the class,
 # because they also spell `"${branch}"` and splitting there cuts a command off
@@ -54,7 +54,8 @@ COMMAND_SEPARATOR = re.compile(r"[\n;&|()`]+|(?<=\s)\{(?=\s)|(?<=\s)\}")
 
 # git's own options sit between `git` and the subcommand, so `git -C . push`
 # would not read as a push at all. Dropped, so the subcommand comes first.
-GIT_GLOBAL_OPTIONS = re.compile(r"^git(?:\s+(?:-[Cc]\s+\S+|--(?:git-dir|work-tree|namespace)=\S+))+\s+")
+GIT_GLOBAL_OPTIONS = re.compile(
+    r"^git(?:\s+(?:-[Cc]\s+(?:\"[^\"]*\"|'[^']*'|\S+)|--(?:git-dir|work-tree|namespace|exec-path)(?:=|\s+)\S+|-{1,2}[A-Za-z][\w-]*))+\s+")
 
 
 def git_commands(source):
@@ -149,7 +150,7 @@ class TheFlagsAreTheScriptsOwn(unittest.TestCase):
         # `+$branch` forces branch:branch without one, and a quote can sit
         # where the space was.
         for command in commands.splitlines():
-            if command.startswith("git push"):
+            if command.startswith("git push") or " push " in command:
                 self.assertNotRegex(command, r'(?:^|\s)"?\+\S',
                                     "a `+` refspec forces without naming a flag")
 
@@ -176,6 +177,9 @@ class TheFlagsAreTheScriptsOwn(unittest.TestCase):
             'git -C . push --force origin "$branch"',
             'git -c push.default=current push origin +$branch',
             'git --git-dir=.git push origin "+$branch:$branch"',
+            'env git push --force origin "$branch"',
+            'git --no-pager push origin +$branch',
+            'git -c "k=a b" push --force origin "$branch"',
         )
         baseline = git_commands(self.source)
         for line in hidden:
@@ -444,6 +448,21 @@ class AConflictIsTheCaseRebaseIsHereFor(unittest.TestCase):
         self.assertEqual(9, again.returncode, again.stderr)
         self.assertIn("a rebase is already in progress", again.stderr)
         self.assertEqual("yes", self.rebase_running(), "the running rebase was disturbed")
+
+    def test_continue_refuses_a_replay_whose_head_was_moved(self):
+        # Checked out onto a branch mid-replay, `--continue` would commit the
+        # rest there, move that branch, and publish a history never replayed.
+        published = self.at("git rev-parse refs/remotes/origin/feat/x").stdout.strip()
+        self.assertEqual(8, self.helper("start").returncode)
+        self.at('echo resolved > a.txt && git add a.txt && git checkout -q -b feat/other')
+        other = self.at("git rev-parse feat/other").stdout.strip()
+
+        result = self.helper("continue")
+        self.assertEqual(9, result.returncode, result.stderr)
+        self.assertIn("HEAD has moved since the replay of feat/x stopped", result.stderr)
+        self.assertEqual(other, self.at("git rev-parse feat/other").stdout.strip(), "feat/other was moved")
+        self.assertEqual(published, self.at("git ls-remote origin refs/heads/feat/x").stdout.split()[0],
+                         "origin was published over")
 
     def test_continue_sends_a_replay_whose_remote_branch_went_to_abort(self):
         # Mid-replay there is nothing to push normally, so the way out named
@@ -720,6 +739,7 @@ class TheHelperPublishesWhatItRebased(unittest.TestCase):
         result = self.helper("publish")
         self.assertEqual(9, result.returncode, result.stderr)
         self.assertIn("does not descend from", result.stderr)
+        self.assertIn("'abort' only clears the", result.stderr, "abort is offered as a way out it is not")
         self.assertEqual(published, self.remote_tip(),
                          "the amended commit was forced over the published one")
 

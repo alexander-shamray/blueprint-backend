@@ -235,7 +235,8 @@ stopped() {
       exit 11; }
   # Checked, because an unwritten marker wedges the rebase: `continue` and
   # `abort` both refuse one without it, and no raw `git rebase` is granted.
-  : > "$now/started-by-this-helper" ||
+  # It holds the commit the replay stopped at, which `continue` requires.
+  git rev-parse HEAD > "$now/started-by-this-helper" ||
     { echo "cannot mark $now as this helper's, so neither 'continue' nor 'abort'" >&2
       echo "would accept the rebase afterwards; the replay is left where it is" >&2
       exit 14; }
@@ -321,6 +322,16 @@ case "$mode" in
         echo "this replay runs on the apply backend, which this helper no longer uses: 'abort' and start again" >&2
         exit 9 ;;
     esac
+    # And HEAD still where the replay stopped, detached. Checked out onto
+    # another branch or reset meanwhile, `--continue` would commit the rest
+    # there, move that branch, and hand `publish` a history this helper never
+    # replayed.
+    stopped_at=$(cat "$state/started-by-this-helper")
+    if git symbolic-ref -q HEAD > /dev/null || [ "$(git rev-parse HEAD)" != "$stopped_at" ]; then
+      echo "HEAD has moved since the replay of $branch stopped at ${stopped_at:-an unrecorded commit}:" >&2
+      echo "put it back there, detached, and 'continue', or 'abort'" >&2
+      exit 9
+    fi
     unmerged=$(git diff --name-only --diff-filter=U)
     [ -z "$unmerged" ] ||
       { echo "these are still unmerged; resolve and 'git add' them first:" >&2
@@ -363,11 +374,12 @@ case "$mode" in
         exit 9; }
     # Commits made on top of the replay are this checkout's own and go with
     # it. A HEAD that does not descend from it is a rewrite this helper did
-    # not make; clearing the record then leaves the branch where `start`
-    # refuses it too, so the message names the way back first.
+    # not make, and `abort` then only clears the record: the branch stays
+    # rewritten, which `start` refuses too, so the message says so.
     git merge-base --is-ancestor "$recorded_head" HEAD ||
       { echo "HEAD does not descend from $recorded_head, the commit this helper replayed:" >&2
-        echo "put that commit back under the branch and run 'publish' again, or 'abort' to give the replay up" >&2
+        echo "put that commit back under the branch and run 'publish' again; 'abort' only clears the" >&2
+        echo "record, and starting over needs $branch reset by hand to ${recorded_before:-its tip before the replay}" >&2
         exit 9; }
     # The remote must still be where the guard left it. If it moved, this lease
     # was approved against a tip that no longer exists and re-approving it here
@@ -436,7 +448,8 @@ case "$mode" in
               exit 9; }
           [ -n "$recorded_before" ] ||
             { echo "the waiting record names no tip from before the replay, so $branch cannot be put back:" >&2
-              echo "'publish' it, or reset it by hand to origin/$branch and remove $pending" >&2
+              echo "'publish' it, or reset it by hand to its tip before the replay (ORIG_HEAD, or the reflog)" >&2
+              echo "and remove $pending" >&2
               exit 9; }
           git reset -q --keep "$recorded_before" ||
             { echo "cannot put $branch back at $recorded_before; the record is kept" >&2; exit 9; }
