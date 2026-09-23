@@ -325,7 +325,10 @@ case "$mode" in
     [ -z "$unmerged" ] ||
       { echo "these are still unmerged; resolve and 'git add' them first:" >&2
         printf '%s\n' "$unmerged" >&2; exit 9; }
-    require_remote_branch
+    # Not `require_remote_branch`, whose way out is a normal push: mid-replay
+    # there is nothing to push until the replay ends, and it will not end here.
+    git show-ref --verify --quiet "refs/remotes/origin/$branch" ||
+      { echo "origin has no $branch any more, so the replay has nothing to force over: 'abort' it" >&2; exit 6; }
     # Fails closed, like the branch-name read above it. An unreadable starting
     # point means the divergence check cannot be made, and skipping it would
     # leave the lease as the only guard — which another session's already
@@ -427,9 +430,13 @@ case "$mode" in
           remote_now=$(remote_tip)
         fi
         if [ "$remote_now" = "$recorded_lease" ]; then
-          [ "$(git rev-parse HEAD)" = "$recorded_head" ] && [ -n "$recorded_before" ] ||
+          [ "$(git rev-parse HEAD)" = "$recorded_head" ] ||
             { echo "commits sit on the replay of $branch, so 'publish' is the way on; to give the replay up," >&2
               echo "move them off it and run 'abort' again" >&2
+              exit 9; }
+          [ -n "$recorded_before" ] ||
+            { echo "the waiting record names no tip from before the replay, so $branch cannot be put back:" >&2
+              echo "'publish' it, or reset it by hand to origin/$branch and remove $pending" >&2
               exit 9; }
           git reset -q --keep "$recorded_before" ||
             { echo "cannot put $branch back at $recorded_before; the record is kept" >&2; exit 9; }

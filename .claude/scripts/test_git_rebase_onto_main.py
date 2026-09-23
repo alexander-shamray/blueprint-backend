@@ -52,6 +52,11 @@ COMMAND_LEAD = re.compile(
 COMMAND_SEPARATOR = re.compile(r"[\n;&|()`]+|(?<=\s)\{(?=\s)|(?<=\s)\}")
 
 
+# git's own options sit between `git` and the subcommand, so `git -C . push`
+# would not read as a push at all. Dropped, so the subcommand comes first.
+GIT_GLOBAL_OPTIONS = re.compile(r"^git(?:\s+(?:-[Cc]\s+\S+|--(?:git-dir|work-tree|namespace)=\S+))+\s+")
+
+
 def git_commands(source):
     """Every `git …` command in a shell script, however it is introduced.
 
@@ -66,6 +71,7 @@ def git_commands(source):
         piece = piece.strip()
         while COMMAND_LEAD.match(piece):
             piece = COMMAND_LEAD.sub("", piece, count=1)
+        piece = GIT_GLOBAL_OPTIONS.sub("git ", piece)
         if piece.startswith("git "):
             commands.append(piece)
     return commands
@@ -167,6 +173,9 @@ class TheFlagsAreTheScriptsOwn(unittest.TestCase):
             'git push origin +$branch',
             'git push origin "+$branch:$branch"',
             'git push origin "$branch" -f',
+            'git -C . push --force origin "$branch"',
+            'git -c push.default=current push origin +$branch',
+            'git --git-dir=.git push origin "+$branch:$branch"',
         )
         baseline = git_commands(self.source)
         for line in hidden:
@@ -300,11 +309,12 @@ class TheHelperRefusesBeforeItRewrites(unittest.TestCase):
         self.assertIn("no replay is waiting to be published", result.stderr)
 
     def interactive_rebase_by_hand(self):
-        # `-i` with an attached suffix, which GNU and BSD sed both take. Bare
-        # `-i` is GNU-only: on macOS the rebase would never start and the case
-        # would assert on the wrong refusal.
-        self.at('GIT_SEQUENCE_EDITOR="sed -i.bak 1s/^pick/break/" '
-                'git rebase -i refs/remotes/origin/main')
+        # A todo that stops at once and then drops the branch's commit, which
+        # is the rebase the marker guard is for. Written by a shell function
+        # rather than `sed -i`, whose in-place flag GNU and BSD spell apart.
+        self.at("GIT_SEQUENCE_EDITOR='f() { { echo break; sed \"s/^pick/drop/\" \"$1\"; } "
+                "> \"$1.new\" && mv \"$1.new\" \"$1\"; }; f' "
+                "git rebase -i refs/remotes/origin/main")
         self.assertEqual("yes", self.at(REBASE_RUNNING).stdout.strip(),
                          "the hand-run rebase did not stop, so nothing below is reached")
         self.addCleanup(lambda: self.at("git rebase --abort"))
@@ -434,6 +444,17 @@ class AConflictIsTheCaseRebaseIsHereFor(unittest.TestCase):
         self.assertEqual(9, again.returncode, again.stderr)
         self.assertIn("a rebase is already in progress", again.stderr)
         self.assertEqual("yes", self.rebase_running(), "the running rebase was disturbed")
+
+    def test_continue_sends_a_replay_whose_remote_branch_went_to_abort(self):
+        # Mid-replay there is nothing to push normally, so the way out named
+        # has to be one that works from here.
+        self.assertEqual(8, self.helper("start").returncode)
+        self.at("git update-ref -d refs/remotes/origin/feat/x")
+        self.at('echo resolved > a.txt && git add a.txt')
+        result = self.helper("continue")
+        self.assertEqual(6, result.returncode, result.stderr)
+        self.assertIn("nothing to force over: 'abort' it", result.stderr)
+        self.assertEqual("yes", self.rebase_running())
 
     def test_continue_refuses_an_apply_backend_replay_left_marked(self):
         # An earlier version's replay: marked as this helper's, on the backend
@@ -781,6 +802,17 @@ class TheHelperPublishesWhatItRebased(unittest.TestCase):
             "a record was left for a replay that never happened")
         self.at(HOOKS + '; rm -f "$h/pre-rebase"')
         self.assertEqual(0, self.helper().returncode, "a stale record refused the next start")
+
+    def test_abort_says_so_when_a_record_names_no_tip_to_put_back(self):
+        # A three-field record, as an earlier version wrote: nothing sits on
+        # the replay, so the refusal must not claim that anything does.
+        self.fail_the_push()
+        self.at('f="$(git rev-parse --git-path claude-rebase-pending)"; read -r b l h o < "$f"; '
+                'echo "$b $l $h" > "$f"')
+        result = self.helper("abort")
+        self.assertEqual(9, result.returncode, result.stderr)
+        self.assertIn("names no tip from before the replay", result.stderr)
+        self.assertNotIn("commits sit on the replay", result.stderr)
 
     def test_abort_gives_a_replay_up_by_putting_the_branch_back(self):
         # A push origin keeps refusing would otherwise hold the record for
