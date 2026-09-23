@@ -235,10 +235,11 @@ stopped() {
       exit 11; }
   # Checked, because an unwritten marker wedges the rebase: `continue` and
   # `abort` both refuse one without it, and no raw `git rebase` is granted.
-  # It holds the commit the replay stopped at, which `continue` requires.
+  # It holds the commit the replay stopped at, which `continue` requires
+  # HEAD to be at or beyond.
   git rev-parse HEAD > "$now/started-by-this-helper" ||
-    { echo "cannot mark $now as this helper's, so neither 'continue' nor 'abort'" >&2
-      echo "would accept the rebase afterwards; the replay is left where it is" >&2
+    { echo "cannot mark $now as this helper's; the replay is left where it is, and" >&2
+      echo "'abort' accepts it only if an earlier stop's mark is there, or else by hand" >&2
       exit 14; }
 
   unmerged=$(git diff --name-only --diff-filter=U)
@@ -322,14 +323,16 @@ case "$mode" in
         echo "this replay runs on the apply backend, which this helper no longer uses: 'abort' and start again" >&2
         exit 9 ;;
     esac
-    # And HEAD still where the replay stopped, detached. Checked out onto
-    # another branch or reset meanwhile, `--continue` would commit the rest
-    # there, move that branch, and hand `publish` a history this helper never
-    # replayed.
+    # And HEAD detached at or beyond where the replay stopped: a resolution
+    # the caller committed is theirs, and `--continue` keeps it. Checked out
+    # onto a branch, or reset elsewhere, `--continue` would commit the rest
+    # there and hand `publish` a history this helper never replayed. No move
+    # is suggested, because putting HEAD back is exactly what loses a commit.
     stopped_at=$(cat "$state/started-by-this-helper")
-    if git symbolic-ref -q HEAD > /dev/null || [ "$(git rev-parse HEAD)" != "$stopped_at" ]; then
-      echo "HEAD has moved since the replay of $branch stopped at ${stopped_at:-an unrecorded commit}:" >&2
-      echo "put it back there, detached, and 'continue', or 'abort'" >&2
+    if git symbolic-ref -q HEAD > /dev/null || [ -z "$stopped_at" ] ||
+       ! git merge-base --is-ancestor "$stopped_at" HEAD; then
+      echo "HEAD is not where the replay of $branch stopped, ${stopped_at:-an unrecorded commit}, or beyond it," >&2
+      echo "so what the move meant cannot be told from here: 'abort' the replay and start again" >&2
       exit 9
     fi
     unmerged=$(git diff --name-only --diff-filter=U)
