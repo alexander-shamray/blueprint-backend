@@ -49,11 +49,10 @@ case "$lowered" in
     echo "refusing to rebase or force-push main, spelled $branch" >&2; exit 3 ;;
 esac
 
-# Both backends, because which one runs is git's choice and not this file's:
-# the merge backend is the default and the am backend still appears behind
-# `--apply`, `rebase.backend` and older versions. A function, because the
-# answer moves: a replay that stops leaves state where there was none, and
-# `stopped` has to ask again.
+# Both state directories, although `start` only ever makes rebase-merge: a
+# rebase this helper did not start may be either, and it has to be seen to be
+# refused. A function, because the answer moves: a replay that stops leaves
+# state where there was none, and `stopped` has to ask again.
 current_state() {
   local candidate
   for candidate in "$(git rev-parse --git-path rebase-merge)" "$(git rev-parse --git-path rebase-apply)"; do
@@ -185,9 +184,9 @@ remember_lease() {
 
 # Rewritten by `start` and `continue` once the replay has finished and before
 # the push, so the record names the commit this helper produced; a retry
-# never rewrites it, whatever it has since been committed on top of. A rebase refused before it started
-# leaves the two-field record a failed push would, and without the head
-# `publish` would force whatever HEAD had since become.
+# never rewrites it, whatever has since been committed on top. A record still
+# holding two fields is a replay that stopped or was abandoned, and without
+# the head `publish` would force whatever HEAD had since become.
 remember_replay() {
   printf '%s %s %s\n' "$branch" "$approved_lease" "$1" > "$pending"
 }
@@ -309,6 +308,14 @@ case "$mode" in
     # discard the branch's work with the guards all green.
     [ -f "$state/started-by-this-helper" ] ||
       { echo "this rebase was not started by this helper, so it will not be published" >&2; exit 9; }
+    # `start` spells `--merge`, so an apply-backend replay carrying the marker
+    # is an earlier version's, and continuing it can stop where nothing here
+    # would ever let it finish.
+    case "$state" in
+      */rebase-apply)
+        echo "this replay runs on the apply backend, which this helper no longer uses: 'abort' and start again" >&2
+        exit 9 ;;
+    esac
     unmerged=$(git diff --name-only --diff-filter=U)
     [ -z "$unmerged" ] ||
       { echo "these are still unmerged; resolve and 'git add' them first:" >&2
@@ -361,8 +368,18 @@ case "$mode" in
     [ -n "$remote_now" ] ||
       { echo "origin has no $branch any more, so there is nothing to force: 'abort' the record and push it normally" >&2
         exit 6; }
+    # A push that landed while its answer was lost reads as a moved remote,
+    # and is the one move that needs nothing further.
+    if [ "$remote_now" = "$(git rev-parse HEAD)" ]; then
+      rm -f "$pending"
+      echo "origin already has $branch at $remote_now; nothing to force"
+      exit 0
+    fi
+    # `start` refuses the rewritten branch against a moved remote as well, so
+    # the message does not send the caller there.
     [ "$remote_now" = "$recorded_lease" ] ||
-      { echo "origin/$branch has moved since the replay was approved: 'abort' the record and start again" >&2
+      { echo "origin/$branch has moved since the replay was approved, and this checkout's $branch is rewritten:" >&2
+        echo "reconcile it with origin's $remote_now by hand; 'abort' only clears the record" >&2
         exit 7; }
     approved_lease="$recorded_lease"
     publish
