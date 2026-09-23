@@ -101,7 +101,9 @@ PR-6).
     `OUTPUT` projection into `FulfilmentWork`, and `FailSql` reading
     `OutboxDispatcher.BackoffAttemptCap` and `BackoffBaseSeconds` — with
     `FulfilmentWorker.ClaimBatchSize = 1`, `LeaseSeconds = 60` and
-    `RunOnceAsync`, and `Shipment.ReleaseClaim()` on the aggregate.
+    `RunOnceAsync`, and `Shipment.ReleaseClaim()` on the aggregate, under a
+    class remark rewritten to say the aggregate only resets the workers'
+    columns.
     **`FulfilmentClaims` is not a general helper and is not extracted into
     one**: its two statements name the fulfilment populations and
     `NextAttemptAt` in their text. Task 3 writes a `TrackingClaims` beside it
@@ -794,7 +796,11 @@ Expected: compile failure on `PollApplied`, `ShipmentErrors`,
 
 - [ ] **Step 4: Add the one domain member**
 
-In `Shipment.cs`, below `Record` and beside PR-5's `ReleaseClaim`:
+In `Shipment.cs`, below `Record` and beside PR-5's `ReleaseClaim`. The class
+remark PR-5 rewrote — the backoff, lease and poll columns are the workers',
+and the aggregate only resets them — is true of this member as well, which
+reschedules the one and clears the others through `ReleaseClaim`, so nothing
+in that block moves:
 
 ```csharp
     /// <summary>

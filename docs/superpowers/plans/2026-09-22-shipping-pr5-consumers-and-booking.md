@@ -1135,8 +1135,9 @@ public static class DependencyInjection { public const string BaseUrlKey = "Addr
 ```
 
 - Produces: `Shipping.OrderingStub.StubOrdering` with `Address`, `Addresses`,
-  `Fail`, `AbortNextCalls`, `Calls` and `Tokens`; `ShippingWorkerFactory`'s
-  `addressSourceBaseUrl` parameter and `Tokens` property.
+  `Fail`, `AbortNextCalls`, `Calls`, `Tokens` and `Reset`;
+  `ShippingWorkerFactory`'s `addressSourceBaseUrl` parameter, defaulting to
+  its `UnreachableAddressSource`, and `Tokens` property.
 
 - [ ] **Step 1: Write the stub**
 
@@ -1263,6 +1264,21 @@ public sealed class StubOrdering : IAsyncLifetime
     /// exercises <c>AddressHop</c>'s retry.
     /// </remarks>
     public int AbortNextCalls { get; set; }
+
+    /// <summary>
+    /// Back to knowing nothing. The stub is the collection's and outlives every
+    /// test in it, so a status one test queued and did not consume would answer
+    /// the next test's first read; the fixture calls this where it resets the
+    /// carrier.
+    /// </summary>
+    public void Reset()
+    {
+        Addresses.Clear();
+        _statuses.Clear();
+        _calls.Clear();
+        _tokens.Clear();
+        AbortNextCalls = 0;
+    }
 
     public async ValueTask InitializeAsync()
     {
@@ -2163,7 +2179,34 @@ and the linked contract:
 - [ ] **Step 7: Give the factory the address source and a token**
 
 In `tests/Shipping.TestSupport/ShippingWorkerFactory.cs`, a fifth parameter
-and a substituted token cache:
+and a substituted token cache. The parameter is defaulted on
+`PaymentsApiFactory`'s terms, so every caller PR-1 and PR-2 wrote compiles
+unchanged, and its default is qualified as that factory qualifies
+`UnreachableProvider`, because a primary constructor's defaults are resolved
+outside the type's body. Before:
+
+```csharp
+public class ShippingWorkerFactory(
+    string connectionString,
+    string rabbitConnectionString,
+    string carrierBaseUrl = ShippingWorkerFactory.UnreachableCarrier,
+    string? carrierApiKey = null)
+    : WebApplicationFactory<Program>
+```
+
+After:
+
+```csharp
+public class ShippingWorkerFactory(
+    string connectionString,
+    string rabbitConnectionString,
+    string carrierBaseUrl = ShippingWorkerFactory.UnreachableCarrier,
+    string? carrierApiKey = null,
+    string addressSourceBaseUrl = ShippingWorkerFactory.UnreachableAddressSource)
+    : WebApplicationFactory<Program>
+```
+
+The constant it defaults to, beside PR-2's two, and the token cache:
 
 ```csharp
     /// <summary>
@@ -2316,7 +2359,8 @@ in a compilation is CS0436.
 ### Task 4: The fulfilment worker
 
 **Files:**
-- Modify: `src/Services/Shipping/Shipping.Domain/Shipments/Shipment.cs` — `ReleaseClaim`
+- Modify: `src/Services/Shipping/Shipping.Domain/Shipments/Shipment.cs` —
+  `ReleaseClaim`, and the last sentence of the class remark it makes false
 - Create: `src/Services/Shipping/Shipping.Infrastructure/Fulfilment/FulfilmentWork.cs`
 - Create: `src/Services/Shipping/Shipping.Infrastructure/Fulfilment/FulfilmentClaims.cs`
 - Create: `src/Services/Shipping/Shipping.Infrastructure/Fulfilment/FulfilmentWorker.cs`
@@ -2419,6 +2463,36 @@ In `Shipment`, beside the bookkeeping properties PR-1 left behind:
         Attempts = 0;
     }
 ```
+
+The class remark above those properties ends by saying the three columns are
+properties and no behaviour, which this member makes false, and a doc block
+left beside its contradiction is the shape this plan refuses elsewhere. Its
+last sentence is rewritten in the same edit; the summary and the rest of the
+remark stay, and the block stays at ten lines. Before:
+
+```csharp
+/// <remarks>
+/// Every operation returns whether it moved the shipment; a superseded
+/// arrival returns <c>false</c> rather than throwing, because a throw is a
+/// row retried for ever in a worker and a redelivery loop in a consumer. The
+/// backoff, the lease and the poll schedule are properties and no behaviour.
+/// </remarks>
+```
+
+After:
+
+```csharp
+/// <remarks>
+/// Every operation returns whether it moved the shipment; a superseded
+/// arrival returns <c>false</c> rather than throwing, because a throw is a
+/// row retried for ever in a worker and a redelivery loop in a consumer. The
+/// backoff, lease and poll columns are the workers'; the aggregate only resets them.
+/// </remarks>
+```
+
+The sentence is written to stay true when PR-6 gives the aggregate its second
+member over those columns, which reschedules the poll and releases the claim
+through this one, so that plan leaves the remark alone.
 
 - [ ] **Step 4: Write the claim and the backoff**
 
@@ -2821,7 +2895,8 @@ mappings as well as the log, because a stub a test adds outlives a log reset.
 
 **The server is exposed by its own type**, as Payments' fixture exposes
 `Provider`, because a later suite drives it through WireMock.Net's own builders
-rather than only reading its journal:
+rather than only reading its journal, and the stub is exposed beside it, with
+`using Shipping.OrderingStub;` on the file:
 
 ```csharp
     /// <summary>
@@ -2830,12 +2905,37 @@ rather than only reading its journal:
     /// and a real HTTP hop.
     /// </summary>
     public WireMockServer Carrier { get; private set; } = null!;
+
+    /// <summary>
+    /// ADR-052's owner, a real gRPC server on loopback: what a test queues here
+    /// is what the worker's address read meets.
+    /// </summary>
+    public StubOrdering Ordering { get; } = new();
 ```
 
-started with `WireMockServer.Start()` and `ReadStaticMappings(
-SimulatorMappings.Directory())`, and reset per test with `ResetLogEntries()`,
-`ResetMappings()` and a second `ReadStaticMappings` — Payments' fixture's three
-lines, which is also what bounds a mapping a test adds to that test.
+`Carrier` is started with `WireMockServer.Start()` and `ReadStaticMappings(
+SimulatorMappings.Directory())` and `Ordering` with `await
+Ordering.InitializeAsync();`, both in `InitializeAsync` before `Factory` is
+built, because the factory takes both addresses; `DisposeAsync` stops the one
+and awaits `Ordering.DisposeAsync()` where Payments' stops its provider.
+`ResetAsync` resets both below the Respawner's call, in Payments' fixture's
+four-line shape less `ResetScenarios()`, because the simulator's mappings
+hold no scenario state (spec, section 9):
+
+```csharp
+        // The mappings as well as the log: a stub a test adds outlives a log
+        // reset, so re-reading the simulator's own mappings (spec, section 9)
+        // is what leaves every test the same carrier to start from. The
+        // Ordering stub is the collection's the same way, and a status one
+        // test queued and did not consume would answer the next test's first
+        // read.
+        Carrier.ResetMappings();
+        Carrier.ReadStaticMappings(SimulatorMappings.Directory());
+        Carrier.ResetLogEntries();
+        Ordering.Reset();
+```
+
+The re-read is also what bounds a mapping a test adds to that test.
 
 **This is what puts `WireMock.Net` on `Shipping.TestSupport.csproj`.** PR-2 put
 the package on `Shipping.Worker.Tests` alone, because until now the only
@@ -3014,8 +3114,8 @@ public sealed class CapturedLogs : ILoggerProvider
 }
 ```
 
-**`ResetAsync` clears it**, with `CapturedLogs.Clear();` beside the three
-lines that reset the server: a suite that asserts what a pass did not log would
+**`ResetAsync` clears it**, with `CapturedLogs.Clear();` below
+`Ordering.Reset();`: a suite that asserts what a pass did not log would
 otherwise be asserting it over every pass that ran before it in the collection.
 
 **Both are reached through `ShippingWorkerFactory`**, which is what installs
@@ -3642,9 +3742,13 @@ and the second pass runs inside that attempt. The journal is then
 - [ ] **Step 3: The readiness set**
 
 In `tests/Shipping.Worker.Tests/HostSmokeTests.cs`, the registration test PR-1
-left with two checks in it **gains one line** — the assertion §10 asks
-for — and keeps everything else. Its name does not move, and neither do its
-tag assertions: a set asserted by name says nothing about a check the
+left with two checks in it **gains one line** — the set §10 asks for, stated
+whole — and keeps everything else. The exclusion itself is already PR-1's:
+the count refuses a third row and the two `Single` calls refuse a
+replacement, so the line cannot fail before one of them has, and it is added
+for the reader who comes looking for what the set is rather than for a case
+the test did not cover. Its name does not move, and neither do its tag
+assertions: a set asserted by name says nothing about a check the
 `/health/ready` predicate never selects, and the tags are what make it
 selected. Whole, with the addition last:
 
@@ -3676,11 +3780,12 @@ selected. Whole, with the addition last:
         bus.Tags.ShouldContain("ready", "a bus check outside the ready predicate reports to nobody");
         bus.Tags.ShouldContain("masstransit", "both tags are the documented contract (§13.5), so both are pinned");
 
-        // Which two, and not only how many: the carrier, Ordering and Keycloak
-        // are shared by every replica, so a readiness row for one would pull
-        // every pod on its next outage and then block the rollout carrying the
-        // fix (§13.5). A row that replaced the bus's would leave the count
-        // above still saying two.
+        // Which two, stated as one set for a reader. The count above refuses a
+        // third row and each Single refuses a replacement, so this line fails
+        // only after one of them has; it is here because the exclusion is the
+        // point — the carrier, Ordering and Keycloak are shared by every
+        // replica, so a readiness row for one would pull every pod on its next
+        // outage and then block the rollout carrying the fix (§13.5).
         options.Registrations.Select(r => r.Name).ShouldBe(["sql", "masstransit-bus"], ignoreOrder: true);
     }
 ```
@@ -4536,9 +4641,11 @@ spellings by PR-6 —
 `GrantCheckedTokenCache`, `DependencyInjection.BaseUrlKey`,
 `FulfilmentWork`, `FulfilmentClaims`, `FulfilmentWorker.ClaimBatchSize` and
 `.LeaseSeconds` and `.RunOnceAsync`, `Shipment.ReleaseClaim`,
-`StubOrdering`/`StubAddress`, `ServiceFixture.QueueDepthAsync`/`.BindingsAsync`/
+`StubOrdering`/`StubAddress` and `StubOrdering.Reset`,
+`ServiceFixture.Ordering`/`.QueueDepthAsync`/`.BindingsAsync`/
 `.NewWorkerHost` and the static `ServiceFixture.CarrierAnswers`, and
-`ShippingWorkerFactory`'s `addressSourceBaseUrl`, `Tokens`, `CommitFaults` and
+`ShippingWorkerFactory`'s `addressSourceBaseUrl` with its
+`UnreachableAddressSource` default, `Tokens`, `CommitFaults` and
 `CapturedLogs` are produced and consumed under those spellings within this
 plan. `QueueDepthAsync` and `CarrierAnswers` are written here rather than
 assumed: the first exists only in

@@ -1523,11 +1523,13 @@ other two:
 dotnet test tests/Ordering.Api.Tests --filter "FullyQualifiedName~DeliveryAddressServiceTests"
 ```
 
-Expected: compile failure on `OrderingPermissions.DeliveryAddress` alone —
-the `Ordering.Delivery.V1.DeliveryAddresses` types exist from Task 1's proto,
-and a service nobody maps is not a compile error. Then, once the constant
-exists but no `MapGrpcService` names the service, `Unimplemented` on every
-call.
+Expected: compile failure on `OrderingPermissions.DeliveryAddress` alone — the
+`Ordering.Delivery.V1.DeliveryAddresses` types exist from Task 1's proto, and a
+service nobody maps is not a compile error. Then, once the constant exists but
+no `MapGrpcService` names the service, `Unimplemented` on every call that
+carries a principal; the no-token test is already green, because the fallback
+policy answers an unrouted path with the 401 that maps to `Unauthenticated` —
+which is why the second test exists.
 
 - [ ] **Step 3: Write the permission, the service and the policy**
 
