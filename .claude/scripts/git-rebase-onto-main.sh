@@ -151,6 +151,8 @@ publish() {
 # and the read's status never does. Every call site tests this function's
 # status, which suspends `set -e` inside it; the `|| true` keeps a future
 # untested call from ending on a bare exit 1 this script assigns to nothing.
+# `abort` passes `abort` to be told of an unreadable record rather than
+# refused by it, since clearing one is the only way past it.
 recorded_branch=""
 recorded_lease=""
 recorded_head=""
@@ -160,8 +162,10 @@ read_pending() {
   recorded_head=""
   [ -f "$pending" ] || return 1
   read -r recorded_branch recorded_lease recorded_head < "$pending" || true
-  [ -n "$recorded_branch" ] ||
-    { echo "the waiting record is unreadable; remove $pending by hand and start again" >&2; exit 9; }
+  [ -z "$recorded_branch" ] || return 0
+  [ "${1:-}" != abort ] || return 2
+  echo "the waiting record is unreadable; run 'abort' to clear it and start again" >&2
+  exit 9
 }
 
 # Written before the replay, so it survives a push that fails after it.
@@ -253,15 +257,23 @@ stopped() {
         echo "stage them or set them aside, then 'continue', or 'abort'" >&2
         exit 14; }
 
-    # Counted at the first skip rather than up front, so `continue`, which
-    # reads `origin/main` nowhere else, is not stopped by its absence before
-    # it reports a conflict. The branch's pre-rebase length bounds the replay.
+    # Counted against the commit the replay is onto, which git fixed when it
+    # started, and not against `origin/main`: a fetch between `start` and
+    # `continue` moves that ref, and a main that has since taken the branch's
+    # commits shrinks the count below what is being replayed. The branch ref
+    # is not moved until the replay ends, so it is the pre-rebase tip.
     if [ -z "$left" ]; then
-      left=$(git rev-list --count "refs/remotes/origin/main..refs/heads/$branch") || left=""
+      onto=""
+      if [ -f "$now/onto" ]; then
+        onto=$(cat "$now/onto")
+      fi
+      [ -n "$onto" ] ||
+        { echo "the rebase state names no base, so a skip cannot be bounded" >&2; exit 14; }
+      left=$(git rev-list --count "$onto..refs/heads/$branch") || left=""
       [ -n "$left" ] ||
         { echo "cannot count what $branch is replaying, so a skip cannot be bounded" >&2; exit 14; }
       [ "$left" -gt 0 ] ||
-        { echo "$branch holds no commits origin/main lacks, so there is nothing to replay" >&2
+        { echo "$branch holds no commits its base lacks, so there is nothing to replay" >&2
           echo "and nothing a skip could drop: 'abort' and start again" >&2
           exit 14; }
     fi
@@ -388,7 +400,17 @@ case "$mode" in
       # The record is the only route left to a replayed branch, so clearing
       # one that belongs to another strands its rewritten tip. The name passed
       # and the branch in hand are two ways to reach the wrong record.
-      read_pending ||
+      readable=0
+      read_pending abort || readable=$?
+      # An unreadable record names no branch and no head, so `publish` can
+      # never finish it and there is no tip it could still reach; left, it
+      # refuses every mode on every branch.
+      if [ "$readable" -eq 2 ]; then
+        rm -f "$pending"
+        echo "cleared an unreadable waiting record; nothing was published"
+        exit 0
+      fi
+      [ "$readable" -eq 0 ] ||
         { echo "no replay is waiting to be abandoned" >&2; exit 9; }
       [ "$recorded_branch" = "$branch" ] ||
         { echo "the waiting replay is $recorded_branch, not $branch" >&2; exit 4; }

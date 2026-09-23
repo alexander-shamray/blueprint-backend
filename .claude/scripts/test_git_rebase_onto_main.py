@@ -671,6 +671,21 @@ class TheHelperPublishesWhatItRebased(unittest.TestCase):
         self.assertEqual(9, result.returncode, result.stderr)
         self.assertIn("the waiting record is unreadable", result.stderr)
 
+    def test_abort_clears_an_unreadable_record(self):
+        # The one way past it: left, it refuses every mode on every branch.
+        self.fail_the_push()
+        self.at('printf "\\n" > "$(git rev-parse --git-path claude-rebase-pending)"')
+        refused = self.helper("start")
+        self.assertEqual(9, refused.returncode, refused.stderr)
+        self.assertIn("run 'abort' to clear it", refused.stderr)
+
+        result = self.helper("abort")
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertIn("cleared an unreadable waiting record", result.stdout)
+        self.assertEqual(
+            "", self.at('cat "$(git rev-parse --git-path claude-rebase-pending)" 2>/dev/null').stdout,
+            "the unreadable record is still there")
+
     def test_a_rebase_that_never_started_leaves_no_record(self):
         # Nothing was replayed, so there is no tip for a record to protect,
         # and one left behind refuses every later `start` on any branch.
@@ -796,6 +811,19 @@ class TheApplyBackendIsDrivenToo(unittest.TestCase):
         self.assertEqual(self.at("git rev-parse HEAD").stdout.strip(),
                          self.at("git rev-parse refs/remotes/origin/feat/x").stdout.strip(),
                          "the remote carries what was replayed")
+
+    def test_a_fetch_between_start_and_continue_does_not_shrink_the_bound(self):
+        # origin/main moved onto the branch's own tip leaves no commit of the
+        # branch that origin/main lacks, so a bound read from it is zero and
+        # refuses a drop the replay still owes.
+        self.assertEqual(8, self.helper("start").returncode)
+        self.at("echo mine > a.txt && git add a.txt")
+        self.at("git update-ref refs/remotes/origin/main refs/heads/feat/x")
+
+        result = self.helper("continue")
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertIn("left this commit of feat/x empty", result.stderr)
+        self.assertEqual("no", self.apply_running(), "the replay is still wedged in progress")
 
     def test_a_conflict_after_the_drop_is_reported_rather_than_skipped_too(self):
         # A second commit on the same file, so dropping the first as empty
