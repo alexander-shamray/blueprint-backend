@@ -657,7 +657,7 @@ class TheHelperPublishesWhatItRebased(unittest.TestCase):
         self.at('echo extra > extra.txt && git add -A && git commit -qm "after the replay"')
         refused = self.helper("abort")
         self.assertEqual(9, refused.returncode, refused.stderr)
-        self.assertIn("refusing to strand it", refused.stderr)
+        self.assertIn("commits sit on the replay of feat/x", refused.stderr)
 
         self.at(ALLOW_PUSH)
         result = self.helper("publish")
@@ -782,18 +782,26 @@ class TheHelperPublishesWhatItRebased(unittest.TestCase):
         self.at(HOOKS + '; rm -f "$h/pre-rebase"')
         self.assertEqual(0, self.helper().returncode, "a stale record refused the next start")
 
-    def test_abort_refuses_a_replay_that_publish_can_still_finish(self):
-        # Clearing it leaves the branch rewritten with nothing able to reach it.
+    def test_abort_gives_a_replay_up_by_putting_the_branch_back(self):
+        # A push origin keeps refusing would otherwise hold the record for
+        # ever: clearing it strands the rewritten branch, and keeping it
+        # refuses every later `start`. The pre-replay tip is neither.
+        before = self.at("git rev-parse HEAD").stdout.strip()
+        published = self.remote_tip()
         self.fail_the_push()
-        rewritten = self.at("git rev-parse HEAD").stdout.strip()
+        self.assertNotEqual(before, self.at("git rev-parse HEAD").stdout.strip(), "nothing was replayed")
+
         result = self.helper("abort")
-        self.assertEqual(9, result.returncode, result.stderr)
-        self.assertIn("refusing to strand it", result.stderr)
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertIn("put feat/x back at " + before, result.stdout)
+        self.assertEqual(before, self.at("git rev-parse HEAD").stdout.strip())
+        self.assertEqual(published, self.remote_tip(), "something was published")
 
         self.at(ALLOW_PUSH)
-        self.assertEqual(0, self.helper("publish").returncode)
-        self.assertEqual(rewritten, self.remote_tip(),
-                         "publish finished the replay the abort refused to discard")
+        again = self.helper()
+        self.assertEqual(0, again.returncode, again.stderr)
+        self.assertEqual(self.at("git rev-parse HEAD").stdout.strip(), self.remote_tip(),
+                         "the branch put back could not be replayed and published afresh")
 
     def test_abort_clears_a_record_publish_can_no_longer_finish(self):
         # `publish` sends a moved remote to `abort`, so `abort` has to take it
