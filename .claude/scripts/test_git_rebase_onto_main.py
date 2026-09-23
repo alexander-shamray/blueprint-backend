@@ -653,6 +653,30 @@ class TheHelperPublishesWhatItRebased(unittest.TestCase):
         self.assertEqual(self.at("git rev-parse HEAD").stdout.strip(), self.remote_tip(),
                          "the replay and the commit on it are what origin carries")
 
+    def test_a_retry_keeps_the_replayed_head_it_was_given(self):
+        # A retry that failed with a commit on top must not record that commit
+        # as the replay, or dropping it strands the replay the record named.
+        self.fail_the_push()
+        replayed = self.at("git rev-parse HEAD").stdout.strip()
+        self.at('echo extra > extra.txt && git add -A && git commit -qm "after the replay"')
+        self.assertNotEqual(0, self.helper("publish").returncode, "the retry must fail too")
+        self.at("git reset -q --hard " + replayed)
+
+        self.at(ALLOW_PUSH)
+        result = self.helper("publish")
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual(replayed, self.remote_tip())
+
+    def test_abort_clears_a_record_it_cannot_keep_without_asking_origin(self):
+        # HEAD no longer descends from the replay, so the answer is decided
+        # locally, and an origin that cannot be reached does not hold it up.
+        self.fail_the_push()
+        self.at('echo amended > amended.txt && git add -A && git commit -q --amend --no-edit '
+                '&& git remote set-url origin "$(pwd)/../nowhere.git"')
+        result = self.helper("abort")
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertIn("cleared the waiting replay", result.stdout)
+
     def test_publish_refuses_a_head_that_does_not_descend_from_the_replay(self):
         # An amended replay is a rewrite this helper did not make.
         self.fail_the_push()
@@ -797,12 +821,11 @@ class TheHelperPublishesWhatItRebased(unittest.TestCase):
         self.assertEqual(settled, self.at("git rev-parse HEAD").stdout.strip())
 
 
-class TheApplyBackendIsDrivenToo(unittest.TestCase):
-    """`rebase.backend=apply` is the caller's setting, and the helper finds
-    `rebase-apply` beside `rebase-merge` for it.
-
-    It is also the only backend that reaches the empty-replay path: the merge
-    backend drops such a commit itself and says nothing.
+class TheApplyBackendIsNeverTheOneThatRuns(unittest.TestCase):
+    """`rebase.backend=apply` is the caller's setting, and `start` spells
+    `--merge` over it: the apply backend leaves a commit it never applied
+    looking exactly like one a resolution emptied, so nothing could tell a
+    drop that loses nothing from one that loses a commit.
     """
 
     def setUp(self):
@@ -820,30 +843,25 @@ class TheApplyBackendIsDrivenToo(unittest.TestCase):
         return run_bash('cd "$W" && bash "$H" "$B" "$M"',
                         W=self.work, H=str(HELPER), B=branch, M=mode)
 
-    def apply_running(self):
-        return self.at('test -d "$(git rev-parse --git-path rebase-apply)" '
-                       '&& echo yes || echo no').stdout.strip()
+    def state(self):
+        return self.at('for d in rebase-merge rebase-apply; do '
+                       'test -d "$(git rev-parse --git-path $d)" && echo $d; done').stdout.strip()
 
-    def test_the_state_this_backend_leaves_is_the_one_the_helper_finds(self):
+    def test_the_setting_does_not_choose_the_backend(self):
         result = self.helper("start")
         self.assertEqual(8, result.returncode, result.stderr)
         self.assertIn("which is the point:\na.txt", result.stderr)
-        self.assertEqual("yes", self.apply_running(),
-                         "this case is not driving the apply backend at all")
-        self.at("echo resolved > a.txt && git add a.txt")
-        result = self.helper("continue")
-        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual("rebase-merge", self.state(), "the caller's setting chose the backend")
 
-    def test_an_empty_resolution_is_dropped_rather_than_called_a_conflict(self):
-        # Taking origin/main's side verbatim leaves nothing to commit, and git
-        # asks for `--skip`, which nothing grants a caller.
+    def test_an_empty_resolution_is_dropped_by_git_and_published(self):
+        # Taking origin/main's side verbatim empties the commit, which the
+        # merge backend drops by itself rather than asking for `--skip`.
         self.assertEqual(8, self.helper("start").returncode)
         self.at("echo mine > a.txt && git add a.txt")
         result = self.helper("continue")
 
         self.assertEqual(0, result.returncode, result.stderr)
-        self.assertIn("left this commit of feat/x empty", result.stderr)
-        self.assertEqual("no", self.apply_running(), "the replay is still wedged in progress")
+        self.assertEqual("", self.state(), "the replay is still wedged in progress")
         self.assertEqual("mine\n", self.at("cat a.txt").stdout)
         self.assertEqual("work\n", self.at("cat b.txt").stdout,
                          "the branch's own commit was dropped along with the empty one")
@@ -851,23 +869,7 @@ class TheApplyBackendIsDrivenToo(unittest.TestCase):
                          self.at("git rev-parse refs/remotes/origin/feat/x").stdout.strip(),
                          "the remote carries what was replayed")
 
-    def test_a_fetch_between_start_and_continue_does_not_shrink_the_bound(self):
-        # origin/main moved onto the branch's own tip leaves no commit of the
-        # branch that origin/main lacks, so a bound read from it is zero and
-        # refuses a drop the replay still owes.
-        self.assertEqual(8, self.helper("start").returncode)
-        self.at("echo mine > a.txt && git add a.txt")
-        self.at("git update-ref refs/remotes/origin/main refs/heads/feat/x")
-
-        result = self.helper("continue")
-        self.assertEqual(0, result.returncode, result.stderr)
-        self.assertIn("left this commit of feat/x empty", result.stderr)
-        self.assertEqual("no", self.apply_running(), "the replay is still wedged in progress")
-
-    def test_a_conflict_after_the_drop_is_reported_rather_than_skipped_too(self):
-        # A second commit on the same file, so dropping the first as empty
-        # puts a conflicting one into the replay; the pass after a skip has
-        # to answer as the first one did.
+    def test_a_conflict_after_an_emptied_commit_is_reported(self):
         self.at('echo theirs-again > a.txt && git add -A '
                 '&& git commit -qm "the branch edits a.txt again" '
                 '&& git push -q -f origin feat/x')
@@ -876,50 +878,48 @@ class TheApplyBackendIsDrivenToo(unittest.TestCase):
 
         result = self.helper("continue")
         self.assertEqual(8, result.returncode, result.stderr)
-        self.assertIn("left this commit of feat/x empty", result.stderr)
         self.assertIn("which is the point:\na.txt", result.stderr,
-                      "the conflict after the drop was skipped instead of reported")
-        self.assertEqual("yes", self.apply_running(),
+                      "the conflict after the dropped commit was not reported")
+        self.assertEqual("rebase-merge", self.state(),
                          "the replay was not left in progress for the caller")
 
-    def test_an_untracked_file_stops_the_drop(self):
-        # Neither diff read sees it, and one standing where a later commit
-        # adds a file stops this backend with a tree that looks empty.
+    def test_a_commit_an_untracked_file_blocks_is_applied_once_it_is_moved(self):
+        # The case the apply backend lost a whole commit in: a file standing
+        # where the next commit adds one. Refused, named, and then applied.
+        self.at('echo added > new.txt && git add -A && git commit -qm "the branch adds new.txt" '
+                '&& git push -q -f origin feat/x')
         self.assertEqual(8, self.helper("start").returncode)
-        self.at("echo mine > a.txt && git add a.txt && echo stray > stray.txt")
+        self.at("echo resolved > a.txt && git add a.txt && echo stray > new.txt")
 
+        blocked = self.helper("continue")
+        self.assertEqual(14, blocked.returncode, blocked.stderr)
+        self.assertIn("stopped with nothing unmerged", blocked.stderr)
+        self.assertIn("new.txt", blocked.stderr, "the caller is told what is in the way")
+        self.assertEqual("stray\n", self.at("cat new.txt").stdout, "the untracked file was overwritten")
+
+        self.at("rm new.txt")
         result = self.helper("continue")
-        self.assertEqual(14, result.returncode, result.stderr)
-        self.assertIn("untracked files in the tree", result.stderr)
-        self.assertIn("stray.txt", result.stderr, "the caller is told what is in the way")
-        self.assertEqual("yes", self.apply_running(), "the replay was skipped past the file")
-        self.assertEqual("stray\n", self.at("cat stray.txt").stdout)
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual("added\n", self.at("cat new.txt").stdout,
+                         "the commit the file blocked was dropped rather than applied")
+        self.assertEqual(self.at("git rev-parse HEAD").stdout.strip(),
+                         self.at("git rev-parse refs/remotes/origin/feat/x").stdout.strip())
 
-    def test_unstaged_work_is_not_discarded_by_the_drop(self):
-        # `--continue` refuses over an unstaged edit and leaves the index at
-        # HEAD, so an emptiness test of the index alone passes, and the skip
-        # would hard-reset the edit away and publish without it.
+    def test_unstaged_work_survives_the_continue(self):
+        # Nothing here resets the tree, so an edit made while resolving is
+        # still there whatever the run then says.
         self.assertEqual(8, self.helper("start").returncode)
         self.at("echo mine > a.txt && git add a.txt")
         self.at("echo precious >> b.txt")
-        before = self.at("git rev-parse refs/remotes/origin/feat/x").stdout.strip()
-        self.assertTrue(before, "the remote tip was not read")
-
-        result = self.helper("continue")
-        self.assertEqual(14, result.returncode, result.stderr)
-        self.assertIn("unstaged changes in the tree", result.stderr)
-        self.assertIn("b.txt", result.stderr, "the caller is told what is in the way")
+        self.helper("continue")
         self.assertEqual("work\nprecious\n", self.at("cat b.txt").stdout,
-                         "the unstaged edit was hard-reset away by the skip")
-        self.assertEqual(before, self.at("git rev-parse refs/remotes/origin/feat/x").stdout.strip(),
-                         "the branch was published without the work still in the tree")
+                         "the unstaged edit was reset away")
 
 
 class AStoppedReplayIsNotAlwaysAConflict(unittest.TestCase):
     """A replay can stop with nothing unmerged and a real change staged — a
     commit git would not make for a reason of its own. It is reported as
-    itself rather than skipped, because dropping a commit that holds content
-    is the one outcome the empty-replay path must never reach."""
+    itself and left in progress, because nothing here may drop a commit."""
 
     def setUp(self):
         self.root = run_bash(FIXTURE).stdout.strip()
@@ -943,24 +943,24 @@ class AStoppedReplayIsNotAlwaysAConflict(unittest.TestCase):
 
         result = self.helper("continue")
         self.assertEqual(14, result.returncode, result.stderr)
-        self.assertIn("nothing unmerged and a change still staged", result.stderr)
+        self.assertIn("stopped with nothing unmerged", result.stderr)
         self.assertNotIn("resolve these", result.stderr,
                          "the caller is sent to resolve files that are named nowhere")
         self.assertEqual("yes", self.at(REBASE_RUNNING).stdout.strip(),
                          "the replay was thrown away rather than left to be answered")
         self.assertEqual("different\n", self.at("git show :a.txt").stdout,
-                         "the staged change was dropped by a skip that must not have run")
+                         "the staged change was dropped")
 
     def test_the_merge_backend_drops_an_empty_replay_on_its_own(self):
-        # Why the apply backend is where the empty-replay path lives: this
-        # one never asks, so the helper's skip must not run here.
+        # The reason no skip is needed: this backend drops an emptied commit
+        # itself, without leaving a stop for the helper to judge.
         self.assertEqual(8, self.helper("start").returncode)
         self.at("echo mine > a.txt && git add a.txt")
         result = self.helper("continue")
         self.assertEqual(0, result.returncode, result.stderr)
         self.assertEqual("mine\n", self.at("cat a.txt").stdout)
-        self.assertNotIn("left this commit", result.stderr,
-                         "the helper's skip path ran; this backend drops it itself")
+        self.assertEqual(self.at("git rev-parse HEAD").stdout.strip(),
+                         self.at("git rev-parse refs/remotes/origin/feat/x").stdout.strip())
 
 
 class EveryFixtureSaysItWasBuilt(unittest.TestCase):
