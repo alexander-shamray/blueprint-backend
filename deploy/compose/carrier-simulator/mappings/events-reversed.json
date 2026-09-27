@@ -1,0 +1,29 @@
+{
+  "Guid": "7c4d1a20-0022-4000-8000-000000000022",
+  "Title": "SIM-REVERSED: delivered on the page before collected",
+  "Priority": 1,
+  "Request": {
+    "Path": { "Matchers": [{ "Name": "ExactMatcher", "Pattern": "/v1/shipments/crr_SIM-REVERSED/events" }] },
+    "Methods": ["GET"]
+  },
+  "Response": {
+    "StatusCode": 200,
+    "Headers": { "Content-Type": "application/json" },
+    "BodyAsJson": {
+      "events": [
+        {
+          "id": "evt-delivered",
+          "status": "delivered",
+          "occurredAt": "2026-01-03T15:30:00Z",
+          "url": "https://carrier.example/track/crr"
+        },
+        {
+          "id": "evt-collected",
+          "status": "collected",
+          "occurredAt": "2026-01-02T09:00:00Z",
+          "url": "https://carrier.example/track/crr"
+        }
+      ]
+    }
+  }
+}

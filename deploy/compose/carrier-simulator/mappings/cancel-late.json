@@ -1,0 +1,14 @@
+{
+  "Guid": "7c4d1a20-0030-4000-8000-000000000030",
+  "Title": "SIM-LATE: the parcel is already collected, so the cancel is too late",
+  "Priority": 1,
+  "Request": {
+    "Path": { "Matchers": [{ "Name": "ExactMatcher", "Pattern": "/v1/shipments/crr_SIM-LATE/cancel" }] },
+    "Methods": ["POST"]
+  },
+  "Response": {
+    "StatusCode": 409,
+    "Headers": { "Content-Type": "application/json" },
+    "BodyAsJson": { "status": "too_late", "code": "already_collected" }
+  }
+}

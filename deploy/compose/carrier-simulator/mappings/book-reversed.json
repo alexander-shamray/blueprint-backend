@@ -1,0 +1,15 @@
+{
+  "Guid": "7c4d1a20-0005-4000-8000-000000000005",
+  "Title": "SIM-REVERSED books, and its feed puts delivered before collected",
+  "Priority": 1,
+  "Request": {
+    "Path": { "Matchers": [{ "Name": "ExactMatcher", "Pattern": "/v1/shipments" }] },
+    "Methods": ["POST"],
+    "Body": { "Matcher": { "Name": "RegexMatcher", "Pattern": "\"postalCode\"\\s*:\\s*\"SIM-REVERSED\"" } }
+  },
+  "Response": {
+    "StatusCode": 201,
+    "Headers": { "Content-Type": "application/json" },
+    "BodyAsJson": { "status": "booked", "reference": "crr_SIM-REVERSED", "trackingNumber": "TRK-SIM-REVERSED" }
+  }
+}

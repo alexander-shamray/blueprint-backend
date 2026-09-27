@@ -1,0 +1,29 @@
+{
+  "Guid": "7c4d1a20-0020-4000-8000-000000000020",
+  "Title": "Any booking not scripted otherwise: collected, then delivered",
+  "Priority": 10,
+  "Request": {
+    "Path": { "Matchers": [{ "Name": "WildcardMatcher", "Pattern": "/v1/shipments/*/events" }] },
+    "Methods": ["GET"]
+  },
+  "Response": {
+    "StatusCode": 200,
+    "Headers": { "Content-Type": "application/json" },
+    "BodyAsJson": {
+      "events": [
+        {
+          "id": "evt-collected",
+          "status": "collected",
+          "occurredAt": "2026-01-02T09:00:00Z",
+          "url": "https://carrier.example/track/crr"
+        },
+        {
+          "id": "evt-delivered",
+          "status": "delivered",
+          "occurredAt": "2026-01-03T15:30:00Z",
+          "url": "https://carrier.example/track/crr"
+        }
+      ]
+    }
+  }
+}

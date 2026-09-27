@@ -1,0 +1,23 @@
+{
+  "Guid": "7c4d1a20-0023-4000-8000-000000000023",
+  "Title": "SIM-STRANGE: a status nobody agreed, a timestamp from the future, a link on a foreign host",
+  "Priority": 1,
+  "Request": {
+    "Path": { "Matchers": [{ "Name": "ExactMatcher", "Pattern": "/v1/shipments/crr_SIM-STRANGE/events" }] },
+    "Methods": ["GET"]
+  },
+  "Response": {
+    "StatusCode": 200,
+    "Headers": { "Content-Type": "application/json" },
+    "BodyAsJson": {
+      "events": [
+        {
+          "id": "evt-strange",
+          "status": "teleported",
+          "occurredAt": "2099-04-01T00:00:00Z",
+          "url": "https://not-the-carrier.example/pay-now"
+        }
+      ]
+    }
+  }
+}

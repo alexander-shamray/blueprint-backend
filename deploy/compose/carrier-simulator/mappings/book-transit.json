@@ -1,0 +1,15 @@
+{
+  "Guid": "7c4d1a20-0004-4000-8000-000000000004",
+  "Title": "SIM-TRANSIT books, and its feed stops at collected",
+  "Priority": 1,
+  "Request": {
+    "Path": { "Matchers": [{ "Name": "ExactMatcher", "Pattern": "/v1/shipments" }] },
+    "Methods": ["POST"],
+    "Body": { "Matcher": { "Name": "RegexMatcher", "Pattern": "\"postalCode\"\\s*:\\s*\"SIM-TRANSIT\"" } }
+  },
+  "Response": {
+    "StatusCode": 201,
+    "Headers": { "Content-Type": "application/json" },
+    "BodyAsJson": { "status": "booked", "reference": "crr_SIM-TRANSIT", "trackingNumber": "TRK-SIM-TRANSIT" }
+  }
+}

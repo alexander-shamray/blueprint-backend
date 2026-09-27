@@ -1,0 +1,16 @@
+{
+  "Guid": "7c4d1a20-0003-4000-8000-000000000003",
+  "Title": "SIM-SLOW delays past the adapter's total, then answers as booked",
+  "Priority": 1,
+  "Request": {
+    "Path": { "Matchers": [{ "Name": "ExactMatcher", "Pattern": "/v1/shipments" }] },
+    "Methods": ["POST"],
+    "Body": { "Matcher": { "Name": "RegexMatcher", "Pattern": "\"postalCode\"\\s*:\\s*\"SIM-SLOW\"" } }
+  },
+  "Response": {
+    "StatusCode": 201,
+    "Headers": { "Content-Type": "application/json" },
+    "BodyAsJson": { "status": "booked", "reference": "crr_SIM-SLOW", "trackingNumber": "TRK-SIM-SLOW" },
+    "Delay": 30000
+  }
+}
