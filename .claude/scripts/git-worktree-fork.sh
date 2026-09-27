@@ -9,6 +9,10 @@ set -euo pipefail
 [ "$#" -eq 2 ] || { echo "usage: git-worktree-fork.sh <path> <branch>" >&2; exit 2; }
 path="$1"
 branch="$2"
+# The checks below read `git rev-parse` inside `[ ]`, where a failure is an
+# empty string that `set -e` never sees, so the repository is established first.
+git rev-parse --git-dir >/dev/null 2>&1 ||
+  { echo "not in a git repository" >&2; exit 2; }
 # .claude/worktrees/<name>, which is the only shape step 5 creates: the one
 # location EnterWorktree moves the session into without a confirmation no
 # allow rule can pre-approve. Enforced here as well as there so the helper
