@@ -18,6 +18,7 @@
 tests/Catalog.Api.Tests/HostSmokeTests.cs | connection-string-password | da3fd0c5abaa | A deliberately unusable value in a host that must not reach a database.
 tests/Catalog.Api.Tests/MessageTypeMapValidatorTests.cs | connection-string-password | da3fd0c5abaa | The same unusable fixture in the validator suite.
 tests/Catalog.Api.Tests/MessagingRegistrationTests.cs | credential-assignment | c2b0cc497a36 | A broker URI pointing at a hostname that does not resolve.
+tests/Catalog.Api.Tests/MetricsRegistrationTests.cs | connection-string-password | da3fd0c5abaa | The same unusable fixture in the metrics registration suite.
 tests/Ordering.Api.Tests/HostSmokeTests.cs | connection-string-password | da3fd0c5abaa | The same unusable fixture in Ordering's host smoke suite.
 tests/Ordering.Api.Tests/MessageTypeMapValidatorTests.cs | connection-string-password | da3fd0c5abaa | The same unusable fixture in Ordering's validator suite.
 tests/Ordering.Api.Tests/MetricsRegistrationTests.cs | connection-string-password | da3fd0c5abaa | The same unusable fixture in the metrics registration suite.

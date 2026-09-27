@@ -66,6 +66,14 @@ COPIED = frozenset(
         "src/Services/Catalog/Catalog.Infrastructure/Persistence/OutboxMessageConfiguration.cs",
         "src/Services/Catalog/Catalog.Infrastructure/Persistence/InboxMessageConfiguration.cs",
         "src/Services/Catalog/Catalog.Infrastructure/Persistence/IdempotencyMarkerConfiguration.cs",
+        # §13.6's per-lane gauges. They travel for the reason the outbox table
+        # does: every service hosts the dispatcher, the loaded alerts group by
+        # service_name, and a rendered service without them is covered by
+        # alerts that can never fire for it — which reads exactly like health.
+        "src/Services/Catalog/Catalog.Infrastructure/Observability/IOutboxStats.cs",
+        "src/Services/Catalog/Catalog.Infrastructure/Observability/OutboxStats.cs",
+        "src/Services/Catalog/Catalog.Infrastructure/Observability/OutboxMetrics.cs",
+        "src/Services/Catalog/Catalog.Infrastructure/Observability/MetricsInitialiser.cs",
         "src/Services/Catalog/Catalog.Migrator/Catalog.Migrator.csproj",
         "src/Services/Catalog/Catalog.Migrator/Dockerfile",
         "src/Services/Catalog/Catalog.Migrator/MigrationRunner.cs",
@@ -85,6 +93,7 @@ COPIED = frozenset(
         "tests/Catalog.Api.Tests/IntegrationCollection.cs",
         "tests/Catalog.Api.Tests/MessageTypeMapValidatorTests.cs",
         "tests/Catalog.Api.Tests/MessagingRegistrationTests.cs",
+        "tests/Catalog.Api.Tests/MetricsRegistrationTests.cs",
         "tests/Catalog.Api.Tests/InboxFilterTests.cs",
         "tests/Catalog.Api.Tests/OutboxDispatcherTests.cs",
         "tests/Catalog.Api.Tests/RetentionPurgeTests.cs",
@@ -1175,6 +1184,37 @@ def update_broker_definitions(repo_root: Path, names: Names) -> str:
     })
 
     return restore(json.dumps(definitions, indent=2) + "\n", newline)
+
+
+# §13.2's export names meters one by one, so a service's own meter is a line in
+# a building block rather than something its own tree can declare. The line is
+# written here for the reason the broker account is: without it the rendered
+# service publishes §13.6's gauges and the platform collects none of them, and
+# nothing else in the render would say so.
+OBSERVABILITY = "src/BuildingBlocks/Common.Web/ObservabilityExtensions.cs"
+
+# The anchor is the shared block's first line rather than the template's own
+# meter, because a service's meters are listed in §4.1's order and the
+# template's sits at the top of that list. Read rather than assumed: a list
+# this script cannot find is a building block that has moved.
+SHARED_METERS = "                // Shared names, not service-prefixed: every service emits the\n"
+
+
+def update_observability_meters(repo_root: Path, names: Names) -> str:
+    """One `AddMeter` line for the rendered service's outbox meter (§13.2)."""
+    text, newline = read(repo_root, OBSERVABILITY)
+
+    line = f'                .AddMeter("{names.pascal}.Outbox")'
+    if line in text:
+        raise ScaffoldError(
+            f"{OBSERVABILITY} already registers {names.pascal}.Outbox; this script "
+            f"adds the line and never a second copy of it")
+
+    require_once(text, "\n" + SHARED_METERS, OBSERVABILITY)
+    padded = line.ljust(67) + "// §13.6 per-lane\n"
+    # Before the blank line, so the new meter joins the service-prefixed
+    # group instead of opening the shared one (§4.1's order, §13.2's export).
+    return restore(text.replace("\n" + SHARED_METERS, padded + "\n" + SHARED_METERS), newline)
 
 
 def update_ports_readme(repo_root: Path, names: Names, port: int) -> str:

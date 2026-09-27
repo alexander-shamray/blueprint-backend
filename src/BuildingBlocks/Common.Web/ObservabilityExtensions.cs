@@ -86,6 +86,7 @@ public static class ObservabilityExtensions
                 // instruments: a name is a string and costs nothing, and the
                 // alternative is spreading one block's edits across six later
                 // pull requests.
+                .AddMeter("Catalog.Outbox")                        // §13.6 per-lane
                 .AddMeter("Ordering.Orders")                       // §13.3, §13.6
                 .AddMeter("Ordering.Outbox")                       // §13.6 per-lane
                 .AddMeter("Inventory.Reservations")                // §13.3

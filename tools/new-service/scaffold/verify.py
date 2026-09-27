@@ -118,6 +118,12 @@ SCAN_REASONS = (
         "The same unusable fixture in the validator suite.",
     ),
     (
+        "tests/Catalog.Api.Tests/MetricsRegistrationTests.cs",
+        "connection-string-password",
+        "not-a-real-password",
+        "The same unusable fixture in the metrics registration suite.",
+    ),
+    (
         "tests/Catalog.Api.Tests/MessagingRegistrationTests.cs",
         "credential-assignment",
         # The URI scheme, exactly as the compose broker row uses it.
