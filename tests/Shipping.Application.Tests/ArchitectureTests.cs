@@ -1,5 +1,5 @@
 using System.Reflection;
-using Shipping.Domain;
+using Shipping.Domain.Shipments;
 using NetArchTest.Rules;
 using Shouldly;
 using Xunit;
@@ -89,7 +89,7 @@ public class ArchitectureTests
         // broker is up. MassTransit's in-memory outbox does not close that gap
         // on its own: the buffer flushes after the consumer returns, which is
         // after the repository has committed.
-        Assembly[] assemblies = [typeof(DependencyInjection).Assembly, typeof(AssemblyMarker).Assembly];
+        Assembly[] assemblies = [typeof(DependencyInjection).Assembly, typeof(Shipment).Assembly];
         foreach (Assembly assembly in assemblies)
         {
             Types

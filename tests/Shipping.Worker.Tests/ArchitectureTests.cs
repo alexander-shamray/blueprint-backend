@@ -1,5 +1,5 @@
 using System.Reflection;
-using Shipping.Domain;
+using Shipping.Domain.Shipments;
 using Shipping.Infrastructure.Persistence;
 using Shipping.Migrator;
 using NetArchTest.Rules;
@@ -97,7 +97,7 @@ public class ArchitectureTests
     /// cost, and the limit is the sibling suites' gates' too.</remarks>
     private static readonly Assembly[] ServiceAssemblies =
     [
-        typeof(AssemblyMarker).Assembly,
+        typeof(Shipment).Assembly,
         typeof(Shipping.Application.DependencyInjection).Assembly,
         typeof(ShippingDbContext).Assembly,
         typeof(MigratorHost).Assembly,
