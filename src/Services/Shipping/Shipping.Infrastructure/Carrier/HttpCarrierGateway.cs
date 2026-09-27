@@ -60,8 +60,12 @@ internal sealed class HttpCarrierGateway(HttpClient http, CarrierMetrics metrics
                 : throw Unavailable("The carrier refused with a body that is not a refusal.");
         }
 
+        // The reference becomes a path segment of every later call, and
+        // EscapeDataString leaves a dot segment for the base address to
+        // resolve away, so one is refused here rather than kept.
         return answer is { Status: "booked", Reference: { } reference, TrackingNumber: { } tracking }
                && Recordable(reference, CarrierLimits.MaxReferenceLength)
+               && reference is not ("." or "..")
                && Recordable(tracking, CarrierLimits.MaxTrackingNumberLength)
             ? new BookingResult.Booked(reference, tracking)
             : throw Unavailable("The carrier booked with a body that is not a booking.");
