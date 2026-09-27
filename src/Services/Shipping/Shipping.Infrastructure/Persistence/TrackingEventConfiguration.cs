@@ -20,12 +20,13 @@ internal sealed class TrackingEventConfiguration : IEntityTypeConfiguration<Trac
             .Property(e => e.ShipmentId)
             .HasConversion(id => id.Value, value => new ShipmentId(value));
 
-        // Compared exactly, as the aggregate compares it, at both ends: this is
+        // Case-sensitive at both ends, as the aggregate compares it: this is
         // half a key rather than text. The binary collation is the inbox
         // endpoint's reason, SQL Server's default folding case; the ordinal
         // comparer is the change tracker's, which on this provider folds case
         // too. Either alone fails the commit of a page holding two ids that
-        // differ only by case.
+        // differ only by case; padding, which the engine also ignores, the
+        // aggregate refuses.
         builder
             .Property(e => e.CarrierEventId)
             .HasMaxLength(ShipmentLimits.MaxCarrierEventIdLength)

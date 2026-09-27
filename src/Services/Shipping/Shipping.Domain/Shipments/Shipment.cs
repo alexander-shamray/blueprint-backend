@@ -191,7 +191,9 @@ public sealed class Shipment : AggregateRoot<ShipmentId>
     /// <summary>
     /// A value the columns cannot hold is §5.7's broken invariant rather than a
     /// no-op: the adapter bounds what the carrier sends (spec, section 9), so
-    /// anything arriving here oversized is a defect above this line.
+    /// anything arriving here oversized or padded is a defect above this line.
+    /// Padding counts because SQL Server compares strings ignoring trailing
+    /// spaces, so a padded id and its bare twin would be one key to the table.
     /// </summary>
     private static void Require(string value, int maxLength, string what)
     {
@@ -200,5 +202,8 @@ public sealed class Shipment : AggregateRoot<ShipmentId>
 
         if (value.Length > maxLength)
             throw new DomainException($"{what} is longer than {maxLength} characters; the adapter bounds it.");
+
+        if (value.Trim().Length != value.Length)
+            throw new DomainException($"{what} carries surrounding whitespace; the adapter trims it.");
     }
 }
