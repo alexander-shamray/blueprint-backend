@@ -1,4 +1,5 @@
 using Shipping.Domain;
+using Shipping.Infrastructure.Idempotency;
 using Shipping.Infrastructure.Messaging;
 using Shipping.Infrastructure.Observability;
 using Shipping.Infrastructure.Persistence;
@@ -8,7 +9,6 @@ using Common.Infrastructure.Idempotency;
 using Common.Infrastructure.Inbox;
 using Common.Infrastructure.Messaging;
 using Common.Infrastructure.Outbox;
-using Common.Infrastructure.Redis;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -53,14 +53,11 @@ public static class DependencyInjection
 
         // §5.6's repository registrations join with the first aggregate.
 
-        // §8.5's durable half, beside the unit of work rather than in
-        // AddRedisConnections with its Redis sibling: the two ports are backed
-        // by different systems, and only this one has to land on the
-        // transaction EfUnitOfWork opens — it resolves the DbContext alias
-        // above, which is what puts the marker in that transaction. Losing
-        // this line surfaces on the first command rather than at startup,
-        // because ValidateOnBuild never constructs TransactionBehavior's open
-        // generic.
+        // §8.5's durable half. Only this one has to land on the transaction
+        // EfUnitOfWork opens — it resolves the DbContext alias above, which is
+        // what puts the marker in that transaction. Losing this line surfaces
+        // on the first command rather than at startup, because ValidateOnBuild
+        // never constructs TransactionBehavior's open generic.
         services.AddScoped<IIdempotencyMarkerStore, EfIdempotencyMarkerStore>();
 
         // §7.5's two Infrastructure halves: the collector reads EF's change
@@ -142,14 +139,11 @@ public static class DependencyInjection
         // instruments exist before the first message is delivered against them.
         services.AddHostedService<MetricsInitialiser>();
 
-        // §8's two connections. The call brings §8.2's HybridCache stack with
-        // it whether or not this service reads a cache, because the method is
-        // one call by design (§8.2): a service either has Redis or does not,
-        // and half-having it is the state that produces a cache silently
-        // reading the database. Both connection strings are read eagerly and
-        // throw when absent, so this line is what a missing key stops — the
-        // host will not start.
-        services.AddRedisConnections(configuration);
+        // §2: no Redis. RetentionPurgeService still resolves IIdempotencyStore
+        // unconditionally for ADR-039's marker purge, so this service registers
+        // its own rather than the shared Redis-backed one it has no connection
+        // for.
+        services.AddSingleton<IIdempotencyStore, NoClaimsIdempotencyStore>();
 
         // The bus (§9). Its readiness needs no line below: AddMassTransit
         // registers the bus health check itself — "masstransit-bus", tagged
@@ -183,26 +177,10 @@ public static class DependencyInjection
             new SqlConnectionFactory(configuration.GetConnectionString("Shipping")!));
 
         // Readiness lives here, not in Common.Web, because it needs the
-        // connection strings the shared host package does not have (§13.5).
-        // The Redis rows are not optional: AbortOnConnectFail is false (§8.1),
-        // so a disconnected multiplexer does not stop the host, and without
-        // them it would sit Ready while every idempotency claim failed closed
-        // — the case §13.5 says is indistinguishable from readiness never
-        // having been wired. Both, not one: §8.1 gives the two instances
-        // different eviction policies and therefore different servers, so a
-        // cache that is up says nothing about the coordination instance §8.5
-        // writes claims to.
+        // connection string the shared host package does not have (§13.5).
         services
             .AddHealthChecks()
-            .AddSqlServer(configuration.GetConnectionString("Shipping")!, name: "sql", tags: ["ready"])
-            .AddRedis(
-                configuration.GetConnectionString(RedisConnections.Cache)!,
-                name: "redis-cache",
-                tags: ["ready"])
-            .AddRedis(
-                configuration.GetConnectionString(RedisConnections.Coordination)!,
-                name: "redis-coordination",
-                tags: ["ready"]);
+            .AddSqlServer(configuration.GetConnectionString("Shipping")!, name: "sql", tags: ["ready"]);
 
         return services;
     }

@@ -2,7 +2,6 @@ using Shipping.TestSupport.Outbox;
 using Common.Application;
 using Common.Infrastructure.Messaging;
 using Common.Infrastructure.Outbox;
-using Common.Infrastructure.Redis;
 using Common.Web;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Hosting;
@@ -20,9 +19,7 @@ namespace Shipping.TestSupport;
 /// </summary>
 public class ShippingWorkerFactory(
     string connectionString,
-    string rabbitConnectionString,
-    string? redisCacheConnectionString = null,
-    string? redisCoordinationConnectionString = null)
+    string rabbitConnectionString)
     : WebApplicationFactory<Program>
 {
     /// <summary>
@@ -38,18 +35,6 @@ public class ShippingWorkerFactory(
     public const string UnreachableAuthority = "https://identity.invalid/realms/test";
 
     /// <summary>
-    /// The Redis address a host takes when the caller supplies none:
-    /// <c>AddRedisConnections</c> reads both keys eagerly and throws naming
-    /// the missing one, so every host over this <c>Program</c> needs both.
-    /// </summary>
-    /// <remarks>Unreachable is safe here and would not be for SQL:
-    /// <c>AddRedisConnections</c> forces <c>AbortOnConnectFail = false</c>
-    /// (§8.1), and every host resolves both multiplexers at startup, so it is
-    /// the flag that keeps the throw from taking the host down. A suite that
-    /// exercises §8.5's store passes a running container instead.</remarks>
-    public const string UnreachableRedis = "redis.invalid:6379";
-
-    /// <summary>
     /// The RUNTIME connection of §7.1, and only that one. The host has no
     /// business reading <c>ShippingMigrator</c>, and a fixture that supplied
     /// both would hide it if it started. The bus key is required because
@@ -60,12 +45,6 @@ public class ShippingWorkerFactory(
         builder
             .UseSetting("ConnectionStrings:Shipping", connectionString)
             .UseSetting("ConnectionStrings:RabbitMq", rabbitConnectionString)
-            .UseSetting(
-                $"ConnectionStrings:{RedisConnections.Cache}",
-                redisCacheConnectionString ?? UnreachableRedis)
-            .UseSetting(
-                $"ConnectionStrings:{RedisConnections.Coordination}",
-                redisCoordinationConnectionString ?? UnreachableRedis)
             .UseSetting(AuthenticationExtensions.AuthorityKey, UnreachableAuthority)
             .ConfigureServices(services =>
             {

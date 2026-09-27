@@ -14,15 +14,13 @@ using Microsoft.Extensions.Logging;
 using Respawn;
 using Testcontainers.MsSql;
 using Testcontainers.RabbitMq;
-using Testcontainers.Redis;
 using Xunit;
 
 namespace Shipping.TestSupport;
 
 /// <summary>
-/// A real SQL Server migrated by the real migrator, a real RabbitMQ, and
-/// §8.1's two Redis servers (ADR-010, §12.4) — each the image §14.1's
-/// Compose file runs, so a test and a developer machine cannot disagree
+/// A real SQL Server migrated by the real migrator and a real RabbitMQ
+/// (ADR-010, §12.4) — each the image §14.1's Compose file runs, so a test and a developer machine cannot disagree
 /// about the engine. §4.1's home: the suites it serves cannot reference each
 /// other.
 /// </summary>
@@ -31,24 +29,6 @@ namespace Shipping.TestSupport;
 /// stay distinct so a migrator reading the wrong one is caught.</remarks>
 public sealed class ServiceFixture : IAsyncLifetime
 {
-    /// <summary>
-    /// §8.1's two servers, and two rather than one for §12.4's stated reason:
-    /// with a single server playing both roles, a stack accidentally wired to
-    /// the wrong connection passes every prefix, TTL and claim test while
-    /// production idempotency keys sit on an <c>allkeys-lru</c> instance —
-    /// evicted under exactly the memory pressure that makes the duplicate
-    /// write hardest to reproduce. Two servers make role-routing assertable.
-    /// </summary>
-    private readonly RedisContainer _redisCache = new RedisBuilder()
-        .WithImage("redis:7-alpine")
-        .WithCommand("--maxmemory-policy", "allkeys-lru")
-        .Build();
-
-    private readonly RedisContainer _redisCoordination = new RedisBuilder()
-        .WithImage("redis:7-alpine")
-        .WithCommand("--maxmemory-policy", "noeviction")
-        .Build();
-
     private readonly MsSqlContainer _sql = new MsSqlBuilder()
         .WithImage("mcr.microsoft.com/mssql/server:2022-latest")
         .Build();
@@ -131,9 +111,7 @@ public sealed class ServiceFixture : IAsyncLifetime
         // SQL Server's, which is the slower of the two by some margin.
         await Task.WhenAll(
             _sql.StartAsync(TestContext.Current.CancellationToken),
-            _rabbit.StartAsync(TestContext.Current.CancellationToken),
-            _redisCache.StartAsync(TestContext.Current.CancellationToken),
-            _redisCoordination.StartAsync(TestContext.Current.CancellationToken));
+            _rabbit.StartAsync(TestContext.Current.CancellationToken));
 
         // The container hands out a connection to master; Shipping owns a
         // database of its own (§7.1), and MigrateAsync is what creates it.
@@ -146,15 +124,7 @@ public sealed class ServiceFixture : IAsyncLifetime
 
         FirstRunExitCode = await RunMigratorAsync(ConnectionString);
 
-        // Both Redis connections, because AddRedisConnections reads both
-        // eagerly (§8.1) — and real ones rather than the factory's unreachable
-        // default, because §8.5's behaviour claims a key on every protected
-        // command this suite dispatches.
-        Factory = new ShippingWorkerFactory(
-            ConnectionString,
-            _rabbit.GetConnectionString(),
-            _redisCache.GetConnectionString(),
-            _redisCoordination.GetConnectionString());
+        Factory = new ShippingWorkerFactory(ConnectionString, _rabbit.GetConnectionString());
 
         // A table for the transaction tests, created here and not in a
         // migration. It is a fixture of the test rather than a table of the
@@ -638,28 +608,11 @@ public sealed class ServiceFixture : IAsyncLifetime
             }
             finally
             {
-                try
-                {
-                    // Null-safe on Ordering's fixture's argument: the image
-                    // build and the builder chain both run before the field is
-                    // assigned, and either can throw.
-                    if (_rabbit is not null)
-                        await _rabbit.DisposeAsync();
-                }
-                finally
-                {
-                    // Nested on the same argument as every layer above it: a
-                    // failed broker disposal must not leave two Redis
-                    // containers running for the rest of the CI job.
-                    try
-                    {
-                        await _redisCache.DisposeAsync();
-                    }
-                    finally
-                    {
-                        await _redisCoordination.DisposeAsync();
-                    }
-                }
+                // Null-safe on Ordering's fixture's argument: the image build
+                // and the builder chain both run before the field is assigned,
+                // and either can throw.
+                if (_rabbit is not null)
+                    await _rabbit.DisposeAsync();
             }
         }
     }
