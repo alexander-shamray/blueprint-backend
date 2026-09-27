@@ -11,7 +11,7 @@ import re
 from datetime import datetime, timedelta
 from pathlib import Path, PurePosixPath
 
-from scaffold import TEMPLATE, Names, ScaffoldError, read, require_once, restore
+from scaffold import API_HOST, TEMPLATE, Names, ScaffoldError, read, require_once, restore
 from scaffold.patch import (
     IDEMPOTENCY_MIGRATION_PATCHES,
     INBOX_MIGRATION_PATCHES,
@@ -19,6 +19,7 @@ from scaffold.patch import (
     OUTBOX_MIGRATION_PATCHES,
     PATCHES,
     RETENTION_INDEX_MIGRATION_PATCHES,
+    WORKER_PATCHES,
 )
 
 # The five service projects §4.1 gives a service, its three test projects, and
@@ -490,12 +491,13 @@ def classify(repo_root: Path, labels: tuple[str, ...]) -> list[str]:
             + ". Remove them from COPIED — with their PATCHES entries — or restore them."
         )
 
-    # And no patch may be inert. A PATCHES key for a file that is not copied
-    # never reaches `require_once`, so the anchor it guards would be unbound
-    # while every other anchor still looked enforced.
-    if (inert := set(PATCHES) - set(copied)):
+    # And no patch may be inert. A PATCHES or WORKER_PATCHES key for a file
+    # that is not copied never reaches `require_once`, so the anchor it guards
+    # would be unbound while every other anchor still looked enforced. The
+    # parentheses matter: `-` binds tighter than `|`.
+    if (inert := (set(PATCHES) | set(WORKER_PATCHES)) - set(copied)):
         raise ScaffoldError(
-            "PATCHES names files the scaffold does not copy: "
+            "PATCHES or WORKER_PATCHES names files the scaffold does not copy: "
             + ", ".join(sorted(inert))
             + ". A patch that never runs is an anchor that guards nothing."
         )
@@ -697,6 +699,8 @@ def render_projects(repo_root: Path, names: Names, migration_id: str,
             csharp_newline = newline
 
         patches = PATCHES.get(relative, ())
+        if names.host != API_HOST:
+            patches = (*patches, *WORKER_PATCHES.get(relative, ()))
         if PurePosixPath(relative).name.endswith("_InitialCreate.cs"):
             patches = (*patches, *INITIAL_CREATE_PATCHES)
         elif PurePosixPath(relative).name.endswith("_AddOutbox.cs"):
@@ -809,7 +813,7 @@ def update_solution(repo_root: Path, names: Names) -> str:
         *(
             f'    <Project Path="src/Services/{names.pascal}/{names.pascal}.{layer}'
             f'/{names.pascal}.{layer}.csproj" />\n'
-            for layer in ("Api", "Application", "Domain", "Infrastructure", "Migrator")
+            for layer in sorted(("Application", "Domain", "Infrastructure", "Migrator", names.host))
         ),
         "  </Folder>\n",
     ]
@@ -831,7 +835,7 @@ def update_solution(repo_root: Path, names: Names) -> str:
 
     tests = [
         f'    <Project Path="tests/{names.pascal}.{suite}/{names.pascal}.{suite}.csproj" />\n'
-        for suite in ("Api.Tests", "Application.Tests", "Domain.Tests", "TestSupport")
+        for suite in sorted(("Application.Tests", "Domain.Tests", "TestSupport", f"{names.host}.Tests"))
     ]
     entry = re.compile(r'^    <Project Path="tests/([^"]+)" />')
     positions = [(i, m.group(1)) for i, line in enumerate(lines) if (m := entry.match(line))]
@@ -910,7 +914,7 @@ def compose_included(repo_root: Path) -> list[tuple[int, str]]:
     return entries
 
 
-def update_compose(repo_root: Path, names: Names, port: int) -> str:
+def update_compose(repo_root: Path, names: Names, port: int | None) -> str:
     """The index gains one line, and nothing else in it moves.
 
     **The port collision check reads every included file, not this one.** The
@@ -929,12 +933,17 @@ def update_compose(repo_root: Path, names: Names, port: int) -> str:
     """
     entries = compose_included(repo_root)
 
-    for _, entry in entries:
-        included, _ = read(repo_root, f"{COMPOSE_DIR}/{entry}")
-        if re.search(rf'"(?:{HOST_IP}:)?{port}:\d+"', included):
-            raise ScaffoldError(
-                f"port {port} is already published in {COMPOSE_DIR}/{entry}"
-            )
+    # A worker publishes nothing, so there is no allocation to collide with —
+    # and running the loop with `port is None` would build the pattern `:None:`
+    # and find every port free, which is the fail-open shape this check exists
+    # to be the opposite of.
+    if port is not None:
+        for _, entry in entries:
+            included, _ = read(repo_root, f"{COMPOSE_DIR}/{entry}")
+            if re.search(rf'"(?:{HOST_IP}:)?{port}:\d+"', included):
+                raise ScaffoldError(
+                    f"port {port} is already published in {COMPOSE_DIR}/{entry}"
+                )
 
     text, newline = read(repo_root, COMPOSE_INDEX)
     lines = text.split("\n")
@@ -959,7 +968,7 @@ def update_compose(repo_root: Path, names: Names, port: int) -> str:
     return restore("\n".join([*lines[:after], f"  - {unit}", *lines[after:]]), newline)
 
 
-def render_service_compose(repo_root: Path, names: Names, port: int) -> str:
+def render_service_compose(repo_root: Path, names: Names, port: int | None) -> str:
     """Catalog's own unit file, renamed, re-ported and re-headed.
 
     An extraction rather than a template: the pair's comments argue the
@@ -1005,7 +1014,15 @@ def render_service_compose(repo_root: Path, names: Names, port: int) -> str:
             f"the template's api block publishes no {LOOPBACK}-bound port to substitute "
             f"(§14.1 binds every mapping to loopback)"
         )
-    block = block.replace(published.group(0), f'ports: [ "{LOOPBACK}:{port}:8080" ]')
+
+    if port is None:
+        # §3.2 gives a worker no API and nothing dials it, so the mapping is
+        # removed rather than set to something. The whole line, indent and
+        # newline included: a bare substitution would leave a blank line the
+        # YAML keeps and a reader reads as an omission.
+        block = re.sub(rf'^ *{re.escape(published.group(0))}\n', "", block, flags=re.MULTILINE)
+    else:
+        block = block.replace(published.group(0), f'ports: [ "{LOOPBACK}:{port}:8080" ]')
 
     # §7.1's runtime key is `ConnectionStrings__<Service>` and the rename is
     # what writes it, so a service named after one of §14.1's infrastructure
@@ -1217,7 +1234,7 @@ def update_observability_meters(repo_root: Path, names: Names) -> str:
     return restore(text.replace("\n" + SHARED_METERS, padded + "\n" + SHARED_METERS), newline)
 
 
-def update_ports_readme(repo_root: Path, names: Names, port: int) -> str:
+def update_ports_readme(repo_root: Path, names: Names, port: int | None) -> str:
     """One row in the application-services table — the keyboard inventory (§14.1)."""
     text, newline = read(repo_root, "deploy/compose/README.md")
     header = "| Service | Host port(s) | Notes |\n"
@@ -1225,14 +1242,21 @@ def update_ports_readme(repo_root: Path, names: Names, port: int) -> str:
 
     start = text.index(header)
     end = text.index("\n\n", start) + 1
+    # A worker's row is written rather than omitted for the reason §15.3
+    # writes `service.enabled: false` down: an absence is not a decision
+    # anybody can read.
     row = (
-        f"| {names.pascal} API | http://localhost:{port} | "
-        # The token note is not decoration: ADR-030 fallback policy covers
-        # MapOpenApi, so a rendered service document answers 401 to an
-        # anonymous request exactly as Catalog and Ordering do. A row
-        # that omitted it would re-introduce the claim the README was
-        # corrected to remove, once per scaffolded service.
-        f"`/health/live`, `/health/ready`, "
-        f"`/openapi/v1.json` (needs a token — see below) |\n"
+        f"| {names.pascal} worker | — (no published port) | "
+        f"§3.2 gives it no API; §13.5's `/health/live` and `/health/ready` are its "
+        f"only listener and answer inside the container |\n"
+        if port is None
+        else f"| {names.pascal} API | http://localhost:{port} | "
+             # The token note is not decoration: ADR-030 fallback policy covers
+             # MapOpenApi, so a rendered service document answers 401 to an
+             # anonymous request exactly as Catalog and Ordering do. A row
+             # that omitted it would re-introduce the claim the README was
+             # corrected to remove, once per scaffolded service.
+             f"`/health/live`, `/health/ready`, "
+             f"`/openapi/v1.json` (needs a token — see below) |\n"
     )
     return restore(text[:end] + row + text[end:], newline)

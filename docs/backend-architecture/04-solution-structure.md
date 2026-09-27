@@ -1341,9 +1341,10 @@ the twentieth dependency.
 
 ## 4.5 Adding a service
 
-**Four** of §4.1's six services share the shape below — Catalog, Ordering,
-Inventory and Payments — and writing the fourth by hand is how it ends up
-subtly different from the first three. One command renders it instead:
+**Five** of §4.1's six services share the shape below — Catalog, Ordering,
+Inventory and Payments as API hosts, Shipping as a worker — and writing the
+fifth by hand is how it ends up subtly different from the first four. One
+command renders it instead:
 
 ```bash
 python tools/new-service/new_service.py Yankee --port 5199
@@ -1355,6 +1356,18 @@ those taken, at which point the command a reader copies from the chapter
 raised `ScaffoldError` — and the paragraph below, which says the run refuses a
 port another service already publishes, made the chapter contradict its own
 sample. A probe cannot quietly become a service later.
+
+`--worker` renders §4.1's other host shape. The nine projects are the same
+nine with `<Name>.Worker` where `<Name>.Api` would be, and what leaves is
+the OpenAPI document, the route group and the published port — a worker
+consumes from the broker and nothing dials it (§3.2). **Kestrel stays bound
+all the same**, because §15.3 gives Shipping and Notifications the same
+chart minus the Service and the Ingress and their one listener is §13.5's
+health endpoint, which the kubelet reaches on the container port without a
+Service in front of it. The mode is the rename's rather than a patch
+table's: the host's name reaches a project, a namespace, a Compose service
+key, a Dockerfile entry point and a test fixture's type, and a patch can
+edit a file's text but not its path.
 
 It writes §4.1's five service projects, its three test projects and its
 `TestSupport` library — nine in all, and §4.1 is explicit that the last is not
@@ -1404,7 +1417,10 @@ the ports table in `deploy/compose/README.md`
 ([§14.1](14-local-development.md)), the broker definitions that grant the new
 service an account of its own — without which it renders a service that starts
 and cannot authenticate, since the broker has held no shared principal since
-#44 — and, under `.github/secret-scan/allowed/`, the file covering each
+#44 — the `AddMeter` line in `Common.Web` for the service's outbox meter,
+without which §13.6's gauges are published and collected by nothing, since
+§13.2's export names meters one by one — and, under
+`.github/secret-scan/allowed/`, the file covering each
 entry's tree, one accepted-finding line per
 **distinct** finding the render produces — two lines carrying one value under
 one rule in one file are one finding and take one entry. **The last is the
@@ -1497,10 +1513,11 @@ be removed, and its own doc comment says so.
 > second, untested rollback mechanism for something version control already
 > does is not worth having.
 
-`--port` is required and never derived. A port is an allocation recorded in
-§14.1 and in `deploy/compose/README.md`; a script that guessed one would
-quietly disagree with a printed chapter. The run refuses a port another service
-already publishes.
+`--port` is required for an API render, refused for a worker, and never
+derived. A port is an allocation recorded in §14.1 and in
+`deploy/compose/README.md`; a script that guessed one would quietly disagree
+with a printed chapter. The run refuses a port another service already
+publishes.
 
 **It refuses a *name* on the same terms, and the collision is one the rename
 creates rather than one the operator could see.** §7.1's runtime key is
@@ -1513,12 +1530,10 @@ predicate over the rendered `environment:` mappings and never a list of the
 names it happens to catch today, because a list goes stale the moment §14.1
 gives that block another `ConnectionStrings__*` key.
 
-Three things are outside it, and none is silently missing: the gateway route
-([§10.2](10-api-gateway.md)) — the route belongs to the gateway's
-configuration, not the service's tree — the Helm chart
-([§15.3](15-cicd-deployment.md)), and a Worker host in place of an API, which
-Shipping and Notifications take (§4.1) and which joins the script with the
-first one built.
+**Two** things are outside it, and neither is silently missing: the gateway
+route ([§10.2](10-api-gateway.md)) — the route belongs to the gateway's
+configuration, not the service's tree — and the Helm chart
+([§15.3](15-cicd-deployment.md)).
 
 **The chart's exclusion cost nothing until PR-23 and now costs something**, and
 the sentence above is the same either way, which is why it is worth saying
@@ -1540,11 +1555,13 @@ gains a template — the deployables today carry six of those includes or seven,
 depending on whether the service owns a database — so the thing worth writing
 down is the rule, not the arithmetic.
 
-**The scaffold refuses `Shipping` and `Notifications` by name until it can.**
-Documenting the gap left the script willing to render either as an API service,
-which would have contradicted §4.1 quietly — Notifications has no Domain
-project at all. A note is not a guard, and the two names come off that list
-with the PR that adds the mode.
+**The scaffold refuses `Notifications` by name, and `Shipping` only without
+`--worker`.** Documenting the gap left the script willing to render either
+as an API service, which would have contradicted §4.1 quietly. A note is not
+a guard, so the guard stayed and narrowed: an API render under either name
+is still refused, and `Notifications` is refused in both modes because §4.1
+gives it no Domain project at all — which is a second mode, and it comes off
+with the PR that builds it.
 
 ---
 

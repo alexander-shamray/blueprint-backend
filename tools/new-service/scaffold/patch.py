@@ -896,6 +896,154 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
     ),
 }
 
+# The edits a WORKER render makes on top of PATCHES, and the order is
+# load-bearing: these are appended to a file's PATCHES tuple, so each anchor is
+# matched against the text the earlier ones already produced. Two of the three
+# Program.cs entries anchor on a PATCHES replacement for exactly that reason.
+#
+# §3.2 gives a worker no API, and §15.3 keeps Kestrel bound for §13.5's health
+# endpoint — so what leaves is the OpenAPI document, the endpoint guidance and
+# the smoke tests that ask for the document, and what stays is the host, the
+# middleware §11.2 requires of every service, and the probes.
+WORKER_PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
+    "src/Services/Catalog/Catalog.Api/Catalog.Api.csproj": (
+        (
+            "    The Web SDK, because this is the one project in the service that is a\n"
+            "    host. Application and Infrastructure per §4.2's fourth row — Program.cs is\n"
+            "    the only composition root, and the endpoints gate in Catalog.Api.Tests\n"
+            "    holds every other file to Application and Domain contracts.\n",
+            "    The Web SDK, and a worker keeps it: §3.2 gives this service no API, and\n"
+            "    §15.3 still requires §13.5's health endpoint, which is a listener — so\n"
+            "    Kestrel stays bound and nothing routes to it. Application and\n"
+            "    Infrastructure per §4.2's fourth row — Program.cs is the only composition\n"
+            "    root, and the gate in Catalog.Api.Tests holds every other file to\n"
+            "    Application and Domain contracts.\n",
+        ),
+        (
+            "  <ItemGroup>\n"
+            "    <!-- Appendix C's OpenAPI deliverable: document only, no UI. -->\n"
+            "    <PackageReference Include=\"Microsoft.AspNetCore.OpenApi\" />\n"
+            "  </ItemGroup>\n"
+            "\n",
+            "",
+        ),
+    ),
+    "src/Services/Catalog/Catalog.Api/Program.cs": (
+        (
+            "\n"
+            "// Appendix C's OpenAPI deliverable: document only, no UI.\n"
+            "builder.Services.AddOpenApi();\n",
+            "",
+        ),
+        (
+            "// This service registers no permission policy, because it names no endpoint\n"
+            "// that needs one. The first slice brings both together (§11.4):\n"
+            "//\n"
+            "//     builder.Services\n"
+            "//         .AddAuthorizationBuilder()\n"
+            "//         .AddPolicy(<Service>Permissions.Write, p => p.RequirePermission(…));\n"
+            "//\n"
+            "// A policy registered before an endpoint names it is an unused registration;\n"
+            "// an endpoint naming one nobody registered throws on the first request that\n"
+            "// reaches it, never at startup. Add AuthorizationPolicyTests with the slice —\n"
+            "// it enumerates the endpoints and requires every policy they name to resolve.\n",
+            "// This host registers no permission policy and never will: §3.2 gives it no\n"
+            "// API, so there is no endpoint to name one. The middleware below stays,\n"
+            "// because §11.2 makes every host validate its own token whether or not it\n"
+            "// serves anything, and because ADR-030's fallback policy is what makes the\n"
+            "// probes' AllowAnonymous a decision rather than an omission.\n",
+        ),
+        (
+            "app.MapCommonHealthEndpoints();   // §13.5 — anonymous; kubelet carries no token\n"
+            "app.MapOpenApi();\n"
+            "\n"
+            "// This service maps no endpoint of its own yet. The first one goes here,\n"
+            "// behind RequireAuthorization at the group (§11.4) — fail closed, and let\n"
+            "// any deliberately public endpoint say AllowAnonymous out loud.\n",
+            "// §13.5's probes are the only thing this host serves, and that is the whole\n"
+            "// difference from an API service: everything it does, it does from a hosted\n"
+            "// service. The kubelet reaches this port without a Service in front of it\n"
+            "// (§15.3), which is why there is a listener and no route.\n"
+            "app.MapCommonHealthEndpoints();   // §13.5 — anonymous; kubelet carries no token\n",
+        ),
+    ),
+    # The smoke suite asks the host for the document with a caller and expects
+    # 200. A host that maps no document answers 404 to that caller — the
+    # suite's own unknown-path test says so — so the two tests that name the
+    # document leave, and the suite's two doc blocks stop describing it. The
+    # authenticated factory stays: the unknown-path test is its other user.
+    "tests/Catalog.Api.Tests/HostSmokeTests.cs": (
+        (
+            "/// The host builds under <c>ValidateOnBuild</c> and answers what an empty\n"
+            "/// service can already be asked: the probes (§13.5) and the OpenAPI document\n"
+            "/// (Appendix C). One factory for the class, since nothing mutates the host.\n",
+            "/// The host builds under <c>ValidateOnBuild</c> and answers what an empty\n"
+            "/// worker can already be asked: the probes (§13.5), which §15.3 makes its one\n"
+            "/// listener. One factory for the class, since nothing mutates the host.\n",
+        ),
+        (
+            "    /// <summary>\n"
+            "    /// The same unreachable host with the <c>TestAuthHandler</c> scheme the\n"
+            "    /// base factory installs, so a caller can authenticate.\n"
+            "    /// </summary>\n"
+            "    /// <remarks>\n"
+            "    /// It exists because <c>AddCommonWebDefaults</c> sets a fallback\n"
+            "    /// authorization policy (§11.4): the OpenAPI document is behind it, so the\n"
+            "    /// production-scheme factory can prove only that a caller is challenged.\n"
+            "    /// Whether the document still generates needs a caller who gets through,\n"
+            "    /// and this is the cheapest one — no container, since generating the\n"
+            "    /// document reaches no dependency.\n"
+            "    /// </remarks>\n",
+            "    /// <summary>\n"
+            "    /// The same unreachable host with the <c>TestAuthHandler</c> scheme the\n"
+            "    /// base factory installs, so a caller can authenticate: the fallback\n"
+            "    /// policy (§11.4) lets the production-scheme factory prove only that a\n"
+            "    /// caller is challenged, and whether an unknown path is still a 404\n"
+            "    /// needs one who gets through — the cheapest, since it reaches nothing.\n"
+            "    /// </summary>\n",
+        ),
+        (
+            "\n"
+            "    [Fact]\n"
+            "    public async Task OpenApi_document_is_not_anonymous()\n"
+            "    {\n"
+            "        // MapOpenApi carries no authorization metadata of its own, so it is\n"
+            "        // reached by the fallback policy AddCommonWebDefaults sets (§11.4).\n"
+            "        // That is the decision rather than an accident: the document\n"
+            "        // enumerates every route and every schema this service has, and §11.2\n"
+            "        // assumes the network inside the cluster is hostile.\n"
+            "        using HttpClient client = factory.CreateClient();\n"
+            "\n"
+            "        HttpResponseMessage response =\n"
+            "            await client.GetAsync(\"/openapi/v1.json\", TestContext.Current.CancellationToken);\n"
+            "\n"
+            "        response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);\n"
+            "    }\n"
+            "\n"
+            "    [Fact]\n"
+            "    public async Task OpenApi_document_is_served_to_a_caller()\n"
+            "    {\n"
+            "        // The half a 401 cannot show. Without this the test above would go on\n"
+            "        // passing if the document stopped generating altogether — every path\n"
+            "        // answers 401 to an anonymous caller, the ones that do not exist\n"
+            "        // included.\n"
+            "        using AuthenticatedUnreachableFactory authenticated = new();\n"
+            "        using HttpClient client = authenticated.CreateClient();\n"
+            "\n"
+            "        using HttpRequestMessage request = new(HttpMethod.Get, \"/openapi/v1.json\");\n"
+            "        request.Headers.Add(TestAuthHandler.UserHeader, Guid.CreateVersion7().ToString());\n"
+            "\n"
+            "        HttpResponseMessage response =\n"
+            "            await client.SendAsync(request, TestContext.Current.CancellationToken);\n"
+            "\n"
+            "        response.StatusCode.ShouldBe(HttpStatusCode.OK);\n"
+            "        response.Content.Headers.ContentType!.MediaType.ShouldBe(\"application/json\");\n"
+            "    }\n",
+            "",
+        ),
+    ),
+}
+
 # Keyed on the file's shape rather than on its path, because the path carries
 # Catalog's migration timestamp — and a PATCHES key that stopped matching would
 # fail *open*, silently leaving the file unpatched. `require_once` still binds
