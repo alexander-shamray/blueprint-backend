@@ -2066,8 +2066,8 @@ A fifth absence sits underneath all of this and is invisible to the checks
 above, because they are about metric *names*. **The four loaded outbox alerts
 group `by (service_name)`, and a service that hosts §9.4's dispatcher and
 registers no `OutboxMetrics` is absent from every one of them.** Which
-services those are is `OUTBOX_METRICS_EXEMPT` in
-`deploy/observability/check.py`, and a stalled lane in one of them is
+services those are, if any, is `OUTBOX_METRICS_EXEMPT` in
+`deploy/observability/check.py`, and a stalled lane in one of them would be
 precisely the silent case this section exists to prevent — arriving through a
 service missing from a series rather than through a metric nobody declared.
 
@@ -2079,8 +2079,7 @@ copies them and writes the service's `AddMeter` line — so a rendered service
 publishes them from its first boot, and the exemption list holds a service
 only when somebody writes its reason down.
 
-What this pull request does instead is refuse to let the absence be quiet.
-`check.py` requires every service hosting the dispatcher to publish the gauges
+What the gate adds is that an absence cannot be quiet. `check.py` requires every service hosting the dispatcher to publish the gauges
 **or** to be on a declared exemption with a reason, and it fails in both
 directions — a new unexempted service, and a stale exemption for one that no
 longer needs it. **A gap somebody argued is not the same as a dashboard nobody

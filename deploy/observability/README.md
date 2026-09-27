@@ -68,12 +68,11 @@ by nobody here — only paired.
 **Check 8 exists because checks 4 and 5 are about metric *names* and cannot see
 a service missing from a series.** The four loaded outbox alerts group `by
 (service_name)`; a service that runs a dispatcher and publishes no gauges is
-"covered" by four alerts that can never fire for it. Catalog is that service
-today — §13.3 places `OutboxMetrics` in `Ordering.Infrastructure`, so closing
-it means lifting the type into common code and teaching §4.5's scaffold to emit
-it, which is a larger decision. It is on the exemption list with that reason,
-and the check fails in **both** directions: a new unexempted service, and a
-stale exemption for one that no longer needs it.
+"covered" by four alerts that can never fire for it. The exemption list is
+empty, because §4.5's template registers the gauges and the scaffold renders
+them into every new service (§13.6); a service lands on it only with a reason
+written down, and the check fails in **both** directions: a new unexempted
+service, and a stale exemption for one that no longer needs it.
 
 **Checks 4, 5 and 6 read C# with comments removed first, and the direction of
 that failure is why.** The instrument scan is a regex over source, so a
