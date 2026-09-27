@@ -9,8 +9,8 @@ namespace Shipping.Domain.Tests;
 /// Spec section 5: the key `(ShipmentId, CarrierEventId)` orders nothing, so
 /// the state machine is monotonic by rank rather than by arrival. A carrier
 /// page can hold `delivered` above `collected` — the simulator's
-/// `SIM-REVERSED` is exactly that — and the timeline the platform publishes
-/// must not depend on which order the feed arrived in.
+/// `SIM-REVERSED` is exactly that — and the events the platform publishes,
+/// and their order, must not depend on which order the feed arrived in.
 /// </summary>
 public class ShuffledTrackingFeedTests
 {
