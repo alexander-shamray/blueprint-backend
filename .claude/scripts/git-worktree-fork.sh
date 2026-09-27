@@ -1,16 +1,10 @@
 #!/usr/bin/env bash
-# Fork the worktree /branch step 5 creates under .claude/worktrees/, and
-# nothing else.
+# Fork /branch step 5's worktree under .claude/worktrees/, and nothing else.
 #
 # The whole command is fixed: `git worktree add --no-track -b <branch> <path>
 # origin/main`. A prefix grant on `git worktree add` also buys `-B`, which
 # resets an existing branch to the start point past the `git branch --force`
 # and `git branch -M` denies, and a prefix rule cannot exclude a flag.
-#
-# `--no-track` is fixed because the start point is a remote-tracking ref, so
-# without it the new branch's upstream becomes origin/main and /pr never sets
-# the right one. origin/main is fixed because step 5 forks only from the
-# fetched base.
 set -euo pipefail
 [ "$#" -eq 2 ] || { echo "usage: git-worktree-fork.sh <path> <branch>" >&2; exit 2; }
 path="$1"
@@ -49,4 +43,8 @@ esac
   { echo "branch already exists: $branch" >&2; exit 3; }
 git show-ref --verify --quiet refs/remotes/origin/main ||
   { echo "no refs/remotes/origin/main — fetch first (step 1)" >&2; exit 4; }
+# `--no-track` is fixed because the start point is a remote-tracking ref, so
+# without it the new branch's upstream becomes origin/main and /pr never sets
+# the right one. origin/main is fixed because step 5 forks only from the
+# fetched base.
 git worktree add --no-track -b "$branch" "$path" origin/main
