@@ -42,6 +42,13 @@
     <Project Path="src/Services/Payments/Payments.Infrastructure/Payments.Infrastructure.csproj" />
     <Project Path="src/Services/Payments/Payments.Migrator/Payments.Migrator.csproj" />
   </Folder>
+  <Folder Name="/src/Services/Shipping/">
+    <Project Path="src/Services/Shipping/Shipping.Application/Shipping.Application.csproj" />
+    <Project Path="src/Services/Shipping/Shipping.Domain/Shipping.Domain.csproj" />
+    <Project Path="src/Services/Shipping/Shipping.Infrastructure/Shipping.Infrastructure.csproj" />
+    <Project Path="src/Services/Shipping/Shipping.Migrator/Shipping.Migrator.csproj" />
+    <Project Path="src/Services/Shipping/Shipping.Worker/Shipping.Worker.csproj" />
+  </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Catalog.Api.Tests/Catalog.Api.Tests.csproj" />
     <Project Path="tests/Catalog.Application.Tests/Catalog.Application.Tests.csproj" />
@@ -65,6 +72,10 @@
     <Project Path="tests/Payments.Domain.Tests/Payments.Domain.Tests.csproj" />
     <Project Path="tests/Payments.TestSupport/Payments.TestSupport.csproj" />
     <Project Path="tests/Platform.IntegrationTests/Platform.IntegrationTests.csproj" />
+    <Project Path="tests/Shipping.Application.Tests/Shipping.Application.Tests.csproj" />
+    <Project Path="tests/Shipping.Domain.Tests/Shipping.Domain.Tests.csproj" />
+    <Project Path="tests/Shipping.TestSupport/Shipping.TestSupport.csproj" />
+    <Project Path="tests/Shipping.Worker.Tests/Shipping.Worker.Tests.csproj" />
     <Project Path="tests/Web.Bff.TestSupport/Web.Bff.TestSupport.csproj" />
     <Project Path="tests/Web.Bff.Tests/Web.Bff.Tests.csproj" />
   </Folder>

@@ -1,0 +1,163 @@
+using Shipping.TestSupport.Outbox;
+using Common.Application;
+using Common.Infrastructure.Messaging;
+using Common.Infrastructure.Outbox;
+using Common.Infrastructure.Redis;
+using Common.Web;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+
+namespace Shipping.TestSupport;
+
+/// <summary>
+/// The real Shipping host over caller-supplied dependencies (§12.4). One type
+/// for both suites here — the host smoke points it at names that cannot
+/// resolve, the container suite at running containers — so what differs
+/// between them is the infrastructure and not the wiring.
+/// </summary>
+public class ShippingWorkerFactory(
+    string connectionString,
+    string rabbitConnectionString,
+    string? redisCacheConnectionString = null,
+    string? redisCoordinationConnectionString = null)
+    : WebApplicationFactory<Program>
+{
+    /// <summary>
+    /// The authority every host over this <c>Program</c> must name (§11.3).
+    /// Deliberately fake and deliberately unreachable — <c>.invalid</c> is
+    /// reserved and never resolves, so a test that accidentally dials the
+    /// authority fails loudly rather than reaching a real identity provider.
+    /// Required rather than optional for the same reason both connection
+    /// strings are: <c>AddJwtAuthentication</c> reads this key eagerly and
+    /// throws naming it, so a host that cannot name its identity provider
+    /// does not start.
+    /// </summary>
+    public const string UnreachableAuthority = "https://identity.invalid/realms/test";
+
+    /// <summary>
+    /// The Redis address a host takes when the caller supplies none:
+    /// <c>AddRedisConnections</c> reads both keys eagerly and throws naming
+    /// the missing one, so every host over this <c>Program</c> needs both.
+    /// </summary>
+    /// <remarks>Unreachable is safe here and would not be for SQL:
+    /// <c>AddRedisConnections</c> forces <c>AbortOnConnectFail = false</c>
+    /// (§8.1), and every host resolves both multiplexers at startup, so it is
+    /// the flag that keeps the throw from taking the host down. A suite that
+    /// exercises §8.5's store passes a running container instead.</remarks>
+    public const string UnreachableRedis = "redis.invalid:6379";
+
+    /// <summary>
+    /// The RUNTIME connection of §7.1, and only that one. The host has no
+    /// business reading <c>ShippingMigrator</c>, and a fixture that supplied
+    /// both would hide it if it started. The bus key is required because
+    /// <c>AddMassTransitMessaging</c> throws without it — every host over
+    /// this Program needs one, reachable or not.
+    /// </summary>
+    protected override void ConfigureWebHost(IWebHostBuilder builder) =>
+        builder
+            .UseSetting("ConnectionStrings:Shipping", connectionString)
+            .UseSetting("ConnectionStrings:RabbitMq", rabbitConnectionString)
+            .UseSetting(
+                $"ConnectionStrings:{RedisConnections.Cache}",
+                redisCacheConnectionString ?? UnreachableRedis)
+            .UseSetting(
+                $"ConnectionStrings:{RedisConnections.Coordination}",
+                redisCoordinationConnectionString ?? UnreachableRedis)
+            .UseSetting(AuthenticationExtensions.AuthorityKey, UnreachableAuthority)
+            .ConfigureServices(services =>
+            {
+                ConfigureAuthentication(services);
+
+                // Remove only the outbox dispatcher, not every hosted
+                // service: MassTransit registers its bus as one, and
+                // RemoveAll<IHostedService>() would stop the broker and
+                // silently disable every consumption test. Left running it
+                // polls every 500 ms and drains rows underneath assertions
+                // about them — tests that want it call
+                // fixture.ProcessOutboxBatchAsync() explicitly.
+                // AddShippingInfrastructure uses AddHostedService<T> rather
+                // than a factory overload for exactly this match: a factory
+                // registration leaves ImplementationType null.
+                ServiceDescriptor hosted = services.Single(d =>
+                    d.ServiceType == typeof(IHostedService) &&
+                    d.ImplementationType == typeof(OutboxDispatcher));
+                services.Remove(hosted);
+
+                // Still resolvable directly, so tests can drive one pass.
+                services.AddSingleton<OutboxDispatcher>();
+
+                // §9.5's purge, removed and re-registered for the same two
+                // reasons and by the same match. Its timer is an hour rather
+                // than 500 ms, so it would not race an assertion in a run this
+                // short — but a test asserting that an abandoned row survives
+                // retention cannot be sure of that from a service it does not
+                // drive, and "the pass never happened" and "the pass spared the
+                // row" are the same green.
+                ServiceDescriptor purge = services.Single(d =>
+                    d.ServiceType == typeof(IHostedService) &&
+                    d.ImplementationType == typeof(RetentionPurgeService));
+                services.Remove(purge);
+
+                services.AddSingleton<RetentionPurgeService>();
+
+                // §9.4. Adding, not replacing: the production assemblies stay,
+                // so a test cannot stage a type the real host would refuse.
+                // Without this, NameOf throws on the first builder call and
+                // every outbox test fails before its assertion.
+                //
+                // Mutating the registered instance rather than re-registering
+                // one, because MessageTypeSource is deliberately mutable for
+                // exactly this and the map is built from it at first resolve.
+                services
+                    .Single(d => d.ServiceType == typeof(MessageTypeSource))
+                    .ImplementationInstance
+                    .ShouldBeSource()
+                    .Add(typeof(AlwaysThrows).Assembly);
+
+                // The projection handlers for two of those three events. Each
+                // layer scans itself (§6.2), and this assembly is a layer the
+                // production registration has no reason to know about.
+                services.AddPluggableFrom(typeof(AlwaysThrows).Assembly);
+            });
+
+    /// <summary>
+    /// Replaces the JWT scheme with <see cref="TestAuthHandler"/> (§12.4)
+    /// rather than configuring it: the endpoints under test sit behind
+    /// <c>RequireAuthorization</c> (§11.4), so the alternative is a 401 on
+    /// every call or a fixture fetching OIDC metadata over the network.
+    /// </summary>
+    /// <remarks>Virtual, because a host keeping the production scheme is the
+    /// only thing that can prove <see cref="TestAuthHandler"/>'s headers mean
+    /// nothing to a real deployment. Forbid is left unset and falls back to
+    /// the challenge scheme, so the 403 is a bare status code.</remarks>
+    protected virtual void ConfigureAuthentication(IServiceCollection services)
+    {
+        services.Configure<AuthenticationOptions>(o =>
+        {
+            o.DefaultAuthenticateScheme = TestAuthHandler.SchemeName;
+            o.DefaultChallengeScheme = TestAuthHandler.SchemeName;
+        });
+
+        services
+            .AddAuthentication()
+            .AddScheme<AuthenticationSchemeOptions, TestAuthHandler>(TestAuthHandler.SchemeName, _ => { });
+    }
+}
+
+file static class ServiceDescriptorExtensions
+{
+    /// <summary>
+    /// Reads the registered instance back as itself, with a message that says
+    /// what changed if it ever stops being registered that way — a cast
+    /// failing here would otherwise read as a null reference from a line that
+    /// mentions no null.
+    /// </summary>
+    public static MessageTypeSource ShouldBeSource(this object? instance) =>
+        instance as MessageTypeSource ??
+            throw new InvalidOperationException(
+                "MessageTypeSource is no longer registered as a singleton instance, so the test " +
+                "assembly's events cannot be added to it before the map is built (§9.4).");
+}

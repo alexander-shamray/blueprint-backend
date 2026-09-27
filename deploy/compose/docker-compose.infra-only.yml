@@ -39,3 +39,7 @@ services:
     profiles: [ "excluded" ]
   payments-api:
     profiles: [ "excluded" ]
+  shipping-migrator:
+    profiles: [ "excluded" ]
+  shipping-worker:
+    profiles: [ "excluded" ]
