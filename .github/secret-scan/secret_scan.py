@@ -71,6 +71,14 @@ SKIP_ROOT_DIRS = frozenset({
     "artifacts",
 })
 
+# Paths below the root declined whole. `/branch` forks each PR's worktree into
+# `.claude/worktrees/`, a separate checkout of another branch: scanning it from
+# here would judge that branch against this one's allow-list, and every
+# allow-listed fixture would reappear under a path no entry names.
+SKIP_ROOT_PATHS = frozenset({
+    Path(".claude", "worktrees"),
+})
+
 # A file is binary when its first block holds a NUL. That is a heuristic and it
 # is the right one here: every pattern below is ASCII, so a format that would
 # hide a secret from a byte scan (a zip, a DLL, a PNG) is a format this gate
@@ -574,7 +582,10 @@ def walk(root: Path) -> list[Path]:
     root_path = Path(root)
     for directory, subdirectories, filenames in os.walk(root):
         skip = SKIP_DIRS | SKIP_ROOT_DIRS if Path(directory) == root_path else SKIP_DIRS
-        subdirectories[:] = sorted(name for name in subdirectories if name not in skip)
+        relative = Path(directory).relative_to(root_path)
+        subdirectories[:] = sorted(
+            name for name in subdirectories
+            if name not in skip and relative / name not in SKIP_ROOT_PATHS)
         for name in sorted(filenames):
             found.append(Path(directory) / name)
     return found

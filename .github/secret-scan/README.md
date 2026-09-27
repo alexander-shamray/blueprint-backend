@@ -14,8 +14,9 @@ licence gate's terms, which is what lets it run first. Not all of it: it
 never descends into a directory `SKIP_DIRS` in `secret_scan.py` names, at any
 depth — build output, editor and vendored trees, and `.git`, because this
 gate is about the tree and not the history — nor, at the repository root
-only, into a directory `SKIP_ROOT_DIRS` names; and it skips a file it reads
-as binary. A credential written only there is outside its claim.
+only, into a directory `SKIP_ROOT_DIRS` names or a path `SKIP_ROOT_PATHS`
+names, the second being `/branch`'s worktrees, which are other branches'
+checkouts; and it skips a file it reads as binary. A credential written only there is outside its claim.
 Against the rest it
 applies named rules, each with a positive case and a near miss in the suite,
 and it reads the accepted findings from [`allowed/`](allowed/), whose README
