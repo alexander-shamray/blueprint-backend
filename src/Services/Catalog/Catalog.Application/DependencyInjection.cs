@@ -40,8 +40,7 @@ public static class DependencyInjection
         services.AddSingleton<RequestMetrics>();
 
         // Ordered, explicit, not scanned — registration order is pipeline
-        // order (§6.3), and all four seats are filled since the PR that built
-        // §8.5's behaviour.
+        // order (§6.3), and all four seats are filled.
         //
         // Idempotency sits INSIDE validation and OUTSIDE the transaction, and
         // both neighbours are load-bearing. Inside validation, because a

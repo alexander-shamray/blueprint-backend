@@ -151,23 +151,14 @@ public class ArchitectureTests
     public void Nothing_in_this_service_references_the_migrator()
     {
         // §4.2's rows say what each project MAY reference, and no row names
-        // the Migrator: Domain takes Common.Domain, Application takes its own
-        // Domain and the Common pair, Infrastructure takes Domain and
-        // Application, and the Api takes Application and Infrastructure. The
-        // migrator is a leaf — a job host that resolves a DbContext and calls
-        // Database.Migrate() (§7.4) — so it references and is not referenced.
-        //
-        // The cross-service gate above cannot say this, and is not meant to:
-        // it subtracts everything under this service's own prefix, which is
-        // exactly what makes it silent about an Api -> Migrator edge. That
-        // edge is inside one service and still forbidden, so it takes a rule
-        // of its own rather than a cleverer prefix. The two gates ask "whose
-        // is it" and "which layer is it", and one predicate answering both
-        // would answer neither legibly.
-        //
-        // The migrator is skipped as a subject rather than special-cased in
-        // the predicate: an assembly does not reference itself, so including
-        // it would pass vacuously and read as coverage.
+        // the Migrator: Domain takes Common.Domain, Application takes its
+        // own Domain and the Common pair, Infrastructure takes Domain and
+        // Application, and the Api takes Application and Infrastructure —
+        // the migrator is a leaf (§7.4) that references and is not
+        // referenced. The cross-service gate above stays silent about an
+        // Api -> Migrator edge, since it subtracts everything under this
+        // service's own prefix; skipped as a subject here rather than
+        // special-cased, since an assembly does not reference itself.
         string self = typeof(Program).Assembly.GetName().Name!.Split('.')[0];
         string migrator = $"{self}.Migrator";
 
@@ -189,19 +180,14 @@ public class ArchitectureTests
     {
         // §4.2's narrowest row, and the only one whose "must never" is a
         // sentence rather than a list: "anything it does not need to apply a
-        // migration". A deny-list cannot enforce that — it can only ban what
-        // somebody thought of — so this row gets the allow-list treatment the
-        // Domain row gets, and for the same reason.
-        //
-        // What the absences are worth saying out loud: no Application, so the
-        // migrator cannot dispatch; no MassTransit and no Redis, so §4.2's
-        // "a migration job that can open a message broker is a migration job
-        // with reasons to fail that have nothing to do with migrations" is a
+        // migration". A deny-list cannot enforce that, so this row gets the
+        // allow-list treatment the Domain row gets. No Application, so the
+        // migrator cannot dispatch; no MassTransit and no Redis, so a
+        // migration job with reasons to fail unrelated to migrations is a
         // build failure rather than a paragraph; no ASP.NET, because it is a
-        // job host (§7.4) and not a second composition root; and no Common.*
-        // at all, which is the strongest statement of the row — the migrator
-        // resolves a DbContext and calls Database.Migrate(), and none of the
-        // building blocks is on that path.
+        // job host (§7.4), not a second composition root; and no Common.*
+        // at all, since it resolves a DbContext and calls
+        // Database.Migrate() with none of the building blocks on that path.
         string[] allowed =
         [
             "Catalog.Infrastructure",

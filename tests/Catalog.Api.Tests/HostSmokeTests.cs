@@ -39,16 +39,11 @@ public class HostSmokeTests(HostSmokeTests.UnreachableInfrastructureFactory fact
 
     /// <summary>
     /// The same unreachable host with the <c>TestAuthHandler</c> scheme the
-    /// base factory installs, so a caller can authenticate.
+    /// base factory installs, so a caller can authenticate: the
+    /// production-scheme factory can only prove a caller is challenged, and
+    /// whether the document still generates needs one who gets through —
+    /// this is the cheapest, since generating it reaches no dependency.
     /// </summary>
-    /// <remarks>
-    /// It exists because <c>AddCommonWebDefaults</c> sets a fallback
-    /// authorization policy (§11.4): the OpenAPI document is behind it, so the
-    /// production-scheme factory can prove only that a caller is challenged.
-    /// Whether the document still generates needs a caller who gets through,
-    /// and this is the cheapest one — no container, since generating the
-    /// document reaches no dependency.
-    /// </remarks>
     public sealed class AuthenticatedUnreachableFactory()
         : CatalogApiFactory(UnreachableSql, UnreachableRabbit);
 

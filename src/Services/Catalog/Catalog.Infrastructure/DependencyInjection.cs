@@ -160,16 +160,13 @@ public static class DependencyInjection
         // The poll loop of §9.4. AddHostedService<T>, not a factory over a
         // registered singleton: the generic overload records an
         // ImplementationType, which is what §12.4's fixture matches on to
-        // remove only this hosted service — MassTransit's bus is one too, and
-        // RemoveAll<IHostedService>() would stop the broker. A factory
-        // registration leaves ImplementationType null and that removal
-        // matches nothing.
+        // remove only this hosted service without also removing MassTransit's
+        // bus, itself a hosted service RemoveAll<IHostedService>() would stop.
         //
-        // Registered after the bus and before the purge, and the order is a
-        // shutdown decision: hosted services stop in reverse, so the
-        // dispatcher stops while the transport it publishes through is still
-        // up and drains into it. Registered before the bus, every deploy would
-        // stop the broker underneath a dispatcher still claiming rows.
+        // Registered after the bus and before the purge: hosted services stop
+        // in reverse, so the dispatcher drains into a transport still up, and
+        // registering it before the bus would let a deploy stop the broker
+        // underneath a dispatcher still claiming rows.
         services.AddHostedService<OutboxDispatcher>();
 
         // §9.4's, §9.5's and §8.5's retention, in the one hosted service §9.5

@@ -22,30 +22,15 @@ public class ArchitectureTests
     [Fact]
     public void Application_references_only_what_the_dependency_table_allows()
     {
-        // §4.2's second row read as the allow-list it is. What this catches
-        // that a deny-list cannot: EF Core, ASP.NET, Redis and MassTransit are
-        // all excluded by not appearing, and so is another service's assembly,
-        // which §4.3 forbids and which no deny-list here would have thought to
-        // mention.
-        //
-        // Each entry earns its line, and the two that surprise a reader are
-        // deliberate. Dapper is the read side of §6.5 — query handlers use it
-        // directly and never EF, which Catalog.Application.csproj states at
-        // the reference itself — and System.Data.Common comes with it, because
-        // §6.5's IDbConnectionFactory hands back a DbConnection.
-        //
-        // Common.Domain is the third: §4.2's row names this service's Domain
-        // and not the building block underneath it, because a service's Domain
-        // cannot exist without Common.Domain (§4.2's first row) and arrives
-        // carrying it. The table is about project references, where the line
-        // is genuinely absent; this gate is about assembly references, where
-        // the mapper's IDomainEvent puts it here whether or not a csproj says
-        // so.
-        //
-        // The list is a subset check and not an equality: an entry for
-        // something no longer referenced is a pre-authorised hole rather than
-        // a failure, which is the same trade the Domain gate takes. What both
-        // buy is that ADDING one is a decision somebody has to write down.
+        // §4.2's second row read as the allow-list it is: EF Core, ASP.NET,
+        // Redis and MassTransit are excluded by not appearing, and so is
+        // another service's assembly (§4.3). Dapper is the read side of
+        // §6.5 — query handlers use it directly and never EF — and
+        // System.Data.Common comes with it, since IDbConnectionFactory
+        // hands back a DbConnection. Common.Domain is listed because this
+        // gate reads assembly references, where the mapper's IDomainEvent
+        // puts it here whether or not a csproj says so. A subset check, not
+        // an equality, so adding an entry is a decision written down.
         string[] allowed =
         [
             "Catalog.Domain",

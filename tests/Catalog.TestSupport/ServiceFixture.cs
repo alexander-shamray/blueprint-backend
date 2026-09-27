@@ -503,14 +503,11 @@ public sealed class ServiceFixture : IAsyncLifetime
     /// <summary>
     /// One pass under a policy of the test's own, for the batching edges the
     /// registered one cannot show: a batch of 5,000 would need 10,001 rows
-    /// before a second batch ran at all.
+    /// before a second batch ran at all. Constructed rather than resolved,
+    /// because the policy is a constructor argument and the service composes
+    /// a statement per table from the same registered tables either way, so
+    /// what varies is the batching and nothing else.
     /// </summary>
-    /// <remarks>
-    /// Constructed rather than resolved, because the policy is a constructor
-    /// argument and the service composes a statement per table from the same
-    /// registered tables either way — so what varies is the batching and
-    /// nothing else.
-    /// </remarks>
     public Task<(int Outbox, int Inbox, int Idempotency)> PurgeWithAsync(RetentionPolicy policy) =>
         PurgeWithAsync(policy, Factory.Services.GetRequiredService<IIdempotencyStore>());
 
@@ -569,17 +566,13 @@ public sealed class ServiceFixture : IAsyncLifetime
     }
 
     /// <summary>
-    /// The system clock plus a fixed offset, which is what a test skewing one
-    /// end of a two-clock comparison needs.
+    /// The system clock plus a fixed offset, which is what a test skewing
+    /// one end of a two-clock comparison needs. Hand-written rather than
+    /// <c>FakeTimeProvider</c>: that package is pinned centrally, but this
+    /// project does not reference it, and a frozen clock is not wanted
+    /// here either — the pass compares against rows staged in real time,
+    /// so the substitute has to keep running and simply run ahead.
     /// </summary>
-    /// <remarks>
-    /// Hand-written rather than <c>FakeTimeProvider</c>: that package is pinned
-    /// centrally, but this project does not reference it and adding a
-    /// dependency to move a clock forward by two days would buy a licence
-    /// register entry for four lines of code. A frozen clock is not wanted here
-    /// either — the pass is compared against rows staged in real time, so the
-    /// substitute has to keep running and simply run ahead.
-    /// </remarks>
     private sealed class SkewedClock(TimeSpan skew) : TimeProvider
     {
         public override DateTimeOffset GetUtcNow() => TimeProvider.System.GetUtcNow() + skew;

@@ -70,17 +70,14 @@ public sealed class InboxFilterTests(ServiceFixture fixture) : IAsyncLifetime
     }
 
     /// <summary>
-    /// Clears the change tracker on the service's context, which is the first
-    /// thing <c>EfUnitOfWork.ExecuteAsync</c> does on every attempt (§7.5) and
-    /// so the first thing every message-borne command does under §6.3's
-    /// <c>TransactionBehavior</c>.
+    /// Clears the change tracker on the service's context, which is the
+    /// first thing <c>EfUnitOfWork.ExecuteAsync</c> does on every attempt
+    /// (§7.5). The line rather than the type, because <c>EfUnitOfWork</c> is
+    /// internal to <c>Catalog.Infrastructure</c> and registering it here
+    /// would need an <c>InternalsVisibleTo</c> for one call; what has to be
+    /// reproduced is the interaction, on the same context the filter writes
+    /// through.
     /// </summary>
-    /// <remarks>
-    /// The line rather than the type, because <c>EfUnitOfWork</c> is internal
-    /// to <c>Catalog.Infrastructure</c> and registering it here would need an
-    /// <c>InternalsVisibleTo</c> for one call. What has to be reproduced is
-    /// the interaction, on the same context the filter writes through.
-    /// </remarks>
     public sealed class ClearsTheChangeTrackerConsumer(DbContext db) : IConsumer<ProbeMessage>
     {
         public Task Consume(ConsumeContext<ProbeMessage> context)

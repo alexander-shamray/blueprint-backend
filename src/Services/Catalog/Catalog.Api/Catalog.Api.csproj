@@ -21,18 +21,15 @@
 
   <ItemGroup>
     <!-- Catalog owns the contract because Catalog serves it. Web.Bff compiles
-         this same file as a Client, by link — see the comment on that
-         reference, and pricing.proto's own header.
-
-         BOTH halves, not Server alone, and the client half is here for its own
-         suite. Catalog.Api.Tests drives PricingService over the real pipeline,
-         which needs a client; generating one in the test project instead would
-         put a second copy of every message type in a compilation that already
-         references this assembly, and CS0436 is an error under ADR-019. So the
-         choice is a generated client nothing in production calls, or a
-         transport adapter no test can reach — and an untested adapter is the
-         worse of the two. Web.Bff.TestSupport's own file argues the mirror
-         image of this for the server half. -->
+         this same file as a Client, by link — see that reference and
+         pricing.proto's own header. Both halves, not Server alone: this
+         project's own suite drives PricingService over the real pipeline and
+         needs a client, and generating one in the test project would put a
+         second copy of every message type in a compilation that already
+         references this assembly, where CS0436 is an error under ADR-019. The
+         choice is a generated client nothing in production calls or a
+         transport adapter no test can reach, and an untested adapter is the
+         worse of the two. -->
     <Protobuf Include="Protos\pricing.proto" GrpcServices="Both" />
   </ItemGroup>
 

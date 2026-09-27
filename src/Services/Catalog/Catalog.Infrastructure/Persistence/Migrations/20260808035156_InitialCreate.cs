@@ -3,26 +3,14 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace Catalog.Infrastructure.Persistence.Migrations;
 
 /// <summary>
-/// Catalog's first migration. EF generated an empty <c>Up</c>, because the
-/// model had no entity types until PR-10 — the schema below is hand-written,
-/// which §7.4 permits and describes: DDL that EF cannot generate "rides along,
-/// in the same transaction, applied by the same job, versioned by the same
-/// migration history".
+/// This service's first migration. EF generates an empty <c>Up</c> for a
+/// model with no entity types, so the schema below is hand-written, which
+/// §7.4 permits: DDL EF cannot generate rides along in the same transaction,
+/// applied by the same job, versioned by the same history. Hand-authored
+/// like the rest of the repository, unlike the machine-owned
+/// <c>.Designer.cs</c> and model snapshot beside it, which are left exactly
+/// as the tool wrote them — an edited snapshot feeds a wrong migration.
 /// </summary>
-/// <remarks>
-/// The schema is the one piece of Catalog's shape that exists before its first
-/// table, and creating it here means PR-10's first <c>CREATE TABLE</c> lands in
-/// a schema that is already there rather than being ordered against it.
-/// <para>
-/// This file is hand-authored and reads like the rest of the repository —
-/// file-scoped namespace and all, which IDE0161 makes a build error under
-/// ADR-019. The <c>.Designer.cs</c> beside it and the model snapshot are
-/// machine-owned, carry an <c>auto-generated</c> header that exempts them from
-/// the analysers, and are left exactly as the tool wrote them: the snapshot is
-/// the input to PR-10's <c>migrations add</c>, and an edited one produces a
-/// wrong migration two PRs later.
-/// </para>
-/// </remarks>
 public partial class InitialCreate : Migration
 {
     protected override void Up(MigrationBuilder migrationBuilder) =>
