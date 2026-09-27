@@ -76,7 +76,8 @@ public sealed class CarrierFaultTests : IDisposable
             Carrier().BookAsync(Booking("SIM-SLOW"), TestContext.Current.CancellationToken));
 
         (DateTimeOffset.UtcNow - started).ShouldBeLessThan(CarrierHop.TotalRequestTimeout + TimeSpan.FromSeconds(2));
-        counted.Value.ShouldBeGreaterThanOrEqualTo(1, "an attempt timeout is the carrier's, counted by OnTimeout");
+        counted.Value.ShouldBe(CarrierHop.MaxRetryAttempts + 1,
+            "each attempt timeout is the carrier's, counted once, by OnTimeout");
     }
 
     [Fact]

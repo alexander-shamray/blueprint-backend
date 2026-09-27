@@ -161,7 +161,9 @@ internal sealed class HttpCarrierGateway(HttpClient http, CarrierMetrics metrics
         {
             return await response.Content.ReadFromJsonAsync<T>(ct);
         }
-        catch (JsonException e)
+        // A charset nobody can decode surfaces as InvalidOperationException
+        // before the parser runs, and it is the same carrier being wrong.
+        catch (Exception e) when (e is JsonException or InvalidOperationException)
         {
             throw Unavailable($"The carrier answered {act} with no JSON body.", e);
         }

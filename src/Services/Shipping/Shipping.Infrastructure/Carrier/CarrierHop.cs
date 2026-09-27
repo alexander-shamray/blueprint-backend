@@ -46,12 +46,14 @@ public static class CarrierHop
     /// </summary>
     public const int CircuitBreakerMinimumThroughput = 4;
 
+    /// <summary>
+    /// At least twice <see cref="AttemptTimeout"/>, which the library
+    /// validates at startup: a window a single attempt can outlast cannot
+    /// sample it.
+    /// </summary>
     public static readonly TimeSpan CircuitBreakerSamplingDuration = TimeSpan.FromSeconds(60);
 
-    /// <summary>
-    /// Shorter than the window above, so the breaker does not forget its
-    /// failures while open and reopen on the first error after it closes.
-    /// </summary>
+    /// <summary>How long an open circuit refuses before one probe is let through.</summary>
     public static readonly TimeSpan CircuitBreakerBreakDuration = TimeSpan.FromSeconds(30);
 
     /// <summary>
