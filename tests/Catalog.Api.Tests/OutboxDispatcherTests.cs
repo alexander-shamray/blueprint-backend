@@ -162,13 +162,12 @@ public sealed class OutboxDispatcherTests(ServiceFixture fixture) : IAsyncLifeti
         // fixture runs. Everything else here exercises the Local lane, so
         // without this a failure in payload deserialisation, type resolution
         // or the publish call would ship while the staging tests and the
-        // direct-bus smoke both stayed green.
-        //
-        // What is asserted is that the row completed — not what reached the
-        // transport. §12.4 refuses the latter deliberately: observing the
-        // headers needs an ITestHarness, and this fixture runs the real host
-        // against the real broker on purpose. Publishing without throwing and
-        // marking the row processed is the part this suite owns.
+        // direct-bus smoke both stayed green. What is asserted is that the row
+        // completed, not what reached the transport: §12.4 refuses the latter
+        // deliberately, since observing the headers needs a test harness and
+        // this fixture runs the real host against the real broker. Publishing
+        // without throwing and marking the row processed is the part this
+        // suite owns.
         await fixture.StageOutboxAsync(OutboxRows.Broker(fixture, Guid.CreateVersion7()));
 
         (await fixture.ProcessOutboxBatchAsync()).ShouldBe(1);

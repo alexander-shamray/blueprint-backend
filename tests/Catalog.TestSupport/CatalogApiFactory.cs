@@ -30,17 +30,11 @@ public class CatalogApiFactory(
     /// Deliberately fake and deliberately unreachable — <c>.invalid</c> is
     /// reserved and never resolves, so a test that accidentally dials the
     /// authority fails loudly rather than reaching a real identity provider.
-    /// </summary>
-    /// <remarks>
     /// Required rather than optional for the same reason both connection
     /// strings are: <c>AddJwtAuthentication</c> reads this key eagerly and
-    /// throws naming it, so a service host that cannot name its identity
-    /// provider does not start. §12.4 attributed that failure to
-    /// <c>ValidateOnStart</c> and <c>OptionsValidationException</c>, and the
-    /// chapter was amended — §15.4 keeps <c>ServiceIdentityOptions</c> as the
-    /// solution's only options type, so there is nothing here for
-    /// <c>ValidateDataAnnotations</c> to check.
-    /// </remarks>
+    /// throws naming it, so a host that cannot name its identity provider
+    /// does not start.
+    /// </summary>
     public const string UnreachableAuthority = "https://identity.invalid/realms/test";
 
     /// <summary>
@@ -77,19 +71,16 @@ public class CatalogApiFactory(
             {
                 ConfigureAuthentication(services);
 
-                // Remove ONLY the outbox dispatcher, not every hosted service:
-                // MassTransit registers its bus as one, so a
-                // RemoveAll<IHostedService>() would stop the broker from
-                // starting and silently disable every consumption test.
-                //
-                // The dispatcher polls every 500 ms; left running it drains
-                // outbox rows underneath assertions about them. Tests that
-                // want it call fixture.ProcessOutboxBatchAsync() explicitly.
-                //
-                // This match is why AddCatalogInfrastructure uses
-                // AddHostedService<T> rather than a factory overload — a
-                // factory registration leaves ImplementationType null and
-                // this line would quietly match nothing.
+                // Remove only the outbox dispatcher, not every hosted
+                // service: MassTransit registers its bus as one, and
+                // RemoveAll<IHostedService>() would stop the broker and
+                // silently disable every consumption test. Left running it
+                // polls every 500 ms and drains rows underneath assertions
+                // about them — tests that want it call
+                // fixture.ProcessOutboxBatchAsync() explicitly.
+                // AddCatalogInfrastructure uses AddHostedService<T> rather
+                // than a factory overload for exactly this match: a factory
+                // registration leaves ImplementationType null.
                 ServiceDescriptor hosted = services.Single(d =>
                     d.ServiceType == typeof(IHostedService) &&
                     d.ImplementationType == typeof(OutboxDispatcher));

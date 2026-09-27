@@ -36,15 +36,20 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
             "        // returns nothing and the dispatcher exits early (§7.5).\n",
         ),
         (
+            "        // §4.2's sample line. IValidator<T> is not in PluggableInterfaces.All\n"
+            "        // because it is FluentValidation's contract, not one of ours — its own\n"
+            "        // scanner knows its own conventions (Include* filters, internal\n"
+            "        // validators) and a second scan would drift from it.\n"
             "        services.AddValidatorsFromAssemblyContaining<PublishProductValidator>();\n",
-            "        // §4.2's line spelt over the assembly rather than over a type in\n"
-            "        // it, because there is no validator yet to name — and this class,\n"
-            "        // the obvious anchor, is static and cannot be a type argument.\n"
-            "        // Move to AddValidatorsFromAssemblyContaining<TFirstValidator>()\n"
-            "        // with the first one, and add the registration test that guards\n"
-            "        // it: ValidationBehavior takes IEnumerable<IValidator<T>>, so a\n"
-            "        // lost scan is a pipeline that validates nothing and says so to\n"
-            "        // nobody.\n"
+            "        // §4.2's sample line, spelt over the assembly rather than over a type\n"
+            "        // in it: IValidator<T> is not in PluggableInterfaces.All because it is\n"
+            "        // FluentValidation's own contract — its own scanner knows its own\n"
+            "        // conventions, and a second scan would drift from it — and there is no\n"
+            "        // validator yet to anchor on; this static class cannot be a type\n"
+            "        // argument. Move to AddValidatorsFromAssemblyContaining<TFirstValidator>()\n"
+            "        // with the first one, and add the registration test that guards it:\n"
+            "        // ValidationBehavior takes IEnumerable<IValidator<T>> and asks nobody\n"
+            "        // when that sequence comes back empty.\n"
             "        services.AddValidatorsFromAssembly(typeof(DependencyInjection).Assembly);\n",
         ),
     ),
@@ -70,20 +75,16 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
             "        // nothing to assert against.\n"
             "        [typeof(ProductPublishedDomainEvent)] = e => ToContract((ProductPublishedDomainEvent)e)\n"
             "    };\n",
-            "    // The allow-list, empty until this service publishes something. Every\n"
-            "    // domain event it raises is local-only while this dictionary is empty,\n"
-            "    // which is the correct state for a service with no contracts — and not\n"
-            "    // a gap, because §9.3 makes translation opt-in precisely so that a new\n"
-            "    // event is internal until somebody decides otherwise.\n"
-            "    //\n"
-            "    // An entry is one line and one private ToContract method beside it:\n"
+            "    // The allow-list, empty until this service publishes something: every\n"
+            "    // domain event it raises is local-only while this dictionary is, which is\n"
+            "    // the correct state for a service with no contracts rather than a gap,\n"
+            "    // because §9.3 makes translation opt-in. An entry is one line —\n"
             "    //\n"
             "    //     [typeof(OrderPlacedDomainEvent)] = e => ToContract((OrderPlacedDomainEvent)e)\n"
             "    //\n"
-            "    // with the contract living in Common.Contracts under a versioned\n"
-            "    // namespace (§9.2), carrying primitives only, and taking its MessageId\n"
-            "    // and CorrelationId from the mapper rather than from Stage (§9.1).\n"
-            "    private static readonly Dictionary<Type, Func<IDomainEvent, object>> Registry = [];\n",
+            "    // with one private ToContract method beside it, the contract living in\n"
+            "    // Common.Contracts under a versioned namespace (§9.2), carrying primitives\n"
+            "    // only, and taking its MessageId and CorrelationId from the mapper (§9.1).\n"            "    private static readonly Dictionary<Type, Func<IDomainEvent, object>> Registry = [];\n",
         ),
         (
             "\n"
@@ -177,12 +178,8 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
         (
             "        services.AddSingleton(\n"
             "            new MessageTypeSource(typeof(ProductPublished).Assembly, typeof(Product).Assembly));\n",
-            "        // IIntegrationEvent and AssemblyMarker stand in for the two anchors\n"
-            "        // §9.4 names — this service's contracts and its domain — because it\n"
-            "        // has neither yet. Both point at the right assemblies regardless, so\n"
-            "        // the first contract and the first aggregate change what these lines\n"
-            "        // say and not what they resolve to.\n"
-            "        services.AddSingleton(\n"
+            "        // §9.4's two anchors are this service's contracts and its domain;\n"
+            "        // IIntegrationEvent and AssemblyMarker stand in until it has either.\n"            "        services.AddSingleton(\n"
             "            new MessageTypeSource(typeof(IIntegrationEvent).Assembly, typeof(AssemblyMarker).Assembly));\n",
         ),
         (
@@ -218,19 +215,15 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
             "\n"
             "  <ItemGroup>\n"
             "    <!-- Catalog owns the contract because Catalog serves it. Web.Bff compiles\n"
-            "         this same file as a Client, by link — see the comment on that\n"
-            "         reference, and pricing.proto's own header.\n"
-            "\n"
-            "         BOTH halves, not Server alone, and the client half is here for its own\n"
-            "         suite. Catalog.Api.Tests drives PricingService over the real pipeline,\n"
-            "         which needs a client; generating one in the test project instead would\n"
-            "         put a second copy of every message type in a compilation that already\n"
-            "         references this assembly, and CS0436 is an error under ADR-019. So the\n"
-            "         choice is a generated client nothing in production calls, or a\n"
-            "         transport adapter no test can reach — and an untested adapter is the\n"
-            "         worse of the two. Web.Bff.TestSupport's own file argues the mirror\n"
-            "         image of this for the server half. -->\n"
-            "    <Protobuf Include=\"Protos\\pricing.proto\" GrpcServices=\"Both\" />\n"
+            "         this same file as a Client, by link — see that reference and\n"
+            "         pricing.proto's own header. Both halves, not Server alone: this\n"
+            "         project's own suite drives PricingService over the real pipeline and\n"
+            "         needs a client, and generating one in the test project would put a\n"
+            "         second copy of every message type in a compilation that already\n"
+            "         references this assembly, where CS0436 is an error under ADR-019. The\n"
+            "         choice is a generated client nothing in production calls or a\n"
+            "         transport adapter no test can reach, and an untested adapter is the\n"
+            "         worse of the two. -->\n"            "    <Protobuf Include=\"Protos\\pricing.proto\" GrpcServices=\"Both\" />\n"
             "  </ItemGroup>\n",
             "",
         ),
@@ -269,16 +262,12 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
             "// Catalog's permission policies (§11.4). Deliberately not inside either helper\n"
             "// above: Application knows nothing about HTTP, and Common.Web must not know\n"
             "// Catalog's names. One policy, because one endpoint names one — the write\n"
-            "// path. A policy nothing references would be an unused registration, and\n"
-            "// §11.4's callout is about the opposite mistake: a name an endpoint uses and\n"
-            "// nobody registered throws InvalidOperationException on the first request that\n"
-            "// reaches it, never at startup. AuthorizationPolicyTests asserts both\n"
-            "// directions, from the endpoint metadata rather than from this list.\n"
-            "//\n"
-            "// RequirePermission rather than RequireClaim(\"permission\", …): the claim type\n"
-            "// is Common.Web's (§11.4), so a policy here and the resource-level check\n"
-            "// behind ICurrentUser cannot drift apart.\n"
-            "builder.Services\n"
+            "// path. §11.4's callout is about the opposite mistake: a name an endpoint uses\n"
+            "// and nobody registered throws on the first request that reaches it, never at\n"
+            "// startup, and the endpoint metadata is what a gate reads to assert both\n"
+            "// directions. RequirePermission rather than RequireClaim(\"permission\", …): the\n"
+            "// claim type is Common.Web's (§11.4), so a policy here and the resource-level\n"
+            "// check behind ICurrentUser cannot drift apart.\n"            "builder.Services\n"
             "    .AddAuthorizationBuilder()\n"
             "    .AddPolicy(CatalogPermissions.Write, p => p.RequirePermission(CatalogPermissions.Write));\n"
             "\n",
@@ -289,10 +278,9 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
             "//         .AddAuthorizationBuilder()\n"
             "//         .AddPolicy(<Service>Permissions.Write, p => p.RequirePermission(…));\n"
             "//\n"
-            "// A policy registered before an endpoint names it is an unused registration;\n"
-            "// an endpoint naming one nobody registered throws on the first request that\n"
-            "// reaches it, never at startup. Add AuthorizationPolicyTests with the slice —\n"
-            "// it enumerates the endpoints and requires every policy they name to resolve.\n"
+            "// A policy registered before an endpoint names it is unused; an endpoint\n"
+            "// naming one nobody registered throws on the first request that reaches it,\n"
+            "// never at startup, and the slice brings the gate that enumerates both.\n"
             "\n",
         ),
         (
@@ -308,21 +296,29 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
     "tests/Catalog.Domain.Tests/ArchitectureTests.cs": (
         ("using Catalog.Domain.Products;\n", ""),
         (
-            "        // System.Collections earned its line with the first domain event: a\n"
-            "        // record's generated equality goes through EqualityComparer<T>, which\n"
-            "        // lives there. No collection type appears in any domain signature.\n"
-            "        // System.Linq earned its line with Money's currency guard —\n"
-            "        // enumerable logic over owned values is domain work, not an I/O\n"
-            "        // dependency, and §5.4's Order sample already leans on it.\n"
+            "        // The dependency table's rule is an allow-list — \"Common.Domain and\n"
+            "        // nothing else\" — so the gate is one too, and an exact one: a\n"
+            "        // blacklist only bans what someone thought to name, and a System.*\n"
+            "        // prefix still passes System.Data.SqlClient or a serialiser. Each BCL\n"
+            "        // assembly earns its line: System.Collections with the first domain\n"
+            "        // event, whose generated record equality goes through\n"
+            "        // EqualityComparer<T>, and System.Linq with the first value object\n"
+            "        // doing enumerable logic over owned values — domain work, not an I/O\n"
+            "        // dependency. System.Text.Json is the extension the table forbids by\n"
+            "        // name.\n"
             "        string[] allowed = [\"Common.Domain\", \"System.Runtime\", \"System.Collections\", \"System.Linq\"];\n"
             "\n"
             "        IEnumerable<string> referenced = typeof(Product).Assembly\n",
-            "        // Two entries, because two is what an empty domain references. The\n"
-            "        // two that usually follow, and what earns each: System.Collections\n"
-            "        // with the first domain event, whose generated record equality goes\n"
-            "        // through EqualityComparer<T>, and System.Linq with the first value\n"
-            "        // object doing enumerable logic over owned values — domain work,\n"
-            "        // not an I/O dependency.\n"
+            "        // The dependency table's rule is an allow-list — \"Common.Domain and\n"
+            "        // nothing else\" — so the gate is one too, and an exact one: a\n"
+            "        // blacklist only bans what someone thought to name, and a System.*\n"
+            "        // prefix still passes System.Data.SqlClient or a serialiser. Two\n"
+            "        // entries, because two is what an empty domain references; the two\n"
+            "        // that usually follow are System.Collections, with the first domain\n"
+            "        // event whose generated record equality goes through\n"
+            "        // EqualityComparer<T>, and System.Linq, with the first value object\n"
+            "        // doing enumerable logic over owned values — domain work, not an I/O\n"
+            "        // dependency.\n"
             "        string[] allowed = [\"Common.Domain\", \"System.Runtime\"];\n"
             "\n"
             "        IEnumerable<string> referenced = typeof(AssemblyMarker).Assembly\n",
@@ -571,14 +567,12 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
             "        // fixture runs. Everything else here exercises the Local lane, so\n"
             "        // without this a failure in payload deserialisation, type resolution\n"
             "        // or the publish call would ship while the staging tests and the\n"
-            "        // direct-bus smoke both stayed green.\n"
-            "        //\n"
-            "        // What is asserted is that the row completed — not what reached the\n"
-            "        // transport. §12.4 refuses the latter deliberately: observing the\n"
-            "        // headers needs an ITestHarness, and this fixture runs the real host\n"
-            "        // against the real broker on purpose. Publishing without throwing and\n"
-            "        // marking the row processed is the part this suite owns.\n"
-            "        await fixture.StageOutboxAsync(OutboxRows.Broker(fixture, Guid.CreateVersion7()));\n"
+            "        // direct-bus smoke both stayed green. What is asserted is that the row\n"
+            "        // completed, not what reached the transport: §12.4 refuses the latter\n"
+            "        // deliberately, since observing the headers needs a test harness and\n"
+            "        // this fixture runs the real host against the real broker. Publishing\n"
+            "        // without throwing and marking the row processed is the part this\n"
+            "        // suite owns.\n"            "        await fixture.StageOutboxAsync(OutboxRows.Broker(fixture, Guid.CreateVersion7()));\n"
             "\n"
             "        (await fixture.ProcessOutboxBatchAsync()).ShouldBe(1);\n"
             "\n"
@@ -943,10 +937,9 @@ WORKER_PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
             "//         .AddAuthorizationBuilder()\n"
             "//         .AddPolicy(<Service>Permissions.Write, p => p.RequirePermission(…));\n"
             "//\n"
-            "// A policy registered before an endpoint names it is an unused registration;\n"
-            "// an endpoint naming one nobody registered throws on the first request that\n"
-            "// reaches it, never at startup. Add AuthorizationPolicyTests with the slice —\n"
-            "// it enumerates the endpoints and requires every policy they name to resolve.\n",
+            "// A policy registered before an endpoint names it is unused; an endpoint\n"
+            "// naming one nobody registered throws on the first request that reaches it,\n"
+            "// never at startup, and the slice brings the gate that enumerates both.\n",
             "// This host registers no permission policy and never will: §3.2 gives it no\n"
             "// API, so there is no endpoint to name one. The middleware below stays,\n"
             "// because §11.2 makes every host validate its own token whether or not it\n"
@@ -984,16 +977,11 @@ WORKER_PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
         (
             "    /// <summary>\n"
             "    /// The same unreachable host with the <c>TestAuthHandler</c> scheme the\n"
-            "    /// base factory installs, so a caller can authenticate.\n"
-            "    /// </summary>\n"
-            "    /// <remarks>\n"
-            "    /// It exists because <c>AddCommonWebDefaults</c> sets a fallback\n"
-            "    /// authorization policy (§11.4): the OpenAPI document is behind it, so the\n"
-            "    /// production-scheme factory can prove only that a caller is challenged.\n"
-            "    /// Whether the document still generates needs a caller who gets through,\n"
-            "    /// and this is the cheapest one — no container, since generating the\n"
-            "    /// document reaches no dependency.\n"
-            "    /// </remarks>\n",
+            "    /// base factory installs, so a caller can authenticate: the\n"
+            "    /// production-scheme factory can only prove a caller is challenged, and\n"
+            "    /// whether the document still generates needs one who gets through —\n"
+            "    /// this is the cheapest, since generating it reaches no dependency.\n"
+            "    /// </summary>\n",
             "    /// <summary>\n"
             "    /// The same unreachable host with the <c>TestAuthHandler</c> scheme the\n"
             "    /// base factory installs, so a caller can authenticate: the fallback\n"
@@ -1044,59 +1032,17 @@ WORKER_PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
     ),
 }
 
-# Keyed on the file's shape rather than on its path, because the path carries
-# Catalog's migration timestamp — and a PATCHES key that stopped matching would
-# fail *open*, silently leaving the file unpatched. `require_once` still binds
-# each anchor.
-INITIAL_CREATE_PATCHES: tuple[tuple[str, str], ...] = (
-    (
-        "/// Catalog's first migration. EF generated an empty <c>Up</c>, because the\n"
-        "/// model had no entity types until PR-10 — the schema below is hand-written,\n",
-        "/// This service's first migration. EF generates an empty <c>Up</c> for a model\n"
-        "/// with no entity types, so the schema below is hand-written,\n",
-    ),
-    (
-        "/// The schema is the one piece of Catalog's shape that exists before its first\n"
-        "/// table, and creating it here means PR-10's first <c>CREATE TABLE</c> lands in\n"
-        "/// a schema that is already there rather than being ordered against it.\n",
-        "/// The schema is the one piece of Catalog's shape that exists before its first\n"
-        "/// table, and creating it here means the first <c>CREATE TABLE</c> lands in a\n"
-        "/// schema that is already there rather than being ordered against it.\n",
-    ),
-    (
-        # The second PR-10 in this file, and it went out unpatched: a
-        # scaffolded service inherited "the input to PR-10's migrations add",
-        # which is Catalog's history and false everywhere else. Found by a
-        # reviewer reading Ordering's rendered copy, one patch below the one
-        # that had already neutralised the *first* PR-10 three lines up —
-        # a reminder that a file with a patch table is not therefore a file
-        # whose references have all been checked.
-        "/// the analysers, and are left exactly as the tool wrote them: the snapshot is\n"
-        "/// the input to PR-10's <c>migrations add</c>, and an edited one produces a\n"
-        "/// wrong migration two PRs later.\n",
-        "/// the analysers, and are left exactly as the tool wrote them: the snapshot is\n"
-        "/// the input to the next <c>migrations add</c>, and an edited one produces a\n"
-        "/// wrong migration the moment one is run.\n",
-    ),
-)
+# Empty, because the template's block is already written for a service rather
+# than for Catalog — there is nothing left here to rename. It stays a tuple:
+# the dispatch in render_projects appends it by name, and the next edit that
+# does need one adds an entry rather than a table.
+INITIAL_CREATE_PATCHES: tuple[tuple[str, str], ...] = ()
 
-# The outbox migration's twin, shape-keyed for the same reason: its path carries
-# Catalog's timestamp. Only the prose is patched — the DDL below it is the
-# tool's own output and is what gives a scaffolded service its outbox table.
-OUTBOX_MIGRATION_PATCHES: tuple[tuple[str, str], ...] = (
-    (
-        "/// §9.4's outbox table, generated from <see cref=\"OutboxMessageConfiguration\"/>\n"
-        "/// on AddProducts' terms — the configuration is the source of truth and only\n"
-        "/// this file's dress is hand-authored (file-scoped namespace, this comment,\n"
-        "/// the field CA1861 asks for). The <c>.Designer.cs</c> and the snapshot beside\n"
-        "/// it are machine-owned and untouched.\n",
-        "/// §9.4's outbox table, generated from <see cref=\"OutboxMessageConfiguration\"/>\n"
-        "/// — the configuration is the source of truth and only this file's dress is\n"
-        "/// hand-authored (file-scoped namespace, this comment, the field CA1861 asks\n"
-        "/// for). The <c>.Designer.cs</c> and the snapshot beside it are machine-owned\n"
-        "/// and untouched.\n",
-    ),
-)
+# Empty, because the template's block is already written for a service rather
+# than for Catalog — there is nothing left here to rename. It stays a tuple:
+# the dispatch in render_projects appends it by name, and the next edit that
+# does need one adds an entry rather than a table.
+OUTBOX_MIGRATION_PATCHES: tuple[tuple[str, str], ...] = ()
 
 # And the inbox migration's, for the same reason again: the template names the
 # outbox migration whose dress it follows, and a scaffolded service's copy
@@ -1112,57 +1058,14 @@ INBOX_MIGRATION_PATCHES: tuple[tuple[str, str], ...] = (
     ),
 )
 
-# The retention index's, shape-keyed like the two above. What is dropped is the
-# prose about how the gap was found — a scaffolded service inherits the index
-# without inheriting the review that noticed its absence.
-RETENTION_INDEX_MIGRATION_PATCHES: tuple[tuple[str, str], ...] = (
-    (
-        "/// The index §9.4's retention purge deletes through, generated from\n"
-        "/// <see cref=\"OutboxMessageConfiguration\"/> on <c>AddInbox</c>'s terms — the\n"
-        "/// configuration is the source of truth and only this file's dress is\n"
-        "/// hand-authored. The <c>.Designer.cs</c> and the snapshot beside it are\n"
-        "/// machine-owned and untouched.\n",
-        "/// The index §9.4's retention purge deletes through, generated from\n"
-        "/// <see cref=\"OutboxMessageConfiguration\"/> — the configuration is the source\n"
-        "/// of truth and only this file's dress is hand-authored. The\n"
-        "/// <c>.Designer.cs</c> and the snapshot beside it are machine-owned and\n"
-        "/// untouched.\n",
-    ),
-    (
-        "/// <para>\n"
-        "/// The inbox got its <c>IX_Inbox_HandledAt</c> when its purge was written and\n"
-        "/// this one did not, which is the asymmetry a review caught. Filtered the other\n"
-        "/// way for the same reason its twin is filtered: the purge never reads an\n"
-        "/// unprocessed row, so the index stays the size of the undeleted backlog rather\n"
-        "/// than of the table.\n"
-        "/// </para>\n",
-        "/// <para>\n"
-        "/// Filtered the other way for the same reason its twin is filtered: the purge\n"
-        "/// never reads an unprocessed row, so the index stays the size of the undeleted\n"
-        "/// backlog rather than of the table.\n"
-        "/// </para>\n",
-    ),
-)
+# Empty, because the template's block is already written for a service rather
+# than for Catalog — there is nothing left here to rename. It stays a tuple:
+# the dispatch in render_projects appends it by name, and the next edit that
+# does need one adds an entry rather than a table.
+RETENTION_INDEX_MIGRATION_PATCHES: tuple[tuple[str, str], ...] = ()
 
-# §8.5's marker table, shape-keyed like the three above. What is dropped is the
-# paragraph naming the defect the marker closes: a scaffolded service inherits
-# the table without inheriting the history of the race that was open from PR-09
-# until it was written.
-IDEMPOTENCY_MIGRATION_PATCHES: tuple[tuple[str, str], ...] = (
-    (
-        "/// <b>This table is the one place in the schema where a missing row is a\n"
-        "/// correctness failure rather than a lost record.</b> The outbox and the inbox\n"
-        "/// hold delivery state; a row here says a command committed, and it is what\n"
-        "/// refuses the retry of an attempt whose commit landed and whose acknowledgement\n"
-        "/// was lost. Without it §8.5's guarantee carries the exception it carried from\n"
-        "/// PR-09 to this migration — at most one commit per key, <em>except</em> across\n"
-        "/// a lost acknowledgement.\n"
-        "/// <para>\n",
-        "/// <b>This table is the one place in the schema where a missing row is a\n"
-        "/// correctness failure rather than a lost record.</b> The outbox and the inbox\n"
-        "/// hold delivery state; a row here says a command committed, and it is what\n"
-        "/// refuses the retry of an attempt whose commit landed and whose acknowledgement\n"
-        "/// was lost.\n"
-        "/// <para>\n",
-    ),
-)
+# Empty, because the template's block is already written for a service rather
+# than for Catalog — there is nothing left here to rename. It stays a tuple:
+# the dispatch in render_projects appends it by name, and the next edit that
+# does need one adds an entry rather than a table.
+IDEMPOTENCY_MIGRATION_PATCHES: tuple[tuple[str, str], ...] = ()
