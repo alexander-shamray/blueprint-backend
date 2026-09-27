@@ -1361,10 +1361,10 @@ sample. A probe cannot quietly become a service later.
 nine with `<Name>.Worker` where `<Name>.Api` would be, and what leaves is
 the OpenAPI document, the route group and the published port — a worker
 consumes from the broker and nothing dials it (§3.2). **Kestrel stays bound
-all the same**, because §15.3 gives Shipping and Notifications the same
-chart minus the Service and the Ingress and their one listener is §13.5's
-health endpoint, which the kubelet reaches on the container port without a
-Service in front of it. The mode is the rename's rather than a patch
+all the same**, because §15.3 separates a worker's chart from Ordering's
+by `service.enabled` alone and its probes still address the container port:
+§13.5's health endpoint is the one listener a worker has, and the kubelet
+reaches it without a Service in front of it. The mode is the rename's rather than a patch
 table's: the host's name reaches a project, a namespace, a Compose service
 key, a Dockerfile entry point and a test fixture's type, and a patch can
 edit a file's text but not its path.

@@ -2071,12 +2071,13 @@ services those are is `OUTBOX_METRICS_EXEMPT` in
 precisely the silent case this section exists to prevent — arriving through a
 service missing from a series rather than through a metric nobody declared.
 
-It is not closed here because §13.3 places `OutboxMetrics` in each publishing
-service's `*.Infrastructure`, and lifting it into common code is a decision
-about **the template**: Catalog is what §4.5's scaffold renders, so every new
-service inherits the gap until the type is common and the scaffold emits it.
-A service closes the gap for itself by registering the type, and pays for it
-with a copy.
+§13.3 places `OutboxMetrics` in each publishing service's `*.Infrastructure`,
+so the gap closes one service at a time, by registering the type and paying
+for it with a copy. **The template closes it for every service after it**:
+Catalog, which §4.5's scaffold renders, registers the gauges, and the scaffold
+copies them and writes the service's `AddMeter` line — so a rendered service
+publishes them from its first boot, and the exemption list holds a service
+only when somebody writes its reason down.
 
 What this pull request does instead is refuse to let the absence be quiet.
 `check.py` requires every service hosting the dispatcher to publish the gauges
