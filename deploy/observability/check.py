@@ -140,13 +140,7 @@ EXTERNAL_METRICS = {
 # a service that registers OutboxMetrics publishes. A dispatcher-hosting
 # service that does not register it is the silent case §13.6 spends its
 # callout on.
-OUTBOX_METRICS_EXEMPT = {
-    "Catalog":
-        "§4.5 names Catalog as the scaffold template, so a service-local "
-        "OutboxMetrics registered here would render into every new service; "
-        "closing the gap is a decision about the template (§13.6), not one "
-        "this service can make alone.",
-}
+OUTBOX_METRICS_EXEMPT: dict[str, str] = {}
 
 # PromQL keywords that survive the stripping below and are not metric names.
 PROMQL_KEYWORDS = {

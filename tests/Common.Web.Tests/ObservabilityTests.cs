@@ -30,6 +30,7 @@ public class ObservabilityTests
     // on in vain.
     private static readonly string[] Required =
     [
+        "Catalog.Outbox",
         "Ordering.Orders",
         "Ordering.Outbox",
         "Inventory.Reservations",

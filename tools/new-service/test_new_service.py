@@ -135,6 +135,7 @@ def template_copy(destination: Path) -> Path:
         "deploy/compose/.env.example",
         "deploy/compose/README.md",
         "deploy/compose/rabbitmq/definitions.json",
+        "src/BuildingBlocks/Common.Web/ObservabilityExtensions.cs",
     ):
         (destination / shared).parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(REPO_ROOT / shared, destination / shared)
@@ -885,6 +886,18 @@ class EditsTheSharedFiles(unittest.TestCase):
         lines = override.replace("\r\n", "\n")
         self.assertIn('  zulu-migrator:\n    profiles: [ "excluded" ]', lines)
         self.assertIn('  zulu-api:\n    profiles: [ "excluded" ]', lines)
+
+    def test_the_outbox_meter_is_collected_in_the_service_prefixed_group(self):
+        # A gauge on a meter nobody registered is collected by nothing, so the
+        # line is asserted in place: after the template's own, before the
+        # shared block, and in the column its neighbours use (IDE0055).
+        text = self.rendered.updated["src/BuildingBlocks/Common.Web/ObservabilityExtensions.cs"]
+        lines = text.replace("\r\n", "\n").split("\n")
+        mine = next(i for i, line in enumerate(lines) if '.AddMeter("Zulu.Outbox")' in line)
+        self.assertEqual(lines[mine + 1], "")
+        self.assertIn("// Shared names, not service-prefixed", lines[mine + 2])
+        self.assertEqual(lines[mine].index("//"), lines[mine - 1].index("//"))
+        self.assertEqual(text.count('.AddMeter("Zulu.Outbox")'), 1)
 
     def test_the_ports_readme_gains_one_row(self):
         readme = self.rendered.updated["deploy/compose/README.md"]
@@ -2069,19 +2082,14 @@ class TheCommandLine(unittest.TestCase):
 
             self.assertEqual(0, code)
             self.assertEqual("", err)
-            # NO ENUMERATION HERE, and the third failure of one is why. The
-            # comment used to name the files that made the total what it was —
-            # it said 54 while the assertion said 55, then named two files
-            # while the assertion said 59 — and each time it congratulated
-            # itself, in its own text, for being the half that does not rot.
-            # A number a test pins fails when it is wrong; a list a comment
-            # keeps beside it does not, so the list is the half to delete.
-            # What a reader can check is `plan().created`.
+            # A count and not a list: a number a test pins fails when it is
+            # wrong, and a list a comment keeps beside it does not. What a
+            # reader can check is `plan().created`.
             #
-            # `6 updated` and not 7: this root has no `.github/`, so §15.1's
+            # `7 updated` and not 8: this root has no `.github/`, so §15.1's
             # allow-list step degrades — which is `TheAllowListStep`'s subject
             # and is asserted there from both sides.
-            self.assertIn("65 files created, 6 updated", out)
+            self.assertIn("70 files created, 7 updated", out)
             self.assertIn(f"port {PORT}", out)
             self.assertTrue((root / "src/Services/Zulu/Zulu.Api/Program.cs").exists())
 

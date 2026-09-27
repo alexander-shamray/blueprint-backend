@@ -49,6 +49,7 @@ from scaffold.render import (
     COMPOSE_INDEX,
     COPY_ROOTS,
     MIGRATION_LABELS,
+    OBSERVABILITY,
     TEMPLATE_TOKEN,
     compose_unit,
     render_projects,
@@ -57,6 +58,7 @@ from scaffold.render import (
     update_compose,
     update_env_example,
     update_infra_only,
+    update_observability_meters,
     update_ports_readme,
     update_solution,
 )
@@ -301,6 +303,7 @@ def plan(repo_root: Path, name: str, port: int, migration_id: str) -> Plan:
         "deploy/compose/README.md": update_ports_readme(repo_root, names, port),
         "deploy/compose/rabbitmq/definitions.json":
             update_broker_definitions(repo_root, names),
+        OBSERVABILITY: update_observability_meters(repo_root, names),
     }
 
     # Last, because it is the only update whose input is every other one. The

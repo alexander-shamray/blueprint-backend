@@ -1,6 +1,7 @@
 using System.Text.Json.Serialization;
 using Catalog.Domain.Products;
 using Catalog.Infrastructure.Messaging;
+using Catalog.Infrastructure.Observability;
 using Catalog.Infrastructure.Persistence;
 using Common.Application;
 using Common.Contracts.Catalog.V1;
@@ -9,6 +10,7 @@ using Common.Infrastructure.Inbox;
 using Common.Infrastructure.Messaging;
 using Common.Infrastructure.Outbox;
 using Common.Infrastructure.Redis;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -113,6 +115,33 @@ public static class DependencyInjection
         // §13.3's messaging instruments, on the Commerce.Messaging meter
         // AddObservability already collects; the class owns the list.
         services.AddSingleton<MessagingMetrics>();
+
+        // §13.6's per-lane outbox gauges, and the stats type behind them. Both
+        // singletons: the gauges are callbacks the Meter holds, and a second
+        // instance would mean two sets of instruments on one meter.
+        //
+        // OutboxStats gets its own connection factory with the bounded connect
+        // timeout its own constant argues, because it runs inside gauge
+        // callbacks and a command timeout bounds only the statement. The
+        // runtime key, because it reads the same data plane (§7.1); only the
+        // timeout differs, so no query path inherits it.
+        string metricsConnectionString =
+            new SqlConnectionStringBuilder(configuration.GetConnectionString("Catalog"))
+            {
+                ConnectTimeout = OutboxStats.ConnectTimeoutSeconds
+            }.ConnectionString;
+
+        services.AddSingleton<IOutboxStats>(sp => new OutboxStats(
+            new SqlConnectionFactory(metricsConnectionString),
+            sp.GetRequiredService<OutboxTable>()));
+        services.AddSingleton<OutboxMetrics>();
+
+        // Singleton registration alone is lazy: instruments appear on first
+        // resolve, which for a class nothing injects is never, and
+        // ValidateOnBuild cannot check it because nothing depends on a metrics
+        // class (§6.2). Registered before the bus and the dispatcher, so the
+        // instruments exist before the first message is delivered against them.
+        services.AddHostedService<MetricsInitialiser>();
 
         // §8's two connections. The call brings §8.2's HybridCache stack with
         // it whether or not this service reads a cache, because the method is
