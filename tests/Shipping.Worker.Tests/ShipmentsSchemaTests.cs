@@ -55,6 +55,32 @@ public sealed class ShipmentsSchemaTests(ServiceFixture fixture) : IAsyncLifetim
     }
 
     [Fact]
+    public async Task The_carriers_event_id_is_compared_exactly_as_the_aggregate_compares_it()
+    {
+        // Half a key rather than text, as the inbox's endpoint is: under the
+        // default case-insensitive collation two ids differing only by case are
+        // one key, and a page the aggregate kept whole fails its commit.
+        (await fixture.ScalarAsync<string>(
+            """
+            SELECT Value = collation_name
+            FROM sys.columns
+            WHERE object_id = OBJECT_ID('shipping.TrackingEvents') AND name = 'CarrierEventId'
+            """))
+            .ShouldBe("Latin1_General_BIN2");
+
+        Shipment shipment = Shipment.For(ShipmentId.New(), new OrderId(Guid.CreateVersion7()), Now);
+        shipment.Book("car_1", "TRK1", Now);
+        shipment.Record("ev7Ab", TrackingStatus.InTransit, Now, Now);
+        shipment.Record("ev7aB", TrackingStatus.InTransit, Now, Now);
+
+        await SaveAsync(shipment);
+
+        (await fixture.ScalarAsync<int>(
+            "SELECT Value = COUNT(*) FROM shipping.TrackingEvents WHERE ShipmentId = {0}", shipment.Id.Value))
+            .ShouldBe(2);
+    }
+
+    [Fact]
     public async Task One_shipment_per_order_is_the_database_s_rule_and_not_only_the_aggregate_s()
     {
         OrderId order = new(Guid.CreateVersion7());

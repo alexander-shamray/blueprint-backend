@@ -12,7 +12,7 @@ using Shipping.Infrastructure.Persistence;
 namespace Shipping.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(ShippingDbContext))]
-    [Migration("20260927144814_AddShipments")]
+    [Migration("20260927165320_AddShipments")]
     partial class AddShipments
     {
         /// <inheritdoc />
@@ -204,7 +204,8 @@ namespace Shipping.Infrastructure.Persistence.Migrations
 
                     b.Property<string>("CarrierEventId")
                         .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
+                        .HasColumnType("nvarchar(100)")
+                        .UseCollation("Latin1_General_BIN2");
 
                     b.Property<DateTimeOffset>("OccurredAt")
                         .HasColumnType("datetimeoffset(7)");

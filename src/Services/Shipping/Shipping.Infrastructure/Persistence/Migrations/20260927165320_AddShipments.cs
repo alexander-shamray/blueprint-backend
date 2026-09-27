@@ -45,7 +45,7 @@ public partial class AddShipments : Migration
             columns: table => new
             {
                 ShipmentId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
-                CarrierEventId = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
+                CarrierEventId = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false, collation: "Latin1_General_BIN2"),
                 Status = table.Column<string>(type: "nvarchar(16)", maxLength: 16, nullable: false),
                 OccurredAt = table.Column<DateTimeOffset>(type: "datetimeoffset(7)", nullable: false),
                 RecordedAt = table.Column<DateTimeOffset>(type: "datetimeoffset(7)", nullable: false)
