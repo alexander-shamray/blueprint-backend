@@ -170,7 +170,7 @@ def main():
         return refusal(f"edits inside its checkout only; cwd {cwd!r} is in "
                        "no checkout")
     # The checkout being edited may carry a newer list than this guard's own,
-    # a sibling worktree's for one. Its denies are added, which can only
+    # a forked worktree's for one. Its denies are added, which can only
     # narrow; a list there that cannot be read refuses.
     local = os.path.join(root, COMMAND)
     if (os.path.exists(local)

@@ -53,7 +53,10 @@ Claude Code reads every ancestor's `CLAUDE.md`, so a session in a worktree also
 reads `main`'s copy, and a branch that edits `CLAUDE.md` has two versions in
 context: the worktree's is the one the branch changes. MSBuild's
 `Directory.*.props`, `global.json` and the root-marked `.editorconfig` resolve
-in the worktree first and stop there.
+in the worktree first and stop there. **Skills resolve the other way:** a
+session in the main checkout also discovers each live worktree's
+`.claude/skills/`, so a branch that edits a skill offers that session both
+copies, the branch's under the worktree's path.
 
 **The sweeps take the opposite path deliberately, and the difference is the
 worktree's job.** `/security-sweep` and `/bug-sweep` each fork a *detached*
@@ -354,9 +357,8 @@ not content.
    **Then check whether the branch survived, because it usually does.**
    `git worktree add -b` creates the branch *before* it creates the directory,
    so a failure at the directory leaves the branch behind — against an
-   unwritable directory it prints `branch '<name>' set up to track …` and then
-   `fatal: could not create leading directories`, and the branch stays in
-   `git branch --list`. A blind
+   unwritable directory it prints `fatal: could not create leading
+   directories`, and the branch stays in `git branch --list`. A blind
    create there fails with *branch already exists* — `git-branch-create.sh`
    refuses it on purpose — which would turn a handled fallback into a stop.
    Both post-failure states are ordinary and each has one command:
