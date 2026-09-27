@@ -2,6 +2,7 @@ using Common.Infrastructure.Idempotency;
 using Common.Infrastructure.Inbox;
 using Common.Infrastructure.Outbox;
 using Microsoft.EntityFrameworkCore;
+using Shipping.Domain.Shipments;
 
 namespace Shipping.Infrastructure.Persistence;
 
@@ -45,6 +46,13 @@ public sealed class ShippingDbContext(DbContextOptions<ShippingDbContext> option
     /// other two.
     /// </summary>
     public DbSet<IdempotencyMarker> IdempotencyMarkers => Set<IdempotencyMarker>();
+
+    /// <summary>
+    /// §3.2's aggregate, and the first <c>DbSet</c> here that is one (spec,
+    /// section 7). No <c>DbSet&lt;TrackingEvent&gt;</c> beside it, deliberately:
+    /// a tracking event is reached only through its shipment.
+    /// </summary>
+    public DbSet<Shipment> Shipments => Set<Shipment>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
