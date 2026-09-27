@@ -1467,6 +1467,7 @@ class RendersAWorker(unittest.TestCase):
         smoke = self.rendered.created[f"tests/{PROBE}.Worker.Tests/HostSmokeTests.cs"]
         self.assertNotIn("/openapi", smoke)
         self.assertNotIn("OpenApi_document", smoke)
+        self.assertNotIn("OpenAPI document", smoke)
         # The probe tests and the authenticated factory stay: the patch takes
         # the two tests and not the file's tail.
         self.assertIn("An_unknown_path_is_a_404_to_a_caller(", smoke)

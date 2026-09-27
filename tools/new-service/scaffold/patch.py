@@ -1029,6 +1029,11 @@ WORKER_PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
             "    }\n",
             "",
         ),
+        (
+            "        // this service has, which is the same argument the 405 pair and the\n"
+            "        // OpenAPI document already carry.\n",
+            "        // this service has, which is the same argument the 405 pair carries.\n",
+        ),
     ),
 }
 

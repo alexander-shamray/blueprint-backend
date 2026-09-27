@@ -152,8 +152,7 @@ public class HostSmokeTests(HostSmokeTests.UnreachableInfrastructureFactory fact
         // when routing matched nothing, so an anonymous request for a path
         // that does not exist is a 401 rather than a 404, accepted on §11.2's
         // terms: a caller with no credentials learns nothing about which paths
-        // this service has, which is the same argument the 405 pair and the
-        // OpenAPI document already carry.
+        // this service has, which is the same argument the 405 pair carries.
         using HttpClient client = factory.CreateClient();
 
         HttpResponseMessage response =
