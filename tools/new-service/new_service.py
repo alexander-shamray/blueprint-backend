@@ -43,7 +43,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 
-from scaffold import TEMPLATE, Names, ScaffoldError
+from scaffold import API_HOST, HOSTS, TEMPLATE, WORKER_HOST, Names, ScaffoldError
 from scaffold.render import (
     BENIGN,
     COMPOSE_INDEX,
@@ -78,26 +78,34 @@ from scaffold.render import (
 )
 from scaffold.verify import SCAN_ALLOW_LIST, SCAN_GATE, load_scan_gate
 
-# §4.1 gives these two a Worker in place of an Api, and Notifications no Domain
-# project at all. This script renders the Api shape, so it refuses them by name
-# rather than producing a service that contradicts the chapter — which is the
-# quiet failure the documentation's "no Worker template" note did not prevent,
-# because a note is not a guard. The names go when the mode arrives.
-WORKER_SERVICES = frozenset({"Shipping", "Notifications"})
+# The names §4.1 gives a Worker in place of an Api. The mode exists, so this is
+# not a refusal of the name: it is what makes `--worker` mandatory for them,
+# because rendering either as an API service would contradict the chapter.
+WORKER_ONLY_SERVICES = frozenset({"Shipping", "Notifications"})
 
-# The nine projects a render creates, by suffix. Named once because the
-# solution writer and the identity check below must agree about them.
-PROJECT_SUFFIXES = (
-    "Domain",
-    "Application",
-    "Infrastructure",
-    "Migrator",
-    "Api",
-    "Domain.Tests",
-    "Application.Tests",
-    "Api.Tests",
-    "TestSupport",
-)
+# And the one this script still cannot render at all: §4.1 gives Notifications
+# no Domain project, which is a second mode. It comes off with that mode.
+UNRENDERABLE_SERVICES = frozenset({"Notifications"})
+
+
+def project_suffixes(host: str) -> tuple[str, ...]:
+    """The nine projects a render creates, by suffix.
+
+    A function of the host rather than a constant, because the host project and
+    its suite take the host's own name — and the identity check below and the
+    solution writer must agree about them.
+    """
+    return (
+        "Domain",
+        "Application",
+        "Infrastructure",
+        "Migrator",
+        host,
+        "Domain.Tests",
+        "Application.Tests",
+        f"{host}.Tests",
+        "TestSupport",
+    )
 
 # Every anchored pattern here is applied with `fullmatch`, never `match`.
 # Python's `$` matches at the end of the string *or just before a trailing
@@ -149,7 +157,8 @@ class Plan:
     updated: dict[str, str] = field(default_factory=dict)
 
 
-def plan(repo_root: Path, name: str, port: int, migration_id: str) -> Plan:
+def plan(repo_root: Path, name: str, port: int | None, migration_id: str,
+         host: str = API_HOST) -> Plan:
     """Everything the run would write, validated. Nothing is written here."""
     if not NAME.fullmatch(name):
         raise ScaffoldError(f"'{name}' is not a PascalCase service name")
@@ -181,12 +190,27 @@ def plan(repo_root: Path, name: str, port: int, migration_id: str) -> Plan:
             f"{name} is the template under another casing; it cannot be its own copy"
         )
 
-    if name.lower() in {service.lower() for service in WORKER_SERVICES}:
+    if host not in HOSTS:
+        raise ScaffoldError(f"'{host}' is not a host this script renders; §4.1 names {HOSTS}")
+    if host == WORKER_HOST and port is not None:
         raise ScaffoldError(
-            f"§4.1 gives {name} a Worker in place of an Api, and this script renders the "
-            f"Api shape. Worker mode joins with the PR that builds the first worker host; "
-            f"until then a {name} scaffolded here would contradict the chapter."
-        )
+            f"a worker publishes no port (§3.2 gives it no API), so --port has nothing "
+            f"to allocate; {port} would be a mapping nothing dials")
+    if host == API_HOST and port is None:
+        raise ScaffoldError(
+            "--port is required for an API render: a port is an allocation recorded in "
+            "§14.1 and deploy/compose/README.md")
+
+    # The narrower refusal first: Notifications is in both sets, and only the
+    # message naming what no flag can fix is worth printing.
+    if name.lower() in {service.lower() for service in UNRENDERABLE_SERVICES}:
+        raise ScaffoldError(
+            f"§4.1 gives {name} no Domain project and this script renders one. That is a "
+            f"second mode, and it joins with the PR that builds the first such host.")
+    if host == API_HOST and name.lower() in {s.lower() for s in WORKER_ONLY_SERVICES}:
+        raise ScaffoldError(
+            f"§4.1 gives {name} a Worker in place of an Api. Render it with --worker; an "
+            f"API service under this name would contradict the chapter.")
 
     # And the same test against every service already here, because the
     # template is only the first entry in that set. After Ordering exists,
@@ -208,12 +232,12 @@ def plan(repo_root: Path, name: str, port: int, migration_id: str) -> Plan:
         raise ScaffoldError(
             f"'{migration_id}' is not a 14-digit migration timestamp; it reaches a file path"
         )
-    if port not in PORTS:
+    if port is not None and port not in PORTS:
         raise ScaffoldError(f"port {port} is outside 1–65535 and Docker cannot publish it")
     if not (repo_root / COPY_ROOTS[0]).is_dir():
         raise ScaffoldError(f"{repo_root} does not look like the repository: no {COPY_ROOTS[0]}")
 
-    names = Names(name)
+    names = Names(name, host)
 
     # Assembly identity first, because it is the more fundamental refusal:
     # "this name can never work here", ahead of "this service already exists".
@@ -228,7 +252,7 @@ def plan(repo_root: Path, name: str, port: int, migration_id: str) -> Plan:
     # `COMMON.Domain` does not intersect `Common.Domain` as a string — so the
     # first version of this check let through exactly the case it was written
     # to stop.
-    generated = {f"{names.pascal}.{suffix}": suffix for suffix in PROJECT_SUFFIXES}
+    generated = {f"{names.pascal}.{suffix}": suffix for suffix in project_suffixes(host)}
     existing = {
         path.stem.lower()
         for directory in ("src", "tests")
@@ -353,11 +377,20 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--port",
         type=int,
-        required=True,
+        default=None,
         help=(
-            "the host port the API publishes. Required, never derived: a port is an "
-            "allocation recorded in §14.1 and deploy/compose/README.md, and a script "
-            "that guessed one would quietly disagree with a printed chapter"
+            "the host port the API publishes. Required for an API render, refused for a "
+            "worker: a port is an allocation recorded in §14.1 and "
+            "deploy/compose/README.md, and a script that guessed one would quietly "
+            "disagree with a printed chapter"
+        ),
+    )
+    parser.add_argument(
+        "--worker",
+        action="store_true",
+        help=(
+            "render §4.1's Worker host instead of an Api: no OpenAPI document, no route "
+            "group, no published port, and §13.5's health endpoint as the one listener"
         ),
     )
     parser.add_argument(
@@ -375,15 +408,17 @@ def main(argv: list[str] | None = None) -> int:
 
     migration_id = args.migration_id or datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
     try:
-        rendered = plan(args.repo_root, args.name, args.port, migration_id)
+        host = WORKER_HOST if args.worker else API_HOST
+        rendered = plan(args.repo_root, args.name, args.port, migration_id, host)
         apply(args.repo_root, rendered)
     except ScaffoldError as error:
         print(f"new_service.py: {error}", file=sys.stderr)
         return 1
 
+    where = "publishing no port" if args.port is None else f"API on port {args.port}"
     print(
         f"{args.name}: {len(rendered.created)} files created, "
-        f"{len(rendered.updated)} updated, API on port {args.port}."
+        f"{len(rendered.updated)} updated, {where}."
     )
     print("Next: dotnet restore Platform.slnx && dotnet build Platform.slnx")
     return 0

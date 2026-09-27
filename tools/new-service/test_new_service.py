@@ -1409,6 +1409,95 @@ class TheAllowListStep(unittest.TestCase):
             )
 
 
+def worker(name: str = PROBE, repo_root: Path = REPO_ROOT) -> Plan:
+    return plan(repo_root, name, None, MIGRATION_ID, host=new_service.WORKER_HOST)
+
+
+class RendersAWorker(unittest.TestCase):
+    """§4.1's second host shape: no API, and §13.5's endpoint the only listener."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.rendered = worker()
+
+    def test_the_host_project_is_a_worker_and_there_is_no_api(self):
+        self.assertIn(
+            f"src/Services/{PROBE}/{PROBE}.Worker/{PROBE}.Worker.csproj", self.rendered.created)
+        self.assertIn(
+            f"tests/{PROBE}.Worker.Tests/{PROBE}.Worker.Tests.csproj", self.rendered.created)
+        for path in self.rendered.created:
+            self.assertNotIn(f"{PROBE}.Api", path)
+
+    def test_the_fixture_and_the_entry_point_follow_the_host(self):
+        factory = f"tests/{PROBE}.TestSupport/{PROBE}WorkerFactory.cs"
+        self.assertIn(factory, self.rendered.created)
+        # `public class`, not `public sealed`: the template's factory is
+        # unsealed, so a render cannot produce a sealed one.
+        self.assertIn(
+            f"public class {PROBE}WorkerFactory", self.rendered.created[factory])
+        dockerfile = f"src/Services/{PROBE}/{PROBE}.Worker/Dockerfile"
+        self.assertIn(
+            f'ENTRYPOINT ["dotnet", "{PROBE}.Worker.dll"]', self.rendered.created[dockerfile])
+
+    def test_the_host_serves_the_health_endpoint_and_nothing_else(self):
+        program = self.rendered.created[f"src/Services/{PROBE}/{PROBE}.Worker/Program.cs"]
+        self.assertIn("app.MapCommonHealthEndpoints();", program)
+        self.assertNotIn("MapOpenApi", program)
+        self.assertNotIn("AddOpenApi", program)
+        # Kestrel stays bound (§15.3), so the host is still a WebApplication
+        # and the middleware §11.2 requires is still on it.
+        self.assertIn("WebApplication.CreateBuilder", program)
+        self.assertIn("app.UseAuthentication();", program)
+
+    def test_the_host_project_carries_no_openapi_package(self):
+        csproj = self.rendered.created[
+            f"src/Services/{PROBE}/{PROBE}.Worker/{PROBE}.Worker.csproj"]
+        self.assertNotIn("Microsoft.AspNetCore.OpenApi", csproj)
+        # And it is still a web project, for §13.5's endpoint.
+        self.assertIn("Microsoft.NET.Sdk.Web", csproj)
+
+    def test_the_host_suite_asks_for_no_openapi_document(self):
+        # On a host that maps no document, the template's request for it is the
+        # 404 the suite's own unknown-path test asserts, so the copy would be red.
+        smoke = self.rendered.created[f"tests/{PROBE}.Worker.Tests/HostSmokeTests.cs"]
+        self.assertNotIn("/openapi", smoke)
+        self.assertNotIn("OpenApi_document", smoke)
+        # The probe tests and the authenticated factory stay: the patch takes
+        # the two tests and not the file's tail.
+        self.assertIn("An_unknown_path_is_a_404_to_a_caller(", smoke)
+        self.assertIn("class AuthenticatedUnreachableFactory", smoke)
+
+    def test_the_compose_pair_is_migrator_and_worker_and_publishes_no_port(self):
+        unit = self.rendered.created[UNIT].replace("\r\n", "\n")
+        declared = [line for line in unit.split("\n") if new_service.SERVICE_KEY.fullmatch(line)]
+        self.assertEqual(declared, [f"  {PROBE.lower()}-migrator:", f"  {PROBE.lower()}-worker:"])
+        self.assertNotIn("ports:", unit)
+
+    def test_the_infra_only_override_excludes_the_worker_half(self):
+        override = self.rendered.updated["deploy/compose/docker-compose.infra-only.yml"]
+        self.assertIn(
+            f"  {PROBE.lower()}-worker:\n    profiles: [ \"excluded\" ]\n",
+            override.replace("\r\n", "\n"))
+
+    def test_the_ports_table_says_no_port_rather_than_omitting_the_service(self):
+        readme = self.rendered.updated["deploy/compose/README.md"]
+        self.assertIn(f"| {PROBE} worker |", readme)
+        self.assertIn("no published port", readme)
+
+    def test_the_solution_folder_holds_the_worker_and_its_suite(self):
+        solution = self.rendered.updated["Platform.slnx"]
+        self.assertIn(
+            f'<Project Path="src/Services/{PROBE}/{PROBE}.Worker/{PROBE}.Worker.csproj" />',
+            solution)
+        self.assertIn(
+            f'<Project Path="tests/{PROBE}.Worker.Tests/{PROBE}.Worker.Tests.csproj" />',
+            solution)
+
+    def test_the_meter_line_names_the_worker_s_outbox(self):
+        extensions = self.rendered.updated[new_service.OBSERVABILITY]
+        self.assertIn(f'.AddMeter("{PROBE}.Outbox")', extensions)
+
+
 class RefusesToRun(unittest.TestCase):
     def test_a_name_that_is_not_pascal_case(self):
         # The last two needed `fullmatch`: Python's `$` matches before a
@@ -1517,15 +1606,37 @@ class RefusesToRun(unittest.TestCase):
             render(name="Common")
         self.assertIn("assembly identity", str(raised.exception))
 
-    def test_a_service_section_4_1_gives_a_worker(self):
-        # Shipping and Notifications take a Worker in place of an Api, and
-        # Notifications has no Domain project. Documenting "no Worker template"
-        # did not stop the script producing an Api for either — a note is not
-        # a guard, and the output would have contradicted the chapter.
-        for name in ("Shipping", "Notifications", "SHIPPING"):
+    def test_a_name_section_4_1_gives_a_worker_is_refused_as_an_api(self):
+        # An API render under this name would contradict §4.1. Notifications
+        # is outside the loop because the narrower refusal answers it first.
+        for name in ("Shipping", "SHIPPING"):
             with self.assertRaises(ScaffoldError) as raised:
                 render(name=name)
-            self.assertIn("Worker", str(raised.exception))
+            self.assertIn("--worker", str(raised.exception))
+
+    def test_the_service_with_no_domain_project_is_refused_in_either_mode(self):
+        # §4.1 gives Notifications no Domain project, which is a second mode
+        # this script does not have.
+        for call in (lambda: render(name="Notifications", port=5198),
+                     lambda: worker(name="Notifications")):
+            with self.assertRaises(ScaffoldError) as raised:
+                call()
+            self.assertIn("Domain", str(raised.exception))
+
+    def test_a_worker_render_refuses_a_port(self):
+        with self.assertRaises(ScaffoldError) as raised:
+            plan(REPO_ROOT, PROBE, PORT, MIGRATION_ID, host=new_service.WORKER_HOST)
+        self.assertIn("publishes no port", str(raised.exception))
+
+    def test_an_api_render_still_requires_one(self):
+        with self.assertRaises(ScaffoldError) as raised:
+            plan(REPO_ROOT, PROBE, None, MIGRATION_ID)
+        self.assertIn("--port", str(raised.exception))
+
+    def test_a_host_this_script_does_not_render(self):
+        with self.assertRaises(ScaffoldError) as raised:
+            plan(REPO_ROOT, PROBE, None, MIGRATION_ID, host="Daemon")
+        self.assertIn("Daemon", str(raised.exception))
 
     def test_a_name_that_contains_a_template_token_is_still_a_name(self):
         # The straggler check searches for `catalog` and `roduct`, and a
@@ -2105,13 +2216,26 @@ class TheCommandLine(unittest.TestCase):
             self.assertEqual("", out, "a refused run must not report success")
             self.assertIn("Worker", err)
 
-    def test_the_port_is_required(self):
-        # argparse exits 2 rather than returning, which is its contract and
-        # not this script's — asserted so a later `default=` cannot slip in.
-        with self.assertRaises(SystemExit) as exit_code:
-            with contextlib.redirect_stderr(io.StringIO()):
-                main(["Zulu"])
-        self.assertEqual(2, exit_code.exception.code)
+    def test_the_port_is_required_for_an_api_render(self):
+        # Optional to argparse, because a worker refuses one, and required by
+        # `plan` for an API render — so the refusal is the script's one line.
+        code, out, err = self.run_main("Zulu", "--migration-id", MIGRATION_ID)
+        self.assertEqual(1, code)
+        self.assertEqual("", out)
+        self.assertIn("--port is required", err)
+
+    def test_a_worker_run_reports_that_it_publishes_no_port(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = template_copy(Path(directory))
+
+            code, out, err = self.run_main(
+                "Zulu", "--worker", "--repo-root", str(root), "--migration-id", MIGRATION_ID,
+            )
+
+            self.assertEqual(0, code)
+            self.assertEqual("", err)
+            self.assertIn("updated, publishing no port.", out)
+            self.assertTrue((root / "src/Services/Zulu/Zulu.Worker/Program.cs").exists())
 
     def test_fourteen_digits_that_are_not_a_date_refuse_in_one_line(self):
         # MIGRATION_ID checks the shape, which is its job — month thirteen is

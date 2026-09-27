@@ -11,7 +11,8 @@ python tools/new-service/new_service.py Yankee --port 5199
 | | |
 |---|---|
 | `name` | The service, PascalCase. It becomes the namespace root, the project names, the database, the SQL schema, both connection-string keys and both Compose service names |
-| `--port` | The host port the API publishes. **Required** — a port is an allocation recorded in [§14.1](../../docs/backend-architecture/14-local-development.md) and in `deploy/compose/README.md`, and a script that derived one would quietly disagree with a printed chapter. The run refuses a port another service already publishes |
+| `--port` | The host port the API publishes. **Required for an API render and refused for a worker** — a port is an allocation recorded in [§14.1](../../docs/backend-architecture/14-local-development.md) and in `deploy/compose/README.md`, and a script that derived one would quietly disagree with a printed chapter. The run refuses a port another service already publishes |
+| `--worker` | Render §4.1's Worker host in place of an Api: `<Name>.Worker`, no OpenAPI document, no route group and no published port |
 | `--migration-id` | The `InitialCreate` id, and the base every later template migration is spaced from — one minute per entry in `TEMPLATE_MIGRATIONS`, in the order they apply. Defaults to the current UTC timestamp; the tests pass a fixed one |
 | `--repo-root` | Defaults to this script's repository |
 
@@ -25,12 +26,13 @@ table matches `plan()`.
 | | |
 |---|---|
 | `Platform.slnx` | the service's project entries, in alphabetical position |
-| `deploy/compose/services/<name>.yml` | the migrator and API pair — created, not spliced. Lower case: the unit's file name is the service key's casing, not the PascalCase input, so `Yankee` renders `services/yankee.yml` |
+| `deploy/compose/services/<name>.yml` | the migrator and host pair — created, not spliced. Lower case: the unit's file name is the service key's casing, not the PascalCase input, so `Yankee` renders `services/yankee.yml` |
 | `deploy/compose/docker-compose.yml` | one `include:` line for that file |
 | `deploy/compose/docker-compose.infra-only.yml` | both halves of that pair, excluded |
 | `deploy/compose/.env.example` | the two §7.1 connection variables |
 | `deploy/compose/README.md` | one row in the ports table |
 | `deploy/compose/rabbitmq/definitions.json` | the broker account the service authenticates as, since #44 |
+| `src/BuildingBlocks/Common.Web/ObservabilityExtensions.cs` | the `AddMeter` line for the service's outbox meter, which §13.2's export names one by one |
 | `.github/secret-scan/allowed/<tree>.txt` | one accepted-finding entry per credential-shaped literal the render carries, in the file covering that entry's tree, since #161 |
 
 **The last one is the difference between a service that renders and a service
@@ -194,13 +196,17 @@ deleted before the real aggregate can be written.
    is what stops a policy name resolving to nothing.
 
 Not in scope, and not silently missing: the gateway route (PR-17 builds the
-gateway), the Helm chart (PR-23), and a Worker host in place of an API — §4.1
-gives Shipping and Notifications one, and no such host exists yet to copy.
+gateway) and the Helm chart (PR-23).
 
-**`Shipping` and `Notifications` are refused by name** for that reason: the
-script renders the API shape, §4.1 gives those two a Worker, and Notifications
-no Domain project either. Both names are accepted again by the change that adds
-the mode.
+**`--worker` renders §4.1's other host shape**: the same nine projects with
+`<Name>.Worker` in place of `<Name>.Api` and `<Name>.Worker.Tests` in place
+of `<Name>.Api.Tests`, no OpenAPI document, no route group and no published
+port. Kestrel stays bound because §15.3's worker chart says the health
+endpoint of §13.5 is the one listener a worker has, and the kubelet reaches
+it without a Service in front of it. **`Shipping` is refused without
+`--worker` and rendered with it**; `Notifications` is refused in both modes,
+because §4.1 gives it no Domain project and that is a second mode this
+script does not have.
 
 ## The tests
 
