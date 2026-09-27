@@ -115,9 +115,10 @@ holding a secret that must differ per environment.
 outbound call it makes itself** — `Identity__Client__ClientSecret`, for the
 BFF, the only host that calls a peer synchronously
 ([§9.7](backend-architecture/09-messaging.md),
-[§11.5](backend-architecture/11-identity-authorization.md), ADR-017), and
+[§11.5](backend-architecture/11-identity-authorization.md), ADR-017),
 `PaymentProvider__ApiKey`, for Payments' provider behind §3.2's
-anti-corruption layer
+anti-corruption layer, and `Carrier__ApiKey`, for Shipping's carrier behind
+the same
 ([§15.4](backend-architecture/15-cicd-deployment.md)).
 
 **The fourth subsection below is not a host's, and that is why the sentence
@@ -329,6 +330,7 @@ to be tidied away:
 | Keycloak admin | `admin` / `admin` |
 | RabbitMQ | `catalog-svc` / `local-dev-catalog`, `ordering-svc` / `local-dev-ordering` |
 | Payment provider key | `local-dev-psp` |
+| Carrier key | `local-dev-carrier` |
 
 These defaults are what make `docker compose up` work with no prior setup, and
 **the environment variable in front of each is the seam** that keeps them out of
@@ -345,8 +347,9 @@ check uses**: `read_admin.py` refuses a base URL that is not `https` and has no
 local subject at all, because the local realm is checked from its file rather
 than through a running Keycloak. The two never meet, and a reader who has just
 met the realm-check service account should not have to infer that from a
-silence. The provider key has no seam because nothing checks it: the simulator
-ignores the key, so a variable would override a value no local party compares.
+silence. The provider and carrier keys have no seam because nothing checks
+them: each simulator ignores its key, so a variable would override a value no
+local party compares.
 
 Note how the connection strings nest — `${CATALOG_CONNECTION:-…Password=${SQL_PASSWORD:-…}…}`
 — so overriding the password alone keeps every connection string correct. That

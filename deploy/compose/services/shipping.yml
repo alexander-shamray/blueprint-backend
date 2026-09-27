@@ -26,6 +26,21 @@ services:
       sql: { condition: service_healthy }
     restart: "no"
 
+  # §3.2's carrier, simulated (spec section 9). Shipping's own dependency,
+  # so it lives in Shipping's unit rather than the shared baseline, and
+  # docker-compose.infra-only.yml keeps it, since a Shipping host run from an
+  # IDE needs it as much as a containerised one. The tag is
+  # Directory.Packages.props' WireMock.Net pin: one engine, one version, one
+  # set of mappings for this container and the tests.
+  carrier-simulator:
+    image: sheyenrath/wiremock.net:2.12.0
+    # The image does not read static mappings by default; without this flag
+    # every request answers 404 and spec section 9's mappings never load.
+    command: [ "--ReadStaticMappings", "true" ]
+    volumes:
+      - ../carrier-simulator/mappings:/app/__admin/mappings:ro
+    ports: [ "127.0.0.1:5191:80" ]
+
   shipping-worker:
     build:
       context: ../../..
@@ -52,8 +67,12 @@ services:
       # identity belongs to the BFF alone (§9.7, §11.5).
       Identity__Authority: "http://keycloak:8080/realms/commerce"
       OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4317"
+      Carrier__BaseUrl: "http://carrier-simulator/"
+      # §14.1's local-development exception: the simulator ignores it.
+      Carrier__ApiKey: "local-dev-carrier"
     depends_on:
       shipping-migrator: { condition: service_completed_successfully }
+      carrier-simulator: { condition: service_started }
       rabbitmq: { condition: service_healthy }
       # service_healthy since infrastructure.yml's keycloak declares a
       # healthcheck. The API

@@ -97,3 +97,7 @@ deploy/compose/services/shipping.yml | connection-string-password | 8a11e54d9d5b
 deploy/compose/services/shipping.yml | credential-assignment | c25bbc06db03 | Shipping's local connection default, in-cluster hostname.
 deploy/compose/services/shipping.yml | credential-assignment | 734cfb583d56 | Section 14.1's broker default for Shipping, the per-service account that replaced guest.
 deploy/compose/rabbitmq/definitions.json | credential-assignment | f4c1f31eff5a | The Shipping service account's password hash, Section 14.1's local default.
+
+# Not the render's: the carrier the unit names beside it.
+
+deploy/compose/services/shipping.yml | credential-assignment | d219e95f003c | Section 14.1's local default for the simulated carrier's API key; the simulator ignores it.
