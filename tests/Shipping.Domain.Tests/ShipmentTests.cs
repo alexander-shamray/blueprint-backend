@@ -218,11 +218,16 @@ public class ShipmentTests
         Shipment shipment = Booked();
 
         shipment.Record("ev1", TrackingStatus.InTransit, Now, Now).ShouldBeFalse();
-        shipment.Record("ev1 ", TrackingStatus.InTransit, Now, Now).ShouldBeFalse();
+
+        // Collected, so a twin that slipped past the key would despatch.
+        shipment.Record("ev1 ", TrackingStatus.Collected, Now, Now).ShouldBeFalse();
 
         shipment.TrackingEvents.ShouldHaveSingleItem().CarrierEventId.ShouldBe("ev1");
+        shipment.Status.ShouldBe(ShipmentStatus.Booked);
 
-        // A padded id on its own is still an id: nothing about it is refused.
-        Booked().Record("ev2 ", TrackingStatus.Collected, Now, Now).ShouldBeTrue();
+        // A padded id on its own is still an id, kept as the carrier sent it.
+        Shipment padded = Booked();
+        padded.Record("ev2 ", TrackingStatus.Collected, Now, Now).ShouldBeTrue();
+        padded.TrackingEvents.ShouldHaveSingleItem().CarrierEventId.ShouldBe("ev2 ");
     }
 }
