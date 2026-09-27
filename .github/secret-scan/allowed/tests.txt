@@ -75,3 +75,7 @@ tests/Shipping.Worker.Tests/HostSmokeTests.cs | connection-string-password | da3
 tests/Shipping.Worker.Tests/MessageTypeMapValidatorTests.cs | connection-string-password | da3fd0c5abaa | The same unusable fixture in the validator suite.
 tests/Shipping.Worker.Tests/MessagingRegistrationTests.cs | credential-assignment | b41686d0d679 | A broker URI pointing at a hostname that does not resolve.
 tests/Shipping.Worker.Tests/MetricsRegistrationTests.cs | connection-string-password | da3fd0c5abaa | The same unusable fixture in the metrics registration suite.
+
+# Not the render's: the carrier the factory names beside it.
+
+tests/Shipping.TestSupport/ShippingWorkerFactory.cs | credential-assignment | d219e95f003c | The carrier key §14.1 allows as a local-development placeholder; the simulator ignores it.

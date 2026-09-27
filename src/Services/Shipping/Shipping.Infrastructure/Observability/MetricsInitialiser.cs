@@ -1,6 +1,7 @@
 using Common.Application;
 using Common.Infrastructure.Messaging;
 using Microsoft.Extensions.Hosting;
+using Shipping.Infrastructure.Carrier;
 
 namespace Shipping.Infrastructure.Observability;
 
@@ -26,11 +27,16 @@ public sealed class MetricsInitialiser : IHostedService
     /// what turn a resolution into a read, and a null would mean the container
     /// resolved a metrics type to nothing.
     /// </remarks>
-    public MetricsInitialiser(OutboxMetrics outbox, MessagingMetrics messaging, RequestMetrics requests)
+    public MetricsInitialiser(
+        OutboxMetrics outbox,
+        MessagingMetrics messaging,
+        RequestMetrics requests,
+        CarrierMetrics carrier)
     {
         ArgumentNullException.ThrowIfNull(outbox);
         ArgumentNullException.ThrowIfNull(messaging);
         ArgumentNullException.ThrowIfNull(requests);
+        ArgumentNullException.ThrowIfNull(carrier);
     }
 
     // `cancellationToken`, not this repository's usual `ct`: CA1725 requires an

@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using CarrierRegistration = Shipping.Infrastructure.Carrier.DependencyInjection;
 
 namespace Shipping.TestSupport;
 
@@ -19,7 +20,9 @@ namespace Shipping.TestSupport;
 /// </summary>
 public class ShippingWorkerFactory(
     string connectionString,
-    string rabbitConnectionString)
+    string rabbitConnectionString,
+    string carrierBaseUrl = ShippingWorkerFactory.UnreachableCarrier,
+    string? carrierApiKey = null)
     : WebApplicationFactory<Program>
 {
     /// <summary>
@@ -35,6 +38,22 @@ public class ShippingWorkerFactory(
     public const string UnreachableAuthority = "https://identity.invalid/realms/test";
 
     /// <summary>
+    /// The carrier every host over this <c>Program</c> must name (§3.2).
+    /// Unreachable because <c>.invalid</c> never resolves, so a test that dials
+    /// the carrier by accident fails loudly rather than booking anything, and
+    /// plain HTTP because the factory runs the host as Development, the one
+    /// environment that allows it.
+    /// </summary>
+    public const string UnreachableCarrier = "http://carrier.invalid/";
+
+    /// <summary>
+    /// §14.1's local-development placeholder for the carrier key, which the
+    /// simulator ignores. Required by the host (§15.4), so a caller that names
+    /// none still gets one.
+    /// </summary>
+    public const string LocalCarrierApiKey = "local-dev-carrier";
+
+    /// <summary>
     /// The RUNTIME connection of §7.1, and only that one. The host has no
     /// business reading <c>ShippingMigrator</c>, and a fixture that supplied
     /// both would hide it if it started. The bus key is required because
@@ -46,6 +65,8 @@ public class ShippingWorkerFactory(
             .UseSetting("ConnectionStrings:Shipping", connectionString)
             .UseSetting("ConnectionStrings:RabbitMq", rabbitConnectionString)
             .UseSetting(AuthenticationExtensions.AuthorityKey, UnreachableAuthority)
+            .UseSetting(CarrierRegistration.BaseUrlKey, carrierBaseUrl)
+            .UseSetting(CarrierRegistration.ApiKeyKey, carrierApiKey ?? LocalCarrierApiKey)
             .ConfigureServices(services =>
             {
                 ConfigureAuthentication(services);

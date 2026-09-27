@@ -1,16 +1,19 @@
 using System.Diagnostics.Metrics;
 using Shipping.Application;
 using Shipping.Infrastructure;
+using Shipping.Infrastructure.Carrier;
 using Shipping.Infrastructure.Observability;
 using Common.Application;
 using Common.Infrastructure.Messaging;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Shouldly;
 using Xunit;
+using CarrierRegistration = Shipping.Infrastructure.Carrier.DependencyInjection;
 
 namespace Shipping.Worker.Tests;
 
@@ -88,6 +91,7 @@ public class MetricsRegistrationTests
         registered.ShouldContain(typeof(OutboxMetrics));
         registered.ShouldContain(typeof(MessagingMetrics));
         registered.ShouldContain(typeof(RequestMetrics));
+        registered.ShouldContain(typeof(CarrierMetrics));
     }
 
     [Fact]
@@ -293,13 +297,13 @@ public class MetricsRegistrationTests
     }
 
     /// <summary>
-    /// Both registration helpers, over configuration that reaches nothing
-    /// (§12.4's .invalid convention).
+    /// All three registration helpers, over configuration that reaches
+    /// nothing (§12.4's .invalid convention).
     /// </summary>
     /// <remarks>
-    /// Leaving either out would make this test agree with a
-    /// <see cref="MetricsInitialiser"/> that forgot whatever the missing one
-    /// registers: the metrics types are split across both.
+    /// <c>AddCarrierGateway</c> is the third, and leaving it out would make
+    /// this test agree with a <see cref="MetricsInitialiser"/> that forgot
+    /// <see cref="CarrierMetrics"/>: the types are split across all three.
     /// </remarks>
     private static ServiceCollection BuildServices()
     {
@@ -309,15 +313,44 @@ public class MetricsRegistrationTests
                 {
                     ["ConnectionStrings:Shipping"] =
                         "Server=shipping-sql.invalid;Database=Shipping;User Id=sa;Password=not-a-real-password",
-                    ["ConnectionStrings:RabbitMq"] = "amqp://guest:guest@shipping-rabbit.invalid:5672"
+                    ["ConnectionStrings:RabbitMq"] = "amqp://guest:guest@shipping-rabbit.invalid:5672",
+                    // Both read eagerly by AddCarrierGateway, which throws
+                    // naming the missing one — the same reason the bus key
+                    // above is here, and unreachable on the same convention.
+                    // HTTPS because the environment below is not Development,
+                    // which is the rule that helper applies.
+                    [CarrierRegistration.BaseUrlKey] = "https://shipping-carrier.invalid",
+                    [CarrierRegistration.ApiKeyKey] = "not-a-real-key"
                 })
             .Build();
 
         ServiceCollection services = new();
         services.AddShippingApplication();
         services.AddShippingInfrastructure(configuration);
+        services.AddCarrierGateway(configuration, new TestEnvironment());
 
         return services;
+    }
+
+    /// <summary>
+    /// A minimal <see cref="IHostEnvironment"/>: <c>AddCarrierGateway</c>
+    /// reads only <see cref="IHostEnvironment.EnvironmentName"/>, through
+    /// <c>IsDevelopment()</c>.
+    /// </summary>
+    /// <remarks>
+    /// Production rather than Development, because the stricter branch is the
+    /// one a registration defect would be found under — and the address above
+    /// is HTTPS so that this choice costs nothing here.
+    /// </remarks>
+    private sealed class TestEnvironment : IHostEnvironment
+    {
+        public string ApplicationName { get; set; } = "Shipping.Worker.Tests";
+
+        public string EnvironmentName { get; set; } = Environments.Production;
+
+        public string ContentRootPath { get; set; } = string.Empty;
+
+        public IFileProvider ContentRootFileProvider { get; set; } = new NullFileProvider();
     }
 
     /// <summary>
