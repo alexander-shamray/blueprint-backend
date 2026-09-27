@@ -57,7 +57,8 @@ leaves it exactly where it was written:
 
 ```bash
 rm -rf src/Services/Yankee tests/Yankee.* deploy/compose/services/yankee.yml
-git checkout -- Platform.slnx deploy/compose/ .github/secret-scan/allowed/
+git checkout -- Platform.slnx deploy/compose/ .github/secret-scan/allowed/ \
+    src/BuildingBlocks/Common.Web/ObservabilityExtensions.cs
 ```
 
 (`Yankee` rather than a `<Name>` placeholder because this is a `bash` fence and
@@ -110,7 +111,7 @@ its marker statements — the candidate select and the delete that joins the
 rows it returned — so a service scaffolded without the migration fails its own
 purge with `Invalid column name 'RowVersion'` on the first pass.
 
-The service builds and its eighty-nine tests pass before you have written a
+The service builds and its ninety-four tests pass before you have written a
 line, and forty-six of them run against real SQL Server and RabbitMQ
 containers:
 the migrator's exit code, §7.1's two-key boundary, the readiness probe — 200
@@ -125,9 +126,11 @@ PR adds to the template — they read forty-one and sixteen until PR-18
 recounted them against a rendered service, three PRs after they stopped being
 true, fifty-six until PR-22 did it again, seventy-eight until PR-32 rendered a
 service carrying §8.5's marker suite, seventy-nine until PR-33 put four
-more into it across two of its review rounds, and eighty-three until PR-35 —
+more into it across two of its review rounds, eighty-three until PR-35 —
 which found the pair already stale by four before it had added anything, PR-34
-having put its own four into `RetentionPurgeTests` without recounting. A figure
+having put its own four into `RetentionPurgeTests` without recounting — and
+eighty-nine until the outbox gauges' registration suite joined the template
+and a render read 1, 18 and 75. A figure
 nobody recounts goes stale on the next PR's clock rather than on its own.
 
 **Adding to the number is not recounting it.** PR-22 put three tests into the
