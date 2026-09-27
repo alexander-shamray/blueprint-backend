@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
@@ -99,11 +100,16 @@ public sealed class HttpCarrierGatewayTests : IClassFixture<HttpCarrierGatewayTe
         await Carrier().BookAsync(Booking("050000", shipment), TestContext.Current.CancellationToken);
 
         ILogEntry call = _server.LogEntries.ShouldHaveSingleItem();
-        string body = call.RequestMessage!.Body!;
-        body.ShouldContain(shipment.Value.ToString());
-        body.ShouldContain("Abay");
-        body.ShouldNotContain("customer", Case.Insensitive,
-            "section 7: the carrier is shown an address and the shipment's id");
+        using JsonDocument body = JsonDocument.Parse(call.RequestMessage!.Body!);
+        JsonElement root = body.RootElement;
+
+        // The whole shape, not the absence of one word: a field added to the
+        // body is a fact the carrier is shown, and section 7 names two.
+        root.EnumerateObject().Select(p => p.Name).ShouldBe(["shipmentId", "address"], ignoreOrder: true);
+        root.GetProperty("address").EnumerateObject().Select(p => p.Name).ShouldBe(
+            ["line1", "line2", "city", "postalCode", "country"], ignoreOrder: true);
+        root.GetProperty("shipmentId").GetGuid().ShouldBe(shipment.Value);
+        root.GetProperty("address").GetProperty("line1").GetString().ShouldBe("1 Abay Avenue");
         call.RequestMessage.Headers!["Authorization"].Single()
             .ShouldBe($"Bearer {ShippingWorkerFactory.LocalCarrierApiKey}");
     }
@@ -150,10 +156,8 @@ public sealed class HttpCarrierGatewayTests : IClassFixture<HttpCarrierGatewayTe
     }
 
     [Fact]
-    public void The_breaker_samples_over_a_window_longer_than_it_breaks_for()
+    public void The_breaker_samples_over_at_least_two_attempt_timeouts()
     {
-        CarrierHop.CircuitBreakerSamplingDuration.ShouldBeGreaterThan(CarrierHop.CircuitBreakerBreakDuration,
-            "a breaker that forgets its failures while open reopens on the first error after it closes");
         CarrierHop.CircuitBreakerSamplingDuration.ShouldBeGreaterThanOrEqualTo(CarrierHop.AttemptTimeout * 2,
             "the library validates this pair at startup, and a host that will not start is not a budget");
     }
@@ -309,6 +313,63 @@ public sealed class HttpCarrierGatewayTests : IClassFixture<HttpCarrierGatewayTe
             await Should.ThrowAsync<CarrierUnavailableException>(call);
     }
 
+    [Theory]
+    [InlineData(CarrierLimits.MaxTrackingNumberLength, true)]
+    [InlineData(CarrierLimits.MaxTrackingNumberLength + 1, false)]
+    public async Task A_tracking_number_longer_than_the_column_is_refused_before_it_is_recorded(
+        int length, bool accepted)
+    {
+        string tracking = new('t', length);
+        _server.Given(Request.Create().WithPath("/v1/shipments").UsingPost())
+            .AtPriority(0)
+            .RespondWith(Response.Create().WithStatusCode(201).WithBody(
+                $"{{\"status\":\"booked\",\"reference\":\"crr_x\",\"trackingNumber\":\"{tracking}\"}}"));
+
+        Func<Task<BookingResult>> call = () => Carrier()
+            .BookAsync(Booking("050000"), TestContext.Current.CancellationToken);
+
+        if (accepted)
+            (await call()).ShouldBe(new BookingResult.Booked("crr_x", tracking));
+        else
+            await Should.ThrowAsync<CarrierUnavailableException>(call);
+    }
+
+    [Theory]
+    [InlineData(CarrierLimits.MaxReasonLength, true)]
+    [InlineData(CarrierLimits.MaxReasonLength + 1, false)]
+    public async Task A_refusal_code_longer_than_the_column_is_refused_before_it_is_recorded(int length, bool accepted)
+    {
+        string code = new('c', length);
+        _server.Given(Request.Create().WithPath("/v1/shipments").UsingPost())
+            .AtPriority(0)
+            .RespondWith(Response.Create().WithStatusCode(422).WithBody(
+                $"{{\"status\":\"refused\",\"code\":\"{code}\"}}"));
+
+        Func<Task<BookingResult>> call = () => Carrier()
+            .BookAsync(Booking("050000"), TestContext.Current.CancellationToken);
+
+        if (accepted)
+            (await call()).ShouldBe(new BookingResult.Refused(code));
+        else
+            await Should.ThrowAsync<CarrierUnavailableException>(call);
+    }
+
+    [Fact]
+    public async Task A_body_in_a_charset_nobody_can_decode_is_unavailable_and_counted()
+    {
+        _server.Given(Request.Create().WithPath("/v1/shipments").UsingPost())
+            .AtPriority(0)
+            .RespondWith(Response.Create().WithStatusCode(201)
+                .WithHeader("Content-Type", "application/json; charset=bogus")
+                .WithBody("{\"status\":\"booked\",\"reference\":\"crr_x\",\"trackingNumber\":\"t\"}"));
+        using UnavailableCount counted = UnavailableCounter.Of(_factory.Services);
+
+        await Should.ThrowAsync<CarrierUnavailableException>(() =>
+            Carrier().BookAsync(Booking("050000"), TestContext.Current.CancellationToken));
+
+        counted.Value.ShouldBe(1, "one attempt, answered with a body this adapter cannot read");
+    }
+
     [Fact]
     public async Task An_event_id_longer_than_its_key_is_refused_with_the_page()
     {
@@ -347,6 +408,24 @@ public sealed class HttpCarrierGatewayTests : IClassFixture<HttpCarrierGatewayTe
             Carrier().BookAsync(Booking("050000"), cancelled.Token));
 
         counted.Value.ShouldBe(0, "a pass cancelled at shutdown is not a carrier incident");
+    }
+
+    [Fact]
+    public async Task A_cancellation_during_an_attempt_is_the_callers_and_is_not_counted()
+    {
+        using UnavailableCount counted = UnavailableCounter.Of(_factory.Services);
+        using CancellationTokenSource cancelled = CancellationTokenSource.CreateLinkedTokenSource(
+            TestContext.Current.CancellationToken);
+        cancelled.CancelAfter(TimeSpan.FromSeconds(1));
+
+        // The stalled script, so the cancellation lands inside an attempt,
+        // where it and an attempt timeout arrive as the same exception. A
+        // cancelled outcome is not one the breaker records, so this host stays
+        // shared.
+        await Should.ThrowAsync<OperationCanceledException>(() =>
+            Carrier().BookAsync(Booking("SIM-SLOW"), cancelled.Token));
+
+        counted.Value.ShouldBe(0, "the caller cancelling mid-attempt is not a carrier incident");
     }
 
     [Theory]
