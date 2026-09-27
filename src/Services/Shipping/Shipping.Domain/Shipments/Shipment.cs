@@ -147,8 +147,9 @@ public sealed class Shipment : AggregateRoot<ShipmentId>
     {
         Require(carrierEventId, ShipmentLimits.MaxCarrierEventIdLength, "the carrier's event id");
 
-        // The key makes a repeated page free (spec, section 5).
-        if (_trackingEvents.Any(e => e.CarrierEventId == carrierEventId))
+        // The key makes a repeated page free (spec, section 5), compared the
+        // way the table compares it, so nothing kept here is refused at commit.
+        if (_trackingEvents.Any(e => SameEventId(e.CarrierEventId, carrierEventId)))
             return false;
 
         _trackingEvents.Add(new TrackingEvent(Id, carrierEventId, status, occurredAt, now));
@@ -191,9 +192,7 @@ public sealed class Shipment : AggregateRoot<ShipmentId>
     /// <summary>
     /// A value the columns cannot hold is §5.7's broken invariant rather than a
     /// no-op: the adapter bounds what the carrier sends (spec, section 9), so
-    /// anything arriving here oversized or padded is a defect above this line.
-    /// Padding counts because SQL Server compares strings ignoring trailing
-    /// spaces, so a padded id and its bare twin would be one key to the table.
+    /// anything arriving here oversized is a defect above this line.
     /// </summary>
     private static void Require(string value, int maxLength, string what)
     {
@@ -202,8 +201,13 @@ public sealed class Shipment : AggregateRoot<ShipmentId>
 
         if (value.Length > maxLength)
             throw new DomainException($"{what} is longer than {maxLength} characters; the adapter bounds it.");
-
-        if (value.Trim().Length != value.Length)
-            throw new DomainException($"{what} carries surrounding whitespace; the adapter trims it.");
     }
+
+    /// <summary>
+    /// Whether two carrier event ids are one key to the table. Case-sensitive,
+    /// as the column's binary collation is, and blind to trailing spaces,
+    /// because SQL Server compares strings ignoring them under every collation.
+    /// </summary>
+    private static bool SameEventId(string left, string right) =>
+        string.Equals(left.TrimEnd(' '), right.TrimEnd(' '), StringComparison.Ordinal);
 }

@@ -210,14 +210,19 @@ public class ShipmentTests
     }
 
     [Fact]
-    public void A_carrier_string_with_surrounding_whitespace_is_a_broken_invariant()
+    public void An_id_differing_only_by_trailing_spaces_is_the_same_event_as_the_table_keys_it()
     {
         // SQL Server compares keys ignoring trailing spaces under every
-        // collation, so "ev1" and "ev1 " are two ids to the aggregate and one
-        // key to the table: the page would fail its commit on every pass.
-        Should.Throw<DomainException>(() => Booked().Record("ev1 ", TrackingStatus.Collected, Now, Now));
-        Should.Throw<DomainException>(() => Booked().Record(" ev1", TrackingStatus.Collected, Now, Now));
-        Should.Throw<DomainException>(() => Pending().Book("car_1 ", "TRK1", Now));
-        Should.Throw<DomainException>(() => Pending().Book("car_1", "TRK1 ", Now));
+        // collation, so "ev1" and "ev1 " are one key to the table. The
+        // aggregate keys the same way, and the second is a repeated page.
+        Shipment shipment = Booked();
+
+        shipment.Record("ev1", TrackingStatus.InTransit, Now, Now).ShouldBeFalse();
+        shipment.Record("ev1 ", TrackingStatus.InTransit, Now, Now).ShouldBeFalse();
+
+        shipment.TrackingEvents.ShouldHaveSingleItem().CarrierEventId.ShouldBe("ev1");
+
+        // A padded id on its own is still an id: nothing about it is refused.
+        Booked().Record("ev2 ", TrackingStatus.Collected, Now, Now).ShouldBeTrue();
     }
 }

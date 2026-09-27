@@ -25,8 +25,8 @@ internal sealed class TrackingEventConfiguration : IEntityTypeConfiguration<Trac
         // endpoint's reason, SQL Server's default folding case; the ordinal
         // comparer is the change tracker's, which on this provider folds case
         // too. Either alone fails the commit of a page holding two ids that
-        // differ only by case; padding, which the engine also ignores, the
-        // aggregate refuses.
+        // differ only by case; trailing spaces, which the engine ignores, the
+        // aggregate already treats as one id.
         builder
             .Property(e => e.CarrierEventId)
             .HasMaxLength(ShipmentLimits.MaxCarrierEventIdLength)
