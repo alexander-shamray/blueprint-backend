@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Fork the sibling worktree /branch step 5 creates, and nothing else.
+# Fork the worktree /branch step 5 creates under .claude/worktrees/, and
+# nothing else.
 #
 # The whole command is fixed: `git worktree add --no-track -b <branch> <path>
 # origin/main`. A prefix grant on `git worktree add` also buys `-B`, which
@@ -14,11 +15,25 @@ set -euo pipefail
 [ "$#" -eq 2 ] || { echo "usage: git-worktree-fork.sh <path> <branch>" >&2; exit 2; }
 path="$1"
 branch="$2"
-# A sibling of this checkout, which is the only shape step 5 creates. Enforced
-# here as well as there so the helper reads safely on its own terms: neither
-# argument can begin with '-', so nothing a caller passes arrives as a flag.
-[[ "$path" =~ ^\.\./[A-Za-z0-9][A-Za-z0-9._-]*$ ]] ||
-  { echo "path must be a sibling of the checkout: ../<name>" >&2; exit 2; }
+# .claude/worktrees/<name>, which is the only shape step 5 creates: the one
+# location EnterWorktree moves the session into without a confirmation no
+# allow rule can pre-approve. Enforced here as well as there so the helper
+# reads safely on its own terms: neither argument can begin with '-', so
+# nothing a caller passes arrives as a flag.
+[[ "$path" =~ ^\.claude/worktrees/[A-Za-z0-9][A-Za-z0-9._-]*$ ]] ||
+  { echo "path must be .claude/worktrees/<name>" >&2; exit 2; }
+# The path is relative, so it means the main checkout's directory only when
+# run from the main checkout's root. From a linked worktree it would nest a
+# second worktree inside the first, which /branch step 0 refuses.
+[ -z "$(git rev-parse --show-prefix)" ] ||
+  { echo "run from the checkout root" >&2; exit 2; }
+[ "$(git rev-parse --git-dir)" = "$(git rev-parse --git-common-dir)" ] ||
+  { echo "run from the main checkout, not a linked worktree" >&2; exit 2; }
+# A worktree inside the checkout is untracked content of it unless ignored,
+# and every `git status` the chain reads — grok-review.sh's clean-tree
+# refusal, /commit's unscoped sweep — would then see it.
+git check-ignore -q "$path" ||
+  { echo "$path is not ignored — add .claude/worktrees/ to .gitignore" >&2; exit 2; }
 [ ! -e "$path" ] || { echo "path already exists: $path" >&2; exit 2; }
 # Branch names here are <type>/<kebab>, and feat(scope)/ carries parentheses.
 case "$branch" in

@@ -1,5 +1,5 @@
 ---
-description: Start a correctly named working branch — in its own sibling worktree from a clean main, in place when the tree is dirty or the parent is not writable
+description: Start a correctly named working branch — in its own worktree under .claude/worktrees/ from a clean main, in place when the tree is dirty or that directory is not writable
 argument-hint: "[what the change does] — omit to derive it from the uncommitted work"
 allowed-tools: Read, Grep, EnterWorktree, Bash(git status:*), Bash(git diff:*), Bash(git branch --list:*), Bash(git branch --show-current), Bash(git branch -a), Bash(git log:*), Bash(git fetch origin:*), Bash(bash .claude/scripts/git-branch-create.sh:*), Bash(bash .claude/scripts/git-worktree-fork.sh:*), Bash(bash .claude/scripts/git-switch-existing.sh:*), Bash(git rev-parse:*), Bash(git worktree list:*), Bash(ls:*)
 ---
@@ -26,20 +26,34 @@ root as a review's working state, and `/commit`'s unscoped form sweeps
 untracked files. Each of those is a rule about *the* tree, and each of them
 gets safer when a PR owns one.
 
-Worktrees are siblings of this checkout, never children of it:
+Worktrees live under this checkout's `.claude/worktrees/`:
 
 ```
-C:/dev/ashamray                     main — stays clean, stays put
-C:/dev/ashamray-groklimit           feat/grok-usage-limit-guard
-C:/dev/ashamray-masstransit         feat(template)/masstransit-registration
+C:/dev/ashamray/blueprint-backend                                main — stays clean, stays put
+C:/dev/ashamray/blueprint-backend/.claude/worktrees/groklimit    feat/grok-usage-limit-guard
+C:/dev/ashamray/blueprint-backend/.claude/worktrees/masstransit  feat(template)/masstransit-registration
 ```
 
-`../<checkout-name>-<slug>` is the shape. **Outside the repository tree is the
-load-bearing half**, not the naming: a worktree under `.claude/worktrees/` would
-sit inside the checkout, show up as untracked in every `git status` the chain
-reads, and put `grok-review.sh`'s clean-tree refusal in its blast radius.
-Nothing has to be added to `.gitignore` for a sibling, because there is nothing
-to ignore.
+`.claude/worktrees/<slug>` is the shape. **That directory is the load-bearing
+half**, not the naming: it is the one place `EnterWorktree` moves the session
+into without asking. Any other path — a sibling included — raises a
+*permission-root relocation* confirmation that no allow rule and no "don't ask
+again" suppresses, so `/ship` would stop on a question that is not a judgement.
+Inside that directory the session's permission root becomes the worktree, and
+`.claude/settings.json`'s denies apply to the worktree's own `.claude/`.
+
+**It is inside the checkout, so it must be ignored**, and `.gitignore` carries
+`.claude/worktrees/`. Unignored, every worktree would show as untracked in each
+`git status` the chain reads and put `grok-review.sh`'s clean-tree refusal in
+its blast radius. `git-worktree-fork.sh` refuses a path git does not ignore,
+so a lost line fails the fork rather than the review.
+
+**Anything that resolves upward from the worktree reaches the main checkout.**
+Claude Code reads every ancestor's `CLAUDE.md`, so a session in a worktree also
+reads `main`'s copy, and a branch that edits `CLAUDE.md` has two versions in
+context: the worktree's is the one the branch changes. MSBuild's
+`Directory.*.props`, `global.json` and the root-marked `.editorconfig` resolve
+in the worktree first and stop there.
 
 **The sweeps take the opposite path deliberately, and the difference is the
 worktree's job.** `/security-sweep` and `/bug-sweep` each fork a *detached*
@@ -48,23 +62,23 @@ nothing returns to it, and they refuse a sibling *by name* — partly because a
 root-level or container layout has no writable parent to put one in, which is a
 layout they have to keep working under rather than one they require. This one
 holds a branch that a PR, two review loops and a person all come back to, so it
-wants a stable named directory beside the checkout rather than a temp path.
+wants a stable named directory in the checkout rather than a temp path.
 None is another's precedent — do not reconcile them by making one match.
 
-**A writable parent is the precondition for the sibling worktree, not for this
-command**, and it is the constraint the sweeps warn about: a root-level
-or container layout cannot create `../<checkout-name>-<slug>` at all. `/branch`
-still succeeds there — it branches in place and says so, exactly as it does on
-a dirty `main`. Naming the case is what keeps it from surfacing as a raw `git`
-error mid-`/ship`; step 5 has the handling.
+**A writable `.claude/worktrees/` is the precondition for the worktree, not
+for this command.** The root-level and container layouts the sweeps warn about
+have no writable `..`, and that no longer matters here, because the fork writes
+inside the checkout. A checkout whose `.claude/` is itself read-only still
+cannot fork. `/branch` succeeds there anyway: it branches in place and says
+so, exactly as it does on a dirty `main`. Naming the case is what keeps it
+from surfacing as a raw `git` error mid-`/ship`; step 5 has the handling.
 
 The slug is the branch's kebab summary cut to the first word or two that name
 the change — it is a directory name, not a branch name, so the `<type>/` prefix
 and any parenthesised scope are dropped rather than spelled.
-`feat(template)/masstransit-registration` gives `ashamray-masstransit` above
+`feat(template)/masstransit-registration` gives `masstransit` above
 because one word is already unambiguous; take the second where it is not.
-`ashamray-masstransit-registration` is fine, and `ashamray-feat(template)` is
-not a path.
+`masstransit-registration` is fine, and `feat(template)` is not a path.
 
 **A worktree carries committed files and nothing else.** Anything untracked
 that a build needs would have to be copied across — today nothing is, and a
@@ -140,7 +154,7 @@ not content.
 
      ```bash
      git switch main
-     git worktree add ../<checkout-name>-<slug> <branch>
+     git worktree add .claude/worktrees/<slug> <branch>
      ```
 
      then `EnterWorktree` on the new path. Say that, rather than promising a
@@ -212,19 +226,19 @@ not content.
    **The directory check runs only on the path that uses the directory** —
    step 1's clean-`main` case in the main checkout, the one row of step 5's
    table that reaches `git worktree add`. The other three branch in place and
-   never touch the sibling path, so a stranger sitting at
-   `../<checkout-name>-<slug>` must not stop them: refusing to carry dirty work
+   never touch the worktree path, so a stranger sitting at
+   `.claude/worktrees/<slug>` must not stop them: refusing to carry dirty work
    off `main` because an unrelated directory shares a two-word slug is a
    blocked command with no defect behind it.
 
    **On that one path the directory takes a second check, because
    `git worktree list` cannot see most of what could be in the way** — it
    reports registered worktrees and nothing else, so an ordinary file or
-   directory at `../<checkout-name>-<slug>` passes it silently and only fails
+   directory at `.claude/worktrees/<slug>` passes it silently and only fails
    inside step 5's `git worktree add`. Look at the path itself:
 
    ```bash
-   ls -d ../<checkout-name>-<slug>
+   ls -d .claude/worktrees/<slug>
    ```
 
    **Anything already there stops this command**, whatever it is — a
@@ -240,7 +254,7 @@ not content.
    collision to resolve by guessing.
 
    **Stopping here is what keeps step 5's fallthrough honest.** That
-   fallthrough reads a failed `git worktree add` as an unwritable parent and
+   fallthrough reads a failed `git worktree add` as an unwritable directory and
    branches in place; an occupied path fails the same command for a completely
    different reason, and would be silently absorbed as though the layout were
    at fault. One is a case to handle, the other is a question for the user, and
@@ -250,9 +264,9 @@ not content.
 
    | Step 1 said | This step does |
    |---|---|
-   | On `main`, clean, in the main checkout with a writable parent | Both halves — fork the worktree, enter it |
+   | On `main`, clean, in the main checkout with a writable `.claude/worktrees/` | Both halves — fork the worktree, enter it |
    | On `main` clean, but **already in a linked worktree** (step 0) | `bash .claude/scripts/git-branch-create.sh <name> origin/main` here. The workspace exists; forking a second is what step 0 refused |
-   | On `main` clean, parent not writable | `bash .claude/scripts/git-branch-create.sh <name> origin/main` where you are |
+   | On `main` clean, `.claude/worktrees/` not writable | `bash .claude/scripts/git-branch-create.sh <name> origin/main` where you are |
    | On `main` dirty, or **detached** | `bash .claude/scripts/git-branch-create.sh <name> HEAD` — the point is to carry what is in this tree |
    | Already on a branch | Nothing — step 1 stopped |
 
@@ -279,7 +293,7 @@ not content.
    command:
 
    ```bash
-   bash .claude/scripts/git-worktree-fork.sh ../<checkout-name>-<slug> <name>
+   bash .claude/scripts/git-worktree-fork.sh .claude/worktrees/<slug> <name>
    ```
 
    **The helper is the whole command, and it takes two arguments because
@@ -313,13 +327,13 @@ not content.
    `dotnet test` — runs there. The two paragraphs below are what happens when
    either does not.
 
-   **If the parent directory is not writable, `git worktree add` fails and the
-   answer is the in-place branch, not a temp path.** A root-level or container
-   layout has no `..` to write into — the case the sweeps name — and
+   **If `.claude/worktrees/` is not writable, `git worktree add` fails and the
+   answer is the in-place branch, not a temp path.** A checkout whose `.claude/`
+   is read-only has nowhere to put the worktree, and
    a workspace somewhere unrelated to the checkout would be worse than none: it
    is a directory the user has to be told about and return to, where the
    in-place branch is where they already are. So report the failure and say the
-   sibling could not be created.
+   worktree could not be created.
 
    **Read the failure before falling back, because only one kind of failure
    means this.** The layout case has a recognisable shape — git prints
@@ -327,7 +341,7 @@ not content.
    denied`, a refusal to create the path at all. A ref lock it could not take,
    corrupt repository metadata, a full filesystem, a path the platform will not
    accept: each of those also fails `git worktree add`, and none of them says
-   anything about the parent being unwritable. Falling back on all of them
+   anything about the directory being unwritable. Falling back on all of them
    alike would quietly downgrade the PR to the shared checkout and **report a
    layout exception that did not happen** — a wrong reason recorded as a
    handled case, which is worse than the raw error this handling exists to
@@ -340,7 +354,7 @@ not content.
    **Then check whether the branch survived, because it usually does.**
    `git worktree add -b` creates the branch *before* it creates the directory,
    so a failure at the directory leaves the branch behind — against an
-   unwritable parent it prints `branch '<name>' set up to track …` and then
+   unwritable directory it prints `branch '<name>' set up to track …` and then
    `fatal: could not create leading directories`, and the branch stays in
    `git branch --list`. A blind
    create there fails with *branch already exists* — `git-branch-create.sh`

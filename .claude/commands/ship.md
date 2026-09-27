@@ -126,7 +126,7 @@ step 0 reads it: `git rev-parse --git-dir --git-common-dir` differing, with no
 is already inside this PR's worktree. Then every row above is owed *there* and
 nothing forks a second directory. A run that starts in the main checkout on
 `main` is the only one that can fork a workspace at all — and only with a clean
-tree and a writable parent, per step 1's two exceptions.
+tree and a writable `.claude/worktrees/`, per step 1's two exceptions.
 
 **The Grok loop's clean state cannot be read from the tree**, so a resumed run
 re-enters step 5 rather than inferring it ran: `suggestions.md` is absent
@@ -566,12 +566,12 @@ because asking failed.
    `ExitWorktree` in row one, the switch in row three — rather than by reading
    this heading.
 
-   **Remove a sibling worktree only when its branch is finished**, in exactly
+   **Remove a forked worktree only when its branch is finished**, in exactly
    the sense the predicate above defines, and let git decide the tree half a
    second time:
 
    ```bash
-   git worktree remove ../<checkout-name>-<slug>
+   git worktree remove .claude/worktrees/<slug>
    ```
 
    **One definition, read at both sites, and it is the predicate above rather
@@ -634,8 +634,8 @@ because asking failed.
    `git-worktree-fork.sh` would refuse the name if it tried.
 
    **This step is also where the workspace comes from, and it has two
-   outcomes.** From a clean `main` with a writable parent, `/branch` forks a
-   sibling worktree and moves the session into it: **every step below then runs
+   outcomes.** From a clean `main`, `/branch` forks a worktree under
+   `.claude/worktrees/` and moves the session into it: **every step below then runs
    in the PR's own directory** and this checkout stays on `main`. On either
    exception — a dirty `main`, because uncommitted work cannot follow a fresh
    checkout without a stash or a patch and both are refused here, or a parent
@@ -1482,7 +1482,7 @@ because asking failed.
    bash .claude/scripts/git-switch-existing.sh main     # 3. in-place runs only
    git pull --ff-only                                   # 4. main, now containing the merge
    git merge-base --is-ancestor <merge-oid> HEAD        # 5. and it really does contain it
-   git worktree remove ../<checkout-name>-<slug>        # 6. forked runs only
+   git worktree remove .claude/worktrees/<slug>         # 6. forked runs only
    git worktree prune                                   # 7.
    ```
 

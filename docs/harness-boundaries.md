@@ -704,7 +704,7 @@ frontmatter list lasts one turn and is not applied inside an agent at all
 `review-grok.md` on every call — one list, no copy — and refuses a target
 under any of them, matched without regard to case, and any target outside the
 checkout its event's `cwd` stands in. The list is the one beside the hook, plus the edited
-checkout's own when that is another file — a sibling worktree's — because an
+checkout's own when that is another file — a forked worktree's — because an
 added list can only narrow, where a replaced one would let that worktree's
 branch loosen it. Run in place, hook and list are both the branch's, as
 `settings.json` and every other guard are; what keeps a review from
@@ -1111,6 +1111,6 @@ the residual.
 **Both sweeps' worktrees carry the `secsweep-` prefix**, and the second is
 borrowing. `git-worktree-detach.sh` and `git-worktree-drop.sh` refuse any path
 that is not `secsweep-` plus six characters under the canonical temp root —
-the shape check that stops a poisoned finding from naming a sibling PR worktree
+the shape check that stops a poisoned finding from naming a PR worktree
 and having it deleted. Renaming the prefix would have to move in both helpers
 and both callers at once, so it stands; what is lost is attribution.

@@ -183,8 +183,8 @@ The contract's §6 lists what locality leaves in force; these are the rest.
   local, never committed.** It is for the user, and it lists open PRs
   (with the issues each closes) and open issues with no PR. Update it the
   moment this session opens, merges or closes a PR, or files, closes or
-  reopens an issue. From a sibling worktree, edit the main checkout's copy,
-  not one in the worktree. When in doubt, rebuild it from
+  reopens an issue. From a worktree under `.claude/worktrees/`, edit the main
+  checkout's copy, not one in the worktree. When in doubt, rebuild it from
   `gh pr list --limit 1000` and `gh issue list --limit 1000`, because the
   default of 30 truncates silently.
 
@@ -198,7 +198,7 @@ The contract's §6 lists what locality leaves in force; these are the rest.
 | `/new-adr` | Append an ADR in the established form |
 | `/style-pass` | Apply one corrected code form corpus-wide, then record it in the guide and `.editorconfig` |
 | `/ship` | Clean `main` → `/branch` → checks → `/commit` → `/pr` → both review loops → merge → teardown. **It stops for nothing that is a judgement** |
-| `/branch` | A correctly named branch **in a sibling worktree** the session moves into; in place when the tree is dirty or the parent is not writable |
+| `/branch` | A correctly named branch **in a worktree under `.claude/worktrees/`** the session moves into; in place when the tree is dirty or that directory is not writable |
 | `/commit` | Split the working tree into semantic commits with arguing bodies |
 | `/pr` | Open a PR in the house body form |
 | `/review-grok` | Triage an external review into a resolution record |
