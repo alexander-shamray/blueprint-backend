@@ -76,7 +76,7 @@ from scaffold.render import (
     compose_included,
     environment_keys,
 )
-from scaffold.verify import SCAN_ALLOW_LIST, SCAN_GATE, load_scan_gate
+from scaffold.verify import SCAN_ALLOW_LIST, SCAN_GATE, allow_list_trees, load_scan_gate
 
 # The names §4.1 gives a Worker in place of an Api. The mode exists, so this is
 # not a refusal of the name: it is what makes `--worker` mandatory for them,
