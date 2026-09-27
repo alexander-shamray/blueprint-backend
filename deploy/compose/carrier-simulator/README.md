@@ -20,7 +20,7 @@ controls:
 | `SIM-SLOW` | the booking answers after a delay past `CarrierHop`'s total |
 | `SIM-TRANSIT` | events: `collected` and nothing after it |
 | `SIM-REVERSED` | events: `delivered` on the page before `collected` |
-| `SIM-STRANGE` | events: a status nobody agreed, a timestamp from next year, a link on a foreign host |
+| `SIM-STRANGE` | events: a status nobody agreed, a timestamp decades ahead, a link on a foreign host |
 | `SIM-LATE` | a cancel answers 409 `already_collected` |
 | any other | booked; events `collected` then `delivered` |
 
@@ -34,8 +34,9 @@ reference's path. The feed's timestamps are fixed for the same reason.
 Place an order whose delivery postal code is one of the codes above, then
 read the fulfilment and tracking workers' logs:
 
-- `SIM-DOWN`: the fulfilment worker backs off, and books once the code
-  changes.
+- `SIM-DOWN`: the fulfilment worker backs off and retries, and the shipment
+  stays `Pending` for as long as the script answers 503. The script holds no
+  state, so recovery is watched by editing the mapping through `/__admin`.
 - `SIM-SLOW`: each attempt times out, the call is abandoned inside the total
   budget, and the row backs off as it does for `SIM-DOWN`.
 - `SIM-REFUSED`: the shipment turns `Unfulfillable` with the carrier's reason.
