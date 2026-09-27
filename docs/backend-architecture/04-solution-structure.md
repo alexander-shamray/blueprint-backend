@@ -1433,11 +1433,12 @@ be a second implementation of which substring each rule matches — and a
 fingerprint matching nothing is a stale entry that fails the build. Where
 `.github/secret-scan/` is absent it writes nothing and says nothing, which is
 the case in the scaffold suite's own synthetic root. The new service
-builds and its **eighty-nine** tests pass before a line of it is written,
+builds and its **ninety-four** tests pass before a line of it is written,
 **forty-six** of them against real SQL Server and RabbitMQ containers —
 counts measured against a rendered service, by PR-18 when they read forty-one
 and sixteen three PRs after they stopped being true, again by PR-22 when they
-read fifty-six, twice by PR-32, twice by PR-33, and again by PR-35. The
+read fifty-six, twice by PR-32, twice by PR-33, again by PR-35, and again when
+the outbox gauges' registration suite joined the template: 1, 18 and 75. The
 forty-six is the `Category=Integration` count of §12.4, which is a filter
 rather than a tally.
 
