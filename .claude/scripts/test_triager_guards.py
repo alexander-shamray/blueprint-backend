@@ -458,7 +458,7 @@ class TheTriagerEditsNothingTheTriageDenies(unittest.TestCase):
         self.assertIsNone(pattern.match("docs/ci\n.yml"))
 
     def test_the_edited_checkout_adds_its_own_denies(self):
-        # A sibling worktree whose command denies one more tree than the
+        # A forked worktree whose command denies one more tree than the
         # checkout holding the guard: both lists bind, neither replaces.
         with tempfile.TemporaryDirectory() as other:
             os.makedirs(os.path.join(other, ".git"))

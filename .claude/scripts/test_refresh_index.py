@@ -145,7 +145,7 @@ class Base(unittest.TestCase):
 
 class ChoosingTheCheckout(Base):
     def test_the_events_cwd_decides_the_checkout(self):
-        """`/branch` moves the session into a sibling worktree, so the tree
+        """`/branch` moves the session into a worktree of its own, so the tree
         that changed is the event's and not the one `CLAUDE_PROJECT_DIR`
         still names."""
         edited = self.checkout("worktree")
@@ -158,7 +158,7 @@ class ChoosingTheCheckout(Base):
     def test_the_edited_file_decides_over_the_session_directory(self):
         """`guard-edit-target` admits an edit against the session's tree or
         the one it forked from, so an absolute edit into the original while
-        the session sits in a sibling leaves the tree that changed stale."""
+        the session sits in a worktree leaves the tree that changed stale."""
         edited = self.checkout("original")
         session = self.checkout("worktree")
         touched = edited / "src" / "Thing.cs"
