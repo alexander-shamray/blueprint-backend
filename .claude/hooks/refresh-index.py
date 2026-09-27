@@ -99,10 +99,11 @@ def edited(event: dict) -> Path | None:
             base = event.get("cwd")
             if not path.is_absolute() and base:
                 path = Path(str(base)) / path
-            # Resolved before anything walks it. `../main/src/Thing.cs` from a
-            # sibling worktree lands in `main`, and the worktree is among that
-            # path's lexical parents — so an unresolved walk finds the
-            # worktree's `.git` and refreshes the tree the edit did not touch.
+            # Resolved before anything walks it. `../../../src/Thing.cs` from a
+            # worktree under `.claude/worktrees/` lands in the main checkout,
+            # and the worktree is among that path's lexical parents — so an
+            # unresolved walk finds the worktree's `.git` and refreshes the
+            # tree the edit did not touch.
             try:
                 return path.resolve()
             except OSError:
