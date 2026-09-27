@@ -721,6 +721,24 @@ class Walking(unittest.TestCase):
                 self.assertEqual(code, 0)
                 self.assertIn("1 file(s)", out)
 
+    def test_a_forked_worktree_is_not_descended_into(self):
+        """`.claude/worktrees/` holds other branches' checkouts, not this tree.
+
+        The planted secret sits where `/branch` puts a worktree; the file count
+        says the walk declined it, and the second subtest says the exclusion is
+        that path and not every directory named `worktrees`.
+        """
+        for relative, expected in ((".claude/worktrees/feature/src", 0),
+                                   ("src/worktrees", 1)):
+            with self.subTest(relative), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                planted = root / relative
+                planted.mkdir(parents=True)
+                (planted / "appsettings.json").write_text(f"aws={AWS_ID}\n", encoding="utf-8")
+                (root / "kept.txt").write_text("nothing here\n", encoding="utf-8")
+                code, _, _ = run(root)
+                self.assertEqual(code, expected)
+
     def test_a_source_directory_called_artifacts_is_still_scanned(self):
         """The subject is the depth the exclusion reaches, not the name it uses.
 

@@ -225,6 +225,17 @@ class ScanProjects(unittest.TestCase):
             ("src/Thing/obj/Thing.csproj", csproj(body)))
         self.assertEqual(findings, [])
 
+    def test_does_not_read_a_forked_worktree(self):
+        # .claude/worktrees/ holds other branches' checkouts, judged by their
+        # own pins; a project there is not this tree's.
+        body = ('  <ItemGroup>\n'
+                '    <PackageReference Include="Evil" Version="1.0.0" />\n'
+                '  </ItemGroup>\n')
+        findings = scan(
+            ("src/Thing/Thing.csproj", csproj('  <ItemGroup />\n')),
+            (".claude/worktrees/feature/src/Thing/Thing.csproj", csproj(body)))
+        self.assertEqual(findings, [])
+
     def test_fails_when_there_is_no_project_to_scan(self):
         # An empty subject is a finding, not a clean result: a glob matching
         # nothing reports what a repository with no fault reports.

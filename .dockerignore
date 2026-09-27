@@ -15,6 +15,10 @@ artifacts
 **/obj
 TestResults
 
+# /branch's worktrees: other branches' checkouts inside this one, each with
+# its own artifacts/ and .git file. Excluded for size, as .git is.
+.claude/worktrees
+
 # .gitignore's "local configuration and secrets" section, mirrored: git
 # ignoring a file does not keep it out of a build context, and a COPY of a
 # whole source tree would carry a local appsettings into the published image.

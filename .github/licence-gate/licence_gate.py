@@ -73,6 +73,10 @@ PIN_ELEMENTS = frozenset({"PackageVersion", "GlobalPackageReference"})
 # would be reading the restore it exists to check.
 SKIPPED_DIRECTORIES = frozenset({"obj", "bin", ".git"})
 
+# `/branch` forks each PR's worktree here: another branch's checkout, whose
+# projects answer to that branch's pins and not to this one's.
+SKIPPED_ROOT_PATH = (".claude", "worktrees")
+
 # What a restore reads and this gate therefore has to. The props and targets
 # files are here because a `PackageReference` carrying a `Version` is legal in
 # any of them and reaches every project at once — a wider hole than the one a
@@ -171,7 +175,10 @@ def find_projects(root: Path) -> list[Path]:
     projects: list[Path] = []
     for suffix in PROJECT_SUFFIXES:
         for path in root.rglob(f"*{suffix}"):
-            if SKIPPED_DIRECTORIES.intersection(path.relative_to(root).parts[:-1]):
+            parts = path.relative_to(root).parts
+            if SKIPPED_DIRECTORIES.intersection(parts[:-1]):
+                continue
+            if parts[:len(SKIPPED_ROOT_PATH)] == SKIPPED_ROOT_PATH:
                 continue
             projects.append(path)
     return sorted(projects)

@@ -19,7 +19,9 @@ uncleared", for the reason under *What it does not claim*.
 - `allowed-licences.txt` beside this file — the licences the register may
   name.
 - Every `.csproj`, `.props` and `.targets` outside the directories
-  `SKIPPED_DIRECTORIES` in `licence_gate.py` names, the props file included,
+  `SKIPPED_DIRECTORIES` in `licence_gate.py` names and outside
+  `.claude/worktrees/`, where `/branch`'s worktrees hold other branches'
+  checkouts, the props file included,
   for the two ways a
   project steps past central pinning: a `PackageReference` naming its own
   version — a `Version` attribute, a `Version` child element or a
