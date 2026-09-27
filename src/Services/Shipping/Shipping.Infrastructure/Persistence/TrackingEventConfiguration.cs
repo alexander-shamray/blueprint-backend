@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Shipping.Domain.Shipments;
 
@@ -19,7 +20,20 @@ internal sealed class TrackingEventConfiguration : IEntityTypeConfiguration<Trac
             .Property(e => e.ShipmentId)
             .HasConversion(id => id.Value, value => new ShipmentId(value));
 
-        builder.Property(e => e.CarrierEventId).HasMaxLength(ShipmentLimits.MaxCarrierEventIdLength);
+        // Compared exactly, as the aggregate compares it, at both ends: this is
+        // half a key rather than text. The binary collation is the inbox
+        // endpoint's reason, SQL Server's default folding case; the ordinal
+        // comparer is the change tracker's, which on this provider folds case
+        // too. Either alone fails the commit of a page holding two ids that
+        // differ only by case.
+        builder
+            .Property(e => e.CarrierEventId)
+            .HasMaxLength(ShipmentLimits.MaxCarrierEventIdLength)
+            .UseCollation("Latin1_General_BIN2")
+            .Metadata.SetValueComparer(new ValueComparer<string>(
+                (left, right) => string.Equals(left, right, StringComparison.Ordinal),
+                value => StringComparer.Ordinal.GetHashCode(value),
+                value => value));
 
         builder.Property(e => e.Status).HasConversion<string>().HasMaxLength(16);
     }
