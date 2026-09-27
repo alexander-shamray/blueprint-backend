@@ -97,7 +97,7 @@ that reaches a merge — so the rows below say what is owed *between* them:
 
 | State | What is owed |
 |---|---|
-| On `main` | All of it — step 1 forks the workspace when the tree is clean and the parent is writable, and otherwise branches in place |
+| On `main` | All of it — step 1 forks the workspace when the tree is clean and `.claude/worktrees/` is writable, and otherwise branches in place |
 | On a branch, tree dirty | Checks, `/commit`, push, `/pr` |
 | On a branch, tree clean, unpushed or ahead | Push, `/pr` |
 | On a branch, tree clean and pushed | `/pr`, then the review loops |
@@ -635,13 +635,13 @@ because asking failed.
 
    **This step is also where the workspace comes from, and it has two
    outcomes.** From a clean `main`, `/branch` forks a worktree under
-   `.claude/worktrees/` and moves the session into it: **every step below then runs
-   in the PR's own directory** and this checkout stays on `main`. On either
+   `.claude/worktrees/` and moves the session into it: **every step below then
+   runs in the PR's own directory** and this checkout stays on `main`. On either
    exception — a dirty `main`, because uncommitted work cannot follow a fresh
-   checkout without a stash or a patch and both are refused here, or a parent
-   that is not writable, where there is nowhere beside the checkout to put
-   one — it branches in place, and the rest of the run happens in the main
-   checkout on the new branch.
+   checkout without a stash or a patch and both are refused here, or a
+   `.claude/worktrees/` that is not writable, where there is nowhere in the
+   checkout to put one — it branches in place, and the rest of the run happens
+   in the main checkout on the new branch.
 
    `/branch` owns the naming, the placement and both exceptions, so do not
    restate the rules; do report which outcome happened, because it is what
