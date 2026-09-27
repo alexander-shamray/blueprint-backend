@@ -17,6 +17,11 @@
 .mcp.json
 .codeindexignore
 
+# /branch's worktrees. They sit inside the checkout because EnterWorktree
+# moves a session there without a confirmation; ignored here so git status,
+# /commit and the code index do not read a second copy of the tree.
+.claude/worktrees/
+
 # .NET — the solution described in docs/backend-architecture/ lands here.
 #
 # artifacts/ is where every build writes, per Directory.Build.props's Output
