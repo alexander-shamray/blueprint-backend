@@ -25,6 +25,12 @@
       "password_hash": "jf2lBk/Sv4yp0KrnOTNvBAmmqFocTtbmI+Re5KDUjtPlZWwT",
       "hashing_algorithm": "rabbit_password_hashing_sha256",
       "tags": []
+    },
+    {
+      "name": "shipping-svc",
+      "password_hash": "QX8uVt6glh3LsJPKAwhU+ZGOKGa8awMQnB8+IvnLjm+pmnDe",
+      "hashing_algorithm": "rabbit_password_hashing_sha256",
+      "tags": []
     }
   ],
   "vhosts": [
@@ -60,6 +66,13 @@
       "configure": "^(payments-|Common\\.Contracts|Payments\\.Infrastructure\\.Messaging:|MassTransit:)",
       "write": "^(payments-|Common\\.Contracts(\\.Payments\\.V1:|:)|Payments\\.Infrastructure\\.Messaging:|MassTransit:)",
       "read": "^(payments-|Common\\.Contracts|Payments\\.Infrastructure\\.Messaging:|MassTransit:)"
+    },
+    {
+      "user": "shipping-svc",
+      "vhost": "/",
+      "configure": "^(shipping-|Common\\.Contracts(\\.Shipping\\.V1:|\\.Inventory\\.V1:|:)|MassTransit:)",
+      "write": "^(shipping-|Common\\.Contracts(\\.Shipping\\.V1:|:)|MassTransit:)",
+      "read": "^(shipping-|Common\\.Contracts\\.Shipping\\.V1:|Common\\.Contracts\\.Inventory\\.V1:|MassTransit:)"
     }
   ],
   "topic_permissions": [],

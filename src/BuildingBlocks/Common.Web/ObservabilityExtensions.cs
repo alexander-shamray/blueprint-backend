@@ -93,6 +93,7 @@ public static class ObservabilityExtensions
                 .AddMeter("Inventory.Outbox")                      // §13.6 per-lane
                 .AddMeter("Payments.Provider")                     // §3.2's provider
                 .AddMeter("Payments.Outbox")                       // §13.6 per-lane
+                .AddMeter("Shipping.Outbox")                       // §13.6 per-lane
 
                 // Shared names, not service-prefixed: every service emits the
                 // same instruments and the service.name resource attribute

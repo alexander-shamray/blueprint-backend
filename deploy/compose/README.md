@@ -75,6 +75,7 @@ and exits, then `catalog-api` starts (§14.1's pair rule).
 | Inventory API | http://localhost:5103 | `/health/live`, `/health/ready`, `/openapi/v1.json` (needs a token — see below), `/v1/inventory/stock/{productId}` — needs a token, unlike Catalog's listing |
 | Payments API | http://localhost:5104 | `/health/live`, `/health/ready`, `/openapi/v1.json` (needs a token — see below) |
 | PSP simulator | http://localhost:5190 | `/__admin/mappings` — the scripted amounts are in [`psp-simulator/README.md`](psp-simulator/README.md) |
+| Shipping worker | — (no published port) | §3.2 gives it no API; §13.5's `/health/live` and `/health/ready` are its only listener and answer inside the container |
 
 **Every OpenAPI document needs a token**, and that is a decision rather than
 an oversight. `MapOpenApi()` carries no authorization metadata, so the
