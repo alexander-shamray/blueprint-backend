@@ -221,6 +221,22 @@ public sealed class ServiceFixture : IAsyncLifetime
             .SingleAsync(TestContext.Current.CancellationToken);
     }
 
+    /// <summary>The column names of one table, from the engine rather than from the model.</summary>
+    public async Task<string[]> ColumnsAsync(string schema, string table)
+    {
+        await using AsyncServiceScope scope = Factory.Services.CreateAsyncScope();
+        ShippingDbContext db = scope.ServiceProvider.GetRequiredService<ShippingDbContext>();
+
+        return await db.Database
+            .SqlQuery<string>(
+                $"""
+                SELECT COLUMN_NAME AS Value
+                FROM INFORMATION_SCHEMA.COLUMNS
+                WHERE TABLE_SCHEMA = {schema} AND TABLE_NAME = {table}
+                """)
+            .ToArrayAsync(TestContext.Current.CancellationToken);
+    }
+
     /// <summary>
     /// The migrations EF considers applied. Asked through EF rather than by
     /// selecting from <c>__EFMigrationsHistory</c>, so the assertion is about
