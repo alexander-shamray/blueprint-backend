@@ -70,9 +70,9 @@
     {
       "user": "shipping-svc",
       "vhost": "/",
-      "configure": "^(shipping-|Common\\.Contracts(\\.Shipping\\.V1:|\\.Inventory\\.V1:|:)|MassTransit:)",
-      "write": "^(shipping-|Common\\.Contracts(\\.Shipping\\.V1:|:)|MassTransit:)",
-      "read": "^(shipping-|Common\\.Contracts\\.Shipping\\.V1:|Common\\.Contracts\\.Inventory\\.V1:|MassTransit:)"
+      "configure": "^(shipping-|Common\\.Contracts|Shipping\\.Infrastructure\\.Messaging:|MassTransit:)",
+      "write": "^(shipping-|Common\\.Contracts(\\.Shipping\\.V1:|:)|Shipping\\.Infrastructure\\.Messaging:|MassTransit:)",
+      "read": "^(shipping-|Common\\.Contracts|Shipping\\.Infrastructure\\.Messaging:|MassTransit:)"
     }
   ],
   "topic_permissions": [],
