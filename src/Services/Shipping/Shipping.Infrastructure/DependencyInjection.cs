@@ -1,4 +1,4 @@
-using Shipping.Domain;
+using Shipping.Domain.Shipments;
 using Shipping.Infrastructure.Idempotency;
 using Shipping.Infrastructure.Messaging;
 using Shipping.Infrastructure.Observability;
@@ -91,10 +91,10 @@ public static class DependencyInjection
         // dispatcher claims a row, so MessageTypeMapValidator is what makes a
         // duplicate FullName fail the host rather than the first message. It
         // is the first hosted service because hosted services start in order.
-        // §9.4's two anchors are this service's contracts and its domain;
-        // IIntegrationEvent and AssemblyMarker stand in until it has either.
+        // §9.4's two anchors: IIntegrationEvent until this service publishes
+        // a contract of its own (§9.3), and the aggregate for its domain.
         services.AddSingleton(
-            new MessageTypeSource(typeof(IIntegrationEvent).Assembly, typeof(AssemblyMarker).Assembly));
+            new MessageTypeSource(typeof(IIntegrationEvent).Assembly, typeof(Shipment).Assembly));
         services.AddSingleton(sp =>
         {
             MessageTypeSource source = sp.GetRequiredService<MessageTypeSource>();
