@@ -208,4 +208,16 @@ public class ShipmentTests
         Should.Throw<DomainException>(() =>
             Booked().Record("", TrackingStatus.Collected, Now, Now));
     }
+
+    [Fact]
+    public void A_carrier_string_with_surrounding_whitespace_is_a_broken_invariant()
+    {
+        // SQL Server compares keys ignoring trailing spaces under every
+        // collation, so "ev1" and "ev1 " are two ids to the aggregate and one
+        // key to the table: the page would fail its commit on every pass.
+        Should.Throw<DomainException>(() => Booked().Record("ev1 ", TrackingStatus.Collected, Now, Now));
+        Should.Throw<DomainException>(() => Booked().Record(" ev1", TrackingStatus.Collected, Now, Now));
+        Should.Throw<DomainException>(() => Pending().Book("car_1 ", "TRK1", Now));
+        Should.Throw<DomainException>(() => Pending().Book("car_1", "TRK1 ", Now));
+    }
 }
