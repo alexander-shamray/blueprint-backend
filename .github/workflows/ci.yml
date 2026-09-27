@@ -293,6 +293,16 @@ jobs:
       - name: Compile what it rendered
         run: dotnet build tests/Yankee.Api.Tests/Yankee.Api.Tests.csproj
 
+      # The worker mode as well, beside the first: WORKER_PATCHES removes the
+      # OpenAPI package and the tests that asked for the document, so a
+      # template change that leans on either compiles as an API and not as a
+      # worker. A worker publishes no port, so it cannot collide with Yankee's.
+      - name: Render a worker
+        run: python tools/new-service/new_service.py Xray --worker
+
+      - name: Compile the worker it rendered
+        run: dotnet build tests/Xray.Worker.Tests/Xray.Worker.Tests.csproj
+
       # No cleanup step. The scaffold both creates untracked files and edits
       # tracked ones, so undoing it locally takes the commands
       # `tools/new-service/README.md` gives; here the checkout is discarded
