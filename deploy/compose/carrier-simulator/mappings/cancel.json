@@ -1,0 +1,14 @@
+{
+  "Guid": "7c4d1a20-0031-4000-8000-000000000031",
+  "Title": "Any other booking cancels",
+  "Priority": 10,
+  "Request": {
+    "Path": { "Matchers": [{ "Name": "WildcardMatcher", "Pattern": "/v1/shipments/*/cancel" }] },
+    "Methods": ["POST"]
+  },
+  "Response": {
+    "StatusCode": 200,
+    "Headers": { "Content-Type": "application/json" },
+    "BodyAsJson": { "status": "cancelled" }
+  }
+}

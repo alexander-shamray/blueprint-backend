@@ -56,6 +56,15 @@ deploy/helm/** text eol=lf
 # on who checked it out.
 deploy/compose/rabbitmq/** text eol=lf
 
+# deploy/compose/carrier-simulator/ joins on the rabbitmq/ tree's argument one
+# directory over: these files are mounted into a Linux container and read by a
+# server there, and the same bytes are loaded by an in-process server on
+# Windows. A mapping's RegexMatcher pattern is matched against a body the
+# adapter sends, so a tree that arrives CRLF on one machine and LF on another
+# is a matcher whose result depends on who checked it out. The README beside
+# them joins so the directory is one thing.
+deploy/compose/carrier-simulator/** text eol=lf
+
 # The secret scan's allow-list joins on the canary tree's argument and on
 # nothing stronger, which is worth saying because the stronger one looks
 # available and is false. Its entries are keyed on a SHA-256 of the matched

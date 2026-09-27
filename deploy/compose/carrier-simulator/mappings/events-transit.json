@@ -1,0 +1,23 @@
+{
+  "Guid": "7c4d1a20-0021-4000-8000-000000000021",
+  "Title": "SIM-TRANSIT: collected, and nothing after it",
+  "Priority": 1,
+  "Request": {
+    "Path": { "Matchers": [{ "Name": "ExactMatcher", "Pattern": "/v1/shipments/crr_SIM-TRANSIT/events" }] },
+    "Methods": ["GET"]
+  },
+  "Response": {
+    "StatusCode": 200,
+    "Headers": { "Content-Type": "application/json" },
+    "BodyAsJson": {
+      "events": [
+        {
+          "id": "evt-collected",
+          "status": "collected",
+          "occurredAt": "2026-01-02T09:00:00Z",
+          "url": "https://carrier.example/track/crr"
+        }
+      ]
+    }
+  }
+}

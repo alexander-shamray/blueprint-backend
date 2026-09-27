@@ -1,0 +1,14 @@
+{
+  "Guid": "7c4d1a20-0010-4000-8000-000000000010",
+  "Title": "Every other postal code books, and its feed runs collected then delivered",
+  "Priority": 10,
+  "Request": {
+    "Path": { "Matchers": [{ "Name": "ExactMatcher", "Pattern": "/v1/shipments" }] },
+    "Methods": ["POST"]
+  },
+  "Response": {
+    "StatusCode": 201,
+    "Headers": { "Content-Type": "application/json" },
+    "BodyAsJson": { "status": "booked", "reference": "crr_SIM-OK", "trackingNumber": "TRK-SIM-OK" }
+  }
+}
