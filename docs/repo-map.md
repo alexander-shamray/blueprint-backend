@@ -481,15 +481,17 @@ service has been built**, which is four commands and a cleanup.
 
 **CI does this too, in a `scaffold-build` job of its own**, so the class is
 caught on the pull request rather than in six months. That does not retire the
-block below: the job renders `Yankee` and builds it after the fact, where
-running these four locally is how you find out before pushing — and the
-cleanup half exists only here, because the runner discards its checkout.
+block below: the job renders `Yankee`, and an `Xray` worker beside it, and
+builds them after the fact, where running these four locally is how you find
+out before pushing — and the cleanup half exists only here, because the runner
+discards its checkout.
 
 ```bash
 python tools/new-service/new_service.py Yankee --port 5199
 dotnet build tests/Yankee.Api.Tests/Yankee.Api.Tests.csproj
 rm -rf src/Services/Yankee tests/Yankee.* deploy/compose/services/yankee.yml
-git checkout -- Platform.slnx deploy/compose/ .github/secret-scan/allowed/
+git checkout -- Platform.slnx deploy/compose/ .github/secret-scan/allowed/ \
+    src/BuildingBlocks/Common.Web/ObservabilityExtensions.cs
 ```
 
 **That `git checkout` reverts uncommitted work in `deploy/compose/` and in the
@@ -519,9 +521,10 @@ root — a degraded path that suite therefore cannot assert — and refuses a
 root that has `.github/` but no scanner in it.
 
 The scaffold edits tracked files as well as creating its own — the solution
-file, the compose tree and the allow-list, which is why the `git checkout`
-above names all three — so that cleanup is part of the procedure rather than
-tidying after it. **Commit before dogfooding**, though, if the PR itself
+file, the compose tree, the allow-list and the `AddMeter` line in
+`Common.Web`, which is why the `git checkout` above names all four — so that
+cleanup is part of the procedure rather than tidying after it.
+**Commit before dogfooding**, though, if the PR itself
 changes `deploy/compose/` or that allow-list — the cleanup reverts the tree's
 own changes.
 
