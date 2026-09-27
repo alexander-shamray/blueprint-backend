@@ -187,9 +187,21 @@ lift.
 enumeration lesson in miniature: an exact-file rule cannot cover a sibling, and
 Claude Code loads both files. Denying `.claude/**` wholesale was considered and
 refused — `.claude/worktrees/` is where `/branch` puts working checkouts, so
-that blanket would deny editing the repository itself while a worktree run is
-live. A test pins both halves: every loaded settings file denied, and the
+that blanket would deny a main-checkout session every edit to a live worktree.
+A test pins both halves: every loaded settings file denied, and the
 worktree root never denied.
+
+**Every rule here anchors at the session's permission root, and
+`EnterWorktree` moves it.** Measured with nested `claude -p` sessions: once a
+session has entered `.claude/worktrees/<slug>`, `Edit(.claude/commands/**)`
+and `Edit(.claude/hooks/**)` refuse the worktree's own `.claude/` and `docs/`
+stays writable. From the main checkout the same paths sit under
+`.claude/worktrees/<slug>/.claude/`, which no rule here names; what refuses
+them there is Claude Code's own sensitive-file check, which measured every
+`.claude/` target inside a nested worktree — hooks, scripts, commands, agents,
+settings — as a refusal under `acceptEdits` and a prompt otherwise. That is
+the residual, and it is the one a sibling worktree had: a path outside the
+project prompted there too.
 
 Changing any of them is a human's edit, made with the deny lifted. Like the
 push denies it is defence in depth — `Bash` redirection can still write a file

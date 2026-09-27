@@ -57,8 +57,8 @@ class HarnessControlSurfaceIsDenied(unittest.TestCase):
         A deny on the exact file cannot cover a sibling, and .gitignore names
         `settings.local.json` as the per-developer override. Denying
         `.claude/**` wholesale is not the answer: `.claude/worktrees/` is
-        where /branch puts working checkouts, so that blanket would deny
-        editing the repository itself while a worktree run is live.
+        where /branch puts working checkouts, so that blanket would deny a
+        main-checkout session every edit to a live worktree.
         """
         deny = self.deny()
         for name in ("settings.json", "settings.local.json"):
