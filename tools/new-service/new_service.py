@@ -192,17 +192,11 @@ def plan(repo_root: Path, name: str, port: int | None, migration_id: str,
 
     if host not in HOSTS:
         raise ScaffoldError(f"'{host}' is not a host this script renders; §4.1 names {HOSTS}")
-    if host == WORKER_HOST and port is not None:
-        raise ScaffoldError(
-            f"a worker publishes no port (§3.2 gives it no API), so --port has nothing "
-            f"to allocate; {port} would be a mapping nothing dials")
-    if host == API_HOST and port is None:
-        raise ScaffoldError(
-            "--port is required for an API render: a port is an allocation recorded in "
-            "§14.1 and deploy/compose/README.md")
 
-    # The narrower refusal first: Notifications is in both sets, and only the
-    # message naming what no flag can fix is worth printing.
+    # The name before the port, because the name decides the host and the host
+    # decides whether a port is owed. The narrower refusal first: Notifications
+    # is in both sets, and only the message naming what no flag can fix is
+    # worth printing.
     if name.lower() in {service.lower() for service in UNRENDERABLE_SERVICES}:
         raise ScaffoldError(
             f"§4.1 gives {name} no Domain project and this script renders one. That is a "
@@ -211,6 +205,15 @@ def plan(repo_root: Path, name: str, port: int | None, migration_id: str,
         raise ScaffoldError(
             f"§4.1 gives {name} a Worker in place of an Api. Render it with --worker; an "
             f"API service under this name would contradict the chapter.")
+
+    if host == WORKER_HOST and port is not None:
+        raise ScaffoldError(
+            f"a worker publishes no port (§3.2 gives it no API), so --port has nothing "
+            f"to allocate; {port} would be a mapping nothing dials")
+    if host == API_HOST and port is None:
+        raise ScaffoldError(
+            "--port is required for an API render: a port is an allocation recorded in "
+            "§14.1 and deploy/compose/README.md")
 
     # And the same test against every service already here, because the
     # template is only the first entry in that set. After Ordering exists,

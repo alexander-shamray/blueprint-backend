@@ -1518,10 +1518,17 @@ class EveryGateSeesTheWorkerRender(unittest.TestCase):
         self.assertEqual(len(projects), 9, projects)
 
     def test_the_licence_gate_walks_every_rendered_project_file(self):
+        # The gate's own walk over a tree the render was applied to, so its
+        # skipped directories are exercised rather than its suffix list alone.
         gate = gate_module("licence-gate", "licence_gate.py")
-        for path in (p for p in self.paths if p.endswith(".csproj")):
-            self.assertTrue(
-                path.endswith(gate.PROJECT_SUFFIXES), f"{path} is outside the licence gate's walk")
+        with tempfile.TemporaryDirectory() as directory:
+            root = template_copy(Path(directory))
+            apply(root, plan(root, PROBE, None, MIGRATION_ID, host=new_service.WORKER_HOST))
+            walked = {path.relative_to(root).as_posix() for path in gate.find_projects(root)}
+        rendered = [p for p in self.rendered.created if p.endswith(".csproj")]
+        self.assertTrue(rendered)
+        for path in rendered:
+            self.assertIn(path, walked, f"{path} is outside the licence gate's walk")
 
     def test_the_secret_scan_s_allow_list_covers_every_rendered_tree(self):
         gate = load_scan_gate(REPO_ROOT)
@@ -1542,13 +1549,13 @@ class EveryGateSeesTheWorkerRender(unittest.TestCase):
 
     def test_the_comment_gate_reads_every_rendered_source_file(self):
         gate = comment_gate_module()
-        # No .json: a JSON document has nowhere to carry a comment, so the
-        # gate declares no reader for it.
-        sources = [p for p in self.rendered.created if p.endswith((".cs", ".csproj", ".yml"))]
-        self.assertTrue(sources)
-        for path in sources:
-            self.assertIn(
-                PurePosixPath(path).suffix, gate.READERS,
+        # The gate's own dispatch, over every created file. A Dockerfile and a
+        # JSON document are the two it reads nothing in, by its own design.
+        unread = [p for p in self.rendered.created if gate.reader_for(p) is None]
+        self.assertTrue(len(unread) < len(self.rendered.created))
+        for path in unread:
+            self.assertTrue(
+                PurePosixPath(path).name == "Dockerfile" or path.endswith(".json"),
                 f"{path} carries comments the gate has no reader for")
 
     def test_the_coverage_filter_matches_the_rendered_domain_assembly(self):
@@ -1702,6 +1709,16 @@ class RefusesToRun(unittest.TestCase):
             with self.assertRaises(ScaffoldError) as raised:
                 call()
             self.assertIn("Domain", str(raised.exception))
+
+    def test_a_name_refusal_answers_before_the_port_one(self):
+        # The name decides the host, so it is answered first: asking a caller
+        # for a port the next message tells them to drop is a loop.
+        with self.assertRaises(ScaffoldError) as raised:
+            plan(REPO_ROOT, "Shipping", None, MIGRATION_ID)
+        self.assertIn("--worker", str(raised.exception))
+        with self.assertRaises(ScaffoldError) as raised:
+            plan(REPO_ROOT, "Notifications", None, MIGRATION_ID)
+        self.assertIn("Domain", str(raised.exception))
 
     def test_a_worker_render_refuses_a_port(self):
         with self.assertRaises(ScaffoldError) as raised:
