@@ -1,3 +1,4 @@
+using System.Net.Http.Headers;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -88,7 +89,7 @@ public static class DependencyInjection
         IHttpClientBuilder client = services.AddHttpClient<ICarrierGateway, HttpCarrierGateway>(http =>
         {
             http.BaseAddress = baseAddress;
-            http.DefaultRequestHeaders.Authorization = new("Bearer", apiKey);
+            http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
         });
 
         // A followed 307 or 308 would replay the address to wherever the

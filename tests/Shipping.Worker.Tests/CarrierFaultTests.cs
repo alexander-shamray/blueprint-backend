@@ -13,7 +13,8 @@ namespace Shipping.Worker.Tests;
 
 /// <summary>
 /// Section 9's transient rows, each over a host of its own because the
-/// breaker they fill is sized to open (<c>CarrierHop</c>).
+/// breaker they fill is sized to open (<c>CarrierHop</c>), and because a
+/// stalled answer outlives the test that asked for it.
 /// </summary>
 public sealed class CarrierFaultTests : IDisposable
 {
@@ -78,6 +79,25 @@ public sealed class CarrierFaultTests : IDisposable
         (DateTimeOffset.UtcNow - started).ShouldBeLessThan(CarrierHop.TotalRequestTimeout + TimeSpan.FromSeconds(2));
         counted.Value.ShouldBe(CarrierHop.MaxRetryAttempts + 1,
             "each attempt timeout is the carrier's, counted once, by OnTimeout");
+    }
+
+    [Fact]
+    public async Task A_cancellation_during_an_attempt_is_the_callers_and_is_not_counted()
+    {
+        using UnavailableCount counted = UnavailableCounter.Of(_host.Factory.Services);
+        using CancellationTokenSource cancelled = CancellationTokenSource.CreateLinkedTokenSource(
+            TestContext.Current.CancellationToken);
+        cancelled.CancelAfter(TimeSpan.FromSeconds(1));
+
+        // The stalled script, so the cancellation lands inside an attempt,
+        // where it and an attempt timeout arrive as the same exception. Here
+        // rather than on the shared host: the server finishes the stalled
+        // answer after the caller has gone, and logs it where a later test's
+        // request count would include it.
+        await Should.ThrowAsync<OperationCanceledException>(() =>
+            Carrier().BookAsync(Booking("SIM-SLOW"), cancelled.Token));
+
+        counted.Value.ShouldBe(0, "the caller cancelling mid-attempt is not a carrier incident");
     }
 
     [Fact]

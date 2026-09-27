@@ -410,24 +410,6 @@ public sealed class HttpCarrierGatewayTests : IClassFixture<HttpCarrierGatewayTe
         counted.Value.ShouldBe(0, "a pass cancelled at shutdown is not a carrier incident");
     }
 
-    [Fact]
-    public async Task A_cancellation_during_an_attempt_is_the_callers_and_is_not_counted()
-    {
-        using UnavailableCount counted = UnavailableCounter.Of(_factory.Services);
-        using CancellationTokenSource cancelled = CancellationTokenSource.CreateLinkedTokenSource(
-            TestContext.Current.CancellationToken);
-        cancelled.CancelAfter(TimeSpan.FromSeconds(1));
-
-        // The stalled script, so the cancellation lands inside an attempt,
-        // where it and an attempt timeout arrive as the same exception. A
-        // cancelled outcome is not one the breaker records, so this host stays
-        // shared.
-        await Should.ThrowAsync<OperationCanceledException>(() =>
-            Carrier().BookAsync(Booking("SIM-SLOW"), cancelled.Token));
-
-        counted.Value.ShouldBe(0, "the caller cancelling mid-attempt is not a carrier incident");
-    }
-
     [Theory]
     [InlineData("http://carrier.example/", false)]
     [InlineData("https://carrier.example/", true)]
