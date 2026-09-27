@@ -1,5 +1,6 @@
 using Shipping.Application;
 using Shipping.Infrastructure;
+using Shipping.Infrastructure.Carrier;
 using Common.Web;
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
@@ -16,6 +17,10 @@ builder.Host.UseDefaultServiceProvider(o =>
 builder.AddCommonWebDefaults();                 // §13.2
 builder.Services.AddShippingApplication();       // §6.2
 builder.Services.AddShippingInfrastructure(builder.Configuration);   // §4.2, §7.1
+
+// §3.2's anti-corruption layer; its address is read, and its scheme checked,
+// eagerly.
+builder.Services.AddCarrierGateway(builder.Configuration, builder.Environment);
 
 // This host registers no permission policy and never will: §3.2 gives it no
 // API, so there is no endpoint to name one. The middleware below stays,
