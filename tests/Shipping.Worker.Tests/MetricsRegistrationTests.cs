@@ -309,12 +309,7 @@ public class MetricsRegistrationTests
                 {
                     ["ConnectionStrings:Shipping"] =
                         "Server=shipping-sql.invalid;Database=Shipping;User Id=sa;Password=not-a-real-password",
-                    ["ConnectionStrings:RabbitMq"] = "amqp://guest:guest@shipping-rabbit.invalid:5672",
-                    // AddRedisConnections reads both eagerly and throws naming
-                    // the missing one (§8.2), so the host cannot be assembled
-                    // without them. Unreachable on §12.4's .invalid convention.
-                    ["ConnectionStrings:RedisCache"] = "shipping-redis.invalid:6379",
-                    ["ConnectionStrings:RedisCoordination"] = "shipping-redis.invalid:6380"
+                    ["ConnectionStrings:RabbitMq"] = "amqp://guest:guest@shipping-rabbit.invalid:5672"
                 })
             .Build();
 

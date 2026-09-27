@@ -315,14 +315,7 @@ public class DatabaseSmokeTests(ServiceFixture fixture)
                     // rather than the fixture's broker on the §12.4 .invalid
                     // convention: no host runs here, so the bus never starts
                     // and nothing should be able to dial one.
-                    ["ConnectionStrings:RabbitMq"] = "amqp://guest:guest@shipping-rabbit.invalid:5672",
-                    // Both read eagerly by AddRedisConnections, which throws
-                    // naming the missing one — the same reason the bus key above
-                    // is here, and unreachable on the same §12.4 convention: no
-                    // host runs in this provider and nothing resolves a
-                    // multiplexer.
-                    ["ConnectionStrings:RedisCache"] = "shipping-redis.invalid:6379",
-                    ["ConnectionStrings:RedisCoordination"] = "shipping-redis.invalid:6380"
+                    ["ConnectionStrings:RabbitMq"] = "amqp://guest:guest@shipping-rabbit.invalid:5672"
                 })
             .Build());
 
