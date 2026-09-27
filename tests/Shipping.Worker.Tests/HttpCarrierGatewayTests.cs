@@ -314,6 +314,22 @@ public sealed class HttpCarrierGatewayTests : IClassFixture<HttpCarrierGatewayTe
     }
 
     [Theory]
+    [InlineData(".")]
+    [InlineData("..")]
+    public async Task A_reference_that_is_a_dot_segment_is_refused_before_it_is_recorded(string reference)
+    {
+        // Kept, it would be spliced into the cancel and events paths, where a
+        // dot segment is resolved away and the call reaches another endpoint.
+        _server.Given(Request.Create().WithPath("/v1/shipments").UsingPost())
+            .AtPriority(0)
+            .RespondWith(Response.Create().WithStatusCode(201).WithBody(
+                $"{{\"status\":\"booked\",\"reference\":\"{reference}\",\"trackingNumber\":\"t\"}}"));
+
+        await Should.ThrowAsync<CarrierUnavailableException>(() =>
+            Carrier().BookAsync(Booking("050000"), TestContext.Current.CancellationToken));
+    }
+
+    [Theory]
     [InlineData(CarrierLimits.MaxTrackingNumberLength, true)]
     [InlineData(CarrierLimits.MaxTrackingNumberLength + 1, false)]
     public async Task A_tracking_number_longer_than_the_column_is_refused_before_it_is_recorded(

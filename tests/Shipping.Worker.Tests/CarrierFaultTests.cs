@@ -90,10 +90,7 @@ public sealed class CarrierFaultTests : IDisposable
         cancelled.CancelAfter(TimeSpan.FromSeconds(1));
 
         // The stalled script, so the cancellation lands inside an attempt,
-        // where it and an attempt timeout arrive as the same exception. Here
-        // rather than on the shared host: the server finishes the stalled
-        // answer after the caller has gone, and logs it where a later test's
-        // request count would include it.
+        // where it and an attempt timeout arrive as the same exception.
         await Should.ThrowAsync<OperationCanceledException>(() =>
             Carrier().BookAsync(Booking("SIM-SLOW"), cancelled.Token));
 
