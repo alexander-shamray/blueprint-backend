@@ -17,7 +17,7 @@ import re
 import shutil
 import tempfile
 import unittest
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 import new_service
 from new_service import (
@@ -40,17 +40,22 @@ from new_service import (
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
-def comment_gate_module():
-    """The comment gate, imported from its own tree.
+def gate_module(name: str, filename: str):
+    """A gate, imported from its own tree.
 
-    Its PATTERNS own which words count as history; a second copy here would be
-    the one that stops agreeing with it.
+    Never a second copy of its selector here: the copy is the thing that stops
+    agreeing with the gate, which is the failure the tests reading it are about.
     """
-    path = REPO_ROOT / ".github" / "comment-gate" / "comment_gate.py"
-    spec = importlib.util.spec_from_file_location("comment_gate", path)
+    path = REPO_ROOT / ".github" / name / filename
+    spec = importlib.util.spec_from_file_location(filename.removesuffix(".py"), path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+def comment_gate_module():
+    """The comment gate, whose PATTERNS own which words count as history."""
+    return gate_module("comment-gate", "comment_gate.py")
 
 
 MIGRATION_ID = "20260809120000"
@@ -1496,6 +1501,81 @@ class RendersAWorker(unittest.TestCase):
     def test_the_meter_line_names_the_worker_s_outbox(self):
         extensions = self.rendered.updated[new_service.OBSERVABILITY]
         self.assertIn(f'.AddMeter("{PROBE}.Outbox")', extensions)
+
+
+class EveryGateSeesTheWorkerRender(unittest.TestCase):
+    """The worker render's projects are inside every gate's own selector."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.rendered = worker()
+        cls.paths = sorted({**cls.rendered.created, **cls.rendered.updated})
+
+    def test_the_render_is_the_nine_projects_the_suite_is_about(self):
+        # The floor. A render that produced no project file would satisfy every
+        # assertion below by having nothing for a gate to miss.
+        projects = [p for p in self.paths if p.endswith(".csproj")]
+        self.assertEqual(len(projects), 9, projects)
+
+    def test_the_licence_gate_walks_every_rendered_project_file(self):
+        gate = gate_module("licence-gate", "licence_gate.py")
+        for path in (p for p in self.paths if p.endswith(".csproj")):
+            self.assertTrue(
+                path.endswith(gate.PROJECT_SUFFIXES), f"{path} is outside the licence gate's walk")
+
+    def test_the_secret_scan_s_allow_list_covers_every_rendered_tree(self):
+        gate = load_scan_gate(REPO_ROOT)
+        covers = new_service.allow_list_trees(REPO_ROOT, gate)
+        for path in self.paths:
+            # A file at the repository root is outside every tree the
+            # allow-list declares, and that is the design: Platform.slnx, the
+            # one root file a render updates, holds nothing to suppress.
+            if "/" not in path:
+                continue
+            self.assertTrue(
+                any(gate.covers_path(prefix, path) for prefix in covers),
+                f"no allow-list file covers {path}, so an entry for it would have nowhere to go")
+
+        # Not vacuous: without this the loop above would pass over a render
+        # that produced nothing but root files.
+        self.assertTrue([p for p in self.paths if "/" in p])
+
+    def test_the_comment_gate_reads_every_rendered_source_file(self):
+        gate = comment_gate_module()
+        # No .json: a JSON document has nowhere to carry a comment, so the
+        # gate declares no reader for it.
+        sources = [p for p in self.rendered.created if p.endswith((".cs", ".csproj", ".yml"))]
+        self.assertTrue(sources)
+        for path in sources:
+            self.assertIn(
+                PurePosixPath(path).suffix, gate.READERS,
+                f"{path} carries comments the gate has no reader for")
+
+    def test_the_coverage_filter_matches_the_rendered_domain_assembly(self):
+        module_path = re.search(
+            r"<ModulePath>(.+?)</ModulePath>",
+            (REPO_ROOT / "coverage.runsettings").read_text(encoding="utf-8")).group(1)
+        self.assertRegex(f"{PROBE}.Domain.dll", module_path)
+
+    def test_the_architecture_gates_name_the_rendered_assemblies(self):
+        # §4.2's gates need a type per project, and the render's is the marker
+        # written to be deleted. Each suite has to NAME it, or the gate is
+        # judging whatever assembly happened to be loaded.
+        for suite in ("Domain.Tests", "Application.Tests", f"{new_service.WORKER_HOST}.Tests"):
+            body = self.rendered.created[f"tests/{PROBE}.{suite}/ArchitectureTests.cs"]
+            self.assertIn("typeof(AssemblyMarker).Assembly", body, suite)
+        self.assertIn(
+            f"src/Services/{PROBE}/{PROBE}.Domain/AssemblyMarker.cs", self.rendered.created)
+
+    def test_the_pipeline_gate_would_see_both_rendered_dockerfiles(self):
+        dockerfiles = [p for p in self.rendered.created if p.endswith("/Dockerfile")]
+        self.assertEqual(len(dockerfiles), 2, dockerfiles)
+        # The gate walks src/ for every file named Dockerfile and reads each
+        # matrix entry back against it, so what a render owes is a Dockerfile
+        # under src/ in the host's and the migrator's own directory.
+        self.assertEqual(
+            sorted(PurePosixPath(p).parent.name for p in dockerfiles if p.startswith("src/")),
+            [f"{PROBE}.Migrator", f"{PROBE}.{new_service.WORKER_HOST}"])
 
 
 class RefusesToRun(unittest.TestCase):
