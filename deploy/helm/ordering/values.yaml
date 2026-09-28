@@ -1,6 +1,7 @@
-# Ordering, and the chart §15.3 prints. One port rather than Catalog's two:
-# Ordering serves no gRPC, because ADR-017 spends the platform's one
-# synchronous hop on the BFF's pricing call and nothing else.
+# Ordering, and the chart §15.3 prints. Two ports since ADR-052: §10.2's REST
+# surface, and the HTTP/2-only endpoint that serves DeliveryAddresses.Get to a
+# Shipping worker. A cleartext Kestrel endpoint cannot serve HTTP/1.1 and h2c
+# at once — measured, and argued in Ordering.Api/appsettings.json.
 
 workload:
   # §10.2's route file dials `http://ordering-api:8080/` as a literal, so this
@@ -39,6 +40,11 @@ image:
 ports:
   - name: http
     containerPort: 8080
+  # 8081 is cluster-internal: no route reaches it (§10.2 routes HTTP), the
+  # Ingress is disabled, and the RPC on it requires orders:delivery-address
+  # (ADR-052).
+  - name: grpc
+    containerPort: 8081
 
 resources:
   requests: { cpu: 100m, memory: 256Mi }

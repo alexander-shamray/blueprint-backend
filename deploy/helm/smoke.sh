@@ -1099,30 +1099,53 @@ check 'every pod template disables the service-account token' \
 section 'The Service forwards to a port something is listening on'
 # --------------------------------------------------------------------------
 # The routing gate above compares caller URLs with rendered Service ports and
-# never looks at the process behind `targetPort`. Catalog declares its two
-# Kestrel endpoints in its own appsettings.json (§9.7: a cleartext port cannot
-# serve HTTP/1.1 and h2c at once), so moving the h2c listener there would
-# deploy a Service forwarding to a closed port.
-grep -ohE 'http://0\.0\.0\.0:[0-9]+' "$ROOT/src/Services/Catalog/Catalog.Api/appsettings.json" |
-    sed -E 's|.*:([0-9]+)|\1|' | sort -u >"$OUT/listeners.txt"
+# never looks at the process behind `targetPort`. A service declaring
+# Kestrel:Endpoints owns its ports outright — ASPNETCORE_URLS and
+# ASPNETCORE_HTTP_PORTS both lose to that section (§14.2) — so a listener moved
+# there and not in the chart deploys a Service forwarding to a closed port.
+# Every chart is asked, through src_of, and the number that answered is
+# asserted below: a service that starts pinning its own ports is covered the
+# day it does, and a search that stops finding any fails rather than passing
+# quietly.
+pinned=0
+for chart in $SERVICE_CHARTS; do
+    settings="$(grep -rl '"Kestrel"' --include=appsettings.json "$(src_of "$chart")" || true)"
+    [ -n "$settings" ] || continue
 
-if [ ! -s "$OUT/listeners.txt" ]; then
-    fail 'no Kestrel endpoints found in Catalog appsettings.json — the parse, not the chart, is wrong'
-else
+    if [ "$(printf '%s\n' "$settings" | wc -l)" -ne 1 ]; then
+        fail "$chart pins ports in more than one appsettings.json — the search, not the chart, is wrong"
+        continue
+    fi
+
+    pinned=$((pinned + 1))
+    grep -ohE 'http://0\.0\.0\.0:[0-9]+' "$settings" |
+        sed -E 's|.*:([0-9]+)|\1|' | sort -u >"$OUT/$chart-listeners.txt"
+
+    if [ ! -s "$OUT/$chart-listeners.txt" ]; then
+        fail "no Kestrel endpoint parsed out of $settings — the parse, not the chart, is wrong"
+        continue
+    fi
+
     while read -r port; do
-        check "catalog-api listens on $port and the chart declares it" \
-            grep -q "containerPort: $port$" "$OUT/catalog.yaml"
-    done <"$OUT/listeners.txt"
-fi
+        check "$chart listens on $port and its chart declares it" \
+            grep -q "containerPort: $port$" "$OUT/$chart.yaml"
+    done <"$OUT/$chart-listeners.txt"
 
-# And the other direction, so a chart port with nothing behind it is caught too.
-awk '/^kind: Deployment$/ { in_dep = 1 } in_dep && /containerPort:/ { print $2 }' \
-    "$OUT/catalog.yaml" | sort -u >"$OUT/declared.txt"
-missing="$(comm -23 "$OUT/declared.txt" "$OUT/listeners.txt")"
-if [ -z "$missing" ]; then
-    pass 'and declares no port Catalog does not listen on'
+    # And the other direction, so a chart port with nothing behind it is caught too.
+    awk '/^kind: Deployment$/ { in_dep = 1 } in_dep && /containerPort:/ { print $2 }' \
+        "$OUT/$chart.yaml" | sort -u >"$OUT/$chart-declared.txt"
+    missing="$(comm -23 "$OUT/$chart-declared.txt" "$OUT/$chart-listeners.txt")"
+    if [ -z "$missing" ]; then
+        pass "and $chart declares no port it does not listen on"
+    else
+        fail "$chart's chart declares port(s) it has no listener for: $(echo "$missing" | tr '\n' ' ')"
+    fi
+done
+
+if [ "$pinned" -eq 0 ]; then
+    fail 'no chart pins its own Kestrel endpoints — the search, not the charts, is wrong'
 else
-    fail "chart declares port(s) Catalog has no listener for: $(echo "$missing" | tr '\n' ' ')"
+    pass "the listener comparison covered $pinned chart(s) that pin their own endpoints"
 fi
 
 # --------------------------------------------------------------------------

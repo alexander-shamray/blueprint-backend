@@ -302,15 +302,18 @@ src/BFF/Web.Bff/             the third host, and the ONE that calls a peer
                              (§11.5). Same shape as the gateway
 src/Services/Catalog/        §4.1's project set — Domain, Application,
                              Infrastructure, Migrator, Api. The first real
-                             service, the scaffold's template, and the
-                             platform's one gRPC server
+                             service, the scaffold's template, and the first
+                             of the platform's two gRPC servers
 src/Services/Ordering/       the same set, rendered by the scaffold rather
                              than written, then given §5's Order aggregate,
                              §6.6's price projection with its withdrawal
                              watermark behind the solution's first receive
                              endpoint, and §9.6's saga with its receive
                              endpoints and the solution's only MassTransit EF
-                             persistence reference
+                             persistence reference, and, since ADR-052,
+                             `DeliveryAddresses.Get` on a second HTTP/2-only
+                             port — the address a Shipping worker reads,
+                             behind a permission no person holds
 tests/                       per service: .Domain.Tests, .Application.Tests,
                              .Api.Tests and .TestSupport — the last is NOT a
                              test project (§4.1). Per building block with
