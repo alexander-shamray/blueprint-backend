@@ -21,7 +21,7 @@
 | Host building block | One middleware or host extension | `TestServer` — no containers, no entry point | < 50 ms | Tens | `Common.Web.Tests` |
 | Infrastructure building block | One §8, §9 or §11.5 mechanism — a consumer wrapper, the outbox's table and type map, the idempotency store, the lock, the retention policy, the client-credentials token source | Recording fakes for most; a stub OpenID provider on loopback for the token source; a real Redis (container) for the classes in its `Integration` collection, where the mechanism under test is Redis's | < 10 ms, and < 500 ms against the stub provider or Redis | One suite | `Common.Infrastructure.Tests` |
 | Edge configuration | The route file of §10.2 against the host that loaded it, and §10.1's edge behaviours — compression and the body ceiling | `WebApplicationFactory` + a stub destination on loopback — no containers, and `UseKestrel` where the property under test is the server's own | < 1 s | One suite | `Gateway.Api.Tests` |
-| Outbound hop | §9.7's one synchronous call: the timeout hierarchy read off the built host, the credential handler's position inside the resilience pipeline, and §11.5's realm | `WebApplicationFactory` + a real gRPC server on loopback; one class also runs a real Keycloak | < 1 s, and seconds for the Keycloak class | One suite | `Web.Bff.Tests` |
+| Outbound hop | §9.7's pricing hop: the timeout hierarchy read off the built host, the credential handler's position inside the resilience pipeline, and §11.5's realm | `WebApplicationFactory` + a real gRPC server on loopback; one class also runs a real Keycloak | < 1 s, and seconds for the Keycloak class | One suite | `Web.Bff.Tests` |
 | Pipeline behaviour | One §6.3 behaviour against recording fakes — the branches its handler-level tests cannot reach | None | < 10 ms | One suite per behaviour | `Common.Application.Tests` |
 | Saga | One whole saga, coordination only | MassTransit in-memory harness — no infrastructure | < 100 ms per positive assertion (§12.5) | A few | `*.Application.Tests` |
 | Contract shape | Every published contract against the rules it must obey | Both assemblies, reflection only | < 1 s | One suite | `Platform.IntegrationTests` |
@@ -46,11 +46,10 @@ does the message one service publishes still mean what its consumers expect —
 is a reflection test over the contract assembly, and it is why
 `Platform.IntegrationTests` exists; what else that suite holds is §12.6's.
 Contract compatibility is **not the only thing genuinely between services** —
-§9.7's one synchronous hop is another, and §12.6 tests the two in almost
-opposite ways. The hop is
-deliberately not in this suite: a contract over it needs the provider
-running, so it lives in the provider's own suite rather than buying a sixth
-project a container set.
+§9.7's synchronous calls are another, and §12.6 tests the two in almost
+opposite ways. The calls are deliberately not in this suite: a contract over
+one needs the provider running, so it lives in the provider's own suite rather
+than buying a sixth project a container set.
 
 What no level above covers is whether the *deployed* system responds under load
 and against real infrastructure. That is the **k6 run against staging**
@@ -1810,7 +1809,7 @@ public async Task The_service_receives_the_path_with_the_namespace_prefix_remove
 ### The outbound hop
 
 The pyramid's outbound-hop row is `Web.Bff.Tests`, and it exists because
-§9.7's one synchronous call has three properties no other suite can reach: a
+§9.7's pricing hop has three properties no other suite can reach: a
 timeout hierarchy, a credential handler's *position*, and a realm that nothing
 compiles against.
 
@@ -2258,9 +2257,10 @@ public async Task Commands_are_sent_and_events_are_published()
 The saga tests above prove one service's coordination. **Two things are
 genuinely *between* services**, and they are tested in almost opposite ways: the
 contract assembly, whose rules are about *shape* and hold for every contract
-there will ever be, and [§9.7](09-messaging.md)'s one synchronous hop, whose
-rules are about *behaviour* and are one consumer's. The first is below; the
-second is the consumer-driven contract at the end of this section.
+there will ever be, and [§9.7](09-messaging.md)'s synchronous calls, whose
+rules are about *behaviour* and are each one consumer's. The first is below; the
+second is the consumer-driven contract at the end of this section, which also
+says which call earns one.
 
 The contract assembly's rules are all stated elsewhere as things reviewers
 should notice: §9.1's "a contract may not name a domain type", §9.2's versioned
@@ -2625,11 +2625,23 @@ consumer authors and the provider verifies — is taken, and the broker and wire
 format that ship it across a repository boundary are declined, because this is a
 monorepo and that boundary is not there.
 
-**Two things it does not do.** It covers one relationship, because the platform
-has one synchronous hop; a second would be the same conditional judgement again
-rather than an automatic second contract. And it does not cross a repository
-boundary — extract the BFF and this file becomes something that has to be
-published, at which point Pact is the answer after all.
+**Two things it does not do.** It does not cover the address read
+[ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)
+gives Shipping's worker, the second relationship
+[ADR-023](adr/ADR-023-the-consumer-driven-contract-is-a-linked-file-not-pact.md)
+left to the same conditional judgement, and the judgement is that the read
+earns no consumer-authored file. What made the pricing hop contentious was
+behaviour the consumer depends on and a hand-written stub reproduced wrongly —
+a currency's spelling compared with the request's, an amount's scale, a
+basket's ceiling. The worker depends on less: it compares nothing in the reply
+with anything it sent, checks each field's shape itself as §9.7's sixth rule
+asks, and tells only `NotFound` and a refusal (`Unauthenticated`,
+`PermissionDenied`) apart from everything else — and Ordering's API suite pins
+each of those statuses against the real provider. `StubOrdering` is still a
+hand-written stub, so a worker that comes to depend on more of the reply is
+where the contract becomes owed. And it does not cross a repository boundary —
+extract the BFF and this file becomes something that has to be published, at
+which point Pact is the answer after all.
 
 ## 12.7 Test doubles
 

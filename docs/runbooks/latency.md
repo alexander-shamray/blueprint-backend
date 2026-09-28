@@ -74,12 +74,15 @@ up here.
 
 ### A slow peer
 
-There is exactly one synchronous hop in this platform: BFF → Catalog for pricing
-([§9.7](../backend-architecture/09-messaging.md), ADR-017). If the BFF is the
-service alerting, check Catalog's own p99 first, then the resilience handler's
+There is one synchronous hop on a request path — BFF → Catalog for pricing
+([§9.7](../backend-architecture/09-messaging.md), ADR-017) — and it is the
+only one that can make an HTTP request wait. If the BFF is the service
+alerting, check Catalog's own p99 first, then the resilience handler's
 timeout hierarchy — `ServiceOptions.OperationTimeout` is 20 s and a request
 sitting near it is a peer that has stopped answering rather than one that is
-merely slow.
+merely slow. Shipping's worker calls Ordering for an address (ADR-052), and
+a slow answer there shows up as a shipment that has not booked rather than
+as latency: nothing is waiting on it, and the row backs off.
 
 Everything else crosses the broker and cannot make an HTTP request wait. If a
 trace shows a command handler blocking on a message, that is a design defect and

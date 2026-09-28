@@ -1244,9 +1244,9 @@ as behaviour rather than as an error:
 
 ```csharp
 // Web.Bff/Program.cs (§9.7) — the same place that registers CachingTokenClient
-// and ClientCredentialsHandler, and the only host that registers any of the
-// three. Unbound, the BFF requests a token with an empty scope and gets 401s
-// it will read as Catalog's fault.
+// and ClientCredentialsHandler; every host that calls a peer registers all
+// three in its own Program.cs (§9.7). Unbound, the BFF requests a token with an
+// empty scope and gets 401s it will read as Catalog's fault.
 services
     .AddOptions<ServiceIdentityOptions>()
     .BindConfiguration("Identity:Client")

@@ -186,8 +186,8 @@ services:
       ConnectionStrings__RabbitMq: "amqp://ordering-svc:local-dev-ordering@rabbitmq:5672"
       # The authority, to validate inbound tokens (§11.2). No Identity__Client__*:
       # Ordering calls no peer synchronously — prices come from a local
-      # projection (§6.4) and the rest goes over the broker. Only the BFF holds
-      # client credentials (§9.7, §11.5).
+      # projection (§6.4) and the rest goes over the broker. A host holds
+      # client credentials when it calls a peer (§9.7, §11.5, ADR-052).
       Identity__Authority: "http://keycloak:8080/realms/commerce"
       OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4317"
       # §8.1's two connections, joined on the rule that brought every line
@@ -261,11 +261,11 @@ services:
       payments-api: { condition: service_started }
       web-bff: { condition: service_started }
 
-  # The one host with client credentials, because it is the one host that calls
-  # a peer synchronously (§9.7). Everything else here has the authority only.
-  # Named web-bff, matching the Aspire resource (§14.2) and the YARP
-  # destination (§10.2) — the gateway resolves the destination by hostname, so
-  # the container name IS the routing configuration.
+  # Client credentials, because this host calls a peer synchronously (§9.7);
+  # §15.4 says which other hosts do (ADR-052). Named web-bff, matching the
+  # Aspire resource (§14.2) and the YARP destination (§10.2) — the gateway
+  # resolves the destination by hostname, so the container name is the routing
+  # configuration.
   web-bff:
     build:
       context: ../../..
@@ -685,9 +685,10 @@ WithPlatformIdentity(
         .WithHttpHealthCheck("/health/ready")
         .WithExternalHttpEndpoints());
 
-// The only resource with a callerClientId, matching Compose (§14.1): the BFF
-// is the only host that calls a peer synchronously (§9.7). If a second one
-// ever appears, ADR-017's hop budget is the thing to check first.
+// The only resource with a callerClientId, and the only one this model needs:
+// a host that calls a peer holds client credentials (§9.7, §11.5), §15.4 says
+// which other hosts do (ADR-052), and this sample runs none of them. For a host
+// added that calls a peer, ADR-017's hop budget is the first check.
 WithPlatformIdentity(
     builder.AddProject<Projects.Web_Bff>("web-bff")
         .WithReference(catalog)

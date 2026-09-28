@@ -53,13 +53,24 @@ graph TB
         GRAF[Grafana / Tempo / Prometheus]
     end
 
+    subgraph External
+        PSP[Payment provider]
+        CAR[Shipping carrier]
+    end
+
     GW --> CAT
     GW --> ORD
     GW --> INV
     GW --> PAY
     GW --> BFF
 
-    BFF -->|gRPC, the one sync hop| CAT
+    BFF -->|gRPC, pricing| CAT
+
+    SHP -->|gRPC, the address read| ORD
+    SHP -.->|client credentials| IDP
+
+    PAY -->|HTTPS, authorise and void| PSP
+    SHP -->|HTTPS, book and cancel| CAR
 
     GW -.->|validate| IDP
     BFF -.->|client credentials| IDP

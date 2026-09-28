@@ -21,7 +21,7 @@ graph LR
     INV -->|StockReserved / Failed<br/>StockReleased| ORD
     ORD -->|AuthorisePayment<br/>OrderPlaced| PAY
     PAY -->|PaymentAuthorised / Declined| ORD
-    ORD -->|OrderConfirmed| SHP
+    ORD -->|OrderConfirmed<br/>OrderCancelled| SHP
     SHP -->|ShipmentDispatched| ORD
     ORD -->|order events| NOT
     PAY -->|payment events| NOT
@@ -29,7 +29,8 @@ graph LR
     SHP -->|shipment events| NOT
 ```
 
-**Every collaboration is a round trip, and the return leg is an event.**
+**Every collaboration the map draws is a round trip, and the return leg is an
+event.**
 Ordering sends a command and then waits — it does not call and block. The
 return edges drawn above are what the fulfilment saga
 ([§9.6](09-messaging.md)) transitions on, and drawing only the outbound half
@@ -38,6 +39,13 @@ The saga has a fourth round trip the map does not draw, because both of its
 ends are Ordering: `ConfirmOrder` out to the aggregate and `OrderConfirmed`
 back. It is asynchronous on exactly these terms, and the Consumes cell below is
 where it is recorded.
+
+One collaboration is of another kind, and the map leaves it undrawn because it
+draws messages: a Shipping worker reads a delivery address from Ordering over
+gRPC, off every request path
+([ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)).
+It is the departure [§2.3](02-architecture-at-a-glance.md)'s callout records,
+not a round trip whose return leg is an event.
 
 | Context | Type | Why it is separate |
 |---|---|---|
@@ -64,7 +72,7 @@ subscriber silently executing your business commands.
 | **Ordering** | Order, OrderLine, the fulfilment saga | `OrderPlaced`, `OrderConfirmed`, `OrderCancelled` | `OrderPlaced` (its own — the saga starts on it), `OrderCancelled` (its own — the saga stops on it), `OrderConfirmed` (its own — the saga waits on it), `ProductPublished`, `PriceChanged`, `ProductDiscontinued`, `StockReserved`, `StockReservationFailed`, `StockReleased`, `PaymentAuthorised`, `PaymentDeclined`, `ShipmentDispatched` | `CancelOrder`, `ConfirmOrder`, `MarkOrderShipped`, `FlagOrderForReview` |
 | **Inventory** | StockItem, Reservation | `StockReserved`, `StockReservationFailed`, `StockReleased`, `StockLevelChanged` | `OrderCancelled`, `ShipmentDispatched` | `ReserveStock`, `ReleaseStock` |
 | **Payments** | PaymentIntent, Refund | `PaymentAuthorised`, `PaymentDeclined`, `PaymentRefunded` | `OrderPlaced`, `OrderCancelled` | `AuthorisePayment` |
-| **Shipping** | Shipment, TrackingEvent | `ShipmentDispatched`, `ShipmentDelivered` | `OrderConfirmed` | — |
+| **Shipping** | Shipment, TrackingEvent | `ShipmentDispatched`, `ShipmentDelivered` | `OrderConfirmed`, `OrderCancelled` | — |
 | **Notifications** | NotificationLog | — | `OrderPlaced`, `OrderConfirmed`, `OrderCancelled`, `PaymentDeclined`, `PaymentRefunded`, `ShipmentDispatched`, `ShipmentDelivered` | — |
 
 Every cell enumerates. "All customer-relevant events" would be shorter and is
@@ -112,8 +120,8 @@ for its effect is what that assumption looked like in the machine
 **A round trip whose two ends are the same service is still a round trip**, and
 this is the platform's only one. The context map above draws no Ordering
 self-edge, which is a simplification rather than a claim: the collaboration is
-real, it is asynchronous like every other, and it obeys the same rule that the
-return leg is an event.
+real, it is asynchronous like every one drawn here, and it obeys the same rule
+that the return leg is an event.
 
 **Payments subscribes to `OrderPlaced` to build its own record of the order —
 the payer, the total and the currency.** The payer is the one it cannot do

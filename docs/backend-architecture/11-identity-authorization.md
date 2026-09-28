@@ -1556,7 +1556,7 @@ sequenceDiagram
     B->>S: consume (inbox)
     O->>O: anonymise Orders.CustomerId, purge address
     N->>N: anonymise NotificationLog rows
-    S->>S: anonymise Shipment recipient
+    S->>S: delete DeliveryAddresses rows (ADR-052)
     O->>B: PersonalDataDeleteCompletedV1 {RequestId, "ordering"}
     N->>B: PersonalDataDeleteCompletedV1 {RequestId, "notifications"}
     S->>B: PersonalDataDeleteCompletedV1 {RequestId, "shipping"}

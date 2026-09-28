@@ -2858,9 +2858,14 @@ two-BFF diagram illustrates it, and is a picture of the pattern rather than of
 this platform.
 
 `Web.Bff`'s pricing hop to Catalog (below) is the platform's one synchronous
-call between its services and Catalog calls nobody, so the deepest chain is
-`Client → Gateway → BFF → Catalog`. The fan-out allowance is stated because it
-is the rule a reviewer needs.
+call on a request path, and Catalog calls nobody, so the deepest chain is
+`Client → Gateway → BFF → Catalog`. There is a second synchronous call between
+services and it is on no request path at all:
+[ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)
+has a Shipping worker read a delivery address from Ordering with nothing
+waiting on the answer, so it spends no hop of this budget and §2.3's callout
+records the departure. The fan-out allowance is stated because it is the rule
+a reviewer needs.
 
 That said, fan-out is not free — each additional call adds a failure mode and
 another dependency to the caller's availability. Beyond about three, the data
@@ -2938,12 +2943,16 @@ configuration-validation test at startup.
    500, because a contract violation between two services is nobody's caller's
    fault.
 
-For a peer call, the BFF's `Program.cs` (§4.1) is the one composition root
-that registers any of this — `Web.Bff` is the only host in this blueprint that
-calls a peer synchronously, which makes it the only one holding client
-credentials (§11.5), and §4.2's helper deliberately registers none of it. The
-other outbound client is Payments' provider hop, `ProviderHop`, behind §3.2's
-anti-corruption layer, which Payments registers for itself. `PricingHop`,
+For a peer call, the caller's own `Program.cs` (§4.1) registers it and §4.2's
+helper deliberately registers none of it, so a host that holds client
+credentials is a host that calls a peer (§11.5). `Web.Bff` registers the
+pricing hop; Shipping's worker registers the address read
+[ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)
+gives it, off every request path. The outbound clients of the other kind call
+third parties — Payments' `ProviderHop`, behind the anti-corruption layer §3.1
+gives Payments, and Shipping's `CarrierHop`, to the carrier §3.1 makes
+Shipping conformist to — and each is registered by the service that makes the
+call. `PricingHop`,
 beside the BFF's registration, names the client and Catalog's address once:
 `http`, not `https`,
 because TLS terminates at the ingress and traffic inside the cluster is plain
