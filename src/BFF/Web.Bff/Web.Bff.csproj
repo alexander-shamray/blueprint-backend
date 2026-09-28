@@ -7,8 +7,8 @@
     no domain and no database, so there is nothing for an Application or an
     Infrastructure layer to hold. Program.cs is the whole composition root.
     What it has that the gateway does not is an outbound call — a synchronous
-    hop to a peer (§9.7, ADR-017) — and that is why the packages below are
-    here.
+    hop to a peer (§9.7, ADR-017) — and that is why the gRPC and resilience
+    packages below are here.
   -->
 
   <ItemGroup>
