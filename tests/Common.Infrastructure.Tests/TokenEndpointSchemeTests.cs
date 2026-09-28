@@ -4,7 +4,7 @@ using Microsoft.Extensions.Options;
 using Shouldly;
 using Xunit;
 
-namespace Web.Bff.Tests;
+namespace Common.Infrastructure.Tests;
 
 /// <summary>
 /// Where §11.5's client secret is allowed to be posted. The discovery document

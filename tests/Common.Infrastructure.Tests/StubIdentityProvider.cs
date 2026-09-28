@@ -8,7 +8,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using Xunit;
 
-namespace Web.Bff.Tests;
+namespace Common.Infrastructure.Tests;
 
 /// <summary>
 /// A real HTTP server standing in for the identity provider: a discovery
