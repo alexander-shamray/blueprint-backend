@@ -5,8 +5,8 @@ namespace Shipping.Infrastructure.Addresses;
 
 /// <summary>
 /// One refused credential on the way to an address, whether the identity
-/// provider refused this host or Ordering refused its token, on the carrier's
-/// meter (spec, section 11).
+/// provider refused this host or Ordering refused its token, on the outbound
+/// meter <see cref="CarrierMetrics.MeterName"/> names (spec, section 11).
 /// </summary>
 /// <remarks>
 /// <c>CarrierMetrics.MeterName</c> rather than a string of its own, so §13.2's

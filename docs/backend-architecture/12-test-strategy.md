@@ -21,7 +21,7 @@
 | Host building block | One middleware or host extension | `TestServer` — no containers, no entry point | < 50 ms | Tens | `Common.Web.Tests` |
 | Infrastructure building block | One §8, §9 or §11.5 mechanism — a consumer wrapper, the outbox's table and type map, the idempotency store, the lock, the retention policy, the client-credentials token source | Recording fakes for most; a stub OpenID provider on loopback for the token source; a real Redis (container) for the classes in its `Integration` collection, where the mechanism under test is Redis's | < 10 ms, and < 500 ms against the stub provider or Redis | One suite | `Common.Infrastructure.Tests` |
 | Edge configuration | The route file of §10.2 against the host that loaded it, and §10.1's edge behaviours — compression and the body ceiling | `WebApplicationFactory` + a stub destination on loopback — no containers, and `UseKestrel` where the property under test is the server's own | < 1 s | One suite | `Gateway.Api.Tests` |
-| Outbound hop | §9.7's pricing hop: the timeout hierarchy read off the built host, the credential handler's position inside the resilience pipeline, and §11.5's realm | `WebApplicationFactory` + a real gRPC server on loopback; one class also runs a real Keycloak | < 1 s, and seconds for the Keycloak class | One suite | `Web.Bff.Tests` |
+| Outbound hop | One of §9.7's synchronous calls, from its caller's host: the timeout hierarchy, the credential handler's position inside the resilience pipeline, and §11.5's realm for the pricing hop | `WebApplicationFactory` + a real gRPC server on loopback; one class also runs a real Keycloak | < 1 s, and seconds for the Keycloak class | One suite per caller | `Web.Bff.Tests`, `Shipping.Worker.Tests` |
 | Pipeline behaviour | One §6.3 behaviour against recording fakes — the branches its handler-level tests cannot reach | None | < 10 ms | One suite per behaviour | `Common.Application.Tests` |
 | Saga | One whole saga, coordination only | MassTransit in-memory harness — no infrastructure | < 100 ms per positive assertion (§12.5) | A few | `*.Application.Tests` |
 | Contract shape | Every published contract against the rules it must obey | Both assemblies, reflection only | < 1 s | One suite | `Platform.IntegrationTests` |
@@ -1808,10 +1808,12 @@ public async Task The_service_receives_the_path_with_the_namespace_prefix_remove
 
 ### The outbound hop
 
-The pyramid's outbound-hop row is `Web.Bff.Tests`, and it exists because
-§9.7's pricing hop has three properties no other suite can reach: a
-timeout hierarchy, a credential handler's *position*, and a realm that nothing
-compiles against.
+The pyramid's outbound-hop row is `Web.Bff.Tests` for §9.7's pricing hop,
+which has three properties no other suite can reach: a timeout hierarchy, a
+credential handler's *position*, and a realm that nothing compiles against.
+`Shipping.Worker.Tests` holds the first two for the address read
+[ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)
+adds, against a stub Ordering on loopback.
 
 The hierarchy is read off the **built host** rather than recomputed from the
 numbers a helper returns — which is what makes it a test of the registration:

@@ -23,12 +23,11 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Services\Shipping\Shipping.Application\Shipping.Application.csproj" />
-    <!-- No Shipping.TestSupport and no Docker, which departs from §12.1's
-         Application row on purpose: the handlers here run against hand-rolled
-         fakes, because what is worth pinning is the row each one writes or
-         leaves, not a database. The persisted write runs over a real broker
-         and database in the worker's suite, which already carries the fixture
-         a second copy here would duplicate. -->
+    <!-- No Shipping.TestSupport and no Docker: the handlers here run against
+         hand-rolled fakes. §12.4 reads the pyramid's levels as what a test
+         exercises, never as assembly names, and the real-database cases for
+         these handlers are the consumer cases in Shipping.Worker.Tests, where
+         the fixture lives. -->
   </ItemGroup>
 
 </Project>
