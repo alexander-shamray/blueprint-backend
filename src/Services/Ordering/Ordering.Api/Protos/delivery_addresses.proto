@@ -37,9 +37,10 @@ message GetDeliveryAddressReply {
   // record holds neither.
   string customer_id = 1;
 
-  // Address.Of's five parts, in its own spelling (§5.3). Nothing else of the
-  // order travels: not its status, not its total, not its lines. A reader that
-  // needed one of those would be reading an order rather than an address.
+  // Address.Of's five parts (§5.3), with post_code standing for its
+  // PostalCode. Nothing else of the order travels: not its status, not its
+  // total, not its lines. A reader that needed one of those would be reading
+  // an order rather than an address.
   string line1 = 2;
 
   // EMPTY, never absent: proto3 has no null string, and Address.Line2 is

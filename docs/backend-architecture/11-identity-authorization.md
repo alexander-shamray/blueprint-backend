@@ -1437,11 +1437,13 @@ satisfy.
 > pass every other check and hand the platform to any user the realm holds.
 
 It is also the **one** suite that runs a real Keycloak, and it arrives with the
-BFF (PR-19) because client credentials are the BFF's mechanism and no other
-host has them. §12.4's fixture deliberately does the opposite: it points at an
-unreachable authority and swaps the JWT scheme for `TestAuthHandler`, because
-the several hundred tests that merely need *a* principal should not pay for an
-identity provider or fail when one is slow. That fixture therefore cannot see
+BFF (PR-19) because client credentials were the BFF's mechanism alone until
+[ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)
+minted `shipping-worker`, whose grant the same suite proves both ways. §12.4's
+fixture deliberately does the opposite: it points at an unreachable authority
+and swaps the JWT scheme for `TestAuthHandler`, because the several hundred
+tests that merely need *a* principal should not pay for an identity provider or
+fail when one is slow. That fixture therefore cannot see
 this defect at all — it never validates a token Keycloak issued. So this suite
 gets its own fixture, starting the Keycloak container with the realm import
 from [§14.1](14-local-development.md) and the real JWT scheme:
