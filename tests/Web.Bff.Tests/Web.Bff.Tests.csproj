@@ -25,10 +25,6 @@
          §9.7's hierarchy. Carried transitively by Web.Bff; named here for the
          same reason. -->
     <PackageReference Include="Microsoft.Extensions.Http.Resilience" />
-    <!-- FakeTimeProvider. CachingTokenClient's expiry guard is thirty seconds
-         and its whole point is a token handed back too close to expiry; a test
-         that waited for that would be a thirty-second test. -->
-    <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
     <!-- §11.5's suite, and the only one in the solution that runs a real
          Keycloak. The audience mapper it proves is realm configuration, so
          nothing in the solution compiles differently when it is missing. -->

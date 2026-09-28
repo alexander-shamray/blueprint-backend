@@ -8,6 +8,18 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- §11.5's token source is proved against a real server, because half of
+         what is under test is what the client does with a discovery document
+         (the stub's own remarks). Kestrel and the minimal-API results are the
+         shared framework's, and this suite is the only thing here that takes
+         it — Common.Infrastructure itself does not. It also carries the real
+         container and the in-memory IConfiguration the registration tests
+         resolve AddRedisConnections through, so neither is named as a package
+         (NU1510). -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="xunit.v3" />
     <PackageReference Include="xunit.runner.visualstudio" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
@@ -15,12 +27,6 @@
     <!-- The lock's guards and call shapes need no server; the container
          suite below is what needs one. -->
     <PackageReference Include="NSubstitute" />
-    <!-- The real container: the registration tests resolve through the same
-         AddRedisConnections a service calls, not a second copy of it. -->
-    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
-    <!-- A real IConfiguration for AddRedisConnections' signature, built
-         in-memory rather than substituted. -->
-    <PackageReference Include="Microsoft.Extensions.Configuration" />
     <PackageReference Include="Testcontainers.Redis" />
     <!-- The in-memory harness for §9.4's two consumers. Core, not
          MassTransit.RabbitMQ: the harness swaps the transport out, and the

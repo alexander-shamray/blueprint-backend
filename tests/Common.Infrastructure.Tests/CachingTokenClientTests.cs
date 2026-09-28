@@ -6,7 +6,7 @@ using Microsoft.Extensions.Time.Testing;
 using Shouldly;
 using Xunit;
 
-namespace Web.Bff.Tests;
+namespace Common.Infrastructure.Tests;
 
 /// <summary>
 /// §11.5's token source: what it fetches, what it caches, and what it refuses

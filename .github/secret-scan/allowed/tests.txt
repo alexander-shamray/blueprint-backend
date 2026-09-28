@@ -31,12 +31,12 @@ tests/Common.Web.Tests/RedactingScopeProviderTests.cs | connection-string-passwo
 tests/Common.Web.Tests/SensitiveDataRedactorTests.cs | connection-string-password | f52fbd32b2b3 | The same throwaway value in the record redactor's suite.
 tests/Common.Web.Tests/SensitiveDataRedactorTests.cs | connection-string-password | 75857a458999 | An English word in a message template the suite asserts about.
 tests/Common.Web.Tests/SensitiveKeysTests.cs | connection-string-password | f52fbd32b2b3 | The throwaway value across the separator-spelling table cases.
-tests/Web.Bff.Tests/CachingTokenClientTests.cs | credential-assignment | eb26d4a9a0ef | Section 11.5's local BFF client default, bound in a test fixture.
-tests/Web.Bff.Tests/CachingTokenClientTests.cs | credential-assignment | ca2a7d5ccd7e | An invented bearer value in a stub error body, asserted never to be logged.
+tests/Common.Infrastructure.Tests/CachingTokenClientTests.cs | credential-assignment | eb26d4a9a0ef | Section 11.5's local BFF client default, bound in a test fixture.
+tests/Common.Infrastructure.Tests/CachingTokenClientTests.cs | credential-assignment | ca2a7d5ccd7e | An invented bearer value in a stub error body, asserted never to be logged.
 tests/Web.Bff.Tests/KeycloakIdentityTests.cs | credential-assignment | eb26d4a9a0ef | The same local BFF client default in the identity suite.
 tests/Web.Bff.Tests/KeycloakIdentityTests.cs | credential-assignment | 5d7c40ed1628 | An invented wrong value, asserted to be refused by the provider.
-tests/Web.Bff.Tests/TokenEndpointSchemeTests.cs | credential-assignment | eb26d4a9a0ef | The same local BFF client default in the scheme suite.
-tests/Web.Bff.Tests/TokenEndpointSchemeTests.cs | credential-assignment | 96b2735306f5 | A non-HTTP endpoint URL asserted to be refused. A URL, not a credential.
+tests/Common.Infrastructure.Tests/TokenEndpointSchemeTests.cs | credential-assignment | eb26d4a9a0ef | The same local BFF client default in the scheme suite.
+tests/Common.Infrastructure.Tests/TokenEndpointSchemeTests.cs | credential-assignment | 96b2735306f5 | A non-HTTP endpoint URL asserted to be refused. A URL, not a credential.
 
 
 # --- Inventory, rendered by tools/new-service -----------------------------
