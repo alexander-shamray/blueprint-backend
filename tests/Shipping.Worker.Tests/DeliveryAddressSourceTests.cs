@@ -5,7 +5,9 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Http.Resilience;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using Shipping.Application.Addresses;
 using Shipping.Application.Carrier;
 using Shipping.Domain.Shipments;
@@ -348,21 +350,32 @@ public sealed class DeliveryAddressSourceTests : IClassFixture<DeliveryAddressSo
     }
 
     [Fact]
-    public void Every_attempt_and_every_bounded_delay_fit_inside_the_total()
+    public void The_built_pipeline_fits_every_attempt_and_every_bounded_delay_inside_the_total()
     {
-        TimeSpan worst = AddressHop.AttemptTimeout * (AddressHop.MaxRetryAttempts + 1)
-                         + AddressHop.MaxRetryDelay * AddressHop.MaxRetryAttempts;
+        // Off the built host, by the name the handler registered under, so this
+        // checks the registration rather than restating the constants (§9.7).
+        HttpStandardResilienceOptions options = _factory.Services
+            .GetRequiredService<IOptionsMonitor<HttpStandardResilienceOptions>>()
+            .Get(AddressHop.ResilienceOptionsName);
+
+        options.AttemptTimeout.Timeout.ShouldBe(AddressHop.AttemptTimeout);
+        options.Retry.MaxRetryAttempts.ShouldBe(AddressHop.MaxRetryAttempts);
+        options.Retry.MaxDelay.ShouldBe(AddressHop.MaxRetryDelay, "jitter makes the nominal delay no bound");
+        options.TotalRequestTimeout.Timeout.ShouldBe(AddressHop.TotalRequestTimeout);
+
+        TimeSpan worst = options.AttemptTimeout.Timeout * (options.Retry.MaxRetryAttempts + 1)
+                         + options.Retry.MaxDelay!.Value * options.Retry.MaxRetryAttempts;
 
         worst.ShouldBeLessThan(
-            AddressHop.TotalRequestTimeout,
+            options.TotalRequestTimeout.Timeout,
             "a total that cancels the last retry makes the retry count a fiction");
 
-        AddressHop.TotalRequestTimeout.ShouldBeLessThan(Common.Web.ServiceOptions.OperationTimeout);
+        options.TotalRequestTimeout.Timeout.ShouldBeLessThan(Common.Web.ServiceOptions.OperationTimeout);
 
         // §9.7's bands, because Ordering is a peer and not a third party — the
         // one place this hop differs from CarrierHop, which sits outside them.
-        AddressHop.AttemptTimeout.ShouldBeInRange(TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(2));
-        AddressHop.TotalRequestTimeout.ShouldBeInRange(TimeSpan.FromSeconds(3), TimeSpan.FromSeconds(5));
+        options.AttemptTimeout.Timeout.ShouldBeInRange(TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(2));
+        options.TotalRequestTimeout.Timeout.ShouldBeInRange(TimeSpan.FromSeconds(3), TimeSpan.FromSeconds(5));
     }
 
     [Fact]
