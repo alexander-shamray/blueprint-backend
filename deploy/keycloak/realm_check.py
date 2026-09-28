@@ -688,9 +688,9 @@ def check_worker_client(client: dict) -> list[str]:
     """ADR-052's ceiling on the address reader, as far as a realm document reaches.
 
     The grant itself is out of reach and that record says so: a service
-    account's roles live on its user, which is in neither the realm
-    representation this gate is handed nor the client list `read_admin.py`
-    fetches. What is left here is the rest of a stolen secret's blast radius —
+    account's roles live on its user, which the client list `read_admin.py`
+    fetches does not carry and `judged` does not keep even where an export
+    does. What is left here is the rest of a stolen secret's blast radius —
     that the client is confidential, mints tokens for itself alone, and carries
     the scope whose mapper writes the `permission` claim at all.
     """
