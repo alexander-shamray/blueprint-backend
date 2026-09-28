@@ -1,3 +1,4 @@
+using Common.Infrastructure.Identity;
 using Common.Web;
 using Grpc.Net.ClientFactory;
 using Microsoft.AspNetCore.Authentication;
@@ -5,7 +6,6 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using Web.Bff.Identity;
 
 namespace Web.Bff.Tests;
 

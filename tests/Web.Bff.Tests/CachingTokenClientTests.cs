@@ -1,9 +1,9 @@
+using Common.Infrastructure.Identity;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 using Shouldly;
-using Web.Bff.Identity;
 using Xunit;
 
 namespace Web.Bff.Tests;
@@ -15,6 +15,7 @@ namespace Web.Bff.Tests;
 public sealed class CachingTokenClientTests : IAsyncLifetime
 {
     private const string Scope = "commerce-api";
+    private const string AuthorityKey = "Test:Authority";
 
     private readonly StubIdentityProvider _provider = new();
     private readonly FakeTimeProvider _clock = new();
@@ -36,6 +37,7 @@ public sealed class CachingTokenClientTests : IAsyncLifetime
                 ClientSecret = "local-dev-secret",
                 Scope = Scope
             }));
+        services.AddSingleton(new AuthorityKeyName(AuthorityKey));
         services.AddSingleton<ITokenCache, CachingTokenClient>();
 
         _services = services.BuildServiceProvider();
@@ -224,8 +226,9 @@ public sealed class CachingTokenClientTests : IAsyncLifetime
         InvalidOperationException thrown = await Should.ThrowAsync<InvalidOperationException>(
             () => Tokens.GetAsync(Scope, TestContext.Current.CancellationToken));
 
-        // Naming Identity:Authority is what turns this from "something went
-        // wrong talking to the provider" into a deployment instruction.
-        thrown.Message.ShouldContain("Identity:Authority");
+        // The key the host was configured from is what turns this from
+        // "something went wrong talking to the provider" into a deployment
+        // instruction, so the name this client was given is what it prints.
+        thrown.Message.ShouldContain(AuthorityKey);
     }
 }

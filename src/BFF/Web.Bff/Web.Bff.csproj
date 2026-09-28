@@ -62,6 +62,13 @@
          through it. The BFF consumes no Ordering message type and must not
          start. -->
     <ProjectReference Include="..\..\BuildingBlocks\Common.Contracts\Common.Contracts.csproj" />
+    <!-- §11.5's client-credentials grant, which ADR-052 puts in a building
+         block because more than one host needs it. Every other host reaches
+         this project through its own *.Infrastructure (§4.2); the BFF has
+         none (§10.1), so it names it here and restores the outbox, inbox and
+         Redis code it never calls — the cost Common.Web's EF Core reference
+         already pays in the gateway, in the same currency. -->
+    <ProjectReference Include="..\..\BuildingBlocks\Common.Infrastructure\Common.Infrastructure.csproj" />
   </ItemGroup>
 
   <ItemGroup>
