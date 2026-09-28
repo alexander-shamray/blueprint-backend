@@ -55,12 +55,12 @@ internal sealed class GrpcDeliveryAddressSource(
         // value is an address (AddressLimits).
         return new AddressLookup.Found(
             new DeliveryAddress(
-                Bounded(reply.Line1, AddressLimits.MaxLineLength, "line1"),
+                Required(reply.Line1, AddressLimits.MaxLineLength, "line1"),
                 reply.Line2.Length == 0 ? null : Bounded(reply.Line2, AddressLimits.MaxLineLength, "line2"),
-                Bounded(reply.City, AddressLimits.MaxCityLength, "city"),
-                Bounded(reply.PostCode, AddressLimits.MaxPostalCodeLength, "post_code"),
+                Required(reply.City, AddressLimits.MaxCityLength, "city"),
+                Required(reply.PostCode, AddressLimits.MaxPostalCodeLength, "post_code"),
                 Country(reply.Country)),
-            Guid.Parse(reply.CustomerId));
+            Customer(reply.CustomerId));
 
         // The field, never the value: the value is an address, and §13.4's
         // redactor cannot see one interpolated into a message.
@@ -69,12 +69,27 @@ internal sealed class GrpcDeliveryAddressSource(
                 ? value
                 : throw new InvalidOperationException($"Ordering answered with a {field} longer than {maxLength}.");
 
-        // Two ASCII letters, the shape the producer checks and the char column
-        // stores; a shorter one would be padded into a different code.
+        // Address.Of refuses a blank one of these, so a blank one here is a
+        // reply the contract does not produce rather than an address.
+        static string Required(string value, int maxLength, string field) =>
+            string.IsNullOrWhiteSpace(value)
+                ? throw new InvalidOperationException($"Ordering answered with an empty {field}.")
+                : Bounded(value, maxLength, field);
+
+        // Two upper-case ASCII letters, the form Address.Of stores and the char
+        // column holds; a shorter one would be padded into a different code.
         static string Country(string value) =>
-            value.Length == AddressLimits.CountryLength && value.All(char.IsAsciiLetter)
+            value.Length == AddressLimits.CountryLength && value.All(char.IsAsciiLetterUpper)
                 ? value
                 : throw new InvalidOperationException(
-                    $"Ordering answered with a country that is not {AddressLimits.CountryLength} ASCII letters.");
+                    $"Ordering answered with a country that is not {AddressLimits.CountryLength} upper-case ASCII " +
+                    "letters.");
+
+        // The key erasure deletes by (ADR-052): an empty one would file the
+        // address under a subject no erasure ever names.
+        static Guid Customer(string value) =>
+            Guid.TryParse(value, out Guid customer) && customer != Guid.Empty
+                ? customer
+                : throw new InvalidOperationException("Ordering answered with an empty or malformed customer_id.");
     }
 }
