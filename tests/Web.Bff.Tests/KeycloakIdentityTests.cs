@@ -30,6 +30,16 @@ public sealed class KeycloakIdentityTests(KeycloakFixture keycloak)
     private const string BffClient = "web-bff";
     private const string BffSecret = "local-dev-secret";
 
+    /// <summary>
+    /// The permission ADR-052 gives the address reader, spelt as a literal.
+    /// </summary>
+    /// <remarks>
+    /// <c>OrderingPermissions.DeliveryAddress</c> is the owner and this suite
+    /// may not reference Ordering to read it; the realm's closed role set is
+    /// what ties the two spellings together (§11.4, §11.5).
+    /// </remarks>
+    private const string DeliveryAddress = "orders:delivery-address";
+
     private static readonly JwtSecurityTokenHandler Tokens = new();
 
     [Fact]
@@ -173,16 +183,6 @@ public sealed class KeycloakIdentityTests(KeycloakFixture keycloak)
 
         response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
     }
-
-    /// <summary>
-    /// The permission ADR-052 gives the address reader, spelt as a literal.
-    /// </summary>
-    /// <remarks>
-    /// <c>OrderingPermissions.DeliveryAddress</c> is the owner and this suite
-    /// may not reference Ordering to read it; the realm's closed role set is
-    /// what ties the two spellings together (§11.4, §11.5).
-    /// </remarks>
-    private const string DeliveryAddress = "orders:delivery-address";
 
     /// <summary>
     /// A minimal host running the platform's real token validation against the
