@@ -514,12 +514,13 @@ public class RealmImportTests
         granted.ShouldBe(["orders:delivery-address"]);
 
         // And nothing beside it: a role on another client, realm-management's
-        // view-users say, or a realm role composing one, widens the same
-        // stolen secret without touching the list above.
+        // view-users say, or a realm role or group carrying one, widens the
+        // same stolen secret without touching the list above.
         string[] clients = [.. account.GetProperty("clientRoles").EnumerateObject().Select(c => c.Name)];
 
         clients.ShouldBe([Audience]);
         account.TryGetProperty("realmRoles", out _).ShouldBeFalse();
+        account.TryGetProperty("groups", out _).ShouldBeFalse();
     }
 
     [Fact]
