@@ -114,13 +114,12 @@
          package since ASP.NET Core 3.0. Same version line as the runtime
          above: it ships with the framework and moves with it. -->
     <PackageVersion Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.10" />
-    <!-- JwtSecurityTokenHandler, which §11.5's Keycloak suite reads an `aud`
-         claim with. Carried transitively by the row above; pinned because a
-         test names the type, on the register's honesty rule.
+    <!-- JwtSecurityTokenHandler. Carried transitively by the row above, and
+         pinned because projects name the type; Appendix B's row says which.
          8.19.2 rather than a round number, because that is the floor the row
          above reaches it at — through Microsoft.IdentityModel.Protocols.OpenIdConnect
          — and with CentralPackageTransitivePinningEnabled anything lower is a
-         package DOWNGRADE that fails the restore. The same shape Google.Protobuf
+         package downgrade that fails the restore. The same shape Google.Protobuf
          carries above. -->
     <PackageVersion Include="System.IdentityModel.Tokens.Jwt" Version="8.19.2" />
     <!-- Appendix C's OpenAPI deliverable: the framework's own document

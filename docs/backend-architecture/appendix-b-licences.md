@@ -56,7 +56,7 @@ Adding a dependency means adding its identity here, not just its name.
 | `NSubstitute` | BSD-3 | Mocking |
 | `Shouldly` *or* `AwesomeAssertions` | BSD-3 / Apache 2.0 | Assertions. An either/or row: only the chosen library is pinned in §4.4, and the licence gate excludes the other rather than reporting it as a dropped pin |
 | Testcontainers for .NET (`Testcontainers.MsSql`, `Testcontainers.Redis`, `Testcontainers.RabbitMq`, `Testcontainers.Keycloak`) | MIT | Integration test infrastructure. The Keycloak module is [§11.5](11-identity-authorization.md)'s suite, and the only place the solution runs an identity provider |
-| `System.IdentityModel.Tokens.Jwt` | MIT | `JwtSecurityTokenHandler`, which [§11.5](11-identity-authorization.md)'s suite reads the `aud` claim with. A transitive of the JWT bearer handler, pinned because a project names the type |
+| `System.IdentityModel.Tokens.Jwt` | MIT | `JwtSecurityTokenHandler`, which Shipping's worker reads its own token's `permission` claim with in production ([ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)), and [§11.5](11-identity-authorization.md)'s suite reads the `aud` claim with. A transitive of the JWT bearer handler, pinned because projects name the type |
 | `SSH.NET` | MIT | The SSH transport behind Testcontainers' port forwarding — a transitive dependency pinned explicitly, on the same terms as `Microsoft.OpenApi` above: the floor the row above declares resolves to a version carrying GHSA-q939-rpr3-3284 and NU1903 fails the restore. Registered because a pinned transitive is still a pin, not because anything here opens an SSH connection |
 | `Respawn` | MIT | Test database reset |
 | `WireMock.Net` | Apache 2.0 | HTTP stubbing |
