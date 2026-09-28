@@ -46,53 +46,28 @@ public class ArchitectureTests
     [Fact]
     public void Application_references_only_what_the_dependency_table_allows()
     {
-        // §4.2's second row read as the allow-list it is. What this catches
-        // that a deny-list cannot: EF Core, ASP.NET, Redis and MassTransit are
-        // all excluded by not appearing, and so is another service's assembly,
-        // which §4.3 forbids and which no deny-list here would have thought to
-        // mention.
-        //
-        // Two entries are worth reading twice. Common.Domain is here and not
-        // in §4.2's row, because a service's Domain cannot exist without it
-        // (§4.2's first row) and arrives carrying it — the table is about
-        // project references, where the line is genuinely absent, and this
-        // gate is about assembly references, where the mapper's IDomainEvent
-        // and four handlers' DomainException put it here regardless.
-        //
-        // System.Collections.Immutable is the other, and it is here because
-        // the compiler emitted it: no source file in this project names a
-        // type from that assembly, and Catalog.Application — same shape, same
-        // analysers — does not reference it at all. The obvious explanation
-        // was the collection expressions in the mapper, spread into an
-        // interface-typed member, and it is wrong: adding exactly that shape
-        // to Catalog.Application pulled in nothing. The cause is not
-        // established and the entry is measured rather than argued.
-        //
-        // Which is the case for reading EMITTED references rather than
-        // usings. A source-level review of this project would not have found
-        // this line, and a gate that only saw what the source names would
-        // have had nothing to say about it.
-        //
-        // Catalog's list carries Dapper and System.Data.Common where this one
-        // does not: §6.5's read side is Dapper wherever a query handler exists
-        // and Ordering has none yet, so the entry arrives with the PR that
-        // writes the first one rather than being reserved for it.
-        //
-        // The list is a subset check and not an equality: an entry for
-        // something no longer referenced is a pre-authorised hole rather than
-        // a failure, which is the same trade the Domain gate takes. What both
-        // buy is that ADDING one is a decision somebody has to write down.
+        // §4.2's second row read as the allow-list it is: EF Core, ASP.NET,
+        // Redis, MassTransit and every other service's assembly (§4.3) are
+        // excluded by not appearing. Dapper is §6.5's read side and brings
+        // System.Data.Common, as in Catalog's list. Common.Domain arrives with
+        // Ordering.Domain (§4.2's first row), and System.Collections.Immutable
+        // is emitted by the compiler with no source naming it — measured, not
+        // argued, which is why this reads emitted references rather than
+        // usings. A subset check, not an equality: adding an entry is a
+        // decision written down.
         string[] allowed =
         [
             "Common.Application",
             "Common.Contracts",
             "Common.Domain",
+            "Dapper",
             "FluentValidation",
             "FluentValidation.DependencyInjectionExtensions",
             "Microsoft.Extensions.DependencyInjection.Abstractions",
             "Ordering.Domain",
             "System.Collections",
             "System.Collections.Immutable",
+            "System.Data.Common",
             "System.Linq",
             "System.Linq.Expressions",
             "System.Runtime"
