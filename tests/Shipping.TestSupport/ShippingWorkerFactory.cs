@@ -1,3 +1,4 @@
+using Shipping.Infrastructure.Fulfilment;
 using Shipping.TestSupport.Outbox;
 using Common.Application;
 using Common.Infrastructure.Identity;
@@ -112,6 +113,16 @@ public class ShippingWorkerFactory(
 
                 // Still resolvable directly, so tests can drive one pass.
                 services.AddSingleton<OutboxDispatcher>();
+
+                // The fulfilment worker, by the same match and for the same
+                // reason: its tick would book a row underneath an assertion
+                // about it, so a test drives RunOnceAsync instead.
+                ServiceDescriptor fulfilment = services.Single(d =>
+                    d.ServiceType == typeof(IHostedService) &&
+                    d.ImplementationType == typeof(FulfilmentWorker));
+                services.Remove(fulfilment);
+
+                services.AddSingleton<FulfilmentWorker>();
 
                 // §9.5's purge, removed and re-registered for the same two
                 // reasons and by the same match. Its timer is an hour rather

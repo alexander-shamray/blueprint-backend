@@ -8,10 +8,10 @@ namespace Shipping.Domain.Shipments;
 /// section 5 table is its states and the only moves between them.
 /// </summary>
 /// <remarks>
-/// Every operation returns whether it moved the shipment; a superseded
-/// arrival returns <c>false</c> rather than throwing, because a throw is a
-/// row retried for ever in a worker and a redelivery loop in a consumer. The
-/// backoff, the lease and the poll schedule are properties and no behaviour.
+/// Every operation returns whether it moved the shipment; a superseded arrival
+/// returns <c>false</c> rather than throwing, because a throw is a row retried
+/// for ever in a worker and a redelivery loop in a consumer. The backoff, lease
+/// and poll columns are the workers'; the aggregate only resets them.
 /// </remarks>
 public sealed class Shipment : AggregateRoot<ShipmentId>
 {
@@ -160,6 +160,19 @@ public sealed class Shipment : AggregateRoot<ShipmentId>
             TrackingStatus.Delivered => Deliver(occurredAt, now),
             _ => false,
         };
+    }
+
+    /// <summary>
+    /// The pass that claimed this row has finished with it: the lease is
+    /// dropped and the backoff reset (spec, section 4). Behaviour here rather
+    /// than in the worker because the columns are this row's; the claim and
+    /// the failure are raw statements, because neither has the aggregate in
+    /// hand.
+    /// </summary>
+    public void ReleaseClaim()
+    {
+        LockedUntil = null;
+        Attempts = 0;
     }
 
     private bool Dispatch(DateTimeOffset occurredAt)

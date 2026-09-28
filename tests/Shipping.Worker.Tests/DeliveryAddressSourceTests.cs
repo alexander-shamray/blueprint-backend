@@ -11,6 +11,7 @@ using Shipping.Application.Carrier;
 using Shipping.Domain.Shipments;
 using Shipping.Infrastructure.Addresses;
 using Shipping.Infrastructure.Carrier;
+using Shipping.Infrastructure.Fulfilment;
 using Shipping.OrderingStub;
 using Shipping.TestSupport;
 using Shouldly;
@@ -327,6 +328,27 @@ public sealed class DeliveryAddressSourceTests : IClassFixture<DeliveryAddressSo
         // one place this hop differs from CarrierHop, which sits outside them.
         AddressHop.AttemptTimeout.ShouldBeInRange(TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(2));
         AddressHop.TotalRequestTimeout.ShouldBeInRange(TimeSpan.FromSeconds(3), TimeSpan.FromSeconds(5));
+    }
+
+    [Fact]
+    public void The_lease_outlives_the_longest_pass_a_row_can_take()
+    {
+        // Three calls on one row is the worst pass: the address read, the
+        // booking, and the compensating cancel when the commit refused the
+        // booking (spec, section 6). The recovery leg is one carrier call.
+        TimeSpan pass = AddressHop.TotalRequestTimeout + 2 * CarrierHop.TotalRequestTimeout;
+
+        (pass * FulfilmentWorker.ClaimBatchSize).ShouldBeLessThan(
+            TimeSpan.FromSeconds(FulfilmentWorker.LeaseSeconds),
+            "a lease that lapsed mid-pass would let a second replica claim a row this one is still booking");
+
+        // §15.3's thirty-second drain — HostOptions.ShutdownTimeout's default,
+        // which that section fixes the grace period against — is met by the
+        // token and not by the budget: every call in a pass takes the stopping
+        // token, so a stop cuts the pass short. What the budget still has to
+        // fit is one call, the longest of them, which is all a stop can find
+        // in flight.
+        CarrierHop.TotalRequestTimeout.ShouldBeLessThan(TimeSpan.FromSeconds(30));
     }
 
     [Fact]
