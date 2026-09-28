@@ -285,7 +285,8 @@ src/BuildingBlocks/
   Common.Infrastructure/       §8's Redis helpers and §8.5's durable
                                idempotency marker, §9's outbox, inbox,
                                consumers and the retention purge over all
-                               three tables
+                               three tables, and §11.5's client-credentials
+                               grant (ADR-052)
   Common.Web/                  §10.4, §10.5, §10.6, §11.3, §11.4, §13.2, §13.4
                                and §13.5, and nothing else — the only building
                                block with a FrameworkReference
