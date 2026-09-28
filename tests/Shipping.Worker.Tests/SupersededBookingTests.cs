@@ -1,5 +1,6 @@
 using Common.Application;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Shipping.Application.Addresses;
@@ -139,6 +140,29 @@ public sealed class SupersededBookingTests
         LogEntry orphaned = log.Entries.ShouldHaveSingleItem();
         orphaned.Id.Name.ShouldBe("Orphaned");
         orphaned.Exception.ShouldBeSameAs(outage);
+    }
+
+    [Fact]
+    public async Task A_booking_whose_commit_fails_is_logged_with_its_carrier_reference_and_rethrown()
+    {
+        Shipment pending = Shipment.For(
+            new ShipmentId(Guid.CreateVersion7()), new OrderId(Guid.CreateVersion7()), Now);
+        RecordingCarrier carrier = new();
+        RecordingLogger log = new();
+
+        RetryLimitExceededException thrown = await Should.ThrowAsync<RetryLimitExceededException>(
+            () => PassAsync(carrier, new ExhaustedUnitOfWork(), log, pending));
+
+        LogEntry uncommitted = log.Entries.ShouldHaveSingleItem(
+            "the cancel consumer can void the row before a pass books it again");
+        uncommitted.Id.Name.ShouldBe("BookingUncommitted");
+        uncommitted.Level.ShouldBe(LogLevel.Error);
+        uncommitted.Message.ShouldContain(RecordingCarrier.Reference);
+        uncommitted.Message.ShouldContain(pending.Id.Value.ToString());
+        uncommitted.Message.ShouldContain(pending.OrderId.Value.ToString());
+        uncommitted.Message.ShouldNotContain("Abay");
+        uncommitted.Exception.ShouldBeSameAs(thrown);
+        carrier.Cancels.ShouldBeEmpty("a pending row's booking is rebooked under the same key, not handed back");
     }
 
     private static Shipment Voided()
@@ -337,5 +361,17 @@ public sealed class SupersededBookingTests
             _conflicted = true;
             throw new DbUpdateConcurrencyException("the row version moved underneath the save");
         }
+    }
+
+    /// <summary>
+    /// Every attempt at the unit meets a transient fault and the strategy
+    /// gives up, which is a failure the conflict's one repeat does not cover.
+    /// </summary>
+    private sealed class ExhaustedUnitOfWork : InlineUnitOfWork
+    {
+        public override Task<TResult> ExecuteAsync<TResult>(
+            Func<CancellationToken, Task<TResult>> operation,
+            CancellationToken ct) =>
+            throw new RetryLimitExceededException("the strategy's retries ran out", new TimeoutException());
     }
 }

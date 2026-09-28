@@ -65,6 +65,14 @@ public sealed class FulfilmentWorker(IServiceScopeFactory scopes, ILogger<Fulfil
             "Shipment {ShipmentId} on order {OrderId} was voided during its booking, and carrier booking " +
             "{CarrierReference} could not be handed back; it needs cancelling at the carrier.");
 
+    private static readonly Action<ILogger, Guid, Guid, string, Exception?> BookingUncommitted =
+        LoggerMessage.Define<Guid, Guid, string>(
+            LogLevel.Error,
+            new EventId(5, nameof(BookingUncommitted)),
+            "Shipment {ShipmentId} on order {OrderId} was booked as carrier booking {CarrierReference}, but the " +
+            "booking was not committed; if the row is voided before a pass books it again, it needs cancelling " +
+            "at the carrier.");
+
     // stoppingToken, not ct: CA1725 requires an override to keep the base's
     // parameter name.
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -193,8 +201,20 @@ public sealed class FulfilmentWorker(IServiceScopeFactory scopes, ILogger<Fulfil
 
         BookingResult.Booked booked = (BookingResult.Booked)booking;
 
-        CommitOutcome committed = await CommitPendingAsync(
-            sp, id, (shipment, now) => shipment.Book(booked.Reference, booked.TrackingNumber, now), ct);
+        CommitOutcome committed;
+
+        try
+        {
+            committed = await CommitPendingAsync(
+                sp, id, (shipment, now) => shipment.Book(booked.Reference, booked.TrackingNumber, now), ct);
+        }
+        catch (Exception ex)
+        {
+            // The row's catch backs it off without the reference, and the
+            // cancel consumer may void it before the next pass rebooks it.
+            BookingUncommitted(log, work.Id, work.OrderId, booked.Reference, ex);
+            throw;
+        }
 
         // The reloaded row decides, not the move: a refused move also comes
         // back when the execution strategy repeated a commit whose
@@ -212,9 +232,10 @@ public sealed class FulfilmentWorker(IServiceScopeFactory scopes, ILogger<Fulfil
     /// section 6 says a Pending shipment is never booked, so the booking goes
     /// back under the shipment's cancel key. The row is Voided and final, so
     /// nothing here is left to a later pass: a booking the carrier keeps is
-    /// logged for a person, whether it answered too late or did not answer. A
-    /// crash before this call leaves no line at all; that window is the price
-    /// of the consumers never waiting on a lease.
+    /// logged for a person, whether it answered too late or did not answer.
+    /// A booking whose commit threw is logged with its reference before the
+    /// row backs off; a crash before this call leaves no line at all, the
+    /// price of the consumers never waiting on a lease.
     /// </summary>
     private async Task HandBackAsync(
         ICarrierGateway carrier,
