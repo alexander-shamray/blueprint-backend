@@ -74,6 +74,7 @@
     <Project Path="tests/Platform.IntegrationTests/Platform.IntegrationTests.csproj" />
     <Project Path="tests/Shipping.Application.Tests/Shipping.Application.Tests.csproj" />
     <Project Path="tests/Shipping.Domain.Tests/Shipping.Domain.Tests.csproj" />
+    <Project Path="tests/Shipping.OrderingStub/Shipping.OrderingStub.csproj" />
     <Project Path="tests/Shipping.TestSupport/Shipping.TestSupport.csproj" />
     <Project Path="tests/Shipping.Worker.Tests/Shipping.Worker.Tests.csproj" />
     <Project Path="tests/Web.Bff.TestSupport/Web.Bff.TestSupport.csproj" />

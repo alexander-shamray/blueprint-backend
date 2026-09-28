@@ -1,0 +1,380 @@
+using System.Diagnostics.Metrics;
+using Common.Infrastructure.Identity;
+using Grpc.Core;
+using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging.Abstractions;
+using Shipping.Application.Addresses;
+using Shipping.Application.Carrier;
+using Shipping.Domain.Shipments;
+using Shipping.Infrastructure.Addresses;
+using Shipping.Infrastructure.Carrier;
+using Shipping.OrderingStub;
+using Shipping.TestSupport;
+using Shouldly;
+using Xunit;
+using AddressRegistration = Shipping.Infrastructure.Addresses.DependencyInjection;
+
+namespace Shipping.Worker.Tests;
+
+/// <summary>
+/// ADR-052's five outcomes, read from the client's side, over a real gRPC
+/// server on loopback.
+/// </summary>
+public sealed class DeliveryAddressSourceTests : IClassFixture<DeliveryAddressSourceTests.OrderingHost>
+{
+    /// <summary>
+    /// One stub and one host for the class, because a host over an unreachable
+    /// broker takes seconds to stop. Only a transport fault reaches the
+    /// breaker, and a single one leaves it well under
+    /// <c>AddressHop.CircuitBreakerMinimumThroughput</c>.
+    /// </summary>
+    public sealed class OrderingHost : IAsyncLifetime
+    {
+        public StubOrdering Ordering { get; } = new();
+
+        public ShippingWorkerFactory Factory { get; private set; } = null!;
+
+        public async ValueTask InitializeAsync()
+        {
+            await Ordering.InitializeAsync();
+            Factory = new ShippingWorkerFactory(
+                Unreachable.Sql,
+                Unreachable.Rabbit,
+                addressSourceBaseUrl: Ordering.Address.ToString());
+        }
+
+        public async ValueTask DisposeAsync()
+        {
+            Factory.Dispose();
+            await Ordering.DisposeAsync();
+        }
+    }
+
+    private readonly StubOrdering _ordering;
+    private readonly ShippingWorkerFactory _factory;
+
+    public DeliveryAddressSourceTests(OrderingHost host)
+    {
+        _ordering = host.Ordering;
+        _factory = host.Factory;
+        _ordering.Reset();
+    }
+
+    private IDeliveryAddressSource Source() => Source(_factory);
+
+    private static IDeliveryAddressSource Source(WebApplicationFactory<Program> host) =>
+        host.Services.CreateScope().ServiceProvider.GetRequiredService<IDeliveryAddressSource>();
+
+    private OutboundCount CountRefused() => OutboundCounter.Refused(_factory.Services);
+
+    private Guid KnownOrder(string postalCode = "050000")
+    {
+        Guid order = Guid.CreateVersion7();
+        _ordering.Addresses[order] =
+            new StubAddress(Guid.CreateVersion7(), "1 Abay Avenue", null, "Almaty", postalCode, "KZ");
+
+        return order;
+    }
+
+    [Fact]
+    public async Task An_order_answers_with_its_address_and_its_customer()
+    {
+        Guid order = KnownOrder();
+        StubAddress expected = _ordering.Addresses[order];
+
+        AddressLookup lookup = await Source().GetAsync(new OrderId(order), TestContext.Current.CancellationToken);
+
+        AddressLookup.Found found = lookup.ShouldBeOfType<AddressLookup.Found>();
+        found.CustomerId.ShouldBe(expected.CustomerId, "the row erasure deletes by is carried on the reply (ADR-052)");
+        found.Address.ShouldBe(new DeliveryAddress("1 Abay Avenue", null, "Almaty", "050000", "KZ"));
+    }
+
+    [Fact]
+    public async Task An_empty_second_line_arrives_as_absent_rather_than_blank()
+    {
+        Guid order = Guid.CreateVersion7();
+        _ordering.Addresses[order] =
+            new StubAddress(Guid.CreateVersion7(), "1 Abay Avenue", "", "Almaty", "050000", "KZ");
+
+        AddressLookup lookup = await Source().GetAsync(new OrderId(order), TestContext.Current.CancellationToken);
+
+        lookup.ShouldBeOfType<AddressLookup.Found>().Address.Line2.ShouldBeNull(
+            "proto3 has no null string, so the absence arrives as \"\" and is stored as the absence it is");
+    }
+
+    [Fact]
+    public async Task The_call_carries_the_hosts_own_token()
+    {
+        await Source().GetAsync(new OrderId(KnownOrder()), TestContext.Current.CancellationToken);
+
+        _ordering.Tokens.ShouldHaveSingleItem().ShouldStartWith("Bearer ");
+    }
+
+    [Fact]
+    public async Task NotFound_is_the_one_answer_that_means_the_order_has_no_address()
+    {
+        AddressLookup lookup = await Source().GetAsync(
+            new OrderId(Guid.CreateVersion7()), TestContext.Current.CancellationToken);
+
+        lookup.ShouldBeOfType<AddressLookup.NoSuchOrder>();
+    }
+
+    [Theory]
+    [InlineData(StatusCode.Unauthenticated)]
+    [InlineData(StatusCode.PermissionDenied)]
+    public async Task A_refused_credential_is_counted_and_thrown_rather_than_treated_as_an_absence(StatusCode status)
+    {
+        using OutboundCount counted = CountRefused();
+        _ordering.Fail(status);
+
+        await Should.ThrowAsync<AddressSourceRefusedException>(() =>
+            Source().GetAsync(new OrderId(KnownOrder()), TestContext.Current.CancellationToken));
+
+        counted.Value.ShouldBe(1, "a revoked grant is a defect somebody must see, not an outage to wait out");
+    }
+
+    [Fact]
+    public async Task A_refusal_decided_inside_the_pipeline_reaches_the_caller_as_itself_and_is_counted_once()
+    {
+        // The grant check runs in the client's own handler chain, where
+        // Grpc.Net.Client reports any exception as a status of its own; this
+        // is the whole host, so that translation is the one under test.
+        using WebApplicationFactory<Program> refusing = _factory.WithWebHostBuilder(b =>
+            b.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<ITokenCache>();
+                services.AddSingleton<ITokenCache>(sp => new GrantCheckedTokenCache(
+                    new RefusingTokenCache(),
+                    sp.GetRequiredService<AddressMetrics>(),
+                    NullLogger<GrantCheckedTokenCache>.Instance));
+            }));
+        using OutboundCount counted = OutboundCounter.Refused(refusing.Services);
+
+        await Should.ThrowAsync<AddressSourceRefusedException>(() =>
+            Source(refusing).GetAsync(new OrderId(KnownOrder()), TestContext.Current.CancellationToken));
+
+        counted.Value.ShouldBe(1, "counted where the refusal was decided, and not again on the way out");
+        _ordering.Calls.ShouldBeEmpty("a host whose own token was refused sends nothing");
+    }
+
+    [Fact]
+    public void The_host_draws_its_token_through_the_grant_check()
+    {
+        using ProgramTokensFactory host = new();
+
+        host.Services.GetRequiredService<ITokenCache>().ShouldBeOfType<GrantCheckedTokenCache>();
+    }
+
+    [Fact]
+    public async Task A_transient_status_is_thrown_uncounted_after_exactly_one_call()
+    {
+        using OutboundCount counted = CountRefused();
+        Guid order = KnownOrder();
+        _ordering.Fail(StatusCode.Unavailable, StatusCode.Unavailable, StatusCode.Unavailable);
+
+        await Should.ThrowAsync<RpcException>(() =>
+            Source().GetAsync(new OrderId(order), TestContext.Current.CancellationToken));
+
+        counted.Value.ShouldBe(0, "an outage is not a decision anybody took");
+
+        // One, not three: a gRPC status travels as an HTTP 200 with
+        // grpc-status in the trailers, so AddStandardResilienceHandler sees a
+        // successful response and hands it straight back (§9.7).
+        _ordering.Calls.Count.ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task A_transport_fault_is_retried_inside_the_budget_and_the_call_recovers()
+    {
+        Guid order = KnownOrder();
+
+        // An aborted connection, which is the shape an owner that is genuinely
+        // down produces and the one thing AddressHop's retry covers.
+        _ordering.AbortNextCalls = 1;
+
+        AddressLookup lookup = await Source().GetAsync(new OrderId(order), TestContext.Current.CancellationToken);
+
+        lookup.ShouldBeOfType<AddressLookup.Found>();
+        _ordering.Calls.Count.ShouldBe(2, "the pipeline retried inside AddressHop's budget");
+
+        // The credential handler inside the pipeline runs once per attempt
+        // (§11.5); registered outside it, both attempts would carry one token.
+        _ordering.Tokens.Distinct().Count().ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task An_unreachable_owner_throws_rather_than_answering()
+    {
+        using ShippingWorkerFactory dead = new(
+            Unreachable.Sql,
+            Unreachable.Rabbit,
+            addressSourceBaseUrl: ShippingWorkerFactory.UnreachableAddressSource);
+
+        await Should.ThrowAsync<RpcException>(() =>
+            Source(dead).GetAsync(new OrderId(Guid.CreateVersion7()), TestContext.Current.CancellationToken));
+    }
+
+    [Theory]
+    [InlineData("line1")]
+    [InlineData("line2")]
+    [InlineData("city")]
+    [InlineData("post_code")]
+    [InlineData("country")]
+    public async Task A_field_wider_than_its_column_is_refused_by_name_and_never_by_value(string field)
+    {
+        using OutboundCount counted = CountRefused();
+        Guid order = Guid.CreateVersion7();
+        _ordering.Addresses[order] = Widened(field);
+
+        InvalidOperationException thrown = await Should.ThrowAsync<InvalidOperationException>(() =>
+            Source().GetAsync(new OrderId(order), TestContext.Current.CancellationToken));
+
+        thrown.Message.ShouldContain(field);
+
+        // The value is an address, and a message is what a log carries.
+        thrown.Message.ShouldNotContain("ЖЖ");
+        counted.Value.ShouldBe(0, "a malformed answer is not a refused credential");
+    }
+
+    [Fact]
+    public async Task Every_field_at_its_column_width_is_accepted()
+    {
+        Guid order = Guid.CreateVersion7();
+        StubAddress widest = new(
+            Guid.CreateVersion7(),
+            new string('Ж', AddressLimits.MaxLineLength),
+            new string('Ж', AddressLimits.MaxLineLength),
+            new string('Ж', AddressLimits.MaxCityLength),
+            new string('Ж', AddressLimits.MaxPostalCodeLength),
+            "KZ");
+        _ordering.Addresses[order] = widest;
+
+        AddressLookup lookup = await Source().GetAsync(new OrderId(order), TestContext.Current.CancellationToken);
+
+        lookup.ShouldBeOfType<AddressLookup.Found>().Address.ShouldBe(new DeliveryAddress(
+            widest.Line1, widest.Line2, widest.City, widest.PostalCode, widest.Country));
+    }
+
+    [Theory]
+    [InlineData("K")]
+    [InlineData("1Z")]
+    public async Task A_country_that_is_not_two_letters_is_refused(string country)
+    {
+        Guid order = Guid.CreateVersion7();
+        _ordering.Addresses[order] =
+            new StubAddress(Guid.CreateVersion7(), "1 Abay Avenue", null, "Almaty", "050000", country);
+
+        (await Should.ThrowAsync<InvalidOperationException>(() =>
+                Source().GetAsync(new OrderId(order), TestContext.Current.CancellationToken)))
+            .Message.ShouldContain("country");
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("ordering-api/")]
+    [InlineData("ftp://ordering.example/")]
+    public void An_address_source_that_is_not_an_absolute_http_address_stops_the_host(string configured)
+    {
+        using ShippingWorkerFactory factory = new(
+            Unreachable.Sql, Unreachable.Rabbit, addressSourceBaseUrl: configured);
+
+        Should.Throw<InvalidOperationException>(() => factory.Services)
+            .Message.ShouldContain(AddressRegistration.BaseUrlKey);
+    }
+
+    [Theory]
+    [InlineData("http://ordering.example/?region=kz")]
+    [InlineData("http://ordering.example/#delivery")]
+    public void An_address_source_with_a_query_or_fragment_stops_the_host(string configured)
+    {
+        using ShippingWorkerFactory factory = new(
+            Unreachable.Sql, Unreachable.Rabbit, addressSourceBaseUrl: configured);
+
+        Should.Throw<InvalidOperationException>(() => factory.Services)
+            .Message.ShouldBe(
+                $"{AddressRegistration.BaseUrlKey} carries a query or fragment, " +
+                "which no request to Ordering would keep.");
+    }
+
+    [Fact]
+    public void An_address_source_carrying_user_information_stops_the_host_without_echoing_it()
+    {
+        using ShippingWorkerFactory factory = new(
+            Unreachable.Sql, Unreachable.Rabbit, addressSourceBaseUrl: "http://shipping:hunter2@ordering.example/");
+
+        string message = Should.Throw<InvalidOperationException>(() => factory.Services).Message;
+
+        message.ShouldContain("user information");
+        message.ShouldNotContain("hunter2");
+    }
+
+    [Fact]
+    public void Every_attempt_and_every_bounded_delay_fit_inside_the_total()
+    {
+        TimeSpan worst = AddressHop.AttemptTimeout * (AddressHop.MaxRetryAttempts + 1)
+                         + AddressHop.MaxRetryDelay * AddressHop.MaxRetryAttempts;
+
+        worst.ShouldBeLessThan(
+            AddressHop.TotalRequestTimeout,
+            "a total that cancels the last retry makes the retry count a fiction");
+
+        AddressHop.TotalRequestTimeout.ShouldBeLessThan(Common.Web.ServiceOptions.OperationTimeout);
+
+        // §9.7's bands, because Ordering is a peer and not a third party — the
+        // one place this hop differs from CarrierHop, which sits outside them.
+        AddressHop.AttemptTimeout.ShouldBeInRange(TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(2));
+        AddressHop.TotalRequestTimeout.ShouldBeInRange(TimeSpan.FromSeconds(3), TimeSpan.FromSeconds(5));
+    }
+
+    [Fact]
+    public void Both_instruments_land_on_the_one_meter_section_13_2_exports()
+    {
+        IMeterFactory factory = _factory.Services.GetRequiredService<IMeterFactory>();
+
+        // The factory caches by name, which is what lets CarrierMetrics and
+        // AddressMetrics each create the outbound meter and still produce one.
+        // If it ever stopped, the second class's instruments would be on a
+        // meter no AddMeter line names and would be collected by nothing.
+        factory.Create(CarrierMetrics.MeterName).ShouldBeSameAs(factory.Create(CarrierMetrics.MeterName));
+    }
+
+    /// <summary>
+    /// A known address with one field a character past its column, in a
+    /// script no other field uses, so a message that echoed it is detectable.
+    /// </summary>
+    private static StubAddress Widened(string field)
+    {
+        StubAddress valid = new(Guid.CreateVersion7(), "1 Abay Avenue", null, "Almaty", "050000", "KZ");
+
+        return field switch
+        {
+            "line1" => valid with { Line1 = new string('Ж', AddressLimits.MaxLineLength + 1) },
+            "line2" => valid with { Line2 = new string('Ж', AddressLimits.MaxLineLength + 1) },
+            "city" => valid with { City = new string('Ж', AddressLimits.MaxCityLength + 1) },
+            "post_code" => valid with { PostalCode = new string('Ж', AddressLimits.MaxPostalCodeLength + 1) },
+            "country" => valid with { Country = "ЖЖЖ" },
+            _ => throw new ArgumentOutOfRangeException(nameof(field), field, "not a field of the reply")
+        };
+    }
+
+    /// <summary>The host with <c>Program</c>'s own token source left in place.</summary>
+    private sealed class ProgramTokensFactory() : ShippingWorkerFactory(Unreachable.Sql, Unreachable.Rabbit)
+    {
+        protected override void ConfigureTokens(IServiceCollection services)
+        {
+        }
+    }
+
+    /// <summary>
+    /// The identity provider's refusal as <c>CachingTokenClient</c> throws it
+    /// (§11.5).
+    /// </summary>
+    private sealed class RefusingTokenCache : ITokenCache
+    {
+        public Task<string> GetAsync(string scope, CancellationToken ct) =>
+            throw new InvalidOperationException("The token endpoint refused this host's client credentials.");
+    }
+}

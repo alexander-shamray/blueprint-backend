@@ -24,11 +24,6 @@ namespace Shipping.Worker.Tests;
 /// </summary>
 public sealed class HttpCarrierGatewayTests : IClassFixture<HttpCarrierGatewayTests.CarrierHost>
 {
-    private const string UnreachableSql =
-        "Server=sql.invalid;Database=Shipping;User Id=x;Password=x;TrustServerCertificate=true";
-
-    private const string UnreachableRabbit = "amqp://shipping-svc:x@rabbit.invalid:5672";
-
     /// <summary>
     /// One server and one host for the class: a host over an unreachable
     /// broker can take seconds to stop, so only a test that needs a pipeline
@@ -43,7 +38,7 @@ public sealed class HttpCarrierGatewayTests : IClassFixture<HttpCarrierGatewayTe
             // 0.0.0.0 is what a workstation firewall stops to ask about, and the
             // only caller is the in-process host under test.
             Server = WireMockServer.Start(new WireMockServerSettings { Urls = ["http://127.0.0.1:0"] });
-            Factory = new ShippingWorkerFactory(UnreachableSql, UnreachableRabbit, Server.Urls[0] + "/");
+            Factory = new ShippingWorkerFactory(Unreachable.Sql, Unreachable.Rabbit, Server.Urls[0] + "/");
         }
 
         public WireMockServer Server { get; }
@@ -130,7 +125,7 @@ public sealed class HttpCarrierGatewayTests : IClassFixture<HttpCarrierGatewayTe
     [Fact]
     public async Task A_refused_connection_is_unavailable_rather_than_a_refusal()
     {
-        using ShippingWorkerFactory dead = new(UnreachableSql, UnreachableRabbit, "http://carrier.invalid/");
+        using ShippingWorkerFactory dead = new(Unreachable.Sql, Unreachable.Rabbit, "http://carrier.invalid/");
 
         await Should.ThrowAsync<CarrierUnavailableException>(() => dead.Services.CreateScope().ServiceProvider
             .GetRequiredService<ICarrierGateway>()
@@ -382,7 +377,7 @@ public sealed class HttpCarrierGatewayTests : IClassFixture<HttpCarrierGatewayTe
             .RespondWith(Response.Create().WithStatusCode(201)
                 .WithHeader("Content-Type", "application/json; charset=bogus")
                 .WithBody("{\"status\":\"booked\",\"reference\":\"crr_x\",\"trackingNumber\":\"t\"}"));
-        using UnavailableCount counted = UnavailableCounter.Of(_factory.Services);
+        using OutboundCount counted = OutboundCounter.Unavailable(_factory.Services);
 
         await Should.ThrowAsync<CarrierUnavailableException>(() =>
             Carrier().BookAsync(Booking("050000"), TestContext.Current.CancellationToken));
@@ -420,7 +415,7 @@ public sealed class HttpCarrierGatewayTests : IClassFixture<HttpCarrierGatewayTe
     [Fact]
     public async Task The_callers_own_cancellation_is_not_counted_against_the_carrier()
     {
-        using UnavailableCount counted = UnavailableCounter.Of(_factory.Services);
+        using OutboundCount counted = OutboundCounter.Unavailable(_factory.Services);
         using CancellationTokenSource cancelled = new();
         await cancelled.CancelAsync();
 
@@ -435,7 +430,7 @@ public sealed class HttpCarrierGatewayTests : IClassFixture<HttpCarrierGatewayTe
     [InlineData("https://carrier.example/", true)]
     public void Outside_development_only_an_https_carrier_is_accepted(string address, bool starts)
     {
-        using ShippingWorkerFactory factory = new(UnreachableSql, UnreachableRabbit, address);
+        using ShippingWorkerFactory factory = new(Unreachable.Sql, Unreachable.Rabbit, address);
         using WebApplicationFactory<Program> production =
             factory.WithWebHostBuilder(b => b.UseEnvironment("Production"));
 
@@ -448,10 +443,23 @@ public sealed class HttpCarrierGatewayTests : IClassFixture<HttpCarrierGatewayTe
         }
     }
 
+    [Theory]
+    [InlineData("https://carrier.example/?tenant=kz")]
+    [InlineData("https://carrier.example/#bookings")]
+    public void A_base_url_with_a_query_or_fragment_stops_the_host(string address)
+    {
+        using ShippingWorkerFactory factory = new(Unreachable.Sql, Unreachable.Rabbit, address);
+
+        Should.Throw<InvalidOperationException>(() => factory.Services)
+            .Message.ShouldBe(
+                $"{CarrierRegistration.BaseUrlKey} carries a query or fragment, " +
+                "which no request to the carrier would keep.");
+    }
+
     [Fact]
     public void A_missing_base_url_stops_the_host()
     {
-        using ShippingWorkerFactory factory = new(UnreachableSql, UnreachableRabbit, carrierBaseUrl: "");
+        using ShippingWorkerFactory factory = new(Unreachable.Sql, Unreachable.Rabbit, carrierBaseUrl: "");
 
         Should.Throw<InvalidOperationException>(() => factory.Services)
             .Message.ShouldContain(CarrierRegistration.BaseUrlKey);
@@ -461,7 +469,7 @@ public sealed class HttpCarrierGatewayTests : IClassFixture<HttpCarrierGatewayTe
     public void A_missing_carrier_key_stops_the_host()
     {
         using ShippingWorkerFactory factory = new(
-            UnreachableSql, UnreachableRabbit, "https://carrier.example/", carrierApiKey: " ");
+            Unreachable.Sql, Unreachable.Rabbit, "https://carrier.example/", carrierApiKey: " ");
 
         Should.Throw<InvalidOperationException>(() => factory.Services)
             .Message.ShouldContain(CarrierRegistration.ApiKeyKey, Case.Sensitive,

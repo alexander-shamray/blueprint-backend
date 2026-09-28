@@ -1,6 +1,8 @@
 using Shipping.Application;
 using Shipping.Infrastructure;
+using Shipping.Infrastructure.Addresses;
 using Shipping.Infrastructure.Carrier;
+using Common.Infrastructure.Identity;
 using Common.Web;
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
@@ -21,6 +23,46 @@ builder.Services.AddShippingInfrastructure(builder.Configuration);   // §4.2, �
 // §3.2's anti-corruption layer; its address is read, and its scheme checked,
 // eagerly.
 builder.Services.AddCarrierGateway(builder.Configuration, builder.Environment);
+
+// §9.7, §11.5 — this host's client-credentials registrations (ADR-052). The
+// types are Common.Infrastructure.Identity's and the binding is this host's.
+builder.Services.AddTransient<ClientCredentialsHandler>();
+builder.Services.AddSingleton<CachingTokenClient>();
+
+// ADR-052: this host holds itself to its grant, because the realm gate cannot
+// read a service account's roles. Decorating rather than replacing, so the
+// caching and the discovery rules are still the building block's.
+builder.Services.AddSingleton<ITokenCache>(sp => new GrantCheckedTokenCache(
+    sp.GetRequiredService<CachingTokenClient>(),
+    sp.GetRequiredService<AddressMetrics>(),
+    sp.GetRequiredService<ILogger<GrantCheckedTokenCache>>()));
+
+// Bound, validated and validated at start. IOptions<T> always resolves —
+// unbound it hands back a default instance — so a forgotten binding is
+// invisible to ValidateOnBuild and surfaces as Ordering refusing this host's
+// calls (§15.4).
+builder.Services
+    .AddOptions<ServiceIdentityOptions>()
+    .BindConfiguration(ServiceIdentityOptions.SectionName)
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
+
+// The token client's own transport, which carries no ClientCredentialsHandler:
+// a client that attached a token in order to fetch a token would recurse until
+// the stack ran out.
+string authority = builder.Configuration[AuthenticationExtensions.AuthorityKey]!;
+
+builder.Services
+    .AddHttpClient(CachingTokenClient.HttpClientName, client =>
+        client.BaseAddress = new Uri(authority.TrimEnd('/') + "/"));
+
+// The same key's name, carried into the token client because a building block
+// below Common.Web cannot name it and a refused discovery document has to say
+// which key to fix (§11.3, §11.5).
+builder.Services.AddSingleton(new AuthorityKeyName(AuthenticationExtensions.AuthorityKey));
+
+// ADR-052's read; its address is read, and checked, eagerly.
+builder.Services.AddDeliveryAddressSource(builder.Configuration);
 
 // This host registers no permission policy and never will: §3.2 gives it no
 // API, so there is no endpoint to name one. The middleware below stays,

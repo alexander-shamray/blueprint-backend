@@ -1,6 +1,7 @@
 using System.Diagnostics.Metrics;
 using Shipping.Application;
 using Shipping.Infrastructure;
+using Shipping.Infrastructure.Addresses;
 using Shipping.Infrastructure.Carrier;
 using Shipping.Infrastructure.Observability;
 using Common.Application;
@@ -13,6 +14,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Shouldly;
 using Xunit;
+using AddressRegistration = Shipping.Infrastructure.Addresses.DependencyInjection;
 using CarrierRegistration = Shipping.Infrastructure.Carrier.DependencyInjection;
 
 namespace Shipping.Worker.Tests;
@@ -92,6 +94,7 @@ public class MetricsRegistrationTests
         registered.ShouldContain(typeof(MessagingMetrics));
         registered.ShouldContain(typeof(RequestMetrics));
         registered.ShouldContain(typeof(CarrierMetrics));
+        registered.ShouldContain(typeof(AddressMetrics));
     }
 
     [Fact]
@@ -297,13 +300,13 @@ public class MetricsRegistrationTests
     }
 
     /// <summary>
-    /// All three registration helpers, over configuration that reaches
+    /// All four registration helpers, over configuration that reaches
     /// nothing (§12.4's .invalid convention).
     /// </summary>
     /// <remarks>
-    /// <c>AddCarrierGateway</c> is the third, and leaving it out would make
-    /// this test agree with a <see cref="MetricsInitialiser"/> that forgot
-    /// <see cref="CarrierMetrics"/>: the types are split across all three.
+    /// Leaving any out would make this test agree with a
+    /// <see cref="MetricsInitialiser"/> that forgot whatever the missing one
+    /// registers: the metrics types are split across all four.
     /// </remarks>
     private static ServiceCollection BuildServices()
     {
@@ -320,7 +323,11 @@ public class MetricsRegistrationTests
                     // HTTPS because the environment below is not Development,
                     // which is the rule that helper applies.
                     [CarrierRegistration.BaseUrlKey] = "https://shipping-carrier.invalid",
-                    [CarrierRegistration.ApiKeyKey] = "not-a-real-key"
+                    [CarrierRegistration.ApiKeyKey] = "not-a-real-key",
+                    // Read eagerly by AddDeliveryAddressSource on the carrier
+                    // key's terms; plain HTTP because that helper applies no
+                    // scheme rule (§9.7), and unreachable on the same convention.
+                    [AddressRegistration.BaseUrlKey] = "http://shipping-ordering.invalid"
                 })
             .Build();
 
@@ -328,6 +335,7 @@ public class MetricsRegistrationTests
         services.AddShippingApplication();
         services.AddShippingInfrastructure(configuration);
         services.AddCarrierGateway(configuration, new TestEnvironment());
+        services.AddDeliveryAddressSource(configuration);
 
         return services;
     }
