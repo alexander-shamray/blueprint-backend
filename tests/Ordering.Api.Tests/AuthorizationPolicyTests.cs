@@ -54,6 +54,9 @@ public class AuthorizationPolicyTests(HostSmokeTests.UnreachableInfrastructureFa
         // produce exactly that.
         named.ShouldContain(OrderingPermissions.Write);
         named.ShouldContain(OrderingPermissions.Cancel);
+        named.ShouldContain(
+            OrderingPermissions.DeliveryAddress,
+            "ADR-052's method is the first in this service behind a policy no endpoint route names");
 
         foreach (string policy in named)
         {
