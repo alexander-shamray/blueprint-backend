@@ -262,7 +262,9 @@ public sealed class DeliveryAddressSourceTests : IClassFixture<DeliveryAddressSo
     [Theory]
     [InlineData("K")]
     [InlineData("1Z")]
-    public async Task A_country_that_is_not_two_letters_is_refused(string country)
+    [InlineData("kz")]
+    [InlineData("Kz")]
+    public async Task A_country_that_is_not_two_upper_case_letters_is_refused(string country)
     {
         Guid order = Guid.CreateVersion7();
         _ordering.Addresses[order] =
@@ -271,6 +273,39 @@ public sealed class DeliveryAddressSourceTests : IClassFixture<DeliveryAddressSo
         (await Should.ThrowAsync<InvalidOperationException>(() =>
                 Source().GetAsync(new OrderId(order), TestContext.Current.CancellationToken)))
             .Message.ShouldContain("country");
+    }
+
+    [Theory]
+    [InlineData("line1")]
+    [InlineData("city")]
+    [InlineData("post_code")]
+    public async Task An_empty_required_field_is_refused_by_name(string field)
+    {
+        StubAddress valid = new(Guid.CreateVersion7(), "1 Abay Avenue", null, "Almaty", "050000", "KZ");
+        Guid order = Guid.CreateVersion7();
+        _ordering.Addresses[order] = field switch
+        {
+            "line1" => valid with { Line1 = "" },
+            "city" => valid with { City = "" },
+            "post_code" => valid with { PostalCode = "" },
+            _ => throw new ArgumentOutOfRangeException(nameof(field), field, "not a required field of the reply")
+        };
+
+        (await Should.ThrowAsync<InvalidOperationException>(() =>
+                Source().GetAsync(new OrderId(order), TestContext.Current.CancellationToken)))
+            .Message.ShouldBe($"Ordering answered with an empty {field}.");
+    }
+
+    [Fact]
+    public async Task An_empty_customer_is_refused_rather_than_stored_under_no_subject()
+    {
+        Guid order = Guid.CreateVersion7();
+        _ordering.Addresses[order] =
+            new StubAddress(Guid.Empty, "1 Abay Avenue", null, "Almaty", "050000", "KZ");
+
+        (await Should.ThrowAsync<InvalidOperationException>(() =>
+                Source().GetAsync(new OrderId(order), TestContext.Current.CancellationToken)))
+            .Message.ShouldContain("customer_id");
     }
 
     [Theory]
