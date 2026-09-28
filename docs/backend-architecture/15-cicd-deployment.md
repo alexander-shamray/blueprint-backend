@@ -354,9 +354,10 @@ Each of the Helm filter's outside paths is an input `smoke.sh` actually reads:
   literals on the stated grounds that "the host is the Kubernetes Service
   name" — so renaming a destination without them is a green pull request that
   breaks the next deploy;
-- Catalog's `appsettings.json`, which declares the Kestrel endpoints those
-  Services forward to, so moving the h2c listener off 8081 would otherwise
-  leave a Service pointing at a closed port with every assertion still passing;
+- each service's `appsettings.json` that declares the Kestrel endpoints its
+  Service forwards to — Catalog's and Ordering's — so moving an h2c listener
+  off 8081 would otherwise leave a Service pointing at a closed port with every
+  assertion still passing;
 - `Common.Web`'s `HealthCheckExtensions.cs`, which maps the three probe
   paths — the charts are the manifest `Common.Web.Tests`'
   `HealthEndpointTests` warns about by name, "a manifest no compiler reads",

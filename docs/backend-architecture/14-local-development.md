@@ -435,6 +435,11 @@ export ConnectionStrings__RabbitMq='amqp://ordering-svc:local-dev-ordering@local
 export Identity__Authority='http://localhost:8080/realms/commerce'
 export ConnectionStrings__RedisCache='localhost:6379'
 export ConnectionStrings__RedisCoordination='localhost:6380'
+# Not a key the host throws without, but a bind it fails: Ordering's
+# appsettings.json pins 8080 and 8081 (ADR-052), and 8080 on the host is
+# Keycloak's. deploy/compose/README.md gives Catalog's pair beside these.
+export Kestrel__Endpoints__Rest__Url='http://localhost:5101'
+export Kestrel__Endpoints__Grpc__Url='http://localhost:8082'
 ```
 
 > **The two Redis ports differ here and are identical in the compose blocks,
@@ -618,15 +623,19 @@ var ordering = WithPlatformIdentity(
         // Gate on the migrator completing, not merely starting — the Compose
         // equivalent is service_completed_successfully (§14.1).
         .WaitForCompletion(orderingMigrator)
+        // Pinned ports, moved as Catalog's are below; 8082 because Catalog's
+        // h2c listener holds 8081 (ADR-052).
+        .WithEnvironment("Kestrel__Endpoints__Rest__Url", "http://localhost:5101")
+        .WithEnvironment("Kestrel__Endpoints__Grpc__Url", "http://localhost:8082")
         .WithHttpHealthCheck("/health/ready"));   // authority only — no peer calls
 
-// Catalog is the one resource here whose ports Aspire does NOT get to choose.
-// Its appsettings.json declares Kestrel:Endpoints — 8080 for REST and 8081 for
-// §9.7's gRPC hop, because a cleartext port cannot serve HTTP/1.1 and h2c at
-// once — and declaring that section suppresses ASPNETCORE_URLS and
-// ASPNETCORE_HTTP_PORTS entirely, which is how Aspire assigns a port. So it
+// Catalog and Ordering are the resources here whose ports Aspire does NOT get
+// to choose. Each appsettings.json declares Kestrel:Endpoints — 8080 for REST
+// and 8081 for its gRPC surface, because a cleartext port cannot serve HTTP/1.1
+// and h2c at once — and declaring that section suppresses ASPNETCORE_URLS and
+// ASPNETCORE_HTTP_PORTS entirely, which is how Aspire assigns a port. So each
 // binds 8080 whatever this host allocates, and 8080 is what AddKeycloak took
-// above: the two fight for it unless one is moved.
+// above: they fight for it unless each is moved.
 //
 // Move Catalog's, with the same configuration keys the compose README uses for
 // `dotnet run` — a higher provider is the only thing that overrides that file:
