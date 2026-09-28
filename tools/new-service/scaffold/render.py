@@ -119,21 +119,14 @@ COPIED = frozenset(
 OMITTED = frozenset(
     {
         "src/Services/Catalog/Catalog.Api/Endpoints/ProductEndpoints.cs",
-        # PR-19's pricing hop, whole. §9.7 permits exactly one synchronous
-        # downstream call in the platform and Catalog is the callee, so a
-        # service scaffolded from it inherits a gRPC server nobody calls,
-        # a contract nobody consumes and a second Kestrel endpoint serving
-        # neither. The .proto is Catalog's own API rather than a shape
-        # every service has.
-        #
-        # appsettings.json goes with it because it exists ONLY for that
-        # hop: it declares the Http2 endpoint gRPC needs, and a cleartext
-        # port cannot serve HTTP/1.1 and h2c at once. Omitting it returns
-        # the service to the container image's own port configuration,
-        # which is what every other host here uses — and NOT omitting it
-        # would be worse than redundant, because that file overrides
-        # ASPNETCORE_HTTP_PORTS, so a service inheriting it would silently
-        # stop listening on whatever its deployment set.
+        # The pricing hop, whole. Catalog serves it for the BFF's quote
+        # (§9.7), so a service scaffolded from Catalog inherits a gRPC server
+        # nobody calls, a contract nobody consumes and a second Kestrel
+        # endpoint serving neither. appsettings.json goes with it because it
+        # exists only for that hop: it declares the Http2 endpoint gRPC needs,
+        # and a cleartext port cannot serve HTTP/1.1 and h2c at once. It also
+        # overrides ASPNETCORE_HTTP_PORTS, so a service inheriting it would
+        # silently stop listening on whatever its deployment set.
         "src/Services/Catalog/Catalog.Api/appsettings.json",
         "src/Services/Catalog/Catalog.Api/Protos/pricing.proto",
         "src/Services/Catalog/Catalog.Api/Grpc/PricingService.cs",
@@ -187,14 +180,13 @@ OMITTED = frozenset(
         # once: there is no PricingService to drive, and the channel it
         # builds needs the generated client the csproj patch in PATCHES drops.
         "tests/Catalog.Api.Tests/PricingServiceTests.cs",
-        # PR-26's provider verification, which leaves for a third reason on
-        # top of that pair: it is one named consumer's expectations of one
-        # named provider. Web.Bff asks Catalog for prices (§9.7 permits
-        # exactly one synchronous hop and this is it), so a scaffolded
-        # service inherits neither the RPC nor anyone consuming it — and a
-        # contract copied to a service no consumer calls is an expectation
-        # nobody holds, which is the one thing a consumer-driven contract
-        # must never become. The csproj patch in PATCHES drops the linked
+        # The provider verification leaves for a third reason on top of that
+        # pair: it is one named consumer's expectations of one named provider.
+        # Web.Bff asks Catalog for prices (§9.7), so a scaffolded service
+        # inherits neither the RPC nor anyone consuming it — and a contract
+        # copied to a service no consumer calls is an expectation nobody
+        # holds, which is the one thing a consumer-driven contract must never
+        # become. The csproj patch in PATCHES drops the linked
         # PricingContract.cs with it, for the same reason.
         "tests/Catalog.Api.Tests/PricingContractVerificationTests.cs",
         # Both name /v1/catalog/products, so both are slice by requirement:
