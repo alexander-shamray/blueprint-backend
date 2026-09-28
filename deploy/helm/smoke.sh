@@ -1100,31 +1100,31 @@ section 'The Service forwards to a port something is listening on'
 # --------------------------------------------------------------------------
 # The routing gate above compares caller URLs with rendered Service ports and
 # never looks at the process behind `targetPort`. A service declaring
-# Kestrel:Endpoints owns its ports outright — ASPNETCORE_URLS and
-# ASPNETCORE_HTTP_PORTS both lose to that section (§14.2) — so a listener moved
-# there and not in the chart deploys a Service forwarding to a closed port.
-# Every chart is asked, through src_of, and the number that answered is
-# asserted below: a service that starts pinning its own ports is covered the
-# day it does, and a search that stops finding any fails rather than passing
-# quietly.
+# Kestrel:Endpoints owns its ports outright (§14.2), and one that does not
+# listens on the image's ASPNETCORE_HTTP_PORTS default, 8080 — so every chart
+# is compared in both directions against one or the other, and a chart whose
+# service stops pinning is held to 8080 rather than skipped. The count that
+# pins is asserted below, so a search that stops finding any fails rather than
+# passing quietly.
 pinned=0
 for chart in $SERVICE_CHARTS; do
     settings="$(grep -rl '"Kestrel"' --include=appsettings.json --exclude-dir=bin --exclude-dir=obj \
         "$(src_of "$chart")" || true)"
-    [ -n "$settings" ] || continue
 
-    if [ "$(printf '%s\n' "$settings" | wc -l)" -ne 1 ]; then
+    if [ -z "$settings" ]; then
+        echo 8080 >"$OUT/$chart-listeners.txt"
+    elif [ "$(printf '%s\n' "$settings" | wc -l)" -ne 1 ]; then
         fail "$chart pins ports in more than one appsettings.json — the search, not the chart, is wrong"
         continue
-    fi
+    else
+        pinned=$((pinned + 1))
+        { grep -ohE 'http://0\.0\.0\.0:[0-9]+' "$settings" || true; } |
+            sed -E 's|.*:([0-9]+)|\1|' | sort -u >"$OUT/$chart-listeners.txt"
 
-    pinned=$((pinned + 1))
-    { grep -ohE 'http://0\.0\.0\.0:[0-9]+' "$settings" || true; } |
-        sed -E 's|.*:([0-9]+)|\1|' | sort -u >"$OUT/$chart-listeners.txt"
-
-    if [ ! -s "$OUT/$chart-listeners.txt" ]; then
-        fail "no Kestrel endpoint parsed out of $settings — the parse, not the chart, is wrong"
-        continue
+        if [ ! -s "$OUT/$chart-listeners.txt" ]; then
+            fail "no Kestrel endpoint parsed out of $settings — the parse, not the chart, is wrong"
+            continue
+        fi
     fi
 
     while read -r port; do
