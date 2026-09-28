@@ -72,9 +72,10 @@ py -3.12 deploy/keycloak/realm_check.py check --kind local
   than enumerated here, because
   [ADR-052](../../docs/backend-architecture/adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)
   argues each of them and `check_worker_client` is the list. The grant itself
-  is not among them: a service account's roles live on its user, which is in
-  neither document this gate reads, so `check_worker_client` reaches the client
-  object and the token client's own check is the other half (ADR-052).
+  is not among them: a service account's roles live on its user, which a
+  deployed realm's client list does not carry and the projection drops from an
+  export, so `check_worker_client` reaches the client object and the token
+  client's own check is the other half (ADR-052).
 
 ## What it does not check
 

@@ -422,10 +422,10 @@ class TheWorkerClient(Fixture):
         for flag in ("standardFlowEnabled", "directAccessGrantsEnabled", "implicitFlowEnabled"):
             with self.subTest(flag=flag):
                 found = self.problems(realm(browser(), worker(**{flag: True})))
-                # implicitFlowEnabled is also caught by check_implicit_flow,
-                # which judges every client — two findings there, one for the
-                # others, and both name the flag.
-                self.assertTrue(any(flag in problem for problem in found), found)
+                # check_implicit_flow also refuses the implicit flow on every
+                # client, so the worker limb's own wording is what is matched:
+                # naming the flag alone would stay green with that limb gone.
+                self.assertTrue(any(f"has {flag}=" in problem for problem in found), found)
 
     def test_an_optional_audience_scope_is_caught(self):
         """The default list keeps commerce-api, so only the optional limb fires."""
