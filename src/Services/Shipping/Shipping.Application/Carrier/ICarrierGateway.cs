@@ -1,7 +1,8 @@
 namespace Shipping.Application.Carrier;
 
 /// <summary>
-/// §3.2's anti-corruption layer: the carrier in this service's vocabulary.
+/// The carrier's anti-corruption layer (spec, section 9): the carrier in this
+/// service's vocabulary.
 /// </summary>
 /// <remarks>
 /// A transient fault throws <see cref="CarrierUnavailableException"/> and is

@@ -2951,9 +2951,8 @@ pricing hop; Shipping's worker registers the address read
 [ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)
 gives it, off every request path. The outbound clients of the other kind call
 third parties — Payments' `ProviderHop`, behind the anti-corruption layer §3.1
-gives Payments, and Shipping's `CarrierHop`, to the carrier §3.1 makes
-Shipping conformist to — and each is registered by the service that makes the
-call. `PricingHop`,
+gives Payments, and Shipping's `CarrierHop`, to the carrier — and each is
+registered by the service that makes the call. `PricingHop`,
 beside the BFF's registration, names the client and Catalog's address once:
 `http`, not `https`,
 because TLS terminates at the ingress and traffic inside the cluster is plain

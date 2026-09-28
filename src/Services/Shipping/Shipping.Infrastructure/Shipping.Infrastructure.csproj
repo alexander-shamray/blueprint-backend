@@ -28,8 +28,9 @@
          transitively; the direct reference states the direct use, as the
          SqlClient line above does. -->
     <PackageReference Include="Microsoft.Extensions.Caching.Memory" />
-    <!-- The carrier's typed client, its budget and its breaker (§3.2's
-         anti-corruption layer): the standard pipeline, configured in Carrier/. -->
+    <!-- The carrier's typed client, its budget and its breaker (the
+         anti-corruption layer of spec, section 9), and the address read's:
+         the standard pipeline, configured in Carrier/ and Addresses/. -->
     <PackageReference Include="Microsoft.Extensions.Http.Resilience" />
     <!-- IHostEnvironment, which AddCarrierGateway names in its signature for
          the scheme rule, as Common.Infrastructure references it. -->

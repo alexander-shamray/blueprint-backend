@@ -14,8 +14,8 @@ public static class CarrierHop
 {
     /// <summary>
     /// Deliberately above §9.7's one-to-two-second band, for that section's
-    /// own reason: a third party behind an anti-corruption layer is sized to
-    /// the wait above it, and nothing waits on this hop — the row backs off.
+    /// own reason: a third party is sized to the wait above it, and nothing
+    /// waits on this hop — the row backs off.
     /// </summary>
     public static readonly TimeSpan AttemptTimeout = TimeSpan.FromSeconds(8);
 
