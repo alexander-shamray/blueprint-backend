@@ -369,12 +369,12 @@ export AddressSource__BaseUrl='http://localhost:8082'
 dotnet run --project src/Services/Shipping/Shipping.Worker
 ```
 
-**This hop is not the BFF's.** That block leaves its address at
-`catalog-api:8081` because §9.7 makes the pricing hop's address a literal
-rather than a key; this one is a configuration key (§15.4), so a host-run worker
-points it at a host-run Ordering and needs no `hosts` entry. A host-run
-`Ordering.Api` listens on 8082, because its block above moves its h2c endpoint
-off Catalog's — two host processes cannot both hold 8081.
+**This hop is not the BFF's.** That block leaves its address on the Compose
+network because §9.7 makes the pricing hop's address a literal rather than a
+key; this one is a configuration key (§15.4), so a host-run worker points it
+at a host-run Ordering and needs no `hosts` entry. `AddressSource__BaseUrl` is
+the h2c endpoint Ordering's block above moves off Catalog's, because two host
+processes cannot hold one port.
 
 `Cors__Enabled` and `Ingress__Enabled` are both absent above and both default
 to off, which is the shape the flags are written for — off is a valid
