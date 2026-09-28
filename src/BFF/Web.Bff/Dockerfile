@@ -56,18 +56,11 @@ RUN dotnet publish src/BFF/Web.Bff/Web.Bff.csproj \
 # -extra, like every other image here. §15.2 argued the suffix from
 # Microsoft.Data.SqlClient, which refuses to open a connection under
 # globalization-invariant mode — and this host, like the gateway, opens no
-# connection at all (§9.7's one hop is gRPC). It takes the variant anyway, for
-# the second reason that chapter gives: one base image across the platform, so
-# what a host does with a culture-sensitive comparison never depends on which
-# suffix somebody picked for its image.
-#
-# This file shipped as plain chiselled and argued its way there — no SQL, and
-# the one culture-sensitive thing it does, parsing the price off the wire,
-# names InvariantCulture at both ends. Every clause true and the conclusion
-# still wrong: §15.2 had already decided this host's suffix BY NAME, and the
-# uniformity it buys is precisely that nobody has to redo that analysis before
-# adding a date format or a sort. ICU and tzdata are the whole difference; no
-# shell, no root.
+# database connection at all; its hop is gRPC (§9.7, ADR-052). It takes the
+# variant anyway, for the second reason that chapter gives: one base image
+# across the platform, so what a host does with a culture-sensitive comparison
+# never depends on which suffix somebody picked for its image. ICU and tzdata
+# are the whole difference; no shell, no root.
 FROM mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled-extra AS final
 WORKDIR /app
 COPY --from=build /app/publish .

@@ -13,7 +13,8 @@ A monorepo makes cross-cutting changes and contract updates atomic and reviewabl
 │   │   ├── Common.Domain/              Entity, AggregateRoot, IDomainEvent (§5.5)
 │   │   ├── Common.Application/         Dispatcher, pipeline behaviours, Result<T>
 │   │   ├── Common.Infrastructure/      Outbox, inbox, idempotency markers,
-│   │   │                               EF conventions, Redis
+│   │   │                               EF conventions, Redis, and §11.5's
+│   │   │                               client-credentials grant (ADR-052)
 │   │   ├── Common.Web/                 Host defaults: OTel, health, auth, ProblemDetails.
 │   │   │                               Referenced by every host. NOT resilience —
 │   │   │                               the BFF and Payments each hold an outbound
@@ -27,8 +28,9 @@ A monorepo makes cross-cutting changes and contract updates atomic and reviewabl
 │   ├── BFF/
 │   │   └── Web.Bff/                    Aggregation for the web client (§10.1).
 │   │                                   The ONLY host that calls a service
-│   │                                   synchronously (§9.7), and therefore the
-│   │                                   only one with client credentials (§11.5)
+│   │                                   synchronously (§9.7); it binds
+│   │                                   Identity:Client, and the grant's code is
+│   │                                   Common.Infrastructure's (§11.5, ADR-052)
 │   │
 │   └── Services/
 │       ├── Catalog/

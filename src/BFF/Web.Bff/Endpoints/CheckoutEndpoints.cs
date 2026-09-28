@@ -47,11 +47,11 @@ public static class CheckoutEndpoints
                     CancellationToken ct) =>
                 {
                     // Before the hop, always. A request that cannot produce
-                    // anything must not spend the platform's one synchronous
-                    // hop finding that out — and the throw is how the 400 gets
-                    // its field keys, because Common.Web's
-                    // ValidationExceptionHandler is what turns a
-                    // ValidationException into §10.5's ValidationProblemDetails.
+                    // anything must not spend a synchronous hop finding that
+                    // out (§9.7) — and the throw is how the 400 gets its field
+                    // keys, because Common.Web's ValidationExceptionHandler
+                    // turns a ValidationException into §10.5's
+                    // ValidationProblemDetails.
                     await validator.ValidateAndThrowAsync(request, ct);
 
                     // Merged by product, first appearance ordered. This is

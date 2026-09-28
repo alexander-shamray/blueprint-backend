@@ -1,8 +1,8 @@
 namespace Web.Bff;
 
 /// <summary>
-/// The platform's one synchronous downstream hop, named in one place (§9.7,
-/// ADR-017).
+/// This host's synchronous downstream hop, named in one place (§9.7, ADR-017);
+/// it is not the platform's only one (ADR-052).
 /// </summary>
 public static class PricingHop
 {
