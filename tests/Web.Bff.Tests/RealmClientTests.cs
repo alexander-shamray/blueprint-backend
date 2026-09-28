@@ -168,11 +168,11 @@ public class RealmClientTests
         ];
 
         // §11.5 makes the number of hosts holding a client secret the number of
-        // synchronous couplings in the platform, and ADR-052 moved it from one
-        // to two by deciding what the second one reads when it is stolen. Over-
-        // supply has no failing test to catch it — which is what this is — so a
-        // third name appearing here is a third coupling or a credential nothing
-        // sends. Notifications' client is decided and not built.
+        // synchronous couplings in the platform. ADR-052 decides two more and
+        // says what each reads when it is stolen; Shipping's is minted and
+        // Notifications' is not yet. Over-supply has no failing test to catch
+        // it — which is what this is — so any other name appearing here is an
+        // undecided coupling or a credential nothing sends.
         serviceAccounts.ShouldBe([ClientId, WorkerClient], ignoreOrder: true);
     }
 }
