@@ -1141,13 +1141,13 @@ is **every host but the BFF and, since
 Shipping's worker**. The gateway forwards the caller's token rather than
 minting its own; every other service exchanges events over the broker and
 reads local projections ([§6.4](06-cqrs.md), ADR-002). Two sets of
-credentials in the whole platform, and the count is the point: it is the
-number of synchronous couplings, and it moved by a decision that said what
-the second one reads when it is stolen. Supplying the rest "for consistency"
-is not harmless padding — it provisions a Keycloak client, a secret in the
-vault and a mount, all of which must be rotated and audited, for credentials
-no code path ever sends. Over-supply has no failing test to catch it, which is
-why it survives longer than under-supply does.
+credentials in the whole platform today, and the count is the point: it is
+the number of synchronous couplings, and it moves only by a decision that
+says what each new one reads when it is stolen. Supplying the rest "for
+consistency" is not harmless padding — it provisions a Keycloak client, a
+secret in the vault and a mount, all of which must be rotated and audited, for
+credentials no code path ever sends. Over-supply has no failing test to catch
+it, which is why it survives longer than under-supply does.
 
 **`OTEL_EXPORTER_OTLP_ENDPOINT` read `— defaults` and the chart refuses to
 render without it**, and only one of those can describe a deployment

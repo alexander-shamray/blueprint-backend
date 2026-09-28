@@ -102,10 +102,11 @@ MOBILE_CLIENT = "mobile-app"
 
 # The address reader ADR-052 mints, named for the same reason the two above
 # are: its obligations are properties of one client and cannot be checked
-# without finding it. It is required from the change that puts it in the
-# realm export, ahead of the host that calls with it, so a deployed realm
-# gains it when it is next installed from that export. Notifications' client
-# is decided and in no export yet, so it is deliberately not here.
+# without finding it. It is required from the change that mints it in the
+# local export; a deployed realm is no committed file (ADR-042), so an
+# operator creates the client there with a generated secret, and this gate
+# refuses that realm until one has. Notifications' client is decided and
+# minted nowhere yet, so it is deliberately not here.
 WORKER_CLIENT = "shipping-worker"
 
 # The two entries Keycloak accepts in `webOrigins` that are not origins, named
