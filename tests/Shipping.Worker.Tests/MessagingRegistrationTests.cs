@@ -1,4 +1,6 @@
 using Shipping.Infrastructure.Messaging;
+using Common.Contracts.Ordering.V1;
+using Common.Infrastructure.Messaging;
 using MassTransit;
 using MassTransit.Testing;
 using Microsoft.Extensions.Configuration;
@@ -149,7 +151,28 @@ public class MessagingRegistrationTests
             "MassTransit starts the bus from a hosted service; without it the registration is inert");
     }
 
+    [Fact]
+    public void Every_event_in_the_consumes_column_is_registered()
+    {
+        // §3.2's Consumes column for Shipping. A consumer registered and
+        // never bound looks exactly like one that was never added, and this
+        // is the half of that pair a harness-swapped registration can see —
+        // the binding is a separate claim, provable only against a real queue.
+        ServiceCollection services = new();
 
+        services.AddMassTransitMessaging(Configuration());
+
+        foreach (Type consumer in new[]
+                 {
+                     typeof(IntegrationEventConsumer<OrderConfirmed>),
+                     typeof(IntegrationEventConsumer<OrderCancelled>)
+                 })
+        {
+            services.ShouldContain(
+                d => d.ImplementationType == consumer || d.ServiceType == consumer,
+                $"{consumer.Name} is in §3.2's Consumes column and has no AddConsumer");
+        }
+    }
 
     [Fact]
     public void The_consumer_assertion_can_actually_see_a_consumer()

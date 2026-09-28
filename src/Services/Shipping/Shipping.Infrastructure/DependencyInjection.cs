@@ -1,3 +1,4 @@
+using Shipping.Application.Shipments;
 using Shipping.Domain.Shipments;
 using Shipping.Infrastructure.Idempotency;
 using Shipping.Infrastructure.Messaging;
@@ -51,8 +52,8 @@ public static class DependencyInjection
 
         services.AddScoped<IUnitOfWork, EfUnitOfWork>();                     // §6.3
 
-        // §5.6's repository registration joins with the first command that
-        // loads a shipment; the aggregate is mapped, and nothing loads it yet.
+        // §5.6's repository for §3.2's aggregate.
+        services.AddScoped<IShipmentRepository, ShipmentRepository>();
 
         // §8.5's durable half. Only this one has to land on the transaction
         // EfUnitOfWork opens — it resolves the DbContext alias above, which is
