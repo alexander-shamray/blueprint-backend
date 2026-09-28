@@ -117,7 +117,7 @@ Three details in this picture are decisions, not layout:
   revoked token with no error. Payments and Shipping reach neither: both
   cache nothing, and §8.5's keys belong to HTTP write commands, which neither
   has — Payments' idempotency is the payment provider's key and its own rows,
-  and Shipping's is the lease its two workers take in SQL.
+  and Shipping's is the lease its workers take in SQL.
 - **Every service validates its own token**, not just the gateway. [§11.2](11-identity-authorization.md) treats
   the network as hostile, so a request arriving by any other path is still
   authenticated. A diagram showing only `GW -.-> IDP` would depict exactly the

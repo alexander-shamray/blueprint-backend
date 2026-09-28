@@ -1236,8 +1236,9 @@ configuration at startup and fail fast — a service that starts with a missing
 setting and fails on the first request is much harder to diagnose than one that
 refuses to start.
 
-**Every options type gets this — no exceptions, and it goes in the registration
-helper that owns the consumer.** `IOptions<T>` always resolves: unbound, it
+**Every options type gets this — no exceptions, and it goes beside the
+registration of its consumer: for `Identity:Client`, the calling host's own
+`Program.cs` (§9.7).** `IOptions<T>` always resolves: unbound, it
 hands back a default-constructed instance. So a forgotten binding is invisible
 to `ValidateOnBuild` (§4.2), the service starts clean, and the failure surfaces
 as behaviour rather than as an error:
@@ -1271,12 +1272,12 @@ third outcome, because a key that never varies has nothing to validate.
 > `Identity:Client` earns its options type by holding a secret that must differ
 > per environment, and it is the only thing here that does.
 
-Which helper matters as much as the call itself. Binding beside the consumer is
-what makes "the gateway needs no client credentials" true *by construction*
-rather than by remembering — the gateway calls neither helper, so it neither
-binds `Identity:Client` nor demands it. A binding hoisted into `Common.Web` for
-tidiness would re-impose the requirement on every host and put us back where
-§15.3 started.
+Where the binding sits matters as much as the call itself. Binding beside the
+consumer is what makes "the gateway needs no client credentials" true *by
+construction* rather than by remembering — the gateway registers no client
+that calls a peer, so it neither binds `Identity:Client` nor demands it. A
+binding hoisted into `Common.Web` for tidiness would re-impose the requirement
+on every host and put us back where §15.3 started.
 
 `[Required]` is what makes `ValidateDataAnnotations` do anything — a bound
 options class with no annotations validates successfully while empty:

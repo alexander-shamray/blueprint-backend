@@ -29,8 +29,8 @@ graph LR
     SHP -->|shipment events| NOT
 ```
 
-**Every collaboration the map draws is a round trip, and the return leg is an
-event.**
+**Every collaboration the saga has with another service is a round trip, and
+the return leg is an event.**
 Ordering sends a command and then waits — it does not call and block. The
 return edges drawn above are what the fulfilment saga
 ([§9.6](09-messaging.md)) transitions on, and drawing only the outbound half

@@ -1326,7 +1326,7 @@ each other.
 > because the grant is the address owner's to serve.
 
 Mechanically this is a `DelegatingHandler` attached to every outbound client
-(§9.7), so no call site has to remember it:
+that calls a peer (§9.7), so no call site has to remember it:
 
 ```csharp
 public sealed class ClientCredentialsHandler(ITokenCache tokens, IOptions<ServiceIdentityOptions> identity)
@@ -1488,9 +1488,11 @@ public async Task A_client_without_the_scope_is_rejected()
 is under test is the registration plus the realm, and neither of those is
 Catalog's. Driving a real service would add a SQL container and a migrator run
 to a suite whose subject is a token, and it would still be asserting exactly
-this. The suite lives in `Web.Bff.Tests` because the BFF is the host that owns
-the client id — the same rule that put `GrantablePermissionTests` in
-`Gateway.Api.Tests`.
+this. The suite lives in `Web.Bff.Tests` because the BFF owned the first
+client id — the same rule that put `GrantablePermissionTests` in
+`Gateway.Api.Tests` — and `shipping-worker`'s grant joined a suite that
+already runs the realm rather than buying `Shipping.Worker.Tests` a Keycloak
+container of its own.
 
 ## 11.6 Secrets
 
