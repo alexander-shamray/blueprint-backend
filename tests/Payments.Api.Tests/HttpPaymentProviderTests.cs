@@ -17,6 +17,7 @@ using WireMock.Logging;
 using WireMock.RequestBuilders;
 using WireMock.ResponseBuilders;
 using WireMock.Server;
+using WireMock.Settings;
 using Xunit;
 using ProviderRegistration = Payments.Infrastructure.Provider.DependencyInjection;
 
@@ -43,7 +44,10 @@ public sealed class HttpPaymentProviderTests : IClassFixture<HttpPaymentProvider
     {
         public ProviderHost()
         {
-            Server = WireMockServer.Start();
+            // Loopback, not WireMock's default of every interface: a socket on
+            // 0.0.0.0 is what a workstation firewall stops to ask about, and the
+            // only caller is the in-process host under test.
+            Server = WireMockServer.Start(new WireMockServerSettings { Urls = ["http://127.0.0.1:0"] });
             Factory = new PaymentsApiFactory(UnreachableSql, UnreachableRabbit, Server.Urls[0] + "/");
         }
 

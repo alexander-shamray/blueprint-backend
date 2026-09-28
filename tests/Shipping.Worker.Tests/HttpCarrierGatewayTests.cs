@@ -11,6 +11,7 @@ using WireMock.Logging;
 using WireMock.RequestBuilders;
 using WireMock.ResponseBuilders;
 using WireMock.Server;
+using WireMock.Settings;
 using Xunit;
 using CarrierRegistration = Shipping.Infrastructure.Carrier.DependencyInjection;
 
@@ -38,7 +39,10 @@ public sealed class HttpCarrierGatewayTests : IClassFixture<HttpCarrierGatewayTe
     {
         public CarrierHost()
         {
-            Server = WireMockServer.Start();
+            // Loopback, not WireMock's default of every interface: a socket on
+            // 0.0.0.0 is what a workstation firewall stops to ask about, and the
+            // only caller is the in-process host under test.
+            Server = WireMockServer.Start(new WireMockServerSettings { Urls = ["http://127.0.0.1:0"] });
             Factory = new ShippingWorkerFactory(UnreachableSql, UnreachableRabbit, Server.Urls[0] + "/");
         }
 
