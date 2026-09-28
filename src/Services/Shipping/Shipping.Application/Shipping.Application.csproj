@@ -3,17 +3,18 @@
   <!--
     Settings come from Directory.Build.props (§4.4).
 
-    Domain and Common.Application — the §4.2 dependency table's second row,
-    minus Common.Contracts. The §9.3 mapper is where a contract would be
-    named, and its allow-list is empty until this service publishes
-    something — so the reference joins with the first entry in it, and not
-    before. §4.3's one assembly that crosses a service boundary; it crosses
-    at the mapper or nowhere.
+    Domain, Common.Application and Common.Contracts — the §4.2 dependency
+    table's second row, and §4.3's one assembly permitted to cross a service
+    boundary. It crosses inbound at the consumers, which read
+    Common.Contracts.Ordering.V1 directly (§9.4), and outbound at the §9.3
+    mapper — the one place this project may name a contract of its own to
+    publish, and its allow-list stays empty until it does.
   -->
 
   <ItemGroup>
     <ProjectReference Include="..\Shipping.Domain\Shipping.Domain.csproj" />
     <ProjectReference Include="..\..\..\BuildingBlocks\Common.Application\Common.Application.csproj" />
+    <ProjectReference Include="..\..\..\BuildingBlocks\Common.Contracts\Common.Contracts.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -27,6 +28,19 @@
          would be a claim this project never states. -->
     <PackageReference Include="FluentValidation" />
     <PackageReference Include="FluentValidation.DependencyInjectionExtensions" />
+    <!-- VoidShipmentHandler's LoggerMessage.Define call (CA1848 under
+         ADR-019 makes log.LogInformation an error), referenced directly
+         rather than arriving transitively. -->
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- §12's Application suite asserts §9.3's allow-list as a whole, and the
+         mapper holding it is internal because §5.5 makes that registry a
+         construction rather than a surface. Named here rather than widened at
+         the member: one line naming the one assembly that reads it commits
+         less than a public member on a type no other assembly may hold. -->
+    <InternalsVisibleTo Include="Shipping.Application.Tests" />
   </ItemGroup>
 
 </Project>

@@ -1,3 +1,6 @@
+using Common.Contracts.Ordering.V1;
+using Common.Infrastructure.Inbox;
+using Common.Infrastructure.Messaging;
 using MassTransit;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -12,6 +15,14 @@ namespace Shipping.Infrastructure.Messaging;
 /// </summary>
 public static class DependencyInjection
 {
+    /// <summary>
+    /// §3.2's Consumes column for Shipping. One queue for both events: each
+    /// writes one row in this service's own database and makes no call, so
+    /// neither can meet a fault that is a wait and one retry vocabulary
+    /// covers both (spec, section 8).
+    /// </summary>
+    public const string EventsQueue = "shipping-events";
+
     public static IServiceCollection AddMassTransitMessaging(
         this IServiceCollection services,
         IConfiguration configuration)
@@ -36,9 +47,36 @@ public static class DependencyInjection
             // this platform's telemetry, and none of it leaves silently.
             x.DisableUsageTelemetry();
 
+            // §3.2's Consumes column. Registering and binding are two
+            // statements and both are needed; a consumer registered and never
+            // bound receives nothing.
+            x.AddConsumer<IntegrationEventConsumer<OrderConfirmed>>();
+            x.AddConsumer<IntegrationEventConsumer<OrderCancelled>>();
+
             x.UsingRabbitMq((context, cfg) =>
             {
                 cfg.Host(new Uri(connectionString));
+
+                cfg.ReceiveEndpoint(
+                    EventsQueue,
+                    e =>
+                    {
+                        // RetryPolicy.Standard bare, and no UseDelayedRedelivery:
+                        // neither consumer can meet a fault that is a wait, and
+                        // no mapping exception is possible because neither
+                        // message is mapped by an ICommandMessageMapper —
+                        // §9.8's exclusions have nothing to exclude here.
+                        e.UseMessageRetry(RetryPolicy.Standard);
+
+                        // Inbox outside the in-memory outbox (§9.8): the other
+                        // nesting commits the inbox row before the buffered
+                        // sends have flushed.
+                        e.UseConsumeFilter(typeof(InboxFilter<>), context);
+                        e.UseInMemoryOutbox(context);
+
+                        e.ConfigureConsumer<IntegrationEventConsumer<OrderConfirmed>>(context);
+                        e.ConfigureConsumer<IntegrationEventConsumer<OrderCancelled>>(context);
+                    });
 
                 // §9.8 configures retry per endpoint, so the policy lives with
                 // each endpoint. No ConfigureEndpoints(context), deliberately:

@@ -24,6 +24,13 @@ internal sealed class ShippingIntegrationEventMapper : IIntegrationEventMapper
     // only, and taking its MessageId and CorrelationId from the mapper (§9.1).
     private static readonly Dictionary<Type, Func<IDomainEvent, object>> Registry = [];
 
+    /// <summary>
+    /// §12's Application suite asserts the allow-list as a whole rather than
+    /// by entry, so it needs to see the registry without a domain event to
+    /// map through it.
+    /// </summary>
+    internal static IReadOnlyCollection<Type> RegisteredEvents => Registry.Keys;
+
     public IReadOnlyList<object> Map(IReadOnlyList<IDomainEvent> domainEvents)
     {
         List<object> mapped = [];
