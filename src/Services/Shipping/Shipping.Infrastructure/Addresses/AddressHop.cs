@@ -22,8 +22,7 @@ public static class AddressHop
     /// <summary>
     /// The name <c>AddStandardResilienceHandler</c> files this client's options
     /// under, so the built pipeline can be read back rather than recomputed
-    /// (§9.7); a wrong name yields default options, whose 30 s total breaches
-    /// the band at once.
+    /// (§9.7).
     /// </summary>
     public const string ResilienceOptionsName = $"{ClientName}-standard";
 
