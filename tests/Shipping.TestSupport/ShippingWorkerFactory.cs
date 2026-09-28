@@ -1,4 +1,5 @@
 using Shipping.Infrastructure.Fulfilment;
+using Shipping.Infrastructure.Persistence;
 using Shipping.TestSupport.Outbox;
 using Common.Application;
 using Common.Infrastructure.Identity;
@@ -8,9 +9,11 @@ using Common.Web;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using AddressRegistration = Shipping.Infrastructure.Addresses.DependencyInjection;
 using CarrierRegistration = Shipping.Infrastructure.Carrier.DependencyInjection;
 
@@ -73,6 +76,20 @@ public class ShippingWorkerFactory(
     public RecordingTokenCache Tokens { get; } = new();
 
     /// <summary>
+    /// The host's commit fault, disarmed until a test arms it. Installed on
+    /// every host over this factory, because a disarmed interceptor changes
+    /// nothing and one host per seam would be a container set per seam.
+    /// </summary>
+    public ShipmentCommitFaults CommitFaults { get; } = new();
+
+    /// <summary>
+    /// The host's log, captured. Added to the providers the host configures
+    /// rather than replacing them, so what a test reads is what a deployment
+    /// would write (spec, section 11).
+    /// </summary>
+    public CapturedLogs CapturedLogs { get; } = new();
+
+    /// <summary>
     /// The RUNTIME connection of §7.1, and only that one. The host has no
     /// business reading <c>ShippingMigrator</c>, and a fixture that supplied
     /// both would hide it if it started. The bus key is required because
@@ -90,6 +107,7 @@ public class ShippingWorkerFactory(
             .UseSetting($"{ServiceIdentityOptions.SectionName}:ClientId", "shipping-worker-test")
             .UseSetting($"{ServiceIdentityOptions.SectionName}:ClientSecret", "not-a-real-secret")
             .UseSetting($"{ServiceIdentityOptions.SectionName}:Scope", "commerce-api")
+            .ConfigureLogging(logging => logging.AddProvider(CapturedLogs))
             .ConfigureServices(services =>
             {
                 ConfigureAuthentication(services);
@@ -156,7 +174,9 @@ public class ShippingWorkerFactory(
                 // layer scans itself (§6.2), and this assembly is a layer the
                 // production registration has no reason to know about.
                 services.AddPluggableFrom(typeof(AlwaysThrows).Assembly);
-            });
+            })
+            .ConfigureTestServices(services =>
+                services.ConfigureDbContext<ShippingDbContext>(o => o.AddInterceptors(CommitFaults)));
 
     /// <summary>
     /// Replaces the JWT scheme with <see cref="TestAuthHandler"/> (§12.4)

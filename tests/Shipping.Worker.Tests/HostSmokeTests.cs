@@ -109,6 +109,14 @@ public class HostSmokeTests(HostSmokeTests.UnreachableInfrastructureFactory fact
         HealthCheckRegistration bus = options.Registrations.Single(r => r.Name == "masstransit-bus");
         bus.Tags.ShouldContain("ready", "a bus check outside the ready predicate reports to nobody");
         bus.Tags.ShouldContain("masstransit", "both tags are the documented contract (§13.5), so both are pinned");
+
+        // Which two, stated as one set for a reader. The count above refuses a
+        // third row and each Single refuses a replacement, so this line fails
+        // only after one of them has; it is here because the exclusion is the
+        // point — the carrier, Ordering and Keycloak are shared by every
+        // replica, so a readiness row for one would pull every pod on its next
+        // outage and then block the rollout carrying the fix (§13.5).
+        options.Registrations.Select(r => r.Name).ShouldBe(["sql", "masstransit-bus"], ignoreOrder: true);
     }
 
     [Fact]
