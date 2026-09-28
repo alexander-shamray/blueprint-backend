@@ -26,6 +26,7 @@ tests/Inventory.Api.Tests/MetricsRegistrationTests.cs | connection-string-passwo
 tests/Payments.Api.Tests/MetricsRegistrationTests.cs | connection-string-password | da3fd0c5abaa | The same unusable fixture in Payments' metrics registration suite.
 tests/Ordering.Api.Tests/MessagingRegistrationTests.cs | credential-assignment | 9d8e49ea1c49 | A broker URI pointing at a hostname that does not resolve.
 tests/Common.Web.Tests/RealmImportTests.cs | credential-assignment | eb26d4a9a0ef | The suite pinning the realm export's documented local client default.
+tests/Common.Web.Tests/RealmImportTests.cs | credential-assignment | afcf12beb59c | The suite pinning the realm export's second documented local client default.
 tests/Common.Web.Tests/RealmImportTests.cs | connection-string-password | 4b7870187707 | A C# local of that name assigned the result of a call, not a value.
 tests/Common.Web.Tests/RedactingScopeProviderTests.cs | connection-string-password | f52fbd32b2b3 | The throwaway value the scope redactor is asserted to remove.
 tests/Common.Web.Tests/SensitiveDataRedactorTests.cs | connection-string-password | f52fbd32b2b3 | The same throwaway value in the record redactor's suite.
@@ -35,6 +36,7 @@ tests/Common.Infrastructure.Tests/CachingTokenClientTests.cs | credential-assign
 tests/Common.Infrastructure.Tests/CachingTokenClientTests.cs | credential-assignment | ca2a7d5ccd7e | An invented bearer value in a stub error body, asserted never to be logged.
 tests/Web.Bff.Tests/KeycloakIdentityTests.cs | credential-assignment | eb26d4a9a0ef | The same local BFF client default in the identity suite.
 tests/Web.Bff.Tests/KeycloakIdentityTests.cs | credential-assignment | 5d7c40ed1628 | An invented wrong value, asserted to be refused by the provider.
+tests/Web.Bff.Tests/KeycloakFixture.cs | credential-assignment | afcf12beb59c | ADR-052's second local client default, held where the fixture and the realm meet.
 tests/Common.Infrastructure.Tests/TokenEndpointSchemeTests.cs | credential-assignment | eb26d4a9a0ef | The same local BFF client default in the scheme suite.
 tests/Common.Infrastructure.Tests/TokenEndpointSchemeTests.cs | credential-assignment | 96b2735306f5 | A non-HTTP endpoint URL asserted to be refused. A URL, not a credential.
 

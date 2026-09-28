@@ -150,8 +150,11 @@ public class RealmClientTests
         compose.ShouldContain($"Identity__Client__Scope: \"{AuthenticationExtensions.Audience}\"");
     }
 
+    /// <summary>The second client ADR-052 mints, and the reader of Ordering's address.</summary>
+    private const string WorkerClient = "shipping-worker";
+
     [Fact]
-    public void It_is_the_only_service_account_client_in_the_realm()
+    public void The_service_account_clients_are_exactly_the_hosts_that_call_a_peer()
     {
         string[] serviceAccounts =
         [
@@ -164,11 +167,12 @@ public class RealmClientTests
                 .Select(c => c.GetProperty("clientId").GetString()!)
         ];
 
-        // §11.5 and §15.4 both say it: one set of credentials in the whole
-        // platform is what "async by default" looks like in the secrets
-        // inventory, and over-supply has no failing test to catch it — which
-        // is what this is. A second service-account client appearing here is a
-        // second synchronous coupling, or a credential nothing sends.
-        serviceAccounts.ShouldBe([ClientId]);
+        // §11.5 makes the number of hosts holding a client secret the number of
+        // synchronous couplings in the platform, and ADR-052 moved it from one
+        // to two by deciding what the second one reads when it is stolen. Over-
+        // supply has no failing test to catch it — which is what this is — so a
+        // third name appearing here is a third coupling or a credential nothing
+        // sends. Notifications' client is decided and not built.
+        serviceAccounts.ShouldBe([ClientId, WorkerClient], ignoreOrder: true);
     }
 }

@@ -361,7 +361,8 @@ public class RealmImportTests
                 "payments:admin",
                 "orders:write",
                 "orders:cancel",
-                "orders:admin"
+                "orders:admin",
+                "orders:delivery-address"
             ],
             ignoreOrder: true);
     }
@@ -419,28 +420,40 @@ public class RealmImportTests
     }
 
     /// <summary>
-    /// The one client whose grant requires both sides to agree on a secret
-    /// (§11.5), and the documented local-development value it agrees on.
+    /// The clients whose grant requires both sides to agree on a secret
+    /// (§11.5, ADR-052), and the documented local default each agrees on.
     /// </summary>
     /// <remarks>
     /// A client-credentials flow is two parties holding the same string, one
-    /// of which is a committed Compose file, so a Keycloak-generated secret
-    /// would leave the realm and the deployment disagreeing. Pinning the value
-    /// keeps the rule strong: a generated secret fails here, and so does a
-    /// real one.
+    /// of which is a committed file, so a generated secret would leave the
+    /// realm and the deployment disagreeing. Pinning each value keeps the
+    /// rule strong: a generated secret fails here, and so does a real one.
     /// </remarks>
     private const string CredentialClient = "web-bff";
+
     private const string DocumentedLocalSecret = "local-dev-secret";
 
+    /// <summary>ADR-052's second credentialed client, and its own default.</summary>
+    private const string WorkerCredentialClient = "shipping-worker";
+
+    private const string DocumentedLocalWorkerSecret = "local-dev-shipping-secret";
+
+    private static readonly Dictionary<string, string> DocumentedLocalSecrets =
+        new(StringComparer.Ordinal)
+        {
+            [CredentialClient] = DocumentedLocalSecret,
+            [WorkerCredentialClient] = DocumentedLocalWorkerSecret
+        };
+
     [Fact]
-    public void No_client_ships_a_secret_but_the_one_whose_grant_needs_one()
+    public void No_client_ships_a_secret_but_the_ones_whose_grants_need_one()
     {
         foreach (JsonElement client in Root.GetProperty("clients").EnumerateArray())
         {
             string clientId = client.GetProperty("clientId").GetString()!;
             bool ships = client.TryGetProperty("secret", out JsonElement secret);
 
-            if (clientId != CredentialClient)
+            if (!DocumentedLocalSecrets.TryGetValue(clientId, out string? documented))
             {
                 // §11.6 and the local-development carve-out: Compose's
                 // documented defaults are deliberate, and a randomly generated
@@ -455,13 +468,50 @@ public class RealmImportTests
                 "the deployment have to hold the same value (§11.5)");
 
             // The documented default and nothing else. The matching half lives
-            // in deploy/compose/services/web-bff.yml, which a building block's
-            // suite may not read.
+            // in the host's own Compose unit, which a building block's suite
+            // may not read.
             secret.GetString().ShouldBe(
-                DocumentedLocalSecret,
+                documented,
                 "a secret in a committed realm must be the documented local default, " +
                 "never a generated or real one (§11.6)");
         }
+
+        // Not vacuous: with a set that named a client the realm does not hold,
+        // every branch above would take the first arm and assert nothing about
+        // the credential this platform actually ships.
+        string[] present =
+        [
+            .. Root.GetProperty("clients").EnumerateArray()
+                .Select(c => c.GetProperty("clientId").GetString()!)
+        ];
+
+        foreach (string credentialed in DocumentedLocalSecrets.Keys)
+            present.ShouldContain(credentialed);
+    }
+
+    [Fact]
+    public void The_worker_service_account_holds_exactly_the_role_its_grant_names()
+    {
+        // The `permission` mapper is oidc-usermodel-client-role-mapper, so a
+        // service account's claim comes from the client roles assigned to its
+        // own user — which a realm export carries as a user with
+        // serviceAccountClientId. Without that user the client authenticates
+        // and its token carries no permission at all, which reads at the
+        // reader as PermissionDenied and at the realm as nothing wrong.
+        JsonElement account = Root.GetProperty("users").EnumerateArray()
+            .Single(u => u.TryGetProperty("serviceAccountClientId", out JsonElement client) &&
+                         client.GetString() == WorkerCredentialClient);
+
+        string[] granted =
+        [
+            .. account.GetProperty("clientRoles").GetProperty(Audience).EnumerateArray()
+                .Select(r => r.GetString()).OfType<string>()
+        ];
+
+        // Exactly, not ShouldContain. ADR-052 sizes this credential by what it
+        // reads when it is stolen, and a second role here is a second thing it
+        // reads — which is the decision that record exists to hold.
+        granted.ShouldBe(["orders:delivery-address"]);
     }
 
     [Fact]

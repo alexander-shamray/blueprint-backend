@@ -458,6 +458,15 @@
           "clientRole": true,
           "containerId": "e55a8854-8088-495c-8db4-331d4b5eb68e",
           "attributes": {}
+        },
+        {
+          "id": "6b0f2d94-8a17-4e53-9c26-0d4a71e3b85f",
+          "name": "orders:delivery-address",
+          "description": "Read one order's delivery address over gRPC (ADR-052). Held by the shipping-worker service account and by no person: the read crosses subjects, so the method skips the ownership check and an authenticated caller alone would be too many.",
+          "composite": false,
+          "clientRole": true,
+          "containerId": "e55a8854-8088-495c-8db4-331d4b5eb68e",
+          "attributes": {}
         }
       ]
     }
@@ -936,7 +945,7 @@
       "id": "1fcb9f88-54ab-44a9-a768-ef111ceaef00",
       "clientId": "web-bff",
       "name": "Web BFF",
-      "description": "The one host that calls a service synchronously (§9.7), and therefore the only one holding client credentials (§11.5). Service accounts only: no browser flow, and nothing can obtain a token as a person through it.",
+      "description": "One of the two hosts that call a service synchronously and hold client credentials (§9.7, §11.5, ADR-052). Service accounts only: no browser flow, and nothing can obtain a token as a person through it.",
       "surrogateAuthRequired": false,
       "enabled": true,
       "alwaysDisplayInConsole": false,
@@ -1009,6 +1018,58 @@
           }
         }
       ],
+      "defaultClientScopes": [
+        "web-origins",
+        "acr",
+        "profile",
+        "roles",
+        "basic",
+        "email",
+        "commerce-api"
+      ],
+      "optionalClientScopes": [
+        "address",
+        "phone",
+        "organization",
+        "offline_access",
+        "microprofile-jwt"
+      ],
+      "access": {
+        "view": true,
+        "configure": true,
+        "manage": true
+      }
+    },
+    {
+      "id": "7c5a1d38-9e02-4b6f-8134-2fa6c0d75e91",
+      "clientId": "shipping-worker",
+      "name": "Shipping worker",
+      "description": "The second host that calls a service synchronously (ADR-052): a Shipping worker reading one order's delivery address. Service accounts only, holding orders:delivery-address and nothing else.",
+      "surrogateAuthRequired": false,
+      "enabled": true,
+      "alwaysDisplayInConsole": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "local-dev-shipping-secret",
+      "redirectUris": [],
+      "webOrigins": [],
+      "notBefore": 0,
+      "bearerOnly": false,
+      "consentRequired": false,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "publicClient": false,
+      "frontchannelLogout": false,
+      "protocol": "openid-connect",
+      "attributes": {
+        "realm_client": "false",
+        "backchannel.logout.session.required": "true",
+        "backchannel.logout.revoke.offline.tokens": "false"
+      },
+      "authenticationFlowBindingOverrides": {},
+      "fullScopeAllowed": true,
+      "nodeReRegistrationTimeout": -1,
       "defaultClientScopes": [
         "web-origins",
         "acr",
@@ -2709,6 +2770,16 @@
       "realmRoles": [
         "default-roles-commerce"
       ]
+    },
+    {
+      "username": "service-account-shipping-worker",
+      "enabled": true,
+      "serviceAccountClientId": "shipping-worker",
+      "clientRoles": {
+        "commerce-api": [
+          "orders:delivery-address"
+        ]
+      }
     }
   ]
 }

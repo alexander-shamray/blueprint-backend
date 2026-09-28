@@ -100,6 +100,13 @@ BROWSER_CLIENT = "web-app"
 # first spelling. The same derivation trap applies as to BROWSER_CLIENT.
 MOBILE_CLIENT = "mobile-app"
 
+# The address reader ADR-052 mints, named for the same reason the two above
+# are: its obligations are properties of one client and cannot be checked
+# without finding it. Notifications' client is decided and unbuilt, so it is
+# deliberately not here — a gate that required a client nobody deploys would
+# fail every realm.
+WORKER_CLIENT = "shipping-worker"
+
 # The two entries Keycloak accepts in `webOrigins` that are not origins, named
 # because the check below has to tell them apart rather than refuse both alike.
 # `*` answers every page on the internet; `+` means the origins this client's
@@ -159,9 +166,9 @@ REDACTED = "<redacted by realm_check>"
 # page whose token exchange gets no `Access-Control-Allow-Origin` discards
 # the token unread.
 REALM_FIELDS = ("accessTokenLifespan", "revokeRefreshToken", "refreshTokenMaxReuse")
-CLIENT_FIELDS = ("clientId", "standardFlowEnabled", "implicitFlowEnabled",
-                 "directAccessGrantsEnabled", "publicClient", "redirectUris",
-                 "defaultClientScopes", "webOrigins")
+CLIENT_FIELDS = ("clientId", "enabled", "standardFlowEnabled", "implicitFlowEnabled",
+                 "directAccessGrantsEnabled", "serviceAccountsEnabled", "publicClient",
+                 "redirectUris", "defaultClientScopes", "optionalClientScopes", "webOrigins")
 CLIENT_ATTRIBUTES = ("use.refresh.tokens", "access.token.lifespan",
                      "pkce.code.challenge.method")
 
@@ -211,6 +218,8 @@ FLAGS = (
     "implicitFlowEnabled",
     "standardFlowEnabled",
     "directAccessGrantsEnabled",
+    "serviceAccountsEnabled",
+    "enabled",
 )
 
 
@@ -414,6 +423,14 @@ def check_realm(realm: dict, kind: str, lifetime: int) -> list[str]:
             "obligation is a property of that client and cannot be checked "
             "without it")
 
+    worker = [c for c in clients if isinstance(c, dict) and c.get("clientId") == WORKER_CLIENT]
+    if len(worker) != 1:
+        problems.append(
+            f"the realm declares the address reader {WORKER_CLIENT!r} "
+            f"{len(worker)} time(s), expected exactly one. ADR-052 sizes that "
+            "client by what it reads when its secret is stolen, and every "
+            "obligation below is a property of the client object")
+
     problems += check_flags_are_booleans(clients)
     problems += check_lifetime(realm, clients, lifetime)
     problems += check_implicit_flow(clients)
@@ -424,6 +441,8 @@ def check_realm(realm: dict, kind: str, lifetime: int) -> list[str]:
         problems += check_mobile_client(mobile[0])
         problems += check_web_origins(mobile[0], MOBILE_CLIENT)
         problems += check_refresh_token_rotation(realm)
+    if worker:
+        problems += check_worker_client(worker[0])
     return problems
 
 
@@ -662,6 +681,71 @@ def check_mobile_client(client: dict) -> list[str]:
             "missing carries no audience and no permission claim, and every "
             "request it makes is refused with nothing in this file's own "
             "checks to say why")
+    return problems
+
+
+def check_worker_client(client: dict) -> list[str]:
+    """ADR-052's ceiling on the address reader, as far as a realm document reaches.
+
+    The grant itself is out of reach and that record says so: a service
+    account's roles live on its user, which is in neither the realm
+    representation this gate is handed nor the client list `read_admin.py`
+    fetches. What is left here is the rest of a stolen secret's blast radius —
+    that the client is confidential, mints tokens for itself alone, and carries
+    the scope whose mapper writes the `permission` claim at all.
+    """
+    problems: list[str] = []
+
+    if client.get("enabled") is not True:
+        problems.append(
+            f"client {WORKER_CLIENT!r} is disabled. Every obligation below "
+            "then holds because the client mints nothing, and the address read "
+            "fails as a refused credential in whichever environment imported "
+            "this realm")
+
+    if client.get("publicClient") is not False:
+        problems.append(
+            f"client {WORKER_CLIENT!r} has publicClient="
+            f"{client.get('publicClient')!r}. A public client presents no "
+            "secret, so the grant ADR-052 gives this reader is one Keycloak "
+            "refuses outright")
+
+    if client.get("serviceAccountsEnabled") is not True:
+        problems.append(
+            f"client {WORKER_CLIENT!r} has service accounts disabled. Keycloak "
+            "refuses the client-credentials grant with unauthorized_client, "
+            "which reaches the worker as a refused credential — ADR-052's "
+            "fourth row, a defect somebody must see rather than an outage")
+
+    for flag, what in (("standardFlowEnabled", "an authorization-code flow"),
+                       ("directAccessGrantsEnabled", "a password grant"),
+                       ("implicitFlowEnabled", "an implicit flow")):
+        if client.get(flag) is not False:
+            problems.append(
+                f"client {WORKER_CLIENT!r} has {flag}={client.get(flag)!r}, "
+                f"which gives it {what}. Its secret is a deployment value, so "
+                "the blast radius of that secret leaking has to stay one order's "
+                "address and never a token for a person in this realm (ADR-052)")
+
+    defaults = client.get("defaultClientScopes")
+    defaults = defaults if isinstance(defaults, list) else []
+    optional = client.get("optionalClientScopes")
+    optional = optional if isinstance(optional, list) else []
+
+    if "commerce-api" not in defaults:
+        problems.append(
+            f"client {WORKER_CLIENT!r} does not hold commerce-api as a default "
+            "client scope. A client-credentials token requests no scope by "
+            "name, so the audience mapper never runs and the permission claim "
+            "is never written — the read is refused with nothing in this "
+            "file's other checks to say why (§11.5)")
+
+    if "commerce-api" in optional:
+        problems.append(
+            f"client {WORKER_CLIENT!r} also holds commerce-api as an OPTIONAL "
+            "scope. Keycloak's admin console will create that state and it "
+            "resolves in the wrong direction for a grant that names no scope")
+
     return problems
 
 
