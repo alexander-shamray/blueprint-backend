@@ -296,10 +296,11 @@ src/Gateway/Gateway.Api/     the edge, and the second host. One
                              no database, so neither layer has anything to
                              hold. appsettings.json is the deliverable as much
                              as Program.cs is, and is under test
-src/BFF/Web.Bff/             the third host, and the ONE that calls a peer
-                             synchronously (§9.7, ADR-017) — which is what
-                             makes it the only one holding client credentials
-                             (§11.5). Same shape as the gateway
+src/BFF/Web.Bff/             the third host, and the one that calls a peer
+                             synchronously on a request path (§9.7, ADR-017)
+                             — it holds client credentials because of it, as
+                             every caller of a peer does (§11.5, ADR-052).
+                             Same shape as the gateway
 src/Services/Catalog/        §4.1's project set — Domain, Application,
                              Infrastructure, Migrator, Api. The first real
                              service, the scaffold's template, and the first
@@ -319,7 +320,9 @@ tests/                       per service: .Domain.Tests, .Application.Tests,
                              test project (§4.1). Per building block with
                              behaviour to test, one suite. Per host, one
                              suite, and the BFF's has a .TestSupport of its
-                             own. Plus Platform.IntegrationTests, the only
+                             own; Shipping.OrderingStub is a stub provider
+                             beside Shipping's suites, and not a .TestSupport.
+                             Plus Platform.IntegrationTests, the only
                              suite that references every service (§4.1),
                              where §12.1 homes Common.Contracts' shape tests
 ```
@@ -342,7 +345,12 @@ helper is not it.
 `Web.Bff.TestSupport` is the exception that proves the shape — one BFF suite,
 but `StubCatalog` must compile the *server* half of a `.proto` whose *client*
 half `Web.Bff` already compiles, and both in one assembly makes every message
-type a CS0436, which ADR-019 turns into an error.
+type a CS0436, which ADR-019 turns into an error. `Shipping.OrderingStub` is
+the sibling case and not a `.TestSupport` at all: a library holding only the
+server half of Ordering's `delivery_addresses.proto` (ADR-052), referencing
+nothing of Shipping's, so what it serves is the contract rather than a Shipping
+type. It stands apart because a gRPC service base in `Shipping.Infrastructure`
+would be a surface §3.2 says Shipping does not have; its csproj argues the rest.
 
 **The other thing shared as a linked file rather than as an assembly is the
 same relationship one level apart.** `pricing.proto` is Catalog's, because
