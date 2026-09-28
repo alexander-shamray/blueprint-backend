@@ -13,9 +13,9 @@ using Xunit;
 namespace Shipping.Worker.Tests;
 
 /// <summary>
-/// A booking the commit declines, over fakes rather than containers: which row
-/// the unit reloads decides whether the carrier's booking is handed back, and a
-/// real database cannot be made to reload a chosen state on cue.
+/// A pass whose commit declines, over fakes rather than containers: which row
+/// the unit reloads decides whether the carrier's booking is handed back or the
+/// pass ends quietly, and a real database cannot reload a chosen state on cue.
 /// </summary>
 public sealed class SupersededBookingTests
 {
@@ -77,6 +77,39 @@ public sealed class SupersededBookingTests
     }
 
     [Fact]
+    public async Task A_refusal_commit_that_loses_to_the_cancel_consumer_ends_quietly_on_the_voided_row()
+    {
+        Shipment voided = Voided();
+        Shipment pending = Shipment.For(voided.Id, voided.OrderId, Now);
+        RecordingCarrier carrier = new() { BookAnswer = () => new BookingResult.Refused("address_not_serviceable") };
+        RecordingLogger log = new();
+
+        // Returned rather than thrown: the row's catch would back off a Voided
+        // row the claim never takes again and log it as a row that will retry.
+        bool moved = await PassAsync(carrier, new ConflictOnceUnitOfWork(), log, pending, voided);
+
+        moved.ShouldBeFalse();
+        log.Entries.ShouldBeEmpty();
+        carrier.Cancels.ShouldBeEmpty("a refused booking holds nothing at the carrier to hand back");
+    }
+
+    [Fact]
+    public async Task An_unknown_order_commit_that_loses_to_the_cancel_consumer_ends_quietly_on_the_voided_row()
+    {
+        Shipment voided = Voided();
+        Shipment pending = Shipment.For(voided.Id, voided.OrderId, Now);
+        RecordingCarrier carrier = new();
+        RecordingLogger log = new();
+
+        bool moved = await PassAsync(
+            new NoStoredAddress(), carrier, new ConflictOnceUnitOfWork(), log, pending, voided);
+
+        moved.ShouldBeFalse();
+        log.Entries.ShouldBeEmpty();
+        carrier.Bookings.ShouldBe(0, "an order the owner does not know is never booked");
+    }
+
+    [Fact]
     public async Task A_carrier_too_late_to_take_the_booking_back_is_logged_as_an_orphan()
     {
         RecordingCarrier carrier = new() { CancelAnswer = () => new CancellationResult.TooLate() };
@@ -117,7 +150,15 @@ public sealed class SupersededBookingTests
         return shipment;
     }
 
+    private static Task<bool> PassAsync(
+        RecordingCarrier carrier,
+        IUnitOfWork unitOfWork,
+        RecordingLogger log,
+        params Shipment[] loads) =>
+        PassAsync(new KnownAddress(), carrier, unitOfWork, log, loads);
+
     private static async Task<bool> PassAsync(
+        IDeliveryAddressStore store,
         RecordingCarrier carrier,
         IUnitOfWork unitOfWork,
         RecordingLogger log,
@@ -127,7 +168,8 @@ public sealed class SupersededBookingTests
         services.AddSingleton<ICarrierGateway>(carrier);
         services.AddSingleton(unitOfWork);
         services.AddSingleton<IShipmentRepository>(new ScriptedRepository(loads));
-        services.AddSingleton<IDeliveryAddressStore>(new KnownAddress());
+        services.AddSingleton(store);
+        services.AddSingleton<IDeliveryAddressSource>(new UnknownOrder());
         services.AddSingleton(TimeProvider.System);
 
         await using ServiceProvider provider = services.BuildServiceProvider();
@@ -147,10 +189,18 @@ public sealed class SupersededBookingTests
 
         public List<CancellationRequest> Cancels { get; } = [];
 
+        public int Bookings { get; private set; }
+
         public Func<CancellationResult> CancelAnswer { get; init; } = () => new CancellationResult.Cancelled();
 
-        public Task<BookingResult> BookAsync(BookingRequest request, CancellationToken ct) =>
-            Task.FromResult<BookingResult>(new BookingResult.Booked(Reference, TrackingNumber));
+        public Func<BookingResult> BookAnswer { get; init; } =
+            () => new BookingResult.Booked(Reference, TrackingNumber);
+
+        public Task<BookingResult> BookAsync(BookingRequest request, CancellationToken ct)
+        {
+            Bookings++;
+            return Task.FromResult(BookAnswer());
+        }
 
         public Task<CancellationResult> CancelAsync(CancellationRequest request, CancellationToken ct)
         {
@@ -212,6 +262,26 @@ public sealed class SupersededBookingTests
 
         public Task<DeliveryAddress?> GetAsync(OrderId orderId, CancellationToken ct) =>
             Task.FromResult<DeliveryAddress?>(new DeliveryAddress("1 Abay Avenue", null, "Almaty", "050000", "KZ"));
+    }
+
+    private sealed class NoStoredAddress : IDeliveryAddressStore
+    {
+        public Task SaveAsync(
+            OrderId orderId,
+            Guid customerId,
+            DeliveryAddress address,
+            DateTimeOffset fetchedAt,
+            CancellationToken ct) =>
+            throw new NotSupportedException("an order the owner does not know has no address to store");
+
+        public Task<DeliveryAddress?> GetAsync(OrderId orderId, CancellationToken ct) =>
+            Task.FromResult<DeliveryAddress?>(null);
+    }
+
+    private sealed class UnknownOrder : IDeliveryAddressSource
+    {
+        public Task<AddressLookup> GetAsync(OrderId orderId, CancellationToken ct) =>
+            Task.FromResult<AddressLookup>(new AddressLookup.NoSuchOrder());
     }
 
     /// <summary>Runs the unit once and commits it, as a strategy with nothing to retry does.</summary>

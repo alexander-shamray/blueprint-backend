@@ -165,7 +165,7 @@ public sealed class FulfilmentWorker(IServiceScopeFactory scopes, ILogger<Fulfil
                 // Terminal, and not retried: ADR-052's fifth row. The order has
                 // no address anybody can be shown, so the shipment cannot be
                 // fulfilled and no later pass would learn otherwise.
-                CommitOutcome unfulfillable = await CommitAsync(
+                CommitOutcome unfulfillable = await CommitPendingAsync(
                     sp, id, (shipment, now) => shipment.MarkUnfulfillable("no_such_order", now), ct);
 
                 return unfulfillable.Moved;
@@ -185,7 +185,7 @@ public sealed class FulfilmentWorker(IServiceScopeFactory scopes, ILogger<Fulfil
 
         if (booking is BookingResult.Refused refused)
         {
-            CommitOutcome declined = await CommitAsync(
+            CommitOutcome declined = await CommitPendingAsync(
                 sp, id, (shipment, now) => shipment.MarkUnfulfillable(refused.Reason, now), ct);
 
             return declined.Moved;
@@ -193,21 +193,8 @@ public sealed class FulfilmentWorker(IServiceScopeFactory scopes, ILogger<Fulfil
 
         BookingResult.Booked booked = (BookingResult.Booked)booking;
 
-        CommitOutcome committed;
-
-        try
-        {
-            committed = await CommitBookingAsync(sp, id, booked, ct);
-        }
-        catch (DbUpdateConcurrencyException)
-        {
-            // The cancel consumer voided the row between the reload and the
-            // save; the strategy does not retry a conflict, and a backed-off
-            // Voided row is never claimed again. Once is enough: that consumer
-            // is the one other writer a leased Pending row has, and it writes
-            // the row once.
-            committed = await CommitBookingAsync(sp, id, booked, ct);
-        }
+        CommitOutcome committed = await CommitPendingAsync(
+            sp, id, (shipment, now) => shipment.Book(booked.Reference, booked.TrackingNumber, now), ct);
 
         // The reloaded row decides, not the move: a refused move also comes
         // back when the execution strategy repeated a commit whose
@@ -254,12 +241,28 @@ public sealed class FulfilmentWorker(IServiceScopeFactory scopes, ILogger<Fulfil
             Orphaned(log, work.Id, work.OrderId, reference, null);
     }
 
-    private static Task<CommitOutcome> CommitBookingAsync(
+    /// <summary>
+    /// A leased Pending row's commit, made once more when the cancel consumer
+    /// voided the row between the reload and the save: the strategy does not
+    /// retry a conflict, and a backed-off Voided row is never claimed again.
+    /// Once is enough, because that consumer is the one other writer such a
+    /// row has, and it writes the row once.
+    /// </summary>
+    private static async Task<CommitOutcome> CommitPendingAsync(
         IServiceProvider sp,
         ShipmentId id,
-        BookingResult.Booked booked,
-        CancellationToken ct) =>
-        CommitAsync(sp, id, (shipment, now) => shipment.Book(booked.Reference, booked.TrackingNumber, now), ct);
+        Func<Shipment, DateTimeOffset, bool> move,
+        CancellationToken ct)
+    {
+        try
+        {
+            return await CommitAsync(sp, id, move, ct);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return await CommitAsync(sp, id, move, ct);
+        }
+    }
 
     private static async Task<CommitOutcome> CommitAsync(
         IServiceProvider sp,
