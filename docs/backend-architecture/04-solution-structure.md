@@ -17,8 +17,8 @@ A monorepo makes cross-cutting changes and contract updates atomic and reviewabl
 │   │   │                               client-credentials grant (ADR-052)
 │   │   ├── Common.Web/                 Host defaults: OTel, health, auth, ProblemDetails.
 │   │   │                               Referenced by every host. NOT resilience —
-│   │   │                               the BFF and Payments each hold an outbound
-│   │   │                               client (§9.7), so each policy lives with it.
+│   │   │                               a host holding an outbound client (§9.7)
+│   │   │                               keeps that client's policy beside it.
 │   │   │                               (Aspire's template calls this ServiceDefaults.)
 │   │   └── Common.Contracts/           Integration event DTOs — the ONLY shared types
 │   │
@@ -27,10 +27,11 @@ A monorepo makes cross-cutting changes and contract updates atomic and reviewabl
 │   │
 │   ├── BFF/
 │   │   └── Web.Bff/                    Aggregation for the web client (§10.1).
-│   │                                   The ONLY host that calls a service
-│   │                                   synchronously (§9.7); it binds
-│   │                                   Identity:Client, and the grant's code is
-│   │                                   Common.Infrastructure's (§11.5, ADR-052)
+│   │                                   The only host that calls a service
+│   │                                   synchronously on a request path (§9.7,
+│   │                                   ADR-052); it binds Identity:Client, and
+│   │                                   the grant's code is
+│   │                                   Common.Infrastructure's (§11.5)
 │   │
 │   └── Services/
 │       ├── Catalog/
@@ -724,8 +725,8 @@ public static IServiceCollection AddOrderingInfrastructure(
     // No ITokenCache, no ClientCredentialsHandler and no ServiceIdentityOptions
     // here. Ordering makes no synchronous outbound call — the price it needs
     // comes from a local projection (§6.4) and everything else it says goes
-    // over the broker. The one host in this blueprint that calls a peer is the
-    // BFF (§9.7), and outbound identity belongs to it (§11.5).
+    // over the broker. Outbound identity belongs to the hosts that call a peer
+    // (§9.7, §11.5), and Ordering is not one of them.
 
     // Registered by type, not by factory: the generic overload records an
     // ImplementationType, and the integration-test fixture matches on it to
