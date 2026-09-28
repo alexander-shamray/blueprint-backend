@@ -113,7 +113,9 @@ holding a secret that must differ per environment.
 
 **A running host holds a datastore credential, or the credential of an
 outbound call it makes itself** — `Identity__Client__ClientSecret`, for the
-BFF, the only host that calls a peer synchronously
+BFF and, since
+[ADR-052](backend-architecture/adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md),
+for Shipping's worker — the two hosts that call a peer synchronously
 ([§9.7](backend-architecture/09-messaging.md),
 [§11.5](backend-architecture/11-identity-authorization.md), ADR-017),
 `PaymentProvider__ApiKey`, for Payments' provider behind §3.2's
@@ -135,11 +137,13 @@ flip.
 
 1. Add the new secret in Keycloak, keeping the old one valid.
 2. Update the vault entry.
-3. Wait for External Secrets to reconcile, then restart the BFF's pods —
-   configuration is read at startup, so a reconciled Secret does not reach a
-   running process.
-4. Confirm the BFF is authenticating: pricing calls to Catalog succeeding is the
-   observable proof, since that hop is the only thing the credential is for.
+3. Wait for External Secrets to reconcile, then restart the pods of the host
+   whose secret this is — configuration is read at startup, so a reconciled
+   Secret does not reach a running process.
+4. Confirm the host is authenticating. For the BFF that is pricing calls to
+   Catalog succeeding; for Shipping's worker it is shipments leaving
+   `Pending`, and `shipping.address.refused` staying flat — ADR-052 counts a
+   refused credential separately from an outage for exactly this moment.
 5. Retire the old secret in Keycloak.
 
 **Step 3 is the one that gets skipped**, and skipping it produces a rotation
@@ -331,6 +335,7 @@ to be tidied away:
 | RabbitMQ | `catalog-svc` / `local-dev-catalog`, `ordering-svc` / `local-dev-ordering` |
 | Payment provider key | `local-dev-psp` |
 | Carrier key | `local-dev-carrier` |
+| Shipping worker client secret | `local-dev-shipping-secret`, in the realm export; the seam in front of it arrives with the host that reads it |
 
 These defaults are what make `docker compose up` work with no prior setup, and
 **the environment variable in front of each is the seam** that keeps them out of
@@ -349,7 +354,10 @@ than through a running Keycloak. The two never meet, and a reader who has just
 met the realm-check service account should not have to infer that from a
 silence. The provider and carrier keys have no seam because nothing checks
 them: each simulator ignores its key, so a variable would override a value no
-local party compares.
+local party compares. Shipping's client secret has no variable in front of it
+yet for a reason of sequence rather than of design — the realm holds the value
+from the change that minted the client, and the Compose seam arrives with the
+host that posts it.
 
 Note how the connection strings nest — `${CATALOG_CONNECTION:-…Password=${SQL_PASSWORD:-…}…}`
 — so overriding the password alone keeps every connection string correct. That

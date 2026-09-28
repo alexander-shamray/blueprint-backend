@@ -1136,14 +1136,18 @@ silent defect, while leaving it off is a valid topology. Writing such a key as
 **Required-for-some-hosts is a third category, and the mistake it invites runs
 the other way.** `Identity__Client__*` is mandatory for a host that calls
 another service and meaningless for one that does not — which in this blueprint
-is **every host except the BFF**. The gateway forwards the caller's token rather
-than minting its own; Ordering and Catalog talk over the broker and read local
-projections ([§6.4](06-cqrs.md), ADR-002). One set of credentials in the whole platform is
-what "async by default" looks like in the secrets inventory. Supplying the rest "for consistency" is not
-harmless padding — it provisions a Keycloak client, a secret in the vault and a
-mount, all of which must be rotated and audited, for credentials no code path
-ever sends. Over-supply has no failing test to catch it, which is why it
-survives longer than under-supply does.
+is **every host but the BFF and, since
+[ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md),
+Shipping's worker**. The gateway forwards the caller's token rather than
+minting its own; every other service exchanges events over the broker and
+reads local projections ([§6.4](06-cqrs.md), ADR-002). Two sets of
+credentials in the whole platform, and the count is the point: it is the
+number of synchronous couplings, and it moved by a decision that said what
+the second one reads when it is stolen. Supplying the rest "for consistency"
+is not harmless padding — it provisions a Keycloak client, a secret in the
+vault and a mount, all of which must be rotated and audited, for credentials
+no code path ever sends. Over-supply has no failing test to catch it, which is
+why it survives longer than under-supply does.
 
 **`OTEL_EXPORTER_OTLP_ENDPOINT` read `— defaults` and the chart refuses to
 render without it**, and only one of those can describe a deployment
@@ -1204,9 +1208,9 @@ namespace read access.
 | `ConnectionStrings__RedisCoordination` | **Secret** | External Secrets — separate ACL user, `noeviction` instance | ✓ **when the host calls `AddRedisConnections`** — both or neither |
 | `ConnectionStrings__RabbitMq` | Secret | External Secrets — carries the per-service broker account of [ADR-036](adr/ADR-036-the-broker-has-a-per-service-identity.md) | ✓ — the Secret is named per service (`catalog-rabbitmq`, `ordering-rabbitmq`) and never shared |
 | `Identity__Authority` | Config | Helm `identity.authority` → ConfigMap | ✓ — **every host**, including the gateway |
-| `Identity__Client__ClientId` | Config | Helm `identity.clientId` | ✓ **BFF only** — the one host that calls a peer ([§9.7](09-messaging.md), [§11.5](11-identity-authorization.md)) |
-| `Identity__Client__Scope` | Config | Helm `identity.scope` | ✓ **BFF only** |
-| `Identity__Client__ClientSecret` | Secret | `web-bff-identity` secret | ✓ **BFF only** |
+| `Identity__Client__ClientId` | Config | Helm `identity.clientId` | ✓ **for a host that calls a peer** — the BFF ([§9.7](09-messaging.md), [§11.5](11-identity-authorization.md)), and Shipping's worker from the pull request that gives it ADR-052's address read |
+| `Identity__Client__Scope` | Config | Helm `identity.scope` | ✓ **for a host that calls a peer**, as above |
+| `Identity__Client__ClientSecret` | Secret | `web-bff-identity` secret; one per host | ✓ **for a host that calls a peer**, as above |
 | `Cors__Enabled` | Config | Helm `cors.enabled` → ConfigMap — **gateway only** | ✓ |
 | `Cors__Origins__0…n` | Config | Helm `cors.origins` → ConfigMap — **gateway only** | ✓ **when `Cors__Enabled`** |
 | `Ingress__Enabled` | Config | Helm `ingress.enabled` → ConfigMap — **gateway only** | ✓ — true in Kubernetes, false only where the gateway is the edge (Compose) |

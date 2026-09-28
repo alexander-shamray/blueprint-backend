@@ -625,7 +625,8 @@ roles to permissions in one place.
 builder.Services
     .AddAuthorizationBuilder()
     .AddPolicy(OrderingPermissions.Write, p => p.RequirePermission(OrderingPermissions.Write))
-    .AddPolicy(OrderingPermissions.Cancel, p => p.RequirePermission(OrderingPermissions.Cancel));
+    .AddPolicy(OrderingPermissions.Cancel, p => p.RequirePermission(OrderingPermissions.Cancel))
+    .AddPolicy(OrderingPermissions.DeliveryAddress, p => p.RequirePermission(OrderingPermissions.DeliveryAddress));
 ```
 
 One policy per constant and no more: a policy registered before an endpoint
@@ -665,6 +666,7 @@ public static class OrderingPermissions
 {
     public const string Write = "orders:write";
     public const string Cancel = "orders:cancel";
+    public const string DeliveryAddress = "orders:delivery-address";
 }
 ```
 
@@ -1294,28 +1296,34 @@ grant, holding its own client ID and secret with a narrow scope. Never reuse a
 user's token for a background operation — it expires, it carries the wrong
 permissions, and it makes the audit trail lie about who did what.
 
-**In this blueprint that is exactly one host: the BFF** (§9.7). The gateway
-forwards the caller's token unchanged rather than exchanging it for one of its
-own; Ordering and Catalog exchange events over the broker and read local
-projections ([§6.4](06-cqrs.md), ADR-002), so neither ever presents itself to the other.
+**In this blueprint that is two hosts: the BFF** (§9.7) **and Shipping's
+worker** ([ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)).
+The gateway forwards the caller's token unchanged rather than exchanging it
+for one of its own; every other service exchanges events over the broker and
+reads local projections ([§6.4](06-cqrs.md), ADR-002), so none of them ever
+presents itself to another.
 
 That is not a simplification for the sake of the example — it is what ADR-002
 and ADR-017 add up to. The mechanism below is worth understanding precisely
 because the number of hosts using it is the number of synchronous couplings in
-the platform, and both are meant to stay at one. "Every host gets the full
-identity block" is the natural-looking generalisation and the wrong one; so is
-reading this section and concluding the services talk to each other.
+the platform, and the callout below says what moving that number costs. "Every
+host gets the full identity block" is the natural-looking generalisation and
+the wrong one; so is reading this section and concluding the services talk to
+each other.
 
-> **Two more hosts are decided, and neither is built.**
-> [ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)
-> gives Shipping a client that reads a delivery address from Ordering and
-> Notifications one that reads a mailbox from Keycloak, because
+> **One more host is decided and not built.** Shipping's client is minted
+> here, in the pull request that gives Ordering the method it reads, and is
+> first used by the pull request that gives Shipping's worker
+> [ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)'s
+> address read; Notifications' is still owed, and reads a mailbox from
+> Keycloak, because
 > [ADR-035](adr/ADR-035-an-integration-event-carries-identifiers-not-personal-data.md)
 > left neither value a way to arrive by event. The argument above is why
 > that took a record rather than a registration: the count of hosts holding
 > a client secret is the count of synchronous couplings, and it moves only
 > by a decision that says what each new secret reads when it is stolen.
-> Each client joins the table below with the service that uses it.
+> Shipping's joined it with Ordering's method rather than with Shipping,
+> because the grant is the address owner's to serve.
 
 Mechanically this is a `DelegatingHandler` attached to every outbound client
 (§9.7), so no call site has to remember it:
@@ -1388,12 +1396,13 @@ every retry replays the token the first attempt built — see the ordering in
 validates `Audience = "commerce-api"`. Those are **not** the same claim, and
 nothing so far makes one imply the other: a client-credentials token carries
 `scope: commerce-api` and, by default, an `aud` of `account`. Catalog would
-reject the platform's only permitted synchronous hop, at the one moment there is
+reject a synchronous hop the platform does permit, at the one moment there is
 no user to blame it on.
 
 The realm has to close the gap. In Keycloak the client scope `commerce-api`
 needs an **audience mapper** adding `commerce-api` to `aud`, and the BFF's
-service-account client needs that scope assigned as default:
+service-account client needs that scope assigned as default, and so does
+Shipping's, for the same reason and by the same mapper (ADR-052):
 
 | Realm object | Setting | Why |
 |---|---|---|
@@ -1401,6 +1410,7 @@ service-account client needs that scope assigned as default:
 | Client scope `commerce-api` | Mapper of type *User Client Role*, claim name `permission`, multivalued, restricted to the `commerce-api` client | The claim §11.4's policies read. Client roles rather than realm roles, measured rather than assumed: a realm-role mapper also emits `offline_access`, `uma_authorization` and `default-roles-commerce`, which puts Keycloak's own internals into the permission vocabulary |
 | Client `commerce-api` | No flow enabled, holds the permission roles | The API as an object in the realm, so permissions are a closed set somebody can grant. Nothing can obtain a token *as* it |
 | Client `web-bff` | Service accounts enabled, `commerce-api` a **default** client scope | Client-credentials tokens request no scope explicitly; a client scope left optional is silently absent. **Arrives with the BFF** (PR-19) — the scope and its mappers ship now, the client with the host that uses it |
+| Client `shipping-worker` | Service accounts enabled, `commerce-api` a **default** client scope, the client role `orders:delivery-address` on its service account | The second synchronous coupling, and the first grant a host holds ([ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)). The role is what the `permission` mapper emits for a service account, so without it the token is valid and the read is 403 |
 | Clients for browser flows | Same scope, so a user's token validates at the same services | One audience for the whole platform (§11.3) — per-service audiences are a later split, not a v1 one |
 
 This is realm configuration, not code, which is exactly why it earns a test

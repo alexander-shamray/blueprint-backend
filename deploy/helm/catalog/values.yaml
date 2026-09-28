@@ -41,7 +41,8 @@ image:
 # The container ports, and the Service's ports where one is rendered. Two here
 # because a cleartext Kestrel endpoint cannot serve HTTP/1.1 and h2c at once —
 # measured, and argued in Catalog.Api/appsettings.json — so Catalog declares a
-# second, HTTP/2-only endpoint for the BFF's one synchronous hop (§9.7).
+# second, HTTP/2-only endpoint for the BFF's synchronous hop (§9.7). Ordering
+# declares one of its own for ADR-052's address read.
 #
 # 8081 is cluster-internal: no route reaches it (§10.2 routes HTTP) and the
 # Ingress below is disabled anyway. It is on the same footing as the SQL port,

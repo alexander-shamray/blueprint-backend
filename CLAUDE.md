@@ -59,8 +59,9 @@ tools/new-service/           §4.5's scaffold, with Catalog as its template
 src/BuildingBlocks/          Common.Domain, .Application, .Contracts, .Infrastructure, .Web
 src/Gateway/Gateway.Api/     the edge, and the second host
 src/BFF/Web.Bff/             the third host, and the one synchronous caller
-src/Services/Catalog/        §4.1's five projects; the one gRPC server
-src/Services/Ordering/       the same five, plus §5's aggregate and §9.6's saga
+src/Services/Catalog/        §4.1's five projects; the first gRPC server
+src/Services/Ordering/       the same five, plus §5's aggregate, §9.6's saga
+                             and ADR-052's gRPC address read
 tests/                       per service .Domain/.Application/.Api.Tests and .TestSupport (NOT a test project, §4.1);
                              Common.*.Tests; the hosts' suites; Platform.IntegrationTests
 ```
