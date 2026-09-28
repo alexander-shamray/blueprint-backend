@@ -55,18 +55,25 @@ public sealed class ServiceFixture : IAsyncLifetime
     /// <c>shipping-svc</c> onto Ordering's exchanges and ADR-036's production
     /// grant correctly refuses that. Widened here rather than in
     /// <c>definitions.json</c>, the deployed artefact a gate holds to the
-    /// code. <c>configure</c> and <c>read</c> are read back from that file,
-    /// and <c>write</c> is its grant plus Ordering's exchanges alone, so a
-    /// route this service may not declare or publish to still fails here.
+    /// code. All three are read back from that file, and <c>write</c> gains
+    /// Ordering's exchanges alone, so a route this service may not declare or
+    /// publish to still fails here.
     /// </summary>
     private async Task WidenWriteForTheHarnessAsync()
     {
         const string user = "shipping-svc";
-        const string write =
-            "^(shipping-|Common\\.Contracts(\\.Shipping\\.V1:|\\.Ordering\\.V1:|:)"
-            + "|Shipping\\.Infrastructure\\.Messaging:|MassTransit:)";
+        const string contracts = "Common\\.Contracts(";
 
-        (string configure, string read) = ImportedGrant();
+        (string configure, string granted, string read) = ImportedGrant();
+
+        int anchor = granted.IndexOf(contracts, StringComparison.Ordinal);
+        if (anchor < 0)
+        {
+            throw new InvalidOperationException(
+                $"{user}'s write grant has no '{contracts}' alternation to add Ordering's exchanges to: {granted}");
+        }
+
+        string write = granted.Insert(anchor + contracts.Length, "\\.Ordering\\.V1:|");
 
         ExecResult result = await _rabbit!.ExecAsync(
             ["rabbitmqctl", "set_permissions", "-p", "/", user, configure, write, read],
@@ -84,7 +91,7 @@ public sealed class ServiceFixture : IAsyncLifetime
 
         // The mapped file rather than the container, because it is the same
         // text the broker imported and it can be read before anything starts.
-        static (string Configure, string Read) ImportedGrant()
+        static (string Configure, string Write, string Read) ImportedGrant()
         {
             string path = Path.Combine(BrokerContextPath(), "definitions.json");
             using JsonDocument definitions = JsonDocument.Parse(File.ReadAllText(path));
@@ -94,7 +101,10 @@ public sealed class ServiceFixture : IAsyncLifetime
                 if (entry.GetProperty("user").GetString() != user || entry.GetProperty("vhost").GetString() != "/")
                     continue;
 
-                return (entry.GetProperty("configure").GetString()!, entry.GetProperty("read").GetString()!);
+                return (
+                    entry.GetProperty("configure").GetString()!,
+                    entry.GetProperty("write").GetString()!,
+                    entry.GetProperty("read").GetString()!);
             }
 
             throw new InvalidOperationException(
@@ -111,7 +121,7 @@ public sealed class ServiceFixture : IAsyncLifetime
     public ShippingWorkerFactory Factory { get; private set; } = null!;
 
     /// <summary>
-    /// §3.2's carrier, in process over the same mappings directory Compose
+    /// The carrier, in process over the same mappings directory Compose
     /// mounts (spec, section 9), so no test double stands between the adapter
     /// and a real HTTP hop.
     /// </summary>
