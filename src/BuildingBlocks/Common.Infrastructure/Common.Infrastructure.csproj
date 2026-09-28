@@ -27,6 +27,17 @@
     <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.Options" />
+    <!-- IHttpClientFactory, which the token client fetches §11.5's grant over
+         by name rather than over a captured HttpClient: a singleton that held
+         one would keep its handler past the factory's rotation.
+
+         No type here resolves it yet, which Ordering.Application.csproj's
+         Dapper block calls a claim a project would not be making. That rule
+         holds and is answered rather than waived: the claim is made true by
+         the change that moves the token client in, and the locality gate is
+         what splits the two — a pin is Class E's whole touch set and the move
+         is Class B. -->
+    <PackageReference Include="Microsoft.Extensions.Http" />
     <!-- §13.2's rule: an instrumentation lands with the package it
          instruments. The Redis one lands here, not in Common.Web — the
          connections are keyed services, invisible to the parameterless

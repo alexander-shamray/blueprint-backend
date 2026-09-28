@@ -34,6 +34,11 @@
          §8 argues about — it stores no domain data and crosses no process. -->
     <PackageVersion Include="Microsoft.Extensions.Caching.Memory" Version="10.0.0" />
     <PackageVersion Include="Microsoft.Extensions.Http.Resilience" Version="10.0.0" />
+    <!-- IHttpClientFactory, which Common.Infrastructure's token client fetches
+         its grant over (§11.5). ASP.NET Core's shared framework carries it and
+         that building block takes no framework reference, so it pays for the
+         contract as a package — the abstractions rows' terms. -->
+    <PackageVersion Include="Microsoft.Extensions.Http" Version="10.0.0" />
     <!-- The container and logging contracts Common.Application compiles
          against (§6.2, §13.3). ASP.NET Core's shared framework carries both,
          but Application takes no FrameworkReference — §4.2 puts the web on the
