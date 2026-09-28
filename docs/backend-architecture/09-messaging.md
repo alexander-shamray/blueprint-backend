@@ -2920,9 +2920,10 @@ configuration-validation test at startup.
 1. **Timeout.** One to two seconds per attempt, per the table above; never
    infinite. Where in that band is decided by the arithmetic below, not by
    taste — the attempts plus their backoff have to fit the client total. A
-   third party behind an anti-corruption layer sits outside the band, and
-   `ProviderHop` is sized to it: the provider's latency is not a peer's, and
-   the call fits the saga's payment wait (§9.6) rather than a waiting caller.
+   third party sits outside the band, and `ProviderHop` and `CarrierHop` are
+   each sized to theirs: a third party's latency is not a peer's, and neither
+   call has a waiting caller — the provider's fits the saga's payment wait
+   (§9.6), and the carrier's a worker's leased row.
 2. **Circuit breaker.** After a threshold of failures, fail fast rather than
    queueing threads against a dead service.
 3. **A fallback.** Cached data, a degraded response, or a clear error — decided
