@@ -1109,7 +1109,8 @@ section 'The Service forwards to a port something is listening on'
 # quietly.
 pinned=0
 for chart in $SERVICE_CHARTS; do
-    settings="$(grep -rl '"Kestrel"' --include=appsettings.json "$(src_of "$chart")" || true)"
+    settings="$(grep -rl '"Kestrel"' --include=appsettings.json --exclude-dir=bin --exclude-dir=obj \
+        "$(src_of "$chart")" || true)"
     [ -n "$settings" ] || continue
 
     if [ "$(printf '%s\n' "$settings" | wc -l)" -ne 1 ]; then
@@ -1118,7 +1119,7 @@ for chart in $SERVICE_CHARTS; do
     fi
 
     pinned=$((pinned + 1))
-    grep -ohE 'http://0\.0\.0\.0:[0-9]+' "$settings" |
+    { grep -ohE 'http://0\.0\.0\.0:[0-9]+' "$settings" || true; } |
         sed -E 's|.*:([0-9]+)|\1|' | sort -u >"$OUT/$chart-listeners.txt"
 
     if [ ! -s "$OUT/$chart-listeners.txt" ]; then

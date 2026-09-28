@@ -299,7 +299,7 @@ PR-18 and the BFF's with PR-19; without one a host-run gateway 502s the exact
 path the PR exists to stop answering 502.
 
 The BFF is excluded too, and it is the one host that needs more than an
-authority — §15.4 marks `Identity__Client__*` BFF-only, `ValidateOnStart`
+authority — §15.4 requires `Identity__Client__*` of it, `ValidateOnStart`
 refuses to boot without all three, and its own hop needs Catalog's **gRPC**
 port rather than its REST one:
 
