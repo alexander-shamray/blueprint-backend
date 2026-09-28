@@ -10,7 +10,7 @@ namespace Common.Infrastructure.Identity;
 /// <summary>
 /// §11.5's client-credentials grant, cached. A singleton, because the token it
 /// holds is the host's own and not a caller's: a scoped cache would fetch one
-/// per inbound call and add a hop to every call the host makes (ADR-052).
+/// per inbound call and add a hop to every call the host makes.
 /// </summary>
 /// <remarks>
 /// It fetches over its own named client, which carries no

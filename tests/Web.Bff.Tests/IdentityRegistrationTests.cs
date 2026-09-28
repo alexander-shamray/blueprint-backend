@@ -20,8 +20,8 @@ public sealed class IdentityRegistrationTests
 
         // Common.Infrastructure may not name Common.Web, so the key's name
         // travels as a value and a refused discovery document says which key
-        // to fix. Supplied wrongly, every refusal this host's token client
-        // writes names a key nobody can set, and no other test would notice.
+        // to fix. Supplied wrongly, a refused discovery document names a key
+        // nobody can set, and no other test would notice.
         factory.Services.GetRequiredService<AuthorityKeyName>()
             .Name.ShouldBe(AuthenticationExtensions.AuthorityKey);
     }
