@@ -23,11 +23,12 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Services\Shipping\Shipping.Application\Shipping.Application.csproj" />
-    <!-- No Shipping.TestSupport and no Shipping.Infrastructure yet, and no
-         Docker with them: §12.1 homes the handler tests here against real
-         containers, and this project has no handler to test. The fixture
-         reference, the DbContext reference and the provider package all
-         return with the first one. -->
+    <!-- No Shipping.TestSupport and no Docker, which departs from §12.1's
+         Application row on purpose: the handlers here run against hand-rolled
+         fakes, because what is worth pinning is the row each one writes or
+         leaves, not a database. The persisted write runs over a real broker
+         and database in the worker's suite, which already carries the fixture
+         a second copy here would duplicate. -->
   </ItemGroup>
 
 </Project>
