@@ -22,7 +22,7 @@ builder.AddCommonWebDefaults();                 // §13.2
 
 // The BFF's own error translation, beside the two AddCommonProblemDetails
 // already registers. It is here rather than in Common.Web because it is about
-// this host's outbound call (§9.7), which is the BFF's own shape (ADR-052).
+// this host's outbound call (§9.7).
 builder.Services.AddExceptionHandler<UpstreamExceptionHandler>();
 
 // §6.4's validator, registered rather than newed up in the endpoint, because
@@ -163,9 +163,9 @@ pricing
 // the whole reason the ordering comment above is worth reading.
 pricing.AddHttpMessageHandler<ClientCredentialsHandler>();
 
-// §10.4's outbound half: a synchronous hop (§9.7, ADR-017, ADR-052) is a call
-// that could carry an ID across a process boundary and did not. Events already
-// do — §9.1's envelope has the member — so the gap was this edge.
+// §10.4's outbound half: a synchronous hop (§9.7, ADR-017) carries the
+// correlation ID across the process boundary, as §9.1's envelope does for
+// events.
 //
 // Inside the pipeline like the handler above, though for a weaker reason: the
 // value does not change between attempts, so the position is uniformity rather

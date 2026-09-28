@@ -56,7 +56,7 @@ RUN dotnet publish src/BFF/Web.Bff/Web.Bff.csproj \
 # -extra, like every other image here. §15.2 argued the suffix from
 # Microsoft.Data.SqlClient, which refuses to open a connection under
 # globalization-invariant mode — and this host, like the gateway, opens no
-# database connection at all; its hop is gRPC (§9.7, ADR-052). It takes the
+# database connection at all; its hop is gRPC (§9.7). It takes the
 # variant anyway, for the second reason that chapter gives: one base image
 # across the platform, so what a host does with a culture-sensitive comparison
 # never depends on which suffix somebody picked for its image. ICU and tzdata
