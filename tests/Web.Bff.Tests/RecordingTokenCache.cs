@@ -1,4 +1,4 @@
-using Web.Bff.Identity;
+using Common.Infrastructure.Identity;
 
 namespace Web.Bff.Tests;
 

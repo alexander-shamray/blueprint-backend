@@ -1,9 +1,9 @@
+using Common.Infrastructure.Identity;
 using Common.Web;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Shouldly;
-using Web.Bff.Identity;
 using Xunit;
 
 namespace Web.Bff.Tests;

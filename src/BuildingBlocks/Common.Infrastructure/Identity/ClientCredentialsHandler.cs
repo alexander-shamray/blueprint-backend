@@ -1,7 +1,7 @@
 using System.Net.Http.Headers;
 using Microsoft.Extensions.Options;
 
-namespace Web.Bff.Identity;
+namespace Common.Infrastructure.Identity;
 
 /// <summary>
 /// §11.5's handler, attached to every outbound client so that no call site has

@@ -2,27 +2,25 @@ using System.Collections.Concurrent;
 using System.Globalization;
 using System.Net;
 using System.Text.Json;
-using Common.Web;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
-namespace Web.Bff.Identity;
+namespace Common.Infrastructure.Identity;
 
 /// <summary>
 /// §11.5's client-credentials grant, cached. A singleton, because the token it
-/// holds is the host's own and not a caller's — nothing here is per request,
-/// and a scoped cache would fetch a token per inbound call and turn one
-/// synchronous hop into two.
+/// holds is the host's own and not a caller's: a scoped cache would fetch one
+/// per inbound call and add a hop to every call the host makes (ADR-052).
 /// </summary>
 /// <remarks>
-/// <b>It fetches over its own named client, and that is not tidiness.</b> The
-/// client named below carries no <see cref="ClientCredentialsHandler"/>; if it
-/// did, every token fetch would attach a token, which needs a token fetch. The
-/// recursion terminates only by stack overflow, and it would be invisible in
-/// the registration because the handler is attached to the <i>other</i> client.
+/// It fetches over its own named client, which carries no
+/// <see cref="ClientCredentialsHandler"/>: one that did would attach a token to
+/// every token fetch, and the recursion ends only in a stack overflow.
 /// </remarks>
 public sealed partial class CachingTokenClient(
     IHttpClientFactory clients,
     IOptions<ServiceIdentityOptions> identity,
+    AuthorityKeyName authorityKey,
     TimeProvider clock,
     ILogger<CachingTokenClient> logger) : ITokenCache, IDisposable
 {
@@ -209,7 +207,7 @@ public sealed partial class CachingTokenClient(
     /// <c>/protocol/openid-connect/token</c> would work today and would encode
     /// the provider's URL shape into the host.
     /// </remarks>
-    private static async Task<Uri> DiscoverTokenEndpointAsync(HttpClient client, CancellationToken ct)
+    private async Task<Uri> DiscoverTokenEndpointAsync(HttpClient client, CancellationToken ct)
     {
         using HttpResponseMessage response = await client.GetAsync(".well-known/openid-configuration", ct);
         response.EnsureSuccessStatusCode();
@@ -222,7 +220,7 @@ public sealed partial class CachingTokenClient(
         {
             throw new InvalidOperationException(
                 $"The discovery document at '{client.BaseAddress}' declares no usable token_endpoint. " +
-                $"'{AuthenticationExtensions.AuthorityKey}' names an OpenID provider (§11.3), and this " +
+                $"'{authorityKey.Name}' names an OpenID provider (§11.3), and this " +
                 "host needs that same one to mint its own token (§11.5).");
         }
 
@@ -265,10 +263,10 @@ public sealed partial class CachingTokenClient(
     /// <see cref="Failure(HttpStatusCode, string)"/> refuses to echo, for the
     /// opposite reason.
     /// </remarks>
-    private static string Unusable(HttpClient client, Uri endpoint, string fault) =>
+    private string Unusable(HttpClient client, Uri endpoint, string fault) =>
         $"The discovery document at '{client.BaseAddress}' declares a token_endpoint of '{endpoint}', which " +
         $"{fault}. This host posts its client secret there (§11.5), so the endpoint may not be less protected " +
-        $"than the authority '{AuthenticationExtensions.AuthorityKey}' names (§11.3).";
+        $"than the authority '{authorityKey.Name}' names (§11.3).";
 
     /// <summary>
     /// The failure message, with RFC 6749's <c>error</c> member lifted out and
@@ -311,7 +309,7 @@ public sealed partial class CachingTokenClient(
         string code = ((int)status).ToString(CultureInfo.InvariantCulture);
 
         return $"The token endpoint refused this host's client credentials with {code}{detail}. " +
-            $"'{ServiceIdentityOptions.SectionName}' is the only credential set in the platform (§11.5), " +
+            $"'{ServiceIdentityOptions.SectionName}' is this host's credential set (§11.5), " +
             "so this is a deployment fault rather than a caller's.";
     }
 

@@ -1,11 +1,11 @@
 using Catalog.Pricing.V1;
+using Common.Infrastructure.Identity;
 using Common.Web;
 using FluentValidation;
 using Microsoft.Extensions.Http.Resilience;
 using Polly;
 using Web.Bff;
 using Web.Bff.Endpoints;
-using Web.Bff.Identity;
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
@@ -38,12 +38,12 @@ builder.Services.AddExceptionHandler<UpstreamExceptionHandler>();
 // field-keyed 400.
 builder.Services.AddSingleton<IValidator<QuoteRequest>, QuoteRequestValidator>();
 
-// §9.7, §11.5 — the whole of the platform's client-credentials mechanism, in
-// the one host that has any. Every line below is absent from every other
-// Program.cs in the solution, and that is the design rather than an omission:
-// "the gateway needs no client credentials" is true by CONSTRUCTION, because
-// the gateway calls none of this and therefore neither binds Identity:Client
-// nor demands it (§15.4).
+// §9.7, §11.5 — this host's client-credentials registrations. The types are
+// Common.Infrastructure.Identity's (ADR-052) and the binding is each host's
+// own: "the gateway needs no client credentials" is true by CONSTRUCTION,
+// because the gateway binds Identity:Client nowhere and therefore demands it
+// nowhere (§15.4). A binding hoisted into Common.Web would re-impose it on
+// every host.
 builder.Services.AddTransient<ClientCredentialsHandler>();
 builder.Services.AddSingleton<ITokenCache, CachingTokenClient>();
 
@@ -73,6 +73,11 @@ builder.Services
 // with no trailing slash replaces the last path segment and asks the wrong
 // realm.
 string authority = builder.Configuration[AuthenticationExtensions.AuthorityKey]!;
+
+// The same key's NAME, carried into the token client because a building block
+// below Common.Web cannot name it and a refused discovery document has to say
+// which key to fix (§11.3, §11.5).
+builder.Services.AddSingleton(new AuthorityKeyName(AuthenticationExtensions.AuthorityKey));
 
 builder.Services
     .AddHttpClient(CachingTokenClient.HttpClientName, client =>

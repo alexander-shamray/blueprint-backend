@@ -1,7 +1,7 @@
+using Common.Infrastructure.Identity;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Shouldly;
-using Web.Bff.Identity;
 using Xunit;
 
 namespace Web.Bff.Tests;
@@ -22,6 +22,7 @@ namespace Web.Bff.Tests;
 public sealed class TokenEndpointSchemeTests
 {
     private const string Scope = "commerce-api";
+    private const string AuthorityKey = "Test:Authority";
 
     /// <summary>
     /// A client over one stub provider, with the self-signed certificate
@@ -50,6 +51,7 @@ public sealed class TokenEndpointSchemeTests
                 ClientSecret = "local-dev-secret",
                 Scope = Scope
             }));
+        services.AddSingleton(new AuthorityKeyName(AuthorityKey));
         services.AddSingleton<ITokenCache, CachingTokenClient>();
 
         return services.BuildServiceProvider();

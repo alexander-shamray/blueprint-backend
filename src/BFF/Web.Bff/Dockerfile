@@ -26,6 +26,7 @@ COPY global.json Directory.Build.props Directory.Packages.props ./
 COPY src/BuildingBlocks/Common.Domain/Common.Domain.csproj src/BuildingBlocks/Common.Domain/
 COPY src/BuildingBlocks/Common.Application/Common.Application.csproj src/BuildingBlocks/Common.Application/
 COPY src/BuildingBlocks/Common.Contracts/Common.Contracts.csproj src/BuildingBlocks/Common.Contracts/
+COPY src/BuildingBlocks/Common.Infrastructure/Common.Infrastructure.csproj src/BuildingBlocks/Common.Infrastructure/
 COPY src/BuildingBlocks/Common.Web/Common.Web.csproj src/BuildingBlocks/Common.Web/
 COPY src/BFF/Web.Bff/Web.Bff.csproj src/BFF/Web.Bff/
 RUN dotnet restore src/BFF/Web.Bff/Web.Bff.csproj

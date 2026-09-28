@@ -1,4 +1,4 @@
-namespace Web.Bff.Identity;
+namespace Common.Infrastructure.Identity;
 
 /// <summary>
 /// §11.5's token source, behind a port so that <c>ClientCredentialsHandler</c>
