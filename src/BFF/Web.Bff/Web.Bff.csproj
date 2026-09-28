@@ -6,10 +6,9 @@
     One project, like the gateway and for the same reason: §10.1 gives the BFF
     no domain and no database, so there is nothing for an Application or an
     Infrastructure layer to hold. Program.cs is the whole composition root.
-
-    What it has that the gateway does not is an outbound call — the one
-    synchronous hop the platform permits (§9.7, ADR-017) — and that single fact
-    is why every package below is here and nowhere else.
+    What it has that the gateway does not is an outbound call — a synchronous
+    hop to a peer (§9.7, ADR-017, ADR-052) — and that is why every package
+    below is here and nowhere else.
   -->
 
   <ItemGroup>
@@ -48,19 +47,12 @@
          ValidationExceptionHandler that turns QuoteRequestValidator's throw
          into §10.5's field-keyed 400. -->
     <ProjectReference Include="..\..\BuildingBlocks\Common.Web\Common.Web.csproj" />
-    <!-- The second reference, and the only one this host has that the gateway
-         does not need. It exists for OrderLimits and nothing else: the quote
-         endpoint must refuse exactly the quantities PlaceOrderValidator will
-         later refuse, so the two read one constant instead of holding two
-         literals that can drift.
-
-         §4.3 permits exactly one assembly to cross a service boundary and this
-         is that assembly, so the edge is the sanctioned one rather than a new
-         kind. What it is NOT is permission to reach further: an unused project
-         reference is a claim about the dependency graph that nothing makes
-         true, and a reference existing is not licence to reach across §4.2
-         through it. The BFF consumes no Ordering message type and must not
-         start. -->
+    <!-- For OrderLimits and nothing else: the quote endpoint must refuse
+         exactly the quantities PlaceOrderValidator will later refuse, so the
+         two read one constant instead of two literals that can drift. §4.3
+         permits exactly one assembly to cross a service boundary and this is
+         that assembly — which is not licence to reach across §4.2 through it.
+         The BFF consumes no Ordering message type and must not start. -->
     <ProjectReference Include="..\..\BuildingBlocks\Common.Contracts\Common.Contracts.csproj" />
     <!-- §11.5's client-credentials grant, which ADR-052 puts in a building
          block because more than one host needs it. Every other host reaches

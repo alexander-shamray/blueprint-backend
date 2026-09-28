@@ -3,22 +3,12 @@ namespace Common.Web;
 /// <summary>
 /// §15.4's static constants — the tier of settings that are genuinely not
 /// configuration, and are therefore not bound, not validated and not
-/// deployable.
+/// deployable. §15.4's test is whether a member would differ between
+/// Compose, the fixture and production; nothing here does, and
+/// <c>ServiceIdentityOptions</c> is a type that passes it (§11.5).
 /// </summary>
 /// <remarks>
-/// <b>The name is §15.4's and the class is deliberately not an options
-/// type.</b> §15.4's test for what deserves binding is whether any member would
-/// differ between Compose, the test fixture and production; nothing here does,
-/// and a bag bound to a section nobody sets would gate boot on configuration
-/// that never varies. <c>ServiceIdentityOptions</c> in <c>Web.Bff</c> is the
-/// only options type in the solution, and it earns that by holding a secret.
-/// <para>
-/// It lives in <c>Common.Web</c> rather than in the one host that reads it
-/// today, because the hierarchy this caps is the platform's: §9.7 requires
-/// timeouts to decrease inwards at every level, and the middle tier is a claim
-/// about what any host here will spend on one request, not about what the BFF
-/// spends on its hop.
-/// </para>
+/// It caps a hierarchy that is the platform's and not one host's (§9.7).
 /// </remarks>
 public static class ServiceOptions
 {

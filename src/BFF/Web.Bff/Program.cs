@@ -22,7 +22,7 @@ builder.AddCommonWebDefaults();                 // §13.2
 
 // The BFF's own error translation, beside the two AddCommonProblemDetails
 // already registers. It is here rather than in Common.Web because it is about
-// an outbound call, and this is the only host that makes one (§9.7).
+// this host's outbound call (§9.7), which is the BFF's own shape (ADR-052).
 builder.Services.AddExceptionHandler<UpstreamExceptionHandler>();
 
 // §6.4's validator, registered rather than newed up in the endpoint, because
@@ -163,10 +163,9 @@ pricing
 // the whole reason the ordering comment above is worth reading.
 pricing.AddHttpMessageHandler<ClientCredentialsHandler>();
 
-// §10.4's outbound half, and the platform's only place for it: this is the one
-// synchronous hop (§9.7, ADR-017), so it is the one call that could carry an ID
-// across a process boundary and was not. Events already do — §9.1's envelope
-// has the member — so the gap was exactly this edge.
+// §10.4's outbound half: a synchronous hop (§9.7, ADR-017, ADR-052) is a call
+// that could carry an ID across a process boundary and did not. Events already
+// do — §9.1's envelope has the member — so the gap was this edge.
 //
 // Inside the pipeline like the handler above, though for a weaker reason: the
 // value does not change between attempts, so the position is uniformity rather
@@ -193,19 +192,15 @@ app.UseStatusCodePages();         // §10.5 — 401 and 403 as problem+json
 app.UseAuthentication();          // §11.3 — populates HttpContext.User
 app.UseAuthorization();           // §11.4
 
-// No readiness check is registered anywhere in this host, so /health/ready
-// reports ready immediately — which §13.5 says is correct for exactly two
-// hosts, the gateway and this one, because neither owns a database. The rule
-// that separates that from "readiness was never wired up" is whether the host
-// has a connection string, and this one has none.
+// No readiness check is registered in this host, so /health/ready reports ready
+// immediately — §13.5's answer for a host that owns no database, and the rule
+// that separates it from "readiness was never wired up" is whether the host has
+// a connection string. This one has none, and MapCommonHealthEndpoints refuses
+// to start a host with an empty readiness set unless it says so on purpose.
 //
-// The argument used to live only in this comment, and a comment is not a
-// mechanism: MapCommonHealthEndpoints now refuses to start a host with an
-// empty readiness set unless the host says the set is empty on purpose, which
-// is what the argument above amounts to. Catalog's synchronous hop (§9.7) is
-// deliberately NOT a readiness dependency — a BFF that reports unready when
-// Catalog is down takes itself out of rotation for a fault it is meant to
-// degrade around (§13.5).
+// Catalog's synchronous hop (§9.7) is deliberately not a readiness dependency:
+// a BFF that reports unready when Catalog is down takes itself out of rotation
+// for a fault it is meant to degrade around (§13.5).
 app.MapCommonHealthEndpoints(ownsNoReadinessDependencies: true);   // §13.5 — anonymous; kubelet carries no token
 app.MapCheckoutEndpoints();
 
