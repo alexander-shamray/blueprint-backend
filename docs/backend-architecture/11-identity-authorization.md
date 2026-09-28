@@ -1488,11 +1488,9 @@ public async Task A_client_without_the_scope_is_rejected()
 is under test is the registration plus the realm, and neither of those is
 Catalog's. Driving a real service would add a SQL container and a migrator run
 to a suite whose subject is a token, and it would still be asserting exactly
-this. The suite lives in `Web.Bff.Tests` because the BFF owned the first
-client id — the same rule that put `GrantablePermissionTests` in
-`Gateway.Api.Tests` — and `shipping-worker`'s grant joined a suite that
-already runs the realm rather than buying `Shipping.Worker.Tests` a Keycloak
-container of its own.
+this. The suite lives in `Web.Bff.Tests`, which already runs Keycloak, and
+asserts the BFF's and `shipping-worker`'s grants there rather than buying
+`Shipping.Worker.Tests` a second Keycloak container.
 
 ## 11.6 Secrets
 
