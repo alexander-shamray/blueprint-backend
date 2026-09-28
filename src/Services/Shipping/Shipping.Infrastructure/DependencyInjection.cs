@@ -1,3 +1,4 @@
+using Shipping.Application.Addresses;
 using Shipping.Application.Shipments;
 using Shipping.Domain.Shipments;
 using Shipping.Infrastructure.Idempotency;
@@ -177,6 +178,11 @@ public static class DependencyInjection
         // identity would be §7.1's boundary failing quietly.
         services.AddSingleton<IDbConnectionFactory>(
             new SqlConnectionFactory(configuration.GetConnectionString("Shipping")!));
+
+        // A table of its own beside the shipment (spec, section 7): scoped
+        // only because AddScoped is this layer's default for a port, not
+        // because the store holds any per-request state.
+        services.AddScoped<IDeliveryAddressStore, SqlDeliveryAddressStore>();
 
         // Readiness lives here, not in Common.Web, because it needs the
         // connection string the shared host package does not have (§13.5).
