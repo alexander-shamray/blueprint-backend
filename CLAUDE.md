@@ -58,7 +58,7 @@ deploy/observability/        §13.8's dashboards, §13.6's rules, §13.7's k6 ru
 tools/new-service/           §4.5's scaffold, with Catalog as its template
 src/BuildingBlocks/          Common.Domain, .Application, .Contracts, .Infrastructure, .Web
 src/Gateway/Gateway.Api/     the edge, and the second host
-src/BFF/Web.Bff/             the third host, and the one synchronous caller
+src/BFF/Web.Bff/             the third host, and the one caller on a request path
 src/Services/Catalog/        §4.1's five projects; the first gRPC server
 src/Services/Ordering/       the same five, plus §5's aggregate, §9.6's saga
                              and ADR-052's gRPC address read
