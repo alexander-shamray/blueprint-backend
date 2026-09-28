@@ -38,6 +38,14 @@ RUN dotnet restore src/Services/Shipping/Shipping.Worker/Shipping.Worker.csproj
 COPY .editorconfig ./
 COPY src/BuildingBlocks/ src/BuildingBlocks/
 COPY src/Services/Shipping/ src/Services/Shipping/
+
+# Shipping.Infrastructure compiles Ordering's contract by relative path, as its
+# csproj argues, so the file has to be in the build context though no Ordering
+# project is. A source input rather than a restore one, which is why
+# it sits here; ci.yml's shipping filter names the same path, so a change to
+# the contract alone still rebuilds this image (§15.1).
+COPY src/Services/Ordering/Ordering.Api/Protos/ src/Services/Ordering/Ordering.Api/Protos/
+
 RUN dotnet publish src/Services/Shipping/Shipping.Worker/Shipping.Worker.csproj \
     -c $BUILD_CONFIGURATION -o /app/publish --no-restore /p:UseAppHost=false
 
