@@ -467,9 +467,9 @@ public class RealmImportTests
                 $"'{clientId}' authenticates with the client-credentials grant, so the realm and " +
                 "the deployment have to hold the same value (§11.5)");
 
-            // The documented default and nothing else. The matching half lives
-            // in the host's own Compose unit, which a building block's suite
-            // may not read.
+            // The documented default and nothing else. The matching half is the
+            // host's own deployment, which a building block's suite may not
+            // read.
             secret.GetString().ShouldBe(
                 documented,
                 "a secret in a committed realm must be the documented local default, " +
@@ -512,6 +512,14 @@ public class RealmImportTests
         // reads when it is stolen, and a second role here is a second thing it
         // reads — which is the decision that record exists to hold.
         granted.ShouldBe(["orders:delivery-address"]);
+
+        // And nothing beside it: a role on another client, realm-management's
+        // view-users say, or a realm role composing one, widens the same
+        // stolen secret without touching the list above.
+        string[] clients = [.. account.GetProperty("clientRoles").EnumerateObject().Select(c => c.Name)];
+
+        clients.ShouldBe([Audience]);
+        account.TryGetProperty("realmRoles", out _).ShouldBeFalse();
     }
 
     [Fact]
