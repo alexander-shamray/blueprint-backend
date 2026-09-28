@@ -1,6 +1,9 @@
 using System.Data.Common;
+using System.Text.Json;
+using Shipping.Infrastructure.Fulfilment;
 using Shipping.Infrastructure.Persistence;
 using Shipping.Migrator;
+using Shipping.OrderingStub;
 using Common.Application;
 using Common.Infrastructure.Idempotency;
 using Common.Infrastructure.Inbox;
@@ -11,9 +14,15 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using DotNet.Testcontainers.Containers;
 using Respawn;
 using Testcontainers.MsSql;
 using Testcontainers.RabbitMq;
+using WireMock.Matchers;
+using WireMock.RequestBuilders;
+using WireMock.ResponseBuilders;
+using WireMock.Server;
+using WireMock.Settings;
 using Xunit;
 
 namespace Shipping.TestSupport;
@@ -41,12 +50,208 @@ public sealed class ServiceFixture : IAsyncLifetime
     private Respawner? _respawner;
 
     /// <summary>
+    /// Widens <c>shipping-svc</c>'s <c>write</c> for the suite, since these
+    /// tests publish <c>OrderConfirmed</c> and <c>OrderCancelled</c> as
+    /// <c>shipping-svc</c> onto Ordering's exchanges and ADR-036's production
+    /// grant correctly refuses that. Widened here rather than in
+    /// <c>definitions.json</c>, the deployed artefact a gate holds to the
+    /// code. <c>configure</c> and <c>read</c> are read back from that file,
+    /// and <c>write</c> is its grant plus Ordering's exchanges alone, so a
+    /// route this service may not declare or publish to still fails here.
+    /// </summary>
+    private async Task WidenWriteForTheHarnessAsync()
+    {
+        const string user = "shipping-svc";
+        const string write =
+            "^(shipping-|Common\\.Contracts(\\.Shipping\\.V1:|\\.Ordering\\.V1:|:)"
+            + "|Shipping\\.Infrastructure\\.Messaging:|MassTransit:)";
+
+        (string configure, string read) = ImportedGrant();
+
+        ExecResult result = await _rabbit!.ExecAsync(
+            ["rabbitmqctl", "set_permissions", "-p", "/", user, configure, write, read],
+            TestContext.Current.CancellationToken);
+
+        // A silent failure here is the worst outcome available: every
+        // consumer test would then fail on a publish, thirty seconds later,
+        // naming a message rather than a permission.
+        if (result.ExitCode != 0)
+        {
+            throw new InvalidOperationException(
+                $"Could not widen {user}'s broker permissions for the harness "
+                + $"(exit {result.ExitCode}). stdout: {result.Stdout} stderr: {result.Stderr}");
+        }
+
+        // The mapped file rather than the container, because it is the same
+        // text the broker imported and it can be read before anything starts.
+        static (string Configure, string Read) ImportedGrant()
+        {
+            string path = Path.Combine(BrokerContextPath(), "definitions.json");
+            using JsonDocument definitions = JsonDocument.Parse(File.ReadAllText(path));
+
+            foreach (JsonElement entry in definitions.RootElement.GetProperty("permissions").EnumerateArray())
+            {
+                if (entry.GetProperty("user").GetString() != user || entry.GetProperty("vhost").GetString() != "/")
+                    continue;
+
+                return (entry.GetProperty("configure").GetString()!, entry.GetProperty("read").GetString()!);
+            }
+
+            throw new InvalidOperationException(
+                $"{path} grants {user} nothing on the default vhost, so there is no scope to preserve.");
+        }
+    }
+
+    /// <summary>
     /// The connection each §7.1 identity would hold, pointed at Shipping's own
     /// database rather than the container's <c>master</c>.
     /// </summary>
     public string ConnectionString { get; private set; } = null!;
 
     public ShippingWorkerFactory Factory { get; private set; } = null!;
+
+    /// <summary>
+    /// §3.2's carrier, in process over the same mappings directory Compose
+    /// mounts (spec, section 9), so no test double stands between the adapter
+    /// and a real HTTP hop.
+    /// </summary>
+    public WireMockServer Carrier { get; private set; } = null!;
+
+    /// <summary>
+    /// ADR-052's owner, a real gRPC server on loopback: what a test queues here
+    /// is what the worker's address read meets.
+    /// </summary>
+    public StubOrdering Ordering { get; } = new();
+
+    /// <summary>
+    /// Fails the host's next commit that moves a shipment, once. Disposing the
+    /// returned fault disarms it.
+    /// </summary>
+    public CommitFault FailNextCommit() => Factory.CommitFaults.Arm();
+
+    /// <summary>Every line the host has logged since the last reset.</summary>
+    public CapturedLogs CapturedLogs => Factory.CapturedLogs;
+
+    /// <summary>Runs exactly one fulfilment pass. No timers, no waiting.</summary>
+    public Task<int> RunFulfilmentPassAsync() =>
+        Factory.Services
+            .GetRequiredService<FulfilmentWorker>()
+            .RunOnceAsync(TestContext.Current.CancellationToken);
+
+    /// <summary>
+    /// Messages a queue holds, read from the broker itself, or zero when it
+    /// does not exist yet — MassTransit declares an <c>_error</c> queue on its
+    /// first fault, and a fault's arrival there is an outcome no table shows.
+    /// </summary>
+    public async Task<int> QueueDepthAsync(string queue)
+    {
+        foreach (string[] columns in await BrokerRowsAsync(["list_queues", "name", "messages"]))
+        {
+            if (columns.Length == 2 && columns[0] == queue)
+                return int.Parse(columns[1], System.Globalization.CultureInfo.InvariantCulture);
+        }
+
+        return 0;
+    }
+
+    /// <summary>
+    /// The exchanges bound to one destination, read from the broker itself:
+    /// a binding is declared when the endpoint starts, and only a real broker
+    /// holds the result.
+    /// </summary>
+    public async Task<string[]> BindingsAsync(string queue) =>
+    [
+        .. (await BrokerRowsAsync(["list_bindings", "source_name", "destination_name"]))
+            .Where(columns => columns.Length == 2 && columns[1] == queue)
+            .Select(columns => columns[0])
+    ];
+
+    /// <summary>
+    /// A second worker host over these containers and this Ordering stub,
+    /// answered by a carrier the caller started. A resilience pipeline belongs
+    /// to a host, so a suite whose cases fill the breaker takes one of these
+    /// per test (<c>CarrierHop</c>).
+    /// </summary>
+    public ShippingWorkerFactory NewWorkerHost(string carrierBaseUrl) =>
+        new(
+            ConnectionString,
+            _rabbit!.GetConnectionString(),
+            carrierBaseUrl,
+            addressSourceBaseUrl: Ordering.Address.ToString());
+
+    /// <summary>Makes one carrier server answer one path with one status code, after an optional delay.</summary>
+    /// <remarks>
+    /// The handle disposes the mapping. A mapping on a running server rather
+    /// than a file under deploy/compose/carrier-simulator: that directory is the
+    /// postal-code script Compose and this fixture share (spec, section 9), and
+    /// an answer nobody can reach from a checkout is no part of it. The server
+    /// is a parameter rather than <see cref="Carrier"/>, because the suites that
+    /// script an answer run a host of their own.
+    /// </remarks>
+    public static IDisposable CarrierAnswers(
+        WireMockServer server,
+        string path,
+        int statusCode,
+        string method = "GET",
+        TimeSpan? delay = null)
+    {
+        Guid id = Guid.CreateVersion7();
+        IResponseBuilder answer = Response.Create().WithStatusCode(statusCode);
+
+        server
+            .Given(Request.Create().WithPath(new ExactMatcher(path)).UsingMethod(method))
+            .AtPriority(0)
+            .WithGuid(id)
+            .RespondWith(delay is null ? answer : answer.WithDelay(delay.Value));
+
+        return new CarrierMapping(server, id);
+    }
+
+    /// <summary>
+    /// A carrier server on loopback rather than WireMock's default of every
+    /// interface: a socket on 0.0.0.0 is what a workstation firewall stops to
+    /// ask about, and the only caller is the in-process host under test.
+    /// </summary>
+    public static WireMockServer StartCarrier()
+    {
+        WireMockServer server = WireMockServer.Start(new WireMockServerSettings { Urls = ["http://127.0.0.1:0"] });
+        server.ReadStaticMappings(SimulatorMappings.Directory());
+
+        return server;
+    }
+
+    /// <summary>
+    /// One <c>rabbitmqctl</c> listing, split into its tab-separated columns.
+    /// </summary>
+    private async Task<IReadOnlyList<string[]>> BrokerRowsAsync(string[] listing)
+    {
+        ExecResult result = await _rabbit!.ExecAsync(
+            ["rabbitmqctl", listing[0], "--quiet", "--no-table-headers", .. listing[1..]],
+            TestContext.Current.CancellationToken);
+
+        if (result.ExitCode != 0)
+        {
+            throw new InvalidOperationException(
+                $"Could not run the broker's {listing[0]} (exit {result.ExitCode}). stderr: {result.Stderr}");
+        }
+
+        return
+        [
+            .. result.Stdout
+                .Split('\n', StringSplitOptions.RemoveEmptyEntries)
+                .Select(line => line.Split('\t', StringSplitOptions.TrimEntries))
+        ];
+    }
+
+    /// <summary>
+    /// Removes one mapping and leaves the rest. <c>ResetAsync</c> resets the
+    /// whole server between tests and is the backstop; this is what keeps a
+    /// mapping from outliving the assertion it was added for inside one.
+    /// </summary>
+    private sealed class CarrierMapping(WireMockServer server, Guid id) : IDisposable
+    {
+        public void Dispose() => server.DeleteMapping(id);
+    }
 
     /// <summary>The exit code of the first real migration run.</summary>
     public int FirstRunExitCode { get; private set; } = -1;
@@ -113,6 +318,11 @@ public sealed class ServiceFixture : IAsyncLifetime
             _sql.StartAsync(TestContext.Current.CancellationToken),
             _rabbit.StartAsync(TestContext.Current.CancellationToken));
 
+        await WidenWriteForTheHarnessAsync();
+
+        Carrier = StartCarrier();
+        await Ordering.InitializeAsync();
+
         // The container hands out a connection to master; Shipping owns a
         // database of its own (§7.1), and MigrateAsync is what creates it.
         // DbConnectionStringBuilder out of habit rather than necessity now:
@@ -124,7 +334,7 @@ public sealed class ServiceFixture : IAsyncLifetime
 
         FirstRunExitCode = await RunMigratorAsync(ConnectionString);
 
-        Factory = new ShippingWorkerFactory(ConnectionString, _rabbit.GetConnectionString());
+        Factory = NewWorkerHost(Carrier.Urls[0] + "/");
 
         // A table for the transaction tests, created here and not in a
         // migration. It is a fixture of the test rather than a table of the
@@ -162,6 +372,18 @@ public sealed class ServiceFixture : IAsyncLifetime
             });
 
         await _respawner.ResetAsync(connection);
+
+        // The mappings as well as the log: a stub a test adds outlives a log
+        // reset, so re-reading the simulator's own mappings (spec, section 9)
+        // is what leaves every test the same carrier to start from. The
+        // Ordering stub and the captured log are the collection's the same
+        // way: a status one test queued would answer the next test's first
+        // read, and a line an earlier pass logged would be searched again.
+        Carrier.ResetMappings();
+        Carrier.ReadStaticMappings(SimulatorMappings.Directory());
+        Carrier.ResetLogEntries();
+        Ordering.Reset();
+        CapturedLogs.Clear();
     }
 
     /// <summary>
@@ -620,7 +842,21 @@ public sealed class ServiceFixture : IAsyncLifetime
         {
             try
             {
-                await _sql.DisposeAsync();
+                try
+                {
+                    try
+                    {
+                        Carrier?.Stop();
+                    }
+                    finally
+                    {
+                        await Ordering.DisposeAsync();
+                    }
+                }
+                finally
+                {
+                    await _sql.DisposeAsync();
+                }
             }
             finally
             {
