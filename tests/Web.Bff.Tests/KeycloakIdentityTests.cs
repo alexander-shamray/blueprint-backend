@@ -15,25 +15,15 @@ using Xunit;
 namespace Web.Bff.Tests;
 
 /// <summary>
-/// §11.5's whole argument, against a real Keycloak: that the scope becomes an
-/// audience, that the audience is what a service validates, and that neither
-/// is granted to a client the realm merely happens to hold.
+/// §11.5's whole argument, against a real Keycloak because realm configuration
+/// compiles the same right or wrong: the scope becomes an audience, the
+/// audience is what a service validates, and neither is granted to a client
+/// the realm merely holds. The negative half matters more: a mapper that put
+/// the audience on every token would pass the first test and hand the
+/// platform to any client in the realm. Since ADR-052 the realm holds two
+/// credentialed clients, and the second is proved both ways here — a grant is
+/// a claim about what a token carries, and only a real Keycloak carries one.
 /// </summary>
-/// <remarks>
-/// <para>
-/// <b>This is realm configuration, which is exactly why it earns a test rather
-/// than a paragraph.</b> Nothing in the solution compiles differently when the
-/// audience mapper is missing: a client-credentials token would carry
-/// <c>scope: commerce-api</c> and an <c>aud</c> of <c>account</c>, and every
-/// service would reject the platform's one permitted synchronous hop.
-/// </para>
-/// <para>
-/// The negative half matters more than the positive, and §11.5 says so: a
-/// mapper that added the audience to <i>every</i> token would pass the first
-/// test here and hand the platform to any client the realm holds. That is what
-/// the unrelated client is for.
-/// </para>
-/// </remarks>
 [Collection(nameof(KeycloakCollection))]
 public sealed class KeycloakIdentityTests(KeycloakFixture keycloak)
 {
@@ -58,17 +48,81 @@ public sealed class KeycloakIdentityTests(KeycloakFixture keycloak)
     }
 
     [Fact]
-    public async Task The_service_account_carries_no_permission_claim()
+    public async Task The_BFF_service_account_carries_no_permission_claim()
     {
         (_, string token) = await keycloak.ClientCredentialsAsync(BffClient, BffSecret);
 
         JwtSecurityToken jwt = Tokens.ReadJwtToken(token);
 
-        // §11.4's vocabulary belongs to people, not to hosts. A service account
-        // arriving with permissions would make every ownership and policy check
-        // in the platform satisfiable by a host — which is why Catalog's gRPC
-        // service requires authentication and deliberately not a permission.
+        // §11.4's vocabulary is a person's by default, and this client is the
+        // case that holds: the BFF's hop reads what a product listing already
+        // publishes, so Catalog's gRPC service asks for authentication and
+        // deliberately not a permission. ADR-052 names the exception rather
+        // than widening the rule — a host holds one only where the read
+        // crosses subjects, and this one does not.
         jwt.Claims.ShouldNotContain(c => c.Type == PermissionClaim.Type);
+    }
+
+    [Fact]
+    public async Task The_worker_client_is_issued_exactly_the_grant_the_record_names()
+    {
+        (bool granted, string token) = await keycloak.ClientCredentialsAsync(
+            KeycloakFixture.WorkerClient,
+            KeycloakFixture.WorkerSecret);
+
+        granted.ShouldBeTrue(
+            "the realm must hold shipping-worker with service accounts enabled (ADR-052)");
+
+        JwtSecurityToken jwt = Tokens.ReadJwtToken(token);
+
+        // The audience first: without it the permission below is carried in a
+        // token no service validates, and the read fails for the other reason.
+        jwt.Audiences.ShouldContain(AuthenticationExtensions.Audience);
+
+        // Exactly, not ShouldContain. ADR-052 sizes this credential by what it
+        // reads when it is stolen, so a realm that granted more has to fail
+        // somewhere, and this is the assertion that says the realm did not.
+        // Keycloak's own defaults live in realm_access and on the account
+        // client, which this mapper does not read.
+        string[] permissions =
+        [
+            .. jwt.Claims.Where(c => c.Type == PermissionClaim.Type).Select(c => c.Value)
+        ];
+
+        permissions.ShouldBe(["orders:delivery-address"]);
+    }
+
+    [Fact]
+    public async Task A_service_requiring_the_permission_accepts_the_worker_and_refuses_the_BFF()
+    {
+        (_, string worker) = await keycloak.ClientCredentialsAsync(
+            KeycloakFixture.WorkerClient,
+            KeycloakFixture.WorkerSecret);
+        (_, string bff) = await keycloak.ClientCredentialsAsync(BffClient, BffSecret);
+
+        await using WebApplication service = await ServiceValidatingTheRealm();
+        using HttpClient client = service.GetTestClient();
+
+        (await StatusOfAsync(client, worker)).ShouldBe(HttpStatusCode.OK);
+
+        // The refusal, and the BFF rather than an unrelated client on purpose:
+        // its token carries the same issuer, the same signing key AND the same
+        // audience, so a 403 here can only be the permission doing the work.
+        // An unrelated client would be refused at the audience and prove
+        // nothing about the grant (ADR-052).
+        (await StatusOfAsync(client, bff)).ShouldBe(HttpStatusCode.Forbidden);
+    }
+
+    private static async Task<HttpStatusCode> StatusOfAsync(HttpClient client, string token)
+    {
+        using HttpRequestMessage request = new(HttpMethod.Get, "/address");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        using HttpResponseMessage response = await client.SendAsync(
+            request,
+            TestContext.Current.CancellationToken);
+
+        return response.StatusCode;
     }
 
     [Fact]
@@ -121,6 +175,16 @@ public sealed class KeycloakIdentityTests(KeycloakFixture keycloak)
     }
 
     /// <summary>
+    /// The permission ADR-052 gives the address reader, spelt as a literal.
+    /// </summary>
+    /// <remarks>
+    /// <c>OrderingPermissions.DeliveryAddress</c> is the owner and this suite
+    /// may not reference Ordering to read it; the realm's closed role set is
+    /// what ties the two spellings together (§11.4, §11.5).
+    /// </remarks>
+    private const string DeliveryAddress = "orders:delivery-address";
+
+    /// <summary>
     /// A minimal host running the platform's real token validation against the
     /// container.
     /// </summary>
@@ -151,12 +215,19 @@ public sealed class KeycloakIdentityTests(KeycloakFixture keycloak)
         // AddJwtBearer here would validate whatever this file decided to
         // validate and prove nothing about what a service does.
         builder.AddJwtAuthentication();
-        builder.Services.AddAuthorizationBuilder();
+
+        // RequirePermission, not RequireClaim: the claim type is Common.Web's
+        // (§11.4), so this policy and the one Ordering registers cannot drift
+        // apart about where a permission lives in a token.
+        builder.Services
+            .AddAuthorizationBuilder()
+            .AddPolicy(DeliveryAddress, p => p.RequirePermission(DeliveryAddress));
 
         WebApplication app = builder.Build();
         app.UseAuthentication();
         app.UseAuthorization();
         app.MapGet("/protected", () => Results.Ok()).RequireAuthorization();
+        app.MapGet("/address", () => Results.Ok()).RequireAuthorization(DeliveryAddress);
 
         await app.StartAsync(TestContext.Current.CancellationToken);
 

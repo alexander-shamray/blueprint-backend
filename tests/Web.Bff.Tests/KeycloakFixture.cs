@@ -31,6 +31,15 @@ public sealed class KeycloakFixture : IAsyncLifetime
     public const string Realm = "commerce";
 
     /// <summary>
+    /// ADR-052's second credentialed client and the documented local default
+    /// it authenticates with (§14.1). Here rather than in each test class for
+    /// the reason the admin pair below is: the realm file and this fixture are
+    /// the two halves that have to agree.
+    /// </summary>
+    public const string WorkerClient = "shipping-worker";
+    public const string WorkerSecret = "local-dev-shipping-secret";
+
+    /// <summary>
     /// The container's bootstrap admin, set here rather than read back off
     /// the container: the module exposes no accessor for either value, and a
     /// literal that the builder below also sets cannot drift from it.

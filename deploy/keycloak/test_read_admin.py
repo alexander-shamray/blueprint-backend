@@ -437,7 +437,17 @@ class WhatItWrites(Stubbed):
                        "defaultClientScopes": ["web-origins", "acr", "profile", "roles",
                                                "basic", "commerce-api", "email"],
                        "attributes": {"use.refresh.tokens": "true",
-                                      "pkce.code.challenge.method": "S256"}}])
+                                      "pkce.code.challenge.method": "S256"}},
+                      {"clientId": realm_check.WORKER_CLIENT,
+                       "enabled": True,
+                       "standardFlowEnabled": False,
+                       "implicitFlowEnabled": False,
+                       "directAccessGrantsEnabled": False,
+                       "serviceAccountsEnabled": True,
+                       "publicClient": False,
+                       "defaultClientScopes": ["basic", "commerce-api"],
+                       "optionalClientScopes": ["address"],
+                       "webOrigins": []}])
         self.assertEqual(self.run_main(), 0)
 
         # Read back through the deploy path's own two calls, not through json.
@@ -471,7 +481,17 @@ class WhatItWrites(Stubbed):
                        "defaultClientScopes": ["web-origins", "acr", "profile", "roles",
                                                "basic", "commerce-api", "email"],
                        "attributes": {"use.refresh.tokens": "true",
-                                      "pkce.code.challenge.method": "S256"}}])
+                                      "pkce.code.challenge.method": "S256"}},
+                      {"clientId": realm_check.WORKER_CLIENT,
+                       "enabled": True,
+                       "standardFlowEnabled": False,
+                       "implicitFlowEnabled": False,
+                       "directAccessGrantsEnabled": False,
+                       "serviceAccountsEnabled": True,
+                       "publicClient": False,
+                       "defaultClientScopes": ["basic", "commerce-api"],
+                       "optionalClientScopes": ["address"],
+                       "webOrigins": []}])
         self.run_main()
         found = realm_check.check_realm(
             realm_check.load_realm(self.out), realm_check.DEPLOYED, 300)

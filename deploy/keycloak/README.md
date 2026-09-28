@@ -54,18 +54,27 @@ py -3.12 deploy/keycloak/realm_check.py check --kind local
   required and has no default: §11.2 documents the password grant as a local
   affordance a deployed realm turns off, and §14.1's documented login *is* that
   grant.
-- **Both named clients declare a browser origin.** Keycloak grants CORS to
-  none by default, and a client that runs its token exchange from a page
-  cannot read its own token response without one — silently, because the
-  request is CORS-safelisted and nothing preflights. The entries are judged
-  for shape and not for value: non-empty, no `*`, no `+` on a client whose
-  redirect URIs imply no origin, and each remaining entry equal to the
-  canonical origin a browser would send
+- **`web-app` and `mobile-app` each declare a browser origin.** Keycloak
+  grants CORS to none by default, and a client that runs its token exchange
+  from a page cannot read its own token response without one — silently,
+  because the request is CORS-safelisted and nothing preflights. The entries
+  are judged for shape and not for value: non-empty, no `*`, no `+` on a
+  client whose redirect URIs imply no origin, and each remaining entry equal
+  to the canonical origin a browser would send
   ([ADR-046](../../docs/backend-architecture/adr/ADR-046-each-client-declares-a-browser-origin-and-the-gate-asserts-the-shape.md)).
 - **`mobile-app`'s own shape**, and the realm's refresh-token rotation behind
   it — cited rather than enumerated here, because
   [ADR-044](../../docs/backend-architecture/adr/ADR-044-the-native-client-holds-a-refresh-token-and-the-realm-rotates-it.md)
   argues each of them and `check_mobile_client` is the list.
+- **`shipping-worker`'s own shape**, as far as a client object reaches: one
+  such client, confidential, service accounts on, no interactive flow, and
+  `commerce-api` a default client scope and not an optional one — cited rather
+  than enumerated here, because
+  [ADR-052](../../docs/backend-architecture/adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)
+  argues each of them and `check_worker_client` is the list. The grant itself
+  is not among them: a service account's roles live on its user, which is in
+  neither document this gate reads, so `check_worker_client` reaches the client
+  object and the token client's own check is the other half (ADR-052).
 
 ## What it does not check
 
@@ -84,8 +93,10 @@ py -3.12 deploy/keycloak/realm_check.py check --kind local
 - **Everything else in the realm — and it does not merely decline to check
   it, it does not hold it.** What the gate judges is a projection of the keys
   `REALM_FIELDS`, `CLIENT_FIELDS` and `CLIENT_ATTRIBUTES` name, so the audience
-  mapper, the permission vocabulary, the client scopes, the two development
-  logins and every client secret are not in the object at all. Those belong
+  mapper, the permission vocabulary, the client scopes' own definitions and
+  their mappers, the two development logins and every client secret are not in
+  the object at all — a client's two scope lists are, for the obligations
+  above that read them. Those belong
   to `tests/Common.Web.Tests/RealmImportTests.cs`, which is not superseded.
   The projection is also why no message here can leak a credential: there is
   none to leak.
