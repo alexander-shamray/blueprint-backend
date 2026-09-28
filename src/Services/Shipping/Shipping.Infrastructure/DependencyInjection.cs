@@ -1,6 +1,7 @@
 using Shipping.Application.Addresses;
 using Shipping.Application.Shipments;
 using Shipping.Domain.Shipments;
+using Shipping.Infrastructure.Fulfilment;
 using Shipping.Infrastructure.Idempotency;
 using Shipping.Infrastructure.Messaging;
 using Shipping.Infrastructure.Observability;
@@ -164,6 +165,12 @@ public static class DependencyInjection
         // registering it before the bus would let a deploy stop the broker
         // underneath a dispatcher still claiming rows.
         services.AddHostedService<OutboxDispatcher>();
+
+        // Spec section 4's first worker. AddHostedService<T> rather than a
+        // factory overload, so a suite that drives one pass can find and
+        // remove exactly this registration by its implementation type.
+        services.AddScoped<FulfilmentClaims>();
+        services.AddHostedService<FulfilmentWorker>();
 
         // §9.4's, §9.5's and §8.5's retention, in the one hosted service §9.5
         // asks for. Registered last, so it is the first stopped: it is pure
