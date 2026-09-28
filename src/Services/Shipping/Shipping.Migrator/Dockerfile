@@ -27,6 +27,12 @@ RUN dotnet restore src/Services/Shipping/Shipping.Migrator/Shipping.Migrator.csp
 COPY .editorconfig ./
 COPY src/BuildingBlocks/ src/BuildingBlocks/
 COPY src/Services/Shipping/ src/Services/Shipping/
+
+# Ordering's contract. The migrator references Shipping.Infrastructure, which
+# compiles that .proto by relative path as its csproj argues, so the file has to
+# be in the build context though no Ordering project is.
+COPY src/Services/Ordering/Ordering.Api/Protos/ src/Services/Ordering/Ordering.Api/Protos/
+
 RUN dotnet publish src/Services/Shipping/Shipping.Migrator/Shipping.Migrator.csproj \
     -c Release -o /app/publish --no-restore /p:UseAppHost=false
 

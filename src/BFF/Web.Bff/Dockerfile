@@ -38,11 +38,10 @@ COPY .editorconfig ./
 COPY src/BuildingBlocks/ src/BuildingBlocks/
 COPY src/BFF/ src/BFF/
 
-# THE ONE LINE THAT IS NOT LIKE THE OTHER IMAGES, and it is the price of the
-# linked .proto (§4.3, and this project's csproj). Web.Bff compiles Catalog's
-# contract by relative path, so the file has to be in the build context even
-# though no Catalog project is — and it is a *source* input rather than a
-# restore one, which is why it sits here and not above.
+# The price of the linked .proto, which Web.Bff's csproj argues. Web.Bff
+# compiles Catalog's contract by relative path, so the file has to be in the
+# build context even though no Catalog project is — and it is a source input
+# rather than a restore one, which is why it sits here and not above.
 #
 # The failure mode is loud and its message is misleading: without this,
 # Grpc.Tools reports the .proto missing and names a path under
