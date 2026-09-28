@@ -335,7 +335,7 @@ to be tidied away:
 | RabbitMQ | `catalog-svc` / `local-dev-catalog`, `ordering-svc` / `local-dev-ordering` |
 | Payment provider key | `local-dev-psp` |
 | Carrier key | `local-dev-carrier` |
-| Shipping worker client secret | `local-dev-shipping-secret`, in the realm export; the seam in front of it arrives with the host that reads it |
+| Shipping worker client secret | `${SHIPPING_CLIENT_SECRET:-local-dev-shipping-secret}` |
 
 These defaults are what make `docker compose up` work with no prior setup, and
 **the environment variable in front of each is the seam** that keeps them out of
@@ -354,10 +354,7 @@ than through a running Keycloak. The two never meet, and a reader who has just
 met the realm-check service account should not have to infer that from a
 silence. The provider and carrier keys have no seam because nothing checks
 them: each simulator ignores its key, so a variable would override a value no
-local party compares. Shipping's client secret has no variable in front of it
-yet for a reason of sequence rather than of design — the realm holds the value
-from the change that minted the client, and the Compose seam arrives with the
-host that posts it.
+local party compares.
 
 Note how the connection strings nest — `${CATALOG_CONNECTION:-…Password=${SQL_PASSWORD:-…}…}`
 — so overriding the password alone keeps every connection string correct. That

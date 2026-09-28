@@ -50,8 +50,8 @@ services:
       # The authority, to validate inbound tokens (§11.2). Read eagerly by
       # AddJwtAuthentication, which throws naming the key — so this line is
       # what lets the host start, exactly like the bus one above. No
-      # Identity__Client__*: Inventory calls no peer synchronously, and outbound
-      # identity belongs to the BFF alone (§9.7, §11.5).
+      # Identity__Client__*: Inventory calls no peer synchronously, and §15.4
+      # requires them only of a host that does.
       Identity__Authority: "http://keycloak:8080/realms/commerce"
       OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4317"
       # §8.1's two connections, and they joined on exactly the terms the

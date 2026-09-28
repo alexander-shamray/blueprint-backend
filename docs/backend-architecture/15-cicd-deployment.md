@@ -1209,7 +1209,7 @@ namespace read access.
 | `ConnectionStrings__RedisCoordination` | **Secret** | External Secrets — separate ACL user, `noeviction` instance | ✓ **when the host calls `AddRedisConnections`** — both or neither |
 | `ConnectionStrings__RabbitMq` | Secret | External Secrets — carries the per-service broker account of [ADR-036](adr/ADR-036-the-broker-has-a-per-service-identity.md) | ✓ — the Secret is named per service (`catalog-rabbitmq`, `ordering-rabbitmq`) and never shared |
 | `Identity__Authority` | Config | Helm `identity.authority` → ConfigMap | ✓ — **every host**, including the gateway |
-| `Identity__Client__ClientId` | Config | Helm `identity.clientId` | ✓ **for a host that calls a peer** — the BFF ([§9.7](09-messaging.md), [§11.5](11-identity-authorization.md)), and Shipping's worker from the pull request that gives it ADR-052's address read |
+| `Identity__Client__ClientId` | Config | Helm `identity.clientId` | ✓ **for a host that calls a peer** — the BFF ([§9.7](09-messaging.md), [§11.5](11-identity-authorization.md)), and Shipping's worker, for [ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)'s address read |
 | `Identity__Client__Scope` | Config | Helm `identity.scope` | ✓ **for a host that calls a peer**, as above |
 | `Identity__Client__ClientSecret` | Secret | `web-bff-identity` secret; one per host | ✓ **for a host that calls a peer**, as above |
 | `Cors__Enabled` | Config | Helm `cors.enabled` → ConfigMap — **gateway only** | ✓ |
@@ -1222,6 +1222,7 @@ namespace read access.
 | `PaymentProvider__ApiKey` | Secret | External Secrets | ✓ — **Payments only**; the provider's credential, and the host refuses to start without it |
 | `Carrier__BaseUrl` | Config | ConfigMap | ✓ — **Shipping only**; the carrier's address, and the host refuses to start without it |
 | `Carrier__ApiKey` | Secret | External Secrets | ✓ — **Shipping only**; the carrier's credential, and the host refuses to start without it |
+| `AddressSource__BaseUrl` | Config | ConfigMap | ✓ — **Shipping only**; the owner's address for [ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)'s read, and the host refuses to start without it |
 
 | Kind | Source | Example |
 |---|---|---|
