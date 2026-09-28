@@ -26,6 +26,10 @@ internal sealed class DeliveryAddressRowConfiguration : IEntityTypeConfiguration
 
         // Two ASCII letters by contract; IsFixedLength plus IsUnicode(false)
         // is what emits char(2) rather than nvarchar(2).
-        builder.Property(r => r.Country).HasMaxLength(2).IsFixedLength().IsUnicode(false).IsRequired();
+        builder.Property(r => r.Country)
+            .HasMaxLength(AddressLimits.CountryLength)
+            .IsFixedLength()
+            .IsUnicode(false)
+            .IsRequired();
     }
 }

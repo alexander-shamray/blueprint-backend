@@ -1,6 +1,7 @@
 using Common.Application;
 using Common.Infrastructure.Messaging;
 using Microsoft.Extensions.Hosting;
+using Shipping.Infrastructure.Addresses;
 using Shipping.Infrastructure.Carrier;
 
 namespace Shipping.Infrastructure.Observability;
@@ -31,12 +32,14 @@ public sealed class MetricsInitialiser : IHostedService
         OutboxMetrics outbox,
         MessagingMetrics messaging,
         RequestMetrics requests,
-        CarrierMetrics carrier)
+        CarrierMetrics carrier,
+        AddressMetrics addresses)
     {
         ArgumentNullException.ThrowIfNull(outbox);
         ArgumentNullException.ThrowIfNull(messaging);
         ArgumentNullException.ThrowIfNull(requests);
         ArgumentNullException.ThrowIfNull(carrier);
+        ArgumentNullException.ThrowIfNull(addresses);
     }
 
     // `cancellationToken`, not this repository's usual `ct`: CA1725 requires an

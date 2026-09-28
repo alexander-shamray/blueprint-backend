@@ -34,6 +34,38 @@
     <!-- IHostEnvironment, which AddCarrierGateway names in its signature for
          the scheme rule, as Common.Infrastructure references it. -->
     <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
+    <!-- The client half of ADR-052's read. Grpc.Net.ClientFactory is the
+         AddGrpcClient integration, Grpc.Tools the protoc build task, and
+         Google.Protobuf the runtime the generated code compiles against.
+         They share one row in Appendix B because they ship and version
+         together, and §4.2's third row permits an Infrastructure project any
+         package, as Microsoft.Extensions.Http.Resilience already is here. -->
+    <PackageReference Include="Grpc.Net.ClientFactory" />
+    <PackageReference Include="Google.Protobuf" />
+    <PackageReference Include="Grpc.Tools">
+      <!-- Build-time only: protoc and the C# plugin. Nothing of it ships. -->
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <!-- JwtSecurityTokenHandler, which the grant check reads its own token's
+         permission claim with (ADR-052). -->
+    <PackageReference Include="System.IdentityModel.Tokens.Jwt" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Linked, not copied (§4.3): one contract with two generated halves, so
+         the client and the server cannot drift. Ordering owns the file because
+         Ordering serves the RPC. A file reference and not an assembly one, so
+         no project dependency is created and Common.Contracts is still the
+         only assembly crossing a service boundary. The cost is a build-time
+         path into another service's tree, here and in each of this service's
+         Dockerfiles. Internal, so Ordering's message types are no part of
+         this assembly's surface. -->
+    <Protobuf
+      Include="..\..\Ordering\Ordering.Api\Protos\delivery_addresses.proto"
+      Link="Protos\delivery_addresses.proto"
+      GrpcServices="Client"
+      Access="Internal" />
   </ItemGroup>
 
   <ItemGroup>

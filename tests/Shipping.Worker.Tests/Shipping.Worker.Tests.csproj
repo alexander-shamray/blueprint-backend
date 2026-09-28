@@ -41,6 +41,10 @@
          in process, loading the simulator's own mappings, so the adapter is
          asserted against the file Compose runs. -->
     <PackageReference Include="WireMock.Net" />
+    <!-- JwtSecurityToken, which the grant check's suite writes its tokens
+         with. Carried transitively; named here on the register's honesty
+         rule, because this project names the type. -->
+    <PackageReference Include="System.IdentityModel.Tokens.Jwt" />
   </ItemGroup>
 
   <ItemGroup>
@@ -51,6 +55,8 @@
          two cannot reference each other — which is why the fixture has a
          project of its own. -->
     <ProjectReference Include="..\..\tests\Shipping.TestSupport\Shipping.TestSupport.csproj" />
+    <!-- StubOrdering, which the address adapter's suite starts itself. -->
+    <ProjectReference Include="..\Shipping.OrderingStub\Shipping.OrderingStub.csproj" />
   </ItemGroup>
 
 </Project>

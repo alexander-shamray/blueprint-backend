@@ -12,4 +12,7 @@ public static class AddressLimits
     public const int MaxCityLength = 100;
 
     public const int MaxPostalCodeLength = 32;
+
+    /// <summary>ISO 3166-1 alpha-2: exactly this many letters, never fewer.</summary>
+    public const int CountryLength = 2;
 }

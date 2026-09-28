@@ -26,36 +26,12 @@ public static class DependencyInjection
         IConfiguration configuration,
         IHostEnvironment environment)
     {
-        // Eager, as the broker's key is: a host that cannot name its carrier
-        // does not start, rather than failing its first booking.
-        string? configured = configuration[BaseUrlKey];
-        if (string.IsNullOrWhiteSpace(configured))
-            throw new InvalidOperationException($"{BaseUrlKey} is not configured. Shipping cannot reach a carrier.");
-
-        // No message below echoes the configured value: a startup failure is
-        // logged, and an address can carry user information.
-        if (!Uri.TryCreate(configured, UriKind.Absolute, out Uri? parsed)
-            || (parsed.Scheme != Uri.UriSchemeHttps && parsed.Scheme != Uri.UriSchemeHttp))
-        {
-            throw new InvalidOperationException($"{BaseUrlKey} is not an absolute HTTP(S) address.");
-        }
-
-        // The carrier is authenticated by the key alone, and a credential in
-        // the address would travel wherever the address is printed.
-        if (parsed.UserInfo.Length > 0)
-        {
-            throw new InvalidOperationException(
-                $"{BaseUrlKey} carries user information; the carrier's credential is {ApiKeyKey} alone.");
-        }
-
-        // Every request resolves a relative path against the address, which
-        // keeps its path and drops its query and fragment, so an address with
-        // either would start clean and call a different endpoint.
-        if (parsed.Query.Length > 0 || parsed.Fragment.Length > 0)
-        {
-            throw new InvalidOperationException(
-                $"{BaseUrlKey} carries a query or fragment, which no request to the carrier would keep.");
-        }
+        Uri parsed = ConfiguredBaseUrl.Read(
+            configuration,
+            BaseUrlKey,
+            whenMissing: "Shipping cannot reach a carrier.",
+            whenUserInfo: $"the carrier's credential is {ApiKeyKey} alone.",
+            peer: "the carrier");
 
         // HTTPS everywhere but Development, the rule AuthenticationExtensions
         // applies to the identity provider: the key below is a bearer

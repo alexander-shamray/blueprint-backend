@@ -39,7 +39,7 @@ public sealed class CarrierFaultTests : IDisposable
     [Fact]
     public async Task A_503_is_retried_in_the_client_then_thrown_as_unavailable_and_counted_per_attempt()
     {
-        using UnavailableCount counted = UnavailableCounter.Of(_host.Factory.Services);
+        using OutboundCount counted = OutboundCounter.Unavailable(_host.Factory.Services);
 
         await Should.ThrowAsync<CarrierUnavailableException>(() =>
             Carrier().BookAsync(Booking("SIM-DOWN"), TestContext.Current.CancellationToken));
@@ -70,7 +70,7 @@ public sealed class CarrierFaultTests : IDisposable
     [Fact]
     public async Task A_stalled_carrier_is_unavailable_within_the_total_budget_and_its_timeouts_count()
     {
-        using UnavailableCount counted = UnavailableCounter.Of(_host.Factory.Services);
+        using OutboundCount counted = OutboundCounter.Unavailable(_host.Factory.Services);
         DateTimeOffset started = DateTimeOffset.UtcNow;
 
         await Should.ThrowAsync<CarrierUnavailableException>(() =>
@@ -84,7 +84,7 @@ public sealed class CarrierFaultTests : IDisposable
     [Fact]
     public async Task A_cancellation_during_an_attempt_is_the_callers_and_is_not_counted()
     {
-        using UnavailableCount counted = UnavailableCounter.Of(_host.Factory.Services);
+        using OutboundCount counted = OutboundCounter.Unavailable(_host.Factory.Services);
         using CancellationTokenSource cancelled = CancellationTokenSource.CreateLinkedTokenSource(
             TestContext.Current.CancellationToken);
         cancelled.CancelAfter(TimeSpan.FromSeconds(1));

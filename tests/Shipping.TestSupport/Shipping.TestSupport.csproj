@@ -46,6 +46,9 @@
          `backoffLimit: 2` and the fixture drives the real host rather than a
          copy of its wiring. -->
     <ProjectReference Include="..\..\src\Services\Shipping\Shipping.Migrator\Shipping.Migrator.csproj" />
+    <!-- StubOrdering, for the fixtures that run a worker against a
+         stand-in Ordering. -->
+    <ProjectReference Include="..\Shipping.OrderingStub\Shipping.OrderingStub.csproj" />
   </ItemGroup>
 
 </Project>

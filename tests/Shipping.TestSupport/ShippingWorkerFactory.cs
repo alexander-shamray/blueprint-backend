@@ -1,5 +1,6 @@
 using Shipping.TestSupport.Outbox;
 using Common.Application;
+using Common.Infrastructure.Identity;
 using Common.Infrastructure.Messaging;
 using Common.Infrastructure.Outbox;
 using Common.Web;
@@ -7,7 +8,9 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
+using AddressRegistration = Shipping.Infrastructure.Addresses.DependencyInjection;
 using CarrierRegistration = Shipping.Infrastructure.Carrier.DependencyInjection;
 
 namespace Shipping.TestSupport;
@@ -22,7 +25,8 @@ public class ShippingWorkerFactory(
     string connectionString,
     string rabbitConnectionString,
     string carrierBaseUrl = ShippingWorkerFactory.UnreachableCarrier,
-    string? carrierApiKey = null)
+    string? carrierApiKey = null,
+    string addressSourceBaseUrl = ShippingWorkerFactory.UnreachableAddressSource)
     : WebApplicationFactory<Program>
 {
     /// <summary>
@@ -54,6 +58,20 @@ public class ShippingWorkerFactory(
     public const string LocalCarrierApiKey = "local-dev-carrier";
 
     /// <summary>
+    /// Where the address client points when a test does not care. Unreachable
+    /// for the authority's reason: <c>.invalid</c> never resolves, so a test
+    /// that dials Ordering by accident fails loudly.
+    /// </summary>
+    public const string UnreachableAddressSource = "http://ordering-api.invalid/";
+
+    /// <summary>
+    /// The token source the credential handler draws on, replacing
+    /// <c>CachingTokenClient</c> and its grant check so that no test needs an
+    /// identity provider to prove what the handler does with a token.
+    /// </summary>
+    public RecordingTokenCache Tokens { get; } = new();
+
+    /// <summary>
     /// The RUNTIME connection of §7.1, and only that one. The host has no
     /// business reading <c>ShippingMigrator</c>, and a fixture that supplied
     /// both would hide it if it started. The bus key is required because
@@ -67,9 +85,15 @@ public class ShippingWorkerFactory(
             .UseSetting(AuthenticationExtensions.AuthorityKey, UnreachableAuthority)
             .UseSetting(CarrierRegistration.BaseUrlKey, carrierBaseUrl)
             .UseSetting(CarrierRegistration.ApiKeyKey, carrierApiKey ?? LocalCarrierApiKey)
+            .UseSetting(AddressRegistration.BaseUrlKey, addressSourceBaseUrl)
+            .UseSetting($"{ServiceIdentityOptions.SectionName}:ClientId", "shipping-worker-test")
+            .UseSetting($"{ServiceIdentityOptions.SectionName}:ClientSecret", "not-a-real-secret")
+            .UseSetting($"{ServiceIdentityOptions.SectionName}:Scope", "commerce-api")
             .ConfigureServices(services =>
             {
                 ConfigureAuthentication(services);
+
+                ConfigureTokens(services);
 
                 // Remove only the outbox dispatcher, not every hosted
                 // service: MassTransit registers its bus as one, and
@@ -144,6 +168,15 @@ public class ShippingWorkerFactory(
         services
             .AddAuthentication()
             .AddScheme<AuthenticationSchemeOptions, TestAuthHandler>(TestAuthHandler.SchemeName, _ => { });
+    }
+
+    /// <summary>Puts <see cref="Tokens"/> in place of the host's own token source.</summary>
+    /// <remarks>Virtual, because only a host that keeps <c>Program</c>'s
+    /// registration can prove which token source a deployment gets.</remarks>
+    protected virtual void ConfigureTokens(IServiceCollection services)
+    {
+        services.RemoveAll<ITokenCache>();
+        services.AddSingleton<ITokenCache>(Tokens);
     }
 }
 
