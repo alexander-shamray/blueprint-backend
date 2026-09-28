@@ -1,0 +1,57 @@
+syntax = "proto3";
+
+// Ordering owns this file, because Ordering serves the RPC — pricing.proto's
+// rule, one service over. Shipping LINKS it rather than copying it (§4.3), as
+// Web.Bff links pricing.proto: one contract, two generated halves, and no
+// assembly crosses the boundary.
+package ordering.delivery.v1;
+
+// Both halves generate into this namespace, in their own assemblies. The
+// method's path is /ordering.delivery.v1.DeliveryAddresses/Get, which is what
+// the gateway's route file must not match (ADR-052).
+option csharp_namespace = "Ordering.Delivery.V1";
+
+// The platform's second synchronous hop, and the first one no user is waiting
+// on (ADR-052): a Shipping worker claims a shipment row under a lease, asks
+// for that order's address and commits the answer. It is not a screen's call
+// and it is not made inside a consumer, so ADR-017's one-hop exception is not
+// spent by it.
+service DeliveryAddresses {
+  // One order, never a batch. The caller resolves one shipment per pass, so a
+  // fan-out would be a request shape nothing produces — the opposite of
+  // GetPrices, where an order form holds a handful of products at once.
+  rpc Get (GetDeliveryAddressRequest) returns (GetDeliveryAddressReply);
+}
+
+message GetDeliveryAddressRequest {
+  // A GUID in its canonical text form, for pricing.proto's reason: 36 readable
+  // bytes beat 16 unreadable ones in every log line and every grpcurl
+  // transcript this call will be debugged from.
+  string order_id = 1;
+}
+
+message GetDeliveryAddressReply {
+  // The order's customer, carried for the reader's erasure row and for nothing
+  // else (ADR-052). Shipping keys its copy by the order and holds this beside
+  // it so §11.7's erasure consumer can delete by subject; the shipment's own
+  // record holds neither.
+  string customer_id = 1;
+
+  // Address.Of's five parts, in its own spelling (§5.3). Nothing else of the
+  // order travels: not its status, not its total, not its lines. A reader that
+  // needed one of those would be reading an order rather than an address.
+  string line1 = 2;
+
+  // EMPTY, never absent: proto3 has no null string, and Address.Line2 is
+  // optional — an order placed without a second line answers "" here, and a
+  // reader stores that as the absence it is rather than as a blank line.
+  string line2 = 3;
+  string city = 4;
+  string post_code = 5;
+
+  // ISO 3166-1 alpha-2, upper-cased by Address.Of. SHAPE and not membership:
+  // the producer checks two ASCII letters and deliberately not the assigned
+  // set, so ZZ arrives here and whoever ships the parcel is the layer that
+  // knows (Address's own remarks).
+  string country = 6;
+}
