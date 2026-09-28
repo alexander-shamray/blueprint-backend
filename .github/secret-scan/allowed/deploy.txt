@@ -102,3 +102,11 @@ deploy/compose/rabbitmq/definitions.json | credential-assignment | f4c1f31eff5a 
 # Not the render's: the carrier the unit names beside it.
 
 deploy/compose/services/shipping.yml | credential-assignment | d219e95f003c | Section 14.1's local default for the simulated carrier's API key; the simulator ignores it.
+
+# Not the render's either: ADR-052's client, and the worker's host-run recipe.
+
+deploy/compose/services/shipping.yml | credential-assignment | afcf12beb59c | Section 14.1's local default for ADR-052's worker client secret, behind its own variable; the realm export holds the same value.
+deploy/compose/README.md | credential-assignment | 3f4975571c0d | Shipping's local connection recipe against a published port.
+deploy/compose/README.md | credential-assignment | f979f7f163df | The host-run broker recipe for Shipping, its own service account.
+deploy/compose/README.md | credential-assignment | afcf12beb59c | Section 14.1's local default for ADR-052's worker client secret in the host-run recipe.
+deploy/compose/README.md | credential-assignment | d219e95f003c | Section 14.1's local carrier key in the host-run recipe; the simulator ignores it.

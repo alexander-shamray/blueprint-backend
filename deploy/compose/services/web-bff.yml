@@ -1,18 +1,18 @@
 # The BFF's deployment (§14.1), included by
 # deploy/compose/docker-compose.yml. A host rather than a service —
-# docs/change-locality.md section 3 draws that line — and the one host that
-# holds client credentials, which is what makes its environment worth reading
-# on its own.
+# docs/change-locality.md section 3 draws that line — and a host that holds
+# client credentials, which is what makes its environment worth reading on its
+# own.
 #
 # `include` resolves a relative path against the directory of the file that
 # declares it, so the repository root — the build context — is three levels up
 # from here.
 services:
-  # The one host with client credentials, because it is the one host that calls
-  # a peer synchronously (§9.7). Everything else here has the authority only.
-  # Named web-bff, matching the Aspire resource (§14.2) and the YARP
-  # destination (§10.2) — the gateway resolves the destination by hostname, so
-  # the container name IS the routing configuration.
+  # Client credentials, because this host calls a peer synchronously (§9.7);
+  # §15.4 says which other hosts do. Named web-bff, matching the Aspire
+  # resource (§14.2) and the YARP destination (§10.2) — the gateway resolves
+  # the destination by hostname, so the container name is the routing
+  # configuration.
   #
   # No migrator beside it and no pair rule: the BFF owns no database, so there
   # is nothing to migrate — the same shape services/gateway.yml has.

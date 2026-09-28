@@ -62,23 +62,36 @@ services:
       ConnectionStrings__RabbitMq: "amqp://shipping-svc:local-dev-shipping@rabbitmq:5672"
       # The authority, to validate inbound tokens (§11.2). Read eagerly by
       # AddJwtAuthentication, which throws naming the key — so this line is
-      # what lets the host start, exactly like the bus one above. No
-      # Identity__Client__*: Shipping calls no peer synchronously, and outbound
-      # identity belongs to the BFF alone (§9.7, §11.5).
+      # what lets the host start, exactly like the bus one above.
       Identity__Authority: "http://keycloak:8080/realms/commerce"
       OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4317"
       Carrier__BaseUrl: "http://carrier-simulator/"
       # §14.1's local-development exception: the simulator ignores it.
       Carrier__ApiKey: "local-dev-carrier"
+      # ADR-052's read. The host name is the Compose service and the
+      # Kubernetes Service alike; the port is Ordering's HTTP/2-only endpoint,
+      # because a cleartext Kestrel endpoint cannot serve HTTP/1.1 and h2c at
+      # once.
+      AddressSource__BaseUrl: "http://ordering-api:8081"
+      # Required by ValidateOnStart (§15.4): this host calls a peer (ADR-052),
+      # so it refuses to boot without all three. Local values only; production
+      # mounts a secret, and the default here is the realm export's.
+      Identity__Client__ClientId: "shipping-worker"
+      Identity__Client__ClientSecret: "${SHIPPING_CLIENT_SECRET:-local-dev-shipping-secret}"
+      # The scope that becomes the audience every service validates (§11.5),
+      # and the scope whose mapper writes the permission claim this host holds
+      # itself to (ADR-052).
+      Identity__Client__Scope: "commerce-api"
     depends_on:
       shipping-migrator: { condition: service_completed_successfully }
       carrier-simulator: { condition: service_started }
+      # Without it the worker's first pass meets a host name that does not
+      # resolve yet and backs the claimed row off for nothing.
+      ordering-api: { condition: service_started }
       rabbitmq: { condition: service_healthy }
-      # service_healthy since infrastructure.yml's keycloak declares a
-      # healthcheck. The API
-      # itself does not need it — JwtBearer fetches the discovery document
-      # lazily, on the first request that carries a token — but `up --wait`
-      # gates on every service's health, and the value is for whoever types the
-      # README's token command the moment it returns. Under service_started
-      # that command races the realm import and can be handed a 404.
+      # service_healthy, because the worker's first pass asks the realm for a
+      # client-credentials token (§11.5, CachingTokenClient). Under
+      # service_started that request races the realm import and fails as an
+      # outage would, so the claimed row backs off for a realm that was only
+      # still starting.
       keycloak: { condition: service_healthy }

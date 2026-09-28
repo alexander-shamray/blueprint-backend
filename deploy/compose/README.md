@@ -71,7 +71,7 @@ and exits, then `catalog-api` starts (§14.1's pair rule).
 | Catalog API | http://localhost:5102 | `/health/live`, `/health/ready`, `/openapi/v1.json` (needs a token — see below), `/v1/catalog/products` |
 | Gateway | http://localhost:5000 | `/health/live`, `/health/ready`, and [§10.2](../../docs/backend-architecture/10-api-gateway.md)'s four routes |
 | Ordering API | http://localhost:5101 | `/health/live`, `/health/ready`, `/openapi/v1.json` (needs a token — see below), `/v1/orders` — every route needs a token, unlike Catalog's listing |
-| Web BFF | http://localhost:5200 | `/health/live`, `/health/ready`, `POST /v1/checkout/quote` with a body of `currency` and `lines` ([ADR-045](../../docs/backend-architecture/adr/ADR-045-the-checkout-quote-takes-quantities.md)) — a token needed, and the only host that mints one of its own ([§11.5](../../docs/backend-architecture/11-identity-authorization.md)) |
+| Web BFF | http://localhost:5200 | `/health/live`, `/health/ready`, `POST /v1/checkout/quote` with a body of `currency` and `lines` ([ADR-045](../../docs/backend-architecture/adr/ADR-045-the-checkout-quote-takes-quantities.md)) — a token needed, and a host that mints one of its own ([§11.5](../../docs/backend-architecture/11-identity-authorization.md); [§15.4](../../docs/backend-architecture/15-cicd-deployment.md) names every host that does) |
 | Inventory API | http://localhost:5103 | `/health/live`, `/health/ready`, `/openapi/v1.json` (needs a token — see below), `/v1/inventory/stock/{productId}` — needs a token, unlike Catalog's listing |
 | Payments API | http://localhost:5104 | `/health/live`, `/health/ready`, `/openapi/v1.json` (needs a token — see below) |
 | PSP simulator | http://localhost:5190 | `/__admin/mappings` — the scripted amounts are in [`psp-simulator/README.md`](psp-simulator/README.md) |
@@ -298,10 +298,10 @@ same rule the Compose file's `depends_on` follows. Ordering's line arrived with
 PR-18 and the BFF's with PR-19; without one a host-run gateway 502s the exact
 path the PR exists to stop answering 502.
 
-The BFF is excluded too, and it is the one host that needs more than an
-authority — §15.4 requires `Identity__Client__*` of it, `ValidateOnStart`
-refuses to boot without all three, and its own hop needs Catalog's **gRPC**
-port rather than its REST one:
+The BFF is excluded too, and it needs more than an authority — §15.4's three
+`Identity__Client__*` rows are required of a host that calls a peer,
+`ValidateOnStart` refuses to boot without all three, and its own hop needs
+Catalog's **gRPC** port rather than its REST one:
 
 ```bash
 export ASPNETCORE_ENVIRONMENT=Development
@@ -347,6 +347,34 @@ not, because its job never sees a token. **That is the rule and deliberately
 not a count**: this sentence said "both of them" until Ordering's block made
 three, which is the same way the compose smoke's image count went stale, one
 file over.
+
+Shipping's worker refuses to start without its carrier and its address
+source, each read as eagerly as the authority (§15.4), and it calls a peer, so
+it takes the three `Identity__Client__*` keys as the BFF does
+([ADR-052](../../docs/backend-architecture/adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)).
+The override leaves `carrier-simulator` running, so a host-run worker points
+at the port it publishes:
+
+```bash
+export ASPNETCORE_ENVIRONMENT=Development
+export ConnectionStrings__Shipping='Server=localhost;Database=Shipping;User Id=sa;Password=Local_Dev_Pa55w0rd!;TrustServerCertificate=True'
+export ConnectionStrings__RabbitMq='amqp://shipping-svc:local-dev-shipping@localhost:5672'
+export Identity__Authority='http://localhost:8080/realms/commerce'
+export Identity__Client__ClientId='shipping-worker'
+export Identity__Client__ClientSecret='local-dev-shipping-secret'
+export Identity__Client__Scope='commerce-api'
+export Carrier__BaseUrl='http://localhost:5191/'
+export Carrier__ApiKey='local-dev-carrier'
+export AddressSource__BaseUrl='http://localhost:8082'
+dotnet run --project src/Services/Shipping/Shipping.Worker
+```
+
+**This hop is not the BFF's.** That block leaves its address at
+`catalog-api:8081` because §9.7 makes the pricing hop's address a literal
+rather than a key; this one is a configuration key (§15.4), so a host-run worker
+points it at a host-run Ordering and needs no `hosts` entry. A host-run
+`Ordering.Api` listens on 8082, because its block above moves its h2c endpoint
+off Catalog's — two host processes cannot both hold 8081.
 
 `Cors__Enabled` and `Ingress__Enabled` are both absent above and both default
 to off, which is the shape the flags are written for — off is a valid
