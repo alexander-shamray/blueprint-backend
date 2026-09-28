@@ -97,10 +97,10 @@
     <PackageVersion Include="FluentValidation.DependencyInjectionExtensions" Version="12.0.0" />
     <PackageVersion Include="Scrutor" Version="6.1.0" />
     <PackageVersion Include="Yarp.ReverseProxy" Version="2.3.0" />
-    <!-- §9.7's synchronous calls; Appendix B's row says which projects make
-         them. Grpc.* majors move on their own schedule, independent of the
-         .NET release — exactly the case for pinning rather than trusting the
-         SDK to carry a compatible version. -->
+    <!-- §9.7's synchronous calls; Appendix B's row says which projects serve
+         and make them. Grpc.* majors move on their own schedule, independent
+         of the .NET release — exactly the case for pinning rather than
+         trusting the SDK to carry a compatible version. -->
     <PackageVersion Include="Grpc.Net.ClientFactory" Version="2.71.0" />
     <PackageVersion Include="Grpc.AspNetCore" Version="2.71.0" />
     <PackageVersion Include="Grpc.Tools" Version="2.71.0" />

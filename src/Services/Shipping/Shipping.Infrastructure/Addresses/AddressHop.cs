@@ -19,6 +19,14 @@ public static class AddressHop
     /// </summary>
     public const string ClientName = "ordering-delivery-addresses";
 
+    /// <summary>
+    /// The name <c>AddStandardResilienceHandler</c> files this client's options
+    /// under, so the built pipeline can be read back rather than recomputed
+    /// (§9.7); a wrong name yields default options, whose 30 s total breaches
+    /// the band at once.
+    /// </summary>
+    public const string ResilienceOptionsName = $"{ClientName}-standard";
+
     /// <summary>The per-attempt bound, inside §9.7's one-to-two-second band.</summary>
     public static readonly TimeSpan AttemptTimeout = TimeSpan.FromSeconds(1.2);
 
