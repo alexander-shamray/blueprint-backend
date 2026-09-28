@@ -5,7 +5,7 @@ namespace Common.Web;
 /// configuration, and are therefore not bound, not validated and not
 /// deployable. §15.4's test is whether a member would differ between
 /// Compose, the fixture and production; nothing here does, and
-/// <c>ServiceIdentityOptions</c> is a type that passes it (§11.5).
+/// <c>ServiceIdentityOptions</c> is a type that passes it.
 /// </summary>
 /// <remarks>
 /// It caps a hierarchy that is the platform's and not one host's (§9.7).
