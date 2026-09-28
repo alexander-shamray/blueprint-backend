@@ -111,16 +111,16 @@ public sealed class FulfilmentFaultTests : IAsyncLifetime
         // outage before the address is read, and the carrier's after it is in
         // hand. A healthy booking goes between them, because the carrier's
         // fault is the one that fills this host's breaker.
-        Guid refused = await _steps.ConfirmAsync(FulfilmentSteps.Kazakh with { PostalCode = "SIM-DOWN" });
+        Guid faulted = await _steps.ConfirmAsync(FulfilmentSteps.Kazakh with { PostalCode = "SIM-DOWN" });
         _fixture.Ordering.Fail(StatusCode.Unavailable);
         (await PassAsync()).ShouldBe(0, "the owner's outage fails the row before its address is read");
 
         await _steps.ConfirmAsync(FulfilmentSteps.Kazakh);
         (await PassAsync()).ShouldBe(1, "the row confirmed second is the one not backed off");
 
-        await _steps.ClearBackoffAsync(refused);
+        await _steps.ClearBackoffAsync(faulted);
         (await PassAsync()).ShouldBe(0, "the carrier's fault fails the row with its address in hand");
-        (await _steps.AttemptsAsync(refused)).ShouldBe(2);
+        (await _steps.AttemptsAsync(faulted)).ShouldBe(2);
 
         // Each part raw and as a JSON body carries it, because the adapter's
         // serialiser escapes every non-ASCII character: a body quoted into an
