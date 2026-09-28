@@ -40,7 +40,7 @@ builder.Services.AddSingleton<IValidator<QuoteRequest>, QuoteRequestValidator>()
 
 // §9.7, §11.5 — this host's client-credentials registrations. The types are
 // Common.Infrastructure.Identity's (ADR-052) and the binding is each host's
-// own: "the gateway needs no client credentials" is true by CONSTRUCTION,
+// own: "the gateway needs no client credentials" is true by construction,
 // because the gateway binds Identity:Client nowhere and therefore demands it
 // nowhere (§15.4). A binding hoisted into Common.Web would re-impose it on
 // every host.
@@ -74,7 +74,7 @@ builder.Services
 // realm.
 string authority = builder.Configuration[AuthenticationExtensions.AuthorityKey]!;
 
-// The same key's NAME, carried into the token client because a building block
+// The same key's name, carried into the token client because a building block
 // below Common.Web cannot name it and a refused discovery document has to say
 // which key to fix (§11.3, §11.5).
 builder.Services.AddSingleton(new AuthorityKeyName(AuthenticationExtensions.AuthorityKey));
