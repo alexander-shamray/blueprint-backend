@@ -28,6 +28,13 @@ internal sealed class FulfilmentSteps(ServiceFixture fixture)
     public static readonly TimeSpan Deadline = TimeSpan.FromSeconds(20);
 
     /// <summary>
+    /// An address in a script the booking's JSON escapes, so a search can tell
+    /// the raw text from the escaped and nvarchar from a code page.
+    /// </summary>
+    public static readonly DeliveryAddress Kazakh =
+        new("Абай даңғылы 1, ә ғ қ ң ө ұ ү һ і", "пәтер 12", "Алматы", "050000", "KZ");
+
+    /// <summary>
     /// Seeds the address the stub will answer with, or none, and publishes
     /// the event that creates the shipment.
     /// </summary>

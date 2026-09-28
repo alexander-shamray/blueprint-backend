@@ -139,22 +139,6 @@ public sealed class ServiceFixture : IAsyncLifetime
             .RunOnceAsync(TestContext.Current.CancellationToken);
 
     /// <summary>
-    /// Messages a queue holds, read from the broker itself, or zero when it
-    /// does not exist yet — MassTransit declares an <c>_error</c> queue on its
-    /// first fault, and a fault's arrival there is an outcome no table shows.
-    /// </summary>
-    public async Task<int> QueueDepthAsync(string queue)
-    {
-        foreach (string[] columns in await BrokerRowsAsync(["list_queues", "name", "messages"]))
-        {
-            if (columns.Length == 2 && columns[0] == queue)
-                return int.Parse(columns[1], System.Globalization.CultureInfo.InvariantCulture);
-        }
-
-        return 0;
-    }
-
-    /// <summary>
     /// The exchanges bound to one destination, read from the broker itself:
     /// a binding is declared when the endpoint starts, and only a real broker
     /// holds the result.

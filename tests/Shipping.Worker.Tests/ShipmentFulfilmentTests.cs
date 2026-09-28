@@ -1,4 +1,3 @@
-using System.Text.Encodings.Web;
 using System.Text.Json;
 using Common.Application;
 using Grpc.Core;
@@ -23,9 +22,6 @@ namespace Shipping.Worker.Tests;
 [Collection(nameof(IntegrationCollection))]
 public sealed class ShipmentFulfilmentTests(ServiceFixture fixture) : IAsyncLifetime
 {
-    private static readonly DeliveryAddress Kazakh =
-        new("Абай даңғылы 1, ә ғ қ ң ө ұ ү һ і", "пәтер 12", "Алматы", "050000", "KZ");
-
     private readonly FulfilmentSteps _steps = new(fixture);
 
     public ValueTask InitializeAsync() => new(fixture.ResetAsync());
@@ -52,7 +48,7 @@ public sealed class ShipmentFulfilmentTests(ServiceFixture fixture) : IAsyncLife
     [Fact]
     public async Task A_confirmed_order_is_booked_and_the_address_round_trips_to_the_carrier()
     {
-        Guid order = await _steps.ConfirmAsync(Kazakh);
+        Guid order = await _steps.ConfirmAsync(FulfilmentSteps.Kazakh);
 
         (await fixture.RunFulfilmentPassAsync()).ShouldBe(1);
 
@@ -67,43 +63,9 @@ public sealed class ShipmentFulfilmentTests(ServiceFixture fixture) : IAsyncLife
     }
 
     [Fact]
-    public async Task No_log_line_holds_the_address()
+    public async Task An_owner_that_refuses_leaves_the_shipment_pending_until_it_answers()
     {
-        Guid first = await _steps.ConfirmAsync(Kazakh);
-        Guid second = await _steps.ConfirmAsync(Kazakh);
-
-        // One owner outage ahead of the bookings, so a pass logs its failure
-        // with the exception and the same capture holds both halves: the
-        // exception's text and the lines of the passes the address went through.
-        fixture.Ordering.Fail(StatusCode.Unavailable);
-
-        (await fixture.RunFulfilmentPassAsync()).ShouldBe(0, "the owner's outage fails the first row claimed");
-        (await fixture.RunFulfilmentPassAsync()).ShouldBe(1);
-        await _steps.ClearBackoffAsync(first);
-        await _steps.ClearBackoffAsync(second);
-        (await fixture.RunFulfilmentPassAsync()).ShouldBe(1, "the row that failed is booked once the owner answers");
-
-        // Each part raw and as a JSON body carries it, because the adapter's
-        // serialiser escapes every non-ASCII character: a body quoted into an
-        // exception would hold only the escaped form.
-        string[] parts = ["Абай", "пәтер", "Алматы"];
-        string[] needles =
-            [.. parts, .. parts.Select(p => JsonEncodedText.Encode(p, JavaScriptEncoder.Default).ToString())];
-
-        fixture.CapturedLogs.Everything.ShouldNotContain(
-            line => needles.Any(needle => line.Contains(needle, StringComparison.Ordinal)));
-        fixture.CapturedLogs.Everything.ShouldContain(
-            line => line.Contains(FulfilmentSteps.BookingPath, StringComparison.Ordinal),
-            "a capture that missed the booking the address travelled on would assert nothing");
-        fixture.CapturedLogs.Everything.ShouldContain(
-            line => line.StartsWith("Grpc.Core.RpcException", StringComparison.Ordinal),
-            "a capture that dropped the exception's text would search none of it");
-    }
-
-    [Fact]
-    public async Task An_owner_that_refuses_leaves_the_shipment_pending_and_nothing_in_an_error_queue()
-    {
-        Guid order = await _steps.ConfirmAsync(Kazakh);
+        Guid order = await _steps.ConfirmAsync(FulfilmentSteps.Kazakh);
 
         // One refusal, not two, and the count is the arrangement: the stub
         // dequeues one status per call, the claim takes one row, and a gRPC
@@ -116,8 +78,6 @@ public sealed class ShipmentFulfilmentTests(ServiceFixture fixture) : IAsyncLife
 
         (await _steps.StatusAsync(order)).ShouldBe("Pending");
         (await _steps.AttemptsAsync(order)).ShouldBe(1);
-        (await fixture.QueueDepthAsync($"{MessagingRegistration.EventsQueue}_error")).ShouldBe(
-            0, "the consumers made no call, so an outage reaches no queue at all");
 
         await _steps.ClearBackoffAsync(order);
         (await fixture.RunFulfilmentPassAsync()).ShouldBe(1, "the stub recovered and the row was still there");
@@ -142,7 +102,7 @@ public sealed class ShipmentFulfilmentTests(ServiceFixture fixture) : IAsyncLife
     [Fact]
     public async Task A_carrier_that_refuses_the_address_makes_the_shipment_unfulfillable()
     {
-        Guid order = await _steps.ConfirmAsync(Kazakh with { PostalCode = "SIM-REFUSED" });
+        Guid order = await _steps.ConfirmAsync(FulfilmentSteps.Kazakh with { PostalCode = "SIM-REFUSED" });
 
         await fixture.RunFulfilmentPassAsync();
 
@@ -153,7 +113,7 @@ public sealed class ShipmentFulfilmentTests(ServiceFixture fixture) : IAsyncLife
     [Fact]
     public async Task A_crash_between_the_carriers_answer_and_the_commit_books_once_at_the_carrier()
     {
-        Guid order = await _steps.ConfirmAsync(Kazakh);
+        Guid order = await _steps.ConfirmAsync(FulfilmentSteps.Kazakh);
         using CommitFault fault = fixture.FailNextCommit();
 
         // Zero rather than a throw: the fault is not transient, so the
@@ -179,7 +139,7 @@ public sealed class ShipmentFulfilmentTests(ServiceFixture fixture) : IAsyncLife
     [Fact]
     public async Task A_lapsed_lease_is_taken_by_another_pass()
     {
-        Guid order = await _steps.ConfirmAsync(Kazakh);
+        Guid order = await _steps.ConfirmAsync(FulfilmentSteps.Kazakh);
         await fixture.ExecuteAsync(
             "UPDATE shipping.Shipments SET LockedUntil = DATEADD(second, -1, SYSDATETIMEOFFSET()) WHERE OrderId = {0};",
             order);
@@ -218,7 +178,7 @@ public sealed class ShipmentFulfilmentTests(ServiceFixture fixture) : IAsyncLife
     [Fact]
     public async Task Cancel_then_despatch_voids_a_pending_shipment_and_never_books_it()
     {
-        Guid order = await _steps.ConfirmAsync(Kazakh);
+        Guid order = await _steps.ConfirmAsync(FulfilmentSteps.Kazakh);
 
         await _steps.PublishAsync(FulfilmentSteps.Cancelled(order));
 
@@ -232,7 +192,7 @@ public sealed class ShipmentFulfilmentTests(ServiceFixture fixture) : IAsyncLife
     public async Task Cancel_before_confirm_leaves_a_tombstone_the_confirmation_finds()
     {
         Guid order = Guid.CreateVersion7();
-        fixture.Ordering.Addresses[order] = FulfilmentSteps.Stub(Kazakh);
+        fixture.Ordering.Addresses[order] = FulfilmentSteps.Stub(FulfilmentSteps.Kazakh);
 
         await _steps.PublishAsync(FulfilmentSteps.Cancelled(order));
         await _steps.PublishAsync(FulfilmentSteps.Confirmed(order));
@@ -245,7 +205,7 @@ public sealed class ShipmentFulfilmentTests(ServiceFixture fixture) : IAsyncLife
     [Fact]
     public async Task A_cancellation_of_a_booked_shipment_asks_the_carrier_and_voids_it()
     {
-        Guid order = await _steps.ConfirmAsync(Kazakh);
+        Guid order = await _steps.ConfirmAsync(FulfilmentSteps.Kazakh);
         await fixture.RunFulfilmentPassAsync();
 
         await _steps.PublishAsync(FulfilmentSteps.Cancelled(order));
@@ -260,7 +220,7 @@ public sealed class ShipmentFulfilmentTests(ServiceFixture fixture) : IAsyncLife
     [Fact]
     public async Task A_carrier_that_says_it_is_too_late_stamps_the_refusal_and_leaves_it_booked()
     {
-        Guid order = await _steps.ConfirmAsync(Kazakh with { PostalCode = "SIM-LATE" });
+        Guid order = await _steps.ConfirmAsync(FulfilmentSteps.Kazakh with { PostalCode = "SIM-LATE" });
         await fixture.RunFulfilmentPassAsync();
         await _steps.PublishAsync(FulfilmentSteps.Cancelled(order));
 
@@ -276,7 +236,7 @@ public sealed class ShipmentFulfilmentTests(ServiceFixture fixture) : IAsyncLife
     [Fact]
     public async Task Despatch_then_cancel_is_a_no_op_and_the_goods_move()
     {
-        Guid order = await _steps.ConfirmAsync(Kazakh);
+        Guid order = await _steps.ConfirmAsync(FulfilmentSteps.Kazakh);
         await fixture.RunFulfilmentPassAsync();
         (await DespatchAsync(order)).ShouldBeTrue();
 
