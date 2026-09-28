@@ -39,11 +39,8 @@ builder.Services.AddExceptionHandler<UpstreamExceptionHandler>();
 builder.Services.AddSingleton<IValidator<QuoteRequest>, QuoteRequestValidator>();
 
 // §9.7, §11.5 — this host's client-credentials registrations. The types are
-// Common.Infrastructure.Identity's (ADR-052) and the binding is each host's
-// own: "the gateway needs no client credentials" is true by construction,
-// because the gateway binds Identity:Client nowhere and therefore demands it
-// nowhere (§15.4). A binding hoisted into Common.Web would re-impose it on
-// every host.
+// Common.Infrastructure.Identity's (ADR-052); the binding is this host's own,
+// never Common.Web's (§15.4).
 builder.Services.AddTransient<ClientCredentialsHandler>();
 builder.Services.AddSingleton<ITokenCache, CachingTokenClient>();
 
@@ -192,11 +189,9 @@ app.UseStatusCodePages();         // §10.5 — 401 and 403 as problem+json
 app.UseAuthentication();          // §11.3 — populates HttpContext.User
 app.UseAuthorization();           // §11.4
 
-// No readiness check is registered in this host, so /health/ready reports ready
-// immediately — §13.5's answer for a host that owns no database, and the rule
-// that separates it from "readiness was never wired up" is whether the host has
-// a connection string. This one has none, and MapCommonHealthEndpoints refuses
-// to start a host with an empty readiness set unless it says so on purpose.
+// No readiness check is registered in this host, which owns no database, so
+// /health/ready reports ready immediately (§13.5); MapCommonHealthEndpoints
+// accepts the empty set only because the host says so on purpose.
 //
 // Catalog's synchronous hop (§9.7) is deliberately not a readiness dependency:
 // a BFF that reports unready when Catalog is down takes itself out of rotation
