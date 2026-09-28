@@ -8,10 +8,10 @@ using Shipping.Domain.Shipments;
 namespace Shipping.Infrastructure.Carrier;
 
 /// <summary>
-/// The one place that knows the carrier's wire format (§3.2's anti-corruption
-/// layer). Everything it returns is the port's vocabulary, and everything the
-/// carrier sends is a stranger's input: bounded, translated, and never stored
-/// as a link (spec, section 9).
+/// The one place that knows the carrier's wire format (the anti-corruption
+/// layer of spec, section 9). Everything it returns is the port's vocabulary,
+/// and everything the carrier sends is a stranger's input: bounded,
+/// translated, and never stored as a link.
 /// </summary>
 internal sealed class HttpCarrierGateway(HttpClient http, CarrierMetrics metrics, TimeProvider clock) : ICarrierGateway
 {

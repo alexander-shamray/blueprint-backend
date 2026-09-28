@@ -20,8 +20,8 @@ builder.AddCommonWebDefaults();                 // §13.2
 builder.Services.AddShippingApplication();       // §6.2
 builder.Services.AddShippingInfrastructure(builder.Configuration);   // §4.2, §7.1
 
-// §3.2's anti-corruption layer; its address is read, and its scheme checked,
-// eagerly.
+// The carrier's anti-corruption layer (spec, section 9); its address is read,
+// and its scheme checked, eagerly.
 builder.Services.AddCarrierGateway(builder.Configuration, builder.Environment);
 
 // §9.7, §11.5 — this host's client-credentials registrations (ADR-052). The
