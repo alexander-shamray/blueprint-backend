@@ -1,3 +1,6 @@
+using System.Text.Encodings.Web;
+using System.Text.Json;
+using Grpc.Core;
 using Microsoft.Extensions.DependencyInjection;
 using Shipping.Application.Carrier;
 using Shipping.Infrastructure.Carrier;
@@ -10,8 +13,8 @@ using Xunit;
 namespace Shipping.Worker.Tests;
 
 /// <summary>
-/// The two fulfilment cases that end in a carrier fault, each over a host of
-/// its own because the breaker they fill is sized to open (<c>CarrierHop</c>).
+/// The fulfilment cases that end in a carrier fault, each over a host of its
+/// own because the breaker they fill is sized to open (<c>CarrierHop</c>).
 /// The database, the broker and the Ordering stub stay the collection's.
 /// </summary>
 [Collection(nameof(IntegrationCollection))]
@@ -99,6 +102,45 @@ public sealed class FulfilmentFaultTests : IAsyncLifetime
         (await _steps.AttemptsAsync(order)).ShouldBe(1, "one pass failed on the row, and the other never took it");
         FulfilmentSteps.BookingCalls(_carrier).ShouldBe(
             CarrierHop.MaxRetryAttempts + 1, "every request in the journal belongs to the first pass");
+    }
+
+    [Fact]
+    public async Task No_log_line_holds_the_address()
+    {
+        // Two faults on one row, each logged with its exception: the owner's
+        // outage before the address is read, and the carrier's after it is in
+        // hand. A healthy booking goes between them, because the carrier's
+        // fault is the one that fills this host's breaker.
+        Guid refused = await _steps.ConfirmAsync(FulfilmentSteps.Kazakh with { PostalCode = "SIM-DOWN" });
+        _fixture.Ordering.Fail(StatusCode.Unavailable);
+        (await PassAsync()).ShouldBe(0, "the owner's outage fails the row before its address is read");
+
+        await _steps.ConfirmAsync(FulfilmentSteps.Kazakh);
+        (await PassAsync()).ShouldBe(1, "the row confirmed second is the one not backed off");
+
+        await _steps.ClearBackoffAsync(refused);
+        (await PassAsync()).ShouldBe(0, "the carrier's fault fails the row with its address in hand");
+        (await _steps.AttemptsAsync(refused)).ShouldBe(2);
+
+        // Each part raw and as a JSON body carries it, because the adapter's
+        // serialiser escapes every non-ASCII character: a body quoted into an
+        // exception would hold only the escaped form. Both hosts, because the
+        // collection's consumes the events this one's passes follow.
+        string[] parts = ["Абай", "пәтер", "Алматы"];
+        string[] needles =
+            [.. parts, .. parts.Select(p => JsonEncodedText.Encode(p, JavaScriptEncoder.Default).ToString())];
+        string[] captured = [.. _fixture.CapturedLogs.Everything, .. _host.CapturedLogs.Everything];
+
+        captured.ShouldNotContain(line => needles.Any(needle => line.Contains(needle, StringComparison.Ordinal)));
+        captured.ShouldContain(
+            line => line.Contains(FulfilmentSteps.BookingPath, StringComparison.Ordinal),
+            "a capture that missed the booking the address travelled on would assert nothing");
+        captured.ShouldContain(
+            line => line.StartsWith("Grpc.Core.RpcException", StringComparison.Ordinal),
+            "a capture that dropped the owner's exception would search none of it");
+        captured.ShouldContain(
+            line => line.StartsWith(typeof(CarrierUnavailableException).FullName!, StringComparison.Ordinal),
+            "a capture that dropped the carrier's exception would search none of what held the address");
     }
 
     private Task<int> PassAsync() =>
