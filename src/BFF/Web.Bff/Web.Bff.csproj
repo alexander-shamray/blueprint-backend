@@ -41,7 +41,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Everything the BFF needs from the platform — observability, token
+    <!-- Everything the BFF takes from Common.Web — observability, token
          validation, the "authenticated" policy, problem details, the liveness
          probe — arrives through AddCommonWebDefaults, including the
          ValidationExceptionHandler that turns QuoteRequestValidator's throw

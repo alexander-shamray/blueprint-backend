@@ -5,7 +5,7 @@ namespace Common.Infrastructure.Identity;
 /// <summary>
 /// §15.4's options type for §11.5's client-credentials grant. It earns a
 /// binding by holding a secret that differs per environment, which is
-/// §15.4's test; each host that calls a peer binds it for itself (§15.3).
+/// §15.4's test; each host that calls a peer binds it for itself (§15.4).
 /// </summary>
 /// <remarks>
 /// <c>[Required]</c> is what makes <c>ValidateDataAnnotations</c> do
