@@ -230,11 +230,11 @@ export ASPNETCORE_ENVIRONMENT=Development
 export ConnectionStrings__Catalog='Server=localhost;Database=Catalog;User Id=sa;Password=Local_Dev_Pa55w0rd!;TrustServerCertificate=True'
 export ConnectionStrings__RabbitMq='amqp://catalog-svc:local-dev-catalog@localhost:5672'
 export Identity__Authority='http://localhost:8080/realms/commerce'
-# Catalog is the ONE service that pins its own ports, and on the host they
-# have to move. Its appsettings.json declares two Kestrel endpoints — 8080 for
-# REST and 8081 for §9.7's gRPC hop, because a cleartext port cannot serve
-# HTTP/1.1 and h2c at once — and 8080 on the host belongs to Keycloak, so a
-# host run without these two lines fails to bind.
+# Catalog and Ordering each pin their own ports, and on the host both have to
+# move. Each declares two Kestrel endpoints — 8080 for REST and a second for
+# its gRPC surface, because a cleartext port cannot serve HTTP/1.1 and h2c at
+# once — and 8080 on the host belongs to Keycloak, so a host run without these
+# two lines fails to bind.
 #
 # They are the only way to move them: declaring Kestrel:Endpoints at all
 # suppresses ASPNETCORE_URLS and ASPNETCORE_HTTP_PORTS entirely, measured
@@ -248,8 +248,8 @@ dotnet run --project src/Services/Catalog/Catalog.Api
 The failure without them is loud — *Failed to bind to address
 http://0.0.0.0:8080: address already in use* — which is the right shape for a
 clash between two things that both want a port. It is named here anyway,
-because the address it names is Keycloak's and the project it names is
-Catalog's, and nothing in that message says the two are related.
+because the address it names is Keycloak's and the project it names is the
+one being run, and nothing in that message says the two are related.
 
 Ordering is the same shape with its own key — `ConnectionStrings__Ordering`,
 never Catalog's, because `AddOrderingInfrastructure` reads its own name and
@@ -260,6 +260,12 @@ export ASPNETCORE_ENVIRONMENT=Development
 export ConnectionStrings__Ordering='Server=localhost;Database=Ordering;User Id=sa;Password=Local_Dev_Pa55w0rd!;TrustServerCertificate=True'
 export ConnectionStrings__RabbitMq='amqp://ordering-svc:local-dev-ordering@localhost:5672'
 export Identity__Authority='http://localhost:8080/realms/commerce'
+# The same two exports Catalog needs, for the same reason and at its own
+# numbers: 5101 is the port §14.1 already allocates this service, and 8082
+# rather than 8081 because 8081 is where the block above puts Catalog's h2c
+# listener — two host processes cannot both hold it.
+export Kestrel__Endpoints__Rest__Url='http://localhost:5101'
+export Kestrel__Endpoints__Grpc__Url='http://localhost:8082'
 dotnet run --project src/Services/Ordering/Ordering.Api
 ```
 

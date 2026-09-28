@@ -12,6 +12,23 @@
   <ItemGroup>
     <!-- PR-07's OpenAPI deliverable (Appendix C): document only, no UI. -->
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
+    <!-- The server half of ADR-052's address read. Grpc.AspNetCore brings
+         Grpc.Tools and Google.Protobuf with it, which is why neither is named
+         here — Appendix B registers all four as one row because they ship and
+         version as one thing. -->
+    <PackageReference Include="Grpc.AspNetCore" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Ordering owns the contract because Ordering serves it. Shipping
+         compiles this same file as a Client, by link (§4.3).
+
+         BOTH halves, not Server alone, and for Catalog.Api's reason: the suite
+         drives the service over the real pipeline, which needs a client, and
+         generating one in the test project would put a second copy of every
+         message type in a compilation that already references this assembly —
+         CS0436, an error under ADR-019. -->
+    <Protobuf Include="Protos\delivery_addresses.proto" GrpcServices="Both" />
   </ItemGroup>
 
   <ItemGroup>
