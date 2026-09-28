@@ -19,6 +19,7 @@ using Respawn;
 using Testcontainers.MsSql;
 using Testcontainers.RabbitMq;
 using WireMock.Server;
+using WireMock.Settings;
 using Xunit;
 
 namespace Payments.TestSupport;
@@ -216,7 +217,10 @@ public sealed class ServiceFixture : IAsyncLifetime
 
         await broker.CreateAsync(TestContext.Current.CancellationToken);
 
-        Provider = WireMockServer.Start();
+        // Loopback, not WireMock's default of every interface: a socket on
+        // 0.0.0.0 is what a workstation firewall stops to ask about, and the
+        // only caller is the in-process host under test.
+        Provider = WireMockServer.Start(new WireMockServerSettings { Urls = ["http://127.0.0.1:0"] });
         Provider.ReadStaticMappings(SimulatorMappings.Directory());
 
         // Together, §12.4's printed shape — the broker's start hides inside
