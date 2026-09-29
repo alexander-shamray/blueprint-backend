@@ -865,7 +865,7 @@ that a key joins a chart when a host's code reads it, applied to the one
 workload running with DDL rights: neither line belongs here until a
 `*.Migrator` holds a seeder to switch on, and none does.
 
-**Shipping and Notifications get the same chart minus the Service and the
+**Shipping and Notifications get a service chart with no Service and no
 Ingress.** They consume from the broker and expose no API, so their only
 listener is the health endpoint §13.5 requires — which is a reason to keep
 Kestrel bound and no reason at all to route to it. The probes address the pod
@@ -882,7 +882,7 @@ ingress:
   enabled: false
 ```
 
-**This paragraph said "the two keys that are the whole difference" and it is
+**Of these two routing keys, a worker's chart differs from Ordering's in
 one**, which PR-23 settled by shipping the charts rather than by arguing. Only
 the gateway has `ingress.enabled: true`: Catalog, Ordering and the BFF are all
 reached *through* the edge (§10.1, §10.2), so an Ingress on any of them would
@@ -898,9 +898,9 @@ idles through a carrier outage and through a backlog alike — so Shipping's
 chart sets `autoscaling.enabled: false` and `replicaCount: 3`, three for
 availability across a node drain. **What would say three is too few is owed.**
 §13.6's queue-backlog rule watches Shipping's receive endpoint, and its
-consumer only records a `Pending` row: the replica-bound work is the
-fulfilment and tracking workers', and a row no pass has reached yet shows on no
-gauge, `shipping.shipments.waiting` included
+consumers only write a row — a `Pending` shipment, or a cancellation — so
+the replica-bound work is the fulfilment and tracking workers', and a row no
+pass has reached yet shows on no gauge, `shipping.shipments.waiting` included
 ([#315](https://github.com/alexander-shamray/blueprint-backend/issues/315)
 owns those workers at scale). `deploy/helm/smoke.sh` partitions the charts into
 the autoscaled and the fixed-replica, and holds each chart's values to its

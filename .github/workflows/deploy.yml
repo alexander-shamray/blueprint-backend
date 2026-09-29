@@ -359,8 +359,9 @@ jobs:
           # weight as a ceiling.
 
           # One read of the replica count, used both for the maximum above and
-          # for the value the cleanup restores. Two reads of one number is how
-          # a message ends up naming a figure the check beside it would reject.
+          # for the value the cleanup restores when the rollout does not
+          # promote. Two reads of one number is how a message ends up naming a
+          # figure the check beside it would reject.
           CURRENT=$(kubectl get deployment "$WORKLOAD" -n "$NAMESPACE" \
             -o jsonpath='{.spec.replicas}')
           echo "STABLE_REPLICAS_BEFORE=$CURRENT" >> "$GITHUB_ENV"
@@ -375,7 +376,8 @@ jobs:
           # The Deployment's own replica count, recorded whether or not there
           # is an HPA. `autoscaling.enabled: false` is a supported chart
           # configuration (§15.3), and under it there is no floor for the
-          # cleanup to restore, so this is the value it scales back to.
+          # cleanup to restore, so this is the value it scales back to when the
+          # rollout does not promote.
           if [ -n "$FLOOR" ]; then
             kubectl patch hpa "$WORKLOAD" -n "$NAMESPACE" \
               --type=merge -p "{\"spec\":{\"minReplicas\":$NEEDED}}"

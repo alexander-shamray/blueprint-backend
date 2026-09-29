@@ -94,10 +94,10 @@ deploy undoes.
 
 **It sees a receive endpoint and nothing past it.** A service whose work waits
 in its own tables rather than on the broker is outside it. Shipping is that
-shape: its consumer only records a `Pending` shipment, and the carrier and
-address calls that make up the real work are done by the fulfilment and
-tracking workers, so Shipping's queue stays shallow however far behind those
-workers fall.
+shape: its consumers only write a row — a `Pending` shipment, or a
+cancellation — and the carrier and address calls that make up the real work
+are done by the fulfilment and tracking workers, so Shipping's queue stays
+shallow however far behind those workers fall.
 
 Their signals are `shipping.shipments.waiting`, the gauge of shipments past
 their first failed pass by state, and `shipping.carrier.unavailable` beside it.
