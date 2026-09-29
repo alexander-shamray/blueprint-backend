@@ -177,19 +177,41 @@ groups:
             whose loss it is.
           runbook_url: docs/runbooks/outbox-abandoned.md
 
+      # §13.7's event target as a rule: publish to consumer start, p95 under
+      # two seconds. It is the async path's latency number, and it is measured
+      # by the consumer that records it — so it stops where the handler starts
+      # and can say nothing about what that handler then waited on. The runbook
+      # says so rather than this comment's reader inferring it.
+      # `for` is kept, unlike the age gauges above: a quantile over a rate is
+      # true instantaneously and a single slow burst is not a symptom.
+      - alert: DeliveryLag
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (service_name, le) (rate(messaging_delivery_lag_seconds_bucket[10m]))
+          ) > 2
+        for: 10m
+        labels:
+          severity: ticket
+          owner: service
+        annotations:
+          summary: "Event delivery p95 above 2s on {{ $labels.service_name }}"
+          description: >-
+            Messages are reaching their consumers late, against §13.7's
+            two-second target. Nothing has failed: a ticket rather than a page,
+            because the rules that fire when a business process has actually
+            stopped are the error-queue and outbox-stall ones beside it.
+          runbook_url: docs/runbooks/queue-backlog.md
+
   - name: platform-infrastructure
     rules:
       # The rules whose signal comes from an exporter rather than from this
-      # platform's own meters. They are live because those exporters are part of
-      # the target deployment (§15.3), and check.py holds their metric names in
-      # its declared external list for exactly that reason — a name it cannot
-      # find in C# is either external and declared, or a typo.
-      #
-      # Un-counted rather than recounted: this read "the two rules" and #131
-      # made it three, which is the kind of figure this repository keeps having
-      # to stop writing down. The members are ErrorQueueDepth,
-      # SkippedQueueDepth and MigrationJobFailed, and naming them is what makes
-      # a fourth arrival obvious.
+      # platform's own meters. They are live because those exporters are part
+      # of the target deployment (§15.3), and check.py holds their names in its
+      # declared external list: a name it cannot find in C# is either external
+      # and declared, or a typo. The members are ErrorQueueDepth,
+      # SkippedQueueDepth, QueueBacklogGrowing and MigrationJobFailed, named
+      # rather than counted so the next arrival is obvious.
       - alert: ErrorQueueDepth
         expr: sum by (queue) (rabbitmq_queue_messages{queue=~".+_error"}) > 0
         for: 1m
@@ -243,6 +265,33 @@ groups:
             producer shipped ahead of the consumer that understands it (§9.2),
             or a binding this service should declare is missing.
           runbook_url: docs/runbooks/skipped-queue.md
+
+      # The backlog on a working queue, in OutboxGrowth's shape: over a
+      # threshold AND rising. One half alone is a pager people mute — a deep
+      # queue draining after a restart is healthy, and a rising shallow one is
+      # a Tuesday.
+      # The selector excludes the two dead-letter queues, which the rules above
+      # own and triage from the opposite end: those are messages nothing will
+      # retry, this is messages nobody has reached yet.
+      # `sum by (queue)` rather than `max`: the exporter reads the broker, so
+      # there is one series per queue and no replica to deduplicate.
+      - alert: QueueBacklogGrowing
+        expr: |
+          sum by (queue) (rabbitmq_queue_messages{queue!~".+_(error|skipped)"}) > 1000
+          and
+          deriv(sum by (queue) (rabbitmq_queue_messages{queue!~".+_(error|skipped)"})[10m:]) > 0
+        for: 10m
+        labels:
+          severity: ticket
+          owner: service
+        annotations:
+          summary: "Queue {{ $labels.queue }} above 1000 messages and rising"
+          description: >-
+            A consumer is not keeping up, or there are too few of it. For a
+            host with no HTTP traffic this is the capacity signal there is:
+            §15.3 gives a worker a fixed replica count precisely because CPU
+            would not move while its queue does.
+          runbook_url: docs/runbooks/queue-backlog.md
 
       # TWO BRANCHES, because §13.6's condition is "non-zero, OR a release stuck
       # pending". A failed-count-only rule catches the first and is blind to the

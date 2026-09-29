@@ -81,6 +81,12 @@ SHARED_RUNBOOKS = {
         "§13.8's ownership — gateway 5xx is Platform's, a service's is its "
         "team's, and a static owner label on one rule routes both to whoever "
         "it names. The procedure is the same, and it branches on which fired.",
+    "queue-backlog.md":
+        "DeliveryLag and QueueBacklogGrowing are one condition read from two "
+        "ends — the consumer's own measure of how late a message was, and the "
+        "broker's count of how many are still waiting. The procedure is the "
+        "same and branches on which fired; two documents would share their "
+        "first three steps and drift on the fourth.",
 }
 
 # Metrics that no C# file declares because nothing in this solution declares
@@ -94,8 +100,8 @@ EXTERNAL_METRICS = {
     "http_server_request_duration_seconds": (
         "Histogram", "ASP.NET Core instrumentation, enabled in §13.2"),
     "rabbitmq_queue_messages": (
-        "Gauge", "the RabbitMQ exporter — §14.1's broker; §13.6's error-queue "
-                 "and skipped-queue alerts both read it"),
+        "Gauge", "the RabbitMQ exporter — §14.1's broker; §13.6's error-queue, "
+                 "skipped-queue and queue-backlog alerts read it"),
     "kube_job_failed": (
         "Gauge", "kube-state-metrics — the Job's Failed CONDITION, which is "
                  "retries exhausted. `kube_job_status_failed` counts failed "
