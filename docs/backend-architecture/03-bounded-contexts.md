@@ -13,7 +13,7 @@ graph LR
     ORD[Ordering<br/><i>Core domain</i>]
     INV[Inventory<br/><i>Supplier</i>]
     PAY[Payments<br/><i>ACL over PSP</i>]
-    SHP[Shipping<br/><i>Conformist</i>]
+    SHP[Shipping<br/><i>ACL over carrier</i>]
     NOT[Notifications<br/><i>Generic</i>]
 
     CAT -->|product + price events| ORD
@@ -53,7 +53,7 @@ not a round trip whose return leg is an event.
 | **Catalog** | Supporting | Different read/write ratio (1000:1), different scaling, different team cadence. |
 | **Inventory** | Supporting | Different consistency requirements — stock is the one place contention is real. |
 | **Payments** | Supporting | Isolates a volatile third-party API behind an anti-corruption layer. Compliance boundary. |
-| **Shipping** | Supporting | Conformist to carrier APIs; changes on the carrier's schedule, not yours. |
+| **Shipping** | Supporting | Isolates the carrier's API behind an anti-corruption layer, `ICarrierGateway`: a carrier's change lands in its adapter on the carrier's schedule, and never in the domain. |
 | **Notifications** | Generic | Not a differentiator. Would be replaced by an off-the-shelf product without regret. |
 
 ## 3.2 Service responsibilities
