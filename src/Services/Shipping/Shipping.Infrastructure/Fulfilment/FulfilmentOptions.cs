@@ -5,8 +5,9 @@ namespace Shipping.Infrastructure.Fulfilment;
 /// <summary>
 /// ADR-052's give-up age: how long a shipment may stay <c>Pending</c> before
 /// the fulfilment pass makes it unfulfillable, sized to reach
-/// <c>OrderFulfilmentSaga.DespatchTimeoutDelay</c>, past which the saga has
-/// already raised the order for review. Configuration rather than a constant
+/// <c>OrderFulfilmentSaga.DespatchTimeoutDelay</c>, at which the saga raises
+/// the order for review, give or take the two consumers' lag on the one
+/// event both clocks start from. Configuration rather than a constant
 /// because that deadline is another service's, and an operator riding out a
 /// long outage decides whether a day's shipments wait for it.
 /// </summary>
