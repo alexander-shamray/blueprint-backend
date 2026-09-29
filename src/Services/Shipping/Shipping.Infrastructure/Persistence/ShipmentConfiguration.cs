@@ -44,7 +44,9 @@ internal sealed class ShipmentConfiguration : IEntityTypeConfiguration<Shipment>
         // while a release rolls out, the version still running inserts
         // shipments without the column, and §7.4 requires every migration to
         // be backward compatible with it. The default also stamps the rows
-        // that exist when the column arrives.
+        // that exist when the column arrives. Their true age is unknown, and
+        // counting it from then can only let one wait longer, where a guess
+        // too old would end a shipment that was still live.
         builder.Property(s => s.CreatedAt).HasDefaultValueSql("SYSDATETIMEOFFSET()");
 
         // The two workers' bookkeeping, mapped here because the columns are

@@ -131,6 +131,7 @@ public sealed class ShipmentsSchemaTests(ServiceFixture fixture) : IAsyncLifetim
 
         read.Status.ShouldBe(ShipmentStatus.Dispatched);
         read.CarrierReference.ShouldBe("car_1");
+        read.CreatedAt.ShouldBe(Now, "the aggregate's own stamp, never the column's default");
         read.Version.ShouldNotBeEmpty("the rowversion is what §6.3's concurrency check reads");
         read.TrackingEvents.Select(e => e.Status).ShouldBe(
             [TrackingStatus.Collected, TrackingStatus.Unrecognised], ignoreOrder: true);
