@@ -1248,6 +1248,7 @@ namespace read access.
 | `AddressSource__BaseUrl` | Config | Helm `addressSource.baseUrl` → ConfigMap | ✓ — **Shipping only**; the owner's address for [ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)'s read, and the host refuses to start without it |
 | `Jurisdiction__AddressRetention` | Config | Helm `jurisdiction.addressRetention` → ConfigMap | ✓ — **Shipping only**; ADR-053's statutory window for a delivery address, and the host refuses to start without it |
 | `Jurisdiction__TrackingRetention` | Config | Helm `jurisdiction.trackingRetention` → ConfigMap | ✓ — **Shipping only**; ADR-053's statutory window for a shipment's tracking events, and the host refuses to start without it |
+| `Fulfilment__GiveUpAge` | Config | Helm `fulfilment.giveUpAge` → ConfigMap, defaulted in the chart | ✓ — **Shipping only**; [ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)'s give-up age for a pending shipment, and the host refuses to start without it |
 
 | Kind | Source | Example |
 |---|---|---|
@@ -1280,12 +1281,15 @@ services
     .ValidateOnStart();
 ```
 
-**There are two options types in the solution, and both had to earn it.**
-`Identity:Client` holds a secret that differs per environment, and
-`Jurisdiction` holds the statutory windows
+**Every options type in the solution had to earn it.**
+`Identity:Client` holds a secret that differs per environment, `Jurisdiction`
+holds the statutory windows
 [ADR-053](adr/ADR-053-a-jurisdiction-is-a-value-the-deployment-is-given.md)
-makes values a deployment is given. The tempting third is a
-`ServiceOptions`-shaped bag — batch sizes, poll intervals, retry caps — bound
+makes values a deployment is given, and `Fulfilment` holds the give-up age
+[ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)
+makes one — a deadline that decides whether a day's shipments survive a long
+outage, which is an operator's call and not a build's. The tempting next one is
+a `ServiceOptions`-shaped bag — batch sizes, poll intervals, retry caps — bound
 to an `Ordering` section that no environment ever sets. It costs nothing to
 write and it is not free: `ValidateOnStart` now gates boot on a section nobody
 supplies, `[Required]` on any member stops every host, and `[Required]` on none
@@ -1302,7 +1306,11 @@ a key that never varies has nothing to validate.
 > per environment, and `Jurisdiction` earns one because a statutory window is a
 > fact about where a deployment runs: a deployment is given its windows
 > (ADR-053 rule 1), so a developer's stack, which is no jurisdiction, carries
-> invented ones, and a real window belongs in a values file.
+> invented ones, and a real window belongs in a values file. `Fulfilment` passes
+> on ADR-052's word rather than on this test: its age is the same everywhere
+> until an outage makes an operator lengthen it, and that record makes the end
+> of waiting a value of the deployment so that the change is a values edit and
+> not a release.
 
 Where the binding sits matters as much as the call itself. Binding beside the
 consumer is what makes "the gateway needs no client credentials" true *by
