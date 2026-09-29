@@ -179,9 +179,10 @@ groups:
 
       # §13.7's event end-to-end target as a rule, read at a bucket edge
       # because MessagingMetrics exports the target as a bound. A ticket for
-      # QueueBacklogGrowing's reason: every message late here is still on the
-      # broker and will be delivered. The two share a runbook, and
-      # SHARED_RUNBOOKS in check.py says why.
+      # QueueBacklogGrowing's reason: a message late here is still on the
+      # broker, and one that fails for good reaches _error, which
+      # ErrorQueueDepth pages on. The two share a runbook, and SHARED_RUNBOOKS
+      # in check.py says why.
       - alert: DeliveryLagHigh
         expr: |
           histogram_quantile(

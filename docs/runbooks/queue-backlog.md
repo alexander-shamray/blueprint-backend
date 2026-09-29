@@ -15,7 +15,9 @@ delivered, so this is work running late rather than work lost. That is why it
 is a ticket and not a page — a business process that has actually stopped
 raises [`error-queue.md`](error-queue.md) or
 [`outbox-broker.md`](outbox-broker.md) instead, and if one of those is firing
-too, work it first.
+too, work it first. The lag alert reads the same way with one exception: a
+message whose handler fails on every attempt raises the lag and then goes to
+`_error`, which is the error-queue alert's page and not this ticket.
 
 What users see is staleness: a projection behind its source, an order whose
 saga has not moved, a shipment whose despatch has not reached the buyer's
@@ -133,12 +135,20 @@ shows through the messages queued behind it, which start late. A failing one
 shows too: the endpoint's in-memory retry re-enters `Consume` for every
 attempt, and each attempt records the message again, measured from its
 original `OccurredAt`. So before scaling out on the lag, read the service's
-consume error rate from the section above: a lag that rose with the errors is
-a fault to find, not a shortage of consumers. Only a failure that is never
-retried leaves the lag quiet. The lag also compares a timestamp made on
-another machine, so a clock skewed between two hosts moves it without
-anything being late — check the publisher's and the consumer's clocks before
-scaling anything on the lag alone.
+consume error rate — the series is absent until the service's first fault, so
+no data here means none:
+
+```promql
+sum by (service_name) (rate(messaging_masstransit_consume_errors_ea_total[10m]))
+```
+
+A lag that rose with the errors is a fault to find, not a shortage of
+consumers. Only a failure that is never retried leaves the lag quiet.
+
+The lag also compares a timestamp made on another machine, so a clock skewed
+between two hosts moves it without anything being late — check the
+publisher's and the consumer's clocks before scaling anything on the lag
+alone.
 
 ## Closing it
 
