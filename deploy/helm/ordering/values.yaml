@@ -79,9 +79,8 @@ probes:
 
 service:
   # True: the gateway dials this workload by name. False is the worker case
-  # (§15.3), and it is the ONE key separating Shipping's chart from this one —
-  # the chapter said two until the charts were written, because it assumed a
-  # service behind the edge would carry an Ingress of its own.
+  # (§15.3): of the two routing keys, the one Shipping's chart sets
+  # differently.
   enabled: true
 
 ingress:
@@ -99,7 +98,7 @@ identity:
   authority: https://id.example.com/realms/commerce
   # False, and written down rather than absent: §15.4's
   # required-for-some-hosts category is a claim a chart has to make, not one to
-  # infer from a missing key. Exactly one chart in the platform sets it true.
+  # infer from a missing key.
   clientCredentials: false
 
 database:

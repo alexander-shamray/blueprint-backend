@@ -1,8 +1,9 @@
 apiVersion: v2
 name: web-bff
 description: >-
-  The BFF (§4.1) — the one host that calls a peer synchronously (§9.7,
-  ADR-017), and therefore the one chart carrying client credentials (§11.5).
+  The BFF (§4.1) — one of the hosts that call a peer synchronously (§9.7,
+  ADR-017, ADR-052), and therefore one of the charts carrying client
+  credentials (§11.5).
 type: application
 version: 0.1.0
 dependencies:

@@ -1,5 +1,6 @@
-# Exactly one chart in the platform carries client credentials, and the
-# asymmetry is the design rather than an oversight (§15.3).
+# The charts whose host calls a peer carry client credentials and no other
+# chart does; which charts those are is the design rather than an oversight
+# (§15.3, ADR-052).
 
 workload:
   # §10.2's route file dials `http://web-bff:8080/`, and §14.1's container is
