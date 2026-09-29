@@ -106,8 +106,9 @@ to rotate is the one that does not exist.
 environments.** If every value would be the same in Compose, in the test fixture
 and in production, it is not configuration — it is a constant that has been
 given a deployment obligation and four places to be forgotten.
-`Identity:Client` is the only options type in the solution, and it earns that by
-holding a secret that must differ per environment.
+`Identity:Client` earns its options type by holding a secret that must differ
+per environment; §15.4's inventory is where every type that has earned one is
+listed.
 
 ## Rotation
 
