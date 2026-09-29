@@ -1363,11 +1363,14 @@ naming the stable replica count that would satisfy the step. At §15.3's
 is unreachable until the stable track is scaled to **19** — which the rollout
 does, deliberately and before anything rolls, rather than quietly serving five
 times the blast radius under a label that says 5%. `autoscaling.maxReplicas` is
-20 on every chart but one, so on those 19 plus one canary is exactly the
-ceiling. **The gateway's is 30** — every external request passes through it —
-so there 19 is simply what 5% needs rather than all the chart allows, and its
-autoscaler can still climb past the canary's stable count during a dwell. The
-19 is a property of the weight, not of every HPA.
+20 on every chart that autoscales but one, so on those 19 plus one canary is
+exactly the ceiling. **The gateway's is 30** — every external request passes
+through it — so there 19 is simply what 5% needs rather than all the chart
+allows, and its autoscaler can still climb past the canary's stable count
+during a dwell. **A worker's chart does not autoscale at all**, and §15.3 says
+why, so no `maxReplicas` bounds it: the first rung scales its Deployment and
+there is no floor to raise with it. The 19 is a property of the weight, not of
+every HPA.
 
 **The two tracks are told apart by `deployment.track`**, a resource attribute
 the chart supplies through `OTEL_RESOURCE_ATTRIBUTES` (§15.4).

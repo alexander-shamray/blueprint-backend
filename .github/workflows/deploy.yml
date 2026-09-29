@@ -321,9 +321,10 @@ jobs:
           # express it: one canary already serves 25%. Scaling up is what
           # makes the requested weight the served weight, and `canary.py plan`
           # refuses rather than rounding. §15.3's autoscaling.maxReplicas is
-          # exactly this 19 plus one canary on the service charts, and higher
-          # on the gateway, where the 19 is what the weight costs rather than
-          # all the chart allows.
+          # exactly this 19 plus one canary on the charts that autoscale,
+          # higher on the gateway, where the 19 is what the weight costs rather
+          # than all the chart allows, and not a bound at all on a worker,
+          # which sets its replica count directly.
 
           # The HPA's floor moves first, and a `kubectl scale` alone would not
           # hold. These charts enable an autoscaler on the stable track, and
