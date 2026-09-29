@@ -348,12 +348,16 @@ not a count**: this sentence said "both of them" until Ordering's block made
 three, which is the same way the compose smoke's image count went stale, one
 file over.
 
-Shipping's worker refuses to start without its carrier and its address
-source, each read as eagerly as the authority (§15.4), and it calls a peer, so
-it takes the three `Identity__Client__*` keys as the BFF does
+Shipping's worker refuses to start without any key §15.4's inventory marks
+required for Shipping — its carrier, its address source and its jurisdiction's
+retention windows, each read as eagerly as the authority — and it calls a
+peer, so it takes the three `Identity__Client__*` keys as the BFF does
 ([ADR-052](../../docs/backend-architecture/adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)).
-The override leaves `carrier-simulator` running, so a host-run worker points
-at the port it publishes:
+The windows are the made-up ones the Compose unit sets, because a developer's
+machine is no jurisdiction
+([ADR-053](../../docs/backend-architecture/adr/ADR-053-a-jurisdiction-is-a-value-the-deployment-is-given.md)
+rule 2). The override leaves `carrier-simulator` running, so a host-run worker
+points at the port it publishes:
 
 ```bash
 export ASPNETCORE_ENVIRONMENT=Development
@@ -366,6 +370,8 @@ export Identity__Client__Scope='commerce-api'
 export Carrier__BaseUrl='http://localhost:5191/'
 export Carrier__ApiKey='local-dev-carrier'
 export AddressSource__BaseUrl='http://localhost:8082'
+export Jurisdiction__AddressRetention='11.00:00:00'
+export Jurisdiction__TrackingRetention='23.00:00:00'
 dotnet run --project src/Services/Shipping/Shipping.Worker
 ```
 
