@@ -588,11 +588,13 @@ listing of a token denylist among Redis's contents.
 
 **The authority is read eagerly and the throw names the key**, which is the
 posture `AddSqlServer` and `AddMassTransitMessaging` already take: a host that
-cannot name its identity provider does not start. It is deliberately **not** an options type with `ValidateOnStart` —
+cannot name its identity provider does not start. It is deliberately **not**
+an options type with `ValidateOnStart` —
 [§15.4](15-cicd-deployment.md) admits one only where a member would differ
 between Compose, the fixture and production, and a bag bound to a section
-holding one value is the shape that rule forbids. §12.4's fixture comment attributed this failure to
-`OptionsValidationException` until PR-16 wrote the code and found otherwise.
+holding one value is the shape that rule forbids. §12.4's fixture comment
+attributed this failure to `OptionsValidationException` until PR-16 wrote the
+code and found otherwise.
 
 **The audience is a constant, not configuration.** §11.5 settles on one
 audience for the whole platform — per-service audiences are a later split — so

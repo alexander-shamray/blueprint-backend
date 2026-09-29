@@ -82,10 +82,9 @@ services:
       # and the scope whose mapper writes the permission claim this host holds
       # itself to (ADR-052).
       Identity__Client__Scope: "commerce-api"
-      # ADR-053's statutory windows, as values this deployment is given. A
-      # developer's stack is no jurisdiction either, so these are that record's
-      # made-up ones rather than either country's — a real window belongs in a
-      # values file and never in a file everybody runs.
+      # ADR-053 rule 2's made-up windows: a developer's stack is no
+      # jurisdiction, so a real window belongs in a values file and never in
+      # a file everybody runs.
       Jurisdiction__AddressRetention: "11.00:00:00"
       Jurisdiction__TrackingRetention: "23.00:00:00"
     depends_on:
