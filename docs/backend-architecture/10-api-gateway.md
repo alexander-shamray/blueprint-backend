@@ -1341,16 +1341,16 @@ subject rule is not satisfied by a best guess. ADR-051's rebuild replays from
 the broker's retention window, so an order whose `OrderPlaced` has aged out
 and whose `ShipmentDelivered` has not is exactly such a row.
 
-> **What this asks of Shipping, and it is one thing.** The shipment half of
-> the detail route is as rich as Shipping's published events, and §3.2 gives
-> it two that carry an order id and a tracking number between them. So a
-> buyer sees despatch, delivery and a number to take to the carrier, and a
-> **tracking feed needs an event that does not exist yet**. Shipping's spec
-> decides that and nothing else here: either it publishes tracking as it
-> arrives, and the detail route grows a list that is additive, or it does not
-> and the two milestones are the timeline. What the spec is **not** asked for
-> is a read endpoint — ADR-051 exists so that it is not, and §3.2, §4.1, §13
-> and §15 all describe a Shipping that has none.
+> **What Shipping settled, and what it was not asked for.** The shipment
+> half of the detail route is as rich as Shipping's published events, and
+> §3.2 gives it two that carry an order id and a tracking number between them.
+> So a buyer sees despatch, delivery and a number to take to the carrier, and
+> **no tracking feed**: Shipping publishes no tracking event, and the two
+> milestones are the timeline
+> (`docs/superpowers/specs/2026-09-22-shipping-service-design.md`, section 1).
+> What its spec was **not** asked for is a read endpoint — ADR-051 exists so
+> that it is not, and §3.2, §4.1, §13 and §15 all describe a Shipping that has
+> none.
 
 ---
 
