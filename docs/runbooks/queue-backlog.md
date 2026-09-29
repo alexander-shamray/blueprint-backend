@@ -39,13 +39,22 @@ A backlog is a rate problem and has exactly two sides.
   database that has slowed, a third party the handler waits on, or simply too
   few replicas. The consumers are taking messages more slowly than usual.
 
-Depth rises either way, so it cannot tell them apart. The consumers' own
-delivery rate can: compare it with the same hour yesterday before concluding
-anything about the consumer.
+Depth rises either way, so it cannot tell them apart. The rate at which the
+owning service finishes messages can: compare it with the same hour yesterday
+before concluding anything about the consumer. MassTransit counts every
+consumer type, commands and events alike, and errors are subtracted because a
+retried message is consumed again without draining anything:
 
 ```promql
-sum by (service_name) (rate(messaging_delivery_lag_seconds_count[10m]))
+sum by (service_name) (rate(messaging_masstransit_consume_ea_total[10m]))
+-
+sum by (service_name) (rate(messaging_masstransit_consume_errors_ea_total[10m]))
 ```
+
+It is per service, not per queue, so read the service that owns the queue the
+alert names; a service with two busy queues blends them. Ordering's saga
+endpoint is counted by `messaging_masstransit_saga_ea_total` and its errors
+series instead.
 
 ```bash
 kubectl -n <ns> get deploy <workload> -o jsonpath='{.spec.replicas}{"\n"}'
@@ -108,11 +117,7 @@ it ([#317](https://github.com/alexander-shamray/blueprint-backend/issues/317)).
 
 It clears on its own once the depth drops below a thousand or stops rising.
 Before closing, check the backlog **drained** rather than the producer
-stopping — a queue nobody publishes to has an excellent depth. The consumers'
-delivery count tells the two apart, because a drained queue is still being fed:
-
-```promql
-sum by (service_name) (rate(messaging_delivery_lag_seconds_count[10m]))
-```
-
-If that has collapsed too, the incident is upstream and is not over.
+stopping — a queue nobody publishes to has an excellent depth. The owning
+service's finished-message rate from the step above tells the two apart,
+because a drained queue is still being fed: if that has collapsed too, the
+incident is upstream and is not over.

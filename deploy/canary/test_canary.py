@@ -102,9 +102,9 @@ class WeightTests(unittest.TestCase):
 
     def test_five_percent_is_expressible_at_nineteen(self) -> None:
         """And 19 + 1 is 20, which is the maxReplicas of every chart that
-        autoscales — not the gateway's, which is 30 because every external
-        request passes through it, and not the worker's, which sets a replica
-        count instead (§15.3). The 19 is what the weight costs, and only on
+        autoscales but one — the gateway's is 30, because every external
+        request passes through it, and the worker's sets a replica count
+        instead of autoscaling (§15.3). The 19 is what the weight costs, and only on
         those charts is it also all the chart allows."""
         result = canary.plan(5, stable_replicas=19, overshoot_points=0)
 
