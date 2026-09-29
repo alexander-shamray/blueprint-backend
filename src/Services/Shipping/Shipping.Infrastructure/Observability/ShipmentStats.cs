@@ -2,11 +2,13 @@ using System.Data;
 using Common.Application;
 using Dapper;
 using Microsoft.Extensions.Caching.Memory;
+using Shipping.Infrastructure.Fulfilment;
+using Shipping.Infrastructure.Tracking;
 
 namespace Shipping.Infrastructure.Observability;
 
 /// <summary>
-/// <see cref="IShipmentStats"/> over one aggregate query per state, run on a
+/// <see cref="IShipmentStats"/> over one aggregate query per state or pass, run on a
 /// cache miss, in <c>OutboxStats</c>' shape and on its arguments: a connection
 /// factory rather than a scope, a bounded command timeout, and a short cache,
 /// because a metrics type that loads the database it measures is a monitor
@@ -48,6 +50,24 @@ internal sealed class ShipmentStats(IDbConnectionFactory connections) : IShipmen
                      AND (Status = 'Pending' OR CancellationRequestedAt IS NOT NULL)));
         """;
 
+    // Each claim's own population, read from the claim, over its own due
+    // column: a row that is due and that no pass holds is one a replica has
+    // not reached, so the oldest one's wait is how far the passes are behind.
+    // NULL when there is none, which is no wait at all.
+    private static readonly string FulfilmentOverdueSql =
+        $"""
+        SELECT DATEDIFF_BIG(millisecond, MIN(NextAttemptAt), SYSDATETIMEOFFSET()) / 1000.0
+        FROM shipping.Shipments
+        WHERE {FulfilmentClaims.Claimable};
+        """;
+
+    private static readonly string TrackingOverdueSql =
+        $"""
+        SELECT DATEDIFF_BIG(millisecond, MIN(NextPollAt), SYSDATETIMEOFFSET()) / 1000.0
+        FROM shipping.Shipments
+        WHERE {TrackingClaims.Claimable};
+        """;
+
     private readonly MemoryCache _cache = new(new MemoryCacheOptions());
 
     public int WaitingCount(string state) =>
@@ -61,6 +81,21 @@ internal sealed class ShipmentStats(IDbConnectionFactory connections) : IShipmen
                     WaitingSql,
                     new { Status = state },
                     commandTimeout: CommandTimeoutSeconds));
+        });
+
+    public double FulfilmentOverdueSeconds() => OverdueSeconds(FulfilmentOverdueSql);
+
+    public double TrackingOverdueSeconds() => OverdueSeconds(TrackingOverdueSql);
+
+    // Keyed by the statement, which no state's name can equal.
+    private double OverdueSeconds(string sql) =>
+        _cache.GetOrCreate(sql, entry =>
+        {
+            entry.AbsoluteExpirationRelativeToNow = CacheFor;
+            using IDbConnection connection = connections.Create();
+
+            return connection.ExecuteScalar<double?>(
+                new CommandDefinition(sql, commandTimeout: CommandTimeoutSeconds)) ?? 0;
         });
 
     public void Dispose() => _cache.Dispose();

@@ -113,20 +113,19 @@ are done by the fulfilment and tracking workers, so Shipping's queue stays
 shallow however far behind those workers fall.
 
 Their signals are `shipping.shipments.waiting`, the gauge of shipments past
-their first failed pass by state, and `shipping.carrier.unavailable` beside it.
-**A row no pass has reached yet is on neither**, so nothing today says that
-Shipping's replica count is too small — [§15.3](../backend-architecture/15-cicd-deployment.md)
-records that as owed. Before concluding from a quiet queue that Shipping is
-healthy, read those two, and count the `Pending` rows that have not yet been
-attempted:
+their first failed pass by state, `shipping.carrier.unavailable` beside it,
+and `shipping.shipments.overdue`, how long the longest-due row each pass would
+claim has waited for one, by `pass`. Before concluding from a quiet queue that
+Shipping is healthy, read all three.
 
-```sql
-SELECT COUNT(*)
-FROM shipping.Shipments
-WHERE Status = 'Pending'
-    AND Attempts = 0
-    AND TerminalAt IS NULL;
-```
+**The overdue gauge is the one that sees a row no pass has reached yet**, which
+the other two cannot. Healthy, each claim takes a due row within a tick of its
+worker's loop, so the age stays near zero. One that climbs and keeps climbing
+is a pass that cannot keep up with its population. On `tracking`, a carrier
+slow enough to hold every pass to its request timeout does the same, so read
+`shipping.carrier.unavailable` and the carrier's latency before scaling. With
+the carrier healthy, the answer is `replicaCount`, as the paragraph on a
+worker's replica count above says.
 
 **The lag alert is measured at consumer start, and a failure can raise it.**
 `messaging.delivery.lag` is recorded at the top of `Consume`, before a handler

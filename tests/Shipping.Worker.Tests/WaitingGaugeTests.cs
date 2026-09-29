@@ -12,9 +12,10 @@ using Xunit;
 namespace Shipping.Worker.Tests;
 
 /// <summary>
-/// Spec section 11's third instrument: rows past their first backoff, by state.
+/// Spec section 11's third instrument, rows past their first backoff by state,
+/// and beside it the wait of the longest-due row each pass would claim.
 /// Delivery lag stops when a consumer starts, so it never sees a worker waiting
-/// on a carrier — this gauge is the only signal that does.
+/// on a carrier or on a replica — these gauges are the signals that do.
 /// </summary>
 [Collection(nameof(IntegrationCollection))]
 public sealed class WaitingGaugeTests(ServiceFixture fixture) : IAsyncLifetime
@@ -38,11 +39,11 @@ public sealed class WaitingGaugeTests(ServiceFixture fixture) : IAsyncLifetime
         await fixture.RequestCancellationAsync(booked.Id);
         await fixture.SetAttemptsAsync(booked.Id, 1);
 
-        List<(string State, double Value)> measured = ReadWaitingGauge();
+        List<(string Tag, double Value)> measured = ReadGauge("shipping.shipments.waiting", "state");
 
-        measured.ShouldContain(m => m.State == "Booked" && m.Value == 1);
-        measured.ShouldContain(m => m.State == "Pending" && m.Value == 0);
-        measured.Select(m => m.State).ShouldBe(
+        measured.ShouldContain(m => m.Tag == "Booked" && m.Value == 1);
+        measured.ShouldContain(m => m.Tag == "Pending" && m.Value == 0);
+        measured.Select(m => m.Tag).ShouldBe(
             Enum.GetNames<ShipmentStatus>(),
             ignoreOrder: true,
             "every state reports, because a state missing from a sum reads as a healthy zero");
@@ -56,9 +57,9 @@ public sealed class WaitingGaugeTests(ServiceFixture fixture) : IAsyncLifetime
         Shipment booked = await fixture.BookedAsync("SIM-TRANSIT");
         await fixture.SetPollAttemptsAsync(booked.Id, 1);
 
-        List<(string State, double Value)> measured = ReadWaitingGauge();
+        List<(string Tag, double Value)> measured = ReadGauge("shipping.shipments.waiting", "state");
 
-        measured.ShouldContain(m => m.State == "Booked" && m.Value == 1);
+        measured.ShouldContain(m => m.Tag == "Booked" && m.Value == 1);
     }
 
     [Fact]
@@ -72,10 +73,10 @@ public sealed class WaitingGaugeTests(ServiceFixture fixture) : IAsyncLifetime
         await fixture.RequestCancellationAsync(dispatched.Id);
         await fixture.SetAttemptsAsync(dispatched.Id, 1);
 
-        List<(string State, double Value)> measured = ReadWaitingGauge();
+        List<(string Tag, double Value)> measured = ReadGauge("shipping.shipments.waiting", "state");
 
         measured.ShouldContain(
-            m => m.State == "Dispatched" && m.Value == 0,
+            m => m.Tag == "Dispatched" && m.Value == 0,
             "only the tracking pass will claim this row again, and its own count is clear");
     }
 
@@ -95,24 +96,77 @@ public sealed class WaitingGaugeTests(ServiceFixture fixture) : IAsyncLifetime
         (await fixture.StatusAsync(pending)).ShouldBe("Voided");
         (await fixture.AttemptsAsync(pending)).ShouldBe(1, "the void left the counter, which is the case under test");
 
-        List<(string State, double Value)> measured = ReadWaitingGauge();
+        List<(string Tag, double Value)> measured = ReadGauge("shipping.shipments.waiting", "state");
 
         measured.ShouldContain(
-            m => m.State == "Voided" && m.Value == 0,
+            m => m.Tag == "Voided" && m.Value == 0,
             "a row no worker will claim again is not waiting on anything");
     }
 
+    [Fact]
+    public async Task A_due_row_no_pass_holds_reads_as_its_wait_under_its_own_pass()
+    {
+        // A minute past due and held by nothing: the tracking claim would take
+        // it, and nothing has. Booked with no cancellation, so the fulfilment
+        // claim would take nothing and reads a wait of zero.
+        Shipment booked = await fixture.BookedAsync("SIM-TRANSIT");
+        await fixture.ExecuteAsync(
+            "UPDATE shipping.Shipments SET NextPollAt = DATEADD(second, -60, SYSDATETIMEOFFSET()) WHERE Id = {0};",
+            booked.Id.Value);
+
+        List<(string Tag, double Value)> measured = ReadGauge("shipping.shipments.overdue", "pass");
+
+        measured.Single(m => m.Tag == "tracking").Value.ShouldBeInRange(60, 120);
+        measured.Single(m => m.Tag == "fulfilment").Value.ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task A_row_a_pass_holds_or_that_is_not_yet_due_has_no_wait()
+    {
+        // Both would be read wrongly by a MIN over the due column alone: the
+        // first is being worked, and the second is not owed a turn yet.
+        Shipment held = await fixture.BookedAsync("SIM-TRANSIT");
+        await fixture.ClaimForTrackingAsync();
+        Shipment later = await fixture.BookedAsync("SIM-TRANSIT");
+        await fixture.ExecuteAsync(
+            "UPDATE shipping.Shipments SET NextPollAt = DATEADD(minute, 5, SYSDATETIMEOFFSET()) WHERE Id = {0};",
+            later.Id.Value);
+
+        (await fixture.LockedUntilAsync(held.Id)).ShouldNotBeNull();
+
+        List<(string Tag, double Value)> measured = ReadGauge("shipping.shipments.overdue", "pass");
+
+        measured.ShouldContain(m => m.Tag == "tracking" && m.Value == 0);
+    }
+
+    [Fact]
+    public async Task A_pending_row_no_pass_has_reached_reads_under_fulfilment()
+    {
+        // The row the runbook's query counts by hand: never attempted, and due.
+        FulfilmentSteps steps = new(fixture);
+        Guid order = await steps.ConfirmAsync(FulfilmentSteps.Kazakh);
+        ShipmentId pending = new(await steps.ShipmentIdAsync(order));
+        await fixture.ExecuteAsync(
+            "UPDATE shipping.Shipments SET NextAttemptAt = DATEADD(second, -120, SYSDATETIMEOFFSET()) WHERE Id = {0};",
+            pending.Value);
+
+        List<(string Tag, double Value)> measured = ReadGauge("shipping.shipments.overdue", "pass");
+
+        measured.Single(m => m.Tag == "fulfilment").Value.ShouldBeInRange(120, 180);
+    }
+
     /// <summary>
-    /// Spec section 11's waiting gauge, read once per call: one entry per state
-    /// the callback reported, with the value it produced. Built over a stats
-    /// reader of this suite's own rather than the host's, whose per-state cache
-    /// the host's metric reader can fill from an empty table between the
-    /// booking and this read; the claim here is the gauge's shape, its tag and
-    /// its predicate. The filter is on the meter instance and never its name,
-    /// and the instrument name is written out rather than taken from the
-    /// registration, which would agree with itself whatever it is called.
+    /// One of <see cref="ShipmentMetrics"/>' gauges, read once per call: one
+    /// entry per tag value the callback reported, with the value it produced.
+    /// Built over a stats reader of this suite's own rather than the host's,
+    /// whose cache the host's metric reader can fill from an empty table
+    /// between the booking and this read; the claim here is the gauge's shape,
+    /// its tag and its predicate. The filter is on the meter instance and never
+    /// its name, and each caller writes the instrument name out rather than
+    /// taking it from the registration, which would agree with itself whatever
+    /// it is called.
     /// </summary>
-    private List<(string State, double Value)> ReadWaitingGauge()
+    private List<(string Tag, double Value)> ReadGauge(string instrumentName, string tagKey)
     {
         // The factory has to outlive the collection: a Meter disposed with its
         // factory publishes nothing, and DefaultMeterFactory is internal to
@@ -131,16 +185,16 @@ public sealed class WaitingGaugeTests(ServiceFixture fixture) : IAsyncLifetime
         // name, so this is a handle on it rather than a second meter.
         Meter mine = factory.Create(CarrierMetrics.MeterName);
 
-        List<(string State, double Value)> measured = [];
+        List<(string Tag, double Value)> measured = [];
         using MeterListener listener = new();
 
         listener.InstrumentPublished = (instrument, l) =>
         {
-            if (ReferenceEquals(instrument.Meter, mine) && instrument.Name == "shipping.shipments.waiting")
+            if (ReferenceEquals(instrument.Meter, mine) && instrument.Name == instrumentName)
                 l.EnableMeasurementEvents(instrument);
         };
         listener.SetMeasurementEventCallback<double>(
-            (_, value, tags, _) => measured.Add((StateOf(tags), value)));
+            (_, value, tags, _) => measured.Add((TagOf(tags, tagKey), value)));
 
         listener.Start();
         listener.RecordObservableInstruments();
@@ -153,15 +207,16 @@ public sealed class WaitingGaugeTests(ServiceFixture fixture) : IAsyncLifetime
     }
 
     /// <summary>
-    /// The <c>state</c> tag a measurement carries, or the empty string where it
-    /// carries none — which no assertion matches, so a tag renamed fails the
-    /// assertion that reads it rather than being silently dropped.
+    /// The tag a measurement carries under <paramref name="key"/>, or the empty
+    /// string where it carries none — which no assertion matches, so a tag
+    /// renamed fails the assertion that reads it rather than being silently
+    /// dropped.
     /// </summary>
-    private static string StateOf(ReadOnlySpan<KeyValuePair<string, object?>> tags)
+    private static string TagOf(ReadOnlySpan<KeyValuePair<string, object?>> tags, string key)
     {
         foreach (KeyValuePair<string, object?> tag in tags)
         {
-            if (tag.Key == "state")
+            if (tag.Key == key)
                 return tag.Value?.ToString() ?? "";
         }
 
