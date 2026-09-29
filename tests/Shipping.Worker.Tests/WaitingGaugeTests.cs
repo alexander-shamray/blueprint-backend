@@ -26,12 +26,17 @@ public sealed class WaitingGaugeTests(ServiceFixture fixture) : IAsyncLifetime
     [Fact]
     public async Task A_row_past_its_first_backoff_is_counted_under_its_own_state()
     {
-        Shipment booked = await fixture.BookedAsync("SIM-TRANSIT");
-        await fixture.SetAttemptsAsync(booked.Id, 1);
-
-        // A second Booked row with no failed pass: Booked reading 1 with two
-        // Booked rows present is what shows the predicate excludes it.
+        // A Booked row with no failed pass: Booked reading 1 with two Booked
+        // rows present is what shows the predicate excludes it. Booked first,
+        // because the other row's cancellation would be the next booking
+        // pass's claim.
         await fixture.BookedAsync("050000");
+
+        // Awaiting its cancellation's answer, so the fulfilment claim still
+        // selects it and its count is one a later pass will clear.
+        Shipment booked = await fixture.BookedAsync("SIM-TRANSIT");
+        await fixture.RequestCancellationAsync(booked.Id);
+        await fixture.SetAttemptsAsync(booked.Id, 1);
 
         List<(string State, double Value)> measured = ReadWaitingGauge();
 
@@ -54,6 +59,23 @@ public sealed class WaitingGaugeTests(ServiceFixture fixture) : IAsyncLifetime
         List<(string State, double Value)> measured = ReadWaitingGauge();
 
         measured.ShouldContain(m => m.State == "Booked" && m.Value == 1);
+    }
+
+    [Fact]
+    public async Task A_fulfilment_count_no_claim_will_act_on_is_not_counted()
+    {
+        // A cancel that failed and then a collection: the row is Dispatched,
+        // out of the fulfilment claim, and the count stays until it ends.
+        Shipment dispatched = await fixture.BookedAsync("SIM-TRANSIT");
+        (await fixture.RunTrackingPassAsync()).ShouldBe(1);
+        (await fixture.StatusAsync(dispatched.Id)).ShouldBe("Dispatched");
+        await fixture.SetAttemptsAsync(dispatched.Id, 1);
+
+        List<(string State, double Value)> measured = ReadWaitingGauge();
+
+        measured.ShouldContain(
+            m => m.State == "Dispatched" && m.Value == 0,
+            "only the tracking pass will claim this row again, and its own count is clear");
     }
 
     [Fact]
