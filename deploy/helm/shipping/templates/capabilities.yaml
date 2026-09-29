@@ -13,6 +13,9 @@ this chart refuses the switches themselves (§15.4).
 {{- if not (.Values.jurisdiction).enabled }}
 {{- fail "jurisdiction.enabled is false on the shipping chart. ShippingJurisdictionOptions is bound and validated at start (ADR-053), so the host does not start without both windows." }}
 {{- end }}
+{{- if not (.Values.fulfilment).enabled }}
+{{- fail "fulfilment.enabled is false on the shipping chart. FulfilmentOptions is bound and validated at start (ADR-052), so the host does not start without a give-up age." }}
+{{- end }}
 {{- if not .Values.identity.clientCredentials }}
 {{- fail "identity.clientCredentials is false on the shipping chart. The worker binds ServiceIdentityOptions with ValidateOnStart (ADR-052) and does not start without all three values (§15.4)." }}
 {{- end }}

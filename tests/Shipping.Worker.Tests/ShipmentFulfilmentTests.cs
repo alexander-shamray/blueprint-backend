@@ -3,6 +3,7 @@ using Common.Application;
 using Grpc.Core;
 using MassTransit;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Shipping.Application.Carrier;
 using Shipping.Application.Shipments;
 using Shipping.Domain.Shipments;
@@ -97,6 +98,38 @@ public sealed class ShipmentFulfilmentTests(ServiceFixture fixture) : IAsyncLife
 
         await _steps.ClearBackoffAsync(order);
         (await fixture.RunFulfilmentPassAsync()).ShouldBe(0, "a terminal row is outside the claim");
+    }
+
+    [Fact]
+    public async Task A_shipment_pending_past_its_give_up_age_is_unfulfillable_and_leaves_the_claim_for_good()
+    {
+        Guid order = await _steps.ConfirmAsync(FulfilmentSteps.Kazakh);
+        await _steps.AgeAsync(order, GiveUpAge() + TimeSpan.FromMinutes(1));
+
+        (await fixture.RunFulfilmentPassAsync()).ShouldBe(1);
+
+        (await _steps.StatusAsync(order)).ShouldBe("Unfulfillable");
+        (await _steps.ReasonAsync(order)).ShouldBe(FulfilmentWorker.GaveUpReason);
+        fixture.Ordering.Calls.ShouldNotContain(order, "past the age nobody is asked for the address");
+        FulfilmentSteps.BookingCalls(fixture.Carrier).ShouldBe(0, "past the age nothing is booked");
+
+        await _steps.ClearBackoffAsync(order);
+        (await fixture.RunFulfilmentPassAsync()).ShouldBe(0, "a terminal row is outside the claim");
+    }
+
+    [Fact]
+    public async Task A_shipment_inside_its_give_up_age_is_still_retried()
+    {
+        // The control for the case above: the same failing owner, a row a
+        // minute short of the age, and the row backs off rather than ending.
+        Guid order = await _steps.ConfirmAsync(FulfilmentSteps.Kazakh);
+        await _steps.AgeAsync(order, GiveUpAge() - TimeSpan.FromMinutes(1));
+        fixture.Ordering.Fail(StatusCode.PermissionDenied);
+
+        (await fixture.RunFulfilmentPassAsync()).ShouldBe(0);
+
+        (await _steps.StatusAsync(order)).ShouldBe("Pending");
+        (await _steps.AttemptsAsync(order)).ShouldBe(1);
     }
 
     [Fact]
@@ -257,6 +290,9 @@ public sealed class ShipmentFulfilmentTests(ServiceFixture fixture) : IAsyncLife
 
     // Parsed rather than searched: the adapter's serialiser escapes every
     // non-ASCII character, so the raw body holds none of the address's text.
+    private TimeSpan GiveUpAge() =>
+        fixture.Factory.Services.GetRequiredService<IOptions<FulfilmentOptions>>().Value.GiveUpAge!.Value;
+
     private string BookingBody()
     {
         string body = fixture.Carrier.LogEntries

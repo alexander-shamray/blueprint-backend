@@ -38,7 +38,7 @@ internal sealed class FulfilmentClaims(IDbConnectionFactory connections)
         )
         UPDATE claimable
         SET LockedUntil = DATEADD(second, {FulfilmentWorker.LeaseSeconds}, SYSDATETIMEOFFSET())
-        OUTPUT inserted.Id, inserted.OrderId, inserted.Status, inserted.CarrierReference;
+        OUTPUT inserted.Id, inserted.OrderId, inserted.Status, inserted.CarrierReference, inserted.CreatedAt;
         """;
 
     // Increments the attempt counter and backs off by pushing NextAttemptAt
@@ -46,8 +46,8 @@ internal sealed class FulfilmentClaims(IDbConnectionFactory connections)
     // a row that is already scheduled. The ladder is the dispatcher's
     // (spec, section 4), read from its constants so the two cannot drift.
     //
-    // Nothing is abandoned by count: the shipment's deadline is the saga's,
-    // and a row that outlives it is already a review row in Ordering.
+    // Nothing is abandoned by count: what ends the retrying is the row's age,
+    // which the pass reads against FulfilmentOptions.GiveUpAge (ADR-052).
     private static readonly string FailSql =
         $"""
         UPDATE shipping.Shipments

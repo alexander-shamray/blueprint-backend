@@ -1,8 +1,10 @@
+using System.Globalization;
 using Common.Application;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Shipping.Application.Addresses;
 using Shipping.Application.Carrier;
 using Shipping.Application.Shipments;
@@ -195,12 +197,20 @@ public sealed class SupersededBookingTests
         services.AddSingleton(store);
         services.AddSingleton<IDeliveryAddressSource>(new UnknownOrder());
         services.AddSingleton(TimeProvider.System);
+        // The longest age the options accept: these shipments are made at a
+        // fixed instant and the pass reads the system clock, so any shorter
+        // age is one the suite would eventually outlive.
+        services.AddSingleton(Options.Create(new FulfilmentOptions
+        {
+            GiveUpAge = TimeSpan.Parse(FulfilmentOptions.MaximumGiveUpAge, CultureInfo.InvariantCulture)
+        }));
 
         await using ServiceProvider provider = services.BuildServiceProvider();
         FulfilmentWorker worker = new(provider.GetRequiredService<IServiceScopeFactory>(), log);
 
         Shipment first = loads[0];
-        FulfilmentWork work = new(first.Id.Value, first.OrderId.Value, nameof(ShipmentStatus.Pending), null);
+        FulfilmentWork work = new(
+            first.Id.Value, first.OrderId.Value, nameof(ShipmentStatus.Pending), null, first.CreatedAt);
 
         return await worker.FulfilAsync(provider, work, TestContext.Current.CancellationToken);
     }

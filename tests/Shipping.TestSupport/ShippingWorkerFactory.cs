@@ -34,7 +34,8 @@ public class ShippingWorkerFactory(
     string? carrierApiKey = null,
     string addressSourceBaseUrl = ShippingWorkerFactory.UnreachableAddressSource,
     string addressRetention = ShippingWorkerFactory.InventedAddressRetention,
-    string trackingRetention = ShippingWorkerFactory.InventedTrackingRetention)
+    string trackingRetention = ShippingWorkerFactory.InventedTrackingRetention,
+    string giveUpAge = ShippingWorkerFactory.InventedGiveUpAge)
     : WebApplicationFactory<Program>
 {
     /// <summary>
@@ -84,6 +85,13 @@ public class ShippingWorkerFactory(
     public const string InventedTrackingRetention = "23.00:00:00";
 
     /// <summary>
+    /// A give-up age no deployment would choose, for
+    /// <see cref="InventedAddressRetention"/>'s reason: a suite that ages a
+    /// row past it has read the configured value rather than a constant.
+    /// </summary>
+    public const string InventedGiveUpAge = "5.07:00:00";
+
+    /// <summary>
     /// The token source the credential handler draws on, replacing
     /// <c>CachingTokenClient</c> and its grant check so that no test needs an
     /// identity provider to prove what the handler does with a token.
@@ -124,6 +132,7 @@ public class ShippingWorkerFactory(
             .UseSetting($"{ServiceIdentityOptions.SectionName}:Scope", "commerce-api")
             .UseSetting($"{ShippingJurisdictionOptions.SectionName}:AddressRetention", addressRetention)
             .UseSetting($"{ShippingJurisdictionOptions.SectionName}:TrackingRetention", trackingRetention)
+            .UseSetting($"{FulfilmentOptions.SectionName}:GiveUpAge", giveUpAge)
             .ConfigureLogging(logging => logging.AddProvider(CapturedLogs))
             .ConfigureServices(services =>
             {

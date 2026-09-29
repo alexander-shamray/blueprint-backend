@@ -495,12 +495,13 @@ fi
 pass 'paymentProvider renders both keys and refuses an empty address or an address while off'
 
 # --------------------------------------------------------------------------
-section 'The worker chart declares four capabilities, and each is required'
+section 'The worker chart declares its capabilities, and each is required'
 # --------------------------------------------------------------------------
 # Shipping's host reads every key below before it will start (§15.4), so each
 # state that renders cleanly here is a pod that never starts. Asserted by
 # placement and not by presence: §15.4 puts the credential in a Secret and the
-# two addresses and two windows in Config, and a global grep proves neither.
+# addresses, the windows and the give-up age in Config, and a global grep
+# proves neither.
 SHIPPING_RENDER=$("$HELM" template shipping "$CHARTS_DIR/shipping" \
     --set-string image.tag="$TAG" $(overlay_for shipping))
 printf '%s\n' "$SHIPPING_RENDER" >"$OUT/shipping-capability.yaml"
@@ -520,6 +521,11 @@ check 'shipping: both jurisdiction windows are in the ConfigMap' \
          /^---$/ { in_cm = 0 }
          in_cm && /^ *Jurisdiction__[A-Za-z]+Retention: / { n++ }
          END { exit n == 2 ? 0 : 1 }' "$OUT/shipping-capability.yaml"
+check 'shipping: the give-up age is in the ConfigMap' \
+    awk '/^kind: ConfigMap$/ { in_cm = 1 }
+         /^---$/ { in_cm = 0 }
+         in_cm && /^ *Fulfilment__GiveUpAge: "3\.00:00:00"$/ { found = 1 }
+         END { exit found ? 0 : 1 }' "$OUT/shipping-capability.yaml"
 check 'shipping: Carrier__ApiKey comes from a secretKeyRef, not a literal' \
     awk '/^ *- name: Carrier__ApiKey$/ { at = NR }
          at && NR == at + 1 && /^ *valueFrom:$/ { vf = 1 }
@@ -577,6 +583,15 @@ refuses_chart shipping 'client credentials off with a client id fails the render
 refuses_chart shipping 'client credentials off and cleared fails the render' \
     'identity.clientCredentials is false on the shipping chart' \
     --set identity.clientCredentials=false --set-string 'identity.clientId='
+refuses_chart shipping 'a cleared give-up age fails the render' \
+    'fulfilment.giveUpAge is required' --set-string 'fulfilment.giveUpAge='
+refuses_chart shipping 'a give-up age that is not a TimeSpan fails the render' \
+    'not a TimeSpan this chart will accept' --set-string 'fulfilment.giveUpAge=3 days'
+refuses_chart shipping 'a give-up age with the capability off fails the render' \
+    'but fulfilment.giveUpAge is set' --set fulfilment.enabled=false
+refuses_chart shipping 'the give-up age off and cleared fails the render' \
+    'fulfilment.enabled is false on the shipping chart' \
+    --set fulfilment.enabled=false --set-string 'fulfilment.giveUpAge='
 check 'a retention window in days-and-time form still renders' \
     "$HELM" template shipping "$CHARTS_DIR/shipping" --set-string "image.tag=$TAG" \
     $(overlay_for shipping) --set-string 'jurisdiction.addressRetention=1.12:30'

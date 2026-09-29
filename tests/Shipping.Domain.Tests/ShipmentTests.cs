@@ -28,6 +28,7 @@ public class ShipmentTests
         shipment.CarrierReference.ShouldBeNull();
         shipment.TrackingNumber.ShouldBeNull();
         shipment.TerminalAt.ShouldBeNull();
+        shipment.CreatedAt.ShouldBe(Now, "ADR-052's give-up age is measured from here");
         shipment.DomainEvents.ShouldBeEmpty();
     }
 

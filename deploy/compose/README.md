@@ -350,8 +350,9 @@ file over.
 
 Shipping's worker refuses to start without `Carrier__BaseUrl`,
 `Carrier__ApiKey` and `AddressSource__BaseUrl`, read as eagerly as the
-authority, or without the two `Jurisdiction__*` retention windows, validated
-at start (§15.4) — and it calls a peer, so it takes the three
+authority, or without the two `Jurisdiction__*` retention windows and
+`Fulfilment__GiveUpAge`, validated at start (§15.4) — and it calls a peer, so it
+takes the three
 `Identity__Client__*` keys as the BFF does
 ([ADR-052](../../docs/backend-architecture/adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)).
 The windows are the made-up ones the Compose unit sets, because a developer's
@@ -373,6 +374,7 @@ export Carrier__ApiKey='local-dev-carrier'
 export AddressSource__BaseUrl='http://localhost:8082'
 export Jurisdiction__AddressRetention='11.00:00:00'
 export Jurisdiction__TrackingRetention='23.00:00:00'
+export Fulfilment__GiveUpAge='3.00:00:00'
 dotnet run --project src/Services/Shipping/Shipping.Worker
 ```
 

@@ -37,6 +37,12 @@ public sealed class Shipment : AggregateRoot<ShipmentId>
     /// </summary>
     public DateTimeOffset? TerminalAt { get; private set; }
 
+    /// <summary>
+    /// When the confirmed order made this shipment, and the clock ADR-052's
+    /// give-up age is measured from.
+    /// </summary>
+    public DateTimeOffset CreatedAt { get; private set; }
+
     public int Attempts { get; private set; }
 
     public DateTimeOffset NextAttemptAt { get; private set; }
@@ -55,6 +61,7 @@ public sealed class Shipment : AggregateRoot<ShipmentId>
         Id = id;
         OrderId = orderId;
         Status = ShipmentStatus.Pending;
+        CreatedAt = now;
         NextAttemptAt = now;
     }
 

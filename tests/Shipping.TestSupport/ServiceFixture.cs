@@ -444,8 +444,10 @@ public sealed class ServiceFixture : IAsyncLifetime
             INSERT INTO #staged (ShipmentId, OrderId)
             SELECT TOP ({0}) NEWID(), NEWID() FROM sys.all_objects a CROSS JOIN sys.all_objects b;
 
-            INSERT INTO shipping.Shipments (Id, OrderId, Status, TerminalAt, Attempts, NextAttemptAt)
-            SELECT ShipmentId, OrderId, 'Delivered', DATEADD(day, -40, SYSDATETIMEOFFSET()), 0, SYSDATETIMEOFFSET()
+            INSERT INTO shipping.Shipments (Id, OrderId, Status, TerminalAt, Attempts, NextAttemptAt, CreatedAt)
+            SELECT
+                ShipmentId, OrderId, 'Delivered', DATEADD(day, -40, SYSDATETIMEOFFSET()), 0, SYSDATETIMEOFFSET(),
+                DATEADD(day, -45, SYSDATETIMEOFFSET())
             FROM #staged;
 
             INSERT INTO shipping.DeliveryAddresses (OrderId, CustomerId, Line1, City, PostalCode, Country, FetchedAt)

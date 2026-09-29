@@ -189,6 +189,14 @@ public static class DependencyInjection
         services.AddScoped<FulfilmentClaims>();
         services.AddHostedService<FulfilmentWorker>();
 
+        // Beside its consumer, for the jurisdiction's reason below: a missing
+        // or impossible give-up age refuses the host at start (ADR-052).
+        services
+            .AddOptions<FulfilmentOptions>()
+            .BindConfiguration(FulfilmentOptions.SectionName)
+            .ValidateOnStart();
+        services.AddSingleton<IValidateOptions<FulfilmentOptions>, AnnotatedOptionsValidator<FulfilmentOptions>>();
+
         // Spec section 4's second worker. AddHostedService<T> rather than a
         // factory overload, exactly as the fulfilment worker is registered, so
         // a suite that drives one pass can find and remove this registration by
@@ -205,7 +213,9 @@ public static class DependencyInjection
             .AddOptions<ShippingJurisdictionOptions>()
             .BindConfiguration(ShippingJurisdictionOptions.SectionName)
             .ValidateOnStart();
-        services.AddSingleton<IValidateOptions<ShippingJurisdictionOptions>, ShippingJurisdictionOptionsValidator>();
+        services.AddSingleton<
+            IValidateOptions<ShippingJurisdictionOptions>,
+            AnnotatedOptionsValidator<ShippingJurisdictionOptions>>();
 
         // AddHostedService<T> for §12.4's reason, and by implementation type
         // because that is what the fixture's removal matches on: its start-up

@@ -161,6 +161,15 @@ jurisdiction:
   addressRetention: ""
   trackingRetention: ""
 
+# ADR-052's give-up age: how long a shipment stays Pending before the
+# fulfilment pass makes it unfulfillable. Defaulted rather than required, as
+# addressSource is: it is sized to reach OrderFulfilmentSaga.DespatchTimeoutDelay,
+# which is the same in every cluster. Lengthening it rides out a long carrier
+# or owner outage; the host refuses a missing or impossible one at start.
+fulfilment:
+  enabled: true
+  giveUpAge: "3.00:00:00"
+
 observability:
   otlpEndpoint: http://otel-collector.observability:4317
 
