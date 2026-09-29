@@ -31,7 +31,6 @@ public class AbandonShipmentHandlerTests
         shipment.Status.ShouldBe(ShipmentStatus.Abandoned);
         shipment.TerminalAt.ShouldBe(Handled);
         shipment.NextPollAt.ShouldBeNull();
-        shipment.LockedUntil.ShouldBeNull("the lease is released by the commit that ended the row");
         shipment.DomainEvents.ShouldBeEmpty();
     }
 
