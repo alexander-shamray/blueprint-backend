@@ -1,6 +1,7 @@
 using Shipping.Infrastructure.Fulfilment;
 using Shipping.Infrastructure.Persistence;
 using Shipping.Infrastructure.Retention;
+using Shipping.Infrastructure.Tracking;
 using Shipping.TestSupport.Outbox;
 using Common.Application;
 using Common.Infrastructure.Identity;
@@ -157,6 +158,16 @@ public class ShippingWorkerFactory(
                 services.Remove(fulfilment);
 
                 services.AddSingleton<FulfilmentWorker>();
+
+                // The tracking worker, by the same match and for the same
+                // reason: its tick would poll a row underneath an assertion
+                // about it, so a test drives ProcessBatchAsync instead.
+                ServiceDescriptor tracking = services.Single(d =>
+                    d.ServiceType == typeof(IHostedService) &&
+                    d.ImplementationType == typeof(TrackingWorker));
+                services.Remove(tracking);
+
+                services.AddSingleton<TrackingWorker>();
 
                 // §9.5's purge, removed and re-registered for the same two
                 // reasons and by the same match. Its timer is an hour rather

@@ -7,6 +7,7 @@ using Shipping.Infrastructure.Messaging;
 using Shipping.Infrastructure.Observability;
 using Shipping.Infrastructure.Persistence;
 using Shipping.Infrastructure.Retention;
+using Shipping.Infrastructure.Tracking;
 using Common.Application;
 using Common.Contracts;
 using Common.Infrastructure.Idempotency;
@@ -173,6 +174,14 @@ public static class DependencyInjection
         // remove exactly this registration by its implementation type.
         services.AddScoped<FulfilmentClaims>();
         services.AddHostedService<FulfilmentWorker>();
+
+        // Spec section 4's second worker. AddHostedService<T> rather than a
+        // factory overload, exactly as the fulfilment worker is registered, so
+        // a suite that drives one pass can find and remove this registration by
+        // its implementation type — a poll running underneath an assertion
+        // about a row is the same race §12.4 removes the outbox dispatcher for.
+        services.AddScoped<TrackingClaims>();
+        services.AddHostedService<TrackingWorker>();
 
         // §15.4's shape, in the registration helper that owns the consumer
         // rather than in Program.cs: a binding hoisted upwards re-imposes the
