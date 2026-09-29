@@ -200,10 +200,10 @@ public static class DependencyInjection
         // §15.4's shape, in the registration helper that owns the consumer
         // rather than in Program.cs: a binding hoisted upwards re-imposes the
         // key on every host, which is the mistake that section spends a
-        // paragraph on. ValidateOnStart is what turns a missing statutory
-        // window into a refusal to boot — IOptions<T> always resolves, so
-        // without it the purge would run with a default-constructed instance
-        // and delete nothing while reporting healthy (ADR-053).
+        // paragraph on. ValidateOnStart refuses a missing statutory window at
+        // host start, before any hosted service is constructed, so the refusal
+        // waits on no reader of the options and holds for a host that never
+        // constructs the purge (ADR-053).
         services
             .AddOptions<ShippingJurisdictionOptions>()
             .BindConfiguration(ShippingJurisdictionOptions.SectionName)

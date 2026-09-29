@@ -30,9 +30,11 @@ internal sealed class ShipmentStats(IDbConnectionFactory connections) : IShipmen
 
     /// <summary>
     /// Live rows past their first failed pass, whichever worker took them:
-    /// both claims' failure paths increment <c>Attempts</c>, so one column
-    /// answers for both (spec, section 4). <c>TerminalAt</c> bounds it,
-    /// because <c>Shipment.Cancel</c> voids a pending row without clearing
+    /// both claims' failure paths increment <c>Attempts</c> and a pass either
+    /// worker applies clears it, because spec section 7 gives them one column.
+    /// So a Booked row whose cancellation keeps failing while its polls succeed
+    /// counts only between a failure and the next poll. <c>TerminalAt</c>
+    /// bounds it: <c>Shipment.Cancel</c> voids a pending row without clearing
     /// <c>Attempts</c>, and a row nothing will claim again is not waiting.
     /// </summary>
     private const string WaitingSql =
