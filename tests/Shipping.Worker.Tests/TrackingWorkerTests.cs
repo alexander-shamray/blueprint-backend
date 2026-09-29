@@ -1,3 +1,4 @@
+using Common.Infrastructure.Outbox;
 using Microsoft.Extensions.DependencyInjection;
 using Shipping.Domain.Shipments;
 using Shipping.Infrastructure.Carrier;
@@ -85,9 +86,11 @@ public sealed class TrackingWorkerTests(ServiceFixture fixture) : IAsyncLifetime
             "a terminal row is released like any other, not left to its lease");
 
         // Order, not membership: Ordering's saga finalises on the first and
-        // ADR-051's projection reads both.
+        // ADR-051's projection reads both. Staging order, read off the identity
+        // column, because both rows carry the one recording instant and
+        // OccurredAt cannot tell them apart (Shipment.Record).
         (await fixture.OutboxAsync())
-            .OrderBy(row => row.OccurredAt)
+            .OrderBy(row => row.Id)
             .Select(row => row.MessageType.Split('.')[^1])
             .ShouldBe(["ShipmentDispatched", "ShipmentDelivered"]);
     }
@@ -97,7 +100,7 @@ public sealed class TrackingWorkerTests(ServiceFixture fixture) : IAsyncLifetime
     {
         // Spec section 6's third case. SIM-LATE's cancel answers too late, and
         // its events fall to the simulator's default page, collected and then
-        // delivered, so the despatch is published ahead of the delivery.
+        // delivered, so the despatch is staged ahead of the delivery.
         Shipment shipment = await fixture.BookedAsync("SIM-LATE");
         await fixture.RequestCancellationAsync(shipment.Id);
 
@@ -113,20 +116,28 @@ public sealed class TrackingWorkerTests(ServiceFixture fixture) : IAsyncLifetime
         await fixture.RunFulfilmentPassAsync();
         fixture.Carrier.LogEntries.Count.ShouldBe(carrierCalls, "a refused cancellation is outside the claim");
 
+        // Read off the clock the handler stamps with, on either side of the
+        // pass, so the bound below is the pass's own duration and no skew.
+        TimeProvider clock = fixture.Factory.Services.GetRequiredService<TimeProvider>();
+        DateTimeOffset before = clock.GetUtcNow();
+
         (await Worker().ProcessBatchAsync(TestContext.Current.CancellationToken)).ShouldBe(1);
 
+        DateTimeOffset after = clock.GetUtcNow();
+
         (await fixture.StatusAsync(shipment.Id)).ShouldBe("Delivered");
-        (await fixture.OutboxAsync())
-            .OrderBy(row => row.OccurredAt)
+        IReadOnlyList<OutboxMessage> outbox = await fixture.OutboxAsync();
+        outbox
+            .OrderBy(row => row.Id)
             .Select(row => row.MessageType.Split('.')[^1])
             .ShouldBe(["ShipmentDispatched", "ShipmentDelivered"]);
 
-        // Deliver raises the despatch itself on a Booked row, so the order
-        // above holds without Collected; the instant is the simulator's
-        // default page script (spec, section 9), and only Collected supplies it.
-        (await fixture.OutboxAsync())
+        // The despatch carries the instant the pass raised it, not the
+        // collection the simulator's default page scripts (spec, section 9):
+        // §9.4 stamps the row with it, and §13.3's lag is measured from it.
+        outbox
             .Single(row => row.MessageType.EndsWith("ShipmentDispatched", StringComparison.Ordinal))
-            .OccurredAt.ShouldBe(new DateTimeOffset(2026, 1, 2, 9, 0, 0, TimeSpan.Zero));
+            .OccurredAt.ShouldBeInRange(before, after);
     }
 
     [Fact]

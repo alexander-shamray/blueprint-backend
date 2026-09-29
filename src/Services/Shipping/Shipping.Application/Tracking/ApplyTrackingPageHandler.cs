@@ -7,12 +7,12 @@ namespace Shipping.Application.Tracking;
 
 /// <remarks>
 /// The aggregate, not the rank, keeps a delivery from getting ahead of its
-/// despatch: <c>Shipment.Deliver</c> despatches a Booked row first. Rank
-/// decides which instant that despatch carries, the carrier's collection when
-/// the page has one. Publication order is the outbox's, by OccurredAt (§9.4),
-/// and is not promised here. The read <c>Include</c>s the tracking events
-/// because <c>Shipment.Record</c> deduplicates over the loaded ones (spec,
-/// section 5).
+/// despatch: <c>Shipment.Deliver</c> despatches a Booked row first, and both
+/// events carry the one recording instant. Over distinct event ids, rank
+/// decides no event and no instant; where a page repeats one id, it decides
+/// which arrival the key keeps. Publication order is the outbox's (§9.4). The
+/// read <c>Include</c>s the tracking events because <c>Shipment.Record</c>
+/// deduplicates over the loaded ones (spec, section 5).
 /// </remarks>
 public sealed class ApplyTrackingPageHandler(IShipmentRepository shipments, TimeProvider clock)
     : ICommandHandler<ApplyTrackingPageCommand, Result>

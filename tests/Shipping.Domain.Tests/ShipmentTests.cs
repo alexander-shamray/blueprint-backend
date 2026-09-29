@@ -105,7 +105,26 @@ public class ShipmentTests
 
         shipment.Status.ShouldBe(ShipmentStatus.Dispatched);
         shipment.DomainEvents.ShouldHaveSingleItem()
-            .ShouldBe(new ShipmentDispatchedDomainEvent(shipment.Id, shipment.OrderId, "TRK1", Now.AddHours(1)));
+            .ShouldBe(new ShipmentDispatchedDomainEvent(shipment.Id, shipment.OrderId, "TRK1", Now.AddHours(2)));
+    }
+
+    [Fact]
+    public void The_events_carry_the_recording_instant_and_the_row_keeps_the_carriers()
+    {
+        // §9.4 stamps the outbox row with the event's OccurredAt and §13.3
+        // measures lag from it, so the carrier's instant stays on the tracking
+        // row (spec, section 7) and never reaches an event. A delivery on a
+        // Booked row raises both, so both are pinned.
+        Shipment shipment = Booked();
+
+        shipment.Record("e1", TrackingStatus.Delivered, Now.AddHours(1), Now.AddHours(2)).ShouldBeTrue();
+
+        shipment.DomainEvents.OfType<ShipmentDispatchedDomainEvent>().Single().OccurredAt.ShouldBe(Now.AddHours(2));
+        shipment.DomainEvents.OfType<ShipmentDeliveredDomainEvent>().Single().OccurredAt.ShouldBe(Now.AddHours(2));
+
+        TrackingEvent recorded = shipment.TrackingEvents.ShouldHaveSingleItem();
+        recorded.OccurredAt.ShouldBe(Now.AddHours(1), "the carrier's fact is kept as the carrier reported it");
+        recorded.RecordedAt.ShouldBe(Now.AddHours(2));
     }
 
     [Fact]

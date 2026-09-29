@@ -154,10 +154,15 @@ public sealed class Shipment : AggregateRoot<ShipmentId>
 
         _trackingEvents.Add(new TrackingEvent(Id, carrierEventId, status, occurredAt, now));
 
+        // The row keeps the carrier's instant (spec, section 7) and the events
+        // carry the recording one: §9.4 stamps the outbox row with a message's
+        // OccurredAt, and §13.3 measures lag from the raise, so a carrier's
+        // instant would count the poll delay, or a late scan's months, as the
+        // platform's own.
         return status switch
         {
-            TrackingStatus.Collected => Dispatch(occurredAt),
-            TrackingStatus.Delivered => Deliver(occurredAt, now),
+            TrackingStatus.Collected => Dispatch(now),
+            TrackingStatus.Delivered => Deliver(now),
             _ => false,
         };
     }
@@ -191,17 +196,17 @@ public sealed class Shipment : AggregateRoot<ShipmentId>
         ReleaseClaim();
     }
 
-    private bool Dispatch(DateTimeOffset occurredAt)
+    private bool Dispatch(DateTimeOffset now)
     {
         if (Status != ShipmentStatus.Booked)
             return false;
 
         Status = ShipmentStatus.Dispatched;
-        Raise(new ShipmentDispatchedDomainEvent(Id, OrderId, TrackingNumber!, occurredAt));
+        Raise(new ShipmentDispatchedDomainEvent(Id, OrderId, TrackingNumber!, now));
         return true;
     }
 
-    private bool Deliver(DateTimeOffset occurredAt, DateTimeOffset now)
+    private bool Deliver(DateTimeOffset now)
     {
         if (Status is not (ShipmentStatus.Booked or ShipmentStatus.Dispatched))
             return false;
@@ -210,11 +215,11 @@ public sealed class Shipment : AggregateRoot<ShipmentId>
         // despatch is not a timeline, and the two consumers of the first event
         // have already acted by the time the second is read.
         if (Status == ShipmentStatus.Booked)
-            Dispatch(occurredAt);
+            Dispatch(now);
 
         Status = ShipmentStatus.Delivered;
         TerminalAt = now;
-        Raise(new ShipmentDeliveredDomainEvent(Id, OrderId, TrackingNumber!, occurredAt));
+        Raise(new ShipmentDeliveredDomainEvent(Id, OrderId, TrackingNumber!, now));
         return true;
     }
 
