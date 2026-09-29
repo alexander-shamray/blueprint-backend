@@ -46,8 +46,9 @@ internal sealed class FulfilmentClaims(IDbConnectionFactory connections)
     // a row that is already scheduled. The ladder is the dispatcher's
     // (spec, section 4), read from its constants so the two cannot drift.
     //
-    // Nothing is abandoned by count: what ends the retrying is the row's age,
-    // which the pass reads against FulfilmentOptions.GiveUpAge (ADR-052).
+    // Nothing is abandoned by count. A Pending row's retrying ends at its age,
+    // which the pass reads against FulfilmentOptions.GiveUpAge (ADR-052); a
+    // Booked row awaiting the carrier's cancellation answer has no such end.
     private static readonly string FailSql =
         $"""
         UPDATE shipping.Shipments

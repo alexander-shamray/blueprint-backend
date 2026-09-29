@@ -179,7 +179,9 @@ public sealed class FulfilmentWorker(IServiceScopeFactory scopes, ILogger<Fulfil
 
         // Asked before the owner or the carrier is: past the age the saga has
         // already raised the order for review, so a booking made now would
-        // ship an order somebody is deciding about (ADR-052).
+        // ship an order somebody is deciding about (ADR-052). The contact row
+        // stays: nobody answered that the address does not exist, so it goes
+        // on ShippingRetentionService's window like any terminal shipment's.
         TimeSpan giveUpAge = sp.GetRequiredService<IOptions<FulfilmentOptions>>().Value.GiveUpAge!.Value;
 
         if (sp.GetRequiredService<TimeProvider>().GetUtcNow() - work.CreatedAt >= giveUpAge)
