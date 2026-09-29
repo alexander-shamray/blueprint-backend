@@ -43,18 +43,25 @@ Depth rises either way, so it cannot tell them apart. The rate at which the
 owning service finishes messages can: compare it with the same hour yesterday
 before concluding anything about the consumer. MassTransit counts every
 consumer type, commands and events alike, and errors are subtracted because a
-retried message is consumed again without draining anything:
+retried message is consumed again without draining anything. The errors
+series does not exist until a service's first fault, so it is coalesced to a
+zero per service; without that, `-` matches nothing and a healthy service
+reads as no data:
 
 ```promql
 sum by (service_name) (rate(messaging_masstransit_consume_ea_total[10m]))
 -
-sum by (service_name) (rate(messaging_masstransit_consume_errors_ea_total[10m]))
+(
+  sum by (service_name) (rate(messaging_masstransit_consume_errors_ea_total[10m]))
+  or
+  0 * sum by (service_name) (rate(messaging_masstransit_consume_ea_total[10m]))
+)
 ```
 
 It is per service, not per queue, so read the service that owns the queue the
 alert names; a service with two busy queues blends them. Ordering's saga
-endpoint is counted by `messaging_masstransit_saga_ea_total` and its errors
-series instead.
+endpoint is counted by `messaging_masstransit_saga_ea_total` and
+`messaging_masstransit_saga_errors_ea_total` instead, in the same form.
 
 ```bash
 kubectl -n <ns> get deploy <workload> -o jsonpath='{.spec.replicas}{"\n"}'

@@ -40,11 +40,12 @@ non-string, and `tag: 1.2` is a YAML float.
 {{/*
 NON-BLANK IS NOT AN ADDRESS, which is the same lesson one step further on.
 
-Two keys here are base addresses a host parses before it will start, and both
-hosts reject far more than the empty string: `AddJwtAuthentication` and
-`AddPaymentProvider` each require an absolute HTTP(S) URL with no query and no
-fragment, over HTTPS outside Development, and the provider additionally
-refuses user information because its credential is the API key alone. Under
+The keys that call this are base addresses a host parses before it will
+start, and each host rejects far more than the empty string:
+`AddJwtAuthentication`, `AddPaymentProvider` and `AddCarrierGateway` each
+require an absolute HTTP(S) URL with no query and no fragment, over HTTPS
+outside Development, and the two third-party registrations additionally refuse
+user information because each one's credential is its API key alone. Under
 `commerce.require` a value like `keycloak:8080/realms/commerce` or
 `https://u:p@psp/` rendered cleanly, began a rollout and died in the new pod —
 the failure every render-time guard in this file exists to move earlier.

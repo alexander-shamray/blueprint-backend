@@ -499,8 +499,8 @@ section 'The worker chart declares four capabilities, and each is required'
 # --------------------------------------------------------------------------
 # Shipping's host reads every key below before it will start (§15.4), so each
 # state that renders cleanly here is a pod that never starts. Asserted by
-# placement and not by presence: §15.4 puts the credential and the three
-# addresses in different Kinds, and a global grep proves neither.
+# placement and not by presence: §15.4 puts the credential in a Secret and the
+# two addresses and two windows in Config, and a global grep proves neither.
 SHIPPING_RENDER=$("$HELM" template shipping "$CHARTS_DIR/shipping" \
     --set-string image.tag="$TAG" $(overlay_for shipping))
 printf '%s\n' "$SHIPPING_RENDER" >"$OUT/shipping-capability.yaml"
