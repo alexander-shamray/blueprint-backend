@@ -332,12 +332,14 @@ OTEL_EXPORTER_OTLP_ENDPOINT: {{ include "commerce.require" (list .Values.observa
 {{- if .Values.identity.clientCredentials }}
 {{- /*
 Two of the three client-credential keys are Config and only the secret is a
-Secret (§15.4). They belong to the one host that calls a peer synchronously
-(§9.7, ADR-017); all three are [Required] on ServiceIdentityOptions and gated
-by ValidateOnStart, so a missing one is a refusal to boot rather than a 401
-somebody reads as the callee's fault.
+Secret (§15.4). They belong to the two hosts that call a peer synchronously
+— the BFF (§9.7, ADR-017) and Shipping's worker (ADR-052); all three are
+[Required] on ServiceIdentityOptions and gated by ValidateOnStart, so a missing
+one is a refusal to boot rather than a 401 somebody reads as the callee's
+fault.
 
-A second chart growing these is a design change, not a configuration change.
+A third chart growing these is a design change, not a configuration change;
+ADR-052 is the record that made it two.
 
 **The switch is its own key, and `clientId` used to be it.** That made the
 opt-out invalid rather than merely odd: clearing `identity.clientId` on the BFF
@@ -349,7 +351,7 @@ this the *required-for-some-hosts* category; an explicit boolean is what makes
 a host say which it is, and every value below is then required rather than
 implied.
 */}}
-Identity__Client__ClientId: {{ include "commerce.require" (list .Values.identity.clientId "identity.clientId is required when identity.clientCredentials: Web.Bff binds ServiceIdentityOptions unconditionally and ValidateOnStart refuses to boot without it (§15.4).") | quote }}
+Identity__Client__ClientId: {{ include "commerce.require" (list .Values.identity.clientId "identity.clientId is required when identity.clientCredentials: the hosts that declare it bind ServiceIdentityOptions unconditionally and ValidateOnStart refuses to boot without it (§15.4).") | quote }}
 Identity__Client__Scope: {{ include "commerce.require" (list .Values.identity.scope "identity.scope is required when identity.clientCredentials: it becomes the audience every service validates (§11.5), and ServiceIdentityOptions marks it [Required].") | quote }}
 {{- end }}
 {{- if (.Values.paymentProvider).enabled }}
@@ -364,6 +366,36 @@ charts carry no such block, and the parenthesised form reads a missing map as
 empty where the dotted one fails the render.
 */}}
 PaymentProvider__BaseUrl: {{ include "commerce.requireUrl" (list .Values.paymentProvider.baseUrl "paymentProvider.baseUrl is required when paymentProvider.enabled: AddPaymentProvider reads it eagerly and throws naming the key, so the host does not start (§15.4).") | quote }}
+{{- end }}
+{{- if (.Values.carrier).enabled }}
+{{- /*
+§3.2's carrier, on the provider's pattern one service over and for the same
+reason: an address is not a credential, so it is Config, and it is required
+because the host parses it before it will start (§15.4). HTTPS unconditionally,
+which `commerce.requireUrl` argues — a chart is how a cluster is deployed and
+sets no environment, so Production is what runs.
+*/}}
+Carrier__BaseUrl: {{ include "commerce.requireUrl" (list .Values.carrier.baseUrl "carrier.baseUrl is required when carrier.enabled: Shipping's carrier registration reads it eagerly and throws naming the key, so the host does not start (§15.4).") | quote }}
+{{- end }}
+{{- if (.Values.addressSource).enabled }}
+{{- /*
+ADR-052's address read, and the one required address here that `requireUrl`
+must NOT see. TLS terminates at the Ingress (§10.1) and every hop past it is
+plain http, so Ordering's HTTP/2-only endpoint is dialled over cleartext
+exactly as `PricingHop.cs` dials Catalog's — and the host's own guard says so,
+refusing user information and accepting either scheme.
+*/}}
+AddressSource__BaseUrl: {{ include "commerce.require" (list .Values.addressSource.baseUrl "addressSource.baseUrl is required when addressSource.enabled: the worker resolves the address owner eagerly (ADR-052) and does not start without it (§15.4).") | quote }}
+{{- end }}
+{{- if (.Values.jurisdiction).enabled }}
+{{- /*
+ADR-053's two statutory windows, required and never defaulted: a window is a
+fact about where a deployment runs, and a chart that guessed one would pick
+somebody's statute for them. The record says refused rather than clamped, and
+this is the render-time half of that — the host's own refusal is at start.
+*/}}
+Jurisdiction__AddressRetention: {{ include "commerce.require" (list .Values.jurisdiction.addressRetention "jurisdiction.addressRetention is required when jurisdiction.enabled: ADR-053 makes the window a value the deployment is given, and ShippingJurisdictionOptions refuses to boot without it.") | quote }}
+Jurisdiction__TrackingRetention: {{ include "commerce.require" (list .Values.jurisdiction.trackingRetention "jurisdiction.trackingRetention is required when jurisdiction.enabled: ADR-053's second window, on the same terms.") | quote }}
 {{- end }}
 {{- end -}}
 
@@ -437,10 +469,19 @@ database its host unconditionally resolves.
 {{- fail "redis.enabled is false but redis.secretRef is set. AddRedisConnections reads BOTH connection strings eagerly and throws naming the missing one (§8.1), so this renders cleanly and the host does not start. A capability is a fact about the code, not an environment setting." }}
 {{- end }}
 {{- if and .Values.identity.clientId (not .Values.identity.clientCredentials) }}
-{{- fail "identity.clientCredentials is false but identity.clientId is set. Web.Bff binds ServiceIdentityOptions unconditionally and ValidateOnStart refuses to boot without all three values (§15.4) — so this is a render that succeeds and a pod that never starts." }}
+{{- fail "identity.clientCredentials is false but identity.clientId is set. The hosts that declare it bind ServiceIdentityOptions unconditionally and ValidateOnStart refuses to boot without all three values (§15.4) — so this is a render that succeeds and a pod that never starts." }}
 {{- end }}
 {{- if and (or (.Values.paymentProvider).apiKeySecretRef (.Values.paymentProvider).baseUrl) (not (.Values.paymentProvider).enabled) }}
 {{- fail "paymentProvider.enabled is false but a paymentProvider setting is set. AddPaymentProvider reads both provider keys eagerly (§15.4), so this renders cleanly and the host does not start. A capability is a fact about the code, not an environment setting." }}
+{{- end }}
+{{- if and (or (.Values.carrier).apiKeySecretRef (.Values.carrier).baseUrl) (not (.Values.carrier).enabled) }}
+{{- fail "carrier.enabled is false but a carrier setting is set. Shipping reads both carrier keys eagerly (§15.4), so this renders cleanly and the host does not start. A capability is a fact about the code, not an environment setting." }}
+{{- end }}
+{{- if and (.Values.addressSource).baseUrl (not (.Values.addressSource).enabled) }}
+{{- fail "addressSource.enabled is false but addressSource.baseUrl is set. The worker resolves ADR-052's address owner at startup, so this renders cleanly and the host does not start." }}
+{{- end }}
+{{- if and (or (.Values.jurisdiction).addressRetention (.Values.jurisdiction).trackingRetention) (not (.Values.jurisdiction).enabled) }}
+{{- fail "jurisdiction.enabled is false but a jurisdiction window is set. ShippingJurisdictionOptions is validated at start (ADR-053), so this renders cleanly and the host does not start." }}
 {{- end }}
 {{- /*
 The other direction, and the one that moves a CREDENTIAL rather than stalling
@@ -451,17 +492,21 @@ calls `AddPaymentProvider`, holding the credential of one that does. The same
 is true of the BFF's client secret under `identity.clientCredentials`.
 
 Both blocks already say a capability is a fact about the code; until now they
-only enforced it downwards. These two enforce it upwards, and they name the
-owning chart because that is the fact: `AddPaymentProvider` is in
-`Payments.Api/Program.cs` and `ServiceIdentityOptions` is bound by `Web.Bff`
-alone (§9.7, ADR-017). A second chart growing either is a design change, and
-a design change edits this line.
+only enforced it downwards. These three enforce it upwards, and they name the
+owning charts because that is the fact: `AddPaymentProvider` is in
+`Payments.Api/Program.cs`, `AddCarrierGateway` is in
+`Shipping.Worker/Program.cs`, and `ServiceIdentityOptions` is bound by those
+two hosts that call a peer (§9.7, ADR-052). A further chart growing any of
+them is a design change, and a design change edits this line.
 */}}
 {{- if and (.Values.paymentProvider).enabled (ne .Chart.Name "payments") }}
 {{- fail (printf "paymentProvider.enabled is true on the %s chart, and only payments registers a provider (§3.2). This would mount the provider's Secret into a pod that never reads it — a credential crossing a service boundary, which no value in an environment file may do." .Chart.Name) }}
 {{- end }}
-{{- if and .Values.identity.clientCredentials (ne .Chart.Name "web-bff") }}
-{{- fail (printf "identity.clientCredentials is true on the %s chart, and the BFF is the one host that calls a peer synchronously (§9.7, ADR-017). This would mount the BFF's client secret into a pod that never presents it — a credential crossing a service boundary, which no value in an environment file may do." .Chart.Name) }}
+{{- if and (.Values.carrier).enabled (ne .Chart.Name "shipping") }}
+{{- fail (printf "carrier.enabled is true on the %s chart, and only shipping books with a carrier (§3.2). This would mount the carrier's Secret into a pod that never reads it — a credential crossing a service boundary, which no value in an environment file may do." .Chart.Name) }}
+{{- end }}
+{{- if and .Values.identity.clientCredentials (not (has .Chart.Name (list "web-bff" "shipping"))) }}
+{{- fail (printf "identity.clientCredentials is true on the %s chart, and the two hosts that call a peer synchronously are the BFF (§9.7, ADR-017) and Shipping's worker (ADR-052). This would mount one of their client secrets into a pod that never presents it — a credential crossing a service boundary, which no value in an environment file may do." .Chart.Name) }}
 {{- end }}
 {{- if .Values.database.enabled }}
 {{- /*
@@ -531,5 +576,12 @@ the duplicate write hardest to reproduce.
     secretKeyRef:
       name: {{ include "commerce.require" (list .Values.paymentProvider.apiKeySecretRef.name "paymentProvider.apiKeySecretRef.name is required when paymentProvider.enabled. The key is a reference, never a value (§15.3).") | quote }}
       key: {{ include "commerce.require" (list .Values.paymentProvider.apiKeySecretRef.key "paymentProvider.apiKeySecretRef.key is required when paymentProvider.enabled.") | quote }}
+{{- end }}
+{{- if (.Values.carrier).enabled }}
+- name: Carrier__ApiKey
+  valueFrom:
+    secretKeyRef:
+      name: {{ include "commerce.require" (list .Values.carrier.apiKeySecretRef.name "carrier.apiKeySecretRef.name is required when carrier.enabled. The key is a reference, never a value (§15.3).") | quote }}
+      key: {{ include "commerce.require" (list .Values.carrier.apiKeySecretRef.key "carrier.apiKeySecretRef.key is required when carrier.enabled.") | quote }}
 {{- end }}
 {{- end -}}
