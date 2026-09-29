@@ -313,7 +313,17 @@ public sealed class ServiceFixture : IAsyncLifetime
     {
         Shipment shipment = await BookedAsync("050000", line1: line1, city: city);
 
-        await RunTrackingPassAsync();
+        if (await RunTrackingPassAsync() != 1)
+        {
+            throw new InvalidOperationException("The tracking pass did not poll the shipment for postal code 050000.");
+        }
+
+        string status = await StatusAsync(shipment.Id);
+
+        if (!string.Equals(status, "Delivered", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException($"The tracking pass left the shipment {status}, not Delivered.");
+        }
 
         return shipment;
     }
@@ -340,7 +350,18 @@ public sealed class ServiceFixture : IAsyncLifetime
             shipment.Id.Value);
 
         await RequestCancellationAsync(shipment.Id);
-        await RunFulfilmentPassAsync();
+
+        if (await RunFulfilmentPassAsync() != 1)
+        {
+            throw new InvalidOperationException("The fulfilment pass did not void the shipment.");
+        }
+
+        string status = await StatusAsync(shipment.Id);
+
+        if (!string.Equals(status, "Voided", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException($"The fulfilment pass left the shipment {status}, not Voided.");
+        }
 
         return shipment;
     }
@@ -350,13 +371,25 @@ public sealed class ServiceFixture : IAsyncLifetime
     /// be crossed inside a test. <c>TerminalAt</c> is where the address window
     /// starts for any terminal state, and the tracking window's start for a
     /// delivered row (spec, section 7). Set absolutely, so a test may age one
-    /// row twice without compounding.
+    /// row twice without compounding. Throws for a row that is not terminal,
+    /// because ageing a live row would leave the window uncrossed.
     /// </summary>
-    public Task AgeTerminalAsync(ShipmentId id, TimeSpan age) =>
-        ExecuteAsync(
-            "UPDATE shipping.Shipments SET TerminalAt = DATEADD(second, {0}, SYSDATETIMEOFFSET()) WHERE Id = {1};",
-            -(int)age.TotalSeconds,
-            id.Value);
+    public async Task AgeTerminalAsync(ShipmentId id, TimeSpan age)
+    {
+        await using AsyncServiceScope scope = Factory.Services.CreateAsyncScope();
+        ShippingDbContext db = scope.ServiceProvider.GetRequiredService<ShippingDbContext>();
+
+        int updated = await db.Database.ExecuteSqlRawAsync(
+            "UPDATE shipping.Shipments SET TerminalAt = DATEADD(second, {0}, SYSDATETIMEOFFSET()) " +
+            "WHERE Id = {1} AND TerminalAt IS NOT NULL;",
+            [-(int)age.TotalSeconds, id.Value],
+            TestContext.Current.CancellationToken);
+
+        if (updated != 1)
+        {
+            throw new InvalidOperationException($"Shipment {id.Value} is not terminal, so it cannot be aged.");
+        }
+    }
 
     /// <summary>
     /// How many delivery addresses are held for one order — one or none, since

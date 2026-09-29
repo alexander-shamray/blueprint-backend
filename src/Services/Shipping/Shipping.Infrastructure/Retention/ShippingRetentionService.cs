@@ -126,10 +126,10 @@ public sealed class ShippingRetentionService : BackgroundService
     /// <paramref name="before"/>, in bounded batches.
     /// </summary>
     /// <remarks>
-    /// Selected then deleted by identity rather than by a join, as the spec's
-    /// section 7 has it: each statement is short and keyed by identity, so none
-    /// spans <c>Shipments</c>, the table both workers claim from. A full batch
-    /// means more may wait, up to <see cref="MaxBatchesPerPass"/>.
+    /// Selected then deleted by identity, as the spec's section 7 has it: the
+    /// delete holds no locks on <c>Shipments</c>, the table both workers claim
+    /// from, and the candidate read is a short READ COMMITTED select. A full
+    /// batch means more may wait, up to <see cref="MaxBatchesPerPass"/>.
     /// </remarks>
     private static async Task<int> PurgeAddressesAsync(
         IDbConnection connection,

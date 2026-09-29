@@ -49,6 +49,20 @@ public sealed class JurisdictionOptionsTests
         Should.Throw<Exception>(() => factory.CreateClient());
     }
 
+    [Fact]
+    public void The_host_starts_with_the_invented_windows()
+    {
+        // The control for the theory above: the same unreachable hosts start,
+        // so a refusal there is the window's and not the infrastructure's.
+        using ShippingWorkerFactory factory = new(
+            UnreachableSql,
+            UnreachableRabbit,
+            addressRetention: ShippingWorkerFactory.InventedAddressRetention,
+            trackingRetention: ShippingWorkerFactory.InventedTrackingRetention);
+
+        Should.NotThrow(() => factory.CreateClient());
+    }
+
     [Theory]
     [InlineData("AddressRetention", "")]
     [InlineData("TrackingRetention", "")]
