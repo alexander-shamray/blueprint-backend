@@ -157,12 +157,10 @@ public static IHostApplicationBuilder AddObservability(this IHostApplicationBuil
             // Every meter the platform exports, so every one an alert or SLO
             // reads from. A condition whose signal is not registered here
             // cannot fire — it looks configured and is silent, which is worse
-            // than having no alert at all.
+            // than having no alert at all. The service-prefixed names are
+            // ObservabilityExtensions' list, one per service meter and outbox
+            // lane, and this sample shows one of them rather than a copy.
             .AddMeter("Ordering.Orders")                       // §13.3, §13.6
-            .AddMeter("Ordering.Outbox")                       // §13.6 per-lane
-            .AddMeter("Inventory.Reservations")                // §13.3
-            .AddMeter("Inventory.Outbox")                      // §13.6 per-lane
-            .AddMeter("Payments.Provider")                     // §3.2's provider
             // Shared names, not service-prefixed: every service emits the same
             // instruments and the service.name resource attribute separates
             // them. One dashboard query then works for all of them, and a new
