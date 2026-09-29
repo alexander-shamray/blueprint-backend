@@ -350,10 +350,9 @@ public sealed class ServiceFixture : IAsyncLifetime
                 // test that accidentally dials the authority fails loudly
                 // rather than reaching a real identity provider.
                 //
-                // Not ValidateOnStart and not OptionsValidationException,
-                // which is what this comment said until PR-16 wrote the code:
-                // §15.4 keeps ServiceIdentityOptions as the solution's only
-                // options type, so there is no options class here to validate.
+                // Not ValidateOnStart and not OptionsValidationException: the
+                // authority is read eagerly rather than bound (§11.3), so
+                // there is no options class here to validate.
                 //
                 // No Identity:Client here. Ordering does not call a peer, so it
                 // never binds ServiceIdentityOptions (§9.7) and supplying one

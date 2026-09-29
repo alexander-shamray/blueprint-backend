@@ -1274,12 +1274,11 @@ no consumer can tell them apart. `Compensating` has no buyer meaning at all —
 what the buyer is owed is the outcome it works towards, and that arrives as
 `OrderCancelled`.
 
-> **`dispatched` and `delivered` wait on Shipping.** No service publishes
-> `ShipmentDispatched` or `ShipmentDelivered` yet; §3.2 assigns them to
-> Shipping, which is specified after this contract is agreed. Until it ships,
-> the reachable set is the other five and the routes are honest about
-> carrying no shipment. This is the timing the issue asked for — the contract
-> settled before the spec, so the spec is written against it.
+> **`dispatched` and `delivered` are Shipping's.** §3.2 assigns
+> `ShipmentDispatched` and `ShipmentDelivered` to Shipping, which was
+> specified after this contract was agreed and publishes both through its
+> outbox. This is the timing the issue asked for — the contract settled
+> before the spec, so the spec is written against it.
 
 ### The fields both routes carry
 
