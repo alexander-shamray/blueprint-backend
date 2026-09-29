@@ -35,8 +35,8 @@ internal sealed class FulfilmentSteps(ServiceFixture fixture)
         new("Абай даңғылы 1, ә ғ қ ң ө ұ ү һ і", "пәтер 12", "Алматы", "050000", "KZ");
 
     /// <summary>
-    /// Seeds the address the stub will answer with, or none, and publishes
-    /// the event that creates the shipment.
+    /// Seeds the address the stub will answer with, or none, publishes the
+    /// event that creates the shipment, and waits until the claim can see it.
     /// </summary>
     public async Task<Guid> ConfirmAsync(DeliveryAddress? address)
     {
@@ -46,6 +46,7 @@ internal sealed class FulfilmentSteps(ServiceFixture fixture)
             fixture.Ordering.Addresses[order] = Stub(address);
 
         await PublishAsync(Confirmed(order));
+        await fixture.WaitUntilAttemptDueAsync(order);
 
         return order;
     }
