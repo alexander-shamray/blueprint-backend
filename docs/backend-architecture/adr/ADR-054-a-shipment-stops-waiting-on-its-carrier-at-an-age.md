@@ -30,7 +30,9 @@ and gives each worker a failure count of its own.
    shipment's is. Measured from creation and not from the carrier's last
    event, because a feed that goes on reporting a parcel in transit would
    otherwise hold an address for as long as it talks, and an outer bound is
-   what the address needs.
+   what the address needs. Both ages count from `CreatedAt`, so
+   `FulfilmentOptions` refuses a give-up age at or past this one at start:
+   a shipment booked that late would be abandoned on its first poll.
 3. **Each worker counts its own failed passes.** `Attempts` is the fulfilment
    pass's and `PollAttempts` the tracking pass's, and a pass that succeeds
    clears only its own. One shared column let a working events feed reset the

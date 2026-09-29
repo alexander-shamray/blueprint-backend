@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using Shipping.Infrastructure.Tracking;
 
 namespace Shipping.Infrastructure.Fulfilment;
 
@@ -12,7 +13,7 @@ namespace Shipping.Infrastructure.Fulfilment;
 /// long outage decides whether a day's shipments wait for it. ADR-054 ends
 /// an unanswered cancellation at the same age.
 /// </summary>
-public sealed class FulfilmentOptions
+public sealed class FulfilmentOptions : IValidatableObject
 {
     /// <summary>The configuration section, named once (§15.4).</summary>
     public const string SectionName = "Fulfilment";
@@ -38,4 +39,20 @@ public sealed class FulfilmentOptions
     [Required]
     [Range(typeof(TimeSpan), MinimumGiveUpAge, MaximumGiveUpAge, ParseLimitsInInvariantCulture = true)]
     public TimeSpan? GiveUpAge { get; init; }
+
+    /// <summary>
+    /// Refuses an age at or past <c>TrackingWorker.GiveUpAge</c>: both are
+    /// measured from <c>Shipment.CreatedAt</c>, so a shipment booked that late
+    /// would be abandoned on its first poll (ADR-054). Run by the validator
+    /// after the annotations pass, so the value is present here.
+    /// </summary>
+    public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+    {
+        if (GiveUpAge >= TrackingWorker.GiveUpAge)
+        {
+            yield return new ValidationResult(
+                $"{nameof(GiveUpAge)} must be shorter than the tracking age of {TrackingWorker.GiveUpAge}.",
+                [nameof(GiveUpAge)]);
+        }
+    }
 }

@@ -38,6 +38,7 @@ public sealed class FulfilmentOptionsTests
     [InlineData("")]
     [InlineData("00:59:59")]
     [InlineData("3651.00:00:00")]
+    [InlineData("90.00:00:00")]
     public void The_failure_names_the_give_up_age(string value)
     {
         using ServiceProvider provider = Bound(value);
