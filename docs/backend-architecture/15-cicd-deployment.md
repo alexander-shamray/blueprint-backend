@@ -217,9 +217,11 @@ The second is the Helm tree (PR-23). A workflow path-filtered to
 `file://` dependencies, lints each one, and then renders every one and asserts
 what comes out: three probes per workload, a memory limit and no CPU limit, the
 hook annotations of [§7.4](07-persistence.md), the ConfigMap/Secret split of
-§15.4, and one client secret in the whole platform (§11.5). Rendering only — no
-cluster is reached, so schema validation against a live API server stays a
-deploy-time gate and is named in the script as not covered.
+§15.4, and a client secret on each of the charts whose host calls a peer and
+on none of the others (§11.5,
+[ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)).
+Rendering only — no cluster is reached, so schema validation against a live API
+server stays a deploy-time gate and is named in the script as not covered.
 
 The third is the observability tree (PR-24). A workflow path-filtered to
 `deploy/observability/**` runs `deploy/observability/check.py`, which pairs
@@ -766,7 +768,7 @@ observability:
 
 service:
   # True: something dials this workload by name. False is the worker case
-  # below, and it is the ONE key that separates Shipping's chart from this one.
+  # below: of the two routing keys, the one Shipping's chart sets differently.
   enabled: true
 
 ingress:
@@ -832,10 +834,10 @@ two Redis connection strings for as long as nothing called
 `IdempotencyBehavior` claims a `{service}:idem:` key before any protected
 command runs, so each of those charts carries a `redis:` block on `broker`'s
 shape — one Secret, but two distinct keys where the broker needs one — and
-§15.4's column is unconditional for them. The gateway, the BFF and Payments
-declare `redis.enabled: false` — written down rather than omitted, because a
-capability is a claim a chart makes rather than one to infer from a missing
-key.
+§15.4's column is unconditional for them. The gateway, the BFF, Payments and
+Shipping declare `redis.enabled: false` — written down rather than omitted,
+because a capability is a claim a chart makes rather than one to infer from a
+missing key.
 
 Neither list is restated anywhere else, and `deploy/helm/smoke.sh` is what
 holds both to the charts: it reads each service's source for a call to
@@ -872,8 +874,8 @@ of it, and telemetry is pushed to the collector rather than scraped (§13.2), so
 nothing else needs a stable name for these pods either:
 
 ```yaml
-# deploy/helm/shipping/values.yaml — both written down, one of them the
-# difference from Ordering
+# deploy/helm/shipping/values.yaml — both written down, and of the two only
+# the first differs from Ordering's
 service:
   enabled: false
 ingress:
@@ -886,7 +888,20 @@ the gateway has `ingress.enabled: true`: Catalog, Ordering and the BFF are all
 reached *through* the edge (§10.1, §10.2), so an Ingress on any of them would
 publish a second door past the rate limiting, the CORS policy and the
 forwarded-header handling that live there. Against Ordering, a worker differs
-by `service.enabled` alone.
+by `service.enabled` alone **among these two keys**, which is what this
+paragraph is about; Shipping's chart differs in more than them, and the next
+paragraph says how.
+
+**A worker's replica count is a decision and not a copy.** CPU utilisation is
+the wrong signal for a host that waits on a queue and on a third party — it
+idles through a carrier outage and through a backlog alike — so Shipping's
+chart sets `autoscaling.enabled: false` and `replicaCount: 3`: three for
+availability across a node drain, and §13.6's queue-backlog rule for finding
+out that three is too few. `deploy/helm/smoke.sh` partitions the charts into
+the autoscaled and the fixed-replica, and holds each chart's values to its
+side, because a branch driven by the file it is judging asserts nothing.
+§15.5's rollout already supports it: the first rung scales the Deployment and
+raises an HPA floor only where there is one.
 
 Both keys are still written down rather than left absent, and that half was
 never about the diff. A key that is missing looks the same whether it was
@@ -907,11 +922,12 @@ considered or forgotten.
 > can. A safety argument aimed at a copy nobody would perform protects nothing,
 > and reads as though it does.
 
-Exactly one chart in the platform carries client credentials, and the asymmetry
-is the design rather than an oversight:
+The charts whose host calls a peer carry client credentials and no other
+chart does, and which charts those are is the design rather than an oversight
+([ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)):
 
 ```yaml
-# deploy/helm/web-bff/values.yaml — the only chart with an Identity:Client
+# deploy/helm/web-bff/values.yaml — one of the two charts with an Identity:Client
 identity:
   authority: https://id.example.com/realms/commerce
   # Required by ValidateOnStart (§15.4): this host does call a peer (§9.7).
@@ -928,10 +944,12 @@ identity:
     key: client-secret
 ```
 
-> **A second chart setting `identity.clientCredentials: true` is a design
-> change, not a configuration change.** It means a host started calling a peer
-> synchronously, which is ADR-017's budget being spent — so the review question
-> is not "does the secret exist" but "why is this call not an event".
+> **A further chart setting `identity.clientCredentials: true` is a design
+> change, not a configuration change.** It means another host started calling a
+> peer synchronously, which is ADR-017's budget being spent — so the review
+> question is not "does the secret exist" but "why is this call not an event".
+> ADR-052 is where that question was answered for Shipping's worker, so a
+> review of this chart cites that record rather than arguing it again.
 
 The gateway's chart is not a service chart with the database parts deleted. It
 has no migrator, no client credentials, and two keys no service has — and every
@@ -1211,7 +1229,7 @@ namespace read access.
 | `Identity__Authority` | Config | Helm `identity.authority` → ConfigMap | ✓ — **every host**, including the gateway |
 | `Identity__Client__ClientId` | Config | Helm `identity.clientId` | ✓ **for a host that calls a peer** — the BFF ([§9.7](09-messaging.md), [§11.5](11-identity-authorization.md)), and Shipping's worker, for [ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)'s address read |
 | `Identity__Client__Scope` | Config | Helm `identity.scope` | ✓ **for a host that calls a peer**, as above |
-| `Identity__Client__ClientSecret` | Secret | `web-bff-identity` secret; one per host | ✓ **for a host that calls a peer**, as above |
+| `Identity__Client__ClientSecret` | Secret | `web-bff-identity` and `shipping-identity`; one per host, never shared — two hosts on one grant is one host able to act as the other (§11.5) | ✓ **for a host that calls a peer**, as above |
 | `Cors__Enabled` | Config | Helm `cors.enabled` → ConfigMap — **gateway only** | ✓ |
 | `Cors__Origins__0…n` | Config | Helm `cors.origins` → ConfigMap — **gateway only** | ✓ **when `Cors__Enabled`** |
 | `Ingress__Enabled` | Config | Helm `ingress.enabled` → ConfigMap — **gateway only** | ✓ — true in Kubernetes, false only where the gateway is the edge (Compose) |
@@ -1220,11 +1238,11 @@ namespace read access.
 | `OTEL_RESOURCE_ATTRIBUTES` | Config | Helm — derived from `canary.enabled`, never set by hand | ✓ — **every host**, as `deployment.track=stable` or `=canary`. §15.5's rollout compares the two tracks and this is the only thing that tells them apart ([ADR-022](adr/ADR-022-the-canary-is-a-second-release-weighted-by-replicas.md)) |
 | `PaymentProvider__BaseUrl` | Config | ConfigMap | ✓ — **Payments only**; the provider's address, and the host refuses to start without it |
 | `PaymentProvider__ApiKey` | Secret | External Secrets | ✓ — **Payments only**; the provider's credential, and the host refuses to start without it |
-| `Carrier__BaseUrl` | Config | ConfigMap | ✓ — **Shipping only**; the carrier's address, and the host refuses to start without it |
-| `Carrier__ApiKey` | Secret | External Secrets | ✓ — **Shipping only**; the carrier's credential, and the host refuses to start without it |
-| `AddressSource__BaseUrl` | Config | ConfigMap | ✓ — **Shipping only**; the owner's address for [ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)'s read, and the host refuses to start without it |
-| `Jurisdiction__AddressRetention` | Config | ConfigMap | ✓ — **Shipping only**; ADR-053's statutory window for a delivery address, and the host refuses to start without it |
-| `Jurisdiction__TrackingRetention` | Config | ConfigMap | ✓ — **Shipping only**; ADR-053's statutory window for a shipment's tracking events, and the host refuses to start without it |
+| `Carrier__BaseUrl` | Config | Helm `carrier.baseUrl` → ConfigMap | ✓ — **Shipping only**; the carrier's address, and the host refuses to start without it |
+| `Carrier__ApiKey` | Secret | Helm `carrier.apiKeySecretRef` → External Secrets | ✓ — **Shipping only**; the carrier's credential, and the host refuses to start without it |
+| `AddressSource__BaseUrl` | Config | Helm `addressSource.baseUrl` → ConfigMap | ✓ — **Shipping only**; the owner's address for [ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)'s read, and the host refuses to start without it |
+| `Jurisdiction__AddressRetention` | Config | Helm `jurisdiction.addressRetention` → ConfigMap | ✓ — **Shipping only**; ADR-053's statutory window for a delivery address, and the host refuses to start without it |
+| `Jurisdiction__TrackingRetention` | Config | Helm `jurisdiction.trackingRetention` → ConfigMap | ✓ — **Shipping only**; ADR-053's statutory window for a shipment's tracking events, and the host refuses to start without it |
 
 | Kind | Source | Example |
 |---|---|---|

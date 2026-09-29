@@ -82,7 +82,7 @@ change:
 |---|---|
 | 1. Compose | the host's own unit under `deploy/compose/services/` (§14.1), with a working inline default |
 | 2. The Aspire host | §14.2 — **not adopted**, so this is a line to write only if it ever is |
-| 3. Helm values | `deploy/helm/<chart>/values.yaml` and the umbrella (§15.3) |
+| 3. Helm values | `deploy/helm/<chart>/values.yaml`, inside the capability block that makes the key conditional where the chart has one; the umbrella holds no values of its own, so its caller passes the same value under the subchart's name (§15.3) |
 | 4. The inventory | §15.4's table — the row is what makes the obligation reviewable |
 | 5. The integration-test fixture | §12.4 — and this one fails first |
 
@@ -136,7 +136,9 @@ Keycloak supports two active secrets during a rotation; use that rather than a
 flip.
 
 1. Add the new secret in Keycloak, keeping the old one valid.
-2. Update the vault entry.
+2. Update the vault entry — `web-bff-identity` for the BFF,
+   `shipping-identity` for Shipping's worker. Each chart names its own under
+   `identity.clientSecretRef`, and they are never one Secret.
 3. Wait for External Secrets to reconcile, then restart the pods of the host
    whose secret this is — configuration is read at startup, so a reconciled
    Secret does not reach a running process.

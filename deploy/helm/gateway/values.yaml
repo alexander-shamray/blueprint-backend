@@ -83,7 +83,7 @@ identity:
   authority: https://id.example.com/realms/commerce
   # False, and written down rather than absent: §15.4's
   # required-for-some-hosts category is a claim a chart has to make, not one to
-  # infer from a missing key. Exactly one chart in the platform sets it true.
+  # infer from a missing key.
   clientCredentials: false
 
 # The gateway owns no schema and reads no broker connection, so both are off
