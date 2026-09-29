@@ -154,16 +154,17 @@ public sealed class WaitingGaugeTests(ServiceFixture fixture) : IAsyncLifetime
     public async Task A_booked_row_waits_from_its_cancellation_not_from_its_making()
     {
         // Booked on its first pass two days ago, so NextAttemptAt still holds
-        // the making; the cancellation just now is when the claim was owed it.
+        // the making; the cancellation thirty seconds ago is when the claim was
+        // owed it. Zero is a failure too: a gauge blind to the row reads it.
         Shipment booked = await fixture.BookedAsync("SIM-TRANSIT");
         await fixture.ExecuteAsync(
-            "UPDATE shipping.Shipments SET NextAttemptAt = DATEADD(day, -2, SYSDATETIMEOFFSET()) WHERE Id = {0};",
+            "UPDATE shipping.Shipments SET NextAttemptAt = DATEADD(day, -2, SYSDATETIMEOFFSET()), " +
+            "CancellationRequestedAt = DATEADD(second, -30, SYSDATETIMEOFFSET()) WHERE Id = {0};",
             booked.Id.Value);
-        await fixture.RequestCancellationAsync(booked.Id);
 
         List<(string Tag, double Value)> measured = ReadGauge("shipping.shipments.overdue", "pass");
 
-        measured.Single(m => m.Tag == "fulfilment").Value.ShouldBeInRange(0, 60);
+        measured.Single(m => m.Tag == "fulfilment").Value.ShouldBeInRange(30, 90);
     }
 
     /// <summary>
