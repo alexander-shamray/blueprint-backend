@@ -21,11 +21,7 @@ public sealed class FulfilmentOptions
     /// </summary>
     public const string MinimumGiveUpAge = "01:00:00";
 
-    /// <summary>
-    /// Ten years, which is a configuration error rather than a policy, and
-    /// keeps the age representable when the pass subtracts it from a
-    /// <c>DateTimeOffset</c>.
-    /// </summary>
+    /// <summary>Ten years, which is a configuration error rather than a policy.</summary>
     public const string MaximumGiveUpAge = "3650.00:00:00";
 
     /// <summary>

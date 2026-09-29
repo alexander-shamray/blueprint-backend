@@ -120,8 +120,8 @@ public sealed class ShipmentFulfilmentTests(ServiceFixture fixture) : IAsyncLife
     [Fact]
     public async Task A_shipment_inside_its_give_up_age_is_still_retried()
     {
-        // The control for the case above: the same failing owner, a row a
-        // minute short of the age, and the row backs off rather than ending.
+        // The control for the case above: a failing owner and a row a minute
+        // short of the age, which backs off rather than ending.
         Guid order = await _steps.ConfirmAsync(FulfilmentSteps.Kazakh);
         await _steps.AgeAsync(order, GiveUpAge() - TimeSpan.FromMinutes(1));
         fixture.Ordering.Fail(StatusCode.PermissionDenied);
@@ -288,11 +288,11 @@ public sealed class ShipmentFulfilmentTests(ServiceFixture fixture) : IAsyncLife
     private static bool ClaimFailedLogged(ShippingWorkerFactory host) =>
         host.CapturedLogs.Everything.Any(line => line.StartsWith("Fulfilment claim failed", StringComparison.Ordinal));
 
-    // Parsed rather than searched: the adapter's serialiser escapes every
-    // non-ASCII character, so the raw body holds none of the address's text.
     private TimeSpan GiveUpAge() =>
         fixture.Factory.Services.GetRequiredService<IOptions<FulfilmentOptions>>().Value.GiveUpAge!.Value;
 
+    // Parsed rather than searched: the adapter's serialiser escapes every
+    // non-ASCII character, so the raw body holds none of the address's text.
     private string BookingBody()
     {
         string body = fixture.Carrier.LogEntries
