@@ -6,8 +6,8 @@ namespace Shipping.Application.Tracking;
 
 /// <summary>
 /// Ends a shipment the carrier never finished and releases the tracking lease
-/// in the same commit, whichever the move decided: a row the claim projected
-/// as live may have turned terminal since, and it is done with either way.
+/// in the same commit. The lease is what makes the move certain: the claim
+/// took a Booked or Dispatched row, and nothing else moves one while it holds.
 /// </summary>
 public sealed class AbandonShipmentHandler(IShipmentRepository shipments, TimeProvider clock)
     : ICommandHandler<AbandonShipmentCommand, Result>

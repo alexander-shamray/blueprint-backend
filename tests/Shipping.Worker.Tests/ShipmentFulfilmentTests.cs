@@ -296,8 +296,7 @@ public sealed class ShipmentFulfilmentTests(ServiceFixture fixture) : IAsyncLife
     [Fact]
     public async Task A_fulfilment_pass_leaves_the_tracking_pass_s_count_alone()
     {
-        // The converse of TrackingWorkerTests' case: each worker clears only
-        // its own count (ADR-054).
+        // Each worker clears only its own count (ADR-054).
         Shipment shipment = await fixture.BookedAsync("SIM-LATE");
         await fixture.RequestCancellationAsync(shipment.Id);
         await fixture.SetPollAttemptsAsync(shipment.Id, 2);

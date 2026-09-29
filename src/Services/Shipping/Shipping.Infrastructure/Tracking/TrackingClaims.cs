@@ -70,9 +70,9 @@ internal sealed class TrackingClaims(IDbConnectionFactory connections)
         WHERE shipment.Id = @Id;
         """;
 
-    // Hands a claimed row back unchanged, for the next tick. Neither Attempts
-    // nor NextPollAt moves: the pass ran out of time, which is not a fact about
-    // the carrier.
+    // Hands a claimed row back unchanged, for the next tick. Neither
+    // PollAttempts nor NextPollAt moves: the pass ran out of time, which is
+    // not a fact about the carrier.
     private const string ReleaseSql =
         "UPDATE shipping.Shipments SET LockedUntil = NULL WHERE Id = @Id;";
 

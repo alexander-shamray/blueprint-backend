@@ -24,9 +24,8 @@ public partial class SplitShipmentAttemptsAndIndexClaims : Migration
             nullable: false,
             defaultValue: 0);
 
-        // A row the carrier voided kept its poll schedule until
-        // Shipment.CarrierCancelled cleared it, so the tracking index would
-        // start out holding rows its claim never takes.
+        // Rows already voided still hold a NextPollAt the tracking claim never
+        // takes, and the tracking index is filtered on it.
         migrationBuilder.Sql(
             "UPDATE shipping.Shipments SET NextPollAt = NULL " +
             "WHERE NextPollAt IS NOT NULL AND Status NOT IN ('Booked', 'Dispatched');");
