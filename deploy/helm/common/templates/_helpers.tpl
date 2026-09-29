@@ -357,12 +357,12 @@ Identity__Client__Scope: {{ include "commerce.require" (list .Values.identity.sc
 {{- end }}
 {{- if (.Values.paymentProvider).enabled }}
 {{- /*
-The provider's address (§3.2's one third party). Config, not a Secret: an
+The provider's address (§3.2's payment provider). Config, not a Secret: an
 address is not a credential. Required, and refused at render when empty,
 because the host's own refusal is at start — a clean render followed by a pod
 that will not start is the shape every guard in this file exists to refuse.
 
-`(.Values.paymentProvider).enabled` rather than the dotted form: the four other
+`(.Values.paymentProvider).enabled` rather than the dotted form: the other
 charts carry no such block, and the parenthesised form reads a missing map as
 empty where the dotted one fails the render.
 */}}
@@ -518,9 +518,9 @@ pod with a `secretKeyRef` to Payments' provider Secret — a host that never
 calls `AddPaymentProvider`, holding the credential of one that does. The same
 is true of the BFF's client secret under `identity.clientCredentials`.
 
-Both blocks already say a capability is a fact about the code; until now they
-only enforced it downwards. These three enforce it upwards, and they name the
-owning charts because that is the fact: `AddPaymentProvider` is in
+The capability blocks already say a capability is a fact about the code, and
+the guards above enforce it downwards. These enforce it upwards, and they name
+the owning charts because that is the fact: `AddPaymentProvider` is in
 `Payments.Api/Program.cs`, `AddCarrierGateway` is in
 `Shipping.Worker/Program.cs`, and `ServiceIdentityOptions` is bound by those
 two hosts that call a peer (§9.7, ADR-052). A further chart growing any of

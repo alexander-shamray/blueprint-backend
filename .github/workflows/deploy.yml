@@ -582,10 +582,15 @@ jobs:
               value = value[key]
           print(int(value))' "$@"
           }
+          # Which count to restore comes from the promoted values too, because
+          # a promotion can switch a chart between an HPA and a fixed count.
           if [ -n "${PROMOTED:-}" ]; then
-            if [ -n "${HPA_FLOOR:-}" ]; then
+            if ! autoscaled=$(declared_count autoscaling enabled); then
+              failed=1
+            elif [ "$autoscaled" -eq 1 ]; then
               if declared=$(declared_count autoscaling minReplicas); then HPA_FLOOR="$declared"; else failed=1; fi
-            elif [ -n "${STABLE_REPLICAS_BEFORE:-}" ]; then
+            else
+              HPA_FLOOR=""
               if declared=$(declared_count replicaCount); then STABLE_REPLICAS_BEFORE="$declared"; else failed=1; fi
             fi
           fi
