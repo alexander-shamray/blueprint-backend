@@ -43,6 +43,29 @@ public sealed class WaitingGaugeTests(ServiceFixture fixture) : IAsyncLifetime
             "every state reports, because a state missing from a sum reads as a healthy zero");
     }
 
+    [Fact]
+    public async Task A_terminal_row_that_backed_off_is_not_counted()
+    {
+        // A pending row past its first backoff, then voided by OrderCancelled
+        // through the real consumer: Shipment.Cancel moves the state and
+        // leaves Attempts where the failed pass put it.
+        FulfilmentSteps steps = new(fixture);
+        Guid order = await steps.ConfirmAsync(FulfilmentSteps.Kazakh);
+        ShipmentId pending = new(await steps.ShipmentIdAsync(order));
+        await fixture.SetAttemptsAsync(pending, 1);
+
+        await steps.PublishAsync(FulfilmentSteps.Cancelled(order));
+
+        (await fixture.StatusAsync(pending)).ShouldBe("Voided");
+        (await fixture.AttemptsAsync(pending)).ShouldBe(1, "the void left the counter, which is the case under test");
+
+        List<(string State, double Value)> measured = ReadWaitingGauge();
+
+        measured.ShouldContain(
+            m => m.State == "Voided" && m.Value == 0,
+            "a row no worker will claim again is not waiting on anything");
+    }
+
     /// <summary>
     /// Spec section 11's waiting gauge, read once per call: one entry per state
     /// the callback reported, with the value it produced. Built over a stats
