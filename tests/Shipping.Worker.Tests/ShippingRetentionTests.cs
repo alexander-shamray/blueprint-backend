@@ -89,9 +89,8 @@ public sealed class ShippingRetentionTests(ServiceFixture fixture) : IAsyncLifet
     [Fact]
     public async Task No_line_of_the_purge_holds_an_address()
     {
-        // Spec section 11, at the one pass that reads the address table. The
-        // log takes the shipment's id and the order's id; a row count is not a
-        // person.
+        // Spec section 11: no line the purge pass logs holds an address. Its
+        // lines carry a row count and a table name, and neither is a person.
         Shipment terminal = await fixture.DeliveredAsync(line1: "12 Абай даңғылы", city: "Алматы");
         await fixture.AgeTerminalAsync(terminal.Id, TimeSpan.FromDays(12));
 

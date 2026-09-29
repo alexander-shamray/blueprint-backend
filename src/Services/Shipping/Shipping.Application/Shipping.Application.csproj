@@ -7,8 +7,8 @@
     table's second row, and §4.3's one assembly permitted to cross a service
     boundary. It crosses inbound at the consumers, which read
     Common.Contracts.Ordering.V1 directly (§9.4), and outbound at the §9.3
-    mapper — the one place this project may name a contract of its own to
-    publish, and its allow-list stays empty until it does.
+    mapper — the one place this project names a contract of its own to
+    publish.
   -->
 
   <ItemGroup>

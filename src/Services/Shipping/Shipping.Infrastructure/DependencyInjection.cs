@@ -209,10 +209,10 @@ public static class DependencyInjection
         services.AddSingleton<IValidateOptions<ShippingJurisdictionOptions>, ShippingJurisdictionOptionsValidator>();
 
         // AddHostedService<T> for §12.4's reason, and by implementation type
-        // because that is what the fixture's removal matches on: an hourly
-        // timer would not race a run this short, but "the pass never happened"
-        // and "the pass spared the row" are the same green, so a test drives it
-        // rather than waits for it.
+        // because that is what the fixture's removal matches on: its start-up
+        // pass would purge while a fixture seeds rows, and "the pass never
+        // happened" and "the pass spared the row" are the same green, so a
+        // test drives it rather than waits for it.
         services.AddHostedService<ShippingRetentionService>();
 
         // §9.4's, §9.5's and §8.5's retention, in the one hosted service §9.5
