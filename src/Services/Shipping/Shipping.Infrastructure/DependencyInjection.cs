@@ -6,6 +6,7 @@ using Shipping.Infrastructure.Idempotency;
 using Shipping.Infrastructure.Messaging;
 using Shipping.Infrastructure.Observability;
 using Shipping.Infrastructure.Persistence;
+using Shipping.Infrastructure.Retention;
 using Common.Application;
 using Common.Contracts;
 using Common.Infrastructure.Idempotency;
@@ -16,6 +17,7 @@ using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 namespace Shipping.Infrastructure;
 
@@ -171,6 +173,19 @@ public static class DependencyInjection
         // remove exactly this registration by its implementation type.
         services.AddScoped<FulfilmentClaims>();
         services.AddHostedService<FulfilmentWorker>();
+
+        // §15.4's shape, in the registration helper that owns the consumer
+        // rather than in Program.cs: a binding hoisted upwards re-imposes the
+        // key on every host, which is the mistake that section spends a
+        // paragraph on. ValidateOnStart is what turns a missing statutory
+        // window into a refusal to boot — IOptions<T> always resolves, so
+        // without it the purge would run with a default-constructed instance
+        // and delete nothing while reporting healthy (ADR-053).
+        services
+            .AddOptions<ShippingJurisdictionOptions>()
+            .BindConfiguration(ShippingJurisdictionOptions.SectionName)
+            .ValidateOnStart();
+        services.AddSingleton<IValidateOptions<ShippingJurisdictionOptions>, ShippingJurisdictionOptionsValidator>();
 
         // §9.4's, §9.5's and §8.5's retention, in the one hosted service §9.5
         // asks for. Registered last, so it is the first stopped: it is pure
