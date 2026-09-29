@@ -57,6 +57,27 @@ internal sealed class ShipmentConfiguration : IEntityTypeConfiguration<Shipment>
         builder.Property(s => s.LockedUntil);
         builder.Property(s => s.NextPollAt);
 
+        // Defaulted in the database for CreatedAt's reason: the version still
+        // running during a rollout inserts without it (§7.4).
+        builder.Property(s => s.PollAttempts).HasDefaultValue(0);
+
+        // One index per claim, filtered to the rows it may take, because the
+        // table is never purged and an empty tick would otherwise scan it. The
+        // claims repeat each filter in their predicates, which is what lets the
+        // optimiser match it; a filter cannot say OR, so the fulfilment index
+        // also holds booked rows with no cancellation, which its claim skips.
+        builder
+            .HasIndex(s => s.NextAttemptAt)
+            .HasDatabaseName("IX_Shipments_FulfilmentClaim")
+            .HasFilter("[Status] IN ('Pending', 'Booked') AND [CancellationRefusedAt] IS NULL")
+            .IncludeProperties(s => new { s.Status, s.CancellationRequestedAt, s.LockedUntil });
+
+        builder
+            .HasIndex(s => s.NextPollAt)
+            .HasDatabaseName("IX_Shipments_TrackingClaim")
+            .HasFilter("[NextPollAt] IS NOT NULL")
+            .IncludeProperties(s => new { s.Status, s.LockedUntil });
+
         builder.Property(s => s.Version).HasColumnName("RowVersion").IsRowVersion();
 
         builder.Ignore(s => s.DomainEvents);

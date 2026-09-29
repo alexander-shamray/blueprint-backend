@@ -22,33 +22,35 @@ internal sealed class FulfilmentClaims(IDbConnectionFactory connections)
     // Two populations, one claim: a Pending shipment to book, and a Booked one
     // whose cancellation the carrier has not answered yet (spec, section 5).
     // Every terminal state is outside both, so nothing already finished is
-    // ever claimed.
+    // ever claimed. The first two predicates repeat ShipmentConfiguration's
+    // index filter word for word, which is what lets the optimiser match it.
     private static readonly string ClaimSql =
         $"""
         WITH claimable AS (
             SELECT TOP ({FulfilmentWorker.ClaimBatchSize}) *
             FROM shipping.Shipments WITH (UPDLOCK, READPAST, ROWLOCK)
-            WHERE NextAttemptAt <= SYSDATETIMEOFFSET()
+            WHERE Status IN ('Pending', 'Booked')
+                AND CancellationRefusedAt IS NULL
+                AND (Status = 'Pending' OR CancellationRequestedAt IS NOT NULL)
+                AND NextAttemptAt <= SYSDATETIMEOFFSET()
                 AND (LockedUntil IS NULL OR LockedUntil < SYSDATETIMEOFFSET())
-                AND (Status = 'Pending'
-                     OR (Status = 'Booked'
-                         AND CancellationRequestedAt IS NOT NULL
-                         AND CancellationRefusedAt IS NULL))
             ORDER BY NextAttemptAt
         )
         UPDATE claimable
         SET LockedUntil = DATEADD(second, {FulfilmentWorker.LeaseSeconds}, SYSDATETIMEOFFSET())
-        OUTPUT inserted.Id, inserted.OrderId, inserted.Status, inserted.CarrierReference, inserted.CreatedAt;
+        OUTPUT inserted.Id, inserted.OrderId, inserted.Status, inserted.CarrierReference, inserted.CreatedAt,
+            inserted.CancellationRequestedAt;
         """;
 
-    // Increments the attempt counter and backs off by pushing NextAttemptAt
-    // forward, and drops the lease so a replica does not wait out a minute for
-    // a row that is already scheduled. The ladder is the dispatcher's
-    // (spec, section 4), read from its constants so the two cannot drift.
+    // Increments this worker's attempt counter and backs off by pushing
+    // NextAttemptAt forward, and drops the lease so a replica does not wait
+    // out a minute for a row that is already scheduled. The ladder is the
+    // dispatcher's (spec, section 4), read from its constants so the two
+    // cannot drift.
     //
-    // Nothing is abandoned by count. A Pending row's retrying ends at its age,
-    // which the pass reads against FulfilmentOptions.GiveUpAge (ADR-052); a
-    // Booked row awaiting the carrier's cancellation answer has no such end.
+    // Nothing is abandoned by count: each population's retrying ends at its
+    // age, which the pass reads against FulfilmentOptions.GiveUpAge (ADR-052,
+    // ADR-054).
     private static readonly string FailSql =
         $"""
         UPDATE shipping.Shipments

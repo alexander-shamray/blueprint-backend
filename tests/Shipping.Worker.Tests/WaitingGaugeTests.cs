@@ -44,6 +44,19 @@ public sealed class WaitingGaugeTests(ServiceFixture fixture) : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_row_whose_polls_are_failing_is_counted_too()
+    {
+        // Each worker counts its own failures (ADR-054), so the gauge reads
+        // both counts or it goes blind to a carrier whose feed is down.
+        Shipment booked = await fixture.BookedAsync("SIM-TRANSIT");
+        await fixture.SetPollAttemptsAsync(booked.Id, 1);
+
+        List<(string State, double Value)> measured = ReadWaitingGauge();
+
+        measured.ShouldContain(m => m.State == "Booked" && m.Value == 1);
+    }
+
+    [Fact]
     public async Task A_terminal_row_that_backed_off_is_not_counted()
     {
         // A pending row past its first backoff, then voided by OrderCancelled

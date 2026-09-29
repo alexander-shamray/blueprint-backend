@@ -66,7 +66,8 @@ public sealed class TrackingFaultTests : IAsyncLifetime
         (await Worker().ProcessBatchAsync(TestContext.Current.CancellationToken)).ShouldBe(0);
 
         (await _fixture.StatusAsync(shipment.Id)).ShouldBe("Booked", "an outage is never an answer");
-        (await _fixture.AttemptsAsync(shipment.Id)).ShouldBe(1);
+        (await _fixture.PollAttemptsAsync(shipment.Id)).ShouldBe(1);
+        (await _fixture.AttemptsAsync(shipment.Id)).ShouldBe(0, "the fulfilment pass's ladder is its own (ADR-054)");
         (await _fixture.LockedUntilAsync(shipment.Id)).ShouldBeNull("a backed-off row is released, not held");
         (await _fixture.NextPollAtAsync(shipment.Id)).ShouldNotBeNull().ShouldBeGreaterThanOrEqualTo(
             before + CarrierHop.TrackingPollInterval,

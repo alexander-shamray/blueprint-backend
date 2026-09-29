@@ -1,5 +1,6 @@
 using Shipping.Domain.Shipments;
 using Shipping.Infrastructure.Retention;
+using Shipping.Infrastructure.Tracking;
 using Shipping.TestSupport;
 using Shouldly;
 using Xunit;
@@ -36,6 +37,23 @@ public sealed class ShippingRetentionTests(ServiceFixture fixture) : IAsyncLifet
         (await fixture.AddressCountAsync(live.OrderId)).ShouldBe(1, "a shipment still moving still needs its address");
         (await fixture.AddressCountAsync(terminal.OrderId)).ShouldBe(0);
         (await fixture.StatusAsync(terminal.Id)).ShouldBe("Delivered", "the shipment's own record is whole");
+    }
+
+    [Fact]
+    public async Task A_shipment_the_carrier_never_finished_loses_its_address_on_the_same_window()
+    {
+        // ADR-054's outer bound is what starts the window for a parcel never
+        // delivered: abandoned by the tracking pass, then aged past the window.
+        Shipment shipment = await fixture.BookedAsync("SIM-TRANSIT");
+        await fixture.AgeCreatedAsync(shipment.Id, TrackingWorker.GiveUpAge + TimeSpan.FromMinutes(1));
+        (await fixture.RunTrackingPassAsync()).ShouldBe(1);
+        (await fixture.StatusAsync(shipment.Id)).ShouldBe("Abandoned");
+        await fixture.AgeTerminalAsync(shipment.Id, TimeSpan.FromDays(12));
+
+        (int addresses, _) = await fixture.PurgeShippingRetentionAsync();
+
+        addresses.ShouldBe(1);
+        (await fixture.AddressCountAsync(shipment.OrderId)).ShouldBe(0);
     }
 
     [Fact]

@@ -27,6 +27,9 @@ internal sealed class TrackingClaims(IDbConnectionFactory connections)
     // second population and is pollable at the same time, so the two claims
     // overlap by design. Whichever stamps LockedUntil first holds the row until
     // its lease lapses, which is what two writers to one aggregate should be.
+    //
+    // NextPollAt IS NOT NULL repeats ShipmentConfiguration's index filter,
+    // which is what lets the optimiser match it.
     private static readonly string ClaimSql =
         $"""
         WITH claimable AS (
@@ -40,24 +43,23 @@ internal sealed class TrackingClaims(IDbConnectionFactory connections)
         )
         UPDATE claimable
         SET LockedUntil = DATEADD(second, {TrackingWorker.LeaseSeconds}, SYSDATETIMEOFFSET())
-        OUTPUT inserted.Id, inserted.OrderId, inserted.CarrierReference, inserted.Attempts;
+        OUTPUT inserted.Id, inserted.OrderId, inserted.CarrierReference, inserted.PollAttempts, inserted.CreatedAt;
         """;
 
     // NextPollAt where FulfilmentClaims pushes NextAttemptAt, on the ladder
     // read from the dispatcher's own constants (spec, section 4): one number
     // tuned in two places is two backoffs that stop agreeing. Floored at
     // CarrierHop.TrackingPollInterval, because a ladder step below it would
-    // answer a 429 by polling sooner than a healthy row is polled. Attempts is
-    // the one column both workers share, which Shipment.PollApplied and
-    // Shipment.ReleaseClaim both clear — a carrier that is down fails the
-    // booking and the poll alike.
+    // answer a 429 by polling sooner than a healthy row is polled. The count
+    // is this worker's own, so a feed that fails climbs its own ladder and a
+    // cancel that fails climbs the other's (ADR-054).
     private static readonly string FailSql =
         $"""
         UPDATE shipment
         SET
-            Attempts    = shipment.Attempts + 1,
-            LockedUntil = NULL,
-            NextPollAt  = DATEADD(
+            PollAttempts = shipment.PollAttempts + 1,
+            LockedUntil  = NULL,
+            NextPollAt   = DATEADD(
                 second,
                 CASE WHEN ladder.Seconds > {(int)CarrierHop.TrackingPollInterval.TotalSeconds}
                      THEN ladder.Seconds
@@ -65,9 +67,9 @@ internal sealed class TrackingClaims(IDbConnectionFactory connections)
                 SYSDATETIMEOFFSET())
         FROM shipping.Shipments AS shipment
         CROSS APPLY (VALUES (
-            POWER(2, CASE WHEN shipment.Attempts > {OutboxDispatcher.BackoffAttemptCap}
+            POWER(2, CASE WHEN shipment.PollAttempts > {OutboxDispatcher.BackoffAttemptCap}
                           THEN {OutboxDispatcher.BackoffAttemptCap}
-                          ELSE shipment.Attempts END) * {OutboxDispatcher.BackoffBaseSeconds}
+                          ELSE shipment.PollAttempts END) * {OutboxDispatcher.BackoffBaseSeconds}
         )) AS ladder (Seconds)
         WHERE shipment.Id = @Id;
         """;
@@ -87,9 +89,8 @@ internal sealed class TrackingClaims(IDbConnectionFactory connections)
         return [.. await connection.QueryAsync<TrackingWork>(new CommandDefinition(ClaimSql, cancellationToken: ct))];
     }
 
-    // No count abandons a row: a shipment leaves the poll only when it is
-    // terminal (spec, sections 4 and 5), so a Dispatched one the carrier never
-    // delivers goes on being polled, backed off while the carrier fails.
+    // No count abandons a row: a shipment leaves the poll when it is terminal
+    // or past TrackingWorker.GiveUpAge, which the pass reads (ADR-054).
     public async Task FailAsync(Guid id, CancellationToken ct)
     {
         using IDbConnection connection = connections.Create();

@@ -89,6 +89,13 @@ public sealed class FulfilmentWorker(IServiceScopeFactory scopes, ILogger<Fulfil
             "Shipment {ShipmentId} on order {OrderId} was pending past its give-up age of {GiveUpAge}; it is " +
             "unfulfillable and will not be retried.");
 
+    private static readonly Action<ILogger, Guid, Guid, TimeSpan, Exception?> GaveUpCancellation =
+        LoggerMessage.Define<Guid, Guid, TimeSpan>(
+            LogLevel.Warning,
+            new EventId(7, nameof(GaveUpCancellation)),
+            "The carrier did not answer the cancellation of shipment {ShipmentId} on order {OrderId} within its " +
+            "give-up age of {GiveUpAge}; it is recorded as refused, and tracking goes on.");
+
     // stoppingToken, not ct: CA1725 requires an override to keep the base's
     // parameter name.
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -161,9 +168,25 @@ public sealed class FulfilmentWorker(IServiceScopeFactory scopes, ILogger<Fulfil
         ShipmentId id = new(work.Id);
         OrderId order = new(work.OrderId);
         ICarrierGateway carrier = sp.GetRequiredService<ICarrierGateway>();
+        TimeSpan giveUpAge = sp.GetRequiredService<IOptions<FulfilmentOptions>>().Value.GiveUpAge!.Value;
+        DateTimeOffset now = sp.GetRequiredService<TimeProvider>().GetUtcNow();
 
         if (work.Status == nameof(ShipmentStatus.Booked))
         {
+            // Asked before the carrier is, and recorded as its refusal: the
+            // parcel may be moving, and what follows a silence is what follows
+            // a "too late" (ADR-054).
+            if (now - work.CancellationRequestedAt!.Value >= giveUpAge)
+            {
+                CommitOutcome ended = await CommitAsync(
+                    sp, id, (shipment, at) => shipment.CarrierRefusedCancellation(at), ct);
+
+                if (ended.Moved)
+                    GaveUpCancellation(log, work.Id, work.OrderId, giveUpAge, null);
+
+                return ended.Moved;
+            }
+
             CancellationResult cancellation =
                 await carrier.CancelAsync(new CancellationRequest(id, work.CarrierReference!), ct);
 
@@ -183,9 +206,7 @@ public sealed class FulfilmentWorker(IServiceScopeFactory scopes, ILogger<Fulfil
         // contact row stays: nobody answered that the address does not exist,
         // so it goes on ShippingRetentionService's window like any terminal
         // shipment's.
-        TimeSpan giveUpAge = sp.GetRequiredService<IOptions<FulfilmentOptions>>().Value.GiveUpAge!.Value;
-
-        if (sp.GetRequiredService<TimeProvider>().GetUtcNow() - work.CreatedAt >= giveUpAge)
+        if (now - work.CreatedAt >= giveUpAge)
         {
             CommitOutcome abandoned = await CommitPendingAsync(
                 sp, id, (shipment, now) => shipment.MarkUnfulfillable(GaveUpReason, now), ct);

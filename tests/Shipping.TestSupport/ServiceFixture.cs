@@ -267,8 +267,31 @@ public sealed class ServiceFixture : IAsyncLifetime
     public Task<DateTimeOffset?> NextPollAtAsync(ShipmentId id) =>
         ScalarAsync<DateTimeOffset?>("SELECT Value = NextPollAt FROM shipping.Shipments WHERE Id = {0}", id.Value);
 
+    /// <summary>The fulfilment pass's failed passes on the row (ADR-054).</summary>
     public Task<int> AttemptsAsync(ShipmentId id) =>
         ScalarAsync<int>("SELECT Value = Attempts FROM shipping.Shipments WHERE Id = {0}", id.Value);
+
+    /// <summary>The tracking pass's failed passes on the row (ADR-054).</summary>
+    public Task<int> PollAttemptsAsync(ShipmentId id) =>
+        ScalarAsync<int>("SELECT Value = PollAttempts FROM shipping.Shipments WHERE Id = {0}", id.Value);
+
+    /// <summary>
+    /// Moves the shipment's making back by <paramref name="age"/> from the
+    /// host's clock, the clock the tracking pass reads its age against.
+    /// </summary>
+    public Task AgeCreatedAsync(ShipmentId id, TimeSpan age) =>
+        ExecuteAsync(
+            "UPDATE shipping.Shipments SET CreatedAt = {1} WHERE Id = {0};", id.Value, DateTimeOffset.UtcNow - age);
+
+    /// <summary>
+    /// Moves the cancellation's request back by <paramref name="age"/> from the
+    /// host's clock, the clock the fulfilment pass reads its give-up age against.
+    /// </summary>
+    public Task AgeCancellationAsync(ShipmentId id, TimeSpan age) =>
+        ExecuteAsync(
+            "UPDATE shipping.Shipments SET CancellationRequestedAt = {1} WHERE Id = {0};",
+            id.Value,
+            DateTimeOffset.UtcNow - age);
 
     /// <summary>Null once a pass has released the row it claimed.</summary>
     public Task<DateTimeOffset?> LockedUntilAsync(ShipmentId id) =>
@@ -882,6 +905,13 @@ public sealed class ServiceFixture : IAsyncLifetime
     public Task SetAttemptsAsync(ShipmentId id, int attempts) =>
         ExecuteAsync(
             "UPDATE shipping.Shipments SET Attempts = {0} WHERE Id = {1};",
+            attempts,
+            id.Value);
+
+    /// <summary><see cref="SetAttemptsAsync"/> for the tracking pass's own count (ADR-054).</summary>
+    public Task SetPollAttemptsAsync(ShipmentId id, int attempts) =>
+        ExecuteAsync(
+            "UPDATE shipping.Shipments SET PollAttempts = {0} WHERE Id = {1};",
             attempts,
             id.Value);
 
