@@ -5,15 +5,13 @@ using Shipping.Domain.Shipments;
 
 namespace Shipping.Application.Tracking;
 
-/// <summary>
-/// Applies one carrier page through the aggregate and schedules the next poll.
-/// </summary>
 /// <remarks>
 /// Applied by rank, not by arrival: the carrier's key orders nothing (spec,
 /// section 5) and the aggregate is monotonic, but events raised in one unit of
 /// work are read in the order raised, and a delivery ahead of its despatch is a
 /// timeline no consumer can read. The read <c>Include</c>s the tracking events
-/// because <c>Shipment.Record</c> deduplicates over the loaded ones (§5.2).
+/// because <c>Shipment.Record</c> deduplicates over the loaded ones (spec,
+/// section 5).
 /// </remarks>
 public sealed class ApplyTrackingPageHandler(IShipmentRepository shipments, TimeProvider clock)
     : ICommandHandler<ApplyTrackingPageCommand, Result>
