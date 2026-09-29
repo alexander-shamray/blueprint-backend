@@ -30,18 +30,22 @@ internal sealed class ShipmentStats(IDbConnectionFactory connections) : IShipmen
 
     /// <summary>
     /// Live rows past their first failed pass, whichever worker took it: each
-    /// counts its own failures (ADR-054), so a Booked row whose cancellation
-    /// keeps failing is counted while its polls succeed. <c>TerminalAt</c>
-    /// bounds it: <c>Shipment.Cancel</c> voids a pending row without clearing
-    /// <c>Attempts</c>, and a row nothing will claim again is not waiting.
+    /// counts its own failures (ADR-054). A row nothing will claim again is not
+    /// waiting, so <c>TerminalAt</c> bounds both counts and <c>Attempts</c> is
+    /// read only on the rows <c>FulfilmentClaims</c> selects: a despatch leaves
+    /// the count a failed cancel wrote, and no fulfilment pass will clear it.
     /// </summary>
     private const string WaitingSql =
         """
         SELECT COUNT(*)
         FROM shipping.Shipments
         WHERE Status = @Status
-            AND (Attempts > 0 OR PollAttempts > 0)
-            AND TerminalAt IS NULL;
+            AND TerminalAt IS NULL
+            AND (PollAttempts > 0
+                 OR (Attempts > 0
+                     AND Status IN ('Pending', 'Booked')
+                     AND CancellationRefusedAt IS NULL
+                     AND (Status = 'Pending' OR CancellationRequestedAt IS NOT NULL)));
         """;
 
     private readonly MemoryCache _cache = new(new MemoryCacheOptions());
