@@ -41,8 +41,10 @@ public static class CarrierHop
     /// <summary>
     /// Sized to a worker's call rate, which is what the endpoint default is
     /// not: a hundred calls in a sampling window is a threshold a loop ticking
-    /// every few seconds never reaches, so the breaker would never open. Four
-    /// attempts is two failed calls, and the third is refused.
+    /// every few seconds never reaches, so the breaker would never open. For
+    /// the fulfilment pass, four attempts is two failed calls and the third is
+    /// refused; a tracking pass sends its batch at once, so there the breaker
+    /// bounds an outage to one <c>TrackingWorker.ClaimBatchSize</c> per replica.
     /// </summary>
     public const int CircuitBreakerMinimumThroughput = 4;
 

@@ -155,6 +155,22 @@ public sealed class WaitingGaugeTests(ServiceFixture fixture) : IAsyncLifetime
         measured.Single(m => m.Tag == "fulfilment").Value.ShouldBeInRange(120, 180);
     }
 
+    [Fact]
+    public async Task A_booked_row_waits_from_its_cancellation_not_from_its_making()
+    {
+        // Booked on its first pass two days ago, so NextAttemptAt still holds
+        // the making; the cancellation just now is when the claim was owed it.
+        Shipment booked = await fixture.BookedAsync("SIM-TRANSIT");
+        await fixture.ExecuteAsync(
+            "UPDATE shipping.Shipments SET NextAttemptAt = DATEADD(day, -2, SYSDATETIMEOFFSET()) WHERE Id = {0};",
+            booked.Id.Value);
+        await fixture.RequestCancellationAsync(booked.Id);
+
+        List<(string Tag, double Value)> measured = ReadGauge("shipping.shipments.overdue", "pass");
+
+        measured.Single(m => m.Tag == "fulfilment").Value.ShouldBeInRange(0, 60);
+    }
+
     /// <summary>
     /// One of <see cref="ShipmentMetrics"/>' gauges, read once: one entry per
     /// tag value, with its value. Over a stats reader of this suite's own, not
