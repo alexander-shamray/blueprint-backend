@@ -50,13 +50,18 @@ internal sealed class ShipmentStats(IDbConnectionFactory connections) : IShipmen
                      AND (Status = 'Pending' OR CancellationRequestedAt IS NOT NULL)));
         """;
 
-    // Each claim's own population, read from the claim, over its own due
-    // column: a row that is due and that no pass holds is one a replica has
+    // Each claim's own population, read from the claim, from when each row
+    // became due: one that is due and that no pass holds is one a replica has
     // not reached, so the oldest one's wait is how far the passes are behind.
-    // NULL when there is none, which is no wait at all.
+    // NULL when there is none, which is no wait at all. A Booked row's
+    // NextAttemptAt is its making until a cancel fails, because Shipment.Cancel
+    // stamps only CancellationRequestedAt, so the later of the two is its due.
     private static readonly string FulfilmentOverdueSql =
         $"""
-        SELECT DATEDIFF_BIG(millisecond, MIN(NextAttemptAt), SYSDATETIMEOFFSET()) / 1000.0
+        SELECT DATEDIFF_BIG(
+            millisecond,
+            MIN(CASE WHEN CancellationRequestedAt > NextAttemptAt THEN CancellationRequestedAt ELSE NextAttemptAt END),
+            SYSDATETIMEOFFSET()) / 1000.0
         FROM shipping.Shipments
         WHERE {FulfilmentClaims.Claimable};
         """;
@@ -87,15 +92,19 @@ internal sealed class ShipmentStats(IDbConnectionFactory connections) : IShipmen
 
     public double TrackingOverdueSeconds() => OverdueSeconds(TrackingOverdueSql);
 
-    // Keyed by the statement, which no state's name can equal.
+    // Keyed by the statement, which no state's name can equal. Floored at zero
+    // because the due instants are stamped by the host and read against the
+    // engine's clock, and skew is not a wait.
     private double OverdueSeconds(string sql) =>
         _cache.GetOrCreate(sql, entry =>
         {
             entry.AbsoluteExpirationRelativeToNow = CacheFor;
             using IDbConnection connection = connections.Create();
 
-            return connection.ExecuteScalar<double?>(
-                new CommandDefinition(sql, commandTimeout: CommandTimeoutSeconds)) ?? 0;
+            return Math.Max(
+                0,
+                connection.ExecuteScalar<double?>(
+                    new CommandDefinition(sql, commandTimeout: CommandTimeoutSeconds)) ?? 0);
         });
 
     public void Dispose() => _cache.Dispose();
