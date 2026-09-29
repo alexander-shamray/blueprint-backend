@@ -58,6 +58,13 @@ public sealed class ServiceFixture : IAsyncLifetime
     private Respawner? _respawner;
 
     /// <summary>
+    /// How long a staged step may take — a delivery through the broker or a
+    /// bus coming up. A deadline, not a sleep, so it costs nothing when the
+    /// step is prompt.
+    /// </summary>
+    private static readonly TimeSpan StepDeadline = TimeSpan.FromSeconds(20);
+
+    /// <summary>
     /// Widens <c>shipping-svc</c>'s <c>write</c> for the suite, since these
     /// tests publish <c>OrderConfirmed</c> and <c>OrderCancelled</c> as
     /// <c>shipping-svc</c> onto Ordering's exchanges and ADR-036's production
@@ -289,17 +296,10 @@ public sealed class ServiceFixture : IAsyncLifetime
             id.Value);
 
     /// <summary>
-    /// How long a staged step may take — a delivery through the broker or a
-    /// bus coming up. A deadline, not a sleep, so it costs nothing when the
-    /// step is prompt.
+    /// Polls to <see cref="StepDeadline"/> and throws when it lapses: a staged
+    /// step, not a sleep.
     /// </summary>
-    private static readonly TimeSpan StepDeadline = TimeSpan.FromSeconds(20);
-
-    /// <summary>
-    /// Polls to <see cref="StepDeadline"/> and throws when it lapses, which is
-    /// what stages a step on something another has already done.
-    /// </summary>
-    private static async Task WaitUntilAsync(Func<Task<bool>> predicate)
+    public static async Task WaitUntilAsync(Func<Task<bool>> predicate)
     {
         DateTimeOffset deadline = DateTimeOffset.UtcNow + StepDeadline;
 

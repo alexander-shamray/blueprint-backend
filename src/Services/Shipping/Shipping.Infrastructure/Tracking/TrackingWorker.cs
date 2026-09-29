@@ -126,12 +126,12 @@ public sealed class TrackingWorker(
             catch (Exception ex) when (!ct.IsCancellationRequested)
             {
                 // One row's carrier, one row's backoff. A page that cannot be
-                // read is not a fact about any other shipment. The same split
-                // FulfilmentWorker makes, through the claim class rather than a
-                // statement of this worker's own.
-                await claims.FailAsync(work.Id, ct);
-
+                // read is not a fact about any other shipment. Logged before
+                // the backoff is written, as FulfilmentWorker does, so a
+                // database fault in FailAsync cannot hide the carrier's.
                 PollFailed(log, work.Id, work.OrderId, work.Attempts + 1, ex);
+
+                await claims.FailAsync(work.Id, ct);
             }
         }
 
