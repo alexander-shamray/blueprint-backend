@@ -98,8 +98,8 @@ public static class DependencyInjection
         // dispatcher claims a row, so MessageTypeMapValidator is what makes a
         // duplicate FullName fail the host rather than the first message. It
         // is the first hosted service because hosted services start in order.
-        // §9.4's two anchors: IIntegrationEvent until this service publishes
-        // a contract of its own (§9.3), and the aggregate for its domain.
+        // §9.4's two anchors: IIntegrationEvent for Common.Contracts (§4.3),
+        // which holds this service's contracts, and Shipment for its domain.
         services.AddSingleton(
             new MessageTypeSource(typeof(IIntegrationEvent).Assembly, typeof(Shipment).Assembly));
         services.AddSingleton(sp =>
@@ -200,10 +200,8 @@ public static class DependencyInjection
         // §15.4's shape, in the registration helper that owns the consumer
         // rather than in Program.cs: a binding hoisted upwards re-imposes the
         // key on every host, which is the mistake that section spends a
-        // paragraph on. ValidateOnStart refuses a missing statutory window at
-        // host start, before any hosted service is constructed, so the refusal
-        // waits on no reader of the options and holds for a host that never
-        // constructs the purge (ADR-053).
+        // paragraph on. ValidateOnStart makes a missing or impossible
+        // statutory window a refusal at host start (ADR-053).
         services
             .AddOptions<ShippingJurisdictionOptions>()
             .BindConfiguration(ShippingJurisdictionOptions.SectionName)

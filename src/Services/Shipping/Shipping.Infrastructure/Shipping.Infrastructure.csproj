@@ -76,20 +76,16 @@
          metrics and the dispatcher it hosts; §9.5's inbox and §8.5's marker
          store ride in on the same reference. -->
     <ProjectReference Include="..\..\..\BuildingBlocks\Common.Infrastructure\Common.Infrastructure.csproj" />
-    <!-- MessageTypeSource's Broker half. Named through IIntegrationEvent
-         until this service has a contract of its own, at which point the
-         anchor becomes that contract — same assembly either way. -->
+    <!-- MessageTypeSource's Broker half. IIntegrationEvent anchors the
+         assembly that holds every service's contracts (§4.3), so naming it
+         claims them all rather than one event's assembly-mates. -->
     <ProjectReference Include="..\..\..\BuildingBlocks\Common.Contracts\Common.Contracts.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <!-- Named here rather than widened at the type or member: one line naming
          the one assembly commits less than a public surface no production
-         caller has a use for. The worker suite reaches FulfilmentWorker
-         .FulfilAsync, which takes a service provider, and builds the internal
-         ShipmentStats and SqlConnectionFactory over a fixture's connection
-         string, so that spec section 11's gauge is read through a cache the
-         test owns rather than the one the host's exporter fills. -->
+         caller has a use for. -->
     <InternalsVisibleTo Include="Shipping.Worker.Tests" />
   </ItemGroup>
 
