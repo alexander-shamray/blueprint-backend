@@ -1223,6 +1223,8 @@ namespace read access.
 | `Carrier__BaseUrl` | Config | ConfigMap | ✓ — **Shipping only**; the carrier's address, and the host refuses to start without it |
 | `Carrier__ApiKey` | Secret | External Secrets | ✓ — **Shipping only**; the carrier's credential, and the host refuses to start without it |
 | `AddressSource__BaseUrl` | Config | ConfigMap | ✓ — **Shipping only**; the owner's address for [ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)'s read, and the host refuses to start without it |
+| `Jurisdiction__AddressRetention` | Config | Helm `jurisdiction.addressRetention` → ConfigMap | ✓ — **Shipping only**; ADR-053's statutory window for a delivery address, and the host refuses to start without it |
+| `Jurisdiction__TrackingRetention` | Config | Helm `jurisdiction.trackingRetention` → ConfigMap | ✓ — **Shipping only**; ADR-053's statutory window for a shipment's tracking events |
 
 | Kind | Source | Example |
 |---|---|---|
@@ -1255,10 +1257,13 @@ services
     .ValidateOnStart();
 ```
 
-**This is the only options type in the solution, and that is the point.** The
-tempting next line is a `ServiceOptions`-shaped bag — batch sizes, poll
-intervals, retry caps — bound to an `Ordering` section that no environment ever
-sets. It costs nothing to write and it is not free: `ValidateOnStart` now gates
+**There are two options types in the solution, and both had to earn it.**
+`Identity:Client` holds a secret that differs per environment, and
+`Jurisdiction` holds the statutory windows
+[ADR-053](adr/ADR-053-a-jurisdiction-is-a-value-the-deployment-is-given.md)
+makes values a deployment is given. The tempting third is a
+`ServiceOptions`-shaped bag — batch sizes, poll intervals, retry caps — bound
+to an `Ordering` section that no environment ever sets. It costs nothing to write and it is not free: `ValidateOnStart` now gates
 boot on a section nobody supplies, `[Required]` on any member stops every host,
 and `[Required]` on none makes `ValidateDataAnnotations` decorative. There is no
 third outcome, because a key that never varies has nothing to validate.
@@ -1270,7 +1275,10 @@ third outcome, because a key that never varies has nothing to validate.
 > (§9.4), the dispatcher's tick, the saga's schedule delays (§9.6) and
 > `ServiceOptions.OperationTimeout` are all constants for exactly this reason.
 > `Identity:Client` earns its options type by holding a secret that must differ
-> per environment, and it is the only thing here that does.
+> per environment, and `Jurisdiction` earns one because a statutory window is a
+> fact about where a deployment runs: ADR-053 rule 2 gives a developer's stack
+> invented ones precisely because it is no jurisdiction, and a deployment that
+> is one supplies its own.
 
 Where the binding sits matters as much as the call itself. Binding beside the
 consumer is what makes "the gateway needs no client credentials" true *by
