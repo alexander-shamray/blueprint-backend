@@ -106,6 +106,13 @@ public sealed class TrackingWorkerTests(ServiceFixture fixture) : IAsyncLifetime
             "SELECT Value = COUNT(*) FROM shipping.Shipments WHERE Id = {0} AND CancellationRefusedAt IS NOT NULL",
             shipment.Id.Value)).ShouldBe(1, "the carrier refused the cancellation");
 
+        // Still Booked with both stamps, so only the refusal predicate keeps
+        // the fulfilment claim off it. Carrier calls, not the pass's count: a
+        // re-asked cancellation is refused again and moves nothing.
+        int carrierCalls = fixture.Carrier.LogEntries.Count;
+        await fixture.RunFulfilmentPassAsync();
+        fixture.Carrier.LogEntries.Count.ShouldBe(carrierCalls, "a refused cancellation is outside the claim");
+
         (await Worker().ProcessBatchAsync(TestContext.Current.CancellationToken)).ShouldBe(1);
 
         (await fixture.StatusAsync(shipment.Id)).ShouldBe("Delivered");
@@ -113,7 +120,13 @@ public sealed class TrackingWorkerTests(ServiceFixture fixture) : IAsyncLifetime
             .OrderBy(row => row.OccurredAt)
             .Select(row => row.MessageType.Split('.')[^1])
             .ShouldBe(["ShipmentDispatched", "ShipmentDelivered"]);
-        (await fixture.RunFulfilmentPassAsync()).ShouldBe(0, "a refused cancellation is outside the claim");
+
+        // Deliver raises the despatch itself on a Booked row, so the order
+        // above holds without Collected; the instant is the simulator's
+        // default page script (spec, section 9), and only Collected supplies it.
+        (await fixture.OutboxAsync())
+            .Single(row => row.MessageType.EndsWith("ShipmentDispatched", StringComparison.Ordinal))
+            .OccurredAt.ShouldBe(new DateTimeOffset(2026, 1, 2, 9, 0, 0, TimeSpan.Zero));
     }
 
     [Fact]
