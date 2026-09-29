@@ -327,7 +327,7 @@ jobs:
           # worker, which sets its replica count directly.
 
           # The HPA's floor moves first, and a `kubectl scale` alone would not
-          # hold. These charts enable an autoscaler on the stable track, and
+          # hold. The charts that autoscale run the HPA on the stable track, and
           # _deployment.tpl says `replicas` is a managed field the HPA writes
           # back, so a raised count decays toward the autoscaler's floor across
           # the dwells and `plan` then computes its share against a replica
