@@ -767,6 +767,17 @@ public sealed class ServiceFixture : IAsyncLifetime
             messageId);
 
     /// <summary>
+    /// Seeds a prior attempt count through the same column the workers write,
+    /// which is what puts a row past its first backoff. Explicit rather than
+    /// hidden in a builder, so no state carries between tests (§12.8).
+    /// </summary>
+    public Task SetAttemptsAsync(ShipmentId id, int attempts) =>
+        ExecuteAsync(
+            "UPDATE shipping.Shipments SET Attempts = {0} WHERE Id = {1};",
+            attempts,
+            id.Value);
+
+    /// <summary>
     /// Repoints a staged row at the other lane, which is the only way to
     /// produce the row <see cref="OutboxMessage.Stage"/> refuses: a lane that
     /// disagrees with its payload. Written through SQL on purpose — the point

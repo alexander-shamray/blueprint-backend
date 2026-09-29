@@ -33,13 +33,15 @@ public sealed class MetricsInitialiser : IHostedService
         MessagingMetrics messaging,
         RequestMetrics requests,
         CarrierMetrics carrier,
-        AddressMetrics addresses)
+        AddressMetrics addresses,
+        ShipmentMetrics shipments)
     {
         ArgumentNullException.ThrowIfNull(outbox);
         ArgumentNullException.ThrowIfNull(messaging);
         ArgumentNullException.ThrowIfNull(requests);
         ArgumentNullException.ThrowIfNull(carrier);
         ArgumentNullException.ThrowIfNull(addresses);
+        ArgumentNullException.ThrowIfNull(shipments);
     }
 
     // `cancellationToken`, not this repository's usual `ct`: CA1725 requires an
