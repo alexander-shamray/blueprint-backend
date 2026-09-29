@@ -24,10 +24,10 @@ public sealed class TrackingWorkerTests(ServiceFixture fixture) : IAsyncLifetime
     [Fact]
     public void The_lease_outlives_the_hop_and_the_pass()
     {
-        // Every_attempt_and_every_bounded_delay_fit_inside_the_total's shape,
-        // one level up: a lease shorter than either would let a second replica
-        // claim a row this pass is still calling the carrier about, and the two
-        // would book or record against the same aggregate.
+        // CarrierHop.TotalRequestTimeout bounds one call; the lease bounds the
+        // pass around it (spec, section 4). A lease shorter than either would
+        // let a second replica claim a row this pass is still calling the
+        // carrier about, and the two would record against the same aggregate.
         TimeSpan lease = TimeSpan.FromSeconds(TrackingWorker.LeaseSeconds);
 
         lease.ShouldBeGreaterThan(CarrierHop.TotalRequestTimeout, "one call must finish inside the lease");
@@ -39,11 +39,11 @@ public sealed class TrackingWorkerTests(ServiceFixture fixture) : IAsyncLifetime
             TimeSpan.FromSeconds(30),
             "the host's shutdown timeout is thirty seconds (§15.3), and a pass that outlives it is killed mid-row");
 
-        // The two leases are separate numbers over one column, so the pair is
-        // stated once here: each bounds its own worst-case pass, and neither is
-        // a bound on the other's. What keeps the two workers apart is the
-        // LockedUntil predicate both claims carry, which the two tests below
-        // drive; the lengths only decide how long a killed replica's row waits.
+        // The two leases are separate numbers over one column: each bounds its
+        // own worst-case pass, and neither is a bound on the other's. What
+        // keeps the two workers apart is the LockedUntil predicate
+        // TrackingClaims and FulfilmentClaims both carry; the lengths only
+        // decide how long a killed replica's row waits.
         TimeSpan.FromSeconds(FulfilmentWorker.LeaseSeconds).ShouldBeGreaterThan(
             TimeSpan.FromSeconds(TrackingWorker.LeaseSeconds),
             "a fulfilment pass makes two hops and a tracking pass one, so its lease is the longer");
@@ -66,17 +66,19 @@ public sealed class TrackingWorkerTests(ServiceFixture fixture) : IAsyncLifetime
     {
         Shipment shipment = await fixture.BookedAsync("050000");
 
-        await Worker().ProcessBatchAsync(TestContext.Current.CancellationToken);
+        (await Worker().ProcessBatchAsync(TestContext.Current.CancellationToken)).ShouldBe(1);
 
         (await fixture.StatusAsync(shipment.Id)).ShouldBe("Delivered");
         (await fixture.NextPollAtAsync(shipment.Id)).ShouldBeNull(
             "a terminal shipment has nothing further to learn");
+        (await fixture.LockedUntilAsync(shipment.Id)).ShouldBeNull(
+            "a terminal row is released like any other, not left to its lease");
     }
 
     [Fact]
     public async Task A_row_still_being_polled_is_not_claimed_by_a_second_pass()
     {
-        await fixture.BookedAsync("SIM-TRANSIT");
+        Shipment shipment = await fixture.BookedAsync("SIM-TRANSIT");
 
         // Staged, not two passes back to back: the claim's lease is what the
         // second pass must see, and a pass that has already committed would
@@ -84,6 +86,11 @@ public sealed class TrackingWorkerTests(ServiceFixture fixture) : IAsyncLifetime
         await fixture.ClaimForTrackingAsync();
 
         (await Worker().ProcessBatchAsync(TestContext.Current.CancellationToken)).ShouldBe(0);
+
+        // A pass that claimed the row and failed its poll also answers 0, and
+        // leaves Attempts at 1: the row as booked is what says it was skipped.
+        (await fixture.StatusAsync(shipment.Id)).ShouldBe("Booked");
+        (await fixture.AttemptsAsync(shipment.Id)).ShouldBe(0);
     }
 
     [Fact]
@@ -103,9 +110,9 @@ public sealed class TrackingWorkerTests(ServiceFixture fixture) : IAsyncLifetime
     {
         // The one row both claims select: a Booked shipment whose cancellation
         // the carrier has not answered is in FulfilmentClaims' second
-        // population AND due a poll. The status filters overlap by design and
-        // are not what keeps the two workers apart — the LockedUntil predicate
-        // is, and this is the test that says so.
+        // population and due a poll (spec, section 4). The status filters
+        // overlap by design; the LockedUntil predicate in TrackingClaims is
+        // what keeps this worker off a row the other holds.
         Shipment shipment = await fixture.BookedAsync("SIM-TRANSIT");
         await fixture.RequestCancellationAsync(shipment.Id);
 
@@ -119,10 +126,10 @@ public sealed class TrackingWorkerTests(ServiceFixture fixture) : IAsyncLifetime
     [Fact]
     public async Task A_row_this_worker_holds_is_not_claimed_by_a_fulfilment_pass()
     {
-        // The same overlap, from the other side. Driven through
-        // ServiceFixture.RunFulfilmentPassAsync rather than a second copy of
-        // that loop, so what is under test is FulfilmentClaims' own claim and
-        // not this suite's idea of it.
+        // The row both claims select, held under this worker's lease: the
+        // LockedUntil predicate in FulfilmentClaims is what refuses it (spec,
+        // section 4). Driven through ServiceFixture.RunFulfilmentPassAsync, so
+        // the claim that refuses is FulfilmentClaims' own and not a copy.
         Shipment shipment = await fixture.BookedAsync("SIM-TRANSIT");
         await fixture.RequestCancellationAsync(shipment.Id);
 
@@ -156,7 +163,7 @@ public sealed class TrackingWorkerTests(ServiceFixture fixture) : IAsyncLifetime
         // the direct call above logs nothing and a loop that let the fault out
         // completes instead of logging.
         await Task.Delay(CarrierHop.TrackingPollInterval, TestContext.Current.CancellationToken);
-        await FulfilmentSteps.WaitUntil(() =>
+        await ServiceFixture.WaitUntilAsync(() =>
             Task.FromResult(ClaimFailedLogged(broken) || worker.ExecuteTask!.IsCompleted));
 
         // ExecuteTask is the loop, and a faulted one is the host on its way
