@@ -1,5 +1,6 @@
 using Shipping.Infrastructure.Fulfilment;
 using Shipping.Infrastructure.Persistence;
+using Shipping.Infrastructure.Retention;
 using Shipping.TestSupport.Outbox;
 using Common.Application;
 using Common.Infrastructure.Identity;
@@ -30,7 +31,9 @@ public class ShippingWorkerFactory(
     string rabbitConnectionString,
     string carrierBaseUrl = ShippingWorkerFactory.UnreachableCarrier,
     string? carrierApiKey = null,
-    string addressSourceBaseUrl = ShippingWorkerFactory.UnreachableAddressSource)
+    string addressSourceBaseUrl = ShippingWorkerFactory.UnreachableAddressSource,
+    string addressRetention = ShippingWorkerFactory.InventedAddressRetention,
+    string trackingRetention = ShippingWorkerFactory.InventedTrackingRetention)
     : WebApplicationFactory<Program>
 {
     /// <summary>
@@ -67,6 +70,17 @@ public class ShippingWorkerFactory(
     /// that dials Ordering by accident fails loudly.
     /// </summary>
     public const string UnreachableAddressSource = "http://ordering-api.invalid/";
+
+    /// <summary>
+    /// ADR-053 rule 2's made-up jurisdiction, and deliberately a value no real
+    /// one uses: eleven days and twenty-three days match neither the six years
+    /// nor the five that record's table names, so a test passing under them is
+    /// a test that read its configuration rather than a constant.
+    /// </summary>
+    public const string InventedAddressRetention = "11.00:00:00";
+
+    /// <inheritdoc cref="InventedAddressRetention"/>
+    public const string InventedTrackingRetention = "23.00:00:00";
 
     /// <summary>
     /// The token source the credential handler draws on, replacing
@@ -107,6 +121,8 @@ public class ShippingWorkerFactory(
             .UseSetting($"{ServiceIdentityOptions.SectionName}:ClientId", "shipping-worker-test")
             .UseSetting($"{ServiceIdentityOptions.SectionName}:ClientSecret", "not-a-real-secret")
             .UseSetting($"{ServiceIdentityOptions.SectionName}:Scope", "commerce-api")
+            .UseSetting($"{ShippingJurisdictionOptions.SectionName}:AddressRetention", addressRetention)
+            .UseSetting($"{ShippingJurisdictionOptions.SectionName}:TrackingRetention", trackingRetention)
             .ConfigureLogging(logging => logging.AddProvider(CapturedLogs))
             .ConfigureServices(services =>
             {
