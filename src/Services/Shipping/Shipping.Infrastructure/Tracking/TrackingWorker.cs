@@ -66,11 +66,11 @@ public sealed class TrackingWorker(
     // parameter name (ADR-019 makes it an error).
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        // The loop's period is the poll interval and not a second number: a row
-        // polled during one tick comes due exactly one period later, which is
-        // the tick after it, so the two uses are one latency budget rather than
-        // two that can drift (CarrierHop.TrackingPollInterval).
-        using PeriodicTimer timer = new(CarrierHop.TrackingPollInterval);
+        // Due-ness is the row's NextPollAt, stamped after its call returns, so
+        // it falls part-way into a tick. A loop period as long as the poll
+        // interval would claim that row one tick late; this one only bounds
+        // how late a due row is picked up (CarrierHop.TrackingTick).
+        using PeriodicTimer timer = new(CarrierHop.TrackingTick);
 
         while (await timer.WaitForNextTickAsync(stoppingToken))
         {
