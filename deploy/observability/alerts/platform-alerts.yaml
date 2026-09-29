@@ -197,8 +197,9 @@ groups:
           description: >-
             Events are reaching this service's consumers late: publish to
             consumer start, at the 95th percentile, is past §13.7's target.
-            Nothing has failed, and a consumer is not keeping up with what it
-            is sent.
+            Usually a consumer not keeping up with what it is sent; a handler
+            failing and being retried raises it too, because each attempt
+            records the message again, so check the consume error rate first.
           runbook_url: docs/runbooks/queue-backlog.md
 
   - name: platform-infrastructure
