@@ -233,6 +233,10 @@ public sealed class ServiceFixture : IAsyncLifetime
     public Task<string> StatusAsync(ShipmentId id) =>
         ScalarAsync<string>("SELECT Value = Status FROM shipping.Shipments WHERE Id = {0}", id.Value);
 
+    /// <summary>The reference the carrier answered a booking with, or null.</summary>
+    public Task<string?> CarrierReferenceAsync(ShipmentId id) =>
+        ScalarAsync<string?>("SELECT Value = CarrierReference FROM shipping.Shipments WHERE Id = {0}", id.Value);
+
     /// <summary>Null once the shipment is terminal and has nothing further to learn.</summary>
     public Task<DateTimeOffset?> NextPollAtAsync(ShipmentId id) =>
         ScalarAsync<DateTimeOffset?>("SELECT Value = NextPollAt FROM shipping.Shipments WHERE Id = {0}", id.Value);
@@ -572,6 +576,8 @@ public sealed class ServiceFixture : IAsyncLifetime
 
         FirstRunExitCode = await RunMigratorAsync(ConnectionString);
 
+        // The factory's retention defaults are the invented windows, so this
+        // host runs as ADR-053 rule 2's made-up jurisdiction and no test opts in.
         Factory = NewWorkerHost(Carrier.Urls[0] + "/");
 
         // A table for the transaction tests, created here and not in a
