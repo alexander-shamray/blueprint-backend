@@ -38,7 +38,8 @@ public sealed class HttpPaymentProviderTests : IClassFixture<HttpPaymentProvider
     /// <summary>
     /// One server and one host for the class: a host over an unreachable
     /// broker can take seconds to stop, so only a test that needs different
-    /// settings builds its own.
+    /// settings builds its own, and so does one that sends the stalled script,
+    /// whose answer outlives the test that asked for it.
     /// </summary>
     public sealed class ProviderHost : IDisposable
     {
@@ -77,8 +78,23 @@ public sealed class HttpPaymentProviderTests : IClassFixture<HttpPaymentProvider
         _server.ReadStaticMappings(SimulatorMappings.Directory());
     }
 
-    private IPaymentProvider Provider() =>
-        _factory.Services.CreateScope().ServiceProvider.GetRequiredService<IPaymentProvider>();
+    private IPaymentProvider Provider() => Provider(_factory);
+
+    private static IPaymentProvider Provider(PaymentsApiFactory factory) =>
+        factory.Services.CreateScope().ServiceProvider.GetRequiredService<IPaymentProvider>();
+
+    /// <summary>
+    /// A server of its own for the stalled script. The simulator logs a stalled
+    /// request when its delay ends rather than when the client gives up, so on
+    /// the shared server the entry lands in whichever test is running by then
+    /// and is counted as one of its calls.
+    /// </summary>
+    private static ProviderHost StalledHost()
+    {
+        ProviderHost own = new();
+        own.Server.ReadStaticMappings(SimulatorMappings.Directory());
+        return own;
+    }
 
     private static AuthorisationRequest Authorisation(decimal amount, OrderId? order = null) =>
         new(order ?? OrderId.New(), Guid.CreateVersion7(), amount, "EUR");
@@ -306,11 +322,12 @@ public sealed class HttpPaymentProviderTests : IClassFixture<HttpPaymentProvider
     [Fact]
     public async Task A_stalled_provider_is_unavailable_within_the_total_budget_and_its_timeouts_count()
     {
-        using UnavailableCount counted = CountUnavailable();
+        using ProviderHost own = StalledHost();
+        using UnavailableCount counted = CountUnavailable(own.Factory);
         DateTimeOffset started = DateTimeOffset.UtcNow;
 
         await Should.ThrowAsync<PaymentProviderUnavailableException>(() =>
-            Provider().AuthoriseAsync(Authorisation(10.09m), TestContext.Current.CancellationToken));
+            Provider(own.Factory).AuthoriseAsync(Authorisation(10.09m), TestContext.Current.CancellationToken));
 
         (DateTimeOffset.UtcNow - started).ShouldBeLessThan(ProviderHop.TotalRequestTimeout + TimeSpan.FromSeconds(2));
         counted.Value.ShouldBe(
@@ -569,7 +586,8 @@ public sealed class HttpPaymentProviderTests : IClassFixture<HttpPaymentProvider
     [Fact]
     public async Task A_cancellation_during_an_attempt_is_the_callers_and_is_not_counted()
     {
-        using UnavailableCount counted = CountUnavailable();
+        using ProviderHost own = StalledHost();
+        using UnavailableCount counted = CountUnavailable(own.Factory);
         using CancellationTokenSource cancelled = CancellationTokenSource.CreateLinkedTokenSource(
             TestContext.Current.CancellationToken);
         cancelled.CancelAfter(TimeSpan.FromSeconds(1));
@@ -577,7 +595,7 @@ public sealed class HttpPaymentProviderTests : IClassFixture<HttpPaymentProvider
         // The stalled script, so the cancellation lands inside an attempt,
         // where it and an attempt timeout arrive as the same exception.
         await Should.ThrowAsync<OperationCanceledException>(() =>
-            Provider().AuthoriseAsync(Authorisation(10.09m), cancelled.Token));
+            Provider(own.Factory).AuthoriseAsync(Authorisation(10.09m), cancelled.Token));
 
         counted.Value.ShouldBe(0, "the caller cancelling mid-attempt is not a provider incident");
     }
