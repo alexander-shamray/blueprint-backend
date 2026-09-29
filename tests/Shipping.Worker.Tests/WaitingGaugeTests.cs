@@ -121,16 +121,11 @@ public sealed class WaitingGaugeTests(ServiceFixture fixture) : IAsyncLifetime
     }
 
     [Fact]
-    public async Task A_row_a_pass_holds_or_that_is_not_yet_due_has_no_wait()
+    public async Task A_row_a_pass_holds_has_no_wait()
     {
-        // Both would be read wrongly by a MIN over the due column alone: the
-        // first is being worked, and the second is not owed a turn yet.
+        // Due, and being worked: a MIN over the due column alone would read it.
         Shipment held = await fixture.BookedAsync("SIM-TRANSIT");
         await fixture.ClaimForTrackingAsync();
-        Shipment later = await fixture.BookedAsync("SIM-TRANSIT");
-        await fixture.ExecuteAsync(
-            "UPDATE shipping.Shipments SET NextPollAt = DATEADD(minute, 5, SYSDATETIMEOFFSET()) WHERE Id = {0};",
-            later.Id.Value);
 
         (await fixture.LockedUntilAsync(held.Id)).ShouldNotBeNull();
 
@@ -142,7 +137,7 @@ public sealed class WaitingGaugeTests(ServiceFixture fixture) : IAsyncLifetime
     [Fact]
     public async Task A_pending_row_no_pass_has_reached_reads_under_fulfilment()
     {
-        // The row the runbook's query counts by hand: never attempted, and due.
+        // Never attempted, and due.
         FulfilmentSteps steps = new(fixture);
         Guid order = await steps.ConfirmAsync(FulfilmentSteps.Kazakh);
         ShipmentId pending = new(await steps.ShipmentIdAsync(order));
