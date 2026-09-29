@@ -196,6 +196,13 @@ public static class DependencyInjection
             .ValidateOnStart();
         services.AddSingleton<IValidateOptions<ShippingJurisdictionOptions>, ShippingJurisdictionOptionsValidator>();
 
+        // AddHostedService<T> for §12.4's reason, and by implementation type
+        // because that is what the fixture's removal matches on: an hourly
+        // timer would not race a run this short, but "the pass never happened"
+        // and "the pass spared the row" are the same green, so a test drives it
+        // rather than waits for it.
+        services.AddHostedService<ShippingRetentionService>();
+
         // §9.4's, §9.5's and §8.5's retention, in the one hosted service §9.5
         // asks for. Registered last, so it is the first stopped: it is pure
         // housekeeping, and a deploy that interrupts a purge loses nothing an

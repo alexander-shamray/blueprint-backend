@@ -183,6 +183,16 @@ public class ShippingWorkerFactory(
 
                 services.AddSingleton<RetentionPurgeService>();
 
+                // The statutory windows' pass, by the same match and for the
+                // same reason: a test drives PurgeAsync so that "the pass
+                // never happened" cannot pass for "the pass spared the row".
+                ServiceDescriptor retention = services.Single(d =>
+                    d.ServiceType == typeof(IHostedService) &&
+                    d.ImplementationType == typeof(ShippingRetentionService));
+                services.Remove(retention);
+
+                services.AddSingleton<ShippingRetentionService>();
+
                 // §9.4. Adding, not replacing: the production assemblies stay,
                 // so a test cannot stage a type the real host would refuse.
                 // Without this, NameOf throws on the first builder call and
