@@ -60,8 +60,8 @@ is. What check 9 pins is the table, which is the claim a reader can check —
 name it bare in the Runbook column, and both sets must equal the directory.
 
 **The pairing is not one-to-one and this check does not require it to be.**
-§13.8's ownership split and §13.6's backlog pair each put two rules over one
-procedure, and `SHARED_RUNBOOKS` is where each is declared with its reason.
+§13.8's ownership split makes error rate two rules over one procedure, declared
+with its reason in `SHARED_RUNBOOKS`.
 That is why the chapter's *conditions* and the rule files' *alerts* are counted
 by nobody here — only paired.
 
