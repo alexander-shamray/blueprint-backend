@@ -175,6 +175,22 @@ public sealed class Shipment : AggregateRoot<ShipmentId>
         Attempts = 0;
     }
 
+    /// <summary>
+    /// A tracking pass has been applied: the claim released, the failed-pass
+    /// counter cleared, the next poll due at <paramref name="nextPollAt"/>
+    /// unless the shipment is terminal (spec, section 4).
+    /// </summary>
+    /// <remarks>
+    /// The release is <see cref="ReleaseClaim"/>'s rather than a second copy, so
+    /// no second member drops the lease differently. <c>Attempts</c> counts
+    /// failed passes whichever worker took them: one carrier fails both.
+    /// </remarks>
+    public void PollApplied(DateTimeOffset nextPollAt)
+    {
+        NextPollAt = Status is ShipmentStatus.Booked or ShipmentStatus.Dispatched ? nextPollAt : null;
+        ReleaseClaim();
+    }
+
     private bool Dispatch(DateTimeOffset occurredAt)
     {
         if (Status != ShipmentStatus.Booked)
