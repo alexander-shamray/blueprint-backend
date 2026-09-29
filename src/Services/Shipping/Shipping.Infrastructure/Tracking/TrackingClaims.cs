@@ -2,6 +2,7 @@ using System.Data;
 using Common.Application;
 using Common.Infrastructure.Outbox;
 using Dapper;
+using Shipping.Infrastructure.Carrier;
 
 namespace Shipping.Infrastructure.Tracking;
 
@@ -42,28 +43,33 @@ internal sealed class TrackingClaims(IDbConnectionFactory connections)
         OUTPUT inserted.Id, inserted.OrderId, inserted.CarrierReference, inserted.Attempts;
         """;
 
-    // NextPollAt where FulfilmentClaims pushes NextAttemptAt, and the same
-    // ladder read from the dispatcher's own constants (spec, section 4): one
-    // number tuned in two places is two backoffs that stop agreeing. Attempts
-    // is the one column both workers share, which Shipment.PollApplied and
+    // NextPollAt where FulfilmentClaims pushes NextAttemptAt, on the ladder
+    // read from the dispatcher's own constants (spec, section 4): one number
+    // tuned in two places is two backoffs that stop agreeing. Floored at
+    // CarrierHop.TrackingPollInterval, because a ladder step below it would
+    // answer a 429 by polling sooner than a healthy row is polled. Attempts is
+    // the one column both workers share, which Shipment.PollApplied and
     // Shipment.ReleaseClaim both clear — a carrier that is down fails the
     // booking and the poll alike.
-    //
-    // Nothing is abandoned by count: the shipment's deadline is the saga's,
-    // and a row that outlives it is already a review row in Ordering.
     private static readonly string FailSql =
         $"""
-        UPDATE shipping.Shipments
+        UPDATE shipment
         SET
-            Attempts    = Attempts + 1,
+            Attempts    = shipment.Attempts + 1,
             LockedUntil = NULL,
             NextPollAt  = DATEADD(
                 second,
-                POWER(2, CASE WHEN Attempts > {OutboxDispatcher.BackoffAttemptCap}
-                              THEN {OutboxDispatcher.BackoffAttemptCap}
-                              ELSE Attempts END) * {OutboxDispatcher.BackoffBaseSeconds},
+                CASE WHEN ladder.Seconds > {(int)CarrierHop.TrackingPollInterval.TotalSeconds}
+                     THEN ladder.Seconds
+                     ELSE {(int)CarrierHop.TrackingPollInterval.TotalSeconds} END,
                 SYSDATETIMEOFFSET())
-        WHERE Id = @Id;
+        FROM shipping.Shipments AS shipment
+        CROSS APPLY (VALUES (
+            POWER(2, CASE WHEN shipment.Attempts > {OutboxDispatcher.BackoffAttemptCap}
+                          THEN {OutboxDispatcher.BackoffAttemptCap}
+                          ELSE shipment.Attempts END) * {OutboxDispatcher.BackoffBaseSeconds}
+        )) AS ladder (Seconds)
+        WHERE shipment.Id = @Id;
         """;
 
     // Hands a claimed row back unchanged, for the next tick. Neither Attempts
@@ -81,6 +87,9 @@ internal sealed class TrackingClaims(IDbConnectionFactory connections)
         return [.. await connection.QueryAsync<TrackingWork>(new CommandDefinition(ClaimSql, cancellationToken: ct))];
     }
 
+    // No count abandons a row: a shipment leaves the poll only when it is
+    // terminal (spec, sections 4 and 5), so a Dispatched one the carrier never
+    // delivers goes on being polled, backed off while the carrier fails.
     public async Task FailAsync(Guid id, CancellationToken ct)
     {
         using IDbConnection connection = connections.Create();
