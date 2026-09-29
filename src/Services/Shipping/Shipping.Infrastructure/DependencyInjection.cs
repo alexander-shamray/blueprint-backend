@@ -197,11 +197,10 @@ public static class DependencyInjection
         services.AddScoped<TrackingClaims>();
         services.AddHostedService<TrackingWorker>();
 
-        // §15.4's shape, in the registration helper that owns the consumer
-        // rather than in Program.cs: a binding hoisted upwards re-imposes the
-        // key on every host, which is the mistake that section spends a
-        // paragraph on. ValidateOnStart makes a missing or impossible
-        // statutory window a refusal at host start (ADR-053).
+        // §15.4's rule: the binding sits beside the registration of its
+        // consumer, and ShippingRetentionService is registered here.
+        // ValidateOnStart makes a missing or impossible statutory window a
+        // refusal at host start (ADR-053).
         services
             .AddOptions<ShippingJurisdictionOptions>()
             .BindConfiguration(ShippingJurisdictionOptions.SectionName)

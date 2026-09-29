@@ -1277,9 +1277,9 @@ a key that never varies has nothing to validate.
 > `ServiceOptions.OperationTimeout` are all constants for exactly this reason.
 > `Identity:Client` earns its options type by holding a secret that must differ
 > per environment, and `Jurisdiction` earns one because a statutory window is a
-> fact about where a deployment runs: ADR-053 rule 2 gives a developer's stack
-> invented ones precisely because it is no jurisdiction, and a deployment that
-> is one supplies its own.
+> fact about where a deployment runs: a deployment is given its windows
+> (ADR-053 rule 1), so a developer's stack, which is no jurisdiction, carries
+> invented ones, and a real window belongs in a values file.
 
 Where the binding sits matters as much as the call itself. Binding beside the
 consumer is what makes "the gateway needs no client credentials" true *by
