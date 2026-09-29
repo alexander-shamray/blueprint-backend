@@ -54,8 +54,9 @@ internal sealed class ShipmentStats(IDbConnectionFactory connections) : IShipmen
     // became due: one that is due and that no pass holds is one a replica has
     // not reached, so the oldest one's wait is how far the passes are behind.
     // NULL when there is none, which is no wait at all. A Booked row's
-    // NextAttemptAt is its making until a cancel fails, because Shipment.Cancel
-    // stamps only CancellationRequestedAt, so the later of the two is its due.
+    // NextAttemptAt is at or before its booking until a cancel fails, because
+    // Shipment.Cancel stamps only CancellationRequestedAt, so the later of the
+    // two is its due.
     private static readonly string FulfilmentOverdueSql =
         $"""
         SELECT DATEDIFF_BIG(
