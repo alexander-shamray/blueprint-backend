@@ -11,7 +11,7 @@ package catalog.pricing.v1;
 // service below.
 option csharp_namespace = "Catalog.Pricing.V1";
 
-// The one synchronous hop in the platform (ADR-017). It exists for a screen —
+// The pricing hop (§9.7, ADR-017). It exists for a screen —
 // the order form has to show a price before the customer submits — and not for
 // a transaction: the write path reads Ordering's own projection (§6.4), so a
 // Catalog outage costs a spinner and never an order.

@@ -80,8 +80,8 @@ public sealed class PricingCredentialsTests : IAsyncLifetime
         await client.Quote("GBP", TestContext.Current.CancellationToken, (Chair, 1));
 
         // §10.4 promises one ID "propagates through every service", and this
-        // is the one synchronous hop in the platform — so it is the only place
-        // that promise could be broken by a process boundary, and it was.
+        // is the one hop §9.7 makes on behalf of an inbound request — so it is
+        // the only place that promise could be broken by a process boundary.
         // Asserted at the RECEIVING end for the reason the token above is: a
         // handler that sets the header on a request nobody sends looks
         // identical from inside this process.

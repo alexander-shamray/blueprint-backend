@@ -12,7 +12,7 @@
   <ItemGroup>
     <!-- Appendix C's OpenAPI deliverable: document only, no UI. -->
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
-    <!-- The server half of §9.7's one synchronous hop. Grpc.AspNetCore brings
+    <!-- The server half of §9.7's pricing hop. Grpc.AspNetCore brings
          Grpc.Tools and Google.Protobuf with it, which is why neither is named
          here — Appendix B registers all four as one row because they ship and
          version as one thing. -->
