@@ -1,0 +1,90 @@
+using Common.Infrastructure.Messaging;
+using OpenTelemetry;
+using OpenTelemetry.Metrics;
+using Shouldly;
+using Xunit;
+
+namespace Common.Infrastructure.Tests;
+
+/// <summary>
+/// §13.3's two lags as the OpenTelemetry SDK exports them, bucket bounds and
+/// all: the SDK gives an instrument it does not know millisecond bounds, and a
+/// quantile over those reads the same whatever the lag was. Each test reads
+/// back only its own series, because the provider subscribes by meter name and
+/// another suite's <see cref="MessagingMetrics"/> publishes on the same one.
+/// </summary>
+public class MessagingMetricsTests
+{
+    // §13.7's targets for the two lags, held here rather than read from the
+    // production bounds: sharing them would let a bound deleted there delete
+    // the expectation with it.
+    private static readonly double[] Targets = [1, 2];
+
+    [Theory]
+    [InlineData("messaging.delivery.lag")]
+    [InlineData("projection.lag")]
+    public void A_healthy_lag_is_exported_in_a_bucket_a_tenth_of_a_second_wide(string instrument)
+    {
+        IReadOnlyList<HistogramBucket> buckets = Export(instrument, TimeSpan.FromMilliseconds(50));
+
+        HistogramBucket landed = buckets.First(b => b.BucketCount > 0);
+
+        landed.ExplicitBound.ShouldBeLessThanOrEqualTo(0.1);
+    }
+
+    [Theory]
+    [InlineData("messaging.delivery.lag")]
+    [InlineData("projection.lag")]
+    public void Every_target_is_a_bound_and_a_lag_past_them_is_still_resolved(string instrument)
+    {
+        IReadOnlyList<HistogramBucket> buckets = Export(instrument, TimeSpan.FromSeconds(4));
+
+        double[] bounds = [.. buckets.Select(b => b.ExplicitBound).Where(double.IsFinite)];
+
+        Targets.ShouldBeSubsetOf(bounds);
+        buckets.First(b => b.BucketCount > 0).ExplicitBound.ShouldBeLessThan(double.PositiveInfinity);
+    }
+
+    private static List<HistogramBucket> Export(string instrument, TimeSpan lag)
+    {
+        string message = $"Probe{Guid.NewGuid():N}";
+        List<MetricSnapshot> exported = [];
+
+        // Built before the instruments exist: an instrument created first has
+        // no listener, and the test would read an empty export as a pass.
+        using MeterProvider provider = Sdk.CreateMeterProviderBuilder()
+            .AddMeter("Commerce.Messaging")
+            .AddInMemoryExporter(exported)
+            .Build();
+        using TestMeterFactory factory = new();
+
+        MessagingMetrics metrics = new(factory);
+        metrics.Delivered(message, lag);
+        metrics.Projected(message, lag);
+
+        provider.ForceFlush();
+
+        MetricPoint point = exported
+            .Where(m => m.Name == instrument)
+            .SelectMany(m => m.MetricPoints)
+            .Single(p => Carries(p, message));
+
+        List<HistogramBucket> buckets = [];
+
+        foreach (HistogramBucket bucket in point.GetHistogramBuckets())
+            buckets.Add(bucket);
+
+        return buckets;
+    }
+
+    private static bool Carries(MetricPoint point, string message)
+    {
+        foreach (KeyValuePair<string, object?> tag in point.Tags)
+        {
+            if (tag.Key == "message" && Equals(tag.Value, message))
+                return true;
+        }
+
+        return false;
+    }
+}
