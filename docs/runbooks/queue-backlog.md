@@ -125,12 +125,14 @@ WHERE Status = 'Pending'
 ```
 
 **The lag alert stops where the handler starts.** `messaging.delivery.lag` is
-recorded at the top of `Consume`, before a handler runs, so a handler that is
-slow or failing after it starts leaves this quiet; [§13.7](../backend-architecture/13-observability.md)
-records that gap. It also compares a timestamp made on another machine, so a
-clock skewed between two hosts moves it without anything being late — check
-the publisher's and the consumer's clocks before scaling anything on the lag
-alone.
+recorded at the top of `Consume`, before a handler runs, so a message's own
+handling time is outside its lag, and a handler that fails after it starts
+leaves this quiet; [§13.7](../backend-architecture/13-observability.md)
+records that gap. A slow handler still shows, through the messages queued
+behind it, which start late. The lag also compares a timestamp made on
+another machine, so a clock skewed between two hosts moves it without
+anything being late — check the publisher's and the consumer's clocks before
+scaling anything on the lag alone.
 
 ## Closing it
 
