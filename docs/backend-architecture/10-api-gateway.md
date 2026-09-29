@@ -778,12 +778,13 @@ public sealed class CorrelationIdHandler(IHttpContextAccessor context) : Delegat
 
 > **It lives in `Common.Web` beside the middleware, and it is registered by the
 > host rather than by `AddCommonWebDefaults`.** The guarantee is this section's
-> and not the BFF's, so keeping the two halves in one file is what stops them
-> drifting — but a `DelegatingHandler` attaches to a *named client*, and it
-> has an ID to copy only when an inbound request stands behind the call. A
-> client called from a consumer or a worker has none, so a service's outbound
-> clients register no handler; a host registers it on the client its own
-> request path calls ([ADR-017](adr/ADR-017-one-synchronous-hop.md)).
+> and not the BFF's, so keeping the two halves side by side in `Common.Web` is
+> what stops them drifting — but a `DelegatingHandler` attaches to a *named
+> client*, and it has an ID to copy only when an inbound request stands behind
+> the call. A client called from a consumer or a worker has none, so no
+> service's outbound client carries this handler; a host registers it on the
+> client its own request path calls
+> ([ADR-017](adr/ADR-017-one-synchronous-hop.md)).
 
 > **With no inbound ID it sends no header at all, which is deliberate.** The
 > callee's own middleware then mints one from the current trace — the right
