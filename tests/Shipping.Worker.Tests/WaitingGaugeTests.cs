@@ -29,14 +29,18 @@ public sealed class WaitingGaugeTests(ServiceFixture fixture) : IAsyncLifetime
         Shipment booked = await fixture.BookedAsync("SIM-TRANSIT");
         await fixture.SetAttemptsAsync(booked.Id, 1);
 
-        Shipment healthy = await fixture.BookedAsync("050000");
+        // A second Booked row with no failed pass: Booked reading 1 with two
+        // Booked rows present is what shows the predicate excludes it.
+        await fixture.BookedAsync("050000");
 
         List<(string State, double Value)> measured = ReadWaitingGauge();
 
         measured.ShouldContain(m => m.State == "Booked" && m.Value == 1);
-        measured.ShouldContain(m => m.State == "Pending" && m.Value == 0,
+        measured.ShouldContain(m => m.State == "Pending" && m.Value == 0);
+        measured.Select(m => m.State).ShouldBe(
+            Enum.GetNames<ShipmentStatus>(),
+            ignoreOrder: true,
             "every state reports, because a state missing from a sum reads as a healthy zero");
-        healthy.Id.ShouldNotBe(booked.Id);
     }
 
     /// <summary>

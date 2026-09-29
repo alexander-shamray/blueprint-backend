@@ -6,12 +6,12 @@ using Microsoft.Extensions.Caching.Memory;
 namespace Shipping.Infrastructure.Observability;
 
 /// <summary>
-/// <see cref="IShipmentStats"/> over one aggregate query, in <c>OutboxStats</c>'
-/// shape and on its arguments: a connection factory rather than a scope, a
-/// bounded command timeout, and a short cache, because a metrics type that
-/// loads the database it measures is a monitor that causes the symptom. A read
-/// that throws surfaces as an absent series, which
-/// <c>ShipmentMetrics.PerState</c> is what makes true.
+/// <see cref="IShipmentStats"/> over one aggregate query per state, run on a
+/// cache miss, in <c>OutboxStats</c>' shape and on its arguments: a connection
+/// factory rather than a scope, a bounded command timeout, and a short cache,
+/// because a metrics type that loads the database it measures is a monitor
+/// that causes the symptom. A read that throws surfaces as an absent series,
+/// which <c>ShipmentMetrics.PerState</c> is what makes true.
 /// </summary>
 internal sealed class ShipmentStats(IDbConnectionFactory connections) : IShipmentStats, IDisposable
 {
