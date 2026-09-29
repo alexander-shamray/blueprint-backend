@@ -19,17 +19,13 @@ namespace Shipping.Infrastructure.Tracking;
 internal sealed class TrackingClaims(IDbConnectionFactory connections)
 {
     /// <summary>
-    /// The rows a claim would take now: due, and held by no pass. The
-    /// LockedUntil predicate, not the status filter, keeps this pass and the
-    /// fulfilment pass off each other's rows: a Booked shipment awaiting its
-    /// cancellation's answer is in both claims by design, and whichever stamps
-    /// LockedUntil first holds it until the lease lapses. NextPollAt IS NOT
-    /// NULL repeats ShipmentConfiguration's index filter, so it matches.
+    /// The rows a claim would take now, due and held by no pass, which
+    /// <c>ShipmentStats</c> measures rather than a copy. The LockedUntil
+    /// predicate, not the status filter, keeps the two passes off each other's
+    /// rows: a Booked shipment awaiting its cancellation's answer is in both
+    /// claims by design. NextPollAt IS NOT NULL repeats ShipmentConfiguration's
+    /// index filter, so it matches.
     /// </summary>
-    /// <remarks>
-    /// Internal so <c>ShipmentStats</c> measures this population rather than
-    /// a copy of it.
-    /// </remarks>
     internal const string Claimable =
         """
         Status IN ('Booked', 'Dispatched')

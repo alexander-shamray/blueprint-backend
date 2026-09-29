@@ -32,9 +32,8 @@ public sealed class TrackingWorker(
 
     /// <summary>
     /// How long a claim holds its rows: above <c>CarrierHop.TotalRequestTimeout</c>,
-    /// which bounds a pass because its rows are polled together, so a row
-    /// still being called about stays out of either worker's next claim — the
-    /// lease is one column.
+    /// which bounds a pass whose rows are polled together, so a row in flight
+    /// stays out of either worker's next claim.
     /// </summary>
     /// <remarks>
     /// Shorter than <c>FulfilmentWorker.LeaseSeconds</c> and not one constant

@@ -156,15 +156,12 @@ public sealed class WaitingGaugeTests(ServiceFixture fixture) : IAsyncLifetime
     }
 
     /// <summary>
-    /// One of <see cref="ShipmentMetrics"/>' gauges, read once per call: one
-    /// entry per tag value the callback reported, with the value it produced.
-    /// Built over a stats reader of this suite's own rather than the host's,
-    /// whose cache the host's metric reader can fill from an empty table
-    /// between the booking and this read; the claim here is the gauge's shape,
-    /// its tag and its predicate. The filter is on the meter instance and never
-    /// its name, and each caller writes the instrument name out rather than
-    /// taking it from the registration, which would agree with itself whatever
-    /// it is called.
+    /// One of <see cref="ShipmentMetrics"/>' gauges, read once: one entry per
+    /// tag value, with its value. Over a stats reader of this suite's own, not
+    /// the host's, whose cache the host's metric reader can fill from an empty
+    /// table before this read. The filter is on the meter instance, and each
+    /// caller writes the instrument name out rather than taking it from the
+    /// registration, which would agree with itself whatever it is called.
     /// </summary>
     private List<(string Tag, double Value)> ReadGauge(string instrumentName, string tagKey)
     {
