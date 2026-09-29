@@ -237,7 +237,7 @@ public sealed class ServiceFixture : IAsyncLifetime
     public Task<string?> CarrierReferenceAsync(ShipmentId id) =>
         ScalarAsync<string?>("SELECT Value = CarrierReference FROM shipping.Shipments WHERE Id = {0}", id.Value);
 
-    /// <summary>Null once the shipment is terminal and has nothing further to learn.</summary>
+    /// <summary>Null once a tracking pass has applied a page to a terminal shipment.</summary>
     public Task<DateTimeOffset?> NextPollAtAsync(ShipmentId id) =>
         ScalarAsync<DateTimeOffset?>("SELECT Value = NextPollAt FROM shipping.Shipments WHERE Id = {0}", id.Value);
 
