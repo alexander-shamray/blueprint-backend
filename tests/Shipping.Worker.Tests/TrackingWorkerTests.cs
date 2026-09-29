@@ -93,6 +93,30 @@ public sealed class TrackingWorkerTests(ServiceFixture fixture) : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_refused_cancellation_goes_on_being_tracked_and_despatches_on_collection()
+    {
+        // Spec section 6's third case. SIM-LATE's cancel answers too late, and
+        // its events fall to the simulator's default page, collected and then
+        // delivered, so the despatch is published ahead of the delivery.
+        Shipment shipment = await fixture.BookedAsync("SIM-LATE");
+        await fixture.RequestCancellationAsync(shipment.Id);
+
+        (await fixture.RunFulfilmentPassAsync()).ShouldBe(1);
+        (await fixture.ScalarAsync<int>(
+            "SELECT Value = COUNT(*) FROM shipping.Shipments WHERE Id = {0} AND CancellationRefusedAt IS NOT NULL",
+            shipment.Id.Value)).ShouldBe(1, "the carrier refused the cancellation");
+
+        (await Worker().ProcessBatchAsync(TestContext.Current.CancellationToken)).ShouldBe(1);
+
+        (await fixture.StatusAsync(shipment.Id)).ShouldBe("Delivered");
+        (await fixture.OutboxAsync())
+            .OrderBy(row => row.OccurredAt)
+            .Select(row => row.MessageType.Split('.')[^1])
+            .ShouldBe(["ShipmentDispatched", "ShipmentDelivered"]);
+        (await fixture.RunFulfilmentPassAsync()).ShouldBe(0, "a refused cancellation is outside the claim");
+    }
+
+    [Fact]
     public async Task A_row_still_being_polled_is_not_claimed_by_a_second_pass()
     {
         Shipment shipment = await fixture.BookedAsync("SIM-TRANSIT");

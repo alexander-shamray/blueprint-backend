@@ -43,8 +43,12 @@ public class ShipmentPollTests
     }
 
     [Fact]
-    public void A_voided_shipment_is_never_polled_again()
+    public void A_page_applied_to_a_voided_shipment_schedules_no_poll()
     {
+        // A property of PollApplied, whoever calls it: a carrier's void commits
+        // through Shipment.ReleaseClaim and the tracking claim selects only
+        // Booked and Dispatched rows, so no pass is expected to land here. A
+        // terminal row is still never rescheduled if one does.
         Shipment shipment = Booked();
         shipment.Cancel(Now);
         shipment.CarrierCancelled(Now);

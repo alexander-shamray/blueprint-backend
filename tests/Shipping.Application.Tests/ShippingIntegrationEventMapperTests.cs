@@ -68,8 +68,9 @@ public class ShippingIntegrationEventMapperTests
             ]);
 
         // Order, not membership: a delivery staged ahead of its despatch is a
-        // timeline no consumer can make sense of, and the outbox delivers in
-        // OccurredAt order.
+        // timeline no consumer can make sense of. The mapper's part is to map,
+        // and so stage, the contracts in the order they were raised; delivery
+        // order is the outbox building block's (§9.4).
         mapped.Select(c => c.GetType()).ShouldBe([typeof(ShipmentDispatched), typeof(ShipmentDelivered)]);
     }
 
