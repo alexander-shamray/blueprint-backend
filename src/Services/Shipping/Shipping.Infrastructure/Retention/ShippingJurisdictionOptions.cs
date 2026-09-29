@@ -8,8 +8,9 @@ namespace Shipping.Infrastructure.Retention;
 /// so it holds no language set and no time zone.
 /// </summary>
 /// <remarks>
-/// It passes §15.4's test: both windows are a statute's, so a developer's stack
-/// is given ADR-053 rule 2's invented ones and a deployment its own.
+/// ADR-053 rule 1 gives a deployment its statutory windows. A developer's
+/// stack is not a jurisdiction, so it carries invented windows. Both
+/// windows are statutes', so it passes §15.4's test.
 /// </remarks>
 public sealed class ShippingJurisdictionOptions
 {
