@@ -30,13 +30,14 @@ CIDR='{10.42.0.0/16}'
 GATEWAY_OVERLAY="--set ingress.trustedNetworks=$CIDR"
 PLATFORM_OVERLAY="--set gateway.ingress.trustedNetworks=$CIDR"
 
-# Payments' required provider address (§15.4). Per chart, not for all: on any
-# other chart it is a setting with the capability off, which the library's
-# coherence guard refuses. So it cannot ride GATEWAY_OVERLAY, which every
-# chart receives.
+# The required per-chart values a render cannot supply for every chart (§15.4):
+# on any other chart each is a setting with the capability off, which the
+# library's coherence guard refuses. So none can ride GATEWAY_OVERLAY, which
+# every chart receives.
 overlay_for() {
     case "$1" in
         payments) printf '%s' "--set-string paymentProvider.baseUrl=https://psp.example.invalid/" ;;
+        shipping) printf '%s' "--set-string carrier.baseUrl=https://carrier.example.invalid/ --set-string jurisdiction.addressRetention=30.00:00:00 --set-string jurisdiction.trackingRetention=90.00:00:00" ;;
     esac
 }
 
@@ -115,6 +116,22 @@ refuses_foreign() {
     fi
 }
 
+# A capability is a fact about the code, not an environment setting. Each of
+# these renders cleanly and produces a pod that will not start, and each has to
+# be aimed at a chart that has the capability — `refuses` below renders the
+# gateway, which owns no database and no migrator.
+refuses_chart() {
+    # refuses_chart <chart> <label> <needle> <helm args...>
+    local chart="$1" label="$2" needle="$3"
+    shift 3
+    if "$HELM" template "$chart" "$CHARTS_DIR/$chart" --set-string "image.tag=$TAG" \
+        $(overlay_for "$chart") "$@" >"$OUT/cap.txt" 2>&1; then
+        fail "$label — it rendered instead"
+    else
+        check "$label" grep -q "$needle" "$OUT/cap.txt"
+    fi
+}
+
 # --------------------------------------------------------------------------
 section 'The gate covers every chart on disk'
 # --------------------------------------------------------------------------
@@ -138,13 +155,20 @@ else
     fail "MIGRATOR_CHARTS + DATABASELESS_CHARTS ($both) do not partition SERVICE_CHARTS ($listed)"
 fi
 
-# Read from the values files rather than from a render, and asserted here: a
-# second chart setting it renders nothing at all, so under `set -e` the run
-# would abort in the render section before this reported. ADR-017's budget is
-# one synchronous hop, so it is one chart (§11.5).
-credentialed="$(grep -l 'clientCredentials: true' "$CHARTS_DIR"/*/values.yaml | wc -l | tr -d ' ')"
-check "exactly one chart declares client credentials (found $credentialed)" \
-    test "$credentialed" -eq 1
+# ADR-052 made ADR-017's budget two: the BFF's pricing hop and Shipping's
+# address read. Named rather than counted — a count of two is satisfied by the
+# wrong two charts, and which host holds a grant is the whole claim. Read from
+# the values files rather than from a render, because a second chart setting it
+# renders nothing at all and the run would abort before this reported.
+CREDENTIALED_CHARTS="shipping web-bff"
+credentialed="$(grep -l 'clientCredentials: true' "$CHARTS_DIR"/*/values.yaml |
+    sed -E 's|.*/([^/]+)/values\.yaml|\1|' | sort | tr '\n' ' ' | sed 's/ *$//')"
+want_credentialed="$(printf '%s\n' $CREDENTIALED_CHARTS | sort | tr '\n' ' ' | sed 's/ *$//')"
+if [ "$credentialed" = "$want_credentialed" ]; then
+    pass "exactly the charts whose host calls a peer declare client credentials ($credentialed)"
+else
+    fail "charts declaring client credentials ($credentialed) are not ($want_credentialed)"
+fi
 
 # Each chart must declare what its code requires, read from src/ rather than
 # trusted: the render-time guards refuse a half override, and a whole one —
@@ -216,6 +240,8 @@ done
 
 check 'the BFF binds ServiceIdentityOptions in src/, so its chart declares credentials' \
     grep -rq 'ServiceIdentityOptions' "$ROOT/src/BFF/Web.Bff"
+check "the worker attaches ClientCredentialsHandler in src/, so its chart declares credentials" \
+    grep -rq 'ClientCredentialsHandler' "$ROOT/src/Services/Shipping"
 
 # --------------------------------------------------------------------------
 section 'The source-detection patterns select code, not prose'
@@ -433,6 +459,63 @@ fi
 pass 'paymentProvider renders both keys and refuses an empty address or an address while off'
 
 # --------------------------------------------------------------------------
+section 'The worker chart declares four capabilities, and each is required'
+# --------------------------------------------------------------------------
+# Shipping's host reads every key below before it will start (§15.4), so each
+# state that renders cleanly here is a pod that never starts. Asserted by
+# placement and not by presence: §15.4 puts the credential and the three
+# addresses in different Kinds, and a global grep proves neither.
+SHIPPING_RENDER=$("$HELM" template shipping "$CHARTS_DIR/shipping" \
+    --set-string image.tag="$TAG" $(overlay_for shipping))
+printf '%s\n' "$SHIPPING_RENDER" >"$OUT/shipping-capability.yaml"
+
+check 'shipping: Carrier__BaseUrl is in the ConfigMap' \
+    awk '/^kind: ConfigMap$/ { in_cm = 1 }
+         /^---$/ { in_cm = 0 }
+         in_cm && /^ *Carrier__BaseUrl: "https:\/\/carrier\.example\.invalid\/"$/ { found = 1 }
+         END { exit found ? 0 : 1 }' "$OUT/shipping-capability.yaml"
+check 'shipping: AddressSource__BaseUrl is in the ConfigMap' \
+    awk '/^kind: ConfigMap$/ { in_cm = 1 }
+         /^---$/ { in_cm = 0 }
+         in_cm && /^ *AddressSource__BaseUrl: / { found = 1 }
+         END { exit found ? 0 : 1 }' "$OUT/shipping-capability.yaml"
+check 'shipping: both jurisdiction windows are in the ConfigMap' \
+    awk '/^kind: ConfigMap$/ { in_cm = 1 }
+         /^---$/ { in_cm = 0 }
+         in_cm && /^ *Jurisdiction__[A-Za-z]+Retention: / { n++ }
+         END { exit n == 2 ? 0 : 1 }' "$OUT/shipping-capability.yaml"
+check 'shipping: Carrier__ApiKey comes from a secretKeyRef, not a literal' \
+    awk '/^ *- name: Carrier__ApiKey$/ { at = NR }
+         at && NR == at + 1 && /^ *valueFrom:$/ { vf = 1 }
+         vf && NR == at + 2 && /^ *secretKeyRef:$/ { found = 1 }
+         END { exit found ? 0 : 1 }' "$OUT/shipping-capability.yaml"
+check 'shipping: no ConfigMap carries Carrier__ApiKey' \
+    awk '/^kind: ConfigMap$/ { in_cm = 1 }
+         /^---$/ { in_cm = 0 }
+         in_cm && /Carrier__ApiKey/ { found = 1 }
+         END { exit found ? 1 : 0 }' "$OUT/shipping-capability.yaml"
+
+refuses_chart shipping 'a cleared carrier address fails the render' \
+    'carrier.baseUrl is required' --set-string 'carrier.baseUrl='
+refuses_chart shipping 'a plain-HTTP carrier address fails the render' \
+    'HTTPS address this chart will accept' \
+    --set-string 'carrier.baseUrl=http://carrier.example.invalid/'
+refuses_chart shipping 'a carrier setting with the capability off fails the render' \
+    'but a carrier setting is set' --set carrier.enabled=false
+refuses_chart shipping 'the carrier capability off and cleared fails the render' \
+    'carrier.enabled is false on the shipping chart' \
+    --set carrier.enabled=false --set carrier.apiKeySecretRef=null \
+    --set-string 'carrier.baseUrl='
+refuses_chart shipping 'a cleared address source fails the render' \
+    'addressSource.baseUrl is required' --set-string 'addressSource.baseUrl='
+refuses_chart shipping 'a cleared retention window fails the render' \
+    'jurisdiction.addressRetention is required' \
+    --set-string 'jurisdiction.addressRetention='
+refuses_chart shipping 'a jurisdiction the capability is off for fails the render' \
+    'but a jurisdiction window is set' --set jurisdiction.enabled=false
+pass 'the worker chart renders four capabilities and refuses each half state'
+
+# --------------------------------------------------------------------------
 section 'Probes — three per workload (§13.5)'
 # --------------------------------------------------------------------------
 for chart in $SERVICE_CHARTS; do
@@ -625,15 +708,25 @@ check 'every ConnectionStrings__ value comes from a secretKeyRef' \
     -eq "$(awk '/- name: ConnectionStrings__/ { want = 1; next } want && /secretKeyRef/ { n++; want = 0 } END { print n + 0 }' "$OUT/platform.yaml")"
 
 # --------------------------------------------------------------------------
-section 'Client credentials: exactly one chart (§11.5, §15.3)'
+section 'Client credentials: the hosts that call a peer (§11.5, §15.3, ADR-052)'
 # --------------------------------------------------------------------------
-# A second chart growing an identity.clientId is a design change, not a
+# A third chart growing an identity.clientId is a design change, not a
 # configuration change: it means a host started calling a peer synchronously,
-# which is ADR-017's budget being spent.
-check 'exactly one workload in the platform holds a client secret' \
-    test "$(count 'Identity__Client__ClientSecret' "$OUT/platform.yaml")" -eq 1
-check 'and it is the BFF' \
+# which is ADR-017's budget being spent a third time.
+check 'exactly two workloads in the platform hold a client secret' \
+    test "$(count 'Identity__Client__ClientSecret' "$OUT/platform.yaml")" -eq 2
+check 'one of them is the BFF' \
     test "$(count 'Identity__Client__ClientSecret' "$OUT/web-bff.yaml")" -eq 1
+check 'and the other is the worker' \
+    test "$(count 'Identity__Client__ClientSecret' "$OUT/shipping.yaml")" -eq 1
+# And they read DIFFERENT Secrets, which the counts above cannot see: a values
+# file copied from the BFF's leaves Shipping's pod mounting the BFF's grant,
+# renders cleanly, passes all three counts, and gives one host another's
+# identity (§11.5).
+check 'and the two read different Secrets' \
+    test "$(awk '/- name: Identity__Client__ClientSecret/ { want = 1; next }
+                 want && /name: / { print $2; want = 0 }' "$OUT/platform.yaml" |
+        sort -u | wc -l)" -eq 2
 
 # The two assertions above read the DEFAULT render, and Helm accepts values a
 # chart's values.yaml never declares — so they establish what the charts ship
@@ -648,12 +741,21 @@ for chart in $SERVICE_CHARTS; do
         --set-string paymentProvider.baseUrl=https://psp.example.invalid/ \
         --set-string paymentProvider.apiKeySecretRef.name=payments-provider \
         --set-string paymentProvider.apiKeySecretRef.key=api-key
-    [ "$chart" = web-bff ] || refuses_foreign "$chart" \
-        "the BFF's client credentials are refused on $chart" 'one host that calls a peer' \
-        --set identity.clientCredentials=true \
-        --set-string identity.clientId=x --set-string identity.scope=y \
-        --set-string identity.clientSecretRef.name=web-bff-identity \
-        --set-string identity.clientSecretRef.key=secret
+    [ "$chart" = shipping ] || refuses_foreign "$chart" \
+        "the carrier capability is refused on $chart" 'only shipping books with a carrier' \
+        --set carrier.enabled=true \
+        --set-string carrier.baseUrl=https://carrier.example.invalid/ \
+        --set-string carrier.apiKeySecretRef.name=shipping-carrier \
+        --set-string carrier.apiKeySecretRef.key=api-key
+    case "$chart" in
+        web-bff|shipping) ;;
+        *) refuses_foreign "$chart" \
+            "client credentials are refused on $chart" 'the two hosts that call a peer' \
+            --set identity.clientCredentials=true \
+            --set-string identity.clientId=x --set-string identity.scope=y \
+            --set-string identity.clientSecretRef.name=web-bff-identity \
+            --set-string identity.clientSecretRef.key=secret ;;
+    esac
 done
 
 # --------------------------------------------------------------------------
@@ -962,22 +1064,6 @@ refuses 'an origin naming the default port fails the render' 'default port' \
     $GATEWAY_OVERLAY --set cors.enabled=true --set 'cors.origins={https://shop.example.com:443}'
 refuses 'an origin with a leading-zero port fails the render' 'non-canonically' \
     $GATEWAY_OVERLAY --set cors.enabled=true --set 'cors.origins={https://shop.example.com:08080}'
-
-# A capability is a fact about the code, not an environment setting. Each of
-# these renders cleanly and produces a pod that will not start, and each has to
-# be aimed at a chart that has the capability — `refuses` above renders the
-# gateway, which owns no database and no migrator.
-refuses_chart() {
-    # refuses_chart <chart> <label> <needle> <helm args...>
-    local chart="$1" label="$2" needle="$3"
-    shift 3
-    if "$HELM" template "$chart" "$CHARTS_DIR/$chart" --set-string "image.tag=$TAG" \
-        "$@" >"$OUT/cap.txt" 2>&1; then
-        fail "$label — it rendered instead"
-    else
-        check "$label" grep -q "$needle" "$OUT/cap.txt"
-    fi
-}
 
 refuses_chart catalog 'disabling a database the chart is configured for fails the render' \
     'database.enabled is false' --set database.enabled=false

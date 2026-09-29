@@ -1,0 +1,167 @@
+# Shipping, and the first chart in this tree with no front door. §3.2 gives it
+# no API, so §15.3's worker shape is the chart: no Service, no Ingress, and
+# probes that address the container port directly.
+
+workload:
+  # Nothing dials this workload — it is here because every object a chart
+  # renders is named from it (_helpers.tpl), not because a peer resolves it.
+  # The service's name and not the image's: the migration Job is
+  # `<name>-migrate-<tag>`, a deploy's tag is a full commit SHA (ADR-050), and
+  # `shipping-worker` leaves that Job one character past the budget
+  # _migration-job.tpl enforces.
+  name: shipping
+
+# Three, and a decision rather than a copy. CPU is the wrong signal for a host
+# that waits on a queue and a third party: it idles through a carrier outage
+# and through a backlog alike, so an autoscaler would scale on noise. Three is
+# for availability across a node drain, and §13.6's queue-backlog rule is how
+# anyone finds out it is too few.
+replicaCount: 3
+
+# §15.5's canary track, and OFF is what every ordinary release means. Turned
+# on, this chart renders the second of two Deployments; the Service, Ingress,
+# HPA and PodDisruptionBudget are suppressed because the stable release owns
+# those names (ADR-022). Set by the rollout, not by an operator.
+canary:
+  enabled: false
+
+image:
+  # Registry namespace only. Each workload appends its own name, so the chart
+  # can reference both images (§7.4) from one tag.
+  registry: registry.example.com/commerce
+  # `-worker`, not `-api`: the image is the host, and this host is a worker.
+  api: shipping-worker
+  migrator: shipping-migrator
+  # Supplied by CI, never "latest". Deliberately empty rather than a default: a
+  # deploy that cannot name its tag must fail, not roll something (§15.3).
+  tag: ""
+  pullPolicy: IfNotPresent
+
+ports:
+  # §13.5's health endpoint and nothing else. Declared because the kubelet
+  # reaches a container port without a Service in front of it (§15.3).
+  - name: http
+    containerPort: 8080
+
+resources:
+  requests: { cpu: 100m, memory: 256Mi }
+  limits:   { memory: 512Mi }          # No CPU limit — §15.3.
+
+migrationJob:
+  resources:
+    requests: { cpu: 50m, memory: 128Mi }
+    limits:   { memory: 256Mi }
+
+# Off, which is the other half of replicaCount above. The key is written down
+# rather than omitted, on service.enabled's terms (§15.3): a capability is a
+# claim a chart makes, not one to infer from a missing key.
+autoscaling:
+  enabled: false
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 2
+
+# One receive endpoint, an outbox dispatcher and three hosted services to
+# drain — fulfilment, tracking and retention — with a call in flight bounded by
+# CarrierHop.TotalRequestTimeout and AddressHop.TotalRequestTimeout. No number
+# is taken from those here: the value must exceed HostOptions.ShutdownTimeout,
+# and _deployment.tpl carries the argument.
+terminationGracePeriodSeconds: 45
+
+probes:
+  probePort: http
+  liveness:  { path: /health/live,  initialDelaySeconds: 10, periodSeconds: 10 }
+  readiness: { path: /health/ready, initialDelaySeconds: 5,  periodSeconds: 5 }
+  startup:   { path: /health/startup, failureThreshold: 30,  periodSeconds: 2 }
+
+service:
+  # False, and the key §15.3's callout is about: a worker's safety comes from
+  # having no route, so the absence of a route is the thing to assert.
+  enabled: false
+
+ingress:
+  # False, and refused with the Service off anyway (_ingress.tpl): an Ingress
+  # whose backend does not exist installs cleanly and answers 503.
+  enabled: false
+
+identity:
+  # The authority, to validate incoming JWTs (§11.2) — and, since ADR-052, the
+  # issuer this host asks for its own token.
+  authority: https://id.example.com/realms/commerce
+  # True: the worker presents this grant to read a delivery address from its
+  # owner (ADR-052), which is what a host declaring it is saying. All three
+  # values are required by ValidateOnStart (§15.4).
+  clientCredentials: true
+  clientId: shipping-worker
+  scope: commerce-api
+  clientSecretRef:
+    # Its own Secret, never web-bff-identity: two hosts holding one grant is
+    # one host able to act as the other (§11.5).
+    name: shipping-identity
+    key: client-secret
+
+database:
+  enabled: true
+  # GetConnectionString("Shipping") at runtime, "ShippingMigrator" in the hook.
+  connectionName: Shipping
+  runtimeSecretRef:
+    name: shipping-database
+    key: connection-string
+  migratorSecretRef:
+    name: shipping-migrator-secret
+    key: connection-string
+
+# The bus (§9). One Secret per service, never a shared one: a single broker
+# principal is what makes queue arrival a boundary in name only (§9.4,
+# ADR-036). The Secret this names must carry a connection string for the
+# `shipping-svc` account, whose permissions
+# deploy/compose/rabbitmq/definitions.json declares and check_permissions.py
+# holds to the code. Provisioning it on a deployed broker is an obligation
+# stated and not checked — §15.4's division.
+broker:
+  enabled: true
+  secretRef:
+    name: shipping-rabbitmq
+    key: connection-string
+
+# No Redis (§8.1): the two workers claim rows under a lease in SQL, nothing is
+# cached, and no HTTP write command takes a §8.5 key. Declared rather than
+# omitted, as the gateway, the BFF and Payments declare it (§15.3).
+redis:
+  enabled: false
+
+# §3.2's carrier. The address is an environment value with no default a cluster
+# could use — the simulator is Compose's, never a cluster's — so the capability
+# refuses to render without one. Both keys are read eagerly, which is why the
+# chart beside this file refuses the capability being switched off at all.
+carrier:
+  enabled: true
+  baseUrl: ""
+  apiKeySecretRef:
+    name: shipping-carrier
+    key: api-key
+
+# ADR-052's address owner: the host and the port are routing configuration —
+# `ordering-api`'s HTTP/2-only endpoint, the same in every cluster — so this is
+# the one address the chart defaults rather than requires; the host reads it
+# from `AddressSource:BaseUrl` and refuses to start without it (§15.4). Plain
+# http, because TLS terminates at the Ingress (§10.1) and every hop past it
+# says so.
+addressSource:
+  enabled: true
+  baseUrl: http://ordering-api:8081
+
+# ADR-053's two statutory windows, and neither has a default on purpose: a
+# window is a fact about the jurisdiction a deployment runs in, and a chart
+# that shipped a plausible one would pick somebody's statute for them. Refused
+# rather than clamped, at render and again at start.
+jurisdiction:
+  enabled: true
+  addressRetention: ""
+  trackingRetention: ""
+
+observability:
+  otlpEndpoint: http://otel-collector.observability:4317
+
+extraConfigMaps: []

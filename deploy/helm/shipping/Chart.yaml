@@ -1,0 +1,11 @@
+apiVersion: v2
+name: shipping
+description: >-
+  Shipping (§4.1) — the platform's first worker: a migrator hook, no Service
+  and no Ingress (§3.2, §15.3), and the two outbound calls §9 gives it.
+type: application
+version: 0.1.0
+dependencies:
+  - name: commerce-common
+    version: 0.1.0
+    repository: file://../common
