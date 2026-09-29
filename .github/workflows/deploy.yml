@@ -470,6 +470,7 @@ jobs:
                 -f stable-values.yaml --set-string image.tag="$TAG" \
                 --set-string identity.authority="$CHECKED_AUTHORITY" \
                 --atomic --wait --timeout 20m
+              echo "PROMOTED=true" >> "$GITHUB_ENV"
               helm uninstall "$WORKLOAD-canary" -n "$NAMESPACE"
               break
             fi
@@ -552,6 +553,7 @@ jobs:
       - name: Undo everything the rollout raised
         if: always()
         run: |
+          set -o pipefail
           failed=0
 
           # The canary first: it is the one serving traffic.
@@ -564,6 +566,27 @@ jobs:
           # the only ignored outcome.
           echo "Removing the canary release if the rollout left one."
           helm uninstall "$WORKLOAD-canary" -n "$NAMESPACE" --ignore-not-found || failed=1
+
+          # After a promotion the counts to restore are the ones the promoted
+          # release declares, not the ones read before the climb: restoring
+          # those would undo a replicaCount or minReplicas change the promoted
+          # chart carried, and on a chart with no autoscaler nothing would
+          # ever put it back.
+          declared_count() {
+            helm get values "$WORKLOAD" -n "$NAMESPACE" --all -o json |
+              python -c 'import json, sys
+          value = json.load(sys.stdin)
+          for key in sys.argv[1:]:
+              value = value[key]
+          print(int(value))' "$@"
+          }
+          if [ -n "${PROMOTED:-}" ]; then
+            if [ -n "${HPA_FLOOR:-}" ]; then
+              if declared=$(declared_count autoscaling minReplicas); then HPA_FLOOR="$declared"; else failed=1; fi
+            elif [ -n "${STABLE_REPLICAS_BEFORE:-}" ]; then
+              if declared=$(declared_count replicaCount); then STABLE_REPLICAS_BEFORE="$declared"; else failed=1; fi
+            fi
+          fi
 
           if [ -n "${HPA_FLOOR:-}" ]; then
             kubectl patch hpa "$WORKLOAD" -n "$NAMESPACE" \
