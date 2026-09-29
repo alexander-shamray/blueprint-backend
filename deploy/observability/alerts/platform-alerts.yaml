@@ -177,6 +177,30 @@ groups:
             whose loss it is.
           runbook_url: docs/runbooks/outbox-abandoned.md
 
+      # §13.7's event end-to-end target as a rule, read at a bucket edge
+      # because MessagingMetrics exports the target as a bound. A ticket for
+      # QueueBacklogGrowing's reason: every message late here is still on the
+      # broker and will be delivered. The two share a runbook, and
+      # SHARED_RUNBOOKS in check.py says why.
+      - alert: DeliveryLagHigh
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (service_name, le) (rate(messaging_delivery_lag_seconds_bucket[10m]))
+          ) > 2
+        for: 10m
+        labels:
+          severity: ticket
+          owner: service
+        annotations:
+          summary: "Event delivery p95 above 2s on {{ $labels.service_name }}"
+          description: >-
+            Events are reaching this service's consumers late: publish to
+            consumer start, at the 95th percentile, is past §13.7's target.
+            Nothing has failed, and a consumer is not keeping up with what it
+            is sent.
+          runbook_url: docs/runbooks/queue-backlog.md
+
   - name: platform-infrastructure
     rules:
       # The rules whose signal comes from an exporter rather than from this
