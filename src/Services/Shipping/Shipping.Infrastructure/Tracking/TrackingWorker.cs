@@ -24,15 +24,17 @@ public sealed class TrackingWorker(
     ILogger<TrackingWorker> log) : BackgroundService
 {
     /// <summary>
-    /// How many rows one claim leases. Smaller than the outbox's, because each
-    /// row here is a round trip to a third party rather than a publish.
+    /// How many rows one claim leases, and so how many carrier calls one pass
+    /// has in flight at once. Smaller than the outbox's, because each row here
+    /// is a round trip to a third party rather than a publish.
     /// </summary>
     public const int ClaimBatchSize = 20;
 
     /// <summary>
-    /// How long a claim holds its rows: above <see cref="PassBudget"/> and
-    /// <c>CarrierHop.TotalRequestTimeout</c>, so a row still being called
-    /// about stays out of either worker's next claim — the lease is one column.
+    /// How long a claim holds its rows: above <c>CarrierHop.TotalRequestTimeout</c>,
+    /// which bounds a pass because its rows are polled together, so a row
+    /// still being called about stays out of either worker's next claim — the
+    /// lease is one column.
     /// </summary>
     /// <remarks>
     /// Shorter than <c>FulfilmentWorker.LeaseSeconds</c> and not one constant
@@ -40,13 +42,6 @@ public sealed class TrackingWorker(
     /// bounds its own worst case.
     /// </remarks>
     public const int LeaseSeconds = 45;
-
-    /// <summary>
-    /// The most one pass spends on carrier calls. Below §15.3's
-    /// thirty-second shutdown drain and above one hop's total, so a pass
-    /// always makes at least one call and never outlives the host's stop.
-    /// </summary>
-    public static readonly TimeSpan PassBudget = TimeSpan.FromSeconds(25);
 
     /// <summary>
     /// ADR-054's tracking age, measured from <c>Shipment.CreatedAt</c>: a
@@ -118,39 +113,34 @@ public sealed class TrackingWorker(
         TrackingClaims claims = claimScope.ServiceProvider.GetRequiredService<TrackingClaims>();
         IReadOnlyList<TrackingWork> claimed = await claims.ClaimAsync(ct);
 
-        TimeProvider clock = claimScope.ServiceProvider.GetRequiredService<TimeProvider>();
-        DateTimeOffset started = clock.GetUtcNow();
-        int applied = 0;
+        // Every claimed row at once, so a pass lasts one hop rather than one
+        // hop per row, and carrier latency caps no row's turn: the lease is
+        // what bounds it. WhenAll and not a loop that stops at the first
+        // fault, so a row whose backoff could not be written leaves the
+        // others to finish, and the fault still reaches ExecuteAsync.
+        bool[] applied = await Task.WhenAll(claimed.Select(work => PollOrBackOffAsync(claims, work, ct)));
 
-        foreach (TrackingWork work in claimed)
+        return applied.Count(isApplied => isApplied);
+    }
+
+    private async Task<bool> PollOrBackOffAsync(TrackingClaims claims, TrackingWork work, CancellationToken ct)
+    {
+        try
         {
-            // A row whose call could not finish inside the budget is released
-            // rather than started: the next tick claims it, and nothing is left
-            // leased behind a pass that ran out of time.
-            if (clock.GetUtcNow() - started + CarrierHop.TotalRequestTimeout > PassBudget)
-            {
-                await claims.ReleaseAsync(work.Id, ct);
-                continue;
-            }
-
-            try
-            {
-                if (await PollAsync(work, ct))
-                    applied++;
-            }
-            catch (Exception ex) when (!ct.IsCancellationRequested)
-            {
-                // One row's carrier, one row's backoff. A page that cannot be
-                // read is not a fact about any other shipment. Logged before
-                // the backoff is written, as FulfilmentWorker does, so a
-                // database fault in FailAsync cannot hide the carrier's.
-                PollFailed(log, work.Id, work.OrderId, work.PollAttempts + 1, ex);
-
-                await claims.FailAsync(work.Id, ct);
-            }
+            return await PollAsync(work, ct);
         }
+        catch (Exception ex) when (!ct.IsCancellationRequested)
+        {
+            // One row's carrier, one row's backoff. A page that cannot be
+            // read is not a fact about any other shipment. Logged before
+            // the backoff is written, as FulfilmentWorker does, so a
+            // database fault in FailAsync cannot hide the carrier's.
+            PollFailed(log, work.Id, work.OrderId, work.PollAttempts + 1, ex);
 
-        return applied;
+            await claims.FailAsync(work.Id, ct);
+
+            return false;
+        }
     }
 
     /// <summary>

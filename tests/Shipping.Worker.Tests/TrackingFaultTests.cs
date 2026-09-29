@@ -10,8 +10,9 @@ using Xunit;
 namespace Shipping.Worker.Tests;
 
 /// <summary>
-/// The poll's transient row, over a host of its own because the breaker it
-/// fills is sized to open (<c>CarrierHop</c>). The database, the broker and
+/// The poll against a carrier that is down or slow, over a host of its own
+/// because the breaker it fills is sized to open (<c>CarrierHop</c>) and a
+/// delay set on the server delays every answer. The database, the broker and
 /// the Ordering stub stay the collection's.
 /// </summary>
 [Collection(nameof(IntegrationCollection))]
@@ -72,6 +73,26 @@ public sealed class TrackingFaultTests : IAsyncLifetime
         (await _fixture.NextPollAtAsync(shipment.Id)).ShouldNotBeNull().ShouldBeGreaterThanOrEqualTo(
             before + CarrierHop.TrackingPollInterval,
             "the ladder's first step is five seconds, and a failed poll is never due sooner than a healthy one");
+    }
+
+    [Fact]
+    public async Task A_slow_carrier_still_has_every_claimed_row_polled_in_one_pass()
+    {
+        // A carrier answering in four seconds, over a batch of five: polled one
+        // after another inside a budget that reserves a hop's total per row,
+        // the pass would start two calls and hand the rest back. Polled
+        // together, every row's call starts at the claim and ends inside it.
+        const int Batch = 5;
+        _carrier.AddGlobalProcessingDelay(TimeSpan.FromSeconds(4));
+
+        for (int i = 0; i < Batch; i++)
+            await _fixture.BookedAsync("SIM-TRANSIT");
+
+        (await Worker().ProcessBatchAsync(TestContext.Current.CancellationToken)).ShouldBe(Batch);
+
+        (await _fixture.ScalarAsync<int>(
+            "SELECT Value = COUNT(*) FROM shipping.Shipments WHERE Status = 'Dispatched' AND LockedUntil IS NULL"))
+            .ShouldBe(Batch, "each row's page was applied and its claim released by the commit that used it");
     }
 
     private TrackingWorker Worker() => _host.Services.GetRequiredService<TrackingWorker>();
