@@ -4,6 +4,7 @@ using Shipping.Application.Shipments;
 using Shipping.Domain.Shipments;
 using Shipping.Infrastructure.Fulfilment;
 using Shipping.Infrastructure.Persistence;
+using Shipping.Infrastructure.Retention;
 using Shipping.Infrastructure.Tracking;
 using Shipping.Migrator;
 using Shipping.OrderingStub;
@@ -294,6 +295,83 @@ public sealed class ServiceFixture : IAsyncLifetime
         ExecuteAsync(
             "UPDATE shipping.Shipments SET CancellationRequestedAt = SYSDATETIMEOFFSET() WHERE Id = {0};",
             id.Value);
+
+    /// <summary>
+    /// A shipment the carrier has delivered, with its address row and its
+    /// tracking events in place: booked through the fulfilment worker and then
+    /// polled once, so the state and the rows are the workers' own.
+    /// </summary>
+    /// <remarks>
+    /// "050000" is the simulator's delivered script (spec, section 9). The two
+    /// optional parts carry a non-ASCII address into the table the purge reads.
+    /// </remarks>
+    public async Task<Shipment> DeliveredAsync(string? line1 = null, string? city = null)
+    {
+        Shipment shipment = await BookedAsync("050000", line1: line1, city: city);
+
+        await RunTrackingPassAsync();
+
+        return shipment;
+    }
+
+    /// <summary>
+    /// A voided shipment that already carries a tracking event. It is the one
+    /// shape that separates ADR-053's two clocks — terminal, so its address is
+    /// due, and never delivered, so its feed is not.
+    /// </summary>
+    /// <remarks>
+    /// The tracking row is written here rather than polled for: every simulator
+    /// script either promotes the shipment out of the cancellable population or
+    /// is refused whole (spec, section 9).
+    /// </remarks>
+    public async Task<Shipment> VoidedWithTrackingAsync()
+    {
+        Shipment shipment = await BookedAsync("SIM-TRANSIT");
+
+        await ExecuteAsync(
+            """
+            INSERT INTO shipping.TrackingEvents (ShipmentId, CarrierEventId, Status, OccurredAt, RecordedAt)
+            VALUES ({0}, 'evt-in-transit', 'InTransit', SYSDATETIMEOFFSET(), SYSDATETIMEOFFSET());
+            """,
+            shipment.Id.Value);
+
+        await RequestCancellationAsync(shipment.Id);
+        await RunFulfilmentPassAsync();
+
+        return shipment;
+    }
+
+    /// <summary>
+    /// Moves a terminal shipment's clock back, so a window measured in days can
+    /// be crossed inside a test. <c>TerminalAt</c> and not the row's creation,
+    /// because ADR-053's two clocks both start there — and set absolutely, so a
+    /// test may age one row twice without compounding.
+    /// </summary>
+    public Task AgeTerminalAsync(ShipmentId id, TimeSpan age) =>
+        ExecuteAsync(
+            "UPDATE shipping.Shipments SET TerminalAt = DATEADD(second, {0}, SYSDATETIMEOFFSET()) WHERE Id = {1};",
+            -(int)age.TotalSeconds,
+            id.Value);
+
+    /// <summary>
+    /// How many delivery addresses are held for one order — one or none, since
+    /// the table is keyed by the order (spec, section 7).
+    /// </summary>
+    public Task<int> AddressCountAsync(OrderId orderId) =>
+        ScalarAsync<int>(
+            "SELECT Value = COUNT(*) FROM shipping.DeliveryAddresses WHERE OrderId = {0}",
+            orderId.Value);
+
+    /// <summary>How many tracking events a shipment still holds.</summary>
+    public Task<int> TrackingEventCountAsync(ShipmentId id) =>
+        ScalarAsync<int>(
+            "SELECT Value = COUNT(*) FROM shipping.TrackingEvents WHERE ShipmentId = {0}",
+            id.Value);
+
+    /// <summary>Runs exactly one statutory-retention pass. No timers, no waiting.</summary>
+    public Task<(int Addresses, int TrackingEvents)> PurgeShippingRetentionAsync() =>
+        Factory.Services.GetRequiredService<ShippingRetentionService>().PurgeAsync(
+            TestContext.Current.CancellationToken);
 
     /// <summary>
     /// Polls to <see cref="StepDeadline"/> and throws when it lapses: a staged

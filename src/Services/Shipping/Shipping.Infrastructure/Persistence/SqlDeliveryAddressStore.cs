@@ -8,8 +8,8 @@ using Shipping.Domain.Shipments;
 namespace Shipping.Infrastructure.Persistence;
 
 /// <summary>
-/// The only reader and writer of <c>shipping.DeliveryAddresses</c> (spec,
-/// section 7).
+/// The only reader and writer of whole addresses (spec, section 7); the
+/// retention pass and §11.7's erasure only delete rows of them.
 /// </summary>
 /// <remarks>
 /// On its own connection, unlike <c>IUnitOfWork.ExecuteRawAsync</c>'s callers:
