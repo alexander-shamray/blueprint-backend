@@ -7,8 +7,7 @@ namespace Shipping.Infrastructure.Observability;
 
 /// <summary>
 /// Spec section 11's gauge over shipments past their first failed pass, by state, and
-/// the wait of the longest-due row each pass would claim, on the same meter as the
-/// carrier's and the address's instruments.
+/// the wait of the longest-due row each pass would claim, on the carrier's meter.
 /// </summary>
 /// <remarks>
 /// <c>CarrierMetrics.MeterName</c> rather than a string of its own, so §13.2's

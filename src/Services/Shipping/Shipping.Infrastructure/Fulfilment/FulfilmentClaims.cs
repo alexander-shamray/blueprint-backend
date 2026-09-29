@@ -17,17 +17,13 @@ namespace Shipping.Infrastructure.Fulfilment;
 internal sealed class FulfilmentClaims(IDbConnectionFactory connections)
 {
     /// <summary>
-    /// The rows a claim would take now: due, and held by no pass. Two
-    /// populations, one claim: a Pending shipment to book, and a Booked one
-    /// whose cancellation the carrier has not answered yet (spec, section 5).
-    /// Every terminal state is outside both, so nothing already finished is
-    /// ever claimed. The first two predicates repeat ShipmentConfiguration's
-    /// index filter word for word, which is what lets the optimiser match it.
+    /// The rows a claim would take now, due and held by no pass, which
+    /// <c>ShipmentStats</c> measures rather than a copy. Two populations: a
+    /// Pending shipment to book, and a Booked one whose cancellation the
+    /// carrier has not answered (spec, section 5). The first two predicates
+    /// repeat ShipmentConfiguration's index filter word for word, which is
+    /// what lets the optimiser match it.
     /// </summary>
-    /// <remarks>
-    /// Internal so <c>ShipmentStats</c> measures this population rather than
-    /// a copy of it.
-    /// </remarks>
     internal const string Claimable =
         """
         Status IN ('Pending', 'Booked')
