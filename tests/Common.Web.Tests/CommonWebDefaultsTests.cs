@@ -129,10 +129,8 @@ public class CommonWebDefaultsTests
     public void A_host_that_cannot_name_its_identity_provider_does_not_start()
     {
         // The eager read of §11.3, and the posture AddSqlServer and
-        // AddMassTransitMessaging already take. Not ValidateOnStart: §15.4
-        // keeps ServiceIdentityOptions as the solution's only options type,
-        // and §12.4's fixture comment naming OptionsValidationException here
-        // was amended in the same change that added this test.
+        // AddMassTransitMessaging already take: the key is refused where it is
+        // read, so no options type stands between it and the failure.
         HostApplicationBuilder builder = TelemetryHost.Builder();
         builder.Configuration[AuthenticationExtensions.AuthorityKey] = null;
 

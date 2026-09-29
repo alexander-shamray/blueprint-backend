@@ -30,17 +30,11 @@ public class InventoryApiFactory(
     /// Deliberately fake and deliberately unreachable — <c>.invalid</c> is
     /// reserved and never resolves, so a test that accidentally dials the
     /// authority fails loudly rather than reaching a real identity provider.
+    /// Required for the reason both connection strings are:
+    /// <c>AddJwtAuthentication</c> reads this key eagerly and throws naming it,
+    /// so a host that cannot name its identity provider does not start, and no
+    /// options type stands between the key and that refusal.
     /// </summary>
-    /// <remarks>
-    /// Required rather than optional for the same reason both connection
-    /// strings are: <c>AddJwtAuthentication</c> reads this key eagerly and
-    /// throws naming it, so a service host that cannot name its identity
-    /// provider does not start. §12.4 attributed that failure to
-    /// <c>ValidateOnStart</c> and <c>OptionsValidationException</c>, and the
-    /// chapter was amended — §15.4 keeps <c>ServiceIdentityOptions</c> as the
-    /// solution's only options type, so there is nothing here for
-    /// <c>ValidateDataAnnotations</c> to check.
-    /// </remarks>
     public const string UnreachableAuthority = "https://identity.invalid/realms/test";
 
     /// <summary>
