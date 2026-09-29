@@ -25,18 +25,15 @@ public sealed class TrackingWorkerTests(ServiceFixture fixture) : IAsyncLifetime
     [Fact]
     public void The_lease_outlives_the_hop_and_the_pass()
     {
-        // CarrierHop.TotalRequestTimeout bounds one call; the lease bounds the
-        // pass around it (spec, section 4). A lease shorter than either would
-        // let a second replica claim a row this pass is still calling the
-        // carrier about, and the two would record against the same aggregate.
+        // A pass polls its claimed rows together, so CarrierHop.TotalRequestTimeout
+        // bounds the whole pass as well as one call (spec, section 4). A lease
+        // shorter than it would let a second replica claim a row this pass is
+        // still calling the carrier about, and the two would record against
+        // the same aggregate.
         TimeSpan lease = TimeSpan.FromSeconds(TrackingWorker.LeaseSeconds);
 
-        lease.ShouldBeGreaterThan(CarrierHop.TotalRequestTimeout, "one call must finish inside the lease");
-        lease.ShouldBeGreaterThan(TrackingWorker.PassBudget, "a pass must finish inside its own lease");
-        TrackingWorker.PassBudget.ShouldBeGreaterThan(
-            CarrierHop.TotalRequestTimeout,
-            "a budget below one hop's total would make every pass claim rows and process none");
-        TrackingWorker.PassBudget.ShouldBeLessThan(
+        lease.ShouldBeGreaterThan(CarrierHop.TotalRequestTimeout, "a pass must finish inside its own lease");
+        CarrierHop.TotalRequestTimeout.ShouldBeLessThan(
             TimeSpan.FromSeconds(30),
             "the host's shutdown timeout is thirty seconds (§15.3), and a pass that outlives it is killed mid-row");
 

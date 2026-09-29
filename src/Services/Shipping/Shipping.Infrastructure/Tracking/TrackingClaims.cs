@@ -18,23 +18,34 @@ namespace Shipping.Infrastructure.Tracking;
 /// </remarks>
 internal sealed class TrackingClaims(IDbConnectionFactory connections)
 {
+    /// <summary>
+    /// The rows a claim would take now: due, and held by no pass. The
+    /// LockedUntil predicate, not the status filter, keeps this pass and the
+    /// fulfilment pass off each other's rows: a Booked shipment awaiting its
+    /// cancellation's answer is in both claims by design, and whichever stamps
+    /// LockedUntil first holds it until the lease lapses. NextPollAt IS NOT
+    /// NULL repeats ShipmentConfiguration's index filter, so it matches.
+    /// </summary>
+    /// <remarks>
+    /// Internal so <c>ShipmentStats</c> measures this population rather than
+    /// a copy of it.
+    /// </remarks>
+    internal const string Claimable =
+        """
+        Status IN ('Booked', 'Dispatched')
+            AND NextPollAt IS NOT NULL
+            AND NextPollAt <= SYSDATETIMEOFFSET()
+            AND (LockedUntil IS NULL OR LockedUntil < SYSDATETIMEOFFSET())
+        """;
+
     // Atomic claim: selects and leases in one statement, so two replicas
     // cannot take the same row. READPAST skips rows another replica holds.
-    //
-    // The LockedUntil predicate, not the status filter, keeps this pass and
-    // the fulfilment pass off each other's rows: a Booked shipment awaiting
-    // its cancellation's answer is in both claims by design, and whichever
-    // stamps LockedUntil first holds it until the lease lapses. NextPollAt IS
-    // NOT NULL repeats ShipmentConfiguration's index filter, so it matches.
     private static readonly string ClaimSql =
         $"""
         WITH claimable AS (
             SELECT TOP ({TrackingWorker.ClaimBatchSize}) *
             FROM shipping.Shipments WITH (UPDLOCK, READPAST, ROWLOCK)
-            WHERE Status IN ('Booked', 'Dispatched')
-                AND NextPollAt IS NOT NULL
-                AND NextPollAt <= SYSDATETIMEOFFSET()
-                AND (LockedUntil IS NULL OR LockedUntil < SYSDATETIMEOFFSET())
+            WHERE {Claimable}
             ORDER BY NextPollAt
         )
         UPDATE claimable
@@ -70,12 +81,6 @@ internal sealed class TrackingClaims(IDbConnectionFactory connections)
         WHERE shipment.Id = @Id;
         """;
 
-    // Hands a claimed row back unchanged, for the next tick. Neither
-    // PollAttempts nor NextPollAt moves: the pass ran out of time, which is
-    // not a fact about the carrier.
-    private const string ReleaseSql =
-        "UPDATE shipping.Shipments SET LockedUntil = NULL WHERE Id = @Id;";
-
     public async Task<IReadOnlyList<TrackingWork>> ClaimAsync(CancellationToken ct)
     {
         using IDbConnection connection = connections.Create();
@@ -92,12 +97,5 @@ internal sealed class TrackingClaims(IDbConnectionFactory connections)
         using IDbConnection connection = connections.Create();
 
         await connection.ExecuteAsync(new CommandDefinition(FailSql, new { Id = id }, cancellationToken: ct));
-    }
-
-    public async Task ReleaseAsync(Guid id, CancellationToken ct)
-    {
-        using IDbConnection connection = connections.Create();
-
-        await connection.ExecuteAsync(new CommandDefinition(ReleaseSql, new { Id = id }, cancellationToken: ct));
     }
 }
