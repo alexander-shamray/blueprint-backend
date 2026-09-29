@@ -1,7 +1,7 @@
 namespace Shipping.Infrastructure.Carrier;
 
 /// <summary>
-/// The carrier call's budget and the two intervals a worker runs at, in one
+/// The carrier call's budget and the intervals the two workers run at, in one
 /// class because section 4's arithmetic spans them: the total sits under
 /// <c>ServiceOptions.OperationTimeout</c>, each lease above the total.
 /// </summary>
@@ -78,11 +78,19 @@ public static class CarrierHop
     public static readonly TimeSpan FulfilmentTick = TimeSpan.FromSeconds(5);
 
     /// <summary>
-    /// How often the tracking loop asks the carrier. A latency number before
-    /// it is a load number: nothing downstream learns of a despatch sooner
-    /// than the next poll, so this is added to §13.7's two-second event
-    /// target, and it is what keeps a busy table inside a carrier's rate
-    /// limit.
+    /// How often the tracking loop claims the rows that are due. Short because
+    /// due-ness lives on the row as <c>NextPollAt</c>, so the tick only bounds
+    /// how late a due row is picked up; it matches <see cref="FulfilmentTick"/>
+    /// without being it, since the two loops are paced by different things.
+    /// </summary>
+    public static readonly TimeSpan TrackingTick = TimeSpan.FromSeconds(5);
+
+    /// <summary>
+    /// How long after an applied page a shipment is next due a poll, stamped on
+    /// the row. A latency number before it is a load number: nothing downstream
+    /// learns of a despatch sooner than the next poll, so this and one
+    /// <see cref="TrackingTick"/> are added to §13.7's two-second event target,
+    /// and it is what keeps a busy table inside a carrier's rate limit.
     /// </summary>
     public static readonly TimeSpan TrackingPollInterval = TimeSpan.FromSeconds(30);
 }

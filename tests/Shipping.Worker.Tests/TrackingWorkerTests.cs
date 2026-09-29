@@ -39,6 +39,13 @@ public sealed class TrackingWorkerTests(ServiceFixture fixture) : IAsyncLifetime
             TimeSpan.FromSeconds(30),
             "the host's shutdown timeout is thirty seconds (§15.3), and a pass that outlives it is killed mid-row");
 
+        // NextPollAt is stamped after the carrier answers, part-way into a
+        // tick, so a loop ticking once per poll interval meets that row a
+        // moment before it is due and takes it one tick late (CarrierHop).
+        CarrierHop.TrackingTick.ShouldBeLessThan(
+            CarrierHop.TrackingPollInterval,
+            "the tick bounds how late a due row is claimed, and one as long as the interval doubles the cadence");
+
         // The two leases are separate numbers over one column: each bounds its
         // own worst-case pass, and neither is a bound on the other's. What
         // keeps the two workers apart is the LockedUntil predicate
@@ -168,11 +175,10 @@ public sealed class TrackingWorkerTests(ServiceFixture fixture) : IAsyncLifetime
 
         await worker.StartAsync(TestContext.Current.CancellationToken);
 
-        // One whole interval, because PeriodicTimer fires first that long after
-        // the loop starts; then the loop's own line rather than a margin, since
-        // the direct call above logs nothing and a loop that let the fault out
-        // completes instead of logging.
-        await Task.Delay(CarrierHop.TrackingPollInterval, TestContext.Current.CancellationToken);
+        // Staged on the loop's own line rather than on a sleep: PeriodicTimer
+        // first fires one CarrierHop.TrackingTick after the start, inside the
+        // wait's deadline, and the direct call above logs nothing. A loop that
+        // let the fault out completes instead of logging.
         await ServiceFixture.WaitUntilAsync(() =>
             Task.FromResult(ClaimFailedLogged(broken) || worker.ExecuteTask!.IsCompleted));
 
