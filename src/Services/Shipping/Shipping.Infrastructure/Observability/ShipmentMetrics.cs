@@ -6,8 +6,9 @@ using Shipping.Infrastructure.Carrier;
 namespace Shipping.Infrastructure.Observability;
 
 /// <summary>
-/// Spec section 11's gauge over shipments past their first failed pass, by state, on the
-/// same meter as the carrier's and the address's instruments.
+/// Spec section 11's gauge over shipments past their first failed pass, by state, and
+/// the wait of the longest-due row each pass would claim, on the same meter as the
+/// carrier's and the address's instruments.
 /// </summary>
 /// <remarks>
 /// <c>CarrierMetrics.MeterName</c> rather than a string of its own, so §13.2's
@@ -27,6 +28,13 @@ public sealed class ShipmentMetrics
             + "collection omits every state rather than reporting some — absent rather than "
             + "wrong, see ShipmentMetrics.");
 
+    private static readonly Action<ILogger, Exception?> OverdueReadFailed =
+        LoggerMessage.Define(
+            LogLevel.Error,
+            new EventId(2, nameof(OverdueReadFailed)),
+            "Overdue-shipment gauge read failed. This collection omits both passes rather than "
+            + "reporting one, see ShipmentMetrics.");
+
     public ShipmentMetrics(IMeterFactory factory, IShipmentStats stats, ILogger<ShipmentMetrics> logger)
     {
         Meter meter = factory.Create(CarrierMetrics.MeterName);
@@ -40,6 +48,15 @@ public sealed class ShipmentMetrics
             () => PerState(stats, logger),
             unit: "{shipment}",
             description: "Shipments past their first failed pass, by state.");
+
+        // The row no pass has reached yet, which the gauge above cannot see:
+        // healthy, each claim takes a due row within a tick, so an age that
+        // climbs past one is the replicas falling behind their passes.
+        meter.CreateObservableGauge(
+            "shipping.shipments.overdue",
+            () => PerPass(stats, logger),
+            unit: "s",
+            description: "How long the longest-due shipment each pass would claim has waited for one, by pass.");
     }
 
     /// <summary>
@@ -77,6 +94,27 @@ public sealed class ShipmentMetrics
         }
 
         return measurements;
+    }
+
+    /// <summary>
+    /// One measurement per pass, both or neither, for <see cref="PerState"/>'s
+    /// reason: a pass missing from a <c>max by (pass)</c> reads as no wait.
+    /// </summary>
+    private static List<Measurement<double>> PerPass(IShipmentStats stats, ILogger logger)
+    {
+        try
+        {
+            return
+            [
+                new(stats.FulfilmentOverdueSeconds(), new KeyValuePair<string, object?>("pass", "fulfilment")),
+                new(stats.TrackingOverdueSeconds(), new KeyValuePair<string, object?>("pass", "tracking")),
+            ];
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            OverdueReadFailed(logger, exception);
+            return [];
+        }
     }
 
     private static KeyValuePair<string, object?> Tag(ShipmentStatus status) =>

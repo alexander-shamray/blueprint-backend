@@ -16,24 +16,35 @@ namespace Shipping.Infrastructure.Fulfilment;
 /// </remarks>
 internal sealed class FulfilmentClaims(IDbConnectionFactory connections)
 {
+    /// <summary>
+    /// The rows a claim would take now: due, and held by no pass. Two
+    /// populations, one claim: a Pending shipment to book, and a Booked one
+    /// whose cancellation the carrier has not answered yet (spec, section 5).
+    /// Every terminal state is outside both, so nothing already finished is
+    /// ever claimed. The first two predicates repeat ShipmentConfiguration's
+    /// index filter word for word, which is what lets the optimiser match it.
+    /// </summary>
+    /// <remarks>
+    /// Internal so <c>ShipmentStats</c> measures this population rather than
+    /// a copy of it.
+    /// </remarks>
+    internal const string Claimable =
+        """
+        Status IN ('Pending', 'Booked')
+            AND CancellationRefusedAt IS NULL
+            AND (Status = 'Pending' OR CancellationRequestedAt IS NOT NULL)
+            AND NextAttemptAt <= SYSDATETIMEOFFSET()
+            AND (LockedUntil IS NULL OR LockedUntil < SYSDATETIMEOFFSET())
+        """;
+
     // Atomic claim: selects and leases in one statement, so two replicas
     // cannot take the same row. READPAST skips rows another replica holds.
-    //
-    // Two populations, one claim: a Pending shipment to book, and a Booked one
-    // whose cancellation the carrier has not answered yet (spec, section 5).
-    // Every terminal state is outside both, so nothing already finished is
-    // ever claimed. The first two predicates repeat ShipmentConfiguration's
-    // index filter word for word, which is what lets the optimiser match it.
     private static readonly string ClaimSql =
         $"""
         WITH claimable AS (
             SELECT TOP ({FulfilmentWorker.ClaimBatchSize}) *
             FROM shipping.Shipments WITH (UPDLOCK, READPAST, ROWLOCK)
-            WHERE Status IN ('Pending', 'Booked')
-                AND CancellationRefusedAt IS NULL
-                AND (Status = 'Pending' OR CancellationRequestedAt IS NOT NULL)
-                AND NextAttemptAt <= SYSDATETIMEOFFSET()
-                AND (LockedUntil IS NULL OR LockedUntil < SYSDATETIMEOFFSET())
+            WHERE {Claimable}
             ORDER BY NextAttemptAt
         )
         UPDATE claimable

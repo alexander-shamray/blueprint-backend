@@ -896,15 +896,16 @@ paragraph says how.
 the wrong signal for a host that waits on a queue and on a third party — it
 idles through a carrier outage and through a backlog alike — so Shipping's
 chart sets `autoscaling.enabled: false` and `replicaCount: 3`, three for
-availability across a node drain. **What would say three is too few is owed.**
-§13.6's queue-backlog rule watches Shipping's receive endpoint, and its
-consumers only write a row — a `Pending` shipment, or a cancellation — so
-the replica-bound work is the fulfilment and tracking workers', and a row no
-pass has reached yet shows on no gauge, `shipping.shipments.waiting` included
-([#315](https://github.com/alexander-shamray/blueprint-backend/issues/315)
-owns those workers at scale). `deploy/helm/smoke.sh` partitions the charts into
-the autoscaled and the fixed-replica, and holds each chart's values to its
-side, because a branch driven by the file it is judging asserts nothing.
+availability across a node drain. **What says three is too few is
+`shipping.shipments.overdue`**, not the queue: §13.6's queue-backlog rule
+watches Shipping's receive endpoint, and its consumers only write a row — a
+`Pending` shipment, or a cancellation — so the replica-bound work is the
+fulfilment and tracking workers'. The gauge is the wait of the longest-due row
+each pass would claim, by pass, and
+[`queue-backlog.md`](../runbooks/queue-backlog.md) says how to read it.
+`deploy/helm/smoke.sh` partitions the charts into the autoscaled and the
+fixed-replica, and holds each chart's values to its side, because a branch
+driven by the file it is judging asserts nothing.
 §15.5's rollout already supports it: the first rung scales the Deployment and
 raises an HPA floor only where there is one.
 
