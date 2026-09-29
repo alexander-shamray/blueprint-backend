@@ -83,10 +83,13 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- FulfilmentWorker.FulfilAsync, which the worker suite hands the row a
-         commit reloads. Named here rather than widened at the member: a
-         public member taking a service provider is a surface no production
-         caller has a use for. -->
+    <!-- Named here rather than widened at the type or member: one line naming
+         the one assembly commits less than a public surface no production
+         caller has a use for. The worker suite reaches FulfilmentWorker
+         .FulfilAsync, which takes a service provider, and builds the internal
+         ShipmentStats and SqlConnectionFactory over a fixture's connection
+         string, so that spec section 11's gauge is read through a cache the
+         test owns rather than the one the host's exporter fills. -->
     <InternalsVisibleTo Include="Shipping.Worker.Tests" />
   </ItemGroup>
 

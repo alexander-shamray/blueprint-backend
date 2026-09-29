@@ -95,6 +95,7 @@ public class MetricsRegistrationTests
         registered.ShouldContain(typeof(RequestMetrics));
         registered.ShouldContain(typeof(CarrierMetrics));
         registered.ShouldContain(typeof(AddressMetrics));
+        registered.ShouldContain(typeof(ShipmentMetrics));
     }
 
     [Fact]

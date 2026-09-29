@@ -7,11 +7,6 @@ namespace Shipping.Infrastructure.Carrier;
 /// §13.3's claim rule does not reach it — a pass that rolls back still met
 /// a failing carrier.
 /// </summary>
-/// <remarks>
-/// The meter is named for the work that leaves this service and not for the
-/// carrier: the other two instruments it will carry are the address
-/// adapter's and the waiting gauge's (§13.2).
-/// </remarks>
 public sealed class CarrierMetrics
 {
     public const string MeterName = "Shipping.Outbound";

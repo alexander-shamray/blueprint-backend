@@ -139,6 +139,20 @@ public static class DependencyInjection
             sp.GetRequiredService<OutboxTable>()));
         services.AddSingleton<OutboxMetrics>();
 
+        // Its own connection factory with the bounded connect timeout, for
+        // OutboxStats' reason: this runs inside a gauge callback, and a command
+        // timeout bounds only the statement. One argument and not two, because
+        // shipping.Shipments is this service's own table and is spelled inside
+        // the type, where OutboxStats takes the registered OutboxTable.
+        //
+        // Through a factory rather than as a built instance, exactly as
+        // OutboxStats is: the class holds a MemoryCache and is IDisposable, and
+        // the container disposes what it constructed and never what it was
+        // handed.
+        services.AddSingleton<IShipmentStats>(
+            _ => new ShipmentStats(new SqlConnectionFactory(metricsConnectionString)));
+        services.AddSingleton<ShipmentMetrics>();
+
         // Singleton registration alone is lazy: instruments appear on first
         // resolve, which for a class nothing injects is never, and
         // ValidateOnBuild cannot check it because nothing depends on a metrics

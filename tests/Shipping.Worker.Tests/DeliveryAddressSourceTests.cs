@@ -400,14 +400,15 @@ public sealed class DeliveryAddressSourceTests : IClassFixture<DeliveryAddressSo
     }
 
     [Fact]
-    public void Both_instruments_land_on_the_one_meter_section_13_2_exports()
+    public void All_three_instruments_land_on_the_one_meter_section_13_2_exports()
     {
         IMeterFactory factory = _factory.Services.GetRequiredService<IMeterFactory>();
 
-        // The factory caches by name, which is what lets CarrierMetrics and
-        // AddressMetrics each create the outbound meter and still produce one.
-        // If it ever stopped, the second class's instruments would be on a
-        // meter no AddMeter line names and would be collected by nothing.
+        // The factory caches by name, which is what lets CarrierMetrics,
+        // AddressMetrics and ShipmentMetrics each create §11's meter and still
+        // produce one. If it ever stopped, the later classes' instruments would
+        // be on a meter no AddMeter line names and would be collected by
+        // nothing (§13.2).
         factory.Create(CarrierMetrics.MeterName).ShouldBeSameAs(factory.Create(CarrierMetrics.MeterName));
     }
 
