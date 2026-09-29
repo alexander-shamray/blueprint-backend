@@ -40,6 +40,19 @@ namespace Common.Infrastructure.Messaging;
 /// </remarks>
 public sealed class MessagingMetrics
 {
+    /// <summary>
+    /// The bucket bounds both lags are exported on, in seconds. Given as advice
+    /// because the SDK gives seconds-scale defaults only to instruments it knows
+    /// by name, and millisecond bounds put every lag under five seconds in one
+    /// bucket, where a quantile reads the same whatever the lag was. §13.7's
+    /// targets for both lags are among them, so a quantile against either is
+    /// read at a bucket edge rather than interpolated across one.
+    /// </summary>
+    private static readonly InstrumentAdvice<double> LagBuckets = new()
+    {
+        HistogramBucketBoundaries = [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2, 5, 10, 30]
+    };
+
     private readonly Histogram<double> _deliveryLag;
     private readonly Histogram<double> _projectionLag;
     private readonly Counter<long> _rejected;
@@ -52,11 +65,15 @@ public sealed class MessagingMetrics
         _deliveryLag = meter.CreateHistogram<double>(
             "messaging.delivery.lag",
             unit: "s",
-            description: "OccurredAt to consumer start.");
+            description: "OccurredAt to consumer start.",
+            tags: null,
+            advice: LagBuckets);
         _projectionLag = meter.CreateHistogram<double>(
             "projection.lag",
             unit: "s",
-            description: "Event raised to projection applied.");
+            description: "Event raised to projection applied.",
+            tags: null,
+            advice: LagBuckets);
         _rejected = meter.CreateCounter<long>(
             "command.domain_rejected",
             description: "Message-borne commands the domain refused (§9.8).");
