@@ -740,11 +740,11 @@ and nothing that crosses a process boundary.
 
 Asynchronously that is enough: [§9.1](09-messaging.md)'s envelope carries
 `CorrelationId` as a member, so a message takes the ID with it by construction.
-Synchronously there is nothing to carry it, and the platform makes exactly one
-synchronous call — the BFF's hop to Catalog ([§9.7](09-messaging.md),
-[ADR-017](adr/ADR-017-one-synchronous-hop.md)). Without a header
-on it the callee mints an ID from its own trace, and one incident has two of
-them.
+Synchronously there is nothing to carry it, and the one synchronous call with
+an inbound request behind it is the BFF's hop to Catalog
+([§9.7](09-messaging.md), [ADR-017](adr/ADR-017-one-synchronous-hop.md)).
+Without a header on it the callee mints an ID from its own trace, and one
+incident has two of them.
 
 `CorrelationIdHandler` is the outbound half — a `DelegatingHandler` on the
 outbound client, so no call site has to remember it:
@@ -779,10 +779,11 @@ public sealed class CorrelationIdHandler(IHttpContextAccessor context) : Delegat
 > **It lives in `Common.Web` beside the middleware, and it is registered by the
 > host rather than by `AddCommonWebDefaults`.** The guarantee is this section's
 > and not the BFF's, so keeping the two halves in one file is what stops them
-> drifting — but a `DelegatingHandler` attaches to a *named client*, and a
-> host with no outbound client has nothing to attach it to. One host
-> registers it today, and that is a fact about ADR-017 rather than about this
-> type.
+> drifting — but a `DelegatingHandler` attaches to a *named client*, and it
+> has an ID to copy only when an inbound request stands behind the call. A
+> client called from a consumer or a worker has none, so a service's outbound
+> clients register no handler; a host registers it on the client its own
+> request path calls ([ADR-017](adr/ADR-017-one-synchronous-hop.md)).
 
 > **With no inbound ID it sends no header at all, which is deliberate.** The
 > callee's own middleware then mints one from the current trace — the right
