@@ -10,19 +10,21 @@ using Xunit;
 namespace Shipping.Application.Tests;
 
 /// <summary>
-/// One carrier page applied to one shipment. Applying by rank is what makes
-/// the despatch carry the carrier's collection instant whichever order the
-/// carrier listed the page in (spec, section 5).
+/// One carrier page applied to one shipment, at the handler's clock (spec,
+/// section 5).
 /// </summary>
 public class ApplyTrackingPageHandlerTests
 {
     private static readonly DateTimeOffset Now = new(2026, 9, 22, 9, 0, 0, TimeSpan.Zero);
 
+    private static readonly DateTimeOffset Recorded = Now.AddHours(3);
+
     [Fact]
     public async Task A_reversed_page_despatches_before_it_delivers()
     {
-        // A page that lists the delivery first still despatches at the
-        // collection's instant, not the delivery's (spec, section 5).
+        // A page that lists the delivery first still raises the despatch
+        // first, and both at the instant the page was applied rather than at
+        // either of the carrier's (§9.4; spec, section 5).
         Shipment shipment = Booked();
         FakeShipments repository = new(shipment);
 
@@ -36,7 +38,7 @@ public class ApplyTrackingPageHandlerTests
         shipment.Status.ShouldBe(ShipmentStatus.Delivered);
         shipment.DomainEvents.Select(e => e.GetType()).ShouldBe(
             [typeof(ShipmentDispatchedDomainEvent), typeof(ShipmentDeliveredDomainEvent)]);
-        shipment.DomainEvents.OfType<ShipmentDispatchedDomainEvent>().Single().OccurredAt.ShouldBe(Now.AddHours(1));
+        shipment.DomainEvents.Select(e => e.OccurredAt).ShouldBe([Recorded, Recorded]);
     }
 
     [Fact]
@@ -110,7 +112,7 @@ public class ApplyTrackingPageHandlerTests
         FakeShipments repository,
         ShipmentId id,
         IReadOnlyList<CarrierEvent> page) =>
-        new ApplyTrackingPageHandler(repository, TimeProvider.System).HandleAsync(
+        new ApplyTrackingPageHandler(repository, new FixedClock(Recorded)).HandleAsync(
             new ApplyTrackingPageCommand(id, page, Now.AddSeconds(30)),
             TestContext.Current.CancellationToken);
 
@@ -133,5 +135,10 @@ public class ApplyTrackingPageHandlerTests
             throw new NotSupportedException("The tracking path reads by shipment id.");
 
         public void Add(Shipment added) => throw new NotSupportedException();
+    }
+
+    private sealed class FixedClock(DateTimeOffset now) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => now;
     }
 }
