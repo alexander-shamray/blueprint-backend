@@ -1248,7 +1248,7 @@ namespace read access.
 | `AddressSource__BaseUrl` | Config | Helm `addressSource.baseUrl` → ConfigMap | ✓ — **Shipping only**; the owner's address for [ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)'s read, and the host refuses to start without it |
 | `Jurisdiction__AddressRetention` | Config | Helm `jurisdiction.addressRetention` → ConfigMap | ✓ — **Shipping only**; ADR-053's statutory window for a delivery address, and the host refuses to start without it |
 | `Jurisdiction__TrackingRetention` | Config | Helm `jurisdiction.trackingRetention` → ConfigMap | ✓ — **Shipping only**; ADR-053's statutory window for a shipment's tracking events, and the host refuses to start without it |
-| `Fulfilment__GiveUpAge` | Config | Helm `fulfilment.giveUpAge` → ConfigMap, defaulted in the chart | ✓ — **Shipping only**; [ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)'s give-up age for a pending shipment, and the host refuses to start without it |
+| `Fulfilment__GiveUpAge` | Config | Helm `fulfilment.giveUpAge` → ConfigMap, defaulted in the chart | ✓ — **Shipping only**; [ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)'s give-up age for a pending shipment, and [ADR-054](adr/ADR-054-a-shipment-stops-waiting-on-its-carrier-at-an-age.md)'s for an unanswered cancellation; the host refuses to start without it |
 
 | Kind | Source | Example |
 |---|---|---|
