@@ -363,7 +363,7 @@ public sealed class QuoteEndpointTests : IAsyncLifetime
     /// <summary>
     /// Both halves of every refusal above. The second is the one worth
     /// stating: a request that cannot produce anything must not spend the
-    /// platform's one synchronous hop finding that out (§9.7).
+    /// pricing hop finding that out (§9.7).
     /// </summary>
     private async Task ShouldBeRefusedWithoutAHop(HttpResponseMessage response)
     {

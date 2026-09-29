@@ -201,7 +201,7 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
     ),
     "src/Services/Catalog/Catalog.Api/Catalog.Api.csproj": (
         (
-            "    <!-- The server half of §9.7's one synchronous hop. Grpc.AspNetCore brings\n"
+            "    <!-- The server half of §9.7's pricing hop. Grpc.AspNetCore brings\n"
             "         Grpc.Tools and Google.Protobuf with it, which is why neither is named\n"
             "         here — Appendix B registers all four as one row because they ship and\n"
             "         version as one thing. -->\n"

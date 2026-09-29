@@ -6,7 +6,7 @@ namespace Catalog.Application.Products.GetPrices;
 
 /// <summary>
 /// §6.5's read side again — Dapper over the write tables, Catalog being level 1
-/// — answering §9.7's one synchronous hop.
+/// — answering §9.7's pricing hop.
 /// </summary>
 public sealed class GetPricesHandler(IDbConnectionFactory connections)
     : IQueryHandler<GetPricesQuery, IReadOnlyList<ProductPriceDto>>
