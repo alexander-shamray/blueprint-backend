@@ -158,8 +158,8 @@ public static IHostApplicationBuilder AddObservability(this IHostApplicationBuil
             // reads from. A condition whose signal is not registered here
             // cannot fire — it looks configured and is silent, which is worse
             // than having no alert at all. The service-prefixed names are
-            // ObservabilityExtensions' list, one per service meter and outbox
-            // lane, and this sample shows one of them rather than a copy.
+            // ObservabilityExtensions' list, each service's own meters and its
+            // outbox meter, and this sample shows one of them, not a copy.
             .AddMeter("Ordering.Orders")                       // §13.3, §13.6
             // Shared names, not service-prefixed: every service emits the same
             // instruments and the service.name resource attribute separates
