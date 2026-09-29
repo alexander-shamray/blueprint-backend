@@ -10,8 +10,8 @@ namespace Shipping.Infrastructure.Addresses;
 /// </summary>
 /// <remarks>
 /// <c>CarrierMetrics.MeterName</c> rather than a string of its own, so §13.2's
-/// one <c>AddMeter</c> line covers both. <c>IMeterFactory</c> caches by name,
-/// so the two classes hold one meter between them.
+/// one <c>AddMeter</c> line covers every class that creates it.
+/// <c>IMeterFactory</c> caches by name, so those classes share one meter.
 /// </remarks>
 public sealed class AddressMetrics
 {
