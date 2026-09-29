@@ -405,10 +405,10 @@ public sealed class DeliveryAddressSourceTests : IClassFixture<DeliveryAddressSo
         IMeterFactory factory = _factory.Services.GetRequiredService<IMeterFactory>();
 
         // The factory caches by name, which is what lets CarrierMetrics,
-        // AddressMetrics and ShipmentMetrics each create §11's meter and still
-        // produce one. If it ever stopped, the later classes' instruments would
-        // be on a meter no AddMeter line names and would be collected by
-        // nothing (§13.2).
+        // AddressMetrics and ShipmentMetrics each create spec section 11's
+        // meter and still produce one. If it ever stopped, the later classes'
+        // instruments would be on a meter no AddMeter line names and would be
+        // collected by nothing (§13.2).
         factory.Create(CarrierMetrics.MeterName).ShouldBeSameAs(factory.Create(CarrierMetrics.MeterName));
     }
 

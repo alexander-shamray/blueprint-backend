@@ -6,10 +6,11 @@ using Shipping.Domain.Shipments;
 namespace Shipping.Application.Tracking;
 
 /// <remarks>
-/// Applied by rank, not by arrival: the carrier's key orders nothing (spec,
-/// section 5) and the aggregate is monotonic, but events raised in one unit of
-/// work are read in the order raised, and a delivery ahead of its despatch is a
-/// timeline no consumer can read. The read <c>Include</c>s the tracking events
+/// The aggregate, not the rank, keeps a delivery from getting ahead of its
+/// despatch: <c>Shipment.Deliver</c> despatches a Booked row first. Rank
+/// decides which instant that despatch carries, the carrier's collection when
+/// the page has one. Publication order is the outbox's, by OccurredAt (§9.4),
+/// and is not promised here. The read <c>Include</c>s the tracking events
 /// because <c>Shipment.Record</c> deduplicates over the loaded ones (spec,
 /// section 5).
 /// </remarks>
@@ -22,8 +23,8 @@ public sealed class ApplyTrackingPageHandler(IShipmentRepository shipments, Time
 
         // A refusal rather than a throw for a row the claim projected and the
         // read no longer finds: no code path deletes a shipment, so this guards
-        // a hand or a migration, and a throw from a worker is a row retried for
-        // ever (spec, section 5).
+        // a hand or a migration. A refusal is not counted as an applied page,
+        // and it rolls the unit back rather than moving anything (§6.3).
         if (shipment is null)
             return Result.Failure(ShipmentErrors.NotFound);
 

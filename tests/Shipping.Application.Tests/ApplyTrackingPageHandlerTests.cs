@@ -10,10 +10,9 @@ using Xunit;
 namespace Shipping.Application.Tests;
 
 /// <summary>
-/// One carrier page applied to one shipment. The handler is where the page's
-/// order stops mattering: the aggregate already refuses a superseded arrival,
-/// and applying by rank is what makes one page's inserts and its raised events
-/// the same whichever order the carrier listed them in (spec, section 5).
+/// One carrier page applied to one shipment. Applying by rank is what makes
+/// the despatch carry the carrier's collection instant whichever order the
+/// carrier listed the page in (spec, section 5).
 /// </summary>
 public class ApplyTrackingPageHandlerTests
 {
@@ -22,7 +21,8 @@ public class ApplyTrackingPageHandlerTests
     [Fact]
     public async Task A_reversed_page_despatches_before_it_delivers()
     {
-        // The simulator's SIM-REVERSED script, at the layer that meets it.
+        // A page that lists the delivery first still despatches at the
+        // collection's instant, not the delivery's (spec, section 5).
         Shipment shipment = Booked();
         FakeShipments repository = new(shipment);
 
@@ -36,6 +36,7 @@ public class ApplyTrackingPageHandlerTests
         shipment.Status.ShouldBe(ShipmentStatus.Delivered);
         shipment.DomainEvents.Select(e => e.GetType()).ShouldBe(
             [typeof(ShipmentDispatchedDomainEvent), typeof(ShipmentDeliveredDomainEvent)]);
+        shipment.DomainEvents.OfType<ShipmentDispatchedDomainEvent>().Single().OccurredAt.ShouldBe(Now.AddHours(1));
     }
 
     [Fact]
@@ -89,8 +90,8 @@ public class ApplyTrackingPageHandlerTests
     {
         // No code path deletes a shipment, so a null here is the repository's
         // contract met by a hand or a migration rather than by the service. A
-        // throw from a worker is a row retried for ever; a refusal rolls the
-        // unit back and the claim lapses.
+        // refusal is not counted as an applied page, and it rolls the unit
+        // back rather than moving anything (§6.3).
         Result result = await Handle(new FakeShipments(null), ShipmentId.New(), []);
 
         result.IsFailure.ShouldBeTrue();
