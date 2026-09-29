@@ -348,10 +348,11 @@ not a count**: this sentence said "both of them" until Ordering's block made
 three, which is the same way the compose smoke's image count went stale, one
 file over.
 
-Shipping's worker refuses to start without any key §15.4's inventory marks
-required for Shipping — its carrier and its address source, read as eagerly as
-the authority, and its jurisdiction's retention windows, validated at start
-(§15.4) — and it calls a peer, so it takes the three `Identity__Client__*` keys as the BFF does
+Shipping's worker refuses to start without `Carrier__BaseUrl`,
+`Carrier__ApiKey` and `AddressSource__BaseUrl`, read as eagerly as the
+authority, or without the two `Jurisdiction__*` retention windows, validated
+at start (§15.4) — and it calls a peer, so it takes the three
+`Identity__Client__*` keys as the BFF does
 ([ADR-052](../../docs/backend-architecture/adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)).
 The windows are the made-up ones the Compose unit sets, because a developer's
 machine is no jurisdiction
