@@ -50,8 +50,6 @@ public class MessagingMetricsTests
         string message = $"Probe{Guid.NewGuid():N}";
         List<MetricSnapshot> exported = [];
 
-        // Built before the instruments exist: an instrument created first has
-        // no listener, and the test would read an empty export as a pass.
         using MeterProvider provider = Sdk.CreateMeterProviderBuilder()
             .AddMeter("Commerce.Messaging")
             .AddInMemoryExporter(exported)
