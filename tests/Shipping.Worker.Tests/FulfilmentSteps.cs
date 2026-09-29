@@ -134,6 +134,14 @@ internal sealed class FulfilmentSteps(ServiceFixture fixture)
         fixture.ScalarAsync<DateTimeOffset>(
             "SELECT Value = NextAttemptAt FROM shipping.Shipments WHERE OrderId = {0}", order);
 
+    /// <summary>
+    /// Moves the shipment's creation back by <paramref name="age"/> from the
+    /// host's clock, the clock the pass reads the give-up age against.
+    /// </summary>
+    public Task AgeAsync(Guid order, TimeSpan age) =>
+        fixture.ExecuteAsync(
+            "UPDATE shipping.Shipments SET CreatedAt = {1} WHERE OrderId = {0};", order, DateTimeOffset.UtcNow - age);
+
     /// <summary>Makes a backed-off row claimable now, so a test need not wait out the ladder.</summary>
     public Task ClearBackoffAsync(Guid order) =>
         fixture.ExecuteAsync(

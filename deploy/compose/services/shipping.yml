@@ -87,6 +87,10 @@ services:
       # (ADR-053 rule 1).
       Jurisdiction__AddressRetention: "11.00:00:00"
       Jurisdiction__TrackingRetention: "23.00:00:00"
+      # ADR-052's give-up age, required by ValidateOnStart (§15.4), and the
+      # chart's value rather than a made-up one: it is sized to reach
+      # OrderFulfilmentSaga.DespatchTimeoutDelay, which a laptop shares.
+      Fulfilment__GiveUpAge: "3.00:00:00"
     depends_on:
       shipping-migrator: { condition: service_completed_successfully }
       carrier-simulator: { condition: service_started }

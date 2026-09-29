@@ -46,7 +46,7 @@ public class DatabaseSmokeTests(ServiceFixture fixture)
         // purge identifies one of its rows by — all of them wiring every
         // service has rather than anything this one chose.
         string[] applied = await fixture.AppliedMigrationsAsync();
-        applied.Length.ShouldBe(9);
+        applied.Length.ShouldBe(10);
         applied[0].ShouldEndWith("_InitialCreate");
         applied[1].ShouldEndWith("_AddOutbox");
         applied[2].ShouldEndWith("_AddInbox");
@@ -56,6 +56,7 @@ public class DatabaseSmokeTests(ServiceFixture fixture)
         applied[6].ShouldEndWith("_AddIdempotencyMarkerRowVersion");
         applied[7].ShouldEndWith("_AddShipments");
         applied[8].ShouldEndWith("_AddDeliveryAddresses");
+        applied[9].ShouldEndWith("_AddShipmentCreatedAt");
     }
 
     [Fact]

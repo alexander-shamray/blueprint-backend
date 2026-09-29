@@ -417,13 +417,34 @@ is the host's to refuse: ShippingJurisdictionOptions owns its bounds.
     "addressRetention" (include "commerce.require" (list .Values.jurisdiction.addressRetention "jurisdiction.addressRetention is required when jurisdiction.enabled: ADR-053 makes the window a value the deployment is given, and ShippingJurisdictionOptions refuses to boot without it."))
     "trackingRetention" (include "commerce.require" (list .Values.jurisdiction.trackingRetention "jurisdiction.trackingRetention is required when jurisdiction.enabled: ADR-053's second window, on the same terms.")) }}
 {{- range $key, $window := $windows }}
-{{- if not (regexMatch "^([0-9]+\\.)?([01]?[0-9]|2[0-3]):[0-5][0-9](:[0-5][0-9](\\.[0-9]{1,7})?)?$" $window) }}
+{{- if not (regexMatch (include "commerce.timeSpanPattern" $) $window) }}
 {{- fail (printf "jurisdiction.%s is %q, which is not a TimeSpan this chart will accept: [d.]hh:mm[:ss], as in 30.00:00:00 for thirty days. ShippingJurisdictionOptions binds it at start (ADR-053)." $key $window) }}
 {{- end }}
 {{- end }}
 Jurisdiction__AddressRetention: {{ $windows.addressRetention | quote }}
 Jurisdiction__TrackingRetention: {{ $windows.trackingRetention | quote }}
 {{- end }}
+{{- if (.Values.fulfilment).enabled }}
+{{- /*
+ADR-052's give-up age, on the jurisdiction windows' TimeSpan terms: present is
+not enough, because `3 days` renders and fails binding in the new pod. The
+range is the host's to refuse: FulfilmentOptions owns its bounds.
+*/}}
+{{- $giveUpAge := include "commerce.require" (list .Values.fulfilment.giveUpAge "fulfilment.giveUpAge is required when fulfilment.enabled: ADR-052 makes the give-up age a value the deployment is given, and FulfilmentOptions refuses to boot without it.") }}
+{{- if not (regexMatch (include "commerce.timeSpanPattern" .) $giveUpAge) }}
+{{- fail (printf "fulfilment.giveUpAge is %q, which is not a TimeSpan this chart will accept: [d.]hh:mm[:ss], as in 3.00:00:00 for three days. FulfilmentOptions binds it at start (ADR-052)." $giveUpAge) }}
+{{- end }}
+Fulfilment__GiveUpAge: {{ $giveUpAge | quote }}
+{{- end }}
+{{- end -}}
+
+{{- /*
+A .NET TimeSpan as this chart accepts one, `[d.]hh:mm[:ss[.fffffff]]` with hours
+under 24 and minutes and seconds under 60, held once for every setting that
+binds one.
+*/}}
+{{- define "commerce.timeSpanPattern" -}}
+^([0-9]+\.)?([01]?[0-9]|2[0-3]):[0-5][0-9](:[0-5][0-9](\.[0-9]{1,7})?)?$
 {{- end -}}
 
 {{- /*
@@ -509,6 +530,9 @@ database its host unconditionally resolves.
 {{- end }}
 {{- if and (or (.Values.jurisdiction).addressRetention (.Values.jurisdiction).trackingRetention) (not (.Values.jurisdiction).enabled) }}
 {{- fail "jurisdiction.enabled is false but a jurisdiction window is set. ShippingJurisdictionOptions is validated at start (ADR-053), so this renders cleanly and the host does not start." }}
+{{- end }}
+{{- if and (.Values.fulfilment).giveUpAge (not (.Values.fulfilment).enabled) }}
+{{- fail "fulfilment.enabled is false but fulfilment.giveUpAge is set. FulfilmentOptions is validated at start (ADR-052), so this renders cleanly and the host does not start." }}
 {{- end }}
 {{- /*
 The other direction, and the one that moves a CREDENTIAL rather than stalling

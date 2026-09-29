@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using Shipping.Infrastructure;
 using Shipping.Infrastructure.Retention;
 using Shipping.TestSupport;
 using Shouldly;
@@ -85,7 +86,9 @@ public sealed class JurisdictionOptionsTests
             .AddOptions<ShippingJurisdictionOptions>()
             .BindConfiguration(ShippingJurisdictionOptions.SectionName)
             .ValidateOnStart();
-        services.AddSingleton<IValidateOptions<ShippingJurisdictionOptions>, ShippingJurisdictionOptionsValidator>();
+        services.AddSingleton<
+            IValidateOptions<ShippingJurisdictionOptions>,
+            AnnotatedOptionsValidator<ShippingJurisdictionOptions>>();
 
         using ServiceProvider provider = services.BuildServiceProvider();
 
@@ -118,7 +121,9 @@ public sealed class JurisdictionOptionsTests
             .AddOptions<ShippingJurisdictionOptions>()
             .BindConfiguration(ShippingJurisdictionOptions.SectionName)
             .ValidateOnStart();
-        services.AddSingleton<IValidateOptions<ShippingJurisdictionOptions>, ShippingJurisdictionOptionsValidator>();
+        services.AddSingleton<
+            IValidateOptions<ShippingJurisdictionOptions>,
+            AnnotatedOptionsValidator<ShippingJurisdictionOptions>>();
 
         using ServiceProvider provider = services.BuildServiceProvider();
 

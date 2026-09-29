@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Shipping.Application.Addresses;
 using Shipping.Application.Carrier;
 using Shipping.Application.Shipments;
@@ -40,6 +41,14 @@ public sealed class FulfilmentWorker(IServiceScopeFactory scopes, ILogger<Fulfil
     /// </summary>
     public const int LeaseSeconds = 60;
 
+    /// <summary>
+    /// The reason a shipment carries when it waited past
+    /// <see cref="FulfilmentOptions.GiveUpAge"/>: ADR-052's terminal outcome
+    /// with a reason of its own, so an operator can tell it from an owner or
+    /// a carrier answering that it cannot be done.
+    /// </summary>
+    public const string GaveUpReason = "gave_up";
+
     private static readonly Action<ILogger, Guid, Guid, Exception?> PassFailed =
         LoggerMessage.Define<Guid, Guid>(
             LogLevel.Error,
@@ -72,6 +81,13 @@ public sealed class FulfilmentWorker(IServiceScopeFactory scopes, ILogger<Fulfil
             "Shipment {ShipmentId} on order {OrderId} was booked as carrier booking {CarrierReference}, but the " +
             "booking was not committed; if the row is voided before a pass books it again, it needs cancelling " +
             "at the carrier.");
+
+    private static readonly Action<ILogger, Guid, Guid, TimeSpan, Exception?> GaveUp =
+        LoggerMessage.Define<Guid, Guid, TimeSpan>(
+            LogLevel.Warning,
+            new EventId(6, nameof(GaveUp)),
+            "Shipment {ShipmentId} on order {OrderId} was pending past its give-up age of {GiveUpAge}; it is " +
+            "unfulfillable and will not be retried.");
 
     // stoppingToken, not ct: CA1725 requires an override to keep the base's
     // parameter name.
@@ -159,6 +175,22 @@ public sealed class FulfilmentWorker(IServiceScopeFactory scopes, ILogger<Fulfil
             }, ct);
 
             return answered.Moved;
+        }
+
+        // Asked before the owner or the carrier is: past the age the saga has
+        // already raised the order for review, so a booking made now would
+        // ship an order somebody is deciding about (ADR-052).
+        TimeSpan giveUpAge = sp.GetRequiredService<IOptions<FulfilmentOptions>>().Value.GiveUpAge!.Value;
+
+        if (sp.GetRequiredService<TimeProvider>().GetUtcNow() - work.CreatedAt >= giveUpAge)
+        {
+            CommitOutcome abandoned = await CommitPendingAsync(
+                sp, id, (shipment, now) => shipment.MarkUnfulfillable(GaveUpReason, now), ct);
+
+            if (abandoned.Moved)
+                GaveUp(log, work.Id, work.OrderId, giveUpAge, null);
+
+            return abandoned.Moved;
         }
 
         IDeliveryAddressStore store = sp.GetRequiredService<IDeliveryAddressStore>();
