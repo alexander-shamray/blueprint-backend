@@ -320,8 +320,8 @@ public sealed class ServiceFixture : IAsyncLifetime
 
     /// <summary>
     /// A voided shipment that already carries a tracking event. It is the one
-    /// shape that separates ADR-053's two clocks — terminal, so its address is
-    /// due, and never delivered, so its feed is not.
+    /// shape that separates the spec's two windows (section 7) — terminal, so
+    /// its address is due, and never delivered, so its feed is not.
     /// </summary>
     /// <remarks>
     /// The tracking row is written here rather than polled for: every simulator
@@ -347,9 +347,10 @@ public sealed class ServiceFixture : IAsyncLifetime
 
     /// <summary>
     /// Moves a terminal shipment's clock back, so a window measured in days can
-    /// be crossed inside a test. <c>TerminalAt</c> and not the row's creation,
-    /// because ADR-053's two clocks both start there — and set absolutely, so a
-    /// test may age one row twice without compounding.
+    /// be crossed inside a test. <c>TerminalAt</c> is where the address window
+    /// starts for any terminal state, and the tracking window's start for a
+    /// delivered row (spec, section 7). Set absolutely, so a test may age one
+    /// row twice without compounding.
     /// </summary>
     public Task AgeTerminalAsync(ShipmentId id, TimeSpan age) =>
         ExecuteAsync(
@@ -365,6 +366,41 @@ public sealed class ServiceFixture : IAsyncLifetime
         ScalarAsync<int>(
             "SELECT Value = COUNT(*) FROM shipping.DeliveryAddresses WHERE OrderId = {0}",
             orderId.Value);
+
+    /// <summary>
+    /// Stages <paramref name="count"/> delivered shipments past both windows,
+    /// each with an address and one tracking event, in one set-based batch so a
+    /// backlog larger than a purge batch costs one round trip.
+    /// </summary>
+    public Task StageExpiredDeliveriesAsync(int count) =>
+        ExecuteAsync(
+            """
+            CREATE TABLE #staged (ShipmentId uniqueidentifier NOT NULL, OrderId uniqueidentifier NOT NULL);
+
+            INSERT INTO #staged (ShipmentId, OrderId)
+            SELECT TOP ({0}) NEWID(), NEWID() FROM sys.all_objects a CROSS JOIN sys.all_objects b;
+
+            INSERT INTO shipping.Shipments (Id, OrderId, Status, TerminalAt, Attempts, NextAttemptAt)
+            SELECT ShipmentId, OrderId, 'Delivered', DATEADD(day, -40, SYSDATETIMEOFFSET()), 0, SYSDATETIMEOFFSET()
+            FROM #staged;
+
+            INSERT INTO shipping.DeliveryAddresses (OrderId, CustomerId, Line1, City, PostalCode, Country, FetchedAt)
+            SELECT OrderId, NEWID(), '1 Test Street', 'Almaty', '050000', 'KZ', SYSDATETIMEOFFSET()
+            FROM #staged;
+
+            INSERT INTO shipping.TrackingEvents (ShipmentId, CarrierEventId, Status, OccurredAt, RecordedAt)
+            SELECT ShipmentId, 'evt-delivered', 'Delivered', SYSDATETIMEOFFSET(), SYSDATETIMEOFFSET()
+            FROM #staged;
+            """,
+            count);
+
+    /// <summary>How many rows <c>shipping.Shipments</c> holds.</summary>
+    public Task<int> ShipmentCountAsync() =>
+        ScalarAsync<int>("SELECT Value = COUNT(*) FROM shipping.Shipments");
+
+    /// <summary>How many delivery addresses are held in all.</summary>
+    public Task<int> AddressTotalAsync() =>
+        ScalarAsync<int>("SELECT Value = COUNT(*) FROM shipping.DeliveryAddresses");
 
     /// <summary>How many tracking events a shipment still holds.</summary>
     public Task<int> TrackingEventCountAsync(ShipmentId id) =>

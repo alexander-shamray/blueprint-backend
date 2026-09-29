@@ -1,4 +1,5 @@
 using Shipping.Domain.Shipments;
+using Shipping.Infrastructure.Retention;
 using Shipping.TestSupport;
 using Shouldly;
 using Xunit;
@@ -101,8 +102,25 @@ public sealed class ShippingRetentionTests(ServiceFixture fixture) : IAsyncLifet
         // ToString(), so the structured half is searched too (spec, section 11).
         fixture.CapturedLogs.Everything.ShouldNotBeEmpty(
             "a capture that recorded nothing would pass whatever the pass logged");
+        fixture.CapturedLogs.Everything.ShouldContain(
+            line => line.Contains("Shipping retention deleted", StringComparison.Ordinal),
+            "the pass's own line must be in the capture, or the absence below proves nothing");
         fixture.CapturedLogs.Everything.ShouldNotContain(
             line => line.Contains("Абай", StringComparison.Ordinal)
                 || line.Contains("Алматы", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task A_backlog_larger_than_one_batch_drains_within_the_pass()
+    {
+        const int backlog = ShippingRetentionService.BatchSize + 100;
+        await fixture.StageExpiredDeliveriesAsync(backlog);
+
+        (int addresses, int events) = await fixture.PurgeShippingRetentionAsync();
+
+        addresses.ShouldBe(backlog);
+        events.ShouldBe(backlog);
+        (await fixture.AddressTotalAsync()).ShouldBe(0);
+        (await fixture.ShipmentCountAsync()).ShouldBe(backlog, "the shipments' own records survive");
     }
 }

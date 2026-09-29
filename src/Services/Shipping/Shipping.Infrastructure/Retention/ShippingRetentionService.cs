@@ -33,6 +33,12 @@ public sealed class ShippingRetentionService : BackgroundService
     /// </summary>
     public const int BatchSize = 500;
 
+    /// <summary>
+    /// Batches per table per pass, the bound <c>RetentionPolicy</c> names the
+    /// same way: a backlog drains within a pass, and a pass still ends.
+    /// </summary>
+    public const int MaxBatchesPerPass = 20;
+
     private static readonly Action<ILogger, int, string, Exception?> Purged =
         LoggerMessage.Define<int, string>(
             LogLevel.Information,
@@ -112,83 +118,105 @@ public sealed class ShippingRetentionService : BackgroundService
     }
 
     /// <summary>
-    /// Every address whose shipment turned terminal before <paramref name="before"/>.
+    /// Every address whose shipment turned terminal before
+    /// <paramref name="before"/>, in bounded batches.
     /// </summary>
     /// <remarks>
-    /// Selected then deleted by identity rather than deleted by a join: a join in
-    /// the <c>DELETE</c> holds locks on <c>Shipments</c>, the table both workers
-    /// claim from with <c>UPDLOCK</c>, and a purge blocking a claim reads as a
-    /// slow carrier. It is <c>RetentionPurgeService</c>'s shape and the delete by
-    /// identity ADR-052 asks for.
+    /// Selected then deleted by identity rather than by a join, as the spec's
+    /// section 7 has it: each statement is short and keyed by identity, so none
+    /// spans <c>Shipments</c>, the table both workers claim from. A full batch
+    /// means more may wait, up to <see cref="MaxBatchesPerPass"/>.
     /// </remarks>
     private static async Task<int> PurgeAddressesAsync(
         IDbConnection connection,
         DateTimeOffset before,
         CancellationToken ct)
     {
-        Guid[] orders =
-        [
-            .. await connection.QueryAsync<Guid>(
+        int total = 0;
+
+        for (int batch = 0; batch < MaxBatchesPerPass; batch++)
+        {
+            Guid[] orders =
+            [
+                .. await connection.QueryAsync<Guid>(
+                    new CommandDefinition(
+                        """
+                        SELECT TOP (@BatchSize) address.OrderId
+                        FROM shipping.DeliveryAddresses address
+                        INNER JOIN shipping.Shipments shipment ON shipment.OrderId = address.OrderId
+                        WHERE shipment.TerminalAt IS NOT NULL
+                            AND shipment.TerminalAt < @Before
+                        ORDER BY shipment.TerminalAt;
+                        """,
+                        new { BatchSize, Before = before },
+                        cancellationToken: ct))
+            ];
+
+            if (orders.Length == 0)
+                break;
+
+            total += await connection.ExecuteAsync(
                 new CommandDefinition(
-                    """
-                    SELECT TOP (@BatchSize) address.OrderId
-                    FROM shipping.DeliveryAddresses address
-                    INNER JOIN shipping.Shipments shipment ON shipment.OrderId = address.OrderId
-                    WHERE shipment.TerminalAt IS NOT NULL
-                        AND shipment.TerminalAt < @Before
-                    ORDER BY shipment.TerminalAt;
-                    """,
-                    new { BatchSize, Before = before },
-                    cancellationToken: ct))
-        ];
+                    "DELETE FROM shipping.DeliveryAddresses WHERE OrderId IN @Orders;",
+                    new { Orders = orders },
+                    cancellationToken: ct));
 
-        if (orders.Length == 0)
-            return 0;
+            if (orders.Length < BatchSize)
+                break;
+        }
 
-        return await connection.ExecuteAsync(
-            new CommandDefinition(
-                "DELETE FROM shipping.DeliveryAddresses WHERE OrderId IN @Orders;",
-                new { Orders = orders },
-                cancellationToken: ct));
+        return total;
     }
 
     /// <summary>
-    /// Every tracking event of a shipment delivered before <paramref name="before"/>.
+    /// Every tracking event of a shipment delivered before
+    /// <paramref name="before"/>, in bounded batches.
     /// </summary>
     /// <remarks>
     /// <c>Delivered</c> and not any terminal state, because a voided shipment's
     /// feed is the record of what the carrier did with a parcel nobody
-    /// received; ADR-053's clock for these rows starts at the delivery.
+    /// received; the spec's section 7 starts this window at the delivery.
     /// </remarks>
     private static async Task<int> PurgeTrackingEventsAsync(
         IDbConnection connection,
         DateTimeOffset before,
         CancellationToken ct)
     {
-        Guid[] shipments =
-        [
-            .. await connection.QueryAsync<Guid>(
+        int total = 0;
+
+        for (int batch = 0; batch < MaxBatchesPerPass; batch++)
+        {
+            Guid[] shipments =
+            [
+                .. await connection.QueryAsync<Guid>(
+                    new CommandDefinition(
+                        """
+                        SELECT TOP (@BatchSize) shipment.Id
+                        FROM shipping.Shipments shipment
+                        WHERE shipment.Status = 'Delivered'
+                            AND shipment.TerminalAt IS NOT NULL
+                            AND shipment.TerminalAt < @Before
+                            AND EXISTS (
+                                SELECT 1 FROM shipping.TrackingEvents e WHERE e.ShipmentId = shipment.Id)
+                        ORDER BY shipment.TerminalAt;
+                        """,
+                        new { BatchSize, Before = before },
+                        cancellationToken: ct))
+            ];
+
+            if (shipments.Length == 0)
+                break;
+
+            total += await connection.ExecuteAsync(
                 new CommandDefinition(
-                    """
-                    SELECT TOP (@BatchSize) Id
-                    FROM shipping.Shipments
-                    WHERE Status = 'Delivered'
-                        AND TerminalAt IS NOT NULL
-                        AND TerminalAt < @Before
-                        AND EXISTS (SELECT 1 FROM shipping.TrackingEvents e WHERE e.ShipmentId = Id)
-                    ORDER BY TerminalAt;
-                    """,
-                    new { BatchSize, Before = before },
-                    cancellationToken: ct))
-        ];
+                    "DELETE FROM shipping.TrackingEvents WHERE ShipmentId IN @Shipments;",
+                    new { Shipments = shipments },
+                    cancellationToken: ct));
 
-        if (shipments.Length == 0)
-            return 0;
+            if (shipments.Length < BatchSize)
+                break;
+        }
 
-        return await connection.ExecuteAsync(
-            new CommandDefinition(
-                "DELETE FROM shipping.TrackingEvents WHERE ShipmentId IN @Shipments;",
-                new { Shipments = shipments },
-                cancellationToken: ct));
+        return total;
     }
 }
