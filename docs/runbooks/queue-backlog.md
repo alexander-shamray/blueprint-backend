@@ -33,11 +33,19 @@ sum by (queue) (rabbitmq_queue_messages{queue!~".+_(error|skipped)"})
 A backlog is a rate problem and has exactly two sides.
 
 - **Arrival went up.** A campaign, a replay, a backfill, another service
-  catching up after its own outage. Compare the queue's depth with the same
-  hour yesterday before concluding anything about the consumer.
+  catching up after its own outage. The consumers are taking messages at
+  their usual rate or faster, and there are simply more of them.
 - **Service went down.** A consumer retrying inside its own endpoint, a
   database that has slowed, a third party the handler waits on, or simply too
-  few replicas.
+  few replicas. The consumers are taking messages more slowly than usual.
+
+Depth rises either way, so it cannot tell them apart. The consumers' own
+delivery rate can: compare it with the same hour yesterday before concluding
+anything about the consumer.
+
+```promql
+sum by (service_name) (rate(messaging_delivery_lag_seconds_count[10m]))
+```
 
 ```bash
 kubectl -n <ns> get deploy <workload> -o jsonpath='{.spec.replicas}{"\n"}'

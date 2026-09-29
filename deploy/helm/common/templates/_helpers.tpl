@@ -392,6 +392,13 @@ that helper's terms.
 {{- if not (regexMatch "^https?://[^/?#@:\\[\\] ]+(:[0-9]+)?(/[^?#]*)?$" $addressSource) }}
 {{- fail "addressSource.baseUrl is not an address this chart will accept: http or https, a host, optionally a numeric port, and optionally a path. User information, a query and a fragment are refused here rather than at startup (§15.4)." }}
 {{- end }}
+{{- $addressPort := regexFind ":[0-9]+$" (regexFind "^https?://[^/]+" $addressSource) }}
+{{- if $addressPort }}
+{{- $n := atoi (trimPrefix ":" $addressPort) }}
+{{- if or (lt $n 1) (gt $n 65535) }}
+{{- fail "addressSource.baseUrl's port is outside 1-65535, which the host's own parse rejects (§15.4)." }}
+{{- end }}
+{{- end }}
 AddressSource__BaseUrl: {{ $addressSource | quote }}
 {{- end }}
 {{- if (.Values.jurisdiction).enabled }}
@@ -400,15 +407,16 @@ ADR-053's two statutory windows, required and never defaulted: a window is a
 fact about where a deployment runs, and a chart that guessed one would pick
 somebody's statute for them. The record says refused rather than clamped, and
 this is the render-time half of that — the host's own refusal is at start.
-Each window must also read as a TimeSpan, `[d.]hh:mm[:ss]`, because a value
-like `30 days` is present, renders, and fails binding in the new pod. The
-range is the host's to refuse: ShippingJurisdictionOptions owns its bounds.
+Each window must also read as a TimeSpan, `[d.]hh:mm[:ss]` with hours under
+24 and minutes and seconds under 60, because a value like `30 days` or
+`72:00:00` is present, renders, and fails binding in the new pod. The range
+is the host's to refuse: ShippingJurisdictionOptions owns its bounds.
 */}}
 {{- $windows := dict
     "addressRetention" (include "commerce.require" (list .Values.jurisdiction.addressRetention "jurisdiction.addressRetention is required when jurisdiction.enabled: ADR-053 makes the window a value the deployment is given, and ShippingJurisdictionOptions refuses to boot without it."))
     "trackingRetention" (include "commerce.require" (list .Values.jurisdiction.trackingRetention "jurisdiction.trackingRetention is required when jurisdiction.enabled: ADR-053's second window, on the same terms.")) }}
 {{- range $key, $window := $windows }}
-{{- if not (regexMatch "^([0-9]+\\.)?[0-9]{1,2}:[0-9]{2}(:[0-9]{2}(\\.[0-9]{1,7})?)?$" $window) }}
+{{- if not (regexMatch "^([0-9]+\\.)?([01]?[0-9]|2[0-3]):[0-5][0-9](:[0-5][0-9](\\.[0-9]{1,7})?)?$" $window) }}
 {{- fail (printf "jurisdiction.%s is %q, which is not a TimeSpan this chart will accept: [d.]hh:mm[:ss], as in 30.00:00:00 for thirty days. ShippingJurisdictionOptions binds it at start (ADR-053)." $key $window) }}
 {{- end }}
 {{- end }}

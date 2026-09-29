@@ -570,8 +570,8 @@ jobs:
           # After a promotion the counts to restore are the ones the promoted
           # release declares, not the ones read before the climb: restoring
           # those would undo a replicaCount or minReplicas change the promoted
-          # chart carried, and on a chart with no autoscaler nothing would
-          # ever put it back.
+          # chart carried, and the cluster would run the old count until the
+          # next deploy.
           declared_count() {
             helm get values "$WORKLOAD" -n "$NAMESPACE" --all -o json |
               python -c 'import json, sys
