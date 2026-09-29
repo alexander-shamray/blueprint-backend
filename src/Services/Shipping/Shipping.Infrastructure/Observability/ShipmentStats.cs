@@ -17,9 +17,7 @@ internal sealed class ShipmentStats(IDbConnectionFactory connections) : IShipmen
 {
     /// <summary>
     /// Short enough that a stalled state is visible within one export interval,
-    /// long enough that a burst of scrapes is not a burst of queries. One entry
-    /// per state rather than one shared snapshot, so a state nobody asks about
-    /// costs nothing.
+    /// long enough that a burst of scrapes is not a burst of queries.
     /// </summary>
     private static readonly TimeSpan CacheFor = TimeSpan.FromSeconds(5);
 
@@ -31,16 +29,19 @@ internal sealed class ShipmentStats(IDbConnectionFactory connections) : IShipmen
     private const int CommandTimeoutSeconds = 2;
 
     /// <summary>
-    /// Rows past their first failed pass, whichever worker took them. Both
-    /// claim paths increment <c>Attempts</c> and <c>Shipment.ReleaseClaim</c>
-    /// clears it, so one column answers for both (spec, section 4).
+    /// Live rows past their first failed pass, whichever worker took them:
+    /// both claims' failure paths increment <c>Attempts</c>, so one column
+    /// answers for both (spec, section 4). <c>TerminalAt</c> bounds it,
+    /// because <c>Shipment.Cancel</c> voids a pending row without clearing
+    /// <c>Attempts</c>, and a row nothing will claim again is not waiting.
     /// </summary>
     private const string WaitingSql =
         """
         SELECT COUNT(*)
         FROM shipping.Shipments
         WHERE Status = @Status
-            AND Attempts > 0;
+            AND Attempts > 0
+            AND TerminalAt IS NULL;
         """;
 
     private readonly MemoryCache _cache = new(new MemoryCacheOptions());
