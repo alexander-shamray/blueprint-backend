@@ -6,7 +6,7 @@ using Shipping.Infrastructure.Carrier;
 namespace Shipping.Infrastructure.Observability;
 
 /// <summary>
-/// §11's gauge over shipments past their first failed pass, by state, on the
+/// Spec section 11's gauge over shipments past their first failed pass, by state, on the
 /// same meter as the carrier's and the address's instruments.
 /// </summary>
 /// <remarks>
