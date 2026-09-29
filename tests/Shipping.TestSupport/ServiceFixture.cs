@@ -65,6 +65,12 @@ public sealed class ServiceFixture : IAsyncLifetime
     /// </summary>
     private static readonly TimeSpan StepDeadline = TimeSpan.FromSeconds(20);
 
+    private const string AttemptDueSql =
+        "SELECT Value = COUNT(*) FROM shipping.Shipments WHERE OrderId = {0} AND NextAttemptAt <= SYSDATETIMEOFFSET()";
+
+    private const string PollDueSql =
+        "SELECT Value = COUNT(*) FROM shipping.Shipments WHERE OrderId = {0} AND NextPollAt <= SYSDATETIMEOFFSET()";
+
     /// <summary>
     /// Widens <c>shipping-svc</c>'s <c>write</c> for the suite, since these
     /// tests publish <c>OrderConfirmed</c> and <c>OrderCancelled</c> as
@@ -215,12 +221,15 @@ public sealed class ServiceFixture : IAsyncLifetime
         // The inbox row is written after the consumer's command has committed
         // (§9.5), so a pass run before it would find no shipment to claim.
         await WaitUntilAsync(async () => (await InboxAsync(confirmed.MessageId)).Count == 1);
+        await WaitUntilAttemptDueAsync(order);
 
         if (await RunFulfilmentPassAsync() != 1)
         {
             throw new InvalidOperationException(
                 $"The fulfilment pass did not book the shipment for postal code {postalCode}.");
         }
+
+        await WaitUntilPollDueAsync(order);
 
         await using AsyncServiceScope scope = Factory.Services.CreateAsyncScope();
 
@@ -229,6 +238,23 @@ public sealed class ServiceFixture : IAsyncLifetime
             .GetByOrderAsync(new OrderId(order), TestContext.Current.CancellationToken)
             ?? throw new InvalidOperationException($"Order {order} was booked and its shipment is now absent.");
     }
+
+    /// <summary>
+    /// Waits for the engine's clock to reach the order's <c>NextAttemptAt</c>,
+    /// which the host's clock stamped. Both claims compare such a column with
+    /// the engine's clock, so a pass run the moment the stamp commits finds the
+    /// row not yet due for as long as the engine's clock trails. Waiting rather
+    /// than rewriting the column keeps the row exactly what the worker wrote.
+    /// </summary>
+    public Task WaitUntilAttemptDueAsync(Guid order) =>
+        WaitUntilAsync(async () => await ScalarAsync<int>(AttemptDueSql, order) == 1);
+
+    /// <summary>
+    /// <see cref="WaitUntilAttemptDueAsync"/> for the tracking claim's
+    /// <c>NextPollAt</c>, which a booking stamps from the host's clock.
+    /// </summary>
+    public Task WaitUntilPollDueAsync(Guid order) =>
+        WaitUntilAsync(async () => await ScalarAsync<int>(PollDueSql, order) == 1);
 
     public Task<string> StatusAsync(ShipmentId id) =>
         ScalarAsync<string>("SELECT Value = Status FROM shipping.Shipments WHERE Id = {0}", id.Value);
