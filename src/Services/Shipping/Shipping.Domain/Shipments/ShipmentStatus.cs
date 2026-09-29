@@ -1,8 +1,9 @@
 namespace Shipping.Domain.Shipments;
 
 /// <summary>
-/// The states of the spec's section 5 table. <c>Voided</c>,
-/// <c>Unfulfillable</c> and <c>Delivered</c> are terminal.
+/// The states of the spec's section 5 table and ADR-054's <c>Abandoned</c>.
+/// <c>Voided</c>, <c>Unfulfillable</c>, <c>Delivered</c> and <c>Abandoned</c>
+/// are terminal.
 /// </summary>
 /// <remarks>
 /// Every arrival may only move the shipment forward: a carrier page orders
@@ -18,4 +19,5 @@ public enum ShipmentStatus
     Delivered,
     Voided,
     Unfulfillable,
+    Abandoned,
 }

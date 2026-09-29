@@ -98,6 +98,48 @@ public class ShipmentTests
     }
 
     [Fact]
+    public void A_shipment_the_carrier_never_finishes_is_abandoned_and_raises_nothing()
+    {
+        Shipment booked = Booked();
+        booked.Abandon(Now.AddDays(1)).ShouldBeTrue();
+        booked.Status.ShouldBe(ShipmentStatus.Abandoned);
+        booked.TerminalAt.ShouldBe(Now.AddDays(1), "ADR-053's address window starts here");
+        booked.NextPollAt.ShouldBeNull("a terminal shipment is never polled again");
+        booked.DomainEvents.ShouldBeEmpty();
+
+        Shipment dispatched = Booked();
+        dispatched.Record("e1", TrackingStatus.Collected, Now, Now);
+        dispatched.ClearDomainEvents();
+        dispatched.Abandon(Now.AddDays(1)).ShouldBeTrue();
+        dispatched.Status.ShouldBe(ShipmentStatus.Abandoned);
+        dispatched.DomainEvents.ShouldBeEmpty("nothing on the platform waits on a delivery that never came");
+    }
+
+    [Fact]
+    public void Only_a_booked_or_despatched_shipment_is_abandoned()
+    {
+        // A pending shipment ends at ADR-052's give-up age as Unfulfillable,
+        // and a terminal one has already ended.
+        Shipment pending = Pending();
+        pending.Abandon(Now).ShouldBeFalse();
+        pending.Status.ShouldBe(ShipmentStatus.Pending);
+
+        Shipment voided = Pending();
+        voided.Cancel(Now);
+        voided.Abandon(Now).ShouldBeFalse();
+        voided.Status.ShouldBe(ShipmentStatus.Voided);
+
+        Shipment abandoned = Booked();
+        abandoned.Abandon(Now);
+        abandoned.Abandon(Now.AddDays(1)).ShouldBeFalse();
+        abandoned.TerminalAt.ShouldBe(Now);
+        abandoned.Record("e1", TrackingStatus.Delivered, Now, Now).ShouldBeFalse(
+            "a delivery arriving after the give-up age is kept and moves nothing");
+        abandoned.Cancel(Now).ShouldBeFalse();
+        abandoned.Status.ShouldBe(ShipmentStatus.Abandoned);
+    }
+
+    [Fact]
     public void A_collected_event_despatches_a_booked_shipment()
     {
         Shipment shipment = Booked();
@@ -195,6 +237,7 @@ public class ShipmentTests
         delivered.MarkUnfulfillable("too_late", Now).ShouldBeFalse();
         delivered.CarrierCancelled(Now).ShouldBeFalse();
         delivered.CarrierRefusedCancellation(Now).ShouldBeFalse();
+        delivered.Abandon(Now).ShouldBeFalse();
 
         delivered.Status.ShouldBe(ShipmentStatus.Delivered);
         delivered.TrackingNumber.ShouldBe("TRK1");

@@ -43,7 +43,11 @@ public sealed class Shipment : AggregateRoot<ShipmentId>
     /// </summary>
     public DateTimeOffset CreatedAt { get; private set; }
 
+    /// <summary>The fulfilment pass's failed passes on this row (ADR-054).</summary>
     public int Attempts { get; private set; }
+
+    /// <summary>The tracking pass's failed passes on this row (ADR-054).</summary>
+    public int PollAttempts { get; private set; }
 
     public DateTimeOffset NextAttemptAt { get; private set; }
 
@@ -127,12 +131,18 @@ public sealed class Shipment : AggregateRoot<ShipmentId>
 
         Status = ShipmentStatus.Voided;
         TerminalAt = now;
+
+        // Unscheduled, so the tracking claim's index holds only rows it may
+        // take; the status filter alone would keep a voided row out of the
+        // claim and in the index.
+        NextPollAt = null;
         return true;
     }
 
     /// <summary>
-    /// The carrier answered that it has gone. Tracking goes on and the
-    /// despatch is published when <c>Collected</c> arrives; the saga's
+    /// The carrier will not cancel it: it answered that the parcel has gone,
+    /// or it did not answer within the give-up age (ADR-054). Tracking goes on
+    /// and the despatch is published when <c>Collected</c> arrives; the saga's
     /// <c>CancelledAfterConfirmation</c> review row is the one record of the
     /// disagreement (spec, section 6).
     /// </summary>
@@ -142,6 +152,23 @@ public sealed class Shipment : AggregateRoot<ShipmentId>
             return false;
 
         CancellationRefusedAt = now;
+        return true;
+    }
+
+    /// <summary>
+    /// The carrier never finished it: a booked or despatched shipment past
+    /// ADR-054's tracking age ends here, is no longer polled, and raises
+    /// nothing. <c>TerminalAt</c> starts its address window as any terminal
+    /// state's does (ADR-053).
+    /// </summary>
+    public bool Abandon(DateTimeOffset now)
+    {
+        if (Status is not (ShipmentStatus.Booked or ShipmentStatus.Dispatched))
+            return false;
+
+        Status = ShipmentStatus.Abandoned;
+        TerminalAt = now;
+        NextPollAt = null;
         return true;
     }
 
@@ -175,11 +202,11 @@ public sealed class Shipment : AggregateRoot<ShipmentId>
     }
 
     /// <summary>
-    /// The pass that claimed this row has finished with it: the lease is
-    /// dropped and the backoff reset (spec, section 4). Behaviour here rather
-    /// than in the worker because the columns are this row's; the claim and
-    /// the failure are raw statements, because neither has the aggregate in
-    /// hand.
+    /// The fulfilment pass that claimed this row has finished with it: the
+    /// lease is dropped and that pass's backoff reset (spec, section 4).
+    /// Behaviour here rather than in the worker because the columns are this
+    /// row's; the claim and the failure are raw statements, because neither
+    /// has the aggregate in hand.
     /// </summary>
     public void ReleaseClaim()
     {
@@ -188,19 +215,19 @@ public sealed class Shipment : AggregateRoot<ShipmentId>
     }
 
     /// <summary>
-    /// A tracking pass has been applied: the claim released, the failed-pass
-    /// counter cleared, the next poll due at <paramref name="nextPollAt"/>
+    /// A tracking pass has been applied: the lease dropped, that pass's
+    /// backoff reset, the next poll due at <paramref name="nextPollAt"/>
     /// unless the shipment is terminal (spec, section 4).
     /// </summary>
     /// <remarks>
-    /// The release is <see cref="ReleaseClaim"/>'s rather than a second copy, so
-    /// no second member drops the lease differently. <c>Attempts</c> counts
-    /// failed passes whichever worker took them: one carrier fails both.
+    /// <c>Attempts</c> is left alone: it is the fulfilment pass's, and a feed
+    /// that answers says nothing about a cancellation that does not (ADR-054).
     /// </remarks>
     public void PollApplied(DateTimeOffset nextPollAt)
     {
         NextPollAt = Status is ShipmentStatus.Booked or ShipmentStatus.Dispatched ? nextPollAt : null;
-        ReleaseClaim();
+        LockedUntil = null;
+        PollAttempts = 0;
     }
 
     private bool Dispatch(DateTimeOffset now)

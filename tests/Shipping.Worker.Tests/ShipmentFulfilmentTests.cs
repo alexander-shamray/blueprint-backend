@@ -267,6 +267,47 @@ public sealed class ShipmentFulfilmentTests(ServiceFixture fixture) : IAsyncLife
     }
 
     [Fact]
+    public async Task A_cancellation_unanswered_past_the_give_up_age_is_recorded_as_refused_without_asking_again()
+    {
+        // ADR-054: the silence is recorded as the refusal, because what
+        // follows is the refusal's — tracking goes on and the row leaves the
+        // claim. Asked before the carrier is, so a cancel that would fail for
+        // ever cannot hold the row past the age.
+        Guid order = await _steps.ConfirmAsync(FulfilmentSteps.Kazakh);
+        await fixture.RunFulfilmentPassAsync();
+        await _steps.PublishAsync(FulfilmentSteps.Cancelled(order));
+        ShipmentId id = new(await _steps.ShipmentIdAsync(order));
+        await fixture.AgeCancellationAsync(id, GiveUpAge() + TimeSpan.FromMinutes(1));
+
+        (await fixture.RunFulfilmentPassAsync()).ShouldBe(1);
+
+        (await _steps.StatusAsync(order)).ShouldBe("Booked", "the parcel may be moving, so tracking goes on");
+        (await fixture.ScalarAsync<int>(
+            "SELECT Value = COUNT(*) FROM shipping.Shipments WHERE OrderId = {0} AND CancellationRefusedAt IS NOT NULL",
+            order)).ShouldBe(1);
+        CancelKeys().ShouldBeEmpty("past the age the carrier is not asked again");
+        fixture.CapturedLogs.Everything.ShouldContain(
+            line => line.Contains("did not answer the cancellation", StringComparison.Ordinal));
+
+        await _steps.ClearBackoffAsync(order);
+        (await fixture.RunFulfilmentPassAsync()).ShouldBe(0, "a refused cancellation is outside the claim");
+    }
+
+    [Fact]
+    public async Task A_fulfilment_pass_leaves_the_tracking_pass_s_count_alone()
+    {
+        // The converse of TrackingWorkerTests' case: each worker clears only
+        // its own count (ADR-054).
+        Shipment shipment = await fixture.BookedAsync("SIM-LATE");
+        await fixture.RequestCancellationAsync(shipment.Id);
+        await fixture.SetPollAttemptsAsync(shipment.Id, 2);
+
+        (await fixture.RunFulfilmentPassAsync()).ShouldBe(1);
+
+        (await fixture.PollAttemptsAsync(shipment.Id)).ShouldBe(2);
+    }
+
+    [Fact]
     public async Task Despatch_then_cancel_is_a_no_op_and_the_goods_move()
     {
         Guid order = await _steps.ConfirmAsync(FulfilmentSteps.Kazakh);

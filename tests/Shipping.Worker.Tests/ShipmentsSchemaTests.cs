@@ -31,11 +31,48 @@ public sealed class ShipmentsSchemaTests(ServiceFixture fixture) : IAsyncLifetim
         columns.ShouldBe(
             [
                 "Attempts", "CancellationRefusedAt", "CancellationRequestedAt", "CarrierReference", "CreatedAt",
-                "Id", "LockedUntil", "NextAttemptAt", "NextPollAt", "OrderId", "RowVersion",
+                "Id", "LockedUntil", "NextAttemptAt", "NextPollAt", "OrderId", "PollAttempts", "RowVersion",
                 "Status", "TerminalAt", "TrackingNumber", "UnfulfillableReason"
             ],
             ignoreOrder: true);
     }
+
+    [Fact]
+    public async Task Each_claim_has_an_index_filtered_to_the_rows_it_may_take()
+    {
+        // The claims repeat these filters in their predicates, which is what
+        // lets the optimiser use them; a filter that drifts from its claim is
+        // an index nothing reads, so the text is pinned here.
+        (await FilterAsync("IX_Shipments_FulfilmentClaim"))
+            .ShouldBe("(([Status] IN ('Pending', 'Booked')) AND [CancellationRefusedAt] IS NULL)");
+        (await FilterAsync("IX_Shipments_TrackingClaim")).ShouldBe("([NextPollAt] IS NOT NULL)");
+    }
+
+    [Fact]
+    public async Task A_writer_that_predates_PollAttempts_still_inserts_a_shipment()
+    {
+        // §7.4, as for CreatedAt: the version still running during a rollout
+        // inserts without the column.
+        Guid order = Guid.CreateVersion7();
+
+        await fixture.ExecuteAsync(
+            "INSERT INTO shipping.Shipments (Id, OrderId, Status, Attempts, NextAttemptAt) " +
+            "VALUES ({0}, {1}, 'Pending', 0, SYSDATETIMEOFFSET());",
+            Guid.CreateVersion7(),
+            order);
+
+        (await fixture.ScalarAsync<int>(
+            "SELECT Value = PollAttempts FROM shipping.Shipments WHERE OrderId = {0}", order)).ShouldBe(0);
+    }
+
+    private Task<string> FilterAsync(string index) =>
+        fixture.ScalarAsync<string>(
+            """
+            SELECT Value = filter_definition
+            FROM sys.indexes
+            WHERE object_id = OBJECT_ID('shipping.Shipments') AND name = {0}
+            """,
+            index);
 
     [Fact]
     public async Task A_writer_that_predates_CreatedAt_still_inserts_a_shipment_and_the_row_is_stamped()

@@ -153,9 +153,67 @@ public sealed class TrackingWorkerTests(ServiceFixture fixture) : IAsyncLifetime
         (await Worker().ProcessBatchAsync(TestContext.Current.CancellationToken)).ShouldBe(0);
 
         // A pass that claimed the row and failed its poll also answers 0, and
-        // leaves Attempts at 1: the row as booked is what says it was skipped.
+        // leaves PollAttempts at 1: the row as booked is what says it was
+        // skipped.
         (await fixture.StatusAsync(shipment.Id)).ShouldBe("Booked");
-        (await fixture.AttemptsAsync(shipment.Id)).ShouldBe(0);
+        (await fixture.PollAttemptsAsync(shipment.Id)).ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task A_shipment_past_its_tracking_age_is_abandoned_without_asking_the_carrier()
+    {
+        // ADR-054: asked before the carrier is, so the age holds however long
+        // the carrier stays silent. SIM-TRANSIT's page would despatch the row,
+        // so a Booked row read back as Abandoned is the pass not polling it.
+        Shipment shipment = await fixture.BookedAsync("SIM-TRANSIT");
+        await fixture.AgeCreatedAsync(shipment.Id, TrackingWorker.GiveUpAge + TimeSpan.FromMinutes(1));
+        int carrierCalls = fixture.Carrier.LogEntries.Count;
+
+        (await Worker().ProcessBatchAsync(TestContext.Current.CancellationToken)).ShouldBe(1);
+
+        (await fixture.StatusAsync(shipment.Id)).ShouldBe("Abandoned");
+        fixture.Carrier.LogEntries.Count.ShouldBe(carrierCalls, "past the age the carrier is not asked");
+        (await fixture.NextPollAtAsync(shipment.Id)).ShouldBeNull();
+        (await fixture.LockedUntilAsync(shipment.Id)).ShouldBeNull("the commit that ended the row released it");
+        (await fixture.ScalarAsync<int>(
+            "SELECT Value = COUNT(*) FROM shipping.Shipments WHERE Id = {0} AND TerminalAt IS NOT NULL",
+            shipment.Id.Value)).ShouldBe(1, "ADR-053's address window starts at TerminalAt");
+        (await fixture.OutboxAsync()).ShouldBeEmpty("nothing on the platform waits on a delivery that never came");
+        fixture.CapturedLogs.Everything.ShouldContain(
+            line => line.Contains("is abandoned and no longer polled", StringComparison.Ordinal));
+
+        (await Worker().ProcessBatchAsync(TestContext.Current.CancellationToken)).ShouldBe(
+            0, "a terminal row is outside the claim");
+    }
+
+    [Fact]
+    public async Task A_shipment_inside_its_tracking_age_is_still_polled()
+    {
+        // The control for the case above: a minute short of the age, and the
+        // page is applied as any other.
+        Shipment shipment = await fixture.BookedAsync("SIM-TRANSIT");
+        await fixture.AgeCreatedAsync(shipment.Id, TrackingWorker.GiveUpAge - TimeSpan.FromMinutes(1));
+
+        (await Worker().ProcessBatchAsync(TestContext.Current.CancellationToken)).ShouldBe(1);
+
+        (await fixture.StatusAsync(shipment.Id)).ShouldBe("Dispatched");
+    }
+
+    [Fact]
+    public async Task A_poll_that_succeeds_leaves_the_fulfilment_pass_s_count_alone()
+    {
+        // A cancellation that keeps failing climbs its own ladder while the
+        // feed answers (ADR-054): a poll clearing the fulfilment count would
+        // hold the cancel at the ladder's first steps for the whole outage.
+        Shipment shipment = await fixture.BookedAsync("SIM-TRANSIT");
+        await fixture.RequestCancellationAsync(shipment.Id);
+        await fixture.SetAttemptsAsync(shipment.Id, 3);
+        await fixture.SetPollAttemptsAsync(shipment.Id, 2);
+
+        (await Worker().ProcessBatchAsync(TestContext.Current.CancellationToken)).ShouldBe(1);
+
+        (await fixture.AttemptsAsync(shipment.Id)).ShouldBe(3);
+        (await fixture.PollAttemptsAsync(shipment.Id)).ShouldBe(0, "an applied page resets this worker's own ladder");
     }
 
     [Fact]

@@ -43,6 +43,19 @@ public class ShipmentPollTests
     }
 
     [Fact]
+    public void A_carrier_cancellation_unschedules_the_poll()
+    {
+        // The tracking claim's index holds the rows with a poll due, so a
+        // voided row that kept its NextPollAt would sit in it for ever.
+        Shipment shipment = Booked();
+        shipment.Cancel(Now);
+
+        shipment.CarrierCancelled(Now);
+
+        shipment.NextPollAt.ShouldBeNull();
+    }
+
+    [Fact]
     public void A_page_applied_to_a_voided_shipment_schedules_no_poll()
     {
         // A property of PollApplied, whoever calls it: a carrier's void commits

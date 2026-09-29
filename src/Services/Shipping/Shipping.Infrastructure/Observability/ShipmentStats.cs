@@ -29,11 +29,9 @@ internal sealed class ShipmentStats(IDbConnectionFactory connections) : IShipmen
     private const int CommandTimeoutSeconds = 2;
 
     /// <summary>
-    /// Live rows past their first failed pass, whichever worker took them:
-    /// both claims' failure paths increment <c>Attempts</c> and a pass either
-    /// worker applies clears it, because spec section 7 gives them one column.
-    /// So a Booked row whose cancellation keeps failing while its polls succeed
-    /// counts only between a failure and the next poll. <c>TerminalAt</c>
+    /// Live rows past their first failed pass, whichever worker took it: each
+    /// counts its own failures (ADR-054), so a Booked row whose cancellation
+    /// keeps failing is counted while its polls succeed. <c>TerminalAt</c>
     /// bounds it: <c>Shipment.Cancel</c> voids a pending row without clearing
     /// <c>Attempts</c>, and a row nothing will claim again is not waiting.
     /// </summary>
@@ -42,7 +40,7 @@ internal sealed class ShipmentStats(IDbConnectionFactory connections) : IShipmen
         SELECT COUNT(*)
         FROM shipping.Shipments
         WHERE Status = @Status
-            AND Attempts > 0
+            AND (Attempts > 0 OR PollAttempts > 0)
             AND TerminalAt IS NULL;
         """;
 

@@ -48,6 +48,13 @@ public sealed class TrackingWorker(
     /// </summary>
     public static readonly TimeSpan PassBudget = TimeSpan.FromSeconds(25);
 
+    /// <summary>
+    /// ADR-054's tracking age, measured from <c>Shipment.CreatedAt</c>: a
+    /// shipment the carrier has not finished by then is abandoned rather than
+    /// polled. Ninety days: a ceiling past any carrier's delivery.
+    /// </summary>
+    public static readonly TimeSpan GiveUpAge = TimeSpan.FromDays(90);
+
     // Compiled once rather than parsed per call — CA1848 (ADR-019), the shape
     // §9.4's dispatcher takes.
     private static readonly Action<ILogger, Exception?> ClaimFailed =
@@ -61,6 +68,13 @@ public sealed class TrackingWorker(
             LogLevel.Warning,
             new EventId(2, nameof(PollFailed)),
             "Tracking poll for shipment {ShipmentId} of order {OrderId} failed; attempt {Attempt}, backing off.");
+
+    private static readonly Action<ILogger, Guid, Guid, TimeSpan, Exception?> Abandoned =
+        LoggerMessage.Define<Guid, Guid, TimeSpan>(
+            LogLevel.Warning,
+            new EventId(3, nameof(Abandoned)),
+            "Shipment {ShipmentId} of order {OrderId} was not delivered within its tracking age of {GiveUpAge}; " +
+            "it is abandoned and no longer polled.");
 
     // stoppingToken, not ct: CA1725 requires an override to keep the base's
     // parameter name (ADR-019 makes it an error).
@@ -92,7 +106,8 @@ public sealed class TrackingWorker(
 
     /// <summary>
     /// One claim-and-poll pass. Returns the number of shipments whose page the
-    /// handler applied — a claimed row whose command refused is not one. Public
+    /// handler applied, or which it abandoned — a claimed row whose command
+    /// refused is not one. Public
     /// so tests drive it directly instead of racing a timer, the same seam
     /// <c>OutboxDispatcher.ProcessBatchAsync</c> offers (§12.4).
     /// </summary>
@@ -129,7 +144,7 @@ public sealed class TrackingWorker(
                 // read is not a fact about any other shipment. Logged before
                 // the backoff is written, as FulfilmentWorker does, so a
                 // database fault in FailAsync cannot hide the carrier's.
-                PollFailed(log, work.Id, work.OrderId, work.Attempts + 1, ex);
+                PollFailed(log, work.Id, work.OrderId, work.PollAttempts + 1, ex);
 
                 await claims.FailAsync(work.Id, ct);
             }
@@ -151,6 +166,19 @@ public sealed class TrackingWorker(
     private async Task<bool> PollAsync(TrackingWork work, CancellationToken ct)
     {
         await using AsyncServiceScope scope = scopes.CreateAsyncScope();
+        IDispatcher dispatcher = scope.ServiceProvider.GetRequiredService<IDispatcher>();
+
+        // Asked before the carrier is, so a carrier that never answers cannot
+        // hold a shipment, and its address, past the age (ADR-054).
+        if (scope.ServiceProvider.GetRequiredService<TimeProvider>().GetUtcNow() - work.CreatedAt >= GiveUpAge)
+        {
+            Result abandoned = await dispatcher.SendAsync(new AbandonShipmentCommand(new ShipmentId(work.Id)), ct);
+
+            if (abandoned.IsSuccess)
+                Abandoned(log, work.Id, work.OrderId, GiveUpAge, null);
+
+            return abandoned.IsSuccess;
+        }
 
         IReadOnlyList<CarrierEvent> page = await scope.ServiceProvider
             .GetRequiredService<ICarrierGateway>()
@@ -164,7 +192,7 @@ public sealed class TrackingWorker(
         // the same unit of work as the page it applied: the lease is dropped by
         // the commit that used it, never by a second statement that could land
         // on its own.
-        Result result = await scope.ServiceProvider.GetRequiredService<IDispatcher>().SendAsync(
+        Result result = await dispatcher.SendAsync(
             new ApplyTrackingPageCommand(new ShipmentId(work.Id), page, nextPollAt),
             ct);
 

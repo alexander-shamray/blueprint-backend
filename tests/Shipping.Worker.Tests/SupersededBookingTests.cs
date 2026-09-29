@@ -210,7 +210,7 @@ public sealed class SupersededBookingTests
 
         Shipment first = loads[0];
         FulfilmentWork work = new(
-            first.Id.Value, first.OrderId.Value, nameof(ShipmentStatus.Pending), null, first.CreatedAt);
+            first.Id.Value, first.OrderId.Value, nameof(ShipmentStatus.Pending), null, first.CreatedAt, null);
 
         return await worker.FulfilAsync(provider, work, TestContext.Current.CancellationToken);
     }

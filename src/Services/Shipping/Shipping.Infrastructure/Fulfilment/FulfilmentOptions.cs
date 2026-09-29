@@ -9,7 +9,8 @@ namespace Shipping.Infrastructure.Fulfilment;
 /// the order for review, give or take the two consumers' lag on the one
 /// event both clocks start from. Configuration rather than a constant
 /// because that deadline is another service's, and an operator riding out a
-/// long outage decides whether a day's shipments wait for it.
+/// long outage decides whether a day's shipments wait for it. ADR-054 ends
+/// an unanswered cancellation at the same age.
 /// </summary>
 public sealed class FulfilmentOptions
 {
@@ -27,8 +28,10 @@ public sealed class FulfilmentOptions
 
     /// <summary>
     /// How long a <c>Pending</c> shipment is retried, measured from
-    /// <c>Shipment.CreatedAt</c>. Nullable so <c>[Required]</c> can see a key
-    /// nobody supplied, as <c>ShippingJurisdictionOptions</c>' windows are.
+    /// <c>Shipment.CreatedAt</c>, and a cancellation, measured from
+    /// <c>Shipment.CancellationRequestedAt</c>. Nullable so <c>[Required]</c>
+    /// can see a key nobody supplied, as <c>ShippingJurisdictionOptions</c>'
+    /// windows are.
     /// </summary>
     // RangeAttribute's string limits go through TimeSpanConverter, which reads
     // the current culture unless told otherwise.
