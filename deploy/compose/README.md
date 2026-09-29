@@ -355,9 +355,9 @@ at start (§15.4) — and it calls a peer, so it takes the three
 `Identity__Client__*` keys as the BFF does
 ([ADR-052](../../docs/backend-architecture/adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)).
 The windows are the made-up ones the Compose unit sets, because a developer's
-machine is no jurisdiction
+machine is no jurisdiction and a real window is a deployment's value
 ([ADR-053](../../docs/backend-architecture/adr/ADR-053-a-jurisdiction-is-a-value-the-deployment-is-given.md)
-rule 2). The override leaves `carrier-simulator` running, so a host-run worker
+rule 1). The override leaves `carrier-simulator` running, so a host-run worker
 points at the port it publishes:
 
 ```bash

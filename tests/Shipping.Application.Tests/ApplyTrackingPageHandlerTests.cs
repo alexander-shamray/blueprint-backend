@@ -42,6 +42,28 @@ public class ApplyTrackingPageHandlerTests
     }
 
     [Fact]
+    public async Task A_repeated_carrier_id_keeps_its_most_advanced_status()
+    {
+        // The key keeps the first arrival offered, so the delivery must be
+        // offered ahead of the collection it shares an id with (spec, section
+        // 5).
+        Shipment shipment = Booked();
+        FakeShipments repository = new(shipment);
+
+        Result result = await Handle(repository, shipment.Id,
+        [
+            new CarrierEvent("x", TrackingStatus.Collected, Now.AddHours(1)),
+            new CarrierEvent("x", TrackingStatus.Delivered, Now.AddHours(2))
+        ]);
+
+        result.IsSuccess.ShouldBeTrue();
+        shipment.Status.ShouldBe(ShipmentStatus.Delivered);
+        shipment.TrackingEvents.Count.ShouldBe(1);
+        shipment.DomainEvents.Select(e => e.GetType()).ShouldBe(
+            [typeof(ShipmentDispatchedDomainEvent), typeof(ShipmentDeliveredDomainEvent)]);
+    }
+
+    [Fact]
     public async Task An_unrecognised_status_is_stored_and_moves_nothing()
     {
         Shipment shipment = Booked();
