@@ -40,6 +40,13 @@ internal sealed class ShipmentConfiguration : IEntityTypeConfiguration<Shipment>
         builder.Property(s => s.TrackingNumber).HasMaxLength(ShipmentLimits.MaxTrackingNumberLength);
         builder.Property(s => s.UnfulfillableReason).HasMaxLength(ShipmentLimits.MaxUnfulfillableReasonLength);
 
+        // Defaulted in the database although the aggregate always sets it:
+        // while a release rolls out, the version still running inserts
+        // shipments without the column, and §7.4 requires every migration to
+        // be backward compatible with it. The default also stamps the rows
+        // that exist when the column arrives.
+        builder.Property(s => s.CreatedAt).HasDefaultValueSql("SYSDATETIMEOFFSET()");
+
         // The two workers' bookkeeping, mapped here because the columns are
         // this row's (spec, section 7). The claim, the backoff and the poll
         // schedule arrive with the workers that run them.
