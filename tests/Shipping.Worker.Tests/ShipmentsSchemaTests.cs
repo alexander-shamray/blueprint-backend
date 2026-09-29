@@ -38,6 +38,25 @@ public sealed class ShipmentsSchemaTests(ServiceFixture fixture) : IAsyncLifetim
     }
 
     [Fact]
+    public async Task A_writer_that_predates_CreatedAt_still_inserts_a_shipment_and_the_row_is_stamped()
+    {
+        // §7.4: while a release rolls out, the version still running inserts
+        // with no CreatedAt, and the column's default is what lets it through.
+        Guid order = Guid.CreateVersion7();
+        DateTimeOffset before = await fixture.DatabaseNowAsync();
+
+        await fixture.ExecuteAsync(
+            "INSERT INTO shipping.Shipments (Id, OrderId, Status, Attempts, NextAttemptAt) " +
+            "VALUES ({0}, {1}, 'Pending', 0, SYSDATETIMEOFFSET());",
+            Guid.CreateVersion7(),
+            order);
+
+        DateTimeOffset created = await fixture.ScalarAsync<DateTimeOffset>(
+            "SELECT Value = CreatedAt FROM shipping.Shipments WHERE OrderId = {0}", order);
+        created.ShouldBeGreaterThanOrEqualTo(before);
+    }
+
+    [Fact]
     public async Task The_tracking_events_table_is_keyed_on_the_carriers_own_id()
     {
         string[] columns = await fixture.ColumnsAsync("shipping", "TrackingEvents");

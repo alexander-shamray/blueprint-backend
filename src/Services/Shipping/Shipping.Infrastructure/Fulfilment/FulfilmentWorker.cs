@@ -79,8 +79,8 @@ public sealed class FulfilmentWorker(IServiceScopeFactory scopes, ILogger<Fulfil
             LogLevel.Error,
             new EventId(5, nameof(BookingUncommitted)),
             "Shipment {ShipmentId} on order {OrderId} was booked as carrier booking {CarrierReference}, but the " +
-            "booking was not committed; if the row is voided before a pass books it again, it needs cancelling " +
-            "at the carrier.");
+            "booking was not committed; if the row is voided or given up before a pass books it again, it needs " +
+            "cancelling at the carrier.");
 
     private static readonly Action<ILogger, Guid, Guid, TimeSpan, Exception?> GaveUp =
         LoggerMessage.Define<Guid, Guid, TimeSpan>(

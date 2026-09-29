@@ -12,7 +12,7 @@ using Shipping.Infrastructure.Persistence;
 namespace Shipping.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(ShippingDbContext))]
-    [Migration("20260929105720_AddShipmentCreatedAt")]
+    [Migration("20260929114952_AddShipmentCreatedAt")]
     partial class AddShipmentCreatedAt
     {
         /// <inheritdoc />
@@ -155,7 +155,9 @@ namespace Shipping.Infrastructure.Persistence.Migrations
                         .HasColumnType("nvarchar(64)");
 
                     b.Property<DateTimeOffset>("CreatedAt")
-                        .HasColumnType("datetimeoffset(7)");
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetimeoffset(7)")
+                        .HasDefaultValueSql("SYSDATETIMEOFFSET()");
 
                     b.Property<DateTimeOffset?>("LockedUntil")
                         .HasColumnType("datetimeoffset(7)");
