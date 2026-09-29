@@ -199,6 +199,9 @@ fi
 # the safe direction. Declared here so the self-test below runs against the
 # same string the gate uses.
 CALLS_REDIS='^[[:space:]]*[A-Za-z_][A-Za-z0-9_.]*\.AddRedisConnections\('
+# The worker's credential attachment, in the same form and for the same
+# reason: Shipping.Worker's Program.cs names the handler in a comment too.
+ATTACHES_CREDENTIALS='^[[:space:]]*[A-Za-z_][A-Za-z0-9_.]*\.AddHttpMessageHandler<ClientCredentialsHandler>\('
 
 declares() {
     # declares <chart> <block> -> exit 0 when that block sets enabled: true
@@ -257,7 +260,7 @@ done
 check 'the BFF binds ServiceIdentityOptions in src/, so its chart declares credentials' \
     grep -rq 'ServiceIdentityOptions' "$ROOT/src/BFF/Web.Bff"
 check "the worker attaches ClientCredentialsHandler in src/, so its chart declares credentials" \
-    grep -rq 'ClientCredentialsHandler' "$ROOT/src/Services/Shipping"
+    grep -rqE "$ATTACHES_CREDENTIALS" "$ROOT/src/Services/Shipping"
 
 # --------------------------------------------------------------------------
 section 'The source-detection patterns select code, not prose'
@@ -286,6 +289,15 @@ check 'CALLS_REDIS refuses a commented-out call' \
 check 'CALLS_REDIS accepts the real invocation' \
     sh -c 'printf "        services.AddRedisConnections(configuration);\n" |
         grep -qE "$0"' "$CALLS_REDIS"
+check 'ATTACHES_CREDENTIALS refuses a comment that names the handler' \
+    sh -c 'printf "// the token client carries no ClientCredentialsHandler:\n" |
+        grep -qvE "$0"' "$ATTACHES_CREDENTIALS"
+check 'ATTACHES_CREDENTIALS refuses a registration that attaches nothing' \
+    sh -c 'printf "builder.Services.AddTransient<ClientCredentialsHandler>();\n" |
+        grep -qvE "$0"' "$ATTACHES_CREDENTIALS"
+check 'ATTACHES_CREDENTIALS accepts the real attachment' \
+    sh -c 'printf "        client.AddHttpMessageHandler<ClientCredentialsHandler>();\n" |
+        grep -qE "$0"' "$ATTACHES_CREDENTIALS"
 
 # --------------------------------------------------------------------------
 section 'The workflow watches everything this script reads'
@@ -532,12 +544,37 @@ refuses_chart shipping 'the carrier capability off and cleared fails the render'
     --set-string 'carrier.baseUrl='
 refuses_chart shipping 'a cleared address source fails the render' \
     'addressSource.baseUrl is required' --set-string 'addressSource.baseUrl='
+refuses_chart shipping 'an address source that is not an address fails the render' \
+    'not an address this chart will accept' --set-string 'addressSource.baseUrl=ordering-api:8081'
+refuses_chart shipping 'an address source carrying credentials fails the render' \
+    'not an address this chart will accept' \
+    --set-string 'addressSource.baseUrl=http://u:p@ordering-api:8081'
+refuses_chart shipping 'an address source with the capability off fails the render' \
+    'but addressSource.baseUrl is set' --set addressSource.enabled=false
+refuses_chart shipping 'the address source off and cleared fails the render' \
+    'addressSource.enabled is false on the shipping chart' \
+    --set addressSource.enabled=false --set-string 'addressSource.baseUrl='
 refuses_chart shipping 'a cleared retention window fails the render' \
     'jurisdiction.addressRetention is required' \
     --set-string 'jurisdiction.addressRetention='
+refuses_chart shipping 'a retention window that is not a TimeSpan fails the render' \
+    'not a TimeSpan this chart will accept' \
+    --set-string 'jurisdiction.trackingRetention=90 days'
 refuses_chart shipping 'a jurisdiction the capability is off for fails the render' \
     'but a jurisdiction window is set' --set jurisdiction.enabled=false
-pass 'the worker chart renders four capabilities and refuses each half state'
+refuses_chart shipping 'the jurisdiction off and cleared fails the render' \
+    'jurisdiction.enabled is false on the shipping chart' \
+    --set jurisdiction.enabled=false --set-string 'jurisdiction.addressRetention=' \
+    --set-string 'jurisdiction.trackingRetention='
+refuses_chart shipping 'client credentials off with a client id fails the render' \
+    'identity.clientCredentials is false but identity.clientId is set' \
+    --set identity.clientCredentials=false
+refuses_chart shipping 'client credentials off and cleared fails the render' \
+    'identity.clientCredentials is false on the shipping chart' \
+    --set identity.clientCredentials=false --set-string 'identity.clientId='
+check 'a retention window in days-and-time form still renders' \
+    "$HELM" template shipping "$CHARTS_DIR/shipping" --set-string "image.tag=$TAG" \
+    $(overlay_for shipping) --set-string 'jurisdiction.addressRetention=1.12:30'
 
 # --------------------------------------------------------------------------
 section 'Probes — three per workload (§13.5)'
