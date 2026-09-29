@@ -14,8 +14,8 @@ workload:
 # Three, and a decision rather than a copy. CPU is the wrong signal for a host
 # that waits on a queue and a third party: it idles through a carrier outage
 # and through a backlog alike, so an autoscaler would scale on noise. Three is
-# for availability across a node drain, and §13.6's queue-backlog rule is how
-# anyone finds out it is too few.
+# for availability across a node drain; §15.3 says what would show it is too
+# few, and that the signal is owed.
 replicaCount: 3
 
 # §15.5's canary track, and OFF is what every ordinary release means. Turned
