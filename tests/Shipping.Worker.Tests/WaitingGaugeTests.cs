@@ -69,6 +69,7 @@ public sealed class WaitingGaugeTests(ServiceFixture fixture) : IAsyncLifetime
         Shipment dispatched = await fixture.BookedAsync("SIM-TRANSIT");
         (await fixture.RunTrackingPassAsync()).ShouldBe(1);
         (await fixture.StatusAsync(dispatched.Id)).ShouldBe("Dispatched");
+        await fixture.RequestCancellationAsync(dispatched.Id);
         await fixture.SetAttemptsAsync(dispatched.Id, 1);
 
         List<(string State, double Value)> measured = ReadWaitingGauge();
