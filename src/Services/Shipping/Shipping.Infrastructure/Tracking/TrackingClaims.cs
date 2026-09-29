@@ -21,15 +21,11 @@ internal sealed class TrackingClaims(IDbConnectionFactory connections)
     // Atomic claim: selects and leases in one statement, so two replicas
     // cannot take the same row. READPAST skips rows another replica holds.
     //
-    // The LockedUntil predicate is what keeps this pass and the fulfilment
-    // pass off each other's rows, and not the status filter: a Booked shipment
-    // whose cancellation the carrier has not answered is in FulfilmentClaims'
-    // second population and is pollable at the same time, so the two claims
-    // overlap by design. Whichever stamps LockedUntil first holds the row until
-    // its lease lapses, which is what two writers to one aggregate should be.
-    //
-    // NextPollAt IS NOT NULL repeats ShipmentConfiguration's index filter,
-    // which is what lets the optimiser match it.
+    // The LockedUntil predicate, not the status filter, keeps this pass and
+    // the fulfilment pass off each other's rows: a Booked shipment awaiting
+    // its cancellation's answer is in both claims by design, and whichever
+    // stamps LockedUntil first holds it until the lease lapses. NextPollAt IS
+    // NOT NULL repeats ShipmentConfiguration's index filter, so it matches.
     private static readonly string ClaimSql =
         $"""
         WITH claimable AS (
