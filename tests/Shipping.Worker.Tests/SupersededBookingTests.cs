@@ -197,9 +197,8 @@ public sealed class SupersededBookingTests
         services.AddSingleton(store);
         services.AddSingleton<IDeliveryAddressSource>(new UnknownOrder());
         services.AddSingleton(TimeProvider.System);
-        // The longest age the options accept: these shipments are made at a
-        // fixed instant and the pass reads the system clock, so any shorter
-        // age is one the suite would eventually outlive.
+        // Options.Create bypasses validation, so a far-off age keeps these
+        // fixed-instant shipments inside it however long the suite runs.
         services.AddSingleton(Options.Create(new FulfilmentOptions
         {
             GiveUpAge = TimeSpan.Parse(FulfilmentOptions.MaximumGiveUpAge, CultureInfo.InvariantCulture)
