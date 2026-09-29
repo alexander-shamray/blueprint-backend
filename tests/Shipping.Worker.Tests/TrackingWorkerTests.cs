@@ -1,0 +1,174 @@
+using Microsoft.Extensions.DependencyInjection;
+using Shipping.Domain.Shipments;
+using Shipping.Infrastructure.Carrier;
+using Shipping.Infrastructure.Fulfilment;
+using Shipping.Infrastructure.Tracking;
+using Shipping.TestSupport;
+using Shouldly;
+using Xunit;
+
+namespace Shipping.Worker.Tests;
+
+/// <summary>
+/// The second worker against a real database and the simulator's own mappings:
+/// what one pass claims, what it leaves, and which rows it will not take
+/// (spec, sections 4 and 9).
+/// </summary>
+[Collection(nameof(IntegrationCollection))]
+public sealed class TrackingWorkerTests(ServiceFixture fixture) : IAsyncLifetime
+{
+    public async ValueTask InitializeAsync() => await fixture.ResetAsync();
+
+    public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+
+    [Fact]
+    public void The_lease_outlives_the_hop_and_the_pass()
+    {
+        // Every_attempt_and_every_bounded_delay_fit_inside_the_total's shape,
+        // one level up: a lease shorter than either would let a second replica
+        // claim a row this pass is still calling the carrier about, and the two
+        // would book or record against the same aggregate.
+        TimeSpan lease = TimeSpan.FromSeconds(TrackingWorker.LeaseSeconds);
+
+        lease.ShouldBeGreaterThan(CarrierHop.TotalRequestTimeout, "one call must finish inside the lease");
+        lease.ShouldBeGreaterThan(TrackingWorker.PassBudget, "a pass must finish inside its own lease");
+        TrackingWorker.PassBudget.ShouldBeGreaterThan(
+            CarrierHop.TotalRequestTimeout,
+            "a budget below one hop's total would make every pass claim rows and process none");
+        TrackingWorker.PassBudget.ShouldBeLessThan(
+            TimeSpan.FromSeconds(30),
+            "the host's shutdown timeout is thirty seconds (§15.3), and a pass that outlives it is killed mid-row");
+
+        // The two leases are separate numbers over one column, so the pair is
+        // stated once here: each bounds its own worst-case pass, and neither is
+        // a bound on the other's. What keeps the two workers apart is the
+        // LockedUntil predicate both claims carry, which the two tests below
+        // drive; the lengths only decide how long a killed replica's row waits.
+        TimeSpan.FromSeconds(FulfilmentWorker.LeaseSeconds).ShouldBeGreaterThan(
+            TimeSpan.FromSeconds(TrackingWorker.LeaseSeconds),
+            "a fulfilment pass makes two hops and a tracking pass one, so its lease is the longer");
+    }
+
+    [Fact]
+    public async Task A_booked_shipment_is_polled_and_a_collected_page_despatches_it()
+    {
+        Shipment shipment = await fixture.BookedAsync("SIM-TRANSIT");
+
+        (await Worker().ProcessBatchAsync(TestContext.Current.CancellationToken)).ShouldBe(1);
+
+        (await fixture.StatusAsync(shipment.Id)).ShouldBe("Dispatched");
+        (await fixture.LockedUntilAsync(shipment.Id)).ShouldBeNull(
+            "the pass that claimed the row released it through Shipment.PollApplied");
+    }
+
+    [Fact]
+    public async Task A_delivered_page_is_terminal_and_stops_the_polling()
+    {
+        Shipment shipment = await fixture.BookedAsync("050000");
+
+        await Worker().ProcessBatchAsync(TestContext.Current.CancellationToken);
+
+        (await fixture.StatusAsync(shipment.Id)).ShouldBe("Delivered");
+        (await fixture.NextPollAtAsync(shipment.Id)).ShouldBeNull(
+            "a terminal shipment has nothing further to learn");
+    }
+
+    [Fact]
+    public async Task A_row_still_being_polled_is_not_claimed_by_a_second_pass()
+    {
+        await fixture.BookedAsync("SIM-TRANSIT");
+
+        // Staged, not two passes back to back: the claim's lease is what the
+        // second pass must see, and a pass that has already committed would
+        // prove nothing about a row in flight.
+        await fixture.ClaimForTrackingAsync();
+
+        (await Worker().ProcessBatchAsync(TestContext.Current.CancellationToken)).ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task A_lapsed_lease_is_taken_by_another_pass()
+    {
+        Shipment shipment = await fixture.BookedAsync("SIM-TRANSIT");
+
+        await fixture.ClaimForTrackingAsync();
+        await fixture.ExpireLeasesAsync();
+
+        (await Worker().ProcessBatchAsync(TestContext.Current.CancellationToken)).ShouldBe(1);
+        (await fixture.StatusAsync(shipment.Id)).ShouldBe("Dispatched");
+    }
+
+    [Fact]
+    public async Task A_row_the_fulfilment_worker_holds_is_not_polled()
+    {
+        // The one row both claims select: a Booked shipment whose cancellation
+        // the carrier has not answered is in FulfilmentClaims' second
+        // population AND due a poll. The status filters overlap by design and
+        // are not what keeps the two workers apart — the LockedUntil predicate
+        // is, and this is the test that says so.
+        Shipment shipment = await fixture.BookedAsync("SIM-TRANSIT");
+        await fixture.RequestCancellationAsync(shipment.Id);
+
+        await fixture.ClaimForFulfilmentAsync();
+
+        (await Worker().ProcessBatchAsync(TestContext.Current.CancellationToken)).ShouldBe(0);
+        (await fixture.LockedUntilAsync(shipment.Id)).ShouldNotBeNull(
+            "the tracking pass skipped the row rather than releasing a lease it does not hold");
+    }
+
+    [Fact]
+    public async Task A_row_this_worker_holds_is_not_claimed_by_a_fulfilment_pass()
+    {
+        // The same overlap, from the other side. Driven through
+        // ServiceFixture.RunFulfilmentPassAsync rather than a second copy of
+        // that loop, so what is under test is FulfilmentClaims' own claim and
+        // not this suite's idea of it.
+        Shipment shipment = await fixture.BookedAsync("SIM-TRANSIT");
+        await fixture.RequestCancellationAsync(shipment.Id);
+
+        await fixture.ClaimForTrackingAsync();
+
+        (await fixture.RunFulfilmentPassAsync()).ShouldBe(0);
+        (await fixture.StatusAsync(shipment.Id)).ShouldBe(
+            "Booked", "nothing cancelled at the carrier while this worker held the row");
+    }
+
+    [Fact]
+    public async Task A_pass_that_throws_leaves_the_host_running()
+    {
+        // The claim itself failing — the database unreachable — is the case
+        // ExecuteAsync's filter exists for. Driven through the loop and not
+        // through ProcessBatchAsync, because what is under test is the catch
+        // around the pass rather than the pass.
+        using ShippingWorkerFactory broken = new(Unreachable.Sql, Unreachable.Rabbit);
+
+        TrackingWorker worker = broken.Services.GetRequiredService<TrackingWorker>();
+
+        // The pass itself throws, which is what the catch below is about and
+        // what a carrier outage would never produce: that is caught per row.
+        await Should.ThrowAsync<Exception>(
+            () => worker.ProcessBatchAsync(TestContext.Current.CancellationToken));
+
+        await worker.StartAsync(TestContext.Current.CancellationToken);
+
+        // One whole interval, because PeriodicTimer fires first that long after
+        // the loop starts; then the loop's own line rather than a margin, since
+        // the direct call above logs nothing and a loop that let the fault out
+        // completes instead of logging.
+        await Task.Delay(CarrierHop.TrackingPollInterval, TestContext.Current.CancellationToken);
+        await FulfilmentSteps.WaitUntil(() =>
+            Task.FromResult(ClaimFailedLogged(broken) || worker.ExecuteTask!.IsCompleted));
+
+        // ExecuteTask is the loop, and a faulted one is the host on its way
+        // down: the default BackgroundServiceExceptionBehavior stops it.
+        worker.ExecuteTask!.IsFaulted.ShouldBeFalse();
+        ClaimFailedLogged(broken).ShouldBeTrue();
+
+        await worker.StopAsync(TestContext.Current.CancellationToken);
+    }
+
+    private static bool ClaimFailedLogged(ShippingWorkerFactory host) =>
+        host.CapturedLogs.Everything.Any(line => line.StartsWith("Tracking claim failed", StringComparison.Ordinal));
+
+    private TrackingWorker Worker() => fixture.Factory.Services.GetRequiredService<TrackingWorker>();
+}

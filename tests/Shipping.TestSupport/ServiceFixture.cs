@@ -1,14 +1,19 @@
 using System.Data.Common;
 using System.Text.Json;
+using Shipping.Application.Shipments;
+using Shipping.Domain.Shipments;
 using Shipping.Infrastructure.Fulfilment;
 using Shipping.Infrastructure.Persistence;
+using Shipping.Infrastructure.Tracking;
 using Shipping.Migrator;
 using Shipping.OrderingStub;
 using Common.Application;
+using Common.Contracts.Ordering.V1;
 using Common.Infrastructure.Idempotency;
 using Common.Infrastructure.Inbox;
 using Common.Infrastructure.Messaging;
 using Common.Infrastructure.Outbox;
+using MassTransit;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -24,6 +29,9 @@ using WireMock.ResponseBuilders;
 using WireMock.Server;
 using WireMock.Settings;
 using Xunit;
+// MassTransit names a Response as well, for IBus; the carrier's builder is
+// the one this file means.
+using Response = WireMock.ResponseBuilders.Response;
 
 namespace Shipping.TestSupport;
 
@@ -147,6 +155,164 @@ public sealed class ServiceFixture : IAsyncLifetime
         Factory.Services
             .GetRequiredService<FulfilmentWorker>()
             .RunOnceAsync(TestContext.Current.CancellationToken);
+
+    /// <summary>Runs exactly one tracking pass. No timers, no waiting.</summary>
+    public Task<int> RunTrackingPassAsync() =>
+        Factory.Services.GetRequiredService<TrackingWorker>().ProcessBatchAsync(
+            TestContext.Current.CancellationToken);
+
+    /// <summary>
+    /// A shipment the fulfilment worker booked: the order confirmed through the
+    /// real broker, its address answered by <see cref="Ordering"/>, and one
+    /// <see cref="RunFulfilmentPassAsync"/>, so no suite books a row by hand.
+    /// The address is plain ASCII unless a caller names the two script parts.
+    /// </summary>
+    public async Task<Shipment> BookedAsync(
+        string postalCode,
+        string country = "KZ",
+        string? line1 = null,
+        string? city = null)
+    {
+        Guid order = Guid.CreateVersion7();
+        Ordering.Addresses[order] = new StubAddress(
+            Guid.CreateVersion7(), line1 ?? "1 Abay Avenue", null, city ?? "Almaty", postalCode, country);
+
+        OrderConfirmed confirmed = new()
+        {
+            MessageId = Guid.CreateVersion7(),
+            CorrelationId = order,
+            OccurredAt = DateTimeOffset.UtcNow,
+            OrderId = order,
+            CustomerId = Guid.CreateVersion7(),
+            TotalAmount = 10m,
+            Currency = "KZT",
+            Lines = [new ConfirmedLine(Guid.CreateVersion7(), 1, 10m)]
+        };
+
+        // Bounded, because a publish the broker refuses is retried rather than
+        // failed, and an unbounded one would hold the run until CI kills it.
+        using CancellationTokenSource bounded =
+            CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        bounded.CancelAfter(StepDeadline);
+
+        await Factory.Services.GetRequiredService<IBus>().Publish(
+            confirmed,
+            c =>
+            {
+                c.MessageId = confirmed.MessageId;
+                c.CorrelationId = confirmed.CorrelationId;
+            },
+            bounded.Token);
+
+        // The inbox row is written after the consumer's command has committed
+        // (§9.5), so a pass run before it would find no shipment to claim.
+        await WaitUntilAsync(async () => (await InboxAsync(confirmed.MessageId)).Count == 1);
+
+        if (await RunFulfilmentPassAsync() != 1)
+        {
+            throw new InvalidOperationException(
+                $"The fulfilment pass did not book the shipment for postal code {postalCode}.");
+        }
+
+        await using AsyncServiceScope scope = Factory.Services.CreateAsyncScope();
+
+        return await scope.ServiceProvider
+            .GetRequiredService<IShipmentRepository>()
+            .GetByOrderAsync(new OrderId(order), TestContext.Current.CancellationToken)
+            ?? throw new InvalidOperationException($"Order {order} was booked and its shipment is now absent.");
+    }
+
+    public Task<string> StatusAsync(ShipmentId id) =>
+        ScalarAsync<string>("SELECT Value = Status FROM shipping.Shipments WHERE Id = {0}", id.Value);
+
+    /// <summary>Null once the shipment is terminal and has nothing further to learn.</summary>
+    public Task<DateTimeOffset?> NextPollAtAsync(ShipmentId id) =>
+        ScalarAsync<DateTimeOffset?>("SELECT Value = NextPollAt FROM shipping.Shipments WHERE Id = {0}", id.Value);
+
+    public Task<int> AttemptsAsync(ShipmentId id) =>
+        ScalarAsync<int>("SELECT Value = Attempts FROM shipping.Shipments WHERE Id = {0}", id.Value);
+
+    /// <summary>Null once a pass has released the row it claimed.</summary>
+    public Task<DateTimeOffset?> LockedUntilAsync(ShipmentId id) =>
+        ScalarAsync<DateTimeOffset?>("SELECT Value = LockedUntil FROM shipping.Shipments WHERE Id = {0}", id.Value);
+
+    /// <summary>
+    /// The engine's own clock, for a comparison with a column the engine
+    /// stamped: the container's clock and the host's can disagree.
+    /// </summary>
+    public Task<DateTimeOffset> DatabaseNowAsync() =>
+        ScalarAsync<DateTimeOffset>("SELECT Value = SYSDATETIMEOFFSET()");
+
+    /// <summary>
+    /// Repoints a booked row at a reference a test's own carrier answers, so
+    /// the row is the real one and only the carrier's answer is scripted.
+    /// </summary>
+    public Task SetCarrierReferenceAsync(ShipmentId id, string reference) =>
+        ExecuteAsync(
+            "UPDATE shipping.Shipments SET CarrierReference = {0} WHERE Id = {1};",
+            reference,
+            id.Value);
+
+    /// <summary>
+    /// Stamps a live tracking lease on every pollable row, so a second pass
+    /// meets a row in flight rather than one a previous pass has finished with.
+    /// </summary>
+    public Task ClaimForTrackingAsync() =>
+        ExecuteAsync(
+            "UPDATE shipping.Shipments SET LockedUntil = DATEADD(second, {0}, SYSDATETIMEOFFSET()) " +
+            "WHERE Status IN ('Booked', 'Dispatched');",
+            TrackingWorker.LeaseSeconds);
+
+    /// <summary>
+    /// The same, under the fulfilment worker's lease and over its populations.
+    /// Two helpers rather than one with a parameter: what a test is saying is
+    /// WHICH worker holds the row, and a number passed in says that nowhere.
+    /// </summary>
+    public Task ClaimForFulfilmentAsync() =>
+        ExecuteAsync(
+            "UPDATE shipping.Shipments SET LockedUntil = DATEADD(second, {0}, SYSDATETIMEOFFSET()) " +
+            "WHERE Status = 'Pending' " +
+            "   OR (Status = 'Booked' AND CancellationRequestedAt IS NOT NULL AND CancellationRefusedAt IS NULL);",
+            FulfilmentWorker.LeaseSeconds);
+
+    /// <summary>Lets every lease lapse, which is what a killed replica leaves behind.</summary>
+    public Task ExpireLeasesAsync() =>
+        ExecuteAsync("UPDATE shipping.Shipments SET LockedUntil = NULL;");
+
+    /// <summary>
+    /// Stamps the cancellation request without asking the carrier, which is the
+    /// one state a row is due to both workers at once (spec, sections 5 and 6).
+    /// </summary>
+    public Task RequestCancellationAsync(ShipmentId id) =>
+        ExecuteAsync(
+            "UPDATE shipping.Shipments SET CancellationRequestedAt = SYSDATETIMEOFFSET() WHERE Id = {0};",
+            id.Value);
+
+    /// <summary>
+    /// How long a staged step may take — a delivery through the broker or a
+    /// bus coming up. A deadline, not a sleep, so it costs nothing when the
+    /// step is prompt.
+    /// </summary>
+    private static readonly TimeSpan StepDeadline = TimeSpan.FromSeconds(20);
+
+    /// <summary>
+    /// Polls to <see cref="StepDeadline"/> and throws when it lapses, which is
+    /// what stages a step on something another has already done.
+    /// </summary>
+    private static async Task WaitUntilAsync(Func<Task<bool>> predicate)
+    {
+        DateTimeOffset deadline = DateTimeOffset.UtcNow + StepDeadline;
+
+        while (DateTimeOffset.UtcNow < deadline)
+        {
+            if (await predicate())
+                return;
+
+            await Task.Delay(TimeSpan.FromMilliseconds(50), TestContext.Current.CancellationToken);
+        }
+
+        throw new TimeoutException($"The staged condition did not hold within {StepDeadline}.");
+    }
 
     /// <summary>
     /// The exchanges bound to one destination, read from the broker itself:
