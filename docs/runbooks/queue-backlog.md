@@ -21,12 +21,14 @@ What users see is staleness: a projection behind its source, an order whose
 saga has not moved, a shipment whose despatch has not reached the buyer's
 timeline yet.
 
-The two alerts are one condition read from opposite ends. The backlog alert
-carries `queue`, which names one receive endpoint, and so says whose consumer
-is behind. The lag alert carries `service_name`, and fires when messages reach
-that service's consumers late, whether or not they have piled up yet: a
-consumer that is slow at a low rate shows here long before a thousand messages
-wait for it.
+The two alerts read one condition from opposite ends, for integration
+events. The backlog alert carries `queue`, which names one receive endpoint,
+and so says whose consumer is behind. The lag alert carries `service_name`, and
+fires when events reach that service's consumers late, whether or not they have
+piled up yet: a consumer that is slow at a low rate shows there long before a
+thousand messages wait for it. Only event consumers record the lag, so a
+backlog on a command queue or on Ordering's saga endpoint has no counterpart on
+the lag side, and a quiet lag alert says nothing about them.
 
 ```promql
 sum by (queue) (rabbitmq_queue_messages{queue!~".+_(error|skipped)"})
@@ -124,12 +126,16 @@ WHERE Status = 'Pending'
     AND TerminalAt IS NULL;
 ```
 
-**The lag alert stops where the handler starts.** `messaging.delivery.lag` is
-recorded at the top of `Consume`, before a handler runs, so a message's own
-handling time is outside its lag, and a handler that fails after it starts
-leaves this quiet; [§13.7](../backend-architecture/13-observability.md)
-records that gap. A slow handler still shows, through the messages queued
-behind it, which start late. The lag also compares a timestamp made on
+**The lag alert is measured at consumer start, and a failure can raise it.**
+`messaging.delivery.lag` is recorded at the top of `Consume`, before a handler
+runs, so a message's own handling time is outside its lag. A slow handler
+shows through the messages queued behind it, which start late. A failing one
+shows too: the endpoint's in-memory retry re-enters `Consume` for every
+attempt, and each attempt records the message again, measured from its
+original `OccurredAt`. So before scaling out on the lag, read the service's
+consume error rate from the section above: a lag that rose with the errors is
+a fault to find, not a shortage of consumers. Only a failure that is never
+retried leaves the lag quiet. The lag also compares a timestamp made on
 another machine, so a clock skewed between two hosts moves it without
 anything being late — check the publisher's and the consumer's clocks before
 scaling anything on the lag alone.
