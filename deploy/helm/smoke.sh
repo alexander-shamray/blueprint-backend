@@ -41,8 +41,8 @@ overlay_for() {
     esac
 }
 
-SERVICE_CHARTS="catalog ordering inventory payments gateway web-bff"
-MIGRATOR_CHARTS="catalog ordering inventory payments"
+SERVICE_CHARTS="catalog ordering inventory payments shipping gateway web-bff"
+MIGRATOR_CHARTS="catalog ordering inventory payments shipping"
 DATABASELESS_CHARTS="gateway web-bff"
 
 # Every path outside deploy/helm that this script reads, declared once beside
@@ -56,6 +56,7 @@ src/Services/Catalog
 src/Services/Ordering
 src/Services/Inventory
 src/Services/Payments
+src/Services/Shipping
 src/BuildingBlocks/Common.Web/HealthCheckExtensions.cs
 .gitattributes
 deploy/canary/canary.json
@@ -153,6 +154,21 @@ if [ "$both" = "$listed" ]; then
     pass 'every chart is classified as owning a database or not'
 else
     fail "MIGRATOR_CHARTS + DATABASELESS_CHARTS ($both) do not partition SERVICE_CHARTS ($listed)"
+fi
+
+# One chart sets a replica count instead of an autoscaler (§15.3), so the
+# assertions below branch — and the branch is driven by a declared list rather
+# than by each chart's own values. Read from the values alone, a file flipped
+# by itself would change what is asserted rather than fail it, which is this
+# repository's most-repeated failure pointed at its newest surface.
+AUTOSCALED_CHARTS="catalog ordering inventory payments gateway web-bff"
+FIXED_REPLICA_CHARTS="shipping"
+
+scaled="$(printf '%s\n' $AUTOSCALED_CHARTS $FIXED_REPLICA_CHARTS | sort | tr '\n' ' ' | sed 's/ *$//')"
+if [ "$scaled" = "$listed" ]; then
+    pass 'every chart is classified as autoscaled or fixed-replica'
+else
+    fail "AUTOSCALED_CHARTS + FIXED_REPLICA_CHARTS ($scaled) do not partition SERVICE_CHARTS ($listed)"
 fi
 
 # ADR-052 made ADR-017's budget two: the BFF's pricing hop and Shipping's
@@ -370,6 +386,10 @@ for chart in $SERVICE_CHARTS platform; do
         --set-string "inventory.image.tag=$TAG" \
         --set-string "payments.image.tag=$TAG" \
         --set-string "payments.paymentProvider.baseUrl=https://psp.example.invalid/" \
+        --set-string "shipping.image.tag=$TAG" \
+        --set-string "shipping.carrier.baseUrl=https://carrier.example.invalid/" \
+        --set-string "shipping.jurisdiction.addressRetention=30.00:00:00" \
+        --set-string "shipping.jurisdiction.trackingRetention=90.00:00:00" \
         --set-string "gateway.image.tag=$TAG" \
         --set-string "web-bff.image.tag=$TAG" \
         $GATEWAY_OVERLAY $(overlay_for "$chart") $PLATFORM_OVERLAY
@@ -407,6 +427,10 @@ done
     --set-string "inventory.image.tag=$TAG" \
     --set-string "payments.image.tag=$TAG" \
     --set-string "payments.paymentProvider.baseUrl=https://psp.example.invalid/" \
+    --set-string "shipping.image.tag=$TAG" \
+    --set-string "shipping.carrier.baseUrl=https://carrier.example.invalid/" \
+    --set-string "shipping.jurisdiction.addressRetention=30.00:00:00" \
+    --set-string "shipping.jurisdiction.trackingRetention=90.00:00:00" \
     --set-string "gateway.image.tag=$TAG" \
     --set-string "web-bff.image.tag=$TAG" \
     $PLATFORM_OVERLAY >"$OUT/platform.yaml"
@@ -592,9 +616,22 @@ section 'Autoscaling owns the replica count'
 # helm upgrade writes the chart's value and the autoscaler writes it back, so a
 # config-only deploy (§15.1) silently scales the service down and it climbs out
 # again over the following minutes.
-for chart in $SERVICE_CHARTS; do
+for chart in $AUTOSCALED_CHARTS; do
+    check "$chart declares autoscaling in its values" declares "$chart" autoscaling
     check "$chart leaves replicas to its HPA" test "$(count '^ *replicas:' "$OUT/$chart.yaml")" -eq 0
     check "$chart renders an HPA" test "$(count '^kind: HorizontalPodAutoscaler$' "$OUT/$chart.yaml")" -eq 1
+done
+
+# And the other side of the branch, which is the whole of the claim for a host
+# that waits on a queue: no autoscaler, and therefore a replica count the chart
+# owns. Both halves, because either alone is a Deployment defaulted to one pod.
+for chart in $FIXED_REPLICA_CHARTS; do
+    check "$chart declares no autoscaling in its values" lacks "$chart" autoscaling
+    check "$chart renders no HPA" test "$(count '^kind: HorizontalPodAutoscaler$' "$OUT/$chart.yaml")" -eq 0
+    check "$chart carries a replica count of its own" test "$(count '^ *replicas:' "$OUT/$chart.yaml")" -eq 1
+done
+
+for chart in $SERVICE_CHARTS; do
     check "$chart renders a PodDisruptionBudget" \
         test "$(count '^kind: PodDisruptionBudget$' "$OUT/$chart.yaml")" -eq 1
 done
@@ -888,26 +925,30 @@ for key in Identity__Authority OTEL_EXPORTER_OTLP_ENDPOINT; do
 done
 
 # --------------------------------------------------------------------------
-section 'Branches no chart takes yet, exercised anyway'
+section 'The worker shape, on the chart that has it'
 # --------------------------------------------------------------------------
-# §15.3 specifies `service.enabled: false` for Shipping and Notifications, and
-# neither exists yet, so rendering one chart with the value flipped is what
-# keeps the key from being decorative. Rendered under a name nothing dials,
-# which is the difference between exercising the worker branch and asserting
-# that Ordering, a routed destination, may drop its Service.
-"$HELM" template shipping "$CHARTS_DIR/ordering" --set-string "image.tag=$TAG" \
-    --set-string "workload.name=shipping" \
-    --set service.enabled=false >"$OUT/worker.yaml"
-check 'service.enabled=false renders no Service' \
-    test "$(count '^kind: Service$' "$OUT/worker.yaml")" -eq 0
+# §15.3 specifies `service.enabled: false` and `ingress.enabled: false` for
+# Shipping and Notifications. Shipping's chart is on disk, so these read it
+# rather than a stand-in rendered under a name nothing dials.
+check 'shipping renders no Service' \
+    test "$(count '^kind: Service$' "$OUT/shipping.yaml")" -eq 0
+check 'and no Ingress' \
+    test "$(count '^kind: Ingress$' "$OUT/shipping.yaml")" -eq 0
 check 'and the workload survives' \
-    test "$(count '^kind: Deployment$' "$OUT/worker.yaml")" -eq 1
-# Named separately, because a description is a claim about what the command
-# looks at and the line above counts Deployments alone.
+    test "$(count '^kind: Deployment$' "$OUT/shipping.yaml")" -eq 1
 check 'and so does its migration hook' \
-    test "$(count '^kind: Job$' "$OUT/worker.yaml")" -eq 1
+    test "$(count '^kind: Job$' "$OUT/shipping.yaml")" -eq 1
 check 'and the probes still address the container port directly' \
-    test "$(count 'path: /health/ready$' "$OUT/worker.yaml")" -eq 1
+    test "$(count 'path: /health/ready$' "$OUT/shipping.yaml")" -eq 1
+# The pair is not independent: an Ingress backend is this workload's Service,
+# so a values copy that turned the route on would install cleanly and answer
+# 503 for every request (_ingress.tpl).
+refuses_chart shipping 'an Ingress on the worker chart fails the render' \
+    'ingress.enabled requires service.enabled' --set ingress.enabled=true
+
+# --------------------------------------------------------------------------
+section 'A value the gateway requires only when another is set'
+# --------------------------------------------------------------------------
 
 # Conditionally required is a real category (§15.4): off is a valid topology,
 # on-but-unconfigured is a silent defect. The gateway's own startup guards
@@ -1295,6 +1336,10 @@ for chart in $SERVICE_CHARTS; do
     # Helm refuses to render an object another release owns (§15.3), so every
     # name the canary release emits has to differ from the stable one's. These
     # are the four the stable release keeps.
+    # On a chart whose stable release renders no Service, Ingress or HPA, three
+    # of these four pass by construction; the PodDisruptionBudget is the live
+    # one there. Left in the loop rather than special-cased: the claim is about
+    # what a canary release must not own, and it is true of every chart.
     for kind in Service Ingress HorizontalPodAutoscaler PodDisruptionBudget; do
         check "$chart: the canary renders no $kind" \
             test "$(count "^kind: $kind\$" "$OUT/$chart-canary.yaml")" -eq 0

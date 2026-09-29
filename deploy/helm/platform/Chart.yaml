@@ -24,6 +24,9 @@ dependencies:
   - name: payments
     version: 0.1.0
     repository: file://../payments
+  - name: shipping
+    version: 0.1.0
+    repository: file://../shipping
   - name: gateway
     version: 0.1.0
     repository: file://../gateway

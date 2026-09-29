@@ -87,6 +87,12 @@
       "signals": ["consume"],
       "httpExemption": "Payments' HTTP surface is one admin read, behind the payments:admin policy at the gateway and in the service, and an operator's occasional call cannot be relied on to reach minimumRequests in a dwell, so a declared http signal would roll healthy releases back for quiet. Its commands and events arrive on the broker and are judged by consume, and an admin request that fails is still counted by the gateway's http signal, which proxies it. The provider call §3.2 gives this service has no signal of its own — http measures inbound server requests, not Payments' outbound client — but it is not unjudged: AuthorisePaymentHandler awaits it inside the registered command consumer without catching, so a provider fault surfaces as a consume fault and is counted there."
     },
+    "shipping": {
+      "serviceName": "Shipping.Worker",
+      "chart": "shipping",
+      "signals": ["consume"],
+      "httpExemption": "Shipping has no HTTP surface at all (§3.2): its chart renders no Service, no route reaches it, and its only listener is §13.5's health endpoint, which the http templates exclude by route. A declared http signal would read a series that is empty by construction, and an empty result rolls every rung back, so the rollout could only ever fail. Its events arrive on the broker and are judged by consume. The two workers are where this service's risk sits and neither is a consumer, so the carrier and address calls carry no canary signal of their own — §13.6's delivery-lag and queue-backlog rules and shipping.shipments.waiting are what watch them, and docs/runbooks/queue-backlog.md says so."
+    },
     "gateway": { "serviceName": "Gateway.Api", "chart": "gateway", "signals": ["http"] },
     "web-bff": { "serviceName": "Web.Bff", "chart": "web-bff", "signals": ["http"] }
   }
