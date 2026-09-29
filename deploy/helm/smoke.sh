@@ -174,8 +174,8 @@ fi
 # ADR-052 made ADR-017's budget two: the BFF's pricing hop and Shipping's
 # address read. Named rather than counted — a count of two is satisfied by the
 # wrong two charts, and which host holds a grant is the whole claim. Read from
-# the values files rather than from a render, because a second chart setting it
-# renders nothing at all and the run would abort before this reported.
+# the values files rather than from a render, because a chart outside the two
+# setting it fails its render and the run would abort before this reported.
 CREDENTIALED_CHARTS="shipping web-bff"
 credentialed="$(grep -l 'clientCredentials: true' "$CHARTS_DIR"/*/values.yaml |
     sed -E 's|.*/([^/]+)/values\.yaml|\1|' | sort | tr '\n' ' ' | sed 's/ *$//')"
@@ -549,6 +549,8 @@ refuses_chart shipping 'an address source that is not an address fails the rende
 refuses_chart shipping 'an address source carrying credentials fails the render' \
     'not an address this chart will accept' \
     --set-string 'addressSource.baseUrl=http://u:p@ordering-api:8081'
+refuses_chart shipping 'an address source on a port past 65535 fails the render' \
+    'outside 1-65535' --set-string 'addressSource.baseUrl=http://ordering-api:80810'
 refuses_chart shipping 'an address source with the capability off fails the render' \
     'but addressSource.baseUrl is set' --set addressSource.enabled=false
 refuses_chart shipping 'the address source off and cleared fails the render' \
@@ -560,6 +562,9 @@ refuses_chart shipping 'a cleared retention window fails the render' \
 refuses_chart shipping 'a retention window that is not a TimeSpan fails the render' \
     'not a TimeSpan this chart will accept' \
     --set-string 'jurisdiction.trackingRetention=90 days'
+refuses_chart shipping 'a retention window counted in hours past 23 fails the render' \
+    'not a TimeSpan this chart will accept' \
+    --set-string 'jurisdiction.addressRetention=72:00:00'
 refuses_chart shipping 'a jurisdiction the capability is off for fails the render' \
     'but a jurisdiction window is set' --set jurisdiction.enabled=false
 refuses_chart shipping 'the jurisdiction off and cleared fails the render' \
