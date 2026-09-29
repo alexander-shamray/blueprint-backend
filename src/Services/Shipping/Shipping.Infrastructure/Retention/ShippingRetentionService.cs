@@ -71,7 +71,10 @@ public sealed class ShippingRetentionService : BackgroundService
     {
         using PeriodicTimer timer = new(Interval);
 
-        while (await timer.WaitForNextTickAsync(stoppingToken))
+        // A pass at start and then one per tick: a deployment restarting more
+        // often than Interval would otherwise never reach a first tick, and
+        // ADR-053's windows would never be applied.
+        do
         {
             try
             {
@@ -86,6 +89,7 @@ public sealed class ShippingRetentionService : BackgroundService
                 PurgeFailed(_log, ex);
             }
         }
+        while (await timer.WaitForNextTickAsync(stoppingToken));
     }
 
     /// <summary>
