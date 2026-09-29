@@ -1,5 +1,7 @@
 using Common.Application;
+using Common.Contracts.Shipping.V1;
 using Common.Domain;
+using Shipping.Domain.Shipments.Events;
 
 namespace Shipping.Application.Integration;
 
@@ -12,17 +14,15 @@ namespace Shipping.Application.Integration;
 /// </summary>
 internal sealed class ShippingIntegrationEventMapper : IIntegrationEventMapper
 {
-    // The allow-list, empty until this service publishes something: every
-    // domain event it raises is local-only while this dictionary is, which is
-    // the correct state for a service with no contracts rather than a gap,
-    // because §9.3 makes translation opt-in. An entry is one line —
-    //
-    //     [typeof(OrderPlacedDomainEvent)] = e => ToContract((OrderPlacedDomainEvent)e)
-    //
-    // with one private ToContract method beside it, the contract living in
-    // Common.Contracts under a versioned namespace (§9.2), carrying primitives
-    // only, and taking its MessageId and CorrelationId from the mapper (§9.1).
-    private static readonly Dictionary<Type, Func<IDomainEvent, object>> Registry = [];
+    // §3.2's Publishes column for Shipping, and exactly it: two entries. A
+    // tracking event is deliberately not here — the two milestones are the
+    // timeline, and a third contract would carry a carrier's vocabulary onto
+    // the bus for one screen.
+    private static readonly Dictionary<Type, Func<IDomainEvent, object>> Registry = new()
+    {
+        [typeof(ShipmentDispatchedDomainEvent)] = e => ToContract((ShipmentDispatchedDomainEvent)e),
+        [typeof(ShipmentDeliveredDomainEvent)] = e => ToContract((ShipmentDeliveredDomainEvent)e)
+    };
 
     /// <summary>
     /// §12's Application suite asserts the allow-list as a whole rather than
@@ -45,4 +45,28 @@ internal sealed class ShippingIntegrationEventMapper : IIntegrationEventMapper
 
         return mapped;
     }
+
+    // The correlation is the ORDER: §9.6's saga correlates every event about a
+    // fulfilment on it, and the shipment's own id means nothing outside this
+    // service.
+    private static ShipmentDispatched ToContract(ShipmentDispatchedDomainEvent e) => new()
+    {
+        MessageId = Guid.CreateVersion7(),
+        CorrelationId = e.OrderId.Value,
+        OccurredAt = e.OccurredAt,
+        OrderId = e.OrderId.Value,
+        TrackingNumber = e.TrackingNumber
+    };
+
+    // The shipment's id is not carried, and the contract has no field for one:
+    // a tracking number is what a buyer takes to the carrier, and an identifier
+    // of this service's own would be a coupling nobody asked for (§9.1).
+    private static ShipmentDelivered ToContract(ShipmentDeliveredDomainEvent e) => new()
+    {
+        MessageId = Guid.CreateVersion7(),
+        CorrelationId = e.OrderId.Value,
+        OccurredAt = e.OccurredAt,
+        OrderId = e.OrderId.Value,
+        TrackingNumber = e.TrackingNumber
+    };
 }

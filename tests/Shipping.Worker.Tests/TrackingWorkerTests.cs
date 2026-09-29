@@ -59,10 +59,13 @@ public sealed class TrackingWorkerTests(ServiceFixture fixture) : IAsyncLifetime
         (await fixture.StatusAsync(shipment.Id)).ShouldBe("Dispatched");
         (await fixture.LockedUntilAsync(shipment.Id)).ShouldBeNull(
             "the pass that claimed the row released it through Shipment.PollApplied");
+        (await fixture.OutboxAsync())
+            .Select(row => row.MessageType)
+            .ShouldContain(type => type.Contains("ShipmentDispatched", StringComparison.Ordinal));
     }
 
     [Fact]
-    public async Task A_delivered_page_is_terminal_and_stops_the_polling()
+    public async Task A_delivered_page_publishes_the_despatch_first_and_stops_the_polling()
     {
         Shipment shipment = await fixture.BookedAsync("050000");
 
@@ -73,6 +76,13 @@ public sealed class TrackingWorkerTests(ServiceFixture fixture) : IAsyncLifetime
             "a terminal shipment has nothing further to learn");
         (await fixture.LockedUntilAsync(shipment.Id)).ShouldBeNull(
             "a terminal row is released like any other, not left to its lease");
+
+        // Order, not membership: Ordering's saga finalises on the first and
+        // ADR-051's projection reads both.
+        (await fixture.OutboxAsync())
+            .OrderBy(row => row.OccurredAt)
+            .Select(row => row.MessageType.Split('.')[^1])
+            .ShouldBe(["ShipmentDispatched", "ShipmentDelivered"]);
     }
 
     [Fact]
