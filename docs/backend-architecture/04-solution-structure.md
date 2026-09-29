@@ -523,7 +523,10 @@ real cost and the smaller one — the alternative fails a build for a legitimate
 
 ### What the composition root composes
 
-Each layer exposes exactly one registration method. `Program.cs` calls them and
+Each layer exposes exactly one registration method for what it holds, and an
+outbound hop registers in one of its own beside it
+([ADR-055](adr/ADR-055-an-outbound-hop-registers-beside-its-layer-and-the-host-calls-it.md)).
+`Program.cs` calls them, binds the host's own client credentials (§11.5), and
 does nothing else with Infrastructure — which is what makes the rule above
 enforceable rather than aspirational, and what lets tests exercise the real
 registration path ([§6.2](06-cqrs.md)) instead of a hand-built container.
