@@ -287,9 +287,14 @@ public sealed class ServiceFixture : IAsyncLifetime
             "   OR (Status = 'Booked' AND CancellationRequestedAt IS NOT NULL AND CancellationRefusedAt IS NULL);",
             FulfilmentWorker.LeaseSeconds);
 
-    /// <summary>Lets every lease lapse, which is what a killed replica leaves behind.</summary>
+    /// <summary>
+    /// Moves every held lease into the past, which is what a killed replica
+    /// leaves behind: a stamp that has lapsed, not the NULL a release writes.
+    /// </summary>
     public Task ExpireLeasesAsync() =>
-        ExecuteAsync("UPDATE shipping.Shipments SET LockedUntil = NULL;");
+        ExecuteAsync(
+            "UPDATE shipping.Shipments SET LockedUntil = DATEADD(second, -1, SYSDATETIMEOFFSET()) " +
+            "WHERE LockedUntil IS NOT NULL;");
 
     /// <summary>
     /// Stamps the cancellation request without asking the carrier, which is the
