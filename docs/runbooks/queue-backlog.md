@@ -2,9 +2,9 @@
 
 | | |
 |---|---|
-| Alert | `QueueBacklogGrowing`, in `deploy/observability/alerts/platform-alerts.yaml` |
-| Condition | A working queue above 1000 messages and rising over 10 minutes |
-| Signal | `rabbitmq_queue_messages` from the broker's exporter |
+| Alert | `QueueBacklogGrowing` and `DeliveryLagHigh`, in `deploy/observability/alerts/platform-alerts.yaml` |
+| Condition | A working queue above 1000 messages and rising over 10 minutes; or a service's event delivery p95 past [§13.7](../backend-architecture/13-observability.md)'s target over 10 minutes |
+| Signal | `rabbitmq_queue_messages` from the broker's exporter; `messaging.delivery.lag` from the consumer |
 | Owner | The service team of the consumer ([§13.8](../backend-architecture/13-observability.md)) |
 
 ## What it means
@@ -21,11 +21,20 @@ What users see is staleness: a projection behind its source, an order whose
 saga has not moved, a shipment whose despatch has not reached the buyer's
 timeline yet.
 
-The alert carries `queue`, which names one receive endpoint, and so says whose
-consumer is behind.
+The two alerts are one condition read from opposite ends. The backlog alert
+carries `queue`, which names one receive endpoint, and so says whose consumer
+is behind. The lag alert carries `service_name`, and fires when messages reach
+that service's consumers late, whether or not they have piled up yet: a
+consumer that is slow at a low rate shows here long before a thousand messages
+wait for it.
 
 ```promql
 sum by (queue) (rabbitmq_queue_messages{queue!~".+_(error|skipped)"})
+
+histogram_quantile(
+  0.95,
+  sum by (service_name, le) (rate(messaging_delivery_lag_seconds_bucket[10m]))
+)
 ```
 
 ## First, decide whether it is arrival or service
@@ -115,14 +124,18 @@ WHERE Status = 'Pending'
     AND TerminalAt IS NULL;
 ```
 
-**It is not a latency alert.** `messaging.delivery.lag` measures publish to
-consumer start and would be the other end of this condition, but its
-histogram's bucket bounds cannot resolve a p95 in seconds yet, so no rule reads
-it ([#317](https://github.com/alexander-shamray/blueprint-backend/issues/317)).
+**The lag alert stops where the handler starts.** `messaging.delivery.lag` is
+recorded at the top of `Consume`, before a handler runs, so a handler that is
+slow or failing after it starts leaves this quiet; [§13.7](../backend-architecture/13-observability.md)
+records that gap. It also compares a timestamp made on another machine, so a
+clock skewed between two hosts moves it without anything being late — check
+the publisher's and the consumer's clocks before scaling anything on the lag
+alone.
 
 ## Closing it
 
-It clears on its own once the depth drops below a thousand or stops rising.
+The backlog alert clears on its own once the depth drops below a thousand or
+stops rising, and the lag alert once the p95 is back inside its target.
 Before closing, check the backlog **drained** rather than the producer
 stopping — a queue nobody publishes to has an excellent depth. The owning
 service's finished-message rate from the step above tells the two apart,

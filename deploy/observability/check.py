@@ -81,6 +81,11 @@ SHARED_RUNBOOKS = {
         "§13.8's ownership — gateway 5xx is Platform's, a service's is its "
         "team's, and a static owner label on one rule routes both to whoever "
         "it names. The procedure is the same, and it branches on which fired.",
+    "queue-backlog.md":
+        "QueueBacklogGrowing and DeliveryLagHigh are one condition read from "
+        "opposite ends — messages waiting on the broker, and messages reaching "
+        "their consumer late — and both are answered by deciding whether "
+        "arrival rose or service fell.",
 }
 
 # Metrics that no C# file declares because nothing in this solution declares
