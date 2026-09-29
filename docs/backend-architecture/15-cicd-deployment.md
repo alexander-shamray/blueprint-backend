@@ -1224,7 +1224,7 @@ namespace read access.
 | `Carrier__ApiKey` | Secret | External Secrets | ✓ — **Shipping only**; the carrier's credential, and the host refuses to start without it |
 | `AddressSource__BaseUrl` | Config | ConfigMap | ✓ — **Shipping only**; the owner's address for [ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)'s read, and the host refuses to start without it |
 | `Jurisdiction__AddressRetention` | Config | Helm `jurisdiction.addressRetention` → ConfigMap | ✓ — **Shipping only**; ADR-053's statutory window for a delivery address, and the host refuses to start without it |
-| `Jurisdiction__TrackingRetention` | Config | Helm `jurisdiction.trackingRetention` → ConfigMap | ✓ — **Shipping only**; ADR-053's statutory window for a shipment's tracking events |
+| `Jurisdiction__TrackingRetention` | Config | Helm `jurisdiction.trackingRetention` → ConfigMap | ✓ — **Shipping only**; ADR-053's statutory window for a shipment's tracking events, and the host refuses to start without it |
 
 | Kind | Source | Example |
 |---|---|---|
@@ -1263,10 +1263,11 @@ services
 [ADR-053](adr/ADR-053-a-jurisdiction-is-a-value-the-deployment-is-given.md)
 makes values a deployment is given. The tempting third is a
 `ServiceOptions`-shaped bag — batch sizes, poll intervals, retry caps — bound
-to an `Ordering` section that no environment ever sets. It costs nothing to write and it is not free: `ValidateOnStart` now gates
-boot on a section nobody supplies, `[Required]` on any member stops every host,
-and `[Required]` on none makes `ValidateDataAnnotations` decorative. There is no
-third outcome, because a key that never varies has nothing to validate.
+to an `Ordering` section that no environment ever sets. It costs nothing to
+write and it is not free: `ValidateOnStart` now gates boot on a section nobody
+supplies, `[Required]` on any member stops every host, and `[Required]` on none
+makes `ValidateDataAnnotations` decorative. There is no third outcome, because
+a key that never varies has nothing to validate.
 
 > **An options type needs at least one member that differs between
 > environments.** If every value in it would be the same in Compose, in the test
