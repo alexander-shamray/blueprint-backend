@@ -205,10 +205,8 @@
          test resolve from a real container, and the abstractions package the
          source references has none to build — it is contracts only. -->
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.0" />
-    <!-- ConfigurationBuilder and AddInMemoryCollection. AddRedisConnections
-         takes IConfiguration (§8.2), and its tests build a real one rather
-         than substitute the contract — the same argument as the container
-         row above, one abstraction over. -->
+    <!-- ConfigurationBuilder and AddInMemoryCollection; Appendix B's row
+         names who builds a real configuration and why. -->
     <PackageVersion Include="Microsoft.Extensions.Configuration" Version="10.0.0" />
     <!-- The library §4.2's architecture gates are written against; what makes
          those rules a build failure is the gates themselves. A major bump can
