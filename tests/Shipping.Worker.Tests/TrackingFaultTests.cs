@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using Shipping.Domain.Shipments;
+using Shipping.Infrastructure.Carrier;
 using Shipping.Infrastructure.Tracking;
 using Shipping.TestSupport;
 using Shouldly;
@@ -68,8 +69,8 @@ public sealed class TrackingFaultTests : IAsyncLifetime
         (await _fixture.AttemptsAsync(shipment.Id)).ShouldBe(1);
         (await _fixture.LockedUntilAsync(shipment.Id)).ShouldBeNull("a backed-off row is released, not held");
         (await _fixture.NextPollAtAsync(shipment.Id)).ShouldNotBeNull().ShouldBeGreaterThanOrEqualTo(
-            before.AddSeconds(5),
-            "the dispatcher's ladder is 2^min(Attempts, 8) x 5 s, so the first backoff is at least five seconds");
+            before + CarrierHop.TrackingPollInterval,
+            "the ladder's first step is five seconds, and a failed poll is never due sooner than a healthy one");
     }
 
     private TrackingWorker Worker() => _host.Services.GetRequiredService<TrackingWorker>();
