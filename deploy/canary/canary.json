@@ -17,8 +17,9 @@
     "allows. The worker's chart sets a replica count with no autoscaler at",
     "all, so no maxReplicas bounds it and the rollout's first rung is what",
     "scales its stable track (§15.3).",
-    "The smallest configuration in which 5% is expressible is the largest one",
-    "the chart allows, and neither number was chosen with the other in mind."
+    "On the charts whose maxReplicas is 20, the smallest configuration in",
+    "which 5% is expressible is the largest one the chart allows, and neither",
+    "number was chosen with the other in mind."
   ],
 
   "steps": [
