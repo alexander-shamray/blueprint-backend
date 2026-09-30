@@ -1,11 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
 
-  <!--
-    The Web SDK, because this is the one project in the service that is a
-    host. Application and Infrastructure per §4.2's fourth row — Program.cs is
-    the only composition root, and the endpoints gate in Catalog.Api.Tests
-    holds every other file to Application and Domain contracts.
-  -->
+  <!-- The service's one web host; Infrastructure is referenced for Program.cs alone, the composition root (§4.2). -->
 
   <ItemGroup>
     <!-- Appendix C's OpenAPI deliverable: document only, no UI. -->
@@ -18,16 +13,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Catalog owns the contract because Catalog serves it. Web.Bff compiles
-         this same file as a Client, by link — see that reference and
-         pricing.proto's own header. Both halves, not Server alone: this
-         project's own suite drives PricingService over the real pipeline and
-         needs a client, and generating one in the test project would put a
-         second copy of every message type in a compilation that already
-         references this assembly, where CS0436 is an error under ADR-019. The
-         choice is a generated client nothing in production calls or a
-         transport adapter no test can reach, and an untested adapter is the
-         worse of the two. -->
+    <!-- Catalog owns the contract because Catalog serves it; Web.Bff compiles this file as a Client, by link.
+         Both halves, because this project's suite needs a client, and generating one there would put every
+         message type in a compilation twice, where CS0436 is an error under ADR-019. -->
     <Protobuf Include="Protos\pricing.proto" GrpcServices="Both" />
   </ItemGroup>
 
