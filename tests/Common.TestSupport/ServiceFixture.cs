@@ -542,7 +542,7 @@ public abstract class ServiceFixture<TFactory, TEntryPoint, TDbContext> : IAsync
             """,
             key);
 
-    /// <summary>The <c>rowversion</c> the purge identifies one marker by, or null if it is gone.</summary>
+    /// <summary>The <c>rowversion</c> the purge identifies one marker by.</summary>
     public Task<byte[]?> IdempotencyMarkerVersionAsync(string key) =>
         ScalarAsync<byte[]?>(
             $"SELECT Value = RowVersion FROM {_schema}.IdempotencyMarkers WHERE [Key] = {{0}}",
