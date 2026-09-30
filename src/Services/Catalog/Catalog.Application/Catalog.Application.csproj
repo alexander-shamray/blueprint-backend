@@ -1,8 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <!--
-    Settings come from Directory.Build.props (§4.4).
-
     Domain, Common.Application and Common.Contracts — the §4.2 dependency
     table's second row. Contracts arrives with the §9.3 mapper: its
     allow-list turns a domain event into a public record, so the layer that
@@ -20,10 +18,7 @@
     <!-- The read side of §6.5: query handlers use Dapper directly, never EF —
          the architecture gate in Catalog.Application.Tests holds that line. -->
     <PackageReference Include="Dapper" />
-    <!-- AbstractValidator for the command validators, and the assembly-scan
-         registration §4.2's sample uses. Both used directly, both referenced
-         directly — a transitive compile against Common.Application's copy
-         would be a claim this project never states. -->
+    <!-- Referenced directly because used directly, for §4.2's assembly-scan registration. -->
     <PackageReference Include="FluentValidation" />
     <PackageReference Include="FluentValidation.DependencyInjectionExtensions" />
   </ItemGroup>

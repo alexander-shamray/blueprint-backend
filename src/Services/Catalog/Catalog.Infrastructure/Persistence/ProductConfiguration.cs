@@ -4,12 +4,7 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace Catalog.Infrastructure.Persistence;
 
-/// <summary>
-/// §7.2's pattern: configuration in a class, never in attributes on the domain
-/// type — which would put EF Core in <c>Catalog.Domain</c>, past the gate.
-/// Found by <c>CatalogDbContext</c>'s
-/// <c>ApplyConfigurationsFromAssembly</c> call.
-/// </summary>
+/// <summary>§7.2's pattern: configuration in a class, never in attributes on the domain type.</summary>
 internal sealed class ProductConfiguration : IEntityTypeConfiguration<Product>
 {
     public void Configure(EntityTypeBuilder<Product> builder)
@@ -28,8 +23,7 @@ internal sealed class ProductConfiguration : IEntityTypeConfiguration<Product>
 
         // ThumbnailUrl takes the 400 default from §7.2's string convention.
 
-        // Value object mapped as a complex type — columns on the same table,
-        // no identity, exactly matching the domain semantics (§7.2).
+        // A complex type: columns on the same table and no identity, as a value object has none (§7.2).
         builder.ComplexProperty(
             p => p.Price,
             price =>
@@ -41,8 +35,7 @@ internal sealed class ProductConfiguration : IEntityTypeConfiguration<Product>
         // Optimistic concurrency — SQL Server maintains this automatically.
         builder.Property(p => p.Version).IsRowVersion();
 
-        // The exact seek §6.5's keyset predicate performs: newest first,
-        // id-descending within one instant.
+        // The exact seek §6.5's keyset predicate performs.
         builder.HasIndex(p => new { p.PublishedAt, p.Id });
 
         builder.Ignore(p => p.DomainEvents);

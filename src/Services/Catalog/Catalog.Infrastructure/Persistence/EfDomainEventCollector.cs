@@ -4,12 +4,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Catalog.Infrastructure.Persistence;
 
-/// <summary>
-/// §7.5's collector over EF's change tracker — the Infrastructure half of the
-/// port, and the reason the port exists: "which aggregates changed" is a
-/// question only the tracker can answer, and Application must not be able to
-/// ask it directly.
-/// </summary>
+/// <summary>§7.5's collector over EF's change tracker, the one thing that can say which aggregates changed.</summary>
 internal sealed class EfDomainEventCollector(CatalogDbContext db) : IDomainEventCollector
 {
     public IReadOnlyList<IDomainEvent> CollectAndClear()
@@ -24,9 +19,7 @@ internal sealed class EfDomainEventCollector(CatalogDbContext db) : IDomainEvent
 
         IDomainEvent[] events = [.. aggregates.SelectMany(a => a.DomainEvents)];
 
-        // Cleared as they are collected, so a nested dispatch (§6.3's
-        // HasActiveTransaction path) sees only events raised since the last
-        // call rather than staging these a second time.
+        // Cleared as collected, so a nested dispatch (§6.3) does not stage these a second time.
         foreach (IHasDomainEvents aggregate in aggregates)
             aggregate.ClearDomainEvents();
 

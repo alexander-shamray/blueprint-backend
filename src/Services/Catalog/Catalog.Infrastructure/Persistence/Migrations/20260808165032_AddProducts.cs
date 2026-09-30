@@ -2,20 +2,8 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace Catalog.Infrastructure.Persistence.Migrations;
 
-/// <summary>
-/// The first table — §7.4's write-model kind, so the DDL below is exactly what
-/// <c>dotnet ef migrations add</c> produced from <see cref="ProductConfiguration"/>:
-/// the configuration is the source of truth and duplicating its shape by hand
-/// would create two definitions that drift. Only the file's dress is
-/// hand-authored (file-scoped namespace, this comment), on InitialCreate's
-/// terms; the <c>.Designer.cs</c> and the snapshot are machine-owned and
-/// untouched.
-/// </summary>
-/// <remarks>
-/// The <c>EnsureSchema</c> is generated and redundant — InitialCreate already
-/// created the schema — and kept: it is idempotent, and pruning generated DDL
-/// by hand is the drift the paragraph above exists to prevent.
-/// </remarks>
+/// <summary>The first table, §7.4's write-model kind, generated from <see cref="ProductConfiguration"/>.</summary>
+/// <remarks>The generated <c>EnsureSchema</c> is redundant after <see cref="InitialCreate"/>, and idempotent.</remarks>
 public partial class AddProducts : Migration
 {
     protected override void Up(MigrationBuilder migrationBuilder)

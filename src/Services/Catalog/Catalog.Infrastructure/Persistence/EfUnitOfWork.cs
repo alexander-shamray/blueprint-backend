@@ -6,11 +6,7 @@ using Microsoft.EntityFrameworkCore.Storage;
 
 namespace Catalog.Infrastructure.Persistence;
 
-/// <summary>
-/// §6.3's transaction boundary over the Catalog context. Internal — nothing
-/// outside this assembly resolves it by type, only through
-/// <see cref="IUnitOfWork"/>.
-/// </summary>
+/// <summary>§6.3's transaction boundary, resolved only through <see cref="IUnitOfWork"/>.</summary>
 internal sealed class EfUnitOfWork(CatalogDbContext db) : IUnitOfWork
 {
     public bool HasActiveTransaction => db.Database.CurrentTransaction is not null;
@@ -21,40 +17,25 @@ internal sealed class EfUnitOfWork(CatalogDbContext db) : IUnitOfWork
     {
         IExecutionStrategy strategy = db.Database.CreateExecutionStrategy();
 
-        // The token-aware overload, so cancellation is observed by the strategy
-        // itself. With the parameterless one the token reaches only the calls
-        // inside the delegate, so a cancel during a retry backoff is not seen
-        // until the delay elapses and the next attempt happens to reach one.
+        // The token-aware overload, so a cancel during a retry backoff is observed by the strategy itself.
         return await strategy.ExecuteAsync(
             async token =>
             {
-                // Every attempt starts from committed state. EF does not reset
-                // the change tracker when a transaction rolls back, so without
-                // this line a retry re-runs the domain method on attempt 1's
-                // tracked, already-mutated aggregates out of the identity map,
-                // and one SaveChanges commits the mutation twice.
+                // Every attempt starts from committed state: EF keeps a rolled-back attempt's mutated
+                // aggregates tracked, and a retry would commit the mutation twice.
                 db.ChangeTracker.Clear();
 
                 await using IDbContextTransaction tx =
                     await db.Database.BeginTransactionAsync(token);
                 TResult result = await operation(token);
 
-                // The commit decision belongs with the commit. §6.3's behaviour
-                // declines to SaveChanges on a failed Result — but ExecuteRawAsync
-                // writes on this transaction's connection immediately, and only a
-                // rollback undoes that. Returning without committing disposes the
-                // transaction, which rolls it back.
+                // §6.3's behaviour declines to SaveChanges on a failed Result, but ExecuteRawAsync writes on this
+                // transaction's connection immediately, and only a rollback undoes that. Returning uncommitted
+                // disposes the transaction, which rolls it back.
                 if (result is Result { IsFailure: true })
                 {
-                    // And the tracker is cleared with it, because a rollback
-                    // that leaves the rejected mutations tracked is only half a
-                    // rollback. §6.3's behaviour is not the only caller of
-                    // SaveChanges on this scope: §9.5's inbox filter runs after
-                    // the consumer returns and saves unconditionally, having its
-                    // own row to write, so anything a rejected handler left
-                    // tracked would be persisted by it outside the transaction
-                    // just rolled back. A domain refusal would commit its own
-                    // mutations, the one outcome §6.3 exists to prevent.
+                    // Cleared too, because §9.5's inbox filter saves unconditionally after the consumer returns
+                    // and would commit what a rejected handler left tracked.
                     db.ChangeTracker.Clear();
 
                     return result;
@@ -79,13 +60,7 @@ internal sealed class EfUnitOfWork(CatalogDbContext db) : IUnitOfWork
     // this is what makes a raw write part of the command rather than beside it.
     public Task ExecuteRawAsync(string sql, object parameters, CancellationToken ct)
     {
-        // Null-conditional here would hand Dapper transaction: null, and a
-        // command with no transaction autocommits — so the one call this member
-        // exists to prevent would succeed silently, on its own connection,
-        // outside the unit the caller believes it is in. The rule is the same
-        // one ModifiedAggregateCount is checked by rather than trusted with
-        // (§6.3): a convention nothing enforces is a convention that fails on
-        // the first handler that has not read the comment.
+        // Not null-conditional: Dapper given no transaction autocommits on its own connection, outside the unit.
         IDbContextTransaction transaction = db.Database.CurrentTransaction ??
             throw new InvalidOperationException(
                 "ExecuteRawAsync was called outside IUnitOfWork.ExecuteAsync. The write would commit " +

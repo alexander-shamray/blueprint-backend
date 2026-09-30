@@ -5,11 +5,8 @@ using Dapper;
 namespace Catalog.Application.Products.GetProducts;
 
 /// <summary>
-/// §6.5's read side: Dapper over the write tables at level 1, with one level
-/// 2 projection left-joined for Inventory's level (§6.1, §3.2), and a keyset
-/// seek over <c>(PublishedAt DESC, Id DESC)</c>. The tiebreaker is required:
-/// rows sharing a <c>PublishedAt</c> would otherwise straddle the page
-/// boundary unpredictably.
+/// §6.5's read side over the write tables, left-joining Inventory's projected level (§6.1, §3.2), by a keyset
+/// seek whose <c>Id</c> tiebreaker keeps rows sharing a <c>PublishedAt</c> from straddling a page boundary.
 /// </summary>
 public sealed class GetProductsHandler(IDbConnectionFactory connections)
     : IQueryHandler<GetProductsQuery, CursorPage<ProductSummaryDto>>
@@ -38,8 +35,7 @@ public sealed class GetProductsHandler(IDbConnectionFactory connections)
         (DateTimeOffset PublishedAt, Guid Id)? after = Cursor.Decode(query.Cursor);
         using IDbConnection connection = connections.Create();
 
-        // Fetch one extra row to determine whether a next page exists,
-        // without a second COUNT(*) over the whole table.
+        // One extra row says whether a next page exists, without a COUNT(*).
         List<ProductSummaryDto> rows = (await connection.QueryAsync<ProductSummaryDto>(
             new CommandDefinition(
                 Sql,

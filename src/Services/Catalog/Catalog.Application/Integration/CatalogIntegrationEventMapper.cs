@@ -7,10 +7,7 @@ namespace Catalog.Application.Integration;
 
 /// <summary>
 /// §9.3's allow-list for Catalog. §5.5 states the principle — never publish a
-/// domain event to the bus — and this is the mechanism that makes it
-/// structural rather than aspirational: a domain event absent from
-/// <see cref="Registry"/> never reaches the bus, by construction, not by
-/// review.
+/// domain event to the bus — and one absent from <see cref="Registry"/> never reaches it.
 /// </summary>
 internal sealed class CatalogIntegrationEventMapper : IIntegrationEventMapper
 {
