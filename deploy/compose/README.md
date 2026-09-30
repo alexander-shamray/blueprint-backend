@@ -201,9 +201,8 @@ Making this `curl` succeed means publishing a Catalog product and ordering
 proofs here stay the 401, the 403 as `browser`, and the 404 an order you do not
 own returns.
 
-Override connection strings with `CATALOG_CONNECTION` /
-`CATALOG_MIGRATOR_CONNECTION` and `ORDERING_CONNECTION` /
-`ORDERING_MIGRATOR_CONNECTION` — one pair per service, all four commented out
+Override connection strings with `<SERVICE>_CONNECTION` /
+`<SERVICE>_MIGRATOR_CONNECTION` — one pair per service, every one commented out
 in `.env.example` so the nested `${SQL_PASSWORD:-…}` keeps following an
 overridden password rather than freezing it. They default to the `sa` login
 above, and only the configuration *keys* differ locally
