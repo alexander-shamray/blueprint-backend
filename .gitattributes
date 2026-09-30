@@ -79,13 +79,11 @@ deploy/compose/carrier-simulator/** text eol=lf
 # them, so the directory is one thing.
 .github/secret-scan/** text eol=lf
 
-# deploy/canary/ joins on the same argument as deploy/observability/ below, and
-# for once ahead of paying for it. `deploy/helm/smoke.sh` reads the JSON,
-# `canary.py` matches the alert thresholds out of a rules file, and the whole
-# tree is read by gates on a Linux runner and edited on Windows. A tree that
-# arrives CRLF on one machine and LF on another is a gate whose result depends
-# on who checked it out. The .py files are already covered above; this is for
-# the JSON and the README beside them, so the tree is one thing.
+# deploy/canary/ joins on the same argument as deploy/observability/ below:
+# `canary.py` parses the JSON here, smoke.sh's cases included, and matches the
+# alert thresholds out of a rules file, in gates run on a Linux runner over a
+# tree edited on Windows. The .py files are covered above; this is for the
+# JSON and the README beside them, so the tree is one thing.
 deploy/canary/** text eol=lf
 
 # deploy/observability/ joins on the Helm tree's argument rather than on its
