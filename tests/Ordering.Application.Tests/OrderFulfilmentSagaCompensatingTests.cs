@@ -347,7 +347,7 @@ public class OrderFulfilmentSagaCompensatingTests
             (await Consumed<PaymentDeclined>(harness, m => m.MessageId == declined.MessageId))
                 .ShouldBeTrue();
 
-            // The assertion that tells a missing branch from an explicit Ignore.
+            // The assertion that tells a missing branch from a handled one.
             ConsumeFaults<PaymentDeclined>(harness).ShouldAllBe(e => e == null);
 
             (await NotYetSent<FlagOrderForReview>(harness, m => m.OrderId == orderId)).ShouldBeFalse();
