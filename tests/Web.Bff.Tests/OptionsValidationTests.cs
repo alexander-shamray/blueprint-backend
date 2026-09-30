@@ -61,7 +61,7 @@ public class OptionsValidationTests
     [Fact]
     public void The_host_starts_when_all_three_are_supplied()
     {
-        // So the theory above cannot pass on a host unstartable for some other reason.
+        // So the refusals cannot pass on a host unstartable for some other reason.
         using BffFactory factory = new();
         using HttpClient client = factory.CreateClient();
 
