@@ -111,7 +111,7 @@ public sealed class OutboxStatsTests(ServiceFixture fixture) : IAsyncLifetime
         NewStats().OldestAgeSeconds(OutboxLane.Broker).ShouldBe(0);
     }
 
-    /// <summary>A fresh instance per read, since the type caches, resolved through the real registration.</summary>
+    /// <summary>A fresh instance, since the type caches, resolved through the real registration.</summary>
     private IOutboxStats NewStats()
     {
         ServiceProvider provider = new ServiceCollection()
