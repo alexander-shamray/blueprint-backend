@@ -1329,6 +1329,24 @@ class DescriptorReadTests(unittest.TestCase):
             "      workload: {type: choice, options: [catalog-api, 'notifications']}\n",
             canary.WORKFLOW.read_text(encoding="utf-8"), count=1))
 
+    CALLED = "  workflow_call:\n    inputs:\n      workload:\n        type: string\n"
+
+    def test_a_menu_behind_a_called_workflows_workload_input_is_refused(self) -> None:
+        text = canary.WORKFLOW.read_text(encoding="utf-8").replace("        type: string\n", self.MENU, 1)
+        self._assert_menu(text.replace("  workflow_dispatch:\n", self.CALLED + "  workflow_dispatch:\n", 1))
+
+    def test_a_flow_menu_behind_an_earlier_flow_workload_key_is_read(self) -> None:
+        text = """\
+on:
+  workflow_call:
+    inputs:
+      workload: {type: string}
+  workflow_dispatch:
+    inputs:
+      workload: {type: choice, options: [catalog-api]}
+"""
+        self.assertEqual(canary._dispatch_options(text), {"catalog-api"})
+
     GUARD ='if ! python deploy/canary/canary.py chart --workload="$WORKLOAD" >/dev/null 2>&1; then'
     CASES = r'''$PYTHON "$ROOT/deploy/canary/canary.py" smoke-cases | tr -d '\r' >"$CASES"'''
 
