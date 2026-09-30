@@ -101,7 +101,7 @@ public class HostSmokeTests(HostSmokeTests.UnreachableInfrastructureFactory fact
     [Fact]
     public async Task OpenApi_document_is_not_anonymous()
     {
-        // MapOpenApi carries no metadata, so the fallback policy covers it (ADR-030).
+        // MapOpenApi carries no authorization metadata, so the fallback policy covers it (ADR-030).
         using HttpClient client = factory.CreateClient();
 
         HttpResponseMessage response =
