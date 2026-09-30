@@ -612,7 +612,7 @@ def budget_breaches(rendered: Plan, names: Names) -> list[str]:
 
 
 class RendersInsideTheCommentBudget(unittest.TestCase):
-    """The rule tools/new-service/README.md states for a rendered comment, judged by the comment gate."""
+    """The comment gate's findings over what a render writes, and the C# share against COMMENT_CEILING."""
 
     PROGRAM = "src/Services/Catalog/Catalog.Api/Program.cs"
 
