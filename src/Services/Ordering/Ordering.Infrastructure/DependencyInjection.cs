@@ -83,8 +83,8 @@ public static class DependencyInjection
         // §13.3's messaging instruments.
         services.AddSingleton<MessagingMetrics>();
 
-        // §13.6's outbox gauges, singletons so one meter holds one set of instruments. OutboxStats runs in gauge
-        // callbacks, so it gets the runtime key (§7.1) with its own bounded connect timeout, which no query inherits.
+        // §13.6's outbox gauges. OutboxStats reads the runtime key's data plane (§7.1), and runs in gauge callbacks,
+        // so it gets its own bounded connect timeout, which no query inherits.
         string metricsConnectionString =
             new SqlConnectionStringBuilder(configuration.GetConnectionString("Ordering"))
             {
