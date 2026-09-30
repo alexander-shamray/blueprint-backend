@@ -60,7 +60,7 @@ public class PublishProductValidatorTests
             nameof(PublishProductCommand.ThumbnailUrl),
             Valid() with { ThumbnailUrl = "data:text/html;base64,PHNjcmlwdD4=" }
         },
-        // A scheme with no use here, since the rule is an allow-list of two rather than a deny-list.
+        // A scheme with no use here; the rule is an allow-list of two rather than a deny-list.
         { nameof(PublishProductCommand.ThumbnailUrl), Valid() with { ThumbnailUrl = "file:///etc/passwd" } },
         // Relative: no scheme to refuse, and nothing here serves an origin the
         // catalogue's images would be relative to.
