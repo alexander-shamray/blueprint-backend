@@ -17,10 +17,7 @@ internal sealed class ProviderAttemptCounter(ProviderMetrics metrics) : Delegati
         }
         catch (HttpRequestException)
         {
-            // A refused or broken connection is the provider's. A cancelled
-            // attempt is not counted here: an attempt timeout and the caller's
-            // own cancellation arrive as the same exception, so timeouts are
-            // counted where only they arrive, the pipeline's OnTimeout.
+            // Not a cancellation, which may be the caller's; timeouts are counted in the pipeline's OnTimeout.
             metrics.Unavailable();
             throw;
         }

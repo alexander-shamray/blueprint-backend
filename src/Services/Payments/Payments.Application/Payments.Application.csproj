@@ -1,8 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!--
-    Settings come from Directory.Build.props (§4.4).
-  -->
+  <!-- Settings from Directory.Build.props (§4.4). -->
 
   <ItemGroup>
     <ProjectReference Include="..\Payments.Domain\Payments.Domain.csproj" />
@@ -13,15 +11,10 @@
   <ItemGroup>
     <!-- §6.5's read side: GetPaymentHandler uses Dapper directly. -->
     <PackageReference Include="Dapper" />
-    <!-- AbstractValidator for the command validators, and the assembly-scan
-         registration §4.2's sample uses. Both used directly, both referenced
-         directly — a transitive compile against Common.Application's copy
-         would be a claim this project never states. -->
+    <!-- Used directly, so referenced directly: the validators and §4.2's assembly-scan registration. -->
     <PackageReference Include="FluentValidation" />
     <PackageReference Include="FluentValidation.DependencyInjectionExtensions" />
-    <!-- AuthorisePaymentHandler's LoggerMessage.Define call (CA1848 under
-         ADR-019 makes log.LogInformation an error), referenced directly
-         rather than arriving transitively. -->
+    <!-- AuthorisePaymentHandler's LoggerMessage.Define, which CA1848 requires under ADR-019. -->
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
   </ItemGroup>
 

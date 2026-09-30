@@ -9,9 +9,7 @@ namespace Payments.Infrastructure.Persistence;
 
 internal sealed class SqlPaymentOrderStore(PaymentsDbContext db) : IPaymentOrderStore
 {
-    // UPDLOCK with HOLDLOCK on the update: two first writes for one order
-    // meet on the key-range lock rather than on the primary key, so the loser
-    // updates the winner's row instead of failing its insert.
+    // HOLDLOCK: two first writes meet on the key-range lock, so the loser updates rather than failing its insert.
     private const string PlacedSql =
         """
         UPDATE payments.PaymentOrders WITH (UPDLOCK, HOLDLOCK)
@@ -23,8 +21,7 @@ internal sealed class SqlPaymentOrderStore(PaymentsDbContext db) : IPaymentOrder
             VALUES (@OrderId, @CustomerId, @TotalAmount, @Currency, @PlacedAt);
         """;
 
-    // COALESCE keeps the first cancellation's instant: a redelivery says the
-    // order was cancelled, not that it was cancelled again later.
+    // COALESCE keeps the first cancellation's instant, which a redelivery does not move.
     private const string CancelledSql =
         """
         UPDATE payments.PaymentOrders WITH (UPDLOCK, HOLDLOCK)
@@ -36,8 +33,7 @@ internal sealed class SqlPaymentOrderStore(PaymentsDbContext db) : IPaymentOrder
             VALUES (@OrderId, @CancelledAt);
         """;
 
-    // HOLDLOCK takes a key-range lock when the row is absent, so a
-    // cancellation's first insert waits behind this read as an update would.
+    // HOLDLOCK locks the key range when the row is absent, so a first insert waits behind this read.
     private const string LockSql =
         """
         SELECT OrderId, CustomerId, TotalAmount, Currency, PlacedAt, CancelledAt
@@ -107,8 +103,7 @@ internal sealed class SqlPaymentOrderStore(PaymentsDbContext db) : IPaymentOrder
     {
         IDbContextTransaction? current = db.Database.CurrentTransaction;
 
-        // The refusal EfUnitOfWork.ExecuteRawAsync makes: a statement with no
-        // transaction autocommits outside the unit the caller believes it is in.
+        // As in EfUnitOfWork.ExecuteRawAsync: with no transaction, the statement would autocommit outside the unit.
         if (current is null)
         {
             throw new InvalidOperationException(

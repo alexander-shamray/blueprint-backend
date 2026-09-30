@@ -8,10 +8,7 @@ using Polly;
 
 namespace Payments.Infrastructure.Provider;
 
-/// <summary>
-/// The one place that knows the provider's wire format (§3.2's anti-corruption
-/// layer). Everything it returns is the port's vocabulary.
-/// </summary>
+/// <summary>The one place that knows the provider's wire format (§3.2's anti-corruption layer).</summary>
 internal sealed class HttpPaymentProvider(HttpClient http, ProviderMetrics metrics) : IPaymentProvider
 {
     private const string KeyHeader = "Idempotency-Key";
@@ -32,9 +29,7 @@ internal sealed class HttpPaymentProvider(HttpClient http, ProviderMetrics metri
 
         using HttpResponseMessage response = await SendAsync(message, ct);
 
-        // Only the two answers the wire format defines carry a body worth
-        // reading; anything else is a provider this adapter does not
-        // understand, which is a fault rather than a verdict.
+        // Any status the wire format does not define is a fault, not a verdict.
         if (response.StatusCode is not (HttpStatusCode.Created or HttpStatusCode.PaymentRequired))
             throw Unavailable($"The provider answered an authorisation with {(int)response.StatusCode}.");
 
@@ -48,12 +43,8 @@ internal sealed class HttpPaymentProvider(HttpClient http, ProviderMetrics metri
             throw Unavailable("The provider answered an authorisation with no JSON body.", e);
         }
 
-        // The body must agree with its status, and each verdict must carry what
-        // it is a verdict about. A contradiction is a provider this adapter does
-        // not understand — a fault, never an authorisation or a decline.
-        // Longer than either width is refused here rather than at the insert:
-        // a verdict that cannot be recorded would leave money authorised with
-        // no PaymentAuthorised committed for it.
+        // A body that contradicts its status is a fault. An over-long value is refused here, not at the insert,
+        // where it would leave money authorised with no PaymentAuthorised committed for it.
         if (response.StatusCode == HttpStatusCode.PaymentRequired)
         {
             return answer is { Status: "declined", Code: { } code } && Recordable(code, ProviderLimits.MaxReasonLength)
@@ -67,8 +58,7 @@ internal sealed class HttpPaymentProvider(HttpClient http, ProviderMetrics metri
             : throw Unavailable("The provider approved with a body that is not an approval.");
     }
 
-    // The adapter's own rule: a blank reference or reason records nothing, so
-    // it is refused with the over-long one, before a verdict exists.
+    // A blank reference or reason records nothing, so it is refused before a verdict exists.
     private static bool Recordable(string value, int maxLength) =>
         !string.IsNullOrWhiteSpace(value) && value.Length <= maxLength;
 
@@ -80,10 +70,7 @@ internal sealed class HttpPaymentProvider(HttpClient http, ProviderMetrics metri
 
         using HttpResponseMessage response = await SendAsync(message, ct);
 
-        // 200 with "voided" and nothing else: the wire format defines that pair
-        // as the void having happened. A 202 is a void still pending, and a 200
-        // saying anything else is a provider this adapter does not understand;
-        // either would record a Refund and PaymentRefunded before money moved.
+        // Only 200 with "voided" means the void happened; anything else would record a Refund before money moved.
         if (response.StatusCode != HttpStatusCode.OK)
             throw Unavailable($"The provider answered a void with {(int)response.StatusCode}.");
 
@@ -101,10 +88,7 @@ internal sealed class HttpPaymentProvider(HttpClient http, ProviderMetrics metri
             throw Unavailable("The provider answered a void with a body that is not a void.");
     }
 
-    // An answer the pipeline passed as a success, which this adapter cannot
-    // read as a verdict, is still an attempt that met a failing provider
-    // (spec, section 12). Statuses the pipeline retries, broken connections
-    // and timeouts are counted inside it, and never here as well.
+    // Counts an answer the pipeline passed but the adapter cannot read; the pipeline counts its own failures.
     private PaymentProviderUnavailableException Unavailable(string message, Exception? inner = null)
     {
         metrics.Unavailable();
@@ -119,16 +103,14 @@ internal sealed class HttpPaymentProvider(HttpClient http, ProviderMetrics metri
         {
             response = await http.SendAsync(message, ct);
         }
-        // ExecutionRejectedException is every refusal the pipeline makes on its
-        // own account: a timeout, an open circuit, the concurrency limiter.
+        // ExecutionRejectedException is the pipeline's own refusal: a timeout, an open circuit, the limiter.
         catch (Exception e) when (e is HttpRequestException or ExecutionRejectedException
                                       || (e is OperationCanceledException && !ct.IsCancellationRequested))
         {
             throw new PaymentProviderUnavailableException("The provider did not answer within the budget.", e);
         }
 
-        // A 409 is the provider refusing a key reused with different figures:
-        // the same key and different money is a defect, and no retry fixes it.
+        // A 409 is a key reused with different figures: a defect no retry fixes (§9.8).
         if (response.StatusCode == HttpStatusCode.Conflict)
         {
             response.Dispose();
@@ -145,14 +127,10 @@ internal sealed class HttpPaymentProvider(HttpClient http, ProviderMetrics metri
         return response;
     }
 
-    // The factor PaymentAmounts.MinorUnitPlaces implies, derived rather than
-    // written, so the constant and the refusal below cannot disagree about
-    // how many places a payment has.
+    // Derived from PaymentAmounts.MinorUnitPlaces, so the constant and the refusal below cannot disagree.
     private static readonly decimal MinorUnitFactor =
         Enumerable.Repeat(10m, PaymentAmounts.MinorUnitPlaces).Aggregate(1m, (factor, ten) => factor * ten);
 
-    // A figure with more places than minor units is not a payment this
-    // platform can state.
     private static long ToMinor(decimal amount)
     {
         decimal minor = amount * MinorUnitFactor;

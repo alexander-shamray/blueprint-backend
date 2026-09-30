@@ -27,9 +27,7 @@ internal sealed class PaymentIntentConfiguration : IEntityTypeConfiguration<Paym
         builder.Property(i => i.Amount).HasPrecision(PaymentAmounts.Precision, PaymentAmounts.Scale);
         builder.Property(i => i.Currency).HasMaxLength(3).IsFixedLength().IsUnicode(false);
 
-        // The published width and this service's own, both enforced by the
-        // adapter before a verdict exists, so nothing these columns refuse
-        // can reach them.
+        // Both widths are enforced by the adapter before a verdict exists, so nothing these columns refuse arrives.
         builder.Property(i => i.Reference).HasMaxLength(PaymentLimits.MaxReferenceLength);
         builder.Property(i => i.DeclineReason).HasMaxLength(ProviderLimits.MaxReasonLength);
 

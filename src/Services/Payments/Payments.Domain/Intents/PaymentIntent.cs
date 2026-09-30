@@ -4,11 +4,7 @@ using Payments.Domain.Orders;
 
 namespace Payments.Domain.Intents;
 
-/// <summary>
-/// §3.2's <c>PaymentIntent</c>: the provider's verdict on one order. Created in
-/// a terminal state, because the provider answers inside the unit that creates
-/// it (spec, section 4); there is no pending row.
-/// </summary>
+/// <summary>§3.2's verdict on one order, created terminal since the provider answers inside the unit.</summary>
 public sealed class PaymentIntent : AggregateRoot<OrderId>
 {
     public PaymentIntentStatus Status { get; private set; }

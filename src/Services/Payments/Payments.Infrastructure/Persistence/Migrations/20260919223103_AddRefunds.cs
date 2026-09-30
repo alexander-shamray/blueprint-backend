@@ -3,13 +3,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace Payments.Infrastructure.Persistence.Migrations;
 
-/// <summary>
-/// §3.2's <c>Refund</c>, generated from <see cref="RefundConfiguration"/> —
-/// the configuration is the source of truth and only this file's dress is
-/// hand-authored (file-scoped namespace, this comment). The
-/// <c>.Designer.cs</c> and the snapshot beside it are machine-owned and
-/// untouched.
-/// </summary>
+/// <summary>§3.2's <c>Refund</c>, generated from <see cref="RefundConfiguration"/>.</summary>
 public partial class AddRefunds : Migration
 {
     protected override void Up(MigrationBuilder migrationBuilder) =>

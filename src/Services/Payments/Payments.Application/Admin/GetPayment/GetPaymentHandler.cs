@@ -4,14 +4,10 @@ using Dapper;
 
 namespace Payments.Application.Admin.GetPayment;
 
-/// <summary>
-/// §6.5's read side over the three write tables: what Payments holds for one
-/// order, for the runbook's first question (spec, section 10).
-/// </summary>
+/// <summary>§6.5's read side over the three write tables: what Payments holds for one order.</summary>
 /// <remarks>
-/// An intent or refund row without its record cannot exist — every writer locks
-/// or stamps the record first — so <c>PaymentOrders</c> leads the join and a
-/// missing record is this query's only <c>null</c>.
+/// Every writer locks or stamps the record first, through <see cref="Orders.IPaymentOrderStore"/>, so
+/// <c>PaymentOrders</c> leads the join and a missing record is this query's only <c>null</c>.
 /// </remarks>
 public sealed class GetPaymentHandler(IDbConnectionFactory connections)
     : IQueryHandler<GetPaymentQuery, PaymentView?>
@@ -37,17 +33,14 @@ public sealed class GetPaymentHandler(IDbConnectionFactory connections)
         if (row is null)
             return null;
 
-        // Status is the outer join's witness for the intent, and RefundReference
-        // for the refund: both columns are NOT NULL in their own table, so a
-        // null here is the absent row rather than an absent value.
+        // Status and RefundReference are NOT NULL in their tables, so a null here is an absent row.
         IntentView? intent = row.Status is null
             ? null
             : new IntentView(
                 row.Status,
                 row.Reference,
                 row.Amount!.Value,
-                // char(3) pads a shorter code, and the answer carries the
-                // currency rather than the column's width.
+                // char(3) pads a shorter code.
                 row.Currency!.Trim(),
                 row.DeclineReason,
                 row.CreatedAt!.Value);
@@ -59,10 +52,7 @@ public sealed class GetPaymentHandler(IDbConnectionFactory connections)
         return new PaymentView(row.OrderId, new OrderView(row.PlacedAt, row.CancelledAt), intent, refund);
     }
 
-    /// <summary>
-    /// The join's flat shape, every joined column nullable because the two
-    /// joins are outer ones.
-    /// </summary>
+    /// <summary>The join's flat shape, nullable because both joins are outer.</summary>
     private sealed record Row(
         Guid OrderId,
         DateTimeOffset? PlacedAt,

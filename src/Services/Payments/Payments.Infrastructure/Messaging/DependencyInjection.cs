@@ -12,38 +12,20 @@ using Payments.Application.Intents.AuthorisePayment;
 
 namespace Payments.Infrastructure.Messaging;
 
-/// <summary>
-/// The bus registration of §9, per-service rather than common because this is
-/// where a service's consumers, sagas and receive endpoints are configured
-/// (§9.6): <c>UsingRabbitMq</c>, the consumers and the receive endpoints are
-/// each service's own.
-/// </summary>
+/// <summary>§9's bus registration, per-service because each service's consumers and endpoints are its own.</summary>
 public static class DependencyInjection
 {
-    /// <summary>
-    /// §3.2's Consumes column for Payments. One queue for both events: each
-    /// dispatches a command with no failure branch, so they share one retry
-    /// vocabulary.
-    /// </summary>
+    /// <summary>§3.2's Consumes column; one queue, as both events dispatch a command with no failure branch.</summary>
     public const string EventsQueue = "payments-events";
 
-    /// <summary>
-    /// §3.2's Accepts column for Payments. The address Ordering's saga sends
-    /// to is <c>Endpoints.PaymentsQueue</c> in Ordering.Infrastructure, and
-    /// the two must name one queue.
-    /// </summary>
+    /// <summary>§3.2's Accepts column; Ordering's <c>Endpoints.PaymentsQueue</c> must name it too.</summary>
     public const string CommandsQueue = "payments-commands";
 
     public static IServiceCollection AddMassTransitMessaging(
         this IServiceCollection services,
         IConfiguration configuration)
     {
-        // Eager: a host with no broker configured must not start. Read inside
-        // UsingRabbitMq's callback, the missing key would surface at bus start
-        // — after the host is up, past ValidateOnBuild, in a background
-        // service's log. IsNullOrWhiteSpace, not a null check: an empty
-        // environment variable configures an empty string, and letting it
-        // through defers the failure to the same place.
+        // Eager, so a host with no broker, or an empty variable, fails to start rather than at bus start.
         string? connectionString = configuration.GetConnectionString("RabbitMq");
         if (string.IsNullOrWhiteSpace(connectionString))
         {
@@ -53,9 +35,7 @@ public static class DependencyInjection
 
         services.AddMassTransit(x =>
         {
-            // MassTransit 8.5 reports anonymous usage data to a vendor
-            // endpoint after the bus starts, enabled by default. §13.2 owns
-            // this platform's telemetry, and none of it leaves silently.
+            // On by default, it sends usage data to a vendor; §13.2 owns this platform's telemetry.
             x.DisableUsageTelemetry();
 
             // §3.2's Consumes column. Registering and binding are two statements and both
@@ -66,18 +46,14 @@ public static class DependencyInjection
             // §3.2's Accepts column.
             x.AddConsumer<CommandConsumer<AuthorisePayment, AuthorisePaymentCommand>>();
 
-            // ADR-021's scheduler, the half that registers IMessageScheduler.
-            // UseDelayedMessageScheduler below is the other half, and either
-            // alone leaves the command endpoint's redelivery unable to schedule.
+            // ADR-021's scheduler; without UseDelayedMessageScheduler below, redelivery cannot schedule.
             x.AddDelayedMessageScheduler();
 
             x.UsingRabbitMq((context, cfg) =>
             {
                 cfg.Host(new Uri(connectionString));
 
-                // The transport half of ADR-021's scheduler: RabbitMQ's delayed
-                // exchange, a plugin the image deploy/compose builds carries.
-                // On a broker without it the first redelivery hangs.
+                // ADR-021's transport half, the delayed-exchange plugin; on a broker without it redelivery hangs.
                 cfg.UseDelayedMessageScheduler();
 
                 cfg.ReceiveEndpoint(
@@ -116,9 +92,7 @@ public static class DependencyInjection
 
                         e.UseMessageRetry(r =>
                         {
-                            // Terminal: a malformed contract, a mismatch and a wait each get
-                            // nothing from an immediate retry — the first two never will, and
-                            // the third is the redelivery's above.
+                            // No immediate retry: the first two are terminal, and a wait is the redelivery's above.
                             r.Ignore<ContractMappingException>();
                             r.Ignore<PaymentMismatchException>();
                             r.Ignore<PaymentOrderNotYetKnownException>();
@@ -132,26 +106,13 @@ public static class DependencyInjection
                         e.ConfigureConsumer<CommandConsumer<AuthorisePayment, AuthorisePaymentCommand>>(context);
                     });
 
-                // No ConfigureEndpoints, deliberately: for a registered
-                // consumer with no explicit binding it manufactures a queue
-                // named after the consumer type, with neither the inbox filter
-                // nor the retry policy, and §9.8 admits no endpoint without
-                // InboxFilter<>. A consumer added later needs a line here as
-                // well as an AddConsumer, and nothing at startup complains if
-                // it gets one and not the other, but a forgotten binding is
-                // then a message nobody consumes rather than one consumed off
-                // the record.
+                // No ConfigureEndpoints: it would bind an unbound consumer to a queue with no InboxFilter<>,
+                // which §9.8 admits on no endpoint, so a new consumer needs a binding here as well.
             });
         });
 
-        // No readiness line here or in AddPaymentsInfrastructure, and that is
-        // a decision: AddMassTransit registers the bus health check itself —
-        // "masstransit-bus", tagged ready — so §13.5's predicate picks it up
-        // with nothing further. MassTransitHostOptions stays at its defaults
-        // (WaitUntilStarted = false): the host starts while the bus connects
-        // in the background, and readiness carries the wait — blocking
-        // startup on the broker would turn a RabbitMQ outage into a pod that
-        // cannot boot, §13.5's restart-storm argument one dependency over.
+        // AddMassTransit registers the "masstransit-bus" ready check §13.5 picks up. WaitUntilStarted stays
+        // false, so a broker outage leaves a pod unready rather than unable to boot (§13.5).
         return services;
     }
 }

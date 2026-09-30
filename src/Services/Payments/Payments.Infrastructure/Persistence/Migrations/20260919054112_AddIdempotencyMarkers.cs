@@ -2,16 +2,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace Payments.Infrastructure.Persistence.Migrations;
 
-/// <summary>
-/// §8.5's idempotency markers, generated from
-/// <see cref="IdempotencyMarkerConfiguration"/> on <c>AddInbox</c>'s terms
-/// — the configuration is the source of truth, and only this file's dress
-/// is hand-authored; the <c>.Designer.cs</c> and snapshot are untouched.
-/// This table is the one place in the schema where a missing row is a
-/// correctness failure, not a lost record: it says a command committed,
-/// and it is what refuses the retry of an attempt whose acknowledgement
-/// was lost.
-/// </summary>
+/// <summary>§8.5's idempotency markers, generated from <see cref="IdempotencyMarkerConfiguration"/>.</summary>
 public partial class AddIdempotencyMarkers : Migration
 {
     protected override void Up(MigrationBuilder migrationBuilder)

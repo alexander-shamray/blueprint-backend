@@ -2,13 +2,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace Payments.Infrastructure.Persistence.Migrations;
 
-/// <summary>
-/// §3.2's order record, generated from <see cref="PaymentOrderRowConfiguration"/> —
-/// the configuration is the source of truth and only this file's dress is
-/// hand-authored (file-scoped namespace, this comment). The
-/// <c>.Designer.cs</c> and the snapshot beside it are machine-owned and
-/// untouched.
-/// </summary>
+/// <summary>§3.2's order record, generated from <see cref="PaymentOrderRowConfiguration"/>.</summary>
 public partial class AddPaymentOrders : Migration
 {
     protected override void Up(MigrationBuilder migrationBuilder)

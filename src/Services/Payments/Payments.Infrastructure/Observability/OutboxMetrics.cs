@@ -4,35 +4,14 @@ using Microsoft.Extensions.Logging;
 
 namespace Payments.Infrastructure.Observability;
 
-/// <summary>
-/// §13.6's three per-lane outbox gauges. Infrastructure because it reads the
-/// database, which is also why they are observable rather than pushed (§13.3).
-/// </summary>
-/// <remarks>
-/// Singleton, eagerly constructed by <see cref="MetricsInitialiser"/>: these
-/// are callbacks the <see cref="Meter"/> holds, so an instance never built is
-/// an instrument that does not exist. Age catches a lane that has stopped and
-/// count one that is falling behind; §13.6's alerts read one each.
-/// </remarks>
+/// <summary>§13.6's per-lane outbox gauges, observable because they read the database (§13.3).</summary>
+/// <remarks>Built by <see cref="MetricsInitialiser"/>, since an instance never built has no instruments.</remarks>
 public sealed class OutboxMetrics
 {
-    /// <summary>
-    /// The contract with §13.2's <c>AddMeter</c>: this name and the one
-    /// <c>ObservabilityExtensions</c> registers must be the same string, or
-    /// the instruments below are collected by nothing.
-    /// </summary>
+    /// <summary>Must be the name §13.2's <c>AddMeter</c> registers, or nothing collects these instruments.</summary>
     public const string MeterName = "Payments.Outbox";
 
-    /// <summary>
-    /// The only thing that distinguishes a contained failure from a healthy
-    /// quiet lane, because both are an absent series on the graph.
-    /// </summary>
-    /// <remarks>
-    /// <c>LoggerMessage.Define</c> rather than an interpolated call, on the
-    /// terms ADR-019 settled for §6.3's <c>LoggingBehavior</c>: CA1848 is an
-    /// error here, and this runs on the collector's thread once per export
-    /// interval for as long as the failure lasts.
-    /// </remarks>
+    /// <summary>What tells a contained failure from a quiet lane, both an absent series; CA1848 (ADR-019).</summary>
     private static readonly Action<ILogger, Exception?> GaugeReadFailed =
         LoggerMessage.Define(
             LogLevel.Error,
@@ -51,19 +30,14 @@ public sealed class OutboxMetrics
             unit: "s",
             description: "Age of the oldest unprocessed row, per lane.");
 
-        // Depth, per lane. The growth alert needs a count and the age gauge
-        // cannot supply one — see the class remarks.
+        // The growth alert needs a count, which the age gauge cannot supply (§13.6).
         meter.CreateObservableGauge(
             "outbox.pending.count",
             () => PerLane(lane => stats.PendingCount(lane), logger),
             unit: "{message}",
             description: "Unprocessed rows, per lane.");
 
-        // Also per lane, and this is the one where it matters most: a Broker
-        // abandonment means other services never learned something, a Local
-        // one means this service's own read model is permanently wrong.
-        // Different blast radius, different recovery, and outbox-abandoned.md
-        // asks which one first.
+        // Per lane matters most here: a Broker abandonment and a Local one differ in blast radius and recovery.
         meter.CreateObservableGauge(
             "outbox.abandoned.count",
             () => PerLane(lane => stats.AbandonedCount(lane), logger),
@@ -71,16 +45,8 @@ public sealed class OutboxMetrics
             description: "Rows past the attempt cap, per lane.");
     }
 
-    /// <summary>
-    /// One measurement per lane, read from the enum rather than a list written
-    /// out here: a lane added and forgotten would have no gauge and no alert.
-    /// </summary>
-    /// <remarks>
-    /// The read is contained because the collector abandons the rest of its
-    /// pass on an exception, so one lane could stop unrelated instruments. An
-    /// absent series is the right failure for a transient outage; the log is
-    /// what tells a permanent one from a healthy quiet lane.
-    /// </remarks>
+    /// <summary>Lanes from the enum, so a new lane cannot be left without a gauge.</summary>
+    /// <remarks>Contained, since the collector abandons its pass on an exception (§13.6).</remarks>
     private static List<Measurement<double>> PerLane(Func<OutboxLane, double> read, ILogger logger)
     {
         List<Measurement<double>> measurements = [];
@@ -95,9 +61,7 @@ public sealed class OutboxMetrics
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
-                // Every lane is dropped, not just this one: half a reading is
-                // worse than none, because a lane missing from a `max by (lane)`
-                // reads as a healthy zero rather than as no data.
+                // Every lane is dropped: one missing from a `max by (lane)` reads as a healthy zero, not as no data.
                 GaugeReadFailed(logger, exception);
                 return [];
             }
@@ -108,14 +72,7 @@ public sealed class OutboxMetrics
         return measurements;
     }
 
-    /// <summary>
-    /// The tag value is the enum's own name, never a hand-written string. The
-    /// <c>Lane</c> column stores <c>lane.ToString()</c> and §9.4's dispatcher
-    /// compares against <c>"Broker"</c>, so a lowercase tag here would give one
-    /// value three spellings across SQL, C# and PromQL — and an alert querying
-    /// the wrong one matches no series and never fires, which looks exactly
-    /// like health.
-    /// </summary>
+    /// <summary>The enum's name, as the <c>Lane</c> column stores it, so SQL, C# and PromQL agree.</summary>
     private static KeyValuePair<string, object?> Tag(OutboxLane lane) =>
         new("lane", lane.ToString());
 }
