@@ -31,7 +31,6 @@ internal static class TelemetryHost
                 [AuthenticationExtensions.AuthorityKey] = Authority
             });
 
-        // CreateEmptyApplicationBuilder registers no IMeterFactory.
         builder.Services.AddMetrics();
 
         return builder;
