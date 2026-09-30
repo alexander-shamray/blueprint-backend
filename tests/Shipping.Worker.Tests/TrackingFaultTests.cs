@@ -9,7 +9,7 @@ using Xunit;
 
 namespace Shipping.Worker.Tests;
 
-/// <summary>The poll against a down or slow carrier, on a host of its own whose breaker and delay it sets.</summary>
+/// <summary>The poll against a down or slow carrier, on a host of its own, so its breaker is fresh.</summary>
 [Collection(nameof(IntegrationCollection))]
 public sealed class TrackingFaultTests : IAsyncLifetime
 {
