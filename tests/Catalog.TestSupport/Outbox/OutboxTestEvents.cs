@@ -3,16 +3,7 @@ using Common.Domain;
 
 namespace Catalog.TestSupport.Outbox;
 
-/// <summary>
-/// The <c>Local</c> lane's cases, as real domain events in an assembly the
-/// fixture adds to <c>MessageTypeSource</c> (§9.4). Catalog registers no
-/// projection handler of its own — §8.4's cache invalidator needs a cached
-/// query to invalidate — so the lane's behaviour is proven here rather than
-/// by inventing a read model for it.
-/// </summary>
-/// <remarks>In <c>Catalog.TestSupport</c> rather than either test project,
-/// on §4.1's terms: the suites cannot reference each other, and the fixture
-/// that registers them is here.</remarks>
+/// <summary>The <c>Local</c> lane's cases, in an assembly the fixture adds to <c>MessageTypeSource</c>.</summary>
 public sealed record AlwaysThrows : IDomainEvent
 {
     public DateTimeOffset OccurredAt { get; init; }
@@ -22,40 +13,23 @@ public sealed record NoOpEvent : IDomainEvent
 {
     public DateTimeOffset OccurredAt { get; init; }
 
-    /// <summary>
-    /// Somewhere to put a payload longer than §7.2's 400-character string
-    /// convention, which the outbox's <c>Payload</c> column has to outgrow.
-    /// </summary>
+    /// <summary>A payload longer than §7.2's 400-character string convention, which <c>Payload</c> outgrows.</summary>
     public string Note { get; init; } = "";
 }
 
-/// <summary>
-/// Has no handler at all, which is the state §9.4 throws on: a <c>Local</c>
-/// row was staged, so a handler <em>was</em> found earlier, so finding none
-/// now means one was implemented and never registered.
-/// </summary>
+/// <summary>Has no handler at all, the state §9.4 throws on for a staged <c>Local</c> row.</summary>
 public sealed record UnhandledEvent : IDomainEvent
 {
     public DateTimeOffset OccurredAt { get; init; }
 }
 
-/// <summary>
-/// Blocks its handler until a test releases it, so a claim can be observed
-/// while it is still held. Nothing else can show the 60-second lease: a row
-/// that fails immediately has its lease replaced by the retry backoff, and one
-/// that succeeds is processed before a second pass could run.
-/// </summary>
+/// <summary>Blocks its handler until a test releases it, so a claim's lease can be observed while held.</summary>
 public sealed record BlocksUntilReleased : IDomainEvent
 {
     public DateTimeOffset OccurredAt { get; init; }
 }
 
-/// <summary>
-/// Holds <see cref="BlocksUntilReleased"/>'s handler until a test opens it.
-/// Static because the handler is resolved by the container per row and a test
-/// has no reference to the instance — and reset by each test that uses it, so
-/// no state carries between them (§12.8).
-/// </summary>
+/// <summary>Holds <see cref="BlocksUntilReleased"/>'s handler; static, as the container resolves it per row.</summary>
 public static class DeliveryGate
 {
     private static TaskCompletionSource _open = Opened();

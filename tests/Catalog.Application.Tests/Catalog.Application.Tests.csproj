@@ -15,24 +15,17 @@
     <!-- The §4.2 gates that reason over type dependencies rather than
          assembly references — a job GetReferencedAssemblies cannot do. -->
     <PackageReference Include="NetArchTest.Rules" />
-    <!-- ServiceCollection itself, for the registration tests: the
-         abstractions package Catalog.Application compiles against has no
-         container in it to build. -->
+    <!-- ServiceCollection itself; the abstractions package has no container to build. -->
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
-    <!-- The handler tests seed and assert through the real CatalogDbContext
-         (§12.4's seeding rule — a raw INSERT drifts from the aggregate the
-         first time it gains a column). -->
+    <!-- The handler tests seed and assert through the real CatalogDbContext (§12.4). -->
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Services\Catalog\Catalog.Application\Catalog.Application.csproj" />
-    <!-- §12.1 homes the handler tests here, with real containers — the
-         fixture lives in TestSupport, shared with Catalog.Api.Tests, which
-         this project cannot reference. -->
+    <!-- §12.1's handler tests run against real containers, from a fixture project of their own (§4.1). -->
     <ProjectReference Include="..\..\tests\Catalog.TestSupport\Catalog.TestSupport.csproj" />
-    <!-- CatalogDbContext by name, for seeding and read-back. The test
-         project may: §4.2's gate binds Catalog.Application, not its tests. -->
+    <!-- CatalogDbContext by name; §4.2's gate binds Catalog.Application, not its tests. -->
     <ProjectReference Include="..\..\src\Services\Catalog\Catalog.Infrastructure\Catalog.Infrastructure.csproj" />
   </ItemGroup>
 

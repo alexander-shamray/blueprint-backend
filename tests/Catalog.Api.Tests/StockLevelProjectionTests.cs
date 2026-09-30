@@ -7,16 +7,7 @@ using Xunit;
 
 namespace Catalog.Api.Tests;
 
-/// <summary>
-/// §3.2's Catalog projection against the real table, driven through the
-/// handler interface the §6.2 scan registered it under. No broker: the
-/// watermark and the <c>HOLDLOCK</c> are SQL Server's, not the transport's.
-/// </summary>
-/// <remarks>
-/// Resolved, never constructed: a test that constructed the projection would
-/// keep passing with the class made internal — the one change that silently
-/// unregisters it.
-/// </remarks>
+/// <summary>§3.2's Catalog projection on the real table, resolved as the §6.2 scan registered it.</summary>
 [Collection(nameof(IntegrationCollection))]
 public sealed class StockLevelProjectionTests(ServiceFixture fixture) : IAsyncLifetime
 {

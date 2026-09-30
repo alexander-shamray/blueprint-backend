@@ -6,35 +6,15 @@ using Xunit;
 
 namespace Catalog.Api.Tests;
 
-/// <summary>
-/// The two things only a host running the PRODUCTION authentication scheme can
-/// say. Every other suite here swaps in <see cref="TestAuthHandler"/>, which is
-/// what lets them authenticate at all and exactly why none of them can answer
-/// either question.
-/// </summary>
-/// <remarks>
-/// Separate from <c>HostSmokeTests</c>, which owns the factory these share, and
-/// separate for the scaffold's sake: both tests name <c>/v1/catalog/products</c>,
-/// so both belong to the slice and neither survives into a service that has no
-/// endpoints. <c>HostSmokeTests</c> is copied to every new service and this file
-/// is not.
-/// </remarks>
+/// <summary>Claims only a host keeping the production authentication scheme can make.</summary>
 public class EndpointSecurityTests(HostSmokeTests.UnreachableInfrastructureFactory factory)
     : IClassFixture<HostSmokeTests.UnreachableInfrastructureFactory>
 {
     [Fact]
     public async Task Forged_identity_headers_do_not_authenticate()
     {
-        // Appendix C's first security deliverable: a forged header without a
-        // token is a 401. The headers are TestAuthHandler's own, and this host
-        // registers only the production JWT scheme, so they are just bytes
-        // here. The failure it catches is a test convenience reaching
-        // production wiring — a scheme registered in Common.Web "for the
-        // fixtures", or a ConfigureAuthentication override deleted as dead
-        // code — after which any caller could name any subject and any
-        // permission. No Authorization header at all, so nothing is fetched
-        // from the authority: .invalid never resolves, and a challenge needs
-        // no keys.
+        // This host registers only the production JWT scheme, so TestAuthHandler's headers must be just bytes. No
+        // Authorization header, so nothing is fetched from the authority.
         using HttpClient client = factory.CreateClient();
 
         HttpRequestMessage request = new(HttpMethod.Post, "/v1/catalog/products")
@@ -60,12 +40,7 @@ public class EndpointSecurityTests(HostSmokeTests.UnreachableInfrastructureFacto
     [Fact]
     public async Task The_public_listing_needs_no_token()
     {
-        // The other half, and what keeps the test above from passing for the
-        // wrong reason: if authentication were simply refusing everything, both
-        // would be 401. This endpoint is AllowAnonymous by §10.2's
-        // catalog-public route, so it reaches the handler and fails on the
-        // unreachable database instead — a statement about this host's
-        // infrastructure, not about its authorization.
+        // Keeps the test above from passing on a host that refuses everything; §10.2 makes this route anonymous.
         using HttpClient client = factory.CreateClient();
 
         HttpResponseMessage response =

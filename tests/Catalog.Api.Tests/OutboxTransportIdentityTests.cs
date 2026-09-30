@@ -11,14 +11,8 @@ using Xunit;
 
 namespace Catalog.Api.Tests;
 
-/// <summary>
-/// §9.1's single-identity rule, checked on the transport: body, row, broker
-/// header and inbox key are one GUID, and <c>DeliverAsync</c> copying the
-/// row's ids onto the published context is the hop that makes them agree.
-/// </summary>
-/// <remarks>A substitute for <c>IPublishEndpoint</c> rather than a harness,
-/// because §12.4 runs the real host against the real broker on purpose and a
-/// harness would replace the bus configuration under test.</remarks>
+/// <summary>§9.1's single identity on the transport: delivery copies the row's ids onto the context.</summary>
+/// <remarks>A substitute rather than a harness, which §12.4 keeps off this real-broker fixture.</remarks>
 [Collection(nameof(IntegrationCollection))]
 public sealed class OutboxTransportIdentityTests(ServiceFixture fixture) : IAsyncLifetime
 {
@@ -33,15 +27,13 @@ public sealed class OutboxTransportIdentityTests(ServiceFixture fixture) : IAsyn
         OutboxMessage staged = OutboxRows.Broker(fixture, productId);
         await fixture.StageOutboxAsync(staged);
 
-        // A host of its own, so the substitute replaces the real endpoint for
-        // this test and for nothing else in the collection.
+        // A host of its own, so the substitute replaces the endpoint for this test alone.
         using CapturingPublishFactory factory = new(fixture.ConnectionString);
         OutboxDispatcher dispatcher = factory.Services.GetRequiredService<OutboxDispatcher>();
 
         (await dispatcher.ProcessBatchAsync(TestContext.Current.CancellationToken)).ShouldBe(1);
 
-        // Replay the pipe the dispatcher handed the endpoint against a context
-        // that records what is set on it. This is the callback's whole body.
+        // Replays the pipe the dispatcher handed the endpoint against a context that records what is set on it.
         PublishContext context = Substitute.For<PublishContext>();
         await factory.Captured.ShouldNotBeNull().Send(context);
 
@@ -75,11 +67,6 @@ public sealed class OutboxTransportIdentityTests(ServiceFixture fixture) : IAsyn
                         return Task.CompletedTask;
                     });
 
-                // Replaced, not added: the dispatcher resolves one endpoint,
-                // and a second registration would leave MassTransit's real one
-                // last and this substitute never called. The unreachable broker
-                // in the base constructor is deliberate for the same reason —
-                // nothing here should reach a transport.
                 services.RemoveAll<IPublishEndpoint>();
                 services.AddScoped(_ => endpoint);
             });

@@ -6,14 +6,8 @@ using Xunit;
 namespace Catalog.Application.Tests;
 
 /// <summary>
-/// §8.5's opt-in gate. <c>IdempotencyBehavior</c> is constrained to
-/// <see cref="IIdempotentCommand"/>, and the container silently omits an
-/// open-generic registration whose constraints the closed type does not
-/// satisfy: a command that carries a <c>CommandId</c> and forgets the
-/// interface is dispatched unprotected, with no error and no warning, and a
-/// retry runs the whole command a second time. The shape of the command is
-/// read, not the author's intent: a <c>CommandId</c> member is a claim
-/// that retrying is safe, the one signal that needs no memory.
+/// §8.5's opt-in gate, because the container silently omits <c>IdempotencyBehavior</c> for a command that
+/// carries a <c>CommandId</c> without <see cref="IIdempotentCommand"/>.
 /// </summary>
 public class IdempotencyOptInTests
 {
@@ -35,22 +29,14 @@ public class IdempotencyOptInTests
     [Fact]
     public void The_gate_above_is_looking_at_this_service_s_commands()
     {
-        // The gate-coverage rule: an empty offender list is the same green
-        // whether every command opted in or the selector stopped matching
-        // anything. This is the half that fails when ICommand<> moves,
-        // Catalog's namespaces are reorganised, or the assembly anchor is
-        // renamed — none of which the assertion above can see.
+        // The gate-coverage rule: the offender list above is as green when the selector matches nothing.
         Commands().ShouldNotBeEmpty("Catalog declares commands; the selector above found none");
     }
 
     [Fact]
     public void Every_idempotent_command_declares_a_stable_operation_name()
     {
-        // The key's middle segment must not be derivable from the type,
-        // because a rename then changes a live key and a rolling deployment
-        // serves both spellings at once. The compiler already refuses a
-        // command that supplies no OperationName; what it cannot refuse is one
-        // that supplies the type's own name back.
+        // The compiler refuses a missing OperationName but not the type's own name, which a rename would change.
         foreach (Type command in Idempotent())
         {
             string name = OperationNameOf(command);
@@ -63,12 +49,7 @@ public class IdempotencyOptInTests
     [Fact]
     public void Idempotent_commands_return_a_result_shape_the_behaviour_rebuilds()
     {
-        // §8.5's gate, written to what the behaviour accepts rather than to
-        // what the container's constraint accepts. Asking
-        // `typeof(Result).IsAssignableFrom(result)` would be the constraint's
-        // own question, and §8.5 says in as many words that a gate written
-        // that way "would pass a command the behaviour cannot serve and leave
-        // it to fail on first use". The assertions below are the chapter's.
+        // Written to what the behaviour rebuilds, not to what the container's constraint admits.
         (Type Command, Type Result)[] candidates =
         [
             .. Commands()
@@ -79,18 +60,12 @@ public class IdempotencyOptInTests
                     .Select(i => (Command: t, Result: i.GetGenericArguments()[0])))
         ];
 
-        // The gate's own subject, asserted before anything it found. Both
-        // checks below are ShouldBeEmpty, which is green when the chain above
-        // selected NOTHING — the one reason a gate must never pass.
+        // The gate's own subject, asserted first, since both checks below are green on an empty selection.
         candidates.ShouldNotBeEmpty(
             "no command in this assembly implements IIdempotentCommand, so this test is " +
             "looking at nothing — the interface has been renamed, moved, or not yet applied.");
 
-        // Exactly the two shapes ValueTypeOf accepts, not every subtype of
-        // Result. A third shape is unconstructible outside Common.Application
-        // today — Result<T> is sealed and Result's constructor is private
-        // protected — so this assertion is a floor against that changing
-        // rather than a live catch, and it is the cheaper half.
+        // Exactly the two shapes ValueTypeOf accepts.
         candidates
             .Where(pair => pair.Result != typeof(Result) &&
                 !(pair.Result.IsGenericType && pair.Result.GetGenericTypeDefinition() == typeof(Result<>)))
@@ -102,8 +77,6 @@ public class IdempotencyOptInTests
                 "in with anything else is either never protected or fails at its first dispatch, " +
                 "and nothing says so at build time or at startup.");
 
-        // The half with teeth. Result<Money> is constructible today, passes
-        // every check above, and corrupts in silence on replay.
         candidates
             .Where(pair => pair.Result.IsGenericType)
             .Select(pair => (pair.Command, Value: pair.Result.GetGenericArguments()[0]))
@@ -119,21 +92,10 @@ public class IdempotencyOptInTests
     [Fact]
     public void Operation_names_are_distinct_within_this_service()
     {
-        // OperationName is the middle segment of a Redis key whose other two
-        // are the subject and the caller's CommandId, so two commands sharing
-        // one collapse into a single keyspace: the same caller reusing a
-        // CommandId across them is served the FIRST command's stored payload,
-        // deserialised into the second's result type. The docs say "give it a
-        // value the domain would recognise", which is precisely the advice
-        // that makes a copied string plausible.
+        // OperationName is the key's middle segment, so two commands sharing one share a keyspace (§8.5).
         string[] names = [.. Idempotent().Select(OperationNameOf)];
 
-        // The gate-coverage floor, and it carries more weight here than
-        // usual: with one idempotent command a distinctness check cannot
-        // fail, so this assertion is the only part of the test that is
-        // live today. It arms itself on the second command, which is the
-        // moment the check is worth having — and until then it at least
-        // fails when the selector stops finding anything.
+        // With fewer than two idempotent commands the distinctness check cannot fail.
         names.ShouldNotBeEmpty("Catalog declares an idempotent command; the selector above found none");
 
         names.Distinct(StringComparer.Ordinal).Count().ShouldBe(
@@ -145,16 +107,9 @@ public class IdempotencyOptInTests
     [Fact]
     public void No_command_handler_dispatches_a_command()
     {
-        // §8.5 names one dispatch as outside every argument it makes: a
-        // command sent from inside a command handler lands in its parent's
-        // open transaction, so this behaviour completes a claim for 24 hours
-        // against work the outer transaction may still roll back, and a retry
-        // then replays a success for a row that does not exist. Deliberately
-        // not caught: an IIntegrationEventHandler that dispatches, since
-        // §9.5's InboxFilter opens no transaction before the consumer returns,
-        // so that dispatch is an entry point. Named by shape, not by type,
-        // because §4.5 renders this file into every service. Reach is
-        // constructor parameters, where every handler here takes its own.
+        // §8.5: a command dispatched from a command handler lands in its parent's open transaction. An integration
+        // event handler may dispatch, since §9.5's InboxFilter opens no transaction before the consumer returns.
+        // Reach is constructor parameters only.
         IEnumerable<string> offenders = CommandHandlers()
             .Where(t => t
                 .GetConstructors()
@@ -172,9 +127,6 @@ public class IdempotencyOptInTests
     [Fact]
     public void The_nested_dispatch_gate_is_looking_at_this_service_s_handlers()
     {
-        // The fourth anti-vacuity floor in this file. ShouldBeEmpty above is
-        // green when the selector found nothing, and this one depends on
-        // ICommandHandler<,> keeping both its shape and its assembly.
         CommandHandlers().ShouldNotBeEmpty(
             "Catalog declares command handlers; the selector above found none");
     }
