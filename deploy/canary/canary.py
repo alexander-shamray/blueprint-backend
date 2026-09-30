@@ -1338,8 +1338,8 @@ DISPATCH_GUARD = re.compile(
     r'[ \t]*echo "::error::[^"$`\\]*"\n[ \t]*exit 1\n[ \t]*fi$')
 SMOKE_CASES_READ = re.compile(
     r"""(?m)^[ \t]*\$PYTHON "\$ROOT/deploy/canary/canary\.py" smoke-cases \| tr -d '\\r' >"\$CASES"$""")
-# Where smoke.sh could write a chart list by hand: an assignment to a `*CHARTS`
-# name, whatever its builtin or operator, and a `for` loop's word list.
+# The hand-written chart lists check 8 finds in smoke.sh: a plain or declared
+# assignment to a `*CHARTS` name, and a `for` loop's word list.
 CHARTS_ASSIGNED = re.compile(
     r"(?im)(?:^|[\s;&|])(?:(?:readonly|declare|typeset|local|export)(?:[ \t]+-\w+)*[ \t]+)?\w*charts\+?=")
 FOR_LIST = re.compile(r"(?m)(?:^|[\s;&|])for[ \t]+\w+[ \t]+in[ \t]")
