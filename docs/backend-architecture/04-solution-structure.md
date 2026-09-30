@@ -1520,8 +1520,7 @@ be removed, and its own doc comment says so.
 > does is not worth having.
 
 `--port` is required for an API render, refused for a worker, and never
-derived. A port is an allocation recorded in §14.1 and in the service's own
-Compose unit; a script that guessed one would quietly disagree
+derived. A port is an allocation recorded in the service's own Compose unit; a script that guessed one would quietly disagree
 with a printed chapter. The run refuses a port another service already
 publishes.
 

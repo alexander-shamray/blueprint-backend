@@ -212,7 +212,7 @@ def plan(repo_root: Path, name: str, port: int | None, migration_id: str,
     if host == API_HOST and port is None:
         raise ScaffoldError(
             "--port is required for an API render: a port is an allocation recorded in "
-            "§14.1 and in the service's own Compose unit")
+            "the service's own Compose unit")
 
     # And the same test against every service already here, because the
     # template is only the first entry in that set. After Ordering exists,
@@ -381,7 +381,7 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help=(
             "the host port the API publishes. Required for an API render, refused for a "
-            "worker: a port is an allocation recorded in §14.1 and in the service's "
+            "worker: a port is an allocation recorded in the service's "
             "own Compose unit, and a script that guessed one would quietly "
             "disagree with a printed chapter"
         ),
