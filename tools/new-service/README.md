@@ -225,6 +225,29 @@ The suite judges both: the comment gate's own findings over the lines a render
 writes that Catalog does not carry, and the rendered C#'s comment share
 against its `COMMENT_CEILING`.
 
+## A scaffold PR is the scaffold's output
+
+A new service's first pull request is this script's output and nothing else:
+the render, committed as the scaffold left it, with the service's first
+feature in the pull request after it. The scaffold is reviewed once, in its
+own pull request, and never again per service.
+
+`--verify` is the proof. It reads the service's name, host, port and
+migration id from what a commit added, renders them into a temporary copy of
+the commit's parent with the scaffold that parent carried, and compares every
+path the render writes or the commit changes, byte for byte once line endings
+are set aside:
+
+```bash
+py -3.12 tools/new-service/new_service.py --verify <commit>
+```
+
+It exits non-zero on a difference that
+[`known-differences.txt`](known-differences.txt) does not list, and on a
+listed one the render reproduces. That file records, as of each commit it
+names, what this rule would have refused; a commit after the rule adds no
+line to it. The check reads history, so a shallow clone refuses it.
+
 ## The tests
 
 ```bash

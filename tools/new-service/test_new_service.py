@@ -24,6 +24,7 @@ from unittest import mock
 import new_service
 import scaffold.patch
 import scaffold.render
+import scaffold.reproduce
 from new_service import (
     COPY_ROOTS,
     MIGRATIONS as MIGRATIONS_DIR,
@@ -2444,6 +2445,150 @@ class TheCommandLine(unittest.TestCase):
             generated = [p.name for p in migrations.glob("*_InitialCreate.cs")]
             self.assertEqual(1, len(generated), generated)
             self.assertRegex(generated[0], r"^\d{14}_InitialCreate\.cs$")
+
+
+
+# Shipping's scaffold commit. The check reads history, so CI's scaffold job fetches it whole.
+SHIPPING_SCAFFOLD = "df82bac4"
+# The commit after it, which adds no service.
+SHIPPING_FIRST_FEATURE = "2d53cca4"
+OBSERVABILITY_TESTS = "tests/Common.Web.Tests/ObservabilityTests.cs"
+
+
+class VerifiesAScaffoldCommit(unittest.TestCase):
+    """`--verify`, the proof of README.md's *A scaffold PR is the scaffold's output*."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.scaffolded = scaffold.reproduce.arguments(REPO_ROOT, SHIPPING_SCAFFOLD)
+        with tempfile.TemporaryDirectory() as directory:
+            cls.rendered = scaffold.reproduce.render(REPO_ROOT, cls.scaffolded, Path(directory))
+        cls.found = cls.differences_from(cls.rendered)
+
+    @classmethod
+    def differences_from(cls, rendered: dict[str, bytes]) -> dict[str, str]:
+        with mock.patch.object(scaffold.reproduce, "render", return_value=rendered):
+            return scaffold.reproduce.differences(REPO_ROOT, cls.scaffolded)
+
+    def run_main(self, *argv: str) -> tuple[int, str, str]:
+        out, err = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            code = main(list(argv))
+        return code, out.getvalue(), err.getvalue()
+
+    def verify_against(self, lines: list[str]) -> tuple[int, str, str]:
+        """The cached render judged against a known-differences file of these lines."""
+        with tempfile.TemporaryDirectory() as directory:
+            known = Path(directory) / "known-differences.txt"
+            known.write_text("".join(f"{line}\n" for line in lines), encoding="utf-8")
+            with (mock.patch.object(scaffold.reproduce, "KNOWN_DIFFERENCES", known),
+                  mock.patch.object(scaffold.reproduce, "differences", return_value=self.found)):
+                return self.run_main("--verify", SHIPPING_SCAFFOLD)
+
+    def listed(self) -> list[str]:
+        text = scaffold.reproduce.KNOWN_DIFFERENCES.read_text(encoding="utf-8")
+        return [line for line in text.splitlines() if line.startswith(SHIPPING_SCAFFOLD)]
+
+    def test_the_arguments_are_the_ones_the_commit_rendered_with(self):
+        self.assertEqual(
+            ["Shipping", "--worker", "--migration-id", "20260927143053"], self.scaffolded.argv)
+
+    def test_the_render_differs_from_the_commit_by_its_hand_edit_alone(self):
+        self.assertEqual([OBSERVABILITY_TESTS], sorted(self.found))
+
+    def test_a_rendered_file_the_commit_carries_otherwise_is_a_difference(self):
+        edited = {**self.rendered, "Platform.slnx": self.rendered["Platform.slnx"] + b"<!-- -->"}
+
+        self.assertEqual("the commit's content is not the render's",
+                         self.differences_from(edited).get("Platform.slnx"))
+
+    def test_a_rendered_file_the_commit_lacks_is_a_difference(self):
+        extra = {**self.rendered, "src/Services/Shipping/Extra.cs": b"namespace Shipping;"}
+
+        self.assertEqual("the render writes it and the commit does not carry it",
+                         self.differences_from(extra).get("src/Services/Shipping/Extra.cs"))
+
+    def test_line_endings_alone_are_not_a_difference(self):
+        crlf = {path: content.replace(b"\r\n", b"\n").replace(b"\n", b"\r\n")
+                for path, content in self.rendered.items()}
+
+        self.assertEqual(self.found, self.differences_from(crlf))
+
+    def test_shipping_s_scaffold_commit_passes_with_its_known_differences(self):
+        code, out, err = self.run_main("--verify", SHIPPING_SCAFFOLD)
+
+        self.assertEqual(0, code, err)
+        self.assertEqual("", err)
+        self.assertIn(f"known: {OBSERVABILITY_TESTS}", out)
+        self.assertIn("Reproduced", out)
+
+    def test_removing_a_known_difference_fails_naming_its_path(self):
+        remaining = [line for line in self.listed() if OBSERVABILITY_TESTS not in line]
+
+        code, out, err = self.verify_against(remaining)
+
+        self.assertEqual(1, code)
+        self.assertIn(f"{OBSERVABILITY_TESTS}: the commit changes it and the render does not, "
+                      f"and it is not a known difference", err)
+        self.assertNotIn("Reproduced", out)
+
+    def test_a_known_difference_listed_for_another_commit_does_not_apply(self):
+        code, _, err = self.verify_against(
+            [line.replace(SHIPPING_SCAFFOLD, "56677f4e", 1) for line in self.listed()])
+
+        self.assertEqual(1, code)
+        self.assertIn(f"{OBSERVABILITY_TESTS}: the commit changes it", err)
+
+    def test_a_known_difference_the_render_reproduces_fails(self):
+        code, _, err = self.verify_against(
+            [*self.listed(), f"{SHIPPING_SCAFFOLD} Platform.slnx the render writes it exactly"])
+
+        self.assertEqual(1, code)
+        self.assertIn("Platform.slnx is a known difference the render reproduces", err)
+
+    def test_an_unknown_commit_fails_in_one_line(self):
+        code, out, err = self.run_main("--verify", "0" * 40)
+
+        self.assertEqual(1, code)
+        self.assertEqual("", out)
+        self.assertIn(f"{'0' * 40} is not a commit in this checkout", err)
+
+    def test_a_commit_that_is_not_a_scaffold_fails_in_one_line(self):
+        code, out, err = self.run_main("--verify", SHIPPING_FIRST_FEATURE)
+
+        self.assertEqual(1, code)
+        self.assertEqual("", out)
+        self.assertIn("is not a scaffold commit", err)
+
+    def test_an_option_is_not_taken_for_a_commit(self):
+        code, _, err = self.run_main("--verify=--output=x")
+
+        self.assertEqual(1, code)
+        self.assertIn("'--output=x' is not a commit name", err)
+
+    def test_a_commit_outside_head_s_history_or_without_a_parent_is_refused(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+
+            def git(*args: str, stdin: bytes | None = None) -> str:
+                return scaffold.reproduce.git(root, *args, stdin=stdin).decode("ascii").strip()
+
+            git("init", "--quiet")
+            tree = git("hash-object", "-w", "-t", "tree", "--stdin", stdin=b"")
+            identity = ("-c", "user.name=scaffold", "-c", "user.email=scaffold@example.invalid")
+            head = git(*identity, "commit-tree", tree, "-m", "head")
+            elsewhere = git(*identity, "commit-tree", tree, "-m", "elsewhere")
+            git("update-ref", "HEAD", head)
+
+            with self.assertRaisesRegex(ScaffoldError, "not in HEAD's history"):
+                scaffold.reproduce.arguments(root, elsewhere)
+            with self.assertRaisesRegex(ScaffoldError, "has no parent"):
+                scaffold.reproduce.arguments(root, head)
+
+    def test_verify_takes_no_render_arguments(self):
+        with contextlib.redirect_stderr(io.StringIO()) as err, self.assertRaises(SystemExit):
+            main(["Shipping", "--verify", SHIPPING_SCAFFOLD])
+        self.assertIn("reads the service and its arguments from the commit", err.getvalue())
 
 
 if __name__ == "__main__":
