@@ -76,7 +76,7 @@ public sealed class QuoteEndpointTests : IAsyncLifetime
         QuoteResponse? quote = await client.Quote(
             "GBP", TestContext.Current.CancellationToken, (Chair, 3), (Unknown, 2));
 
-        // The second assertion matters, as a dropped line leaves the total right.
+        // The last assertion matters, as a dropped line leaves the total right.
         quote.ShouldNotBeNull();
         quote.Total.ShouldBe(149.97m);
         quote.Unpriced.ShouldBe([Unknown]);
