@@ -87,8 +87,8 @@ The rule reaches `//` and `///` in C# — `/* */` appears only as the one-line
 elision inside a sample block, never as a comment, so a block comment is
 itself a finding — `#` and docstrings in Python, `#` in shell, and the
 comment syntax of YAML, MSBuild and `.editorconfig`. Its mechanical half —
-the names and history a search can find, emphasis, and a block's length — is
-enforced on the lines a pull request adds by
+the names and history a search can find, emphasis, a block's length and an
+uncited `<remarks>` — is enforced on the lines a pull request adds by
 [`.github/comment-gate/`](../.github/comment-gate/README.md); the rest the
 reviewer carries, and the review commands reach it through the contract's
 §2, which they already cite.
@@ -115,16 +115,24 @@ the churn it produces is the same, and it was measured in
   test cites the code it covers; the code does not cite the test, because
   a renamed test leaves the comment pointing at nothing and `rg` on the
   symbol finds the test anyway.
-- **One argument.** A `//` block or a `<remarks>` argues one thing, as
-  briefly as it can; a `<summary>` or a docstring's first line is a sentence
-  or two. A comment that needs a second argument is a decision, and a
-  decision is an ADR: write the ADR with `/new-adr` and cite it.
+- **A budget, not only a vocabulary.** A `<summary>` or a docstring's first
+  line is one sentence and says what the name cannot; a member whose name
+  says what its summary would say has none. A `<remarks>` exists only to
+  cite an owner or to state an invariant nothing checks, cites a section,
+  an ADR or a `cref`, and is four lines or fewer. A `//` or `#` block is
+  five lines or fewer. The ceiling sits where a cited sentence fits and an
+  argument does not: an argument is a decision, and a decision is an ADR —
+  write it with `/new-adr` and cite it.
 - **No emphasis.** No `**bold**`, `<b>`, capitals or `!` for stress in a
   comment. It is read once, beside the code, by someone who is not skimming.
-- **A finding against a comment is closed by cutting.** When a review says a
-  comment is stale or wrong, shorten or delete it. Never append the
-  correction, and never explain in the comment why the previous wording was
-  wrong — that is the sentence the next review finds stale.
+- **A finding against a comment is accepted only for falsehood, and closed
+  by cutting.** A review finding whose subject is a comment's wording,
+  completeness, emphasis or argument is refused; one whose subject is a
+  comment stating a fact that is false is accepted, and the fix is to
+  shorten or delete it. Never append the correction, and never explain in
+  the comment why the previous wording was wrong — that is the sentence the
+  next review finds stale. A round whose only findings are refused under
+  this rule changes nothing, and the loop counts it as clean.
 
 What this leaves is short: `Program.cs` says `// §13.2` beside the call that
 implements it, a timeout says in one line why it is longer than its

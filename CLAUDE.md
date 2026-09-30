@@ -152,10 +152,11 @@ here because they have to be true before anyone opens the guide:
 - **No `#pragma` suppressions and no real credentials**, in a sample or in
   source; §14.1's local-development defaults are the one stated exception.
 - **A comment says why and cites the owner** — no history, no inventory,
-  no review, PR or test named, no copy of an ADR's argument. The guide's
-  *Comments* section is the rule, it reaches XML docs, docstrings and
-  configuration comments alike, and a finding against a comment is closed by
-  cutting it, never by appending the correction.
+  no review, PR or test named, no copy of an ADR's argument — **inside a
+  budget**: a summary is one sentence, a `<remarks>` is cited and four lines,
+  a block is five. The guide's *Comments* section is the rule, it reaches XML
+  docs, docstrings and configuration comments alike, and a finding against a
+  comment is accepted only when the comment is false, and closed by cutting.
 
 ## Working in this repo
 
@@ -175,6 +176,9 @@ The contract's §6 lists what locality leaves in force; these are the rest.
   `## Severity` in the body and the label both have to say it.
 - **A reply is not a resolution.** Resolve a review thread in the same act as
   the reply, and leave an `Ask` open on purpose.
+- **A round's touch set is the finding's file.** A `fix` commit closing a
+  review finding names the finding in its subject and touches the file the
+  finding is in; a second file is a second commit, with its own finding.
 - **A CodeQL alert is a defect in the pull request that raised it, and it is
   fixed there**: break the reported path at its source rather than policing
   the sink, or argue in the commit body why the path cannot be taken.
