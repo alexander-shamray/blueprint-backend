@@ -36,7 +36,7 @@ public sealed class ServiceFixture : IAsyncLifetime
         .WithImage("mcr.microsoft.com/mssql/server:2022-latest")
         .Build();
 
-    /// <summary>§8.1's two servers, so a coordination key written to the evicting one is caught (§12.4).</summary>
+    /// <summary>§8.1's two servers, so a coordination key written to the evicting one can be caught (§12.4).</summary>
     private readonly RedisContainer _redisCache = new RedisBuilder()
         .WithImage("redis:7-alpine")
         .WithCommand("--maxmemory-policy", "allkeys-lru")
