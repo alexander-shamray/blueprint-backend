@@ -94,11 +94,8 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
             "",
         ),
         (
-            "    Domain, Common.Application and Common.Contracts — the §4.2 dependency\n"
-            "    table's second row. Contracts arrives with the §9.3 mapper: its\n"
-            "    allow-list turns a domain event into a public record, so the layer that\n"
-            "    owns the allow-list is the layer that pays for the reference. §4.3's one\n"
-            "    assembly that crosses a service boundary, and it crosses at the mapper.\n",
+            "    Domain, Common.Application and Common.Contracts, §4.2's second row. Contracts arrives with the §9.3\n"
+            "    mapper, whose allow-list turns a domain event into a public record (§4.3).\n",
             "    Domain and Common.Application, §4.2's second row; Common.Contracts joins with the §9.3 mapper's first entry.\n",
         ),
         (
@@ -139,12 +136,8 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
             "            new MessageTypeSource(typeof(IIntegrationEvent).Assembly, typeof(AssemblyMarker).Assembly));\n",
         ),
         (
-            "        // The payload format (§9.4), and the converters that make this\n"
-            "        // service's value objects part of it. MoneyJsonConverter is the same\n"
-            "        // decision as ProductConfiguration's ComplexProperty: Money is\n"
-            "        // persisted twice, as two columns and as two JSON members, and knows\n"
-            "        // about neither. Its absence is silent — a Money round-trips to zero\n"
-            "        // and a null currency rather than throwing.\n"
+            "        // The payload format (§9.4), and the converters that make this service's value objects part of it.\n"
+            "        // Without MoneyJsonConverter a Money round-trips silently to zero and a null currency.\n"
             "        services.AddSingleton<JsonConverter, MoneyJsonConverter>();\n"
             "        services.AddSingleton<OutboxJson>();\n",
             "        // The payload format (§9.4); a value object on a domain event registers its converter here (§12.4).\n"
@@ -167,16 +160,10 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
         (
             "\n"
             "  <ItemGroup>\n"
-            "    <!-- Catalog owns the contract because Catalog serves it. Web.Bff compiles\n"
-            "         this same file as a Client, by link — see that reference and\n"
-            "         pricing.proto's own header. Both halves, not Server alone: this\n"
-            "         project's own suite drives PricingService over the real pipeline and\n"
-            "         needs a client, and generating one in the test project would put a\n"
-            "         second copy of every message type in a compilation that already\n"
-            "         references this assembly, where CS0436 is an error under ADR-019. The\n"
-            "         choice is a generated client nothing in production calls or a\n"
-            "         transport adapter no test can reach, and an untested adapter is the\n"
-            "         worse of the two. -->\n"            "    <Protobuf Include=\"Protos\\pricing.proto\" GrpcServices=\"Both\" />\n"
+            "    <!-- Catalog owns the contract because Catalog serves it; Web.Bff compiles this file as a Client, by link.\n"
+            "         Both halves, because this project's suite needs a client, and generating one there would put every\n"
+            "         message type in a compilation twice, where CS0436 is an error under ADR-019. -->\n"
+            "    <Protobuf Include=\"Protos\\pricing.proto\" GrpcServices=\"Both\" />\n"
             "  </ItemGroup>\n",
             "",
         ),
@@ -212,15 +199,9 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
         # would be a service whose health probes were briefly the only thing
         # anybody had checked.
         (
-            "// Catalog's permission policies (§11.4). Deliberately not inside either helper\n"
-            "// above: Application knows nothing about HTTP, and Common.Web must not know\n"
-            "// Catalog's names. One policy, because one endpoint names one — the write\n"
-            "// path. §11.4's callout is about the opposite mistake: a name an endpoint uses\n"
-            "// and nobody registered throws on the first request that reaches it, never at\n"
-            "// startup, and the endpoint metadata is what a gate reads to assert both\n"
-            "// directions. RequirePermission rather than RequireClaim(\"permission\", …): the\n"
-            "// claim type is Common.Web's (§11.4), so a policy here and the resource-level\n"
-            "// check behind ICurrentUser cannot drift apart.\n"            "builder.Services\n"
+            "// Catalog's permission policies (§11.4). Deliberately not inside either helper above: Application knows nothing\n"
+            "// about HTTP, and Common.Web must not know Catalog's names.\n"
+            "builder.Services\n"
             "    .AddAuthorizationBuilder()\n"
             "    .AddPolicy(CatalogPermissions.Write, p => p.RequirePermission(CatalogPermissions.Write));\n"
             "\n",
@@ -680,11 +661,8 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
 WORKER_PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
     "src/Services/Catalog/Catalog.Api/Catalog.Api.csproj": (
         (
-            "    The Web SDK, because this is the one project in the service that is a\n"
-            "    host. Application and Infrastructure per §4.2's fourth row — Program.cs is\n"
-            "    the only composition root, and the endpoints gate in Catalog.Api.Tests\n"
-            "    holds every other file to Application and Domain contracts.\n",
-            "    The Web SDK for §13.5's health endpoint, on a host §3.2 gives no API (§15.3).\n",
+            "  <!-- The service's one web host; Infrastructure is referenced for Program.cs alone, the composition root (§4.2). -->\n",
+            "  <!-- The Web SDK for §13.5's health endpoint, on a host §3.2 gives no API (§15.3). -->\n",
         ),
         (
             "  <ItemGroup>\n"

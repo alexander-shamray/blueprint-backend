@@ -26,15 +26,8 @@ builder.Services.AddOpenApi();
 // 500 rather than the caller's 400.
 builder.Services.AddGrpc(o => o.Interceptors.Add<ValidationInterceptor>());
 
-// Catalog's permission policies (§11.4). Deliberately not inside either helper
-// above: Application knows nothing about HTTP, and Common.Web must not know
-// Catalog's names. One policy, because one endpoint names one — the write
-// path. §11.4's callout is about the opposite mistake: a name an endpoint uses
-// and nobody registered throws on the first request that reaches it, never at
-// startup, and the endpoint metadata is what a gate reads to assert both
-// directions. RequirePermission rather than RequireClaim("permission", …): the
-// claim type is Common.Web's (§11.4), so a policy here and the resource-level
-// check behind ICurrentUser cannot drift apart.
+// Catalog's permission policies (§11.4). Deliberately not inside either helper above: Application knows nothing
+// about HTTP, and Common.Web must not know Catalog's names.
 builder.Services
     .AddAuthorizationBuilder()
     .AddPolicy(CatalogPermissions.Write, p => p.RequirePermission(CatalogPermissions.Write));

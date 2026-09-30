@@ -1,11 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <!--
-    Domain, Common.Application and Common.Contracts — the §4.2 dependency
-    table's second row. Contracts arrives with the §9.3 mapper: its
-    allow-list turns a domain event into a public record, so the layer that
-    owns the allow-list is the layer that pays for the reference. §4.3's one
-    assembly that crosses a service boundary, and it crosses at the mapper.
+    Domain, Common.Application and Common.Contracts, §4.2's second row. Contracts arrives with the §9.3
+    mapper, whose allow-list turns a domain event into a public record (§4.3).
   -->
 
   <ItemGroup>

@@ -69,12 +69,8 @@ public static class DependencyInjection
         });
         services.AddHostedService<MessageTypeMapValidator>();
 
-        // The payload format (§9.4), and the converters that make this
-        // service's value objects part of it. MoneyJsonConverter is the same
-        // decision as ProductConfiguration's ComplexProperty: Money is
-        // persisted twice, as two columns and as two JSON members, and knows
-        // about neither. Its absence is silent — a Money round-trips to zero
-        // and a null currency rather than throwing.
+        // The payload format (§9.4), and the converters that make this service's value objects part of it.
+        // Without MoneyJsonConverter a Money round-trips silently to zero and a null currency.
         services.AddSingleton<JsonConverter, MoneyJsonConverter>();
         services.AddSingleton<OutboxJson>();
 
