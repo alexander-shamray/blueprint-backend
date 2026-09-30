@@ -78,6 +78,9 @@ def arguments(repo_root: Path, commit: str) -> Scaffolded:
     try:
         parent = git(repo_root, "rev-parse", "--verify", "--quiet", f"{full}^1").decode("ascii").strip()
     except ScaffoldError:
+        if git(repo_root, "rev-parse", "--is-shallow-repository").strip() == b"true":
+            raise ScaffoldError(
+                f"{commit}'s parent is not in this checkout, whose history a shallow clone lacks") from None
         raise ScaffoldError(f"{commit} has no parent, so no scaffold rendered it") from None
     added = paths(git(repo_root, "diff-tree", "-r", "-z", "--name-only", "--no-commit-id",
                       "--diff-filter=A", parent, full))
