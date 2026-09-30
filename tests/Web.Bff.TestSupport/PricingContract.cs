@@ -4,7 +4,7 @@ using Grpc.Core;
 
 namespace Web.Bff.TestSupport;
 
-/// <summary>What <c>Web.Bff</c> needs of Catalog's pricing RPC (§9.7), linked into both suites (ADR-023).</summary>
+/// <summary>What <c>Web.Bff</c> needs of Catalog's pricing RPC (§9.7, ADR-023).</summary>
 public static class PricingContract
 {
     public const string Consumer = "Web.Bff";
