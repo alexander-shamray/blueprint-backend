@@ -1334,12 +1334,18 @@ def _workflow_covers_inputs() -> list[str]:
 SMOKE_PATH = "deploy/helm/smoke.sh"
 SMOKE = ROOT / SMOKE_PATH
 
-# The runs that read the descriptors, as the workflow and smoke.sh spell them.
-READS_WORKLOADS = re.compile(
-    r'if ! python deploy/canary/canary\.py chart --workload "\$WORKLOAD" >/dev/null; then')
-READS_SMOKE_CASES = re.compile(r"canary\.py\"?\s+smoke-cases\b")
-# A chart list written into smoke.sh rather than read from the descriptors.
-LISTED_CHARTS = re.compile(r"^\s*[A-Z_]*CHARTS=[\"']?[a-z]", re.MULTILINE)
+# The reads of the descriptors, as whole live lines: the rollout's guard, whose
+# annotation names no input, and the line smoke.sh takes its cases from.
+DISPATCH_GUARD = re.compile(
+    r'(?m)^[ \t]*if ! python deploy/canary/canary\.py chart --workload "\$WORKLOAD" >/dev/null; then\n'
+    r'[ \t]*echo "::error::[^"$`\\]*"\n[ \t]*exit 1\n[ \t]*fi$')
+SMOKE_CASES_READ = re.compile(
+    r"""(?m)^[ \t]*\$PYTHON "\$ROOT/deploy/canary/canary\.py" smoke-cases \| tr -d '\\r' >"\$CASES"$""")
+# Where smoke.sh could write a chart list by hand: an assignment to a `*CHARTS`
+# name, whatever its builtin or operator, and a `for` loop's word list.
+CHARTS_ASSIGNED = re.compile(
+    r"(?im)(?:^|[\s;&|])(?:(?:readonly|declare|typeset|local|export)(?:[ \t]+-\w+)*[ \t]+)?\w*charts\+?=")
+FOR_LIST = re.compile(r"(?m)(?:^|[\s;&|])for[ \t]+\w+[ \t]+in[ \t]")
 
 # What smoke.sh splits a case into words by, so no value may hold a space or a
 # shell metacharacter. The capability names are smoke.sh's own vocabulary.
@@ -1349,8 +1355,89 @@ OVERLAY = re.compile(r"[A-Za-z][A-Za-z0-9]*(\.[A-Za-z][A-Za-z0-9]*)+=[A-Za-z0-9.
 
 
 def _live(text: str) -> str:
-    """The text less its comment lines, which argue about what runs."""
-    return "\n".join(line for line in text.splitlines() if not line.lstrip().startswith("#"))
+    """The text less its comments, whole-line and trailing, which argue about what runs."""
+    return "\n".join(_uncommented(line) for line in text.splitlines() if not line.lstrip().startswith("#"))
+
+
+def _uncommented(line: str) -> str:
+    """One line less a trailing comment: a `#` that starts a word outside quotes."""
+    quote = None
+    index = 0
+    while index < len(line):
+        char = line[index]
+        if quote == "'":
+            quote = None if char == "'" else quote
+        elif char == "\\":
+            index += 1
+        elif quote == '"':
+            quote = None if char == '"' else quote
+        elif char in "'\"":
+            quote = char
+        elif char == "#" and (index == 0 or line[index - 1] in " \t;&|()"):
+            return line[:index].rstrip()
+        index += 1
+    return line.rstrip()
+
+
+def _shell_words(text: str, start: int, stops: str) -> tuple[str, list[str]]:
+    """The shell value at `start` as written, and its literal words.
+
+    A word holding an expansion is not literal, and a command substitution's
+    contents are not the value's words; an array value runs to its `)`.
+    """
+    stack: list[str] = []
+    outside: list[str] = []
+    index = start
+    if text.startswith("(", index):
+        stack.append("array")
+        index += 1
+    while index < len(text):
+        char, top = text[index], (stack[-1] if stack else None)
+        if top == "'":
+            if char == "'":
+                stack.pop()
+        elif char == "\\":
+            if "$(" not in stack:
+                outside.append(text[index:index + 2])
+            index += 2
+            continue
+        elif top == '"' and char == '"':
+            stack.pop()
+        elif text.startswith("$(", index):
+            stack.append("$(")
+            index += 2
+            continue
+        elif top != '"' and char in "'\"":
+            stack.append(char)
+        elif top == "$(" and char == "(":
+            stack.append("$(")
+        elif char == ")" and top in ("$(", "array"):
+            stack.pop()
+            index += 1
+            if top == "array" and not stack:
+                break
+            continue
+        elif not stack and char in stops:
+            break
+        if "$(" not in stack:
+            outside.append(char)
+        index += 1
+    words = [word.replace('"', "").replace("'", "").replace("\\", "") for word in "".join(outside).split()]
+    return text[start:index], [word for word in words if word and "$" not in word]
+
+
+def _hand_lists(text: str, charts: set[str]) -> list[str]:
+    """Each chart list smoke.sh writes by hand, as it is written."""
+    found = []
+    for match in CHARTS_ASSIGNED.finditer(text):
+        value, words = _shell_words(text, match.end(), " \t\n;&|")
+        if words:
+            found.append(match.group(0).lstrip(" \t\n;&|") + value)
+    for match in FOR_LIST.finditer(text):
+        value, words = _shell_words(text, match.end(), "\n;&|")
+        if set(words) & charts:
+            found.append(match.group(0).lstrip(" \t\n;&|") + value)
+    return found
 
 
 def _smoke_case(name: str, entry: dict) -> list[str]:
@@ -1424,20 +1511,28 @@ def _dispatch_options(text: str) -> set[str] | None:
     return {item.strip() for item in options.group(1).split(",") if item.strip()}
 
 
-def descriptors_read(workloads: dict, workflow: Path = WORKFLOW, smoke: Path = SMOKE) -> dict[str, set[str]]:
-    """The descriptors each reader takes in, from the text it runs."""
+def _reader_texts(workflow: Path, smoke: Path) -> tuple[str, str]:
+    """The workflow's and smoke.sh's live text, or why one cannot be read."""
     try:
-        workflow_text = _live(workflow.read_text(encoding="utf-8"))
-        smoke_text = _live(smoke.read_text(encoding="utf-8"))
+        return _live(workflow.read_text(encoding="utf-8")), _live(smoke.read_text(encoding="utf-8"))
     except OSError as error:
         raise PlanError(f"a descriptor reader is not readable: {error}") from error
 
+
+def _charts(workloads: dict) -> set[str]:
+    return {entry.get("chart") for entry in entries(workloads).values()}
+
+
+def descriptors_read(workloads: dict, workflow: Path = WORKFLOW, smoke: Path = SMOKE) -> dict[str, set[str]]:
+    """The descriptors each reader takes in, from the text it runs."""
+    workflow_text, smoke_text = _reader_texts(workflow, smoke)
+
     described = set(entries(workloads))
     rolled = set(_dispatch_options(workflow_text) or ())
-    if READS_WORKLOADS.search(workflow_text):
+    if DISPATCH_GUARD.search(workflow_text):
         rolled |= described
     rendered = set()
-    if READS_SMOKE_CASES.search(smoke_text) and not LISTED_CHARTS.search(smoke_text):
+    if SMOKE_CASES_READ.search(smoke_text) and not _hand_lists(smoke_text, _charts(workloads)):
         for name in described:
             try:
                 _smoke_case(name, workloads[name])
@@ -1451,18 +1546,29 @@ def _descriptors_agree(workloads: dict, workflow: Path = WORKFLOW, smoke: Path =
     """Check 8: the workflow reads the descriptors; smoke.sh each it rolls."""
     try:
         read = descriptors_read(workloads, workflow, smoke)
-        menu = _dispatch_options(_live(workflow.read_text(encoding="utf-8")))
-    except (OSError, PlanError) as error:
+        workflow_text, smoke_text = _reader_texts(workflow, smoke)
+    except PlanError as error:
         return [f"the descriptor readers cannot be compared: {error}"]
 
     failures = []
+    menu = _dispatch_options(workflow_text)
     if menu is not None:
         failures.append(
             f"{WORKFLOW_PATH} lists its workloads by hand ({', '.join(sorted(menu))}), "
             "a second copy of the descriptors under deploy/canary/deployables"
         )
-    if not read["workflow"]:
-        failures.append(f"{WORKFLOW_PATH} reads no descriptor list, so a dispatch is checked against nothing")
+    if not DISPATCH_GUARD.search(workflow_text):
+        failures.append(
+            f"{WORKFLOW_PATH} holds no live guard that stops a dispatch `canary.py chart` "
+            "cannot look up, so a dispatch is checked against nothing"
+        )
+    if not SMOKE_CASES_READ.search(smoke_text):
+        failures.append(f"{SMOKE_PATH} takes no live cases from `canary.py smoke-cases`")
+    for listed in _hand_lists(smoke_text, _charts(workloads)):
+        failures.append(
+            f"{SMOKE_PATH} lists charts by hand in {listed!r}, a second copy of the "
+            "descriptors under deploy/canary/deployables"
+        )
     for reader in ("canary", "smoke"):
         missing = read["workflow"] - read[reader]
         if missing:
