@@ -103,7 +103,7 @@ public class ArchitectureTests
     [Fact]
     public void Nothing_in_this_service_references_the_migrator()
     {
-        // No §4.2 row names the Migrator, a leaf (§7.4), and the gate above subtracts this service's own prefix.
+        // The Migrator is a leaf (§7.4), and the gate above subtracts this service's own prefix.
         string self = typeof(Program).Assembly.GetName().Name!.Split('.')[0];
         string migrator = $"{self}.Migrator";
 
