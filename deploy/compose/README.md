@@ -111,8 +111,7 @@ replaced with a fresh one rather than echoed, exactly as a missing one is
 
 A route in §10.2's file whose service is not running answers 502 on that
 path and costs nothing else; the two configuration tests over the file are
-what let it ship whole. `/api/v1/catalog` is GET-only at the edge, so
-publishing a product is a call to port 5102 and not to port 5000.
+what let it ship whole.
 
 ## Getting a token
 
