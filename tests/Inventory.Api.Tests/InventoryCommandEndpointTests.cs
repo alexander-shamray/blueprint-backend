@@ -6,12 +6,7 @@ using Xunit;
 
 namespace Inventory.Api.Tests;
 
-/// <summary>
-/// <c>inventory-commands</c> (§9.6): the mappers, the retry policy's
-/// exclusion, the inbox filter and both handlers, driven over the real
-/// broker rather than an in-memory harness, because only a real delivery
-/// exercises the topology a saga actually sends into.
-/// </summary>
+/// <summary><c>inventory-commands</c> (§9.6) over the real broker, the topology a saga actually sends into.</summary>
 [Collection(nameof(IntegrationCollection))]
 public sealed class InventoryCommandEndpointTests(ServiceFixture fixture) : IAsyncLifetime
 {
@@ -205,15 +200,8 @@ public sealed class InventoryCommandEndpointTests(ServiceFixture fixture) : IAsy
         // inbox filter and so leaves no row for the default drain to wait on.
         await SendAsync(new ReserveStock(order, lines), drain: false);
 
-        // The sentinel bounds this wait; it does not prove delivery order.
-        // The endpoint sets no ConcurrentMessageLimit, so MassTransit's
-        // prefetch lets both messages be in flight together and the sentinel
-        // could finish first. What makes "no row" a practical verdict rather
-        // than a race is the head start: seeding the sentinel's stock and
-        // sending it happen after the malformed send has already reached the
-        // broker, so by the time the sentinel's own row exists the malformed
-        // message has almost certainly been consumed too — a bound that
-        // tracks the machine rather than a guarantee.
+        // The sentinel bounds this wait but does not prove order: with no ConcurrentMessageLimit both messages
+        // may be in flight, so the malformed send's head start is a bound that tracks the machine.
         var sentinelProduct = Guid.CreateVersion7();
         await SeedStock(sentinelProduct, 1);
         var sentinelOrder = Guid.CreateVersion7();
@@ -229,13 +217,8 @@ public sealed class InventoryCommandEndpointTests(ServiceFixture fixture) : IAsy
     [Fact]
     public async Task A_malformed_release_is_a_contract_fault_and_is_not_retried()
     {
-        // On the message path a validator failure would propagate out of
-        // CommandConsumer as a fault and be retried, where a domain
-        // rejection is acked, counted and logged instead — so the mapper
-        // refuses this itself, with ContractMappingException excluded from
-        // retry (§9.8), and it reaches the error queue on the first attempt.
-        // ReleaseStock carries no other bound to violate, so an empty order
-        // id is the one shape ReleaseStockMapper has to refuse.
+        // Refused by the mapper, whose ContractMappingException is excluded from retry (§9.4), where a validator
+        // failure would be retried.
         var order = Guid.Empty;
 
         await SendAsync(new ReleaseStock(order), drain: false);
@@ -277,8 +260,7 @@ public sealed class InventoryCommandEndpointTests(ServiceFixture fixture) : IAsy
         (await Available(product)).ShouldBe(0);
     }
 
-    // Thin forwarders that bind this class's fixture once: the private,
-    // same-named members ReservationTestSupport expects of a caller.
+    // Thin forwarders onto ReservationTestSupport.
     private Task SeedStock(Guid product, int available) =>
         ReservationTestSupport.SeedStock(fixture, product, available);
 

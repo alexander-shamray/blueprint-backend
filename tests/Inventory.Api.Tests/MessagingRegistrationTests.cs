@@ -16,34 +16,10 @@ using Xunit;
 
 namespace Inventory.Api.Tests;
 
-/// <summary>
-/// The harness smoke of Appendix C's messaging row, and the row's own split
-/// says which half lives here: "publish/consume proven with the in-memory
-/// harness" is this file, "bus connects" is the container suite's readiness
-/// poll. <c>AddMassTransitTestHarness</c> replaces an existing
-/// <c>AddMassTransit</c> bus with the in-memory transport — verified against
-/// the 8.5.3 source — which means these tests prove the production helper
-/// COMPOSES (its eager key read runs, its options land, nothing conflicts
-/// with the consumer bindings) and that MassTransit's pipeline delivers.
-/// What the swap deliberately removes is the <c>UsingRabbitMq</c> transport
-/// configuration itself, so that half is asserted where it can be true:
-/// against a real broker, over the container-backed fixture.
-/// </summary>
-/// <remarks>
-/// The message and consumer are test-local on purpose, and stay that way now
-/// that <c>Common.Contracts</c> exists: this smoke needs a payload the
-/// pipeline can carry, not a published contract other services may come to
-/// depend on. A real contract here would make every change to it a change to
-/// this test, and the test is about the registration rather than the message.
-/// </remarks>
+/// <summary>The production helper composes under the in-memory transport the harness swaps in.</summary>
 public class MessagingRegistrationTests
 {
-    /// <summary>
-    /// The bus never dials this — the harness swaps the transport before
-    /// start — but the helper's eager read still requires a value, and an
-    /// unresolvable one means a test that accidentally reaches for the real
-    /// transport fails loudly (§12.4's <c>.invalid</c> convention).
-    /// </summary>
+    /// <summary>Unresolvable, so a test reaching for the real transport fails (§12.4).</summary>
     private static IConfiguration Configuration(
         string? rabbitConnectionString = "amqp://guest:guest@inventory-rabbit.invalid:5672") =>
         new ConfigurationBuilder()
@@ -52,37 +28,10 @@ public class MessagingRegistrationTests
                 : [new KeyValuePair<string, string?>("ConnectionStrings:RabbitMq", rabbitConnectionString)])
             .Build();
 
-    /// <summary>
-    /// The bound that decides the assertions below, stated rather than
-    /// inherited. It runs from the last bus activity, and MassTransit's
-    /// default is 1.2 seconds — a developer machine's budget, not a statement
-    /// about how long a saturated runner may take to schedule a consumer.
-    /// </summary>
-    /// <remarks>
-    /// CI runs seven test assemblies concurrently, three of them starting
-    /// Testcontainers, on two cores, and this test failed there and passed on
-    /// a re-run of the same commit with no changes. 30 s is a generous
-    /// scheduling budget for a smoke that asserts only positives and so never
-    /// waits it out, while still failing a genuine composition defect in one
-    /// bounded wait rather than hanging.
-    /// </remarks>
+    /// <summary>Stated, since MassTransit's 1.2-second default is a developer machine's budget.</summary>
     private static readonly TimeSpan HarnessInactivityTimeout = TimeSpan.FromSeconds(30);
 
-    /// <summary>
-    /// The harness's other bound, stated for the same reason and deliberately
-    /// larger. An assertion ends at the <em>earliest</em> applicable bound,
-    /// not at the inactivity one alone — verified at the 8.5.3 pin, where
-    /// <c>testTimeout: 2 s</c> against <c>testInactivityTimeout: 10 s</c> gave
-    /// up after 2 s, and where this timeout is measured from the
-    /// <c>Any(…)</c> call rather than from harness start. Leaving it inherited
-    /// would let a number the test never states decide the wait, which is the
-    /// defect this file exists to fix, one parameter over.
-    /// </summary>
-    /// <remarks>
-    /// 60 s rather than a matching 30 s so that it never fires first: equal
-    /// values would leave the two bounds racing, and which one reported a
-    /// failure would be a detail of how long the publish took.
-    /// </remarks>
+    /// <summary>Larger than the inactivity bound, so the two never race to end a wait.</summary>
     private static readonly TimeSpan HarnessTestTimeout = TimeSpan.FromSeconds(60);
 
     public sealed record ProbeMessage(Guid Id);
@@ -92,18 +41,7 @@ public class MessagingRegistrationTests
         public Task Consume(ConsumeContext<ProbeMessage> context) => Task.CompletedTask;
     }
 
-    /// <summary>
-    /// One registration, shared by the smoke and by the guard that asserts its
-    /// timeout — and shared deliberately. A guard building its own harness
-    /// would keep passing with <c>SetTestTimeouts</c> deleted from the smoke,
-    /// which is precisely the deletion it exists to catch.
-    /// </summary>
-    /// <remarks>
-    /// <c>SetTestTimeouts</c> comes first because it is the only call in the
-    /// chain returning <c>IBusRegistrationConfigurator</c>;
-    /// <c>AddConsumer&lt;T&gt;</c> returns a consumer configurator, so the
-    /// other order does not compile.
-    /// </remarks>
+    /// <summary>Shared by the smoke and the guard on its timeouts, so the guard sees the smoke's own.</summary>
     private static ServiceProvider BuildHarnessProvider()
     {
         ServiceCollection services = new();
@@ -118,15 +56,7 @@ public class MessagingRegistrationTests
     [Fact]
     public async Task The_harness_waits_for_the_stated_timeouts_rather_than_MassTransits_defaults()
     {
-        // The defect this replaced was invisible from the smoke below: with
-        // SetTestTimeouts deleted that test still passes on an idle machine
-        // and fails only on a loaded runner, so a deletion would come back as
-        // a flake rather than as a red test. Asserted here it fails at once —
-        // as does a MassTransit bump that stops honouring the call.
-        //
-        // Both bounds, because the wait ends at whichever fires first: pinning
-        // only the inactivity one would leave the other free to drop below it
-        // and cap the wait without anything here going red.
+        // Both bounds, because the wait ends at whichever fires first; a deleted SetTestTimeouts fails here at once.
         await using ServiceProvider provider = BuildHarnessProvider();
 
         ITestHarness harness = provider.GetRequiredService<ITestHarness>();
@@ -167,9 +97,7 @@ public class MessagingRegistrationTests
     [Fact]
     public void Registration_adds_the_bus_and_its_hosted_service()
     {
-        // Descriptors, not a built provider. Building would start nothing
-        // (the bus starts with the host), but a provider is a heavier claim
-        // than the test makes.
+        // Descriptors, not a built provider, which is a heavier claim than this test makes.
         ServiceCollection services = new();
 
         services.AddMassTransitMessaging(Configuration());
@@ -183,14 +111,8 @@ public class MessagingRegistrationTests
     [Fact]
     public void Every_command_in_the_accepts_column_is_registered_and_bound()
     {
-        // Each entry in §3.2's Accepts column needs both an AddConsumer and
-        // a ConfigureConsumer naming it (asserted at the endpoint, over
-        // containers) — this is the registration half, the one a unit test
-        // can see. Matching on ImplementationType or ServiceType rather than
-        // on IConsumer<> closed over the message type: AddConsumer<T> calls
-        // TryAddScoped<T>(), registering the concrete closed
-        // CommandConsumer<,>, not an open interface a reflection-based
-        // predicate would have to close itself.
+        // The registration half of §3.2's Accepts column; the binding is asserted at the endpoint, over containers.
+        // Matched on the concrete type, which is what AddConsumer<T> registers.
         ServiceCollection services = new();
 
         services.AddMassTransitMessaging(Configuration());
@@ -231,10 +153,7 @@ public class MessagingRegistrationTests
     [Fact]
     public void Usage_telemetry_is_disabled_by_the_production_registration_alone()
     {
-        // Deliberately no harness: AddMassTransitTestHarness disables usage
-        // telemetry itself (verified in the 8.5.3 source), so a harness-backed
-        // assertion would stay green with the production line deleted — and
-        // every real host would quietly resume reporting to the vendor.
+        // No harness: AddMassTransitTestHarness disables usage telemetry itself, hiding a deleted production line.
         ServiceCollection services = new();
         services.AddMassTransitMessaging(Configuration());
 
@@ -251,11 +170,8 @@ public class MessagingRegistrationTests
     [InlineData("   ")]
     public void A_missing_or_blank_connection_string_fails_at_registration_naming_the_key(string? value)
     {
-        // Eager, like AddSqlServer one folder over (§13.5): read lazily inside
-        // UsingRabbitMq, the missing key would surface at bus start — after
-        // the host is up, past ValidateOnBuild, in a background service's log.
-        // Blank rows because an empty environment variable configures an empty
-        // string, which a null-only guard waves through.
+        // Eager, like AddSqlServer (§13.5), so a missing key fails before bus start; blank rows because an empty
+        // environment variable configures an empty string.
         ServiceCollection services = new();
 
         InvalidOperationException exception = Should.Throw<InvalidOperationException>(() =>

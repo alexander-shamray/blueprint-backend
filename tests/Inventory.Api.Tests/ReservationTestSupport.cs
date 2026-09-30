@@ -4,32 +4,18 @@ using MassTransit;
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
 using Xunit;
-// Aliased because Common.Application has a DependencyInjection too, and the
-// queue name this class sends by address is the messaging one's.
+// Aliased because Common.Application has a DependencyInjection too.
 using MessagingRegistration = Inventory.Infrastructure.Messaging.DependencyInjection;
 
 namespace Inventory.Api.Tests;
 
-/// <summary>
-/// The arrange-and-poll helpers a caller needs over one
-/// <see cref="ServiceFixture"/> per test run. Each member names its fixture
-/// explicitly rather than capturing one, because the fixture is per-test-class
-/// state and this class holds none of its own; a caller keeps a private,
-/// same-named forwarder onto it.
-/// </summary>
+/// <summary>Arrange-and-poll helpers over a <see cref="ServiceFixture"/> the caller passes, holding no state.</summary>
 internal static class ReservationTestSupport
 {
-    /// <summary>
-    /// A broker round trip on a runner holding other container sets, bounded
-    /// because an endpoint that binds nothing never arrives late — it never
-    /// arrives.
-    /// </summary>
+    /// <summary>A broker round trip on a busy runner, bounded because an unbound endpoint never arrives.</summary>
     public static readonly TimeSpan DeliveryBudget = TimeSpan.FromSeconds(30);
 
-    /// <summary>
-    /// A client carrying <see cref="InventoryPermissions.Admin"/>, for the
-    /// suites whose subject is an admin-only endpoint.
-    /// </summary>
+    /// <summary>A client carrying <see cref="InventoryPermissions.Admin"/>.</summary>
     public static HttpClient Admin(ServiceFixture fixture)
     {
         HttpClient client = fixture.Factory.CreateClient();
@@ -53,12 +39,7 @@ internal static class ReservationTestSupport
         fixture.ScalarAsync<string>(
             "SELECT Value = Status FROM inventory.Reservations WHERE OrderId = {0}", orderId);
 
-    /// <summary>
-    /// Polls <see cref="StatusAsync"/> until it reads <paramref name="expected"/>
-    /// or the budget elapses. No row yet is not a failure — the handler has not
-    /// committed — so it is read as "not yet" rather than let the missing-row
-    /// exception end the poll early.
-    /// </summary>
+    /// <summary>Polls <see cref="StatusAsync"/> for <paramref name="expected"/>; no row yet is not yet.</summary>
     public static async Task EventuallyStatus(ServiceFixture fixture, Guid orderId, string expected)
     {
         DateTimeOffset deadline = DateTimeOffset.UtcNow + DeliveryBudget;
@@ -102,27 +83,12 @@ internal static class ReservationTestSupport
         actual.ShouldBe(expected, because);
     }
 
-    /// <summary>
-    /// Sends to <c>inventory-commands</c> by address, exactly as §9.6's saga
-    /// does. <paramref name="drain"/> at its default waits on the inbox row
-    /// the delivery writes, so the caller observes the handler's own
-    /// transaction rather than a send that has not yet been consumed.
-    /// </summary>
-    /// <param name="fixture">The running host to send through.</param>
-    /// <param name="command">The command to send.</param>
-    /// <param name="drain">
-    /// False only where no inbox row will ever be written — the malformed-
-    /// contract case: <c>InboxFilter</c> commits its row after the consumer
-    /// returns, and a mapper that throws means it never does, so waiting for
-    /// that row would spend the whole delivery budget proving something the
-    /// caller already asserts a different way.
-    /// </param>
+    /// <summary>Sends to <c>inventory-commands</c> by address, as §9.6's saga does.</summary>
+    /// <param name="drain">Waits on the delivery's inbox row; false only where a mapper refusal writes none.</param>
     public static async Task SendAsync<T>(ServiceFixture fixture, T command, bool drain = true)
         where T : class
     {
-        // IBus, not the scoped ISendEndpointProvider: IBus is registered as a
-        // singleton and is itself an ISendEndpointProvider, so it resolves
-        // straight from the root provider.
+        // IBus, not the scoped ISendEndpointProvider, because the singleton resolves from the root provider.
         ISendEndpoint endpoint = await fixture.Factory.Services
             .GetRequiredService<IBus>()
             .GetSendEndpoint(new Uri($"queue:{MessagingRegistration.CommandsQueue}"));

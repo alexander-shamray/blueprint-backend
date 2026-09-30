@@ -9,24 +9,8 @@ using Xunit;
 namespace Inventory.Api.Tests;
 
 /// <summary>
-/// §11.4's callout, executed: "enumerate the endpoint policy names from
-/// <c>EndpointDataSource</c> in a test and require each to resolve through
-/// <c>IAuthorizationPolicyProvider</c>."
+/// §11.4's callout: every endpoint policy name, read off the built endpoints, resolves through the provider.
 /// </summary>
-/// <remarks>
-/// A policy name is a reference and nothing checks it.
-/// <c>RequireAuthorization(InventoryPermissions.Admin)</c> takes a string —
-/// misspell it, or register the policy in a helper the host never calls, and
-/// there is no compiler error, no <c>ValidateOnBuild</c> failure and no
-/// startup warning. The endpoint throws <c>InvalidOperationException</c> the
-/// first time somebody sets stock, which is to say in production, on the
-/// path that matters.
-///
-/// This reads the names off the built endpoints rather than from a list
-/// beside the registrations, which is the whole point: a list would be a
-/// third place to keep in step, and it would agree with itself while
-/// disagreeing with the host.
-/// </remarks>
 public class AuthorizationPolicyTests(HostSmokeTests.UnreachableInfrastructureFactory factory)
     : IClassFixture<HostSmokeTests.UnreachableInfrastructureFactory>
 {
@@ -48,9 +32,7 @@ public class AuthorizationPolicyTests(HostSmokeTests.UnreachableInfrastructureFa
                 .Distinct()
         ];
 
-        // Not vacuous: the assertion below passes trivially over an empty set,
-        // and an endpoint file that lost its RequireAuthorization line would
-        // produce exactly that.
+        // Not vacuous: an endpoint that lost its RequireAuthorization line would empty the set.
         named.ShouldContain(InventoryPermissions.Admin);
 
         foreach (string policy in named)
@@ -66,12 +48,7 @@ public class AuthorizationPolicyTests(HostSmokeTests.UnreachableInfrastructureFa
     [Fact]
     public async Task The_shared_authenticated_policy_is_registered_by_common_web()
     {
-        // Not named by any Inventory endpoint — the group requires
-        // InventoryPermissions.Admin outright, and the default policy never
-        // enters the picture — so the test above cannot see it. It exists for
-        // the gateway's route file (§10.2), whose route names it, and YARP
-        // resolves it through this same provider when it loads the
-        // configuration.
+        // Named by no Inventory endpoint but by the gateway's routes (§10.2), resolved through this provider.
         IAuthorizationPolicyProvider policies =
             factory.Services.GetRequiredService<IAuthorizationPolicyProvider>();
 
@@ -81,10 +58,7 @@ public class AuthorizationPolicyTests(HostSmokeTests.UnreachableInfrastructureFa
     [Fact]
     public void No_inventory_endpoint_is_anonymous()
     {
-        // The whole difference from Catalog, asserted where an edit to either
-        // endpoint would be caught: a stock level is never public, so there is
-        // no listing to make anonymous by design. An AllowAnonymous anywhere
-        // here defeats the one policy every path on this service carries.
+        // A stock level or a reservation is never public, unlike Catalog's listing.
         string[] names =
         [
             "SetOnHand", "GetStock", "GetReservation", "ReleaseReservation", "ReinstateReservation"

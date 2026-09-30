@@ -9,12 +9,7 @@ using Xunit;
 
 namespace Inventory.Api.Tests;
 
-/// <summary>
-/// The exclusion makes a malformed message fault at once rather than after
-/// <see cref="RetryPolicy.Standard"/>'s whole ladder runs its course, so a
-/// fault observed inside <see cref="RetryPolicy.MinInterval"/> is the
-/// exclusion acting rather than the ladder's own first wait.
-/// </summary>
+/// <summary>The exclusion faults a malformed message before <see cref="RetryPolicy.Standard"/>'s ladder.</summary>
 [Collection(nameof(IntegrationCollection))]
 public sealed class RetryExclusionTests(ServiceFixture fixture) : IAsyncLifetime
 {
@@ -22,11 +17,7 @@ public sealed class RetryExclusionTests(ServiceFixture fixture) : IAsyncLifetime
 
     public ValueTask DisposeAsync() => ValueTask.CompletedTask;
 
-    /// <summary>
-    /// Bus-wide, so it sees every consume attempt on <c>inventory-commands</c>
-    /// rather than one bound to a single consumer instance — MassTransit
-    /// constructs a fresh <c>CommandConsumer</c> per delivery.
-    /// </summary>
+    /// <summary>Bus-wide, since MassTransit constructs a fresh <c>CommandConsumer</c> per delivery.</summary>
     private sealed class FaultCountingObserver : IConsumeObserver
     {
         private readonly ConcurrentDictionary<Guid, int> _faults = new();
@@ -51,13 +42,7 @@ public sealed class RetryExclusionTests(ServiceFixture fixture) : IAsyncLifetime
 
         public int FaultsFor(Guid messageId) => _faults.GetValueOrDefault(messageId);
 
-        /// <summary>
-        /// Completes once a consumer has been entered for
-        /// <paramref name="messageId"/>. Per message rather than bus-wide, so
-        /// another delivery on the same queue cannot answer for this one, and
-        /// askable either side of the delivery: the entry is recorded against
-        /// the id whether or not anything is waiting on it yet.
-        /// </summary>
+        /// <summary>Completes once a consumer is entered for <paramref name="messageId"/>.</summary>
         public Task Entered(Guid messageId) => Entry(messageId).Task;
 
         private TaskCompletionSource Entry(Guid messageId) =>
@@ -82,13 +67,7 @@ public sealed class RetryExclusionTests(ServiceFixture fixture) : IAsyncLifetime
             c => c.MessageId = messageId,
             TestContext.Current.CancellationToken);
 
-        // The window below measures the ladder from the attempt, so it cannot
-        // open before this delivery has reached a consumer. The endpoint
-        // prefetches and runs its deliveries concurrently, so a window opened
-        // on the send would spend itself queued on a loaded runner and read
-        // the absence of a fault as the exclusion acting. Budgeted rather
-        // than awaited outright, because a delivery that never arrives must
-        // say so instead of hanging the suite.
+        // The window below opens at the attempt, not the send, which a loaded runner can leave queued.
         await Task.WhenAny(
             entered,
             Task.Delay(ReservationTestSupport.DeliveryBudget, TestContext.Current.CancellationToken));
@@ -96,11 +75,7 @@ public sealed class RetryExclusionTests(ServiceFixture fixture) : IAsyncLifetime
             $"no consumer was entered for {messageId} within {ReservationTestSupport.DeliveryBudget}, " +
             "so the interval below would be timing a delivery nothing has looked at");
 
-        // RetryPolicy.MinInterval is the ladder's first wait; a message still
-        // on it has not yet faulted, so this window closes well before a
-        // retried attempt could. The margin absorbs scheduling jitter between
-        // the consumer being entered and this delay starting, without
-        // reaching into the ladder's second, longer wait.
+        // Past the ladder's first wait by a jitter margin; a message still on the ladder has not faulted by then.
         await Task.Delay(
             RetryPolicy.MinInterval + TimeSpan.FromSeconds(2), TestContext.Current.CancellationToken);
 

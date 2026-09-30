@@ -12,20 +12,8 @@ using Xunit;
 
 namespace Inventory.Application.Tests;
 
-/// <summary>
-/// The <c>Local</c> lane's payload contract (§9.4). No containers, and it
-/// lives here rather than in §12.6's contract suite because the set it
-/// iterates comes from the <see cref="MessageTypeMap"/> and that suite selects
-/// on the contracts namespace, which no domain event is in.
-/// </summary>
-/// <remarks>
-/// Both halves come out of the real <c>AddInventoryInfrastructure</c>, and
-/// that is the whole design of this test. A hand-built <see cref="OutboxJson"/>
-/// asserting the one converter this service needs would stay green if the
-/// registration that wires it into the running host were deleted. Registration
-/// is the thing that can silently go missing, so registration is what this
-/// resolves.
-/// </remarks>
+/// <summary>The <c>Local</c> lane's payload contract (§9.4), over <see cref="MessageTypeMap"/>'s set.</summary>
+/// <remarks>From the real registration: a hand-built <see cref="OutboxJson"/> misses a lost converter.</remarks>
 public class OutboxSerialisationTests
 {
     private static readonly DateTimeOffset Raised = new(2026, 9, 18, 9, 0, 0, TimeSpan.Zero);
@@ -33,8 +21,7 @@ public class OutboxSerialisationTests
     [Fact]
     public void Every_stageable_domain_event_round_trips_through_the_outbox_options()
     {
-        // Not "every IDomainEvent": the map is the set the outbox can actually
-        // carry, and a type it does not know cannot reach a payload column.
+        // The map's set, not every IDomainEvent: a type it does not know cannot reach a payload column.
         using ServiceProvider provider = Registered();
         JsonSerializerOptions options = provider.GetRequiredService<OutboxJson>().Options;
 
@@ -44,10 +31,7 @@ public class OutboxSerialisationTests
             string json = JsonSerializer.Serialize(sample, type, options);
             object? read = JsonSerializer.Deserialize(json, type, options);
 
-            // Compared through the payload rather than with ShouldBe(sample):
-            // re-serialising is what catches a member dropped on write and on
-            // read together, the same reason Ordering's version of this test
-            // does not compare the object directly either.
+            // Compared by re-serialising, which catches a member dropped on write or on read alike.
             JsonSerializer.Serialize(read, type, options)
                 .ShouldBe(json, $"{type.Name} cannot survive the Local lane");
         }
@@ -56,12 +40,7 @@ public class OutboxSerialisationTests
     [Fact]
     public void The_stageable_set_is_exactly_the_events_this_service_raises()
     {
-        // The loop above is vacuous if the map is empty, and it would be
-        // vacuous quietly — a registration that stopped naming
-        // Inventory.Domain would turn the assertion into a no-op and nothing
-        // else would say so. Asserting the stageable set exactly, rather than
-        // asserting it non-empty, is what forces a newly added domain event
-        // to gain a sample here instead of passing the loop above unnoticed.
+        // Named rather than counted, so an empty map fails and an added event is a decision.
         using ServiceProvider provider = Registered();
 
         provider.GetRequiredService<MessageTypeMap>().StageableDomainEvents.ShouldBe(
@@ -82,12 +61,7 @@ public class OutboxSerialisationTests
             {
                 ["ConnectionStrings:Inventory"] = "Server=none;Database=Inventory;",
                 ["ConnectionStrings:RabbitMq"] = "amqp://none",
-                // AddRedisConnections reads both eagerly and throws naming the
-                // missing one, so the two lines below are what let
-                // AddInventoryInfrastructure run at all — the same reason the
-                // bus key above is here. Nothing resolves a multiplexer in
-                // this suite: the keyed registrations are factories, and no
-                // test asks for one.
+                // AddRedisConnections throws without both keys; nothing here resolves a multiplexer.
                 ["ConnectionStrings:RedisCache"] = "redis.invalid:6379",
                 ["ConnectionStrings:RedisCoordination"] = "redis.invalid:6380"
             })
@@ -99,13 +73,7 @@ public class OutboxSerialisationTests
         return services.BuildServiceProvider();
     }
 
-    /// <summary>
-    /// A deliberate obstacle, the same one <c>ContractSamples</c> is in §12.6:
-    /// a new domain event with no sample fails here instead of being skipped,
-    /// which is the failure mode of every loop over types that falls back to
-    /// <c>Activator.CreateInstance</c> — a parameterless record would produce
-    /// an all-default instance that round-trips perfectly and proves nothing.
-    /// </summary>
+    /// <summary>The obstacle <c>ContractSamples</c> is in §12.6: an event with no sample fails, not skips.</summary>
     private static class DomainEventSamples
     {
         private static readonly Dictionary<Type, object> Samples = new()

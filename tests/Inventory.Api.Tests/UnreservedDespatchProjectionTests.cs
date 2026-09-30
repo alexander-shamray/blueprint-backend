@@ -10,11 +10,7 @@ using Xunit;
 
 namespace Inventory.Api.Tests;
 
-/// <summary>
-/// §13.3's claim: the projection that flips <c>UnreservedCounted</c> is the
-/// one place <see cref="InventoryMetrics.UnreservedDespatch"/> fires, so a
-/// row delivered twice counts once.
-/// </summary>
+/// <summary>§13.3: the projection flipping <c>UnreservedCounted</c> counts a twice-delivered row once.</summary>
 [Collection(nameof(IntegrationCollection))]
 public sealed class UnreservedDespatchProjectionTests(ServiceFixture fixture) : IAsyncLifetime
 {
