@@ -126,7 +126,7 @@ public class PlaceOrderValidatorTests
     [Fact]
     public void An_omitted_CommandId_is_refused_before_any_key_is_claimed()
     {
-        // An omitted CommandId binds as Guid.Empty, one key every such caller would share (§8.5).
+        // An omitted CommandId binds as Guid.Empty, so one caller's id-less commands would share a key (§8.5).
         PlaceOrderCommand command = WithItems(1) with { CommandId = Guid.Empty };
 
         ValidationResult result = Validator.Validate(command);
