@@ -908,10 +908,13 @@ def main(argv):
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--base")
     mode.add_argument("--tree", nargs="+", metavar="PATH")
-    parser.add_argument("--head", default="HEAD")
+    parser.add_argument("--head")
     args = parser.parse_args(argv[1:])
     if args.tree:
+        if args.head is not None:
+            parser.error("--head names a diff's end, and --tree reads no diff")
         return tree(args.tree)
+    args.head = args.head or "HEAD"
     span = f"{args.base}...{args.head}"
     try:
         if not _git("diff", "--name-only", "-z", span).strip(b"\0"):
