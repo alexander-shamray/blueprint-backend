@@ -90,7 +90,7 @@ public sealed class OutboxStatsTests(ServiceFixture fixture) : IAsyncLifetime
     [Fact]
     public async Task An_empty_lane_reads_zero_rather_than_failing()
     {
-        // MIN over no rows is NULL, and a throwing gauge callback silently stops the series, so zero is the reading.
+        // MIN over no rows is NULL, and a failed read drops the series, so zero is the reading.
         await StageAsync(OutboxLane.Broker);
 
         IOutboxStats stats = NewStats();
