@@ -164,7 +164,7 @@ public class JwtAuthenticationTests
         };
     }
 
-    /// <summary>Answers only when it expires, so a check that read anything else fails here.</summary>
+    /// <summary>A token with a fixed expiry; the signing members throw if read.</summary>
     private sealed class TokenExpiringIn(DateTime expires) : SecurityToken
     {
         public override string Id => nameof(TokenExpiringIn);
