@@ -3,10 +3,7 @@ using StackExchange.Redis;
 
 namespace Common.Infrastructure.Redis;
 
-/// <summary>
-/// The coordination connection, never the cache one: a lock on an
-/// allkeys-lru instance is evicted under exactly the memory pressure that
-/// makes the failure hardest to reproduce (§8.1).
+/// <summary>The coordination connection, never the cache one, whose eviction would drop a lock (§8.1).</summary>
 /// </summary>
 internal sealed class RedisDistributedLockFactory(
     [FromKeyedServices(RedisConnections.Coordination)] IConnectionMultiplexer redis,

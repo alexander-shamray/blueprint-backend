@@ -11,72 +11,29 @@ using Microsoft.Extensions.Logging;
 
 namespace Common.Infrastructure.Outbox;
 
-/// <summary>
-/// §9.4's dispatcher: an atomic <b>claim</b> that leases a batch of rows, then
-/// per-row <b>delivery</b> where each message succeeds or fails on its own.
-/// </summary>
-/// <remarks>
-/// <b>Every row is delivered and accounted for independently.</b> Wrapping a
-/// whole batch in one transaction is the obvious implementation and is wrong:
-/// a single failing projection would roll back the batch and block every
-/// healthy <c>Broker</c> row behind it, so a read-model bug in this service
-/// would stop publishing to every other service. The lanes can only be alerted
-/// on separately (§13.6) if they can actually fail separately.
-/// </remarks>
+/// <summary>§9.4's dispatcher: an atomic claim that leases a batch, then delivery that fails per row.</summary>
 public sealed class OutboxDispatcher : BackgroundService
 {
-    /// <summary>
-    /// §9.4's attempt cap. Public because §13.6's abandoned-rows gauge counts
-    /// exactly the rows this claim skips, and a second copy of the number is a
-    /// gauge that stops agreeing with the loop it describes on the day somebody
-    /// tunes one of them.
-    /// </summary>
+    /// <summary>§9.4's attempt cap, public so §13.6's abandoned-rows gauge reads this number, not a copy.</summary>
     public const int MaxAttempts = 10;
 
-    /// <summary>
-    /// How many rows one claim leases. Public for the reason
-    /// <see cref="MaxAttempts"/> is: §13.6's outbox-growth alert names "batch
-    /// size too small for load" as a cause, and its runbook then has to size
-    /// the batch — which is an answer about this number rather than about a
-    /// number that happens to match it.
-    /// </summary>
+    /// <summary>How many rows one claim leases, public so §13.6's runbook sizes this number, not a copy.</summary>
     public const int ClaimBatchSize = 100;
 
-    /// <summary>
-    /// How long a claim holds the rows it leased. Long enough that a slow
-    /// batch is not re-claimed underneath itself, short enough that a
-    /// replica killed mid-batch releases its rows within the minute.
-    /// </summary>
+    /// <summary>A claim's lease: longer than a slow batch, short enough for a killed replica.</summary>
     public const int LeaseSeconds = 60;
 
-    /// <summary>
-    /// The failed-delivery backoff, in seconds:
-    /// <c>2^min(Attempts, BackoffAttemptCap) × BackoffBaseSeconds</c>.
-    /// </summary>
-    /// <remarks>
-    /// The cap bounds the later waits so a row still reaches
-    /// <see cref="MaxAttempts"/> promptly enough for §13.6's abandoned-row
-    /// alert to be actionable: past the cap the delay stops doubling and the
-    /// remaining attempts are evenly spaced. §9.6's confirmation wait is set
-    /// against the ladder these two produce, which is why they are readable
-    /// from there rather than restated in it.
-    /// </remarks>
+    /// <summary>The backoff: <c>2^min(Attempts, BackoffAttemptCap) × BackoffBaseSeconds</c> seconds.</summary>
+    /// <remarks>The cap keeps <see cref="MaxAttempts"/> near enough for §13.6's alert to act on.</remarks>
     public const int BackoffBaseSeconds = 5;
 
     /// <inheritdoc cref="BackoffBaseSeconds"/>
     public const int BackoffAttemptCap = 8;
 
-    /// <summary>
-    /// How often the dispatcher looks for work, and therefore the last delay
-    /// between an aggregate raising an event and a projection seeing it —
-    /// which is the interval §13.7's <c>projection.lag</c> target has to
-    /// leave room for.
-    /// </summary>
+    /// <summary>How often the dispatcher polls, which §13.7's <c>projection.lag</c> target leaves room for.</summary>
     public static readonly TimeSpan PollInterval = TimeSpan.FromMilliseconds(500);
 
-    // Compiled once rather than parsed per call. CA1848 is enforced by ADR-019
-    // and this loop runs once per PollInterval — see §13.3's LoggingBehavior,
-    // which takes the same shape for the same reason.
+    // Compiled once, for CA1848 (ADR-019): this loop runs every PollInterval.
     private static readonly Action<ILogger, Exception?> ClaimFailed =
         LoggerMessage.Define(
             LogLevel.Error,
@@ -92,9 +49,7 @@ public sealed class OutboxDispatcher : BackgroundService
     private readonly IServiceScopeFactory _scopes;
     private readonly ILogger<OutboxDispatcher> _log;
 
-    // Composed once from the registered table (§9.4 writes them against a
-    // literal schema, which common code cannot). Instance fields rather than
-    // consts for that reason and no other.
+    // Composed once from the registered table, which is why these are fields, not consts.
     private readonly string _claimSql;
     private readonly string _completeSql;
     private readonly string _failSql;
@@ -104,8 +59,7 @@ public sealed class OutboxDispatcher : BackgroundService
         _scopes = scopes;
         _log = log;
 
-        // Atomic claim: selects and leases in one statement, so two replicas
-        // cannot take the same row. READPAST skips rows another replica holds.
+        // Selects and leases in one statement, so two replicas cannot take the same row.
         _claimSql =
             $"""
             WITH claimable AS (
@@ -136,9 +90,7 @@ public sealed class OutboxDispatcher : BackgroundService
             WHERE Id = @Id;
             """;
 
-        // Increments the attempt counter and backs off exponentially by
-        // pushing the lease forward. This is what makes the cap — and the
-        // abandoned-row alert in §13.6 — reachable.
+        // Backs off by pushing the lease forward, which makes the cap reachable.
         _failSql =
             $"""
             UPDATE {table.QualifiedName}
@@ -155,10 +107,7 @@ public sealed class OutboxDispatcher : BackgroundService
             """;
     }
 
-    // stoppingToken, not ct: CA1725 requires an override to keep the base's
-    // parameter name, and a reader consulting BackgroundService's
-    // documentation is reading about that one (§7.2's ConfigureConventions
-    // took the same correction rather than a suppression).
+    // stoppingToken, not ct: CA1725 keeps the base's name, an error under ADR-019.
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         using PeriodicTimer timer = new(PollInterval);
@@ -171,45 +120,22 @@ public sealed class OutboxDispatcher : BackgroundService
             }
             catch (Exception ex) when (!stoppingToken.IsCancellationRequested)
             {
-                // The claim itself failed — database unreachable. Next tick.
-                //
-                // The filter asks the token, not the exception type. An
-                // OperationCanceledException is only shutdown when shutdown is
-                // what happened: a projection enforcing its own deadline
-                // throws the same type while this token is still live, and
-                // testing the type alone would let that escape the loop and
-                // fault the whole background service.
+                // The claim failed. The token, not the type: a projection's own deadline throws the same type.
                 ClaimFailed(_log, ex);
             }
         }
     }
 
-    /// <summary>
-    /// One claim-and-deliver pass. Returns the number of rows completed.
-    /// Public so tests drive it directly instead of racing a timer — §12.4.
-    /// </summary>
+    /// <summary>One claim-and-deliver pass, public so tests drive it rather than race a timer (§12.4).</summary>
     public async Task<int> ProcessBatchAsync(CancellationToken ct)
     {
-        // The claim's own scope, holding nothing but the connection. Delivery
-        // gets a scope per row below, so this one exists only to resolve the
-        // factory — and the connection deliberately outlives those scopes,
-        // because the claim, the completes and the fails are one row-keeping
-        // conversation with the database rather than part of any delivery.
+        // The claim's scope holds only the connection, which outlives the per-row delivery scopes.
         await using AsyncServiceScope claimScope = _scopes.CreateAsyncScope();
 
-        // Disposed every pass — the loop ticks once per PollInterval, so a
-        // leaked connection here exhausts the pool within a minute.
         using IDbConnection connection =
             claimScope.ServiceProvider.GetRequiredService<IDbConnectionFactory>().Create();
 
-        // OutboxClaim, not OutboxMessage — the claim projects only the columns
-        // the OUTPUT clause returns, and its own summary says what a mismatch
-        // costs.
-        //
-        // CommandDefinition, so the token reaches the database command: with
-        // the plain overload a shutdown cannot interrupt a blocked claim, and
-        // the host waits out the SQL command timeout before ExecuteAsync
-        // returns. §6.5's read handlers pass it the same way.
+        // CommandDefinition, so a shutdown's token reaches a blocked claim.
         List<OutboxClaim> claimed =
         [
             .. await connection.QueryAsync<OutboxClaim>(
@@ -222,14 +148,7 @@ public sealed class OutboxDispatcher : BackgroundService
         {
             try
             {
-                // A scope per row, not per batch, and this is what makes the
-                // per-row isolation above true rather than merely intended.
-                // Projection handlers are scoped and so is anything they
-                // inject — a DbContext most of all — so one scope for a whole
-                // ClaimBatchSize means a handler that throws mid-write hands
-                // the next row its own tracked, half-mutated state. The row
-                // that failed is then not the only row that fails, and the
-                // §13.6 lane alerts stop meaning what they say.
+                // A scope per row, so a handler that throws cannot hand the next row its half-mutated state.
                 await using AsyncServiceScope delivery = _scopes.CreateAsyncScope();
 
                 await DeliverAsync(delivery.ServiceProvider, message, ct);
@@ -240,15 +159,7 @@ public sealed class OutboxDispatcher : BackgroundService
             }
             catch (Exception ex) when (!ct.IsCancellationRequested)
             {
-                // One bad message does not affect the rest of the batch — the
-                // other ClaimBatchSize - 1 of them.
-                //
-                // Again the token rather than the type. A handler with its own
-                // deadline throws OperationCanceledException while ct is still
-                // live, and the type test let that row escape without an
-                // attempt recorded, without a LastError, and with every row
-                // behind it left leased until the lease expired — a delivery
-                // failure disguised as a shutdown.
+                // One bad message does not affect the rest; the token, not the type, as above.
                 await connection.ExecuteAsync(
                     new CommandDefinition(
                         _failSql, new { message.Id, Error = ex.ToString() }, cancellationToken: ct));
@@ -262,14 +173,10 @@ public sealed class OutboxDispatcher : BackgroundService
 
     private static async Task DeliverAsync(IServiceProvider sp, OutboxClaim message, CancellationToken ct)
     {
-        // Through the map, not Type.GetType: the column holds a name this code
-        // chose, and it has to survive the version bump of the assembly that
-        // wrote it.
+        // Through the map, not Type.GetType, so a name survives an assembly version bump (§9.4).
         Type type = sp.GetRequiredService<MessageTypeMap>().Resolve(message.MessageType);
 
-        // The same registered instance Stage wrote through, converters
-        // included — which is what "both sides must agree" means now that a
-        // value object's shape depends on one (OutboxJson argues why).
+        // The registered options Stage wrote through, converters included (§9.4).
         object payload = JsonSerializer.Deserialize(
             message.Payload,
             type,
@@ -277,13 +184,7 @@ public sealed class OutboxDispatcher : BackgroundService
 
         if (message.Lane == nameof(OutboxLane.Broker))
         {
-            // Checked again here, not only in Stage. The lane arrives from a
-            // database column and the payload type from a name in another
-            // column, so nothing about this pair was validated by the process
-            // that is about to publish it — a row written before a guard
-            // existed, or edited during an incident, reaches exactly this
-            // line. §5.5's rule is that a domain event never goes to the bus,
-            // and the last place able to enforce it is the one that publishes.
+            // Checked again: the row's lane and type were never validated by this process (§5.5).
             if (payload is not IIntegrationEvent)
             {
                 throw new InvalidOperationException(
@@ -312,23 +213,8 @@ public sealed class OutboxDispatcher : BackgroundService
                 "guessed at.");
         }
 
-        // Local lane: this service's own projection handlers, running safely
-        // outside the write transaction that produced the event (§7.5).
-        // OccurredAt comes from the row, not the payload: the invoker is
-        // generic and unconstrained, so it has no typed access to a member the
-        // payload may or may not have (§13.3). It is the time the aggregate
-        // raised the event — Stage() is called inside the write transaction —
-        // so the lag §13.7 measures includes the commit, which is the honest
-        // reading of "how stale is this read model".
-        // The Broker guard's mirror, needed for the same reason and against
-        // the same rows. Stage refuses anything but a domain event on this
-        // lane, so a row carrying one arrived without passing it — an alias
-        // repointed during a rename, a row edited during an incident, a row
-        // written before either guard existed. ProjectionInvoker is generic
-        // and unconstrained, so it would hand an integration contract to a
-        // matching IProjectionHandler<T> and mark the row processed; a
-        // payload that deserialises to null reaches a handler that ignores
-        // its argument and is marked processed too. Neither leaves a trace.
+        // Local lane: projections outside the write transaction (§7.5), timed from the row's OccurredAt (§13.3).
+        // The Broker guard's mirror: an unconstrained invoker would project anything the row carries.
         if (payload is not IDomainEvent)
         {
             throw new InvalidOperationException(

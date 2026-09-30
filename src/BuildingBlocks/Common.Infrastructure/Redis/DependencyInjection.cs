@@ -8,21 +8,14 @@ using StackExchange.Redis;
 
 namespace Common.Infrastructure.Redis;
 
-/// <summary>
-/// §8.1's two keyed connections, §8.2's cache stack over the first of them,
-/// and the coordination-side helpers — one call, so an unregistered cache is
-/// a service that will not start rather than a slower one that silently
-/// reads the database (§8.2).
-/// </summary>
+/// <summary>§8.1's two connections, §8.2's cache stack and the coordination helpers, in one call (§8.2).</summary>
 public static class DependencyInjection
 {
     extension(IServiceCollection services)
     {
         public IServiceCollection AddRedisConnections(IConfiguration configuration)
         {
-            // Read eagerly: a host missing its connection string must not
-            // start (PR-08's precedent — AddSqlServer throws on a null one),
-            // and a lazy factory would move the failure to the first miss.
+            // Read eagerly, so a host missing its connection string does not start.
             string cacheConnection = RequiredConnectionString(configuration, RedisConnections.Cache);
             string coordinationConnection = RequiredConnectionString(configuration, RedisConnections.Coordination);
 
@@ -36,20 +29,10 @@ public static class DependencyInjection
             services.AddSingleton<RedisKeys>();
             services.AddSingleton<IDistributedLockFactory, RedisDistributedLockFactory>();
 
-            // §8.5's store, on the coordination connection like the lock
-            // factory beside it. Singleton for the same reason: it holds
-            // nothing per request, and the multiplexer behind it is already
-            // one. Registered here rather than in a service's own
-            // Add<Service>Infrastructure because the port is Common's and the
-            // connection it needs is the one this method establishes — a
-            // service that has Redis has the store, and one that does not
-            // cannot half-have it.
+            // §8.5's store, on the coordination connection like the lock factory beside it.
             services.AddSingleton<IIdempotencyStore, RedisIdempotencyStore>();
 
-            // The CACHE connection (allkeys-lru); coordination keys use the
-            // other. The factory hands the cache its keyed multiplexer — one
-            // connection per instance, and the traced connection is then the
-            // one the cache actually uses, not a private third.
+            // The cache connection; the factory hands the cache its keyed multiplexer, so that one is traced.
             services.AddStackExchangeRedisCache(_ => { });
             services
                 .AddOptions<RedisCacheOptions>()
@@ -72,11 +55,7 @@ public static class DependencyInjection
                 options.MaximumPayloadBytes = 1024 * 1024;
             });
 
-            // §13.2's rule — an instrumentation lands with the package it
-            // instruments. It cannot live in Common.Web: these connections
-            // are keyed, the parameterless overload only discovers an
-            // unkeyed IConnectionMultiplexer, and there it would silently
-            // instrument nothing.
+            // Here, not in Common.Web (§13.2): the parameterless overload finds no keyed connection.
             services
                 .AddOpenTelemetry()
                 .WithTracing(tracing => tracing
@@ -95,10 +74,7 @@ public static class DependencyInjection
 
     private static string RequiredConnectionString(IConfiguration configuration, string name)
     {
-        // IsNullOrWhiteSpace, not a null check: an empty environment variable
-        // configures an empty string, and letting it through defers the
-        // failure to the first keyed resolve — the fail-fast this method
-        // exists to guarantee.
+        // Whitespace too: an empty environment variable configures an empty string.
         string? connectionString = configuration.GetConnectionString(name);
         return string.IsNullOrWhiteSpace(connectionString)
             ? throw new InvalidOperationException(
@@ -110,10 +86,7 @@ public static class DependencyInjection
     {
         ConfigurationOptions options = ConfigurationOptions.Parse(connectionString);
 
-        // Degrade, don't die: §8.1's first row tolerates Redis being down,
-        // and the readiness check is what reports it. The multiplexer
-        // connects in the background and retries; coordination callers still
-        // fail closed, because their operations throw while it is absent.
+        // Degrade, don't die (§8.1): coordination callers still fail closed, since their operations throw.
         options.AbortOnConnectFail = false;
 
         return ConnectionMultiplexer.Connect(options);

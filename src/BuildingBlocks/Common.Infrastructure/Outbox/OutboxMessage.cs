@@ -5,36 +5,13 @@ using Common.Domain;
 
 namespace Common.Infrastructure.Outbox;
 
-/// <summary>
-/// The staging path's whole row (§9.4). Mapped by EF Core through a
-/// configuration in the service's own Infrastructure assembly, where the
-/// schema is already decided — nothing here names an EF type.
-/// </summary>
-/// <remarks>
-/// <b>Two types map to this table, deliberately.</b> This one is written whole
-/// through EF; <see cref="OutboxClaim"/> is the narrow projection the
-/// dispatcher's <c>OUTPUT</c> clause returns. Collapsing them produces a class
-/// whose <see cref="ProcessedAt"/> is always null on the read path and whose
-/// <see cref="LastError"/> is never populated on the write path.
-/// </remarks>
+/// <summary>The staging path's whole row (§9.4); <see cref="OutboxClaim"/> is the dispatcher's read of it.</summary>
 public sealed class OutboxMessage
 {
-    /// <summary>
-    /// The widest <c>LastError</c> the column holds, named here rather than
-    /// in either service's configuration because three sites read it and they
-    /// are not independent: the dispatcher's fail statement truncates to this
-    /// width with <c>LEFT</c>, and both services map this entity. A
-    /// <c>LEFT</c> narrower than the column silently shortens the one
-    /// diagnostic an abandoned row carries; a wider one fails the update that
-    /// was recording why the delivery failed.
-    /// </summary>
+    /// <summary>The widest <c>LastError</c> the column holds, and the dispatcher's <c>LEFT</c> width.</summary>
     public const int LastErrorMaxLength = 2000;
 
-    /// <summary>
-    /// The widest <see cref="OutboxLane"/> name the column holds. Both
-    /// services spell it, for the same reason above, and the value is a bound
-    /// on the enum's member names rather than on anything a caller supplies.
-    /// </summary>
+    /// <summary>The widest <see cref="OutboxLane"/> name the column holds.</summary>
     public const int LaneMaxLength = 16;
 
     public long Id { get; private set; }
@@ -66,32 +43,9 @@ public sealed class OutboxMessage
         MessageTypeMap types,
         OutboxJson json)
     {
-        // One identity, not two. An integration event already carries its
-        // MessageId and CorrelationId in the envelope the mapper filled in
-        // (§9.3), and DeliverAsync copies the row's values onto the transport —
-        // so minting a second GUID here would give the body one id and the
-        // broker header another. The inbox dedupes on the transport id (§9.5),
-        // which would then disagree with the id a support tool reads out of the
-        // payload, and the only way to notice is to compare two logs.
-        //
-        // A Local-lane row carries a domain event, which has no envelope and
-        // never reaches a broker, so the row mints its own id and takes the
-        // caller's correlation.
-        //
-        // The lane decides which interface the payload has to satisfy, and
-        // this is what makes §9.3's allow-list structural rather than a
-        // convention. `Map` returns `object`, and the type map admits domain
-        // events and contracts alike — so a mapper that returned the domain
-        // event it was handed would stage it on the Broker lane and the
-        // dispatcher would publish it. That is precisely the leak §5.5 forbids
-        // and §12.4 asserts against, and until this guard existed the only
-        // thing preventing it was the mapper being written correctly.
-        // Every value first, because both checks below test for one lane and
-        // let everything else past: `(OutboxLane)42` is neither Broker nor
-        // Local, so it satisfies neither guard, commits, and then fails in
-        // the dispatcher once per attempt until the cap abandons it. A cast
-        // is all it takes to produce one — C# does not confine an enum to its
-        // declared members.
+        // One identity: an integration event's envelope ids go to the transport the inbox dedupes on (§9.5).
+        // A Local row carries a domain event, with no envelope, so it mints its own id.
+        // The lane checks below make §9.3's allow-list structural; first, C# does not confine an enum to its members.
         if (lane is not (OutboxLane.Broker or OutboxLane.Local))
         {
             throw new InvalidOperationException(
@@ -99,13 +53,7 @@ public sealed class OutboxMessage
                 "carries neither can only be discovered after it is committed.");
         }
 
-        // Before either lane check, because a type that is both satisfies
-        // both of them. §5.5 calls conflating the two "one of the most
-        // consequential mistakes in this architecture", and this is what it
-        // costs here: such a payload passes the Broker guard, so a domain
-        // event reaches the bus, and it passes the Local guard while the
-        // identity arm below then reads its envelope instead of minting a row
-        // id. Neither lane is right for it, so neither is offered.
+        // Before either lane check, since a type that is both would pass both (§5.5).
         if (message is IDomainEvent and IIntegrationEvent)
         {
             throw new InvalidOperationException(
@@ -139,17 +87,7 @@ public sealed class OutboxMessage
             Payload = JsonSerializer.Serialize(message, message.GetType(), json.Options),
             Lane = lane,
 
-            // The message's own timestamp, never the staging clock. §13.7
-            // defines projection.lag as "event raised to projection applied",
-            // and a row stamped at staging time silently drops the interval
-            // between the two — small, but measured by the one metric whose
-            // name says it is included.
-            //
-            // No fallback is needed and none is written: NameOf has already
-            // thrown for anything the map does not hold, and the map admits
-            // only these two interfaces (§9.4), so one of the two arms always
-            // matches. A `now` parameter here would be dead weight the caller
-            // still had to find a clock for.
+            // The message's own timestamp, never the staging clock, as §13.7's projection.lag requires.
             OccurredAt = message is IIntegrationEvent o
                 ? o.OccurredAt
                 : ((IDomainEvent)message).OccurredAt
