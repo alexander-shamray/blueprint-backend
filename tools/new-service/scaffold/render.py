@@ -12,15 +12,7 @@ from datetime import datetime, timedelta
 from pathlib import Path, PurePosixPath
 
 from scaffold import API_HOST, TEMPLATE, Names, ScaffoldError, read, require_once, restore
-from scaffold.patch import (
-    IDEMPOTENCY_MIGRATION_PATCHES,
-    INBOX_MIGRATION_PATCHES,
-    INITIAL_CREATE_PATCHES,
-    OUTBOX_MIGRATION_PATCHES,
-    PATCHES,
-    RETENTION_INDEX_MIGRATION_PATCHES,
-    WORKER_PATCHES,
-)
+from scaffold.patch import PATCHES, WORKER_PATCHES
 
 # The five service projects §4.1 gives a service, its three test projects, and
 # Catalog.TestSupport — which §4.1 is explicit is NOT a test project, and which
@@ -232,15 +224,7 @@ OMITTED = frozenset(
 # The one file with no counterpart in Catalog, and it is written to be deleted.
 ASSEMBLY_MARKER = """namespace Catalog.Domain;
 
-/// <summary>
-/// The <c>typeof</c> anchor §4.2's architecture gates need, and nothing else:
-/// a gate that reasons about an assembly has to name a type inside it, and
-/// this project has none until its first aggregate. Written to be deleted —
-/// when that aggregate lands, re-anchor the architecture gates in
-/// <c>Catalog.Domain.Tests</c> and <c>Catalog.Application.Tests</c> on it and
-/// remove this file, because a marker left in place after the first aggregate
-/// means those gates judge an empty type rather than the model.
-/// </summary>
+/// <summary>The type §4.2's architecture gates anchor on until the first aggregate replaces it.</summary>
 public sealed class AssemblyMarker;
 """
 
@@ -689,16 +673,6 @@ def render_projects(repo_root: Path, names: Names, migration_id: str,
         patches = PATCHES.get(relative, ())
         if names.host != API_HOST:
             patches = (*patches, *WORKER_PATCHES.get(relative, ()))
-        if PurePosixPath(relative).name.endswith("_InitialCreate.cs"):
-            patches = (*patches, *INITIAL_CREATE_PATCHES)
-        elif PurePosixPath(relative).name.endswith("_AddOutbox.cs"):
-            patches = (*patches, *OUTBOX_MIGRATION_PATCHES)
-        elif PurePosixPath(relative).name.endswith("_AddInbox.cs"):
-            patches = (*patches, *INBOX_MIGRATION_PATCHES)
-        elif PurePosixPath(relative).name.endswith("_AddOutboxRetentionIndex.cs"):
-            patches = (*patches, *RETENTION_INDEX_MIGRATION_PATCHES)
-        elif PurePosixPath(relative).name.endswith("_AddIdempotencyMarkers.cs"):
-            patches = (*patches, *IDEMPOTENCY_MIGRATION_PATCHES)
         for needle, replacement in patches:
             require_once(text, needle, relative)
             text = text.replace(needle, replacement)

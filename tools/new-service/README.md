@@ -210,6 +210,21 @@ it without a Service in front of it. **`Shipping` is refused without
 because §4.1 gives it no Domain project and that is a second mode this
 script does not have.
 
+## What a rendered comment may say
+
+A comment the scaffold writes itself — a replacement in `scaffold/patch.py`,
+the marker and the Compose header in `scaffold/render.py` — names the section
+or ADR that owns the mechanism, in one line, and nothing that argues. The
+argument stays with its owner, and the service carries the citation. A
+comment copied from Catalog unpatched is Catalog's, under
+[`docs/style-guide.md`](../../docs/style-guide.md)'s *Comments* rule, so a
+patch that only rewords a Catalog comment already true of any service is
+removed rather than kept.
+
+The suite judges both: the comment gate's own findings over the lines a render
+writes that Catalog does not carry, and the rendered C#'s comment share
+against its `COMMENT_CEILING`.
+
 ## The tests
 
 ```bash
