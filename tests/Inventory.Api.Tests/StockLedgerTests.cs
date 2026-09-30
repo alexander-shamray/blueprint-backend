@@ -58,9 +58,7 @@ public sealed class StockLedgerTests(ServiceFixture fixture) : IAsyncLifetime
             .ShouldBe([(new ProductId(a), 3), (new ProductId(b), 0)], ignoreOrder: true);
         outcome.Levels.ShouldAllBe(l => l.UpdatedAt > DateTimeOffset.UtcNow.AddMinutes(-1),
             "the instant is the statement's, stamped under the row lock");
-        // Version-7 ids are not creation-ordered under Guid.CompareTo, so the
-        // order is asserted against the comparer the ledger sorts with, not
-        // against which id was made first.
+        // Version-7 ids are not creation-ordered under Guid.CompareTo, so the ledger's own comparer is asserted.
         outcome.Levels.Select(l => l.ProductId.Value)
             .ShouldBe(
                 outcome.Levels.Select(l => l.ProductId.Value).OrderBy(g => g),

@@ -7,24 +7,7 @@ using Xunit;
 
 namespace Inventory.Api.Tests;
 
-/// <summary>
-/// §9.4 promises that two staged types sharing a <c>FullName</c> fail the host
-/// rather than the first message, and `MessageTypeMapValidator` is the only
-/// thing that makes it true — the map is registered through a factory, and a
-/// factory is lazy.
-/// </summary>
-/// <remarks>
-/// Without this test, deleting that validator leaves the whole suite green:
-/// nothing else resolves the map before the dispatcher claims a row, and the
-/// dispatcher is removed in every fixture. The regression would then surface
-/// on a background thread in a host that had been serving traffic — which is
-/// the failure the validator exists to convert into a refusal to start.
-/// <para>
-/// No containers. The host never opens a connection, because the map is
-/// resolved by a hosted service and the constructor throws before anything
-/// else starts.
-/// </para>
-/// </remarks>
+/// <summary>§9.4's refusal of a duplicate <c>FullName</c> at start, made eager by the map's validator.</summary>
 public class MessageTypeMapValidatorTests
 {
     // Five starts, because a run that loses the race below five times over
@@ -42,33 +25,20 @@ public class MessageTypeMapValidatorTests
     [Fact]
     public async Task A_host_whose_types_are_distinct_starts()
     {
-        // The other direction, so the test above cannot pass because the host
-        // refuses to start for some unrelated reason. Unreachable
-        // infrastructure is fine here: nothing dials it during start-up.
+        // The other direction, so the test above cannot pass on an unrelated refusal to start.
         using HostSmokeTests.UnreachableInfrastructureFactory factory = new();
 
         await Should.NotThrowAsync(factory.StartAsync);
     }
 
-    /// <summary>
-    /// Starts hosts whose type source names one assembly twice until one
-    /// reports why it refused to start, and returns that exception.
-    /// </summary>
-    /// <remarks>
-    /// A failed start disposes the provider <c>WebApplicationFactory</c> is
-    /// still reading, and the loser of that race reports the disposal rather
-    /// than the reason. Only a failed start disposes it, so asking again can
-    /// lose the reason and never invent a refusal.
-    /// </remarks>
+    /// <summary>Starts hosts naming one assembly twice until one reports its refusal, not a disposal race.</summary>
     private static async Task<Exception> RefusalAsync()
     {
         Exception? refusal = null;
 
         for (int attempt = 0; attempt < StartAttempts; attempt++)
         {
-            // The same assembly twice, which is the realistic way two entries
-            // collide — a test host adding one the production registration
-            // already named. Every type in it then appears under one FullName.
+            // The same assembly twice, the realistic collision: a test host adding one production already named.
             using DuplicateTypeSourceFactory factory = new();
 
             refusal = (await Record.ExceptionAsync(() => factory.StartAsync()))
@@ -105,10 +75,7 @@ public class MessageTypeMapValidatorTests
 
 file static class FactoryExtensions
 {
-    /// <summary>
-    /// Starts the host and nothing else. <c>CreateClient</c> would do it too,
-    /// and would also make a request — this asserts about start-up alone.
-    /// </summary>
+    /// <summary>Starts the host and nothing else, where <c>CreateClient</c> would also make a request.</summary>
     public static async Task StartAsync(this InventoryApiFactory factory)
     {
         using IServiceScope scope = factory.Services.CreateScope();

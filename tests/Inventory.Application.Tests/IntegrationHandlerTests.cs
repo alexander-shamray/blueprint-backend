@@ -9,11 +9,7 @@ using Xunit;
 
 namespace Inventory.Application.Tests;
 
-/// <summary>
-/// The integration handlers end to end against a recording dispatcher: each
-/// is one dispatch (§3.2), so the fact worth pinning is what it sent, not a
-/// database.
-/// </summary>
+/// <summary>The integration handlers against a recording dispatcher, since each is one dispatch.</summary>
 public class IntegrationHandlerTests
 {
     [Fact]
@@ -61,9 +57,6 @@ public class IntegrationHandlerTests
         command.OrderId.ShouldBe(order);
     }
 
-    // Records what it is sent rather than a mock: this project references no
-    // mocking package, and neither handler under test needs anything richer
-    // than a spy over one call.
     private sealed class RecordingDispatcher : IDispatcher
     {
         public List<object> Commands { get; } = [];

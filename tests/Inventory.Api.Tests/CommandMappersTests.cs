@@ -10,22 +10,7 @@ using Xunit;
 
 namespace Inventory.Api.Tests;
 
-/// <summary>
-/// §9.4's wire-to-command boundary for the commands in §3.2's Accepts column,
-/// constructed directly rather than over containers: every refusal below is
-/// decided in the mapper itself, before a message ever reaches
-/// <c>ValidationBehavior</c> or a dispatcher, so nothing here needs a broker,
-/// a database, or <see cref="IntegrationCollection"/>.
-/// </summary>
-/// <remarks>
-/// A validator's refusal and a mapper's refusal both end as a fault over the
-/// broker with no row written, by <c>ReserveStockValidator</c> or
-/// <c>ReleaseStockValidator</c> alike — a <c>ValidationException</c> from
-/// <c>ValidationBehavior</c> is a fault <c>CommandConsumer</c> retries and
-/// error-queues, so "no row" there cannot say which of the two threw.
-/// Calling the mapper directly, past the point where a validator would ever
-/// see the value, is the only way to isolate its own refusals.
-/// </remarks>
+/// <summary>§9.4's mappers for §3.2's Accepts column, called directly to isolate their own refusals.</summary>
 public sealed class CommandMappersTests
 {
     private static readonly Guid Order = Guid.CreateVersion7();

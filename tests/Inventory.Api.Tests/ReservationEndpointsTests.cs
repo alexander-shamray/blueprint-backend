@@ -8,12 +8,7 @@ using Xunit;
 
 namespace Inventory.Api.Tests;
 
-/// <summary>
-/// The routes the runbook promises over <c>Reservation</c>: a read, a
-/// release an operator can trigger by hand, and a reinstate that only the
-/// runbook calls. The release the queue drives is a separate path through
-/// the command mappers; this suite is the admin surface.
-/// </summary>
+/// <summary>The runbook's admin surface over <c>Reservation</c>: a read, a release and a reinstate.</summary>
 [Collection(nameof(IntegrationCollection))]
 public sealed class ReservationEndpointsTests(ServiceFixture fixture) : IAsyncLifetime
 {
@@ -210,8 +205,7 @@ public sealed class ReservationEndpointsTests(ServiceFixture fixture) : IAsyncLi
             .StatusCode.ShouldBe(HttpStatusCode.Forbidden);
     }
 
-    // Thin forwarders that bind this class's fixture once: the private,
-    // same-named members ReservationTestSupport expects of a caller.
+    // Thin forwarders onto ReservationTestSupport.
     private Task SeedStock(Guid product, int available) =>
         ReservationTestSupport.SeedStock(fixture, product, available);
 

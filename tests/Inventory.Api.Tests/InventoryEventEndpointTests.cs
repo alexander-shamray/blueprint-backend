@@ -9,18 +9,12 @@ using MassTransit;
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
 using Xunit;
-// Aliased because Common.Application has a DependencyInjection too, and the
-// queue name this class polls the inbox on is the messaging one's.
+// Aliased because Common.Application has a DependencyInjection too.
 using MessagingRegistration = Inventory.Infrastructure.Messaging.DependencyInjection;
 
 namespace Inventory.Api.Tests;
 
-/// <summary>
-/// <c>inventory-events</c> (§3.2) over the real broker: both handlers, the
-/// inbox filter and the <c>UPDLOCK, HOLDLOCK</c> probe in
-/// <c>GetForUpdateAsync</c> that serialises a cancellation racing a despatch,
-/// driven through the topology Ordering and Shipping publish into.
-/// </summary>
+/// <summary>The events §3.2 has Inventory consume, over the real broker Ordering and Shipping publish into.</summary>
 [Collection(nameof(IntegrationCollection))]
 public sealed class InventoryEventEndpointTests(ServiceFixture fixture) : IAsyncLifetime
 {
@@ -209,14 +203,7 @@ public sealed class InventoryEventEndpointTests(ServiceFixture fixture) : IAsync
             .ShouldBe(0, "the second despatch found nothing held to move");
     }
 
-    /// <summary>
-    /// The race the <c>UPDLOCK, HOLDLOCK</c> probe in <c>GetForUpdateAsync</c>
-    /// settles, as a test rather than a sentence. Both orderings are
-    /// legitimate outcomes and the assertion admits exactly those two; what
-    /// it refuses is the third state a probe that did not hold to the commit
-    /// would produce — a row left <c>Reserved</c>, a counter moved twice, or
-    /// <c>Available</c> at any other value.
-    /// </summary>
+    /// <summary>The race <c>GetForUpdateAsync</c>'s lock settles: either ordering passes, and no third state.</summary>
     [Fact]
     public async Task A_cancellation_and_a_despatch_for_one_order_arriving_together_end_in_exactly_one_state()
     {
@@ -273,18 +260,8 @@ public sealed class InventoryEventEndpointTests(ServiceFixture fixture) : IAsync
         TrackingNumber = $"TRACK-{Guid.CreateVersion7()}"
     };
 
-    /// <summary>
-    /// Publishes with both transport headers pinned from the contract. §9.5's
-    /// inbox keys on <see cref="ConsumeContext.MessageId"/>, not on the
-    /// body's property, so leaving the transport id to MassTransit would
-    /// poll a row that never appears; §9.1 makes the body, the row and the
-    /// transport carry one correlation, so pinning only the first would
-    /// exercise a split identity no producer emits.
-    /// </summary>
-    /// <param name="drain">
-    /// False only where two deliveries must genuinely overlap, so the wait for
-    /// the inbox row is the <c>Eventually</c> on both rows instead.
-    /// </param>
+    /// <summary>Publishes with both transport headers pinned from the contract, as §9.1 requires.</summary>
+    /// <param name="drain">False only where two deliveries must overlap.</param>
     private async Task PublishAsync<T>(T message, bool drain = true)
         where T : class, IIntegrationEvent
     {
@@ -311,8 +288,7 @@ public sealed class InventoryEventEndpointTests(ServiceFixture fixture) : IAsync
         }
     }
 
-    // Thin forwarders onto ReservationTestSupport, which every messaging
-    // suite over this fixture needs.
+    // Thin forwarders onto ReservationTestSupport.
     private Task SeedStock(Guid product, int available) =>
         ReservationTestSupport.SeedStock(fixture, product, available);
 

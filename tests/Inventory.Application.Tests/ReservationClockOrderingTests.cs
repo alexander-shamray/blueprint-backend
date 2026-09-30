@@ -11,15 +11,7 @@ using Xunit;
 
 namespace Inventory.Application.Tests;
 
-/// <summary>
-/// Every handler that stamps a reservation reads
-/// <see cref="TimeProvider.GetUtcNow"/> after <c>GetForUpdateAsync</c> returns,
-/// so a writer that waited behind the lock cannot stamp earlier than the one it
-/// waited for. <see cref="LockAdvancingClock"/>
-/// stands in for the wait: it moves the clock forward inside the fake
-/// repository's call, so a handler that samples the clock first would still
-/// observe the earlier instant.
-/// </summary>
+/// <summary>Handlers stamp from a clock read after <c>GetForUpdateAsync</c>, never before the lock.</summary>
 public sealed class ReservationClockOrderingTests
 {
     private static readonly DateTimeOffset BeforeLock = new(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);

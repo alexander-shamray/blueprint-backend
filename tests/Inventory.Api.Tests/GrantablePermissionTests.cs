@@ -6,26 +6,7 @@ using Xunit;
 
 namespace Inventory.Api.Tests;
 
-/// <summary>
-/// Every permission Inventory requires is one somebody can be granted.
-/// </summary>
-/// <remarks>
-/// <para>
-/// §11.4 states the rule in both directions and this is the second one: a
-/// permission something requires and the realm cannot grant is a path
-/// nobody can reach — worth checking again here rather than trusted from
-/// Ordering's own pass, because <c>inventory:admin</c> is a role of its own
-/// in the realm's <c>commerce-api</c> client, and this service is the first
-/// to require it.
-/// </para>
-/// <para>
-/// <c>RealmImportTests</c> in <c>Common.Web.Tests</c> asserts the same realm's
-/// role list is closed and could not catch this — it compares against literals
-/// because that assembly is a building block and cannot reference a host to
-/// read its constants. The check has to run from the side that owns the
-/// constant, which is here.
-/// </para>
-/// </remarks>
+/// <summary>§11.4's rule in its second direction: every permission Inventory requires, the realm can grant.</summary>
 public sealed class GrantablePermissionTests
 {
     /// <summary>The client that owns the permission roles (§11.5).</summary>
@@ -34,11 +15,7 @@ public sealed class GrantablePermissionTests
     [Fact]
     public void Every_permission_an_inventory_endpoint_requires_is_a_role_the_realm_can_grant()
     {
-        // Read off the type, not listed by hand. Naming it explicitly would
-        // make this a second manual registry — a permission added to
-        // InventoryPermissions and required by an endpoint would not enter
-        // the assertion, which is the exact defect the test exists to
-        // prevent.
+        // Read off the type, not listed by hand, so a new permission enters the assertion.
         string[] required =
         [
             .. typeof(InventoryPermissions)
@@ -77,11 +54,7 @@ public sealed class GrantablePermissionTests
         ];
     }
 
-    /// <summary>
-    /// The same walk <c>RealmImportTests</c> makes, and for the same reason: a
-    /// test asserting a repository file has to find it from a bin directory
-    /// whose depth is a build detail.
-    /// </summary>
+    /// <summary>Walks up from the bin directory, whose depth is a build detail.</summary>
     private static string RepositoryFile(string relativePath)
     {
         DirectoryInfo? directory = new(AppContext.BaseDirectory);
