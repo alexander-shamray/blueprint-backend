@@ -5,7 +5,7 @@ using Microsoft.Extensions.Time.Testing;
 
 namespace Common.Application.Tests;
 
-/// <summary>The registration path every test takes, standing in for §4.2's <c>AddOrderingApplication</c>.</summary>
+/// <summary>The registration path, standing in for §4.2's <c>AddOrderingApplication</c>.</summary>
 internal static class TestContainer
 {
     internal static ServiceProvider Build(Action<IServiceCollection>? behaviours = null)
