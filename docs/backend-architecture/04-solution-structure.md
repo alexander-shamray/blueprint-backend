@@ -64,6 +64,10 @@ A monorepo makes cross-cutting changes and contract updates atomic and reviewabl
 │   │                                   Common.Web is a library with no entry
 │   │                                   point, so its suite drives a TestServer
 │   │                                   rather than a WebApplicationFactory
+│   ├── Common.TestSupport/             The body every service's
+│   │                                   ServiceFixture derives from (ADR-056).
+│   │                                   Not a test project, and not a
+│   │                                   building block
 │   ├── Gateway.Api.Tests/              The route file of §10.2, over the real
 │   │                                   host: policy resolution, prefix strips,
 │   │                                   the limiter of §10.3 driven until it
