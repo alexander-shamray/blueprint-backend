@@ -276,7 +276,7 @@ public sealed class OrderFulfilmentSaga : MassTransitStateMachine<OrderFulfilmen
                 .Schedule(DespatchTimeout, ctx => new DespatchExpired(ctx.Saga.OrderId))
                 .TransitionTo(Confirmed),
 
-            // No escalation: there is no despatch to stop, and Payments voids off OrderCancelled itself (§9.6).
+            // No escalation here: Payments voids off OrderCancelled itself (§9.6).
             When(OrderCancelled)
                 .Unschedule(ConfirmationTimeout)
                 .Then(ctx => ctx.Saga.CancelReason = ctx.Message.Reason)
