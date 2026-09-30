@@ -59,9 +59,9 @@ of code, so it is never part of a block.
 
 **An uncited `<remarks>`.** A C# `<remarks>`, from the comment its
 opening tag leads to its closing tag, or, when it has none, to the next
-opening tag or the end of that comment block, whose comment text holds no `§`, no `ADR-` number and no
-`cref=`, is a finding at its opening line when any line of it is added. The
-pattern is the gate's `CITATION`.
+opening tag or the end of that comment block, whose comment text holds no
+`§`, no `ADR-` number and no `cref=`, is a finding at its opening line when
+any line of it is added. The pattern is the gate's `CITATION`.
 
 **Added lines only.** The corpus is brought under the rule by the sweeps in
 [`docs/churn-plan.md`](../../docs/churn-plan.md) and
