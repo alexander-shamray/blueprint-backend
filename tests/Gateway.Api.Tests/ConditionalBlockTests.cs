@@ -154,7 +154,7 @@ public sealed class ConditionalBlockTests
         thrown.Message.ShouldContain("Ingress:TrustedNetworks");
     }
 
-    /// <summary>Pins the parse to startup rather than to the middleware's first construction.</summary>
+    /// <summary>Pins the parse to startup.</summary>
     [Fact]
     public void Ingress_enabled_with_an_unparseable_network_refuses_to_start() =>
         Should.Throw<FormatException>(() =>
