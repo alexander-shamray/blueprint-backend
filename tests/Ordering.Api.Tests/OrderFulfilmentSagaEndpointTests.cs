@@ -153,7 +153,7 @@ public sealed class OrderFulfilmentSagaEndpointTests(ServiceFixture fixture) : I
     [Fact]
     public async Task A_row_this_build_writes_defaults_the_retained_CustomerId_to_empty()
     {
-        // ADR-028's expand half: the instance no longer writes CustomerId, and §15.5's previous release may read
+        // ADR-028's expand half: the instance does not write CustomerId, and §15.5's previous release may read
         // it, where Guid.Empty names nobody.
         var orderId = Guid.CreateVersion7();
 
