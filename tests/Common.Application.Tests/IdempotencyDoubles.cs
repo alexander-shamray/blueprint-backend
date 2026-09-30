@@ -7,7 +7,7 @@ internal sealed class RecordingIdempotencyStore : IIdempotencyStore
 {
     private readonly ConcurrentDictionary<string, Held> _entries = new();
 
-    /// <summary>Every call, in order, as <c>verb key</c>.</summary>
+    /// <summary>Every call, in order.</summary>
     public List<string> Calls { get; } = [];
 
     /// <summary>The <see cref="CancellationToken"/> each call was handed, by call name.</summary>
