@@ -154,10 +154,8 @@ public class ShipmentTests
     [Fact]
     public void The_events_carry_the_recording_instant_and_the_row_keeps_the_carriers()
     {
-        // §9.4 stamps the outbox row with the event's OccurredAt and §13.3
-        // measures lag from it, so the carrier's instant stays on the tracking
-        // row (spec, section 7) and never reaches an event. A delivery on a
-        // Booked row raises both, so both are pinned.
+        // §9.4 stamps the outbox row with the event's OccurredAt and §13.3 measures lag from it, so the carrier's
+        // instant stays on the tracking row. A delivery on a Booked row raises both events, so both are pinned.
         Shipment shipment = Booked();
 
         shipment.Record("e1", TrackingStatus.Delivered, Now.AddHours(1), Now.AddHours(2)).ShouldBeTrue();

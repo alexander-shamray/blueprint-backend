@@ -7,12 +7,7 @@ using Xunit;
 
 namespace Shipping.Worker.Tests;
 
-/// <summary>
-/// ADR-053's two windows against the tables they are about: an address is
-/// deleted its window after its shipment turns terminal, and a shipment's
-/// tracking events theirs after delivery. The shipment's own record survives
-/// both, which is why the address is a table of its own (spec, section 7).
-/// </summary>
+/// <summary>ADR-053's two windows against their tables; the shipment's own record survives both.</summary>
 [Collection(nameof(IntegrationCollection))]
 public sealed class ShippingRetentionTests(ServiceFixture fixture) : IAsyncLifetime
 {
@@ -23,10 +18,7 @@ public sealed class ShippingRetentionTests(ServiceFixture fixture) : IAsyncLifet
     [Fact]
     public async Task An_address_outlives_a_live_shipment_and_not_a_terminal_one_past_its_window()
     {
-        // The live row is arranged second, and the order is the arrangement:
-        // DeliveredAsync runs a tracking pass, and that claim takes every
-        // Booked row whose poll is due — a shipment booked before it would be
-        // delivered by it and stop being the live one this asserts over.
+        // The live row is arranged second, since DeliveredAsync's tracking pass would deliver an earlier booking.
         Shipment terminal = await fixture.DeliveredAsync();
         Shipment live = await fixture.BookedAsync("050000");
         await fixture.AgeTerminalAsync(terminal.Id, TimeSpan.FromDays(12));
@@ -90,10 +82,7 @@ public sealed class ShippingRetentionTests(ServiceFixture fixture) : IAsyncLifet
     [Fact]
     public async Task A_voided_shipments_events_are_not_deleted_by_the_delivery_window()
     {
-        // The two clocks are not one: an address goes on any terminal state and
-        // tracking events only after a delivery, because a voided shipment's
-        // feed is the record of what the carrier did with a parcel nobody
-        // received.
+        // An address goes on any terminal state, tracking events only after a delivery.
         Shipment voided = await fixture.VoidedWithTrackingAsync();
         await fixture.AgeTerminalAsync(voided.Id, TimeSpan.FromDays(40));
 
@@ -107,16 +96,13 @@ public sealed class ShippingRetentionTests(ServiceFixture fixture) : IAsyncLifet
     [Fact]
     public async Task No_line_of_the_purge_holds_an_address()
     {
-        // Spec section 11: no line the purge pass logs holds an address. Its
-        // lines carry a row count and a table name, and neither is a person.
+        // No line the purge logs holds an address (ADR-052).
         Shipment terminal = await fixture.DeliveredAsync(line1: "12 Абай даңғылы", city: "Алматы");
         await fixture.AgeTerminalAsync(terminal.Id, TimeSpan.FromDays(12));
 
         await fixture.PurgeShippingRetentionAsync();
 
-        // CapturedLogs.Everything and not a search over formatted messages: it
-        // holds the message, the state's values and any exception's
-        // ToString(), so the structured half is searched too (spec, section 11).
+        // CapturedLogs.Everything, so the state's values and any exception are searched too.
         fixture.CapturedLogs.Everything.ShouldNotBeEmpty(
             "a capture that recorded nothing would pass whatever the pass logged");
         fixture.CapturedLogs.Everything.ShouldContain(

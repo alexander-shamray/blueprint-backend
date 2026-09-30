@@ -4,11 +4,7 @@ using Xunit;
 
 namespace Shipping.Domain.Tests;
 
-/// <summary>
-/// The one piece of the tracking worker's bookkeeping that belongs on the row:
-/// when the next poll is due, and that a terminal shipment is never polled
-/// again (spec, section 4).
-/// </summary>
+/// <summary>The row's poll schedule: when the next poll is due, and none once the shipment is terminal.</summary>
 public class ShipmentPollTests
 {
     private static readonly DateTimeOffset Now = new(2026, 9, 22, 9, 0, 0, TimeSpan.Zero);
@@ -58,10 +54,8 @@ public class ShipmentPollTests
     [Fact]
     public void A_page_applied_to_a_voided_shipment_schedules_no_poll()
     {
-        // A property of PollApplied, whoever calls it: a carrier's void commits
-        // through Shipment.ReleaseClaim and the tracking claim selects only
-        // Booked and Dispatched rows, so no pass is expected to land here. A
-        // terminal row is still never rescheduled if one does.
+        // A property of PollApplied, whoever calls it, although the tracking claim selects only Booked and Dispatched
+        // rows and so no pass is expected to land here.
         Shipment shipment = Booked();
         shipment.Cancel(Now);
         shipment.CarrierCancelled(Now);

@@ -7,10 +7,7 @@ using Xunit;
 
 namespace Shipping.Application.Tests;
 
-/// <summary>
-/// ADR-054's tracking age applied to one leased shipment, at the handler's
-/// clock.
-/// </summary>
+/// <summary>ADR-054's tracking age applied to one leased shipment, at the handler's clock.</summary>
 public class AbandonShipmentHandlerTests
 {
     private static readonly DateTimeOffset Now = new(2026, 9, 22, 9, 0, 0, TimeSpan.Zero);
@@ -48,10 +45,7 @@ public class AbandonShipmentHandlerTests
             new AbandonShipmentCommand(id),
             TestContext.Current.CancellationToken);
 
-    /// <summary>
-    /// <c>IShipmentRepository</c>, whole, answering one shipment by id; the
-    /// members this handler never calls throw rather than answer.
-    /// </summary>
+    /// <summary><c>IShipmentRepository</c>, whole, answering one shipment by id; its other members throw.</summary>
     private sealed class FakeShipments(Shipment? shipment) : IShipmentRepository
     {
         public Task<Shipment?> GetAsync(ShipmentId id, CancellationToken ct) =>

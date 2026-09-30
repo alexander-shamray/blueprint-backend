@@ -17,26 +17,15 @@ using CarrierRegistration = Shipping.Infrastructure.Carrier.DependencyInjection;
 
 namespace Shipping.Worker.Tests;
 
-/// <summary>
-/// The adapter over a real HTTP server loading the simulator's own mappings,
-/// so the file Compose runs is the file these assert (§12: WireMock.Net for a
-/// third-party API).
-/// </summary>
+/// <summary>The adapter over a real HTTP server loading the simulator's own mappings (§12.7).</summary>
 public sealed class HttpCarrierGatewayTests : IClassFixture<HttpCarrierGatewayTests.CarrierHost>
 {
-    /// <summary>
-    /// One server and one host for the class: a host over an unreachable
-    /// broker can take seconds to stop, so only a test that needs a pipeline
-    /// of its own builds one. Every case that leaves the breaker with a
-    /// failure to remember is in <c>CarrierFaultTests</c> instead.
-    /// </summary>
+    /// <summary>One server and one host for the class, as a host over an unreachable broker is slow to stop.</summary>
     public sealed class CarrierHost : IDisposable
     {
         public CarrierHost()
         {
-            // Loopback, not WireMock's default of every interface: a socket on
-            // 0.0.0.0 is what a workstation firewall stops to ask about, and the
-            // only caller is the in-process host under test.
+            // Loopback, not WireMock's default of every interface, which a workstation firewall stops to ask about.
             Server = WireMockServer.Start(new WireMockServerSettings { Urls = ["http://127.0.0.1:0"] });
             Factory = new ShippingWorkerFactory(Unreachable.Sql, Unreachable.Rabbit, Server.Urls[0] + "/");
         }
@@ -102,8 +91,7 @@ public sealed class HttpCarrierGatewayTests : IClassFixture<HttpCarrierGatewayTe
         using JsonDocument body = JsonDocument.Parse(call.RequestMessage!.Body!);
         JsonElement root = body.RootElement;
 
-        // The whole shape, not the absence of one word: a field added to the
-        // body is a fact the carrier is shown, and section 7 names two.
+        // The whole shape, since a field added to the body is a fact the carrier is shown.
         root.EnumerateObject().Select(p => p.Name).ShouldBe(["shipmentId", "address"], ignoreOrder: true);
         root.GetProperty("address").EnumerateObject().Select(p => p.Name).ShouldBe(
             ["line1", "line2", "city", "postalCode", "country"], ignoreOrder: true);
@@ -148,9 +136,7 @@ public sealed class HttpCarrierGatewayTests : IClassFixture<HttpCarrierGatewayTe
     [Fact]
     public void The_attempt_timeout_is_outside_the_band_a_waiting_caller_is_sized_to()
     {
-        // §9.7's 1-2 s band is a caller's patience. Nobody waits on this hop:
-        // a worker's row backs off, so the attempt is sized to a third party
-        // behind an anti-corruption layer (spec, section 9).
+        // §9.7's 1-2 s band is a waiting caller's; this hop's row backs off, so it is sized to a third party.
         CarrierHop.AttemptTimeout.ShouldBeGreaterThan(TimeSpan.FromSeconds(2));
     }
 
@@ -208,9 +194,7 @@ public sealed class HttpCarrierGatewayTests : IClassFixture<HttpCarrierGatewayTe
         IReadOnlyList<CarrierEvent> page = await Carrier()
             .GetEventsAsync("crr_SIM-REVERSED", TestContext.Current.CancellationToken);
 
-        // The adapter sorts nothing: the key makes a repeated page free and
-        // section 5's promotion is monotonic by rank, so an order imposed here
-        // would hide the case the domain exists to survive.
+        // The adapter sorts nothing, as the domain's promotion is monotonic by rank and a sort would hide that.
         page.Select(e => e.Status).ShouldBe([TrackingStatus.Delivered, TrackingStatus.Collected]);
     }
 
@@ -232,9 +216,7 @@ public sealed class HttpCarrierGatewayTests : IClassFixture<HttpCarrierGatewayTe
     [Fact]
     public async Task A_hostile_page_is_the_carrier_being_wrong_and_nothing_of_it_is_returned()
     {
-        // SIM-STRANGE's timestamp is decades ahead: a stored future instant
-        // would sit ahead of every real one for ever, so the page is refused
-        // whole rather than partly kept (spec, section 9).
+        // SIM-STRANGE's timestamp is decades ahead, so the page is refused whole rather than partly kept.
         CarrierUnavailableException thrown = await Should.ThrowAsync<CarrierUnavailableException>(() =>
             Carrier().GetEventsAsync("crr_SIM-STRANGE", TestContext.Current.CancellationToken));
 

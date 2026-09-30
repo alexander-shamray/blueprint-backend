@@ -8,12 +8,7 @@ using Xunit;
 
 namespace Shipping.Worker.Tests;
 
-/// <summary>
-/// The spec's section 7, against the engine the migrator ran on. The aggregate
-/// lands here and nothing drives it until a later slice, so this is what makes
-/// the migration real: a table nobody has inserted into is a table nobody has
-/// checked.
-/// </summary>
+/// <summary>The shipment tables against the engine the migrator ran on.</summary>
 [Collection(nameof(IntegrationCollection))]
 public sealed class ShipmentsSchemaTests(ServiceFixture fixture) : IAsyncLifetime
 {
@@ -143,9 +138,7 @@ public sealed class ShipmentsSchemaTests(ServiceFixture fixture) : IAsyncLifetim
 
         await SaveAsync(Shipment.For(ShipmentId.New(), order, Now));
 
-        // Two services decide nothing here — this is one consumer redelivered
-        // past the inbox, and the unique index is what makes the second write
-        // a failure rather than a second shipment nobody reconciles.
+        // One consumer redelivered past the inbox, where the unique index makes the second write fail.
         await Should.ThrowAsync<DbUpdateException>(() => SaveAsync(Shipment.For(ShipmentId.New(), order, Now)));
     }
 
@@ -186,9 +179,7 @@ public sealed class ShipmentsSchemaTests(ServiceFixture fixture) : IAsyncLifetim
         ShippingDbContext db = scope.ServiceProvider.GetRequiredService<ShippingDbContext>();
 
         db.Shipments.Add(shipment);
-        // The domain events stay on the aggregate here: §7.5's dispatcher runs
-        // inside the unit of work, and this test writes through the context
-        // directly because the first command that does not comes later.
+        // Cleared, as this writes through the context directly rather than through §7.5's unit of work.
         shipment.ClearDomainEvents();
         await db.SaveChangesAsync(TestContext.Current.CancellationToken);
     }

@@ -2,15 +2,8 @@ using Common.Infrastructure.Identity;
 
 namespace Shipping.TestSupport;
 
-/// <summary>
-/// An <see cref="ITokenCache"/> that answers without a network call and hands
-/// out a different token each time.
-/// </summary>
-/// <remarks>
-/// The distinct tokens are an instrument, not a model: §11.5 puts the
-/// credential handler inside the resilience pipeline so a retried attempt
-/// goes back to the cache, and only attempts that can be told apart show it.
-/// </remarks>
+/// <summary>An <see cref="ITokenCache"/> that answers without a network call, a different token each time.</summary>
+/// <remarks>Distinct, so the attempts §11.5's retried handler makes can be told apart.</remarks>
 public sealed class RecordingTokenCache : ITokenCache
 {
     private int _issued;

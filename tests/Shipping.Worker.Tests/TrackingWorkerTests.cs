@@ -10,11 +10,7 @@ using Xunit;
 
 namespace Shipping.Worker.Tests;
 
-/// <summary>
-/// The second worker against a real database and the simulator's own mappings:
-/// what one pass claims, what it leaves, and which rows it will not take
-/// (spec, sections 4 and 9).
-/// </summary>
+/// <summary>The tracking worker against a real database and the simulator: what one pass claims and leaves.</summary>
 [Collection(nameof(IntegrationCollection))]
 public sealed class TrackingWorkerTests(ServiceFixture fixture) : IAsyncLifetime
 {
@@ -25,11 +21,8 @@ public sealed class TrackingWorkerTests(ServiceFixture fixture) : IAsyncLifetime
     [Fact]
     public void The_lease_outlives_the_hop_and_the_pass()
     {
-        // A pass polls its claimed rows together, so CarrierHop.TotalRequestTimeout
-        // bounds the whole pass as well as one call (spec, section 4). A lease
-        // shorter than it would let a second replica claim a row this pass is
-        // still calling the carrier about, and the two would record against
-        // the same aggregate.
+        // A pass polls its rows together, so CarrierHop.TotalRequestTimeout bounds the pass; a shorter lease would let
+        // a second replica claim a row still being polled.
         TimeSpan lease = TimeSpan.FromSeconds(TrackingWorker.LeaseSeconds);
 
         lease.ShouldBeGreaterThan(CarrierHop.TotalRequestTimeout, "a pass must finish inside its own lease");
@@ -37,18 +30,12 @@ public sealed class TrackingWorkerTests(ServiceFixture fixture) : IAsyncLifetime
             TimeSpan.FromSeconds(30),
             "the host's shutdown timeout is thirty seconds (§15.3), and a pass that outlives it is killed mid-row");
 
-        // NextPollAt is stamped after the carrier answers, part-way into a
-        // tick, so a loop ticking once per poll interval meets that row a
-        // moment before it is due and takes it one tick late (CarrierHop).
+        // NextPollAt is stamped part-way into a tick, so a tick equal to the interval would take a due row a tick late.
         CarrierHop.TrackingTick.ShouldBeLessThan(
             CarrierHop.TrackingPollInterval,
             "the tick bounds how late a due row is claimed, and one as long as the interval doubles the cadence");
 
-        // The two leases are separate numbers over one column: each bounds its
-        // own worst-case pass, and neither is a bound on the other's. What
-        // keeps the two workers apart is the LockedUntil predicate
-        // TrackingClaims and FulfilmentClaims both carry; the lengths only
-        // decide how long a killed replica's row waits.
+        // Separate leases over one column, each bounding its own pass; LockedUntil keeps the two workers apart.
         TimeSpan.FromSeconds(FulfilmentWorker.LeaseSeconds).ShouldBeGreaterThan(
             TimeSpan.FromSeconds(TrackingWorker.LeaseSeconds),
             "a fulfilment pass makes two hops and a tracking pass one, so its lease is the longer");
@@ -82,10 +69,8 @@ public sealed class TrackingWorkerTests(ServiceFixture fixture) : IAsyncLifetime
         (await fixture.LockedUntilAsync(shipment.Id)).ShouldBeNull(
             "a terminal row is released like any other, not left to its lease");
 
-        // Order, not membership: Ordering's saga finalises on the first and
-        // ADR-051's projection reads both. Staging order, read off the identity
-        // column, because both rows carry the one recording instant and
-        // OccurredAt cannot tell them apart (Shipment.Record).
+        // Order, not membership: Ordering's saga finalises on the first and ADR-051's projection reads both. Read off
+        // the identity column, as both rows carry one recording instant (Shipment.Record).
         (await fixture.OutboxAsync())
             .OrderBy(row => row.Id)
             .Select(row => row.MessageType.Split('.')[^1])
@@ -95,9 +80,7 @@ public sealed class TrackingWorkerTests(ServiceFixture fixture) : IAsyncLifetime
     [Fact]
     public async Task A_refused_cancellation_goes_on_being_tracked_and_despatches_on_collection()
     {
-        // Spec section 6's third case. SIM-LATE's cancel answers too late, and
-        // its events fall to the simulator's default page, collected and then
-        // delivered, so the despatch is staged ahead of the delivery.
+        // SIM-LATE's cancel answers too late, and its feed is the simulator's default page, collected then delivered.
         Shipment shipment = await fixture.BookedAsync("SIM-LATE");
         await fixture.RequestCancellationAsync(shipment.Id);
 
@@ -106,9 +89,8 @@ public sealed class TrackingWorkerTests(ServiceFixture fixture) : IAsyncLifetime
             "SELECT Value = COUNT(*) FROM shipping.Shipments WHERE Id = {0} AND CancellationRefusedAt IS NOT NULL",
             shipment.Id.Value)).ShouldBe(1, "the carrier refused the cancellation");
 
-        // Still Booked with both stamps, so only the refusal predicate keeps
-        // the fulfilment claim off it. Carrier calls, not the pass's count: a
-        // re-asked cancellation is refused again and moves nothing.
+        // Still Booked with both stamps, so only the refusal predicate keeps the fulfilment claim off it; counted as
+        // carrier calls, as a re-asked cancellation would move nothing either.
         int carrierCalls = fixture.Carrier.LogEntries.Count;
         await fixture.RunFulfilmentPassAsync();
         fixture.Carrier.LogEntries.Count.ShouldBe(carrierCalls, "a refused cancellation is outside the claim");
@@ -129,9 +111,7 @@ public sealed class TrackingWorkerTests(ServiceFixture fixture) : IAsyncLifetime
             .Select(row => row.MessageType.Split('.')[^1])
             .ShouldBe(["ShipmentDispatched", "ShipmentDelivered"]);
 
-        // The despatch carries the instant the pass raised it, not the
-        // collection the simulator's default page scripts (spec, section 9):
-        // §9.4 stamps the row with it, and §13.3's lag is measured from it.
+        // The despatch carries the instant the pass raised it: §9.4 stamps the row with it, and §13.3's lag reads it.
         outbox
             .Single(row => row.MessageType.EndsWith("ShipmentDispatched", StringComparison.Ordinal))
             .OccurredAt.ShouldBeInRange(before, after);
@@ -142,16 +122,12 @@ public sealed class TrackingWorkerTests(ServiceFixture fixture) : IAsyncLifetime
     {
         Shipment shipment = await fixture.BookedAsync("SIM-TRANSIT");
 
-        // Staged, not two passes back to back: the claim's lease is what the
-        // second pass must see, and a pass that has already committed would
-        // prove nothing about a row in flight.
+        // Staged rather than two passes, since the second must meet a row in flight.
         await fixture.ClaimForTrackingAsync();
 
         (await Worker().ProcessBatchAsync(TestContext.Current.CancellationToken)).ShouldBe(0);
 
-        // A pass that claimed the row and failed its poll also answers 0, and
-        // leaves PollAttempts at 1: the row as booked is what says it was
-        // skipped.
+        // A pass that claimed the row and failed also answers 0, but leaves PollAttempts at 1.
         (await fixture.StatusAsync(shipment.Id)).ShouldBe("Booked");
         (await fixture.PollAttemptsAsync(shipment.Id)).ShouldBe(0);
     }
@@ -228,11 +204,8 @@ public sealed class TrackingWorkerTests(ServiceFixture fixture) : IAsyncLifetime
     [Fact]
     public async Task A_row_the_fulfilment_worker_holds_is_not_polled()
     {
-        // The one row both claims select: a Booked shipment whose cancellation
-        // the carrier has not answered is in FulfilmentClaims' second
-        // population and due a poll (spec, section 4). The status filters
-        // overlap by design; the LockedUntil predicate in TrackingClaims is
-        // what keeps this worker off a row the other holds.
+        // A Booked row with an unanswered cancellation is due to both claims; TrackingClaims' LockedUntil predicate
+        // keeps this worker off it.
         Shipment shipment = await fixture.BookedAsync("SIM-TRANSIT");
         await fixture.RequestCancellationAsync(shipment.Id);
 
@@ -246,10 +219,7 @@ public sealed class TrackingWorkerTests(ServiceFixture fixture) : IAsyncLifetime
     [Fact]
     public async Task A_row_this_worker_holds_is_not_claimed_by_a_fulfilment_pass()
     {
-        // The row both claims select, held under this worker's lease: the
-        // LockedUntil predicate in FulfilmentClaims is what refuses it (spec,
-        // section 4). Driven through ServiceFixture.RunFulfilmentPassAsync, so
-        // the claim that refuses is FulfilmentClaims' own and not a copy.
+        // The same row under this worker's lease, refused by FulfilmentClaims' own LockedUntil predicate.
         Shipment shipment = await fixture.BookedAsync("SIM-TRANSIT");
         await fixture.RequestCancellationAsync(shipment.Id);
 
@@ -263,25 +233,18 @@ public sealed class TrackingWorkerTests(ServiceFixture fixture) : IAsyncLifetime
     [Fact]
     public async Task A_pass_that_throws_leaves_the_host_running()
     {
-        // The claim itself failing — the database unreachable — is the case
-        // ExecuteAsync's filter exists for. Driven through the loop and not
-        // through ProcessBatchAsync, because what is under test is the catch
-        // around the pass rather than the pass.
+        // The claim failing, with the database unreachable, is the case ExecuteAsync's filter exists for.
         using ShippingWorkerFactory broken = new(Unreachable.Sql, Unreachable.Rabbit);
 
         TrackingWorker worker = broken.Services.GetRequiredService<TrackingWorker>();
 
-        // The pass itself throws, which is what the catch below is about and
-        // what a carrier outage would never produce: that is caught per row.
+        // The pass itself throws, which a carrier outage never does: that is caught per row.
         await Should.ThrowAsync<Exception>(
             () => worker.ProcessBatchAsync(TestContext.Current.CancellationToken));
 
         await worker.StartAsync(TestContext.Current.CancellationToken);
 
-        // Staged on the loop's own line rather than on a sleep: PeriodicTimer
-        // first fires one CarrierHop.TrackingTick after the start, inside the
-        // wait's deadline, and the direct call above logs nothing. A loop that
-        // let the fault out completes instead of logging.
+        // Staged on the loop's own line, which the first CarrierHop.TrackingTick reaches inside the wait's deadline.
         await ServiceFixture.WaitUntilAsync(() =>
             Task.FromResult(ClaimFailedLogged(broken) || worker.ExecuteTask!.IsCompleted));
 

@@ -9,16 +9,7 @@ using Xunit;
 
 namespace Shipping.Worker.Tests;
 
-/// <summary>
-/// ADR-053 rule 1, from the side that matters: a statutory window is a value the
-/// deployment is given, and a missing or impossible one is §15.4's failure at
-/// start rather than a number this service picks for a regulator.
-/// </summary>
-/// <remarks>
-/// <c>[Required]</c> catches the key nobody supplied; the range catches the key
-/// supplied as <c>00:00:00</c>, which a bound <c>TimeSpan</c> hides from it. A
-/// host refusing to start races its disposal, so no exception type is asserted.
-/// </remarks>
+/// <summary>ADR-053 rule 1: a missing or impossible statutory window is §15.4's failure at start.</summary>
 public sealed class JurisdictionOptionsTests
 {
     private const string UnreachableSql =
@@ -78,10 +69,7 @@ public sealed class JurisdictionOptionsTests
                 string.Equals(name, member, StringComparison.Ordinal) ? value : "11.00:00:00")))
             .Build());
 
-        // The production validator over the same binding, rather than the whole
-        // infrastructure helper: what is under test is that its failure names
-        // the member, and the theory above is what still fails if
-        // AddShippingInfrastructure ever drops the registration.
+        // The production validator over the same binding; the theory above still fails if the registration is dropped.
         services
             .AddOptions<ShippingJurisdictionOptions>()
             .BindConfiguration(ShippingJurisdictionOptions.SectionName)
@@ -101,10 +89,7 @@ public sealed class JurisdictionOptionsTests
     [Fact]
     public void An_invented_jurisdiction_satisfies_both_windows()
     {
-        // ADR-053 rule 2: the made-up deployment's values are configuration and
-        // nothing else, so the suite passes under them with no line of code
-        // changed. Without this the theories above could pass against a class
-        // nothing can satisfy.
+        // ADR-053 rule 2's control, without which the theories above could pass against a class nothing satisfies.
         ServiceCollection services = new();
         services.AddSingleton<IConfiguration>(new ConfigurationBuilder()
             .AddInMemoryCollection(

@@ -8,20 +8,11 @@ using Xunit;
 
 namespace Shipping.Worker.Tests;
 
-/// <summary>
-/// The one table in this service that holds personal data (spec, section 7),
-/// over a real engine because every claim here is the column's rather than the
-/// model's: the width, the collation and the round trip.
-/// </summary>
+/// <summary>The table holding this service's personal data (ADR-052), against a real engine's columns.</summary>
 [Collection(nameof(IntegrationCollection))]
 public sealed class DeliveryAddressStoreTests(ServiceFixture fixture) : IAsyncLifetime
 {
-    /// <summary>
-    /// A Kazakh-script address (spec, section 7). Every text column is
-    /// nvarchar, and the letters below are the ones a Cyrillic code page would
-    /// lose: an address stored as question marks reaches the carrier as an
-    /// undeliverable parcel and nothing in the platform reports it.
-    /// </summary>
+    /// <summary>A Kazakh-script address, in letters a Cyrillic code page would lose.</summary>
     private static readonly DeliveryAddress Kazakh =
         new("Абай даңғылы 1, ә ғ қ ң ө ұ ү һ і", "пәтер 12", "Алматы", "050000", "KZ");
 
@@ -54,10 +45,7 @@ public sealed class DeliveryAddressStoreTests(ServiceFixture fixture) : IAsyncLi
         DateTimeOffset laterInstant = Now.AddMinutes(1);
         await SaveAsync(order, firstCustomer, Kazakh);
 
-        // The port is idempotent per order (spec, section 4): a caller that
-        // saves twice ends with one row rather than a primary-key failure,
-        // and the row answers the later save in full — including the
-        // customer §11.7's erasure deletes by, not only the address.
+        // Idempotent per order: a second save leaves one row answering it in full, customer included.
         await SaveAsync(order, laterCustomer, later, laterInstant);
 
         (await fixture.ScalarAsync<int>(
@@ -98,10 +86,7 @@ public sealed class DeliveryAddressStoreTests(ServiceFixture fixture) : IAsyncLi
         Guid customer = Guid.CreateVersion7();
         await SaveAsync(order, customer, Kazakh);
 
-        // §11.7's erasure statement, written here because ADR-052 asks for the
-        // path to be named beside the table and the extension that runs it is
-        // owed whole. What it must leave behind is the shipment's own record,
-        // which holds no customer at all (spec, section 7).
+        // §11.7's erasure statement, named beside the table as ADR-052 asks.
         await fixture.ExecuteAsync("DELETE FROM shipping.DeliveryAddresses WHERE CustomerId = {0};", customer);
 
         (await ReadAsync(order)).ShouldBeNull();
@@ -117,9 +102,7 @@ public sealed class DeliveryAddressStoreTests(ServiceFixture fixture) : IAsyncLi
             ignoreOrder: true,
             "the shipment's own record holds no personal data, so a column added here is a decision");
 
-        // Country alone is fixed-width and non-Unicode: every other
-        // free-text column is nvarchar at its AddressLimits bound, and this
-        // is the one place the model's default would have been wrong.
+        // Country alone is fixed-width and non-Unicode, where the model's default would have been wrong.
         (await ColumnShapeAsync("Country")).ShouldBe("char(2)");
         (await ColumnShapeAsync("Line1")).ShouldBe("nvarchar(200)");
         (await ColumnShapeAsync("Line2")).ShouldBe("nvarchar(200) NULL");

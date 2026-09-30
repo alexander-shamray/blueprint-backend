@@ -9,12 +9,7 @@ using Xunit;
 
 namespace Shipping.Worker.Tests;
 
-/// <summary>
-/// §9.4's dispatcher, driven explicitly rather than by waiting on a timer.
-/// These cover the behaviour §13.6 alerts on — per-row isolation and attempt
-/// accounting — and neither is observable from a test that lets the background
-/// service run, which is why <see cref="ShippingWorkerFactory"/> removes it.
-/// </summary>
+/// <summary>§9.4's dispatcher, a pass at a time, as <see cref="ShippingWorkerFactory"/> removes its timer.</summary>
 [Collection(nameof(IntegrationCollection))]
 public sealed class OutboxDispatcherTests(ServiceFixture fixture) : IAsyncLifetime
 {
@@ -51,9 +46,7 @@ public sealed class OutboxDispatcherTests(ServiceFixture fixture) : IAsyncLifeti
 
         (await fixture.ProcessOutboxBatchAsync()).ShouldBe(0);   // 9 → 10
 
-        // Clear the backoff lease, so the second pass is blocked by the
-        // attempt cap and nothing else. Without this the test would pass even
-        // if the cap were removed entirely.
+        // Clears the backoff lease, so the second pass is blocked by the attempt cap alone.
         await fixture.ExpireOutboxLeasesAsync();
 
         (await fixture.ProcessOutboxBatchAsync()).ShouldBe(0);
@@ -66,11 +59,7 @@ public sealed class OutboxDispatcherTests(ServiceFixture fixture) : IAsyncLifeti
     [Fact]
     public async Task A_domain_event_on_the_broker_lane_is_never_published()
     {
-        // §5.5's rule, enforced at the last place able to enforce it. Stage
-        // refuses this pairing, so the row is built the only way the failure
-        // can actually occur: written correctly, then repointed — a rename
-        // that aliased an old Broker name onto a domain event, or a row
-        // edited during an incident.
+        // §5.5's rule at the last place able to enforce it; Stage refuses this pairing, so the row is repointed.
         OutboxMessage row = OutboxRows.Healthy(fixture);
         await fixture.StageOutboxAsync(row);
         await fixture.SetOutboxLaneAsync(row.MessageId, OutboxLane.Broker);
@@ -85,30 +74,21 @@ public sealed class OutboxDispatcherTests(ServiceFixture fixture) : IAsyncLifeti
     [Fact]
     public async Task A_local_row_with_no_registered_handler_fails_loudly()
     {
-        // The one worth keeping forever. It asserts the failure mode that
-        // would otherwise be invisible: a projection that never runs while
-        // every dashboard stays green.
+        // A projection that never runs would otherwise leave every dashboard green.
         await fixture.StageOutboxAsync(OutboxRows.Unhandled(fixture));
 
         await fixture.ProcessOutboxBatchAsync();
 
         OutboxMessage row = (await fixture.OutboxAsync()).ShouldHaveSingleItem();
-        row.ProcessedAt.ShouldBeNull();           // NOT silently completed
+        row.ProcessedAt.ShouldBeNull();           // not silently completed
         row.LastError.ShouldNotBeNull().ShouldContain("IProjectionHandler");
     }
 
     [Fact]
     public async Task A_row_still_being_delivered_is_not_claimed_by_a_second_pass()
     {
-        // The lease, observed while it is held — which takes two overlapping
-        // passes and cannot be done with sequential ones: a poison row run
-        // through two passes back to back proves nothing, because `_failSql`
-        // replaces the 60-second lease with the 5-second retry backoff and it
-        // is the backoff that blocks the second pass. So: a handler that
-        // blocks, a first pass left in flight, and a second pass run while the
-        // first still holds the claim. This is what UPDLOCK, READPAST and
-        // LockedUntil exist for — without them two replicas deliver the same
-        // row at the same time.
+        // The lease, observed while held, which takes two overlapping passes: UPDLOCK, READPAST and LockedUntil
+        // are what stop two replicas delivering one row.
         DeliveryGate.Close();
         try
         {
@@ -140,14 +120,7 @@ public sealed class OutboxDispatcherTests(ServiceFixture fixture) : IAsyncLifeti
     [Fact]
     public async Task A_broker_row_is_published_and_completed()
     {
-        // The Broker half of DeliverAsync, against the real RabbitMQ the
-        // fixture runs. Everything else here exercises the Local lane, so
-        // without this a failure in payload deserialisation, type resolution
-        // or the publish call would ship while the staging tests stayed green.
-        //
-        // What is asserted is that the row completed, not what reached the
-        // transport: §12.4 refuses an ITestHarness on a fixture that runs the
-        // real host against the real broker on purpose.
+        // The row completing, not what reached the transport: §12.4 refuses an ITestHarness on the real broker.
         await fixture.StageOutboxAsync(OutboxRows.Broker(fixture, Guid.CreateVersion7()));
 
         (await fixture.ProcessOutboxBatchAsync()).ShouldBe(1);
@@ -161,10 +134,8 @@ public sealed class OutboxDispatcherTests(ServiceFixture fixture) : IAsyncLifeti
     [Fact]
     public async Task An_integration_event_on_the_local_lane_never_reaches_a_projection()
     {
-        // The mirror of the Broker-lane guard, and the quieter of the two:
-        // ProjectionInvoker is generic and unconstrained, so without the guard
-        // a contract would be offered to any matching IProjectionHandler<T>
-        // and the row marked processed — no publish, no handler, no trace.
+        // The mirror of the Broker-lane guard: ProjectionInvoker is unconstrained, so a contract would be offered
+        // to any matching IProjectionHandler<T>.
         OutboxMessage row = OutboxRows.Broker(fixture, Guid.CreateVersion7());
         await fixture.StageOutboxAsync(row);
         await fixture.SetOutboxLaneAsync(row.MessageId, OutboxLane.Local);
@@ -183,9 +154,7 @@ public sealed class OutboxDispatcherTests(ServiceFixture fixture) : IAsyncLifeti
 
         (await fixture.ProcessOutboxBatchAsync()).ShouldBe(1);
 
-        // At-least-once is the outbox's promise, but re-delivering a row the
-        // dispatcher has already marked processed would be at-least-once
-        // forever: nothing else in the design ever stops it.
+        // A processed row is never delivered again, since nothing else would ever stop it.
         (await fixture.ProcessOutboxBatchAsync()).ShouldBe(0);
     }
 }

@@ -1,10 +1,6 @@
 namespace Shipping.TestSupport;
 
-/// <summary>
-/// The carrier simulator's mapping files, where Compose mounts them from
-/// (§14.1), so a test over an in-process server loads the same stubs the
-/// local stack runs rather than a copy that could drift from them.
-/// </summary>
+/// <summary>The simulator's mappings where Compose mounts them from (§14.1), so tests load the same stubs.</summary>
 public static class SimulatorMappings
 {
     public static string Directory()

@@ -13,38 +13,22 @@ using Xunit;
 
 namespace Shipping.Worker.Tests;
 
-/// <summary>
-/// The persistence layer against a real engine: the migrator applies the
-/// schema and reports it, §13.5's readiness check answers from a database
-/// that is up, and <c>EfUnitOfWork</c> commits and rolls back the way §6.3
-/// says it does.
-/// </summary>
-/// <remarks>ADR-010 makes real infrastructure non-optional, so a missing
-/// Docker daemon fails these rather than skipping them, and joining
-/// <see cref="IntegrationCollection"/> is what puts them in the half a
-/// selector can leave out — never the half that passes without one.</remarks>
+/// <summary>The migrator, §13.5's readiness and §6.3's unit of work against a real engine (ADR-010).</summary>
 [Collection(nameof(IntegrationCollection))]
 public class DatabaseSmokeTests(ServiceFixture fixture)
 {
     [Fact]
     public async Task Migrator_exits_zero_and_creates_the_schema()
     {
-        // The fixture ran the real host against an empty server, so this is the
-        // §7.4 job's own outcome rather than a re-enactment of it.
+        // The fixture ran the real §7.4 job against an empty server, so this is its own outcome.
         fixture.FirstRunExitCode.ShouldBe(0);
 
         int schema = await fixture.ScalarAsync<int>(
             "SELECT Value = COUNT(*) FROM sys.schemas WHERE name = 'shipping'");
         schema.ShouldBe(1, "InitialCreate's hand-written EnsureSchema is what creates it");
 
-        // Named and ordered, not merely counted: the migrator's job is to
-        // apply every migration in sequence, and a count alone would pass on
-        // a shorter prefix of them applied twice. What a scaffolded service
-        // starts with is the schema, then §9.4's outbox table, §9.5's inbox,
-        // the index the retention purge deletes through, and §8.5's marker
-        // table with the database clock it is aged by and the rowversion the
-        // purge identifies one of its rows by — all of them wiring every
-        // service has rather than anything this one chose.
+        // Named and ordered, not counted, since a count passes on a shorter prefix applied twice. The first seven
+        // are wiring every service has; the last four are this service's own (§3.2).
         string[] applied = await fixture.AppliedMigrationsAsync();
         applied.Length.ShouldBe(11);
         applied[0].ShouldEndWith("_InitialCreate");
@@ -63,9 +47,7 @@ public class DatabaseSmokeTests(ServiceFixture fixture)
     [Fact]
     public async Task Migrating_twice_applies_nothing_and_still_exits_zero()
     {
-        // §7.4 runs this as a pre-install/pre-upgrade hook, so it reruns on
-        // every deploy. Applying nothing is a successful outcome, and a job
-        // that failed here would block every deploy after the first.
+        // §7.4 reruns this on every deploy, so applying nothing has to succeed.
         int exitCode = await ServiceFixture.RunMigratorAsync(fixture.ConnectionString);
 
         exitCode.ShouldBe(0);
@@ -74,10 +56,7 @@ public class DatabaseSmokeTests(ServiceFixture fixture)
     [Fact]
     public async Task Migrator_fails_when_only_the_runtime_connection_string_is_set()
     {
-        // §7.1's split is two principals with different rights, and it is a
-        // boundary only while the migrator reads its own key. Handing it the
-        // runtime connection under the runtime name must not work — if it did,
-        // the two connection strings would be a naming convention.
+        // §7.1's split is a boundary only while the migrator reads its own key.
         int exitCode = await ServiceFixture.RunMigratorAsync(
             migratorConnectionString: null,
             runtimeConnectionString: fixture.ConnectionString);
@@ -88,13 +67,7 @@ public class DatabaseSmokeTests(ServiceFixture fixture)
     [Fact]
     public async Task Ready_probe_reaches_200_once_the_bus_connects()
     {
-        // A poll, not a single request, and the shape is the claim:
-        // WaitUntilStarted is false (the registration argues it), so the host
-        // starts while the bus connects in the background and a 503 in the
-        // first moments is the designed behaviour — Kubernetes holds traffic
-        // until the flip, which is exactly what this asserts. It is also "the
-        // bus connects" (Appendix C) proven against a real broker rather than
-        // inferred from the in-memory harness.
+        // A poll: WaitUntilStarted is false, so a 503 while the bus connects is designed, and the flip is the claim.
         using HttpClient client = fixture.Factory.CreateClient();
 
         HttpStatusCode status = HttpStatusCode.ServiceUnavailable;
@@ -138,12 +111,7 @@ public class DatabaseSmokeTests(ServiceFixture fixture)
     [Fact]
     public async Task ExecuteAsync_rolls_back_a_raw_write_when_the_operation_fails()
     {
-        // The guard §6.3 puts in EfUnitOfWork rather than in the behaviour, and
-        // the reason it is there: TransactionBehavior declining to SaveChanges
-        // covers everything EF tracks, and covers nothing that ExecuteRawAsync
-        // has already sent down the connection. Only the rollback takes that
-        // back, so this is the route TransactionBehavior cannot test for
-        // itself.
+        // §6.3's guard in EfUnitOfWork: declining SaveChanges cannot take back what ExecuteRawAsync already sent.
         Guid id = Guid.CreateVersion7();
 
         await using AsyncServiceScope scope = fixture.Factory.Services.CreateAsyncScope();
@@ -166,10 +134,7 @@ public class DatabaseSmokeTests(ServiceFixture fixture)
     [Fact]
     public async Task The_behaviour_leaves_no_row_when_a_handler_writes_raw_and_then_fails()
     {
-        // The full §6.3 stack: the real behaviour over the scope's real unit
-        // of work and the registered dispatcher, with a handler that writes
-        // through ExecuteRawAsync and then rejects. This proves the behaviour
-        // is what opens the unit and declines the commit.
+        // The full §6.3 stack, proving the behaviour is what opens the unit and declines the commit.
         Guid id = Guid.CreateVersion7();
 
         await using AsyncServiceScope scope = fixture.Factory.Services.CreateAsyncScope();
@@ -202,10 +167,8 @@ public class DatabaseSmokeTests(ServiceFixture fixture)
     [Fact]
     public async Task ExecuteRawAsync_outside_a_unit_of_work_throws_rather_than_autocommitting()
     {
-        // Without the guard this call succeeds: Dapper is handed a null
-        // transaction, SQL Server autocommits, and the row is durable outside
-        // any unit — the dual write ExecuteRawAsync exists to prevent. The
-        // assertion is therefore both halves, the throw and the empty table.
+        // Without the guard SQL Server autocommits a write handed a null transaction, so both the throw and the
+        // empty table are asserted.
         Guid id = Guid.CreateVersion7();
 
         await using AsyncServiceScope scope = fixture.Factory.Services.CreateAsyncScope();
@@ -223,10 +186,7 @@ public class DatabaseSmokeTests(ServiceFixture fixture)
     [Fact]
     public async Task A_transient_fault_retries_the_whole_unit_and_commits_it_once()
     {
-        // The unmanaged half: the strategy re-runs the whole delegate, and
-        // attempt 1's work must not survive into the commit — here the raw
-        // write, rolled back with its transaction. The tracked half is the
-        // test below.
+        // The unmanaged half: attempt 1's raw write must roll back with its transaction.
         Guid id = Guid.CreateVersion7();
         int attempts = 0;
 
@@ -255,12 +215,7 @@ public class DatabaseSmokeTests(ServiceFixture fixture)
     [Fact]
     public async Task A_transient_fault_does_not_double_apply_a_tracked_mutation()
     {
-        // The identity-map half, and the reason EfUnitOfWork clears the
-        // tracker: EF keeps it across a rollback, so without the Clear()
-        // attempt 2 reads attempt 1's already-mutated instance back out of
-        // the identity map and the domain method applies twice into one
-        // commit. ProbeModelCustomizer is what makes a tracked entity
-        // possible without mapping one into the production model.
+        // The identity-map half: EF keeps tracked state across a rollback, which is why EfUnitOfWork clears it.
         Guid id = Guid.CreateVersion7();
 
         await using ServiceProvider provider = BuildFaultInjectingProvider();
@@ -301,11 +256,8 @@ public class DatabaseSmokeTests(ServiceFixture fixture)
     }
 
     /// <summary>
-    /// AddShippingInfrastructure over the fixture's database, with two changes
-    /// scoped to these options and nothing else's: the execution strategy also
-    /// retries the marker, and the model carries <see cref="TrackedProbe"/>.
-    /// AddDbContext backs off registrations that exist, so the stock options
-    /// descriptor is removed first.
+    /// AddShippingInfrastructure over the fixture's database, with a strategy that retries the marker and a model
+    /// carrying <see cref="TrackedProbe"/>.
     /// </summary>
     private ServiceProvider BuildFaultInjectingProvider()
     {
@@ -315,10 +267,7 @@ public class DatabaseSmokeTests(ServiceFixture fixture)
                 new Dictionary<string, string?>
                 {
                     ["ConnectionStrings:Shipping"] = fixture.ConnectionString,
-                    // AddMassTransitMessaging throws without it. Unreachable
-                    // rather than the fixture's broker on the §12.4 .invalid
-                    // convention: no host runs here, so the bus never starts
-                    // and nothing should be able to dial one.
+                    // AddMassTransitMessaging throws without it; unreachable (§12.4), since no bus starts here.
                     ["ConnectionStrings:RabbitMq"] = "amqp://guest:guest@shipping-rabbit.invalid:5672"
                 })
             .Build());
@@ -338,10 +287,7 @@ public class DatabaseSmokeTests(ServiceFixture fixture)
     [Fact]
     public async Task HasActiveTransaction_is_false_outside_the_unit_and_true_inside_it()
     {
-        // The guard TransactionBehavior reads to avoid opening a second
-        // transaction on a nested dispatch. It is one property and it is
-        // invisible until something depends on it, which is why it is pinned
-        // here rather than discovered there.
+        // The guard TransactionBehavior reads to avoid a second transaction on a nested dispatch.
         await using AsyncServiceScope scope = fixture.Factory.Services.CreateAsyncScope();
         IUnitOfWork unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
 

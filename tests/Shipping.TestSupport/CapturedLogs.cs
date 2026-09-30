@@ -3,15 +3,8 @@ using Microsoft.Extensions.Logging;
 
 namespace Shipping.TestSupport;
 
-/// <summary>
-/// Every line the host logs, exported whole: the message, each value the state
-/// carries, and the exception's text, because spec section 11 keeps an address
-/// out of all three and a search over messages alone would miss the rest.
-/// </summary>
-/// <remarks>
-/// A <see cref="ConcurrentQueue{T}"/>, because entries arrive from the bus's
-/// consumer threads and both workers at once; <see cref="Everything"/> copies.
-/// </remarks>
+/// <summary>Every line the host logs, with its state values and exception text, so a search misses none.</summary>
+/// <remarks>ADR-052 keeps an address out of every log attribute and exception's text.</remarks>
 public sealed class CapturedLogs : ILoggerProvider
 {
     private readonly ConcurrentQueue<string> _lines = new();
@@ -46,9 +39,7 @@ public sealed class CapturedLogs : ILoggerProvider
         {
             lines.Enqueue(formatter(state, exception));
 
-            // The structured half: LoggerMessage.Define hands the state over as
-            // the template's name-value pairs, which an exporter writes as
-            // attributes rather than into the message (spec, section 11).
+            // The structured half, which an exporter writes as attributes rather than into the message.
             if (state is IReadOnlyList<KeyValuePair<string, object?>> values)
             {
                 foreach (KeyValuePair<string, object?> value in values)

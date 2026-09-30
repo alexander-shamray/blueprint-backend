@@ -43,9 +43,7 @@ public class CarrierPortTests
     [Fact]
     public void A_carrier_event_carries_no_link_of_the_carriers()
     {
-        // Section 9's stored-no-URL rule, asserted on the shape rather than on
-        // one answer: a link the carrier supplies is a phishing primitive once
-        // anything renders it, and a field is the only way one could be kept.
+        // No URL is stored, checked on the shape: a field is the one way a link could be kept.
         typeof(CarrierEvent).GetProperties()
             .Select(p => p.Name)
             .ShouldBe(["CarrierEventId", "Status", "OccurredAt"], ignoreOrder: true);
