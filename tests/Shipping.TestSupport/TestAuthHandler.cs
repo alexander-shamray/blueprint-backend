@@ -28,7 +28,7 @@ public sealed class TestAuthHandler(
 
         List<Claim> claims = [new(ClaimTypes.NameIdentifier, userId.ToString())];
 
-        // PermissionClaim.Type, not a literal, so the claim is the one §11.4's policies require.
+        // PermissionClaim.Type, not a literal.
         if (Request.Headers.TryGetValue(PermissionsHeader, out StringValues granted))
         {
             claims.AddRange(
