@@ -680,6 +680,13 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
 WORKER_PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
     "src/Services/Catalog/Catalog.Api/Catalog.Api.csproj": (
         (
+            "    The Web SDK, because this is the one project in the service that is a\n"
+            "    host. Application and Infrastructure per §4.2's fourth row — Program.cs is\n"
+            "    the only composition root, and the endpoints gate in Catalog.Api.Tests\n"
+            "    holds every other file to Application and Domain contracts.\n",
+            "    The Web SDK for §13.5's health endpoint, on a host §3.2 gives no API (§15.3).\n",
+        ),
+        (
             "  <ItemGroup>\n"
             "    <!-- Appendix C's OpenAPI deliverable: document only, no UI. -->\n"
             "    <PackageReference Include=\"Microsoft.AspNetCore.OpenApi\" />\n"
