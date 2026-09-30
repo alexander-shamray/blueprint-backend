@@ -1347,6 +1347,12 @@ on:
 """
         self.assertEqual(canary._dispatch_options(text), {"catalog-api"})
 
+    def test_a_quoted_description_in_a_flow_mapping_is_not_a_menu(self) -> None:
+        for description in ("'one of the options: see README'", '"type: choice, options: [x]"'):
+            with self.subTest(description=description):
+                text = f"      workload: {{description: {description}, type: string}}\n"
+                self.assertIsNone(canary._dispatch_options(text))
+
     GUARD ='if ! python deploy/canary/canary.py chart --workload="$WORKLOAD" >/dev/null 2>&1; then'
     CASES = r'''$PYTHON "$ROOT/deploy/canary/canary.py" smoke-cases | tr -d '\r' >"$CASES"'''
 

@@ -1510,8 +1510,11 @@ def _dispatch_options(text: str) -> set[str] | None:
     text = "\n".join(line for line in text.splitlines() if line.strip()) + "\n"
     menus = []
     for flow in re.finditer(r"(?m)^[ \t]*workload:[ \t]*(\{.*)$", text):
-        if re.search(r"""\boptions["']?[ \t]*:|\btype["']?[ \t]*:[ \t]*["']?choice\b""", flow.group(1)):
-            listed = re.search(r"""\boptions["']?[ \t]*:[ \t]*\[([^\]]*)\]""", flow.group(1))
+        # A quoted scalar with a colon may fake a key, so it is blanked; one without may be a key or 'choice'.
+        mapping = re.sub(r"""'[^']*'|"(?:[^"\\]|\\.)*\"""", lambda q: "''" if ":" in q.group(0) else q.group(0),
+                         flow.group(1))
+        if re.search(r"""\boptions["']?[ \t]*:|\btype["']?[ \t]*:[ \t]*["']?choice\b""", mapping):
+            listed = re.search(r"""\boptions["']?[ \t]*:[ \t]*\[([^\]]*)\]""", mapping)
             parts = listed.group(1).split(",") if listed else []
             menus.append({item for item in (part.strip().strip("'\"") for part in parts) if item})
     for block in re.finditer(r"(?m)^([ \t]*)workload:\n((?:\1[ \t].*\n?)*)", text):
