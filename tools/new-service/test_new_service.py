@@ -592,7 +592,7 @@ def budget_breaches(rendered: Plan, names: Names) -> list[str]:
     for path, text in sorted({**rendered.created, **rendered.updated}.items()):
         if gate.reader_for(path) is None:
             continue
-        body = text.lstrip("﻿").replace("\r\n", "\n")
+        body = text.lstrip("\ufeff").replace("\r\n", "\n")
         lines = gate.scan(path, body)
         every = {line.number for line in lines}
         if path in rendered.updated:
