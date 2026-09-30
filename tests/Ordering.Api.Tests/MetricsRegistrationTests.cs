@@ -202,7 +202,7 @@ public class MetricsRegistrationTests
 
         collected.ShouldBeEmpty("a failing read must drop the series, not report one");
 
-        // And it must say so, since a permanent failure and a quiet lane are both an absent series.
+        // And it must say so, since a permanent failure is an absent series.
         // Counted on this thread only, because a host's exporter collects these gauges on its own thread.
         logger.OwnErrors.Count.ShouldBe(3, "one per gauge, carrying the exception");
         logger.OwnErrors.ShouldAllBe(e => e is InvalidOperationException);
