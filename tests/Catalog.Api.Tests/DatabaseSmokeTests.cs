@@ -27,7 +27,7 @@ public class DatabaseSmokeTests(ServiceFixture fixture)
             "SELECT Value = COUNT(*) FROM sys.schemas WHERE name = 'catalog'");
         schema.ShouldBe(1, "InitialCreate's hand-written EnsureSchema creates it; AddProducts' is a no-op after it");
 
-        // Named and ordered, not counted, since a count passes on a shorter prefix applied twice.
+        // Named and ordered, since a count passes on a shorter prefix applied twice.
         string[] applied = await fixture.AppliedMigrationsAsync();
         applied.Length.ShouldBe(9);
         applied[0].ShouldEndWith("_InitialCreate");

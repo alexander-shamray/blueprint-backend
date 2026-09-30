@@ -735,7 +735,7 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
             "        schema.ShouldBe(1, \"InitialCreate's hand-written EnsureSchema creates it; "
             "AddProducts' is a no-op after it\");\n"
             "\n"
-            "        // Named and ordered, not counted, since a count passes on a shorter prefix applied twice.\n"
+            "        // Named and ordered, since a count passes on a shorter prefix applied twice.\n"
             "        string[] applied = await fixture.AppliedMigrationsAsync();\n"
             "        applied.Length.ShouldBe(9);\n"
             "        applied[0].ShouldEndWith(\"_InitialCreate\");\n"
@@ -749,7 +749,7 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
             "        applied[8].ShouldEndWith(\"_AddStockLevels\");\n",
             "        schema.ShouldBe(1, \"InitialCreate's hand-written EnsureSchema is what creates it\");\n"
             "\n"
-            "        // Named and ordered, not counted, since a count passes on a shorter prefix applied twice. All seven\n"
+            "        // Named and ordered, since a count passes on a shorter prefix applied twice. All seven\n"
             "        // are wiring every service has.\n"
             "        string[] applied = await fixture.AppliedMigrationsAsync();\n"
             "        applied.Length.ShouldBe(7);\n"
