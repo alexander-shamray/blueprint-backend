@@ -26,7 +26,7 @@ every deployed environment takes its secrets from a vault
 **The broker's row is the one that changed, and the management console is the
 visible cost.** Since
 [ADR-036](../../docs/backend-architecture/adr/ADR-036-the-broker-has-a-per-service-identity.md)
-each service authenticates as itself — `catalog-svc` and `ordering-svc`, whose
+each service authenticates as itself, as `<service>-svc`, whose
 passwords are in that service's own file under `services/` beside every other
 local default it carries — and
 **`guest` is not created at all**. RabbitMQ seeds that account only when it
@@ -36,7 +36,7 @@ importing definitions does not *delete* a `guest` that already exists, so
 `docker compose down -v` is what makes the removal true on a stack that ran
 before this landed.
 
-Neither service account carries a tag, so **nothing here can log into
+No service account carries a tag, so **nothing here can log into
 http://localhost:15672**, and that is the design rather than an oversight —
 `administrator` on a shared account is what
 [#44](https://github.com/alexander-shamray/blueprint-backend/issues/44) was
