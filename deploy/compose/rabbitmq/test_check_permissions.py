@@ -69,8 +69,26 @@ CHAIN = ("new ImageFromDockerfileBuilder()"
          ".WithDockerfileDirectory(BrokerContextPath())")
 
 
-def fixture_text(name: str) -> str:
-    return (gate.TESTS / name / "ServiceFixture.cs").read_text(encoding="utf-8")
+# Where a case plants a fixture; the text comes from the tree, whichever file holds it.
+PLANTED = "Planted.TestSupport"
+
+
+def mapping_text() -> str:
+    """The first file the gate finds that maps the broker's configuration."""
+    for path in gate.broker_fixtures():
+        text = path.read_text(encoding="utf-8")
+        if "WithResourceMapping(" in text:
+            return text
+    raise AssertionError("no broker fixture maps the configuration: the case, not the gate")
+
+
+def stock_half() -> str:
+    """That fixture with any image build cut, so only the stock route is left."""
+    text = mapping_text()
+    start = text.find("new ImageFromDockerfileBuilder()")
+    if start < 0:
+        return text
+    return text[:start] + "null" + text[text.index(";", start):]
 
 
 def run_over_fixtures(files: dict[str, str], dockerfile: str = "") -> list[str]:
@@ -330,7 +348,7 @@ class TheFixtureCheckLooksAtEveryFixture(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             planted = Path(tmp) / "Platform.IntegrationTests" / "BrokerHarness.cs"
             planted.parent.mkdir(parents=True)
-            planted.write_text(fixture_text("Catalog.TestSupport"), encoding="utf-8")
+            planted.write_text(mapping_text(), encoding="utf-8")
             gate.TESTS = Path(tmp)
             try:
                 self.assertEqual([planted], gate.broker_fixtures())
@@ -350,15 +368,15 @@ class TheFixtureCheckLooksAtEveryFixture(unittest.TestCase):
     def test_a_drift_outside_the_first_fixture_is_refused(self):
         # A mapping moved in a fixture other than the first: the case a
         # check reading one named fixture cannot report.
-        drifted = fixture_text("Inventory.TestSupport").replace(
+        drifted = mapping_text().replace(
             '"/etc/rabbitmq/conf.d/"', '"/etc/rabbitmq/"')
         failures = run_over_fixtures({
-            "Catalog.TestSupport": fixture_text("Catalog.TestSupport"),
-            "Inventory.TestSupport": drifted,
+            PLANTED: mapping_text(),
+            "Platform.IntegrationTests": drifted,
         })
 
         self.assertTrue(
-            any("Inventory.TestSupport" in f for f in failures),
+            any("Platform.IntegrationTests" in f for f in failures),
             f"a moved mapping outside the named fixture went unreported: {failures}")
 
     def refuses(self, fixture: str, saying: str, because: str) -> None:
@@ -367,15 +385,14 @@ class TheFixtureCheckLooksAtEveryFixture(unittest.TestCase):
         The fixture's name alone does not say which branch fired — several
         carry it — so every case here names the sentence it expects.
         """
-        failures = run_over_fixtures({"Catalog.TestSupport": fixture})
+        failures = run_over_fixtures({PLANTED: fixture})
         self.assertTrue(
             any(saying in f for f in failures),
             f"{because}: {failures}")
 
     def unmapped(self, prefix: str = "") -> str:
-        """Catalog's fixture with its mappings gone, under an optional header."""
-        return prefix + fixture_text("Catalog.TestSupport").replace(
-            "WithResourceMapping", "WithNothing")
+        """The stock route with its mappings gone, under an optional header."""
+        return prefix + stock_half().replace("WithResourceMapping", "WithNothing")
 
     def test_a_fixture_that_neither_maps_nor_builds_is_refused(self):
         # Its broker starts with none of the definitions, which is the silent
@@ -436,15 +453,14 @@ class TheFixtureCheckLooksAtEveryFixture(unittest.TestCase):
     def test_a_commented_out_mapping_is_not_a_mapping(self):
         # The other half of the same scan: a mapping behind `//` is not one,
         # and reading it as one is a broker configured by nothing.
-        commented = fixture_text("Catalog.TestSupport").replace(
-            "            .WithResourceMapping", "            // .WithResourceMapping")
+        commented = stock_half().replace(".WithResourceMapping", "// .WithResourceMapping")
         self.refuses(commented, "builds no image from its context",
                      "a commented-out mapping was counted as a real one")
 
     def test_a_fixture_that_stops_mapping_one_file_is_refused(self):
         # The drift the wrong-directory case cannot show: a file the image
         # carries and the test broker does not.
-        dropped = fixture_text("Catalog.TestSupport").replace(
+        dropped = mapping_text().replace(
             '"20-commerce.conf"', '"nothing.conf"')
         self.refuses(dropped, "does not map it",
                      "a file the fixture stopped mapping went unreported")
@@ -452,7 +468,7 @@ class TheFixtureCheckLooksAtEveryFixture(unittest.TestCase):
     def test_a_fixture_mapping_a_file_the_image_lacks_is_refused(self):
         # The mirror, from the same mutation: a file the test broker carries
         # and the image does not.
-        dropped = fixture_text("Catalog.TestSupport").replace(
+        dropped = mapping_text().replace(
             '"20-commerce.conf"', '"nothing.conf"')
         self.refuses(dropped, "the Dockerfile does not COPY it",
                      "a mapping of a file the image lacks went unreported")
@@ -466,7 +482,7 @@ class TheFixtureCheckLooksAtEveryFixture(unittest.TestCase):
             "COPY 20-commerce.conf /etc/rabbitmq/conf.d/20-commerce.conf",
             "COPY 20-commerce.conf /etc/rabbitmq/conf.d/renamed.conf")
         failures = run_over_fixtures(
-            {"Catalog.TestSupport": fixture_text("Catalog.TestSupport")}, renaming)
+            {PLANTED: mapping_text()}, renaming)
 
         self.assertTrue(
             any("renamed.conf" in f for f in failures),
@@ -480,11 +496,21 @@ class TheFixtureCheckLooksAtEveryFixture(unittest.TestCase):
             "COPY definitions.json /etc/rabbitmq/definitions.json\n"
             "COPY --chmod=644 30-extra.conf /etc/rabbitmq/conf.d/30-extra.conf")
         failures = run_over_fixtures(
-            {"Catalog.TestSupport": fixture_text("Catalog.TestSupport")}, unparsed)
+            {PLANTED: mapping_text()}, unparsed)
 
         self.assertTrue(
             any("the pattern, not the file" in f for f in failures),
             f"a COPY line the pattern cannot read went unreported: {failures}")
+
+    def test_a_fixture_that_builds_still_maps_its_stock_route(self):
+        # Both routes in one file: the image it builds for a scheduling service
+        # must not excuse the stock one, even while another fixture maps.
+        both = "IFutureDockerImage image = " + CHAIN + ".Build();\n" + self.unmapped()
+        failures = run_over_fixtures({PLANTED: both, "Platform.IntegrationTests": mapping_text()})
+
+        self.assertTrue(
+            any(PLANTED in f and "starts the stock broker image" in f for f in failures),
+            f"a builder excused an unmapped stock route: {failures}")
 
     def test_a_search_matching_nothing_is_refused(self):
         failures = run_over_fixtures({})
