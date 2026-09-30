@@ -238,10 +238,8 @@ def read_access_token_lifetime(root: Path = ROOT) -> int:
     except OSError as error:
         raise SystemExit(f"realm-gate: {LIFETIME_SOURCE} is not readable: {error}") from error
 
-    # Comments are stripped first and the member is anchored: the file's doc
-    # comments name `AccessTokenLifetime`, so a prose mention plus a
-    # reformatted declaration would otherwise leave exactly one match, in the
-    # comment, and this gate would assert a number the platform does not hold.
+    # Comments are stripped first and the member is anchored, so a prose mention
+    # of `AccessTokenLifetime` can never be the one match this gate asserts on.
     code = "\n".join(
         line for line in text.splitlines() if not line.lstrip().startswith("//"))
     matches = re.findall(
