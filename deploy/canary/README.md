@@ -46,8 +46,12 @@ for its Helm release: `deployables/catalog-api.json` is the release
 - `deploy/helm/smoke.sh` takes its cases from `canary.py smoke-cases`.
 
 None of them lists a deployable by hand. Check 8 and the suite hold the
-workflow to that, and the smoke run where its list is a literal word in a
-plain or declared assignment to a `*CHARTS` name, or a chart's name as a word
+workflow to that where a `workload:` key carries its own `options:` or
+`type: choice`, in block form or in a flow mapping on its key line, and miss
+a quoted key, a flow mapping that continues below its key line, and a list in
+a `run:` step. They hold the smoke run to it where its list is a literal word
+in a plain or declared assignment to a `*CHARTS` name, or a chart's name as a
+word
 of a `for` loop's list, bare or in a `{a,b}` brace list. They miss a list
 built by `read -ra`, `printf -v` or `mapfile`, an indexed assignment,
 indirection, a sequence, a parameter-expansion default such as
@@ -100,7 +104,8 @@ because a branch driven by the file it judges asserts nothing. Every value
 6. The parser found host assemblies at all, so check 4 cannot pass
    vacuously.
 7. Both of `deploy.yml`'s triggers cover every path in `SOURCE_INPUTS`.
-8. `deploy.yml` reads the descriptor list and lists no workload by hand, and
+8. `deploy.yml` reads the descriptor list with no menu in a form
+   [the descriptor section](#a-deployable-is-one-descriptor) says it finds, and
    every deployable it can roll is one `smoke.sh` renders — read through
    `canary.py smoke-cases`, with no hand list in a form
    [the descriptor section](#a-deployable-is-one-descriptor) says it finds.
