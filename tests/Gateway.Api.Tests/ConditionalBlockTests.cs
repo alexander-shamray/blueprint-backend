@@ -150,7 +150,7 @@ public sealed class ConditionalBlockTests
         InvalidOperationException thrown =
             Should.Throw<InvalidOperationException>(() => _ = factory.Services);
 
-        // Left empty, only loopback is trusted, so anonymous callers share one §10.3 partition.
+        // Left empty, no proxy is trusted, so anonymous callers share one §10.3 partition.
         thrown.Message.ShouldContain("Ingress:TrustedNetworks");
     }
 
