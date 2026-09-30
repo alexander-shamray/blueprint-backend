@@ -191,7 +191,7 @@ public sealed class RouteConfigurationTests(GatewayFactory factory) : IClassFixt
         IReadOnlyList<RouteConfiguration> routes =
             RouteConfiguration.ReadAll(factory.Services.GetRequiredService<IConfiguration>());
 
-        // The assertions here are foreach loops, and a foreach over nothing passes.
+        // A foreach over nothing passes.
         routes.ShouldNotBeEmpty();
 
         return routes;
