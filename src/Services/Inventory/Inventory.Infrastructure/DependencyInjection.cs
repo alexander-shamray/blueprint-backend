@@ -77,9 +77,8 @@ public static class DependencyInjection
         // §13.3's messaging instruments.
         services.AddSingleton<MessagingMetrics>();
 
-        // §13.6's outbox gauges. InventoryMetrics is AddInventoryApplication's; a second registration would be a
-        // second set of instruments on one meter. OutboxStats runs in gauge callbacks, so it gets the runtime key
-        // (§7.1) with its own bounded connect timeout, which no query inherits.
+        // §13.6's outbox gauges; InventoryMetrics is AddInventoryApplication's (§13.6). OutboxStats runs in gauge
+        // callbacks, so it gets the runtime key (§7.1) with its own bounded connect timeout, which no query inherits.
         string metricsConnectionString =
             new SqlConnectionStringBuilder(configuration.GetConnectionString("Inventory"))
             {
