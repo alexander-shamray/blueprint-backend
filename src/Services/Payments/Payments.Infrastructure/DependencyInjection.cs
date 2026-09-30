@@ -93,7 +93,7 @@ public static class DependencyInjection
             sp.GetRequiredService<OutboxTable>()));
         services.AddSingleton<OutboxMetrics>();
 
-        // Constructs the metrics singletons nothing injects, before the bus, so they exist for the first message.
+        // Constructs the metrics singletons at start, before the bus, so they exist for the first message (§13.6).
         services.AddHostedService<MetricsInitialiser>();
 
         // §2: no Redis, yet RetentionPurgeService resolves IIdempotencyStore for ADR-039's marker purge.

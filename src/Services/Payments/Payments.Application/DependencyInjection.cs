@@ -19,8 +19,7 @@ public static class DependencyInjection
         // §9.3's allow-list, explicit so that what this service publishes is a decision, not a scan's finding.
         services.AddScoped<IIntegrationEventMapper, PaymentsIntegrationEventMapper>();
 
-        // The clock (§5.4) and the request histogram (§13.3) LoggingBehavior injects, which ValidateOnBuild
-        // cannot check, since it never constructs an open generic.
+        // The clock (§5.4) and the request histogram (§13.3), which LoggingBehavior injects.
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton<RequestMetrics>();
 
@@ -30,7 +29,7 @@ public static class DependencyInjection
         services.AddScoped(typeof(IPipelineBehavior<,>), typeof(IdempotencyBehavior<,>));
         services.AddScoped(typeof(IPipelineBehavior<,>), typeof(TransactionBehavior<,>));
 
-        // Scoped, as a command is; missing, it fails the first command rather than startup, as above.
+        // Scoped, as a command is; only open generics inject it, so a missing one fails the first command.
         services.AddScoped<IdempotencyContext>();
 
         // §4.2's sample line, over the assembly because there is no validator yet to anchor on.
