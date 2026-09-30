@@ -6,8 +6,7 @@ using Xunit;
 namespace Gateway.Api.Tests;
 
 /// <summary>
-/// Every permission the gateway requires is a role the shipped realm file can grant, read on
-/// <c>RealmImportTests</c>' terms (§11.4).
+/// Every permission the gateway requires is a role the shipped realm file can grant (§11.4).
 /// </summary>
 public sealed class GrantablePermissionTests
 {
