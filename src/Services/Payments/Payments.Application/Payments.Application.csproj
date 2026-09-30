@@ -11,7 +11,7 @@
   <ItemGroup>
     <!-- §6.5's read side: GetPaymentHandler uses Dapper directly. -->
     <PackageReference Include="Dapper" />
-    <!-- Used directly, so referenced directly: the validators and §4.2's assembly-scan registration. -->
+    <!-- Used directly, so referenced directly: §4.2's assembly-scan registration. -->
     <PackageReference Include="FluentValidation" />
     <PackageReference Include="FluentValidation.DependencyInjectionExtensions" />
     <!-- AuthorisePaymentHandler's LoggerMessage.Define, which CA1848 requires under ADR-019. -->
