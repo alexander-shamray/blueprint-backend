@@ -45,7 +45,7 @@ public class OrderFulfilmentSagaAwaitingConfirmationTests
             (await Sent<ReleaseStock>(harness, m => m.OrderId == orderId)).ShouldBeTrue();
             (await saga.Exists(orderId, x => x.Compensating)).ShouldNotBeNull();
 
-            // No review row, since no despatch can be moving yet.
+            // No review row: Payments voids off OrderCancelled itself (§9.6).
             harness.Sent
                 .Select<FlagOrderForReview>(Spent())
                 .ShouldBeEmpty();
