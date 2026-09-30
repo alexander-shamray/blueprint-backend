@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
 
-  <!-- Settings from Directory.Build.props (§4.4); the one host, and Program.cs the only composition root (§4.2). -->
+  <!-- Settings from Directory.Build.props (§4.1); the one host, and Program.cs the only composition root (§4.2). -->
 
   <ItemGroup>
     <!-- The OpenAPI document only, no UI (Appendix C). -->

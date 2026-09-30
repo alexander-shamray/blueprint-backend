@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <!--
-    Settings from Directory.Build.props (§4.4). §7.4's job host, since ADR-007 forbids migrating at startup.
+    Settings from Directory.Build.props (§4.1). §7.4's job host, since ADR-007 forbids migrating at startup.
     EF Core Design is for `dotnet ef migrations add`, and PrivateAssets keeps it from flowing further.
   -->
 

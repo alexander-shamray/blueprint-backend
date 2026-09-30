@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- Settings from Directory.Build.props (§4.4); Common.Domain and nothing else, per §4.2's first row. -->
+  <!-- Settings from Directory.Build.props (§4.1); Common.Domain and nothing else, per §4.2's first row. -->
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\BuildingBlocks\Common.Domain\Common.Domain.csproj" />

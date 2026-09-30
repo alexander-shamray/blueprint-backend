@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- Settings from Directory.Build.props (§4.4). -->
+  <!-- Settings from Directory.Build.props (§4.1). -->
 
   <ItemGroup>
     <ProjectReference Include="..\Payments.Domain\Payments.Domain.csproj" />
