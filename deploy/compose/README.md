@@ -217,8 +217,8 @@ docker compose -f deploy/compose/docker-compose.yml -f deploy/compose/docker-com
 ```
 
 The host process reads none of the `environment:` blocks above, so every key
-a service refuses to start without, which §14.1 names, has to reach it
-another way. Same values, host names in place of service names:
+Catalog and Ordering refuse to start without, which §14.1 names, has to reach
+them another way. Same values, host names in place of service names:
 
 ```bash
 export ASPNETCORE_ENVIRONMENT=Development
