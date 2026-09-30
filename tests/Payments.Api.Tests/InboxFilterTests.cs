@@ -85,7 +85,7 @@ public sealed class InboxFilterTests(ServiceFixture fixture) : IAsyncLifetime
         services.AddDbContext<PaymentsDbContext>(o => o.UseSqlServer(fixture.ConnectionString));
         services.AddScoped<DbContext>(sp => sp.GetRequiredService<PaymentsDbContext>());
 
-        // The clock HandledAt is stamped from, which the purge's cutoff also reads (§12.7).
+        // The clock HandledAt is stamped from (§12.7).
         services.AddSingleton(TimeProvider.System);
 
         // The filter's observability dependencies (§13).
