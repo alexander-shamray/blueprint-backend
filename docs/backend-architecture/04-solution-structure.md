@@ -415,10 +415,10 @@ it enforces:
 | `*.Api` | composition root, plus any package | the root rule above, no assembly from another service, and none from the migrator |
 
 **The cross-service rule is one test over all five assemblies**, and it is
-stated as an allow-list rather than a deny-list of service names: this
-service by *prefix*, which is what makes it cover a service before it
-exists, and the building blocks *by name*, because `Common.TestSupport`
-(§4.1) is named like one and is not one:
+stated as an allow-list rather than a deny-list of service names, which is
+what makes it cover a service before it exists: this service by *prefix*,
+and the building blocks *by name*, because `Common.TestSupport` (§4.1) is
+named like one and is not one:
 
 ```csharp
 // Every referenced assembly that is one of this repository's own must belong

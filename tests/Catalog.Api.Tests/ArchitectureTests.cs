@@ -79,7 +79,7 @@ public class ArchitectureTests
     public void No_project_in_this_service_references_another_service()
     {
         // §4.2's "must never reference another service's projects", and §4.3 from the other side: a building block
-        // may cross. This service is admitted by prefix, so the gate covers services that do not exist yet.
+        // may cross. An allow-list, so the gate covers services that do not exist yet.
         foreach (Assembly assembly in ServiceAssemblies)
             ShouldStayInsideThisService(assembly.GetName().Name!, assembly.GetReferencedAssemblies());
     }
