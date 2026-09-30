@@ -1520,9 +1520,9 @@ be removed, and its own doc comment says so.
 > does is not worth having.
 
 `--port` is required for an API render, refused for a worker, and never
-derived. A port is an allocation recorded in the service's own Compose unit; a script that guessed one would quietly disagree
-with a printed chapter. The run refuses a port another service already
-publishes.
+derived. A port is an allocation recorded in the service's own Compose unit;
+a script that guessed one would quietly disagree with a printed chapter. The
+run refuses a port another service already publishes.
 
 **It refuses a *name* on the same terms, and the collision is one the rename
 creates rather than one the operator could see.** §7.1's runtime key is
