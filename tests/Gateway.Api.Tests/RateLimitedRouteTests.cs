@@ -19,7 +19,7 @@ public sealed class RateLimitedRouteTests(StubDestination stub) : IClassFixture<
     /// <summary>Authenticated at the edge, and rate-limited per subject (§10.2).</summary>
     private const string AuthenticatedRoute = "/api/v1/orders/018f4c2e";
 
-    /// <summary>The budget and the §10.5 shape on one exhaustion, which costs a hundred requests.</summary>
+    /// <summary>The budget and the §10.5 shape on one exhaustion.</summary>
     [Fact]
     public async Task The_anonymous_window_admits_its_budget_and_refuses_the_next_as_problem_json()
     {
