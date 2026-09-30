@@ -1495,9 +1495,15 @@ def _smoke_reads(name: str, entry: dict, root: Path) -> list[str]:
 def _dispatch_options(text: str) -> set[str] | None:
     """The names in the `workload:` input's menu, or None where it has none.
 
-    Any `options:` key or `type: choice` at that input's own indentation is a
-    menu, in whatever form; a sibling input's list or a description is not.
+    Its own `options:` or `type: choice`, blank lines aside, or either in a flow
+    mapping on its key line, is a menu; a sibling's or a description's is not.
     """
+    text = "\n".join(line for line in text.splitlines() if line.strip()) + "\n"
+    flow = re.search(r"(?m)^[ \t]*workload:[ \t]*(\{.*)$", text)
+    if flow and re.search(r"""\boptions["']?[ \t]*:|\btype["']?[ \t]*:[ \t]*["']?choice\b""", flow.group(1)):
+        listed = re.search(r"""\boptions["']?[ \t]*:[ \t]*\[([^\]]*)\]""", flow.group(1))
+        parts = listed.group(1).split(",") if listed else []
+        return {item for item in (part.strip().strip("'\"") for part in parts) if item}
     block = re.search(r"(?m)^([ \t]*)workload:\n((?:\1[ \t].*\n?)*)", text)
     child_indent = block and re.match(r"[ \t]+", block.group(2))
     if not child_indent:

@@ -1307,7 +1307,29 @@ class DescriptorReadTests(unittest.TestCase):
         self.assertEqual(canary._dispatch_options(canary._live(text)), set())
         self.assertTrue(any("by hand:" in f and "`type: choice`" in f for f in failures), failures)
 
-    GUARD = 'if ! python deploy/canary/canary.py chart --workload="$WORKLOAD" >/dev/null 2>&1; then'
+    MENU = "        type: choice\n        options: [catalog-api, notifications]\n"
+
+    def _assert_menu(self, workflow: str) -> None:
+        read, failures = self._read(workflow=workflow)
+
+        self.assertIn("notifications", read["workflow"])
+        self.assertTrue(any("by hand (catalog-api, notifications)" in f for f in failures), failures)
+
+    def test_a_menu_past_a_blank_line_in_its_input_is_refused(self) -> None:
+        self._assert_menu(canary.WORKFLOW.read_text(encoding="utf-8").replace(
+            "        type: string\n", "\n" + self.MENU, 1))
+
+    def test_a_menu_past_a_blank_line_after_the_key_is_refused(self) -> None:
+        text = self._replaced(canary.WORKFLOW, "      workload:\n", "      workload:\n\n")
+        self._assert_menu(text.replace("        type: string\n", self.MENU, 1))
+
+    def test_a_menu_in_a_flow_mapping_on_the_key_line_is_refused(self) -> None:
+        self._assert_menu(re.sub(
+            r"(?m)^      workload:\n(?:        .*\n)*",
+            "      workload: {type: choice, options: [catalog-api, 'notifications']}\n",
+            canary.WORKFLOW.read_text(encoding="utf-8"), count=1))
+
+    GUARD ='if ! python deploy/canary/canary.py chart --workload="$WORKLOAD" >/dev/null 2>&1; then'
     CASES = r'''$PYTHON "$ROOT/deploy/canary/canary.py" smoke-cases | tr -d '\r' >"$CASES"'''
 
     def _replaced(self, real: Path, old: str, new: str) -> str:
