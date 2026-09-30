@@ -6,7 +6,7 @@ namespace Common.Web;
 /// <summary>RFC 9457 <c>application/problem+json</c> for every service (§10.5).</summary>
 public static class ProblemDetailsExtensions
 {
-    /// <summary>Registers the shared customisation and an executor for each thrown status in §10.5's table.</summary>
+    /// <summary>Registers the shared customisation and an executor for §10.5's 400 and 409 rows.</summary>
     public static IServiceCollection AddCommonProblemDetails(this IServiceCollection services)
     {
         services.AddExceptionHandler<ValidationExceptionHandler>();
