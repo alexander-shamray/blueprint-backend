@@ -66,7 +66,7 @@ public class IdempotencyOptInTests
             "are vacuous. The day it does, this test fails — restore the ShouldNotBeEmpty " +
             "form, which is what keeps a vacuous gate from quietly becoming a permanent one.");
 
-        // Exactly the two shapes ValueTypeOf accepts; a floor, since no third shape is constructible today.
+        // Exactly the two shapes ValueTypeOf accepts.
         candidates
             .Where(pair => pair.Result != typeof(Result) &&
                 !(pair.Result.IsGenericType && pair.Result.GetGenericTypeDefinition() == typeof(Result<>)))
