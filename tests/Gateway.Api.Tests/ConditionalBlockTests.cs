@@ -115,7 +115,7 @@ public sealed class ConditionalBlockTests
     // A browser serialises an origin without its scheme's default port.
     [InlineData("https://spa.example:443")]
     [InlineData("http://spa.example:80")]
-    // The canonical form is lowercase and WithOrigins compares ordinally.
+    // The canonical form is lowercase.
     [InlineData("https://SPA.example")]
     public void Cors_enabled_with_a_value_that_is_not_an_origin_refuses_to_start(string configured)
     {
