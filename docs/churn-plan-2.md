@@ -225,12 +225,12 @@ Each rule names its owner; this file cites and does not restate.
   the argument goes where the guide already sends it — an ADR.
 - **A review finding against a comment is accepted only for falsehood.**
   The review commands — `review-copilot.md`, `review-branch.md`, the
-  subagent prompts `/ship` dispatches, and `/bug-sweep`'s auditor — refuse a
-  finding whose subject is a comment's wording, completeness, emphasis or
-  argument, and accept one whose subject is a comment stating a fact that is
-  false. The one fix for an accepted finding is to cut. A round that
-  changes no behaviour and no false claim is not a round; the loop counts
-  it as clean.
+  adjudicator `/ship`'s Grok triage dispatches, and `/bug-sweep`'s auditor
+  — refuse a finding whose subject is a comment's wording, completeness,
+  emphasis or argument, and accept one whose subject is a comment stating a
+  fact that is false. The one fix for an accepted finding is to cut. A
+  round whose only findings are refused changes nothing; each loop judges
+  the round after it on its own terms.
 - **A round's touch set is the finding's file.** The primer's *Working in
   this repo* gains one line: a `fix` commit closing a review finding names
   the finding in its subject and touches the file the finding is in; a
@@ -274,8 +274,8 @@ gate prints, at or under the ceiling the step names.
 
 The PR this file arrives in. It adds the budget to the style guide's
 *Comments* section, the review-finding rule to each review command and to
-the subagent prompts `/ship` carries, the round's-touch-set line to the
-primer, and this file's row to the primer's table. In the gate:
+the adjudicator `/ship`'s Grok triage dispatches, the round's-touch-set
+line to the primer, and this file's row to the primer's table. In the gate:
 `BLOCK_LIMIT` 10 → 5; a `<remarks>` without a citation is a finding; a
 `--tree` mode that judges every comment in the named tree instead of a
 diff; and the added-comment-to-added-code report, printed and not yet
