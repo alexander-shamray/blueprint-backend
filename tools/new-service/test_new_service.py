@@ -551,7 +551,7 @@ class GeneratedGuidanceIsTrue(unittest.TestCase):
         self.assertNotIn("set_permissions", fixture)
 
 
-# The comment share, in per cent, that a rendered service's C# may reach (tools/new-service/README.md).
+# The comment share, in per cent, that a rendered service's C# may reach.
 COMMENT_CEILING = 20
 
 
