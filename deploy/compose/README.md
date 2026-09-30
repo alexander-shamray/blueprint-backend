@@ -53,30 +53,28 @@ docker compose exec rabbitmq rabbitmqctl list_permissions
 Management API rather than these, and it is written against a **deployed**
 broker whose operator credential comes from the vault — not against this one.
 
-**Every port here and below is
-published on `127.0.0.1` rather than on every interface**, which is the
-control standing in front of those defaults — `localhost` is what each recipe
-in this file already types, so the bind costs them nothing and keeps the stack
-off the network the laptop is sitting on.
+**Every port here and in every unit below is published on `127.0.0.1` rather
+than on every interface**, which is the control standing in front of those
+defaults — `localhost` is what each recipe in this file already types, so the
+bind costs them nothing and keeps the stack off the network the laptop is
+sitting on.
 
 ## Application services
 
-Application services join this file as their images land —
-[Appendix C](../../docs/backend-architecture/appendix-c-delivery-plan.md)
-sequences them. Catalog is the first: `catalog-migrator` applies the schema
-and exits, then `catalog-api` starts (§14.1's pair rule).
+[§14.1](../../docs/backend-architecture/14-local-development.md)'s model is
+one baseline and one file per deployable unit. `docker-compose.yml` is the
+index, and its `include:` list names `infrastructure.yml` — the baseline the
+table above covers — and each unit under `services/`, one line apiece. A
+unit's first line says what it is and cites its owner, and its `ports:` lines
+are where its host ports are allocated, so this lists every unit, each
+container it declares and what that container publishes:
 
-| Service | Host port(s) | Notes |
-|---|---|---|
-| Catalog API | http://localhost:5102 | `/health/live`, `/health/ready`, `/openapi/v1.json` (needs a token — see below), `/v1/catalog/products` |
-| Gateway | http://localhost:5000 | `/health/live`, `/health/ready`, and [§10.2](../../docs/backend-architecture/10-api-gateway.md)'s four routes |
-| Ordering API | http://localhost:5101 | `/health/live`, `/health/ready`, `/openapi/v1.json` (needs a token — see below), `/v1/orders` — every route needs a token, unlike Catalog's listing |
-| Web BFF | http://localhost:5200 | `/health/live`, `/health/ready`, `POST /v1/checkout/quote` with a body of `currency` and `lines` ([ADR-045](../../docs/backend-architecture/adr/ADR-045-the-checkout-quote-takes-quantities.md)) — a token needed, and a host that mints one of its own ([§11.5](../../docs/backend-architecture/11-identity-authorization.md); [§15.4](../../docs/backend-architecture/15-cicd-deployment.md) names every host that does) |
-| Inventory API | http://localhost:5103 | `/health/live`, `/health/ready`, `/openapi/v1.json` (needs a token — see below), `/v1/inventory/stock/{productId}` — needs a token, unlike Catalog's listing |
-| Payments API | http://localhost:5104 | `/health/live`, `/health/ready`, `/openapi/v1.json` (needs a token — see below) |
-| PSP simulator | http://localhost:5190 | `/__admin/mappings` — the scripted amounts are in [`psp-simulator/README.md`](psp-simulator/README.md) |
-| Shipping worker | — (no published port) | §3.2 gives it no API; §13.5's `/health/live` and `/health/ready` are its only listener and answer inside the container |
-| Carrier simulator | http://localhost:5191 | `/__admin/mappings` — the scripted postal codes are in [`carrier-simulator/README.md`](carrier-simulator/README.md) |
+```bash
+grep -E '^# |^  [a-z-]+:$|ports:' deploy/compose/services/*.yml
+```
+
+A container with no `ports:` line publishes nothing, and a simulator's
+scripted responses are in the README beside its mappings.
 
 **Every OpenAPI document needs a token**, and that is a decision rather than
 an oversight. `MapOpenApi()` carries no authorization metadata, so the

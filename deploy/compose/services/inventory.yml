@@ -1,12 +1,4 @@
-# Inventory's deployment (§14.1), included by deploy/compose/docker-compose.yml.
-# Rendered by tools/new-service from the template service's unit file: the
-# pair rule below belongs to the chapter, and the file boundary belongs to
-# docs/change-locality.md, so a Inventory PR edits this file and never
-# another service's.
-#
-# `include` resolves a relative path against the directory of the file that
-# declares it, so the repository root — the build context — is three levels up
-# from here.
+# Inventory: /v1/inventory/stock/{productId}, behind a token (ADR-030).
 services:
   # §14.1's pair rule: a {service}-migrator one-shot plus the service itself,
   # gated on `condition: service_completed_successfully` — every service owns

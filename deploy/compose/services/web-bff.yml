@@ -1,12 +1,4 @@
-# The BFF's deployment (§14.1), included by
-# deploy/compose/docker-compose.yml. A host rather than a service —
-# docs/change-locality.md section 3 draws that line — and a host that holds
-# client credentials, which is what makes its environment worth reading on its
-# own.
-#
-# `include` resolves a relative path against the directory of the file that
-# declares it, so the repository root — the build context — is three levels up
-# from here.
+# The BFF: POST /v1/checkout/quote (ADR-045), minting its own token (§11.5).
 services:
   # Client credentials, because this host calls a peer synchronously (§9.7);
   # §15.4 says which other hosts do. Named web-bff, matching the Aspire

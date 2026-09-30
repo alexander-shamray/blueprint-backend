@@ -1,15 +1,4 @@
-# Catalog's deployment (§14.1), included by deploy/compose/docker-compose.yml.
-# The pair rule below belongs to the chapter; the file boundary belongs to
-# docs/change-locality.md, so a Catalog PR edits this file and never another
-# service's.
-#
-# Catalog is also the scaffold's template: tools/new-service reads this file
-# and renders the new service's own beside it, so a block added here is a block
-# every later service is born with.
-#
-# `include` resolves a relative path against the directory of the file that
-# declares it, so the repository root — the build context — is three levels up
-# from here.
+# Catalog: /v1/catalog/products (§4.1), and the scaffold's template (§4.5).
 services:
   # §14.1's pair rule: a {service}-migrator one-shot plus the service itself,
   # gated on `condition: service_completed_successfully` — every service owns
