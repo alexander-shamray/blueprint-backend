@@ -9,6 +9,8 @@ it judges and what it leaves to the reviewer are the README's. Exit 0 passes,
 import argparse
 import ast
 import io
+import json
+import os
 import re
 import subprocess
 import sys
@@ -23,6 +25,10 @@ CITATION = re.compile(r"§|\bADR-[0-9]+|\bcref=")
 
 # The languages whose added lines the report weighs, comment against code.
 REPORTED = {"C#": (".cs",), "scripts": (".py", ".sh")}
+
+# The pull requests the C# ratio excepts; the README owns why.
+DOCS_TITLE = re.compile(r"docs[:(]")
+SWEEP_LABEL = "comment-sweep"
 
 # The third field exempts a tree: the harness's helpers are about the
 # reviewers, so a reviewer named there is a subject rather than history.
@@ -807,6 +813,33 @@ def _report(totals, what):
               f"line(s), {share}% comment")
 
 
+def _exception():
+    """Why the pull request in the environment is excepted from the ratio."""
+    listed = os.environ.get("PR_LABELS") or "[]"
+    try:
+        labels = json.loads(listed)
+    except json.JSONDecodeError:
+        labels = None
+    if not isinstance(labels, list) or not all(
+            isinstance(label, str) for label in labels):
+        raise Unreadable(f"PR_LABELS is not a JSON list of names: {listed}")
+    if DOCS_TITLE.match(os.environ.get("PR_TITLE", "")):
+        return "its title is of the docs type"
+    if SWEEP_LABEL in labels:
+        return f"it is labelled {SWEEP_LABEL}"
+    return None
+
+
+def _outweighed(totals, exception):
+    """The ratio's finding, or None when the added C# is not mostly comment."""
+    comment, code = totals.get("C#", (0, 0))
+    if comment <= code:
+        return None
+    said = (f"the added C# is more comment than code, {comment} comment "
+            f"line(s) to {code} code line(s)")
+    return f"{said}, excepted because {exception}" if exception else said
+
+
 def _comment_only(text, whole, start, stop, end):
     content = [k for k in range(start, stop) if text[k] not in " \t"]
     if content:
@@ -922,6 +955,7 @@ def main(argv):
     args.head = args.head or "HEAD"
     span = f"{args.base}...{args.head}"
     try:
+        exception = _exception()
         if not _git("diff", "--name-only", "-z", span).strip(b"\0"):
             raise Unreadable(f"{span} changes no file, so the base or the "
                              "head is not the pull request's")
@@ -966,6 +1000,12 @@ def main(argv):
         print(f"::error file={path},line={line}::{message}")
         print(f"{path}:{line}: {message}")
     _report(totals, "added")
+    ratio = _outweighed(totals, exception)
+    if ratio and not exception:
+        print(f"::error::{ratio}")
+        found.append(ratio)
+    if ratio:
+        print(ratio)
     print(f"judged the added lines of {judged} file(s) it reads, "
           f"{len(found)} finding(s)")
     return 1 if found else 0
