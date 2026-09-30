@@ -20,8 +20,10 @@ corpus is brought under it.
 
 **Measured on 2026-09-30 against `main` at 2c616def, the merge of #323.**
 Every figure here is a record of that day, per the contract's §2, and
-nothing in this file is kept current. Where a figure has a counterpart in
-the first plan's section 1, the first plan's value follows in brackets.
+nothing in this file is kept current. A bracketed figure is the earlier
+side of a comparison. In the history table it is the same measure taken
+over the pull requests through #204, and it differs from the first plan's
+own figures wherever the method does; elsewhere it is the first plan's value.
 
 ### The history since the first plan
 
