@@ -53,6 +53,10 @@ change quoted from the review is a risk with no benefit.
   statements, file-scoped namespaces, explicit types, British prose beside
   real identifier spellings, the unpinned Aspire rows. Read that table before
   adjudicating a style finding, and reject those by naming the row.
+- **The comment rule**, by pointer: `docs/style-guide.md`'s *Comments*
+  section accepts a finding against a comment only for falsehood. A finding
+  about a comment's wording, completeness, emphasis or argument is
+  `reject-rule`, naming that section.
 - **The locality contract**, by pointer: `docs/change-locality.md` §2 is
   the owner of what a document may and may not restate, and this profile
   does not copy its list, because a copy is the one that loses an exception.

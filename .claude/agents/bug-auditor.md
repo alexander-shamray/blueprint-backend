@@ -146,8 +146,9 @@ Say nothing about these; the parent has other commands for them.
   does, that *is* yours: one of the two is a defect and the reader is being
   misled either way.
 - **Style and taste** — naming, formatting, a shape you would have written
-  differently, a refactor that would read better. A repository style guide
-  exists and it is not this audit.
+  differently, a refactor that would read better, and a comment's wording,
+  length or completeness. A repository style guide exists and it is not
+  this audit; only a comment that is false is yours, as above.
 - **Missing features and absent tests** — "there is no test for X" is not a
   defect in X. A test that exists and cannot fail is (above); a test that does
   not exist is a gap for someone else's list.

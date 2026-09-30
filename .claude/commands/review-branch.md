@@ -79,6 +79,11 @@ clean), and the stale restatements `docs/change-locality.md` §2 leaves in
 place — a pre-existing count, "since PR-NN" or second copy of a value that
 this branch did not touch, where the owner site is already correct.
 
+Raise no finding whose subject is a comment's wording, completeness,
+emphasis or argument: `docs/style-guide.md`'s *Comments* section accepts a
+finding against a comment only when the comment states something false,
+and closes it by cutting.
+
 ---
 
 ## Recheck mode

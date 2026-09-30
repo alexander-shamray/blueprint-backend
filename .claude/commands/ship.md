@@ -1152,7 +1152,9 @@ because asking failed.
       block, and no unresolved threads. The last two are the ones that get
       skipped: a review can read "generated no new comments" above a
       suppressed finding worth fixing, and no second round is there to catch
-      a block that went unread.
+      a block that went unread. A round whose only findings are refused under
+      `docs/style-guide.md`'s *Comments* rule — a comment's wording, not its
+      truth — changes nothing, and is clean.
 
       **Anything short of all three is a round with findings.** Run
       `/review-copilot` **paused at its marker step**: let it
