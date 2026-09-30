@@ -23,7 +23,7 @@
     <PackageReference Include="Microsoft.Extensions.Http.Resilience" />
     <!-- §11.5's suite, the one that runs a real Keycloak. -->
     <PackageReference Include="Testcontainers.Keycloak" />
-    <!-- JwtSecurityTokenHandler, named for the same reason though Common.Web's JwtBearer carries it. -->
+    <!-- JwtSecurityTokenHandler, named directly though Common.Web's JwtBearer carries it. -->
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" />
   </ItemGroup>
 
