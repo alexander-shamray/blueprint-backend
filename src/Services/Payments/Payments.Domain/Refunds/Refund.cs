@@ -5,11 +5,7 @@ using Payments.Domain.Refunds.Events;
 
 namespace Payments.Domain.Refunds;
 
-/// <summary>
-/// §3.2's <c>Refund</c>: money voided back for a cancelled order. Created only
-/// from an authorised intent, because the event it raises reports an act and
-/// not a postcondition (ADR-047).
-/// </summary>
+/// <summary>§3.2's money voided back, only from an authorised intent: its event reports an act (ADR-049).</summary>
 public sealed class Refund : AggregateRoot<OrderId>
 {
     public string Reference { get; private set; } = "";

@@ -1,49 +1,30 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
-  <!--
-    Settings come from Directory.Build.props (§4.4).
-
-    Domain and Application — §4.2's third row permits any package besides,
-    used here for EF Core for the write side (§7.2), Dapper for the raw writes
-    IUnitOfWork exposes (§6.3), the SQL readiness check (§13.5), and
-    IConfiguration, which AddPaymentsInfrastructure names in its signature.
-  -->
+  <!-- Settings from Directory.Build.props (§4.4); §4.2's third row permits any package besides. -->
 
   <ItemGroup>
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
     <PackageReference Include="Dapper" />
-    <!-- SqlConnection, constructed by name in SqlConnectionFactory (§6.5).
-         The EF provider above carries it transitively; the direct reference
-         states the direct use. -->
+    <!-- Carried by the EF provider too; referenced because SqlConnectionFactory names it (§6.5). -->
     <PackageReference Include="Microsoft.Data.SqlClient" />
     <PackageReference Include="AspNetCore.HealthChecks.SqlServer" />
-    <!-- The bus (§9). The transport package; MassTransit itself rides in
-         transitively at the same pinned version. No RabbitMQ health-check
-         package beside it: AddMassTransit registers the bus check itself,
-         argued in Messaging/DependencyInjection.cs. -->
+    <!-- The bus (§9); no RabbitMQ health-check package, as AddMassTransit registers the bus check itself. -->
     <PackageReference Include="MassTransit.RabbitMQ" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" />
-    <!-- The provider's typed client and its budget (§3.2's anti-corruption
-         layer): the standard pipeline, configured in Provider/. -->
+    <!-- The provider's typed client and its budget (§3.2's anti-corruption layer). -->
     <PackageReference Include="Microsoft.Extensions.Http.Resilience" />
-    <!-- IHostEnvironment, which AddPaymentProvider names in its signature for
-         the scheme rule, as Common.Infrastructure references it. -->
+    <!-- IHostEnvironment, which AddPaymentProvider takes for the scheme rule. -->
     <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
-    <!-- OutboxStats caches each read briefly, so repeated collections inside
-         that window do not re-query §13.6's gauges. -->
+    <!-- OutboxStats' brief cache of §13.6's gauge reads. -->
     <PackageReference Include="Microsoft.Extensions.Caching.Memory" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Payments.Domain\Payments.Domain.csproj" />
     <ProjectReference Include="..\Payments.Application\Payments.Application.csproj" />
-    <!-- §9.4's outbox: the entity this assembly maps, the type map, the
-         metrics and the dispatcher it hosts; §9.5's inbox and §8.5's marker
-         store ride in on the same reference. -->
+    <!-- §9.4's outbox, §9.5's inbox and §8.5's marker store. -->
     <ProjectReference Include="..\..\..\BuildingBlocks\Common.Infrastructure\Common.Infrastructure.csproj" />
-    <!-- MessageTypeSource's Broker half. Named through IIntegrationEvent
-         until this service has a contract of its own, at which point the
-         anchor becomes that contract — same assembly either way. -->
+    <!-- MessageTypeSource's Broker half, anchored on IIntegrationEvent. -->
     <ProjectReference Include="..\..\..\BuildingBlocks\Common.Contracts\Common.Contracts.csproj" />
   </ItemGroup>
 

@@ -1,11 +1,6 @@
 namespace Payments.Application;
 
-/// <summary>
-/// The money this service records and sends. Ordering's money precision
-/// (§7.2's decimal(19,4), its saga's <c>Total</c> and every line price), so
-/// any total Ordering stores fits here; and two places, the minor units the
-/// provider is sent.
-/// </summary>
+/// <summary>Ordering's decimal(19,4) (§7.2), so any total it stores fits, and the provider's minor units.</summary>
 public static class PaymentAmounts
 {
     public const int Precision = 19;

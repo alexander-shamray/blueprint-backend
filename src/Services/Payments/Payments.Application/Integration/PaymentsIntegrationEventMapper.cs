@@ -6,20 +6,10 @@ using Payments.Domain.Refunds.Events;
 
 namespace Payments.Application.Integration;
 
-/// <summary>
-/// §9.3's allow-list for this service. §5.5 states the principle — never publish a
-/// domain event to the bus — and this is the mechanism that makes it
-/// structural rather than aspirational: a domain event absent from
-/// <see cref="Registry"/> never reaches the bus, by construction, not by
-/// review.
-/// </summary>
+/// <summary>§9.3's allow-list: a domain event not in <see cref="Registry"/> never reaches the bus (§5.5).</summary>
 internal sealed class PaymentsIntegrationEventMapper : IIntegrationEventMapper
 {
-    // §3.2's Publishes column for Payments: PaymentIntent's two events and
-    // Refund's one, each with one private ToContract method beside it, the
-    // contract living in Common.Contracts under a versioned namespace
-    // (§9.2), carrying primitives only, and taking its MessageId and
-    // CorrelationId from the mapper rather than from Stage (§9.1).
+    // §3.2's Publishes column; each contract takes its MessageId and CorrelationId from here, not Stage (§9.1).
     private static readonly Dictionary<Type, Func<IDomainEvent, object>> Registry = new()
     {
         [typeof(PaymentAuthorisedDomainEvent)] = e => ToContract((PaymentAuthorisedDomainEvent)e),
@@ -42,7 +32,7 @@ internal sealed class PaymentsIntegrationEventMapper : IIntegrationEventMapper
         return mapped;
     }
 
-    // The correlation is the ORDER: §9.6's saga correlates every payment event on it.
+    // The correlation is the order, on which §9.6's saga correlates every payment event.
     private static PaymentAuthorised ToContract(PaymentAuthorisedDomainEvent e) => new()
     {
         MessageId = Guid.CreateVersion7(),

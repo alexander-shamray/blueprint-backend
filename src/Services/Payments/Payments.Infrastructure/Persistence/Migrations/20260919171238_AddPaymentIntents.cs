@@ -2,13 +2,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace Payments.Infrastructure.Persistence.Migrations;
 
-/// <summary>
-/// §3.2's <c>PaymentIntent</c>, generated from
-/// <see cref="PaymentIntentConfiguration"/> — the configuration is the
-/// source of truth and only this file's dress is hand-authored (file-scoped
-/// namespace, this comment). The <c>.Designer.cs</c> and the snapshot beside
-/// it are machine-owned and untouched.
-/// </summary>
+/// <summary>§3.2's <c>PaymentIntent</c>, generated from <see cref="PaymentIntentConfiguration"/>.</summary>
 public partial class AddPaymentIntents : Migration
 {
     protected override void Up(MigrationBuilder migrationBuilder)

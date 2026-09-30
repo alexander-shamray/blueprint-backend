@@ -2,12 +2,8 @@ using System.Diagnostics.Metrics;
 
 namespace Payments.Infrastructure.Provider;
 
-/// <summary>
-/// One attempt that met a failing provider: a fault rather than a verdict,
-/// whether the pipeline saw it or the adapter read it from the answer. A fact
-/// about the provider rather than an order, so §13.3's claim rule does not
-/// reach it: a unit that rolls back still met a failing provider.
-/// </summary>
+/// <summary>Attempts that met a failing provider, whether the pipeline or the adapter saw the fault.</summary>
+/// <remarks>A fact about the provider, not an order, so §13.3's claim rule does not reach it.</remarks>
 public sealed class ProviderMetrics
 {
     public const string MeterName = "Payments.Provider";

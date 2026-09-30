@@ -1,14 +1,9 @@
 namespace Payments.Infrastructure.Messaging;
 
-/// <summary>
-/// §3.2's wait for an <c>OrderPlaced</c> that has not arrived: redelivery, not
-/// retry, so the message is released between attempts rather than holding an
-/// endpoint slot for minutes.
-/// </summary>
+/// <summary>§3.2's wait for an <c>OrderPlaced</c> not yet arrived, redelivered so no endpoint slot is held.</summary>
 /// <remarks>
-/// Its total must reach the saga's payment timeout, so a lost order
-/// compensates rather than pages. That timeout is Ordering's (§9.6) and
-/// unreadable here (§4.2), so the two are held together outside both.
+/// Its total must reach the saga's payment timeout, so a lost order compensates rather than pages. That timeout is
+/// Ordering's (§9.6) and unreadable here (§4.2), so the two are held together outside both.
 /// </remarks>
 public static class RedeliveryLadder
 {

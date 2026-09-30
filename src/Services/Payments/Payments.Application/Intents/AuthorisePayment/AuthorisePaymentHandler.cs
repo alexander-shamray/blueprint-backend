@@ -15,9 +15,7 @@ public sealed class AuthorisePaymentHandler(
     ILogger<AuthorisePaymentHandler> log)
     : ICommandHandler<AuthorisePaymentCommand, Result>
 {
-    // §13.4's own example of an Information line: a business event worth an
-    // audit trail. Compiled once (CA1848, ADR-019). The order and the
-    // provider's reference, never the payer: the subject is not the audit's.
+    // §13.4's Information line for a business event, compiled once (CA1848, ADR-019); never the payer.
     private static readonly Action<ILogger, Guid, string, Exception?> Authorised =
         LoggerMessage.Define<Guid, string>(
             LogLevel.Information,
@@ -28,16 +26,13 @@ public sealed class AuthorisePaymentHandler(
     {
         OrderId order = new(command.OrderId);
 
-        // First, and held to commit: the cancellation's stamp waits behind this
-        // lock, so it cannot land between the check below and the charge
-        // (spec, section 6; ADR-049).
+        // First, and held to commit, so a cancellation cannot land between the check and the charge (ADR-049).
         PaymentOrderRecord? record = await orders.LockAsync(order, ct);
 
         PaymentIntent? existing = await intents.GetAsync(order, ct);
         if (existing is not null)
         {
-            // A resend is answered only when it asks for what was decided: a
-            // fresh command with other money must not inherit an authorisation.
+            // A resend is answered only when it asks for what was decided, so other money inherits nothing.
             if (command.Amount != existing.Amount ||
                 !string.Equals(command.Currency, existing.Currency, StringComparison.Ordinal))
             {
@@ -45,16 +40,11 @@ public sealed class AuthorisePaymentHandler(
                     Mismatch(order, command, existing.Amount, existing.Currency, "the recorded payment"));
             }
 
-            // Acknowledged, not answered again: the verdict was staged with the
-            // intent and reaches the saga regardless, and a second
-            // PaymentAuthorised is not idempotent there (spec, section 6).
+            // Acknowledged, not answered again: the staged verdict reaches the saga, where a second is not idempotent.
             return Result.Success();
         }
 
-        // Money first, whenever there are figures to compare: a cancelled order
-        // that was placed still holds its total, and a command disagreeing
-        // with it is a fault, not a customer-facing decline. A tombstone has no
-        // figures, so it has nothing to disagree with.
+        // Money first: disagreeing with a placed order's total, even a cancelled one's, is a fault, not a decline.
         if (record is { IsPlaced: true } &&
             (command.Amount != record.TotalAmount ||
                 !string.Equals(command.Currency, record.Currency, StringComparison.Ordinal)))
@@ -70,8 +60,7 @@ public sealed class AuthorisePaymentHandler(
             return Result.Success();
         }
 
-        // §3.2: a missing record is a wait, not a decline. Thrown, so the
-        // endpoint's delayed redelivery takes it (spec, section 8).
+        // §3.2: a missing record is a wait, not a decline, so the endpoint's delayed redelivery takes it.
         if (record is not { IsPlaced: true })
             throw new PaymentOrderNotYetKnownException($"No OrderPlaced has reached Payments for {order}.");
 
@@ -94,8 +83,7 @@ public sealed class AuthorisePaymentHandler(
         return Result.Success();
     }
 
-    // Both fields, both sides: the error queue is read by a person deciding
-    // whether the sender or the record is wrong.
+    // Both sides, for the person at the error queue deciding whether the sender or the record is wrong.
     private static string Mismatch(
         OrderId order, AuthorisePaymentCommand command, decimal? amount, string? currency, string against) =>
         $"AuthorisePayment for {order} asks for {command.Amount} {command.Currency}; " +

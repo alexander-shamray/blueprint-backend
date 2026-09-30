@@ -1,9 +1,6 @@
 namespace Payments.Application.Provider;
 
-/// <summary>
-/// A fault from the provider that is not a verdict: retried, never a decline
-/// (spec, section 9).
-/// </summary>
+/// <summary>A fault from the provider that is not a verdict: retried, never a decline.</summary>
 public sealed class PaymentProviderUnavailableException : Exception
 {
     public PaymentProviderUnavailableException()

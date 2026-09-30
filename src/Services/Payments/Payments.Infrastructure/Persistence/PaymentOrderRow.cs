@@ -1,10 +1,6 @@
 namespace Payments.Infrastructure.Persistence;
 
-/// <summary>
-/// The shape of <c>payments.PaymentOrders</c>, mapped only so that
-/// <c>migrations add</c> emits the table. Nothing loads or saves it through EF:
-/// <see cref="SqlPaymentOrderStore"/> is the only reader and writer.
-/// </summary>
+/// <summary>Mapped only so <c>migrations add</c> emits <see cref="SqlPaymentOrderStore"/>'s table.</summary>
 internal sealed class PaymentOrderRow
 {
     public Guid OrderId { get; set; }

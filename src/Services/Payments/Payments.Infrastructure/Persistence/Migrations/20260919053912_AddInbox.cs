@@ -2,16 +2,8 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace Payments.Infrastructure.Persistence.Migrations;
 
-/// <summary>
-/// §9.5's inbox table, generated from <see cref="InboxMessageConfiguration"/>
-/// — the configuration is the source of truth for the column and collation
-/// choices below, and only this file's dress is hand-authored (file-scoped
-/// namespace, this comment); the <c>.Designer.cs</c> and snapshot beside it
-/// are machine-owned and untouched. The table arrives before the first
-/// consumer, deliberately: <c>RetentionPurgeService</c> runs from first boot
-/// and deletes from every table it was given, and a purge against a missing
-/// table logs a failure every pass.
-/// </summary>
+/// <summary>§9.5's inbox table, generated from <see cref="InboxMessageConfiguration"/>, its source of truth.</summary>
+/// <remarks>Before the first consumer, since <c>RetentionPurgeService</c> purges it from first boot (§9.5).</remarks>
 public partial class AddInbox : Migration
 {
     protected override void Up(MigrationBuilder migrationBuilder)

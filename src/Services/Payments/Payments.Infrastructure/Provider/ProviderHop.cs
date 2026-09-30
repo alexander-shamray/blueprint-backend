@@ -1,15 +1,7 @@
 namespace Payments.Infrastructure.Provider;
 
-/// <summary>
-/// The provider call's budget. Every retry inside it is safe only because each
-/// request carries its idempotency key (spec, section 4); the endpoint's policy
-/// (§9.8) owns every retry after it, and the worst case of both stays inside
-/// the saga's payment wait (§9.6).
-/// </summary>
-/// <remarks>
-/// Public for the reason <c>Program</c> is (§4.2): read from another assembly,
-/// and one modifier commits less than an <c>InternalsVisibleTo</c>.
-/// </remarks>
+/// <summary>The provider call's budget, sized to fit the saga's payment wait (§9.7, §9.6).</summary>
+/// <remarks>Retries are safe as each request carries an idempotency key; public as <c>Program</c> is (§4.2).</remarks>
 public static class ProviderHop
 {
     public static readonly TimeSpan AttemptTimeout = TimeSpan.FromSeconds(5);
@@ -19,18 +11,11 @@ public static class ProviderHop
 
     public static readonly TimeSpan RetryDelay = TimeSpan.FromMilliseconds(500);
 
-    /// <summary>
-    /// The cap on one jittered delay. With jitter on, <see cref="RetryDelay"/> is
-    /// a nominal and not a bound; this is what makes the budget arithmetic.
-    /// </summary>
+    /// <summary>The bound on one jittered delay, of which <see cref="RetryDelay"/> is only the nominal.</summary>
     public static readonly TimeSpan MaxRetryDelay = TimeSpan.FromSeconds(1);
 
     public static readonly TimeSpan TotalRequestTimeout = TimeSpan.FromSeconds(20);
 
-    /// <summary>
-    /// The most an answer may carry. Every answer the wire format defines is a
-    /// few short fields, so a larger one is a provider this adapter does not
-    /// understand, refused before it is read.
-    /// </summary>
+    /// <summary>Every defined answer is a few short fields, so a larger one is refused unread.</summary>
     public const int MaxAnswerBytes = 64 * 1024;
 }

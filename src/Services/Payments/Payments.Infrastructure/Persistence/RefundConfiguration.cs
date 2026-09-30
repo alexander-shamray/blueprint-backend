@@ -21,15 +21,13 @@ internal sealed class RefundConfiguration : IEntityTypeConfiguration<Refund>
             .HasConversion(id => id.Value, value => new OrderId(value))
             .ValueGeneratedNever();
 
-        // The intent's width, from the same constant: a refund carries the
-        // intent's reference, so the two columns cannot be allowed to differ.
+        // The intent's width, since a refund carries the intent's reference.
         builder.Property(r => r.Reference).HasMaxLength(PaymentLimits.MaxReferenceLength).IsRequired();
         builder.Property(r => r.Amount).HasPrecision(PaymentAmounts.Precision, PaymentAmounts.Scale);
         builder.Property(r => r.Currency).HasMaxLength(3).IsFixedLength().IsUnicode(false);
         builder.Property(r => r.VoidedAt).IsRequired();
 
-        // No rowversion: one refund per order, inserted once, never updated,
-        // and the order record's lock serialises the insert (spec, section 6).
+        // No rowversion: inserted once and never updated, under the order record's lock.
         builder.Ignore(r => r.Version);
         builder.Ignore(r => r.DomainEvents);
     }
