@@ -1339,7 +1339,8 @@ DISPATCH_GUARD = re.compile(
 SMOKE_CASES_READ = re.compile(
     r"""(?m)^[ \t]*\$PYTHON "\$ROOT/deploy/canary/canary\.py" smoke-cases \| tr -d '\\r' >"\$CASES"$""")
 # The hand-written chart lists check 8 finds in smoke.sh: a plain or declared
-# assignment to a `*CHARTS` name, and a `for` loop's word list.
+# assignment to a `*CHARTS` name, and a `for` loop's word list. The forms it
+# misses are the README's, under "A deployable is one descriptor".
 CHARTS_ASSIGNED = re.compile(
     r"(?im)(?:^|[\s;&|])(?:(?:readonly|declare|typeset|local|export)(?:[ \t]+-\w+)*[ \t]+)?\w*charts\+?=")
 FOR_LIST = re.compile(r"(?m)(?:^|[\s;&|])for[ \t]+\w+[ \t]+in[ \t]")
@@ -1424,7 +1425,7 @@ def _shell_words(text: str, start: int, stops: str) -> tuple[str, list[str]]:
 
 
 def _hand_lists(text: str, charts: set[str]) -> list[str]:
-    """Each chart list smoke.sh writes by hand, as it is written."""
+    """Each hand-written chart list in smoke.sh that check 8 finds, as written; the README names those it misses."""
     found = []
     for match in CHARTS_ASSIGNED.finditer(text):
         value, words = _shell_words(text, match.end(), " \t\n;&|")

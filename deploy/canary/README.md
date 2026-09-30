@@ -46,14 +46,18 @@ for its Helm release: `deployables/catalog-api.json` is the release
 - `deploy/helm/smoke.sh` takes its cases from `canary.py smoke-cases`.
 
 None of them lists a deployable by hand. Check 8 and the suite hold the
-workflow to that, and the smoke run where its list is a plain or declared
-assignment to a `*CHARTS` name or a `for` loop's word list; a chart left out
-of `SERVICE_CHARTS`, however it is written, fails `smoke.sh`'s own comparison
-against the chart directories. Adding a deployable to the deployment is
-its descriptor, its chart and the umbrella's dependency on that chart;
-`smoke.sh` and check 4 refuse any one of them without the others. Its image
-and any credential-bearing capability are entries in lists kept separately,
-which §15.3 names with their owners.
+workflow to that, and the smoke run where its list is a literal word in a
+plain or declared assignment to a `*CHARTS` name, or a chart's name as a word
+of a `for` loop's list, bare or in a `{a,b}` brace list. They miss a list
+built by `read -ra`, `printf -v` or `mapfile`, an indexed assignment,
+indirection, a sequence, a parameter-expansion default such as
+`${X:-catalog}`, and a name in a word that holds an expansion, such as the
+path `"$DIR"/catalog`. A chart left out of `SERVICE_CHARTS`, however it is
+written, fails `smoke.sh`'s own comparison against the chart directories.
+Adding a deployable to the deployment is its descriptor, its chart and the
+umbrella's dependency on that chart; `smoke.sh` and check 4 refuse any one of
+them without the others. Its image and any credential-bearing capability are
+entries in lists kept separately, which §15.3 names with their owners.
 
 | Field | What it is |
 |---|---|
@@ -98,8 +102,8 @@ because a branch driven by the file it judges asserts nothing. Every value
 7. Both of `deploy.yml`'s triggers cover every path in `SOURCE_INPUTS`.
 8. `deploy.yml` reads the descriptor list and lists no workload by hand, and
    every deployable it can roll is one `smoke.sh` renders — read through
-   `canary.py smoke-cases`, with no chart named in a `*CHARTS` assignment or
-   a `for` loop's word list.
+   `canary.py smoke-cases`, with no hand list in a form
+   [the descriptor section](#a-deployable-is-one-descriptor) says it finds.
 9. Every workload declares at least one signal `canary.py` defines; and a
    service whose tree registers a MassTransit
    consumer declares `consume`, and one that registers a saga declares `saga`,
