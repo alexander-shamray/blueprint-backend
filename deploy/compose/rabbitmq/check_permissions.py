@@ -396,6 +396,11 @@ BUILDER = re.compile(r"\bnew\s+ImageFromDockerfileBuilder\s*\(")
 BROKER_CONTEXT = re.compile(
     r"\bWithDockerfileDirectory\s*\(\s*BrokerContextPath\s*\(\s*\)\s*\)")
 
+# A tagged broker image is the stock route, whatever else the file builds: one
+# fixture may hold both routes, and its builder cannot excuse the stock image
+# from mapping the configuration.
+STOCK_IMAGE = re.compile(r'\bWithImage\s*\(\s*"rabbitmq:')
+
 
 def _string_end(text: str, start: int) -> int:
     """The index just past the literal opening at `start`."""
@@ -559,6 +564,10 @@ def check_fixture_matches_dockerfile() -> None:
                  f"image from its context either, so its broker starts with none of "
                  f"the definitions — no vhost, no per-service account, nothing to "
                  f"enforce")
+        elif STOCK_IMAGE.search(text):
+            fail(f"{name}: starts the stock broker image and maps none of the "
+                 f"broker's configuration. The image it builds elsewhere does not "
+                 f"reach that route, so its broker starts with none of the definitions")
 
     if not mapping:
         fail(f"no fixture under tests/ maps the broker's configuration. Either every "
