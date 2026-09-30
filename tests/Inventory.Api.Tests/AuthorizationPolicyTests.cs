@@ -71,8 +71,7 @@ public class AuthorizationPolicyTests(HostSmokeTests.UnreachableInfrastructureFa
                 .ShouldContain(InventoryPermissions.Admin);
         }
 
-        // Not vacuous — the loop above passes over an empty set, which is what
-        // a renamed endpoint would produce.
+        // Not vacuous: a renamed endpoint would drop out of the loop above.
         Endpoints.Count(e => names.Contains(Name(e))).ShouldBe(names.Length);
     }
 
