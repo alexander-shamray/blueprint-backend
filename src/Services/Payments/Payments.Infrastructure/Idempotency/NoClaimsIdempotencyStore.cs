@@ -2,7 +2,7 @@ using Common.Application;
 
 namespace Payments.Infrastructure.Idempotency;
 
-/// <summary>No command here is idempotent, so nothing claims a key; the marker purge calls this (ADR-039).</summary>
+/// <summary>Payments has no IIdempotentCommand, so nothing claims a key; the purge calls this (ADR-039).</summary>
 internal sealed class NoClaimsIdempotencyStore : IIdempotencyStore
 {
     public Task<string?> TryClaimAsync(string key, TimeSpan retention, CancellationToken ct) =>
