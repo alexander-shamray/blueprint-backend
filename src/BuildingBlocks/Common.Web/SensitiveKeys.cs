@@ -59,7 +59,7 @@ public static class SensitiveKeys
         if (Assigns(text, "password") || Assigns(text, "pwd"))
             return true;
 
-        // A JWT's base64url header always opens with these three characters; the compact form has two dots.
+        // A header serialised from `{"` encodes to these three characters (§13.4); the compact form has two dots.
         if (!text.StartsWith("eyJ", StringComparison.Ordinal))
             return false;
 
