@@ -1288,7 +1288,7 @@ class DescriptorReadTests(unittest.TestCase):
         self.assertTrue(any("by hand" in f for f in failures), failures)
         self.assertTrue(any("notifications" in f and "no descriptor describes" in f for f in failures), failures)
 
-    GUARD = 'if ! python deploy/canary/canary.py chart --workload "$WORKLOAD" >/dev/null; then'
+    GUARD = 'if ! python deploy/canary/canary.py chart --workload="$WORKLOAD" >/dev/null 2>&1; then'
     CASES = r'''$PYTHON "$ROOT/deploy/canary/canary.py" smoke-cases | tr -d '\r' >"$CASES"'''
 
     def _replaced(self, real: Path, old: str, new: str) -> str:
@@ -1318,7 +1318,17 @@ class DescriptorReadTests(unittest.TestCase):
     def test_a_guard_that_cannot_fail_is_refused(self) -> None:
         self._assert_no_guard(self._replaced(
             canary.WORKFLOW, self.GUARD,
-            'if ! (python deploy/canary/canary.py chart --workload "$WORKLOAD" >/dev/null || true); then'))
+            'if ! (python deploy/canary/canary.py chart --workload="$WORKLOAD" >/dev/null 2>&1 || true); then'))
+
+    def test_a_guard_that_lets_argparse_read_the_name_as_an_option_is_refused(self) -> None:
+        self._assert_no_guard(self._replaced(
+            canary.WORKFLOW, self.GUARD,
+            'if ! python deploy/canary/canary.py chart --workload "$WORKLOAD" >/dev/null 2>&1; then'))
+
+    def test_a_guard_whose_errors_reach_the_log_is_refused(self) -> None:
+        self._assert_no_guard(self._replaced(
+            canary.WORKFLOW, self.GUARD,
+            'if ! python deploy/canary/canary.py chart --workload="$WORKLOAD" >/dev/null; then'))
 
     def test_a_guard_whose_annotation_echoes_the_input_is_refused(self) -> None:
         self._assert_no_guard(self._replaced(

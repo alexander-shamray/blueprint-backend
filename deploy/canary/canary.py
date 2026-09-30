@@ -1332,9 +1332,9 @@ SMOKE_PATH = "deploy/helm/smoke.sh"
 SMOKE = ROOT / SMOKE_PATH
 
 # The reads of the descriptors, as whole live lines: the rollout's guard, whose
-# annotation names no input, and the line smoke.sh takes its cases from.
+# output names no input, and the line smoke.sh takes its cases from.
 DISPATCH_GUARD = re.compile(
-    r'(?m)^[ \t]*if ! python deploy/canary/canary\.py chart --workload "\$WORKLOAD" >/dev/null; then\n'
+    r'(?m)^[ \t]*if ! python deploy/canary/canary\.py chart --workload="\$WORKLOAD" >/dev/null 2>&1; then\n'
     r'[ \t]*echo "::error::[^"$`\\]*"\n[ \t]*exit 1\n[ \t]*fi$')
 SMOKE_CASES_READ = re.compile(
     r"""(?m)^[ \t]*\$PYTHON "\$ROOT/deploy/canary/canary\.py" smoke-cases \| tr -d '\\r' >"\$CASES"$""")
