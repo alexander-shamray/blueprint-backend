@@ -10,35 +10,15 @@ using Xunit;
 
 namespace Catalog.Api.Tests;
 
-/// <summary>
-/// What a rolled-back unit of work leaves behind, which is a question §6.3 did
-/// not have to answer until §9.5's inbox filter became the second thing calling
-/// <c>SaveChanges</c> on a consume scope.
-/// </summary>
-/// <remarks>
-/// <b>Its own file, and outside the scaffold's template, because it needs a
-/// tracked aggregate.</b> The claim is about entities the change tracker still
-/// holds after a refusal, and <c>Product</c> is the only entity Catalog has —
-/// so a service with no aggregate cannot make this assertion at all. It returns
-/// with the first real slice, alongside the other suites the scaffold drops for
-/// the same reason.
-/// </remarks>
+/// <summary>A rolled-back unit of work leaves nothing tracked for §9.5's inbox filter to save.</summary>
 [Collection(nameof(IntegrationCollection))]
 public class UnitOfWorkRollbackTests(ServiceFixture fixture)
 {
     [Fact]
     public async Task A_rejected_command_leaves_nothing_tracked_for_a_later_save_to_commit()
     {
-        // The rollback has to clear the change tracker as well as the
-        // transaction. §6.3's behaviour declines to SaveChanges on a failed
-        // Result, which covers the case where it is the only caller; §9.5's
-        // inbox filter is a second one, running after the consumer returns and
-        // saving unconditionally because it has its own row to write. Anything
-        // a rejected handler left tracked would go with it, outside the
-        // transaction that was just rolled back — a domain refusal committing
-        // its own mutations, which is the single outcome the transaction
-        // boundary exists to prevent. Written against the real registered
-        // IUnitOfWork and the real context, the pair whose contract is at issue.
+        // §6.3's behaviour declines SaveChanges on a failure, but §9.5's inbox filter saves unconditionally after
+        // the consumer returns, so the rollback has to clear the change tracker too.
         await using AsyncServiceScope scope = fixture.Factory.Services.CreateAsyncScope();
         IUnitOfWork unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
         CatalogDbContext db = scope.ServiceProvider.GetRequiredService<CatalogDbContext>();

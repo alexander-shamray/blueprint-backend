@@ -4,12 +4,7 @@ using Xunit;
 
 namespace Catalog.Api.Tests;
 
-/// <summary>
-/// §3.2's one Catalog projection table, asserted in a Catalog-only file: the
-/// project's general schema smoke test is copied into every rendered
-/// service, and an assertion about <c>catalog.StockLevels</c> there would
-/// fail every render.
-/// </summary>
+/// <summary>§3.2's one Catalog projection table, in a file the scaffold does not copy.</summary>
 [Collection(nameof(IntegrationCollection))]
 public sealed class StockLevelsSchemaTests(ServiceFixture fixture)
 {

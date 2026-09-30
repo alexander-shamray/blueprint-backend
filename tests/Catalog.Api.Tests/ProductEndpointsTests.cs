@@ -8,16 +8,8 @@ using Xunit;
 
 namespace Catalog.Api.Tests;
 
-/// <summary>
-/// §12.4's third level: HTTP in, HTTP out, covering what the levels below
-/// structurally cannot — status codes, serialisation and authorization.
-/// </summary>
-/// <remarks>Every write states the narrowest principal that works: §12.4's
-/// rule is that a fixture handing out a blanket claim set makes the §11.4
-/// policies untestable and, worse, makes them look tested — the endpoints are
-/// reached, the assertions pass, and the one behaviour nobody exercises is
-/// the refusal. So a refusal is asserted both with nothing granted and with
-/// the wrong thing granted.</remarks>
+/// <summary>§12.4's third level: status codes, serialisation and authorization, over HTTP.</summary>
+/// <remarks>Every write states the narrowest principal that works, as §12.4 requires of a fixture.</remarks>
 [Collection(nameof(IntegrationCollection))]
 public sealed class ProductEndpointsTests(ServiceFixture fixture) : IAsyncLifetime
 {
@@ -46,12 +38,7 @@ public sealed class ProductEndpointsTests(ServiceFixture fixture) : IAsyncLifeti
         DateTimeOffset PublishedAt,
         int? QuantityAvailable);
 
-    /// <summary>
-    /// A fresh <c>CommandId</c> per call, and it is load-bearing rather than
-    /// incidental since §8.5's behaviour took the fourth pipeline seat: several
-    /// tests here publish twice, and one reused value would have the second
-    /// replay the first's id instead of running.
-    /// </summary>
+    /// <summary>A fresh <c>CommandId</c> per call, since a reused one would replay the first publish (§8.5).</summary>
     private Task<HttpResponseMessage> PublishAsync(string name, decimal amount = 10m) =>
         PostAsync(
             new
@@ -64,13 +51,7 @@ public sealed class ProductEndpointsTests(ServiceFixture fixture) : IAsyncLifeti
             },
             CatalogPermissions.Write);
 
-    /// <summary>
-    /// A publish request as a caller holding <paramref name="permissions"/> —
-    /// a space-separated grant, or null for no principal at all. Explicit at
-    /// every call site rather than defaulted into the client's headers: a
-    /// default grant is how a suite ends up proving the policy is applied by
-    /// never once arriving without it.
-    /// </summary>
+    /// <summary>A publish as a caller holding <paramref name="permissions"/>, or as no principal when null.</summary>
     private Task<HttpResponseMessage> PostAsync(object body, string? permissions)
     {
         HttpRequestMessage request = new(HttpMethod.Post, "/v1/catalog/products")
@@ -90,20 +71,8 @@ public sealed class ProductEndpointsTests(ServiceFixture fixture) : IAsyncLifeti
     [Fact]
     public async Task The_same_command_id_from_the_same_caller_replays_instead_of_publishing_twice()
     {
-        // §8.5 end to end, and it is the only test in the solution that crosses
-        // the whole stack: HTTP → the registered pipeline → RedisIdempotencyStore
-        // on a real container → SQL. Everything else covers a piece. The
-        // behaviour's own suite replays from an in-memory double, and the store's
-        // suite reads payloads back through the store — neither can see the DI
-        // wiring, the serialisation of THIS command's result, the interaction
-        // with §6.3's transaction, or the reconstruction of a Result<T> from
-        // what was stored. All four are what a duplicate POST actually meets.
-        //
-        // **The subject is pinned, and that is not incidental.** The key is
-        // subject:operation:commandId (§8.5), and PostAsync mints a fresh
-        // X-Test-User per call — so a test that reused only the CommandId would
-        // claim two different keys, publish twice, and pass every assertion
-        // below by never reaching the replay path at all.
+        // §8.5 end to end, from HTTP through the registered pipeline and a real Redis to SQL. The caller is pinned
+        // because the key is subject:operation:commandId, and PostAsync mints a fresh caller per call.
         var caller = Guid.CreateVersion7();
         var commandId = Guid.CreateVersion7();
         object body = new
@@ -120,9 +89,7 @@ public sealed class ProductEndpointsTests(ServiceFixture fixture) : IAsyncLifeti
 
         HttpResponseMessage second = await PostAsAsync(body, caller);
 
-        // The stored outcome, not a fresh one. Result<Guid> maps to 200 with
-        // the value as the body (§10.5), so the status alone proves little —
-        // the identity below is what separates a replay from a second run.
+        // The status alone proves little (§10.5), so the id below separates a replay from a second run.
         second.StatusCode.ShouldBe(
             HttpStatusCode.OK,
             "a replay returns the first attempt's outcome, not a fresh decision");
@@ -135,17 +102,12 @@ public sealed class ProductEndpointsTests(ServiceFixture fixture) : IAsyncLifeti
             "the replayed payload is the first attempt's ProductId — a second id would mean the " +
             "command ran again and the response merely looked the same");
 
-        // The half no status code can carry, and the one §8.5 exists for. Two
-        // runs produce two rows under two ids, and the client sees a 200 both
-        // times either way.
+        // The half no status code carries: two runs would leave two rows.
         int rows = await fixture.ScalarAsync<int>("SELECT Value = COUNT(*) FROM catalog.Products");
         rows.ShouldBe(1, "the claim is what stops the second attempt reaching the handler (§8.5)");
     }
 
-    /// <summary>
-    /// <see cref="PostAsync"/> with the caller pinned, for the one test whose
-    /// subject is the key rather than the endpoint.
-    /// </summary>
+    /// <summary><see cref="PostAsync"/> with the caller pinned, for a test whose subject is the key.</summary>
     private Task<HttpResponseMessage> PostAsAsync(object body, Guid caller)
     {
         HttpRequestMessage request = new(HttpMethod.Post, "/v1/catalog/products")
@@ -162,37 +124,15 @@ public sealed class ProductEndpointsTests(ServiceFixture fixture) : IAsyncLifeti
     [Fact]
     public async Task Publishing_without_a_token_is_a_401()
     {
-        // No X-Test-User header, so TestAuthHandler returns NoResult and the
-        // challenge stands.
-        //
-        // §12.4 calls this "the test that catches UseAuthentication being
-        // dropped from the pipeline". It is not, and the claim was removed from
-        // the chapter rather than restated here: commenting that line out
-        // leaves every test in this class green, because WebApplication adds
-        // the authentication middleware itself whenever the services are
-        // registered. The explicit call moves it earlier; it is not what puts
-        // it there, so deleting it changes the pipeline's order and nothing a
-        // status code can see. AuthenticationMiddlewareTests carries that
-        // whole argument and the regression guard under it.
-        //
-        // (PolicyEvaluator is not the reason, though it is the plausible one:
-        // for a policy naming no schemes it succeeds with the existing
-        // HttpContext.User rather than authenticating anything itself. This
-        // comment said otherwise until a review checked it.)
-        //
-        // What this one does catch is the policy being dropped from the
-        // endpoint, which is the commoner edit and the one a reviewer skims
-        // past.
+        // No X-Test-User header, so the challenge stands. This catches the policy being dropped from the endpoint,
+        // not UseAuthentication being dropped, since WebApplication adds that middleware itself (§4.2).
         HttpResponseMessage response = await PostAsync(
             new { Name = "Walnut desk", ThumbnailUrl = (string?)null, Amount = 10m, Currency = "EUR" },
             permissions: null);
 
         response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
 
-        // And in the platform's one error shape (§10.5). A challenge is written
-        // by the middleware before any endpoint runs and carries no body of its
-        // own, so without UseStatusCodePages the promise §10.5 opens with has a
-        // hole in it on the status a client meets first.
+        // In the platform's one error shape (§10.5), which a bodiless challenge gets from UseStatusCodePages.
         response.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
 
         int rows = await fixture.ScalarAsync<int>("SELECT Value = COUNT(*) FROM catalog.Products");
@@ -202,11 +142,7 @@ public sealed class ProductEndpointsTests(ServiceFixture fixture) : IAsyncLifeti
     [Fact]
     public async Task Publishing_with_the_wrong_permission_is_a_403()
     {
-        // Authenticated, and carrying a permission that is not the one this
-        // endpoint requires — the case a fixture that grants everything hides.
-        // catalog:read is deliberately a permission no policy in this service
-        // registers (CatalogPermissions has one entry): the caller is real, the
-        // grant is real, and it is simply not this grant.
+        // A real caller with the wrong grant, the case a fixture that grants everything hides.
         HttpResponseMessage response = await PostAsync(
             new { Name = "Walnut desk", ThumbnailUrl = (string?)null, Amount = 10m, Currency = "EUR" },
             permissions: "catalog:read");
@@ -217,12 +153,8 @@ public sealed class ProductEndpointsTests(ServiceFixture fixture) : IAsyncLifeti
         int rows = await fixture.ScalarAsync<int>("SELECT Value = COUNT(*) FROM catalog.Products");
         rows.ShouldBe(0, "a refused request must not reach the handler");
 
-        // Which handler answered it, because CatalogApiFactory makes a claim
-        // about that and the status code cannot tell them apart — a bare 403 is
-        // what the bearer handler and the test one both produce.
-        // DefaultForbidScheme is unset and the provider falls back to
-        // DefaultChallengeScheme before DefaultScheme, so the test scheme
-        // answers, which is why this needs no reachable authority.
+        // Which scheme forbids, which a bare 403 cannot show: DefaultForbidScheme is unset and falls back to the
+        // challenge scheme, so the test scheme answers.
         IAuthenticationSchemeProvider schemes =
             fixture.Factory.Services.GetRequiredService<IAuthenticationSchemeProvider>();
 
@@ -234,12 +166,8 @@ public sealed class ProductEndpointsTests(ServiceFixture fixture) : IAsyncLifeti
     [Fact]
     public async Task The_listing_is_reachable_without_a_token()
     {
-        // §10.2's catalog-public route is GET-only and names `anonymous`, so
-        // the group's RequireAuthorization must not reach this endpoint. Over
-        // the wire is the only place that is visible: AllowAnonymous is
-        // metadata, and metadata that fails to suppress the group's policy
-        // looks identical to metadata that succeeds until a request without a
-        // token arrives.
+        // §10.2's catalog-public route names `anonymous`, and only a request without a token shows the group's
+        // policy does not reach this endpoint.
         HttpResponseMessage response = await _client.GetAsync(
             "/v1/catalog/products",
             TestContext.Current.CancellationToken);
@@ -263,14 +191,7 @@ public sealed class ProductEndpointsTests(ServiceFixture fixture) : IAsyncLifeti
     [Fact]
     public async Task Publishing_without_an_amount_is_a_400_not_a_free_product()
     {
-        // A bare decimal cannot say "absent": an omitted amount would bind as
-        // 0 and publish a free product indistinguishable from a deliberate
-        // one. The command's nullable Amount plus the validator's NotNull
-        // turn the omission into the field-keyed 400 every other bad field
-        // gets — and only this boundary can see the omission at all.
-        // Authorised, so the 400 is the validator's answer and not the
-        // pipeline's: an unauthenticated request would 401 here and read as
-        // this assertion passing on the wrong grounds.
+        // An omitted amount is the validator's 400 rather than a free product; authorised, so the 400 is not a 401.
         HttpResponseMessage response = await PostAsync(
             new { Name = "Walnut desk", Currency = "EUR" },
             CatalogPermissions.Write);
@@ -334,11 +255,7 @@ public sealed class ProductEndpointsTests(ServiceFixture fixture) : IAsyncLifeti
     [Fact]
     public async Task The_listing_pages_forward_with_the_returned_cursor()
     {
-        // Three in-process POSTs can share one clock tick, and within a tied
-        // PublishedAt the id tiebreak is not publish order — so this asserts
-        // the paging mechanics (no overlap, nothing skipped, a terminal null),
-        // and the deterministic ordering lives in the handler tests, where
-        // the seeding controls the clock.
+        // Three POSTs can share a clock tick, and the id tiebreak is not publish order, so only paging is asserted.
         List<Guid> published = [];
         string[] names = ["First", "Second", "Third"];
         foreach (string name in names)

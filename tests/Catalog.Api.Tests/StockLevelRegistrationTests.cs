@@ -8,11 +8,7 @@ using Xunit;
 
 namespace Catalog.Api.Tests;
 
-/// <summary>
-/// §3.2's Consumes column for Catalog, asserted as the exact set of consumer
-/// registrations. Catalog-only, because a rendered service subscribes to
-/// nothing and the scaffold's own suite asserts that absence.
-/// </summary>
+/// <summary>§3.2's Consumes column for Catalog, as the exact set of consumer registrations.</summary>
 public class StockLevelRegistrationTests
 {
     [Fact]

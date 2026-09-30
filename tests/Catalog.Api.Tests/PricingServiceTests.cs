@@ -9,16 +9,7 @@ using PricingGrpc = Catalog.Pricing.V1.Pricing;
 
 namespace Catalog.Api.Tests;
 
-/// <summary>
-/// §9.7's server half, driven over the real pipeline: authentication,
-/// authorization, the dispatcher, the validator and Dapper on a real database.
-/// </summary>
-/// <remarks>Over <c>TestServer</c>: it is the right instrument for what the
-/// application decides, and what the server decides — that a cleartext
-/// endpoint must be declared <c>Http2</c> before a gRPC client can reach it —
-/// belongs against a real Kestrel instead. <c>TestServer.CreateHandler()</c>
-/// bypasses the network, so the h2c negotiation this host would otherwise
-/// need never happens.</remarks>
+/// <summary>§9.7's server half over the real pipeline, from authentication to Dapper on a real database.</summary>
 [Collection(nameof(IntegrationCollection))]
 public sealed class PricingServiceTests(ServiceFixture fixture) : IAsyncLifetime
 {
@@ -44,16 +35,8 @@ public sealed class PricingServiceTests(ServiceFixture fixture) : IAsyncLifetime
     }
 
     /// <summary>
-    /// The principal a validated client-credentials token becomes (§11.3), as
-    /// call metadata.
+    /// A client-credentials principal (§11.3), per call rather than on the channel, so a call can arrive without it.
     /// </summary>
-    /// <remarks>
-    /// Passed per call rather than baked into the channel, for
-    /// <c>ProductEndpointsTests</c>' reason one transport over: a default
-    /// grant is how a suite ends up proving a policy is applied by never once
-    /// arriving without it. The anonymous test below is the one that would
-    /// silently stop meaning anything.
-    /// </remarks>
     private static Metadata Authenticated() =>
         [new Metadata.Entry(TestAuthHandler.UserHeader, "service-account-web-bff")];
 
@@ -101,19 +84,8 @@ public sealed class PricingServiceTests(ServiceFixture fixture) : IAsyncLifetime
 
         reply.Price.Count.ShouldBe(2);
 
-        // The invariant form pricing.proto specifies, asserted as TEXT rather
-        // than parsed back: the whole reason the contract carries a string is
-        // that the two ends have to agree on the spelling, and a test that
-        // parsed it would agree with itself. A host under a comma-decimal
-        // culture fails here and nowhere else.
-        //
-        // "49.9900", not "49.99", and the trailing zeros are the column's
-        // scale reaching the wire — PriceAmount is decimal(19,4) (§7.2), and
-        // .NET's decimal carries scale through, so ToString emits it. Pinned
-        // rather than trimmed, because trimming would be presentation logic in
-        // a contract; what it obliges a consumer to do is PARSE the field
-        // rather than compare it, which is what the BFF does and what
-        // pricing.proto now says out loud.
+        // The invariant text pricing.proto specifies, not parsed back; the trailing zeros are decimal(19,4)'s
+        // scale (§7.2), which is why a consumer parses the field rather than comparing it.
         reply.Price
             .Single(p => p.ProductId == chair.ToString())
             .Amount
@@ -133,36 +105,20 @@ public sealed class PricingServiceTests(ServiceFixture fixture) : IAsyncLifetime
             Authenticated(),
             cancellationToken: TestContext.Current.CancellationToken);
 
-        // Money.Of upper-cases on the way in, so the column only ever holds
-        // "GBP" — and GetPricesValidator accepts [A-Za-z]{3}, so "gbp" is a
-        // valid request.
-        //
-        // This one passes with the handler's ToUpperInvariant deleted, because
-        // the fixture's collation is case-insensitive. It is here for the
-        // request shape; the test below is the one that holds the
-        // normalisation, and neither is a substitute for the other.
+        // The request shape only: under the fixture's case-insensitive collation this holds without the handler's
+        // ToUpperInvariant, which the test below holds.
         reply.Price.Single().Currency.ShouldBe("GBP");
     }
 
     /// <summary>
-    /// The same request against a case-sensitive column, which is the only
-    /// configuration in which the handler's normalisation does anything.
+    /// The same request against a case-sensitive column, the one configuration where the normalisation acts.
     /// </summary>
-    /// <remarks><c>ToUpperInvariant</c> exists for a deployment whose
-    /// collation is case-sensitive, which SQL Server's default is not. The
-    /// collation is changed on the column for this test and restored in a
-    /// <c>finally</c>: <c>IntegrationCollection</c> runs serially, and
-    /// <c>Respawn</c> resets rows and not schema.</remarks>
     [Fact]
     public async Task A_lower_case_currency_matches_under_a_case_sensitive_collation()
     {
         Guid chair = await PublishAsync("Chair", 49.99m, "GBP");
 
-        // Read rather than assumed. Restoring to a hard-coded
-        // SQL_Latin1_General_CP1_CI_AS would be right for the image this runs
-        // against today and would silently re-collate the column on any server
-        // configured differently — a test that repairs the schema into a state
-        // it was never in is worse than one that leaves it broken loudly.
+        // Read rather than assumed, so the restore returns the column to whatever the server had.
         string original = await CurrencyCollationAsync();
 
         await SetCurrencyCollationAsync("Latin1_General_CS_AS");
@@ -177,11 +133,7 @@ public sealed class PricingServiceTests(ServiceFixture fixture) : IAsyncLifetime
                 Authenticated(),
                 cancellationToken: TestContext.Current.CancellationToken);
 
-            // Without the handler's ToUpperInvariant this is empty: "gbp" is
-            // compared to the stored "GBP" under a collation that tells them
-            // apart, and a valid request is answered "product absent" — the
-            // same answer a product that does not exist gets, which is what
-            // makes the failure mode invisible in production.
+            // Without the handler's ToUpperInvariant this is empty, the same answer an unknown product gets.
             reply.Price.Single().Currency.ShouldBe("GBP");
         }
         finally
@@ -193,10 +145,7 @@ public sealed class PricingServiceTests(ServiceFixture fixture) : IAsyncLifetime
     /// <summary>The collation <c>PriceCurrency</c> currently carries.</summary>
     private Task<string> CurrencyCollationAsync() =>
         fixture.ScalarAsync<string>(
-            // Value, and no terminator: ScalarAsync goes through
-            // SqlQueryRaw, which wraps this as a subquery and reads one
-            // column by that name. The repo's other scalar probes are
-            // spelt the same way.
+            // Value, and no terminator: ScalarAsync's SqlQueryRaw wraps this as a subquery and reads that column.
             """
             SELECT Value = collation_name
             FROM sys.columns
@@ -205,17 +154,8 @@ public sealed class PricingServiceTests(ServiceFixture fixture) : IAsyncLifetime
             """);
 
     /// <summary>
-    /// Re-declares <c>PriceCurrency</c> with the named collation.
+    /// Re-declares <c>PriceCurrency</c> whole, <c>NOT NULL</c> included, with a collation from this file only.
     /// </summary>
-    /// <remarks>
-    /// The type is restated because <c>ALTER COLUMN</c> takes a whole
-    /// declaration rather than a patch, and dropping <c>NOT NULL</c> here
-    /// would quietly relax a constraint the migration set. The collation name
-    /// is interpolated because SQL Server does not accept a parameter in this
-    /// position — it is a literal from this file and never from a caller,
-    /// which is the same argument <c>OutboxTable</c> makes about a schema
-    /// name.
-    /// </remarks>
     private async Task SetCurrencyCollationAsync(string collation) =>
         await fixture.ExecuteAsync(
             $"ALTER TABLE catalog.Products ALTER COLUMN PriceCurrency nvarchar(3) COLLATE {collation} NOT NULL;");
@@ -257,10 +197,7 @@ public sealed class PricingServiceTests(ServiceFixture fixture) : IAsyncLifetime
     {
         GetPricesRequest request = new() { Currency = "GBP" };
 
-        // No principal: the channel with no interceptor. This is what makes
-        // §11.5's client credentials load-bearing rather than ceremonial — if
-        // this passed, the BFF's whole token mechanism could be missing and
-        // every test would still be green.
+        // No principal, which is what makes §11.5's client credentials load-bearing rather than ceremonial.
         RpcException thrown = await Should.ThrowAsync<RpcException>(
             () => Pricing
                 .GetPricesAsync(request, cancellationToken: TestContext.Current.CancellationToken)
@@ -309,11 +246,7 @@ public sealed class PricingServiceTests(ServiceFixture fixture) : IAsyncLifetime
                     cancellationToken: TestContext.Current.CancellationToken)
                 .ResponseAsync);
 
-        // pricing.proto says "GUIDs in their canonical text form", and
-        // Guid.TryParse accepts four more spellings than that — so every one
-        // of these was a valid product id in a service whose contract says it
-        // is not. Accepting more than the contract states is how two ends stop
-        // agreeing about what the contract is.
+        // pricing.proto says "GUIDs in their canonical text form", and Guid.TryParse accepts these spellings too.
         thrown.StatusCode.ShouldBe(StatusCode.InvalidArgument);
     }
 
@@ -333,11 +266,7 @@ public sealed class PricingServiceTests(ServiceFixture fixture) : IAsyncLifetime
                     cancellationToken: TestContext.Current.CancellationToken)
                 .ResponseAsync);
 
-        // ValidationInterceptor's whole job, and the status matters more than
-        // it looks: untranslated this is Unknown, which the BFF maps to a 500 —
-        // so a caller's malformed request would come back as this platform
-        // having failed. Unknown rides an HTTP 200 like every other gRPC
-        // status, so none of them is retried.
+        // ValidationInterceptor's job: untranslated this is Unknown, which the BFF maps to a 500.
         thrown.StatusCode.ShouldBe(StatusCode.InvalidArgument);
         thrown.Status.Detail.ShouldContain("ProductIds");
     }

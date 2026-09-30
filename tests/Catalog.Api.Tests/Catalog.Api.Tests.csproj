@@ -16,54 +16,28 @@
     <PackageReference Include="xunit.runner.visualstudio" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="Shouldly" />
-    <!-- The endpoints gate (§4.2) — a namespace rule, so it needs type-level
-         dependency analysis rather than GetReferencedAssemblies. -->
+    <!-- The §4.2 gate that reads type-level dependencies. -->
     <PackageReference Include="NetArchTest.Rules" />
-    <!-- WebApplicationFactory over the real Program (§12.4) — the fixture
-         types live in Catalog.TestSupport now, but CreateClient and friends
-         are still this package's API, named directly below. -->
+    <!-- WebApplicationFactory over the real Program (§12.4), named directly by these tests. -->
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
-    <!-- SqlServerRetryingExecutionStrategy, for the subclass that lets the
-         retry test inject a fault the strategy treats as transient. Already
-         pinned centrally and in Appendix B via Catalog.Infrastructure. -->
+    <!-- SqlServerRetryingExecutionStrategy, for the retry test's fault-injecting subclass. -->
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
-    <!-- The in-memory harness for the messaging smoke (§12.5). Core, not
-         MassTransit.RabbitMQ: the harness swaps the transport out, and a test
-         project that uses no transport must not claim one. -->
+    <!-- The in-memory harness; core, not MassTransit.RabbitMQ, since the harness swaps the transport out. -->
     <PackageReference Include="MassTransit" />
-    <!-- One substitute, for one assertion: capturing the IPipe<PublishContext>
-         the outbox dispatcher hands IPublishEndpoint, so §9.1's single-identity
-         rule can be checked on the transport rather than inferred. Writing that
-         fake by hand means stubbing an interface with a dozen members nobody
-         calls. -->
+    <!-- Captures the IPipe<PublishContext> the outbox dispatcher hands IPublishEndpoint (§9.1). -->
     <PackageReference Include="NSubstitute" />
-    <!-- GrpcChannel and Grpc.Core's StatusCode, for calling the gRPC server
-         over loopback. Carried transitively through Catalog.Api; named here
-         on the register's honesty rule, because a project that names a type
-         declares the package rather than relying on a production csproj it
-         does not control. -->
+    <!-- GrpcChannel and Grpc.Core's StatusCode, named although Catalog.Api carries them transitively. -->
     <PackageReference Include="Grpc.Net.ClientFactory" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Services\Catalog\Catalog.Api\Catalog.Api.csproj" />
-    <!-- ServiceFixture and CatalogApiFactory (§12.4, §4.1) — the containers,
-         the migrator runs and the reset live there, shared with
-         Catalog.Application.Tests, which this project cannot reference. -->
+    <!-- The fixtures, in their own project since test projects cannot reference each other (§4.1). -->
     <ProjectReference Include="..\..\tests\Catalog.TestSupport\Catalog.TestSupport.csproj" />
   </ItemGroup>
 
   <ItemGroup>
-    <!-- The consumer-driven contract, linked rather than referenced — the
-         same relationship pricing.proto already has, one level up. The .proto
-         is Catalog's because Catalog serves the RPC; this file is Web.Bff's
-         because only a consumer can say what it needs, and it is compiled
-         into this suite so the provider can be held to it. A file and not an
-         assembly, so no project dependency is created and §4.3 is untouched:
-         Common.Contracts is still the only assembly that crosses a service
-         boundary, and a test helper is expressly not it. The cost is a
-         build-time path into another suite's tree, paid once — no Dockerfile
-         builds a test project, so there is no COPY line to keep in step. -->
+    <!-- Web.Bff's consumer-driven contract, linked rather than referenced (ADR-023). -->
     <Compile Include="..\Web.Bff.TestSupport\PricingContract.cs" Link="Contract\PricingContract.cs" />
   </ItemGroup>
 

@@ -10,13 +10,7 @@ using Xunit;
 
 namespace Catalog.Application.Tests;
 
-/// <summary>
-/// §6.5's and ADR-016's four asserted behaviours — clamping, limit + 1, the
-/// tiebreaker, the opaque cursor's round trip — each stated in prose there
-/// and, until this file, asserted nowhere (§12 prescribes no pagination
-/// test). Seeding goes through real aggregates and the DbContext (§12.4): a
-/// raw INSERT drifts from the aggregate the first time it gains a column.
-/// </summary>
+/// <summary>§6.5's and ADR-016's pagination: clamping, limit + 1, the tiebreaker and the cursor.</summary>
 [Collection(nameof(IntegrationCollection))]
 public sealed class GetProductsHandlerTests(ServiceFixture fixture) : IAsyncLifetime
 {
@@ -26,10 +20,7 @@ public sealed class GetProductsHandlerTests(ServiceFixture fixture) : IAsyncLife
 
     public ValueTask DisposeAsync() => ValueTask.CompletedTask;
 
-    /// <summary>
-    /// Seeds through the aggregate's own factory with a controlled clock —
-    /// the only way to force the PublishedAt ties the tiebreaker tests need.
-    /// </summary>
+    /// <summary>Seeds through the aggregate and the DbContext (§12.4), with the PublishedAt each row names.</summary>
     private async Task<List<Product>> SeedAsync(params (string Name, DateTimeOffset PublishedAt)[] rows)
     {
         List<Product> products =
@@ -99,11 +90,8 @@ public sealed class GetProductsHandlerTests(ServiceFixture fixture) : IAsyncLife
     [Fact]
     public async Task Rows_sharing_a_publish_instant_never_straddle_the_boundary_twice()
     {
-        // §6.5's tiebreaker rule, on a deliberate three-way tie: the seek is
-        // (PublishedAt, Id) descending, so every row appears exactly once
-        // across the boundary. The assertion is coverage, not a .NET sort —
-        // SQL Server orders uniqueidentifier by its own byte groups (§5.2's
-        // trap), and mirroring that here would test the engine, not the seek.
+        // §6.5's tiebreaker on a three-way tie, asserted as coverage rather than a .NET sort, since SQL Server
+        // orders uniqueidentifier by its own byte groups (§5.2).
         List<Product> seeded = await SeedAsync(("A", Base), ("B", Base), ("C", Base));
 
         CursorPage<ProductSummaryDto> first = await QueryAsync(null, 2);

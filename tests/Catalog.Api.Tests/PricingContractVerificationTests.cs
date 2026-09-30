@@ -10,16 +10,8 @@ using PricingGrpc = Catalog.Pricing.V1.Pricing;
 
 namespace Catalog.Api.Tests;
 
-/// <summary>
-/// The provider's half of the consumer-driven contract: every expectation
-/// <c>Web.Bff</c> wrote down in <see cref="PricingContract"/>, verified here.
-/// </summary>
-/// <remarks>Linked in rather than referenced, so no assembly crosses a
-/// service boundary and §4.3 keeps <c>Common.Contracts</c> as its one
-/// exception. Here and not in <c>Platform.IntegrationTests</c> because
-/// verification needs the provider running, which <c>ServiceFixture</c>
-/// already gives it. What the contract does not ask for is not asserted
-/// here.</remarks>
+/// <summary>The provider's half of the consumer-driven contract in <see cref="PricingContract"/>.</summary>
+/// <remarks>Linked in rather than referenced (ADR-023); what the contract does not ask for is not asserted.</remarks>
 [Collection(nameof(IntegrationCollection))]
 public sealed class PricingContractVerificationTests(ServiceFixture fixture) : IAsyncLifetime
 {
@@ -62,10 +54,7 @@ public sealed class PricingContractVerificationTests(ServiceFixture fixture) : I
             Authenticated(),
             cancellationToken: TestContext.Current.CancellationToken);
 
-        // The consumer's own tolerance, applied to the provider's own reply.
-        // Nothing in this file decides what counts as an answer the BFF can use
-        // — which is the whole difference between this and a second provider
-        // suite.
+        // The consumer's own tolerance applied to the provider's reply; nothing in this file decides what counts.
         PricingContract.Verify(interaction, published, reply);
     }
 
@@ -85,34 +74,17 @@ public sealed class PricingContractVerificationTests(ServiceFixture fixture) : I
                     cancellationToken: TestContext.Current.CancellationToken)
                 .ResponseAsync);
 
-        // The status and not merely a failure: UpstreamExceptionHandler maps
-        // InvalidArgument to the caller's 400 and everything it has not thought
-        // about to a 500, so a refusal that arrived as any other status would
-        // reach the customer as this platform's own fault.
+        // The status, not merely a failure, since UpstreamExceptionHandler maps InvalidArgument to the caller's 400.
         thrown.StatusCode.ShouldBe(refusal.Status);
     }
 
-    /// <summary>
-    /// The principal a validated client-credentials token becomes (§11.3), as
-    /// call metadata — the BFF's service account, since it is the BFF's contract
-    /// being verified.
-    /// </summary>
+    /// <summary>The BFF's service account (§11.3), since it is the BFF's contract being verified.</summary>
     private static Metadata Authenticated() =>
         [new Metadata.Entry(TestAuthHandler.UserHeader, "service-account-web-bff")];
 
     private PricingGrpc.PricingClient Pricing => new(_channel);
 
-    /// <summary>
-    /// Realises an interaction's <c>Given</c> state against the real Catalog,
-    /// and answers the id each product was published under.
-    /// </summary>
-    /// <remarks>
-    /// Through <c>POST /v1/catalog/products</c> rather than through the
-    /// repository, so the state the contract is verified against is one a
-    /// customer could have produced — including <c>Money.Of</c>'s
-    /// upper-casing, which is what makes the differently-spelled currency
-    /// interaction test anything at all.
-    /// </remarks>
+    /// <summary>Publishes each <c>Given</c> product through the endpoint, as a customer would.</summary>
     private async Task<IReadOnlyDictionary<string, Guid>> PublishAsync(PricingInteraction interaction)
     {
         Dictionary<string, Guid> published = [];

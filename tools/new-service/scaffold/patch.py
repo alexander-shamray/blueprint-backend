@@ -296,29 +296,14 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
     "tests/Catalog.Domain.Tests/ArchitectureTests.cs": (
         ("using Catalog.Domain.Products;\n", ""),
         (
-            "        // The dependency table's rule is an allow-list — \"Common.Domain and\n"
-            "        // nothing else\" — so the gate is one too, and an exact one: a\n"
-            "        // blacklist only bans what someone thought to name, and a System.*\n"
-            "        // prefix still passes System.Data.SqlClient or a serialiser. Each BCL\n"
-            "        // assembly earns its line: System.Collections with the first domain\n"
-            "        // event, whose generated record equality goes through\n"
-            "        // EqualityComparer<T>, and System.Linq with the first value object\n"
-            "        // doing enumerable logic over owned values — domain work, not an I/O\n"
-            "        // dependency. System.Text.Json is the extension the table forbids by\n"
-            "        // name.\n"
+            "        // An exact allow-list, as §4.2's table is: a System.* prefix would pass System.Data.SqlClient.\n"
+            "        // System.Collections carries generated record equality through EqualityComparer<T>, and System.Linq is\n"
+            "        // Money's currency check.\n"
             "        string[] allowed = [\"Common.Domain\", \"System.Runtime\", \"System.Collections\", \"System.Linq\"];\n"
             "\n"
             "        IEnumerable<string> referenced = typeof(Product).Assembly\n",
-            "        // The dependency table's rule is an allow-list — \"Common.Domain and\n"
-            "        // nothing else\" — so the gate is one too, and an exact one: a\n"
-            "        // blacklist only bans what someone thought to name, and a System.*\n"
-            "        // prefix still passes System.Data.SqlClient or a serialiser. Two\n"
-            "        // entries, because two is what an empty domain references; the two\n"
-            "        // that usually follow are System.Collections, with the first domain\n"
-            "        // event whose generated record equality goes through\n"
-            "        // EqualityComparer<T>, and System.Linq, with the first value object\n"
-            "        // doing enumerable logic over owned values — domain work, not an I/O\n"
-            "        // dependency.\n"
+            "        // An exact allow-list, as §4.2's table is: a System.* prefix would pass System.Data.SqlClient.\n"
+            "        // Two entries, because two is what an empty domain references.\n"
             "        string[] allowed = [\"Common.Domain\", \"System.Runtime\"];\n"
             "\n"
             "        IEnumerable<string> referenced = typeof(AssemblyMarker).Assembly\n",
@@ -429,27 +414,18 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
     ),
     "tests/Catalog.Application.Tests/Catalog.Application.Tests.csproj": (
         (
-            "    <!-- ServiceCollection itself, for the registration tests: the\n"
-            "         abstractions package Catalog.Application compiles against has no\n"
-            "         container in it to build. -->\n"
+            "    <!-- ServiceCollection itself; the abstractions package has no container to build. -->\n"
             "    <PackageReference Include=\"Microsoft.Extensions.DependencyInjection\" />\n"
-            "    <!-- The handler tests seed and assert through the real CatalogDbContext\n"
-            "         (§12.4's seeding rule — a raw INSERT drifts from the aggregate the\n"
-            "         first time it gains a column). -->\n"
+            "    <!-- The handler tests seed and assert through the real CatalogDbContext (§12.4). -->\n"
             "    <PackageReference Include=\"Microsoft.EntityFrameworkCore.SqlServer\" />\n",
-            "    <!-- ServiceCollection itself, for the registration tests: the\n"
-            "         abstractions package Catalog.Application compiles against has no\n"
-            "         container in it to build. -->\n"
+            "    <!-- ServiceCollection itself; the abstractions package has no container to build. -->\n"
             "    <PackageReference Include=\"Microsoft.Extensions.DependencyInjection\" />\n",
         ),
         (
             "    <ProjectReference Include=\"..\\..\\src\\Services\\Catalog\\Catalog.Application\\Catalog.Application.csproj\" />\n"
-            "    <!-- §12.1 homes the handler tests here, with real containers — the\n"
-            "         fixture lives in TestSupport, shared with Catalog.Api.Tests, which\n"
-            "         this project cannot reference. -->\n"
+            "    <!-- §12.1's handler tests run against real containers, from a fixture project of their own (§4.1). -->\n"
             "    <ProjectReference Include=\"..\\..\\tests\\Catalog.TestSupport\\Catalog.TestSupport.csproj\" />\n"
-            "    <!-- CatalogDbContext by name, for seeding and read-back. The test\n"
-            "         project may: §4.2's gate binds Catalog.Application, not its tests. -->\n"
+            "    <!-- CatalogDbContext by name; §4.2's gate binds Catalog.Application, not its tests. -->\n"
             "    <ProjectReference Include=\"..\\..\\src\\Services\\Catalog\\Catalog.Infrastructure\\Catalog.Infrastructure.csproj\" />\n",
             "    <ProjectReference Include=\"..\\..\\src\\Services\\Catalog\\Catalog.Application\\Catalog.Application.csproj\" />\n"
             "    <!-- No Catalog.TestSupport and no Catalog.Infrastructure yet, and no\n"
@@ -471,9 +447,7 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
             "    [Fact]\n"
             "    public void AddCatalogApplication_registers_the_command_validator()\n"
             "    {\n"
-            "        // ValidationBehavior takes IEnumerable<IValidator<T>>, so a missing\n"
-            "        // scan is not a failure — it is a pipeline that validates nothing and\n"
-            "        // says so to nobody. The registration is the only place to catch it.\n"
+            "        // ValidationBehavior takes IEnumerable<IValidator<T>>, so a lost scan validates nothing and fails nowhere.\n"
             "        ServiceCollection services = new();\n"
             "\n"
             "        services.AddCatalogApplication();\n"
@@ -482,10 +456,7 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
             "            d => d.ServiceType == typeof(FluentValidation.IValidator<PublishProductCommand>),\n"
             "            \"AddValidatorsFromAssemblyContaining is §4.2's line, and losing it fails silently\");\n"
             "\n"
-            "        // A query's validator, and it is not the same assertion twice: the scan\n"
-            "        // is one call, but ValidationBehavior is unconstrained (§6.3), so a\n"
-            "        // query validator lost this way disables the id-list ceiling that is\n"
-            "        // GetPrices' only bound — and nothing else would notice.\n"
+            "        // A query's validator too, since ValidationBehavior is unconstrained (§6.3) and this is GetPrices' bound.\n"
             "        services.ShouldContain(\n"
             "            d => d.ServiceType == typeof(FluentValidation.IValidator<GetPricesQuery>));\n"
             "    }\n"
@@ -493,10 +464,7 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
             "    [Fact]\n"
             "    public void AddCatalogApplication_registers_the_slice_handlers()\n"
             "    {\n"
-            "        // These are the registrations §6.2's scan produces, so the scan itself\n"
-            "        // is testable. Every slice adds a row here — the scan is public-only,\n"
-            "        // and a handler it misses registers as nothing at all rather than as\n"
-            "        // something wrong.\n"
+            "        // The scan is public-only (§6.2), and a handler it misses registers as nothing.\n"
             "        ServiceCollection services = new();\n"
             "\n"
             "        services.AddCatalogApplication();\n"
@@ -506,10 +474,6 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
             "        services.ShouldContain(d =>\n"
             "            d.ServiceType == typeof(IQueryHandler<GetProductsQuery, CursorPage<ProductSummaryDto>>));\n"
             "\n"
-            "        // The pricing slice. The scan is public-only (§6.2), so an internal\n"
-            "        // handler, a rename or a missed IQueryHandler<,> registers as nothing\n"
-            "        // and fails on the first gRPC call rather than at startup:\n"
-            "        // ValidateOnBuild never constructs the dispatcher's handler map.\n"
             "        services.ShouldContain(d =>\n"
             "            d.ServiceType == typeof(IQueryHandler<GetPricesQuery, IReadOnlyList<ProductPriceDto>>));\n"
             "    }\n"
@@ -527,11 +491,7 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
     "tests/Catalog.TestSupport/Outbox/OutboxRows.cs": (
         ("using Common.Contracts.Catalog.V1;\n", ""),
         (
-            "    /// <summary>\n"
-            "    /// A Broker-lane row carrying a real contract, so the publish half of\n"
-            "    /// <c>DeliverAsync</c> is exercised against the running broker rather than\n"
-            "    /// inferred from the staging tests.\n"
-            "    /// </summary>\n"
+            "    /// <summary>A Broker-lane row carrying a real contract, so the publish half runs against the broker.</summary>\n"
             "    public static OutboxMessage Broker(ServiceFixture fixture, Guid productId) =>\n"
             "        OutboxMessage.Stage(\n"
             "            new ProductPublished\n"
@@ -563,16 +523,8 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
             "    [Fact]\n"
             "    public async Task A_broker_row_is_published_and_completed()\n"
             "    {\n"
-            "        // The Broker half of DeliverAsync, against the real RabbitMQ the\n"
-            "        // fixture runs. Everything else here exercises the Local lane, so\n"
-            "        // without this a failure in payload deserialisation, type resolution\n"
-            "        // or the publish call would ship while the staging tests and the\n"
-            "        // direct-bus smoke both stayed green. What is asserted is that the row\n"
-            "        // completed, not what reached the transport: §12.4 refuses the latter\n"
-            "        // deliberately, since observing the headers needs a test harness and\n"
-            "        // this fixture runs the real host against the real broker. Publishing\n"
-            "        // without throwing and marking the row processed is the part this\n"
-            "        // suite owns.\n"            "        await fixture.StageOutboxAsync(OutboxRows.Broker(fixture, Guid.CreateVersion7()));\n"
+            "        // The Broker half of DeliverAsync against the fixture's real broker, asserted by the row's completion.\n"
+            "        await fixture.StageOutboxAsync(OutboxRows.Broker(fixture, Guid.CreateVersion7()));\n"
             "\n"
             "        (await fixture.ProcessOutboxBatchAsync()).ShouldBe(1);\n"
             "\n"
@@ -594,10 +546,7 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
             "    [Fact]\n"
             "    public async Task An_integration_event_on_the_local_lane_never_reaches_a_projection()\n"
             "    {\n"
-            "        // The mirror, and the quieter of the two: ProjectionInvoker is\n"
-            "        // generic and unconstrained, so without the guard a contract would be\n"
-            "        // offered to any matching IProjectionHandler<T> and the row marked\n"
-            "        // processed — no publish, no handler, no trace.\n"
+            "        // The mirror: ProjectionInvoker is unconstrained, so without the guard a contract would be marked processed.\n"
             "        OutboxMessage row = OutboxRows.Broker(fixture, Guid.CreateVersion7());\n"
             "        await fixture.StageOutboxAsync(row);\n"
             "        await fixture.SetOutboxLaneAsync(row.MessageId, OutboxLane.Local);\n"
@@ -621,16 +570,7 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
         # widening belongs with a service's first consumer, and arrives with
         # it rather than with the scaffold.
         (
-            "    /// <summary>\n"
-            "    /// The harness publishes a peer's contract under this service's own\n"
-            "    /// account, which the deployed grant refuses: a consumer reads a peer's\n"
-            "    /// exchange and never writes it. Only the test container's write moves.\n"
-            "    /// </summary>\n"
-            "    /// <remarks>\n"
-            "    /// <c>configure</c> and <c>read</c> are read back out of the definitions\n"
-            "    /// the container imports rather than restated, so the topology this suite\n"
-            "    /// judges is judged by the scope that deploys.\n"
-            "    /// </remarks>\n"
+            "    /// <summary>Widens <c>catalog-svc</c>'s write so the harness can publish a peer's contract, past ADR-036.</summary>\n"
             "    private async Task WidenWriteForTheHarnessAsync()\n"
             "    {\n"
             "        const string user = \"catalog-svc\";\n"
@@ -642,9 +582,6 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
             "            [\"rabbitmqctl\", \"set_permissions\", \"-p\", \"/\", user, configure, write, read],\n"
             "            TestContext.Current.CancellationToken);\n"
             "\n"
-            "        // A silent failure here would surface as every endpoint test retrying\n"
-            "        // a refused publish until its budget ran out, naming a message rather\n"
-            "        // than a permission.\n"
             "        if (result.ExitCode != 0)\n"
             "        {\n"
             "            throw new InvalidOperationException(\n"
@@ -652,8 +589,6 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
             "                + $\"(exit {result.ExitCode}). stdout: {result.Stdout} stderr: {result.Stderr}\");\n"
             "        }\n"
             "\n"
-            "        // The mapped file rather than the container, because it is the same\n"
-            "        // text the broker imported and it can be read before anything starts.\n"
             "        static (string Configure, string Read) ImportedGrant()\n"
             "        {\n"
             "            string path = Path.Combine(BrokerContextPath(), \"definitions.json\");\n"
@@ -695,11 +630,7 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
         # the rendered project uses is the unused-dependency claim CLAUDE.md
         # rules out, one file type over.
         (
-            "    <!-- GrpcChannel and Grpc.Core's StatusCode, for calling the gRPC server\n"
-            "         over loopback. Carried transitively through Catalog.Api; named here\n"
-            "         on the register's honesty rule, because a project that names a type\n"
-            "         declares the package rather than relying on a production csproj it\n"
-            "         does not control. -->\n"
+            "    <!-- GrpcChannel and Grpc.Core's StatusCode, named although Catalog.Api carries them transitively. -->\n"
             "    <PackageReference Include=\"Grpc.Net.ClientFactory\" />\n",
             "",
         ),
@@ -711,30 +642,11 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
         # pricing types the Protobuf item above already left with the .proto.
         (
             "  <ItemGroup>\n"
-            "    <!-- The consumer-driven contract, linked rather than referenced — the\n"
-            "         same relationship pricing.proto already has, one level up. The .proto\n"
-            "         is Catalog's because Catalog serves the RPC; this file is Web.Bff's\n"
-            "         because only a consumer can say what it needs, and it is compiled\n"
-            "         into this suite so the provider can be held to it. A file and not an\n"
-            "         assembly, so no project dependency is created and §4.3 is untouched:\n"
-            "         Common.Contracts is still the only assembly that crosses a service\n"
-            "         boundary, and a test helper is expressly not it. The cost is a\n"
-            "         build-time path into another suite's tree, paid once — no Dockerfile\n"
-            "         builds a test project, so there is no COPY line to keep in step. -->\n"
+            "    <!-- Web.Bff's consumer-driven contract, linked rather than referenced (ADR-023). -->\n"
             "    <Compile Include=\"..\\Web.Bff.TestSupport\\PricingContract.cs\" Link=\"Contract\\PricingContract.cs\" />\n"
             "  </ItemGroup>\n"
             "\n",
             "",
-        ),
-        (
-            "    <!-- ServiceFixture and CatalogApiFactory (§12.4, §4.1) — the containers,\n"
-            "         the migrator runs and the reset live there, shared with\n"
-            "         Catalog.Application.Tests, which this project cannot reference. -->\n",
-            "    <!-- ServiceFixture and CatalogApiFactory (§12.4, §4.1) — the containers,\n"
-            "         the migrator runs and the reset live there. The application suite\n"
-            "         becomes the second consumer with its first handler test, and the\n"
-            "         two cannot reference each other — which is why the fixture has a\n"
-            "         project of its own. -->\n",
         ),
     ),
     "tests/Catalog.Api.Tests/ArchitectureTests.cs": (
@@ -763,36 +675,6 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
             "        // that the gate is judging something. Until then Program is all\n"
             "        // there is, and naming an adapter that does not exist is not an\n"
             "        // assertion — see the service this one was scaffolded from.\n",
-        ),
-    ),
-    "tests/Catalog.Api.Tests/HostSmokeTests.cs": (
-        # The production-scheme host survives the copy — every service wants
-        # one — but two claims in its comment are Catalog's rather than the
-        # mechanism's. "The one host in the repository" is false the moment a
-        # second service is scaffolded, and EndpointSecurityTests is omitted
-        # here, so the sentence naming what restoring the base call would
-        # delete names a file the reader cannot find.
-        (
-            "        /// The one host in the repository that keeps the production JWT scheme.\n"
-            "        /// Every other factory swaps in <c>TestAuthHandler</c>, which is what\n"
-            "        /// lets those suites authenticate at all — and precisely why none of\n"
-            "        /// them can say whether its headers mean anything to a real\n"
-            "        /// deployment. A test scheme cannot prove its own absence.\n",
-            "        /// This service's one host that keeps the production JWT scheme. Every\n"
-            "        /// other factory swaps in <c>TestAuthHandler</c>, which is what lets\n"
-            "        /// those suites authenticate at all — and precisely why none of them\n"
-            "        /// can say whether its headers mean anything to a real deployment. A\n"
-            "        /// test scheme cannot prove its own absence.\n",
-        ),
-        (
-            "            // Deliberately empty. Not \"not yet\" — restoring the base call here\n"
-            "            // would silently delete EndpointSecurityTests, which is the only\n"
-            "            // suite that reads this host as a deployment rather than a fixture.\n",
-            "            // Deliberately empty. Not \"not yet\" — this host is the only one\n"
-            "            // that reads as a deployment rather than a fixture, and restoring\n"
-            "            // the base call would silently take that with it. The forged-header\n"
-            "            // suite that reads it arrives with the first endpoint to forge\n"
-            "            // against.\n",
         ),
     ),
     "tests/Catalog.Api.Tests/TransientFaultInjection.cs": (
@@ -853,9 +735,7 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
             "        schema.ShouldBe(1, \"InitialCreate's hand-written EnsureSchema creates it; "
             "AddProducts' is a no-op after it\");\n"
             "\n"
-            "        // Named and ordered, not merely counted: the migrator's job is to\n"
-            "        // apply every migration in sequence, and a count alone would pass on\n"
-            "        // a shorter prefix of them applied twice.\n"
+            "        // Named and ordered, not counted, since a count passes on a shorter prefix applied twice.\n"
             "        string[] applied = await fixture.AppliedMigrationsAsync();\n"
             "        applied.Length.ShouldBe(9);\n"
             "        applied[0].ShouldEndWith(\"_InitialCreate\");\n"
@@ -869,14 +749,8 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
             "        applied[8].ShouldEndWith(\"_AddStockLevels\");\n",
             "        schema.ShouldBe(1, \"InitialCreate's hand-written EnsureSchema is what creates it\");\n"
             "\n"
-            "        // Named and ordered, not merely counted: the migrator's job is to\n"
-            "        // apply every migration in sequence, and a count alone would pass on\n"
-            "        // a shorter prefix of them applied twice. What a scaffolded service\n"
-            "        // starts with is the schema, then §9.4's outbox table, §9.5's inbox,\n"
-            "        // the index the retention purge deletes through, and §8.5's marker\n"
-            "        // table with the database clock it is aged by and the rowversion the\n"
-            "        // purge identifies one of its rows by — all of them wiring every\n"
-            "        // service has rather than anything this one chose.\n"
+            "        // Named and ordered, not counted, since a count passes on a shorter prefix applied twice. All seven\n"
+            "        // are wiring every service has.\n"
             "        string[] applied = await fixture.AppliedMigrationsAsync();\n"
             "        applied.Length.ShouldBe(7);\n"
             "        applied[0].ShouldEndWith(\"_InitialCreate\");\n"
@@ -963,43 +837,20 @@ WORKER_PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
     # The smoke suite asks the host for the document with a caller and expects
     # 200. A host that maps no document answers 404 to that caller — the
     # suite's own unknown-path test says so — so the two tests that name the
-    # document leave, and the suite's two doc blocks stop describing it. The
+    # document leave, and the suite's summary stops describing it. The
     # authenticated factory stays: the unknown-path test is its other user.
     "tests/Catalog.Api.Tests/HostSmokeTests.cs": (
         (
-            "/// The host builds under <c>ValidateOnBuild</c> and answers what an empty\n"
-            "/// service can already be asked: the probes (§13.5) and the OpenAPI document\n"
-            "/// (Appendix C). One factory for the class, since nothing mutates the host.\n",
-            "/// The host builds under <c>ValidateOnBuild</c> and answers what an empty\n"
-            "/// worker can already be asked: the probes (§13.5), which §15.3 makes its one\n"
-            "/// listener. One factory for the class, since nothing mutates the host.\n",
-        ),
-        (
-            "    /// <summary>\n"
-            "    /// The same unreachable host with the <c>TestAuthHandler</c> scheme the\n"
-            "    /// base factory installs, so a caller can authenticate: the\n"
-            "    /// production-scheme factory can only prove a caller is challenged, and\n"
-            "    /// whether the document still generates needs one who gets through —\n"
-            "    /// this is the cheapest, since generating it reaches no dependency.\n"
-            "    /// </summary>\n",
-            "    /// <summary>\n"
-            "    /// The same unreachable host with the <c>TestAuthHandler</c> scheme the\n"
-            "    /// base factory installs, so a caller can authenticate: the fallback\n"
-            "    /// policy (§11.4) lets the production-scheme factory prove only that a\n"
-            "    /// caller is challenged, and whether an unknown path is still a 404\n"
-            "    /// needs one who gets through — the cheapest, since it reaches nothing.\n"
-            "    /// </summary>\n",
+            "/// <summary>The host builds under <c>ValidateOnBuild</c> and serves its probes (§13.5) and OpenAPI "
+            "document.</summary>\n",
+            "/// <summary>The host builds under <c>ValidateOnBuild</c> and serves its probes (§13.5).</summary>\n",
         ),
         (
             "\n"
             "    [Fact]\n"
             "    public async Task OpenApi_document_is_not_anonymous()\n"
             "    {\n"
-            "        // MapOpenApi carries no authorization metadata of its own, so it is\n"
-            "        // reached by the fallback policy AddCommonWebDefaults sets (§11.4).\n"
-            "        // That is the decision rather than an accident: the document\n"
-            "        // enumerates every route and every schema this service has, and §11.2\n"
-            "        // assumes the network inside the cluster is hostile.\n"
+            "        // MapOpenApi has no authorization metadata, so AddCommonWebDefaults' fallback policy reaches it (§11.4).\n"
             "        using HttpClient client = factory.CreateClient();\n"
             "\n"
             "        HttpResponseMessage response =\n"
@@ -1011,10 +862,7 @@ WORKER_PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
             "    [Fact]\n"
             "    public async Task OpenApi_document_is_served_to_a_caller()\n"
             "    {\n"
-            "        // The half a 401 cannot show. Without this the test above would go on\n"
-            "        // passing if the document stopped generating altogether — every path\n"
-            "        // answers 401 to an anonymous caller, the ones that do not exist\n"
-            "        // included.\n"
+            "        // The half a 401 cannot show: that the document still generates.\n"
             "        using AuthenticatedUnreachableFactory authenticated = new();\n"
             "        using HttpClient client = authenticated.CreateClient();\n"
             "\n"
@@ -1028,11 +876,6 @@ WORKER_PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
             "        response.Content.Headers.ContentType!.MediaType.ShouldBe(\"application/json\");\n"
             "    }\n",
             "",
-        ),
-        (
-            "        // this service has, which is the same argument the 405 pair and the\n"
-            "        // OpenAPI document already carry.\n",
-            "        // this service has, which is the same argument the 405 pair carries.\n",
         ),
     ),
 }

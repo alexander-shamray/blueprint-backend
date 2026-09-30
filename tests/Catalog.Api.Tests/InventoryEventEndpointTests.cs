@@ -11,41 +11,20 @@ using Xunit;
 namespace Catalog.Api.Tests;
 
 /// <summary>
-/// The async path behind §3.2's one Catalog Consumes cell: an Inventory event
-/// on a real broker, through the real receive endpoint and the projection,
-/// read back from <c>catalog.StockLevels</c>.
+/// §3.2's one Catalog Consumes cell on a real broker, since the harness replaces the callback the endpoint lives in.
 /// </summary>
-/// <remarks>
-/// The real transport rather than the harness, which removes the thing under
-/// test: <c>AddMassTransitTestHarness</c> replaces the <c>UsingRabbitMq</c>
-/// callback the endpoint, its retry policy and its inbox filter live inside.
-/// </remarks>
 [Collection(nameof(IntegrationCollection))]
 public sealed class InventoryEventEndpointTests(ServiceFixture fixture) : IAsyncLifetime
 {
-    /// <summary>
-    /// How long a published message is given to reach the table. Generous
-    /// because it covers a broker round trip on a runner holding other
-    /// container sets, and bounded because the failure this suite exists to
-    /// catch — an endpoint that binds nothing — never arrives late, it never
-    /// arrives.
-    /// </summary>
+    /// <summary>Generous for a busy runner, and bounded because an endpoint that binds nothing never arrives.</summary>
     private static readonly TimeSpan DeliveryBudget = TimeSpan.FromSeconds(30);
 
-    /// <summary>
-    /// Every message id this test published, so <see cref="DisposeAsync"/>
-    /// can wait for each delivery to finish before the next test truncates.
-    /// </summary>
+    /// <summary>Every message id published, so <see cref="DisposeAsync"/> can drain each delivery.</summary>
     private readonly List<Guid> _published = [];
 
     public async ValueTask InitializeAsync() => await fixture.ResetAsync();
 
-    /// <summary>
-    /// Drains the deliveries this test started: §9.5's filter commits the
-    /// inbox row after the consumer returns, so it is the last write of a
-    /// delivery, and a test that returned on the projection's row alone
-    /// could leave that write racing the next test's reset.
-    /// </summary>
+    /// <summary>Waits for each inbox row, a delivery's last write (§9.5), so none races the next reset.</summary>
     public async ValueTask DisposeAsync()
     {
         foreach (Guid messageId in _published)
@@ -80,8 +59,7 @@ public sealed class InventoryEventEndpointTests(ServiceFixture fixture) : IAsync
             product))
             .ShouldBe(7);
 
-        // The inbox row is the delivery's last write, so it can trail the
-        // projection's row by a moment; waited on, then read.
+        // The inbox row is the delivery's last write, so it is waited on, then read.
         await Eventually(
             async () => (await fixture.InboxAsync(messageId)).Count,
             expected: 1,
@@ -95,10 +73,7 @@ public sealed class InventoryEventEndpointTests(ServiceFixture fixture) : IAsync
         var product = Guid.CreateVersion7();
         var messageId = Guid.CreateVersion7();
 
-        // §9.5's filter counts a drop on messaging.inbox.suppressed before it
-        // returns, so waiting on that instrument is a claim that the
-        // duplicate was actually seen and dropped — a delay is only a claim
-        // that some time passed.
+        // §9.5's filter counts a drop before it returns, so the instrument proves the duplicate was dropped.
         using SemaphoreSlim suppressed = new(0);
         using MeterListener listener = new();
 
@@ -128,10 +103,8 @@ public sealed class InventoryEventEndpointTests(ServiceFixture fixture) : IAsync
             expected: 1,
             because: "the first delivery has to land before the second can be a redelivery of it");
 
-        // A different level and a later OccurredAt (PublishAsync stamps
-        // UtcNow) under the same MessageId: an identical copy could not tell
-        // suppression before the projection runs from an idempotent MERGE
-        // that simply reapplies the same row.
+        // A different level under the same MessageId, since an identical copy could not tell suppression from an
+        // idempotent MERGE reapplying the row.
         await PublishAsync(product, 3, messageId);
 
         (await suppressed.WaitAsync(DeliveryBudget, TestContext.Current.CancellationToken))
@@ -153,13 +126,7 @@ public sealed class InventoryEventEndpointTests(ServiceFixture fixture) : IAsync
                 "before the second row could apply");
     }
 
-    /// <summary>
-    /// Both transport headers pinned to the contract's, as §9.5's inbox keys
-    /// on <c>ConsumeContext.MessageId</c> and §9.1 keeps one correlation
-    /// across body, row and transport: left to MassTransit, the transport
-    /// would mint a second id per publish and a redelivery could never be
-    /// recognised as one.
-    /// </summary>
+    /// <summary>Pins both transport ids to the contract's, as §9.5's inbox and §9.1 require.</summary>
     private async Task PublishAsync(Guid product, int level, Guid messageId)
     {
         StockLevelChanged message = new()
@@ -200,10 +167,7 @@ public sealed class InventoryEventEndpointTests(ServiceFixture fixture) : IAsync
         last.ShouldBe(expected, because);
     }
 
-    /// <summary>
-    /// One tag off a measurement. A span cannot be captured, so the read
-    /// happens inside the callback and only the string escapes.
-    /// </summary>
+    /// <summary>One tag off a measurement, read inside the callback because a span cannot be captured.</summary>
     private static string TagValue(ReadOnlySpan<KeyValuePair<string, object?>> tags, string name)
     {
         foreach (KeyValuePair<string, object?> tag in tags)
