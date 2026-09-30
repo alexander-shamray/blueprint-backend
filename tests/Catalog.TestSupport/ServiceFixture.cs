@@ -316,7 +316,7 @@ public sealed class ServiceFixture : IAsyncLifetime
             .ToListAsync(TestContext.Current.CancellationToken);
     }
 
-    /// <summary>Writes inbox rows directly, for tests about the purge rather than the filter.</summary>
+    /// <summary>Writes inbox rows directly, past the filter.</summary>
     public async Task StageInboxAsync(params InboxMessage[] rows)
     {
         await using AsyncServiceScope scope = Factory.Services.CreateAsyncScope();
