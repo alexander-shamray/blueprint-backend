@@ -32,7 +32,7 @@ public class AuthorizationPolicyTests(HostSmokeTests.UnreachableInfrastructureFa
                 .Distinct()
         ];
 
-        // Not vacuous: an endpoint that lost its RequireAuthorization line would empty the set.
+        // Not vacuous: losing every RequireAuthorization line would empty the set.
         named.ShouldContain(InventoryPermissions.Admin);
 
         foreach (string policy in named)
