@@ -323,6 +323,8 @@ tests/                       per service: .Domain.Tests, .Application.Tests,
                              suite, and the BFF's has a .TestSupport of its
                              own; Shipping.OrderingStub is a stub provider
                              beside Shipping's suites, and not a .TestSupport.
+                             Common.TestSupport is the body every service's
+                             fixture derives from (ADR-056).
                              Plus Platform.IntegrationTests, the only
                              suite that references every service (§4.1),
                              where §12.1 homes Common.Contracts' shape tests
@@ -332,6 +334,11 @@ tests/                       per service: .Domain.Tests, .Application.Tests,
 reason rather than by convention.** The reason is two suites sharing a fixture
 and unable to reference each other — which is why `Catalog.TestSupport` exists
 for Catalog's second consumer rather than for the service.
+`Common.TestSupport` is the one that exists for another reason: it is shared
+across services rather than across one service's suites, as the body each
+`ServiceFixture` derives from, and
+[ADR-056](backend-architecture/adr/ADR-056-a-services-fixture-derives-from-one-shared-body-under-tests.md)
+argues why it sits under `tests/` and not beside the building blocks.
 
 **That is why the project type exists; it is not when a service gets one.**
 The scaffold emits the library with the service (§4.5), so
