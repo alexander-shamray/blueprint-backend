@@ -136,7 +136,7 @@ public sealed class DistributedLockRedisTests(RedisFixture fixture)
         reacquired.ShouldNotBeNull();
     }
 
-    /// <summary>Polls acquisition for about 5 s, far past the 200 ms TTLs, so a pass is never a lucky race.</summary>
+    /// <summary>Polls for about 5 s, far past the 200 ms TTLs, so a slow expiry cannot fail the test.</summary>
     private static async Task<IDistributedLock?> WaitForAcquireAsync(IDistributedLockFactory factory, string name)
     {
         for (int attempt = 0; attempt < 50; attempt++)
