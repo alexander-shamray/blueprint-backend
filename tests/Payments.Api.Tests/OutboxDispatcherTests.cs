@@ -79,7 +79,7 @@ public sealed class OutboxDispatcherTests(ServiceFixture fixture) : IAsyncLifeti
         await fixture.ProcessOutboxBatchAsync();
 
         OutboxMessage row = (await fixture.OutboxAsync()).ShouldHaveSingleItem();
-        row.ProcessedAt.ShouldBeNull();           // NOT silently completed
+        row.ProcessedAt.ShouldBeNull();           // not silently completed
         row.LastError.ShouldNotBeNull().ShouldContain("IProjectionHandler");
     }
 
