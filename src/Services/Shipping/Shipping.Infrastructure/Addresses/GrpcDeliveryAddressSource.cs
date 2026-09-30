@@ -24,7 +24,7 @@ internal sealed class GrpcDeliveryAddressSource(
         }
         catch (RpcException e) when (e.StatusCode == StatusCode.NotFound)
         {
-            // One terminal answer for the three (ADR-052).
+            // One terminal answer for every case Ordering folds into NotFound (ADR-052).
             return new AddressLookup.NoSuchOrder();
         }
         catch (RpcException e) when (e.StatusCode is StatusCode.Unauthenticated or StatusCode.PermissionDenied)
