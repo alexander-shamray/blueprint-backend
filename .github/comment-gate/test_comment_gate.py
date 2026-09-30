@@ -339,25 +339,65 @@ class TheBlockRule(unittest.TestCase):
     def block(self, n, marker="//"):
         return "".join(f"{marker} line {k}\n" for k in range(n))
 
-    def test_ten_lines_pass_and_eleven_fail_at_the_first_line(self):
-        self.assertEqual(judged("A.cs", self.block(10)), [])
+    def test_the_limit_is_five_lines(self):
+        self.assertEqual(gate.BLOCK_LIMIT, 5)
+
+    def test_the_limit_passes_and_one_more_fails_at_the_first_line(self):
+        limit = gate.BLOCK_LIMIT
+        self.assertEqual(judged("A.cs", self.block(limit)), [])
         self.assertEqual([line for _, line, _ in
-                          judged("A.cs", "x();\n" + self.block(11))], [2])
+                          judged("A.cs", "x();\n" + self.block(limit + 1))],
+                         [2])
 
     def test_one_added_line_judges_the_whole_old_block(self):
-        self.assertEqual(len(judged("A.cs", self.block(11), {5})), 1)
-        self.assertEqual(judged("A.cs", self.block(11) + "x();\n", {12}), [])
+        over = gate.BLOCK_LIMIT + 1
+        self.assertEqual(len(judged("A.cs", self.block(over), {3})), 1)
+        self.assertEqual(
+            judged("A.cs", self.block(over) + "x();\n", {over + 1}), [])
 
     def test_a_blank_line_or_code_ends_a_block(self):
-        self.assertEqual(judged("A.cs", self.block(6) + "\n" + self.block(6)),
-                         [])
-        trailing = "".join(f"x(); // {k}\n" for k in range(12))
+        limit = gate.BLOCK_LIMIT
+        self.assertEqual(
+            judged("A.cs", self.block(limit) + "\n" + self.block(limit)), [])
+        trailing = "".join(f"x(); // {k}\n" for k in range(limit * 2))
         self.assertEqual(judged("A.cs", trailing), [])
 
     def test_a_docstring_is_a_block_blank_lines_and_all(self):
-        body = "\n".join(["x"] * 5 + [""] + ["y"] * 4)
+        body = "\n".join(["x"] * 3 + [""] + ["y"] * 2)
         self.assertEqual(len(judged("m.py", f'"""{body}\n"""\n')), 1)
         self.assertEqual(judged("m.py", '"""one\n\ntwo\n"""\n'), [])
+
+
+class TheRemarksRule(unittest.TestCase):
+    def remarks(self, *body):
+        return ("/// <remarks>\n"
+                + "".join(f"/// {line}\n" for line in body)
+                + "/// </remarks>\nvoid M();\n")
+
+    def test_a_remarks_that_cites_nothing_fails_at_its_opening_line(self):
+        found = judged("A.cs", "x();\n" + self.remarks("Because it is."))
+        self.assertEqual(found, [("A.cs", 2, "a <remarks> cites no section, "
+                                             "ADR or cref")])
+
+    def test_a_section_an_adr_or_a_cref_is_a_citation(self):
+        for cited in ("Per §9.4.", "ADR-019 says so.",
+                      'See <see cref="Outbox"/>.'):
+            with self.subTest(cited=cited):
+                self.assertEqual(judged("A.cs", self.remarks(cited)), [])
+
+    def test_a_one_line_remarks_is_judged_too(self):
+        self.assertEqual(len(judged("A.cs", "/// <remarks>So.</remarks>\n")),
+                         1)
+
+    def test_an_old_remarks_is_judged_only_when_a_line_in_it_is_added(self):
+        text = "x();\n" + self.remarks("Because.")
+        self.assertEqual(judged("A.cs", text, {1}), [])
+        self.assertEqual(len(judged("A.cs", text, {3})), 1)
+
+    def test_only_csharp_and_only_comments_are_read(self):
+        self.assertEqual(judged("m.py", "# <remarks>x</remarks>\n"), [])
+        self.assertEqual(
+            judged("A.cs", 'var s = "<remarks>x</remarks>";\n'), [])
 
 
 class TheDiff(unittest.TestCase):
@@ -438,6 +478,45 @@ class TheGateOnARepository(unittest.TestCase):
         result = self.run_gate()
         self.assertEqual(result.returncode, 0, result.stdout)
         self.assertIn("judged the added lines of 1 file(s)", result.stdout)
+
+    def test_the_report_weighs_added_comment_against_added_code(self):
+        self.write("New.cs", "// one\n// two\nx();\n\ny(); // three\n")
+        self.write("new.py", "# one\nx = 1\n")
+        self.write("new.yml", "# not weighed\n")
+        self.commit("change")
+        result = self.run_gate()
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertIn("added, C#: 2 comment line(s), 2 code line(s), "
+                      "50% comment", result.stdout)
+        self.assertIn("added, scripts: 1 comment line(s), 1 code line(s), "
+                      "50% comment", result.stdout)
+
+    def run_tree(self, *roots):
+        return subprocess.run(
+            [sys.executable, str(GATE), "--tree", *roots],
+            cwd=self.repo, capture_output=True, text=True, encoding="utf-8")
+
+    def test_the_tree_mode_judges_every_line_under_the_roots(self):
+        Path(self.repo, "src").mkdir()
+        self.write("src/In.cs", "// PR-3\nx();\n")
+        self.commit("change")
+        result = self.run_tree("src")
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertIn("src/In.cs:1: a comment names a delivery-plan row",
+                      result.stdout)
+        self.assertNotIn("Old.cs", result.stdout)
+        self.assertIn("the tree, C#: 1 comment line(s), 1 code line(s), "
+                      "50% comment", result.stdout)
+        self.assertIn("judged every line of 1 file(s)", result.stdout)
+
+    def test_the_tree_mode_reads_the_working_tree(self):
+        self.write("Moved.cs", "x();\n")
+        result = self.run_tree("Moved.cs")
+        self.assertEqual(result.returncode, 0, result.stdout)
+
+    def test_a_tree_holding_nothing_it_reads_refuses_the_run(self):
+        result = self.run_tree("nowhere")
+        self.assertEqual(result.returncode, 2, result.stdout)
 
     def test_a_diff_that_changes_nothing_refuses_the_run(self):
         result = self.run_gate(base="HEAD")

@@ -192,7 +192,11 @@ history, so a branch can run it before it has a pull request:
 ```bash
 git fetch origin main
 py -3.12 .github/comment-gate/comment_gate.py --base origin/main
+py -3.12 .github/comment-gate/comment_gate.py --tree src/Services/Catalog
 ```
+
+The second form judges every line under the named paths rather than a diff,
+which is how a sweep proves a tree is under the rule.
 
 What it reads and judges is [its README](../.github/comment-gate/README.md)'s.
 
