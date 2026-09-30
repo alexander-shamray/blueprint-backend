@@ -1,0 +1,12 @@
+{
+  "serviceName": "Ordering.Api",
+  "chart": "ordering",
+  "source": "src/Services/Ordering",
+  "signals": ["http", "consume", "saga"],
+  "smoke": {
+    "migrator": true,
+    "autoscaled": true,
+    "capabilities": [],
+    "overlay": []
+  }
+}

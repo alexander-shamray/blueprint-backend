@@ -1,0 +1,12 @@
+{
+  "serviceName": "Web.Bff",
+  "chart": "web-bff",
+  "source": "src/BFF/Web.Bff",
+  "signals": ["http"],
+  "smoke": {
+    "migrator": false,
+    "autoscaled": true,
+    "capabilities": ["clientCredentials"],
+    "overlay": []
+  }
+}

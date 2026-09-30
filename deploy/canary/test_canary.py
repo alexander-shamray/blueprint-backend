@@ -1237,155 +1237,169 @@ class VerifiedVersionTests(unittest.TestCase):
         self.assertIn("Directory.Packages.props", canary.SOURCE_INPUTS)
 
 
-class DispatchOptionTests(unittest.TestCase):
-    """The `workload:` dispatch input's `options:` against canary.json's keys.
+class DescriptorReadTests(unittest.TestCase):
+    """Every descriptor the workflow reads, the canary and the smoke run read.
 
-    A workload the plan can roll and this list cannot choose stays invisible
-    to a manual rollout while every path-filter check stays green: that check
-    covers the trigger, not the menu underneath it.
+    The subject is the text deploy.yml and smoke.sh run; no name is listed here.
     """
 
-    WORKFLOW_TEXT = """\
-on:
-  workflow_dispatch:
-    inputs:
-      workload:
-        description: 'x'
-        required: true
-        type: choice
-        options: [{options}]
-"""
+    def setUp(self) -> None:
+        self.workloads = canary.load_plan()["workloads"]
 
-    def _failures(self, options: str, workloads: dict) -> list[str]:
-        original = canary.WORKFLOW
+    def _read(self, workflow: str | None = None, smoke: str | None = None,
+              workloads: dict | None = None) -> tuple[dict, list[str]]:
+        """What each reader takes in, and check 8's verdict, over these."""
+        workloads = self.workloads if workloads is None else workloads
         with tempfile.TemporaryDirectory() as tmp:
-            path = Path(tmp) / "deploy.yml"
-            path.write_text(self.WORKFLOW_TEXT.format(options=options), encoding="utf-8")
-            canary.WORKFLOW = path
-            try:
-                return canary._dispatch_options_match_workloads(workloads)
-            finally:
-                canary.WORKFLOW = original
+            paths = []
+            for name, text, real in (("deploy.yml", workflow, canary.WORKFLOW), ("smoke.sh", smoke, canary.SMOKE)):
+                path = Path(tmp) / name
+                path.write_text(real.read_text(encoding="utf-8") if text is None else text, encoding="utf-8")
+                paths.append(path)
+            return canary.descriptors_read(workloads, *paths), canary._descriptors_agree(workloads, *paths)
 
-    def test_a_missing_option_fails(self) -> None:
-        failures = self._failures(
-            "catalog-api, ordering-api",
-            {"catalog-api": {}, "ordering-api": {}, "inventory-api": {}},
-        )
+    def test_every_descriptor_the_workflow_reads_the_canary_and_the_smoke_run_read(self) -> None:
+        read = canary.descriptors_read(self.workloads)
 
-        self.assertTrue(any("inventory-api" in f for f in failures), failures)
+        self.assertTrue(read["workflow"], "deploy.yml reads no descriptor, so the comparison below is vacuous")
+        self.assertLessEqual(
+            read["workflow"], read["canary"],
+            f"deploy.yml reads {sorted(read['workflow'] - read['canary'])}, which no descriptor describes")
+        self.assertLessEqual(
+            read["workflow"], read["smoke"],
+            f"deploy.yml reads {sorted(read['workflow'] - read['smoke'])}, which smoke.sh does not render")
+        self.assertEqual(canary._descriptors_agree(self.workloads), [])
 
-    def test_an_extra_option_fails(self) -> None:
-        failures = self._failures("catalog-api, ordering-api", {"catalog-api": {}})
+    def test_a_descriptor_without_its_smoke_block_is_one_the_smoke_run_cannot_read(self) -> None:
+        workloads = json.loads(json.dumps(self.workloads))
+        del workloads["gateway"]["smoke"]
 
-        self.assertTrue(any("ordering-api" in f for f in failures), failures)
+        read, failures = self._read(workloads=workloads)
 
-    def test_the_real_repository_passes(self) -> None:
-        document = canary.load_plan()
+        self.assertIn("gateway", read["workflow"])
+        self.assertNotIn("gateway", read["smoke"])
+        self.assertTrue(any("gateway" in f and "does not render" in f for f in failures), failures)
 
-        self.assertEqual(
-            canary._dispatch_options_match_workloads(canary.entries(document["workloads"])),
-            [],
-        )
+    def test_a_workflow_only_name_is_refused(self) -> None:
+        text = canary.WORKFLOW.read_text(encoding="utf-8").replace(
+            "        type: string\n",
+            "        type: choice\n        options: [catalog-api, notifications]\n", 1)
 
-    def _failures_for_text(self, text: str, workloads: dict) -> list[str]:
-        original = canary.WORKFLOW
-        with tempfile.TemporaryDirectory() as tmp:
-            path = Path(tmp) / "deploy.yml"
-            path.write_text(text, encoding="utf-8")
-            canary.WORKFLOW = path
-            try:
-                return canary._dispatch_options_match_workloads(workloads)
-            finally:
-                canary.WORKFLOW = original
+        read, failures = self._read(workflow=text)
 
-    def test_a_sibling_inputs_options_do_not_stand_in_for_a_missing_list(self) -> None:
-        # `workload` has no `options:` of its own; `region`, a later sibling
-        # choice input, happens to carry the workload names. A search that
-        # runs past `workload:`'s own block would read `region`'s list and
-        # call the input covered when it is not.
-        text = """\
-on:
-  workflow_dispatch:
-    inputs:
-      workload:
-        description: 'x'
-        required: true
-        type: choice
-      region:
-        description: 'y'
-        required: true
-        type: choice
-        options: [catalog-api]
-"""
-        failures = self._failures_for_text(text, {"catalog-api": {}})
+        self.assertIn("notifications", read["workflow"])
+        self.assertTrue(any("by hand" in f for f in failures), failures)
+        self.assertTrue(any("notifications" in f and "no descriptor describes" in f for f in failures), failures)
 
-        self.assertTrue(
-            any("no options list" in f for f in failures),
-            failures,
-        )
+    def test_a_workflow_that_reads_no_list_is_refused(self) -> None:
+        text = canary.WORKFLOW.read_text(encoding="utf-8").replace("canary.py workloads", "canary.py steps")
 
-    def test_workload_after_another_choice_input_is_still_read(self) -> None:
-        # `workload` is not the first input here; the block has to be found
-        # by its own heading rather than assumed to start the section.
-        text = """\
-on:
-  workflow_dispatch:
-    inputs:
-      region:
-        description: 'y'
-        required: true
-        type: choice
-        options: [north, south]
-      workload:
-        description: 'x'
-        required: true
-        type: choice
-        options: [catalog-api]
-"""
-        failures = self._failures_for_text(text, {"catalog-api": {}})
+        read, failures = self._read(workflow=text)
 
-        self.assertEqual(failures, [])
+        self.assertEqual(read["workflow"], set())
+        self.assertTrue(any("reads no descriptor list" in f for f in failures), failures)
 
-    def test_a_description_naming_options_is_not_the_options_key(self) -> None:
-        # No `options:` key at all — the description merely says the word,
-        # the way a real dispatch input's description does. An unanchored
-        # substring search reads this as the list and calls the input
-        # covered when a manual rollout still has no choices.
-        text = """\
-on:
-  workflow_dispatch:
-    inputs:
-      workload:
-        description: 'options: [catalog-api, ordering-api, inventory-api]'
-        required: true
-        type: choice
-"""
-        failures = self._failures_for_text(
-            text, {"catalog-api": {}, "ordering-api": {}, "inventory-api": {}}
-        )
+    def test_a_smoke_run_that_reads_no_cases_renders_nothing(self) -> None:
+        text = canary.SMOKE.read_text(encoding="utf-8").replace("smoke-cases", "workloads")
 
-        self.assertTrue(
-            any("no options list" in f for f in failures),
-            failures,
-        )
+        read, failures = self._read(smoke=text)
 
-    def test_a_description_naming_options_before_the_real_key_is_skipped(self) -> None:
-        # The description mentions `options:` ahead of the real key. The real
-        # key still has to be the one read, in whichever order they fall.
+        self.assertEqual(read["smoke"], set())
+        self.assertTrue(any("does not render" in f for f in failures), failures)
+
+    def test_a_smoke_run_that_lists_its_charts_by_hand_renders_nothing(self) -> None:
+        text = canary.SMOKE.read_text(encoding="utf-8") + 'SERVICE_CHARTS="catalog gateway"\n'
+
+        read, failures = self._read(smoke=text)
+
+        self.assertEqual(read["smoke"], set())
+        self.assertTrue(any("does not render" in f for f in failures), failures)
+
+    def test_a_sibling_inputs_options_are_not_the_workload_inputs(self) -> None:
         text = """\
 on:
   workflow_dispatch:
     inputs:
       workload:
         description: 'options: [wrong, values]'
-        required: true
+        type: string
+      region:
         type: choice
         options: [catalog-api]
 """
-        failures = self._failures_for_text(text, {"catalog-api": {}})
+        self.assertIsNone(canary._dispatch_options(text))
 
-        self.assertEqual(failures, [])
+    def test_the_workload_inputs_own_options_are_read_after_a_sibling(self) -> None:
+        text = """\
+on:
+  workflow_dispatch:
+    inputs:
+      region:
+        type: choice
+        options: [north, south]
+      workload:
+        description: 'options: [wrong, values]'
+        type: choice
+        options: [catalog-api]
+"""
+        self.assertEqual(canary._dispatch_options(text), {"catalog-api"})
+
+
+class DescriptorTests(unittest.TestCase):
+    """A deployable's descriptor: one file, named for its release."""
+
+    def _plan(self, plan: dict, descriptors: dict[str, dict]) -> dict:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "canary.json"
+            path.write_text(json.dumps(plan), encoding="utf-8")
+            folder = Path(tmp) / "deployables"
+            folder.mkdir()
+            for name, descriptor in descriptors.items():
+                (folder / f"{name}.json").write_text(json.dumps(descriptor), encoding="utf-8")
+            return canary.load_plan(path, folder)
+
+    def test_each_descriptor_is_the_workload_its_file_names(self) -> None:
+        plan = self._plan({"steps": []}, {"a-api": {"chart": "a"}, "b": {"chart": "b"}})
+
+        self.assertEqual(plan["workloads"], {"a-api": {"chart": "a"}, "b": {"chart": "b"}})
+
+    def test_a_plan_that_still_carries_workloads_is_refused(self) -> None:
+        with self.assertRaisesRegex(canary.PlanError, "its own file"):
+            self._plan({"workloads": {"a": {}}}, {})
+
+    def test_smoke_cases_prints_what_smoke_sh_reads(self) -> None:
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            code = canary.main(["canary", "smoke-cases"])
+
+        self.assertEqual(code, 0)
+        self.assertEqual(out.getvalue().splitlines(), canary.smoke_cases(canary.load_plan()["workloads"]))
+        self.assertIn("payments overlay paymentProvider.baseUrl=https://psp.example.invalid/",
+                      out.getvalue().splitlines())
+
+    def test_a_case_smoke_sh_would_split_into_two_words_is_refused(self) -> None:
+        workloads = json.loads(json.dumps(canary.load_plan()["workloads"]))
+        workloads["payments-api"]["smoke"]["overlay"] = ["paymentProvider.baseUrl=https://a b/"]
+
+        failures = canary.check({**canary.load_plan(), "workloads": workloads})
+
+        self.assertTrue(any("payments-api.smoke.overlay" in f for f in failures), failures)
+
+    def test_a_source_that_holds_another_host_is_refused(self) -> None:
+        workloads = json.loads(json.dumps(canary.load_plan()["workloads"]))
+        workloads["catalog-api"]["source"] = "src/Services/Ordering"
+
+        failures = canary.check({**canary.load_plan(), "workloads": workloads})
+
+        self.assertTrue(any("catalog-api.source" in f and "Catalog.Api.csproj" in f for f in failures), failures)
+
+    def test_two_descriptors_naming_one_chart_are_refused(self) -> None:
+        workloads = json.loads(json.dumps(canary.load_plan()["workloads"]))
+        workloads["ordering-api"]["chart"] = "catalog"
+
+        failures = canary.check({**canary.load_plan(), "workloads": workloads})
+
+        self.assertTrue(any("two descriptors name the chart 'catalog'" in f for f in failures), failures)
 
 
 class SourceInputTests(unittest.TestCase):
@@ -1608,7 +1622,6 @@ class CommentTests(unittest.TestCase):
         raw = json.loads(Path(canary.PLAN_PATH).read_text(encoding="utf-8"))
 
         self.assertIn("$comment", raw)
-        self.assertIn("$comment", raw["workloads"])
 
 
 class ImageRevisionTests(unittest.TestCase):

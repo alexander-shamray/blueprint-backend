@@ -1,0 +1,12 @@
+{
+  "serviceName": "Gateway.Api",
+  "chart": "gateway",
+  "source": "src/Gateway/Gateway.Api",
+  "signals": ["http"],
+  "smoke": {
+    "migrator": false,
+    "autoscaled": true,
+    "capabilities": [],
+    "overlay": []
+  }
+}

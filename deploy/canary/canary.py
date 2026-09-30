@@ -22,6 +22,9 @@ ROOT = Path(__file__).resolve().parents[2]
 CANARY = Path(__file__).resolve().parent
 PLAN_PATH = CANARY / "canary.json"
 
+# One descriptor per deployable, named for its release (README owns the schema).
+DEPLOYABLES = CANARY / "deployables"
+
 # EVERY PATH OUTSIDE deploy/canary THAT THIS SCRIPT READS, declared once.
 #
 # `deploy/helm/smoke.sh` lost count of its own inventory three times and ended
@@ -107,17 +110,34 @@ def entries(mapping: dict) -> dict:
     return {key: value for key, value in mapping.items() if not key.startswith("$")}
 
 
-def load_plan(path: Path = PLAN_PATH) -> dict:
-    """Read canary.json, or explain what is wrong with it."""
+def load_plan(path: Path = PLAN_PATH, deployables: Path = DEPLOYABLES) -> dict:
+    """Read canary.json and every descriptor, or say what is wrong with them."""
+    document = _read_object(path)
+    if "workloads" in document:
+        raise PlanError(
+            f"{path} carries workloads, and a deployable is described by its own "
+            f"file under {deployables} (deploy/canary/README.md)"
+        )
+    document["workloads"] = {
+        descriptor.stem: _read_object(descriptor)
+        for descriptor in sorted(deployables.glob("*.json"))
+    }
+    return document
+
+
+def _read_object(path: Path) -> dict:
     try:
         text = path.read_text(encoding="utf-8")
     except OSError as error:
         raise PlanError(f"{path} is not readable: {error}") from error
 
     try:
-        return json.loads(text)
+        document = json.loads(text)
     except json.JSONDecodeError as error:
         raise PlanError(f"{path} is not valid JSON: {error}") from error
+    if not isinstance(document, dict):
+        raise PlanError(f"{path} is not a JSON object")
+    return document
 
 
 # --------------------------------------------------------------------------
@@ -181,14 +201,10 @@ def validate_tag(tag: str, job_prefix: str | None = None) -> None:
                 "--set-string would read as a second assignment"
             )
 
-    # The migration Job's name is a tighter budget than the label's on any
-    # chart that has one: `_migration-job.tpl` derives
-    # `<workload>-migrate-<tag>` and refuses it past 63 at render time, which
-    # on this path is after the stable track has been scaled up. Moving that
-    # refusal in front of the scale-up is the one job this preflight has.
-    # The prefix comes from canary.json's workload map rather than being
-    # written down, so a workload added there brings its own budget with it,
-    # and the longest prefix among them sets the tightest one.
+    # `_migration-job.tpl` names the Job `<workload>-migrate-<tag>` and refuses
+    # it past 63 at render time, after the stable track has been scaled up;
+    # this moves that refusal in front of the scale-up (§7.4). The prefix is
+    # the workload's descriptor's, so each deployable brings its own budget.
     if job_prefix is not None and len(job_prefix) + len(tag) > 63:
         raise PlanError(
             f"image tag {tag!r} is {len(tag)} characters, and the migration Job "
@@ -376,12 +392,8 @@ ABSOLUTE = {"errorRate": ("error rate", "{:.3%}"), "latencyP99Seconds": ("p99", 
 def analyse(readings: dict, thresholds: dict, signals: dict) -> dict:
     """Promote or roll back, from one step's readings of one workload's signals.
 
-    `readings` is `{track: {signal: {metric: value}}}` and `signals` is the
-    workload's declared subset of canary.json's `signals`. An absent, quiet,
-    missing or undeclared signal is a rollback, like every other doubt: an
-    empty series reads the same whether nothing failed or nothing was scraped
-    (§13.6). Each declared signal is then held to its own `absolute`
-    thresholds and compared with the stable track (ADR-047).
+    `readings` is `{track: {signal: {metric: value}}}` and `signals` those its
+    descriptor declares. Every doubt is a rollback (§13.6, ADR-047).
     """
     for track in TRACKS:
         if not isinstance(readings.get(track), dict):
@@ -654,6 +666,10 @@ def check(plan_document: dict, root: Path = ROOT, source: Path | None = None,
                 f"workloads.{name}.chart is {entry.get('chart')!r}, which is "
                 "not a chart under deploy/helm"
             )
+        failures += _smoke_reads(name, entry, root)
+    charts = [entry.get("chart") for entry in workloads.values()]
+    for chart in sorted({chart for chart in charts if chart and charts.count(chart) > 1}):
+        failures.append(f"two descriptors name the chart {chart!r}, and smoke.sh renders a chart once")
 
     # 5. Every series the query templates read is one something vouches
     #    for: a loaded alert, whose metrics check.py has proved published, or
@@ -701,8 +717,8 @@ def check(plan_document: dict, root: Path = ROOT, source: Path | None = None,
     # 7. The workflow's triggers cover every input this rollout reads.
     failures += _workflow_covers_inputs()
 
-    # 8. The dispatch menu is exactly the plan's workload set.
-    failures += _dispatch_options_match_workloads(workloads)
+    # 8. Every deployable the workflow can roll, smoke.sh renders.
+    failures += _descriptors_agree(workloads)
 
     # 9. Each workload declares the signals it receives: a service that
     #    registers a consumer or a saga declares consume or saga, or argues
@@ -728,7 +744,7 @@ def check(plan_document: dict, root: Path = ROOT, source: Path | None = None,
     return failures
 
 
-# The keys canary.json holds.
+# The keys the plan holds: canary.json's, and the descriptors as workloads.
 PLAN_KEYS = {"steps", "tolerance", "thresholds", "workloads"}
 
 # The signals ADR-047 defines, with the absolute thresholds each is held to.
@@ -1315,49 +1331,144 @@ def _workflow_covers_inputs() -> list[str]:
     return failures
 
 
-def _dispatch_options_match_workloads(workloads: dict) -> list[str]:
-    """The `workload:` dispatch input's `options:` against canary.json's keys.
+SMOKE_PATH = "deploy/helm/smoke.sh"
+SMOKE = ROOT / SMOKE_PATH
 
-    An exact set, not a subset either way: an option the plan cannot roll
-    dispatches a release `chart` and `plan` have never heard of, a workload
-    missing from the list is one a manual dispatch cannot choose, and nothing
-    else compares the two. Parsed as a flow sequence on `_alert_threshold`'s
-    terms, and scoped to `workload:`'s own child indentation so that a
-    sibling input's `options:` cannot stand in for this input's own.
-    """
+# The runs that read the descriptors, as the workflow and smoke.sh spell them.
+READS_WORKLOADS = re.compile(r"canary\.py\"?\s+workloads\b")
+READS_SMOKE_CASES = re.compile(r"canary\.py\"?\s+smoke-cases\b")
+# A chart list written into smoke.sh rather than read from the descriptors.
+LISTED_CHARTS = re.compile(r"^\s*[A-Z_]*CHARTS=[\"']?[a-z]", re.MULTILINE)
+
+# What smoke.sh splits a case into words by, so no value may hold a space or a
+# shell metacharacter. The capability names are smoke.sh's own vocabulary.
+SOURCE_PATH = re.compile(r"src(/[A-Za-z0-9_-][A-Za-z0-9._-]*)+")
+CAPABILITY = re.compile(r"[A-Za-z]+")
+OVERLAY = re.compile(r"[A-Za-z][A-Za-z0-9]*(\.[A-Za-z][A-Za-z0-9]*)+=[A-Za-z0-9._:/-]*")
+
+
+def _live(text: str) -> str:
+    """The text less its comment lines, which argue about what runs."""
+    return "\n".join(line for line in text.splitlines() if not line.lstrip().startswith("#"))
+
+
+def _smoke_case(name: str, entry: dict) -> list[str]:
+    """One descriptor as `smoke-cases` prints it, or why smoke.sh cannot."""
+    chart, source, smoke = entry.get("chart"), entry.get("source"), entry.get("smoke")
+    if not isinstance(smoke, dict):
+        raise PlanError(
+            f"workloads.{name} has no smoke block, so smoke.sh cannot say which "
+            f"of its cases hold for the chart {chart!r}"
+        )
+    if not isinstance(chart, str) or not RELEASE_NAME.fullmatch(chart):
+        raise PlanError(f"workloads.{name}.chart is {chart!r}, which smoke.sh cannot read as one word")
+    if not isinstance(source, str) or not SOURCE_PATH.fullmatch(source):
+        raise PlanError(
+            f"workloads.{name}.source is {source!r}, which is not a path under src/ "
+            "that smoke.sh can read as one word"
+        )
+    lines = [f"{chart} release {name}", f"{chart} source {source}"]
+    for key in ("migrator", "autoscaled"):
+        if not isinstance(smoke.get(key), bool):
+            raise PlanError(
+                f"workloads.{name}.smoke.{key} is {smoke.get(key)!r} rather than "
+                f"true or false, so smoke.sh cannot classify the chart {chart!r}"
+            )
+        lines.append(f"{chart} {key} {'yes' if smoke[key] else 'no'}")
+    for key, field, pattern in (("capabilities", "capability", CAPABILITY), ("overlay", "overlay", OVERLAY)):
+        values = smoke.get(key)
+        if not isinstance(values, list) or not all(
+                isinstance(value, str) and pattern.fullmatch(value) for value in values):
+            raise PlanError(
+                f"workloads.{name}.smoke.{key} is {values!r}, which is not a list "
+                "of words smoke.sh can hand to helm"
+            )
+        lines += [f"{chart} {field} {value}" for value in values]
+    return lines
+
+
+def smoke_cases(workloads: dict) -> list[str]:
+    """Every descriptor's smoke.sh cases, as `<chart> <field> <value>` lines."""
+    return [line for name, entry in entries(workloads).items() for line in _smoke_case(name, entry)]
+
+
+def _smoke_reads(name: str, entry: dict, root: Path) -> list[str]:
+    """Check 4 for smoke.sh: the cases parse, and the source holds the host."""
     try:
-        text = WORKFLOW.read_text(encoding="utf-8")
-    except OSError as error:
-        return [f"{WORKFLOW_PATH} is not readable, so its dispatch options cannot be checked: {error}"]
+        _smoke_case(name, entry)
+    except PlanError as error:
+        return [str(error)]
+    host = f"{entry.get('serviceName')}.csproj"
+    if not any((root / entry["source"]).rglob(host)):
+        return [
+            f"workloads.{name}.source is {entry['source']!r}, which holds no {host}, "
+            "so smoke.sh would hold the chart to another host's code"
+        ]
+    return []
 
+
+def _dispatch_options(text: str) -> set[str] | None:
+    """The `workload:` input's own `options:` list, or None where it has none.
+
+    Scoped to that input's child indentation, so a sibling input's list or a
+    description naming `options:` is not read as this input's.
+    """
     block = re.search(r"(?m)^([ \t]*)workload:\n((?:\1[ \t].*\n?)*)", text)
     child_indent = block and re.match(r"[ \t]+", block.group(2))
-    options_match = child_indent and re.search(
+    options = child_indent and re.search(
         rf"(?m)^{re.escape(child_indent.group(0))}options:\s*\[([^\]]*)\]", block.group(2)
     )
-    if not options_match:
-        return [
-            f"{WORKFLOW_PATH} has no options list for the workload dispatch "
-            "input, so a manual rollout cannot be checked against the plan"
-        ]
+    if not options:
+        return None
+    return {item.strip() for item in options.group(1).split(",") if item.strip()}
 
-    options = {item.strip() for item in options_match.group(1).split(",") if item.strip()}
-    expected = set(workloads)
+
+def descriptors_read(workloads: dict, workflow: Path = WORKFLOW, smoke: Path = SMOKE) -> dict[str, set[str]]:
+    """The descriptors each reader takes in, from the text it runs."""
+    try:
+        workflow_text = _live(workflow.read_text(encoding="utf-8"))
+        smoke_text = _live(smoke.read_text(encoding="utf-8"))
+    except OSError as error:
+        raise PlanError(f"a descriptor reader is not readable: {error}") from error
+
+    described = set(entries(workloads))
+    rolled = set(_dispatch_options(workflow_text) or ())
+    if READS_WORKLOADS.search(workflow_text):
+        rolled |= described
+    rendered = set()
+    if READS_SMOKE_CASES.search(smoke_text) and not LISTED_CHARTS.search(smoke_text):
+        for name in described:
+            try:
+                _smoke_case(name, workloads[name])
+                rendered.add(name)
+            except PlanError:
+                pass
+    return {"workflow": rolled, "canary": described, "smoke": rendered}
+
+
+def _descriptors_agree(workloads: dict, workflow: Path = WORKFLOW, smoke: Path = SMOKE) -> list[str]:
+    """Check 8: the workflow reads the descriptors; smoke.sh each it rolls."""
+    try:
+        read = descriptors_read(workloads, workflow, smoke)
+        menu = _dispatch_options(_live(workflow.read_text(encoding="utf-8")))
+    except (OSError, PlanError) as error:
+        return [f"the descriptor readers cannot be compared: {error}"]
 
     failures = []
-    missing = expected - options
-    if missing:
+    if menu is not None:
         failures.append(
-            f"{WORKFLOW_PATH}'s workload dispatch options omit "
-            f"{', '.join(sorted(missing))}: canary.json can roll them and a "
-            "manual dispatch cannot choose them"
+            f"{WORKFLOW_PATH} lists its workloads by hand ({', '.join(sorted(menu))}), "
+            "a second copy of the descriptors under deploy/canary/deployables"
         )
-    extra = options - expected
-    if extra:
-        failures.append(
-            f"{WORKFLOW_PATH}'s workload dispatch options list "
-            f"{', '.join(sorted(extra))}, which is not a workload in canary.json"
-        )
+    if not read["workflow"]:
+        failures.append(f"{WORKFLOW_PATH} reads no descriptor list, so a dispatch is checked against nothing")
+    for reader in ("canary", "smoke"):
+        missing = read["workflow"] - read[reader]
+        if missing:
+            failures.append(
+                f"{WORKFLOW_PATH} can roll {', '.join(sorted(missing))}, which "
+                f"{'no descriptor describes' if reader == 'canary' else SMOKE_PATH + ' does not render'}"
+            )
     return failures
 
 
@@ -1560,7 +1671,7 @@ def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
 
-    checker = sub.add_parser("check", help="validate canary.json against the repository")
+    checker = sub.add_parser("check", help="validate the plan and its descriptors against the repository")
     # Absent on a pull request, where there is no image: the plan is then
     # checked against the checkout, which is the only tree there is.
     checker.add_argument(
@@ -1601,13 +1712,11 @@ def main(argv: list[str]) -> int:
     chart = sub.add_parser("chart", help="the chart directory a workload deploys")
     chart.add_argument("--workload", required=True)
 
-    # One name per line, for a shell loop. `realm.yml`'s scheduled job reads
-    # every release's authority between rollouts (ADR-043), and the set of
-    # releases is this plan's — a list restated in that workflow would agree
-    # with this one until a fifth workload joined here and not there, which is
-    # `deploy.yml`'s `options:` list one artefact over, and that one at least
-    # is a dispatch menu rather than a subject.
+    # One name per line, for a shell loop: `deploy.yml` holds a dispatch to it,
+    # and `realm.yml`'s scheduled job judges each release's realm (ADR-043).
     sub.add_parser("workloads", help="every workload in the plan, one per line")
+
+    sub.add_parser("smoke-cases", help="each deployable's smoke.sh cases, one fact per line")
 
     planner = sub.add_parser("plan", help="canary replicas for one step")
     planner.add_argument("--workload", required=True)
@@ -1683,6 +1792,18 @@ def main(argv: list[str]) -> int:
     if args.command == "workloads":
         for name in entries(document["workloads"]):
             print(name)
+        return 0
+
+    if args.command == "smoke-cases":
+        try:
+            cases = smoke_cases(document["workloads"])
+        except PlanError as error:
+            print(f"canary: {error}", file=sys.stderr)
+            return 1
+        if not cases:
+            print(f"canary: no descriptor under {DEPLOYABLES}, so smoke.sh would render nothing", file=sys.stderr)
+            return 1
+        print("\n".join(cases))
         return 0
 
     if args.command == "required":

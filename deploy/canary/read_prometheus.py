@@ -114,7 +114,7 @@ def read(base_url: str, workload: str, window: str, plan: dict,
 
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--workload", required=True, help="a workload key in canary.json")
+    parser.add_argument("--workload", required=True, help="a descriptor's name under deploy/canary/deployables")
     parser.add_argument("--window", required=True, help="the step's dwell, as a PromQL duration")
     # ADR-050. Absent, the probe routes excluded are whatever tree this
     # process is running out of, which is the checkout and not either image.

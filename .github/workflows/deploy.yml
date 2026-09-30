@@ -14,11 +14,12 @@ name: Deploy
 on:
   workflow_dispatch:
     inputs:
+      # A string, because a choice list cannot be read from the descriptors;
+      # the rollout's first step holds it to them.
       workload:
-        description: 'Which deployable to roll (a key in deploy/canary/canary.json)'
+        description: 'Which deployable to roll (a descriptor under deploy/canary/deployables)'
         required: true
-        type: choice
-        options: [catalog-api, ordering-api, inventory-api, payments-api, shipping, gateway, web-bff]
+        type: string
       tag:
         description: 'Image tag to promote. §15.3 refuses an empty one rather than rolling :latest.'
         required: true
@@ -135,6 +136,19 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+
+      # The descriptors are the list of deployables (deploy/canary/README.md),
+      # and a name outside it reaches no Helm command.
+      - name: The workload is a deployable the plan describes
+        run: |
+          set -euo pipefail
+          WORKLOADS=$(python deploy/canary/canary.py workloads)
+          if ! grep -qxF -- "$WORKLOAD" <<< "$WORKLOADS"; then
+            echo "::error::The dispatched workload is not a descriptor under deploy/canary/deployables."
+            exit 1
+          fi
+        env:
+          WORKLOAD: ${{ inputs.workload }}
 
       # No step authenticates to a cluster, and naming that is better than a
       # comment implying it is handled. `ubuntu-latest` is a fresh hosted

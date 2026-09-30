@@ -30,42 +30,62 @@ CIDR='{10.42.0.0/16}'
 GATEWAY_OVERLAY="--set ingress.trustedNetworks=$CIDR"
 PLATFORM_OVERLAY="--set gateway.ingress.trustedNetworks=$CIDR"
 
+# Every case below is a deployable's descriptor's (deploy/canary/README.md),
+# read through canary.py. PYTHON is word-split, so PYTHON="py -3.12" works,
+# and the carriage returns a Windows interpreter writes are dropped.
+PYTHON="${PYTHON:-python3}"
+CASES="$OUT/cases.txt"
+$PYTHON "$ROOT/deploy/canary/canary.py" smoke-cases | tr -d '\r' >"$CASES"
+
+field() {
+    # field <chart> <field> -> each value that chart's descriptor gives it
+    awk -v c="$1" -v f="$2" '$1 == c && $2 == f { print $3 }' "$CASES"
+}
+
+charts_where() {
+    # charts_where <field> <value> -> the charts whose descriptor says so
+    awk -v f="$1" -v v="$2" '$2 == f && $3 == v { print $1 }' "$CASES" | tr '\n' ' ' | sed 's/ *$//'
+}
+
+owns() { case " $(field "$1" capability | tr '\n' ' ') " in *" $2 "*) return 0 ;; esac; return 1; }
+
+SERVICE_CHARTS="$(awk '$2 == "release" { print $1 }' "$CASES" | tr '\n' ' ' | sed 's/ *$//')"
+MIGRATOR_CHARTS="$(charts_where migrator yes)"
+DATABASELESS_CHARTS="$(charts_where migrator no)"
+
 # The required per-chart values a render cannot supply for every chart (§15.4):
 # on any other chart each is a setting with the capability off, which the
 # library's coherence guard refuses. So none can ride GATEWAY_OVERLAY, which
 # every chart receives.
-overlay_for() {
-    case "$1" in
-        payments) printf '%s' "--set-string paymentProvider.baseUrl=https://psp.example.invalid/" ;;
-        shipping) printf '%s' "--set-string carrier.baseUrl=https://carrier.example.invalid/ --set-string jurisdiction.addressRetention=30.00:00:00 --set-string jurisdiction.trackingRetention=90.00:00:00" ;;
-    esac
-}
+overlay_for() { field "$1" overlay | sed 's/^/--set-string /' | tr '\n' ' '; }
 
-SERVICE_CHARTS="catalog ordering inventory payments shipping gateway web-bff"
-MIGRATOR_CHARTS="catalog ordering inventory payments shipping"
-DATABASELESS_CHARTS="gateway web-bff"
+# The umbrella takes each chart's tag and overlay under that chart's name.
+PLATFORM_SETS=""
+for chart in $SERVICE_CHARTS; do
+    PLATFORM_SETS="$PLATFORM_SETS --set-string $chart.image.tag=$TAG"
+    for pair in $(field "$chart" overlay); do
+        PLATFORM_SETS="$PLATFORM_SETS --set-string $chart.$pair"
+    done
+done
 
 # Every path outside deploy/helm that this script reads, declared once beside
 # the reads: the workflow's path filter must cover each of them, or a change to
 # one is a green pull request that skips the gate watching it, and the
-# agreement is asserted below.
+# agreement is asserted below. Each descriptor's source is one of them.
 SOURCE_INPUTS="
 src/Gateway/Gateway.Api
 src/BFF/Web.Bff
-src/Services/Catalog
-src/Services/Ordering
-src/Services/Inventory
-src/Services/Payments
 src/Services/Shipping
 src/BuildingBlocks/Common.Web/HealthCheckExtensions.cs
 .gitattributes
-deploy/canary/canary.json
+deploy/canary
+$(awk '$2 == "source" { print $3 }' "$CASES")
 "
+SOURCE_INPUTS="$(printf '%s\n' $SOURCE_INPUTS | sort -u)"
 
-# The lists above are classifications — which chart owns a database is a fact
-# about the platform — and the membership is not written down: the directory
-# is the authority, and the lists are reconciled against it before anything is
-# rendered, so a new chart directory cannot be skipped silently.
+# The descriptors declare which charts exist and what each is held to; the
+# chart directories are reconciled against them before anything is rendered,
+# so a chart without a descriptor fails rather than being skipped.
 discovered_charts() {
     for d in "$CHARTS_DIR"/*/; do
         name="$(basename "$d")"
@@ -141,9 +161,9 @@ section 'The gate covers every chart on disk'
 found="$(discovered_charts | tr '\n' ' ' | sed 's/ *$//')"
 listed="$(printf '%s\n' $SERVICE_CHARTS | sort | tr '\n' ' ' | sed 's/ *$//')"
 if [ "$found" = "$listed" ]; then
-    pass "SERVICE_CHARTS is every deployable chart on disk ($found)"
+    pass "the descriptors name every deployable chart on disk ($found)"
 else
-    fail "SERVICE_CHARTS ($listed) does not match the chart directories ($found)"
+    fail "the descriptors' charts ($listed) do not match the chart directories ($found)"
 fi
 
 # And the two sub-classifications partition it, so a chart cannot be in the
@@ -161,8 +181,8 @@ fi
 # than by each chart's own values. Read from the values alone, a file flipped
 # by itself would change what is asserted rather than fail it, which is this
 # repository's most-repeated failure pointed at its newest surface.
-AUTOSCALED_CHARTS="catalog ordering inventory payments gateway web-bff"
-FIXED_REPLICA_CHARTS="shipping"
+AUTOSCALED_CHARTS="$(charts_where autoscaled yes)"
+FIXED_REPLICA_CHARTS="$(charts_where autoscaled no)"
 
 scaled="$(printf '%s\n' $AUTOSCALED_CHARTS $FIXED_REPLICA_CHARTS | sort | tr '\n' ' ' | sed 's/ *$//')"
 if [ "$scaled" = "$listed" ]; then
@@ -176,7 +196,7 @@ fi
 # wrong two charts, and which host holds a grant is the whole claim. Read from
 # the values files rather than from a render, because a chart outside the two
 # setting it fails its render and the run would abort before this reported.
-CREDENTIALED_CHARTS="shipping web-bff"
+CREDENTIALED_CHARTS="$(charts_where capability clientCredentials)"
 credentialed="$(grep -l 'clientCredentials: true' "$CHARTS_DIR"/*/values.yaml |
     sed -E 's|.*/([^/]+)/values\.yaml|\1|' | sort | tr '\n' ' ' | sed 's/ *$//')"
 want_credentialed="$(printf '%s\n' $CREDENTIALED_CHARTS | sort | tr '\n' ' ' | sed 's/ *$//')"
@@ -217,16 +237,7 @@ declares() {
 # its argument through "$@", which cannot carry a shell keyword.
 lacks() { ! declares "$1" "$2"; }
 
-# The mapping is data, because the gateway and the BFF are not under
-# src/Services and no capitalisation rule reaches them — and an edge host left
-# out of it is one whose chart is never compared to its source.
-src_of() {
-    case "$1" in
-        gateway) echo "$ROOT/src/Gateway/Gateway.Api" ;;
-        web-bff) echo "$ROOT/src/BFF/Web.Bff" ;;
-        *)       echo "$ROOT/src/Services/$(echo "${1:0:1}" | tr '[:lower:]' '[:upper:]')${1:1}" ;;
-    esac
-}
+src_of() { echo "$ROOT/$(field "$1" source)"; }
 
 for chart in $SERVICE_CHARTS; do
     src="$(src_of "$chart")"
@@ -393,18 +404,7 @@ section 'helm lint'
 # --------------------------------------------------------------------------
 for chart in $SERVICE_CHARTS platform; do
     check "$chart lints" "$HELM" lint "$CHARTS_DIR/$chart" --set-string "image.tag=$TAG" \
-        --set-string "catalog.image.tag=$TAG" \
-        --set-string "ordering.image.tag=$TAG" \
-        --set-string "inventory.image.tag=$TAG" \
-        --set-string "payments.image.tag=$TAG" \
-        --set-string "payments.paymentProvider.baseUrl=https://psp.example.invalid/" \
-        --set-string "shipping.image.tag=$TAG" \
-        --set-string "shipping.carrier.baseUrl=https://carrier.example.invalid/" \
-        --set-string "shipping.jurisdiction.addressRetention=30.00:00:00" \
-        --set-string "shipping.jurisdiction.trackingRetention=90.00:00:00" \
-        --set-string "gateway.image.tag=$TAG" \
-        --set-string "web-bff.image.tag=$TAG" \
-        $GATEWAY_OVERLAY $(overlay_for "$chart") $PLATFORM_OVERLAY
+        $PLATFORM_SETS $GATEWAY_OVERLAY $(overlay_for "$chart") $PLATFORM_OVERLAY
 done
 
 # --------------------------------------------------------------------------
@@ -433,19 +433,7 @@ for chart in $SERVICE_CHARTS; do
         $GATEWAY_OVERLAY $(overlay_for "$chart") >"$OUT/$chart.yaml"
     pass "$chart renders"
 done
-"$HELM" template platform "$CHARTS_DIR/platform" \
-    --set-string "catalog.image.tag=$TAG" \
-    --set-string "ordering.image.tag=$TAG" \
-    --set-string "inventory.image.tag=$TAG" \
-    --set-string "payments.image.tag=$TAG" \
-    --set-string "payments.paymentProvider.baseUrl=https://psp.example.invalid/" \
-    --set-string "shipping.image.tag=$TAG" \
-    --set-string "shipping.carrier.baseUrl=https://carrier.example.invalid/" \
-    --set-string "shipping.jurisdiction.addressRetention=30.00:00:00" \
-    --set-string "shipping.jurisdiction.trackingRetention=90.00:00:00" \
-    --set-string "gateway.image.tag=$TAG" \
-    --set-string "web-bff.image.tag=$TAG" \
-    $PLATFORM_OVERLAY >"$OUT/platform.yaml"
+"$HELM" template platform "$CHARTS_DIR/platform" $PLATFORM_SETS $PLATFORM_OVERLAY >"$OUT/platform.yaml"
 pass 'platform renders'
 
 # --------------------------------------------------------------------------
@@ -807,49 +795,63 @@ section 'Client credentials: the hosts that call a peer (§11.5, §15.3, ADR-052
 # A third chart growing an identity.clientId is a design change, not a
 # configuration change: it means a host started calling a peer synchronously,
 # which is ADR-017's budget being spent a third time.
-check 'exactly two workloads in the platform hold a client secret' \
-    test "$(count 'Identity__Client__ClientSecret' "$OUT/platform.yaml")" -eq 2
-check 'one of them is the BFF' \
-    test "$(count 'Identity__Client__ClientSecret' "$OUT/web-bff.yaml")" -eq 1
-check 'and the other is the worker' \
-    test "$(count 'Identity__Client__ClientSecret' "$OUT/shipping.yaml")" -eq 1
+credentialed_count="$(printf '%s\n' $CREDENTIALED_CHARTS | grep -c . || true)"
+check "exactly the credentialed charts hold a client secret ($CREDENTIALED_CHARTS)" \
+    test "$(count 'Identity__Client__ClientSecret' "$OUT/platform.yaml")" -eq "$credentialed_count"
+for chart in $CREDENTIALED_CHARTS; do
+    check "$chart is one of them" \
+        test "$(count 'Identity__Client__ClientSecret' "$OUT/$chart.yaml")" -eq 1
+done
 # And they read DIFFERENT Secrets, which the counts above cannot see: a values
 # file copied from the BFF's leaves Shipping's pod mounting the BFF's grant,
-# renders cleanly, passes all three counts, and gives one host another's
+# renders cleanly, passes every count above, and gives one host another's
 # identity (§11.5).
-check 'and the two read different Secrets' \
+check 'and each reads a Secret of its own' \
     test "$(awk '/- name: Identity__Client__ClientSecret/ { want = 1; next }
                  want && /name: / { print $2; want = 0 }' "$OUT/platform.yaml" |
-        sort -u | wc -l)" -eq 2
+        sort -u | wc -l)" -eq "$credentialed_count"
 
-# The two assertions above read the DEFAULT render, and Helm accepts values a
-# chart's values.yaml never declares — so they establish what the charts ship
-# and nothing about what an environment file can add. A credential-bearing
-# capability turned on where the code does not have it puts one service's
-# Secret in another service's pod, which is the one misconfiguration here
-# that moves a credential rather than stalling a pod.
-for chart in $SERVICE_CHARTS; do
-    [ "$chart" = payments ] || refuses_foreign "$chart" \
-        "the provider capability is refused on $chart" 'only payments registers a provider' \
-        --set paymentProvider.enabled=true \
-        --set-string paymentProvider.baseUrl=https://psp.example.invalid/ \
-        --set-string paymentProvider.apiKeySecretRef.name=payments-provider \
-        --set-string paymentProvider.apiKeySecretRef.key=api-key
-    [ "$chart" = shipping ] || refuses_foreign "$chart" \
-        "the carrier capability is refused on $chart" 'only shipping books with a carrier' \
-        --set carrier.enabled=true \
-        --set-string carrier.baseUrl=https://carrier.example.invalid/ \
-        --set-string carrier.apiKeySecretRef.name=shipping-carrier \
-        --set-string carrier.apiKeySecretRef.key=api-key
-    case "$chart" in
-        web-bff|shipping) ;;
-        *) refuses_foreign "$chart" \
-            "client credentials are refused on $chart" 'the two hosts that call a peer' \
-            --set identity.clientCredentials=true \
-            --set-string identity.clientId=x --set-string identity.scope=y \
-            --set-string identity.clientSecretRef.name=web-bff-identity \
-            --set-string identity.clientSecretRef.key=secret ;;
+# The assertions above read the default render, and Helm accepts values a
+# chart's values.yaml never declares, so an environment file could put one
+# service's Secret in another's pod by turning a credential-bearing capability
+# on. The library holds which chart owns each and the descriptors declare it;
+# the two are held to each other here in both directions.
+CREDENTIAL_CAPABILITIES="paymentProvider carrier clientCredentials"
+enable_args() {
+    case "$1" in
+        paymentProvider) printf '%s' "--set paymentProvider.enabled=true
+            --set-string paymentProvider.baseUrl=https://psp.example.invalid/
+            --set-string paymentProvider.apiKeySecretRef.name=payments-provider
+            --set-string paymentProvider.apiKeySecretRef.key=api-key" ;;
+        carrier) printf '%s' "--set carrier.enabled=true
+            --set-string carrier.baseUrl=https://carrier.example.invalid/
+            --set-string carrier.apiKeySecretRef.name=shipping-carrier
+            --set-string carrier.apiKeySecretRef.key=api-key" ;;
+        clientCredentials) printf '%s' "--set identity.clientCredentials=true
+            --set-string identity.clientId=x --set-string identity.scope=y
+            --set-string identity.clientSecretRef.name=web-bff-identity
+            --set-string identity.clientSecretRef.key=secret" ;;
     esac
+}
+refused_key() { case "$1" in clientCredentials) echo identity.clientCredentials ;; *) echo "$1.enabled" ;; esac; }
+
+for chart in $SERVICE_CHARTS; do
+    for cap in $(field "$chart" capability); do
+        case " $CREDENTIAL_CAPABILITIES " in
+            *" $cap "*) ;;
+            *) fail "$chart's descriptor declares $cap, which is not a capability this script can turn on" ;;
+        esac
+    done
+    for cap in $CREDENTIAL_CAPABILITIES; do
+        if owns "$chart" "$cap"; then
+            check "$cap renders on $chart, whose descriptor declares it" \
+                "$HELM" template "$chart" "$CHARTS_DIR/$chart" --set-string "image.tag=$TAG" \
+                $GATEWAY_OVERLAY $(overlay_for "$chart") $(enable_args "$cap")
+        else
+            refuses_foreign "$chart" "$cap is refused on $chart, whose descriptor does not declare it" \
+                "$(refused_key "$cap") is true on the $chart chart" $(enable_args "$cap")
+        fi
+    done
 done
 
 # --------------------------------------------------------------------------
@@ -1449,13 +1451,6 @@ done
 for chart in $DATABASELESS_CHARTS; do
     check "$chart: the canary renders no migration Job either" \
         test "$(count '^kind: Job$' "$OUT/$chart-canary.yaml")" -eq 0
-done
-
-# The rollout plan names a chart per workload, and a plan pointing at a chart
-# that cannot render a canary is a deploy that fails after the scale-up.
-for chart in $SERVICE_CHARTS; do
-    check "$chart appears in deploy/canary/canary.json" \
-        grep -q "\"chart\": \"$chart\"" "$ROOT/deploy/canary/canary.json"
 done
 
 # --------------------------------------------------------------------------
