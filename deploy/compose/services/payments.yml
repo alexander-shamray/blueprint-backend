@@ -18,7 +18,7 @@ services:
       sql: { condition: service_healthy }
     restart: "no"
 
-  # §3.2's provider, simulated (spec section 9). Payments' own dependency,
+  # §3.1's provider, simulated (spec section 9). Payments' own dependency,
   # so it lives in Payments' unit rather than the shared baseline, and
   # docker-compose.infra-only.yml keeps it, since a Payments host run from an
   # IDE needs it as much as a containerised one. The tag is

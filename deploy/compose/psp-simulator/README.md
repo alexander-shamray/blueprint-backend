@@ -1,6 +1,6 @@
 # Payment provider simulator
 
-[§3.2](../../../docs/backend-architecture/03-bounded-contexts.md)'s payment
+[§3.1](../../../docs/backend-architecture/03-bounded-contexts.md)'s payment
 provider, simulated: a WireMock.Net server loaded with the mappings in
 `mappings/`, which the adapter's own tests and this Compose unit both read.
 Section 9 of [the service design
