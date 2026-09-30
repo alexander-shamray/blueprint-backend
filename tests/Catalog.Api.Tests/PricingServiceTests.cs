@@ -154,7 +154,7 @@ public sealed class PricingServiceTests(ServiceFixture fixture) : IAsyncLifetime
             """);
 
     /// <summary>
-    /// Re-declares <c>PriceCurrency</c> whole, <c>NOT NULL</c> included, with a collation from this file only.
+    /// Re-declares <c>PriceCurrency</c> whole, <c>NOT NULL</c> included.
     /// </summary>
     private async Task SetCurrencyCollationAsync(string collation) =>
         await fixture.ExecuteAsync(
