@@ -245,6 +245,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # --verify re-renders a named commit (tools/new-service/README.md); a shallow checkout has none.
+          fetch-depth: 0
 
       - uses: actions/setup-python@v5
         with:
