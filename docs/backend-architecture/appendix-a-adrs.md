@@ -62,6 +62,7 @@ decision looks wrong.
 | **ADR-053** | [A jurisdiction is a value the deployment is given](adr/ADR-053-a-jurisdiction-is-a-value-the-deployment-is-given.md) |
 | **ADR-054** | [A shipment stops waiting on its carrier at an age](adr/ADR-054-a-shipment-stops-waiting-on-its-carrier-at-an-age.md) |
 | **ADR-055** | [An outbound hop registers beside its layer, and the host calls it](adr/ADR-055-an-outbound-hop-registers-beside-its-layer-and-the-host-calls-it.md) |
+| **ADR-056** | [A service's fixture derives from one shared body under tests/](adr/ADR-056-a-services-fixture-derives-from-one-shared-body-under-tests.md) |
 
 ---
 
