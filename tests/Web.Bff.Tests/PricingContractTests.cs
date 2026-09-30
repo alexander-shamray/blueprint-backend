@@ -8,7 +8,7 @@ using Xunit;
 namespace Web.Bff.Tests;
 
 /// <summary>ADR-023's consumer half: each <see cref="PricingContract"/> entry driven through the screen.</summary>
-/// <remarks>The ceiling refusal no longer reaches the stub, and stays as Catalog still owes it (ADR-045).</remarks>
+/// <remarks>The ceiling refusal stays as Catalog still owes it (ADR-045).</remarks>
 public sealed class PricingContractTests : IAsyncLifetime
 {
     private readonly StubCatalog _catalog = new();
@@ -84,7 +84,7 @@ public sealed class PricingContractTests : IAsyncLifetime
             TestContext.Current.CancellationToken,
             Basket(interaction, published));
 
-        // QuoteRequestValidator refuses it before the hop since ADR-045, so Catalog is never asked.
+        // QuoteRequestValidator refuses it before the hop, so Catalog is never asked.
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
         _catalog.Calls.ShouldBeEmpty();
     }

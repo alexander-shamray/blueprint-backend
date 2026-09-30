@@ -65,7 +65,7 @@ public static class PricingContract
             "GBP",
             PricingOutcome.Prices()),
 
-        // The consumer's screen no longer reaches this, and Catalog still owes it (ADR-045).
+        // Catalog still owes it (ADR-045).
         new PricingInteraction(
             "a basket past the ceiling is refused rather than served in part",
             [],
