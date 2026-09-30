@@ -467,7 +467,7 @@ public sealed class ServiceFixture()
             attempts,
             id.Value);
 
-    /// <summary>Removes one mapping, so it cannot outlive its assertion; <c>ResetAsync</c> is the backstop.</summary>
+    /// <summary>Removes one mapping, so it cannot outlive its assertion.</summary>
     private sealed class CarrierMapping(WireMockServer server, Guid id) : IDisposable
     {
         public void Dispose() => server.DeleteMapping(id);
