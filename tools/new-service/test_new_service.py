@@ -11,6 +11,7 @@ thing that touches disk.
 """
 
 import contextlib
+import difflib
 import importlib.util
 import io
 import re
@@ -18,8 +19,11 @@ import shutil
 import tempfile
 import unittest
 from pathlib import Path, PurePosixPath
+from unittest import mock
 
 import new_service
+import scaffold.patch
+import scaffold.render
 from new_service import (
     COPY_ROOTS,
     MIGRATIONS as MIGRATIONS_DIR,
@@ -474,7 +478,7 @@ class GeneratedGuidanceIsTrue(unittest.TestCase):
         # independent triggers: a query-only slice was told to wait for a
         # command and to add a validator test with no validator to scan for.
         tests = self.claim("tests/Yankee.Application.Tests/DependencyInjectionTests.cs")
-        self.assertIn("come back separately rather", tests)
+        self.assertIn("each bring back their own registration test", tests)
         self.assertIn("first handler of either kind", tests)
         self.assertIn("first validator", tests)
         self.assertNotIn("with the first command and query", tests)
@@ -487,15 +491,11 @@ class GeneratedGuidanceIsTrue(unittest.TestCase):
         gate = self.claim("tests/Yankee.Domain.Tests/ArchitectureTests.cs")
         self.assertNotIn("the ones Yankee added", gate)
 
-    def test_the_endpoints_gate_points_at_the_template_for_what_it_cannot_show(self):
-        # The gate is vacuous until the service maps an endpoint, and the
-        # comment saying so must send the reader to the template rather than
-        # describe a thing this service has done. The negative is the half
-        # that matters: a claim carrying the new service's name is a history
-        # it has not got.
+    def test_the_endpoints_gate_says_what_it_is_looking_at(self):
+        # The template's own line is true of any host, so it travels unpatched.
         gate = self.claim("tests/Yankee.Api.Tests/ArchitectureTests.cs")
         self.assertNotIn("forbidden reference in Yankee before being trusted", gate)
-        self.assertIn("see the service this one was scaffolded from", gate)
+        self.assertIn("Program's presence says the rule is looking at this host", gate)
 
     def test_no_generated_file_carries_a_history_this_service_has_not_got(self):
         """A service rendered today has no past, so nothing in it may narrate one.
@@ -551,6 +551,101 @@ class GeneratedGuidanceIsTrue(unittest.TestCase):
         self.assertNotIn("WidenWriteForTheHarness", fixture)
         self.assertNotIn("ExecResult", fixture)
         self.assertNotIn("set_permissions", fixture)
+
+
+# The comment share, in per cent, that a rendered service's C# may reach (tools/new-service/README.md).
+COMMENT_CEILING = 20
+
+
+def template_of(path: str, names: Names) -> str | None:
+    """The renamed template text a created path was copied from, or None where it has no counterpart."""
+    relative = path
+    for mine, template in (
+        (f"{names.pascal}.{names.host}", f"{new_service.TEMPLATE}.{new_service.API_HOST}"),
+        (f"{names.pascal}{names.host}", f"{new_service.TEMPLATE}{new_service.API_HOST}"),
+        (names.pascal, new_service.TEMPLATE),
+        (names.lower, new_service.TEMPLATE.lower()),
+    ):
+        relative = relative.replace(mine, template)
+    source = REPO_ROOT / relative
+    if relative.startswith(f"{MIGRATIONS_DIR}/") and (stamp := re.fullmatch(r"\d{14}_(.+)", source.name)):
+        source = next(source.parent.glob(f"*_{stamp.group(1)}"), None)
+    if source is None or not source.is_file():
+        return None
+    return names.rename(source.read_bytes().decode("utf-8-sig")).replace("\r\n", "\n")
+
+
+def changed_lines(before: str, after: str) -> set[int]:
+    """The line numbers of `after` that a line diff from `before` adds or replaces."""
+    matcher = difflib.SequenceMatcher(None, before.split("\n"), after.split("\n"), autojunk=False)
+    return {
+        number + 1
+        for tag, _, _, start, stop in matcher.get_opcodes()
+        if tag in ("replace", "insert")
+        for number in range(start, stop)
+    }
+
+
+def budget_breaches(rendered: Plan, names: Names) -> list[str]:
+    """The comment gate's findings in the lines a render writes, and its C# share against COMMENT_CEILING."""
+    gate = comment_gate_module()
+    breaches: list[str] = []
+    comment = code = 0
+    for path, text in sorted({**rendered.created, **rendered.updated}.items()):
+        if gate.reader_for(path) is None:
+            continue
+        body = text.lstrip("﻿").replace("\r\n", "\n")
+        lines = gate.scan(path, body)
+        every = {line.number for line in lines}
+        if path in rendered.updated:
+            before = (REPO_ROOT / path).read_bytes().decode("utf-8-sig").replace("\r\n", "\n")
+        else:
+            before = template_of(path, names)
+        written = every if before is None else changed_lines(before, body)
+        breaches += [f"{path}:{line}: {message}" for _, line, message in gate.findings(path, lines, written)]
+        if path in rendered.created and path.endswith(".cs"):
+            counted = gate.tally(lines, every)
+            comment, code = comment + counted[0], code + counted[1]
+    if not code:
+        breaches.append("the render holds no C# for the ceiling to weigh")
+    elif (share := comment * 100 / (comment + code)) > COMMENT_CEILING:
+        breaches.append(f"the rendered C# is {share:.1f}% comment, over COMMENT_CEILING's {COMMENT_CEILING}%")
+    return breaches
+
+
+class RendersInsideTheCommentBudget(unittest.TestCase):
+    """The rule tools/new-service/README.md states for a rendered comment, judged by the comment gate."""
+
+    PROGRAM = "src/Services/Catalog/Catalog.Api/Program.cs"
+
+    def test_an_api_render(self):
+        breaches = budget_breaches(render(), Names(PROBE))
+        self.assertEqual([], breaches, "\n".join(breaches))
+
+    def test_a_worker_render(self):
+        breaches = budget_breaches(worker(), Names(PROBE, new_service.WORKER_HOST))
+        self.assertEqual([], breaches, "\n".join(breaches))
+
+    def test_a_template_that_argues_is_refused(self):
+        run = "app.Run();\n"
+
+        def program(replacement: str):
+            patches = (*scaffold.patch.PATCHES[self.PROGRAM], (run, replacement + run))
+            return mock.patch.dict(scaffold.patch.PATCHES, {self.PROGRAM: patches})
+
+        remarks = "/// <remarks>Kept until it is not.</remarks>\npublic sealed class"
+        cases = (
+            (program("// Why.\n" * 6), "/Program.cs:", ": a comment block runs 6 lines, over 5"),
+            (mock.patch.object(scaffold.render, "ASSEMBLY_MARKER",
+                               scaffold.render.ASSEMBLY_MARKER.replace("public sealed class", remarks)),
+             "/AssemblyMarker.cs:", ": a <remarks> cites no section, ADR or cref"),
+            (program("// §11.4.\n\n" * 800), "the rendered C# is ",
+             f"% comment, over COMMENT_CEILING's {COMMENT_CEILING}%"),
+        )
+        for mutation, where, message in cases:
+            with self.subTest(message), mutation:
+                breaches = budget_breaches(render(), Names(PROBE))
+                self.assertTrue(any(where in breach and message in breach for breach in breaches), breaches)
 
 
 class TheMigrationAndItsSnapshot(unittest.TestCase):

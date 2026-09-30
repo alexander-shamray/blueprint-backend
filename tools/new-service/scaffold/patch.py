@@ -24,32 +24,12 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
     "src/Services/Catalog/Catalog.Application/DependencyInjection.cs": (
         ("using Catalog.Application.Products.PublishProduct;\n", ""),
         (
-            "        // Explicit rather than scanned, beside the dispatcher it serves —\n"
-            "        // §4.2's registration sample is the shape. §7.5's real dispatcher,\n"
-            "        // and no null one beside it: a dispatcher that drops every domain\n"
-            "        // event is deleted rather than disabled, so nothing can register it\n"
-            "        // back by accident.\n",
-            "        // Explicit rather than scanned, beside the dispatcher it serves —\n"
-            "        // §4.2's registration sample is the shape. It stages nothing until\n"
-            "        // this service has an aggregate raising domain events, and needs no\n"
-            "        // null object to say so: a collector over an empty change tracker\n"
-            "        // returns nothing and the dispatcher exits early (§7.5).\n",
-        ),
-        (
             "        // §4.2's sample line. IValidator<T> is not in PluggableInterfaces.All\n"
             "        // because it is FluentValidation's contract, not one of ours — its own\n"
             "        // scanner knows its own conventions (Include* filters, internal\n"
             "        // validators) and a second scan would drift from it.\n"
             "        services.AddValidatorsFromAssemblyContaining<PublishProductValidator>();\n",
-            "        // §4.2's sample line, spelt over the assembly rather than over a type\n"
-            "        // in it: IValidator<T> is not in PluggableInterfaces.All because it is\n"
-            "        // FluentValidation's own contract — its own scanner knows its own\n"
-            "        // conventions, and a second scan would drift from it — and there is no\n"
-            "        // validator yet to anchor on; this static class cannot be a type\n"
-            "        // argument. Move to AddValidatorsFromAssemblyContaining<TFirstValidator>()\n"
-            "        // with the first one, and add the registration test that guards it:\n"
-            "        // ValidationBehavior takes IEnumerable<IValidator<T>> and asks nobody\n"
-            "        // when that sequence comes back empty.\n"
+            "        // §4.2's sample line, over the assembly until the first validator gives it a type.\n"
             "        services.AddValidatorsFromAssembly(typeof(DependencyInjection).Assembly);\n",
         ),
     ),
@@ -75,16 +55,7 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
             "        // nothing to assert against.\n"
             "        [typeof(ProductPublishedDomainEvent)] = e => ToContract((ProductPublishedDomainEvent)e)\n"
             "    };\n",
-            "    // The allow-list, empty until this service publishes something: every\n"
-            "    // domain event it raises is local-only while this dictionary is, which is\n"
-            "    // the correct state for a service with no contracts rather than a gap,\n"
-            "    // because §9.3 makes translation opt-in. An entry is one line —\n"
-            "    //\n"
-            "    //     [typeof(OrderPlacedDomainEvent)] = e => ToContract((OrderPlacedDomainEvent)e)\n"
-            "    //\n"
-            "    // with one private ToContract method beside it, the contract living in\n"
-            "    // Common.Contracts under a versioned namespace (§9.2), carrying primitives\n"
-            "    // only, and taking its MessageId and CorrelationId from the mapper (§9.1).\n"            "    private static readonly Dictionary<Type, Func<IDomainEvent, object>> Registry = [];\n",
+            "    // Empty until this service publishes a contract: translation is opt-in (§9.3).\n"            "    private static readonly Dictionary<Type, Func<IDomainEvent, object>> Registry = [];\n",
         ),
         (
             "\n"
@@ -110,10 +81,6 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
             "    };\n",
             "",
         ),
-        (
-            "/// §9.3's allow-list for Catalog. §5.5 states the principle — never publish a\n",
-            "/// §9.3's allow-list for this service. §5.5 states the principle — never publish a\n",
-        ),
     ),
     "src/Services/Catalog/Catalog.Application/Catalog.Application.csproj": (
         # The mapper's registry is emptied and its `using` removed, so nothing
@@ -132,12 +99,7 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
             "    allow-list turns a domain event into a public record, so the layer that\n"
             "    owns the allow-list is the layer that pays for the reference. §4.3's one\n"
             "    assembly that crosses a service boundary, and it crosses at the mapper.\n",
-            "    Domain and Common.Application — the §4.2 dependency table's second row,\n"
-            "    minus Common.Contracts. The §9.3 mapper is where a contract would be\n"
-            "    named, and its allow-list is empty until this service publishes\n"
-            "    something — so the reference joins with the first entry in it, and not\n"
-            "    before. §4.3's one assembly that crosses a service boundary; it crosses\n"
-            "    at the mapper or nowhere.\n",
+            "    Domain and Common.Application, §4.2's second row; Common.Contracts joins with the §9.3 mapper's first entry.\n",
         ),
         (
             "  <ItemGroup>\n"
@@ -145,10 +107,7 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
             "         the architecture gate in Catalog.Application.Tests holds that line. -->\n"
             "    <PackageReference Include=\"Dapper\" />\n",
             "  <ItemGroup>\n"
-            "    <!-- Dapper is not here yet: §6.5's read side uses it directly, and this\n"
-            "         project has no query handler to use it. It joins with the first\n"
-            "         one — an unused package reference is a claim this project would\n"
-            "         not be making. -->\n",
+            "    <!-- Dapper joins with the first query handler (§6.5). -->\n",
         ),
     ),
     "src/Services/Catalog/Catalog.Infrastructure/Catalog.Infrastructure.csproj": (
@@ -156,9 +115,7 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
             "    <!-- typeof(ProductPublished).Assembly, the Broker lane's half of\n"
             "         MessageTypeSource. Transitive through Catalog.Application, named\n"
             "         directly because this file names the type. -->\n",
-            "    <!-- MessageTypeSource's Broker half. Named through IIntegrationEvent\n"
-            "         until this service has a contract of its own, at which point the\n"
-            "         anchor becomes that contract — same assembly either way. -->\n",
+            "    <!-- MessageTypeSource's Broker half, through IIntegrationEvent until this service has a contract (§9.4). -->\n",
         ),
     ),
     "src/Services/Catalog/Catalog.Infrastructure/DependencyInjection.cs": (
@@ -178,8 +135,7 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
         (
             "        services.AddSingleton(\n"
             "            new MessageTypeSource(typeof(ProductPublished).Assembly, typeof(Product).Assembly));\n",
-            "        // §9.4's two anchors are this service's contracts and its domain;\n"
-            "        // IIntegrationEvent and AssemblyMarker stand in until it has either.\n"            "        services.AddSingleton(\n"
+            "        // IIntegrationEvent and AssemblyMarker stand in for §9.4's two anchors until the service has its own.\n"            "        services.AddSingleton(\n"
             "            new MessageTypeSource(typeof(IIntegrationEvent).Assembly, typeof(AssemblyMarker).Assembly));\n",
         ),
         (
@@ -191,10 +147,7 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
             "        // and a null currency rather than throwing.\n"
             "        services.AddSingleton<JsonConverter, MoneyJsonConverter>();\n"
             "        services.AddSingleton<OutboxJson>();\n",
-            "        // The payload format (§9.4). The first value object this service puts\n"
-            "        // on a domain event needs a converter registered here: a readonly\n"
-            "        // record struct deserialises to its default rather than failing,\n"
-            "        // and §12.4's round-trip assertion is what catches that.\n"
+            "        // The payload format (§9.4); a value object on a domain event registers its converter here (§12.4).\n"
             "        services.AddSingleton<OutboxJson>();\n",
         ),
         ("using System.Text.Json.Serialization;\n", ""),
@@ -271,16 +224,7 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
             "    .AddAuthorizationBuilder()\n"
             "    .AddPolicy(CatalogPermissions.Write, p => p.RequirePermission(CatalogPermissions.Write));\n"
             "\n",
-            "// This service registers no permission policy, because it names no endpoint\n"
-            "// that needs one. The first slice brings both together (§11.4):\n"
-            "//\n"
-            "//     builder.Services\n"
-            "//         .AddAuthorizationBuilder()\n"
-            "//         .AddPolicy(<Service>Permissions.Write, p => p.RequirePermission(…));\n"
-            "//\n"
-            "// A policy registered before an endpoint names it is unused; an endpoint\n"
-            "// naming one nobody registered throws on the first request that reaches it,\n"
-            "// never at startup, and the slice brings the gate that enumerates both.\n"
+            "// This service registers no permission policy until an endpoint names one (§11.4).\n"
             "\n",
         ),
         (
@@ -288,9 +232,7 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
             "app.MapProductEndpoints();        // §11.4\n",
             "app.MapOpenApi();\n"
             "\n"
-            "// This service maps no endpoint of its own yet. The first one goes here,\n"
-            "// behind RequireAuthorization at the group (§11.4) — fail closed, and let\n"
-            "// any deliberately public endpoint say AllowAnonymous out loud.\n",
+            "// This service maps no endpoint of its own yet. The first one goes behind RequireAuthorization at the group (§11.4).\n",
         ),
     ),
     "tests/Catalog.Domain.Tests/ArchitectureTests.cs": (
@@ -303,7 +245,6 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
             "\n"
             "        IEnumerable<string> referenced = typeof(Product).Assembly\n",
             "        // An exact allow-list, as §4.2's table is: a System.* prefix would pass System.Data.SqlClient.\n"
-            "        // Two entries, because two is what an empty domain references.\n"
             "        string[] allowed = [\"Common.Domain\", \"System.Runtime\"];\n"
             "\n"
             "        IEnumerable<string> referenced = typeof(AssemblyMarker).Assembly\n",
@@ -428,11 +369,7 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
             "    <!-- CatalogDbContext by name; §4.2's gate binds Catalog.Application, not its tests. -->\n"
             "    <ProjectReference Include=\"..\\..\\src\\Services\\Catalog\\Catalog.Infrastructure\\Catalog.Infrastructure.csproj\" />\n",
             "    <ProjectReference Include=\"..\\..\\src\\Services\\Catalog\\Catalog.Application\\Catalog.Application.csproj\" />\n"
-            "    <!-- No Catalog.TestSupport and no Catalog.Infrastructure yet, and no\n"
-            "         Docker with them: §12.1 homes the handler tests here against real\n"
-            "         containers, and this project has no handler to test. The fixture\n"
-            "         reference, the DbContext reference and the provider package all\n"
-            "         return with the first one. -->\n",
+            "    <!-- TestSupport, Infrastructure and the EF provider return with the first handler test (§12.1). -->\n",
         ),
     ),
     "tests/Catalog.Application.Tests/DependencyInjectionTests.cs": (
@@ -479,12 +416,7 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
             "    }\n"
             "}\n",
             "\n"
-            "    // A handler assertion and a validator assertion come back separately rather\n"
-            "    // than together. The first handler of either kind earns the one that\n"
-            "    // asserts the §6.2 scan produced a registration; the first validator earns\n"
-            "    // the one that asserts the validator scan found it. Both scans fail\n"
-            "    // silently when lost, which is why neither is left implicit — and a\n"
-            "    // query-only slice needs the handler one alone.\n"
+            "    // The first handler of either kind and the first validator each bring back their own registration test (§6.2).\n"
             "}\n",
         ),
     ),
@@ -510,10 +442,7 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
             "            fixture.MessageTypes,\n"
             "            fixture.OutboxJson);\n"
             "\n",
-            "    // A Broker-lane builder returns with this service's first contract,\n"
-            "    // together with the dispatcher test that uses it: staging that lane\n"
-            "    // needs a type Common.Contracts publishes on this service's behalf,\n"
-            "    // and the allow-list mapper is empty until there is one (§9.3).\n"
+            "    // The Broker-lane builder returns with this service's first contract (§9.3).\n"
             "\n",
         ),
     ),
@@ -534,12 +463,7 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
             "        row.LastError.ShouldBeNull();\n"
             "    }\n",
             "\n"
-            "    // Three tests return with this service's first contract, beside the\n"
-            "    // OutboxRows.Broker builder they all need — this one, the Local\n"
-            "    // lane's guard below, and OutboxTransportIdentityTests, which pins\n"
-            "    // §9.1's single identity onto the transport. Until then the\n"
-            "    // allow-list is empty and nothing can build a contract instance, so\n"
-            "    // each would assert against a row no code here can produce.\n",
+            "    // The Broker-lane tests return with this service's first contract and OutboxRows.Broker (§9.1).\n",
         ),
         (
             "\n"
@@ -661,25 +585,6 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
             "        typeof(Product).Assembly,\n",
             "        typeof(AssemblyMarker).Assembly,\n",
         ),
-        # The whole gate travels now, and that is the point of the shape it
-        # arrived at: it selects the entire assembly and subtracts the
-        # composition root from the FAILURES, so it says something true about a
-        # host with no adapters at all. A namespace selector said nothing.
-        #
-        # Only the two adapter names leave, because they are the exemplar's.
-        (
-            "        exempted.ShouldContain(\"Program\");\n",
-            "        exempted.ShouldContain(\"Program\");\n"
-            "\n"
-            "        // The other half of this assertion belongs with the first endpoint:\n"
-            "        // that the gate is judging something. Until then Program is all\n"
-            "        // there is, and naming an adapter that does not exist is not an\n"
-            "        // assertion — see the service this one was scaffolded from.\n",
-        ),
-    ),
-    "tests/Catalog.Api.Tests/TransientFaultInjection.cs": (
-    ),
-    "tests/Catalog.TestSupport/CatalogApiFactory.cs": (
     ),
     # StockLevelConsumer.cs is OMITTED: a rendered service subscribes to
     # nothing, so these registrations of it are removed and the rest of the
@@ -749,8 +654,7 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
             "        applied[8].ShouldEndWith(\"_AddStockLevels\");\n",
             "        schema.ShouldBe(1, \"InitialCreate's hand-written EnsureSchema is what creates it\");\n"
             "\n"
-            "        // Named and ordered, since a count passes on a shorter prefix applied twice. Each is\n"
-            "        // wiring every service has.\n"
+            "        // Named and ordered, since a count passes on a shorter prefix applied twice.\n"
             "        string[] applied = await fixture.AppliedMigrationsAsync();\n"
             "        applied.Length.ShouldBe(7);\n"
             "        applied[0].ShouldEndWith(\"_InitialCreate\");\n"
@@ -776,18 +680,6 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
 WORKER_PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
     "src/Services/Catalog/Catalog.Api/Catalog.Api.csproj": (
         (
-            "    The Web SDK, because this is the one project in the service that is a\n"
-            "    host. Application and Infrastructure per §4.2's fourth row — Program.cs is\n"
-            "    the only composition root, and the endpoints gate in Catalog.Api.Tests\n"
-            "    holds every other file to Application and Domain contracts.\n",
-            "    The Web SDK, and a worker keeps it: §3.2 gives this service no API, and\n"
-            "    §15.3 still requires §13.5's health endpoint, which is a listener — so\n"
-            "    Kestrel stays bound and nothing routes to it. Application and\n"
-            "    Infrastructure per §4.2's fourth row — Program.cs is the only composition\n"
-            "    root, and the gate in Catalog.Api.Tests holds every other file to\n"
-            "    Application and Domain contracts.\n",
-        ),
-        (
             "  <ItemGroup>\n"
             "    <!-- Appendix C's OpenAPI deliverable: document only, no UI. -->\n"
             "    <PackageReference Include=\"Microsoft.AspNetCore.OpenApi\" />\n"
@@ -804,33 +696,15 @@ WORKER_PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
             "",
         ),
         (
-            "// This service registers no permission policy, because it names no endpoint\n"
-            "// that needs one. The first slice brings both together (§11.4):\n"
-            "//\n"
-            "//     builder.Services\n"
-            "//         .AddAuthorizationBuilder()\n"
-            "//         .AddPolicy(<Service>Permissions.Write, p => p.RequirePermission(…));\n"
-            "//\n"
-            "// A policy registered before an endpoint names it is unused; an endpoint\n"
-            "// naming one nobody registered throws on the first request that reaches it,\n"
-            "// never at startup, and the slice brings the gate that enumerates both.\n",
-            "// This host registers no permission policy and never will: §3.2 gives it no\n"
-            "// API, so there is no endpoint to name one. The middleware below stays,\n"
-            "// because §11.2 makes every host validate its own token whether or not it\n"
-            "// serves anything, and because ADR-030's fallback policy is what makes the\n"
-            "// probes' AllowAnonymous a decision rather than an omission.\n",
+            "// This service registers no permission policy until an endpoint names one (§11.4).\n",
+            "// A worker names no endpoint, so it registers no permission policy (§3.2); the token middleware below stays (§11.2).\n",
         ),
         (
             "app.MapCommonHealthEndpoints();   // §13.5 — anonymous; kubelet carries no token\n"
             "app.MapOpenApi();\n"
             "\n"
-            "// This service maps no endpoint of its own yet. The first one goes here,\n"
-            "// behind RequireAuthorization at the group (§11.4) — fail closed, and let\n"
-            "// any deliberately public endpoint say AllowAnonymous out loud.\n",
-            "// §13.5's probes are the only thing this host serves, and that is the whole\n"
-            "// difference from an API service: everything it does, it does from a hosted\n"
-            "// service. The kubelet reaches this port without a Service in front of it\n"
-            "// (§15.3), which is why there is a listener and no route.\n"
+            "// This service maps no endpoint of its own yet. The first one goes behind RequireAuthorization at the group (§11.4).\n",
+            "// §13.5's probes are all this host serves, on a port the kubelet reaches directly (§15.3).\n"
             "app.MapCommonHealthEndpoints();   // §13.5 — anonymous; kubelet carries no token\n",
         ),
     ),
@@ -879,41 +753,3 @@ WORKER_PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
         ),
     ),
 }
-
-# Empty, because the template's block is already written for a service rather
-# than for Catalog — there is nothing left here to rename. It stays a tuple:
-# the dispatch in render_projects appends it by name, and the next edit that
-# does need one adds an entry rather than a table.
-INITIAL_CREATE_PATCHES: tuple[tuple[str, str], ...] = ()
-
-# Empty, because the template's block is already written for a service rather
-# than for Catalog — there is nothing left here to rename. It stays a tuple:
-# the dispatch in render_projects appends it by name, and the next edit that
-# does need one adds an entry rather than a table.
-OUTBOX_MIGRATION_PATCHES: tuple[tuple[str, str], ...] = ()
-
-# And the inbox migration's, for the same reason again: the template names the
-# outbox migration whose dress it follows, and a scaffolded service's copy
-# states the convention without the cross-reference.
-INBOX_MIGRATION_PATCHES: tuple[tuple[str, str], ...] = (
-    (
-        "/// §9.5's inbox table, generated from <see cref=\"InboxMessageConfiguration\"/>\n"
-        "/// on <c>AddOutbox</c>'s terms: the configuration is the source of truth, and\n"
-        "/// the <c>.Designer.cs</c> and snapshot beside it are machine-owned.\n",
-        "/// §9.5's inbox table, generated from <see cref=\"InboxMessageConfiguration\"/>:\n"
-        "/// the configuration is the source of truth, and the <c>.Designer.cs</c> and\n"
-        "/// snapshot beside it are machine-owned.\n",
-    ),
-)
-
-# Empty, because the template's block is already written for a service rather
-# than for Catalog — there is nothing left here to rename. It stays a tuple:
-# the dispatch in render_projects appends it by name, and the next edit that
-# does need one adds an entry rather than a table.
-RETENTION_INDEX_MIGRATION_PATCHES: tuple[tuple[str, str], ...] = ()
-
-# Empty, because the template's block is already written for a service rather
-# than for Catalog — there is nothing left here to rename. It stays a tuple:
-# the dispatch in render_projects appends it by name, and the next edit that
-# does need one adds an entry rather than a table.
-IDEMPOTENCY_MIGRATION_PATCHES: tuple[tuple[str, str], ...] = ()
