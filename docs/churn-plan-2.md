@@ -3,7 +3,7 @@
 **Goal.** The same as [`churn-plan.md`](churn-plan.md)'s: a reviewer reads
 the diff, and every line in it that is not the change is a line they cannot
 approve or refuse on its merits. The first plan measured the corpus at #204,
-sequenced ten steps, and every step landed (#205 to #225 and #236). This
+sequenced eleven steps, and every step landed (#205 to #225 and #236). This
 file measures what the corpus does *now* that those rules are in force,
 names the churn they did not reach, and sequences the work that stops it —
 in the same form: measured on a named commit, one PR per step, an exit test
