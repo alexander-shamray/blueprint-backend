@@ -218,7 +218,8 @@ docker compose -f deploy/compose/docker-compose.yml -f deploy/compose/docker-com
 
 The host process reads none of the `environment:` blocks above, so every key
 Catalog and Ordering refuse to start without, which §14.1 names, has to reach
-them another way. Same values, host names in place of service names:
+them another way. Same values, host names in place of service names, and the
+coordination Redis on its published port (§14.1):
 
 ```bash
 export ASPNETCORE_ENVIRONMENT=Development
