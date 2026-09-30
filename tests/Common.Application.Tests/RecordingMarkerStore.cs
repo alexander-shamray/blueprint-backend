@@ -1,15 +1,6 @@
 namespace Common.Application.Tests;
 
-/// <summary>
-/// A recording <see cref="IIdempotencyMarkerStore"/> on the shared
-/// <see cref="PipelineLog"/>, so its two calls are placed in §6.3's sequence
-/// rather than merely counted.
-/// </summary>
-/// <remarks>
-/// A read after the handler comes too late to stop the work, and a write
-/// outside the transaction survives a refusal, refusing every retry of work
-/// that never committed.
-/// </remarks>
+/// <summary>Logs to the shared <see cref="PipelineLog"/>, so its two calls are placed in §6.3's sequence.</summary>
 public sealed class RecordingMarkerStore(PipelineLog log) : IIdempotencyMarkerStore
 {
     /// <summary>Keys a previous attempt is to be reported as having committed.</summary>

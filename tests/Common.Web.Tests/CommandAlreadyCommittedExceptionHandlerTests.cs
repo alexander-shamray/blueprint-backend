@@ -14,18 +14,7 @@ using Xunit;
 
 namespace Common.Web.Tests;
 
-/// <summary>
-/// §8.5's durable refusal on the wire, built exactly as
-/// <c>ConcurrentRequestExceptionHandlerTests</c> builds the neighbouring 409's.
-/// </summary>
-/// <remarks>
-/// <b>Unregistered, this handler's absence puts the duplicate write back one
-/// release later.</b> §6.3 raises the exception when a command's key already
-/// carries a committed marker; the fallback answers 500, a client reads that as
-/// retryable, and every retry meets the same 500 until the marker's retention
-/// expires — at which point the command runs a second time. The exception exists
-/// to refuse exactly that, and a 500 is an invitation to keep asking.
-/// </remarks>
+/// <summary>§8.5's durable refusal on the wire, which unregistered would be a retryable 500.</summary>
 public class CommandAlreadyCommittedExceptionHandlerTests
 {
     private const string Key =
@@ -51,10 +40,7 @@ public class CommandAlreadyCommittedExceptionHandlerTests
 
         HttpResponseMessage response = await client.GetAsync("/orders", TestContext.Current.CancellationToken);
 
-        // The status assertion is load-bearing for the reason the sibling suite
-        // records: the 500 fallback writes through the same
-        // IProblemDetailsService, so every assertion below passes against it
-        // with this handler unregistered.
+        // The 500 fallback writes through the same service, so only the status shows this handler answered.
         response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
 
         using JsonDocument body = JsonDocument.Parse(
@@ -76,21 +62,14 @@ public class CommandAlreadyCommittedExceptionHandlerTests
         using JsonDocument body = JsonDocument.Parse(
             await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
 
-        // The key's first segment is a principal's identity (§8.5), so no part
-        // of it belongs in a response — the same rule the neighbouring handler
-        // follows about the CommandId, one segment further.
+        // The key's first segment is a principal's identity (§8.5), so none of it is echoed.
         body.RootElement.GetProperty("detail").GetString()!.ShouldNotContain(Key);
     }
 
     [Fact]
     public async Task The_two_409s_are_told_apart_by_what_they_tell_the_caller_to_do()
     {
-        // Three handlers now answer §10.5's 409, so the status carries less
-        // than it used to and the text carries the difference. These two say
-        // opposite things: the neighbour's request has decided nothing and
-        // should be retried, and this one's has already been applied — a retry
-        // meets the same refusal until the marker is purged, and then runs the
-        // command a second time.
+        // Two of §10.5's 409s say opposite things: retry, and already applied.
         string committed = await DetailOfAsync(new CommandAlreadyCommittedException(Key));
         string inProgress = await DetailOfAsync(new ConcurrentRequestException(Guid.CreateVersion7()));
 
@@ -102,12 +81,7 @@ public class CommandAlreadyCommittedExceptionHandlerTests
     [Fact]
     public async Task The_three_409s_carry_distinct_machine_readable_codes()
     {
-        // `detail` is human-readable by RFC 9457, and this status now carries
-        // instructions that contradict each other: two of its producers say
-        // retry and this one says do not. A client that can only tell them
-        // apart by prose retries on a reword — so §10.5's `code` extension is
-        // what it switches on, and these are pinned because a discriminator
-        // nothing asserts is one that drifts back into agreement.
+        // A client switches on §10.5's `code`, not on prose, so the codes are pinned.
         string committed = await CodeOfAsync(new CommandAlreadyCommittedException(Key));
         string inProgress = await CodeOfAsync(new ConcurrentRequestException(Guid.CreateVersion7()));
         string conflict = await CodeOfAsync(new DbUpdateConcurrencyException("stale"));
@@ -116,9 +90,7 @@ public class CommandAlreadyCommittedExceptionHandlerTests
         inProgress.ShouldBe("request.in_progress");
         conflict.ShouldBe("request.concurrency_conflict");
 
-        // Distinctness as a set, not pairwise: the name says three and two of
-        // the three would satisfy any pair of assertions, which is how a gate
-        // ends up covering less than it claims.
+        // Distinct as a set, since two of the three would satisfy any pair of assertions.
         new[] { committed, inProgress, conflict }.Distinct().Count().ShouldBe(3);
     }
 
@@ -139,9 +111,7 @@ public class CommandAlreadyCommittedExceptionHandlerTests
     [Fact]
     public async Task Any_other_exception_still_falls_through_to_the_500()
     {
-        // The half that establishes the handler is selecting rather than
-        // catching: a handler matching everything would pass every assertion
-        // above and answer "already applied" to every fault in the platform.
+        // The handler selects: one matching everything would pass the tests above.
         using IHost host = await StartThrowingAsync(new InvalidOperationException("boom"));
         using HttpClient client = host.GetTestClient();
 

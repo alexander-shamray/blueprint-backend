@@ -8,13 +8,7 @@ using Xunit;
 
 namespace Common.Infrastructure.Tests;
 
-/// <summary>
-/// §8.2's stack through the real registration: stampede-collapsed reads, the
-/// §8.3 prefix and the mandatory TTL asserted against the server rather than
-/// the code, §8.4's tag mechanism at this pin, and the §13.2 claim that
-/// AddRedisConnections instruments its own connections. Each test takes its
-/// own application name, so key scans never see a neighbour's entries.
-/// </summary>
+/// <summary>§8.2's stack through the real registration, asserted against the server rather than the code.</summary>
 [Collection(nameof(IntegrationCollection))]
 public sealed class HybridCacheRedisTests(RedisFixture fixture)
 {
@@ -70,12 +64,7 @@ public sealed class HybridCacheRedisTests(RedisFixture fixture)
     [Fact]
     public async Task Removing_a_tag_invalidates_the_entry()
     {
-        // Same-instance semantics on purpose: §8.4's mechanism proven at
-        // this pin. Cross-replica freshness is deliberately NOT asserted —
-        // §8.2 names the L1 expiry as the bound on how long another
-        // instance may serve an already-invalidated entry, and a test
-        // demanding immediate cross-instance invalidation would assert a
-        // promise the design explicitly trades away.
+        // One instance only: §8.2 bounds cross-instance staleness by the L1 expiry instead.
         await using ServiceProvider provider = fixture.BuildProvider("tags");
         HybridCache cache = provider.GetRequiredService<HybridCache>();
         int executions = 0;
@@ -104,19 +93,14 @@ public sealed class HybridCacheRedisTests(RedisFixture fixture)
     {
         ExportedActivities exported = new();
 
-        // The fixture's composition plus an in-memory exporter — the
-        // instrumentation itself is registered by AddRedisConnections, which
-        // is the claim under test (§13.2's amended home).
+        // Only the exporter is added; AddRedisConnections registering the instrumentation is under test (§13.2).
         await using ServiceProvider provider = fixture.BuildProvider(
             "traced",
             services => services
                 .AddOpenTelemetry()
                 .WithTracing(tracing => tracing.AddInMemoryExporter(exported)));
 
-        // A host's TelemetryHostedService is what builds the TracerProvider;
-        // there is no host here, so the test forces it the same way startup
-        // would — construction is what runs ConfigureRedisInstrumentation
-        // and hands the connections over.
+        // No host builds the TracerProvider here, so the test resolves it as startup would.
         provider.GetRequiredService<TracerProvider>();
 
         HybridCache cache = provider.GetRequiredService<HybridCache>();
@@ -126,8 +110,7 @@ public sealed class HybridCacheRedisTests(RedisFixture fixture)
             (_, _) => ValueTask.FromResult("priced"),
             cancellationToken: TestContext.Current.CancellationToken);
 
-        // The instrumentation drains profiling sessions on a timer, so the
-        // span arrives after the operation rather than during it.
+        // The instrumentation drains profiling sessions on a timer, so the span arrives later.
         for (int attempt = 0; attempt < 150 && exported.Count == 0; attempt++)
             await Task.Delay(100, TestContext.Current.CancellationToken);
 
@@ -148,10 +131,7 @@ public sealed class HybridCacheRedisTests(RedisFixture fixture)
 
         provider.GetRequiredService<TracerProvider>();
 
-        // No cache operation happens here, so any span that arrives can only
-        // have come from the coordination multiplexer — the half of the
-        // registration's claim the test above cannot prove: dropping its
-        // AddConnection call would leave a cache-only suite green.
+        // No cache operation happens here, so any span is the coordination multiplexer's.
         IDistributedLockFactory factory = provider.GetRequiredService<IDistributedLockFactory>();
         IDistributedLock? held = await factory.TryAcquireAsync(
             "traced",

@@ -15,27 +15,21 @@ public sealed class FakeDomainEventCollector(params IDomainEvent[] events) : IDo
 {
     private IDomainEvent[] _events = events;
 
-    /// <summary>How many times the dispatcher asked. §7.5 says exactly once.</summary>
+    /// <summary>How many times the dispatcher asked, which §7.5 says is once.</summary>
     public int Collections { get; private set; }
 
     public IReadOnlyList<IDomainEvent> CollectAndClear()
     {
         Collections++;
 
-        // Cleared on the way out, like the real one — a collector that keeps
-        // returning the same events would hide a dispatcher that called it
-        // twice, which is the defect §7.5's "clears them" clause prevents.
+        // Cleared on the way out, like the real one (§7.5).
         IDomainEvent[] collected = _events;
         _events = [];
         return collected;
     }
 }
 
-/// <summary>
-/// The §9.3 allow-list, one entry. <see cref="Throws"/> makes it the other
-/// half of that section's table: a registered mapper that fails must fail the
-/// command.
-/// </summary>
+/// <summary>§9.3's allow-list of one; <see cref="Throws"/> makes it the registered mapper that fails.</summary>
 public sealed class FakeIntegrationEventMapper : IIntegrationEventMapper
 {
     public bool Throws { get; set; }

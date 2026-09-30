@@ -3,12 +3,7 @@ using Microsoft.Extensions.Time.Testing;
 
 namespace Common.Application.Tests;
 
-/// <summary>
-/// The anonymous sample requests the dispatcher and behaviour suites share,
-/// standing in for §6.4's <c>PlaceOrderCommand</c> and §6.5's query. They carry
-/// no domain: what is under test is the pipeline, and a request with meaning
-/// invites assertions about the meaning instead.
-/// </summary>
+/// <summary>Domain-free stand-ins for §6.4's command and §6.5's query, so the pipeline is what is tested.</summary>
 public sealed record Ping(string Message) : ICommand<string>;
 
 public sealed class PingHandler : ICommandHandler<Ping, string>
@@ -28,11 +23,7 @@ public sealed class AskHandler : IQueryHandler<Ask, string>
 /// <summary>A command nothing handles — the §6.2 trap, made deliberate.</summary>
 public sealed record Unhandled : ICommand<string>;
 
-/// <summary>
-/// One request type under two result types. `ICommand&lt;T&gt;` is an ordinary
-/// generic interface and nothing stops a record implementing it twice, so the
-/// invoker cache cannot assume a request type determines its result type.
-/// </summary>
+/// <summary>One request under two result types, so the invoker cache cannot key on the request alone.</summary>
 public sealed record TwoResults : ICommand<string>, ICommand<int>;
 
 public sealed class TwoResultsTextHandler : ICommandHandler<TwoResults, string>
@@ -47,12 +38,7 @@ public sealed class TwoResultsNumberHandler : ICommandHandler<TwoResults, int>
         Task.FromResult(42);
 }
 
-/// <summary>
-/// Both a command and a query, under the same result type — the quieter of the
-/// two collisions. The cast a shared cache entry goes through succeeds here,
-/// because both invokers derive from the same <c>Invoker&lt;TResult&gt;</c>, so
-/// nothing throws and the wrong handler simply runs.
-/// </summary>
+/// <summary>A command and a query under one result type, where a shared cache entry runs the wrong handler.</summary>
 public sealed record BothWays : ICommand<string>, IQuery<string>;
 
 public sealed class BothWaysCommandHandler : ICommandHandler<BothWays, string>
@@ -76,10 +62,7 @@ public sealed class BoomHandler : ICommandHandler<Boom, string>
         throw new InvalidOperationException("boom");
 }
 
-/// <summary>
-/// Advances the clock inside the handler, so the duration §13.3 records is a
-/// number the test chose rather than however long the machine took.
-/// </summary>
+/// <summary>Advances the clock in the handler, so the duration §13.3 records is the test's choice.</summary>
 public sealed record Tick : ICommand<string>;
 
 public sealed class TickHandler(FakeTimeProvider clock) : ICommandHandler<Tick, string>
@@ -91,11 +74,7 @@ public sealed class TickHandler(FakeTimeProvider clock) : ICommandHandler<Tick, 
     }
 }
 
-/// <summary>
-/// A command the domain refuses. §13.3 counts it as an <c>ok</c> outcome: a
-/// rejection is a working system saying no, and tagging it <c>error</c> makes
-/// the one number that should mean "something is broken" track customers.
-/// </summary>
+/// <summary>A domain refusal, which §13.3 counts as an <c>ok</c> outcome.</summary>
 public sealed record Reject : ICommand<Result>;
 
 public sealed class RejectHandler : ICommandHandler<Reject, Result>
@@ -104,10 +83,7 @@ public sealed class RejectHandler : ICommandHandler<Reject, Result>
         Task.FromResult(Result.Failure(Error.Rule("test.rejected", "The domain said no.")));
 }
 
-/// <summary>
-/// A command the domain accepts, returning the non-generic <c>Result</c> —
-/// the success arm of §6.3's failure guard, <c>Reject</c>'s counterpart.
-/// </summary>
+/// <summary>The success arm of §6.3's failure guard, <c>Reject</c>'s counterpart.</summary>
 public sealed record Approve : ICommand<Result>;
 
 public sealed class ApproveHandler : ICommandHandler<Approve, Result>
@@ -116,16 +92,7 @@ public sealed class ApproveHandler : ICommandHandler<Approve, Result>
         Task.FromResult(Result.Success());
 }
 
-/// <summary>
-/// A command whose handler moves the scope's idempotency key out from under
-/// §6.3, which is what a nested dispatch would do: the inner command's own
-/// <c>IdempotencyBehavior</c> claims a key of its own while the outer
-/// transaction is still open.
-/// </summary>
-/// <remarks>
-/// It makes §6.3's capture observable: a behaviour reading the context after
-/// <c>next()</c> would mark the wrong command's key against these rows.
-/// </remarks>
+/// <summary>Replaces the scope's idempotency key inside §6.3's transaction, as a nested dispatch would.</summary>
 public sealed record Reclaim(string Key) : ICommand<Result>;
 
 public sealed class ReclaimHandler(IdempotencyContext idempotency) : ICommandHandler<Reclaim, Result>
@@ -142,15 +109,7 @@ public sealed class PingValidator : AbstractValidator<Ping>
     public PingValidator() => RuleFor(x => x.Message).NotEmpty().WithErrorCode("Empty");
 }
 
-/// <summary>
-/// A second validator on the same request. §6.3 runs every registered
-/// <c>IValidator&lt;T&gt;</c> and gathers the failures, so an empty message has
-/// to come back carrying both rules and not the first one to notice.
-/// </summary>
-/// <remarks>
-/// A <c>Must</c> with its own error code, so the two rules' failures can be
-/// told apart.
-/// </remarks>
+/// <summary>A second validator on <c>Ping</c>, since §6.3 runs every validator and gathers the failures.</summary>
 public sealed class PingLengthValidator : AbstractValidator<Ping>
 {
     public PingLengthValidator() =>
@@ -165,21 +124,13 @@ public sealed class ValidatorConstructions
     public void Record() => Count++;
 }
 
-/// <summary>
-/// A validator with no rules, whose only job is to be counted. §6.3 enumerates
-/// the injected sequence twice — once for <c>Any()</c> and once for
-/// <c>Select</c> — and that is only safe because the container materialises
-/// <c>IEnumerable&lt;T&gt;</c> before it ever reaches the constructor.
-/// </summary>
+/// <summary>Counted, because §6.3 enumerates the injected validators twice.</summary>
 public sealed class CountingValidator : AbstractValidator<Ask>
 {
     public CountingValidator(ValidatorConstructions constructions) => constructions.Record();
 }
 
-/// <summary>
-/// Which behaviours ran, in the order they were entered and left. Scoped, so
-/// one dispatch fills one log and a second scope starts empty.
-/// </summary>
+/// <summary>Which behaviours ran, in entry and exit order; scoped, so a second scope starts empty.</summary>
 public sealed class PipelineLog
 {
     private readonly List<string> _entries = [];
@@ -189,11 +140,7 @@ public sealed class PipelineLog
     public void Add(string entry) => _entries.Add(entry);
 }
 
-/// <summary>
-/// Records entry and exit around <c>next()</c>. Nesting is what the ordering
-/// test reads: an outer behaviour is entered first and left last, so the log of
-/// a correct pipeline is a palindrome of names.
-/// </summary>
+/// <summary>Logs entry and exit around <c>next()</c>, so a correct pipeline's log is a palindrome.</summary>
 public abstract class RecordingBehavior<TRequest, TResult>(PipelineLog log)
     : IPipelineBehavior<TRequest, TResult>
 {
@@ -218,11 +165,7 @@ public sealed class SecondBehavior<TRequest, TResult>(PipelineLog log)
 public sealed class ThirdBehavior<TRequest, TResult>(PipelineLog log)
     : RecordingBehavior<TRequest, TResult>(log);
 
-/// <summary>
-/// Constrained to commands, the way <c>TransactionBehavior</c> and
-/// <c>IdempotencyBehavior</c> are (§6.3). The container is expected to omit it
-/// when the closed request type is a query rather than to throw.
-/// </summary>
+/// <summary>Constrained to commands as §6.3's transaction behaviour is, so a query omits it.</summary>
 public sealed class CommandOnlyBehavior<TCommand, TResult>(PipelineLog log)
     : RecordingBehavior<TCommand, TResult>(log)
     where TCommand : ICommand<TResult>;
@@ -238,11 +181,7 @@ public sealed class ShortCircuitBehavior<TRequest, TResult>(PipelineLog log)
     }
 }
 
-/// <summary>
-/// A scoped handler that reports which scope built it. The invoker cache is
-/// static and lives for the process (§6.2); this is how a test sees that it
-/// caches the invoker and not the scope behind it.
-/// </summary>
+/// <summary>Reports which scope built its handler, since §6.2's invoker cache lives for the process.</summary>
 public sealed record WhichScope : ICommand<Guid>;
 
 public sealed class ScopeMarker

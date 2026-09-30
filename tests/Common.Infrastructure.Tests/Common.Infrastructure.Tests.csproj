@@ -8,14 +8,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- §11.5's token source is proved against a real server, because half of
-         what is under test is what the client does with a discovery document
-         (the stub's own remarks). Kestrel and the minimal-API results are the
-         shared framework's, and this suite is the only thing here that takes
-         it — Common.Infrastructure itself does not. It also carries the real
-         container and the in-memory IConfiguration the registration tests
-         resolve AddRedisConnections through, so neither is named as a package
-         (NU1510). -->
+    <!-- Kestrel for §11.5's stub provider; it also carries the container and configuration (NU1510). -->
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 
@@ -24,20 +17,13 @@
     <PackageReference Include="xunit.runner.visualstudio" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="Shouldly" />
-    <!-- The lock's guards and call shapes need no server; the container
-         suite below is what needs one. -->
     <PackageReference Include="NSubstitute" />
     <PackageReference Include="Testcontainers.Redis" />
-    <!-- The in-memory harness for §9.4's two consumers. Core, not
-         MassTransit.RabbitMQ: the harness swaps the transport out, and the
-         consumers under test know nothing about one. -->
+    <!-- The in-memory harness for §9.4's consumers, which know nothing of a transport. -->
     <PackageReference Include="MassTransit" />
-    <!-- FakeTimeProvider. §13.3's delivery lag is a clock subtracted from a
-         timestamp made elsewhere, and a test that let the real clock decide
-         the difference could only assert that it was positive. -->
+    <!-- FakeTimeProvider, so §13.3's delivery lag is a value the test chose. -->
     <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
-    <!-- Reads the Redis client spans back out of a real tracer — the §13.2
-         claim that AddRedisConnections instruments its own connections. -->
+    <!-- Reads the Redis client spans back out of a real tracer (§13.2). -->
     <PackageReference Include="OpenTelemetry.Exporter.InMemory" />
   </ItemGroup>
 

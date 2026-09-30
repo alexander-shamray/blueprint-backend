@@ -8,10 +8,7 @@ using Xunit;
 
 namespace Common.Infrastructure.Tests;
 
-/// <summary>
-/// §11.5's token source: what it fetches, what it caches, and what it refuses
-/// to put in an exception message.
-/// </summary>
+/// <summary>§11.5's token source: what it fetches, what it caches, and what it keeps out of a message.</summary>
 public sealed class CachingTokenClientTests : IAsyncLifetime
 {
     private const string Scope = "commerce-api";
@@ -61,9 +58,6 @@ public sealed class CachingTokenClientTests : IAsyncLifetime
         form["client_id"].ShouldBe("web-bff");
         form["scope"].ShouldBe(Scope);
 
-        // In the body rather than a basic-auth header — both are permitted by
-        // RFC 6749 §2.3.1, and the body form keeps the secret out of the one
-        // header every proxy in the world is willing to log.
         form["client_secret"].ShouldBe("local-dev-secret");
     }
 
@@ -72,17 +66,13 @@ public sealed class CachingTokenClientTests : IAsyncLifetime
     {
         await Tokens.GetAsync(Scope, TestContext.Current.CancellationToken);
 
-        // Fetched, rather than built by appending a provider-shaped path to
-        // the authority. The stub's token endpoint is only reachable through
-        // the document, so a client that guessed the path would 404.
         _provider.Discoveries.ShouldBe(1);
     }
 
     [Fact]
     public async Task The_discovery_document_is_fetched_once_across_many_tokens()
     {
-        // Two token fetches, because the clock is advanced past the first
-        // token's life between them.
+        // Two token fetches, because the clock passes the first token's life between them.
         await Tokens.GetAsync(Scope, TestContext.Current.CancellationToken);
         _clock.Advance(TimeSpan.FromMinutes(10));
         await Tokens.GetAsync(Scope, TestContext.Current.CancellationToken);
@@ -108,11 +98,7 @@ public sealed class CachingTokenClientTests : IAsyncLifetime
 
         string first = await Tokens.GetAsync(Scope, TestContext.Current.CancellationToken);
 
-        // Thirty-five seconds in: the token has twenty-five seconds of life
-        // left, which is inside the thirty-second guard and still valid. The
-        // guard's whole reason is that a token handed out here would expire
-        // DURING the five seconds of retries §9.7 permits — so the assertion
-        // is that it is replaced while it is still good, not after it is dead.
+        // 35 s in, 25 s of life remain: inside the 30-second guard, yet still valid.
         _clock.Advance(TimeSpan.FromSeconds(35));
 
         string second = await Tokens.GetAsync(Scope, TestContext.Current.CancellationToken);
@@ -129,10 +115,6 @@ public sealed class CachingTokenClientTests : IAsyncLifetime
         await Tokens.GetAsync(Scope, TestContext.Current.CancellationToken);
         await Tokens.GetAsync(Scope, TestContext.Current.CancellationToken);
 
-        // expires_in is OPTIONAL in RFC 6749 §5.1. Absent, the safe reading is
-        // "already expired" — one fetch per call, which is wasteful and
-        // correct. The unsafe reading is a default hour, which attaches a dead
-        // token for fifty-nine minutes of it.
         _provider.TokenRequests.Count.ShouldBe(2);
     }
 
@@ -143,10 +125,6 @@ public sealed class CachingTokenClientTests : IAsyncLifetime
             .Range(0, 20)
             .Select(_ => Tokens.GetAsync(Scope, TestContext.Current.CancellationToken)));
 
-        // The gate plus the re-read inside it. Without the second read every
-        // waiter fetches a token for a value already in hand, which is a
-        // twenty-fold burst at the provider on the first request after a
-        // restart — exactly when it is least welcome.
         _provider.TokenRequests.Count.ShouldBe(1);
     }
 
@@ -163,11 +141,7 @@ public sealed class CachingTokenClientTests : IAsyncLifetime
         thrown.Message.ShouldContain("401");
         thrown.Message.ShouldContain("unauthorized_client");
 
-        // The half that matters. A token endpoint answers a SUCCESSFUL grant
-        // with a bearer token, so a failure path that echoes whatever arrived
-        // is one provider quirk away from writing that token into a log —
-        // where §13.4's redactor cannot reach it, because it scrubs keyed
-        // attributes and cannot see a secret interpolated into a message.
+        // §13.4's redactor scrubs keyed attributes and cannot see a token interpolated into a message.
         thrown.Message.ShouldNotContain("leaked-bearer-token");
     }
 
@@ -180,12 +154,7 @@ public sealed class CachingTokenClientTests : IAsyncLifetime
     {
         _provider.TokenStatus = status;
 
-        // HttpRequestException, not InvalidOperationException — and the type is
-        // the whole point rather than a detail. This runs inside the pricing
-        // client's resilience pipeline (§9.7), which decides what to retry from
-        // the exception it sees: an InvalidOperationException is not transient
-        // to it, so a Keycloak that was merely restarting used to take the
-        // request down as an unmapped 500.
+        // The type is the point: §9.7's resilience pipeline retries on what it sees.
         await Should.ThrowAsync<HttpRequestException>(
             () => Tokens.GetAsync(Scope, TestContext.Current.CancellationToken));
     }
@@ -197,9 +166,6 @@ public sealed class CachingTokenClientTests : IAsyncLifetime
     {
         _provider.TokenStatus = status;
 
-        // The other half, and it must not become retryable: a wrong client
-        // secret retried three times is three ways of being wrong, and the
-        // failure a deployment needs to see is the first one.
         await Should.ThrowAsync<InvalidOperationException>(
             () => Tokens.GetAsync(Scope, TestContext.Current.CancellationToken));
     }
@@ -209,11 +175,6 @@ public sealed class CachingTokenClientTests : IAsyncLifetime
     {
         _provider.BlankAccessToken = true;
 
-        // Blank counts as missing — the same lesson §11.3 records for
-        // Identity:Authority. A present-but-empty token passes a type check and
-        // is then CACHED for expires_in, so every pricing call sends `Bearer `
-        // for minutes, and the resulting 401s look like the audience mapper
-        // rather than like the provider.
         await Should.ThrowAsync<InvalidOperationException>(
             () => Tokens.GetAsync(Scope, TestContext.Current.CancellationToken));
     }
@@ -226,9 +187,6 @@ public sealed class CachingTokenClientTests : IAsyncLifetime
         InvalidOperationException thrown = await Should.ThrowAsync<InvalidOperationException>(
             () => Tokens.GetAsync(Scope, TestContext.Current.CancellationToken));
 
-        // The key the host was configured from is what turns this from
-        // "something went wrong talking to the provider" into a deployment
-        // instruction, so the name this client was given is what it prints.
         thrown.Message.ShouldContain(AuthorityKey);
     }
 }

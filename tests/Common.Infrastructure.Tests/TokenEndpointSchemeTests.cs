@@ -6,28 +6,13 @@ using Xunit;
 
 namespace Common.Infrastructure.Tests;
 
-/// <summary>
-/// Where §11.5's client secret is allowed to be posted. The discovery document
-/// names the token endpoint, and this is the only thing standing between that
-/// name and an outbound credential.
-/// </summary>
-/// <remarks>
-/// <b>The provider is trusted for its answer, not for where its answer
-/// points.</b> Reaching the document at all proves the authority responded —
-/// over TLS, when the authority is HTTPS — and says nothing about the URL
-/// inside it. A document that advertises a plain-HTTP <c>token_endpoint</c>
-/// puts <c>ClientSecret</c> on the wire in the clear, and every check before
-/// this one has already passed by then.
-/// </remarks>
+/// <summary>Where §11.5's client secret may be posted, whatever the discovery document advertises.</summary>
 public sealed class TokenEndpointSchemeTests
 {
     private const string Scope = "commerce-api";
     private const string AuthorityKey = "Test:Authority";
 
-    /// <summary>
-    /// A client over one stub provider, with the self-signed certificate
-    /// accepted when the stub is serving TLS.
-    /// </summary>
+    /// <summary>A client over one stub provider, accepting its self-signed certificate.</summary>
     private static ServiceProvider Client(StubIdentityProvider provider)
     {
         ServiceCollection services = new();
@@ -36,10 +21,7 @@ public sealed class TokenEndpointSchemeTests
             .AddHttpClient(CachingTokenClient.HttpClientName, c => c.BaseAddress = provider.Authority)
             .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
             {
-                // The stub's certificate is generated per run and trusted by
-                // nothing. Accepting it is scoped to this client in this suite;
-                // the production path validates normally, which is the whole
-                // premise of the downgrade being worth refusing.
+                // Scoped to this suite's client; the production path validates normally.
                 ServerCertificateCustomValidationCallback =
                     HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
             });
@@ -68,10 +50,7 @@ public sealed class TokenEndpointSchemeTests
         InvalidOperationException refusal = await Should.ThrowAsync<InvalidOperationException>(
             () => services.GetRequiredService<ITokenCache>().GetAsync(Scope, TestContext.Current.CancellationToken));
 
-        // PostAsync would refuse this one too, with a NotSupportedException
-        // naming neither the document nor the configuration key that led here.
-        // So the guard is a better message rather than a new protection — the
-        // honest half of this pair, and why the test below exists.
+        // PostAsync would refuse it too, so this guard adds a message, not a protection.
         refusal.Message.ShouldContain("ftp://example.test/token");
     }
 
@@ -92,9 +71,7 @@ public sealed class TokenEndpointSchemeTests
 
         refusal.Message.ShouldContain("downgrades the HTTPS authority to plain HTTP");
 
-        // Nothing was posted. The point is not that the call failed — it is
-        // that the secret never left, and a guard placed after the POST would
-        // satisfy every assertion above while leaking exactly what it refuses.
+        // Nothing was posted: a guard after the POST would pass the assertions above and leak.
         provider.TokenRequests.ShouldBeEmpty();
     }
 
@@ -106,9 +83,7 @@ public sealed class TokenEndpointSchemeTests
 
         await using ServiceProvider services = Client(provider);
 
-        // The control. Without it the test above could pass because the TLS
-        // stub never worked at all — a refusal for the right reason and a
-        // refusal for no reason are the same assertion from outside.
+        // The control, without which the refusal above could mean the TLS stub never worked.
         string token = await services.GetRequiredService<ITokenCache>()
             .GetAsync(Scope, TestContext.Current.CancellationToken);
 

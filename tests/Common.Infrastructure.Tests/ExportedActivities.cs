@@ -3,13 +3,7 @@ using System.Diagnostics;
 
 namespace Common.Infrastructure.Tests;
 
-/// <summary>
-/// A thread-safe sink for <c>AddInMemoryExporter</c>. The Redis
-/// instrumentation exports from its flush timer while the test thread polls
-/// <see cref="Count"/> and then enumerates, and <c>List&lt;T&gt;</c> does
-/// not support a concurrent reader and writer — the flake would be rare and
-/// unattributable, which is the worst kind.
-/// </summary>
+/// <summary>A thread-safe exporter sink, since the Redis instrumentation writes from its flush timer.</summary>
 internal sealed class ExportedActivities : ICollection<Activity>
 {
     private readonly List<Activity> _items = [];
@@ -68,8 +62,7 @@ internal sealed class ExportedActivities : ICollection<Activity>
         }
     }
 
-    /// <summary>Enumerates a snapshot, so a flush mid-assertion cannot
-    /// invalidate the enumerator.</summary>
+    /// <summary>Enumerates a snapshot, so a flush mid-assertion cannot invalidate it.</summary>
     public IEnumerator<Activity> GetEnumerator()
     {
         lock (_lock)

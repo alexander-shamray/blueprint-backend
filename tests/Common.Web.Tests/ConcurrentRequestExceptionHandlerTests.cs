@@ -13,20 +13,7 @@ using Xunit;
 
 namespace Common.Web.Tests;
 
-/// <summary>
-/// §8.5's contention on the wire, built exactly as
-/// <c>ConcurrencyExceptionHandlerTests</c> builds the other 409's.
-/// </summary>
-/// <remarks>
-/// <b>The gap this closes was created by the PR that made the exception
-/// reachable.</b> <c>IdempotencyBehavior</c> took its pipeline seat and two
-/// HTTP commands opted in, so a duplicate arriving while the first attempt is
-/// still running now reaches <c>UseExceptionHandler</c> — which answered 500,
-/// because nothing translated it. A client that treats 500 as fatal abandons
-/// an operation that was about to succeed, and the mechanism reporting itself
-/// as a server fault is the worst available outcome for a feature whose whole
-/// purpose is making a retry safe.
-/// </remarks>
+/// <summary>§8.5's contention on the wire, as a 409 a client may retry rather than a 500.</summary>
 public class ConcurrentRequestExceptionHandlerTests
 {
     private static readonly Guid CommandId = Guid.Parse("6f1d2a70-9c3b-4a1e-8f52-1b7c4d905e33");
@@ -51,10 +38,7 @@ public class ConcurrentRequestExceptionHandlerTests
 
         HttpResponseMessage response = await client.GetAsync("/orders", TestContext.Current.CancellationToken);
 
-        // The status assertion is load-bearing for the reason the sibling suite
-        // records: the 500 fallback writes through the same
-        // IProblemDetailsService, so every assertion below passes against it
-        // with this handler unregistered.
+        // The 500 fallback writes through the same service, so only the status shows this handler answered.
         response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
 
         using JsonDocument body = JsonDocument.Parse(
@@ -76,9 +60,7 @@ public class ConcurrentRequestExceptionHandlerTests
         using JsonDocument body = JsonDocument.Parse(
             await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
 
-        // The framework message names it, and the caller sent it — so echoing
-        // it tells them nothing while putting half of a key whose other
-        // segment is the subject (§8.5) onto the wire.
+        // The caller sent it, and it is part of a key another segment of which is the subject (§8.5).
         body.RootElement.GetProperty("detail").GetString()!.ShouldNotContain(CommandId.ToString());
     }
 
@@ -97,9 +79,7 @@ public class ConcurrentRequestExceptionHandlerTests
     [Fact]
     public async Task Any_other_exception_still_falls_through_to_the_500()
     {
-        // The half that establishes the handler is selecting rather than
-        // catching: a handler matching everything would pass every assertion
-        // above and turn every fault in the platform into a retry instruction.
+        // The handler selects: one matching everything would pass the tests above.
         using IHost host = await StartThrowingAsync(new InvalidOperationException("boom"));
         using HttpClient client = host.GetTestClient();
 

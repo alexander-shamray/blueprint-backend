@@ -39,9 +39,6 @@ public class ResultTests
     {
         Result result = Result.Success();
 
-        // Not null, and not a sentinel. §9.4's consumer reads `result.Error.Code`
-        // under `if (result.IsFailure)`, so the property is non-nullable — and a
-        // read outside that guard is a bug that should say so where it happens.
         Should.Throw<InvalidOperationException>(() => result.Error);
     }
 
@@ -74,10 +71,7 @@ public class ResultTests
     [Fact]
     public void A_result_with_a_value_is_still_a_result()
     {
-        // The reason there is no Unit type. TransactionBehavior tests any
-        // command's outcome with one pattern — `result is Result { IsFailure:
-        // true }` (§6.3) — and it can only do that because Result<T> derives
-        // from Result rather than standing beside it.
+        // §6.3 tests any command's outcome with one pattern because Result<T> derives from Result.
         object outcome = Result.Failure<Guid>(NotFound);
 
         (outcome is Result { IsFailure: true }).ShouldBeTrue();
@@ -86,8 +80,6 @@ public class ResultTests
     [Fact]
     public void A_failure_needs_an_error()
     {
-        // Null here would produce a result that reports success while claiming
-        // to be a failure, which is the one state the type exists to rule out.
         Should.Throw<ArgumentNullException>(() => Result.Failure(null!));
         Should.Throw<ArgumentNullException>(() => Result.Failure<Guid>(null!));
     }

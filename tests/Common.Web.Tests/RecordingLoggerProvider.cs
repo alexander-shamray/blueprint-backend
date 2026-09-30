@@ -3,11 +3,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Common.Web.Tests;
 
-/// <summary>
-/// Captures the scopes pushed onto the logging pipeline. §10.4's whole claim is
-/// that every log line written below the middleware carries the correlation ID,
-/// and a scope nothing records is a claim nothing checks.
-/// </summary>
+/// <summary>Captures pushed scopes, for §10.4's claim that every line below the middleware carries the ID.</summary>
 internal sealed class RecordingLoggerProvider : ILoggerProvider
 {
     private readonly ConcurrentQueue<object> _scopes = new();

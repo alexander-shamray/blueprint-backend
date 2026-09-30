@@ -23,9 +23,7 @@ public class RequestMetricsTests
     [Fact]
     public void A_duration_is_recorded_in_seconds()
     {
-        // The unit is `s`, and §13.7's p95 targets are read in seconds. A
-        // histogram fed milliseconds under a seconds unit is a dashboard that
-        // is wrong by three orders of magnitude and looks fine.
+        // Seconds, the unit §13.7's p95 targets are read in.
         using TestMeterFactory factory = new();
         using MeasurementCollector collector = MeasurementCollector.ForRequests();
         RequestMetrics metrics = new(factory);

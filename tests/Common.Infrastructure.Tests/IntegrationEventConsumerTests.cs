@@ -11,16 +11,7 @@ using Xunit;
 
 namespace Common.Infrastructure.Tests;
 
-/// <summary>
-/// §9.4's adapter from the broker to <c>IIntegrationEventHandler&lt;T&gt;</c>,
-/// through the in-memory harness rather than by construction: what is under
-/// test is resolution — the closed generic off the container, and the handler
-/// collection the §6.2 scan registered.
-/// </summary>
-/// <remarks>
-/// The contract is test-local: a payload carrying the §9.1 envelope, not one
-/// other services depend on.
-/// </remarks>
+/// <summary>§9.4's broker adapter, through the in-memory harness because handler resolution is under test.</summary>
 public class IntegrationEventConsumerTests
 {
     private static readonly DateTimeOffset Now = new(2026, 8, 11, 12, 0, 0, TimeSpan.Zero);
@@ -57,11 +48,7 @@ public class IntegrationEventConsumerTests
         }
     }
 
-    /// <summary>
-    /// The second registration for one event, which is what makes "every
-    /// registered handler runs" a claim rather than a restatement of "the
-    /// handler runs".
-    /// </summary>
+    /// <summary>A second registration for one event, so "every handler runs" is a claim.</summary>
     public sealed class SecondHandler : IIntegrationEventHandler<ProbeEvent>
     {
         public static readonly List<Guid> Handled = [];
@@ -85,10 +72,7 @@ public class IntegrationEventConsumerTests
 
         if (withHandlers)
         {
-            // Registered explicitly rather than through AddPluggableFrom: the
-            // scan's own coverage is asserted where the scan lives, and what
-            // this suite is about is what the consumer does with what it is
-            // given.
+            // Explicitly, since the scan's own coverage is asserted where the scan lives.
             services.AddScoped<IIntegrationEventHandler<ProbeEvent>, FirstHandler>();
             services.AddScoped<IIntegrationEventHandler<ProbeEvent>, SecondHandler>();
         }
@@ -117,15 +101,7 @@ public class IntegrationEventConsumerTests
 
         var messageId = Guid.CreateVersion7();
 
-        // The callback is §9.1's rule, not ceremony: body, row, header and
-        // inbox key are ONE GUID, and IIntegrationEvent says the envelope's
-        // value is "THE message id, not a second one". Without it MassTransit
-        // mints its own header and the event has two identities — and NOTHING
-        // FAILS, because every assertion here reads the payload. That is the
-        // exact cost that comment predicts, and these three publishes were
-        // sitting in it: found while a saga-suite helper was being fixed for
-        // the same thing, by a reviewer checking whether the claim "every
-        // other publisher writes it" was true. It was not.
+        // §9.1's one identity: without the callback MassTransit mints its own header and nothing here fails.
         await harness.Bus.Publish(
             new ProbeEvent { MessageId = messageId, CorrelationId = messageId, OccurredAt = Now },
             c =>
@@ -137,8 +113,7 @@ public class IntegrationEventConsumerTests
 
         (await harness.Consumed.Any<ProbeEvent>(TestContext.Current.CancellationToken)).ShouldBeTrue();
 
-        // One inbox row covers both (§9.5) precisely because they succeed or
-        // fail together, so "both ran" is the behaviour that row is keyed on.
+        // One inbox row covers both handlers (§9.5), so both have run.
         FirstHandler.Handled.ShouldBe([messageId]);
         SecondHandler.Handled.ShouldBe([messageId]);
     }
@@ -162,10 +137,7 @@ public class IntegrationEventConsumerTests
             },
             TestContext.Current.CancellationToken);
 
-        // §9.4's "empty is a decision" table: configuring this consumer for the
-        // type is a statement that something handles it, and acking would be
-        // worse here than anywhere — the inbox filter commits its row once
-        // Consume returns, so the message would be suppressed for good.
+        // §9.4: an ack would let the inbox filter commit its row and suppress the message for good.
         IReceivedMessage<UnhandledEvent> received = await harness.Consumed
             .SelectAsync<UnhandledEvent>(TestContext.Current.CancellationToken)
             .FirstOrDefault();
@@ -178,14 +150,9 @@ public class IntegrationEventConsumerTests
     [Fact]
     public async Task The_delivery_lag_is_measured_from_the_messages_own_timestamp()
     {
-        // Started before the provider, because InstrumentPublished fires at
-        // construction and MessagingMetrics is built on first resolution.
         using RecordedMeasurements measurements = new("Commerce.Messaging");
 
-        // Three seconds of travel, with the clock fixed either side of it: the
-        // lag is the difference between the consumer's clock and OccurredAt,
-        // which is what makes it a cross-machine measurement useful at second
-        // granularity and meaningless below it (§13.3).
+        // Three seconds of travel: the lag is the consumer's clock less OccurredAt (§13.3).
         FakeTimeProvider clock = new(Now.AddSeconds(3));
         await using ServiceProvider provider = BuildProvider(clock);
 

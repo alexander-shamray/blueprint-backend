@@ -2,12 +2,7 @@ using System.Diagnostics.Metrics;
 
 namespace Common.Infrastructure.Tests;
 
-/// <summary>
-/// The smallest <see cref="IMeterFactory"/> that satisfies a metrics class with
-/// one constructor parameter. <c>AddMetrics</c> from
-/// <c>Microsoft.Extensions.Diagnostics</c> would do the same and would mean a
-/// package reference for a type these suites can write in ten lines.
-/// </summary>
+/// <summary>The smallest <see cref="IMeterFactory"/>, rather than a package reference for <c>AddMetrics</c>.</summary>
 internal sealed class TestMeterFactory : IMeterFactory
 {
     private readonly List<Meter> _meters = [];

@@ -8,12 +8,7 @@ public sealed record RecordedMeasurement(
     double Value,
     IReadOnlyDictionary<string, object?> Tags);
 
-/// <summary>
-/// An <see cref="IMeterFactory"/> that owns the meters it hands out, so a test
-/// that disposes it takes its instruments with it. The real one comes from
-/// <c>AddMetrics</c>, which lives on the host side of §4.2 and is therefore not
-/// something <c>Common.Application</c> can reach for.
-/// </summary>
+/// <summary>Owns the meters it hands out, since the real factory's <c>AddMetrics</c> is host-side of §4.2.</summary>
 public sealed class TestMeterFactory : IMeterFactory
 {
     private readonly List<Meter> _meters = [];
@@ -34,12 +29,7 @@ public sealed class TestMeterFactory : IMeterFactory
     }
 }
 
-/// <summary>
-/// Everything recorded on one meter, read through a <see cref="MeterListener"/>
-/// rather than a testing package. §13.3's assertion is about the instrument
-/// name, the value and the two tags — which is exactly what the listener hands
-/// over, and the whole of what a collector would wrap.
-/// </summary>
+/// <summary>Everything recorded on one meter, read through a <see cref="MeterListener"/>.</summary>
 public sealed class MeasurementCollector : IDisposable
 {
     private readonly MeterListener _listener = new();
@@ -67,12 +57,7 @@ public sealed class MeasurementCollector : IDisposable
         _listener.Start();
     }
 
-    /// <summary>
-    /// Listening on the meter §13.3 gives <c>RequestMetrics</c>. The name is
-    /// spelled out again here rather than read off a constant in the source:
-    /// it is the string a dashboard queries, so a test that took it from the
-    /// class under test would agree with that class however it drifted.
-    /// </summary>
+    /// <summary>§13.3's meter name, spelled out rather than read from the class under test.</summary>
     public static MeasurementCollector ForRequests() => new("Commerce.Requests");
 
     public IReadOnlyList<RecordedMeasurement> Measurements
@@ -84,11 +69,7 @@ public sealed class MeasurementCollector : IDisposable
         }
     }
 
-    /// <summary>
-    /// The one measurement tagged with this request. Filtering by tag rather
-    /// than taking the only measurement, because the meter is process-wide and
-    /// a test class running beside this one records to it too.
-    /// </summary>
+    /// <summary>The one measurement tagged with this request, as other test classes record here too.</summary>
     public RecordedMeasurement For(string request) =>
         Measurements.Single(m => m.Tags.TryGetValue("request", out object? value) && Equals(value, request));
 

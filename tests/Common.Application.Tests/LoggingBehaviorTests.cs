@@ -30,10 +30,7 @@ public class LoggingBehaviorTests
     [Fact]
     public async Task The_request_type_is_pushed_as_a_scope_and_not_as_a_property()
     {
-        // A scope, not a log property: everything written inside the handler
-        // inherits it, including EF Core's and MassTransit's own logging
-        // (§13.3). A test that only read the behaviour's own line would pass on
-        // a behaviour that had stopped pushing one.
+        // A scope, so everything written inside the handler inherits it (§13.3).
         using ServiceProvider provider = Build();
         using IServiceScope scope = provider.CreateScope();
         IDispatcher dispatcher = scope.ServiceProvider.GetRequiredService<IDispatcher>();
@@ -83,11 +80,6 @@ public class LoggingBehaviorTests
     [Fact]
     public async Task A_command_the_domain_rejected_is_still_an_ok_outcome()
     {
-        // §13.3's callout, asserted. The behaviour is generic over TResult and
-        // cannot see inside it without a constraint that would exclude queries
-        // — but the deeper reason is that a rejected command is a normal
-        // outcome of a working system, and counting it as an error makes the
-        // one number meaning "something is broken" track customer behaviour.
         using MeasurementCollector collector = MeasurementCollector.ForRequests();
         using ServiceProvider provider = Build();
         using IServiceScope scope = provider.CreateScope();

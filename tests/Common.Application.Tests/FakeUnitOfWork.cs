@@ -1,12 +1,6 @@
 namespace Common.Application.Tests;
 
-/// <summary>
-/// A recording <see cref="IUnitOfWork"/>. Every member the behaviour touches
-/// writes to the shared <see cref="PipelineLog"/>, so ordering across this
-/// fake and <see cref="FakeDomainEventDispatcher"/> is one assertion — the
-/// behaviour's whole contract is a sequence, and two separate logs would let
-/// the sequence lie.
-/// </summary>
+/// <summary>Logs every member the behaviour touches to the shared <see cref="PipelineLog"/>.</summary>
 public sealed class FakeUnitOfWork(PipelineLog log) : IUnitOfWork
 {
     /// <summary>What <see cref="ModifiedAggregateCount"/> reports.</summary>

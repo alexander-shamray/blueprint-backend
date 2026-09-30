@@ -11,14 +11,10 @@ using Xunit;
 
 namespace Common.Web.Tests;
 
-/// <summary>
-/// The one response security header this platform owns (§10.6), asserted on
-/// both paths a response can leave by.
-/// </summary>
+/// <summary>The one response security header this platform owns (§10.6), on both paths a response leaves by.</summary>
 public class SecurityHeadersTests
 {
-    // The literal, not SecurityHeadersExtensions' own constant: a test that
-    // reads the constant cannot notice the constant changing.
+    // The literal, since a test reading the constant cannot notice it change.
     private const string Header = "X-Content-Type-Options";
 
     private static Task<IHost> StartAsync(RequestDelegate terminal) =>
@@ -55,12 +51,7 @@ public class SecurityHeadersTests
     [Fact]
     public async Task The_error_response_carries_it_too()
     {
-        // The half that decides where this middleware writes from.
-        // UseExceptionHandler CLEARS the response before it writes §10.5's
-        // problem body, so a header assigned on the way in is gone from
-        // exactly the 500 a caller-supplied value is most likely to be
-        // reflected on. Registering an OnStarting callback survives that clear
-        // — and this test is the only thing that says so.
+        // UseExceptionHandler clears the response before §10.5's body, which an OnStarting callback survives.
         using IHost host = await StartAsync(_ => throw new InvalidOperationException("boom"));
 
         HttpResponseMessage response =
@@ -73,9 +64,7 @@ public class SecurityHeadersTests
     [Fact]
     public async Task It_is_written_once_when_something_below_has_already_set_it()
     {
-        // Two values on this header are read by some browsers as no header at
-        // all, so the middleware assigns rather than appends. The case is
-        // reachable: a proxy in front, or a handler that sets it itself.
+        // Assigned rather than appended, since some browsers read two values as none.
         using IHost host = await StartAsync(context =>
         {
             context.Response.Headers.Append(Header, "nosniff");

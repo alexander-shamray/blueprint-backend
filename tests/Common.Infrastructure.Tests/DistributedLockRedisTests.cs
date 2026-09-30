@@ -7,19 +7,14 @@ using Xunit;
 
 namespace Common.Infrastructure.Tests;
 
-/// <summary>
-/// The lock against a real server: NX, expiry, and the token check that
-/// keeps a stale handle from releasing the next holder's lock. Each test
-/// takes its own lock name, so the shared container never couples them.
-/// </summary>
+/// <summary>The lock against a real server: NX, expiry, and the token check on release.</summary>
 [Collection(nameof(IntegrationCollection))]
 public sealed class DistributedLockRedisTests(RedisFixture fixture)
 {
     [Fact]
     public async Task A_held_lock_cannot_be_acquired_again()
     {
-        // Each test owns and disposes its provider — it holds the connected
-        // multiplexers, and a discarded one keeps them alive to process exit.
+        // Disposed, since a discarded provider keeps its multiplexers alive to process exit.
         await using ServiceProvider provider = fixture.BuildProvider("locks");
         IDistributedLockFactory factory = provider.GetRequiredService<IDistributedLockFactory>();
 
@@ -90,11 +85,7 @@ public sealed class DistributedLockRedisTests(RedisFixture fixture)
     [Fact]
     public async Task The_release_script_runs_under_the_documented_ACL_grant()
     {
-        // §8.1's per-service user, created live. The categories alone broke
-        // this once: EVAL is @scripting, which +@read +@write +@keyspace do
-        // not include, so a token-checked release under the documented grant
-        // threw and the lock stood until its TTL. The grant §8.1 now prints
-        // is the one this test proves.
+        // §8.1's per-service user, created live: EVAL is @scripting, which no data category includes.
         ConfigurationOptions admin = ConfigurationOptions.Parse(fixture.CoordinationConnectionString);
         admin.AllowAdmin = true;
         await using ConnectionMultiplexer adminConnection = await ConnectionMultiplexer.ConnectAsync(admin);
@@ -122,8 +113,7 @@ public sealed class DistributedLockRedisTests(RedisFixture fixture)
         restricted.Password = "s3cret";
         await using ConnectionMultiplexer connection = await ConnectionMultiplexer.ConnectAsync(restricted);
 
-        // The real factory over the restricted connection — the keyed
-        // override pattern DistributedLockTests already uses.
+        // The real factory over the restricted connection, by keyed override.
         ServiceCollection services = new();
         services.AddSingleton<IHostEnvironment>(new TestEnvironment("acl"));
         services.AddRedisConnections(AddRedisConnectionsTests.Configuration());
@@ -138,8 +128,7 @@ public sealed class DistributedLockRedisTests(RedisFixture fixture)
         held.ShouldNotBeNull();
         await held.DisposeAsync();
 
-        // Re-acquisition is the proof the EVAL actually ran: without the
-        // release, NX would refuse this for the rest of the 30 s TTL.
+        // Re-acquisition proves the EVAL ran; otherwise NX refuses this for the 30 s TTL.
         IDistributedLock? reacquired = await factory.TryAcquireAsync(
             "guarded",
             TimeSpan.FromSeconds(30),
@@ -147,10 +136,7 @@ public sealed class DistributedLockRedisTests(RedisFixture fixture)
         reacquired.ShouldNotBeNull();
     }
 
-    /// <summary>
-    /// Polls acquisition past a short TTL. Bounded at ~5 s of attempts, far
-    /// past the 200 ms TTLs above, so a pass is never a lucky race.
-    /// </summary>
+    /// <summary>Polls acquisition for about 5 s, far past the 200 ms TTLs, so a pass is never a lucky race.</summary>
     private static async Task<IDistributedLock?> WaitForAcquireAsync(IDistributedLockFactory factory, string name)
     {
         for (int attempt = 0; attempt < 50; attempt++)
