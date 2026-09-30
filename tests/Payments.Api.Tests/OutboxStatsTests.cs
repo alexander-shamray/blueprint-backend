@@ -122,7 +122,6 @@ public sealed class OutboxStatsTests(ServiceFixture fixture) : IAsyncLifetime
                         ["ConnectionStrings:Payments"] = fixture.ConnectionString,
                         // AddMassTransitMessaging throws without it; unreachable (§12.4), since no bus starts here.
                         ["ConnectionStrings:RabbitMq"] = "amqp://guest:guest@payments-rabbit.invalid:5672",
-                        // Read eagerly by AddPaymentProvider; unreachable on the same convention.
                         ["PaymentProvider:BaseUrl"] = "https://payments-provider.invalid"
                     })
                 .Build())
