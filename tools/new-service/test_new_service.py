@@ -306,9 +306,7 @@ class RendersTheTemplate(unittest.TestCase):
         # line is gone and names it doing so.
         self.assertNotIn("cfg.ConfigureEndpoints(", messaging)
 
-        # A rendered service subscribes to nothing. Calls are matched rather
-        # than identifiers, because the template's comment names
-        # ReceiveEndpoint.
+        # A rendered service subscribes to nothing.
         self.assertNotIn(".AddConsumer<", messaging)
         self.assertNotIn(".ReceiveEndpoint(", messaging)
         self.assertNotIn("StockLevel", messaging)
