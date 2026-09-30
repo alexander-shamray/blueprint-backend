@@ -123,7 +123,7 @@ public sealed class CatalogEventEndpointTests(ServiceFixture fixture) : IAsyncLi
             .ShouldBe(19.99m, "the order is priced from the projection and never from the request");
     }
 
-    /// <summary>Each other binding over the same queue, since registration alone is not a binding.</summary>
+    /// <summary>The PriceChanged binding over the same queue, since registration alone is not a binding.</summary>
     [Fact]
     public async Task A_price_change_reaches_the_projection_over_the_broker()
     {
