@@ -98,7 +98,8 @@ because a branch driven by the file it judges asserts nothing. Every value
 7. Both of `deploy.yml`'s triggers cover every path in `SOURCE_INPUTS`.
 8. `deploy.yml` reads the descriptor list and lists no workload by hand, and
    every deployable it can roll is one `smoke.sh` renders — read through
-   `canary.py smoke-cases`, with no chart listed by hand.
+   `canary.py smoke-cases`, with no chart named in a `*CHARTS` assignment or
+   a `for` loop's word list.
 9. Every workload declares at least one signal `canary.py` defines; and a
    service whose tree registers a MassTransit
    consumer declares `consume`, and one that registers a saga declares `saga`,
