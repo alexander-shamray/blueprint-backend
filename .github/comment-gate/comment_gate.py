@@ -763,6 +763,11 @@ def _uncited_remarks(path, lines, added):
         if not spans or spans[-1][2]:
             continue
         opened, span, _ = spans[-1]
+        # An unclosed tag ends with its comment block, so code or a trailing
+        # comment below it can neither cite for it nor be judged in it.
+        if not line.comment:
+            spans[-1] = (opened, span, True)
+            continue
         span.append(line)
         if "</remarks>" in line.said or "<remarks/>" in line.said:
             spans[-1] = (opened, span, True)
