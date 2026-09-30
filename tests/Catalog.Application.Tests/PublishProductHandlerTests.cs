@@ -125,7 +125,6 @@ public sealed class PublishProductHandlerTests(ServiceFixture fixture) : IAsyncL
     public async Task A_payload_longer_than_the_string_convention_survives_the_column()
     {
         // §7.2 caps every string property at 400, and a payload is unbounded (§9.1), so the column is asserted.
-        // Staged directly, since the validator's caps keep every valid command's payload shorter.
         string note = new('a', 1_000);
 
         await fixture.StageOutboxAsync(OutboxRows.Verbose(fixture, note));
