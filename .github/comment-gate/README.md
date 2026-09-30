@@ -3,7 +3,9 @@
 **The claim: no comment a pull request adds names an issue, a delivery-plan
 row, a reviewer or a history, stresses a word, sits in a comment block
 longer than `BLOCK_LIMIT`, or is part of a C# `<remarks>` that cites no
-section, ADR or `cref`.** [`docs/style-guide.md`](../../docs/style-guide.md)'s
+section, ADR or `cref`; and no pull request but a docs one or a sweep adds
+more lines of C# comment than of C# code.**
+[`docs/style-guide.md`](../../docs/style-guide.md)'s
 *Comments* section is the rule; this gate is its mechanical half.
 
 ## What it reads
@@ -83,17 +85,30 @@ than assumed. It also reads every tracked file in a language the gate reads,
 so a file the lexers cannot parse fails the suite before it fails a pull
 request.
 
-## What it reports
+## What it reports, and the ratio it refuses
 
 **Beside its findings, the gate prints what the added lines are made of**:
 for C#, and for Python and shell together, the added lines that hold only
 comment against the added lines that hold code, blank lines in neither. The
-languages are the gate's `REPORTED`. The report fails nothing.
+languages are the gate's `REPORTED`. The scripts' line fails nothing.
+
+**The C# line fails a pull request whose added comment lines outnumber its
+added code lines**, as one finding naming both counts; equal counts pass.
+Two pull requests are excepted, and the run prints the exception it took:
+one whose title is of the `docs` type, as the gate's `DOCS_TITLE` reads it,
+because rewording a comment adds comment and no code; and one labelled
+`comment-sweep`, the gate's `SWEEP_LABEL`, because a sweep rewrites comments
+shorter, so what it adds is comment. CI hands the gate the title in
+`PR_TITLE` and the labels, a JSON list of names, in `PR_LABELS`, as the
+event that started the run carried them: a label added or a title changed
+after the last push counts from the next push, so a sweep is labelled when
+it is opened. A run without either, as a local one is, takes no exception,
+and a `PR_LABELS` that is not a list of names refuses the run.
 
 **`--tree` judges every line of the tracked files under the paths it is
 given**, as the working tree holds them, instead of a diff, and prints the
-same two lines for the whole tree. It is how a sweep shows that a tree is
-under the rule; CI does not run it.
+same two lines for the whole tree, failing neither. It is how a sweep shows
+that a tree is under the rule; CI does not run it.
 
 ## How it runs
 

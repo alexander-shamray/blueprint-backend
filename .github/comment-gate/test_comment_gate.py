@@ -5,6 +5,7 @@ leave alone, because a literal is code, and each rule's class pairs a finding
 with its innocent neighbour.
 """
 
+import os
 import subprocess
 import sys
 import tempfile
@@ -461,10 +462,17 @@ class TheGateOnARepository(unittest.TestCase):
         return subprocess.run(["git", "-C", self.repo, "rev-parse", "HEAD"],
                               capture_output=True, text=True).stdout.strip()
 
-    def run_gate(self, base="main~1", head="HEAD"):
+    def run_gate(self, base="main~1", head="HEAD", title=None, labels=None):
+        env = {name: value for name, value in os.environ.items()
+               if name not in ("PR_TITLE", "PR_LABELS")}
+        if title is not None:
+            env["PR_TITLE"] = title
+        if labels is not None:
+            env["PR_LABELS"] = labels
         return subprocess.run(
             [sys.executable, str(GATE), "--base", base, "--head", head],
-            cwd=self.repo, capture_output=True, text=True, encoding="utf-8")
+            cwd=self.repo, capture_output=True, text=True, encoding="utf-8",
+            env=env)
 
     def test_an_added_finding_fails_and_old_ones_stay_unjudged(self):
         self.write("New.cs", "x(); // see #3\n")
@@ -488,11 +496,82 @@ class TheGateOnARepository(unittest.TestCase):
                       result.stdout)
 
     def test_a_clean_change_passes_and_says_what_it_read(self):
-        self.write("New.cs", "// why, in one line\n")
+        self.write("New.cs", "// why, in one line\nx();\n")
         self.commit("change")
         result = self.run_gate()
         self.assertEqual(result.returncode, 0, result.stdout)
         self.assertIn("judged the added lines of 1 file(s)", result.stdout)
+
+    OUTWEIGHED = ("the added C# is more comment than code, 2 comment "
+                  "line(s) to 1 code line(s)")
+
+    def outweigh(self):
+        self.write("New.cs", "// one\n// two\nx();\n")
+        self.commit("change")
+
+    def test_more_added_csharp_comment_than_code_fails_the_run(self):
+        self.outweigh()
+        result = self.run_gate(title="feat(catalog): add", labels='["bug"]')
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertIn(f"::error::{self.OUTWEIGHED}\n", result.stdout)
+        self.assertIn("1 finding(s)", result.stdout)
+
+    def test_a_docs_title_excepts_the_ratio_and_says_so(self):
+        self.outweigh()
+        for title in ("docs: cut", "docs(gate): cut"):
+            with self.subTest(title=title):
+                result = self.run_gate(title=title, labels="[]")
+                self.assertEqual(result.returncode, 0, result.stdout)
+                self.assertIn(f"{self.OUTWEIGHED}, excepted because its "
+                              "title is of the docs type", result.stdout)
+                self.assertNotIn("::error::", result.stdout)
+        for title in ("docsify: cut", "fix: docs(gate) cut"):
+            with self.subTest(title=title):
+                result = self.run_gate(title=title)
+                self.assertEqual(result.returncode, 1, result.stdout)
+
+    def test_the_sweep_label_excepts_the_ratio_and_says_so(self):
+        self.outweigh()
+        result = self.run_gate(title="refactor(catalog): cut",
+                               labels='["bug", "comment-sweep"]')
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertIn(f"{self.OUTWEIGHED}, excepted because it is labelled "
+                      "comment-sweep", result.stdout)
+        self.assertNotIn("::error::", result.stdout)
+        result = self.run_gate(labels='["sweep"]')
+        self.assertEqual(result.returncode, 1, result.stdout)
+
+    def test_as_much_csharp_comment_as_code_passes(self):
+        self.write("New.cs", "// one\nx();\n\n// two\n")
+        self.write("Two.cs", "y();\n")
+        self.commit("change")
+        result = self.run_gate()
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertIn("added, C#: 2 comment line(s), 2 code line(s)",
+                      result.stdout)
+        self.assertNotIn("more comment than code", result.stdout)
+
+    def test_the_scripts_ratio_is_reported_and_fails_nothing(self):
+        self.write("new.py", "# one\n# two\nx = 1\n")
+        self.commit("change")
+        result = self.run_gate()
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertIn("added, scripts: 2 comment line(s), 1 code line(s)",
+                      result.stdout)
+        self.assertNotIn("more comment than code", result.stdout)
+
+    def test_labels_that_are_not_a_json_list_refuse_the_run(self):
+        self.outweigh()
+        result = self.run_gate(labels="comment-sweep")
+        self.assertEqual(result.returncode, 2, result.stdout)
+        self.assertIn("PR_LABELS is not a JSON list of names", result.stdout)
+
+    def test_the_tree_mode_weighs_no_ratio(self):
+        self.write("Only.cs", "// one\n// two\n")
+        self.commit("change")
+        result = self.run_tree("Only.cs")
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertNotIn("more comment than code", result.stdout)
 
     def test_the_report_weighs_added_comment_against_added_code(self):
         self.write("New.cs", "// one\n// two\nx();\n\ny(); // three\n")
