@@ -353,7 +353,7 @@ public abstract class ServiceFixture<TFactory, TEntryPoint, TDbContext> : IAsync
             attempts,
             messageId);
 
-    /// <summary>Repoints a row's lane through SQL, making a row <see cref="OutboxMessage.Stage"/> refuses.</summary>
+    /// <summary>Repoints a row's lane through SQL.</summary>
     public Task SetOutboxLaneAsync(Guid messageId, OutboxLane lane) =>
         ExecuteAsync(
             $"UPDATE {_schema}.OutboxMessages SET Lane = {{0}} WHERE MessageId = {{1}};",
