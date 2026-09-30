@@ -45,8 +45,11 @@ for its Helm release: `deployables/catalog-api.json` is the release
 - `canary.py` plans, checks and judges each one;
 - `deploy/helm/smoke.sh` takes its cases from `canary.py smoke-cases`.
 
-None of them lists a deployable by hand, and check 8 and the suite hold the
-workflow and the smoke run to that. Adding a deployable to the deployment is
+None of them lists a deployable by hand. Check 8 and the suite hold the
+workflow to that, and the smoke run where its list is a plain or declared
+assignment to a `*CHARTS` name or a `for` loop's word list; a chart left out
+of `SERVICE_CHARTS`, however it is written, fails `smoke.sh`'s own comparison
+against the chart directories. Adding a deployable to the deployment is
 its descriptor, its chart and the umbrella's dependency on that chart;
 `smoke.sh` and check 4 refuse any one of them without the others. Its image
 and any credential-bearing capability are entries in lists kept separately,
