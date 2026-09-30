@@ -241,7 +241,7 @@ public class MetricsRegistrationTests
                     // Both read eagerly by AddCarrierGateway; HTTPS because the environment below is not Development.
                     [CarrierRegistration.BaseUrlKey] = "https://shipping-carrier.invalid",
                     [CarrierRegistration.ApiKeyKey] = "not-a-real-key",
-                    // Read eagerly by AddDeliveryAddressSource, which applies no scheme rule (§9.7).
+                    // Read eagerly by AddDeliveryAddressSource, which applies no https rule (§9.7).
                     [AddressRegistration.BaseUrlKey] = "http://shipping-ordering.invalid"
                 })
             .Build();
