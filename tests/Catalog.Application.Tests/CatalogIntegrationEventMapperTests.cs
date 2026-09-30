@@ -48,7 +48,7 @@ public class CatalogIntegrationEventMapperTests
         contract.ThumbnailUrl.ShouldBe("https://cdn.example/d.jpg");
         contract.OccurredAt.ShouldBe(Raised);
 
-        // Money decomposed and normalised, since a contract may not carry a domain type (§9.1).
+        // Money decomposed, since a contract may not carry a domain type (§9.1).
         contract.Amount.ShouldBe(19.99m);
         contract.Currency.ShouldBe("EUR");
     }
