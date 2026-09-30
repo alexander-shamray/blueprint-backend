@@ -1,4 +1,4 @@
-# Payments, and the PSP simulator standing in for its provider (§3.2).
+# Payments, and the PSP simulator standing in for its provider (§3.1).
 services:
   # §14.1's pair rule: a {service}-migrator one-shot plus the service itself,
   # gated on `condition: service_completed_successfully` — every service owns
