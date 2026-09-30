@@ -21,7 +21,7 @@ public static class CancellationReasons
     public static bool TryParse(string? code, out CancellationReason reason) =>
         ByCode.TryGetValue(code ?? "", out reason);
 
-    // The reverse, for §13.3's metric tag and the saga, inverted from the map above rather than written twice.
+    // The reverse, for the wire's Reason code, inverted from the map above rather than written twice.
     private static readonly FrozenDictionary<CancellationReason, string> ToCodeMap =
         ByCode.ToFrozenDictionary(p => p.Value, p => p.Key);
 
