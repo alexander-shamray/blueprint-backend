@@ -9,7 +9,7 @@ using Xunit;
 namespace Catalog.Api.Tests;
 
 /// <summary>§12.4's third level: status codes, serialisation and authorization, over HTTP.</summary>
-/// <remarks>Every write states the narrowest principal that works, as §12.4 requires of a fixture.</remarks>
+/// <remarks>Every write states its principal explicitly, as §12.4 requires of a fixture.</remarks>
 [Collection(nameof(IntegrationCollection))]
 public sealed class ProductEndpointsTests(ServiceFixture fixture) : IAsyncLifetime
 {
