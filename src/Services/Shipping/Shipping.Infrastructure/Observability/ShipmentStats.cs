@@ -11,7 +11,7 @@ namespace Shipping.Infrastructure.Observability;
 /// <remarks>It throws; <see cref="ShipmentMetrics"/> contains that into an absent series (§13.6).</remarks>
 internal sealed class ShipmentStats(IDbConnectionFactory connections) : IShipmentStats, IDisposable
 {
-    /// <summary>Inside one export interval; a burst of scrapes is not a burst of queries.</summary>
+    /// <summary>Inside one export interval, so a repeat callback within it reuses the result.</summary>
     private static readonly TimeSpan CacheFor = TimeSpan.FromSeconds(5);
 
     /// <summary>Bounded, since a wait inside a gauge callback stalls every other callback in the pass.</summary>
