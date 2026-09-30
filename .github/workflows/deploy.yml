@@ -140,6 +140,7 @@ jobs:
       # The descriptors are the list of deployables (deploy/canary/README.md),
       # and a name outside it reaches no Helm command.
       - name: The workload is a deployable the plan describes
+        id: workload
         run: |
           set -euo pipefail
           WORKLOADS=$(python deploy/canary/canary.py workloads)
@@ -553,12 +554,10 @@ jobs:
           WORKLOAD: ${{ inputs.workload }}
           TAG: ${{ inputs.tag }}
 
-      # One mechanism, at the end, for every path. `if: always()` is scoped to
-      # the job, which is the unit every one of these is undone for: it runs
-      # after a promote, after a rollback, after a failure in any step, and
-      # after a cancellation. A restore called at each outcome misses `set -e`,
-      # and a `trap EXIT` in the climb step misses the scale-up step before it,
-      # where the floor is raised.
+      # One mechanism, at the end, for every path past the guard, so a name it
+      # refused reaches no command here. `always()` runs it after a promote, a
+      # rollback, a failure or a cancellation; a restore at each outcome misses
+      # `set -e`, and a `trap EXIT` in the climb misses the scale-up before it.
 
       # The canary is what matters most of what is undone here. A failure
       # between the install and either exit — an unreachable Prometheus, a Helm
@@ -567,7 +566,7 @@ jobs:
       # that restores only the autoscaler leaves a canary of an unproven build
       # serving a share of production indefinitely.
       - name: Undo everything the rollout raised
-        if: always()
+        if: always() && steps.workload.outcome == 'success'
         run: |
           set -o pipefail
           failed=0
