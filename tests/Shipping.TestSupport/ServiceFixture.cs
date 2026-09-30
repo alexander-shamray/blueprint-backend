@@ -1,5 +1,3 @@
-using System.Data.Common;
-using System.Text.Json;
 using Shipping.Application.Shipments;
 using Shipping.Domain.Shipments;
 using Shipping.Infrastructure.Fulfilment;
@@ -8,22 +6,11 @@ using Shipping.Infrastructure.Retention;
 using Shipping.Infrastructure.Tracking;
 using Shipping.Migrator;
 using Shipping.OrderingStub;
-using Common.Application;
 using Common.Contracts.Ordering.V1;
-using Common.Infrastructure.Idempotency;
-using Common.Infrastructure.Inbox;
-using Common.Infrastructure.Messaging;
-using Common.Infrastructure.Outbox;
+using Common.TestSupport;
 using MassTransit;
-using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
-using DotNet.Testcontainers.Containers;
-using Respawn;
-using Testcontainers.MsSql;
-using Testcontainers.RabbitMq;
 using WireMock.Matchers;
 using WireMock.RequestBuilders;
 using WireMock.ResponseBuilders;
@@ -35,18 +22,10 @@ using Response = WireMock.ResponseBuilders.Response;
 
 namespace Shipping.TestSupport;
 
-/// <summary>A real SQL Server migrated by the real migrator, a real broker and the simulator (§12.4).</summary>
-public sealed class ServiceFixture : IAsyncLifetime
+/// <summary>Shipping's names, migrator, worker host, carrier and address stub over the shared body (ADR-056).</summary>
+public sealed class ServiceFixture()
+    : ServiceFixture<ShippingWorkerFactory, Program, ShippingDbContext>("Shipping")
 {
-    private readonly MsSqlContainer _sql = new MsSqlBuilder()
-        .WithImage("mcr.microsoft.com/mssql/server:2022-latest")
-        .Build();
-
-    // Built in InitializeAsync, because its mappings resolve through BrokerContextPath, which can throw.
-    private RabbitMqContainer? _rabbit;
-
-    private Respawner? _respawner;
-
     /// <summary>How long a staged step may take; a deadline, not a sleep, so a prompt step costs nothing.</summary>
     private static readonly TimeSpan StepDeadline = TimeSpan.FromSeconds(20);
 
@@ -55,62 +34,6 @@ public sealed class ServiceFixture : IAsyncLifetime
 
     private const string PollDueSql =
         "SELECT Value = COUNT(*) FROM shipping.Shipments WHERE OrderId = {0} AND NextPollAt <= SYSDATETIMEOFFSET()";
-
-    /// <summary>Widens <c>shipping-svc</c>'s write to publish Ordering's events, which ADR-036 refuses.</summary>
-    private async Task WidenWriteForTheHarnessAsync()
-    {
-        const string user = "shipping-svc";
-        const string contracts = "Common\\.Contracts(";
-
-        (string configure, string granted, string read) = ImportedGrant();
-
-        int anchor = granted.IndexOf(contracts, StringComparison.Ordinal);
-        if (anchor < 0)
-        {
-            throw new InvalidOperationException(
-                $"{user}'s write grant has no '{contracts}' alternation to add Ordering's exchanges to: {granted}");
-        }
-
-        string write = granted.Insert(anchor + contracts.Length, "\\.Ordering\\.V1:|");
-
-        ExecResult result = await _rabbit!.ExecAsync(
-            ["rabbitmqctl", "set_permissions", "-p", "/", user, configure, write, read],
-            TestContext.Current.CancellationToken);
-
-        if (result.ExitCode != 0)
-        {
-            throw new InvalidOperationException(
-                $"Could not widen {user}'s broker permissions for the harness "
-                + $"(exit {result.ExitCode}). stdout: {result.Stdout} stderr: {result.Stderr}");
-        }
-
-        // The mapped file rather than the container, because it is the same
-        // text the broker imported and it can be read before anything starts.
-        static (string Configure, string Write, string Read) ImportedGrant()
-        {
-            string path = Path.Combine(BrokerContextPath(), "definitions.json");
-            using JsonDocument definitions = JsonDocument.Parse(File.ReadAllText(path));
-
-            foreach (JsonElement entry in definitions.RootElement.GetProperty("permissions").EnumerateArray())
-            {
-                if (entry.GetProperty("user").GetString() != user || entry.GetProperty("vhost").GetString() != "/")
-                    continue;
-
-                return (
-                    entry.GetProperty("configure").GetString()!,
-                    entry.GetProperty("write").GetString()!,
-                    entry.GetProperty("read").GetString()!);
-            }
-
-            throw new InvalidOperationException(
-                $"{path} grants {user} nothing on the default vhost, so there is no scope to preserve.");
-        }
-    }
-
-    /// <summary>Shipping's own database (§7.1), not the container's <c>master</c>.</summary>
-    public string ConnectionString { get; private set; } = null!;
-
-    public ShippingWorkerFactory Factory { get; private set; } = null!;
 
     /// <summary>The carrier, in process over the mappings Compose mounts (§14.1), behind a real HTTP hop.</summary>
     public WireMockServer Carrier { get; private set; } = null!;
@@ -123,6 +46,67 @@ public sealed class ServiceFixture : IAsyncLifetime
 
     /// <summary>Every line the host has logged since the last reset.</summary>
     public CapturedLogs CapturedLogs => Factory.CapturedLogs;
+
+    /// <summary>Runs the real §7.4 job host; a null argument leaves that key unset.</summary>
+    public static Task<int> RunMigratorAsync(
+        string? migratorConnectionString,
+        string? runtimeConnectionString = null) =>
+        MigratorRun.RunAsync(
+            "Shipping",
+            MigratorHost.Build,
+            (services, ct) => services.GetRequiredService<MigrationRunner>().RunAsync(ct),
+            migratorConnectionString,
+            runtimeConnectionString);
+
+    protected override Task<int> MigrateAsync(string connectionString) => RunMigratorAsync(connectionString);
+
+    // The factory's retention defaults are the invented windows, so this
+    // host runs as ADR-053 rule 2's made-up jurisdiction and no test opts in.
+    protected override ShippingWorkerFactory CreateFactory() => NewWorkerHost(Carrier.Urls[0] + "/");
+
+    /// <summary>Widens <c>shipping-svc</c>'s write to publish Ordering's events, which ADR-036 refuses.</summary>
+    protected override string? HarnessWrite(string granted)
+    {
+        const string contracts = "Common\\.Contracts(";
+
+        int anchor = granted.IndexOf(contracts, StringComparison.Ordinal);
+        if (anchor < 0)
+        {
+            throw new InvalidOperationException(
+                $"shipping-svc's write grant has no '{contracts}' alternation to add Ordering's exchanges to: "
+                + granted);
+        }
+
+        return granted.Insert(anchor + contracts.Length, "\\.Ordering\\.V1:|");
+    }
+
+    protected override async Task StartStubsAsync()
+    {
+        Carrier = StartCarrier();
+        await Ordering.InitializeAsync();
+    }
+
+    // A stub a test adds outlives a log reset, and a queued address or a logged line would reach the next test.
+    protected override void ResetStubs()
+    {
+        Carrier.ResetMappings();
+        Carrier.ReadStaticMappings(SimulatorMappings.Directory());
+        Carrier.ResetLogEntries();
+        Ordering.Reset();
+        CapturedLogs.Clear();
+    }
+
+    protected override async ValueTask DisposeStubsAsync()
+    {
+        try
+        {
+            Carrier?.Stop();
+        }
+        finally
+        {
+            await Ordering.DisposeAsync();
+        }
+    }
 
     /// <summary>Runs exactly one fulfilment pass, with no timers and no waiting.</summary>
     public Task<int> RunFulfilmentPassAsync() =>
@@ -420,7 +404,7 @@ public sealed class ServiceFixture : IAsyncLifetime
     public ShippingWorkerFactory NewWorkerHost(string carrierBaseUrl) =>
         new(
             ConnectionString,
-            _rabbit!.GetConnectionString(),
+            BrokerConnectionString,
             carrierBaseUrl,
             addressSourceBaseUrl: Ordering.Address.ToString());
 
@@ -453,171 +437,6 @@ public sealed class ServiceFixture : IAsyncLifetime
         return server;
     }
 
-    /// <summary>One <c>rabbitmqctl</c> listing, split into its tab-separated columns.</summary>
-    private async Task<IReadOnlyList<string[]>> BrokerRowsAsync(string[] listing)
-    {
-        ExecResult result = await _rabbit!.ExecAsync(
-            ["rabbitmqctl", listing[0], "--quiet", "--no-table-headers", .. listing[1..]],
-            TestContext.Current.CancellationToken);
-
-        if (result.ExitCode != 0)
-        {
-            throw new InvalidOperationException(
-                $"Could not run the broker's {listing[0]} (exit {result.ExitCode}). stderr: {result.Stderr}");
-        }
-
-        return
-        [
-            .. result.Stdout
-                .Split('\n', StringSplitOptions.RemoveEmptyEntries)
-                .Select(line => line.Split('\t', StringSplitOptions.TrimEntries))
-        ];
-    }
-
-    /// <summary>Removes one mapping, so it cannot outlive its assertion; <c>ResetAsync</c> is the backstop.</summary>
-    private sealed class CarrierMapping(WireMockServer server, Guid id) : IDisposable
-    {
-        public void Dispose() => server.DeleteMapping(id);
-    }
-
-    /// <summary>The exit code of the first real migration run.</summary>
-    public int FirstRunExitCode { get; private set; } = -1;
-
-    private static string BrokerContextPath()
-    {
-        for (DirectoryInfo? dir = new(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
-        {
-            if (!File.Exists(Path.Combine(dir.FullName, "Platform.slnx")))
-                continue;
-
-            string context = Path.Combine(dir.FullName, "deploy", "compose", "rabbitmq");
-            if (!File.Exists(Path.Combine(context, "Dockerfile")))
-            {
-                throw new InvalidOperationException(
-                    $"Found the solution at {dir.FullName} but no Dockerfile at {context} (§14.1, ADR-021).");
-            }
-
-            return context;
-        }
-
-        throw new InvalidOperationException(
-            $"No Platform.slnx above {AppContext.BaseDirectory}; the broker image cannot be built.");
-    }
-
-    // ValueTask, not Task: xUnit v3 redefined IAsyncLifetime (§12.4).
-    public async ValueTask InitializeAsync()
-    {
-        // The password is §14.1's local-development default.
-        _rabbit = new RabbitMqBuilder()
-            .WithImage("rabbitmq:4.1-management-alpine")
-            .WithUsername("shipping-svc")
-            .WithPassword("local-dev-shipping")
-            .WithResourceMapping(
-                new FileInfo(Path.Combine(BrokerContextPath(), "definitions.json")),
-                "/etc/rabbitmq/")
-            .WithResourceMapping(
-                new FileInfo(Path.Combine(BrokerContextPath(), "20-commerce.conf")),
-                "/etc/rabbitmq/conf.d/")
-            .Build();
-
-        await Task.WhenAll(
-            _sql.StartAsync(TestContext.Current.CancellationToken),
-            _rabbit.StartAsync(TestContext.Current.CancellationToken));
-
-        await WidenWriteForTheHarnessAsync();
-
-        Carrier = StartCarrier();
-        await Ordering.InitializeAsync();
-
-        // The container hands out master; Shipping owns a database of its own (§7.1), which MigrateAsync creates.
-        DbConnectionStringBuilder connection = new() { ConnectionString = _sql.GetConnectionString() };
-        connection["Database"] = "Shipping";
-        ConnectionString = connection.ConnectionString;
-
-        FirstRunExitCode = await RunMigratorAsync(ConnectionString);
-
-        // The factory's retention defaults are the invented windows, so this
-        // host runs as ADR-053 rule 2's made-up jurisdiction and no test opts in.
-        Factory = NewWorkerHost(Carrier.Urls[0] + "/");
-
-        // A table of the test, not a migration, so it never ships to production.
-        await ExecuteAsync(
-            """
-            CREATE TABLE shipping.TransactionProbe
-            (
-                Id   uniqueidentifier NOT NULL PRIMARY KEY,
-                Note nvarchar(100)    NOT NULL
-            );
-            """);
-    }
-
-    /// <summary>§12.4's reset: truncates the <c>shipping</c> schema and restores the simulator's mappings.</summary>
-    public async Task ResetAsync()
-    {
-        await using SqlConnection connection = new(ConnectionString);
-        await connection.OpenAsync(TestContext.Current.CancellationToken);
-
-        // dbo is excluded, so EF's migration history survives the truncation.
-        _respawner ??= await Respawner.CreateAsync(
-            connection,
-            new RespawnerOptions
-            {
-                DbAdapter = DbAdapter.SqlServer,
-                SchemasToInclude = ["shipping"]
-            });
-
-        await _respawner.ResetAsync(connection);
-
-        // A stub a test adds outlives a log reset, and a queued address or a logged line would reach the next test.
-        Carrier.ResetMappings();
-        Carrier.ReadStaticMappings(SimulatorMappings.Directory());
-        Carrier.ResetLogEntries();
-        Ordering.Reset();
-        CapturedLogs.Clear();
-    }
-
-    /// <summary>Runs the real §7.4 job host; a null argument leaves that key unset.</summary>
-    public static async Task<int> RunMigratorAsync(
-        string? migratorConnectionString,
-        string? runtimeConnectionString = null)
-    {
-        string[] args =
-        [
-            .. Setting("ConnectionStrings:ShippingMigrator", migratorConnectionString),
-            .. Setting("ConnectionStrings:Shipping", runtimeConnectionString)
-        ];
-
-        using IHost host = MigratorHost.Build(args);
-        using IServiceScope scope = host.Services.CreateScope();
-
-        return await scope.ServiceProvider
-            .GetRequiredService<MigrationRunner>()
-            .RunAsync(TestContext.Current.CancellationToken);
-
-        static string[] Setting(string key, string? value) =>
-            value is null ? [] : [$"--{key}={value}"];
-    }
-
-    /// <summary>Runs a statement outside any unit of work; a <c>{0}</c> placeholder is a SQL parameter.</summary>
-    public async Task ExecuteAsync(string sql, params object[] parameters)
-    {
-        await using AsyncServiceScope scope = Factory.Services.CreateAsyncScope();
-        ShippingDbContext db = scope.ServiceProvider.GetRequiredService<ShippingDbContext>();
-
-        await db.Database.ExecuteSqlRawAsync(sql, parameters, TestContext.Current.CancellationToken);
-    }
-
-    /// <summary>Reads one scalar outside any unit of work; a <c>{0}</c> placeholder is a SQL parameter.</summary>
-    public async Task<T> ScalarAsync<T>(string sql, params object[] parameters)
-    {
-        await using AsyncServiceScope scope = Factory.Services.CreateAsyncScope();
-        ShippingDbContext db = scope.ServiceProvider.GetRequiredService<ShippingDbContext>();
-
-        return await db.Database
-            .SqlQueryRaw<T>(sql, parameters)
-            .SingleAsync(TestContext.Current.CancellationToken);
-    }
-
     /// <summary>The column names of one table, from the engine rather than from the model.</summary>
     public async Task<string[]> ColumnsAsync(string schema, string table)
     {
@@ -634,57 +453,6 @@ public sealed class ServiceFixture : IAsyncLifetime
             .ToArrayAsync(TestContext.Current.CancellationToken);
     }
 
-    /// <summary>The migrations EF considers applied, asked through EF rather than its history table.</summary>
-    public async Task<string[]> AppliedMigrationsAsync()
-    {
-        await using AsyncServiceScope scope = Factory.Services.CreateAsyncScope();
-        ShippingDbContext db = scope.ServiceProvider.GetRequiredService<ShippingDbContext>();
-
-        return [.. await db.Database.GetAppliedMigrationsAsync(TestContext.Current.CancellationToken)];
-    }
-
-    /// <summary>The host's own map (§9.4), which <see cref="Outbox.OutboxRows"/> stages through.</summary>
-    public MessageTypeMap MessageTypes =>
-        Factory.Services.GetRequiredService<MessageTypeMap>();
-
-    /// <summary>The host's payload format, so a staged row is written the way the dispatcher reads it.</summary>
-    public OutboxJson OutboxJson =>
-        Factory.Services.GetRequiredService<OutboxJson>();
-
-    /// <summary>Runs exactly one claim-and-deliver pass, with no timers and no waiting.</summary>
-    public Task<int> ProcessOutboxBatchAsync() =>
-        Factory.Services
-            .GetRequiredService<OutboxDispatcher>()
-            .ProcessBatchAsync(TestContext.Current.CancellationToken);
-
-    /// <summary>Every outbox row, untracked, for asserting over.</summary>
-    public async Task<IReadOnlyList<OutboxMessage>> OutboxAsync()
-    {
-        await using AsyncServiceScope scope = Factory.Services.CreateAsyncScope();
-        ShippingDbContext db = scope.ServiceProvider.GetRequiredService<ShippingDbContext>();
-
-        return await db.OutboxMessages
-            .AsNoTracking()
-            .ToListAsync(TestContext.Current.CancellationToken);
-    }
-
-    /// <summary>Writes rows directly, for tests about the dispatcher rather than the staging.</summary>
-    public async Task StageOutboxAsync(params OutboxMessage[] rows)
-    {
-        await using AsyncServiceScope scope = Factory.Services.CreateAsyncScope();
-        ShippingDbContext db = scope.ServiceProvider.GetRequiredService<ShippingDbContext>();
-
-        db.OutboxMessages.AddRange(rows);
-        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
-    }
-
-    /// <summary>Seeds a prior attempt count through the same column the dispatcher writes.</summary>
-    public Task SetOutboxAttemptsAsync(Guid messageId, int attempts) =>
-        ExecuteAsync(
-            "UPDATE shipping.OutboxMessages SET Attempts = {0} WHERE MessageId = {1};",
-            attempts,
-            messageId);
-
     /// <summary>Seeds a prior attempt count through the column the fulfilment pass writes (ADR-054).</summary>
     public Task SetAttemptsAsync(ShipmentId id, int attempts) =>
         ExecuteAsync(
@@ -699,243 +467,9 @@ public sealed class ServiceFixture : IAsyncLifetime
             attempts,
             id.Value);
 
-    /// <summary>Repoints a row's lane through SQL, making a row <see cref="OutboxMessage.Stage"/> refuses.</summary>
-    public Task SetOutboxLaneAsync(Guid messageId, OutboxLane lane) =>
-        ExecuteAsync(
-            "UPDATE shipping.OutboxMessages SET Lane = {0} WHERE MessageId = {1};",
-            lane.ToString(),
-            messageId);
-
-    /// <summary>Clears retry backoff leases, so the next pass is gated only by the attempt cap.</summary>
-    public Task ExpireOutboxLeasesAsync() =>
-        ExecuteAsync("UPDATE shipping.OutboxMessages SET LockedUntil = NULL WHERE ProcessedAt IS NULL;");
-
-    /// <summary>Every inbox row, untracked, for asserting over (§9.5).</summary>
-    public async Task<IReadOnlyList<InboxMessage>> InboxAsync()
+    /// <summary>Removes one mapping, so it cannot outlive its assertion; <c>ResetAsync</c> is the backstop.</summary>
+    private sealed class CarrierMapping(WireMockServer server, Guid id) : IDisposable
     {
-        await using AsyncServiceScope scope = Factory.Services.CreateAsyncScope();
-        ShippingDbContext db = scope.ServiceProvider.GetRequiredService<ShippingDbContext>();
-
-        return await db.InboxMessages
-            .AsNoTracking()
-            .ToListAsync(TestContext.Current.CancellationToken);
-    }
-
-    /// <summary>The inbox rows one message wrote, untracked (§9.5), so other tests' rows are no part of it.</summary>
-    public async Task<IReadOnlyList<InboxMessage>> InboxAsync(Guid messageId)
-    {
-        await using AsyncServiceScope scope = Factory.Services.CreateAsyncScope();
-        ShippingDbContext db = scope.ServiceProvider.GetRequiredService<ShippingDbContext>();
-
-        return await db.InboxMessages
-            .AsNoTracking()
-            .Where(m => m.MessageId == messageId)
-            .ToListAsync(TestContext.Current.CancellationToken);
-    }
-
-    /// <summary>Every idempotency marker, untracked, for asserting over (§8.5).</summary>
-    public async Task<IReadOnlyList<IdempotencyMarker>> IdempotencyMarkersAsync()
-    {
-        await using AsyncServiceScope scope = Factory.Services.CreateAsyncScope();
-        ShippingDbContext db = scope.ServiceProvider.GetRequiredService<ShippingDbContext>();
-
-        return await db.IdempotencyMarkers
-            .AsNoTracking()
-            .ToListAsync(TestContext.Current.CancellationToken);
-    }
-
-    /// <summary>Writes inbox rows directly, for tests about the purge rather than the filter.</summary>
-    public async Task StageInboxAsync(params InboxMessage[] rows)
-    {
-        await using AsyncServiceScope scope = Factory.Services.CreateAsyncScope();
-        ShippingDbContext db = scope.ServiceProvider.GetRequiredService<ShippingDbContext>();
-
-        db.InboxMessages.AddRange(rows);
-        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
-    }
-
-    /// <summary>Writes idempotency markers directly, for tests about the purge rather than §8.5.</summary>
-    public async Task StageIdempotencyMarkersAsync(params IdempotencyMarker[] rows)
-    {
-        await using AsyncServiceScope scope = Factory.Services.CreateAsyncScope();
-        ShippingDbContext db = scope.ServiceProvider.GetRequiredService<ShippingDbContext>();
-
-        db.IdempotencyMarkers.AddRange(rows);
-        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
-    }
-
-    /// <summary>The registered claim store, which never holds a key (ADR-039).</summary>
-    public IIdempotencyStore IdempotencyClaims =>
-        Factory.Services.GetRequiredService<IIdempotencyStore>();
-
-    /// <summary>Ages a processed outbox row, so a retention test reaches the window without a fake clock.</summary>
-    public Task SetOutboxProcessedAtAsync(Guid messageId, DateTimeOffset processedAt) =>
-        ExecuteAsync(
-            "UPDATE shipping.OutboxMessages SET ProcessedAt = {0} WHERE MessageId = {1};",
-            processedAt,
-            messageId);
-
-    /// <summary>Runs exactly one retention pass over every table, with no timers and no waiting.</summary>
-    public Task<(int Outbox, int Inbox, int Idempotency)> PurgeRetentionAsync() =>
-        Factory.Services
-            .GetRequiredService<RetentionPurgeService>()
-            .PurgeAsync(TestContext.Current.CancellationToken);
-
-    /// <summary>One pass under a policy of the test's own, for batching edges the registered one cannot show.</summary>
-    public Task<(int Outbox, int Inbox, int Idempotency)> PurgeWithAsync(RetentionPolicy policy) =>
-        PurgeWithAsync(policy, Factory.Services.GetRequiredService<IIdempotencyStore>());
-
-    /// <summary>The same pass with the claim store substituted, so a test can hold a key (ADR-039).</summary>
-    public Task<(int Outbox, int Inbox, int Idempotency)> PurgeWithAsync(
-        RetentionPolicy policy,
-        IIdempotencyStore claims)
-    {
-        RetentionPurgeService purge = new(
-            Factory.Services.GetRequiredService<IServiceScopeFactory>(),
-            Factory.Services.GetRequiredService<OutboxTable>(),
-            Factory.Services.GetRequiredService<InboxTable>(),
-            Factory.Services.GetRequiredService<IdempotencyMarkerTable>(),
-            claims,
-            policy,
-            Factory.Services.GetRequiredService<ILogger<RetentionPurgeService>>());
-
-        return purge.PurgeAsync(TestContext.Current.CancellationToken);
-    }
-
-    /// <summary>
-    /// One pass with the registered clock moved by <paramref name="skew"/> and the server's, which ages a
-    /// marker (ADR-038), left alone.
-    /// </summary>
-    public Task<(int Outbox, int Inbox, int Idempotency)> PurgeWithSkewedClockAsync(
-        RetentionPolicy policy,
-        TimeSpan skew)
-    {
-        RetentionPurgeService purge = new(
-            new SkewedScopeFactory(
-                Factory.Services.GetRequiredService<IServiceScopeFactory>(),
-                new SkewedClock(skew)),
-            Factory.Services.GetRequiredService<OutboxTable>(),
-            Factory.Services.GetRequiredService<InboxTable>(),
-            Factory.Services.GetRequiredService<IdempotencyMarkerTable>(),
-            Factory.Services.GetRequiredService<IIdempotencyStore>(),
-            policy,
-            Factory.Services.GetRequiredService<ILogger<RetentionPurgeService>>());
-
-        return purge.PurgeAsync(TestContext.Current.CancellationToken);
-    }
-
-    /// <summary>Running rather than frozen, because the pass compares against rows staged in real time.</summary>
-    private sealed class SkewedClock(TimeSpan skew) : TimeProvider
-    {
-        public override DateTimeOffset GetUtcNow() => TimeProvider.System.GetUtcNow() + skew;
-    }
-
-    private sealed class SkewedScopeFactory(IServiceScopeFactory inner, TimeProvider clock)
-        : IServiceScopeFactory
-    {
-        public IServiceScope CreateScope() => new SkewedScope(inner.CreateScope(), clock);
-    }
-
-    /// <summary>Also <see cref="IAsyncDisposable"/>, because the purge's scope holds a <c>DbContext</c>.</summary>
-    private sealed class SkewedScope : IServiceScope, IAsyncDisposable
-    {
-        private readonly IServiceScope _inner;
-
-        public SkewedScope(IServiceScope inner, TimeProvider clock)
-        {
-            _inner = inner;
-            ServiceProvider = new SkewedProvider(inner.ServiceProvider, clock);
-        }
-
-        public IServiceProvider ServiceProvider { get; }
-
-        public void Dispose() => _inner.Dispose();
-
-        public async ValueTask DisposeAsync()
-        {
-            if (_inner is IAsyncDisposable disposable)
-            {
-                await disposable.DisposeAsync();
-                return;
-            }
-
-            _inner.Dispose();
-        }
-    }
-
-    /// <summary>Not <c>ISupportRequiredService</c>, which <c>GetRequiredService</c> does without.</summary>
-    private sealed class SkewedProvider(IServiceProvider inner, TimeProvider clock) : IServiceProvider
-    {
-        public object? GetService(Type serviceType) =>
-            serviceType == typeof(TimeProvider) ? clock : inner.GetService(serviceType);
-    }
-
-    /// <summary>Rewrites the marker under <paramref name="key"/> with its own <c>CommittedAt</c> (ADR-041).</summary>
-    public Task ReplaceIdempotencyMarkerAsync(string key) =>
-        ExecuteAsync(
-            """
-            DECLARE @committedAt datetimeoffset(7);
-
-            SELECT @committedAt = CommittedAt
-            FROM shipping.IdempotencyMarkers
-            WHERE [Key] = {0};
-
-            DELETE FROM shipping.IdempotencyMarkers WHERE [Key] = {0};
-
-            INSERT INTO shipping.IdempotencyMarkers ([Key], CommittedAt)
-            VALUES ({0}, @committedAt);
-            """,
-            key);
-
-    /// <summary>The <c>rowversion</c> the purge identifies one marker by, or null if it is gone.</summary>
-    public Task<byte[]?> IdempotencyMarkerVersionAsync(string key) =>
-        ScalarAsync<byte[]?>(
-            "SELECT Value = RowVersion FROM shipping.IdempotencyMarkers WHERE [Key] = {0}",
-            key);
-
-    /// <summary>Markers §8.5 holds for one key.</summary>
-    public Task<int> IdempotencyMarkerCountAsync(string key) =>
-        ScalarAsync<int>(
-            "SELECT Value = COUNT(*) FROM shipping.IdempotencyMarkers WHERE [Key] = {0}",
-            key);
-
-    /// <summary>Rows the transaction probe holds for one id.</summary>
-    public Task<int> ProbeRowCountAsync(Guid id) =>
-        ScalarAsync<int>("SELECT Value = COUNT(*) FROM shipping.TransactionProbe WHERE Id = {0}", id);
-
-    public async ValueTask DisposeAsync()
-    {
-        // Each teardown runs even when an earlier one throws, so no container outlives a failed disposal.
-        try
-        {
-            Factory?.Dispose();
-        }
-        finally
-        {
-            try
-            {
-                try
-                {
-                    try
-                    {
-                        Carrier?.Stop();
-                    }
-                    finally
-                    {
-                        await Ordering.DisposeAsync();
-                    }
-                }
-                finally
-                {
-                    await _sql.DisposeAsync();
-                }
-            }
-            finally
-            {
-                // Null when the builder chain threw before the assignment.
-                if (_rabbit is not null)
-                    await _rabbit.DisposeAsync();
-            }
-        }
+        public void Dispose() => server.DeleteMapping(id);
     }
 }

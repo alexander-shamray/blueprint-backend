@@ -153,7 +153,7 @@
          a major that drifts in silently breaks every fixture in the repo. -->
     <PackageVersion Include="xunit.v3" Version="3.1.0" />
     <!-- The fixture contract (IAsyncLifetime, TestContext) for
-         Catalog.TestSupport, which is a Library — xunit.v3 itself refuses
+         Common.TestSupport, which is a Library — xunit.v3 itself refuses
          non-Exe output and names this package as the alternative. Pinned to
          the runner's version because they ship as one release. -->
     <PackageVersion Include="xunit.v3.extensibility.core" Version="3.1.0" />

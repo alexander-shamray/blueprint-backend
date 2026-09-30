@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Not a test project (§4.1): the body every service's ServiceFixture derives from (ADR-056). -->
+
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- IAsyncLifetime and TestContext; not xunit.v3, which refuses Library output. -->
+    <PackageReference Include="xunit.v3.extensibility.core" />
+    <!-- WebApplicationFactory, which each service's factory derives from (§12.4). -->
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
+    <!-- Real SQL Server, per ADR-010. -->
+    <PackageReference Include="Testcontainers.MsSql" />
+    <!-- Real RabbitMQ and Redis, on the same terms. -->
+    <PackageReference Include="Testcontainers.RabbitMq" />
+    <PackageReference Include="Testcontainers.Redis" />
+    <!-- Reset-by-truncation between tests (§12.4). -->
+    <PackageReference Include="Respawn" />
+    <!-- The open connection Respawn inspects. -->
+    <PackageReference Include="Microsoft.Data.SqlClient" />
+    <!-- The relational raw-SQL surface the helpers read and write through. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The outbox, inbox and marker types and the passes the fixture drives (§9.4, §9.5, §8.5). -->
+    <ProjectReference Include="..\..\src\BuildingBlocks\Common.Infrastructure\Common.Infrastructure.csproj" />
+  </ItemGroup>
+
+</Project>

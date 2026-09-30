@@ -543,12 +543,11 @@ class GeneratedGuidanceIsTrue(unittest.TestCase):
         self.assertNotIn("Inventory", fixture)
 
         # A rendered service starts with no consumer and no receive endpoint,
-        # so it has no reason to inherit the harness-only broker widening a
-        # consuming service's fixture carries; that widening belongs with a
-        # service's first consumer.
-        self.assertNotIn("WidenWriteForTheHarness", fixture)
-        self.assertNotIn("ExecResult", fixture)
-        self.assertNotIn("set_permissions", fixture)
+        # so it has no reason to inherit the harness's wider write a consuming
+        # service's fixture overrides; that override belongs with a service's
+        # first consumer.
+        self.assertIn("ServiceFixture<", fixture)
+        self.assertNotIn("HarnessWrite", fixture)
 
 
 # The comment share, in per cent, that a rendered service's C# may reach.

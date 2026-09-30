@@ -16,7 +16,7 @@
          with this one and compiles the Protobuf item below. -->
     <PackageReference Include="Grpc.AspNetCore" />
     <!-- IAsyncLifetime. xunit.v3 itself refuses non-Exe output and names this
-         package as the alternative — the same line Catalog.TestSupport takes. -->
+         package as the alternative — the same line Common.TestSupport takes. -->
     <PackageReference Include="xunit.v3.extensibility.core" />
   </ItemGroup>
 

@@ -471,63 +471,17 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
     ),
     "tests/Catalog.TestSupport/ServiceFixture.cs": (
         # A rendered service starts with no consumer and no receive endpoint,
-        # so it never needs the harness-only broker widening below: that
-        # widening belongs with a service's first consumer, and arrives with
-        # it rather than with the scaffold.
+        # so it keeps the imported grant and never needs the harness's wider
+        # write: that override belongs with a service's first consumer, and
+        # arrives with it rather than with the scaffold.
         (
-            "    /// <summary>Widens <c>catalog-svc</c>'s write so the harness can publish a peer's contract, past ADR-036.</summary>\n"
-            "    private async Task WidenWriteForTheHarnessAsync()\n"
-            "    {\n"
-            "        const string user = \"catalog-svc\";\n"
-            "        const string write = \"^(catalog-|Common\\\\.Contracts|MassTransit:)\";\n"
             "\n"
-            "        (string configure, string read) = ImportedGrant();\n"
-            "\n"
-            "        ExecResult result = await _rabbit!.ExecAsync(\n"
-            "            [\"rabbitmqctl\", \"set_permissions\", \"-p\", \"/\", user, configure, write, read],\n"
-            "            TestContext.Current.CancellationToken);\n"
-            "\n"
-            "        if (result.ExitCode != 0)\n"
-            "        {\n"
-            "            throw new InvalidOperationException(\n"
-            "                $\"Could not widen {user}'s broker permissions for the harness \"\n"
-            "                + $\"(exit {result.ExitCode}). stdout: {result.Stdout} stderr: {result.Stderr}\");\n"
-            "        }\n"
-            "\n"
-            "        static (string Configure, string Read) ImportedGrant()\n"
-            "        {\n"
-            "            string path = Path.Combine(BrokerContextPath(), \"definitions.json\");\n"
-            "            using JsonDocument definitions = JsonDocument.Parse(File.ReadAllText(path));\n"
-            "\n"
-            "            foreach (JsonElement entry in definitions.RootElement"
-            ".GetProperty(\"permissions\").EnumerateArray())\n"
-            "            {\n"
-            "                if (entry.GetProperty(\"user\").GetString() != user "
-            "|| entry.GetProperty(\"vhost\").GetString() != \"/\")\n"
-            "                    continue;\n"
-            "\n"
-            "                return (entry.GetProperty(\"configure\").GetString()!, "
-            "entry.GetProperty(\"read\").GetString()!);\n"
-            "            }\n"
-            "\n"
-            "            throw new InvalidOperationException(\n"
-            "                $\"{path} grants {user} nothing on the default vhost, "
-            "so there is no scope to preserve.\");\n"
-            "        }\n"
-            "    }\n"
-            "\n",
+            "    /// <summary>Widens <c>catalog-svc</c>'s write so the harness can publish a peer's contract, "
+            "past ADR-036.</summary>\n"
+            "    protected override string? HarnessWrite(string granted) => "
+            "\"^(catalog-|Common\\\\.Contracts|MassTransit:)\";\n",
             "",
         ),
-        (
-            "\n"
-            "        await WidenWriteForTheHarnessAsync();\n"
-            "\n",
-            "\n",
-        ),
-        ("using DotNet.Testcontainers.Containers;\n", ""),
-        # The widening above is the fixture's one JSON reader, so its using
-        # leaves with it.
-        ("using System.Text.Json;\n", ""),
     ),
     "tests/Catalog.Api.Tests/Catalog.Api.Tests.csproj": (
         # The gRPC client package is Catalog's, because the pricing RPC is,
