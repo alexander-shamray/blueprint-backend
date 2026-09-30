@@ -217,7 +217,7 @@ public sealed class InventoryCommandEndpointTests(ServiceFixture fixture) : IAsy
     [Fact]
     public async Task A_malformed_release_is_a_contract_fault_and_is_not_retried()
     {
-        // Refused by the mapper, whose ContractMappingException is excluded from retry (§9.4), where a validator
+        // Refused by the mapper, whose ContractMappingException is excluded from retry (§9.8), where a validator
         // failure would be retried.
         var order = Guid.Empty;
 
