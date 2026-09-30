@@ -2,7 +2,7 @@ using MassTransit;
 
 namespace Ordering.Infrastructure.Messaging;
 
-/// <summary>§9.6's saga instance: every field its transitions need, and nothing else.</summary>
+/// <summary>§9.6's saga instance: the fields its transitions need, and <c>StartedAt</c> for §13.6's alert.</summary>
 public sealed class OrderFulfilmentState : SagaStateMachineInstance
 {
     /// <summary>Always the order's id, since §9.6 correlates every event by <c>OrderId</c>.</summary>
