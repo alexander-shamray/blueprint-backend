@@ -119,8 +119,10 @@ the churn it produces is the same, and it was measured in
   line is one sentence and says what the name cannot; a member whose name
   says what its summary would say has none. A `<remarks>` exists only to
   cite an owner or to state an invariant nothing checks, cites a section,
-  an ADR or a `cref`, and is four lines or fewer. A `//` or `#` block is
-  five lines or fewer. The ceiling sits where a cited sentence fits and an
+  an ADR or a `cref`, and is four lines or fewer. A comment block — a run
+  of `//` or `///` lines, of `#` lines, or a docstring — is five lines or
+  fewer, its tags included, so a one-line summary and a four-line
+  `<remarks>` fill it. The ceiling sits where a cited sentence fits and an
   argument does not: an argument is a decision, and a decision is an ADR —
   write it with `/new-adr` and cite it.
 - **No emphasis.** No `**bold**`, `<b>`, capitals or `!` for stress in a
