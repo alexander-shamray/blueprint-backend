@@ -541,41 +541,10 @@ def without_slice_entity(designer: str) -> str:
 
 
 def snapshot_from_designer(designer: str, migration_id: str, migration: str) -> str:
-    """The model snapshot, from the tool's own description of the same model.
+    """The model snapshot, rewritten from the last template migration's designer.
 
-    Catalog's snapshot cannot be copied — it describes `Product`, and the next
-    `migrations add` in a service that has no such entity would generate a
-    drop. Writing one by hand would break the rule that machine-owned files are
-    left exactly as the tool wrote them. The *last* template migration's
-    designer resolves both: it already holds EF's description of a model with
-    both messaging entities in it, which is what a scaffolded service has once
-    `without_slice_entity` has taken the aggregate out, so the class wrapper is
-    rewritten and the model body is never retyped.
-
-    The last one, and taking an earlier one would be wrong in a way with no
-    symptom until the service's first `migrations add`: the outbox designer
-    knows nothing of the inbox, so the snapshot would omit a table the
-    `DbContext` maps and EF would generate a second `CreateTable` for one the
-    scaffolded migrations had already created.
-
-    The designer reaching here has already had the aggregate removed — the
-    render loop does that before its slice check, so that a failed removal
-    stops the run rather than reaching a shipped file. Stripping again here
-    would find nothing and `require_once` would say so.
-
-    `migration` is that last migration's class name, passed in rather than
-    written here. It was a literal — `AddOutboxRetentionIndex` — until §8.5's
-    marker table became the last entry in TEMPLATE_MIGRATIONS: the literal then
-    named the second-to-last migration, every anchor below missed at once, and
-    the run stopped. Loudly, which was luck.
-
-    **What deriving it bought is narrow and worth stating narrowly**: this
-    function no longer memorises a migration name, so it is not one of the
-    places a sixth migration has to be edited. It is not the only place — the
-    shape regex, TEMPLATE_MIGRATIONS, MIGRATION_LABELS, `without_slice_entity`
-    and the patch dispatch all name the new one, and an earlier draft of this
-    paragraph claimed the tuple was the whole edit. It was not, and a docstring
-    that undercounts the work is how the next entry lands half-applied.
+    Catalog's snapshot names `Product` and an earlier designer lacks a later table, so either
+    would make the service's first `migrations add` generate a wrong change.
     """
     text = designer
     for needle, replacement in (
