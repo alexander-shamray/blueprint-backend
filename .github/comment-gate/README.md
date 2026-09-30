@@ -58,8 +58,8 @@ line can push an old block past the limit. A trailing comment is on a line
 of code, so it is never part of a block.
 
 **An uncited `<remarks>`.** A C# `<remarks>`, from the comment its
-opening tag leads to its closing tag, or to the end of that comment block
-when it has none, whose comment text holds no `§`, no `ADR-` number and no
+opening tag leads to its closing tag, or, when it has none, to the next
+opening tag or the end of that comment block, whose comment text holds no `§`, no `ADR-` number and no
 `cref=`, is a finding at its opening line when any line of it is added. The
 pattern is the gate's `CITATION`.
 
