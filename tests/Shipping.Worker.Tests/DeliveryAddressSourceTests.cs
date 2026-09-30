@@ -386,7 +386,7 @@ public sealed class DeliveryAddressSourceTests : IClassFixture<DeliveryAddressSo
     {
         IMeterFactory factory = _factory.Services.GetRequiredService<IMeterFactory>();
 
-        // One meter per name, which CarrierMetrics, AddressMetrics and ShipmentMetrics each rely on (§13.2).
+        // One meter per name.
         factory.Create(CarrierMetrics.MeterName).ShouldBeSameAs(factory.Create(CarrierMetrics.MeterName));
     }
 
