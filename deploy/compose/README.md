@@ -338,7 +338,7 @@ dotnet run --project src/Services/Payments/Payments.Api
 `ASPNETCORE_ENVIRONMENT` leads this block for the same reason it leads the one
 above, and the block is written to stand alone rather than as a delta on that
 shell: without it the authority on the next line is plain HTTP outside
-Development, `AddJwtAuthentication` refuses it at startup, and the gateway does
+Development, `AddJwtAuthentication` refuses it at startup, and the host does
 not run at all. Every host here validates tokens (§11.2), so every host-run
 block that names an authority needs this line — and the migrator below does
 not, because its job never sees a token. **That is the rule and deliberately
