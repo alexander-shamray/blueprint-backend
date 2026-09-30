@@ -19,7 +19,6 @@ public class BffFactory : WebApplicationFactory<Program>
     /// <summary>The scope the fixture's credentials ask for (§11.5).</summary>
     public const string Scope = "commerce-api";
 
-    /// <summary>The pricing client's address; null keeps one that resolves nowhere outside Compose.</summary>
     public Uri? PricingAddress { get; set; }
 
     /// <summary>The credential handler's token source, in place of <see cref="CachingTokenClient"/>.</summary>
