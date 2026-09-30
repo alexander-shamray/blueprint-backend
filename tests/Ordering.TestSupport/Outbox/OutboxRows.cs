@@ -25,7 +25,7 @@ public static class OutboxRows
     public static OutboxMessage Blocking(ServiceFixture fixture) =>
         Local(new BlocksUntilReleased { OccurredAt = Raised }, fixture);
 
-    /// <summary>A Broker-lane row carrying a real contract, so the publish runs against the real broker.</summary>
+    /// <summary>A Broker-lane row carrying a real contract.</summary>
     /// <remarks>Not <c>OrderPlaced</c>, which would start §9.6's saga beside the test.</remarks>
     public static OutboxMessage Broker(ServiceFixture fixture, Guid orderId) =>
         OutboxMessage.Stage(
