@@ -38,7 +38,7 @@ public class OutboxSerialisationTests
     [Fact]
     public void All_five_domain_events_are_stageable()
     {
-        // The loop above is vacuous on an empty map, and naming each makes an added event fail until sampled.
+        // The loop above is vacuous on an empty map, and naming each makes an added event fail until named here.
         using ServiceProvider provider = Registered();
 
         provider.GetRequiredService<MessageTypeMap>().StageableDomainEvents.ShouldBe(
