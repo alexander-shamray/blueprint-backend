@@ -5,11 +5,7 @@ using Xunit;
 
 namespace Ordering.Domain.Tests;
 
-/// <summary>
-/// The shipping address, on §5.3's always-valid terms. What it validates is
-/// deliberately narrow — presence, and the one field that belongs to a closed
-/// international standard.
-/// </summary>
+/// <summary>The shipping address, on §5.3's always-valid terms.</summary>
 public class AddressTests
 {
     [Fact]
@@ -28,9 +24,7 @@ public class AddressTests
     [InlineData("   ")]
     public void A_blank_second_line_is_the_absence_of_one(string line2)
     {
-        // A JSON body spelling an omitted line as "" must not produce an
-        // address whose Line2 is present and empty — one representation, so
-        // no consumer has to test for both.
+        // One representation of an omitted line, so no consumer has to test for both.
         Address.Of("1 Test Street", line2, "Almaty", "050000", "KZ").Line2.ShouldBeNull();
     }
 
@@ -72,13 +66,7 @@ public class AddressTests
     [InlineData("QQ")]
     public void An_unassigned_two_letter_code_is_accepted_and_that_is_the_contract(string country)
     {
-        // Deliberate, and pinned here so the boundary is read rather than
-        // rediscovered: the guard checks the code's shape and not its
-        // membership of the assigned set. Membership is data that changes
-        // without this code changing, and RegionInfo would answer from the
-        // container's ICU data — the same string constructing on one image and
-        // throwing on another is not an invariant. If this test ever fails,
-        // the guard grew a claim the type cannot keep.
+        // Shape, not membership: RegionInfo would answer from the image's ICU data, which differs between images.
         Address.Of("1 Test Street", null, "Almaty", "050000", country).Country.ShouldBe(country);
     }
 

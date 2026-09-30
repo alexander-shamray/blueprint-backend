@@ -15,43 +15,18 @@
     <!-- The §4.2 gates that reason over type dependencies rather than
          assembly references — a job GetReferencedAssemblies cannot do. -->
     <PackageReference Include="NetArchTest.Rules" />
-    <!-- ServiceCollection itself, for the registration tests: the
-         abstractions package Ordering.Application compiles against has no
-         container in it to build. -->
+    <!-- ServiceCollection itself; the abstractions package has no container to build. -->
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
-    <!-- ConfigurationBuilder and AddInMemoryCollection: AddOrderingInfrastructure
-         takes an IConfiguration, and the registration tests build a real one
-         rather than substitute the contract. -->
+    <!-- ConfigurationBuilder, for the IConfiguration AddOrderingInfrastructure takes. -->
     <PackageReference Include="Microsoft.Extensions.Configuration" />
-    <!-- AddMassTransitTestHarness and ITestHarness, for §12.5's saga suite.
-         The CORE package, not the transport: the in-memory harness is core
-         API and this project drives no broker — the same distinction
-         Appendix B's MassTransit row already draws for the harness smoke. -->
+    <!-- The core package's in-memory harness for §12.5's saga suite; this project drives no broker. -->
     <PackageReference Include="MassTransit" />
-    <!-- No EF Core provider package: nothing here names an EF type. The
-         handler tests that would have — the ones §12.1 homes at this level —
-         live in Ordering.Api.Tests instead, because ICurrentUser is
-         HttpContextCurrentUser and a handler resolved in a bare scope has no
-         principal to bind a subject from. This reference arrived with those
-         tests and should have left with them; an unused package reference is
-         a dependency claim the project does not make. -->
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Services\Ordering\Ordering.Application\Ordering.Application.csproj" />
-    <!-- Ordering.Infrastructure for AddOrderingInfrastructure, which the
-         round-trip test resolves OutboxJson and MessageTypeMap out of. The
-         test project may name it: §4.2's gate binds Ordering.Application,
-         not its tests.
-
-         No Ordering.TestSupport, and its absence is the scaffold's default
-         rather than an omission — §12.1 homes handler tests at this level and
-         Ordering's are in Ordering.Api.Tests instead, because ICurrentUser is
-         HttpContextCurrentUser and a handler in a bare scope has no principal.
-         Nothing here names ServiceFixture, so the reference would drag the
-         API, the migrator and Testcontainers into this project's restore
-         graph for a claim it does not make. It arrived with the handler tests
-         and left with them, one round later than it should have. -->
+    <!-- No Ordering.TestSupport: Ordering's handler tests live in Ordering.Api.Tests, because ICurrentUser is
+         HttpContextCurrentUser (§12.4). Ordering.Infrastructure is referenced for AddOrderingInfrastructure. -->
     <ProjectReference Include="..\..\src\Services\Ordering\Ordering.Infrastructure\Ordering.Infrastructure.csproj" />
   </ItemGroup>
 

@@ -6,21 +6,10 @@ using Xunit;
 namespace Ordering.Domain.Tests;
 
 /// <summary>
-/// <see cref="PaymentReference"/> and <see cref="TrackingNumber"/>, whose
-/// guards are deliberately the same pair — presence and length, and nothing
-/// about format, because both values are minted by somebody else. One file
-/// covers the two so the symmetry is visible: a guard added to one and not
-/// the other reads as an omission here rather than as a difference nobody
-/// wrote down.
+/// <see cref="PaymentReference"/> and <see cref="TrackingNumber"/>, whose guards are the same pair, presence and
+/// length, and nothing about a format somebody else mints.
 /// </summary>
-/// <remarks>
-/// Until this file existed both types appeared in <c>OrderTests</c> only as
-/// valid values passed to <c>ConfirmPayment</c> and <c>MarkShipped</c>, so
-/// every guard in them was carried by inspection. The lengths are written as
-/// <c>MaxLength</c> arithmetic rather than as literals: the constant is the
-/// column width (§7.2), and a test spelling 100 would keep passing against a
-/// widened column while the mapping and the guard disagreed.
-/// </remarks>
+/// <remarks>Lengths are <c>MaxLength</c> arithmetic, because the constant is the column width (§7.2).</remarks>
 public class CarrierAndPaymentReferenceTests
 {
     [Theory]
@@ -58,8 +47,6 @@ public class CarrierAndPaymentReferenceTests
     [Fact]
     public void A_payment_reference_one_character_past_the_column_width_is_refused()
     {
-        // The boundary in both directions, because a guard written with the
-        // wrong comparison passes every test that only ever exceeds it.
         Should.Throw<DomainException>(() =>
             PaymentReference.Of(new string('p', PaymentReference.MaxLength + 1)));
     }
@@ -74,10 +61,6 @@ public class CarrierAndPaymentReferenceTests
     [Fact]
     public void Both_trim_what_they_accept()
     {
-        // The trim runs after the length check, so a value that is only within
-        // the width once trimmed is still refused — asserted by the pair above
-        // rather than here. What this one fixes is that the stored value never
-        // carries the whitespace a caller sent.
         PaymentReference.Of(" pay_123 ").Value.ShouldBe("pay_123");
         TrackingNumber.Of(" TRK-1 ").Value.ShouldBe("TRK-1");
     }

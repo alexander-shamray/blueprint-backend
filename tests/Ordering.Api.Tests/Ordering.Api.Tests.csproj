@@ -16,53 +16,25 @@
     <PackageReference Include="xunit.runner.visualstudio" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="Shouldly" />
-    <!-- The endpoints gate (§4.2) — a namespace rule, so it needs type-level
-         dependency analysis rather than GetReferencedAssemblies. -->
+    <!-- The composition-root gate (§4.2), which reads type-level dependencies, not GetReferencedAssemblies. -->
     <PackageReference Include="NetArchTest.Rules" />
-    <!-- WebApplicationFactory over the real Program (§12.4) — the fixture
-         types live in Ordering.TestSupport now, but CreateClient and friends
-         are still this package's API, named directly below. -->
+    <!-- WebApplicationFactory over the real Program (§12.4), named directly by these tests. -->
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
-    <!-- SqlServerRetryingExecutionStrategy, for the subclass that lets the
-         retry test inject a fault the strategy treats as transient. Already
-         pinned centrally and in Appendix B via Ordering.Infrastructure. -->
+    <!-- SqlServerRetryingExecutionStrategy, for the retry test's fault-injecting subclass. -->
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
-    <!-- The in-memory harness for the messaging smoke (§12.5). Core, not
-         MassTransit.RabbitMQ: the harness swaps the transport out, and a test
-         project that uses no transport must not claim one. -->
+    <!-- The in-memory harness; core, not MassTransit.RabbitMQ, since the harness swaps the transport out. -->
     <PackageReference Include="MassTransit" />
-    <!-- EntityFrameworkOutboxOptions<OrderingDbContext>, and that type alone:
-         the assertion that ADR-032's outbox transaction is Serializable
-         resolves those options directly. The other two MassTransit types this
-         suite names are core rather than persistence —
-         IOutboxContextFactory<T> is MassTransit.Middleware's and
-         IBusOutboxNotification is MassTransit.Middleware.Outbox's, both in the
-         MassTransit assembly, so neither is what this row pays for. Carried
-         transitively by the project reference to Ordering.Api below; named
-         here because this assembly uses the type itself, which is the
-         register's honesty rule rather than a restore requirement. -->
+    <!-- Named although transitive, for ADR-032's EntityFrameworkOutboxOptions<OrderingDbContext>. -->
     <PackageReference Include="MassTransit.EntityFrameworkCore" />
-    <!-- One substitute, for one assertion: capturing the IPipe<PublishContext>
-         the outbox dispatcher hands IPublishEndpoint, so §9.1's single-identity
-         rule can be checked on the transport rather than inferred. Writing that
-         fake by hand means stubbing an interface with a dozen members nobody
-         calls. -->
+    <!-- Captures the IPipe<PublishContext> the dispatcher hands IPublishEndpoint, for §9.1's single identity. -->
     <PackageReference Include="NSubstitute" />
-    <!-- GrpcChannel and Grpc.Core's StatusCode, for calling the gRPC server
-         over loopback. Carried transitively through Ordering.Api; named here
-         on the register's honesty rule, because a project that names a type
-         declares the package rather than relying on a production csproj it
-         does not control. -->
+    <!-- Named although transitive, for GrpcChannel and StatusCode against the gRPC server over loopback. -->
     <PackageReference Include="Grpc.Net.ClientFactory" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Services\Ordering\Ordering.Api\Ordering.Api.csproj" />
-    <!-- ServiceFixture and OrderingApiFactory (§12.4, §4.1) — the containers,
-         the migrator runs and the reset live there. The application suite
-         becomes the second consumer with its first handler test, and the
-         two cannot reference each other — which is why the fixture has a
-         project of its own. -->
+    <!-- The fixtures, in their own project since test projects cannot reference each other (§4.1). -->
     <ProjectReference Include="..\..\tests\Ordering.TestSupport\Ordering.TestSupport.csproj" />
   </ItemGroup>
 

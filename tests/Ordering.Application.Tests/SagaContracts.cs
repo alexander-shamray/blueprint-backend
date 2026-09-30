@@ -5,21 +5,10 @@ using Common.Contracts.Shipping.V1;
 
 namespace Ordering.Application.Tests;
 
-/// <summary>
-/// The events §9.6's saga reacts to, built for a test.
-/// </summary>
+/// <summary>The events §9.6's saga reacts to, built for a test.</summary>
 /// <remarks>
-/// <b>A builder rather than object initialisers at each call site, and §12.5
-/// says why.</b> Every member of every V1 contract is <c>required</c> unless
-/// §12.6's additive-member list names it — the §9.1 envelope included, and none
-/// of these — so <c>new StockReserved { OrderId = orderId }</c>
-/// does not compile and there is no partial construction to elide. Written out
-/// per test, the three envelope members would be most of every saga test.
-/// <para>
-/// <c>OccurredAt</c> is a fixed instant rather than <c>UtcNow</c>: the saga
-/// copies it onto <c>StartedAt</c>, and a test asserting on that field must not
-/// be asserting on when it ran.
-/// </para>
+/// A builder, because every V1 member §12.6 does not list as additive is <c>required</c>; <c>OccurredAt</c> is
+/// fixed because the saga copies it onto <c>StartedAt</c>.
 /// </remarks>
 internal static class SagaContracts
 {
@@ -88,39 +77,10 @@ internal static class SagaContracts
         OrderId = orderId
     };
 
-    /// <summary>
-    /// One of the events Ordering publishes to itself — <c>OrderPlaced</c> and
-    /// <c>OrderConfirmed</c> are the others (§3.2).
-    /// </summary>
+    /// <summary>A cancellation from §11.4's endpoint or the saga's own echo, either carrying any reason.</summary>
     /// <remarks>
-    /// The reason is a parameter because both origins reach the saga through
-    /// this one type: §11.4's endpoint, and the code the saga itself sent on
-    /// <c>CancelOrder</c>, echoed back by the aggregate it cancelled.
-    /// <para>
-    /// <b>The code does not say which origin it came from, and an earlier
-    /// revision of these remarks taught that it did.</b> It paired
-    /// <c>customer_request</c> with the endpoint and everything else with the
-    /// saga; <c>CancellationReasons.TryParse</c> accepts all five
-    /// <see cref="CancelReasons"/> codes, so the endpoint may send any of
-    /// them, and the saga sends whichever its own transition recorded. A
-    /// double that teaches a discriminator the real contract does not have is
-    /// the failure PR-26 named — so this is stated rather than left to be
-    /// inferred from the parameter.
-    /// </para>
-    /// <para>
-    /// <b><c>origin</c> defaults to <see cref="CancelOrigins.User"/>, and the
-    /// direction of that default is the decision (#123).</b> It is the only
-    /// origin the saga's missing-instance branch faults on, so a test that
-    /// forgets to state one gets the loud behaviour rather than the silent
-    /// discard — the reverse default would let a test pass by being ignored.
-    /// It is also the commoner case in this file: most of these publishes are
-    /// a customer cancelling mid-workflow, where the instance exists and the
-    /// origin is not read at all.
-    /// </para>
-    /// <para>
-    /// Pass <see cref="CancelOrigins.Workflow"/> for the saga's own echo, and
-    /// <c>null</c> for a publisher predating the field.
-    /// </para>
+    /// <c>origin</c> defaults to <see cref="CancelOrigins.User"/>, so a test that states none meets the
+    /// missing-instance branch's fault rather than its silent return.
     /// </remarks>
     internal static OrderCancelled OrderCancelled(
         Guid orderId,
@@ -137,25 +97,8 @@ internal static class SagaContracts
             Origin = origin
         };
 
-    /// <summary>
-    /// The acknowledgement §9.6's <c>AwaitingConfirmation</c> waits for
-    /// (#126) — the aggregate's own confirmation, published in the
-    /// transaction that set the status.
-    /// </summary>
-    /// <remarks>
-    /// <b>The saga reads only <c>OrderId</c> off it, and the rest is built
-    /// anyway.</b> Every member of THIS contract is <c>required</c>, so there
-    /// is no partial construction to elide — but the more useful reason is
-    /// that a double which fills only the fields today's consumer happens to
-    /// read teaches the next reader that the others are optional. §3.2 gives
-    /// this event to Shipping, which acts on the lines and the total.
-    /// <para>
-    /// It does not carry a delivery address, and that is §11.7's rule rather
-    /// than an omission in this double: a broadcast integration event carries
-    /// identifiers, not personal data (ADR-035). How Shipping obtains an
-    /// address is Shipping's PR to decide.
-    /// </para>
-    /// </remarks>
+    /// <summary>The aggregate's own confirmation, which §9.6's <c>AwaitingConfirmation</c> waits for.</summary>
+    /// <remarks>No delivery address: a broadcast event carries identifiers, not personal data (ADR-035).</remarks>
     internal static OrderConfirmed OrderConfirmed(Guid orderId, Guid customerId) => new()
     {
         MessageId = Guid.CreateVersion7(),

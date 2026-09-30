@@ -7,11 +7,7 @@ using Xunit;
 
 namespace Ordering.Domain.Tests;
 
-/// <summary>
-/// §5.4's aggregate. Every rule asserted here lives in <see cref="Order"/> and
-/// nowhere else — a handler that could reach the same state by another route
-/// would make the aggregate boundary decorative.
-/// </summary>
+/// <summary>§5.4's aggregate, whose rules live in <see cref="Order"/> and nowhere else.</summary>
 public class OrderTests
 {
     private static readonly DateTimeOffset Now = new(2026, 8, 16, 12, 0, 0, TimeSpan.Zero);
@@ -73,11 +69,7 @@ public class OrderTests
     [Fact]
     public void Place_refuses_the_same_product_at_two_different_prices()
     {
-        // The merge keeps the price it already holds, so without this guard
-        // the €7 line would be absorbed at €5 and Total would be 5 × €5 —
-        // wrong, and derivable from nothing the caller sent. Unreachable
-        // through PlaceOrder, whose handler reads one price per product id;
-        // the aggregate is not allowed to depend on that.
+        // The merge keeps the price it already holds, so without this guard the €7 line would be absorbed at €5.
         var product = ProductId.New();
 
         Should.Throw<DomainException>(() =>
@@ -107,9 +99,7 @@ public class OrderTests
     [Fact]
     public void The_lines_collection_is_a_read_only_view()
     {
-        // §5.4's "callers cannot bypass AddLine": the property type carries no
-        // mutator, and the backing list is private. A cast that reached one
-        // would be the invariant hole this asserts against.
+        // §5.4's "callers cannot bypass AddLine": the property type carries no mutator.
         Order order = AnOrder();
 
         order.Lines.ShouldBeAssignableTo<IReadOnlyList<OrderLine>>();
@@ -119,8 +109,7 @@ public class OrderTests
     [Fact]
     public void The_placed_event_snapshots_the_lines_rather_than_aliasing_them()
     {
-        // §5.5's "snapshot, never alias". The event was raised while the order
-        // held one line; a later line must not appear inside it retroactively.
+        // §5.5's "snapshot, never alias": a line added later must not appear inside the earlier event.
         var product = ProductId.New();
         Money price = Money.Of(5m, "EUR");
         Order order = AnOrder((product, 1, price), (product, 1, price));
@@ -189,13 +178,7 @@ public class OrderTests
         CancellationReason reason,
         CancellationOrigin origin)
     {
-        // #123's whole premise. §11.4's endpoint parses all five reason codes,
-        // so neither of these pairings is exotic: a customer may cancel with
-        // payment_declined, and the saga's own compensation carries whatever
-        // reason it sent — including customer_request when it is forwarding
-        // one. A test that only ever paired CustomerRequest with User would
-        // pass against an Origin derived from Reason, which is exactly the
-        // inference this field exists to replace.
+        // Pairings a derived origin would get wrong, both reachable because §11.4's endpoint parses every reason.
         Order order = AnOrder();
 
         order.Cancel(reason, origin, Now);
