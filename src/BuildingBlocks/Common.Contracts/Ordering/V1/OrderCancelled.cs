@@ -1,16 +1,6 @@
 namespace Common.Contracts.Ordering.V1;
 
-/// <summary>
-/// An order was cancelled (§3.2). Inventory releases stock that was held,
-/// Payments voids an authorisation that was taken, and Ordering's own saga
-/// stops: §11.4's endpoint cancels the aggregate, and this event is how that
-/// reaches the workflow.
-/// </summary>
-/// <remarks>
-/// <see cref="Reason"/> is a <see cref="CancelReasons"/> code rather than
-/// Ordering's enum, which would put its domain in every consumer (§9.1), and it
-/// says what was asserted rather than who asked, which is <see cref="Origin"/>.
-/// </remarks>
+/// <summary>Inventory releases, Payments voids and the saga stops on it (§3.2, §11.4).</summary>
 public sealed record OrderCancelled : IIntegrationEvent
 {
     public required Guid MessageId { get; init; }
@@ -25,14 +15,6 @@ public sealed record OrderCancelled : IIntegrationEvent
 
     public required string Reason { get; init; }
 
-    /// <summary>
-    /// Who asked — a <see cref="CancelOrigins"/> code.
-    /// </summary>
-    /// <remarks>
-    /// Optional, so additive under §9.2. Absent means published
-    /// before the field existed, and a consumer keeps its earlier behaviour for
-    /// good: an error queue or a replay can deliver such a payload at any time,
-    /// and making it <c>required</c> would be a V2.
-    /// </remarks>
+    /// <summary>A <see cref="CancelOrigins"/> code; optional, so absent means an older publisher (§9.2).</summary>
     public string? Origin { get; init; }
 }

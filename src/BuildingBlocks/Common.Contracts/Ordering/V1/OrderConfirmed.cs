@@ -1,16 +1,6 @@
 namespace Common.Contracts.Ordering.V1;
 
-/// <summary>
-/// An order was confirmed — payment authorised, stock held (§3.2). Shipping
-/// consumes it: identifiers and order facts, with no directly identifying or
-/// free-text personal data (ADR-035).
-/// </summary>
-/// <remarks>
-/// It carries no address because one on the wire would reach the broker, an
-/// outbox row kept for §9.4's retention window and whatever a consumer
-/// persists, beyond §11.7's erasure.
-/// <c>CustomerId</c> stays; how Shipping obtains an address is Shipping's call.
-/// </remarks>
+/// <summary>No address or free-text personal data, which would outlive erasure (ADR-035, §11.7).</summary>
 public sealed record OrderConfirmed : IIntegrationEvent
 {
     public required Guid MessageId { get; init; }
@@ -30,8 +20,4 @@ public sealed record OrderConfirmed : IIntegrationEvent
     public required IReadOnlyList<ConfirmedLine> Lines { get; init; }
 }
 
-/// <summary>
-/// A line as <see cref="OrderConfirmed"/> carries it — its own type, for the
-/// reason <see cref="PlacedLine"/> states.
-/// </summary>
 public sealed record ConfirmedLine(Guid ProductId, int Quantity, decimal UnitPrice);

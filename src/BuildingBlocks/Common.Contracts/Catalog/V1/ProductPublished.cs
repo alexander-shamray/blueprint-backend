@@ -1,15 +1,6 @@
 namespace Common.Contracts.Catalog.V1;
 
-/// <summary>
-/// Catalog's first public fact (§3.2). The namespace carries the version, not
-/// the type name (§9.2).
-/// </summary>
-/// <remarks>
-/// The envelope is written out rather than inherited: a shared base is a
-/// shared versioning fate (§9.2). <c>Amount</c> and <c>Currency</c> replace
-/// <c>Money</c> in the mapper (§9.3), and the source type's
-/// <c>*DomainEvent</c> suffix lets §12.4 assert it never reaches the broker.
-/// </remarks>
+/// <summary>Every contract writes its envelope out rather than inheriting it (§9.2).</summary>
 public sealed record ProductPublished : IIntegrationEvent
 {
     public required Guid MessageId { get; init; }
