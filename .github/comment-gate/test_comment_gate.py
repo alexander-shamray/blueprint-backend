@@ -394,6 +394,14 @@ class TheRemarksRule(unittest.TestCase):
         self.assertEqual(judged("A.cs", text, {1}), [])
         self.assertEqual(len(judged("A.cs", text, {3})), 1)
 
+    def test_a_tag_mentioned_in_passing_opens_nothing(self):
+        text = "// the <remarks> tag, per §3\n" + self.remarks("Because.")
+        self.assertEqual([line for _, line, _ in judged("A.cs", text)], [2])
+
+    def test_an_unclosed_remarks_is_judged_to_the_next_one(self):
+        text = "/// <remarks>Because.\nvoid M();\n" + self.remarks("Per §9.")
+        self.assertEqual([line for _, line, _ in judged("A.cs", text)], [1])
+
     def test_only_csharp_and_only_comments_are_read(self):
         self.assertEqual(judged("m.py", "# <remarks>x</remarks>\n"), [])
         self.assertEqual(

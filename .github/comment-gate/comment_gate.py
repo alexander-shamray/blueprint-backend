@@ -754,19 +754,23 @@ def findings(path, lines, added):
 
 def _uncited_remarks(path, lines, added):
     found = []
-    opened = None
+    spans = []
     for line in lines:
-        if opened is None and "<remarks" in line.said:
-            opened, span, cited = line.number, set(), False
-        if opened is None:
+        # A tag opens a span only where it leads the comment, as a doc
+        # comment's does; one mentioned in passing is prose.
+        if line.said.lstrip().startswith("<remarks"):
+            spans.append((line.number, [], False))
+        if not spans or spans[-1][2]:
             continue
-        span.add(line.number)
-        cited = cited or bool(CITATION.search(line.said))
+        opened, span, _ = spans[-1]
+        span.append(line)
         if "</remarks>" in line.said or "<remarks/>" in line.said:
-            if not cited and added.intersection(span):
-                found.append((path, opened,
-                              "a <remarks> cites no section, ADR or cref"))
-            opened = None
+            spans[-1] = (opened, span, True)
+    for opened, span, _ in spans:
+        cited = any(CITATION.search(line.said) for line in span)
+        if not cited and added.intersection(line.number for line in span):
+            found.append((path, opened,
+                          "a <remarks> cites no section, ADR or cref"))
     return found
 
 
