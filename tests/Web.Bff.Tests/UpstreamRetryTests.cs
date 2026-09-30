@@ -40,7 +40,7 @@ public sealed class UpstreamRetryTests : IAsyncLifetime
     [Fact]
     public async Task A_transport_fault_is_retried_and_the_request_recovers()
     {
-        // Two aborts, then an answer, inside §9.7's three attempts.
+        // Two aborts, then an answer, inside §9.7's attempts.
         _catalog.AbortNextCalls = 2;
 
         using HttpClient client = Caller();
@@ -69,7 +69,7 @@ public sealed class UpstreamRetryTests : IAsyncLifetime
     [Fact]
     public async Task A_pipeline_timeout_is_503_rather_than_500()
     {
-        // Past the 1.4 s attempt timeout, so Polly's own timeout fires.
+        // Past the attempt timeout, so Polly's own timeout fires.
         _catalog.HangFor = TimeSpan.FromSeconds(2);
 
         using HttpClient client = Caller();
@@ -83,7 +83,7 @@ public sealed class UpstreamRetryTests : IAsyncLifetime
     [Fact]
     public async Task An_open_circuit_is_503_without_calling_Catalog_at_all()
     {
-        // §9.7's breaker trips at a 0.5 ratio over at least 10 calls, which aborting generously guarantees.
+        // §9.7's breaker trips, which aborting generously guarantees.
         _catalog.AbortNextCalls = 200;
 
         using HttpClient client = Caller();
@@ -106,7 +106,7 @@ public sealed class UpstreamRetryTests : IAsyncLifetime
     [Fact]
     public async Task A_grpc_status_is_answered_once_and_never_retried()
     {
-        // Four refusals queued, of which a pipeline retrying statuses would consume three.
+        // Four refusals queued, of which a pipeline retrying statuses would consume one per attempt.
         for (int i = 0; i < 4; i++)
             _catalog.FailNextWith.Enqueue(StatusCode.Unavailable);
 
