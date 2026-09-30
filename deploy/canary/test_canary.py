@@ -1428,6 +1428,9 @@ class DescriptorReadTests(unittest.TestCase):
     def test_a_loop_over_charts_named_by_hand_is_refused(self) -> None:
         self._assert_hand_list("for chart in catalog gateway; do :; done")
 
+    def test_a_loop_over_charts_named_in_a_brace_list_is_refused(self) -> None:
+        self._assert_hand_list("for chart in {catalog,gateway}; do :; done")
+
     def test_a_sibling_inputs_options_are_not_the_workload_inputs(self) -> None:
         text = """\
 on:

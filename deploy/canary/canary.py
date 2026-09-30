@@ -1432,9 +1432,18 @@ def _hand_lists(text: str, charts: set[str]) -> list[str]:
             found.append(match.group(0).lstrip(" \t\n;&|") + value)
     for match in FOR_LIST.finditer(text):
         value, words = _shell_words(text, match.end(), "\n;&|")
-        if set(words) & charts:
+        if {name for word in words for name in _braces_expanded(word)} & charts:
             found.append(match.group(0).lstrip(" \t\n;&|") + value)
     return found
+
+
+def _braces_expanded(word: str) -> list[str]:
+    """The words bash makes of `word` by expanding its unnested `{a,b}` lists."""
+    brace = re.search(r"\{([^{},]*(?:,[^{},]*)+)\}", word)
+    if not brace:
+        return [word]
+    head, tail = word[:brace.start()], word[brace.end():]
+    return [name for item in brace.group(1).split(",") for name in _braces_expanded(head + item + tail)]
 
 
 def _smoke_case(name: str, entry: dict) -> list[str]:
