@@ -517,6 +517,23 @@ class TheGateOnARepository(unittest.TestCase):
                       "50% comment", result.stdout)
         self.assertIn("judged every line of 1 file(s)", result.stdout)
 
+    def test_the_tree_mode_judges_lines_no_commit_added(self):
+        self.write("New.cs", "x();\n")
+        self.commit("change")
+        result = self.run_tree("Old.cs")
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertIn("Old.cs:1: a comment names a delivery-plan row",
+                      result.stdout)
+        self.assertIn("Old.cs:1: a comment block runs 12 lines",
+                      result.stdout)
+
+    def test_the_report_counts_only_the_lines_a_change_adds(self):
+        self.write("Moved.cs", "// PR-2\nx();\n")
+        self.commit("change")
+        result = self.run_gate()
+        self.assertIn("added, C#: 0 comment line(s), 1 code line(s), "
+                      "0% comment", result.stdout)
+
     def test_the_tree_mode_refuses_a_head(self):
         result = self.run_tree("Old.cs", "--head", "HEAD")
         self.assertEqual(result.returncode, 2, result.stdout)
