@@ -17,11 +17,7 @@ public sealed class Order : AggregateRoot<OrderId>
 
     public Money Total => _lines.Aggregate(Money.Zero(_currency), (sum, line) => sum + line.LineTotal);
 
-    /// <summary>
-    /// An immutable copy of the lines, for events. <see cref="Lines"/> returns a read-only <em>view</em> over the
-    /// live list, so an event holding it would keep changing after the fact — a record of what happened must not
-    /// track what happens next.
-    /// </summary>
+    /// <summary>An immutable copy of the lines for events, since <see cref="Lines"/> is a live view.</summary>
     private IReadOnlyList<OrderLineSnapshot> SnapshotLines() =>
         [.. _lines.Select(l => new OrderLineSnapshot(l.ProductId, l.Quantity, l.UnitPrice))];
 
