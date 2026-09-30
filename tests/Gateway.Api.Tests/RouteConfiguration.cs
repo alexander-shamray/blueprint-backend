@@ -47,7 +47,7 @@ internal sealed record RouteConfiguration(
 
     private static RouteConfiguration Read(IConfigurationSection route)
     {
-        // Each transform is a single-entry object, and only PathRemovePrefix is path composition.
+        // Only PathRemovePrefix is path composition.
         List<string> removed =
         [
             .. route
