@@ -416,10 +416,9 @@ it enforces:
 
 **The cross-service rule is one test over all five assemblies**, and it is
 stated as an allow-list rather than a deny-list of service names: this
-service by *prefix*, which is what makes it cover Inventory, Payments,
-Shipping and Notifications before any of them exists, and the building
-blocks *by name*, because `Common.TestSupport` (§4.1) is named like one and
-is not one:
+service by *prefix*, which is what makes it cover a service before it
+exists, and the building blocks *by name*, because `Common.TestSupport`
+(§4.1) is named like one and is not one:
 
 ```csharp
 // Every referenced assembly that is one of this repository's own must belong
