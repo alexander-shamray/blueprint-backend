@@ -604,12 +604,16 @@ the exact failure the migration hook exists to prevent.
 Each service gets a Helm chart; an umbrella chart deploys the platform.
 
 **A deployable is described once**, by its descriptor under
-`deploy/canary/deployables/`, and everything that needs the list of
-deployables reads it there: the rollout's dispatch through `canary.py chart`,
-`realm.yml`'s scheduled job through `canary.py workloads`, the canary's plan,
-and `deploy/helm/smoke.sh`'s cases. None of them lists a deployable, and
-neither does this chapter;
+`deploy/canary/deployables/`, and these readers take the list from there:
+the rollout's dispatch through `canary.py chart`, `realm.yml`'s scheduled job
+through `canary.py workloads`, the canary's plan, and `deploy/helm/smoke.sh`'s
+cases. None of those lists a deployable, and neither does this chapter;
 [`deploy/canary/README.md`](../../deploy/canary/README.md) owns the schema.
+CI's path filters and image matrix are a list kept separately, in `ci.yml`,
+which [`.github/pipeline-gate/`](../../.github/pipeline-gate/README.md) holds
+to the Dockerfiles; so is the library chart's capability map, in
+`commerce.env`, which `smoke.sh` holds to each descriptor's
+`smoke.capabilities`.
 
 > **One release owns a RESOURCE, and that is what the two install modes
 > cannot share.** Helm stamps `meta.helm.sh/release-name` onto everything it
