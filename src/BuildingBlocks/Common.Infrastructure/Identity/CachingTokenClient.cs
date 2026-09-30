@@ -20,7 +20,6 @@ public sealed partial class CachingTokenClient(
     public const string HttpClientName = "identity";
 
     /// <summary>How long before real expiry a cached token stops being handed out.</summary>
-    /// <remarks>Long enough to outlive the call's retries (§9.7) and the clock drift §11.3's skew allows.</remarks>
     private static readonly TimeSpan ExpiryGuard = TimeSpan.FromSeconds(30);
 
     private readonly ConcurrentDictionary<string, CachedToken> _tokens = new(StringComparer.Ordinal);
