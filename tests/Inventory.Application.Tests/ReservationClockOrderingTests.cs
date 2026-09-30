@@ -80,7 +80,7 @@ public sealed class ReservationClockOrderingTests
         released.DespatchedUnreservedAt.ShouldBe(BeforeLock + WaitBehindLock);
     }
 
-    /// <summary>Advances by <c>wait</c> on every call, standing in for a writer queued behind the lock.</summary>
+    /// <summary>Advances by <c>wait</c> only when the lock read asks, standing in for a queued writer.</summary>
     private sealed class LockAdvancingClock(DateTimeOffset start, TimeSpan wait) : TimeProvider
     {
         private DateTimeOffset _now = start;
