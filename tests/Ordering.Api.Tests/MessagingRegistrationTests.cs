@@ -24,7 +24,7 @@ using Xunit;
 
 namespace Ordering.Api.Tests;
 
-/// <summary>The production helper composes under the in-memory transport the harness swaps in.</summary>
+/// <summary>The production helper's registration, and its composition under the harness's in-memory transport.</summary>
 public class MessagingRegistrationTests
 {
     /// <summary>Unresolvable, so a test reaching for the real transport fails (§12.4).</summary>
