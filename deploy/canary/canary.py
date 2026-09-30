@@ -1502,29 +1502,30 @@ def _smoke_reads(name: str, entry: dict, root: Path) -> list[str]:
 
 
 def _dispatch_options(text: str) -> set[str] | None:
-    """The names in the `workload:` input's menu, or None where it has none.
+    """The names in every `workload:` key's menu, or None where no key has one.
 
-    Its own `options:` or `type: choice`, blank lines aside, or either in a flow
-    mapping on its key line, is a menu; a sibling's or a description's is not.
+    A key's own `options:` or `type: choice`, blank lines aside, or either in a
+    flow mapping on its key line, is a menu; a sibling's or a description's is not.
     """
     text = "\n".join(line for line in text.splitlines() if line.strip()) + "\n"
-    flow = re.search(r"(?m)^[ \t]*workload:[ \t]*(\{.*)$", text)
-    if flow and re.search(r"""\boptions["']?[ \t]*:|\btype["']?[ \t]*:[ \t]*["']?choice\b""", flow.group(1)):
-        listed = re.search(r"""\boptions["']?[ \t]*:[ \t]*\[([^\]]*)\]""", flow.group(1))
-        parts = listed.group(1).split(",") if listed else []
-        return {item for item in (part.strip().strip("'\"") for part in parts) if item}
-    block = re.search(r"(?m)^([ \t]*)workload:\n((?:\1[ \t].*\n?)*)", text)
-    child_indent = block and re.match(r"[ \t]+", block.group(2))
-    if not child_indent:
-        return None
-    own, body = re.escape(child_indent.group(0)), block.group(2)
-    options = re.search(rf"(?m)^{own}options:(.*(?:\n{own}(?:[ \t]|-[ \t]).*)*)", body)
-    choice = re.search(rf"""(?m)^{own}type:[ \t]*(["']?)choice\1[ \t]*$""", body)
-    if not options and not choice:
-        return None
-    parts = re.split(r"[\[\],\n]", options.group(1) if options else "")
-    items = (re.sub(r"^-[ \t]+", "", part.strip()).strip("'\"") for part in parts)
-    return {item for item in items if item}
+    menus = []
+    for flow in re.finditer(r"(?m)^[ \t]*workload:[ \t]*(\{.*)$", text):
+        if re.search(r"""\boptions["']?[ \t]*:|\btype["']?[ \t]*:[ \t]*["']?choice\b""", flow.group(1)):
+            listed = re.search(r"""\boptions["']?[ \t]*:[ \t]*\[([^\]]*)\]""", flow.group(1))
+            parts = listed.group(1).split(",") if listed else []
+            menus.append({item for item in (part.strip().strip("'\"") for part in parts) if item})
+    for block in re.finditer(r"(?m)^([ \t]*)workload:\n((?:\1[ \t].*\n?)*)", text):
+        child_indent = re.match(r"[ \t]+", block.group(2))
+        if not child_indent:
+            continue
+        own, body = re.escape(child_indent.group(0)), block.group(2)
+        options = re.search(rf"(?m)^{own}options:(.*(?:\n{own}(?:[ \t]|-[ \t]).*)*)", body)
+        choice = re.search(rf"""(?m)^{own}type:[ \t]*(["']?)choice\1[ \t]*$""", body)
+        if options or choice:
+            parts = re.split(r"[\[\],\n]", options.group(1) if options else "")
+            items = (re.sub(r"^-[ \t]+", "", part.strip()).strip("'\"") for part in parts)
+            menus.append({item for item in items if item})
+    return set().union(*menus) if menus else None
 
 
 def _reader_texts(workflow: Path, smoke: Path) -> tuple[str, str]:
