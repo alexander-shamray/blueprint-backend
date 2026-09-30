@@ -543,13 +543,10 @@ def _shout(key: str) -> str:
 
 def check(plan_document: dict, root: Path = ROOT, source: Path | None = None,
           workload: str | None = None, installed: Path | None = None) -> list[str]:
-    """Everything that can be wrong with canary.json without a cluster.
+    """Every way the plan and its descriptors can be wrong, found without a cluster.
 
-    Failures are collected rather than raised, so one run reports them all.
-    Some checks guard the gate rather than the plan: its own subject, the
-    workflow's path filter, its dispatch menu, and ADR-050's binding. `source`
-    is the tree the deployed image was built from and `workload` is whose
-    image it is; without them every fact is read from the checkout.
+    Failures are collected, so one run reports them all. `source` is the tree
+    `workload`'s image was built from; without them the checkout is read.
     """
     failures: list[str] = []
 
