@@ -749,8 +749,8 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
             "        applied[8].ShouldEndWith(\"_AddStockLevels\");\n",
             "        schema.ShouldBe(1, \"InitialCreate's hand-written EnsureSchema is what creates it\");\n"
             "\n"
-            "        // Named and ordered, since a count passes on a shorter prefix applied twice. All seven\n"
-            "        // are wiring every service has.\n"
+            "        // Named and ordered, since a count passes on a shorter prefix applied twice. Each is\n"
+            "        // wiring every service has.\n"
             "        string[] applied = await fixture.AppliedMigrationsAsync();\n"
             "        applied.Length.ShouldBe(7);\n"
             "        applied[0].ShouldEndWith(\"_InitialCreate\");\n"
