@@ -12,22 +12,11 @@ using MessagingRegistration = Payments.Infrastructure.Messaging.DependencyInject
 
 namespace Payments.Api.Tests;
 
-/// <summary>
-/// §3.2's Accepts column for Payments over a real broker: an
-/// <c>AuthorisePayment</c> sent to <c>payments-commands</c>, consumed by the
-/// real endpoint with its retry and delayed redelivery, answered by the
-/// simulator's own mappings and staged through the outbox. The real transport
-/// rather than the harness, because the redelivery is the delayed exchange's
-/// (ADR-021) and <c>AddMassTransitTestHarness</c> replaces it.
-/// </summary>
+/// <summary>§3.2's Accepts column for Payments over a real broker, whose delayed redelivery is ADR-021's.</summary>
 [Collection(nameof(IntegrationCollection))]
 public sealed class PaymentsCommandEndpointTests(ServiceFixture fixture) : IAsyncLifetime
 {
-    /// <summary>
-    /// How long a sent message is given to settle, on the event suite's
-    /// argument: generous for a loaded runner, bounded because an endpoint
-    /// that binds nothing never answers late, it never answers.
-    /// </summary>
+    /// <summary>How long a sent message is given to settle, generous for a loaded runner.</summary>
     private static readonly TimeSpan DeliveryBudget = TimeSpan.FromSeconds(30);
 
     public async ValueTask InitializeAsync() => await fixture.ResetAsync();
@@ -159,12 +148,7 @@ public sealed class PaymentsCommandEndpointTests(ServiceFixture fixture) : IAsyn
             .ShouldHaveSingleItem();
     }
 
-    /// <summary>
-    /// Sends under a transport id of the caller's or a fresh one and, when
-    /// draining, waits for the inbox row under that id: the inbox keys on the
-    /// transport id (§9.5), and the row is written only once the unit has
-    /// committed, so its arrival is the settled state.
-    /// </summary>
+    /// <summary>Sends and, when draining, waits for the inbox row under the transport id (§9.5).</summary>
     private async Task SendAsync(AuthorisePayment message, bool drain = true, Guid? messageId = null)
     {
         Guid id = messageId ?? Guid.CreateVersion7();
@@ -241,11 +225,7 @@ public sealed class PaymentsCommandEndpointTests(ServiceFixture fixture) : IAsyn
     private int ProviderCalls() =>
         fixture.Provider.LogEntries.Count(e => e.RequestMessage!.Path == "/v1/authorisations");
 
-    /// <summary>
-    /// Polls rather than sleeps, and fails with the last value it saw. The
-    /// budget is a parameter because one outcome here is a redelivery, which
-    /// arrives on the ladder's clock rather than the broker's round trip.
-    /// </summary>
+    /// <summary>Polls rather than sleeps, over a budget a redelivery on the ladder's clock can widen.</summary>
     private static async Task Eventually(Func<Task<int>> read, int expected, string because, TimeSpan? budget = null)
     {
         DateTimeOffset deadline = DateTimeOffset.UtcNow + (budget ?? DeliveryBudget);

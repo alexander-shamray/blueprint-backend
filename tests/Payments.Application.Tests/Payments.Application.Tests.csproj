@@ -15,31 +15,18 @@
     <!-- The §4.2 gates that reason over type dependencies rather than
          assembly references — a job GetReferencedAssemblies cannot do. -->
     <PackageReference Include="NetArchTest.Rules" />
-    <!-- ServiceCollection itself, for the registration tests: the
-         abstractions package Payments.Application compiles against has no
-         container in it to build. -->
+    <!-- ServiceCollection itself; the abstractions package has no container to build. -->
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
-    <!-- ConfigurationBuilder and AddInMemoryCollection: AddPaymentsInfrastructure
-         takes an IConfiguration, and OutboxSerialisationTests builds a real
-         one rather than substitute the contract. -->
+    <!-- ConfigurationBuilder, for the IConfiguration AddPaymentsInfrastructure takes. -->
     <PackageReference Include="Microsoft.Extensions.Configuration" />
-    <!-- AuthorisePaymentHandlerTests names NullLogger<T> directly — a
-         project that names a package's type references the package
-         directly, rather than leaning on what Common.Application carries. -->
+    <!-- NullLogger<T> is named directly, so its package is referenced directly. -->
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Services\Payments\Payments.Application\Payments.Application.csproj" />
-    <!-- No Payments.TestSupport and no Docker: the handlers here run against
-         hand-rolled fakes, because what is worth pinning is what each one
-         sent or decided, not a database. The persisted write is exercised
-         over a real broker and database in the API suite, which already
-         carries the fixture a second copy here would duplicate.
-         Payments.Infrastructure is referenced for AddPaymentsInfrastructure,
-         so the Local lane's payload contract (§9.4) is checked against the
-         real registration; §4.2's gate binds Payments.Application, not its
-         tests. -->
+    <!-- No Payments.TestSupport and no Docker: the handlers here run against hand-rolled fakes.
+         Payments.Infrastructure is referenced so §9.4's payload contract meets the real registration. -->
     <ProjectReference Include="..\..\src\Services\Payments\Payments.Infrastructure\Payments.Infrastructure.csproj" />
   </ItemGroup>
 

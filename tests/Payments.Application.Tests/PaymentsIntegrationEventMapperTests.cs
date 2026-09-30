@@ -78,11 +78,7 @@ public class PaymentsIntegrationEventMapperTests
     [Fact]
     public void One_commit_raising_all_three_stages_each_events_own_contract()
     {
-        // A commit can raise every registered event at once, and mapping them
-        // together must not make them interfere: each reaches its own
-        // contract, none swallowed and none duplicated. It says nothing about
-        // what else the registry holds, because Map reaches only the events it
-        // is handed.
+        // Mapped together, each event reaches its own contract, none swallowed and none duplicated.
         OrderId order = OrderId.New();
 
         IReadOnlyList<object> mapped = Mapper().Map(

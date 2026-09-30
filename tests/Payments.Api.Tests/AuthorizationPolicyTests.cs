@@ -8,14 +8,7 @@ using Xunit;
 namespace Payments.Api.Tests;
 
 /// <summary>
-/// §11.4's callout, executed: enumerate the endpoint policy names from
-/// <c>EndpointDataSource</c> and require each to resolve through
-/// <c>IAuthorizationPolicyProvider</c>. A policy name is a reference nothing
-/// checks — misspell it and there is no compiler error and no
-/// <c>ValidateOnBuild</c> failure, only an <c>InvalidOperationException</c> on
-/// the first request that reaches the endpoint. Read off the built endpoints
-/// rather than a list beside the registrations, which would be a third place
-/// to keep in step, agreeing with itself while disagreeing with the host.
+/// §11.4's callout: every endpoint policy name, read off the built endpoints, resolves through the provider.
 /// </summary>
 public class AuthorizationPolicyTests(HostSmokeTests.UnreachableInfrastructureFactory factory)
     : IClassFixture<HostSmokeTests.UnreachableInfrastructureFactory>
@@ -38,9 +31,7 @@ public class AuthorizationPolicyTests(HostSmokeTests.UnreachableInfrastructureFa
                 .Distinct()
         ];
 
-        // Not vacuous: the assertion below passes trivially over an empty set,
-        // and an endpoint file that lost its RequireAuthorization line would
-        // produce exactly that.
+        // Not vacuous: an endpoint that lost its RequireAuthorization line would empty the set.
         named.ShouldContain(PaymentsPermissions.Admin);
 
         foreach (string policy in named)
@@ -56,12 +47,7 @@ public class AuthorizationPolicyTests(HostSmokeTests.UnreachableInfrastructureFa
     [Fact]
     public async Task The_shared_authenticated_policy_is_registered_by_common_web()
     {
-        // Not named by any Payments endpoint — the group requires
-        // PaymentsPermissions.Admin outright, and the default policy never
-        // enters the picture — so the test above cannot see it. It exists for
-        // the gateway's route file (§10.2), whose routes name it, and YARP
-        // resolves it through this same provider when it loads the
-        // configuration.
+        // Named by no Payments endpoint but by the gateway's routes (§10.2), resolved through this provider.
         IAuthorizationPolicyProvider policies =
             factory.Services.GetRequiredService<IAuthorizationPolicyProvider>();
 
@@ -71,9 +57,7 @@ public class AuthorizationPolicyTests(HostSmokeTests.UnreachableInfrastructureFa
     [Fact]
     public void No_payments_endpoint_is_anonymous()
     {
-        // What Payments holds for an order is never public, so there is no
-        // listing to make anonymous by design. An AllowAnonymous here would
-        // defeat the one policy every path on this service carries.
+        // What Payments holds for an order is never public, so no endpoint is anonymous by design.
         string[] names = ["GetPayment"];
 
         foreach (Endpoint endpoint in Endpoints.Where(e => names.Contains(Name(e))))

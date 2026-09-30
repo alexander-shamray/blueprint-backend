@@ -5,16 +5,7 @@ using Xunit;
 
 namespace Payments.Api.Tests;
 
-/// <summary>
-/// Every permission Payments requires is one somebody can be granted — §11.4's
-/// rule in its second direction, since a permission something requires and the
-/// realm cannot grant is a path nobody can reach. Asserted here rather than
-/// trusted from Inventory's pass, because <c>payments:admin</c> is a role of
-/// its own in the realm's <c>commerce-api</c> client. <c>RealmImportTests</c>
-/// cannot make this check: it compares against literals, being a building
-/// block that cannot reference a host to read its constants, so the check has
-/// to run from the side owning the constant.
-/// </summary>
+/// <summary>§11.4's rule in its second direction: every permission Payments requires, the realm can grant.</summary>
 public sealed class GrantablePermissionTests
 {
     /// <summary>The client that owns the permission roles (§11.5).</summary>
@@ -23,11 +14,7 @@ public sealed class GrantablePermissionTests
     [Fact]
     public void Every_permission_a_payments_endpoint_requires_is_a_role_the_realm_can_grant()
     {
-        // Read off the type, not listed by hand. Naming it explicitly would
-        // make this a second manual registry — a permission added to
-        // PaymentsPermissions and required by an endpoint would not enter
-        // the assertion, which is the exact defect the test exists to
-        // prevent.
+        // Read off the type, not listed by hand, so a new permission enters the assertion.
         string[] required =
         [
             .. typeof(PaymentsPermissions)
@@ -66,11 +53,7 @@ public sealed class GrantablePermissionTests
         ];
     }
 
-    /// <summary>
-    /// The same walk <c>RealmImportTests</c> makes, and for the same reason: a
-    /// test asserting a repository file has to find it from a bin directory
-    /// whose depth is a build detail.
-    /// </summary>
+    /// <summary>Walks up from the bin directory, whose depth is a build detail.</summary>
     private static string RepositoryFile(string relativePath)
     {
         DirectoryInfo? directory = new(AppContext.BaseDirectory);

@@ -8,17 +8,11 @@ using Xunit;
 
 namespace Payments.Api.Tests;
 
-/// <summary>
-/// §6.5's read side over the migrated schema, which is where this query's SQL
-/// is first checked against the tables it names: there is no in-memory stand-in
-/// for Dapper worth writing, so the handler is tested through its endpoint.
-/// </summary>
+/// <summary>§6.5's read side through its endpoint, over the migrated schema its SQL names.</summary>
 [Collection(nameof(IntegrationCollection))]
 public sealed class PaymentEndpointsTests(ServiceFixture fixture) : IAsyncLifetime
 {
-    // Four distinct instants rather than four SYSDATETIMEOFFSET() calls, an
-    // hour and a day apart so no two can be confused: stamps seeded at the
-    // same moment make a crossed pair indistinguishable from a correct one.
+    // Four distinct instants, an hour and a day apart, so a crossed pair cannot pass.
     private static readonly DateTimeOffset Placed = new(2026, 3, 1, 10, 0, 0, TimeSpan.Zero);
     private static readonly DateTimeOffset Cancelled = new(2026, 3, 2, 11, 0, 0, TimeSpan.Zero);
     private static readonly DateTimeOffset IntentCreated = new(2026, 3, 3, 12, 0, 0, TimeSpan.Zero);
@@ -50,10 +44,7 @@ public sealed class PaymentEndpointsTests(ServiceFixture fixture) : IAsyncLifeti
         view.Intent.Amount.ShouldBe(42.10m);
         view.Intent.Currency.ShouldBe("EUR");
 
-        // Each timestamp against the instant that seeded it, not against being
-        // populated. Four stamps come out of one joined row and three share a
-        // type, so crossing a pair leaves every one of them set — which is why
-        // the seed uses four distinct instants and this asserts the values.
+        // Each stamp against the instant that seeded it, since a crossed pair leaves every one of them set.
         view.Order.PlacedAt.ShouldBe(Placed);
         view.Order.CancelledAt.ShouldBe(Cancelled);
         view.Intent.CreatedAt.ShouldBe(IntentCreated);
@@ -63,9 +54,7 @@ public sealed class PaymentEndpointsTests(ServiceFixture fixture) : IAsyncLifeti
     [Fact]
     public async Task A_placed_order_with_no_command_yet_reads_no_intent()
     {
-        // The two outer joins, asserted where they are load-bearing: the record
-        // arrives on OrderPlaced and nothing else exists until a command runs,
-        // so an inner join here would answer 404 for an order Payments holds.
+        // The outer joins, load-bearing because the record exists before any command runs.
         Guid order = Guid.CreateVersion7();
         await SeedAsync(order, authorised: false, refunded: false);
 
@@ -81,11 +70,7 @@ public sealed class PaymentEndpointsTests(ServiceFixture fixture) : IAsyncLifeti
     [Fact]
     public async Task A_declined_intent_reads_its_reason_and_no_reference()
     {
-        // The other half of the intent projection: a decline carries a reason
-        // and no provider reference, where an authorisation carries the
-        // reverse. Both are nullable columns read positionally out of one
-        // joined row, so a pair swapped in the SELECT or the record would
-        // satisfy the authorised case above and be wrong here.
+        // A decline carries a reason and no reference, so a positional swap passes the case above and fails here.
         Guid order = Guid.CreateVersion7();
         await SeedDeclinedAsync(order);
 
@@ -103,9 +88,7 @@ public sealed class PaymentEndpointsTests(ServiceFixture fixture) : IAsyncLifeti
     [Fact]
     public async Task The_answer_names_no_payer()
     {
-        // Asserted over the serialised body rather than the record's shape: the
-        // column is on the table this query reads, so widening the SELECT is
-        // all it would take (spec, section 10).
+        // Asserted over the serialised body, since widening the SELECT is all a leak would take.
         Guid order = Guid.CreateVersion7();
         await SeedAsync(order, authorised: true, refunded: false);
 
@@ -131,9 +114,7 @@ public sealed class PaymentEndpointsTests(ServiceFixture fixture) : IAsyncLifeti
     [Fact]
     public async Task Without_the_permission_it_answers_403()
     {
-        // Authenticated and unauthorised, which is the pair §11.3 asks every
-        // service to re-validate for itself: the gateway's route already
-        // refused this caller, and that refusal is not this service's evidence.
+        // Authenticated and unauthorised, the pair §11.3 asks every service to re-validate for itself.
         using HttpClient client = fixture.Factory.CreateClient();
         client.DefaultRequestHeaders.Add(TestAuthHandler.UserHeader, Guid.CreateVersion7().ToString());
 
@@ -152,11 +133,7 @@ public sealed class PaymentEndpointsTests(ServiceFixture fixture) : IAsyncLifeti
         return client;
     }
 
-    /// <summary>
-    /// The three tables directly, because no command reaches the refund without
-    /// a provider round trip the other suites own. Placeholders are
-    /// <c>{0}</c>-style, which the fixture turns into real SQL parameters.
-    /// </summary>
+    /// <summary>Seeds the tables directly, since no command reaches a refund without a provider round trip.</summary>
     private Task SeedAsync(Guid order, bool authorised, bool refunded) =>
         fixture.ExecuteAsync(
             """
@@ -177,11 +154,7 @@ public sealed class PaymentEndpointsTests(ServiceFixture fixture) : IAsyncLifeti
             IntentCreated,
             Voided);
 
-    /// <summary>
-    /// A placed order whose intent was declined: no reference, a reason, and
-    /// ADR-049's own reason rather than a provider code, because that is the
-    /// one this service mints itself.
-    /// </summary>
+    /// <summary>A placed order whose intent was declined with ADR-049's own reason, one this service mints.</summary>
     private Task SeedDeclinedAsync(Guid order) =>
         fixture.ExecuteAsync(
             """

@@ -8,73 +8,36 @@ using Xunit;
 
 namespace Payments.Api.Tests;
 
-/// <summary>
-/// The host builds under <c>ValidateOnBuild</c> and answers what an empty
-/// service can already be asked: the probes (§13.5) and the OpenAPI
-/// document (Appendix C). One factory for the class — a host per test buys
-/// nothing. Both connection strings are required rather than optional:
-/// §13.5's rule ties a readiness check to having one, and both
-/// registrations throw on a missing key, so a host with no database or no
-/// broker does not start. The values point at names that cannot resolve;
-/// real ones answer in <c>DatabaseSmokeTests</c>.
-/// </summary>
+/// <summary>The host builds under <c>ValidateOnBuild</c> and serves its probes (§13.5) and OpenAPI document.</summary>
 public class HostSmokeTests(HostSmokeTests.UnreachableInfrastructureFactory factory)
     : IClassFixture<HostSmokeTests.UnreachableInfrastructureFactory>
 {
-    /// <summary>
-    /// A parameterless factory, since that is what <c>IClassFixture</c> can
-    /// construct. <c>.invalid</c> is reserved and never resolves, so both
-    /// checks fail on NXDOMAIN rather than a timeout; <c>Connect Timeout=1</c>
-    /// bounds the case where a resolver answers anyway. The bus needs no
-    /// such bound, since <c>WaitUntilStarted</c> is false and the host never
-    /// waits on the broker at all.
-    /// </summary>
-    // The two literals both factories below take, declared once so the two
-    // suites cannot disagree about which deployment they describe.
+    // .invalid never resolves, so both checks fail on NXDOMAIN; Connect Timeout=1 bounds a resolver that answers.
+    // Declared once, so the two factories below cannot disagree.
     private const string UnreachableSql =
         "Server=payments-sql.invalid,1433;Database=Payments;User Id=sa;" +
         "Password=not-a-real-password;Encrypt=False;Connect Timeout=1";
 
     private const string UnreachableRabbit = "amqp://guest:guest@payments-rabbit.invalid:5672";
 
-    /// <summary>
-    /// The same unreachable host with the <c>TestAuthHandler</c> scheme the
-    /// base factory installs, so a caller can authenticate: the
-    /// production-scheme factory can only prove a caller is challenged, and
-    /// whether the document still generates needs one who gets through —
-    /// this is the cheapest, since generating it reaches no dependency.
-    /// </summary>
+    /// <summary>The same host with the base factory's <c>TestAuthHandler</c>, so a caller can authenticate.</summary>
     public sealed class AuthenticatedUnreachableFactory()
         : PaymentsApiFactory(UnreachableSql, UnreachableRabbit);
 
     public sealed class UnreachableInfrastructureFactory()
         : PaymentsApiFactory(UnreachableSql, UnreachableRabbit)
     {
-        /// <summary>
-        /// This service's one host that keeps the production JWT scheme. Every
-        /// other factory swaps in <c>TestAuthHandler</c>, which is what lets
-        /// those suites authenticate at all — and precisely why none of them
-        /// can say whether its headers mean anything to a real deployment. A
-        /// test scheme cannot prove its own absence.
-        /// </summary>
+        /// <summary>The one host keeping the production JWT scheme: a test scheme cannot prove its absence.</summary>
         protected override void ConfigureAuthentication(IServiceCollection services)
         {
-            // Deliberately empty. Not "not yet" — this host is the only one
-            // that reads as a deployment rather than a fixture, and restoring
-            // the base call would silently take that with it. The forged-header
-            // suite that reads it arrives with the first endpoint to forge
-            // against.
+            // Deliberately empty: restoring the base call would make this host a fixture rather than a deployment.
         }
     }
 
     [Fact]
     public async Task Live_probe_returns_200()
     {
-        // Also the assertion that readiness has not leaked into liveness.
-        // §13.5 forbids liveness touching a dependency — "a brief database
-        // outage restarts every pod simultaneously" — and both checks this
-        // host registers are unreachable, so a liveness probe that consulted
-        // either would answer 503 here.
+        // Also that readiness has not leaked into liveness (§13.5): both checks this host registers are unreachable.
         using HttpClient client = factory.CreateClient();
 
         HttpResponseMessage response =
@@ -86,26 +49,18 @@ public class HostSmokeTests(HostSmokeTests.UnreachableInfrastructureFactory fact
     [Fact]
     public void Ready_probe_reports_the_sql_and_bus_checks()
     {
-        // Registration, read without a network round trip. §13.5's concern is
-        // that "reports ready immediately" and "readiness was never wired up"
-        // are indistinguishable from outside, so the wiring is asserted
-        // directly rather than inferred from a status code.
+        // Registration, asserted directly, since unwired readiness and instant readiness look alike (§13.5).
         HealthCheckServiceOptions options = factory.Services
             .GetRequiredService<IOptions<HealthCheckServiceOptions>>()
             .Value;
 
-        // Two, and the count is the assertion rather than a detail of it: an
-        // inventory that only ever grows silently is how a readiness check
-        // gets dropped without anything going red.
+        // The count is the assertion, since a readiness check dropped from a growing list turns nothing red.
         options.Registrations.Count.ShouldBe(2);
 
         HealthCheckRegistration sql = options.Registrations.Single(r => r.Name == "sql");
         sql.Tags.ShouldContain("ready", "an untagged check is invisible to the /health/ready predicate");
 
-        // Registered by AddMassTransit itself, not by AddPaymentsInfrastructure
-        // — name and tags read from the 8.5.3 source, asserted here so a
-        // MassTransit major that changes either fails this test rather than a
-        // cluster's readiness.
+        // Registered by AddMassTransit itself, and pinned so a MassTransit major that changes it fails here.
         HealthCheckRegistration bus = options.Registrations.Single(r => r.Name == "masstransit-bus");
         bus.Tags.ShouldContain("ready", "a bus check outside the ready predicate reports to nobody");
         bus.Tags.ShouldContain("masstransit", "both tags are the documented contract (§13.5), so both are pinned");
@@ -114,10 +69,7 @@ public class HostSmokeTests(HostSmokeTests.UnreachableInfrastructureFactory fact
     [Fact]
     public async Task Ready_probe_returns_503_when_dependencies_are_unreachable()
     {
-        // The other half of the pair above. The registration test fails if the
-        // AddSqlServer line is deleted; this one fails if the checks are
-        // registered but the predicate stops selecting them. Neither alone
-        // catches both.
+        // The other half: this fails if the ready predicate stops selecting the registered checks.
         using HttpClient client = factory.CreateClient();
 
         HttpResponseMessage response =
@@ -129,14 +81,7 @@ public class HostSmokeTests(HostSmokeTests.UnreachableInfrastructureFactory fact
     [Fact]
     public async Task Every_response_carries_nosniff()
     {
-        // The building block owns the header (§10.6); this asserts the host
-        // actually calls it. A middleware registered in Common.Web and composed
-        // by nobody sets no header on anything, and every test in
-        // Common.Web.Tests would still pass.
-        //
-        // Driven at the liveness probe because it needs no caller and no
-        // dependency — the header is on every response, so the cheapest one
-        // answers the question.
+        // The building block owns the header (§10.6); this asserts the host composes it, at the cheapest response.
         using HttpClient client = factory.CreateClient();
 
         HttpResponseMessage response =
@@ -148,12 +93,7 @@ public class HostSmokeTests(HostSmokeTests.UnreachableInfrastructureFactory fact
     [Fact]
     public async Task An_unknown_path_is_challenged_rather_than_missing()
     {
-        // The third endpoint nobody wrote. A fallback policy is evaluated even
-        // when routing matched NOTHING, so an anonymous request for a path
-        // that does not exist is a 401 rather than a 404 — measured, and
-        // accepted on §11.2's terms: a caller with no credentials learns
-        // nothing about which paths this service has, which is the same
-        // argument the 405 pair and the OpenAPI document already carry.
+        // A fallback policy is evaluated even when routing matched nothing, so an unknown path is a 401 (ADR-030).
         using HttpClient client = factory.CreateClient();
 
         HttpResponseMessage response =
@@ -165,10 +105,7 @@ public class HostSmokeTests(HostSmokeTests.UnreachableInfrastructureFactory fact
     [Fact]
     public async Task An_unknown_path_is_a_404_to_a_caller()
     {
-        // The half that makes the one above an assertion about authorization
-        // rather than about routing: with a caller, the same request is the
-        // 404 it always was. Without this, "401" would pass just as happily
-        // against a host that had stopped routing altogether.
+        // With a caller the same request is a 404, so the 401 above is about authorization, not routing.
         using AuthenticatedUnreachableFactory authenticated = new();
         using HttpClient client = authenticated.CreateClient();
 
@@ -184,11 +121,7 @@ public class HostSmokeTests(HostSmokeTests.UnreachableInfrastructureFactory fact
     [Fact]
     public async Task OpenApi_document_is_not_anonymous()
     {
-        // MapOpenApi carries no authorization metadata of its own, so it is
-        // reached by the fallback policy AddCommonWebDefaults sets (§11.4).
-        // That is the decision rather than an accident: the document
-        // enumerates every route and every schema this service has, and §11.2
-        // assumes the network inside the cluster is hostile.
+        // MapOpenApi has no authorization metadata, so AddCommonWebDefaults' fallback policy reaches it (§11.4).
         using HttpClient client = factory.CreateClient();
 
         HttpResponseMessage response =
@@ -200,10 +133,7 @@ public class HostSmokeTests(HostSmokeTests.UnreachableInfrastructureFactory fact
     [Fact]
     public async Task OpenApi_document_is_served_to_a_caller()
     {
-        // The half a 401 cannot show. Without this the test above would go on
-        // passing if the document stopped generating altogether — every path
-        // answers 401 to an anonymous caller, the ones that do not exist
-        // included.
+        // The half a 401 cannot show: that the document still generates.
         using AuthenticatedUnreachableFactory authenticated = new();
         using HttpClient client = authenticated.CreateClient();
 

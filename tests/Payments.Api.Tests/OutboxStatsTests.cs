@@ -11,15 +11,8 @@ using Xunit;
 
 namespace Payments.Api.Tests;
 
-/// <summary>
-/// The three aggregate queries behind §13.6's gauges, against the real table.
-/// </summary>
-/// <remarks>
-/// The lane predicate is the subject. §13.6 gives the two lanes thresholds an
-/// order of magnitude apart, so a query that dropped <c>Lane = @lane</c> would
-/// report one number for both and the local lane's threshold would fire on a
-/// broker blip. Each test stages rows on both lanes for that reason.
-/// </remarks>
+/// <summary>The three aggregate queries behind §13.6's gauges, against the real table.</summary>
+/// <remarks>The lane predicate is the subject, since §13.6 sets the two lanes' thresholds far apart.</remarks>
 [Collection(nameof(IntegrationCollection))]
 public sealed class OutboxStatsTests(ServiceFixture fixture) : IAsyncLifetime
 {
@@ -56,10 +49,7 @@ public sealed class OutboxStatsTests(ServiceFixture fixture) : IAsyncLifetime
     [Fact]
     public async Task Abandoned_counts_only_rows_at_or_past_the_dispatchers_own_cap()
     {
-        // One row below the cap and one at it. The cap is read from
-        // OutboxDispatcher rather than written here, so this assertion follows
-        // the loop it describes if anybody ever tunes it — which is the whole
-        // reason that constant is public.
+        // The cap is read from OutboxDispatcher, so this follows the loop if anybody tunes it.
         OutboxMessage retrying = await StageOneAsync(OutboxLane.Broker);
         OutboxMessage abandoned = await StageOneAsync(OutboxLane.Broker);
         await fixture.SetOutboxAttemptsAsync(retrying.MessageId, OutboxDispatcher.MaxAttempts - 1);
@@ -69,10 +59,7 @@ public sealed class OutboxStatsTests(ServiceFixture fixture) : IAsyncLifetime
 
         stats.AbandonedCount(OutboxLane.Broker).ShouldBe(1);
 
-        // Still pending, and that is not an oversight: an abandoned row is
-        // unprocessed for ever, so the growth alert counts it exactly as §13.6
-        // describes. Backing it out of the pending count would make a lane full
-        // of poison read as empty.
+        // Still pending: an abandoned row is unprocessed for ever, and §13.6's growth alert counts it.
         stats.PendingCount(OutboxLane.Broker).ShouldBe(2);
     }
 
@@ -96,19 +83,14 @@ public sealed class OutboxStatsTests(ServiceFixture fixture) : IAsyncLifetime
         await AgeAsync(old, TimeSpan.FromHours(2));
         await AgeAsync(recent, TimeSpan.FromMinutes(1));
 
-        // MIN, not MAX: a lane that has stopped is diagnosed by its oldest
-        // unshipped row, and reading the newest would report a healthy few
-        // seconds while an hours-old message sat behind it.
+        // MIN, not MAX: a stopped lane is diagnosed by its oldest unshipped row.
         NewStats().OldestAgeSeconds(OutboxLane.Broker).ShouldBeInRange(7_000, 7_400);
     }
 
     [Fact]
     public async Task An_empty_lane_reads_zero_rather_than_failing()
     {
-        // MIN over no rows is NULL, and a gauge callback that throws is
-        // swallowed by the SDK — the series would simply stop being exported,
-        // which on a dashboard is indistinguishable from a lane that is fine.
-        // Zero is the honest reading for a lane with nothing waiting.
+        // MIN over no rows is NULL, and a throwing gauge callback silently stops the series, so zero is the reading.
         await StageAsync(OutboxLane.Broker);
 
         IOutboxStats stats = NewStats();
@@ -121,9 +103,7 @@ public sealed class OutboxStatsTests(ServiceFixture fixture) : IAsyncLifetime
     [Fact]
     public async Task A_processed_row_does_not_hold_the_age_gauge_up()
     {
-        // The age query filters on ProcessedAt exactly as the pending count
-        // does. Without that predicate a delivered row from last week would pin
-        // outbox.oldest.age at days and page somebody every night.
+        // Filtered on ProcessedAt, or a delivered row from last week would pin outbox.oldest.age at days.
         OutboxMessage delivered = await StageOneAsync(OutboxLane.Broker);
         await AgeAsync(delivered, TimeSpan.FromDays(7));
         await fixture.SetOutboxProcessedAtAsync(delivered.MessageId, DateTimeOffset.UtcNow);
@@ -131,15 +111,7 @@ public sealed class OutboxStatsTests(ServiceFixture fixture) : IAsyncLifetime
         NewStats().OldestAgeSeconds(OutboxLane.Broker).ShouldBe(0);
     }
 
-    /// <summary>
-    /// A fresh instance per assertion, resolved through the real registration.
-    /// </summary>
-    /// <remarks>
-    /// Fresh, because the type caches for five seconds and these tests change
-    /// the table between reads. Resolved rather than constructed, because
-    /// asking the container proves <c>AddPaymentsInfrastructure</c> wires it
-    /// to the schema and connection the service uses.
-    /// </remarks>
+    /// <summary>A fresh instance per read, since the type caches, resolved through the real registration.</summary>
     private IOutboxStats NewStats()
     {
         ServiceProvider provider = new ServiceCollection()
@@ -148,15 +120,9 @@ public sealed class OutboxStatsTests(ServiceFixture fixture) : IAsyncLifetime
                     new Dictionary<string, string?>
                     {
                         ["ConnectionStrings:Payments"] = fixture.ConnectionString,
-                        // §12.4's .invalid convention: no host runs here, so
-                        // the bus never starts and nothing should be able to
-                        // dial one. AddMassTransitMessaging throws without it.
+                        // AddMassTransitMessaging throws without it; unreachable (§12.4), since no bus starts here.
                         ["ConnectionStrings:RabbitMq"] = "amqp://guest:guest@payments-rabbit.invalid:5672",
-                        // Read eagerly by AddPaymentProvider, which throws
-                        // naming it — the same reason the bus key above is
-                        // here, unreachable on the same §12.4 convention.
-                        // §2: no Redis keys, because this service registers no
-                        // Redis connection.
+                        // Read eagerly by AddPaymentProvider; unreachable on the same convention.
                         ["PaymentProvider:BaseUrl"] = "https://payments-provider.invalid"
                     })
                 .Build())

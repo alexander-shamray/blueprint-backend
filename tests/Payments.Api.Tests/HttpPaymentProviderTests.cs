@@ -23,11 +23,7 @@ using ProviderRegistration = Payments.Infrastructure.Provider.DependencyInjectio
 
 namespace Payments.Api.Tests;
 
-/// <summary>
-/// The adapter over a real HTTP server loading the simulator's own mappings,
-/// so the file Compose runs is the file these assert (§12: WireMock.Net for a
-/// third-party API).
-/// </summary>
+/// <summary>The adapter over an in-process server loading the simulator's mappings, the file Compose runs.</summary>
 public sealed class HttpPaymentProviderTests : IClassFixture<HttpPaymentProviderTests.ProviderHost>
 {
     private const string UnreachableSql =
@@ -35,19 +31,12 @@ public sealed class HttpPaymentProviderTests : IClassFixture<HttpPaymentProvider
 
     private const string UnreachableRabbit = "amqp://payments-svc:x@rabbit.invalid:5672";
 
-    /// <summary>
-    /// One server and one host for the class: a host over an unreachable
-    /// broker can take seconds to stop, so only a test that needs different
-    /// settings builds its own, and so does one that sends the stalled script,
-    /// whose answer outlives the test that asked for it.
-    /// </summary>
+    /// <summary>One server and host for the class, since a host over an unreachable broker is slow to stop.</summary>
     public sealed class ProviderHost : IDisposable
     {
         public ProviderHost()
         {
-            // Loopback, not WireMock's default of every interface: a socket on
-            // 0.0.0.0 is what a workstation firewall stops to ask about, and the
-            // only caller is the in-process host under test.
+            // Loopback, not every interface, which a workstation firewall stops to ask about.
             Server = WireMockServer.Start(new WireMockServerSettings { Urls = ["http://127.0.0.1:0"] });
             Factory = new PaymentsApiFactory(UnreachableSql, UnreachableRabbit, Server.Urls[0] + "/");
         }
@@ -83,12 +72,7 @@ public sealed class HttpPaymentProviderTests : IClassFixture<HttpPaymentProvider
     private static IPaymentProvider Provider(PaymentsApiFactory factory) =>
         factory.Services.CreateScope().ServiceProvider.GetRequiredService<IPaymentProvider>();
 
-    /// <summary>
-    /// A server of its own for the stalled script. The simulator logs a stalled
-    /// request when its delay ends rather than when the client gives up, so on
-    /// the shared server the entry lands in whichever test is running by then
-    /// and is counted as one of its calls.
-    /// </summary>
+    /// <summary>A server of its own, since the simulator logs a stalled request only when its delay ends.</summary>
     private static ProviderHost StalledHost()
     {
         ProviderHost own = new();
@@ -102,10 +86,7 @@ public sealed class HttpPaymentProviderTests : IClassFixture<HttpPaymentProvider
     private int Calls(string path) =>
         _server.LogEntries.Count(e => e.RequestMessage!.Path == path);
 
-    // This host's meter, never one matched by name: a MeterListener is
-    // process-wide, and another host's provider would count into it. The
-    // factory caches by name, so this is the instance ProviderMetrics holds,
-    // and resolving ProviderMetrics first means the counter already exists.
+    // This host's meter, never one matched by name, since a MeterListener is process-wide.
     private UnavailableCount CountUnavailable() => CountUnavailable(_factory);
 
     private static UnavailableCount CountUnavailable(PaymentsApiFactory factory)
@@ -161,9 +142,7 @@ public sealed class HttpPaymentProviderTests : IClassFixture<HttpPaymentProvider
         _server.LogEntries.ShouldAllBe(e =>
             e.RequestMessage!.Headers!["Idempotency-Key"].Single() == $"authorise:{order.Value}");
 
-        // The simulator ignores the credential, so only this line fails if the
-        // adapter stops sending it: compared with what the host configured, so
-        // the test prints no key of its own.
+        // The simulator ignores the credential, so only this fails if the adapter stops sending it.
         string configured = _factory.Services.GetRequiredService<IConfiguration>()[ProviderRegistration.ApiKeyKey]!;
         _server.LogEntries.ShouldAllBe(e =>
             e.RequestMessage!.Headers!["Authorization"].Single() == $"Bearer {configured}");
@@ -232,10 +211,7 @@ public sealed class HttpPaymentProviderTests : IClassFixture<HttpPaymentProvider
     [Fact]
     public async Task A_refused_connection_is_retried_then_thrown_as_unavailable_and_counted_per_attempt()
     {
-        // A refused connection reaches the client as an HttpRequestException,
-        // counted by the attempt handler's own branch rather than by status.
-        // The in-process server answers its connection faults with a status,
-        // so the provider here is a port nothing listens on.
+        // A refused connection is counted by the attempt handler's own branch, so the provider is a closed port.
         using TcpListener probe = new(IPAddress.Loopback, 0);
         probe.Start();
         int closed = ((IPEndPoint)probe.LocalEndpoint).Port;
@@ -274,9 +250,7 @@ public sealed class HttpPaymentProviderTests : IClassFixture<HttpPaymentProvider
     [InlineData(429)]
     public async Task A_timeout_or_throttle_status_is_retried_then_thrown_as_unavailable(int status)
     {
-        // Stubbed rather than scripted: the translation table names both, and
-        // the simulator scripts neither, so without this a branch that dropped
-        // either would leave the suite green.
+        // Stubbed, since the simulator scripts neither status the translation table names.
         _server.Given(Request.Create().WithPath("/v1/authorisations").UsingPost())
             .AtPriority(0)
             .RespondWith(Response.Create().WithStatusCode(status));
@@ -295,9 +269,7 @@ public sealed class HttpPaymentProviderTests : IClassFixture<HttpPaymentProvider
     [InlineData(1011, 201)]
     public async Task The_simulator_scripts_an_amount_however_its_json_is_spaced(long amountMinor, int expected)
     {
-        // Straight at the simulator, past the adapter: a person probing it by
-        // hand sends spaced JSON, and a scripted amount must not fall through
-        // to an approval because of it.
+        // Straight at the simulator: a person probing it by hand sends spaced JSON.
         using HttpClient client = new() { BaseAddress = new Uri(_server.Urls[0]) };
         using StringContent body = new(
             $"{{ \"amountMinor\" : {amountMinor} , \"currency\" : \"EUR\" }}",
@@ -347,8 +319,7 @@ public sealed class HttpPaymentProviderTests : IClassFixture<HttpPaymentProvider
     [Fact]
     public async Task A_409_is_a_mismatch_and_is_not_retried()
     {
-        // Stubbed here, not in the mappings: a stateless simulator cannot know a
-        // key was used before (spec, section 9).
+        // Stubbed here: a stateless simulator cannot know a key was used before.
         _server.Given(Request.Create().WithPath("/v1/authorisations").UsingPost())
             .AtPriority(0)
             .RespondWith(Response.Create().WithStatusCode(409));
