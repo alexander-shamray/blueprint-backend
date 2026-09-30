@@ -4,7 +4,6 @@ using Shipping.Domain.Shipments.Events;
 namespace Shipping.Domain.Shipments;
 
 /// <summary>§3.2's aggregate, whose moves return <c>false</c> on a superseded arrival rather than throw.</summary>
-/// <remarks>The backoff, lease and poll columns are the workers' (ADR-054).</remarks>
 public sealed class Shipment : AggregateRoot<ShipmentId>
 {
     private readonly List<TrackingEvent> _trackingEvents = [];
