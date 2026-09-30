@@ -57,6 +57,7 @@
     <Project Path="tests/Common.Application.Tests/Common.Application.Tests.csproj" />
     <Project Path="tests/Common.Domain.Tests/Common.Domain.Tests.csproj" />
     <Project Path="tests/Common.Infrastructure.Tests/Common.Infrastructure.Tests.csproj" />
+    <Project Path="tests/Common.TestSupport/Common.TestSupport.csproj" />
     <Project Path="tests/Common.Web.Tests/Common.Web.Tests.csproj" />
     <Project Path="tests/Gateway.Api.Tests/Gateway.Api.Tests.csproj" />
     <Project Path="tests/Inventory.Api.Tests/Inventory.Api.Tests.csproj" />

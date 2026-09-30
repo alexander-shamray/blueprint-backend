@@ -11,14 +11,6 @@
     <PackageReference Include="xunit.v3.extensibility.core" />
     <!-- WebApplicationFactory over the real Program (§12.4). -->
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
-    <!-- Real SQL Server, per ADR-010. -->
-    <PackageReference Include="Testcontainers.MsSql" />
-    <!-- Real RabbitMQ, on the same terms. -->
-    <PackageReference Include="Testcontainers.RabbitMq" />
-    <!-- Reset-by-truncation between tests (§12.4). -->
-    <PackageReference Include="Respawn" />
-    <!-- The open connection Respawn inspects. -->
-    <PackageReference Include="Microsoft.Data.SqlClient" />
     <!-- Named although transitive, because ServiceFixture uses its types directly. -->
     <PackageReference Include="Microsoft.EntityFrameworkCore" />
     <!-- The carrier's stand-in, started over the simulator's mappings. -->
@@ -26,6 +18,8 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- The body every service's ServiceFixture shares (ADR-056). -->
+    <ProjectReference Include="..\Common.TestSupport\Common.TestSupport.csproj" />
     <ProjectReference Include="..\..\src\Services\Shipping\Shipping.Worker\Shipping.Worker.csproj" />
     <!-- The migrator, so the fixture drives the real §7.4 job host. -->
     <ProjectReference Include="..\..\src\Services\Shipping\Shipping.Migrator\Shipping.Migrator.csproj" />
