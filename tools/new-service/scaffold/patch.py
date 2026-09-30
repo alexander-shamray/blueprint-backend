@@ -491,7 +491,7 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
     "tests/Catalog.TestSupport/Outbox/OutboxRows.cs": (
         ("using Common.Contracts.Catalog.V1;\n", ""),
         (
-            "    /// <summary>A Broker-lane row carrying a real contract, so the publish half runs against the broker.</summary>\n"
+            "    /// <summary>A Broker-lane row carrying a real contract.</summary>\n"
             "    public static OutboxMessage Broker(ServiceFixture fixture, Guid productId) =>\n"
             "        OutboxMessage.Stage(\n"
             "            new ProductPublished\n"
