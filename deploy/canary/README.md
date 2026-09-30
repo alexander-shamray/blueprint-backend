@@ -48,7 +48,9 @@ for its Helm release: `deployables/catalog-api.json` is the release
 None of them lists a deployable by hand, and check 8 and the suite hold the
 workflow and the smoke run to that. Adding a deployable to the deployment is
 its descriptor, its chart and the umbrella's dependency on that chart;
-`smoke.sh` and check 4 refuse any one of them without the others.
+`smoke.sh` and check 4 refuse any one of them without the others. Its image
+and any credential-bearing capability are entries in lists kept separately,
+which §15.3 names with their owners.
 
 | Field | What it is |
 |---|---|
