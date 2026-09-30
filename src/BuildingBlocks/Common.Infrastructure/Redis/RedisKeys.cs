@@ -3,7 +3,10 @@ using Microsoft.Extensions.Hosting;
 namespace Common.Infrastructure.Redis;
 
 /// <summary>§8.3's half-key rule, prefixed by <see cref="IHostEnvironment.ApplicationName"/> verbatim.</summary>
-/// <remarks>No <c>Cache(string)</c>, which would double <c>InstanceName</c>'s prefix (§8.3).</remarks>
+/// <remarks>
+/// The one source, since §13.2 stamps it on each trace: two would let prefix and label disagree.
+/// No <c>Cache(string)</c>, which would double <c>InstanceName</c>'s prefix (§8.3).
+/// </remarks>
 public sealed class RedisKeys(IHostEnvironment environment)
 {
     private readonly string _service = environment.ApplicationName;
