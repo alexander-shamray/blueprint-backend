@@ -88,7 +88,7 @@ public sealed class InboxFilterTests(ServiceFixture fixture) : IAsyncLifetime
         // The clock HandledAt is stamped from, which the purge's cutoff also reads (§12.7).
         services.AddSingleton(TimeProvider.System);
 
-        // The filter's observability dependencies (§13); validateScopes makes a missing one a resolution failure.
+        // The filter's observability dependencies (§13).
         services.AddMetrics();
         services.AddLogging();
         services.AddSingleton<MessagingMetrics>();
