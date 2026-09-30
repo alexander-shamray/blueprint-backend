@@ -11,7 +11,7 @@ internal static class RetryPolicy
 
     public static readonly TimeSpan MinInterval = TimeSpan.FromSeconds(1);
 
-    /// <summary>Not reached at <see cref="RetryLimit"/> retries, which §9.6's confirmation wait relies on.</summary>
+    /// <summary>The ceiling the ladder climbs towards; it is not reached at <see cref="RetryLimit"/> retries.</summary>
     public static readonly TimeSpan MaxInterval = TimeSpan.FromMinutes(1);
 
     public static readonly TimeSpan IntervalDelta = TimeSpan.FromSeconds(2);
