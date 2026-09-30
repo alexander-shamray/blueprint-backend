@@ -1,23 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
 
-  <!--
-    Settings come from Directory.Build.props (§4.4).
-
-    One project, like the gateway and for the same reason: §10.1 gives the BFF
-    no domain and no database, so there is nothing for an Application or an
-    Infrastructure layer to hold. Program.cs is the whole composition root.
-    What it has that the gateway does not is an outbound call — a synchronous
-    hop to a peer (§9.7, ADR-017) — and that is why the gRPC and resilience
-    packages below are here.
-  -->
+  <!-- One project, like the gateway: §10.1 gives the BFF no domain and no database. -->
 
   <ItemGroup>
-    <!-- The client half of §9.7's hop. Grpc.Net.ClientFactory is the
-         AddGrpcClient integration; Grpc.Tools is the protoc build task, which
-         Grpc.AspNetCore would have brought along on the server side and which
-         a client-only project has to name itself. Google.Protobuf is the
-         runtime the generated code compiles against. All four are one row in
-         Appendix B because they ship and version together. -->
+    <!-- The client half of §9.7's hop; a client-only project has to name Grpc.Tools itself. -->
     <PackageReference Include="Grpc.Net.ClientFactory" />
     <PackageReference Include="Google.Protobuf" />
     <PackageReference Include="Grpc.Tools">
@@ -25,60 +11,23 @@
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
-    <!-- AddStandardResilienceHandler (§9.7). Retry, circuit breaker, attempt
-         and total timeouts as one registration, so the four numbers that have
-         to agree live in one callback rather than four. -->
+    <!-- AddStandardResilienceHandler (§9.7). -->
     <PackageReference Include="Microsoft.Extensions.Http.Resilience" />
-    <!-- QuoteRequestValidator (ADR-045). Common.Web carries it transitively;
-         the direct reference states the direct use, which is this repository's
-         convention wherever a project names a package's types by hand — see
-         Ordering.Infrastructure and Microsoft.Data.SqlClient. Without it a
-         future change to Common.Web's own dependencies breaks this project for
-         a reason nothing here would explain. Centrally pinned and already in
-         Appendix B, so this adds no version and no register row. Found by
-         Copilot. -->
+    <!-- QuoteRequestValidator (ADR-045); referenced directly because this project names its types. -->
     <PackageReference Include="FluentValidation" />
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Everything the BFF takes from Common.Web — observability, token
-         validation, the "authenticated" policy, problem details, the liveness
-         probe — arrives through AddCommonWebDefaults, including the
-         ValidationExceptionHandler that turns QuoteRequestValidator's throw
-         into §10.5's field-keyed 400. -->
+    <!-- AddCommonWebDefaults (§13.2), whose ValidationExceptionHandler makes a validation throw §10.5's 400. -->
     <ProjectReference Include="..\..\BuildingBlocks\Common.Web\Common.Web.csproj" />
-    <!-- For OrderLimits and nothing else: the quote endpoint must refuse
-         exactly the quantities PlaceOrderValidator will later refuse, so the
-         two read one constant instead of two literals that can drift. §4.3
-         permits exactly one assembly to cross a service boundary and this is
-         that assembly — which is not licence to reach across §4.2 through it.
-         The BFF consumes no Ordering message type and must not start. -->
+    <!-- For OrderLimits only, the bound §4.3 lets both sides of a boundary share (ADR-045). -->
     <ProjectReference Include="..\..\BuildingBlocks\Common.Contracts\Common.Contracts.csproj" />
-    <!-- §11.5's client-credentials grant, which ADR-052 puts in a building
-         block because more than one host needs it. Each service host reaches
-         this project through its own *.Infrastructure; the BFF has
-         none (§10.1), so it names it here and restores the outbox, inbox and
-         Redis code it never calls — the cost Common.Web's EF Core reference
-         already pays in the gateway, in the same currency. -->
+    <!-- §11.5's client-credentials grant, a building block by ADR-052; the BFF has no Infrastructure (§10.1). -->
     <ProjectReference Include="..\..\BuildingBlocks\Common.Infrastructure\Common.Infrastructure.csproj" />
   </ItemGroup>
 
   <ItemGroup>
-    <!-- LINKED, not copied, and the distinction is the whole point (§4.3): one
-         contract with two generated halves, so the client and the server
-         cannot drift. A copy in this directory would compile identically today
-         and be a different contract the first time Catalog edited its own.
-
-         It is a FILE reference and not an assembly one, so no project
-         dependency is created and §4.3's "exactly one assembly crosses a
-         service boundary" is untouched — Common.Contracts is still the only
-         one.
-
-         The cost is a build-time path into another service's tree, and it is
-         paid twice: here, and as a COPY line in this project's Dockerfile.
-         A monorepo is what makes the link possible at all; a polyrepo would
-         publish the .proto to a registry and pull it, which is the same
-         relationship with a package manager in the middle. -->
+    <!-- Linked, not copied, so client and server generate from one contract; the Dockerfile copies the same path. -->
     <Protobuf
       Include="..\..\Services\Catalog\Catalog.Api\Protos\pricing.proto"
       Link="Protos\pricing.proto"
