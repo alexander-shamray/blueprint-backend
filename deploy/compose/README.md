@@ -276,7 +276,7 @@ Development (§11.3), so the host does not start. The container sets the same
 variable, which is why the Compose path never shows this.
 
 The override excludes the `gateway` too, and running that one on the host takes
-a fourth variable: §10.2's destinations are container names, which resolve on
+one more variable: §10.2's destinations are container names, which resolve on
 the Compose network and nowhere else, so a host-run gateway has to be told
 where the service actually is.
 
