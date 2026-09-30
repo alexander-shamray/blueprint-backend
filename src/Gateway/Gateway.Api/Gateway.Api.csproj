@@ -1,28 +1,14 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
 
-  <!--
-    Settings come from Directory.Build.props (§4.4).
-
-    One project, no Application and no Infrastructure: §10.1's gateway owns no
-    domain concept and no database, so there is nothing for either layer to
-    hold. Program.cs is the whole composition root, which is the same rule
-    §4.2 applies to a service — it just has less to compose.
-  -->
+  <!-- One project with no Application or Infrastructure layer: §10.1's gateway owns no domain and no database. -->
 
   <ItemGroup>
-    <!-- §10.2's routing. Versionless: central package management owns the pins
-         (§4.4), and Appendix B already carries YARP's licence — the register
-         listed it from the blueprint, so this is the first reference to a pin
-         that was already there rather than a new dependency. -->
+    <!-- §10.2's routing; the pin is central (§4.4). -->
     <PackageReference Include="Yarp.ReverseProxy" />
   </ItemGroup>
 
   <ItemGroup>
-    <!-- The only reference. AddCommonWebDefaults brings observability, token
-         validation, the "authenticated" policy, problem details and the
-         liveness check (§13.2) — the gateway is a host like every other, and
-         §11.2's re-validation rule is why it validates tokens itself rather
-         than trusting an edge above it. -->
+    <!-- AddCommonWebDefaults (§13.2); the gateway validates tokens itself for §11.2's re-validation rule. -->
     <ProjectReference Include="..\..\BuildingBlocks\Common.Web\Common.Web.csproj" />
   </ItemGroup>
 
