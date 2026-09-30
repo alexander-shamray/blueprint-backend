@@ -1300,7 +1300,8 @@ class DescriptorReadTests(unittest.TestCase):
         self.assertTrue(any("notifications" in f and "no descriptor describes" in f for f in failures), failures)
 
     def test_a_choice_input_with_no_options_is_refused(self) -> None:
-        text = canary.WORKFLOW.read_text(encoding="utf-8").replace("        type: string\n", "        type: choice\n", 1)
+        text = canary.WORKFLOW.read_text(encoding="utf-8").replace(
+            "        type: string\n", "        type: choice\n", 1)
 
         _, failures = self._read(workflow=text)
 
