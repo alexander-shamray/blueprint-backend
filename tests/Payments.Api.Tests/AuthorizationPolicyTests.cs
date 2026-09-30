@@ -57,7 +57,7 @@ public class AuthorizationPolicyTests(HostSmokeTests.UnreachableInfrastructureFa
     [Fact]
     public void No_payments_endpoint_is_anonymous()
     {
-        // What Payments holds for an order is never public, so no endpoint is anonymous by design.
+        // What Payments holds for an order is never public.
         string[] names = ["GetPayment"];
 
         foreach (Endpoint endpoint in Endpoints.Where(e => names.Contains(Name(e))))
