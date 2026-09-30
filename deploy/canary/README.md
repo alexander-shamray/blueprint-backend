@@ -28,10 +28,43 @@ every chart and asserts what comes out.
 
 | File | What it is |
 |---|---|
-| `canary.json` | §15.5's ladder, the thresholds, and the workload map with the signals each workload is judged on |
-| `canary.py` | The weight arithmetic, the signals and their PromQL templates, the promote/rollback verdict, and the gate over `canary.json` |
+| `canary.json` | §15.5's ladder and the thresholds |
+| `deployables/` | One descriptor per deployable, which the section below owns |
+| `canary.py` | The weight arithmetic, the signals and their PromQL templates, the promote/rollback verdict, and the gate over `canary.json` and the descriptors |
 | `read_prometheus.py` | The one file that talks to anything. Runs `canary.py`'s queries for the signals a workload declares and writes what came back |
 | `test_canary.py` | The suite. It is the whole of the assurance the rollout has |
+
+## A deployable is one descriptor
+
+Every deployable is described once, by a JSON file under `deployables/` named
+for its Helm release: `deployables/catalog-api.json` is the release
+`catalog-api`. §15.3 states the rule; this is the schema, and what reads it:
+
+- `deploy.yml` holds a dispatch to `canary.py workloads`, and `realm.yml`'s
+  scheduled job loops over the same list;
+- `canary.py` plans, checks and judges each one;
+- `deploy/helm/smoke.sh` takes its cases from `canary.py smoke-cases`.
+
+None of them lists a deployable by hand, and check 8 and the suite hold the
+workflow and the smoke run to that. Adding a deployable to the deployment is
+its descriptor, its chart and the umbrella's dependency on that chart;
+`smoke.sh` and check 4 refuse any one of them without the others.
+
+| Field | What it is |
+|---|---|
+| `serviceName` | The entry assembly, which §13.2 makes the `service_name` every query selects on — not the chart's name, because a query spelled in the deployment's vocabulary matches no series and an empty result rolls every canary back |
+| `chart` | The directory under `deploy/helm` the release installs; one descriptor per chart |
+| `source` | The host's tree under `src/`, which `smoke.sh` holds the chart to |
+| `signals` | What the workload is judged on, from `canary.py`'s `SIGNALS` (ADR-047) |
+| `httpExemption`, `consumeExemption`, `sagaExemption` | The argument for a signal check 9 finds owed and the workload does not declare |
+| `smoke.migrator` | Whether the chart renders §7.4's migration Job |
+| `smoke.autoscaled` | Whether the chart runs an HPA or a fixed replica count (§15.3) |
+| `smoke.capabilities` | The credential-bearing capabilities the chart may turn on, in `smoke.sh`'s vocabulary; the library refuses each on every other chart, and `smoke.sh` holds the two to each other |
+| `smoke.overlay` | The `key=value` settings a render of this chart cannot do without and no other chart may carry, passed as `--set-string` |
+
+The `smoke` fields are declared rather than read from the chart's values,
+because a branch driven by the file it judges asserts nothing. Every value
+`smoke.sh` reads is one word, and check 4 refuses one that is not.
 
 ## What it asserts
 
@@ -44,8 +77,9 @@ every chart and asserts what comes out.
    `platform-alerts.yaml` rather than restated. A canary tuned looser than the
    alert promotes a release and then pages about it.
 4. Each workload's key is a Helm release name, its `serviceName` is an entry
-   assembly this solution builds, and its `chart` is a chart under
-   `deploy/helm`.
+   assembly this solution builds, its `chart` is a chart under `deploy/helm`
+   that no other descriptor names, its `source` holds that assembly's
+   project, and its `smoke` block is one `smoke.sh` can read.
 5. Every series the query templates read is vouched for: either a loaded alert
    reads it — and `deploy/observability/check.py` has already established
    that something publishes it — or it is an instrument of a meter
@@ -57,7 +91,9 @@ every chart and asserts what comes out.
 6. The parser found host assemblies at all, so check 4 cannot pass
    vacuously.
 7. Both of `deploy.yml`'s triggers cover every path in `SOURCE_INPUTS`.
-8. `deploy.yml`'s dispatch menu is exactly the plan's workload set.
+8. `deploy.yml` reads the descriptor list and lists no workload by hand, and
+   every deployable it can roll is one `smoke.sh` renders — read through
+   `canary.py smoke-cases`, with no chart listed by hand.
 9. Every workload declares at least one signal `canary.py` defines; and a
    service whose tree registers a MassTransit
    consumer declares `consume`, and one that registers a saga declares `saga`,
@@ -71,9 +107,10 @@ every chart and asserts what comes out.
     is derived from those routes, so a new probe route is excluded without an
     edit, and one the scan cannot read fails the plan — and refuses to render
     an `http` query — rather than counting as traffic again.
-11. `canary.json` holds the ladder, the tolerance, the thresholds and the
-    workloads, and nothing else: a plan carrying query text again is refused
-    rather than ignored beside the templates that run.
+11. `canary.json` holds the ladder, the tolerance and the thresholds, and
+    nothing else: a plan carrying query text again is refused rather than
+    ignored beside the templates that run, and one carrying workloads beside
+    the descriptors is refused as it loads.
 12. `deploy.yml` still hands each image's own tree to everything that reads
     `src/` — ADR-050's binding, and any piece of it can go missing while
     every command in the rollout still runs, every other check here still
@@ -82,8 +119,8 @@ every chart and asserts what comes out.
 ## What a workload is judged on
 
 [ADR-047](../../docs/backend-architecture/adr/ADR-047-the-canary-judges-each-workload-on-the-signals-it-receives.md)
-is the decision; this is where it lives. A workload declares `signals` in
-`canary.json`, and `read_prometheus.py` fetches those and no others. The
+is the decision; this is where it lives. A workload declares `signals` in its
+descriptor, and `read_prometheus.py` fetches those and no others. The
 signals and their thresholds are `canary.py`'s `SIGNALS`, and their queries
 are `queries()`, one template per signal and role, which the suite pins as
 golden strings:
