@@ -174,7 +174,7 @@ public sealed class PlaceOrderTests(ServiceFixture fixture) : IAsyncLifetime
     [Fact]
     public async Task A_malformed_request_is_a_400_before_the_domain_sees_it()
     {
-        // ValidationBehavior's half, translated by §10.5's handler; the domain's refusal would be a rule (§5.7).
+        // ValidationBehavior's half, translated by §10.5's handler.
         HttpClient client = Authenticated();
 
         HttpResponseMessage response = await client.PostAsJsonAsync(
