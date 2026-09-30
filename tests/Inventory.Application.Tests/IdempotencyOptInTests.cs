@@ -96,7 +96,7 @@ public class IdempotencyOptInTests
         // OperationName is the key's middle segment, so two commands sharing one share a keyspace (§8.5).
         string[] names = [.. Idempotent().Select(OperationNameOf)];
 
-        // The gate-coverage floor: with fewer than two idempotent commands the distinctness check cannot fail.
+        // With fewer than two idempotent commands the distinctness check cannot fail.
         names.ShouldBeEmpty(
             "This service opts no command into idempotency yet, so the check below is "
             + "vacuous. The day it does, this test fails — replace it with the ShouldNotBeEmpty "
