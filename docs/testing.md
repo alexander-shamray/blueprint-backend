@@ -290,9 +290,11 @@ every row names a project. Two things about it are easy to get wrong from
 inside a checkout:
 
 - **`*.TestSupport` is not a test project**
-  ([§4.1](backend-architecture/04-solution-structure.md)). It exists so that
-  two suites can share a fixture without referencing each other, and it holds
-  no `[Fact]`.
+  ([§4.1](backend-architecture/04-solution-structure.md)). A service's exists
+  so that two suites can share a fixture without referencing each other, and
+  `Common.TestSupport` is the body those fixtures derive from
+  ([ADR-056](backend-architecture/adr/ADR-056-a-services-fixture-derives-from-one-shared-body-under-tests.md)).
+  None holds a `[Fact]`.
 - **Ordering's handler tests live in `Ordering.Api.Tests`**, not in
   `Ordering.Application.Tests` where §12.1's row would put them: `ICurrentUser`
   is `HttpContextCurrentUser`, and a handler resolved in a bare scope has no
