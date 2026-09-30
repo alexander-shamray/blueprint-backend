@@ -22,7 +22,7 @@ public sealed class ProxiedRouteTests(StubDestination stub) : IClassFixture<Stub
         stub.ReceivedPaths.Last().ShouldBe("/v1/catalog/products");
     }
 
-    /// <summary>Reaching the stub shows <c>catalog-write</c> matched, stripped and admitted it (§10.2).</summary>
+    /// <summary>Reaching the stub shows <c>catalog-write</c> matched and admitted it (§10.2).</summary>
     [Fact]
     public async Task An_authenticated_post_reaches_catalog_write()
     {
