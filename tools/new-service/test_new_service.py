@@ -464,8 +464,6 @@ class GeneratedGuidanceIsTrue(unittest.TestCase):
 
         self.assertIn("app.UseAuthentication();", program)
         self.assertIn("app.UseAuthorization();", program)
-        # The commented example in the generated guidance keeps the name, so
-        # match on the executable form: a real call sits at the head of a line.
         self.assertNotIn("\n    .AddAuthorizationBuilder()", program)
         self.assertNotIn("AddPolicy(YankeePermissions", program)
 
