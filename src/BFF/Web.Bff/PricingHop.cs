@@ -10,7 +10,7 @@ public static class PricingHop
     public const string ResilienceOptionsName = $"{ClientName}-standard";
 
     /// <summary>Catalog's gRPC endpoint: plain inside the cluster (§10.1), on its HTTP/2-only port (§9.7).</summary>
-    /// <remarks>A literal, because a Service name does not vary between environments (§15.4).</remarks>
+    /// <remarks>A literal: the host is the Kubernetes Service name, which does not vary (§15.4).</remarks>
     public static readonly Uri Address = new("http://catalog-api:8081");
 
     /// <summary>§9.7's outermost bound for this hop, never left at its default.</summary>
