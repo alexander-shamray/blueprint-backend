@@ -67,7 +67,7 @@ internal sealed class RedisIdempotencyStore(
     private const int TokenLength = 32;
 
     // GET-compare-SET in one script, so a claim that expired cannot overwrite its successor's entry.
-    // KEEPTTL keeps the claim's own window, which therefore starts before §6.3's stamp (§8.5, ADR-039).
+    // KEEPTTL keeps the claim's own window, which therefore starts before §6.3's stamp (§8.5, ADR-038).
     private const string CompleteScript =
         """
         local current = redis.call('get', KEYS[1])
