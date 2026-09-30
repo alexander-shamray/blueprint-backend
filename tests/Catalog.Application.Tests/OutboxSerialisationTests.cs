@@ -41,7 +41,7 @@ public class OutboxSerialisationTests
     public void A_money_payload_ignores_members_a_later_version_added(string json)
     {
         // §9.2 lets a later version add a member, so its whole value is skipped: skipping one token would take a
-        // nested Amount for this one, which bites only when the unknown member comes first, hence the orderings.
+        // nested Amount for this one.
         using ServiceProvider provider = Registered();
 
         JsonSerializer
