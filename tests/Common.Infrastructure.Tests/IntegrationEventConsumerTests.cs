@@ -113,7 +113,7 @@ public class IntegrationEventConsumerTests
 
         (await harness.Consumed.Any<ProbeEvent>(TestContext.Current.CancellationToken)).ShouldBeTrue();
 
-        // One inbox row covers both handlers (§9.5), so both have run.
+        // One inbox row covers both handlers (§9.5).
         FirstHandler.Handled.ShouldBe([messageId]);
         SecondHandler.Handled.ShouldBe([messageId]);
     }
