@@ -112,7 +112,7 @@ public sealed class ServiceFixture : IAsyncLifetime
                 + $"(exit {result.ExitCode}). stdout: {result.Stdout} stderr: {result.Stderr}");
         }
 
-        // The mapped file, which is the text the broker imported.
+        // The build context's copy, the text the broker imported.
         static (string Configure, string Read) ImportedGrant()
         {
             string path = Path.Combine(BrokerContextPath(), "definitions.json");
