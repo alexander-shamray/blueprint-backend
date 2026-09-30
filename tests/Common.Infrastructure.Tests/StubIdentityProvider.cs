@@ -10,18 +10,7 @@ using Xunit;
 
 namespace Common.Infrastructure.Tests;
 
-/// <summary>
-/// A real HTTP server standing in for the identity provider: a discovery
-/// document and a token endpoint, and nothing else.
-/// </summary>
-/// <remarks>
-/// A server rather than a substituted <see cref="HttpMessageHandler"/>, because
-/// half of what is being tested is what <see cref="CachingTokenClient"/> does
-/// with a <i>document</i> — that it reads <c>token_endpoint</c> out of the
-/// discovery response rather than appending a Keycloak-shaped path to the
-/// authority. A substituted handler would have to be told the answer, which is
-/// the thing under test.
-/// </remarks>
+/// <summary>A real server with a discovery document and a token endpoint, since the document is under test.</summary>
 public sealed class StubIdentityProvider : IAsyncLifetime
 {
     private WebApplication? _app;
@@ -51,24 +40,10 @@ public sealed class StubIdentityProvider : IAsyncLifetime
     /// <summary>Answer a 200 whose <c>access_token</c> is the empty string.</summary>
     public bool BlankAccessToken { get; set; }
 
-    /// <summary>
-    /// Serve over TLS with a self-signed certificate, so <see cref="Authority"/>
-    /// is an <c>https</c> URL.
-    /// </summary>
-    /// <remarks>
-    /// The one thing a plain-HTTP stub cannot express is a <i>downgrade</i>, so
-    /// a provider that only ever spoke HTTP would leave that guard asserted in
-    /// prose and measured nowhere.
-    /// </remarks>
+    /// <summary>Serve over TLS, so a test can express a downgrade from an <c>https</c> authority.</summary>
     public bool UseHttps { get; set; }
 
-    /// <summary>
-    /// The <c>token_endpoint</c> to advertise, in place of this stub's own.
-    /// </summary>
-    /// <remarks>
-    /// The document is the only thing that says where the secret goes, which is
-    /// exactly why it is worth being able to make it say something hostile.
-    /// </remarks>
+    /// <summary>A <c>token_endpoint</c> to advertise in place of this stub's own, hostile if a test needs.</summary>
     public string? AdvertisedTokenEndpoint { get; set; }
 
     public async ValueTask InitializeAsync()
@@ -91,9 +66,7 @@ public sealed class StubIdentityProvider : IAsyncLifetime
 
         _app = builder.Build();
 
-        // The realm path is part of the authority, exactly as Keycloak's is —
-        // so a client that appended to a base address without a trailing slash
-        // would ask for /.well-known/... at the root and miss this.
+        // The realm path is part of the authority, as Keycloak's is, so a slashless base address misses it.
         _app.MapGet("/realms/test/.well-known/openid-configuration", () =>
         {
             Discoveries++;
@@ -138,14 +111,7 @@ public sealed class StubIdentityProvider : IAsyncLifetime
         _certificate?.Dispose();
     }
 
-    /// <summary>
-    /// A throwaway certificate for loopback, generated in process.
-    /// </summary>
-    /// <remarks>
-    /// Generated rather than taken from <c>dotnet dev-certs</c>: the suite must
-    /// pass on a runner where that has never been run, and a test that needs a
-    /// machine prepared by hand is a test that is skipped in CI.
-    /// </remarks>
+    /// <summary>A loopback certificate generated in process, so no runner needs <c>dotnet dev-certs</c>.</summary>
     private static X509Certificate2 SelfSigned()
     {
         using RSA key = RSA.Create(2048);
@@ -159,9 +125,7 @@ public sealed class StubIdentityProvider : IAsyncLifetime
             DateTimeOffset.UtcNow.AddDays(-1),
             DateTimeOffset.UtcNow.AddDays(1));
 
-        // Windows' SChannel will not serve a certificate whose key is
-        // ephemeral, so it makes a round trip through PKCS#12 first. On Linux
-        // this is a no-op that costs nothing.
+        // Windows' SChannel will not serve an ephemeral key, hence the PFX round trip.
         return X509CertificateLoader.LoadPkcs12(generated.Export(X509ContentType.Pfx), password: null);
     }
 }

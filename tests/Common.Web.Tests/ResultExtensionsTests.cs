@@ -14,9 +14,7 @@ public class ResultExtensionsTests
     [InlineData(ErrorType.Unavailable, StatusCodes.Status503ServiceUnavailable)]
     public void An_error_type_selects_its_status(ErrorType type, int expected)
     {
-        // §10.5's table, executed rather than remembered. Rule is 422 and not
-        // 409: the concurrency case already owns 409, and a domain refusal is
-        // not a race.
+        // §10.5's table: Rule is 422, since the concurrency case owns 409.
         IResult result = Result.Failure(ErrorOf(type)).ToHttpResult();
 
         result.ShouldBeOfType<ProblemHttpResult>().StatusCode.ShouldBe(expected);
@@ -36,9 +34,7 @@ public class ResultExtensionsTests
     [Fact]
     public void A_failure_carries_its_code_as_a_problem_extension()
     {
-        // Code is the stable identifier a client switches on, so it goes in an
-        // extension member rather than overwriting RFC 9457's title — which
-        // stays the status phrase HTTP already defines.
+        // Code goes in an extension member, leaving RFC 9457's title as the status phrase.
         IResult result = Result.Failure(ErrorOf(ErrorType.Rule)).ToHttpResult();
 
         result.ShouldBeOfType<ProblemHttpResult>()
@@ -48,9 +44,7 @@ public class ResultExtensionsTests
     [Fact]
     public void A_failure_carries_its_description_as_the_detail()
     {
-        // Description is written for a person and is the half of an Error that
-        // may vary — the count in `order.products_unavailable` lives here and
-        // never in the code, which is a metric dimension (§9.8).
+        // Description may vary, unlike the code, which is a metric dimension (§9.8).
         IResult result = Result.Failure(ErrorOf(ErrorType.Rule)).ToHttpResult();
 
         result.ShouldBeOfType<ProblemHttpResult>()
@@ -78,10 +72,7 @@ public class ResultExtensionsTests
     [Fact]
     public void A_value_result_selects_the_overload_that_returns_its_value()
     {
-        // Result<T> derives from Result (§6.3), so both overloads are
-        // applicable and only the identity conversion makes the generic one
-        // win. A value result reaching the void overload would 204 away its
-        // payload silently, which no status code would reveal.
+        // Result<T> derives from Result (§6.3), so only the identity conversion picks the generic overload.
         Result<Guid> result = Result.Success(Guid.CreateVersion7());
 
         result.ToHttpResult().ShouldBeOfType<Ok<Guid>>();

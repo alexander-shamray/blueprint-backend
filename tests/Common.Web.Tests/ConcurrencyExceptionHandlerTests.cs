@@ -12,19 +12,7 @@ using Xunit;
 
 namespace Common.Web.Tests;
 
-/// <summary>
-/// §10.5's 409 row, on the wire, built the same way
-/// <c>ValidationExceptionHandlerTests</c> builds the 400's: the §4.2 pipeline
-/// shape with the exception handler outermost, rather than
-/// <see cref="TestPipeline"/>, which deliberately has no exception handler.
-/// </summary>
-/// <remarks>
-/// §7.3 promised this translation from the beginning and nothing performed it
-/// until PR-18. The gap was invisible for as long as it was: a conflict needs
-/// a mapped <c>rowversion</c> on an aggregate a request can mutate, and
-/// Ordering's <c>Order</c> is the first of those in the solution — Catalog
-/// maps none, so no test and no running host could have produced one.
-/// </remarks>
+/// <summary>§10.5's 409 row on the wire, in §4.2's pipeline shape with the exception handler outermost.</summary>
 public class ConcurrencyExceptionHandlerTests
 {
     [Fact]
@@ -47,22 +35,13 @@ public class ConcurrencyExceptionHandlerTests
 
         HttpResponseMessage response = await client.GetAsync("/orders/cancel", TestContext.Current.CancellationToken);
 
-        // The status assertion is not redundant with the test above, and
-        // leaving it out made this test vacuous — observed, not supposed. The
-        // 500 fallback writes through the same IProblemDetailsService, so it
-        // carries the same instance, traceId and correlationId; with the
-        // handler unregistered every assertion below still passed against the
-        // 500. A test about the 409's body has to establish that the response
-        // is the 409.
+        // The 500 fallback carries the same fields, so only the status shows this handler answered.
         response.StatusCode.ShouldBe(HttpStatusCode.Conflict);
 
         using JsonDocument body = JsonDocument.Parse(
             await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
 
-        // §10.5 opens by promising one error shape regardless of which service
-        // produced it, and a status written around IProblemDetailsService
-        // loses all three of these silently — which is how 401 and 403 broke
-        // the same promise for two releases (§10.5's own table says so).
+        // §10.5's one error shape, which a status written around IProblemDetailsService loses.
         body.RootElement.GetProperty("instance").GetString().ShouldBe("GET /orders/cancel");
         body.RootElement.TryGetProperty("traceId", out _).ShouldBeTrue();
         body.RootElement.TryGetProperty("correlationId", out _).ShouldBeTrue();
@@ -79,9 +58,7 @@ public class ConcurrencyExceptionHandlerTests
         using JsonDocument body = JsonDocument.Parse(
             await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
 
-        // The framework's message names the entity and its version, both of
-        // which are storage details (§7.3). Echoing it would put the schema on
-        // the wire for a status whose whole content is "re-read and retry".
+        // The framework's message names storage details (§7.3).
         string detail = body.RootElement.GetProperty("detail").GetString()!;
         detail.ShouldNotContain("RowVersion");
         detail.ShouldNotContain("42");
@@ -90,9 +67,7 @@ public class ConcurrencyExceptionHandlerTests
     [Fact]
     public async Task A_client_that_cannot_accept_problem_json_still_gets_the_409()
     {
-        // TryWriteAsync declines when content negotiation fails, and echoing
-        // that false would report the exception unhandled — turning a race the
-        // client can retry into a 500 over a request header.
+        // Echoing TryWriteAsync's false would turn a retryable race into a 500.
         using IHost host = await StartThrowingAsync(new DbUpdateConcurrencyException("stale"));
         using HttpClient client = host.GetTestClient();
         client.DefaultRequestHeaders.Accept.ParseAdd("application/xml");
@@ -105,10 +80,7 @@ public class ConcurrencyExceptionHandlerTests
     [Fact]
     public async Task A_plain_update_exception_is_not_a_conflict()
     {
-        // DbUpdateException is the base type and covers a violated constraint,
-        // which is not a race and must not tell the client to retry — the
-        // second attempt would fail identically. Pattern-matching the derived
-        // type is what keeps them apart, and `is DbUpdateException` would not.
+        // The base DbUpdateException also covers a violated constraint, which a retry cannot fix.
         using IHost host = await StartThrowingAsync(new DbUpdateException("constraint"));
         using HttpClient client = host.GetTestClient();
 

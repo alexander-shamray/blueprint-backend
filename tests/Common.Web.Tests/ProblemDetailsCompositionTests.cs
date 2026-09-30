@@ -9,12 +9,7 @@ using Xunit;
 
 namespace Common.Web.Tests;
 
-/// <summary>
-/// The three pieces together. Each is asserted alone elsewhere; what only a
-/// running pipeline can show is that the customisation of §10.5 reaches the
-/// body <c>ToHttpResult</c> writes, and that the correlation ID it reads back
-/// is the one §10.4's middleware put on the request.
-/// </summary>
+/// <summary>§10.5's customisation on the body <c>ToHttpResult</c> writes, with §10.4's correlation ID.</summary>
 public class ProblemDetailsCompositionTests
 {
     private static readonly Error Refused =
@@ -29,8 +24,7 @@ public class ProblemDetailsCompositionTests
 
         HttpResponseMessage response = await client.GetAsync("/orders/cancel", TestContext.Current.CancellationToken);
 
-        // Not application/json. One error shape across every service is only
-        // useful if a client can recognise it by content type (§10.5).
+        // Not application/json: a client recognises §10.5's one error shape by content type.
         response.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
         response.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
     }
@@ -50,8 +44,7 @@ public class ProblemDetailsCompositionTests
     {
         using JsonDocument body = await FailingRequestAsync();
 
-        // A client switching on title gets HTTP's vocabulary, not this
-        // service's — which is why the code went into an extension member.
+        // A client switching on title gets HTTP's vocabulary, not this service's.
         body.RootElement.GetProperty("title").GetString().ShouldBe("Unprocessable Entity");
     }
 
@@ -72,8 +65,7 @@ public class ProblemDetailsCompositionTests
     {
         using JsonDocument body = await FailingRequestAsync();
 
-        // The path, not the type URI: two requests to the same endpoint fail
-        // for different reasons, and an incident starts from the one that did.
+        // The path, not the type URI, since an incident starts from the request that failed.
         body.RootElement.GetProperty("instance").GetString().ShouldBe("GET /orders/cancel");
     }
 

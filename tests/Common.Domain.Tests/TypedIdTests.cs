@@ -3,13 +3,7 @@ using Xunit;
 
 namespace Common.Domain.Tests;
 
-/// <summary>
-/// §5.2's pattern has no base type and no interface — it is a shape, and these
-/// tests pin the three properties every identifier written to it must have.
-/// `Common.Domain` ships no type for them to run against, which is the point:
-/// the cost of the pattern is that each service restates it, and the benefit is
-/// that `GetOrder(customerId)` does not compile.
-/// </summary>
+/// <summary>§5.2's pattern is a shape with no base type, so these tests run against <see cref="TestId"/>.</summary>
 public class TypedIdTests
 {
     [Fact]
@@ -17,9 +11,6 @@ public class TypedIdTests
     {
         var id = TestId.New();
 
-        // v7 rather than v4 — the factory's one observable commitment. The
-        // embedded timestamp does not make the key sequential in SQL Server
-        // (§5.2's trap), and nothing here claims otherwise.
         id.Value.Version.ShouldBe(7);
     }
 
@@ -63,9 +54,7 @@ public class TypedIdTests
         var id = new TestId(value);
         var other = new OtherTestId(value);
 
-        // The compiler already refuses `TestId x = other;` — this asserts the
-        // runtime half, so a future conversion operator cannot quietly make the
-        // two the same thing.
+        // The compiler refuses the assignment; this is the runtime half, against a future conversion operator.
         id.Equals(other).ShouldBeFalse();
     }
 }

@@ -8,11 +8,7 @@ using Xunit;
 
 namespace Common.Infrastructure.Tests;
 
-/// <summary>
-/// The lock's guards and call shapes, with Redis substituted — what reaches
-/// the server, and what must not. Whether the server honours NX and expiry
-/// is <c>DistributedLockRedisTests</c>' half, against the real thing.
-/// </summary>
+/// <summary>The lock's guards and call shapes against a substituted Redis.</summary>
 public sealed class DistributedLockTests
 {
     private readonly IConnectionMultiplexer _redis = Substitute.For<IConnectionMultiplexer>();
@@ -22,11 +18,7 @@ public sealed class DistributedLockTests
     {
         _redis.GetDatabase().Returns(_database);
 
-        // Resolved through the real registration path — the implementation is
-        // internal, and AddRedisConnections is how a service reaches it. The
-        // substitute is keyed in afterwards: for keyed services the last
-        // registration wins, so the factory talks to this test's database
-        // and the real multiplexer factory is never invoked.
+        // The real registration, then the substitute keyed in after it, since the last keyed registration wins.
         ServiceCollection services = new();
         services.AddSingleton<IHostEnvironment>(new TestEnvironment("catalog"));
         services.AddRedisConnections(AddRedisConnectionsTests.Configuration());
@@ -92,9 +84,7 @@ public sealed class DistributedLockTests
             TimeSpan.FromSeconds(30),
             TestContext.Current.CancellationToken))!;
 
-        // A transient failure propagates — and must not consume the handle:
-        // a "released" state after a throw makes every later attempt a
-        // successful no-op, and the lock stands until its TTL.
+        // A transient failure propagates without consuming the handle, so a later release still runs.
         await Should.ThrowAsync<RedisConnectionException>(async () => await held.DisposeAsync());
         await held.DisposeAsync();
 

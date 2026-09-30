@@ -4,10 +4,7 @@ using Xunit;
 
 namespace Common.Application.Tests;
 
-/// <summary>
-/// Registration order is pipeline order (§6.3), and a pipeline registered out
-/// of order or not at all still runs the handler without complaint.
-/// </summary>
+/// <summary>Registration order is pipeline order (§6.3), and a misordered pipeline still runs.</summary>
 public class PipelineOrderingTests
 {
     [Fact]
@@ -42,9 +39,7 @@ public class PipelineOrderingTests
     [Fact]
     public async Task Behaviours_run_in_the_registered_order_and_not_in_reflection_order()
     {
-        // The same three behaviours, registered the other way round. Without
-        // this arm the test above passes on a dispatcher that happens to run
-        // them in whatever order the container returned.
+        // Reversed, so a dispatcher that ignored registration order cannot pass both.
         using ServiceProvider provider = TestContainer.Build(services =>
         {
             services.AddScoped(typeof(IPipelineBehavior<,>), typeof(ThirdBehavior<,>));
@@ -115,11 +110,7 @@ public class PipelineOrderingTests
     [Fact]
     public async Task A_behaviour_constrained_to_commands_is_skipped_for_a_query()
     {
-        // The skipping is a container feature, not a language one: constraints
-        // on open generic registrations have been honoured since .NET 7, and on
-        // an older container the same registration throws when the first query
-        // resolves. §6.3 leans on it for TransactionBehavior and
-        // IdempotencyBehavior, so it is asserted rather than trusted.
+        // A container feature §6.3 leans on for its command-only behaviours, so asserted rather than trusted.
         using ServiceProvider provider = TestContainer.Build(services =>
         {
             services.AddScoped(typeof(IPipelineBehavior<,>), typeof(FirstBehavior<,>));

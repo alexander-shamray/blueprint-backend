@@ -11,10 +11,7 @@ namespace Common.Web.Tests;
 
 public class SensitiveDataRedactorTests
 {
-    // CA1848 is enforced repo-wide (ADR-019) and does not exempt test
-    // projects, so the template goes through LoggerMessage.Define exactly as
-    // production logging does. §13.4's point survives intact: the attribute
-    // keys still come from a message template, read through ILogger.
+    // LoggerMessage.Define, because CA1848 binds test projects too (ADR-019).
     private static readonly Action<ILogger, string, string, Exception?> Login =
         LoggerMessage.Define<string, string>(
             LogLevel.Information,
@@ -37,15 +34,7 @@ public class SensitiveDataRedactorTests
     {
         List<LogRecord> exported = [];
 
-        // Built exactly as AddObservability builds it (§13.2) — ILoggingBuilder,
-        // the same extension, and IncludeFormattedMessage set the same way — so
-        // the test covers the seam the host uses. Not the Logs Bridge API: that
-        // is behind an experimental diagnostic and is not how any host here
-        // produces a record.
-        //
-        // IncludeFormattedMessage is not decoration. With it set the exporter
-        // sends FormattedMessage as the record's body, so a test that leaves it
-        // off asserts against a pipeline shape no host runs.
+        // Built as AddObservability builds it (§13.2), IncludeFormattedMessage included, so this is the host's seam.
         using (ILoggerFactory factory = LoggerFactory.Create(b =>
             b.AddOpenTelemetry(o =>
             {
@@ -71,38 +60,27 @@ public class SensitiveDataRedactorTests
 
         attributes.Single(a => a.Key == "Password").Value.ShouldBe("[redacted]");
 
-        // The other half, and the one that catches a deny-list grown careless:
-        // everything not on it survives intact.
+        // Everything not on the deny list survives intact.
         attributes.Single(a => a.Key == "User").Value.ShouldBe("ada");
     }
 
     [Fact]
     public void A_redacted_record_does_not_export_the_rendered_secret()
     {
-        // The attribute redaction above is cosmetic without this one.
-        // AddObservability sets IncludeFormattedMessage (§13.2), and the OTLP
-        // exporter then uses FormattedMessage as the exported body — so the
-        // fully substituted "Login for ada with hunter2" travels beside a
-        // Password attribute reading "[redacted]", and it is the rendered
-        // string that gets indexed and searched.
+        // The exporter sends FormattedMessage as the body (§13.2), so the rendered secret must go too.
         LogRecord record = EmitRecord(logger => Login(logger, "ada", "hunter2", null));
 
         record.FormattedMessage.ShouldNotBeNull();
         record.FormattedMessage.ShouldNotContain("hunter2");
 
-        // Falling back to the template keeps the record readable. The safe
-        // values are still on the record as attributes, so nothing a reader
-        // needs is lost — only the substitution is.
+        // The template keeps the record readable, and the safe values stay as attributes.
         record.FormattedMessage.ShouldBe("Login for {User} with {Password}");
     }
 
     [Fact]
     public void A_record_with_nothing_sensitive_keeps_its_formatted_message()
     {
-        // The control, and the one that matters most: the fix above rewrites
-        // the message only when something was actually redacted. Without this
-        // assertion a processor that rewrote unconditionally would pass, and
-        // every log line on the platform would silently lose its values.
+        // The control: a processor that rewrote every message would pass the test above.
         LogRecord record = EmitRecord(logger => Plain(logger, "ada", null));
 
         record.FormattedMessage.ShouldBe("Customer ada signed in");
@@ -111,11 +89,7 @@ public class SensitiveDataRedactorTests
     [Fact]
     public void Matching_is_by_substring_and_ignores_case()
     {
-        // ILogger.Log with an explicit state rather than a template, because
-        // CA1727 requires PascalCase placeholders and `card_number` — the exact
-        // key the deny list carries an entry for — cannot be written as one.
-        // The state is what the processor actually sees, so this reaches the
-        // same seam by the only route the analyser leaves open.
+        // An explicit state, because CA1727 forbids `card_number` as a placeholder.
         KeyValuePair<string, object?>[] state =
         [
             new("NewPassword", "a"),
@@ -136,14 +110,10 @@ public class SensitiveDataRedactorTests
     [Fact]
     public void A_connection_string_is_redacted_whatever_its_key_is_called()
     {
-        // The value half. No term in the vocabulary is a substring of "Dsn",
-        // so the key check says nothing here — and this is the shape of the
-        // diagnostic somebody writes next to one of the four call sites that
-        // throw naming their connection string.
+        // The value half: no term in the vocabulary is a substring of "Dsn".
         KeyValuePair<string, object?>[] state =
         [
-            // Spaced separator, which ADO.NET accepts and a literal
-            // "password=" check does not see.
+            // Spaced separator, which ADO.NET accepts and a literal "password=" check does not see.
             new("Dsn", "Server=sql,1433;Database=Catalog;User Id=sa;Password = hunter2"),
             new("Customer", "ada")
         ];
@@ -158,13 +128,7 @@ public class SensitiveDataRedactorTests
     [Fact]
     public void The_template_is_not_redacted_by_its_own_text()
     {
-        // {OriginalFormat} is exempt from the value check, and the exemption is
-        // load-bearing rather than tidy: the template is the fallback the
-        // rewrite below depends on, so a template whose own words match a value
-        // shape would take the record's whole message with it.
-        //
-        // The template here contains "password=" and no argument does. Nothing
-        // is sensitive, so the record must come through untouched.
+        // {OriginalFormat} is exempt from the value check, since the template is the rewrite's fallback.
         KeyValuePair<string, object?>[] state =
         [
             new("Host", "sql"),
@@ -187,9 +151,7 @@ public class SensitiveDataRedactorTests
     [Fact]
     public void A_record_with_no_attributes_at_all_is_left_alone()
     {
-        // The guard clause. Reachable through ILogger with a null state, and
-        // worth pinning because the loop below it dereferences Attributes
-        // twice per record on every request.
+        // The guard clause, reachable through ILogger with a null state.
         List<LogRecord> exported = [];
 
         using (ILoggerFactory factory = LoggerFactory.Create(b =>
@@ -206,18 +168,7 @@ public class SensitiveDataRedactorTests
         exported.Single().Attributes.ShouldBeNull();
     }
 
-    // Pins the `scrubbed ??=` fast path, which exists because this runs on
-    // every log record on every request. Nothing else would catch its removal
-    // — the redaction tests above pass whether or not it copies.
-    //
-    // Measured either side of the redactor by two capturing processors, with
-    // NO exporter in the pipeline. AddInMemoryExporter cannot be used for an
-    // identity assertion: its export path calls LogRecord.Copy(), which
-    // unconditionally reallocates the attribute list as the SDK's defence
-    // against record pooling. Verified by decompiling
-    // OpenTelemetry.Exporter.InMemory 1.17.0, after an earlier version of this
-    // test failed against it for that reason and nothing to do with the code
-    // under test.
+    // Capturing processors either side, with no exporter, because the in-memory exporter copies every record.
     private static (object? Before, object? After) AttributesEitherSideOf(Action<ILogger> write)
     {
         object? before = null;
@@ -243,16 +194,14 @@ public class SensitiveDataRedactorTests
         (object? before, object? after) =
             AttributesEitherSideOf(logger => Plain(logger, "ada", null));
 
-        // Same instance, not merely an equal one: the processor returned
-        // without allocating.
+        // Same instance, not merely an equal one: the processor did not allocate.
         after.ShouldBeSameAs(before);
     }
 
     [Fact]
     public void A_record_with_something_sensitive_is_copied()
     {
-        // The control. Without it the test above passes against a redactor
-        // that never copies anything — including one that never redacts.
+        // The control, without which a redactor that never redacts passes the test above.
         (object? before, object? after) =
             AttributesEitherSideOf(logger => Login(logger, "ada", "hunter2", null));
 
@@ -262,10 +211,7 @@ public class SensitiveDataRedactorTests
     [Fact]
     public void A_state_with_no_template_loses_its_message_rather_than_re_exporting_it()
     {
-        // Without {OriginalFormat} OpenTelemetry fills Body with the
-        // formatter's own output, not a template — so the rendered secret is
-        // sitting in Body, and falling back to it would re-export exactly what
-        // the attribute scrub removed. Measured against 1.17.
+        // Without {OriginalFormat} the SDK fills Body with rendered output, so Body is no safe fallback.
         KeyValuePair<string, object?>[] state = [new("Password", "hunter2")];
 
         LogRecord record = EmitRecord(logger =>
@@ -278,10 +224,7 @@ public class SensitiveDataRedactorTests
     [Fact]
     public void An_exception_repeating_a_redacted_value_is_dropped()
     {
-        // OTLP serialises Exception separately from Attributes and
-        // FormattedMessage, as exception.message and exception.stacktrace, so
-        // scrubbing those two and leaving the exception alone ships the secret
-        // through a third channel.
+        // OTLP serialises the exception as a third channel beside Attributes and FormattedMessage.
         LogRecord record = EmitRecord(logger =>
             Failed(logger, "hunter2", new InvalidOperationException("auth rejected token hunter2")));
 
@@ -292,10 +235,7 @@ public class SensitiveDataRedactorTests
     [Fact]
     public void An_exception_that_reveals_nothing_is_kept()
     {
-        // The control, and the reason this is narrower than "drop the
-        // exception whenever anything was redacted": a stack trace is what an
-        // operator needs most on the error path, and a record that merely has
-        // a Password attribute beside an unrelated failure must keep it.
+        // The control: an unrelated failure keeps its stack trace beside a redacted attribute.
         InvalidOperationException failure = new("connection reset by peer");
 
         LogRecord record = EmitRecord(logger => Failed(logger, "hunter2", failure));
@@ -307,12 +247,7 @@ public class SensitiveDataRedactorTests
     [Fact]
     public void No_other_logging_provider_survives_to_see_the_rendered_secret()
     {
-        // The redactor only ever sees records inside the OpenTelemetry
-        // pipeline, so a second provider would format the original state
-        // itself and ship the secret. AddObservability clears providers for
-        // exactly this reason (§13.4); this stands in for the Console, Debug
-        // and EventSource providers WebApplication.CreateBuilder installs
-        // before a host reaches AddCommonWebDefaults (§4.2).
+        // A provider outside the pipeline would ship the secret, so AddObservability clears them (§13.4).
         HostApplicationBuilder builder = TelemetryHost.Builder();
         CapturingProvider console = new();
         builder.Logging.AddProvider(console);

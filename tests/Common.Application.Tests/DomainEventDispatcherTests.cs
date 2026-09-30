@@ -5,11 +5,7 @@ using Xunit;
 
 namespace Common.Application.Tests;
 
-/// <summary>
-/// §7.5's flow, with the two lanes told apart. The dispatcher stages rows and
-/// runs no handler (ADR-018), so everything below is an assertion about what
-/// reached the publisher and nothing is an assertion about a side effect.
-/// </summary>
+/// <summary>§7.5's two lanes, asserted at the publisher, since the dispatcher runs no handler (ADR-018).</summary>
 public class DomainEventDispatcherTests
 {
     private static readonly DateTimeOffset Now = new(2026, 8, 11, 0, 0, 0, TimeSpan.Zero);
@@ -31,8 +27,7 @@ public class DomainEventDispatcherTests
 
         await harness.DispatchAsync();
 
-        // The contract, not the domain event — §9.3's whole point, and the
-        // reason the two types have different names.
+        // The contract, not the domain event (§9.3).
         harness.Publisher.Staged
             .ShouldContain(s => s.Lane == OutboxLane.Broker && s.Message is MappedContract);
     }
@@ -44,9 +39,6 @@ public class DomainEventDispatcherTests
 
         await harness.DispatchAsync();
 
-        // MappedProjection is an IProjectionHandler<Mapped> in this assembly,
-        // so the §6.2 scan registers it and IProjectionRegistry finds it. The
-        // domain event itself is what the Local lane carries (§7.5).
         harness.Publisher.Staged
             .ShouldContain(s => s.Lane == OutboxLane.Local && s.Message is Mapped);
     }
@@ -58,10 +50,7 @@ public class DomainEventDispatcherTests
 
         await harness.DispatchAsync();
 
-        // Not merely "no row for Unmapped" — no row at all. It is in neither
-        // the allow-list nor the projection registry, which is what most
-        // domain events are, and staging it would put a row in the table that
-        // §9.4 throws on when it finds no handler for it.
+        // No row at all, since §9.4 throws on a row it finds no handler for.
         harness.Publisher.Staged.ShouldBeEmpty();
     }
 
@@ -73,9 +62,7 @@ public class DomainEventDispatcherTests
             services => services.AddSingleton<IIntegrationEventMapper>(
                 new FakeIntegrationEventMapper { Throws = true }));
 
-        // §9.3's second row: someone declared this event must be published, so
-        // if it cannot be, the state change must not stand. The exception
-        // leaves TransactionBehavior's delegate, so nothing commits.
+        // §9.3's table: a registered mapper that throws fails the command.
         await Should.ThrowAsync<InvalidOperationException>(harness.DispatchAsync);
 
         harness.Publisher.Staged.ShouldBeEmpty();
@@ -92,17 +79,11 @@ public class DomainEventDispatcherTests
 
         await harness.DispatchAsync();
 
-        // Both lanes read one collection. A dispatcher that asked per lane
-        // would stage the Broker rows and then find nothing for Local, because
-        // the real collector clears as it collects (§7.5).
+        // Both lanes read one collection, because the real collector clears as it collects (§7.5).
         collector.Collections.ShouldBe(1);
     }
 
-    /// <summary>
-    /// A real container, because <see cref="IProjectionRegistry"/> answers by
-    /// asking one — and a scope, because resolving the registry from the root
-    /// provider throws (§7.5).
-    /// </summary>
+    /// <summary>A real container and a scope, since <see cref="IProjectionRegistry"/> asks one (§7.5).</summary>
     private sealed class Harness : IDisposable
     {
         private ServiceProvider _provider = null!;
@@ -123,9 +104,7 @@ public class DomainEventDispatcherTests
                 services.AddSingleton<IIntegrationEventMapper, FakeIntegrationEventMapper>();
                 services.AddSingleton<IIntegrationEventPublisher>(harness.Publisher);
 
-                // Last, so a test that wants a different double replaces the
-                // default rather than racing it — GetRequiredService takes the
-                // last registration of a service type.
+                // Last, because GetRequiredService takes a service type's last registration.
                 configure?.Invoke(services);
             });
 

@@ -5,26 +5,12 @@ using Xunit;
 
 namespace Common.Web.Tests;
 
-/// <summary>
-/// §11.4's port over a principal. The subject rule rests entirely on this
-/// type: a handler asks it "whose record is this" instead of reading a field
-/// off the request, so every one of its answers is a security decision.
-/// </summary>
-/// <remarks>
-/// Over <see cref="IHttpContextAccessor"/> directly rather than through a
-/// server, because what is under test is how a principal is read and not how
-/// one is issued — the second is <c>TestAuthHandler</c>'s job and
-/// <c>Catalog.Api.Tests</c> exercises it over the wire. The claims here are
-/// spelt with the same types the JWT handler produces (§11.3), which is what
-/// keeps the two ends of that agreement together.
-/// </remarks>
+/// <summary>§11.4's port over a principal, on which the subject rule rests entirely.</summary>
 public class HttpContextCurrentUserTests
 {
     private static HttpContextCurrentUser For(params Claim[] claims)
     {
-        // An identity constructed with an authentication type is authenticated;
-        // one without is not, and that is the distinction the anonymous case
-        // below turns on rather than an absent context.
+        // An identity with an authentication type is authenticated; one without is not.
         DefaultHttpContext context = new()
         {
             User = new ClaimsPrincipal(new ClaimsIdentity(claims, authenticationType: "Test"))
@@ -47,11 +33,7 @@ public class HttpContextCurrentUserTests
     [Fact]
     public void A_display_name_is_not_the_subject()
     {
-        // §11.3 sets NameClaimType to preferred_username, and reading
-        // Identity.Name as the key to a record would work in every test and
-        // break the first time somebody changed their username. The subject
-        // claim is the only one this type will answer with, so a principal
-        // carrying a name and no NameIdentifier has no subject at all.
+        // §11.3 sets NameClaimType to preferred_username; only NameIdentifier is a subject.
         HttpContextCurrentUser user = For(new Claim("preferred_username", "ada"));
 
         Should.Throw<InvalidOperationException>(() => user.Id);
@@ -60,12 +42,7 @@ public class HttpContextCurrentUserTests
     [Fact]
     public void No_principal_is_anonymous_and_has_no_subject()
     {
-        // The message-borne path (§9.4): a handler reached by a consumer has no
-        // HttpContext at all. It throws rather than answering Guid.Empty,
-        // because an empty subject compares unequal to every real one — so a
-        // forgotten guard becomes a refusal nobody can explain instead of an
-        // exception naming the mistake. The direction a mistake should go is
-        // loud, not quiet.
+        // The message-borne path (§9.4) throws rather than answer Guid.Empty, so a missed guard is loud.
         HttpContextCurrentUser user = new(new HttpContextAccessor());
 
         user.IsAuthenticated.ShouldBeFalse();
@@ -75,10 +52,7 @@ public class HttpContextCurrentUserTests
     [Fact]
     public void An_unauthenticated_identity_is_not_a_caller()
     {
-        // The other half, and the one that is easy to miss: a context exists
-        // and User is non-null, but nothing authenticated it. ASP.NET Core puts
-        // exactly this on every anonymous request, so a check reading
-        // "User is not null" would treat every caller as signed in.
+        // ASP.NET Core puts a non-null, unauthenticated User on every anonymous request.
         DefaultHttpContext context = new();
 
         HttpContextCurrentUser user = new(new HttpContextAccessor { HttpContext = context });
@@ -89,13 +63,7 @@ public class HttpContextCurrentUserTests
     [Fact]
     public void An_unauthenticated_identity_carrying_claims_answers_none_of_them()
     {
-        // The sharp version of the test above, and the one that fails if any
-        // member reads HttpContext.User directly. Claims and authentication are
-        // independent: a ClaimsIdentity with no authentication type holds
-        // whatever claims it was built with, quite happily, and IsAuthenticated
-        // is still false. So a member that reads the claim without asking the
-        // question answers an identity the interface says is not a caller —
-        // which is a permission granted to nobody in particular.
+        // An unauthenticated identity can hold any claims, so no member may read one unasked.
         DefaultHttpContext context = new()
         {
             User = new ClaimsPrincipal(
@@ -116,13 +84,7 @@ public class HttpContextCurrentUserTests
     [Fact]
     public void A_second_unauthenticated_identity_contributes_nothing()
     {
-        // ClaimsPrincipal.Identity is the *primary* identity; FindFirst and
-        // HasClaim search every identity the principal holds. So a check that
-        // tests the principal and then reads its claims is testing one thing
-        // and reading another — and a host authenticating over two schemes
-        // produces exactly this shape. The authenticated identity here carries
-        // the subject and no permission; the unauthenticated one carries the
-        // permission, and must not be able to grant it.
+        // Identity is the primary one, but FindFirst searches every identity the principal holds.
         Guid subject = Guid.CreateVersion7();
 
         ClaimsPrincipal principal = new(
@@ -145,12 +107,7 @@ public class HttpContextCurrentUserTests
     [Fact]
     public void A_permission_is_the_claim_the_policies_require()
     {
-        // The same claim type AuthorizationPolicyExtensions.RequirePermission
-        // registers, which is what stops an endpoint policy and a
-        // resource-level check disagreeing about what a permission is (§11.4).
-        // The negative half is the one that matters: a HasPermission that
-        // answered true for everything would pass every ownership test in the
-        // platform and grant every override in it.
+        // The claim type RequirePermission registers, so policy and resource check agree (§11.4).
         HttpContextCurrentUser user = For(
             new Claim(ClaimTypes.NameIdentifier, Guid.CreateVersion7().ToString()),
             new Claim(PermissionClaim.Type, "orders:admin"));
@@ -158,20 +115,14 @@ public class HttpContextCurrentUserTests
         user.HasPermission("orders:admin").ShouldBeTrue();
         user.HasPermission("orders:cancel").ShouldBeFalse();
 
-        // Values are matched whole. A prefix match would make "orders:admin"
-        // satisfy a check for "orders:ad", and a claim holding a
-        // space-separated list would satisfy checks it never granted.
+        // Values are matched whole, never by prefix or as a list.
         user.HasPermission("orders").ShouldBeFalse();
     }
 
     [Fact]
     public void A_permission_in_another_claim_type_grants_nothing()
     {
-        // A realm mapper writing the platform's permissions into "roles" or
-        // "scope" instead of the claim §11.4 requires is exactly the defect
-        // RealmImportTests guards against on the configuration side. This is
-        // the code side of the same agreement: whatever else the token
-        // carries, only this claim type is a permission.
+        // Only §11.4's claim type is a permission, whatever else the token carries.
         HttpContextCurrentUser user = For(
             new Claim(ClaimTypes.NameIdentifier, Guid.CreateVersion7().ToString()),
             new Claim("roles", "orders:admin"),

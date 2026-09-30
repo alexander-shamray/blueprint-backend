@@ -22,10 +22,7 @@ public class HealthEndpointTests
             Task.FromResult(new HealthCheckResult(status));
     }
 
-    // ownsNoReadinessDependencies defaults to FALSE here, matching the production
-    // default, so a test that registers no readiness check has to say so —
-    // which is what makes the three that pass it evidence rather than
-    // configuration.
+    // Defaults to false, as in production, so a test registering no readiness check has to say so.
     private static Task<IHost> StartAsync(
         Action<IHealthChecksBuilder> checks,
         bool ownsNoReadinessDependencies = false) =>
@@ -63,9 +60,7 @@ public class HealthEndpointTests
     [Fact]
     public async Task Liveness_ignores_a_failing_dependency_that_readiness_reports()
     {
-        // §13.5's rule, and the one whose failure mode is a restart storm: if
-        // liveness checked the database, a brief outage would restart every pod
-        // simultaneously and the storm would outlast the outage.
+        // §13.5: a liveness check on the database would restart every pod at once.
         using IHost host = await StartAsync(checks =>
             checks.AddCheck("sql", new Always(HealthStatus.Unhealthy), tags: ["ready"]));
 
@@ -90,9 +85,7 @@ public class HealthEndpointTests
     [Fact]
     public async Task Readiness_ignores_an_observe_tagged_check()
     {
-        // The outbox is tagged observe, scraped and alerted on (§13.6), and
-        // deliberately not part of any probe: gating readiness on a backlog
-        // turns a delivery delay into a total outage.
+        // The outbox is alerted on (§13.6) and never probed, as a backlog is not an outage.
         using IHost host = await StartAsync(
             checks => checks.AddCheck("outbox", new Always(HealthStatus.Unhealthy), tags: ["observe"]),
             ownsNoReadinessDependencies: true);
@@ -105,14 +98,8 @@ public class HealthEndpointTests
     [Fact]
     public async Task Startup_gates_on_the_ready_tagged_checks()
     {
-        // Asserted by request, because the route string is the contract. The
-        // kubelet's startupProbe holds its own copy of "/health/startup" in a
-        // manifest no compiler reads, so nothing here links the two: change
-        // the route to "/health/startupp" and every other test in this file
-        // stays green while a slow-starting pod 404s and is killed mid-boot.
-        //
-        // Counting endpoints does not close that gap — three endpoints exist
-        // under any spelling. Only a GET does.
+        // Asserted by request: the kubelet's startupProbe holds its own copy of the route,
+        // in a manifest no compiler reads.
         using (IHost healthy = await StartAsync(checks =>
             checks.AddCheck("sql", new Always(HealthStatus.Healthy), tags: ["ready"])))
         {
@@ -121,8 +108,7 @@ public class HealthEndpointTests
             startup.StatusCode.ShouldBe(HttpStatusCode.OK);
         }
 
-        // The control: 200 above could equally mean the predicate matched
-        // nothing at all, since an empty predicate set is a passing one.
+        // The control, since an empty predicate set also answers 200.
         using IHost failing = await StartAsync(checks =>
             checks.AddCheck("sql", new Always(HealthStatus.Unhealthy), tags: ["ready"]));
 
@@ -134,12 +120,7 @@ public class HealthEndpointTests
     [Fact]
     public async Task Every_probe_allows_anonymous()
     {
-        // Asserted on the metadata rather than by an unauthenticated request.
-        // This host maps no endpoint behind a policy, so an unauthenticated
-        // request would answer 200 whether or not the probes were anonymous —
-        // it would pass for a reason that has nothing to do with the claim.
-        // §13.5's rule is about the metadata anyway: a probe that 401s is read
-        // by the kubelet as unhealthy and the pod is killed in a loop.
+        // On the metadata, since this host has no policy for an anonymous request to fail (§13.5).
         using IHost host = await StartAsync(_ => { }, ownsNoReadinessDependencies: true);
 
         IReadOnlyList<Endpoint> endpoints = host.Services
@@ -154,11 +135,7 @@ public class HealthEndpointTests
     [Fact]
     public async Task A_host_with_no_readiness_check_refuses_to_start()
     {
-        // The whole of §13.5's fail-open, and the reason it is worth a startup
-        // failure: an empty predicate set is a passing predicate set, so this
-        // host would otherwise answer /health/ready with 200 while reaching
-        // nothing — and §15.1 removes the smoke stage by name on the grounds
-        // that this probe already gates the rollout.
+        // §13.5's fail-open: an empty predicate set passes, and §15.1 relies on this probe gating a rollout.
         InvalidOperationException thrown = await Should.ThrowAsync<InvalidOperationException>(
             () => StartAsync(_ => { }));
 
@@ -168,11 +145,7 @@ public class HealthEndpointTests
     [Fact]
     public async Task An_observe_tagged_check_does_not_satisfy_the_guard()
     {
-        // The control that stops the guard passing on any registration at all.
-        // A host holding only an observe-tagged check has nothing the readiness
-        // predicate will select, so it is the empty case wearing a health
-        // check's clothes — which is exactly the shape a refactor produces
-        // when it retags rather than deletes.
+        // An observe-tagged check alone selects nothing, so it is the empty case.
         await Should.ThrowAsync<InvalidOperationException>(
             () => StartAsync(checks =>
                 checks.AddCheck("outbox", new Always(HealthStatus.Healthy), tags: ["observe"])));
@@ -181,13 +154,7 @@ public class HealthEndpointTests
     [Fact]
     public async Task A_host_that_declares_an_empty_readiness_set_starts_and_reports_ready()
     {
-        // The gateway and the BFF, which is the case the parameter exists for
-        // — and neither owns *nothing*: the BFF calls Catalog (§9.7) and the
-        // gateway proxies four services. What they declare is that no hop of
-        // theirs gates readiness.
-        // Paired with the two above so the guard is shown refusing and
-        // admitting: a guard only ever observed one way is one nobody has
-        // established is looking at anything.
+        // The gateway and the BFF, which declare that no hop of theirs gates readiness.
         using IHost host = await StartAsync(_ => { }, ownsNoReadinessDependencies: true);
 
         HttpResponseMessage ready = await GetAsync(host, "/health/ready");

@@ -30,33 +30,21 @@ public class CommonWebDefaultsTests
         host.Services.GetService<MeterProvider>().ShouldNotBeNull();
         host.Services.GetService<TracerProvider>().ShouldNotBeNull();
 
-        // The RFC 9457 customisation PR-03 shipped (§10.5). Registered through
-        // AddProblemDetails, whose observable effect here is the configured
-        // options rather than a service of its own.
+        // §10.5's RFC 9457 customisation, observable as configured options.
         host.Services
             .GetRequiredService<IOptions<ProblemDetailsOptions>>()
             .Value
             .CustomizeProblemDetails
             .ShouldNotBeNull();
 
-        // Liveness only (§13.5). Common.Web has no connection strings, so it
-        // registers no readiness check — those come from each service's own
-        // Infrastructure.
+        // Liveness only (§13.5): readiness checks come from each service's own Infrastructure.
         host.Services.GetService<HealthCheckService>().ShouldNotBeNull();
     }
 
     [Fact]
     public async Task Authorization_is_deny_by_default()
     {
-        // §11.4's deny-by-default, and the reason it is a fallback rather than
-        // a review rule: without one, UseAuthorization evaluates NOTHING on an
-        // endpoint carrying no policy metadata, so a new *Endpoints class that
-        // omits its RequireAuthorization line is reachable with no compiler
-        // error, no ValidateOnBuild failure and no failing test.
-        //
-        // Asserted through the provider rather than off AuthorizationOptions,
-        // because the provider is what AuthorizationMiddleware asks — reading
-        // the options would pass on a fallback the middleware never consults.
+        // §11.4's deny-by-default fallback, read through the provider AuthorizationMiddleware asks.
         HostApplicationBuilder builder = TelemetryHost.Builder();
 
         builder.AddCommonWebDefaults();
@@ -70,20 +58,14 @@ public class CommonWebDefaultsTests
         fallback.ShouldNotBeNull(
             "an endpoint with no policy metadata is otherwise reachable by anyone (§11.4)");
 
-        // And it is the authenticated-user requirement rather than an empty
-        // policy: a fallback that requires nothing is registered, resolves,
-        // and admits everybody — which passes the assertion above.
+        // The authenticated-user requirement, since an empty fallback admits everybody.
         fallback.Requirements.OfType<DenyAnonymousAuthorizationRequirement>().ShouldHaveSingleItem();
     }
 
     [Fact]
     public async Task Authentication_and_the_shared_policy_arrive_together()
     {
-        // Neither works alone, which is why one test covers both: a policy
-        // requiring an authenticated user, with no scheme registered to
-        // authenticate one, rejects every request that reaches it — and the
-        // failure surfaces in whichever service first maps an endpoint to it
-        // rather than here.
+        // One test for both, since a policy with no scheme to satisfy it rejects every request.
         HostApplicationBuilder builder = TelemetryHost.Builder();
 
         builder.AddCommonWebDefaults();
@@ -105,10 +87,7 @@ public class CommonWebDefaultsTests
     [Fact]
     public void The_current_user_port_resolves_per_request()
     {
-        // §11.4's port and the accessor it depends on. ASP.NET Core registers
-        // no IHttpContextAccessor by default, so the pairing is the assertion:
-        // ICurrentUser alone would resolve here and fail ValidateOnBuild in
-        // every real host, which is the wrong place to find out.
+        // §11.4's port with its accessor, which ASP.NET Core does not register by default.
         HostApplicationBuilder builder = TelemetryHost.Builder();
 
         builder.AddCommonWebDefaults();
@@ -119,8 +98,7 @@ public class CommonWebDefaultsTests
         scope.ServiceProvider.GetRequiredService<IHttpContextAccessor>().ShouldNotBeNull();
         scope.ServiceProvider.GetRequiredService<ICurrentUser>().ShouldBeOfType<HttpContextCurrentUser>();
 
-        // Scoped, not singleton: a caller is per request, and a captured one
-        // would answer the previous request's subject to the next.
+        // Scoped, since a captured caller would answer the previous request's subject.
         ServiceDescriptor descriptor = builder.Services.Single(d => d.ServiceType == typeof(ICurrentUser));
         descriptor.Lifetime.ShouldBe(ServiceLifetime.Scoped);
     }
@@ -128,18 +106,14 @@ public class CommonWebDefaultsTests
     [Fact]
     public void A_host_that_cannot_name_its_identity_provider_does_not_start()
     {
-        // The eager read of §11.3, and the posture AddSqlServer and
-        // AddMassTransitMessaging already take: the key is refused where it is
-        // read, so no options type stands between it and the failure.
+        // §11.3's eager read: the key is refused where it is read.
         HostApplicationBuilder builder = TelemetryHost.Builder();
         builder.Configuration[AuthenticationExtensions.AuthorityKey] = null;
 
         InvalidOperationException thrown =
             Should.Throw<InvalidOperationException>(builder.AddCommonWebDefaults);
 
-        // Naming the key is the whole value over an options exception: the
-        // message is read by somebody looking at a crash loop in a cluster,
-        // and "Identity:Authority" is the search term that ends it.
+        // The key's name is the search term for whoever reads the crash loop.
         thrown.Message.ShouldContain(AuthenticationExtensions.AuthorityKey);
     }
 
@@ -148,13 +122,7 @@ public class CommonWebDefaultsTests
     [InlineData("   ")]
     public void A_blank_authority_is_a_missing_one(string configured)
     {
-        // An environment variable set to nothing — `Identity__Authority=`, the
-        // commonest way a deployment gets this wrong — reaches Configuration
-        // as "" rather than null, so a null-only guard admits it. The host then
-        // starts, having promised it would not, and JwtBearer fails building a
-        // metadata address on the first request that carries a token: a 500
-        // during traffic instead of a refusal at boot, which is the whole
-        // difference the eager read exists to buy.
+        // `Identity__Authority=` reaches Configuration as "", which a null-only guard admits.
         HostApplicationBuilder builder = TelemetryHost.Builder();
         builder.Configuration[AuthenticationExtensions.AuthorityKey] = configured;
 
@@ -169,13 +137,7 @@ public class CommonWebDefaultsTests
     [InlineData("https://identity.example/realms/commerce?tenant=a")]
     public void An_authority_carrying_a_query_or_fragment_is_not_a_base_address(string configured)
     {
-        // Absolute, https, and still not somewhere a discovery document can be
-        // fetched from: JwtBearer appends `/.well-known/openid-configuration`
-        // to this string, and appending to a fragment puts the suffix in a part
-        // of the URL no server ever sees. The host would start and the first
-        // bearer request would fetch the realm page instead — the deferred
-        // failure this guard exists to turn into a deployment error, reached by
-        // a value the shape check above accepts.
+        // JwtBearer appends the discovery path, which a query or fragment would swallow.
         HostApplicationBuilder builder = TelemetryHost.Builder();
         builder.Configuration[AuthenticationExtensions.AuthorityKey] = configured;
 
@@ -192,11 +154,7 @@ public class CommonWebDefaultsTests
     [InlineData("ftp://identity.example/realms/commerce")]
     public void An_authority_that_is_not_an_http_url_is_a_missing_one(string configured)
     {
-        // Blank was the commonest wrong value, not the only one. Each of these
-        // is non-blank and still not an address a discovery document can be
-        // fetched from, so a guard that only asks "is it empty?" lets the host
-        // start and moves the failure into the first request that carries a
-        // token — which is the trade the eager read exists to refuse.
+        // Non-blank, and still no address a discovery document can be fetched from.
         HostApplicationBuilder builder = TelemetryHost.Builder();
         builder.Configuration[AuthenticationExtensions.AuthorityKey] = configured;
 
@@ -210,10 +168,7 @@ public class CommonWebDefaultsTests
     [Fact]
     public void A_plain_http_authority_outside_development_does_not_start()
     {
-        // The same rule RequireHttpsMetadata applies, moved to startup. Signing
-        // keys fetched over a channel an attacker can rewrite make every
-        // validation in §11.3 decorative, and a host that would refuse to fetch
-        // them should refuse to start rather than accept traffic first.
+        // RequireHttpsMetadata's rule, moved to startup (§11.3).
         HostApplicationBuilder builder = TelemetryHost.Builder(Environments.Production);
         builder.Configuration[AuthenticationExtensions.AuthorityKey] =
             "http://keycloak:8080/realms/commerce";
@@ -227,10 +182,7 @@ public class CommonWebDefaultsTests
     [Fact]
     public void A_plain_http_authority_in_development_is_the_documented_local_setup()
     {
-        // The other side of the same line, and the reason it is scoped to the
-        // environment rather than absolute: §14.1's Compose stack runs Keycloak
-        // on http://localhost:8080, and a rule with no carve-out would make the
-        // documented local flow impossible.
+        // §14.1's Compose Keycloak is plain HTTP, so Development is carved out.
         HostApplicationBuilder builder = TelemetryHost.Builder(Environments.Development);
         builder.Configuration[AuthenticationExtensions.AuthorityKey] =
             "http://localhost:8080/realms/commerce";

@@ -9,12 +9,7 @@ using Xunit;
 
 namespace Common.Infrastructure.Tests;
 
-/// <summary>
-/// The registration surface, asserted on the IServiceCollection without
-/// building a provider — the keyed multiplexers connect on first resolve,
-/// and resolving them here would need a server. What the wiring does against
-/// a real Redis is the container suites' half.
-/// </summary>
+/// <summary>The registration, read off the collection, since the keyed multiplexers connect on first resolve.</summary>
 public sealed class AddRedisConnectionsTests
 {
     internal static IConfiguration Configuration(

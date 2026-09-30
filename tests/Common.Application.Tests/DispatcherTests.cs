@@ -46,9 +46,7 @@ public class DispatcherTests
     [Fact]
     public void The_dispatcher_cannot_be_resolved_from_the_root_provider()
     {
-        // Handlers are scoped, so the dispatcher has to be (§6.2): registered
-        // as a singleton it would resolve them from the root provider, which
-        // ValidateScopes refuses.
+        // Handlers are scoped, so the dispatcher has to be (§6.2).
         using ServiceProvider provider = TestContainer.Build();
 
         Should.Throw<InvalidOperationException>(() =>
@@ -60,10 +58,6 @@ public class DispatcherTests
     [Fact]
     public async Task The_cached_invoker_resolves_the_handler_from_the_calling_scope()
     {
-        // The invoker cache is static and outlives every scope in the process
-        // (§6.2). What it must not do is close over the provider that first
-        // built it: a second dispatch from a second scope has to get that
-        // scope's handler, not the first one's.
         using ServiceProvider provider = TestContainer.Build();
 
         Guid first;
@@ -87,10 +81,6 @@ public class DispatcherTests
     [Fact]
     public async Task One_request_type_under_two_result_types_reaches_both_handlers()
     {
-        // The cache key has to carry the result type. Keyed on the request type
-        // alone, the second dispatch reads the first one's invoker and the cast
-        // to Invoker<int> throws — loudly, but from inside the dispatcher,
-        // naming neither the command nor the reason.
         using ServiceProvider provider = TestContainer.Build();
         using IServiceScope scope = provider.CreateScope();
         IDispatcher dispatcher = scope.ServiceProvider.GetRequiredService<IDispatcher>();
@@ -111,11 +101,6 @@ public class DispatcherTests
     [Fact]
     public async Task A_request_that_is_both_a_command_and_a_query_reaches_the_right_handler_each_way()
     {
-        // The quieter half of the same defect, and the one worth the test. Both
-        // invokers derive from Invoker<string>, so a shared cache entry casts
-        // cleanly and nothing throws — the query just runs the command handler,
-        // through the command's behaviours. In a service those include
-        // TransactionBehavior, which §6.3 constrains to commands.
         using ServiceProvider provider = TestContainer.Build();
         using IServiceScope scope = provider.CreateScope();
         IDispatcher dispatcher = scope.ServiceProvider.GetRequiredService<IDispatcher>();
@@ -132,10 +117,7 @@ public class DispatcherTests
     [Fact]
     public async Task The_same_request_type_dispatches_the_same_way_twice()
     {
-        // The second call reads the cached invoker rather than building one.
-        // Both arms are asserted because a cache that hands back the wrong
-        // entry fails only on the second call, and a test that dispatches once
-        // never reaches the line that matters.
+        // A cache that hands back the wrong entry fails only on the second call.
         using ServiceProvider provider = TestContainer.Build();
         using IServiceScope scope = provider.CreateScope();
         IDispatcher dispatcher = scope.ServiceProvider.GetRequiredService<IDispatcher>();

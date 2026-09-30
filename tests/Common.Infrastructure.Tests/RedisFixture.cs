@@ -7,14 +7,7 @@ using Xunit;
 
 namespace Common.Infrastructure.Tests;
 
-/// <summary>
-/// Two real Redis containers (ADR-010) — the image §14.1's Compose file runs
-/// and §8.1's split, for §12.4's stated reason: with one server playing both
-/// roles, a cache stack accidentally wired to the coordination connection
-/// still passes every prefix, TTL and span test while production cache
-/// entries fill the noeviction instance. Two servers make role-routing an
-/// assertable fact.
-/// </summary>
+/// <summary>Two real Redis containers (ADR-010), for §8.1's split, so role routing is assertable (§12.4).</summary>
 public sealed class RedisFixture : IAsyncLifetime
 {
     private readonly RedisContainer _cache = new RedisBuilder()
@@ -31,12 +24,7 @@ public sealed class RedisFixture : IAsyncLifetime
 
     public string CoordinationConnectionString => _coordination.GetConnectionString();
 
-    /// <summary>
-    /// The real composition path — no test re-wires what AddRedisConnections
-    /// wires (§6.2's argument, one layer down). <paramref name="configure"/>
-    /// lets a test add its exporter without touching the registration under
-    /// test.
-    /// </summary>
+    /// <summary>The real composition path; <paramref name="configure"/> adds to it without re-wiring it.</summary>
     public ServiceProvider BuildProvider(string applicationName, Action<IServiceCollection>? configure = null)
     {
         Dictionary<string, string?> settings = new()
@@ -63,9 +51,7 @@ public sealed class RedisFixture : IAsyncLifetime
 
     public async ValueTask DisposeAsync()
     {
-        // Each teardown runs even when the other throws: a failed cache
-        // disposal must not leave the coordination container running for the
-        // rest of the CI job.
+        // Each teardown runs even when the other throws, so no container outlives the job.
         try
         {
             await _cache.DisposeAsync();

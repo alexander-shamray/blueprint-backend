@@ -2,15 +2,7 @@ using System.Collections.Concurrent;
 
 namespace Common.Application.Tests;
 
-/// <summary>
-/// An in-memory <see cref="IIdempotencyStore"/> that records its calls: §8.5
-/// decides <em>which</em> store call happens on which path, so the call log is
-/// the assertion surface.
-/// </summary>
-/// <remarks>
-/// Token-checked like the real store: a complete or release whose token does
-/// not own the entry changes nothing.
-/// </remarks>
+/// <summary>An in-memory, token-checked store whose call log is the assertion surface for §8.5's paths.</summary>
 internal sealed class RecordingIdempotencyStore : IIdempotencyStore
 {
     private readonly ConcurrentDictionary<string, Held> _entries = new();
@@ -18,15 +10,7 @@ internal sealed class RecordingIdempotencyStore : IIdempotencyStore
     /// <summary>Every call, in order, as <c>verb key</c>.</summary>
     public List<string> Calls { get; } = [];
 
-    /// <summary>
-    /// The <see cref="CancellationToken"/> each call was handed, by call name.
-    /// </summary>
-    /// <remarks>
-    /// §8.5 requires the completion and both releases to be made with
-    /// <see cref="CancellationToken.None"/>, and nothing else a test can
-    /// observe distinguishes a store call that forwarded the caller's
-    /// <c>ct</c>.
-    /// </remarks>
+    /// <summary>The <see cref="CancellationToken"/> each call was handed, by call name.</summary>
     public Dictionary<string, CancellationToken> Tokens { get; } = [];
 
     /// <summary>Set to throw from <see cref="CompleteAsync"/>, for the hold case.</summary>
@@ -101,10 +85,7 @@ internal sealed class RecordingIdempotencyStore : IIdempotencyStore
         return Task.FromResult(unheld);
     }
 
-    /// <summary>
-    /// Plants a completed entry, standing in for an earlier attempt that
-    /// committed. The behaviour's replay path is what reads it.
-    /// </summary>
+    /// <summary>Plants a completed entry, standing in for an earlier attempt that committed.</summary>
     public void Completed(string key, string payload) =>
         _entries[key] = new Held(Planted, new IdempotencyEntry(false, payload));
 
@@ -112,11 +93,7 @@ internal sealed class RecordingIdempotencyStore : IIdempotencyStore
     public void InFlight(string key) =>
         _entries[key] = new Held(Planted, new IdempotencyEntry(true, null));
 
-    /// <summary>
-    /// The token a planted entry is held under. No test may pass this to the
-    /// store: a planted entry belongs to an attempt that is not the one under
-    /// test, which is the whole point of planting it.
-    /// </summary>
+    /// <summary>A planted entry's token, which no test passes, since the entry belongs to another attempt.</summary>
     private const string Planted = "planted-by-another-attempt";
 
     private bool Owns(string key, string claim) =>
@@ -125,11 +102,7 @@ internal sealed class RecordingIdempotencyStore : IIdempotencyStore
     private sealed record Held(string Token, IdempotencyEntry Entry);
 }
 
-/// <summary>
-/// A caller, as <see cref="ICurrentUser"/> sees one. Two factories rather than
-/// a constructor flag, because §8.5's subject segment turns on exactly the
-/// distinction their names make.
-/// </summary>
+/// <summary>A caller, with a factory per case §8.5's subject segment distinguishes.</summary>
 internal sealed class StubCurrentUser : ICurrentUser
 {
     private readonly Guid? _id;
@@ -145,10 +118,7 @@ internal sealed class StubCurrentUser : ICurrentUser
 
     public static StubCurrentUser Authenticated(Guid id) => new(id);
 
-    /// <summary>
-    /// No caller — which §8.5 is careful to say covers an anonymous HTTP
-    /// request and a message-borne command alike, not just the second.
-    /// </summary>
+    /// <summary>No caller: an anonymous HTTP request or a message-borne command alike (§8.5).</summary>
     public static StubCurrentUser Anonymous() => new(null);
 
     public bool HasPermission(string permission) => false;

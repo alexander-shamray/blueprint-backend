@@ -17,26 +17,7 @@ using Xunit;
 
 namespace Common.Web.Tests;
 
-/// <summary>
-/// The one step between a real token and <see cref="ICurrentUser.Id"/> that
-/// nothing else in this repository exercises: Keycloak issues <c>sub</c>, the
-/// port reads <see cref="ClaimTypes.NameIdentifier"/>, and inbound claim
-/// mapping is the only thing that turns one into the other.
-/// </summary>
-/// <remarks>
-/// Every other suite starts one step past the gap. <c>RealmImportTests</c>
-/// proves the realm emits <c>sub</c>; <c>HttpContextCurrentUserTests</c> builds
-/// a principal that already carries <c>NameIdentifier</c>. Both stay green with
-/// <c>MapInboundClaims</c> off, and every authenticated request in the platform
-/// throws — a valid token, a correct realm, and a subject nobody can read.
-///
-/// So this one starts from a signed token carrying a raw <c>sub</c> and asserts
-/// what a handler would see. The signing key is supplied directly as
-/// <c>options.Configuration</c>, which is what makes it a unit test rather than
-/// a container one: <c>JwtBearerHandler</c> uses the configuration it is given
-/// and never fetches the discovery document, so the unreachable authority in
-/// <c>TelemetryHost</c> stays unreachable and nothing touches the network.
-/// </remarks>
+/// <summary>Inbound claim mapping, the one step from a token's <c>sub</c> to <see cref="ICurrentUser.Id"/>.</summary>
 public class InboundClaimMappingTests
 {
     private const string Issuer = "https://identity.invalid/realms/test";
@@ -68,11 +49,7 @@ public class InboundClaimMappingTests
     [Fact]
     public async Task Without_the_mapping_the_same_token_has_no_subject_at_all()
     {
-        // The other half, and the reason the line is written out in
-        // AddJwtAuthentication rather than left to the framework default: this
-        // is what the platform looks like if that default ever changes. The
-        // token is identical and still valid — it authenticates, reaches the
-        // endpoint, and carries a claim called `sub` that nothing reads.
+        // Were the framework default to change, the same valid token would carry a `sub` nothing reads.
         Guid subject = Guid.CreateVersion7();
 
         using IHost host = await StartAsync(mapInboundClaims: false);
@@ -81,11 +58,7 @@ public class InboundClaimMappingTests
         client.DefaultRequestHeaders.Authorization =
             new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", Token(subject));
 
-        // The throw itself, rather than a status code: this pipeline carries no
-        // exception handler, so TestServer rethrows what the terminal delegate
-        // raised. In a real host §10.5 would turn it into a 500 — which is the
-        // point being made, since a 500 on every authenticated request is what
-        // this option going quiet actually costs.
+        // The throw itself: this pipeline has no exception handler, where a host would answer 500 (§10.5).
         InvalidOperationException thrown = await Should.ThrowAsync<InvalidOperationException>(
             () => client.GetAsync(
                 new Uri("/subject", UriKind.Relative),
@@ -123,9 +96,7 @@ public class InboundClaimMappingTests
                         .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                         .AddJwtBearer(options =>
                         {
-                            // The shipped registration's own values (§11.3),
-                            // with the signing key handed over directly so no
-                            // discovery document is ever fetched.
+                            // §11.3's values, with the key handed over so no discovery is fetched.
                             options.Audience = AuthenticationExtensions.Audience;
                             options.MapInboundClaims = mapInboundClaims;
                             options.TokenValidationParameters = new TokenValidationParameters
@@ -146,9 +117,7 @@ public class InboundClaimMappingTests
 
                 web.Configure(app =>
                 {
-                    // Authentication only: this suite is about what the handler
-                    // puts on the context, and AddAuthorization drags in
-                    // routing services no terminal delegate needs.
+                    // Authentication only, since what the handler puts on the context is under test.
                     app.UseAuthentication();
                     app.Run(async context =>
                     {

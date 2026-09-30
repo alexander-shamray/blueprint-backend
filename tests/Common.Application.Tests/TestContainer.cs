@@ -5,13 +5,7 @@ using Microsoft.Extensions.Time.Testing;
 
 namespace Common.Application.Tests;
 
-/// <summary>
-/// The registration path every test in this assembly goes through, standing in
-/// for §4.2's <c>AddOrderingApplication</c>. One builder rather than a container
-/// per test: §6.2's argument for testing the real path is that a hand-built
-/// container asserts what the test remembered to register, and the omission it
-/// is meant to catch is exactly the one a hand-built container reproduces.
-/// </summary>
+/// <summary>The registration path every test takes, standing in for §4.2's <c>AddOrderingApplication</c>.</summary>
 internal static class TestContainer
 {
     internal static ServiceProvider Build(Action<IServiceCollection>? behaviours = null)
@@ -21,10 +15,7 @@ internal static class TestContainer
         services.AddDispatcher();
         services.AddPluggableFrom(typeof(Ping).Assembly);
 
-        // The clock, as one instance under two service types — FakeTimeProvider
-        // for the handler that advances it, TimeProvider for the behaviour that
-        // reads it. Two registrations of the same class would give them two
-        // clocks and the elapsed time would always be zero.
+        // One clock under two service types; two registrations would make every elapsed time zero.
         services.AddSingleton<FakeTimeProvider>();
         services.AddSingleton<TimeProvider>(sp => sp.GetRequiredService<FakeTimeProvider>());
 
@@ -36,14 +27,9 @@ internal static class TestContainer
         services.AddScoped<PipelineLog>();
         services.AddScoped<ScopeMarker>();
 
-        // §8.5's key carrier, here rather than beside the behaviours because a
-        // service registers it in Add<Service>Application beside them and this
-        // builder is what stands in for that method. It is empty unless a test
-        // claims a key, which is what a command that did not opt in looks like.
         services.AddScoped<IdempotencyContext>();
 
-        // Behaviours last and by hand, because registration order is pipeline
-        // order (§6.3) and each test declares the pipeline it is about.
+        // By hand, because registration order is pipeline order (§6.3).
         behaviours?.Invoke(services);
 
         return services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });

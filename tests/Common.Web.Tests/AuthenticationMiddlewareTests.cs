@@ -18,34 +18,14 @@ using Xunit;
 
 namespace Common.Web.Tests;
 
-/// <summary>
-/// What the authentication middleware does, and what a composition root's
-/// explicit call to it is worth — asserted because the blueprint had the second
-/// wrong and no test disagreed.
-/// </summary>
+/// <summary>What the authentication middleware does, and what an explicit call to it is worth.</summary>
 /// <remarks>
-/// §12.4 called a 401 test "the test that catches <c>UseAuthentication</c>
-/// being dropped from the pipeline", and §4.2's ordering table said dropping it
-/// leaves "User unpopulated when policies evaluate; every authenticated request
-/// 403s". Both were checked by deleting the line from
-/// <c>Catalog.Api/Program.cs</c>, and every test in the repository stayed green
-/// — because <c>WebApplication</c> adds the authentication and authorization
-/// middleware itself whenever the matching services are registered. An explicit
-/// call moves them earlier in the pipeline; it is not what puts them there.
-///
-/// So no status code can catch that deletion in a <c>WebApplication</c> host,
-/// and the chapters were amended rather than a test written to prove something
-/// untrue. The third test below is the regression guard the other two rest on:
-/// were a future release to stop auto-adding it, every service in this platform
-/// would hand anonymous callers to its handlers while its authorization kept
-/// passing, and this is the only place that would say so.
+/// §4.2 owns the argument: <c>WebApplication</c> adds the middleware itself, so an explicit call sets
+/// order, not presence, and this suite is the regression guard if a release stops auto-inserting it.
 /// </remarks>
 public class AuthenticationMiddlewareTests
 {
-    // SchemeName, not Scheme: inside ProbeHandler below, `Scheme` binds to
-    // AuthenticationHandler<T>'s own inherited property rather than to this
-    // constant — the same collision that made TestAuthHandler rename its
-    // member, one scope in.
+    // Not Scheme, which inside ProbeHandler binds to AuthenticationHandler<T>'s inherited property.
     private const string SchemeName = "Probe";
 
     private static readonly Guid Subject = Guid.CreateVersion7();
@@ -53,10 +33,7 @@ public class AuthenticationMiddlewareTests
     [Fact]
     public async Task The_middleware_is_what_puts_the_principal_on_the_context()
     {
-        // The pairing §11.4 depends on: the middleware populates
-        // HttpContext.User and ICurrentUser reads it. Everything downstream —
-        // every ownership check, §10.3's rate-limit partition, every audit
-        // line — is this one line's output.
+        // §11.4's pairing: the middleware populates HttpContext.User and ICurrentUser reads it.
         Probe probe = await ExplicitPipelineAsync(useAuthentication: true);
 
         probe.Status.ShouldBe(HttpStatusCode.OK);
@@ -67,13 +44,7 @@ public class AuthenticationMiddlewareTests
     [Fact]
     public async Task Authorization_does_not_authenticate_on_its_own()
     {
-        // Where the middleware is genuinely absent, an endpoint behind
-        // RequireAuthorization answers 401: the authorization middleware
-        // evaluates the policy against HttpContext.User and does not populate
-        // it. Worth pinning because the opposite is a natural guess —
-        // AuthorizationMiddleware does call IPolicyEvaluator, which does call
-        // AuthenticateAsync, and that result only chooses between a challenge
-        // and a forbid.
+        // The authorization middleware evaluates HttpContext.User and does not populate it.
         Probe probe = await ExplicitPipelineAsync(useAuthentication: false);
 
         probe.Status.ShouldBe(HttpStatusCode.Unauthorized);
@@ -83,17 +54,7 @@ public class AuthenticationMiddlewareTests
     [Fact]
     public async Task A_web_application_host_adds_the_middleware_without_being_asked()
     {
-        // The finding, and the reason the two tests above build a pipeline by
-        // hand: this host calls neither UseAuthentication nor UseAuthorization,
-        // and does both. Every service host in the solution is a
-        // WebApplication (§4.2), so the explicit lines in each Program.cs are
-        // about ORDER — they have to sit above anything that logs the caller —
-        // and never about presence.
-        //
-        // Keep the explicit calls regardless: they are the blueprint's
-        // specified shape, they are required by any host that is not a
-        // WebApplication, and a pipeline whose order is implicit is one nobody
-        // can review.
+        // This host calls neither UseAuthentication nor UseAuthorization, and does both (§4.2).
         WebApplicationBuilder builder = WebApplication.CreateSlimBuilder();
         builder.WebHost.UseTestServer();
         builder.Logging.ClearProviders();
@@ -117,16 +78,7 @@ public class AuthenticationMiddlewareTests
     [Fact]
     public async Task But_it_does_not_repair_the_two_being_written_in_the_wrong_order()
     {
-        // The limit of the finding above, and §4.2's ordering table promised
-        // the opposite until this test was written. Auto-insertion is
-        // suppressed by the markers the explicit calls set, and it repairs an
-        // OMISSION rather than an ordering: with both present and reversed,
-        // authorization evaluates against a User nothing has populated, and
-        // every authenticated request 401s.
-        //
-        // So the framework protects a host from forgetting a line and not from
-        // misplacing one — which is the arrangement a reader would not guess,
-        // and the reason the table now separates the two cases.
+        // Auto-insertion repairs an omission, not an ordering (§4.2).
         WebApplicationBuilder builder = WebApplication.CreateSlimBuilder();
         builder.WebHost.UseTestServer();
         builder.Logging.ClearProviders();
@@ -148,13 +100,7 @@ public class AuthenticationMiddlewareTests
         probe.Authenticated.ShouldBeFalse("the handler is never reached");
     }
 
-    /// <summary>
-    /// One request through a pipeline built by hand, with or without the
-    /// authentication middleware. A <see cref="HostBuilder"/> rather than a
-    /// <see cref="WebApplication"/>, and the third test above is exactly why: a
-    /// <c>WebApplication</c> would add the line back and the second test would
-    /// assert nothing.
-    /// </summary>
+    /// <summary>One request through a hand-built pipeline, as a <c>WebApplication</c> adds the line back.</summary>
     private static async Task<Probe> ExplicitPipelineAsync(bool useAuthentication)
     {
         using IHost host = await new HostBuilder()
@@ -193,19 +139,12 @@ public class AuthenticationMiddlewareTests
             .AddScheme<AuthenticationSchemeOptions, ProbeHandler>(SchemeName, _ => { });
         services.AddAuthorization();
 
-        // The pairing AddCommonWebDefaults registers (§11.4). Named here rather
-        // than calling that helper, so these hosts hold the moving parts under
-        // test and the observability pipeline is not one of them.
+        // The pairing AddCommonWebDefaults registers (§11.4), without its observability pipeline.
         services.AddHttpContextAccessor();
         services.AddScoped<ICurrentUser, HttpContextCurrentUser>();
     }
 
-    /// <summary>
-    /// The endpoint reports what <see cref="ICurrentUser"/> saw.
-    /// <c>RequireAuthorization</c> so it is genuinely behind the default
-    /// policy — without one to evaluate, an anonymous caller would prove
-    /// nothing.
-    /// </summary>
+    /// <summary>Reports what <see cref="ICurrentUser"/> saw, behind the default policy.</summary>
     private static void MapProbe(IEndpointRouteBuilder endpoints) =>
         endpoints
             .MapGet("/", (ICurrentUser user) => Results.Ok(
@@ -236,11 +175,7 @@ public class AuthenticationMiddlewareTests
 
     private sealed record ProbeBody(bool Authenticated, string? Id);
 
-    /// <summary>
-    /// A scheme that authenticates whatever subject the request names — the JWT
-    /// handler's shape without the signature. What matters here is that a
-    /// scheme exists and succeeds, not what it validates.
-    /// </summary>
+    /// <summary>Authenticates whatever subject the request names: a JWT handler without the signature.</summary>
     private sealed class ProbeHandler(
         IOptionsMonitor<AuthenticationSchemeOptions> options,
         ILoggerFactory logger,

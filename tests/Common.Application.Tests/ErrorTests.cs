@@ -41,9 +41,6 @@ public class ErrorTests
     [Fact]
     public void Two_errors_with_the_same_parts_are_the_same_error()
     {
-        // Value equality is what lets a handler test assert against the
-        // catalogue — `result.Error.ShouldBe(OrderErrors.NotFound)` — instead of
-        // comparing code strings and missing a changed type.
         Error one = Error.Rule("order.already_shipped", "A shipped order cannot be cancelled.");
         Error other = Error.Rule("order.already_shipped", "A shipped order cannot be cancelled.");
 
@@ -53,10 +50,7 @@ public class ErrorTests
     [Fact]
     public void There_are_exactly_three_error_types()
     {
-        // §10.5: three cases, not four. There is deliberately no Validation
-        // member — a malformed request is rejected by ValidationBehavior before
-        // any handler runs, so no handler can return one, and a fourth member
-        // here would put two producers on one status code.
+        // §10.5: no Validation member, since ValidationBehavior rejects before any handler runs.
         Enum.GetValues<ErrorType>().ShouldBe([ErrorType.NotFound, ErrorType.Rule, ErrorType.Unavailable]);
     }
 }

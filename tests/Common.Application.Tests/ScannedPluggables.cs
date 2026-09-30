@@ -1,11 +1,6 @@
 namespace Common.Application.Tests;
 
-/// <summary>
-/// One implementation per entry in <see cref="PluggableInterfaces.All"/> that
-/// the request types next door do not already cover, so the §6.2 scan is
-/// exercised for every interface rather than for the ones a handler happens to
-/// implement.
-/// </summary>
+/// <summary>One implementation per scanned interface the requests leave uncovered (§6.2).</summary>
 public sealed record ScannedEvent(Guid Id);
 
 public sealed class ScannedEventHandler : IIntegrationEventHandler<ScannedEvent>

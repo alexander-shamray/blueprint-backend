@@ -59,18 +59,13 @@ public class AggregateRootTests
     {
         var aggregate = new TestAggregate(TestId.New());
 
-        // The property returns a read-only view, not the backing list. Handing
-        // out the list itself would let a caller stage an event the aggregate
-        // never raised, past every invariant on it.
         Action act = () =>
             ((ICollection<IDomainEvent>)aggregate.DomainEvents).Add(new TestDomainEvent("smuggled", Now));
 
         act.ShouldThrow<NotSupportedException>();
     }
 
-    // The two markers of §5.5, tested through the queries that use them. Both
-    // failures are silent: a change tracker filtered by a marker the base class
-    // does not carry matches nothing, stages no outbox rows, and commits.
+    // §5.5's markers: a change tracker filtered by one the base lacks stages nothing and still commits.
     [Fact]
     public void An_aggregate_root_is_reachable_as_IHasDomainEvents()
     {
@@ -103,9 +98,6 @@ public class AggregateRootTests
     {
         var aggregate = new TestAggregate(TestId.New());
 
-        // Never null: the token is a SQL Server rowversion, and EF writes it
-        // back on save. A null here would fault the first update rather than
-        // the first insert, which is the harder failure to attribute.
         aggregate.Version.ShouldBeEmpty();
     }
 }

@@ -6,18 +6,10 @@ using Xunit;
 
 namespace Common.Infrastructure.Tests;
 
-/// <summary>
-/// §13.3's two lags as the OpenTelemetry SDK exports them, bucket bounds and
-/// all: the SDK gives an instrument it does not know millisecond bounds, and a
-/// quantile over those reads the same whatever the lag was. Each test reads
-/// back only its own series, because the provider subscribes by meter name and
-/// another suite's <see cref="MessagingMetrics"/> publishes on the same one.
-/// </summary>
+/// <summary>§13.3's two lags as the SDK exports them, since its default bounds are milliseconds.</summary>
 public class MessagingMetricsTests
 {
-    // §13.7's targets for the two lags, held here rather than read from the
-    // production bounds: sharing them would let a bound deleted there delete
-    // the expectation with it.
+    // §13.7's targets, restated so a bound deleted in production does not delete the expectation.
     private static readonly double[] Targets = [1, 2];
 
     [Theory]

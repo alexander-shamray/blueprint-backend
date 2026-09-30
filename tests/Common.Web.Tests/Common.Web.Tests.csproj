@@ -16,25 +16,13 @@
     <PackageReference Include="xunit.runner.visualstudio" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="Shouldly" />
-    <!-- The real middleware pipeline, in memory. UseCorrelationId, the
-         ProblemDetails customisation and ToHttpResult are three pieces that
-         only fail together: a customiser that never runs on what ToHttpResult
-         writes is invisible to any test that inspects the IResult alone. -->
+    <!-- The real middleware pipeline in memory, since its pieces only fail together. -->
     <PackageReference Include="Microsoft.AspNetCore.TestHost" />
-    <!-- Reads log records and metrics back out of a real OpenTelemetry
-         pipeline, so the redactor and the meter list are asserted through the
-         path a host actually uses rather than through a stub. -->
+    <!-- Reads records and metrics back out of a real OpenTelemetry pipeline. -->
     <PackageReference Include="OpenTelemetry.Exporter.InMemory" />
-    <!-- JwtBearerDefaults and JwtBearerOptions, read back to pin §11.3's
-         validation parameters. Carried transitively by the project reference
-         below; named here because this assembly uses the types directly, on
-         the register's honesty rule. -->
+    <!-- Transitive, and named because this assembly uses its types to pin §11.3's parameters. -->
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />
-    <!-- DbUpdateConcurrencyException and DbUpdateException, thrown at
-         ConcurrencyExceptionHandler to prove it separates the race from the
-         constraint violation. Same rule as the line above: carried
-         transitively by the project reference below, named here because this
-         assembly uses the types directly. -->
+    <!-- Transitive, and named because this assembly throws its exceptions directly. -->
     <PackageReference Include="Microsoft.EntityFrameworkCore" />
   </ItemGroup>
 
