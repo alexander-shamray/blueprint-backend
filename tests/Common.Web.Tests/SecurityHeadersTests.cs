@@ -17,9 +17,8 @@ namespace Common.Web.Tests;
 /// </summary>
 public class SecurityHeadersTests
 {
-    // The literal, not SecurityHeadersExtensions' own constant. A contract test
-    // that reads the constant cannot notice the constant changing, which is
-    // what CorrelationIdExtensions' header says about its own tests.
+    // The literal, not SecurityHeadersExtensions' own constant: a test that
+    // reads the constant cannot notice the constant changing.
     private const string Header = "X-Content-Type-Options";
 
     private static Task<IHost> StartAsync(RequestDelegate terminal) =>
