@@ -9,10 +9,7 @@ using Xunit;
 
 namespace Shipping.Application.Tests;
 
-/// <summary>
-/// One carrier page applied to one shipment, at the handler's clock (spec,
-/// section 5).
-/// </summary>
+/// <summary>One carrier page applied to one shipment, at the handler's clock.</summary>
 public class ApplyTrackingPageHandlerTests
 {
     private static readonly DateTimeOffset Now = new(2026, 9, 22, 9, 0, 0, TimeSpan.Zero);
@@ -22,9 +19,7 @@ public class ApplyTrackingPageHandlerTests
     [Fact]
     public async Task A_reversed_page_despatches_before_it_delivers()
     {
-        // A page that lists the delivery first still raises the despatch
-        // first, and both at the instant the page was applied rather than at
-        // either of the carrier's (§9.4; spec, section 5).
+        // A page listing the delivery first still raises the despatch first, both at the applying instant (§9.4).
         Shipment shipment = Booked();
         FakeShipments repository = new(shipment);
 
@@ -44,9 +39,7 @@ public class ApplyTrackingPageHandlerTests
     [Fact]
     public async Task A_repeated_carrier_id_keeps_its_most_advanced_status()
     {
-        // The key keeps the first arrival offered, so the delivery must be
-        // offered ahead of the collection it shares an id with (spec, section
-        // 5).
+        // The key keeps the first arrival offered, so the delivery must be offered ahead of the collection.
         Shipment shipment = Booked();
         FakeShipments repository = new(shipment);
 
@@ -112,10 +105,7 @@ public class ApplyTrackingPageHandlerTests
     [Fact]
     public async Task A_shipment_that_is_gone_is_a_refusal_and_not_a_throw()
     {
-        // No code path deletes a shipment, so a null here is the repository's
-        // contract met by a hand or a migration rather than by the service. A
-        // refusal is not counted as an applied page, and it rolls the unit
-        // back rather than moving anything (§6.3).
+        // No code path deletes a shipment, so a missing one is refused, and a refusal rolls the unit back (§6.3).
         Result result = await Handle(new FakeShipments(null), ShipmentId.New(), []);
 
         result.IsFailure.ShouldBeTrue();
@@ -138,16 +128,7 @@ public class ApplyTrackingPageHandlerTests
             new ApplyTrackingPageCommand(id, page, Now.AddSeconds(30)),
             TestContext.Current.CancellationToken);
 
-    /// <summary>
-    /// <c>IShipmentRepository</c>, whole: the two members this handler never
-    /// calls throw rather than answering, so a handler that started reading by
-    /// order would fail here rather than pass.
-    /// </summary>
-    /// <remarks>
-    /// Nested deliberately: this assembly already holds a <c>FakeShipments</c>
-    /// that records what was added, and this one answers one shipment — two
-    /// doubles for two questions rather than one shared helper.
-    /// </remarks>
+    /// <summary><c>IShipmentRepository</c>, whole, whose members this handler never calls throw.</summary>
     private sealed class FakeShipments(Shipment? shipment) : IShipmentRepository
     {
         public Task<Shipment?> GetAsync(ShipmentId id, CancellationToken ct) =>

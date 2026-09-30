@@ -21,15 +21,9 @@ public sealed record StubAddress(
     string Country);
 
 /// <summary>
-/// A real gRPC server on an ephemeral loopback port, standing in for
-/// Ordering's <c>DeliveryAddresses.Get</c> (ADR-052).
+/// A real gRPC server on a loopback port, standing in for Ordering's <c>DeliveryAddresses.Get</c> (ADR-052).
 /// </summary>
-/// <remarks>
-/// A real server rather than a substituted client: everything interesting about
-/// this hop is what the server decides — the h2c negotiation, the bearer token
-/// on the wire, the status that becomes a refusal rather than a backoff.
-/// <c>Http2</c> explicitly: a cleartext default answers <c>HTTP_1_1_REQUIRED</c>.
-/// </remarks>
+/// <remarks>HTTP/2 only, since a cleartext endpoint cannot serve HTTP/1.1 and h2c at once (§9.7).</remarks>
 public sealed class StubOrdering : IAsyncLifetime
 {
     private readonly ConcurrentQueue<StatusCode> _statuses = new();
@@ -50,11 +44,7 @@ public sealed class StubOrdering : IAsyncLifetime
     /// <summary>Every <c>Authorization</c> value this stub has been sent, in order.</summary>
     public IReadOnlyCollection<string> Tokens => _tokens;
 
-    /// <summary>
-    /// Statuses to fail the next calls with, one per call, before answering
-    /// normally. A queue rather than a flag, because a revoked grant that is
-    /// restored is a sequence — refused, refused, then answered.
-    /// </summary>
+    /// <summary>Statuses to fail the next calls with, one per call, before answering normally.</summary>
     public void Fail(params StatusCode[] statuses)
     {
         foreach (StatusCode status in statuses)
@@ -62,20 +52,10 @@ public sealed class StubOrdering : IAsyncLifetime
     }
 
     /// <summary>How many of the next calls to abort instead of replying.</summary>
-    /// <remarks>
-    /// A transport fault, unlike <see cref="Fail"/>: a gRPC status rides an HTTP
-    /// 200 with <c>grpc-status</c> in the trailers and
-    /// <c>AddStandardResilienceHandler</c> hands it back, while an aborted
-    /// connection is an <c>HttpRequestException</c> it retries — so only this
-    /// exercises <c>AddressHop</c>'s retry.
-    /// </remarks>
+    /// <remarks>A transport fault the resilience handler retries, unlike a <see cref="Fail"/> status.</remarks>
     public int AbortNextCalls { get; set; }
 
-    /// <summary>
-    /// Back to knowing nothing. A stub shared by several tests outlives each
-    /// of them, so a status one test queued and did not consume would answer
-    /// the next test's first read.
-    /// </summary>
+    /// <summary>Back to knowing nothing, so a status one test queued cannot answer the next test's read.</summary>
     public void Reset()
     {
         Addresses.Clear();
@@ -90,10 +70,7 @@ public sealed class StubOrdering : IAsyncLifetime
         WebApplicationBuilder builder = WebApplication.CreateSlimBuilder();
 
         builder.Logging.ClearProviders();
-        // Listen rather than ListenLocalhost: the localhost overload refuses
-        // port 0 outright, because it opens two sockets and could not give
-        // them the same OS-assigned port. One loopback address, one port,
-        // knowable after Start.
+        // Listen rather than ListenLocalhost, which refuses port 0 because it opens two sockets.
         builder.WebHost.ConfigureKestrel(o =>
             o.Listen(IPAddress.Loopback, 0, listen => listen.Protocols = HttpProtocols.Http2));
         builder.Services.AddGrpc();

@@ -22,18 +22,11 @@ using AddressRegistration = Shipping.Infrastructure.Addresses.DependencyInjectio
 
 namespace Shipping.Worker.Tests;
 
-/// <summary>
-/// ADR-052's five outcomes, read from the client's side, over a real gRPC
-/// server on loopback.
-/// </summary>
+/// <summary>ADR-052's five outcomes, read from the client's side, over a real gRPC server on loopback.</summary>
 public sealed class DeliveryAddressSourceTests : IClassFixture<DeliveryAddressSourceTests.OrderingHost>
 {
-    /// <summary>
-    /// One stub and one host for the class, because a host over an unreachable
-    /// broker takes seconds to stop. Only a transport fault reaches the
-    /// breaker, and a single one leaves it well under
-    /// <c>AddressHop.CircuitBreakerMinimumThroughput</c>.
-    /// </summary>
+    /// <summary>One stub and one host for the class, as a host over an unreachable broker is slow to stop.</summary>
+    /// <remarks>One transport fault stays under <see cref="AddressHop.CircuitBreakerMinimumThroughput"/>.</remarks>
     public sealed class OrderingHost : IAsyncLifetime
     {
         public StubOrdering Ordering { get; } = new();
@@ -183,9 +176,7 @@ public sealed class DeliveryAddressSourceTests : IClassFixture<DeliveryAddressSo
 
         counted.Value.ShouldBe(0, "an outage is not a decision anybody took");
 
-        // One, not three: a gRPC status travels as an HTTP 200 with
-        // grpc-status in the trailers, so AddStandardResilienceHandler sees a
-        // successful response and hands it straight back (§9.7).
+        // One, not three: a gRPC status rides an HTTP 200, which the resilience handler hands straight back.
         _ordering.Calls.Count.ShouldBe(1);
     }
 
@@ -194,8 +185,7 @@ public sealed class DeliveryAddressSourceTests : IClassFixture<DeliveryAddressSo
     {
         Guid order = KnownOrder();
 
-        // An aborted connection, which is the shape an owner that is genuinely
-        // down produces and the one thing AddressHop's retry covers.
+        // An aborted connection, the shape an owner that is down produces, and one AddressHop's retry covers.
         _ordering.AbortNextCalls = 1;
 
         AddressLookup lookup = await Source().GetAsync(new OrderId(order), TestContext.Current.CancellationToken);
@@ -372,8 +362,7 @@ public sealed class DeliveryAddressSourceTests : IClassFixture<DeliveryAddressSo
 
         options.TotalRequestTimeout.Timeout.ShouldBeLessThan(Common.Web.ServiceOptions.OperationTimeout);
 
-        // §9.7's bands, because Ordering is a peer and not a third party — the
-        // one place this hop differs from CarrierHop, which sits outside them.
+        // §9.7's bands, since Ordering is a peer, where CarrierHop, sized to a third party, sits outside them.
         options.AttemptTimeout.Timeout.ShouldBeInRange(TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(2));
         options.TotalRequestTimeout.Timeout.ShouldBeInRange(TimeSpan.FromSeconds(3), TimeSpan.FromSeconds(5));
     }
@@ -381,21 +370,14 @@ public sealed class DeliveryAddressSourceTests : IClassFixture<DeliveryAddressSo
     [Fact]
     public void The_lease_outlives_the_longest_pass_a_row_can_take()
     {
-        // Three calls on one row is the worst pass: the address read, the
-        // booking, and the compensating cancel when the commit refused the
-        // booking (spec, section 6). The recovery leg is one carrier call.
+        // The worst pass is three calls: the address read, the booking, and the cancel a refused commit sends.
         TimeSpan pass = AddressHop.TotalRequestTimeout + 2 * CarrierHop.TotalRequestTimeout;
 
         (pass * FulfilmentWorker.ClaimBatchSize).ShouldBeLessThan(
             TimeSpan.FromSeconds(FulfilmentWorker.LeaseSeconds),
             "a lease that lapsed mid-pass would let a second replica claim a row this one is still booking");
 
-        // §15.3's thirty-second drain — HostOptions.ShutdownTimeout's default,
-        // which that section fixes the grace period against — is met by the
-        // token and not by the budget: every call in a pass takes the stopping
-        // token, so a stop cuts the pass short. What the budget still has to
-        // fit is one call, the longest of them, which is all a stop can find
-        // in flight.
+        // §15.3's thirty-second drain is met by the stopping token, so the budget has to fit only the longest call.
         CarrierHop.TotalRequestTimeout.ShouldBeLessThan(TimeSpan.FromSeconds(30));
     }
 
@@ -404,16 +386,11 @@ public sealed class DeliveryAddressSourceTests : IClassFixture<DeliveryAddressSo
     {
         IMeterFactory factory = _factory.Services.GetRequiredService<IMeterFactory>();
 
-        // The host's factory answers two creations of spec section 11's meter
-        // name with one meter, which CarrierMetrics, AddressMetrics and
-        // ShipmentMetrics each creating it by that name rely on (§13.2).
+        // One meter per name, which CarrierMetrics, AddressMetrics and ShipmentMetrics each rely on (§13.2).
         factory.Create(CarrierMetrics.MeterName).ShouldBeSameAs(factory.Create(CarrierMetrics.MeterName));
     }
 
-    /// <summary>
-    /// A known address with one field a character past its column, in a
-    /// script no other field uses, so a message that echoed it is detectable.
-    /// </summary>
+    /// <summary>A known address with one field a character past its column, in a script no other field uses.</summary>
     private static StubAddress Widened(string field)
     {
         StubAddress valid = new(Guid.CreateVersion7(), "1 Abay Avenue", null, "Almaty", "050000", "KZ");
@@ -437,10 +414,7 @@ public sealed class DeliveryAddressSourceTests : IClassFixture<DeliveryAddressSo
         }
     }
 
-    /// <summary>
-    /// The identity provider's refusal as <c>CachingTokenClient</c> throws it
-    /// (§11.5).
-    /// </summary>
+    /// <summary>The identity provider's refusal as <c>CachingTokenClient</c> throws it (§11.5).</summary>
     private sealed class RefusingTokenCache : ITokenCache
     {
         public Task<string> GetAsync(string scope, CancellationToken ct) =>

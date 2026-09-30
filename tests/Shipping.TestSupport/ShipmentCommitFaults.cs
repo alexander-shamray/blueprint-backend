@@ -4,20 +4,12 @@ using Shipping.Domain.Shipments;
 
 namespace Shipping.TestSupport;
 
-/// <summary>
-/// A commit that fails once, on demand, after the unit has moved its shipment
-/// — the one rollback §6.3's execution strategy and the fulfilment pass's
-/// per-row catch exist for, which no real fault produces on cue. Test support
-/// only; the host never registers it.
-/// </summary>
+/// <summary>A commit that fails once, on demand, after the unit has moved its shipment (§6.3).</summary>
 public sealed class ShipmentCommitFaults : SaveChangesInterceptor
 {
     private CommitFault? _armed;
 
-    /// <summary>
-    /// Arms the next qualifying save. One fault at a time, because two armed
-    /// at once would leave which of them fired to the order of the saves.
-    /// </summary>
+    /// <summary>Arms the next qualifying save, one fault at a time, so which one fired is never in doubt.</summary>
     public CommitFault Arm()
     {
         CommitFault fault = new(this);
@@ -34,11 +26,7 @@ public sealed class ShipmentCommitFaults : SaveChangesInterceptor
         InterceptionResult<int> result,
         CancellationToken cancellationToken = default)
     {
-        // Only a save that moves a shipment qualifies. This service stages no
-        // outbox row, so the condition Payments' interceptor reads is never
-        // true here; an inbox write, a stored address or an arriving shipment
-        // is not the unit whose rollback is being asked for, and firing on one
-        // would make Fired a claim about nothing.
+        // Only a save that moves a shipment qualifies, so Fired is a claim about that unit.
         bool moving = eventData.Context is not null &&
             eventData.Context.ChangeTracker.Entries<Shipment>().Any(e => e.State == EntityState.Modified);
 
@@ -51,22 +39,12 @@ public sealed class ShipmentCommitFaults : SaveChangesInterceptor
 
         fault.Fired = true;
 
-        // DbUpdateException rather than a TimeoutException, which
-        // SqlServerTransientExceptionDetector accepts: §6.3's strategy would
-        // retry the unit whole, and since Arm disarms on fire the second
-        // attempt commits. The carrier call is outside CommitAsync, so a
-        // retried unit would book nothing and commit cleanly. Non-transient,
-        // the exception leaves ExecuteAsync and reaches the pass's per-row
-        // catch, which is what a crash between the carrier's answer and the
-        // commit actually does.
+        // Non-transient, so §6.3's strategy does not retry the unit and the fault reaches the pass's per-row catch.
         throw new DbUpdateException("Injected commit fault.");
     }
 }
 
-/// <summary>
-/// One armed fault. Disposing disarms it, so a unit that never reached a
-/// qualifying save cannot leave it primed for whatever runs next.
-/// </summary>
+/// <summary>One armed fault; disposing disarms it, so an unfired fault cannot reach whatever runs next.</summary>
 public sealed class CommitFault : IDisposable
 {
     private readonly ShipmentCommitFaults _owner;

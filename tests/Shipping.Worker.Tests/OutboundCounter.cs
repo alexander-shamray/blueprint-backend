@@ -6,12 +6,7 @@ using Shouldly;
 
 namespace Shipping.Worker.Tests;
 
-/// <summary>
-/// One host's counter on the outbound meter, never one matched by name: a
-/// <c>MeterListener</c> is process-wide, so another host's carrier or address
-/// source would count into it. The provider is the caller's because the
-/// suites keep their hosts differently.
-/// </summary>
+/// <summary>One host's outbound counter, matched by meter instance as a <c>MeterListener</c> is process-wide.</summary>
 internal static class OutboundCounter
 {
     public static OutboundCount Unavailable(IServiceProvider services)

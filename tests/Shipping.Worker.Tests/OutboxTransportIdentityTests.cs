@@ -11,16 +11,8 @@ using Xunit;
 
 namespace Shipping.Worker.Tests;
 
-/// <summary>
-/// §9.1's single identity, checked where it is kept: on the transport.
-/// <c>DeliverAsync</c> copies the row's ids onto the published context, so
-/// the broker header and the inbox key agree with the body and the row.
-/// </summary>
-/// <remarks>
-/// Over <c>Shipping.Worker</c>'s own <c>Program</c>, so it answers whether
-/// this service's registration reaches that common code; a substitute rather
-/// than a harness, because §12.4 refuses an <c>ITestHarness</c> here.
-/// </remarks>
+/// <summary>§9.1's single identity on the transport: <c>DeliverAsync</c> copies the row's ids onto it.</summary>
+/// <remarks>A substitute rather than a harness, because §12.4 refuses an <c>ITestHarness</c> here.</remarks>
 [Collection(nameof(IntegrationCollection))]
 public sealed class OutboxTransportIdentityTests(ServiceFixture fixture) : IAsyncLifetime
 {
@@ -42,8 +34,7 @@ public sealed class OutboxTransportIdentityTests(ServiceFixture fixture) : IAsyn
 
         (await dispatcher.ProcessBatchAsync(TestContext.Current.CancellationToken)).ShouldBe(1);
 
-        // Replay the pipe the dispatcher handed the endpoint against a context
-        // that records what is set on it. This is the callback's whole body.
+        // Replays the pipe the dispatcher handed the endpoint against a context that records what is set on it.
         PublishContext context = Substitute.For<PublishContext>();
         await factory.Captured.ShouldNotBeNull().Send(context);
 
@@ -76,11 +67,7 @@ public sealed class OutboxTransportIdentityTests(ServiceFixture fixture) : IAsyn
                         return Task.CompletedTask;
                     });
 
-                // Replaced, not added: the dispatcher resolves one endpoint,
-                // and a second registration would leave MassTransit's real one
-                // last and this substitute never called. The unreachable broker
-                // is deliberate for the same reason: nothing here should reach
-                // a transport.
+                // Replaced, not added: the dispatcher resolves one endpoint, and the last registered wins.
                 services.RemoveAll<IPublishEndpoint>();
                 services.AddScoped(_ => endpoint);
             });

@@ -11,11 +11,7 @@ using Xunit;
 
 namespace Shipping.Application.Tests;
 
-/// <summary>
-/// §3.2's Consumes column. Each consumer writes one row and makes no call
-/// (spec, section 4), and the two writes commute: whichever arrives second
-/// finds the other's row and reaches the same terminal state (spec, section 6).
-/// </summary>
+/// <summary>§3.2's Consumes column: each consumer writes one row, and the two writes commute.</summary>
 public class ShipmentConsumerTests
 {
     private static readonly DateTimeOffset Now = new(2026, 9, 22, 12, 0, 0, TimeSpan.Zero);
@@ -122,10 +118,7 @@ public class ShipmentConsumerTests
         AssertSupersededLogged(log, delivered.Id, order);
     }
 
-    // The superseded arrival (spec, section 5) is the one false this suite
-    // observes a log for, so the message is pinned whole rather than
-    // sampled — a third parameter slipped into the template would fail this
-    // rather than pass unnoticed, which is what proves no address rode along.
+    // Pinned whole rather than sampled, so a parameter slipped into the template, an address among them, fails here.
     private static void AssertSupersededLogged(
         CapturingLogger<VoidShipmentHandler> log, ShipmentId shipment, Guid order)
     {
@@ -138,9 +131,7 @@ public class ShipmentConsumerTests
     [Fact]
     public async Task Each_handler_maps_the_contract_and_nothing_else()
     {
-        // The contract half, separately: a handler that read the wrong member
-        // would still satisfy every assertion above, because they all build
-        // the command by hand, and OrderId and CustomerId are both a Guid.
+        // The contract half, since every assertion above builds the command by hand and both ids are a Guid.
         OrderConfirmed confirmed = new()
         {
             MessageId = Guid.CreateVersion7(),
@@ -208,9 +199,7 @@ public class ShipmentConsumerTests
         public override DateTimeOffset GetUtcNow() => now;
     }
 
-    // No existing capturing logger in this test assembly or in
-    // Shipping.TestSupport; the entry is the formatted message rather than
-    // the raw state, so an assertion can pin the template whole.
+    // The formatted message rather than the raw state, so an assertion can pin the template whole.
     private sealed class CapturingLogger<T> : ILogger<T>
     {
         public List<(LogLevel Level, EventId EventId, string Message)> Entries { get; } = [];

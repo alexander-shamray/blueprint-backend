@@ -67,21 +67,15 @@ public class ShippingIntegrationEventMapperTests
                 new ShipmentDeliveredDomainEvent(ShipmentId.New(), order, "TRK1", Raised.AddHours(1))
             ]);
 
-        // Order, not membership: a delivery staged ahead of its despatch is a
-        // timeline no consumer can make sense of. The mapper's part is to map,
-        // and so stage, the contracts in the order they were raised; delivery
-        // order is the outbox building block's (§9.4).
+        // Order, not membership: the mapper stages contracts in the order raised; delivery is the outbox's (§9.4).
         mapped.Select(c => c.GetType()).ShouldBe([typeof(ShipmentDispatched), typeof(ShipmentDelivered)]);
     }
 
     [Fact]
     public void The_registry_is_exactly_the_publishes_column()
     {
-        // §3.2 gives Shipping two published contracts and no third, and section
-        // 1 of the spec refuses a tracking event on the bus. Asserted over
-        // ShippingIntegrationEventMapper.RegisteredEvents rather than over a
-        // Map, because what would go wrong is an entry nobody noticed and a Map
-        // over a hand-written list can only find the entries the list names.
+        // §3.2 gives Shipping two published contracts and §10.7 no tracking event; asserted over the registry, as a
+        // Map over a hand-written list finds only the entries the list names.
         ShippingIntegrationEventMapper.RegisteredEvents.ShouldBe(
             [typeof(ShipmentDispatchedDomainEvent), typeof(ShipmentDeliveredDomainEvent)],
             ignoreOrder: true);
@@ -90,9 +84,7 @@ public class ShippingIntegrationEventMapperTests
     [Fact]
     public void An_entry_in_the_registry_reaches_its_contract()
     {
-        // The registry names two domain events, and each maps to the contract
-        // §3.2's Publishes column gives it: right keys with a mapping to the
-        // wrong type would still pass the registry assertion.
+        // Each maps to the contract §3.2's Publishes column gives it, which right keys alone would not show.
         OrderId order = new(Guid.CreateVersion7());
 
         Mapper().Map(

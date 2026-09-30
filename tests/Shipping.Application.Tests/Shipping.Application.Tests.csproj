@@ -15,19 +15,14 @@
     <!-- The §4.2 gates that reason over type dependencies rather than
          assembly references — a job GetReferencedAssemblies cannot do. -->
     <PackageReference Include="NetArchTest.Rules" />
-    <!-- ServiceCollection itself, for the registration tests: the
-         abstractions package Shipping.Application compiles against has no
-         container in it to build. -->
+    <!-- ServiceCollection itself; the abstractions package has no container to build. -->
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Services\Shipping\Shipping.Application\Shipping.Application.csproj" />
-    <!-- No Shipping.TestSupport and no Docker: the handlers here run against
-         hand-rolled fakes. §12.4 reads the pyramid's levels as what a test
-         exercises, never as assembly names, and the real-database cases for
-         these handlers are the consumer cases in Shipping.Worker.Tests, where
-         the fixture lives. -->
+    <!-- No Shipping.TestSupport and no Docker: the handlers here run against hand-rolled fakes, and §12.4
+         reads a level as what a test exercises, not as an assembly. -->
   </ItemGroup>
 
 </Project>

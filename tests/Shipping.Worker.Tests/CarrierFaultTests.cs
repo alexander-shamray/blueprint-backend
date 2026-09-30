@@ -11,11 +11,7 @@ using Xunit;
 
 namespace Shipping.Worker.Tests;
 
-/// <summary>
-/// Section 9's transient rows, each over a host of its own because the
-/// breaker they fill is sized to open (<c>CarrierHop</c>), and because a
-/// stalled answer outlives the test that asked for it.
-/// </summary>
+/// <summary>The carrier's transient answers, each on its own host, since the breaker they fill opens.</summary>
 public sealed class CarrierFaultTests : IDisposable
 {
     private readonly HttpCarrierGatewayTests.CarrierHost _host = new();
@@ -54,9 +50,7 @@ public sealed class CarrierFaultTests : IDisposable
     [InlineData(500)]
     public async Task A_timeout_a_throttle_or_a_server_fault_is_retried_then_thrown_as_unavailable(int status)
     {
-        // Stubbed rather than scripted: section 9's table names all three and
-        // the simulator scripts one, so without this a branch that dropped
-        // either of the others would leave the suite green.
+        // Stubbed, since the simulator scripts one of the three and a branch dropping another would stay green.
         Server.Given(Request.Create().WithPath("/v1/shipments").UsingPost())
             .AtPriority(0)
             .RespondWith(Response.Create().WithStatusCode(status));
@@ -100,10 +94,7 @@ public sealed class CarrierFaultTests : IDisposable
     [Fact]
     public async Task An_answer_larger_than_the_bound_is_refused_before_it_is_read_and_the_attempt_is_retried()
     {
-        // CarrierAnswerBuffer reads the body inside the attempt, so a body over
-        // the bound fails the attempt rather than the call: the pipeline
-        // retries it and the breaker remembers it, which is why this row is
-        // here and not on the shared host.
+        // CarrierAnswerBuffer reads the body inside the attempt, so an oversize body fails the attempt and is retried.
         Server.Given(Request.Create().WithPath("/v1/shipments/crr_x/events").UsingGet())
             .AtPriority(0)
             .RespondWith(Response.Create().WithStatusCode(200)
@@ -119,9 +110,7 @@ public sealed class CarrierFaultTests : IDisposable
     [Fact]
     public async Task An_open_circuit_makes_no_call_at_all()
     {
-        // The breaker sits inside the retry, so one call is
-        // MaxRetryAttempts + 1 attempts against the minimum throughput, and a
-        // fresh host is what makes that arithmetic this test's alone.
+        // The breaker sits inside the retry, so one call is MaxRetryAttempts + 1 attempts toward the throughput.
         CancellationToken ct = TestContext.Current.CancellationToken;
         while (Calls("/v1/shipments") < CarrierHop.CircuitBreakerMinimumThroughput)
         {
@@ -132,9 +121,7 @@ public sealed class CarrierFaultTests : IDisposable
 
         await Should.ThrowAsync<CarrierUnavailableException>(() => Carrier().BookAsync(Booking("SIM-DOWN"), ct));
 
-        // The half that makes it a breaker rather than a slow failure: once
-        // open it refuses without a request leaving this process, which is
-        // what stops a worker hammering a carrier that is already down.
+        // Once open, it refuses without a request leaving this process.
         Calls("/v1/shipments").ShouldBe(before);
     }
 }

@@ -5,13 +5,7 @@ using Xunit;
 
 namespace Shipping.Domain.Tests;
 
-/// <summary>
-/// Spec section 5: the key `(ShipmentId, CarrierEventId)` orders nothing, so
-/// the state machine is monotonic by rank rather than by arrival. A carrier
-/// page can hold `delivered` above `collected` — the simulator's
-/// `SIM-REVERSED` is exactly that — and the events the platform publishes,
-/// and their order, must not depend on which order the feed arrived in.
-/// </summary>
+/// <summary>The events a shipment raises, and their order, do not depend on the order of a carrier's page.</summary>
 public class ShuffledTrackingFeedTests
 {
     private static readonly DateTimeOffset Raised = new(2026, 9, 22, 9, 0, 0, TimeSpan.Zero);
@@ -44,10 +38,7 @@ public class ShuffledTrackingFeedTests
             shipment.TrackingEvents.Select(e => e.CarrierEventId)
                 .ShouldBe(["e1", "e2", "e3", "e4"], ignoreOrder: true, customMessage: arrival);
 
-            // Despatch before delivery, whatever order the carrier reported
-            // them in. Ordering's saga finalises on the first and Notifications
-            // reads both, so a delivery ahead of a despatch is a timeline no
-            // consumer can make sense of.
+            // Despatch before delivery whatever the arrival order, since Notifications consumes both (§3.2).
             shipment.DomainEvents.Select(e => e.GetType()).ShouldBe(
                 [typeof(ShipmentDispatchedDomainEvent), typeof(ShipmentDeliveredDomainEvent)], arrival);
         }

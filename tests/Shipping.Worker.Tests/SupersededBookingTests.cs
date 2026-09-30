@@ -15,11 +15,7 @@ using Xunit;
 
 namespace Shipping.Worker.Tests;
 
-/// <summary>
-/// A pass whose commit declines, over fakes rather than containers: which row
-/// the unit reloads decides whether the carrier's booking is handed back or the
-/// pass ends quietly, and a real database cannot reload a chosen state on cue.
-/// </summary>
+/// <summary>A pass whose commit declines, over fakes, as a real database cannot reload a chosen state.</summary>
 public sealed class SupersededBookingTests
 {
     private static readonly DateTimeOffset Now = new(2026, 9, 28, 12, 0, 0, TimeSpan.Zero);
@@ -47,9 +43,7 @@ public sealed class SupersededBookingTests
         ShipmentId id = new(Guid.CreateVersion7());
         OrderId order = new(Guid.CreateVersion7());
 
-        // The execution strategy's retry after a commit whose acknowledgement
-        // was lost: the first attempt books the pending row and commits, and
-        // the second reloads that committed booking and declines to repeat it.
+        // The strategy's retry after a lost acknowledgement reloads the committed booking and declines to repeat it.
         Shipment pending = Shipment.For(id, order, Now);
         Shipment committed = Shipment.For(id, order, Now);
         committed.Book(RecordingCarrier.Reference, RecordingCarrier.TrackingNumber, Now).ShouldBeTrue();
@@ -335,10 +329,7 @@ public sealed class SupersededBookingTests
             throw new NotSupportedException("a pass writes through the aggregate");
     }
 
-    /// <summary>
-    /// The unit committed and its acknowledgement lost, so the strategy runs
-    /// it again over what the first attempt committed (§6.3).
-    /// </summary>
+    /// <summary>The unit committed and its acknowledgement lost, so the strategy runs it again (§6.3).</summary>
     private sealed class LostAcknowledgementUnitOfWork : InlineUnitOfWork
     {
         public override async Task<TResult> ExecuteAsync<TResult>(
@@ -350,10 +341,7 @@ public sealed class SupersededBookingTests
         }
     }
 
-    /// <summary>
-    /// The first unit's save loses to another writer's, as a row version
-    /// refuses it; the strategy hands a conflict on rather than retrying it.
-    /// </summary>
+    /// <summary>The first unit's save loses to another writer's, as a row version refuses it.</summary>
     private sealed class ConflictOnceUnitOfWork : InlineUnitOfWork
     {
         private bool _conflicted;
@@ -372,10 +360,7 @@ public sealed class SupersededBookingTests
         }
     }
 
-    /// <summary>
-    /// Every attempt at the unit meets a transient fault and the strategy
-    /// gives up, which is a failure the conflict's one repeat does not cover.
-    /// </summary>
+    /// <summary>Every attempt at the unit meets a transient fault and the strategy gives up.</summary>
     private sealed class ExhaustedUnitOfWork : InlineUnitOfWork
     {
         public override Task<TResult> ExecuteAsync<TResult>(

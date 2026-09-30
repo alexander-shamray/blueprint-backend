@@ -15,11 +15,7 @@ using MessagingRegistration = Shipping.Infrastructure.Messaging.DependencyInject
 
 namespace Shipping.Worker.Tests;
 
-/// <summary>
-/// The fulfilment worker end to end over the collection's SQL Server and
-/// broker, the simulator's carrier and the Ordering stub (§12.4): each case
-/// drives one pass and reads what it left in the engine and in the journal.
-/// </summary>
+/// <summary>The fulfilment worker end to end over the collection's containers and stubs (§12.4).</summary>
 [Collection(nameof(IntegrationCollection))]
 public sealed class ShipmentFulfilmentTests(ServiceFixture fixture) : IAsyncLifetime
 {
@@ -32,10 +28,8 @@ public sealed class ShipmentFulfilmentTests(ServiceFixture fixture) : IAsyncLife
     [Fact]
     public async Task Every_event_in_the_consumes_column_is_bound_on_the_queue()
     {
-        // The in-memory harness replaces the UsingRabbitMq callback where
-        // ConfigureConsumer is declared, so the binding is provable only
-        // against a real broker. Healthy first, because an endpoint declares
-        // its bindings as it starts and the host does not wait for that (§13.5).
+        // Provable only against a real broker, as the harness replaces the UsingRabbitMq callback; healthy first, since
+        // an endpoint declares its bindings as it starts (§13.5).
         BusHealthStatus health = await fixture.Factory.Services.GetRequiredService<IBusControl>()
             .WaitForHealthStatus(BusHealthStatus.Healthy, FulfilmentSteps.Deadline);
         health.ShouldBe(BusHealthStatus.Healthy);
@@ -68,11 +62,7 @@ public sealed class ShipmentFulfilmentTests(ServiceFixture fixture) : IAsyncLife
     {
         Guid order = await _steps.ConfirmAsync(FulfilmentSteps.Kazakh);
 
-        // One refusal, not two, and the count is the arrangement: the stub
-        // dequeues one status per call, the claim takes one row, and a gRPC
-        // status is asked exactly once because it travels as an HTTP 200 with
-        // grpc-status in the trailers. Two queued would make the recovery pass
-        // below consume the second and fail.
+        // One refusal, not two: a gRPC status is asked once, and a second queued would fail the recovery pass below.
         fixture.Ordering.Fail(StatusCode.PermissionDenied);
 
         (await fixture.RunFulfilmentPassAsync()).ShouldBe(0);
@@ -149,11 +139,7 @@ public sealed class ShipmentFulfilmentTests(ServiceFixture fixture) : IAsyncLife
         Guid order = await _steps.ConfirmAsync(FulfilmentSteps.Kazakh);
         using CommitFault fault = fixture.FailNextCommit();
 
-        // Zero rather than a throw: the fault is not transient, so the
-        // execution strategy hands it on instead of retrying the unit, and the
-        // pass catches per row and backs it off — a failed commit reaches the
-        // row's catch and never the caller (spec, section 4). The counter is
-        // what says the catch ran.
+        // Zero rather than a throw: the fault is not transient, so the pass's per-row catch backs the row off.
         (await fixture.RunFulfilmentPassAsync()).ShouldBe(0);
         (await _steps.AttemptsAsync(order)).ShouldBe(1);
 
@@ -183,10 +169,7 @@ public sealed class ShipmentFulfilmentTests(ServiceFixture fixture) : IAsyncLife
     [Fact]
     public async Task A_pass_that_throws_leaves_the_host_running()
     {
-        // The claim failing, and not a row: RunOnceAsync catches per row, so a
-        // carrier outage never reaches ExecuteAsync's catch at all and a test
-        // driven through one would stay green with that catch deleted. An
-        // unreachable database is what makes the pass itself throw.
+        // The claim failing, not a row, as RunOnceAsync catches per row; an unreachable database makes the pass throw.
         using ShippingWorkerFactory broken = new(Unreachable.Sql, Unreachable.Rabbit);
         FulfilmentWorker worker = broken.Services.GetRequiredService<FulfilmentWorker>();
 
@@ -194,9 +177,7 @@ public sealed class ShipmentFulfilmentTests(ServiceFixture fixture) : IAsyncLife
 
         await worker.StartAsync(TestContext.Current.CancellationToken);
 
-        // Staged on the loop's own line rather than on a sleep: the direct
-        // call above logs nothing, so the line is the loop having ticked and
-        // caught. A loop that let the fault out completes instead.
+        // Staged on the loop's own line, which the direct call above never logs.
         await FulfilmentSteps.WaitUntil(() =>
             Task.FromResult(ClaimFailedLogged(broken) || worker.ExecuteTask!.IsCompleted));
 
@@ -269,10 +250,7 @@ public sealed class ShipmentFulfilmentTests(ServiceFixture fixture) : IAsyncLife
     [Fact]
     public async Task A_cancellation_unanswered_past_the_give_up_age_is_recorded_as_refused_without_asking_again()
     {
-        // ADR-054: the silence is recorded as the refusal, because what
-        // follows is the refusal's — tracking goes on and the row leaves the
-        // claim. Asked before the carrier is, so a cancel that would fail for
-        // ever cannot hold the row past the age.
+        // ADR-054: the silence is recorded as the refusal, and the age is checked before the carrier is asked.
         Guid order = await _steps.ConfirmAsync(FulfilmentSteps.Kazakh);
         await fixture.RunFulfilmentPassAsync();
         await _steps.PublishAsync(FulfilmentSteps.Cancelled(order));
@@ -313,9 +291,7 @@ public sealed class ShipmentFulfilmentTests(ServiceFixture fixture) : IAsyncLife
         await fixture.RunFulfilmentPassAsync();
         (await DespatchAsync(order)).ShouldBeTrue();
 
-        // A second copy of the same scan on a fresh scope: the load by order
-        // has to bring the tracking rows, or the repeat is a second insert of
-        // the key rather than the no-op a repeated scan is (spec, section 5).
+        // A repeat on a fresh scope: the load by order must bring the tracking rows, or the key is inserted twice.
         (await DespatchAsync(order)).ShouldBeFalse();
 
         await _steps.PublishAsync(FulfilmentSteps.Cancelled(order));
@@ -360,10 +336,7 @@ public sealed class ShipmentFulfilmentTests(ServiceFixture fixture) : IAsyncLife
             .Select(e => e.RequestMessage!.Headers!["Idempotency-Key"].Single())
     ];
 
-    /// <summary>
-    /// Records the carrier's collection scan through the repository, as the
-    /// tracking worker will, and returns whether it moved the shipment.
-    /// </summary>
+    /// <summary>Records the carrier's collection scan through the repository; true if it moved the shipment.</summary>
     private async Task<bool> DespatchAsync(Guid order)
     {
         await using AsyncServiceScope scope = fixture.Factory.Services.CreateAsyncScope();

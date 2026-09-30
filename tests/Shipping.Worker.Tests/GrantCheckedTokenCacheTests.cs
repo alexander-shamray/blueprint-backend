@@ -10,10 +10,7 @@ using Xunit;
 
 namespace Shipping.Worker.Tests;
 
-/// <summary>
-/// The grant ADR-052 names, checked on the token this host was issued. Tokens
-/// are written by hand because the host factory substitutes the token source.
-/// </summary>
+/// <summary>The grant ADR-052 names, checked on the token this host was issued.</summary>
 public class GrantCheckedTokenCacheTests
 {
     public static TheoryData<string[]> GrantsThatAreNotTheOne()
@@ -92,23 +89,14 @@ public class GrantCheckedTokenCacheTests
         counted.Value.ShouldBe(1, "a realm that issues no JWT is the deployment's to fix, and no retry will");
     }
 
-    /// <summary>
-    /// The meter factory and the one metrics type, from a container, because
-    /// <c>DefaultMeterFactory</c> is internal to its assembly. The provider has
-    /// to outlive the assertions: a meter disposed with its factory publishes
-    /// nothing.
-    /// </summary>
+    /// <summary>The meter factory and the one metrics type, from a container that outlives the assertions.</summary>
     private static ServiceProvider Metrics() =>
         new ServiceCollection().AddMetrics().AddSingleton<AddressMetrics>().BuildServiceProvider();
 
     private static GrantCheckedTokenCache Cache(IServiceProvider services, ITokenCache inner) =>
         new(inner, services.GetRequiredService<AddressMetrics>(), NullLogger<GrantCheckedTokenCache>.Instance);
 
-    /// <summary>
-    /// An unsigned token carrying one <c>permission</c> claim per element. No
-    /// signing credentials, because the class reads the token and never
-    /// validates it.
-    /// </summary>
+    /// <summary>An unsigned token with one <c>permission</c> claim per element; the class never validates it.</summary>
     private static string Jwt(string[] permissions) =>
         new JwtSecurityTokenHandler().WriteToken(new JwtSecurityToken(
             issuer: "https://identity.invalid/realms/test",

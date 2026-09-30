@@ -7,11 +7,7 @@ using Xunit;
 
 namespace Shipping.Worker.Tests;
 
-/// <summary>
-/// §2: Shipping reaches neither Redis instance. Its two workers claim rows
-/// under a lease in SQL, it caches nothing, and §8.5's keys belong to HTTP
-/// write commands, which a host with no API does not have.
-/// </summary>
+/// <summary>Shipping reaches neither Redis instance: it takes no §8.5 key and caches nothing (§2).</summary>
 public sealed class NoRedisTests
 {
     [Fact]
@@ -35,11 +31,7 @@ public sealed class NoRedisTests
         keyed.GetKeyedService(multiplexer, RedisConnections.Cache).ShouldBeNull();
         keyed.GetKeyedService(multiplexer, RedisConnections.Coordination).ShouldBeNull();
 
-        // RetentionPurgeService (Common.Infrastructure) resolves
-        // IIdempotencyStore unconditionally for ADR-039's marker purge, so
-        // resolving it here proves NoClaimsIdempotencyStore satisfies that
-        // dependency without Redis — ValidateOnBuild would otherwise have
-        // thrown before `factory.Services` above ever returned.
+        // RetentionPurgeService resolves IIdempotencyStore for ADR-039's purge, which this proves works without Redis.
         services.GetRequiredService<RetentionPurgeService>().ShouldNotBeNull();
     }
 }

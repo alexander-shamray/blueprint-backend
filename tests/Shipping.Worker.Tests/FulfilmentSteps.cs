@@ -10,34 +10,20 @@ using Xunit;
 
 namespace Shipping.Worker.Tests;
 
-/// <summary>
-/// What the fulfilment suites arrange and read over the collection's
-/// containers: an order confirmed through the real broker, and one column of
-/// its shipment read back from the engine.
-/// </summary>
+/// <summary>What the fulfilment suites arrange and read over the collection's containers.</summary>
 internal sealed class FulfilmentSteps(ServiceFixture fixture)
 {
     /// <summary>The carrier's booking path, as the adapter posts it.</summary>
     public const string BookingPath = "/v1/shipments";
 
-    /// <summary>
-    /// How long any staged step may take: a delivery through the broker, a
-    /// bus coming up, or a pass part-way through a stalled carrier answer.
-    /// A deadline, not a sleep, so it costs nothing when the step is prompt.
-    /// </summary>
+    /// <summary>How long a staged step may take; a deadline, not a sleep, so a prompt step costs nothing.</summary>
     public static readonly TimeSpan Deadline = TimeSpan.FromSeconds(20);
 
-    /// <summary>
-    /// An address in a script the booking's JSON escapes, so a search can tell
-    /// the raw text from the escaped and nvarchar from a code page.
-    /// </summary>
+    /// <summary>An address in a script the booking's JSON escapes, so raw, escaped and code-page text differ.</summary>
     public static readonly DeliveryAddress Kazakh =
         new("Абай даңғылы 1, ә ғ қ ң ө ұ ү һ і", "пәтер 12", "Алматы", "050000", "KZ");
 
-    /// <summary>
-    /// Seeds the address the stub will answer with, or none, publishes the
-    /// event that creates the shipment, and waits until the claim can see it.
-    /// </summary>
+    /// <summary>Seeds the stub's address, or none, publishes the confirmation and waits for the claim.</summary>
     public async Task<Guid> ConfirmAsync(DeliveryAddress? address)
     {
         Guid order = Guid.CreateVersion7();
@@ -51,12 +37,7 @@ internal sealed class FulfilmentSteps(ServiceFixture fixture)
         return order;
     }
 
-    /// <summary>
-    /// Publishes onto the bus and waits for this message's inbox row, which
-    /// is written after the handler's command has committed (§9.5): a pass
-    /// run before then would claim nothing, and the assertions after it
-    /// would be about an empty table.
-    /// </summary>
+    /// <summary>Publishes and waits for this message's inbox row, written once the command commits (§9.5).</summary>
     public async Task PublishAsync<T>(T message)
         where T : class, IIntegrationEvent
     {
@@ -125,19 +106,12 @@ internal sealed class FulfilmentSteps(ServiceFixture fixture)
         fixture.ScalarAsync<DateTimeOffset?>(
             "SELECT Value = LockedUntil FROM shipping.Shipments WHERE OrderId = {0}", order);
 
-    /// <summary>
-    /// The instant itself and not a <c>DATEDIFF</c> from the SQL clock:
-    /// <c>DATEDIFF</c> counts the boundaries of its unit crossed, so a
-    /// five-second backoff read across a second boundary answers four.
-    /// </summary>
+    /// <summary>The instant itself, as <c>DATEDIFF</c> counts boundaries and can read five seconds as four.</summary>
     public Task<DateTimeOffset> NextAttemptAtAsync(Guid order) =>
         fixture.ScalarAsync<DateTimeOffset>(
             "SELECT Value = NextAttemptAt FROM shipping.Shipments WHERE OrderId = {0}", order);
 
-    /// <summary>
-    /// Moves the shipment's creation back by <paramref name="age"/> from the
-    /// host's clock, the clock the pass reads the give-up age against.
-    /// </summary>
+    /// <summary>Moves <c>CreatedAt</c> back by <paramref name="age"/> from the host's clock.</summary>
     public Task AgeAsync(Guid order, TimeSpan age) =>
         fixture.ExecuteAsync(
             "UPDATE shipping.Shipments SET CreatedAt = {1} WHERE OrderId = {0};", order, DateTimeOffset.UtcNow - age);
@@ -147,20 +121,14 @@ internal sealed class FulfilmentSteps(ServiceFixture fixture)
         fixture.ExecuteAsync(
             "UPDATE shipping.Shipments SET NextAttemptAt = SYSDATETIMEOFFSET() WHERE OrderId = {0};", order);
 
-    /// <summary>
-    /// The engine's own clock, for a comparison with a column the engine
-    /// stamped: the container's clock and the host's can disagree.
-    /// </summary>
+    /// <summary>The engine's own clock, since the container's and the host's can disagree.</summary>
     public Task<DateTimeOffset> DatabaseNowAsync() =>
         fixture.ScalarAsync<DateTimeOffset>("SELECT Value = SYSDATETIMEOFFSET()");
 
     public static int BookingCalls(WireMockServer carrier) =>
         carrier.LogEntries.Count(e => e.RequestMessage!.Path == BookingPath);
 
-    /// <summary>
-    /// Polls to a deadline and throws when it lapses, which is what stages a
-    /// step on something another has already done rather than on a sleep.
-    /// </summary>
+    /// <summary>Polls to <see cref="Deadline"/> and throws when it lapses.</summary>
     public static async Task WaitUntil(Func<Task<bool>> predicate)
     {
         DateTimeOffset deadline = DateTimeOffset.UtcNow + Deadline;

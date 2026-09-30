@@ -1,13 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!--
-    Not a test project (§4.1) and not a second TestSupport: one stub server
-    that references nothing of Shipping's, so what it serves is the contract
-    and not a Shipping type. The server half is not generated into
-    Shipping.Infrastructure, whose client half is internal: §3.2 gives
-    Shipping no API, and a gRPC service base in its production assembly is a
-    surface the service is defined not to have.
-  -->
+  <!-- Not a test project (§4.1) and not a second TestSupport: a stub server referencing nothing of Shipping's,
+       outside Shipping.Infrastructure because §3.2 gives Shipping no API for a gRPC service base to serve. -->
 
   <PropertyGroup>
     <IsPackable>false</IsPackable>
@@ -21,16 +15,13 @@
     <!-- MapGrpcService and the Kestrel host behind it. Grpc.Tools rides in
          with this one and compiles the Protobuf item below. -->
     <PackageReference Include="Grpc.AspNetCore" />
-    <!-- IAsyncLifetime. xunit.v3 itself refuses non-Exe output and names this
-         package as the alternative. -->
+    <!-- IAsyncLifetime; not xunit.v3, which refuses Library output. -->
     <PackageReference Include="xunit.v3.extensibility.core" />
   </ItemGroup>
 
   <ItemGroup>
-    <!-- The server half of the contract Shipping.Infrastructure compiles as a
-         client. Ordering owns the file because Ordering serves the RPC
-         (ADR-052); this project consumes the .proto and no assembly, which is
-         what keeps §4.3 true. -->
+    <!-- The server half of the contract Shipping.Infrastructure compiles as a client. Ordering owns the file
+         (ADR-052), and consuming the .proto rather than an assembly keeps §4.3 true. -->
     <Protobuf
       Include="..\..\src\Services\Ordering\Ordering.Api\Protos\delivery_addresses.proto"
       Link="Protos\delivery_addresses.proto"

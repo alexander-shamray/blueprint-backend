@@ -9,11 +9,7 @@ using Xunit;
 
 namespace Shipping.Worker.Tests;
 
-/// <summary>
-/// ADR-052's give-up age is a value the deployment is given, so a missing or
-/// impossible one is §15.4's failure at start rather than a pass that retries
-/// for ever or ends every shipment on sight.
-/// </summary>
+/// <summary>ADR-052's give-up age is the deployment's, so a missing or impossible one fails start (§15.4).</summary>
 public sealed class FulfilmentOptionsTests
 {
     private const string UnreachableSql =
@@ -52,8 +48,7 @@ public sealed class FulfilmentOptionsTests
     [Fact]
     public void The_invented_age_is_accepted_and_bound()
     {
-        // The control for the theories above, so they cannot pass against a
-        // class nothing satisfies.
+        // The control for the theories above, so they cannot pass against a class nothing satisfies.
         using ServiceProvider provider = Bound(ShippingWorkerFactory.InventedGiveUpAge);
 
         Should.NotThrow(() => provider.GetRequiredService<IStartupValidator>().Validate());

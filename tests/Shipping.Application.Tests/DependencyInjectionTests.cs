@@ -5,11 +5,7 @@ using Xunit;
 
 namespace Shipping.Application.Tests;
 
-/// <summary>
-/// The registration surface of <c>AddShippingApplication</c>, asserted on the
-/// collection rather than a built provider: registration order is pipeline
-/// order (§6.3), and only the descriptor list still shows it.
-/// </summary>
+/// <summary>Asserted on the collection, not a built provider: registration order is pipeline order (§6.3).</summary>
 public class DependencyInjectionTests
 {
     [Fact]
@@ -28,10 +24,6 @@ public class DependencyInjectionTests
     [Fact]
     public void AddShippingApplication_registers_the_system_clock()
     {
-        // LoggingBehavior injects TimeProvider, and neither ValidateOnBuild
-        // nor the host smoke can see the hole: an open generic is not
-        // constructed until a closed IPipelineBehavior<,> resolves, which
-        // nothing does before the first dispatched request (§4.2, §5.4).
         ServiceCollection services = new();
 
         services.AddShippingApplication();
@@ -46,9 +38,6 @@ public class DependencyInjectionTests
     [Fact]
     public void AddShippingApplication_registers_the_request_metrics_singleton()
     {
-        // The clock test's twin, for the same reason: LoggingBehavior injects
-        // RequestMetrics, and neither ValidateOnBuild nor the host smoke can
-        // see the omission before the first dispatched request.
         ServiceCollection services = new();
 
         services.AddShippingApplication();
@@ -62,10 +51,7 @@ public class DependencyInjectionTests
     [Fact]
     public void AddShippingApplication_registers_the_real_domain_event_dispatcher_scoped()
     {
-        // §4.2 registers IDomainEventDispatcher in Application, beside
-        // AddDispatcher. Without it the first resolved TransactionBehavior
-        // throws, and nothing resolves one before the first dispatched
-        // command.
+        // §4.2 registers IDomainEventDispatcher in Application, beside AddDispatcher.
         ServiceCollection services = new();
 
         services.AddShippingApplication();
@@ -75,19 +61,14 @@ public class DependencyInjectionTests
             .ShouldHaveSingleItem();
         dispatcher.Lifetime.ShouldBe(ServiceLifetime.Scoped);
 
-        // Named, not merely counted. The null object this replaced satisfied
-        // every other assertion in this test while dropping every domain event
-        // the aggregate raised, which is exactly the failure a shape-only
-        // check cannot see.
+        // Named, not merely counted, since a null object would satisfy every other assertion here.
         dispatcher.ImplementationType!.Name.ShouldBe("DomainEventDispatcher");
     }
 
     [Fact]
     public void AddShippingApplication_registers_the_projection_registry_scoped()
     {
-        // Scoped, not singleton: the registry resolves scoped handlers, and
-        // GetServices for a scoped service from the root provider throws
-        // (§7.5). Its memo is the singleton beside it, keyed to the container.
+        // Scoped, not singleton: the registry resolves scoped handlers (§7.5).
         ServiceCollection services = new();
 
         services.AddShippingApplication();
@@ -101,9 +82,7 @@ public class DependencyInjectionTests
     [Fact]
     public void AddShippingApplication_registers_the_allow_list_mapper()
     {
-        // The one registration that decides what Shipping publishes (§9.3).
-        // Explicit rather than scanned, so "Shipping publishes these facts" is
-        // not a property of which types happen to be in the assembly.
+        // Explicit rather than scanned, since this registration decides what Shipping publishes (§9.3).
         ServiceCollection services = new();
 
         services.AddShippingApplication();
@@ -140,12 +119,6 @@ public class DependencyInjectionTests
     [Fact]
     public void AddShippingApplication_registers_the_key_carrier_the_two_behaviours_share()
     {
-        // §8.5's behaviour builds the key and §6.3's transaction writes the
-        // durable marker under it, and the carrier between them is a plain
-        // scoped class rather than an interface — so nothing fails at startup
-        // if it is missing. ValidateOnBuild never constructs an open generic,
-        // so the omission surfaces as a TransactionBehavior that cannot be
-        // resolved on the first command this service dispatches.
         ServiceCollection services = new();
 
         services.AddShippingApplication();
@@ -159,10 +132,4 @@ public class DependencyInjectionTests
             "a singleton would carry one command's key into every other command in the process");
     }
 
-    // A handler assertion and a validator assertion come back separately rather
-    // than together. The first handler of either kind earns the one that
-    // asserts the §6.2 scan produced a registration; the first validator earns
-    // the one that asserts the validator scan found it. Both scans fail
-    // silently when lost, which is why neither is left implicit — and a
-    // query-only slice needs the handler one alone.
 }
