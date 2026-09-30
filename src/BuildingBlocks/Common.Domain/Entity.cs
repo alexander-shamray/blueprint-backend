@@ -4,7 +4,6 @@ namespace Common.Domain;
 public abstract class Entity<TId> : IEquatable<Entity<TId>>
     where TId : struct
 {
-    /// <summary>Protected, not init: §5.4's factories set it after construction.</summary>
     public TId Id { get; protected set; }
 
     public bool Equals(Entity<TId>? other) =>
