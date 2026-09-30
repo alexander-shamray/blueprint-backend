@@ -6,7 +6,7 @@ using Xunit;
 
 namespace Web.Bff.Tests;
 
-/// <summary>The half of §11.5 a host keeps after ADR-052: the names the building block cannot write down.</summary>
+/// <summary>The half of §11.5 a host keeps under ADR-052: the names the building block cannot write down.</summary>
 public sealed class IdentityRegistrationTests
 {
     [Fact]
