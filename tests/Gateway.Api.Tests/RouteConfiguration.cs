@@ -47,7 +47,7 @@ internal sealed record RouteConfiguration(
 
     private static RouteConfiguration Read(IConfigurationSection route)
     {
-        // Only PathRemovePrefix is path composition.
+        // Only PathRemovePrefix is path composition here.
         List<string> removed =
         [
             .. route
