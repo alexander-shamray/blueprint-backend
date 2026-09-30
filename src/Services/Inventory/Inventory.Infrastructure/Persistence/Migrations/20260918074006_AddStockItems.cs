@@ -2,12 +2,7 @@
 
 namespace Inventory.Infrastructure.Persistence.Migrations;
 
-/// <summary>
-/// §7.3's stock table, generated from <see cref="StockItemConfiguration"/> —
-/// the configuration is the source of truth and only this file's dress is
-/// hand-authored (file-scoped namespace, this comment). The <c>.Designer.cs</c>
-/// and the snapshot beside it are machine-owned and untouched.
-/// </summary>
+/// <summary>§7.3's stock table, generated from <see cref="StockItemConfiguration"/>.</summary>
 public partial class AddStockItems : Migration
 {
     protected override void Up(MigrationBuilder migrationBuilder)

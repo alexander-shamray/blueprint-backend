@@ -3,11 +3,7 @@ using Inventory.Domain.Reservations;
 
 namespace Inventory.Application.Reservations.ReleaseStock;
 
-/// <summary>
-/// The first of ADR-024's two guarantees, and the tombstone half of the
-/// second; the refusal that closes it is <c>ReserveStockHandler</c>'s,
-/// through <see cref="Reservation.AnswerAgain"/> on the row this writes.
-/// </summary>
+/// <summary>ADR-024's first guarantee, and the tombstone half of its second.</summary>
 public sealed class ReleaseStockHandler(
     IReservationRepository reservations,
     IStockLedger ledger,
@@ -19,9 +15,7 @@ public sealed class ReleaseStockHandler(
         var order = new OrderId(command.OrderId);
         Reservation? reservation = await reservations.GetForUpdateAsync(order, ct);
 
-        // Read under the lock: the instant is taken once a writer that waited
-        // behind this one has committed, so it cannot stamp earlier than the
-        // one it waited for.
+        // Read under the lock, so it cannot precede the instant of a writer this one waited behind.
         DateTimeOffset now = clock.GetUtcNow();
 
         // Two releases for an unknown order serialise on the key-range lock the

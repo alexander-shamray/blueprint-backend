@@ -13,9 +13,7 @@ public static class ReservationErrors
             "reservation.not_reinstatable",
             "Only a released reservation with lines, not yet despatched, can be reinstated.");
 
-    // The ids travel in the description because that is the one member
-    // ResultExtensions serialises, and an operator reinstating by hand needs
-    // to know which product to receive before trying again.
+    // The ids travel in the description, the one member ResultExtensions serialises, for the reinstating operator.
     public static Error Unavailable(IReadOnlyList<ProductId> products) =>
         Error.Rule(
             "reservation.unavailable",

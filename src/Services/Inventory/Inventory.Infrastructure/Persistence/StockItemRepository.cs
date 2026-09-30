@@ -5,12 +5,8 @@ namespace Inventory.Infrastructure.Persistence;
 
 internal sealed class StockItemRepository(InventoryDbContext db) : IStockItemRepository
 {
-    // UPDLOCK, HOLDLOCK on the probe, held to the commit: two first writes
-    // for one product both reach this statement, the second blocks on the
-    // first's key-range lock and finds the row when it proceeds — without it
-    // both insert and the loser fails on the key, which
-    // ConcurrencyExceptionHandler does not map. On a row that exists the same
-    // lock serialises this write with the ledger's statements on the row.
+    // UPDLOCK, HOLDLOCK to the commit: a second first write blocks on the key-range lock and then finds the row,
+    // where both would otherwise insert and the loser fail on a key ConcurrencyExceptionHandler does not map.
     public async Task EnsureAsync(ProductId id, DateTimeOffset now, CancellationToken ct)
     {
         if (db.Database.CurrentTransaction is null)

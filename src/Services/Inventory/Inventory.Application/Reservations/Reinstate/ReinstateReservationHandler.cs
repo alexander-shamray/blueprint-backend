@@ -3,11 +3,7 @@ using Inventory.Domain.Reservations;
 
 namespace Inventory.Application.Reservations.Reinstate;
 
-/// <summary>
-/// A failure result rolls the transaction back, which undoes nothing here
-/// because the savepoint already did, and stages nothing, which is right: a
-/// refused reinstatement publishes no level.
-/// </summary>
+/// <summary>A refusal rolls back nothing the savepoint has not already undone, and publishes no level.</summary>
 public sealed class ReinstateReservationHandler(
     IReservationRepository reservations,
     IStockLedger ledger,

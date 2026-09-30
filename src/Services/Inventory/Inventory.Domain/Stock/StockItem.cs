@@ -3,11 +3,7 @@ using Inventory.Domain.Stock.Events;
 
 namespace Inventory.Domain.Stock;
 
-/// <summary>
-/// One count per product (§3.2, §7.3). The aggregate for the admin path only:
-/// the reservation path writes these columns by §7.3's statement and never
-/// loads this type.
-/// </summary>
+/// <summary>One count per product, loaded by the admin path only; reservations move it by §7.3's statement.</summary>
 public sealed class StockItem : AggregateRoot<ProductId>
 {
     public int Available { get; private set; }
@@ -42,12 +38,7 @@ public sealed class StockItem : AggregateRoot<ProductId>
 
         Available = onHand - Reserved;
 
-        // Monotonic per product, from this side as the ledger's statement is
-        // from its side: the level's instant is the clock when the clock is
-        // ahead of the row and one tick past the row otherwise, so Catalog's
-        // watermark never keeps an older level for a newer stamp whatever the
-        // two clocks do. The row is locked from the load to the commit, so
-        // no ledger stamp lands between the two.
+        // Monotonic per row, as the ledger's stamp is (§7.3); the row is locked from the load to the commit.
         UpdatedAt = now > UpdatedAt ? now : UpdatedAt.AddTicks(1);
         Raise(new StockLevelChangedDomainEvent(Id, Available, UpdatedAt));
     }
