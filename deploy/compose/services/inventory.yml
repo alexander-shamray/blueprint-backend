@@ -1,4 +1,4 @@
-# Inventory: /v1/inventory/stock/{productId}, behind a token (ADR-030).
+# Inventory: /v1/inventory/stock and /v1/inventory/reservations, behind a token (ADR-030).
 services:
   # §14.1's pair rule: a {service}-migrator one-shot plus the service itself,
   # gated on `condition: service_completed_successfully` — every service owns
