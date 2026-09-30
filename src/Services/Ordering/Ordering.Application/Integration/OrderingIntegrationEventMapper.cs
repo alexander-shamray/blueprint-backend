@@ -6,30 +6,13 @@ using Ordering.Domain.Orders.Events;
 
 namespace Ordering.Application.Integration;
 
-/// <summary>
-/// §9.3's allow-list for this service. §5.5 states the principle — never publish a
-/// domain event to the bus — and this is the mechanism that makes it
-/// structural rather than aspirational: a domain event absent from
-/// <see cref="Registry"/> never reaches the bus, by construction, not by
-/// review.
-/// </summary>
+/// <summary>§9.3's allow-list: an event absent from <see cref="Registry"/> never reaches the bus.</summary>
 internal sealed class OrderingIntegrationEventMapper : IIntegrationEventMapper
 {
-    /// <summary>
-    /// §3.2's Publishes column for Ordering, and exactly it. Three of the five
-    /// domain events <c>Order</c> raises are here; the other two are
-    /// deliberately not.
-    /// </summary>
+    /// <summary>§3.2's Publishes column for Ordering, and exactly it.</summary>
     /// <remarks>
-    /// <c>OrderStockConfirmedDomainEvent</c> is internal bookkeeping — §3.2
-    /// gives no service a subscription to it, and Inventory already knows,
-    /// because it is the thing that told us. <c>OrderShippedDomainEvent</c> is
-    /// the sharper case and the one worth stating: despatch is <em>Shipping's</em>
-    /// fact, published by Shipping as <c>ShipmentDispatched</c> and consumed
-    /// by three services (§3.2). Republishing it under Ordering's name would
-    /// put the same event on the bus twice with two owners, which is the
-    /// versioning problem §9.2 exists to avoid, arriving as a duplication
-    /// rather than as a change.
+    /// <c>OrderStockConfirmedDomainEvent</c> is internal bookkeeping no service subscribes to (§3.2), and
+    /// <c>OrderShippedDomainEvent</c> would republish Shipping's <c>ShipmentDispatched</c> with two owners (§9.2).
     /// </remarks>
     private static readonly Dictionary<Type, Func<IDomainEvent, object>> Registry = new()
     {
@@ -53,12 +36,7 @@ internal sealed class OrderingIntegrationEventMapper : IIntegrationEventMapper
         return mapped;
     }
 
-    // Minted here and nowhere else, on Catalog's terms: Stage copies both onto
-    // the row and DeliverAsync copies them onto the transport, so the body, the
-    // row, the broker header and the inbox key are one GUID (§9.1). The
-    // correlation is the ORDER in all three, which is also what §9.6's saga
-    // correlates its instance on — so a support tool following one id sees the
-    // whole workflow rather than three unrelated traces.
+    // One GUID for body, row, header and inbox key (§9.1); the correlation is the order, as §9.6's saga's is.
     private static OrderPlaced ToContract(OrderPlacedDomainEvent e) => new()
     {
         MessageId = Guid.CreateVersion7(),
@@ -80,13 +58,7 @@ internal sealed class OrderingIntegrationEventMapper : IIntegrationEventMapper
         CustomerId = e.CustomerId.Value,
         TotalAmount = e.Total.Amount,
         Currency = e.Total.Currency,
-        // The domain event carries the shipping address and this contract does
-        // not, and the asymmetry is the point rather than an omission: §11.7
-        // governs what crosses a service boundary, and OrderConfirmedDomainEvent
-        // never crosses one. It is the aggregate's own record of what it
-        // decided, over an address ordering.Orders stores anyway; this mapper
-        // is the only thing that ever read the field, and dropping the read is
-        // what keeps the address inside the service that owns it.
+        // No shipping address, which stays inside the service that owns it (§11.7, ADR-035).
         Lines = [.. e.Lines.Select(l => new ConfirmedLine(l.ProductId.Value, l.Quantity, l.UnitPrice.Amount))]
     };
 
@@ -97,20 +69,9 @@ internal sealed class OrderingIntegrationEventMapper : IIntegrationEventMapper
         OccurredAt = e.OccurredAt,
         OrderId = e.OrderId.Value,
         CustomerId = e.CustomerId.Value,
-        // The wire vocabulary, through the one map that owns it (§9.6). The
-        // enum's member names are not the contract and must never become it —
-        // CancellationReasons.ToCode is what keeps the two spellings apart.
+        // The wire vocabulary through the one map that owns it, never the enum's member names (§9.6).
         Reason = CancellationReasons.ToCode(e.Reason),
-        // Populated from this release on. §9.6's saga discards an ABSENT origin
-        // on the same path as its own echo, and that is a TOLERANCE rather
-        // than an identification: absent means "published before the field
-        // existed", which holds the pre-#123 behaviour for as long as such a
-        // payload can still arrive — indefinitely, since the error queue keeps
-        // one until it is handled. Reading it as an origin
-        // in either direction is the inference this field exists to replace —
-        // as User it would fault every cancellation an older instance
-        // published, and as Workflow it would outlive the deploy that
-        // justifies it.
+        // An absent origin is §9.6's tolerance for payloads older than the field, not an identification.
         Origin = CancellationOrigins.ToCode(e.Origin)
     };
 }

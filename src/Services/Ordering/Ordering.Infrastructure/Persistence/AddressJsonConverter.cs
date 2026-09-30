@@ -4,25 +4,8 @@ using Ordering.Domain.Common;
 
 namespace Ordering.Infrastructure.Persistence;
 
-/// <summary>
-/// §5.3's <c>Address</c> on the outbox's <c>Local</c> lane, carried by
-/// <c>OrderConfirmedDomainEvent</c>.
-/// </summary>
-/// <remarks>
-/// <b>The failure mode differs from <see cref="MoneyJsonConverter"/>'s, and is
-/// louder by luck rather than by design.</b> <c>Address</c> is a sealed record
-/// <em>class</em> with a private constructor, so there is no parameterless
-/// constructor to fall back to and <c>System.Text.Json</c> throws on read
-/// instead of silently producing a default. That makes it the better of the
-/// two failures and still a failure — a domain event that cannot be read back
-/// is an outbox row that can never be dispatched, and the dispatcher retries
-/// it to its attempt cap before giving up loudly.
-/// <para>
-/// Reading goes through <see cref="Address.Of"/> for the reason the money
-/// converter gives: a payload is input, and the always-valid principle has no
-/// exemption for input this service wrote itself.
-/// </para>
-/// </remarks>
+/// <summary>§5.3's <c>Address</c> on the <c>Local</c> lane, carried by <c>OrderConfirmedDomainEvent</c>.</summary>
+/// <remarks>Read through <see cref="Address.Of"/>, on <see cref="MoneyJsonConverter"/>'s terms.</remarks>
 internal sealed class AddressJsonConverter : JsonConverter<Address>
 {
     public override Address Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
@@ -44,9 +27,7 @@ internal sealed class AddressJsonConverter : JsonConverter<Address>
             string property = reader.GetString()!;
             reader.Read();
 
-            // Ordinal and case-sensitive, and the whole unknown value skipped
-            // rather than its first token — both for the reasons spelled out
-            // on the money converter beside this one.
+            // Ordinal, and an unknown value skipped whole, as in MoneyJsonConverter.
             if (property == nameof(Address.Line1))
                 line1 = reader.GetString();
             else if (property == nameof(Address.Line2))
@@ -61,8 +42,7 @@ internal sealed class AddressJsonConverter : JsonConverter<Address>
                 reader.Skip();
         }
 
-        // Line2 is absent from this list deliberately: it is optional on the
-        // domain type, so a payload without it is complete rather than partial.
+        // Line2 is optional on the domain type, so a payload without it is complete.
         if (line1 is null || city is null || postalCode is null || country is null)
         {
             throw new JsonException(
@@ -79,9 +59,7 @@ internal sealed class AddressJsonConverter : JsonConverter<Address>
         writer.WriteStartObject();
         writer.WriteString(nameof(Address.Line1), value.Line1);
 
-        // Written even when null, so the payload states the absence rather
-        // than leaving a reader to infer it from a missing member — the two
-        // are different facts once §9.2 makes an added member ordinary.
+        // Written even when null, so the payload states the absence (§9.2).
         writer.WriteString(nameof(Address.Line2), value.Line2);
         writer.WriteString(nameof(Address.City), value.City);
         writer.WriteString(nameof(Address.PostalCode), value.PostalCode);

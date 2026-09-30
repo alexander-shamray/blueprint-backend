@@ -4,11 +4,7 @@ using Ordering.Domain.Orders.Events;
 
 namespace Ordering.Domain.Orders;
 
-/// <summary>
-/// §5.4's aggregate, and the core of this service. Note what it does not have:
-/// public setters, a parameterless public constructor, references to other
-/// aggregates by object, or any knowledge of persistence.
-/// </summary>
+/// <summary>§5.4's aggregate: no public setters, no public parameterless constructor, no persistence.</summary>
 public sealed class Order : AggregateRoot<OrderId>
 {
     private readonly List<OrderLine> _lines = [];
@@ -22,9 +18,8 @@ public sealed class Order : AggregateRoot<OrderId>
     public Money Total => _lines.Aggregate(Money.Zero(_currency), (sum, line) => sum + line.LineTotal);
 
     /// <summary>
-    /// An immutable copy of the lines, for events. <see cref="Lines"/> returns
-    /// a read-only <em>view</em> over the live list, so an event holding it
-    /// would keep changing after the fact — a record of what happened must not
+    /// An immutable copy of the lines, for events. <see cref="Lines"/> returns a read-only <em>view</em> over the
+    /// live list, so an event holding it would keep changing after the fact — a record of what happened must not
     /// track what happens next.
     /// </summary>
     private IReadOnlyList<OrderLineSnapshot> SnapshotLines() =>
@@ -86,14 +81,9 @@ public sealed class Order : AggregateRoot<OrderId>
         OrderLine? existing = _lines.SingleOrDefault(l => l.ProductId == product);
         if (existing is not null)
         {
-            // The merge keeps the price it already has, so a second line at a
-            // different price would silently reprice the first one's quantity
-            // too — an order whose Total no consumer could derive from the
-            // request that produced it. Nothing reaches this today, because
-            // the handler reads one price per product id from the projection
-            // and hands the same Money to both lines; that is a property of
-            // one caller, and an aggregate that is only valid while its
-            // callers behave is the thing §5.3 says it must not be.
+            // The merge keeps the price already held, so a second line at a
+            // different one would silently reprice the first line's quantity
+            // as well — a Total no consumer could derive from the request.
             if (existing.UnitPrice != unitPrice)
                 throw new DomainException("A product cannot appear twice at different prices.");
 

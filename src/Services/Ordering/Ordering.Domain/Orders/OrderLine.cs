@@ -3,18 +3,8 @@ using Ordering.Domain.Common;
 
 namespace Ordering.Domain.Orders;
 
-/// <summary>
-/// A line on an order. An entity rather than a value object — it has identity
-/// that survives a quantity change — but not an aggregate root: it is reached
-/// only through <see cref="Order"/>, which owns every invariant about it.
-/// </summary>
-/// <remarks>
-/// Its own key type rather than <see cref="OrderId"/>, and §5.5's
-/// <c>Entity&lt;TId&gt;</c> comment is why: equality there compares the type
-/// as well as the identifier precisely because a shared key type would
-/// otherwise make a line equal to the order it belongs to, and nothing about
-/// that reads as wrong at the call site. A distinct type removes the question.
-/// </remarks>
+/// <summary>A line on an order: an entity reached only through <see cref="Order"/>, its invariants' owner.</summary>
+/// <remarks>Its own key type, never <see cref="OrderId"/>, so a line cannot equal its order (§5.5).</remarks>
 public sealed class OrderLine : Entity<OrderLineId>
 {
     public ProductId ProductId { get; private set; }
@@ -34,12 +24,7 @@ public sealed class OrderLine : Entity<OrderLineId>
         UnitPrice = unitPrice;
     }
 
-    /// <summary>
-    /// <c>internal</c>, not public: a line is created by <see cref="Order"/>
-    /// and by nothing else. The quantity guard lives on
-    /// <c>Order.AddLine</c> because that is where the merge decision is made,
-    /// and duplicating it here would be a second place to change it.
-    /// </summary>
+    /// <summary>Internal: only <see cref="Order"/> creates a line; the quantity guard is on <c>AddLine</c>.</summary>
     internal static OrderLine For(ProductId productId, int quantity, Money unitPrice) =>
         new(OrderLineId.New(), productId, quantity, unitPrice);
 

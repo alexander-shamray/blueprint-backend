@@ -1,10 +1,6 @@
 namespace Ordering.Domain.Orders;
 
-/// <summary>
-/// A line's own identity, distinct from <see cref="OrderId"/> so that
-/// <c>Entity&lt;TId&gt;</c>'s equality cannot be asked to compare a line with
-/// the order that holds it.
-/// </summary>
+/// <summary>A line's own identity, so a line can never be compared equal to its order (§5.5).</summary>
 public readonly record struct OrderLineId(Guid Value)
 {
     public static OrderLineId New() => new(Guid.CreateVersion7());

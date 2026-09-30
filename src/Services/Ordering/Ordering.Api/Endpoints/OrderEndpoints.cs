@@ -7,19 +7,8 @@ using Ordering.Domain.Orders;
 
 namespace Ordering.Api.Endpoints;
 
-/// <summary>
-/// One static class per aggregate (ADR-015), in the namespace the §4.2 gate
-/// selects on. The group is <c>/v1/orders</c> because the gateway strips
-/// <c>/api</c> from <c>/api/v1/orders/{**catch-all}</c> (§10.2) — the service
-/// sees the version, never the <c>/api</c> prefix.
-/// </summary>
-/// <remarks>
-/// Nothing here is anonymous, and unlike Catalog there is no asymmetry to
-/// argue: §10.2's <c>ordering</c> route carries <c>AuthorizationPolicy:
-/// authenticated</c>, so the edge admits no unauthenticated caller to any of
-/// it. An order belongs to somebody, which is the whole difference from a
-/// product catalogue.
-/// </remarks>
+/// <summary>One static class per aggregate (ADR-015), at <c>/v1/orders</c>: the gateway strips <c>/api</c>.</summary>
+/// <remarks>Nothing here is anonymous: §10.2's <c>ordering</c> route requires authentication.</remarks>
 public static class OrderEndpoints
 {
     public static void MapOrderEndpoints(this IEndpointRouteBuilder app)
@@ -27,15 +16,10 @@ public static class OrderEndpoints
         RouteGroupBuilder group = app
             .MapGroup("/v1/orders")
             .WithTags("Orders")
-            // Fail closed at the group (§11.4's shape): an endpoint added here
-            // later inherits authentication rather than arriving open, so
-            // forgetting a line makes a new endpoint unreachable instead of
-            // public.
+            // Fail closed at the group (§11.4): a later endpoint inherits authentication rather than arriving open.
             .RequireAuthorization();
 
-        // The command binds straight from the body. It carries no CustomerId
-        // to bind — §11.4's subject rule — so the wire shape and the command
-        // are identical and a separate request record would earn nothing.
+        // Bound straight from the body: the command carries no CustomerId to bind (§11.4).
         group
             .MapPost(
                 "/",
@@ -48,12 +32,7 @@ public static class OrderEndpoints
             .RequireAuthorization(OrderingPermissions.Write)
             .WithName("PlaceOrder");
 
-        // A request record rather than the command, because the wire shape and
-        // the command genuinely diverge here — §11.4's enum parse. The route
-        // carries the id, the body carries a reason code from §11.4's
-        // vocabulary, and the origin is not the caller's to state: a request
-        // that could set InitiatedBy to System would be a request that skips
-        // the ownership check.
+        // A request record, since the reason is parsed here and the origin is not the caller's to state (§11.4).
         group
             .MapPost(
                 "/{id:guid}/cancel",
@@ -83,9 +62,5 @@ public static class OrderEndpoints
     }
 }
 
-/// <summary>
-/// The body of a cancellation. One member, and it is a string rather than the
-/// enum: an unknown reason must be a 400 naming the field, not a model-binding
-/// failure whose message names the enum type.
-/// </summary>
+/// <summary>A string reason, so an unknown one is a 400 naming the field rather than a binding failure.</summary>
 public sealed record CancelOrderRequest(string Reason);

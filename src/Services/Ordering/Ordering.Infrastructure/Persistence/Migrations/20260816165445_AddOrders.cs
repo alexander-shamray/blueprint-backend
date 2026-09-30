@@ -2,24 +2,8 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace Ordering.Infrastructure.Persistence.Migrations;
 
-/// <summary>
-/// The aggregate's two tables — §7.4's write-model kind, so the DDL below is
-/// exactly what <c>dotnet ef migrations add</c> produced from
-/// <see cref="OrderConfiguration"/> and <see cref="OrderLineConfiguration"/>:
-/// the configuration is the source of truth and duplicating its shape by hand
-/// would create two definitions that drift. Only the file's dress is
-/// hand-authored (file-scoped namespace, this comment), on InitialCreate's
-/// terms; the <c>.Designer.cs</c> and the snapshot are machine-owned and
-/// untouched.
-/// </summary>
-/// <remarks>
-/// <c>OrderLines.OrderId</c> is <c>nullable: false</c>, and that is the one
-/// column worth checking by eye. EF infers an optional relationship unless the
-/// configuration says <c>IsRequired</c>, and an optional one emits a nullable
-/// foreign key — a schema that accepts a line belonging to no order, which is
-/// the aggregate boundary failing in the only place the domain cannot defend
-/// it. The first generated run had it nullable.
-/// </remarks>
+/// <summary>§5.4's aggregate, generated from <see cref="OrderConfiguration"/> and its line configuration.</summary>
+/// <remarks><c>OrderLines.OrderId</c> is not nullable, set by <see cref="OrderConfiguration"/>'s IsRequired.</remarks>
 public partial class AddOrders : Migration
 {
     protected override void Up(MigrationBuilder migrationBuilder)

@@ -22,14 +22,7 @@ public sealed class ConfirmStockHandler(IOrderRepository orders, TimeProvider cl
         }
         catch (DomainException)
         {
-            // Not Unavailable, and this is the one handler here where nothing
-            // earlier can still be in flight: AwaitingStock is
-            // the state Order.Place leaves behind, so anything else means the
-            // order has already moved on. The interesting case is Cancelled —
-            // a stock timeout fired, the saga cancelled and finalised, and
-            // Inventory's reservation arrived afterwards. That is a rejection
-            // worth counting rather than retrying: the reservation is stranded
-            // in Inventory and no attempt from here releases it.
+            // Not Unavailable: nothing earlier can be in flight, so the order has moved on (usually Cancelled).
             return Result.Failure(OrderErrors.NotAwaitingStock);
         }
 

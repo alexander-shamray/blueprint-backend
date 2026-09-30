@@ -1,33 +1,17 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
 
-  <!--
-    Settings come from Directory.Build.props (§4.4).
-
-    The Web SDK, because this is the one project in the service that is a
-    host. Application and Infrastructure per §4.2's fourth row — Program.cs is
-    the only composition root, and the endpoints gate in Ordering.Api.Tests
-    holds every other file to Application and Domain contracts.
-  -->
+  <!-- Settings from Directory.Build.props (§4.1); the one web host, and Program.cs its composition root (§4.2). -->
 
   <ItemGroup>
-    <!-- PR-07's OpenAPI deliverable (Appendix C): document only, no UI. -->
+    <!-- Appendix C's OpenAPI deliverable: document only, no UI. -->
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
-    <!-- The server half of ADR-052's address read. Grpc.AspNetCore brings
-         Grpc.Tools and Google.Protobuf with it, which is why neither is named
-         here — Appendix B registers all four as one row because they ship and
-         version as one thing. -->
+    <!-- ADR-052's server half; it brings Grpc.Tools and Google.Protobuf, one Appendix B row. -->
     <PackageReference Include="Grpc.AspNetCore" />
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Ordering owns the contract because Ordering serves it. Shipping
-         compiles this same file as a Client, by link (§4.3).
-
-         BOTH halves, not Server alone, and for Catalog.Api's reason: the suite
-         drives the service over the real pipeline, which needs a client, and
-         generating one in the test project would put a second copy of every
-         message type in a compilation that already references this assembly —
-         CS0436, an error under ADR-019. -->
+    <!-- Ordering owns the contract it serves, and Shipping links it as a Client (§4.3). Both halves, as the
+         suite needs a client and a second generated copy would be CS0436, an error under ADR-019. -->
     <Protobuf Include="Protos\delivery_addresses.proto" GrpcServices="Both" />
   </ItemGroup>
 
