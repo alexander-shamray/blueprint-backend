@@ -11,7 +11,7 @@ namespace Ordering.Infrastructure.Persistence;
 /// <summary>The write-side context (§7.2); the architecture gates, not the modifier, confine it.</summary>
 public sealed class OrderingDbContext(DbContextOptions<OrderingDbContext> options) : DbContext(options)
 {
-    /// <summary>§5.4's aggregate root; <c>OrderLine</c> is owned, so it has no set of its own.</summary>
+    /// <summary>§5.4's aggregate root; <c>OrderLine</c> is reached through it, so it has no set of its own.</summary>
     public DbSet<Order> Orders => Set<Order>();
 
     /// <summary>§9.4's outbox, on this context so the row enlists in the aggregate's transaction.</summary>
