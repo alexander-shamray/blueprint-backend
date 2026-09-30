@@ -15,7 +15,7 @@ on:
   workflow_dispatch:
     inputs:
       # A string, because a choice list cannot be read from the descriptors;
-      # the rollout's first step holds it to them.
+      # the rollout's guard step holds it to them.
       workload:
         description: 'Which deployable to roll (a descriptor under deploy/canary/deployables)'
         required: true
