@@ -1,61 +1,29 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!--
-    Settings come from Directory.Build.props (§4.4).
-
-    Microsoft.NET.Sdk with a framework reference, not Microsoft.NET.Sdk.Web:
-    this is the library every host references (§4.1), not a host. The Web SDK
-    would add an entry point, static web assets and a launch profile to an
-    assembly that has none of the three.
-  -->
+  <!-- Settings from Directory.Build.props (§4.1); a library every host references, so not the Web SDK. -->
 
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 
   <ItemGroup>
-    <!-- §13.2's AddObservability. Versionless: central package management
-         owns the pins (§4.4). The Redis instrumentation is deliberately
-         absent and stays so — PR-12 landed it in Common.Infrastructure,
-         beside the keyed connections it instruments (§8.2, §13.2). The EF
-         Core one arrived here, with PR-08's DbContext. -->
+    <!-- §13.2's AddObservability. -->
     <PackageReference Include="OpenTelemetry.Extensions.Hosting" />
     <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" />
     <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" />
     <PackageReference Include="OpenTelemetry.Instrumentation.Http" />
     <PackageReference Include="OpenTelemetry.Instrumentation.Runtime" />
     <PackageReference Include="OpenTelemetry.Instrumentation.EntityFrameworkCore" />
-    <!-- ValidationException, caught by ValidationExceptionHandler — §10.5's
-         400 row. Common.Application carries the package transitively; the
-         direct reference states the direct use. -->
+    <!-- ValidationException, caught by ValidationExceptionHandler for §10.5's 400 row. -->
     <PackageReference Include="FluentValidation" />
-    <!-- §11.3's AddJwtBearer and TokenValidationParameters. NOT in the shared
-         framework: Microsoft.AspNetCore.App carries the authentication
-         abstractions and the cookie handler, and every JWT handler since
-         ASP.NET Core 3.0 has shipped as this package. The one host package
-         Common.Web adds, and the reason is §11.2's — every service
-         re-validates, so the registration cannot live in the gateway. -->
+    <!-- §11.3's AddJwtBearer, which the shared framework does not carry. -->
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />
-    <!-- DbUpdateConcurrencyException, caught by ConcurrencyExceptionHandler —
-         §10.5's 409 row, which names that exact type as the thing the API
-         translates. The base package only, on Common.Infrastructure's terms:
-         common code may name a DbContext or its exceptions, never a provider.
-
-         The cost is real and is accepted rather than hidden: Gateway.Api
-         references this project and has no database (§10.1), so it now
-         restores EF Core to catch an exception it cannot raise. The
-         alternative was a transport-neutral exception in Common.Application
-         with every EfUnitOfWork wrapping into it — which keeps EF out of the
-         edge, and buys that by putting a translation step in each service
-         that §7.3 and §10.5 do not describe. One shared handler naming the
-         framework's own exception is the shape both chapters state. -->
+    <!-- DbUpdateConcurrencyException, which §10.5's 409 row names; the base package, never a provider. -->
     <PackageReference Include="Microsoft.EntityFrameworkCore" />
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Result, Error and ErrorType: ToHttpResult maps them to a status
-         (§10.5). The first project reference in the repo, and one the
-         dependency graph §4.2 draws now actually makes true. -->
+    <!-- Result, Error and ErrorType, which ToHttpResult maps to a status (§10.5). -->
     <ProjectReference Include="..\Common.Application\Common.Application.csproj" />
   </ItemGroup>
 
