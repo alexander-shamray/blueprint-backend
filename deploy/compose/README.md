@@ -146,7 +146,7 @@ TOKEN=$(curl -s http://localhost:8080/realms/commerce/protocol/openid-connect/to
 
 curl -X POST http://localhost:5102/v1/catalog/products \
     -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
-    -d '{"name":"Walnut desk","amount":19.99,"currency":"EUR"}'
+    -d '{"commandId":"'"$(uuidgen)"'","name":"Walnut desk","amount":19.99,"currency":"EUR"}'
 ```
 
 The same call as `browser` is a 403 and the same call with no header is a 401.
