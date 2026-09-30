@@ -23,7 +23,7 @@ builder.Services.AddOpenApi();
 
 // §9.7's server half. The interceptor is what keeps a malformed request from
 // arriving at the caller as Unknown, which the BFF would report as its own
-// 500 rather than the caller's 400 — its own file argues that at length.
+// 500 rather than the caller's 400.
 builder.Services.AddGrpc(o => o.Interceptors.Add<ValidationInterceptor>());
 
 // Catalog's permission policies (§11.4). Deliberately not inside either helper
