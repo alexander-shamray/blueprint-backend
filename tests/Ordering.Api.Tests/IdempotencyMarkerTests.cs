@@ -33,7 +33,7 @@ public class IdempotencyMarkerTests(ServiceFixture fixture)
     [Fact]
     public async Task A_refused_command_leaves_neither_its_work_nor_its_marker()
     {
-        // Both halves, since either alone would pass against a marker written on its own connection.
+        // Both halves: the work rolls back, and a rejected command writes no marker.
         string key = Key();
         Guid id = Guid.CreateVersion7();
 
