@@ -78,8 +78,8 @@ public class IdempotencyMarkerTests(ServiceFixture fixture)
     [Fact]
     public async Task A_committed_marker_is_stamped_by_the_database_and_not_left_at_its_sentinel()
     {
-        // CommittedAt is a store default (ADR-038), and every other test stages an explicit timestamp. The sentinel,
-        // not a value, is asserted: at 0001-01-01 a marker is purgeable the moment it is written.
+        // CommittedAt is a store default (ADR-038). The sentinel, not a value, is asserted: at 0001-01-01 a
+        // marker is purgeable the moment it is written.
         string key = Key();
         Guid id = Guid.CreateVersion7();
 
