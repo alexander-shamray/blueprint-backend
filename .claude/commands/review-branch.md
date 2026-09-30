@@ -105,7 +105,10 @@ and closes it by cutting.
      - **correct** — owner accepted the current state as intentional (only if
        the file already said so, or the user has said so in this conversation)
      - **false positive** — original finding was wrong; only if re-verification
-       shows the claim never held / no longer applies as a defect
+       shows the claim never held / no longer applies as a defect. An item
+       whose subject is a comment's wording, completeness, emphasis or
+       argument, rather than a false statement, is one: the rule above
+       refuses it
 3. **Do not invent new issues** in recheck mode unless verifying a listed item
    surfaces a **direct regression of that item** (same claim, still broken in a
    new place). A full sweep for new findings is `full`, not recheck.
