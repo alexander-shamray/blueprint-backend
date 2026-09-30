@@ -138,7 +138,6 @@ def template_copy(destination: Path) -> Path:
         "deploy/compose/docker-compose.yml",
         "deploy/compose/docker-compose.infra-only.yml",
         "deploy/compose/.env.example",
-        "deploy/compose/README.md",
         "deploy/compose/rabbitmq/definitions.json",
         "src/BuildingBlocks/Common.Web/ObservabilityExtensions.cs",
     ):
@@ -902,23 +901,24 @@ class EditsTheSharedFiles(unittest.TestCase):
         self.assertEqual(lines[mine].index("//"), lines[mine - 1].index("//"))
         self.assertEqual(text.count('.AddMeter("Zulu.Outbox")'), 1)
 
-    def test_the_ports_readme_gains_one_row(self):
-        readme = self.rendered.updated["deploy/compose/README.md"]
-        self.assertIn(f"| Zulu API | http://localhost:{PORT} |", readme)
-
-    def test_the_ports_readme_row_says_the_document_needs_a_token(self):
-        # The whole row, not its prefix. ADR-030's fallback covers MapOpenApi,
-        # so a rendered service's document answers 401 to an anonymous request
-        # exactly as Catalog's and Ordering's do — and the row is the scaffold's
-        # reconciliation with that. A prefix assertion passes just as happily
-        # over a row that dropped the note, which would re-introduce the claim
-        # the compose README was corrected to remove, once per new service.
-        readme = self.rendered.updated["deploy/compose/README.md"]
-        self.assertIn(
-            f"| Zulu API | http://localhost:{PORT} | "
-            "`/health/live`, `/health/ready`, "
-            "`/openapi/v1.json` (needs a token — see below) |",
-            readme,
+    def test_everything_written_under_the_compose_directory_is_named(self):
+        # The unit, and the shared files §14.1's model leaves shared. The
+        # README is not one: a unit's first line describes it, and the README
+        # lists the units rather than holding a row for each.
+        written = [
+            path
+            for path in {**self.rendered.created, **self.rendered.updated}
+            if path.startswith("deploy/compose/")
+        ]
+        self.assertEqual(
+            sorted([
+                UNIT,
+                COMPOSE_INDEX,
+                "deploy/compose/docker-compose.infra-only.yml",
+                "deploy/compose/.env.example",
+                "deploy/compose/rabbitmq/definitions.json",
+            ]),
+            sorted(written),
         )
 
     def test_the_allow_list_gains_an_entry_for_every_finding_the_render_adds(self):
@@ -1137,11 +1137,7 @@ class RendersASecondServiceBesideTheFirst(unittest.TestCase):
         self.assertEqual(index[-2], "  - services/yankee.yml", index[-4:])
         self.assertIn(SECOND_UNIT, self.second.created)
 
-    def test_the_ports_table_and_the_override_gain_one_entry_each(self):
-        readme = self.second.updated["deploy/compose/README.md"]
-        self.assertEqual(1, readme.count("| Zulu API |"))
-        self.assertEqual(1, readme.count("| Yankee API |"))
-
+    def test_the_override_gains_one_entry_per_service(self):
         override = self.second.updated["deploy/compose/docker-compose.infra-only.yml"]
         self.assertEqual(1, override.count("  yankee-api:"))
         self.assertEqual(1, override.count("  zulu-api:"))
@@ -1483,11 +1479,6 @@ class RendersAWorker(unittest.TestCase):
             f"  {PROBE.lower()}-worker:\n    profiles: [ \"excluded\" ]\n",
             override.replace("\r\n", "\n"))
 
-    def test_the_ports_table_says_no_port_rather_than_omitting_the_service(self):
-        readme = self.rendered.updated["deploy/compose/README.md"]
-        self.assertIn(f"| {PROBE} worker |", readme)
-        self.assertIn("no published port", readme)
-
     def test_the_solution_folder_holds_the_worker_and_its_suite(self):
         solution = self.rendered.updated["Platform.slnx"]
         self.assertIn(
@@ -1618,9 +1609,11 @@ class RefusesToRun(unittest.TestCase):
             "src/Services/CATALOGSearch/CATALOGSearch.Domain/AssemblyMarker.cs", rendered.created
         )
 
-    def test_the_compose_header_needs_no_article(self):
-        unit = render().created[UNIT]
-        self.assertIn(f"a PR for {PROBE} edits this file", unit)
+    def test_the_compose_header_is_one_line_naming_the_service(self):
+        # The line the README's listing command prints for this unit.
+        lines = render().created[UNIT].replace("\r\n", "\n").split("\n")
+        self.assertTrue(lines[0].startswith(f"# {PROBE}: "), lines[0])
+        self.assertEqual("services:", lines[1])
 
     def test_a_name_longer_than_a_sql_server_identifier(self):
         # The name is the database and the schema, and `sysname` is
@@ -2290,13 +2283,9 @@ class TheCommandLine(unittest.TestCase):
             self.assertEqual(0, code)
             self.assertEqual("", err)
             # A count and not a list: a number a test pins fails when it is
-            # wrong, and a list a comment keeps beside it does not. What a
-            # reader can check is `plan().created`.
-            #
-            # `7 updated` and not 8: this root has no `.github/`, so §15.1's
-            # allow-list step degrades — which is `TheAllowListStep`'s subject
-            # and is asserted there from both sides.
-            self.assertIn("70 files created, 7 updated", out)
+            # wrong. Six and not seven, because this root has no `.github/` and
+            # §15.1's allow-list step degrades without it.
+            self.assertIn("70 files created, 6 updated", out)
             self.assertIn(f"port {PORT}", out)
             self.assertTrue((root / "src/Services/Zulu/Zulu.Api/Program.cs").exists())
 

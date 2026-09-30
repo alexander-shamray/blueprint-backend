@@ -297,8 +297,7 @@ rather than at once. PR-06 ships the seven infrastructure services above;
 each application block lands with the PR that builds its image — the
 scaffold of [§4.5](04-solution-structure.md) writes the service's own unit
 file and the one line that includes it, along with both `infra-only`
-exclusions below, its `.env.example` variables and its row in
-`deploy/compose/README.md`. The
+exclusions below and its `.env.example` variables. The
 `docker-compose.infra-only.yml` override below arrives with the first
 containerised service, there being nothing to exclude before it.
 

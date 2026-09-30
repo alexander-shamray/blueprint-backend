@@ -1418,8 +1418,7 @@ its own purge with `Invalid column name 'RowVersion'` on the first pass
 ([ADR-041](adr/ADR-041-the-markers-delete-identifies-a-row-by-a-rowversion-not-a-timestamp.md)).
 It then edits the shared files: `Platform.slnx`, the Compose index — one
 `include:` line for the unit it just created — the `infra-only` override, which
-excludes both halves of the pair, `.env.example`,
-the ports table in `deploy/compose/README.md`
+excludes both halves of the pair, `.env.example`
 ([§14.1](14-local-development.md)), the broker definitions that grant the new
 service an account of its own — without which it renders a service that starts
 and cannot authenticate, since the broker has held no shared principal since
@@ -1521,8 +1520,8 @@ be removed, and its own doc comment says so.
 > does is not worth having.
 
 `--port` is required for an API render, refused for a worker, and never
-derived. A port is an allocation recorded in §14.1 and in
-`deploy/compose/README.md`; a script that guessed one would quietly disagree
+derived. A port is an allocation recorded in §14.1 and in the service's own
+Compose unit; a script that guessed one would quietly disagree
 with a printed chapter. The run refuses a port another service already
 publishes.
 
