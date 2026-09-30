@@ -415,16 +415,18 @@ it enforces:
 | `*.Api` | composition root, plus any package | the root rule above, no assembly from another service, and none from the migrator |
 
 **The cross-service rule is one test over all five assemblies**, and it is
-stated as an allow-list of *prefixes* rather than a deny-list of service
-names — which is what makes it cover Inventory, Payments, Shipping and
-Notifications before any of them exists:
+stated as an allow-list rather than a deny-list of service names: this
+service by *prefix*, which is what makes it cover Inventory, Payments,
+Shipping and Notifications before any of them exists, and the building
+blocks *by name*, because `Common.TestSupport` (§4.1) is named like one and
+is not one:
 
 ```csharp
 // Every referenced assembly that is one of this repository's own must belong
-// to this service or to a building block. Common.Contracts is admitted by the
-// Common prefix, which is §4.3 from the other side: it is a building block
-// rather than a service, so the one assembly permitted to cross a boundary
-// needs no exception of its own.
+// to this service or be a building block. Common.Contracts is on the list,
+// which is §4.3 from the other side: it is a building block rather than a
+// service, so the one assembly permitted to cross a boundary needs no
+// exception of its own.
 string self = typeof(Program).Assembly.GetName().Name!.Split('.')[0];
 
 string[] foreign =
@@ -434,7 +436,7 @@ string[] foreign =
         .Where(IsFirstParty)
         .Select(reference => reference.Name!)
         .Where(name =>
-            !name.StartsWith("Common.", StringComparison.Ordinal) &&
+            !BuildingBlocks.Contains(name) &&
             !name.StartsWith($"{self}.", StringComparison.Ordinal))
         .Order()
 ];

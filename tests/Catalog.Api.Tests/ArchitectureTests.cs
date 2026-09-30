@@ -71,31 +71,46 @@ public class ArchitectureTests
     private static bool IsFirstParty(AssemblyName reference) =>
         reference.GetPublicKeyToken() is null or [] && reference.Name != "Dapper";
 
+    /// <summary>§4.1's building blocks by name, because Common.TestSupport is named like one and is not.</summary>
+    private static readonly string[] BuildingBlocks =
+        ["Common.Application", "Common.Contracts", "Common.Domain", "Common.Infrastructure", "Common.Web"];
+
     [Fact]
     public void No_project_in_this_service_references_another_service()
     {
-        // §4.2's "must never reference another service's projects", and §4.3 from the other side: Common.* may
-        // cross. An allow-list of prefixes, so it covers services that do not exist yet.
+        // §4.2's "must never reference another service's projects", and §4.3 from the other side: a building block
+        // may cross. This service is admitted by prefix, so the gate covers services that do not exist yet.
+        foreach (Assembly assembly in ServiceAssemblies)
+            ShouldStayInsideThisService(assembly.GetName().Name!, assembly.GetReferencedAssemblies());
+    }
+
+    [Fact]
+    public void The_gate_refuses_a_test_library_named_like_a_building_block()
+    {
+        AssemblyName[] references = [new("Common.Domain"), new("Common.TestSupport")];
+
+        ShouldAssertException refused =
+            Should.Throw<ShouldAssertException>(() => ShouldStayInsideThisService("Probe", references));
+
+        refused.Message.ShouldContain("Probe reaches across a service boundary: Common.TestSupport");
+    }
+
+    private static void ShouldStayInsideThisService(string subject, AssemblyName[] references)
+    {
         string self = typeof(Program).Assembly.GetName().Name!.Split('.')[0];
 
-        foreach (Assembly assembly in ServiceAssemblies)
-        {
-            string[] foreign =
-            [
-                .. assembly
-                    .GetReferencedAssemblies()
-                    .Where(IsFirstParty)
-                    .Select(reference => reference.Name!)
-                    .Where(name =>
-                        !name.StartsWith("Common.", StringComparison.Ordinal) &&
-                        !name.StartsWith($"{self}.", StringComparison.Ordinal))
-                    .Order()
-            ];
+        string[] foreign =
+        [
+            .. references
+                .Where(IsFirstParty)
+                .Select(reference => reference.Name!)
+                .Where(name =>
+                    !BuildingBlocks.Contains(name) &&
+                    !name.StartsWith($"{self}.", StringComparison.Ordinal))
+                .Order()
+        ];
 
-            foreign.ShouldBeEmpty(
-                $"{assembly.GetName().Name} reaches across a service boundary: " +
-                string.Join(", ", foreign));
-        }
+        foreign.ShouldBeEmpty($"{subject} reaches across a service boundary: {string.Join(", ", foreign)}");
     }
 
     [Fact]
