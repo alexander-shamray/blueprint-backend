@@ -37,7 +37,7 @@ public static class DependencyInjection
         // Scoped, as a command is; only open generics inject it, so a missing one fails the first command.
         services.AddScoped<IdempotencyContext>();
 
-        // §4.2's sample line; FluentValidation's own scanner, since ValidationBehavior accepts an empty sequence.
+        // §4.2's sample line.
         services.AddValidatorsFromAssemblyContaining<SetOnHandValidator>();
         return services;
     }
