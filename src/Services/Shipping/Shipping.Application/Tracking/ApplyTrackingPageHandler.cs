@@ -5,16 +5,7 @@ using Shipping.Domain.Shipments;
 
 namespace Shipping.Application.Tracking;
 
-/// <remarks>
-/// The aggregate, not the rank, keeps a delivery from getting ahead of its
-/// despatch: <c>Shipment.Deliver</c> despatches a Booked row first, and both
-/// events carry the one recording instant. Over distinct event ids, rank
-/// decides no event and no instant. Where a page repeats one id, the key
-/// keeps the first arrival offered, so the rank offers the most advanced
-/// status first (spec, section 5). Publication order is the outbox's (§9.4).
-/// The read <c>Include</c>s the tracking events because
-/// <c>Shipment.Record</c> deduplicates over the loaded ones.
-/// </remarks>
+/// <remarks>The aggregate, not the rank, keeps a delivery behind its despatch; publication order is §9.4's.</remarks>
 public sealed class ApplyTrackingPageHandler(IShipmentRepository shipments, TimeProvider clock)
     : ICommandHandler<ApplyTrackingPageCommand, Result>
 {
@@ -22,10 +13,7 @@ public sealed class ApplyTrackingPageHandler(IShipmentRepository shipments, Time
     {
         Shipment? shipment = await shipments.GetAsync(command.ShipmentId, ct);
 
-        // A refusal rather than a throw for a row the claim projected and the
-        // read no longer finds: no code path deletes a shipment, so this guards
-        // a hand or a migration. A refusal is not counted as an applied page,
-        // and it rolls the unit back rather than moving anything (§6.3).
+        // A refusal, not a throw: no code path deletes a shipment, and it rolls the unit back (§6.3).
         if (shipment is null)
             return Result.Failure(ShipmentErrors.NotFound);
 
@@ -39,14 +27,7 @@ public sealed class ApplyTrackingPageHandler(IShipmentRepository shipments, Time
         return Result.Success();
     }
 
-    /// <summary>
-    /// The order a page is applied in: the two statuses that promote, the most
-    /// advanced first, and everything that moves nothing last. Where a page
-    /// repeats an event id the key keeps the first arrival, so this is what
-    /// keeps the most advanced status (spec, section 5). It is an ordering and
-    /// not a second state machine: the aggregate still refuses a superseded
-    /// arrival.
-    /// </summary>
+    /// <summary>Most advanced first, since the key keeps a repeated id's first arrival; not a state machine.</summary>
     private static int Rank(CarrierEvent carrierEvent) => carrierEvent.Status switch
     {
         TrackingStatus.Delivered => 0,

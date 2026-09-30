@@ -1,15 +1,7 @@
 namespace Shipping.Domain.Shipments;
 
-/// <summary>
-/// One fact the carrier reported about a shipment (spec, section 5). An entity
-/// of <see cref="Shipment"/>, reached only through it.
-/// </summary>
-/// <remarks>
-/// Not an <c>Entity&lt;TId&gt;</c>: its identity is
-/// <c>(ShipmentId, CarrierEventId)</c> and that base type keys on one struct.
-/// The carrier's own id is what makes a repeated page free, and it orders
-/// nothing — which is why the state machine is monotonic by rank.
-/// </remarks>
+/// <summary>One fact the carrier reported, reached only through its <see cref="Shipment"/>.</summary>
+/// <remarks>Not an <see cref="Common.Domain.Entity{TId}"/>, which keys on one struct; this keys on two.</remarks>
 public sealed class TrackingEvent
 {
     public ShipmentId ShipmentId { get; private set; }
@@ -21,17 +13,12 @@ public sealed class TrackingEvent
     /// <summary>The carrier's timestamp, bounded by the adapter before it arrives.</summary>
     public DateTimeOffset OccurredAt { get; private set; }
 
-    /// <summary>When this service first saw it, which is the clock retention ages by.</summary>
     public DateTimeOffset RecordedAt { get; private set; }
 
     // EF Core materialisation only (§5.4).
     private TrackingEvent() { }
 
-    /// <summary>
-    /// <c>internal</c>, not public: an event is created by
-    /// <see cref="Shipment"/> and by nothing else, so the deduplication and
-    /// the promotion cannot be bypassed.
-    /// </summary>
+    /// <summary>Internal, so only <see cref="Shipment"/> creates one and its deduplication holds.</summary>
     internal TrackingEvent(
         ShipmentId shipmentId,
         string carrierEventId,

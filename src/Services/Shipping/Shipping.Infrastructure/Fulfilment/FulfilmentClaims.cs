@@ -5,25 +5,10 @@ using Dapper;
 
 namespace Shipping.Infrastructure.Fulfilment;
 
-/// <summary>
-/// The lease and the backoff over <c>shipping.Shipments</c>, in
-/// <c>OutboxDispatcher</c>'s shape and for its reasons.
-/// </summary>
-/// <remarks>
-/// Raw statements rather than the repository: the claim is an atomic
-/// select-and-lease one statement cannot express through the change tracker,
-/// and the failure path runs when the aggregate was never loaded.
-/// </remarks>
+/// <summary>ADR-052's lease and backoff over the shipments, in <see cref="OutboxDispatcher"/>'s shape.</summary>
 internal sealed class FulfilmentClaims(IDbConnectionFactory connections)
 {
-    /// <summary>
-    /// The rows a claim would take now, due and held by no pass, which
-    /// <c>ShipmentStats</c> measures rather than a copy. Two populations: a
-    /// Pending shipment to book, and a Booked one whose cancellation the
-    /// carrier has not answered (spec, section 5). The first two predicates
-    /// repeat ShipmentConfiguration's index filter word for word, which is
-    /// what lets the optimiser match it.
-    /// </summary>
+    /// <summary>A Pending row to book or a Booked one to cancel; the first two lines repeat the index filter.</summary>
     internal const string Claimable =
         """
         Status IN ('Pending', 'Booked')
@@ -33,8 +18,7 @@ internal sealed class FulfilmentClaims(IDbConnectionFactory connections)
             AND (LockedUntil IS NULL OR LockedUntil < SYSDATETIMEOFFSET())
         """;
 
-    // Atomic claim: selects and leases in one statement, so two replicas
-    // cannot take the same row. READPAST skips rows another replica holds.
+    // One statement selects and leases, so two replicas cannot take one row; READPAST skips another's.
     private static readonly string ClaimSql =
         $"""
         WITH claimable AS (
@@ -49,15 +33,8 @@ internal sealed class FulfilmentClaims(IDbConnectionFactory connections)
             inserted.CancellationRequestedAt;
         """;
 
-    // Increments this worker's attempt counter and backs off by pushing
-    // NextAttemptAt forward, and drops the lease so a replica does not wait
-    // out a minute for a row that is already scheduled. The ladder is the
-    // dispatcher's (spec, section 4), read from its constants so the two
-    // cannot drift.
-    //
-    // Nothing is abandoned by count: each population's retrying ends at its
-    // age, which the pass reads against FulfilmentOptions.GiveUpAge (ADR-052,
-    // ADR-054).
+    // The dispatcher's ladder, read from its constants so the two cannot drift; the lease drops with it. No
+    // count abandons a row: retrying ends at FulfilmentOptions.GiveUpAge (ADR-052, ADR-054).
     private static readonly string FailSql =
         $"""
         UPDATE shipping.Shipments
@@ -77,8 +54,7 @@ internal sealed class FulfilmentClaims(IDbConnectionFactory connections)
     {
         using IDbConnection connection = connections.Create();
 
-        // CommandDefinition, so the token reaches the database command: with
-        // the plain overload a shutdown cannot interrupt a blocked claim.
+        // CommandDefinition, so a shutdown's token can interrupt a blocked claim.
         return [.. await connection.QueryAsync<FulfilmentWork>(new CommandDefinition(ClaimSql, cancellationToken: ct))];
     }
 

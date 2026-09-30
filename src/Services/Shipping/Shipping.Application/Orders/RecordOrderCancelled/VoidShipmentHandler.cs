@@ -9,10 +9,7 @@ public sealed class VoidShipmentHandler(
     IShipmentRepository shipments, TimeProvider clock, ILogger<VoidShipmentHandler> log)
     : ICommandHandler<VoidShipmentCommand, Result>
 {
-    // A superseded arrival (spec, section 5) — a second cancellation, or one
-    // of a shipment already despatched — is logged and returned rather than
-    // thrown. The shipment id and the order id only, never an address
-    // (§11.7). Compiled once (CA1848, ADR-019).
+    // A superseded arrival is logged, not thrown; ids only, never an address (§11.7). CA1848 (ADR-019).
     private static readonly Action<ILogger, Guid, Guid, Exception?> Superseded =
         LoggerMessage.Define<Guid, Guid>(
             LogLevel.Information,
@@ -28,10 +25,7 @@ public sealed class VoidShipmentHandler(
 
         if (shipment is null)
         {
-            // The tombstone (spec, section 8). A row rather than nothing,
-            // because the late confirmation has to find something: with no row
-            // it would create a Pending shipment for a cancelled order and a
-            // worker would book it.
+            // A tombstone, so a late confirmation finds a row rather than creating a shipment a worker would book.
             shipment = Shipment.For(ShipmentId.New(), order, now);
             shipment.Cancel(now);
             shipments.Add(shipment);

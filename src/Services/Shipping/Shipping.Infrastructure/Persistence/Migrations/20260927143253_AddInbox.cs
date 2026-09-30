@@ -2,16 +2,8 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace Shipping.Infrastructure.Persistence.Migrations;
 
-/// <summary>
-/// §9.5's inbox table, generated from <see cref="InboxMessageConfiguration"/>:
-/// the configuration is the source of truth, and the <c>.Designer.cs</c> and
-/// snapshot beside it are machine-owned.
-/// </summary>
-/// <remarks>
-/// The table ships before a service's first consumer because
-/// <c>RetentionPurgeService</c> runs from first boot and deletes from every
-/// table it was given, and a missing table logs a failed purge every pass.
-/// </remarks>
+/// <summary>§9.5's inbox table, generated from <see cref="InboxMessageConfiguration"/>, its source of truth.</summary>
+/// <remarks>Before the first consumer, since <c>RetentionPurgeService</c> purges it from first boot (§9.5).</remarks>
 public partial class AddInbox : Migration
 {
     protected override void Up(MigrationBuilder migrationBuilder)

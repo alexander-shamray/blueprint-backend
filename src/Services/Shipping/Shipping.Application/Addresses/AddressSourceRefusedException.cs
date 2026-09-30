@@ -1,10 +1,6 @@
 namespace Shipping.Application.Addresses;
 
-/// <summary>
-/// The owner refused this host's credential, or the identity provider refused
-/// the host (ADR-052). The worker's backoff owns it, and it is counted because
-/// somebody has to see it.
-/// </summary>
+/// <summary>The owner or the identity provider refused this host's credential, a defect ADR-052 counts.</summary>
 public sealed class AddressSourceRefusedException : Exception
 {
     public AddressSourceRefusedException()

@@ -6,15 +6,8 @@ using Shipping.Domain.Shipments;
 
 namespace Shipping.Infrastructure.Addresses;
 
-/// <summary>
-/// The client half of ADR-052's read, and the only code here that knows
-/// Ordering's wire format. Every status it maps is that record's table.
-/// </summary>
-/// <remarks>
-/// Every transient outcome — a status such as <c>Unavailable</c>, a refused
-/// connection, an open circuit — escapes as <see cref="RpcException"/> and the
-/// worker's backoff owns it; nothing branches on which one it was.
-/// </remarks>
+/// <summary>The client half of ADR-052's read; every status it maps is that record's table.</summary>
+/// <remarks>A transient outcome escapes as <see cref="RpcException"/> for the worker's backoff.</remarks>
 internal sealed class GrpcDeliveryAddressSource(
     DeliveryAddresses.DeliveryAddressesClient addresses,
     AddressMetrics metrics) : IDeliveryAddressSource
@@ -31,8 +24,7 @@ internal sealed class GrpcDeliveryAddressSource(
         }
         catch (RpcException e) when (e.StatusCode == StatusCode.NotFound)
         {
-            // No such order, a cancelled one, or one whose address erasure has
-            // cleared: one answer for the three (ADR-052), and terminal.
+            // One terminal answer for the three (ADR-052).
             return new AddressLookup.NoSuchOrder();
         }
         catch (RpcException e) when (e.StatusCode is StatusCode.Unauthenticated or StatusCode.PermissionDenied)
@@ -44,15 +36,11 @@ internal sealed class GrpcDeliveryAddressSource(
         }
         catch (RpcException e) when (e.Status.DebugException is AddressSourceRefusedException refused)
         {
-            // GrantCheckedTokenCache runs inside this client's handler chain,
-            // and Grpc.Net.Client reports a handler's exception as an Internal
-            // status of its own. The refusal was counted where it was decided.
+            // Grpc.Net.Client reports GrantCheckedTokenCache's refusal as Internal; it was counted there.
             throw refused;
         }
 
-        // Bounded here, before a row is written: a value wider than its column
-        // would fail the insert with an error that quotes the value, and the
-        // value is an address (AddressLimits).
+        // Bounded before a row is written, since a failed insert's error would quote an address.
         return new AddressLookup.Found(
             new DeliveryAddress(
                 Required(reply.Line1, AddressLimits.MaxLineLength, "line1"),
@@ -62,22 +50,19 @@ internal sealed class GrpcDeliveryAddressSource(
                 Country(reply.Country)),
             Customer(reply.CustomerId));
 
-        // The field, never the value: the value is an address, and §13.4's
-        // redactor cannot see one interpolated into a message.
+        // The field, never the value: §13.4's redactor cannot see an address interpolated into a message.
         static string Bounded(string value, int maxLength, string field) =>
             value.Length <= maxLength
                 ? value
                 : throw new InvalidOperationException($"Ordering answered with a {field} longer than {maxLength}.");
 
-        // Address.Of refuses a blank one of these, so a blank one here is a
-        // reply the contract does not produce rather than an address.
+        // Address.Of refuses a blank one, so a blank reply is no address.
         static string Required(string value, int maxLength, string field) =>
             string.IsNullOrWhiteSpace(value)
                 ? throw new InvalidOperationException($"Ordering answered with an empty {field}.")
                 : Bounded(value, maxLength, field);
 
-        // Two upper-case ASCII letters, the form Address.Of stores and the char
-        // column holds; a shorter one would be padded into a different code.
+        // The form Address.Of stores; a shorter one would be padded into a different code.
         static string Country(string value) =>
             value.Length == AddressLimits.CountryLength && value.All(char.IsAsciiLetterUpper)
                 ? value
@@ -85,8 +70,7 @@ internal sealed class GrpcDeliveryAddressSource(
                     $"Ordering answered with a country that is not {AddressLimits.CountryLength} upper-case ASCII " +
                     "letters.");
 
-        // The key erasure deletes by (ADR-052): an empty one would file the
-        // address under a subject no erasure ever names.
+        // The key erasure deletes by (ADR-052), so an empty one would hide the address from it.
         static Guid Customer(string value) =>
             Guid.TryParse(value, out Guid customer) && customer != Guid.Empty
                 ? customer

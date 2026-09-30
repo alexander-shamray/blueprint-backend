@@ -1,10 +1,6 @@
 namespace Shipping.Infrastructure.Observability;
 
-/// <summary>
-/// The questions spec section 11's gauges ask of <c>shipping.Shipments</c>:
-/// how many shipments in each state are past their first failed pass, and how
-/// long the longest-due row each pass would claim has waited for one.
-/// </summary>
+/// <summary>The questions <see cref="ShipmentMetrics"/>' gauges ask of <c>shipping.Shipments</c>.</summary>
 public interface IShipmentStats
 {
     int WaitingCount(string state);

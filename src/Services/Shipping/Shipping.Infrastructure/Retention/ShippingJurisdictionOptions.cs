@@ -2,53 +2,26 @@ using System.ComponentModel.DataAnnotations;
 
 namespace Shipping.Infrastructure.Retention;
 
-/// <summary>
-/// ADR-053 rule 1's one options class for this service: the statutory windows a
-/// deployment is given, and nothing else — Shipping renders no customer message,
-/// so it holds no language set and no time zone.
-/// </summary>
-/// <remarks>
-/// ADR-053 rule 1 gives a deployment its statutory windows. A developer's
-/// stack is not a jurisdiction, so it carries invented windows. Both
-/// windows are statutes', so it passes §15.4's test.
-/// </remarks>
+/// <summary>ADR-053's one options class for this service: the statutory windows a deployment is given.</summary>
+/// <remarks>Shipping renders no customer message, so it holds no language set and no time zone (ADR-053).</remarks>
 public sealed class ShippingJurisdictionOptions
 {
     /// <summary>The configuration section, named once (§15.4).</summary>
     public const string SectionName = "Jurisdiction";
 
-    /// <summary>
-    /// The shortest window this class will accept. One second rather than
-    /// zero, because a zero window deletes the row the instant the shipment
-    /// turns terminal and reads on a values file as "not configured".
-    /// </summary>
+    /// <summary>One second rather than zero, which reads on a values file as "not configured".</summary>
     public const string MinimumWindow = "00:00:01";
 
-    /// <summary>
-    /// Ten years, which is a configuration error rather than a policy. Past a
-    /// decade the value is a typo, and the purge subtracts it from
-    /// <c>DateTimeOffset</c>, which throws where nobody is looking when the
-    /// result is not representable.
-    /// </summary>
+    /// <summary>Ten years, past which a value is a typo the purge's subtraction could throw on.</summary>
     public const string MaximumWindow = "3650.00:00:00";
 
-    /// <summary>
-    /// How long a delivery address is kept after its shipment turns terminal
-    /// (spec, section 7). Nullable so <c>[Required]</c> can see a key nobody
-    /// supplied: a non-nullable <c>TimeSpan</c> binds to <c>00:00:00</c> and
-    /// passes the annotation it was given to satisfy.
-    /// </summary>
-    // The invariant-culture flag is load-bearing: RangeAttribute's string limits
-    // go through TimeSpanConverter, which reads the current culture.
+    /// <summary>Kept after the shipment turns terminal; nullable so <c>[Required]</c> sees a missing key.</summary>
+    // RangeAttribute's string limits go through TimeSpanConverter, which reads the current culture.
     [Required]
     [Range(typeof(TimeSpan), MinimumWindow, MaximumWindow, ParseLimitsInInvariantCulture = true)]
     public TimeSpan? AddressRetention { get; init; }
 
-    /// <summary>
-    /// How long a shipment's tracking events are kept after delivery. Its own
-    /// window and not the address's: one is about a person and the other about
-    /// a parcel, and ADR-053's table gives the two clocks separately.
-    /// </summary>
+    /// <summary>Kept after delivery; its own window, since the address is about a person and this a parcel.</summary>
     [Required]
     [Range(typeof(TimeSpan), MinimumWindow, MaximumWindow, ParseLimitsInInvariantCulture = true)]
     public TimeSpan? TrackingRetention { get; init; }

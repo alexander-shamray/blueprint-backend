@@ -4,11 +4,7 @@ using Shipping.Domain.Shipments;
 
 namespace Shipping.Application.Tracking;
 
-/// <summary>
-/// Ends a shipment the carrier never finished and releases the tracking lease
-/// in the same commit. The lease is what makes the move certain: the claim
-/// took a Booked or Dispatched row, and nothing else moves one while it holds.
-/// </summary>
+/// <summary>Ends a shipment the carrier never finished, releasing the tracking lease in the same commit.</summary>
 public sealed class AbandonShipmentHandler(IShipmentRepository shipments, TimeProvider clock)
     : ICommandHandler<AbandonShipmentCommand, Result>
 {

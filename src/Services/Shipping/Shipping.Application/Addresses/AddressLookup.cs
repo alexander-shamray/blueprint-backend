@@ -9,17 +9,9 @@ public abstract record AddressLookup
     {
     }
 
-    /// <summary>
-    /// The address, and the customer it belongs to. The second member is
-    /// carried for erasure's sake alone (ADR-052): it is stored beside the
-    /// address and nowhere else, and the shipment's own record holds none.
-    /// </summary>
+    /// <summary>The address, and its customer, carried for erasure alone (ADR-052).</summary>
     public sealed record Found(DeliveryAddress Address, Guid CustomerId) : AddressLookup;
 
-    /// <summary>
-    /// No such order, a cancelled one, or one whose address erasure has
-    /// cleared. One answer for the three, because ADR-052 collapses them at
-    /// the owner so that no reader can recover an order's state from a status.
-    /// </summary>
+    /// <summary>No such order, a cancelled one, or an erased address, collapsed at the owner (ADR-052).</summary>
     public sealed record NoSuchOrder : AddressLookup;
 }

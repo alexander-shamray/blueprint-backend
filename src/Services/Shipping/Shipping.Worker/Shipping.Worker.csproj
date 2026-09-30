@@ -1,14 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
 
   <!--
-    Settings come from Directory.Build.props (§4.4).
-
-    The Web SDK, and a worker keeps it: §3.2 gives this service no API, and
-    §15.3 still requires §13.5's health endpoint, which is a listener — so
-    Kestrel stays bound and nothing routes to it. Application and
-    Infrastructure per §4.2's fourth row — Program.cs is the only composition
-    root, and the gate in Shipping.Worker.Tests holds every other file to
-    Application and Domain contracts.
+    Settings from Directory.Build.props (§4.1); Program.cs is the composition root (§4.2).
+    The Web SDK, as §15.3 requires §13.5's health endpoint of a host §3.2 gives no API.
   -->
 
   <ItemGroup>

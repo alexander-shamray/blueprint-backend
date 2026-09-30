@@ -4,13 +4,7 @@ using Shipping.Domain.Shipments;
 
 namespace Shipping.Application.Tracking;
 
-/// <summary>
-/// One page the carrier answered, for one shipment. A command rather than a
-/// method the worker calls, so §6.3's <c>TransactionBehavior</c> opens the unit
-/// of work and §7.5's dispatcher stages the outbox rows inside it — the two
-/// integration events and the state they describe commit together or not at
-/// all.
-/// </summary>
+/// <summary>One carrier page, a command so the state and §7.5's outbox rows commit in §6.3's one unit.</summary>
 public sealed record ApplyTrackingPageCommand(
     ShipmentId ShipmentId,
     IReadOnlyList<CarrierEvent> Page,

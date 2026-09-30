@@ -8,15 +8,10 @@ using Shipping.Application.Carrier;
 
 namespace Shipping.Infrastructure.Carrier;
 
-/// <summary>
-/// The carrier's registration, apart from <c>AddShippingInfrastructure</c>
-/// because its scheme rule needs the host's environment, which that method is
-/// not given.
-/// </summary>
+/// <summary>Apart from <c>AddShippingInfrastructure</c>: the scheme rule needs the host's environment.</summary>
 public static class DependencyInjection
 {
-    // The section is written once, so the two setting names cannot name
-    // different sections; ApiKeyKey is the setting's name, never its value.
+    // ApiKeyKey is the setting's name, never its value.
     private const string Section = "Carrier";
     public const string BaseUrlKey = $"{Section}:BaseUrl";
     public const string ApiKeyKey = $"{Section}:ApiKey";
@@ -33,10 +28,7 @@ public static class DependencyInjection
             whenUserInfo: $"the carrier's credential is {ApiKeyKey} alone.",
             peer: "the carrier");
 
-        // HTTPS everywhere but Development, the rule AuthenticationExtensions
-        // applies to the identity provider: the key below is a bearer
-        // credential, and plain HTTP hands it to anyone on the path. The local
-        // simulator is Development's, and the one plain-HTTP carrier there is.
+        // HTTPS outside Development, as for the identity provider: the key is a bearer credential.
         if (!environment.IsDevelopment() && parsed.Scheme != Uri.UriSchemeHttps)
         {
             throw new InvalidOperationException(
@@ -44,13 +36,10 @@ public static class DependencyInjection
                 "the carrier key would travel in the clear.");
         }
 
-        // A trailing slash, always: without one a relative request replaces
-        // the base address's last segment, so a carrier at …/api would be
-        // called at …/v1/shipments.
+        // A trailing slash, or a relative request would replace the base address's last segment.
         Uri baseAddress = parsed.AbsoluteUri.EndsWith('/') ? parsed : new Uri(parsed.AbsoluteUri + "/");
 
-        // Required for the same reason, and §15.4 says so: a host must not
-        // start and then call a carrier unauthenticated.
+        // Required (§15.4): a host must not start and then call a carrier unauthenticated.
         string? apiKey = configuration[ApiKeyKey];
         if (string.IsNullOrWhiteSpace(apiKey))
         {
@@ -68,15 +57,10 @@ public static class DependencyInjection
             http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
         });
 
-        // A followed 307 or 308 would replay the address to wherever the
-        // carrier pointed, and take that answer as its booking. Unfollowed, a
-        // redirect is a status the adapter does not define.
+        // A followed redirect would replay the address wherever it pointed and take that answer as the booking.
         client.ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false });
 
-        // Separate statements: AddStandardResilienceHandler returns the
-        // pipeline's builder, not the client's, so a chained
-        // AddHttpMessageHandler would not compile onto the client. Added after
-        // the pipeline, the counter is inside it and sees every attempt.
+        // Added after the pipeline, the counter is inside it and sees every attempt.
         client.AddStandardResilienceHandler().Configure((HttpStandardResilienceOptions options, IServiceProvider sp) =>
         {
             options.TotalRequestTimeout.Timeout = CarrierHop.TotalRequestTimeout;
@@ -87,20 +71,15 @@ public static class DependencyInjection
             options.Retry.Delay = CarrierHop.RetryDelay;
             options.Retry.MaxDelay = CarrierHop.MaxRetryDelay;
 
-            // A Retry-After replaces the backoff above and MaxDelay does not
-            // cap it, so one long header would spend the total before the
-            // retry CarrierHop's budget counts on.
+            // MaxDelay does not cap a Retry-After, so one long header would spend the budget CarrierHop counts on.
             options.Retry.ShouldRetryAfterHeader = false;
 
-            // The endpoint defaults never open for a loop that makes a handful
-            // of calls a minute, which is what CarrierHop's own summary argues.
             options.CircuitBreaker.FailureRatio = CarrierHop.CircuitBreakerFailureRatio;
             options.CircuitBreaker.MinimumThroughput = CarrierHop.CircuitBreakerMinimumThroughput;
             options.CircuitBreaker.SamplingDuration = CarrierHop.CircuitBreakerSamplingDuration;
             options.CircuitBreaker.BreakDuration = CarrierHop.CircuitBreakerBreakDuration;
 
-            // An attempt timeout is the carrier's, and this is the one place
-            // it arrives distinguishable from the caller cancelling.
+            // The one place an attempt timeout is distinguishable from the caller cancelling.
             CarrierMetrics metrics = sp.GetRequiredService<CarrierMetrics>();
             options.AttemptTimeout.OnTimeout = _ =>
             {
@@ -110,8 +89,7 @@ public static class DependencyInjection
         });
         client.AddHttpMessageHandler<CarrierAttemptCounter>();
 
-        // Inside the counter, so a body that breaks off or runs over is an
-        // attempt it counts and the pipeline retries.
+        // Inside the counter, so a body that breaks off or runs over is a counted, retried attempt.
         client.AddHttpMessageHandler<CarrierAnswerBuffer>();
 
         return services;

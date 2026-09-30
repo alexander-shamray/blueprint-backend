@@ -1,67 +1,37 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!--
-    Settings come from Directory.Build.props (§4.4).
-
-    Domain and Application — §4.2's third row permits any package besides:
-    EF Core for the write side (§7.2), Dapper for the raw writes IUnitOfWork
-    exposes (§6.3), the SQL readiness check (§13.5), and IConfiguration,
-    which AddShippingInfrastructure names in its signature.
-  -->
+  <!-- Settings from Directory.Build.props (§4.1); §4.2's third row permits any package besides. -->
 
   <ItemGroup>
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
     <PackageReference Include="Dapper" />
-    <!-- SqlConnection, constructed by name in SqlConnectionFactory (§6.5).
-         The EF provider above carries it transitively; the direct reference
-         states the direct use. -->
+    <!-- Carried by the EF provider too; referenced because SqlConnectionFactory names it (§6.5). -->
     <PackageReference Include="Microsoft.Data.SqlClient" />
     <PackageReference Include="AspNetCore.HealthChecks.SqlServer" />
-    <!-- The bus (§9). The transport package; MassTransit itself rides in
-         transitively at the same pinned version. No RabbitMQ health-check
-         package beside it: AddMassTransit registers the bus check itself,
-         argued in Messaging/DependencyInjection.cs. -->
+    <!-- The bus (§9); no RabbitMQ health-check package, as AddMassTransit registers the bus check itself. -->
     <PackageReference Include="MassTransit.RabbitMQ" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" />
-    <!-- §13.6's OutboxStats holds its snapshot in a MemoryCache.
-         Common.Infrastructure's HybridCache reference carries the package
-         transitively; the direct reference states the direct use, as the
-         SqlClient line above does. -->
+    <!-- The stats types' brief cache of §13.6's gauge reads. -->
     <PackageReference Include="Microsoft.Extensions.Caching.Memory" />
-    <!-- The carrier's typed client, its budget and its breaker (the
-         anti-corruption layer of spec, section 9), and the address read's:
-         the standard pipeline, configured in Carrier/ and Addresses/. -->
+    <!-- The carrier's typed client (§3.1's anti-corruption layer) and the address read's pipeline. -->
     <PackageReference Include="Microsoft.Extensions.Http.Resilience" />
-    <!-- IHostEnvironment, which AddCarrierGateway names in its signature for
-         the scheme rule, as Common.Infrastructure references it. -->
+    <!-- IHostEnvironment, which AddCarrierGateway takes for the scheme rule. -->
     <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
-    <!-- The client half of ADR-052's read. Grpc.Net.ClientFactory is the
-         AddGrpcClient integration, Grpc.Tools the protoc build task, and
-         Google.Protobuf the runtime the generated code compiles against.
-         They share one row in Appendix B because they ship and version
-         together, and §4.2's third row permits an Infrastructure project any
-         package, as Microsoft.Extensions.Http.Resilience already is here. -->
+    <!-- The client half of ADR-052's read: one row in Appendix B, as they ship and version together. -->
     <PackageReference Include="Grpc.Net.ClientFactory" />
     <PackageReference Include="Google.Protobuf" />
     <PackageReference Include="Grpc.Tools">
-      <!-- Build-time only: protoc and the C# plugin. Nothing of it ships. -->
+      <!-- Build-time only: protoc and the C# plugin. -->
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
-    <!-- JwtSecurityTokenHandler, which the grant check reads its own token's
-         permission claim with (ADR-052). -->
+    <!-- JwtSecurityTokenHandler, with which the grant check reads its token (ADR-052). -->
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" />
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Linked, not copied (§4.3): one contract with two generated halves, so
-         the client and the server cannot drift. Ordering owns the file because
-         Ordering serves the RPC. A file reference and not an assembly one, so
-         no project dependency is created and Common.Contracts is still the
-         only assembly crossing a service boundary. The cost is a build-time
-         path into another service's tree, here and in each of this service's
-         Dockerfiles. Internal, so Ordering's message types are no part of
-         this assembly's surface. -->
+    <!-- Linked, not copied, so client and server cannot drift; a file, so Common.Contracts stays the only
+         assembly crossing a service boundary (§4.3). Internal, so Ordering's types are not this surface. -->
     <Protobuf
       Include="..\..\Ordering\Ordering.Api\Protos\delivery_addresses.proto"
       Link="Protos\delivery_addresses.proto"
@@ -72,20 +42,14 @@
   <ItemGroup>
     <ProjectReference Include="..\Shipping.Domain\Shipping.Domain.csproj" />
     <ProjectReference Include="..\Shipping.Application\Shipping.Application.csproj" />
-    <!-- §9.4's outbox: the entity this assembly maps, the type map, the
-         metrics and the dispatcher it hosts; §9.5's inbox and §8.5's marker
-         store ride in on the same reference. -->
+    <!-- §9.4's outbox, §9.5's inbox and §8.5's marker store. -->
     <ProjectReference Include="..\..\..\BuildingBlocks\Common.Infrastructure\Common.Infrastructure.csproj" />
-    <!-- MessageTypeSource's Broker half. IIntegrationEvent anchors the
-         assembly that holds every service's contracts (§4.3), so naming it
-         claims them all rather than one event's assembly-mates. -->
+    <!-- MessageTypeSource's Broker half, anchored on IIntegrationEvent. -->
     <ProjectReference Include="..\..\..\BuildingBlocks\Common.Contracts\Common.Contracts.csproj" />
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Named here rather than widened at the type or member: one line naming
-         the one assembly commits less than a public surface no production
-         caller has a use for. -->
+    <!-- Named here rather than widening a type or member no production caller uses. -->
     <InternalsVisibleTo Include="Shipping.Worker.Tests" />
   </ItemGroup>
 

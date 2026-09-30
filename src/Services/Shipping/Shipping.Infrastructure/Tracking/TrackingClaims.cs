@@ -6,26 +6,10 @@ using Shipping.Infrastructure.Carrier;
 
 namespace Shipping.Infrastructure.Tracking;
 
-/// <summary>
-/// The lease and the backoff over <c>shipping.Shipments</c> for the tracking
-/// pass, in <c>FulfilmentClaims</c>' shape and for its reasons.
-/// </summary>
-/// <remarks>
-/// Raw statements rather than the repository: the claim is an atomic
-/// select-and-lease the change tracker cannot express, and the failure
-/// path runs with no aggregate loaded. A second class, not a parameter on
-/// the first: each statement names its own population and schedule column.
-/// </remarks>
+/// <summary>The tracking pass's lease and backoff, in <see cref="Fulfilment.FulfilmentClaims"/>' shape.</summary>
 internal sealed class TrackingClaims(IDbConnectionFactory connections)
 {
-    /// <summary>
-    /// The rows a claim would take now, due and held by no pass, which
-    /// <c>ShipmentStats</c> measures rather than a copy. The LockedUntil
-    /// predicate, not the status filter, keeps the two passes off each other's
-    /// rows: a Booked shipment awaiting its cancellation's answer is in both
-    /// claims by design. NextPollAt IS NOT NULL repeats ShipmentConfiguration's
-    /// index filter, so it matches.
-    /// </summary>
+    /// <summary>The lease, not the status, keeps the passes apart: a Booked row to cancel is in both claims.</summary>
     internal const string Claimable =
         """
         Status IN ('Booked', 'Dispatched')
@@ -34,8 +18,7 @@ internal sealed class TrackingClaims(IDbConnectionFactory connections)
             AND (LockedUntil IS NULL OR LockedUntil < SYSDATETIMEOFFSET())
         """;
 
-    // Atomic claim: selects and leases in one statement, so two replicas
-    // cannot take the same row. READPAST skips rows another replica holds.
+    // One statement selects and leases, so two replicas cannot take one row; READPAST skips another's.
     private static readonly string ClaimSql =
         $"""
         WITH claimable AS (
@@ -49,13 +32,8 @@ internal sealed class TrackingClaims(IDbConnectionFactory connections)
         OUTPUT inserted.Id, inserted.OrderId, inserted.CarrierReference, inserted.PollAttempts, inserted.CreatedAt;
         """;
 
-    // NextPollAt where FulfilmentClaims pushes NextAttemptAt, on the ladder
-    // read from the dispatcher's own constants (spec, section 4): one number
-    // tuned in two places is two backoffs that stop agreeing. Floored at
-    // CarrierHop.TrackingPollInterval, because a ladder step below it would
-    // answer a 429 by polling sooner than a healthy row is polled. The count
-    // is this worker's own, so a feed that fails climbs its own ladder and a
-    // cancel that fails climbs the other's (ADR-054).
+    // The dispatcher's ladder on this worker's own count (ADR-054), floored at the poll interval so a 429 is
+    // never answered by polling sooner than a healthy row is.
     private static readonly string FailSql =
         $"""
         UPDATE shipment
@@ -81,13 +59,11 @@ internal sealed class TrackingClaims(IDbConnectionFactory connections)
     {
         using IDbConnection connection = connections.Create();
 
-        // CommandDefinition, so the token reaches the database command: with
-        // the plain overload a shutdown cannot interrupt a blocked claim.
+        // CommandDefinition, so a shutdown's token can interrupt a blocked claim.
         return [.. await connection.QueryAsync<TrackingWork>(new CommandDefinition(ClaimSql, cancellationToken: ct))];
     }
 
-    // No count abandons a row: a shipment leaves the poll when it is terminal
-    // or past TrackingWorker.GiveUpAge, which the pass reads (ADR-054).
+    // No count abandons a row: it leaves the poll when terminal or past TrackingWorker.GiveUpAge (ADR-054).
     public async Task FailAsync(Guid id, CancellationToken ct)
     {
         using IDbConnection connection = connections.Create();

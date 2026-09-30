@@ -7,12 +7,7 @@ using Shipping.Domain.Shipments;
 
 namespace Shipping.Infrastructure.Carrier;
 
-/// <summary>
-/// The one place that knows the carrier's wire format (the anti-corruption
-/// layer of spec, section 9). Everything it returns is the port's vocabulary,
-/// and everything the carrier sends is a stranger's input: bounded,
-/// translated, and never stored as a link.
-/// </summary>
+/// <summary>The one place that knows the carrier's wire format (§3.1's anti-corruption layer).</summary>
 internal sealed class HttpCarrierGateway(HttpClient http, CarrierMetrics metrics, TimeProvider clock) : ICarrierGateway
 {
     private const string KeyHeader = "Idempotency-Key";
@@ -25,9 +20,7 @@ internal sealed class HttpCarrierGateway(HttpClient http, CarrierMetrics metrics
 
     private sealed record CancelAnswer(string Status, string? Code);
 
-    // No link is declared, which is what makes "stores no URL" a property of
-    // the type rather than of a line somebody could delete: System.Text.Json
-    // drops what no member names.
+    // No link is declared, so "stores no URL" is the type's property: System.Text.Json drops what no member names.
     private sealed record EventAnswer(string? Id, string? Status, DateTimeOffset? OccurredAt);
 
     private sealed record EventsAnswer(IReadOnlyList<EventAnswer>? Events);
@@ -45,9 +38,7 @@ internal sealed class HttpCarrierGateway(HttpClient http, CarrierMetrics metrics
 
         using HttpResponseMessage response = await SendAsync(message, ct);
 
-        // Only the two answers the wire format defines carry a body worth
-        // reading; anything else is a carrier this adapter does not
-        // understand, which is a fault rather than an answer.
+        // Any status the wire format does not define is a fault, not an answer.
         if (response.StatusCode is not (HttpStatusCode.Created or HttpStatusCode.UnprocessableEntity))
             throw Unavailable($"The carrier answered a booking with {(int)response.StatusCode}.");
 
@@ -60,9 +51,7 @@ internal sealed class HttpCarrierGateway(HttpClient http, CarrierMetrics metrics
                 : throw Unavailable("The carrier refused with a body that is not a refusal.");
         }
 
-        // The reference becomes a path segment of every later call, and
-        // EscapeDataString leaves a dot segment for the base address to
-        // resolve away, so one is refused here rather than kept.
+        // The reference is a later path segment, and EscapeDataString leaves a dot segment to resolve away.
         return answer is { Status: "booked", Reference: { } reference, TrackingNumber: { } tracking }
                && Recordable(reference, CarrierLimits.MaxReferenceLength)
                && reference is not ("." or "..")
@@ -84,9 +73,7 @@ internal sealed class HttpCarrierGateway(HttpClient http, CarrierMetrics metrics
 
         CancelAnswer? answer = await ReadAsync<CancelAnswer>(response, "a cancellation", ct);
 
-        // Section 6 turns each of these into a different terminal state, so a
-        // body that disagrees with its status is a fault: guessing would void
-        // a parcel that is moving, or leave a cancelled one on the row.
+        // A body that contradicts its status is a fault: guessing would void a moving parcel or keep a cancelled one.
         if (response.StatusCode == HttpStatusCode.Conflict)
         {
             return answer is { Status: "too_late" }
@@ -106,8 +93,7 @@ internal sealed class HttpCarrierGateway(HttpClient http, CarrierMetrics metrics
 
         using HttpResponseMessage response = await SendAsync(message, ct);
 
-        // An answer, not a fault: the carrier has not heard of the booking
-        // yet, which is ordinary between the booking and the first scan.
+        // An answer, not a fault: the carrier has not heard of the booking before its first scan.
         if (response.StatusCode == HttpStatusCode.NotFound)
             return [];
 
@@ -135,17 +121,14 @@ internal sealed class HttpCarrierGateway(HttpClient http, CarrierMetrics metrics
             throw Unavailable("The carrier sent an event this adapter cannot key.");
         }
 
-        // The page is refused whole rather than partly kept: a stored instant
-        // ahead of the clock outranks every real one for ever, and section 5's
-        // promotion is by rank and then by time.
+        // The page is refused whole: a stored instant ahead of the clock would outrank every real one for ever.
         if (occurredAt > ceiling)
             throw Unavailable("The carrier sent an event later than this clock allows.");
 
         return new CarrierEvent(id, Rank(status), occurredAt);
     }
 
-    // A carrier adds statuses on its own schedule, so a word this platform has
-    // not agreed is Unrecognised and moves nothing (spec, section 5).
+    // A carrier adds statuses on its own schedule, so a word not agreed is Unrecognised and moves nothing.
     private static TrackingStatus Rank(string status) => status switch
     {
         "collected" => TrackingStatus.Collected,
@@ -154,8 +137,7 @@ internal sealed class HttpCarrierGateway(HttpClient http, CarrierMetrics metrics
         _ => TrackingStatus.Unrecognised
     };
 
-    // The adapter's own rule: a blank or over-long string records nothing, so
-    // both are refused before a row is written.
+    // A blank or over-long string records nothing, so it is refused before a row is written.
     private static bool Recordable(string value, int maxLength) =>
         !string.IsNullOrWhiteSpace(value) && value.Length <= maxLength;
 
@@ -165,19 +147,15 @@ internal sealed class HttpCarrierGateway(HttpClient http, CarrierMetrics metrics
         {
             return await response.Content.ReadFromJsonAsync<T>(ct);
         }
-        // A charset nobody can decode surfaces as InvalidOperationException
-        // before the parser runs, and it is the same carrier being wrong.
+        // An undecodable charset surfaces as InvalidOperationException before the parser runs.
         catch (Exception e) when (e is JsonException or InvalidOperationException)
         {
             throw Unavailable($"The carrier answered {act} with no JSON body.", e);
         }
     }
 
-    // An answer the pipeline passed as a success, which this adapter cannot
-    // read, is still an attempt that met a failing carrier (spec, section 11).
-    // Statuses the pipeline retries, broken connections and timeouts are
-    // counted inside it, and never here as well. The message never quotes the
-    // body: a carrier-supplied string in a log is the link rule one layer up.
+    // Counts an answer the pipeline passed but the adapter cannot read; the pipeline counts its own failures.
+    // The message never quotes the body, as a carrier-supplied string in a log is the link rule one layer up.
     private CarrierUnavailableException Unavailable(string message, Exception? inner = null)
     {
         metrics.Unavailable();
@@ -192,8 +170,7 @@ internal sealed class HttpCarrierGateway(HttpClient http, CarrierMetrics metrics
         {
             response = await http.SendAsync(message, ct);
         }
-        // ExecutionRejectedException is every refusal the pipeline makes on its
-        // own account: a timeout, an open circuit, the concurrency limiter.
+        // ExecutionRejectedException is the pipeline's own refusal: a timeout, an open circuit, the limiter.
         catch (Exception e) when (e is HttpRequestException or ExecutionRejectedException
                                       || (e is OperationCanceledException && !ct.IsCancellationRequested))
         {

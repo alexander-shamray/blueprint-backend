@@ -3,16 +3,8 @@ using Shipping.Infrastructure.Carrier;
 
 namespace Shipping.Infrastructure.Addresses;
 
-/// <summary>
-/// One refused credential on the way to an address, whether the identity
-/// provider refused this host or Ordering refused its token, on the outbound
-/// meter <see cref="CarrierMetrics.MeterName"/> names (spec, section 11).
-/// </summary>
-/// <remarks>
-/// <c>CarrierMetrics.MeterName</c> rather than a string of its own, so §13.2's
-/// one <c>AddMeter</c> line covers every class that creates it.
-/// <c>IMeterFactory</c> caches by name, so those classes share one meter.
-/// </remarks>
+/// <summary>Refused credentials on the way to an address, the defect ADR-052 counts.</summary>
+/// <remarks>On <see cref="CarrierMetrics.MeterName"/>, so §13.2's one <c>AddMeter</c> line covers it.</remarks>
 public sealed class AddressMetrics
 {
     private readonly Counter<long> _refused;

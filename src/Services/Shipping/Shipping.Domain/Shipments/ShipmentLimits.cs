@@ -1,11 +1,6 @@
 namespace Shipping.Domain.Shipments;
 
-/// <summary>
-/// The widths this service stores a carrier's strings at, named once because
-/// the aggregate's guards and the entity configurations must agree: a value
-/// the column refuses and the domain accepted is a commit that fails at
-/// <c>SaveChanges</c>, one layer away from whatever produced it.
-/// </summary>
+/// <summary>The widths of a carrier's strings, named once so the aggregate's guards and the columns agree.</summary>
 public static class ShipmentLimits
 {
     public const int MaxCarrierReferenceLength = 64;
