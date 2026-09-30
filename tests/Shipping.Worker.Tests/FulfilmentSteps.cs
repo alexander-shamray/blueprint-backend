@@ -23,7 +23,7 @@ internal sealed class FulfilmentSteps(ServiceFixture fixture)
     public static readonly DeliveryAddress Kazakh =
         new("Абай даңғылы 1, ә ғ қ ң ө ұ ү һ і", "пәтер 12", "Алматы", "050000", "KZ");
 
-    /// <summary>Seeds the stub's address, or none, publishes the confirmation and waits for the claim.</summary>
+    /// <summary>Seeds the stub's address, or none, publishes the confirmation and waits until it is due.</summary>
     public async Task<Guid> ConfirmAsync(DeliveryAddress? address)
     {
         Guid order = Guid.CreateVersion7();
