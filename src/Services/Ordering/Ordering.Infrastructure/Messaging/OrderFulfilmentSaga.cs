@@ -284,7 +284,7 @@ public sealed class OrderFulfilmentSaga : MassTransitStateMachine<OrderFulfilmen
                 .Schedule(ReleaseTimeout, ctx => new StockReleaseExpired(ctx.Saga.OrderId))
                 .TransitionTo(Compensating),
 
-            // Out of moves with the card authorised: ConfirmOrder was never consumed, which wants a person (§9.6).
+            // Out of moves with the card authorised, which wants a person (§9.6).
             When(ConfirmationTimeout.Received)
                 .Send(
                     OrderingQueue,
