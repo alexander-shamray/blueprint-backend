@@ -139,7 +139,8 @@ Notes that decide the edge cases:
   licence gate makes it load-bearing. Do not also list the package in a
   chapter.
 - A `.TestSupport` project is not a test project; it belongs to the service
-  that owns it and is in that service's slice.
+  that owns it and is in that service's slice, except `Common.TestSupport`,
+  which belongs to no service and is in no slice.
 
 ## 4. Parallel work
 
@@ -182,6 +183,7 @@ deploy/compose/infrastructure.yml
 deploy/compose/docker-compose.infra-only.yml
 deploy/compose/keycloak/realm-export.json
 docs/backend-architecture/appendix-b-licences.md
+tests/Common.TestSupport/ServiceFixture.cs
 ```
 
 The Compose index is on that list for one line — the `include:` entry a new
