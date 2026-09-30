@@ -78,7 +78,6 @@ public class SensitiveKeysTests
     [InlineData("Currency")]
     public void An_innocent_key_is_not_matched(string key)
     {
-        // Matching is by substring, so a term inside an ordinary word redacts it: "Shipping" holds "pin".
         // An address is kept off the wire by §11.7 rather than out of the log.
         SensitiveKeys.Matches(key).ShouldBeFalse(key);
     }
