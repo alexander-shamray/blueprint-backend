@@ -78,7 +78,7 @@ public sealed class PublishProductHandlerTests(ServiceFixture fixture) : IAsyncL
         // The correlation is the product, not an ambient request id (§9.3).
         row.CorrelationId.ShouldBe(result.Value);
 
-        // The payload survives the dispatcher's round trip, Money included, so the converter is registered.
+        // The payload survives the dispatcher's round trip.
         ProductPublished published = JsonSerializer
             .Deserialize<ProductPublished>(row.Payload, fixture.OutboxJson.Options)!;
         published.MessageId.ShouldBe(row.MessageId, "one identity, not two (§9.1)");
