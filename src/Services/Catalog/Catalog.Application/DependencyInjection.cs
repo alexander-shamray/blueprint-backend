@@ -24,8 +24,7 @@ public static class DependencyInjection
         // §9.3's allow-list, explicit so what this service publishes is not whichever types the assembly holds.
         services.AddScoped<IIntegrationEventMapper, CatalogIntegrationEventMapper>();
 
-        // The clock (§5.4) and the request histogram (§13.3), which LoggingBehavior injects. ValidateOnBuild
-        // never constructs an open generic, so their absence surfaces only at the first dispatched request.
+        // The clock (§5.4) and the request histogram (§13.3), which LoggingBehavior injects.
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton<RequestMetrics>();
 
