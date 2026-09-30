@@ -5,16 +5,7 @@ using Xunit;
 
 namespace Ordering.Api.Tests;
 
-/// <summary>
-/// The two Kestrel endpoints, read off the host's own configuration rather
-/// than off the file: that is the text the server binds (§9.7, ADR-052).
-/// </summary>
-/// <remarks>
-/// Catalog's <c>appsettings.json</c> carries the measurement: a cleartext
-/// endpoint at <c>Http1AndHttp2</c> refuses a client asking for HTTP/2
-/// exactly, and an <c>Http2</c>-only one refuses HTTP/1.1. The REST entry is
-/// asserted beside it because this section overrides the image's own ports.
-/// </remarks>
+/// <summary>The two Kestrel endpoints, read off the host's configuration, the text the server binds (§9.7).</summary>
 public sealed class KestrelEndpointTests(HostSmokeTests.UnreachableInfrastructureFactory factory)
     : IClassFixture<HostSmokeTests.UnreachableInfrastructureFactory>
 {

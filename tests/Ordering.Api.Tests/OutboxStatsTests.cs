@@ -11,18 +11,8 @@ using Xunit;
 
 namespace Ordering.Api.Tests;
 
-/// <summary>
-/// The three aggregate queries behind §13.6's gauges, against the real table.
-/// </summary>
-/// <remarks>
-/// <b>The lane predicate is the subject, not a detail.</b> §13.6 gives the two
-/// lanes thresholds an order of magnitude apart precisely because they fail for
-/// different reasons — so a query that dropped <c>Lane = @lane</c> would report
-/// one number for both, every alert would read it, and the local lane's
-/// thirty-second threshold would fire on a broker blip it was designed to
-/// tolerate. Each test below stages rows on <em>both</em> lanes for that
-/// reason: an assertion over one lane cannot fail on a missing predicate.
-/// </remarks>
+/// <summary>The three aggregate queries behind §13.6's gauges, against the real table.</summary>
+/// <remarks>The lane predicate is the subject, since §13.6 sets the two lanes' thresholds far apart.</remarks>
 [Collection(nameof(IntegrationCollection))]
 public sealed class OutboxStatsTests(ServiceFixture fixture) : IAsyncLifetime
 {
@@ -59,10 +49,7 @@ public sealed class OutboxStatsTests(ServiceFixture fixture) : IAsyncLifetime
     [Fact]
     public async Task Abandoned_counts_only_rows_at_or_past_the_dispatchers_own_cap()
     {
-        // One row below the cap and one at it. The cap is read from
-        // OutboxDispatcher rather than written here, so this assertion follows
-        // the loop it describes if anybody ever tunes it — which is the whole
-        // reason that constant is public.
+        // The cap is read from OutboxDispatcher, so this follows the loop if anybody tunes it.
         OutboxMessage retrying = await StageOneAsync(OutboxLane.Broker);
         OutboxMessage abandoned = await StageOneAsync(OutboxLane.Broker);
         await fixture.SetOutboxAttemptsAsync(retrying.MessageId, OutboxDispatcher.MaxAttempts - 1);
@@ -72,10 +59,7 @@ public sealed class OutboxStatsTests(ServiceFixture fixture) : IAsyncLifetime
 
         stats.AbandonedCount(OutboxLane.Broker).ShouldBe(1);
 
-        // Still pending, and that is not an oversight: an abandoned row is
-        // unprocessed for ever, so the growth alert counts it exactly as §13.6
-        // describes. Backing it out of the pending count would make a lane full
-        // of poison read as empty.
+        // Still pending: an abandoned row is unprocessed for ever, and §13.6's growth alert counts it.
         stats.PendingCount(OutboxLane.Broker).ShouldBe(2);
     }
 
@@ -99,19 +83,14 @@ public sealed class OutboxStatsTests(ServiceFixture fixture) : IAsyncLifetime
         await AgeAsync(old, TimeSpan.FromHours(2));
         await AgeAsync(recent, TimeSpan.FromMinutes(1));
 
-        // MIN, not MAX: a lane that has stopped is diagnosed by its oldest
-        // unshipped row, and reading the newest would report a healthy few
-        // seconds while an hours-old message sat behind it.
+        // MIN, not MAX: a stopped lane is diagnosed by its oldest unshipped row.
         NewStats().OldestAgeSeconds(OutboxLane.Broker).ShouldBeInRange(7_000, 7_400);
     }
 
     [Fact]
     public async Task An_empty_lane_reads_zero_rather_than_failing()
     {
-        // MIN over no rows is NULL, and a gauge callback that throws is
-        // swallowed by the SDK — the series would simply stop being exported,
-        // which on a dashboard is indistinguishable from a lane that is fine.
-        // Zero is the honest reading for a lane with nothing waiting.
+        // MIN over no rows is NULL, and a throwing gauge callback silently stops the series, so zero is the reading.
         await StageAsync(OutboxLane.Broker);
 
         IOutboxStats stats = NewStats();
@@ -124,9 +103,7 @@ public sealed class OutboxStatsTests(ServiceFixture fixture) : IAsyncLifetime
     [Fact]
     public async Task A_processed_row_does_not_hold_the_age_gauge_up()
     {
-        // The age query filters on ProcessedAt exactly as the pending count
-        // does. Without that predicate a delivered row from last week would pin
-        // outbox.oldest.age at days and page somebody every night.
+        // Filtered on ProcessedAt, or a delivered row from last week would pin outbox.oldest.age at days.
         OutboxMessage delivered = await StageOneAsync(OutboxLane.Broker);
         await AgeAsync(delivered, TimeSpan.FromDays(7));
         await fixture.SetOutboxProcessedAtAsync(delivered.MessageId, DateTimeOffset.UtcNow);
@@ -134,19 +111,7 @@ public sealed class OutboxStatsTests(ServiceFixture fixture) : IAsyncLifetime
         NewStats().OldestAgeSeconds(OutboxLane.Broker).ShouldBe(0);
     }
 
-    /// <summary>
-    /// A fresh instance per assertion, resolved through the real registration.
-    /// </summary>
-    /// <remarks>
-    /// <b>Fresh matters, and so does resolved.</b> The type caches for five
-    /// seconds and these tests change the table between reads, so a shared
-    /// instance would let a stale snapshot satisfy an assertion about a row
-    /// written after it. Resolving rather than constructing is the other half:
-    /// <c>OutboxStats</c> is internal, and asking the container for
-    /// <see cref="IOutboxStats"/> proves <c>AddOrderingInfrastructure</c> wires
-    /// it to the schema and connection the service actually uses — a
-    /// hand-built instance would pass with that registration deleted.
-    /// </remarks>
+    /// <summary>A fresh instance per read, since the type caches, resolved through the real registration.</summary>
     private IOutboxStats NewStats()
     {
         ServiceProvider provider = new ServiceCollection()
@@ -155,14 +120,9 @@ public sealed class OutboxStatsTests(ServiceFixture fixture) : IAsyncLifetime
                     new Dictionary<string, string?>
                     {
                         ["ConnectionStrings:Ordering"] = fixture.ConnectionString,
-                        // §12.4's .invalid convention: no host runs here, so
-                        // the bus never starts and nothing should be able to
-                        // dial one. AddMassTransitMessaging throws without it.
+                        // AddMassTransitMessaging throws without it; unreachable (§12.4), since no bus starts here.
                         ["ConnectionStrings:RabbitMq"] = "amqp://guest:guest@ordering-rabbit.invalid:5672",
-                        // Both read eagerly by AddRedisConnections, which
-                        // throws naming the missing one — the same reason the
-                        // bus key above is here, unreachable on the same
-                        // §12.4 convention.
+                        // Both read eagerly by AddRedisConnections; unreachable on the same convention.
                         ["ConnectionStrings:RedisCache"] = "ordering-redis.invalid:6379",
                         ["ConnectionStrings:RedisCoordination"] = "ordering-redis.invalid:6380"
                     })

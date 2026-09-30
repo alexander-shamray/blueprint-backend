@@ -12,19 +12,7 @@ using Xunit;
 
 namespace Ordering.Api.Tests;
 
-/// <summary>
-/// §8.5's durable marker against a real engine. The property is atomicity with
-/// the command's own transaction, and nothing short of a database can show it:
-/// a fake unit of work commits nothing, so "the marker rolled back with the
-/// work" and "the marker was never written" look the same from every assertion
-/// a double can make.
-/// </summary>
-/// <remarks>
-/// These tests require Docker and are deliberately not skipped without it, on
-/// <c>DatabaseSmokeTests</c>' terms — <see cref="IntegrationCollection"/>
-/// carries the category, and joining the collection is what puts them in the
-/// half that needs a daemon.
-/// </remarks>
+/// <summary>§8.5's durable marker against a real engine, the one thing that shows it shares the work's fate.</summary>
 [Collection(nameof(IntegrationCollection))]
 public class IdempotencyMarkerTests(ServiceFixture fixture)
 {
@@ -45,12 +33,7 @@ public class IdempotencyMarkerTests(ServiceFixture fixture)
     [Fact]
     public async Task A_refused_command_leaves_neither_its_work_nor_its_marker()
     {
-        // Both halves in one assertion, because either alone would pass against
-        // a marker written on its own connection: the row count proves the
-        // transaction rolled back, and the marker count proves the marker was
-        // inside it. A marker that survived a rollback would refuse every later
-        // attempt at a command that never committed — a permanent refusal
-        // nothing in the system could explain.
+        // Both halves, since either alone would pass against a marker written on its own connection.
         string key = Key();
         Guid id = Guid.CreateVersion7();
 
@@ -69,10 +52,7 @@ public class IdempotencyMarkerTests(ServiceFixture fixture)
     [Fact]
     public async Task A_second_attempt_under_a_committed_key_is_refused_and_writes_nothing()
     {
-        // The defect this closes, end to end. The first attempt commits; §8.5's
-        // Redis claim is then released by the lost acknowledgement it cannot
-        // detect, so the second attempt arrives holding a fresh claim over work
-        // that is already durable. Before the marker it wrote the row twice.
+        // §8.5's claim can be released after a commit it cannot see, so the second attempt holds a fresh claim.
         string key = Key();
         Guid first = Guid.CreateVersion7();
         Guid second = Guid.CreateVersion7();
@@ -98,23 +78,8 @@ public class IdempotencyMarkerTests(ServiceFixture fixture)
     [Fact]
     public async Task A_committed_marker_is_stamped_by_the_database_and_not_left_at_its_sentinel()
     {
-        // #167's property, and the one nothing else in this suite can see.
-        // CommittedAt is a store default (ADR-038): MarkAsync constructs the
-        // row without a timestamp, EF omits a property still holding its
-        // sentinel from the INSERT, and SYSDATETIMEOFFSET() supplies the
-        // column. Every other test that reads this column stages its markers
-        // with an explicit timestamp — the escape hatch the entity keeps for a
-        // fixture — so all of them stay green if EF ever sends the sentinel
-        // instead, and the tests above this one count rows without looking at
-        // what is in them.
-        //
-        // **The assertion is the sentinel rather than a value, and it has to
-        // be.** Nothing here can prove WHICH clock wrote a plausible
-        // timestamp; what it can prove is that the column was not left at
-        // 0001-01-01, which is the state a regression produces and the one
-        // that makes every marker older than any window the purge can be
-        // given — purgeable the moment it is written, with §8.5's guarantee
-        // retired and the whole suite still green.
+        // CommittedAt is a store default (ADR-038). The sentinel, not a value, is asserted: at 0001-01-01 a
+        // marker is purgeable the moment it is written.
         string key = Key();
         Guid id = Guid.CreateVersion7();
 
@@ -123,11 +88,7 @@ public class IdempotencyMarkerTests(ServiceFixture fixture)
 
         result.IsSuccess.ShouldBeTrue();
 
-        // Keyed rather than read whole, for the reason ServiceFixture's
-        // InboxAsync(Guid) gives one table over: classes in this collection
-        // share the fixture and run in sequence, so an unkeyed read asserts
-        // test isolation alongside the claim and fails on the half that is
-        // nobody's.
+        // Keyed, since the collection's classes share this fixture in sequence.
         IdempotencyMarker marker = (await fixture.IdempotencyMarkersAsync())
             .Where(candidate => candidate.Key == key)
             .ShouldHaveSingleItem();
@@ -137,11 +98,7 @@ public class IdempotencyMarkerTests(ServiceFixture fixture)
             "the marker was written at the CLR sentinel of 0001-01-01, so the store default never " +
             "fired and this row is already older than any retention window it could be given");
 
-        // An hour either side, and generous on purpose. SYSDATETIMEOFFSET()
-        // reads the SQL Server container's clock, which is this host's, so the
-        // two agree far closer than that — the width is here so the test
-        // cannot fail for a reason that is not its subject, and it still
-        // refuses the sentinel by two thousand years.
+        // An hour either side, generous on purpose, and still two thousand years from the sentinel.
         DateTimeOffset now = DateTimeOffset.UtcNow;
         marker.CommittedAt.ShouldBeInRange(
             now.AddHours(-1),
@@ -152,16 +109,8 @@ public class IdempotencyMarkerTests(ServiceFixture fixture)
     [Fact]
     public async Task The_stamp_above_comes_from_a_default_constraint_on_the_column()
     {
-        // The mechanism the test above is looking at, asserted separately
-        // because the two fail apart: a marker could carry a plausible
-        // timestamp because some insert path wrote one, and from the value
-        // alone that is indistinguishable from the default firing. This is
-        // what makes the stamp a property of the schema rather than of one
-        // caller — and it is the half that fails if the migration is ever
-        // regenerated without the default.
-        //
-        // The form is OrderFulfilmentSagaEndpointTests' pair over the saga's
-        // retained column, which is the same claim about a different default.
+        // The mechanism, asserted apart because a plausible timestamp could come from an insert path rather than
+        // the default; this is the half that fails if the migration is regenerated without it.
         (await fixture.ScalarAsync<int>(
             """
             SELECT Value = COUNT(*)
@@ -177,9 +126,7 @@ public class IdempotencyMarkerTests(ServiceFixture fixture)
                 "ADR-038 puts the marker's age on the database's clock, and the constraint is the " +
                 "only thing that stamps a row whose INSERT omits the column");
 
-        // Lowered, because SQL Server keeps a constraint's definition as the
-        // text it was written with — a hand-written migration may spell the
-        // function in any case, and the case is no part of what this asserts.
+        // Lowered, so the check does not depend on the case SQL Server stores the definition in.
         (await fixture.ScalarAsync<string>(
             """
             SELECT Value = LOWER(d.definition)
@@ -202,17 +149,8 @@ public class IdempotencyMarkerTests(ServiceFixture fixture)
     [Fact]
     public async Task The_row_the_purge_deletes_is_identified_by_a_database_generated_rowversion()
     {
-        // The subject is WHAT THE DELETE IS LOOKING AT, not what a purge pass
-        // found — RetentionPurgeTests covers the behaviour, and it would go on
-        // passing if this column quietly stopped being a rowversion, because a
-        // plain binary(8) nobody updates still differs between two rows within
-        // a single test. What must be true is that the DATABASE generates it,
-        // since that is the whole of #173: a value the application could write
-        // is a value a replacement could carry.
-        //
-        // Read from the model and from sys.columns rather than restated, for
-        // the reason the width above is: a claim written in a test and a claim
-        // written in a configuration agree until one of them is edited.
+        // What the delete is looking at: the database generates the version (ADR-041), since a value the
+        // application could write is one a replacement could carry.
         await using AsyncServiceScope scope = fixture.Factory.Services.CreateAsyncScope();
         OrderingDbContext db = scope.ServiceProvider.GetRequiredService<OrderingDbContext>();
 
@@ -238,9 +176,7 @@ public class IdempotencyMarkerTests(ServiceFixture fixture)
             "SQL Server stamps every row including the ones ALTER TABLE adds the column to, so a " +
             "nullable mapping models a state the database cannot produce");
 
-        // rowversion and timestamp are one type under two spellings, and
-        // sys.columns reports the older one — so this asserts the engine's
-        // answer rather than the migration's text.
+        // rowversion and timestamp are one type, and sys.columns reports the older spelling.
         (await fixture.ScalarAsync<string>(
             $"""
             SELECT Value = TYPE_NAME(c.system_type_id)
@@ -257,15 +193,8 @@ public class IdempotencyMarkerTests(ServiceFixture fixture)
     [Fact]
     public async Task Every_operation_name_leaves_room_for_the_key_it_forms()
     {
-        // §8.5's key is {subject}:{operation}:{commandId}, and the marker column
-        // is what it has to fit in. A name too long for it does not fail at
-        // build time or at startup: SQL Server refuses the insert on the first
-        // dispatch of that command, and the transaction it refuses is the one
-        // carrying the customer's order.
-        //
-        // The width is read from the model rather than restated here, because a
-        // 450 written in a test and a 450 written in a configuration agree
-        // until one of them is edited.
+        // A name too long for §8.5's key fails no build or startup, only the insert on its first dispatch.
+        // The width is read from the model rather than restated.
         await using AsyncServiceScope scope = fixture.Factory.Services.CreateAsyncScope();
         OrderingDbContext db = scope.ServiceProvider.GetRequiredService<OrderingDbContext>();
 
@@ -275,9 +204,7 @@ public class IdempotencyMarkerTests(ServiceFixture fixture)
             .GetMaxLength()!
             .Value;
 
-        // A GUID rendered "D" for the subject, another for the command, and the
-        // two separators. The subject may also be the literal "system", which is
-        // shorter — so the GUID is the case to budget for.
+        // Two GUIDs rendered "D" and two separators; the subject "system" is shorter, so the GUID is budgeted.
         int spent = (Guid.Empty.ToString().Length * 2) + 2;
 
         string[] offenders =
@@ -295,9 +222,7 @@ public class IdempotencyMarkerTests(ServiceFixture fixture)
     [Fact]
     public async Task The_gate_above_is_looking_at_this_service_s_operation_names()
     {
-        // ShouldBeEmpty is green when the selection found nothing, which is the
-        // one reason a gate must never pass. Asserting the subject separately
-        // is the only thing that tells the two apart.
+        // The gate's subject, asserted apart, since ShouldBeEmpty is green on an empty selection.
         await Task.CompletedTask;
 
         Operations().ShouldNotBeEmpty(
@@ -321,13 +246,7 @@ public class IdempotencyMarkerTests(ServiceFixture fixture)
     private static string Key() =>
         $"{Guid.CreateVersion7()}:tests.marker:{Guid.CreateVersion7()}";
 
-    /// <summary>
-    /// One command through the real §6.3 behaviour over the scope's real unit
-    /// of work, with the key already on the context — which is what §8.5's
-    /// behaviour puts there after a successful claim. The handler writes
-    /// through <c>ExecuteRawAsync</c>, so the work and the marker are on the
-    /// same connection and either both commit or neither does.
-    /// </summary>
+    /// <summary>One command through §6.3's real behaviour, with the key already on the context (§8.5).</summary>
     private static Task<Result> RunAsync(AsyncServiceScope scope, string key, Guid id, Result outcome)
     {
         IUnitOfWork unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();

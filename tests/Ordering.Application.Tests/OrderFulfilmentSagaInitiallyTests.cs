@@ -7,19 +7,14 @@ using static Ordering.Application.Tests.OrderFulfilmentSagaHarness;
 
 namespace Ordering.Application.Tests;
 
-/// <summary>
-/// §9.6's saga at <c>Initially</c>: the <c>OrderPlaced</c> that creates
-/// the instance and the commands it sends.
-/// </summary>
+/// <summary>§9.6's saga at <c>Initially</c>.</summary>
 [Collection(nameof(OrderFulfilmentSagaCollection))]
 public class OrderFulfilmentSagaInitiallyTests
 {
     [Fact]
     public async Task Commands_are_sent_and_events_are_published()
     {
-        // §9.6's distinction: a command published rather than sent would reach
-        // every subscriber that bound the type, and nothing else here would
-        // notice.
+        // §9.6's distinction: a command published rather than sent reaches every subscriber of its type.
         (ServiceProvider provider, ITestHarness harness) = await StartHarnessAsync();
         await using (provider)
         {
@@ -27,8 +22,7 @@ public class OrderFulfilmentSagaInitiallyTests
 
             await Publish(harness, SagaContracts.OrderPlaced(orderId, Customer));
 
-            // The positive first gives the negative a point in time to be false
-            // at.
+            // The positive first gives the negative a point in time to be false at.
             (await Sent<ReserveStock>(harness, m => m.OrderId == orderId)).ShouldBeTrue();
             (await NotYetPublished<ReserveStock>(harness, m => m.OrderId == orderId)).ShouldBeFalse();
         }
@@ -37,9 +31,7 @@ public class OrderFulfilmentSagaInitiallyTests
     [Fact]
     public async Task The_order_lines_are_mapped_rather_than_forwarded()
     {
-        // ReserveStock owns its line type, so versioning OrderPlaced does not
-        // version Inventory's command (§9.6); a StockLine has no price, which
-        // is the point of the separate type.
+        // ReserveStock owns its line type, so versioning OrderPlaced does not version Inventory's command (§9.6).
         (ServiceProvider provider, ITestHarness harness) = await StartHarnessAsync();
         await using (provider)
         {

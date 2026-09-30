@@ -14,23 +14,10 @@ using Xunit;
 
 namespace Ordering.Api.Tests;
 
-/// <summary>
-/// PR-16's deferred security test, carried here because it needs the first
-/// resource in the platform that has an owner. §11.4's ownership check, over
-/// HTTP against a real database.
-/// </summary>
+/// <summary>§11.4's ownership check over HTTP against a real database.</summary>
 /// <remarks>
-/// Over the wire rather than against the handler, and that is the point.
-/// <c>ICurrentUser</c> is <c>HttpContextCurrentUser</c> in a running host, so
-/// only a real request exercises the thing that actually answers "who is the
-/// caller" — the claims projection, the authentication scheme and the
-/// authorization policies included. A handler test with a substituted
-/// <c>ICurrentUser</c> proves the <c>if</c>, not the mechanism it depends on.
-/// <para>
-/// Catalog could not host this test: every product is public to every caller
-/// by design, so there was no resource whose owner could differ from the
-/// caller. That is why PR-16 deferred it rather than skipping it.
-/// </para>
+/// Over the wire, because <c>ICurrentUser</c> is <c>HttpContextCurrentUser</c> and only a real request exercises
+/// what answers "who is the caller" (§12.4).
 /// </remarks>
 [Collection(nameof(IntegrationCollection))]
 public sealed class OrderOwnershipTests(ServiceFixture fixture) : IAsyncLifetime
@@ -45,12 +32,7 @@ public sealed class OrderOwnershipTests(ServiceFixture fixture) : IAsyncLifetime
     [Fact]
     public async Task User_A_cancelling_user_B_s_order_gets_404_and_not_403()
     {
-        // The assertion PR-16's row names. 404 rather than 403 is the whole
-        // point: a 403 confirms the order exists, which hands an attacker an
-        // oracle over every id they can guess. The order must still be there
-        // afterwards, because a status code that lies about the outcome is
-        // only half the defect — the other half is the cancellation happening
-        // anyway.
+        // 404 rather than 403, which would confirm the order exists; and the order must still be there after.
         OrderId order = await SeedOrderAsync(Bob);
 
         HttpResponseMessage response = await CancelAsync(order, asUser: Alice);
@@ -64,9 +46,7 @@ public sealed class OrderOwnershipTests(ServiceFixture fixture) : IAsyncLifetime
     [Fact]
     public async Task The_owner_can_cancel_their_own_order()
     {
-        // The control. Without it the test above passes on a handler that
-        // returns 404 to everybody, which is a working access-control check
-        // and a broken feature.
+        // The control, or the test above would pass on a handler that answers 404 to everybody.
         OrderId order = await SeedOrderAsync(Bob);
 
         HttpResponseMessage response = await CancelAsync(order, asUser: Bob);
@@ -78,10 +58,7 @@ public sealed class OrderOwnershipTests(ServiceFixture fixture) : IAsyncLifetime
     [Fact]
     public async Task An_order_that_does_not_exist_is_the_same_404()
     {
-        // The two refusals must be indistinguishable from outside. If the
-        // not-found path and the not-yours path ever diverge — a different
-        // code, a different body, a measurably different latency — the pair
-        // becomes the oracle the 404 was chosen to avoid.
+        // Not-found and not-yours must look alike, or the pair becomes the oracle the 404 avoids.
         HttpResponseMessage response = await CancelAsync(new OrderId(Guid.CreateVersion7()), asUser: Alice);
 
         response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
@@ -90,11 +67,7 @@ public sealed class OrderOwnershipTests(ServiceFixture fixture) : IAsyncLifetime
     [Fact]
     public async Task An_admin_claim_reaches_an_order_it_does_not_own()
     {
-        // §11.4's one sanctioned override, and it is a claim rather than a
-        // policy: the endpoint cannot decide this, because the order is not
-        // loaded when the policy runs. Note what is still true here — nothing
-        // in the request says whose order it is, so this overrides ownership
-        // without breaching the subject rule.
+        // §11.4's one sanctioned override, a claim rather than a policy, since the order is not loaded yet then.
         OrderId order = await SeedOrderAsync(Bob);
 
         HttpResponseMessage response = await CancelAsync(
@@ -109,11 +82,7 @@ public sealed class OrderOwnershipTests(ServiceFixture fixture) : IAsyncLifetime
     [Fact]
     public async Task An_unauthenticated_caller_gets_401_and_never_reaches_the_handler()
     {
-        // The group's RequireAuthorization, doing its half. This matters
-        // beside the ownership check rather than instead of it: the handler's
-        // guard fails closed on a missing principal too, and two independent
-        // refusals is the design — one of them removed should still leave the
-        // order alone.
+        // The group's RequireAuthorization, one of two independent refusals beside the handler's guard.
         OrderId order = await SeedOrderAsync(Bob);
 
         HttpResponseMessage response = await CancelAsync(order, asUser: null);
@@ -125,11 +94,7 @@ public sealed class OrderOwnershipTests(ServiceFixture fixture) : IAsyncLifetime
     [Fact]
     public async Task A_caller_without_the_cancel_permission_gets_403()
     {
-        // 403 rather than 404 here, and the difference from the ownership case
-        // is deliberate: this caller is refused by the endpoint policy before
-        // any order is loaded, so nothing has been revealed about whether the
-        // id exists — the response is the same for every id, which is what
-        // makes it safe to be honest about the missing permission.
+        // 403 is safe here: the policy refuses before any order is loaded, so it is the same for every id.
         OrderId order = await SeedOrderAsync(Bob);
 
         HttpResponseMessage response = await CancelAsync(order, asUser: Bob, permissions: "orders:write");
@@ -141,17 +106,8 @@ public sealed class OrderOwnershipTests(ServiceFixture fixture) : IAsyncLifetime
     [Fact]
     public async Task A_cancellation_through_this_endpoint_publishes_the_user_origin()
     {
-        // **The other half of #123's translation, and it can only be proved
-        // here.** A User-origin command dispatched in a bare scope has no
-        // principal, so §11.4's ownership guard fails closed and returns
-        // NotFound before an origin is ever written — which is the guard
-        // working, and why the sibling assertion in SagaCommandHandlerTests
-        // covers the System case alone. A real request is what supplies the
-        // caller this path needs.
-        //
-        // Inverting the handler's switch would tag this cancellation as the
-        // workflow's own echo, and §9.6 would then discard it on a missing
-        // instance instead of faulting — the silent loss #123 exists to close.
+        // Only a real request supplies the principal a User-origin cancellation needs; tagged as the workflow's
+        // echo, §9.6 would discard it on a missing instance rather than fault.
         OrderId order = await SeedOrderAsync(Bob);
 
         HttpResponseMessage response = await CancelAsync(order, asUser: Bob);
@@ -166,10 +122,6 @@ public sealed class OrderOwnershipTests(ServiceFixture fixture) : IAsyncLifetime
             "a cancellation with a principal behind it is not this workflow's echo");
     }
 
-    /// <summary>
-    /// §12.4's shared seeding helper, on the fixture rather than here so both
-    /// suites reach one implementation of "an order that exists".
-    /// </summary>
     private async Task<OrderId> SeedOrderAsync(Guid customer) =>
         new(await fixture.SeedOrderAsync(customer));
 
@@ -196,13 +148,7 @@ public sealed class OrderOwnershipTests(ServiceFixture fixture) : IAsyncLifetime
     [Fact]
     public async Task A_reason_outside_the_wire_vocabulary_is_rejected()
     {
-        // §12.4's fourth security test. The enum's member name is the
-        // interesting input: Enum.TryParse would accept "CustomerRequest",
-        // and CancellationReasons deliberately does not — it maps the wire
-        // vocabulary and refuses anything else rather than defaulting, so a
-        // sibling service sending an unknown code is a loud deployment
-        // problem instead of an order cancelled for the wrong recorded
-        // reason.
+        // The enum's member name, which Enum.TryParse would accept and CancellationReasons refuses.
         OrderId order = await SeedOrderAsync(Bob);
         HttpClient client = fixture.Factory.CreateClient();
         client.DefaultRequestHeaders.Add(TestAuthHandler.UserHeader, Bob.ToString());
@@ -222,21 +168,7 @@ public sealed class OrderOwnershipTests(ServiceFixture fixture) : IAsyncLifetime
     [InlineData(nameof(OrderStatus.Delivered))]
     public async Task An_order_past_despatch_is_refused_with_422_and_the_shipped_code(string status)
     {
-        // **#109's second half: the producer had no test at all.** Every
-        // occurrence of AlreadyShipped under tests/ was a sample string —
-        // §10.5's 422 was unproven and §9.8's dashboard series was built on a
-        // code nothing had ever been shown to emit. OrderTests covers the
-        // domain THROW, which is the half that already worked; nothing covered
-        // the catch, the mapping or the status code.
-        //
-        // **Delivered is arranged directly because nothing reaches it.**
-        // OrderStatus declares it and no transition sets it — §9.6 has no
-        // ShipmentDelivered — so the guard in Order.Cancel is written for a
-        // status the aggregate cannot get to on its own. Driving the row there
-        // is what makes the guard testable rather than decorative, and it is
-        // the case that would have caught the message defect: the old
-        // description said "A shipped order cannot be cancelled" and this
-        // customer's order was delivered.
+        // §10.5's 422 and its code over HTTP. The status is arranged directly, since no transition sets Delivered.
         OrderId order = await SeedOrderAsync(Bob);
         await fixture.ExecuteAsync(
             "UPDATE ordering.Orders SET Status = {0} WHERE Id = {1}",
@@ -254,16 +186,7 @@ public sealed class OrderOwnershipTests(ServiceFixture fixture) : IAsyncLifetime
         problem.Extensions["code"]?.ToString().ShouldBe(
             "order.already_shipped",
             "the code is a §9.8 dimension value and splitting it would halve the series");
-        // **The exact string, not the absence of the old one.** Asserting only
-        // that the detail no longer contains "A shipped order" rejects one
-        // obsolete substring and passes for a blank detail, a truncated one,
-        // or any other wrong message — which leaves #109's actual subject, the
-        // customer-visible wording, unpinned by the test written to pin it.
-        //
-        // Pinning the prose makes it a thing a later edit has to come here and
-        // change, and that is the cost being accepted rather than an oversight:
-        // this sentence is served to a customer, and #109 was filed because it
-        // said something untrue to half of them.
+        // The exact string, since this customer-facing sentence must be true of both statuses.
         problem.Detail.ShouldBe(
             "An order that has already shipped cannot be cancelled; raise a return instead.",
             $"a {status} order's customer reads this, and naming one of the two " +

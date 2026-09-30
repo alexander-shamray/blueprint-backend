@@ -10,24 +10,7 @@ using Xunit;
 
 namespace Ordering.Api.Tests;
 
-/// <summary>
-/// §11.4's callout, executed: "enumerate the endpoint policy names from
-/// <c>EndpointDataSource</c> in a test and require each to resolve through
-/// <c>IAuthorizationPolicyProvider</c>."
-/// </summary>
-/// <remarks>
-/// A policy name is a reference and nothing checks it.
-/// <c>RequireAuthorization("orders:write")</c> takes a string — misspell it,
-/// or register the policy in a helper the host never calls, and there is no
-/// compiler error, no <c>ValidateOnBuild</c> failure and no startup warning.
-/// The endpoint throws <c>InvalidOperationException</c> the first time somebody
-/// places an order, which is to say in production, on the path that matters.
-///
-/// This reads the names off the built endpoints rather than from a list beside
-/// the registrations, which is the whole point: a list would be a third place
-/// to keep in step, and it would agree with itself while disagreeing with the
-/// host.
-/// </remarks>
+/// <summary>§11.4's callout: every policy an endpoint names, read off the built endpoints, resolves.</summary>
 public class AuthorizationPolicyTests(HostSmokeTests.UnreachableInfrastructureFactory factory)
     : IClassFixture<HostSmokeTests.UnreachableInfrastructureFactory>
 {
@@ -49,9 +32,7 @@ public class AuthorizationPolicyTests(HostSmokeTests.UnreachableInfrastructureFa
                 .Distinct()
         ];
 
-        // Not vacuous: the assertion below passes trivially over an empty set,
-        // and an endpoint file that lost its RequireAuthorization line would
-        // produce exactly that.
+        // Not vacuous: the loop below passes trivially over a set missing a policy.
         named.ShouldContain(OrderingPermissions.Write);
         named.ShouldContain(OrderingPermissions.Cancel);
         named.ShouldContain(
@@ -71,21 +52,8 @@ public class AuthorizationPolicyTests(HostSmokeTests.UnreachableInfrastructureFa
     [Fact]
     public async Task Orders_admin_is_a_claim_and_is_deliberately_not_a_policy()
     {
-        // §11.4 is emphatic that the two are different things, and the names
-        // in this service's vocabulary look alike enough that registering a
-        // third policy would read as consistency. CancelOrderHandler reads
-        // orders:admin through ICurrentUser.HasPermission against a loaded
-        // aggregate — a question no endpoint policy could answer, because the
-        // order is not loaded when the policy runs.
-        //
-        // A literal here for the same reason CancelOrderHandler spells one:
-        // naming it from OrderingPermissions would put it in the vocabulary
-        // this test exists to keep it out of, and §11.4 says that class holds
-        // policies alone.
-        //
-        // Asserted rather than left to the comment above: this fails the day
-        // somebody adds the policy, which is the moment to reread §11.4 and
-        // decide deliberately rather than by symmetry.
+        // §11.4: CancelOrderHandler reads the claim against a loaded aggregate, which no policy could. A literal,
+        // since OrderingPermissions holds policies alone.
         IAuthorizationPolicyProvider policies =
             factory.Services.GetRequiredService<IAuthorizationPolicyProvider>();
 
@@ -100,11 +68,7 @@ public class AuthorizationPolicyTests(HostSmokeTests.UnreachableInfrastructureFa
     [Fact]
     public async Task The_shared_authenticated_policy_is_registered_by_common_web()
     {
-        // Not named by any Ordering endpoint — the group uses the default
-        // policy — so the test above cannot see it. It exists for the
-        // gateway's route file (§10.2), whose `ordering` route names it, and
-        // YARP resolves it through this same provider when it loads the
-        // configuration.
+        // Named by no Ordering endpoint but by the gateway's ordering route (§10.2).
         IAuthorizationPolicyProvider policies =
             factory.Services.GetRequiredService<IAuthorizationPolicyProvider>();
 
@@ -114,38 +78,19 @@ public class AuthorizationPolicyTests(HostSmokeTests.UnreachableInfrastructureFa
     [Fact]
     public void No_ordering_endpoint_is_anonymous()
     {
-        // The whole difference from Catalog, asserted where an edit to either
-        // endpoint would be caught: a product listing is public by design,
-        // and an order belongs to somebody. An AllowAnonymous anywhere here
-        // defeats every policy on the path it sits on.
+        // An order belongs to somebody, and an AllowAnonymous defeats every policy on its path.
         foreach (Endpoint endpoint in Endpoints.Where(e => Name(e) is "PlaceOrder" or "CancelOrder"))
             endpoint.Metadata.GetMetadata<IAllowAnonymous>().ShouldBeNull(Name(endpoint));
 
-        // Not vacuous — the loop above passes over an empty set, which is what
-        // a renamed endpoint would produce.
+        // Not vacuous: the loop above passes over the empty set a renamed endpoint would leave.
         Endpoints.Count(e => Name(e) is "PlaceOrder" or "CancelOrder").ShouldBe(2);
     }
 
     [Fact]
     public void Every_idempotent_command_reaches_this_service_through_an_authenticated_endpoint()
     {
-        // §8.5's rule, and until this test it was a claim IIdempotentCommand's
-        // own remarks made about a gate that did not exist: "a test asserts it
-        // of every command declaring this". Nothing did. The two
-        // IdempotencyOptInTests suites read command SHAPE — the interface, the
-        // result type, the operation name — and none of them can see an
-        // endpoint.
-        //
-        // What the rule protects: ICurrentUser.IsAuthenticated is false for an
-        // anonymous HTTP request, so its subject falls back to the shared
-        // "system" segment. Two anonymous callers reusing one CommandId then
-        // collide inside the mechanism that exists to keep them apart, and the
-        // second is served the first's stored result. An endpoint marked
-        // AllowAnonymous is all it takes.
-        //
-        // Read off the built endpoints for AuthorizationPolicyTests' own
-        // reason: a list beside the registrations would agree with itself while
-        // disagreeing with the host.
+        // §8.5's rule: an anonymous caller's subject falls back to the shared "system" segment, so two of them
+        // reusing one CommandId would collide.
         (Endpoint Endpoint, Type Command)[] idempotent =
         [
             .. Endpoints
@@ -156,25 +101,8 @@ public class AuthorizationPolicyTests(HostSmokeTests.UnreachableInfrastructureFa
                     .Select(p => (Endpoint: e, Command: p.ParameterType)))
         ];
 
-        // **The gate's own subject, and a floor was not enough.** This used to
-        // assert only ShouldNotBeEmpty, which establishes that the selector
-        // found SOMETHING and not that it found everything — while the test is
-        // named for every command declaring the interface. With a second
-        // idempotent command, an endpoint binding a request DTO instead of the
-        // command (a shape this codebase permits) becomes invisible here and
-        // the floor still passes, so exactly the endpoint that stopped being
-        // covered is the one nothing reports.
-        //
-        // So the subject is the AGREEMENT between two independently derived
-        // sets: every idempotent command this service's Application assembly
-        // declares, and every one reachable through an endpoint. It fails from
-        // either side — a command with no endpoint, or a selector that stopped
-        // matching one.
-        //
-        // A broker-only idempotent command would fail this, and that is the
-        // design rather than a limitation: §8.5's subject is equally shared for
-        // a message-borne command, so one arriving is a decision to take and
-        // not a case to widen the gate for silently.
+        // The gate's subject is the agreement of two sets, declared and reachable, so it fails from either side;
+        // a broker-only idempotent command fails it by design (§8.5).
         Type[] declared =
         [
             .. typeof(Ordering.Application.DependencyInjection).Assembly

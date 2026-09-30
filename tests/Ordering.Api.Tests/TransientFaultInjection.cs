@@ -4,19 +4,10 @@ using Microsoft.EntityFrameworkCore.Storage;
 
 namespace Ordering.Api.Tests;
 
-/// <summary>
-/// The marker the retry test throws on its first attempt. A real transient
-/// fault is a SqlException with one of a fixed set of numbers, and those are
-/// not constructible; a strategy taught to retry this marker exercises the
-/// same path without reflection over provider internals.
-/// </summary>
+/// <summary>The retry test's first-attempt fault, since a transient <c>SqlException</c> is not constructible.</summary>
 public sealed class FakeTransientException : Exception;
 
-/// <summary>
-/// The production strategy plus one retriable exception type. Everything the
-/// test proves — the delegate re-runs, the first attempt rolls back, one
-/// commit — is the base class's behaviour, not this subclass's.
-/// </summary>
+/// <summary>The production strategy plus one retriable exception type; everything proven is the base class's.</summary>
 public sealed class MarkerRetryingStrategy(ExecutionStrategyDependencies dependencies)
     : SqlServerRetryingExecutionStrategy(dependencies)
 {
@@ -24,10 +15,7 @@ public sealed class MarkerRetryingStrategy(ExecutionStrategyDependencies depende
         exception is FakeTransientException || base.ShouldRetryOn(exception);
 }
 
-/// <summary>
-/// A tracked entity over the fixture's probe table, so the identity-map half
-/// of the retry defect is assertable before this service has an aggregate.
-/// </summary>
+/// <summary>A tracked entity over the probe table, so the identity-map half of the retry is assertable.</summary>
 public sealed class TrackedProbe
 {
     public Guid Id { get; set; }
@@ -35,14 +23,7 @@ public sealed class TrackedProbe
     public string Note { get; set; } = string.Empty;
 }
 
-/// <summary>
-/// Adds <see cref="TrackedProbe"/> to the model of the retry tests' own
-/// <c>DbContextOptions</c> — and nothing else's. The production model and its
-/// migration snapshot never see the entity: a test table mapped in
-/// <c>OrderingDbContext</c> itself would make the next <c>migrations add</c>
-/// generate DDL for a table only the fixture creates, which is the snapshot
-/// drift PR-08 forbids.
-/// </summary>
+/// <summary>Adds <see cref="TrackedProbe"/> to the retry tests' own model only, so no migration ever sees it.</summary>
 public sealed class ProbeModelCustomizer(ModelCustomizerDependencies dependencies)
     : ModelCustomizer(dependencies)
 {

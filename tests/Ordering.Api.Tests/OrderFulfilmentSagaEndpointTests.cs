@@ -10,20 +10,8 @@ using Xunit;
 
 namespace Ordering.Api.Tests;
 
-/// <summary>
-/// The saga against real SQL Server and a real broker: the EF repository §9.6
-/// registers, the row it writes, and what happens to a message that arrives
-/// after the instance is gone.
-/// </summary>
-/// <remarks>
-/// <b>§12.5's harness cannot reach any of this.</b> That suite swaps in
-/// <c>.InMemoryRepository()</c> and the in-memory transport, so the EF mapping,
-/// the pessimistic locking, the persistence across a transition and the
-/// delete-on-finalise are all replaced by the thing under test's double.
-/// Copilot named the gap; this is the other half, and it is deliberately thin —
-/// the transitions themselves are the harness suite's subject and are not
-/// re-proved over a broker.
-/// </remarks>
+/// <summary>The saga's EF repository and endpoint against real SQL Server and a real broker (§9.6).</summary>
+/// <remarks>§12.5's harness replaces the repository and transport with doubles, so these halves live here.</remarks>
 [Collection(nameof(IntegrationCollection))]
 public sealed class OrderFulfilmentSagaEndpointTests(ServiceFixture fixture) : IAsyncLifetime
 {
@@ -31,28 +19,15 @@ public sealed class OrderFulfilmentSagaEndpointTests(ServiceFixture fixture) : I
 
     private static readonly TimeSpan DeliveryBudget = TimeSpan.FromSeconds(30);
 
-    /// <summary>
-    /// Every message this test published, so the teardown can wait for the
-    /// saga endpoint's inbox row before the next test truncates.
-    /// </summary>
+    /// <summary>Every message this test published, so the teardown can wait for its inbox rows.</summary>
     private readonly List<(Guid MessageId, string Endpoint)> _published = [];
 
     public async ValueTask InitializeAsync() => await fixture.ResetAsync();
 
     /// <summary>
-    /// Drains what this test started.
+    /// Waits for each delivery's inbox row, written after the consumer returns (§9.5), so the next reset
+    /// cannot truncate under a commit still in flight.
     /// </summary>
-    /// <remarks>
-    /// <b>This was a no-op, and it was the same flake the suite next door
-    /// exists to document.</b> The assertions here observe the saga
-    /// repository's commit — a row appearing or disappearing — which happens
-    /// <em>inside</em> the consumer; §9.5's filter writes its inbox row after
-    /// control returns to it. So a test could see the row go, return, and let
-    /// the next <c>ResetAsync</c> truncate the schema underneath a
-    /// <c>SaveChangesAsync</c> still in flight. Copilot caught it in the round
-    /// after the one that added the filter — the filter is what created the
-    /// second write to wait for.
-    /// </remarks>
     public async ValueTask DisposeAsync()
     {
         foreach ((Guid messageId, string endpoint) in _published)
@@ -83,8 +58,7 @@ public sealed class OrderFulfilmentSagaEndpointTests(ServiceFixture fixture) : I
             orderId))
             .ShouldBe("AwaitingStock", "the state column is the mapping under test, not the transition");
 
-        // A failure that finalises immediately, so the delete is observable
-        // without waiting out a timeout.
+        // A failure that finalises immediately, so the delete is observable without waiting out a timeout.
         await PublishReservationFailedAsync(orderId, Guid.CreateVersion7());
 
         await Eventually(
@@ -97,45 +71,8 @@ public sealed class OrderFulfilmentSagaEndpointTests(ServiceFixture fixture) : I
     [Fact]
     public async Task A_cancellation_that_overtakes_its_placement_is_rescued_by_the_retry()
     {
-        // **#123's whole argument for faulting rather than discarding, and
-        // §12.5's suite cannot express it.** That harness registers no
-        // UseMessageRetry, so its tests prove the callback faults ONCE and
-        // nothing more — while the reason a fault is the right answer is that
-        // §9.8's envelope gives the placement time to land and a later attempt
-        // correlates. A fault that never recovers would be a regression this
-        // branch argued for in prose and never measured. Copilot found the gap.
-        //
-        // **What this proves, and what it cannot.** It establishes that a
-        // cancellation published before its placement still ends in
-        // Compensating rather than in the error queue — the recovery §9.8's
-        // envelope is supposed to give #123, which §12.5's harness cannot
-        // express because it registers no UseMessageRetry.
-        //
-        // **The delay is the strongest arrangement available and is not a
-        // proof.** Publish returns at the transport boundary rather than when a
-        // consumer has run, so on a loaded runner the cancellation can still be
-        // queued when the clock expires; the placement then wins, the first
-        // delivery correlates, and this passes having exercised the ordinary
-        // path. It never fails spuriously — it occasionally proves less.
-        // Copilot named that, and the fence it asked for is **not observable
-        // here**: UseMessageRetry wraps the pipeline, so retries run inside it
-        // and no fault reaches an IReceiveObserver or IConsumeObserver until
-        // the ladder is exhausted — about seventy seconds, which is this
-        // repository's own figure for it and well past this suite's budget.
-        // Measured, by writing both observers and watching them stay silent for
-        // the whole wait.
-        //
-        // **No per-attempt arithmetic here, deliberately.** An earlier revision
-        // wrote the ladder out as 1s, 3s, 7s, 15s, 31s and priced it at
-        // fifty-seven — both a contradiction of the seventy this corpus states
-        // everywhere else and a determinism the policy does not have. The only
-        // property this test needs is that the shortest ladder still outlasts
-        // thirty seconds.
-        //
-        // Closing it needs a signal the platform does not have — a first-attempt
-        // hook, or a shorter ladder on a test-only endpoint. Stated rather than
-        // papered over, because the alternative is a comment claiming a
-        // determinism the code does not deliver.
+        // §9.8's retries give the placement time to land, which §12.5's harness cannot show. The delay is not
+        // a proof: on a loaded runner the placement can win, and this then passes on the ordinary path.
         var orderId = Guid.CreateVersion7();
 
         await PublishCancelledAsync(orderId, Guid.CreateVersion7(), CancelOrigins.User);
@@ -149,9 +86,7 @@ public sealed class OrderFulfilmentSagaEndpointTests(ServiceFixture fixture) : I
 
         await PublishPlacedAsync(orderId, Guid.CreateVersion7());
 
-        // The row has to exist before its state can be read at all — ScalarAsync
-        // throws on an empty result rather than answering, so polling the state
-        // directly would die on the first read instead of waiting.
+        // The row first, since ScalarAsync throws on an empty result rather than answering.
         await Eventually(
             () => SagaRowsAsync(orderId),
             expected: 1,
@@ -171,12 +106,7 @@ public sealed class OrderFulfilmentSagaEndpointTests(ServiceFixture fixture) : I
     [Fact]
     public async Task An_observed_cancellation_is_persisted_and_withholds_the_authorisation()
     {
-        // **#143's flag is written by one delivery and read by a later one, and
-        // §12.5's suite cannot see that.** Every scenario there runs on
-        // .InMemoryRepository(), so the column, its mapping and the read-back
-        // across two consume transactions are all replaced by a double — and a
-        // guard that reads a field EF never persisted would pass there and fail
-        // in production. Copilot named the gap; this is the half that closes it.
+        // The flag is written by one delivery and read by a later one, across the EF mapping §12.5's double replaces.
         var orderId = Guid.CreateVersion7();
 
         await PublishPlacedAsync(orderId, Guid.CreateVersion7());
@@ -186,8 +116,7 @@ public sealed class OrderFulfilmentSagaEndpointTests(ServiceFixture fixture) : I
             expected: 1,
             because: "the arrange half");
 
-        // Inventory releasing off an OrderCancelled this saga has not consumed
-        // (ADR-029) — the arrival AwaitingStock records rather than ignores.
+        // Inventory releasing off an OrderCancelled this saga has not consumed (ADR-029).
         await PublishReleasedAsync(orderId, Guid.CreateVersion7());
 
         await Eventually(
@@ -199,18 +128,11 @@ public sealed class OrderFulfilmentSagaEndpointTests(ServiceFixture fixture) : I
             because: "the recording branch has to reach the COLUMN, which is the " +
                 "half a saga harness with an in-memory repository cannot prove");
 
-        // The forward event the guard exists for. Read back on a later delivery,
-        // so this asserts the round trip rather than the assignment.
         var reservedId = Guid.CreateVersion7();
         await PublishReservedAsync(orderId, reservedId);
 
-        // **Fence on the delivery before reading the state, or this assertion
-        // cannot fail.** AwaitingStock is what the row already says when
-        // StockReserved is published, so an Eventually that merely waits for it
-        // returns on its first read — before the saga has consumed anything — and
-        // passes just as happily with the guard removed. Measured: it did.
-        // §9.5's inbox row is written after the consumer returns, so waiting for
-        // it is the barrier that makes the read mean something.
+        // Fenced on the inbox row, written after the consumer returns (§9.5), since the state already reads
+        // AwaitingStock before the delivery.
         await Eventually(
             async () => (await SagaInboxRowsAsync(reservedId)).Count,
             expected: 1,
@@ -231,19 +153,8 @@ public sealed class OrderFulfilmentSagaEndpointTests(ServiceFixture fixture) : I
     [Fact]
     public async Task A_row_this_build_writes_defaults_the_retained_CustomerId_to_empty()
     {
-        // The behavioural half of ADR-028's expand/contract, and until this
-        // test it was an argument rather than a measurement. The instance no
-        // longer declares CustomerId, so the generated INSERT does not name
-        // that column; what supplies it is the database default this branch's
-        // migration adds. Nothing else in the suite watches that — the smoke
-        // test checks the migration was applied, which is not the same claim.
-        //
-        // **What rests on the value being Guid.Empty is the mixed-version
-        // window.** §15.5 runs two releases at once over the same queues, so a
-        // pod on the previous build can step an instance this one created,
-        // materialise this column into its non-nullable Guid, and send its
-        // four-field AuthorisePayment. Empty means it names nobody; any other
-        // value would name a real customer who never placed this order.
+        // ADR-028's expand half: the instance no longer writes CustomerId, and §15.5's previous release may read
+        // it, where Guid.Empty names nobody.
         var orderId = Guid.CreateVersion7();
 
         await PublishPlacedAsync(orderId, Guid.CreateVersion7());
@@ -265,10 +176,7 @@ public sealed class OrderFulfilmentSagaEndpointTests(ServiceFixture fixture) : I
     [Fact]
     public async Task The_retained_CustomerId_column_carries_a_default_constraint()
     {
-        // The mechanism behind the test above, asserted separately because the
-        // two can fail apart. A row could read empty because something wrote
-        // Guid.Empty into it; the constraint is what makes the value a
-        // property of the schema rather than of one insert path.
+        // The mechanism, asserted apart because a row could read empty because something wrote Guid.Empty.
         (await fixture.ScalarAsync<int>(
             """
             SELECT Value = COUNT(*)
@@ -288,18 +196,7 @@ public sealed class OrderFulfilmentSagaEndpointTests(ServiceFixture fixture) : I
     [Fact]
     public async Task A_replayed_OrderPlaced_does_not_restart_a_finished_saga()
     {
-        // **The one that made the saga endpoint take an inbox filter.**
-        //
-        // OrderPlaced is handled in Initially and SetCompletedWhenFinalized
-        // deletes the row, so MassTransit's initial-event policy creates a NEW
-        // instance whenever none exists. §9.4 guarantees at-least-once — a
-        // crash between publishing and marking the outbox row processed
-        // republishes it — so a duplicate arriving after the workflow finished
-        // would reserve stock and authorise payment a second time.
-        //
-        // §9.8's exemption ("a redelivered StockReserved finds the instance
-        // already past AwaitingStock") is an argument about NON-initial events
-        // and never covered this one. Copilot found it.
+        // A finalised saga has no row, so an at-least-once replay (§9.4) of the initial event would start it again.
         var orderId = Guid.CreateVersion7();
         var messageId = Guid.CreateVersion7();
 
@@ -309,15 +206,10 @@ public sealed class OrderFulfilmentSagaEndpointTests(ServiceFixture fixture) : I
         await PublishReservationFailedAsync(orderId, Guid.CreateVersion7());
         await Eventually(() => SagaRowsAsync(orderId), expected: 0, because: "the saga must finish first");
 
-        // The same message, again — which is what the outbox does after a crash.
+        // The same message, again, which is what the outbox does after a crash.
         await PublishPlacedAsync(orderId, messageId);
 
-        // Then a sentinel for an unrelated order, and the wait is on its row
-        // rather than on a clock. **Copilot's finding, and it named the second
-        // half too:** _published holds each id once, so the teardown drain was
-        // already satisfied by the *first* delivery of this id and never waited
-        // for the replay — the exact shape the drain was added to close, one
-        // level down. The sentinel is a fresh id, so it is drained on its own.
+        // A sentinel with a fresh id, so the wait is on a row rather than a clock and the teardown drains it.
         var sentinelOrderId = Guid.CreateVersion7();
         await PublishPlacedAsync(sentinelOrderId, Guid.CreateVersion7());
         await Eventually(
@@ -332,25 +224,13 @@ public sealed class OrderFulfilmentSagaEndpointTests(ServiceFixture fixture) : I
             "a replayed OrderPlaced must not start fulfilment again — a second ReserveStock and a second " +
             "AuthorisePayment for one order is a double charge, and the row is the observable half of it");
 
-        // **A bound, not a proof of ordering**, on the terms
-        // OrderingCommandEndpointTests states in full: nothing pins this
-        // endpoint to one message at a time, so the sentinel may overtake. What
-        // it replaces is a fixed delay that could not scale with the runner at
-        // all, and unlike that delay it fails the test rather than passing it
-        // when the broker is the thing that stalled.
+        // A bound, not a proof of ordering: nothing pins this endpoint to one message at a time.
     }
 
     [Fact]
     public async Task A_scheduled_expiry_survives_the_endpoints_inbox_filter()
     {
-        // The filter throws on a message with no MessageId, and the saga
-        // endpoint now carries one — so every message type that reaches it has
-        // to be checked, not just the contracts. The four expiry records are
-        // published by the scheduler rather than by a mapper, which is the
-        // path least like the others.
-        //
-        // Published directly rather than waited for: what is under test is that
-        // the type crosses the filter, not MassTransit's timer.
+        // The filter throws on a message with no MessageId, and an expiry comes from the scheduler, not a mapper.
         var orderId = Guid.CreateVersion7();
 
         await PublishPlacedAsync(orderId, Guid.CreateVersion7());
@@ -368,24 +248,8 @@ public sealed class OrderFulfilmentSagaEndpointTests(ServiceFixture fixture) : I
     [Fact]
     public async Task Two_events_for_one_instance_arriving_together_are_both_consumed()
     {
-        // Copilot's finding was that ConcurrencyMode.Pessimistic is justified
-        // by a race no test runs, and every other test here delivers one event
-        // at a time. This publishes two without awaiting between them, so both
-        // are on the queue before either is consumed.
-        //
-        // **It does not pin the mode, and that was measured rather than
-        // assumed.** With the registration flipped to Optimistic this passes
-        // in 915 ms — the two transitions are a few milliseconds each, so the
-        // endpoint drains them back to back and no concurrency conflict ever
-        // arises. Writing the name Two_events_..._are_serialised over that
-        // would be this round's own finding committed a second time: a test
-        // green against both sides of the thing it claims to check.
-        //
-        // What it does cover is real and was uncovered before: two events for
-        // one instance, in flight together, are both consumed without
-        // faulting and leave one instance or none. The residual — a genuine
-        // overlap, which needs a transition slow enough to hold the lock — is
-        // recorded in the decision log rather than papered over here.
+        // Two events in flight together; this does not pin ConcurrencyMode.Pessimistic, since the endpoint may
+        // drain them back to back.
         var orderId = Guid.CreateVersion7();
 
         await PublishPlacedAsync(orderId, Guid.CreateVersion7());
@@ -398,21 +262,14 @@ public sealed class OrderFulfilmentSagaEndpointTests(ServiceFixture fixture) : I
             PublishReservedAsync(orderId, reservedId),
             PublishExpiredAsync(orderId, expiredId));
 
-        // InboxFilter records the id *after* the consumer returns — its own
-        // summary says so — so a consume that faults writes no row at all.
-        // That makes this the assertion with teeth: whatever order the two
-        // transitions run in, neither may throw.
+        // InboxFilter writes its row only after the consumer returns, so a faulted consume leaves none.
         await Eventually(
             async () => (await SagaInboxRowsAsync(reservedId)).Count + (await SagaInboxRowsAsync(expiredId)).Count,
             expected: 2,
             because: "a row is written only once its consumer returns, so a transition that faulted on " +
                 "the instance the other one changed leaves this at one");
 
-        // Stated for what it rules out, which is less than it looks: the
-        // primary key on CorrelationId already forbids a second row. It is
-        // here because two instances is the failure a reader expects the mode
-        // to be about, and leaving it unasserted invites the next reader to
-        // add it as though it were the missing coverage.
+        // Less than it looks, since the primary key on CorrelationId already forbids a second row.
         (await SagaRowsAsync(orderId)).ShouldBeLessThanOrEqualTo(
             1,
             "one instance or none — never two for one CorrelationId");
@@ -421,34 +278,8 @@ public sealed class OrderFulfilmentSagaEndpointTests(ServiceFixture fixture) : I
     [Fact]
     public async Task The_sagas_sends_are_committed_with_its_instance_rather_than_buffered()
     {
-        // **#128 and ADR-032, and the only place the mechanism is observable
-        // in its effect rather than its wiring.** `IBus.GetProbeResult()` also
-        // exposes this endpoint's filter scopes, which would settle that the
-        // filter is configured without a broker round trip — a cheaper test of
-        // a weaker claim, and worth having; it is not this one. The saga used
-        // to send through
-        // UseInMemoryOutbox, which buffers in the process and flushes AFTER
-        // EntityFrameworkRepository has committed the instance. A crash in that
-        // window left the order advanced with its commands never sent — and for
-        // OrderPlaced that is the worst shape available, because the
-        // StockReservationExpired schedule that would have rescued the order
-        // was in the same buffer as the ReserveStock that failed to go.
-        //
-        // **What this asserts is not "a message arrived".** Every other test in
-        // this class already proves delivery, and every one of them passed
-        // before this change too — delivery is what the in-memory outbox also
-        // does, right up until the process dies. The observable difference is
-        // WHERE the messages were between the commit and the send, and
-        // MassTransit records exactly that: the endpoint's filter writes an
-        // ordering.InboxState row inside the saga's own transaction, stages the
-        // sends in ordering.OutboxMessage beside it, and stamps
-        // LastSequenceNumber on that row once it has delivered them.
-        //
-        // So LastSequenceNumber IS NOT NULL is the assertion with teeth. It is
-        // false in three distinguishable ways — the filter is not on the
-        // endpoint, the filter is there but the transition sent nothing, or the
-        // rows exist and delivery never ran — and the first of those is the
-        // regression #128 is about.
+        // ADR-032 in its effect: an InboxState row in the saga's transaction, stamped with LastSequenceNumber once
+        // the sends staged beside it are delivered, which an in-memory outbox never writes.
         var orderId = Guid.CreateVersion7();
         var placedId = Guid.CreateVersion7();
 
@@ -459,11 +290,7 @@ public sealed class OrderFulfilmentSagaEndpointTests(ServiceFixture fixture) : I
             expected: 1,
             because: "the arrange half — nothing below can be true before the transition has run");
 
-        // Anti-vacuity, and it is not decoration: the narrow assertion below
-        // adds one predicate to this one, so without this one a WHERE that
-        // matched nothing at all would read exactly like a delivery that had
-        // not happened yet, and this test would fail for the wrong reason for
-        // thirty seconds.
+        // Anti-vacuity: without this, a WHERE matching nothing would read like a delivery not yet made.
         await Eventually(
             () => TransactionalInboxRowsAsync(placedId, deliveredOnly: false),
             expected: 1,
@@ -481,27 +308,8 @@ public sealed class OrderFulfilmentSagaEndpointTests(ServiceFixture fixture) : I
     [Fact]
     public async Task The_scheduled_timeout_keeps_its_delay_through_the_outbox()
     {
-        // **The half `LastSequenceNumber` cannot see, and Copilot named it.**
-        // The test above proves the saga's sends were staged in
-        // ordering.OutboxMessage and delivered from there. It does not prove
-        // the SCHEDULED one kept its delay: a replay that stripped or shortened
-        // it would stage a row, deliver it, stamp LastSequenceNumber, and leave
-        // that assertion green while every newly placed order expired its stock
-        // reservation within seconds of being placed.
-        //
-        // The delay is carried as a message property and re-applied at
-        // delivery, so it survives the outbox by a route nothing else here
-        // exercises. What makes it observable is the saga's own reaction:
-        // StockReservationExpired arriving in AwaitingStock is handled — it
-        // releases and moves on — so an unarmed or zero delay takes the
-        // instance out of AwaitingStock almost at once.
-        //
-        // **This proves less than it looks and never fails spuriously**, which
-        // is the same shape as the cancellation test above. It establishes that
-        // the timeout did not fire within the wait; it cannot establish that it
-        // will fire at five minutes rather than four, and waiting out §9.6's
-        // real delay is not a price a suite pays. A slow runner makes it prove
-        // less, never fail.
+        // The half LastSequenceNumber cannot see: a zeroed delay would expire the stock timeout at once. It shows
+        // the timeout did not fire within the wait, not that it fires at §9.6's delay.
         var orderId = Guid.CreateVersion7();
 
         await PublishPlacedAsync(orderId, Guid.CreateVersion7());
@@ -513,11 +321,7 @@ public sealed class OrderFulfilmentSagaEndpointTests(ServiceFixture fixture) : I
 
         await Task.Delay(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
 
-        // Anti-vacuity before the negative, and not decoration: a finalised
-        // instance has no row at all, so a state assertion alone would read a
-        // deleted instance as "not AwaitingStock" and a missing one as the same
-        // failure — while ScalarAsync throws on an empty result rather than
-        // answering, which would fail this for the wrong reason.
+        // Anti-vacuity before the negative, since a finalised instance has no row to read a state from.
         (await SagaRowsAsync(orderId)).ShouldBe(
             1,
             "the instance must still exist for the state below to mean anything");
@@ -532,22 +336,8 @@ public sealed class OrderFulfilmentSagaEndpointTests(ServiceFixture fixture) : I
                     "delivers StockReservationExpired at once, and this state handles it");
     }
 
-    /// <summary>
-    /// Rows in MassTransit's own inbox for one message —
-    /// <c>ordering.InboxState</c>, which is ADR-032's table and not §9.5's
-    /// <c>ordering.InboxMessages</c>. The two are different mechanisms with
-    /// different windows and both are on the saga endpoint; reading the wrong
-    /// one is the obvious way to write a test that proves nothing.
-    /// </summary>
-    /// <param name="deliveredOnly">
-    /// Narrows to rows whose staged messages have been sent. The saga's
-    /// endpoint is the only one that stages any, so on this endpoint the
-    /// narrowed count is the mechanism and the wide one is only its record.
-    /// <c>LastSequenceNumber</c> alone, without a <c>Consumed IS NOT NULL</c>
-    /// beside it: the sequence number is stamped only after the row is marked
-    /// consumed, so the second predicate narrowed nothing and made the pair of
-    /// queries above look as though they differed by more than they do.
-    /// </param>
+    /// <summary>Rows in <c>ordering.InboxState</c> for one message, ADR-032's table rather than §9.5's.</summary>
+    /// <param name="deliveredOnly">Narrows to rows whose staged messages have been sent.</param>
     private Task<int> TransactionalInboxRowsAsync(Guid messageId, bool deliveredOnly) =>
         fixture.ScalarAsync<int>(
             deliveredOnly
@@ -556,22 +346,7 @@ public sealed class OrderFulfilmentSagaEndpointTests(ServiceFixture fixture) : I
                 : "SELECT Value = COUNT(*) FROM ordering.InboxState WHERE MessageId = {0}",
             messageId);
 
-    /// <summary>
-    /// One message's inbox rows on one endpoint — the inbox key is the pair,
-    /// so a <c>StockReserved</c> leaves one row on the saga's queue and
-    /// another on <c>ordering-stock-events</c>.
-    /// </summary>
-    /// <remarks>
-    /// <b>This took an endpoint after Copilot found the teardown draining
-    /// half of one.</b> `StockReserved` has two consumers by design — the saga
-    /// correlates on it and `StockReservedHandler` records it on the aggregate
-    /// — so the pair-scoped helper that made the concurrency test possible also
-    /// let its publisher register a drain for the saga alone. The saga could
-    /// then finish, the teardown pass, and the next `ResetAsync` truncate the
-    /// schema underneath a `StockReservedHandler` still committing. That is
-    /// exactly the flake this class's teardown was added to close, one
-    /// endpoint over.
-    /// </remarks>
+    /// <summary>One message's inbox rows on one endpoint, since §9.5's inbox key is the pair.</summary>
     private async Task<IReadOnlyList<InboxMessage>> InboxRowsAsync(Guid messageId, string endpoint) =>
         [.. (await fixture.InboxAsync()).Where(r => r.MessageId == messageId && r.Endpoint == endpoint)];
 
@@ -583,11 +358,7 @@ public sealed class OrderFulfilmentSagaEndpointTests(ServiceFixture fixture) : I
             "SELECT Value = COUNT(*) FROM ordering.OrderFulfilmentStates WHERE CorrelationId = {0}",
             orderId);
 
-    /// <summary>
-    /// A scheduled expiry, published with an id of this test's choosing so the
-    /// teardown can wait for it. The scheduler assigns its own in production;
-    /// what is under test is that the type crosses the endpoint's filter.
-    /// </summary>
+    /// <summary>A scheduled expiry, published with an id the teardown can wait for.</summary>
     private async Task PublishExpiredAsync(Guid orderId, Guid messageId)
     {
         // The saga alone: nothing else binds a timeout.
@@ -615,8 +386,7 @@ public sealed class OrderFulfilmentSagaEndpointTests(ServiceFixture fixture) : I
             Lines = [new PlacedLine(Guid.CreateVersion7(), 1, 19.99m)]
         };
 
-        // Added once even when the same id is published twice: the replay is
-        // suppressed by the filter, so it writes no second row.
+        // Added once even when the same id is published twice, since the filter's replay writes no second row.
         if (!_published.Contains((messageId, DependencyInjection.FulfilmentSagaQueue)))
             _published.Add((messageId, DependencyInjection.FulfilmentSagaQueue));
 
@@ -669,9 +439,7 @@ public sealed class OrderFulfilmentSagaEndpointTests(ServiceFixture fixture) : I
             OrderId = orderId
         };
 
-        // One consumer in this service, unlike StockReserved above: §3.2 gives
-        // StockReleased to the saga alone, so the saga queue is the whole
-        // drain list.
+        // The saga alone consumes StockReleased in this service.
         _published.Add((messageId, DependencyInjection.FulfilmentSagaQueue));
 
         await fixture.Factory.Services
@@ -696,11 +464,7 @@ public sealed class OrderFulfilmentSagaEndpointTests(ServiceFixture fixture) : I
             OrderId = orderId
         };
 
-        // **Both, and this is the pair the teardown was missing.** §3.2 gives
-        // StockReserved two consumers in this service — the saga correlates on
-        // it, StockReservedHandler records it on the aggregate — so a drain
-        // that waits for the saga's row alone lets the next ResetAsync
-        // truncate under the other one.
+        // Both: the saga correlates on StockReserved and StockReservedHandler records it on the aggregate.
         _published.Add((messageId, DependencyInjection.FulfilmentSagaQueue));
         _published.Add((messageId, DependencyInjection.StockEventsQueue));
 
@@ -727,8 +491,7 @@ public sealed class OrderFulfilmentSagaEndpointTests(ServiceFixture fixture) : I
             UnavailableProductIds = [Guid.CreateVersion7()]
         };
 
-        // The saga alone — nothing in this service consumes a failed
-        // reservation a second time.
+        // The saga alone consumes a failed reservation in this service.
         _published.Add((messageId, DependencyInjection.FulfilmentSagaQueue));
 
         await fixture.Factory.Services
@@ -746,9 +509,6 @@ public sealed class OrderFulfilmentSagaEndpointTests(ServiceFixture fixture) : I
     private static Task Eventually(Func<Task<int>> read, int expected, string because) =>
         Eventually<int>(read, expected, because);
 
-    // Generic since #143 needed the state COLUMN as well as a row count — the
-    // int overload above is kept so no existing call site had to move, which
-    // is what keeps this change out of the diff of tests it is not about.
     private static async Task Eventually<T>(Func<Task<T>> read, T expected, string because)
     {
         DateTimeOffset deadline = DateTimeOffset.UtcNow + DeliveryBudget;

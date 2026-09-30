@@ -14,25 +14,8 @@ using Xunit;
 
 namespace Ordering.Api.Tests;
 
-/// <summary>
-/// The refusal branches of the three saga-only handlers, which decide whether a
-/// command is retried or acknowledged.
-/// </summary>
-/// <remarks>
-/// <b>Only the success paths were covered, and the distinction these tests pin
-/// is the one with consequences.</b> `CommandConsumer` reads `ErrorType`
-/// (§9.8): `Unavailable` becomes an `UnavailableResultException` the endpoint's
-/// backoff retries, and everything else is acked, counted and gone. So
-/// collapsing `StockNotConfirmed` into a `Rule` error would leave a **paid
-/// order permanently unconfirmed** — and every suite would stay green, because
-/// the endpoint tests only ever drive the happy path. Copilot found the gap.
-/// <para>
-/// Dispatched rather than sent, because the branch under test is the handler's
-/// return value and the endpoint converts it into a retry that hides it. Homed
-/// here rather than in <c>Ordering.Application.Tests</c> because these handlers
-/// load an aggregate, which needs the fixture's database (§12.1's note).
-/// </para>
-/// </remarks>
+/// <summary>The saga-only handlers' refusals, whose <c>ErrorType</c> decides retry or ack (§9.8).</summary>
+/// <remarks>Dispatched, not sent, since the endpoint turns the error into a retry that hides it (§9.8).</remarks>
 [Collection(nameof(IntegrationCollection))]
 public sealed class SagaCommandHandlerTests(ServiceFixture fixture) : IAsyncLifetime
 {
@@ -45,10 +28,7 @@ public sealed class SagaCommandHandlerTests(ServiceFixture fixture) : IAsyncLife
     [Fact]
     public async Task Confirming_an_order_still_awaiting_stock_is_retryable()
     {
-        // The ordering race: Ordering learns of the reservation and of the
-        // authorisation on two receive endpoints with nothing sequencing them.
-        // This must be Unavailable — a Rule error here is acked, and the order
-        // stays unconfirmed for good with the money taken.
+        // The reservation and the authorisation arrive on two endpoints with nothing sequencing them.
         Guid orderId = await fixture.SeedOrderAsync(Customer);
 
         Result result = await DispatchAsync(
@@ -67,9 +47,7 @@ public sealed class SagaCommandHandlerTests(ServiceFixture fixture) : IAsyncLife
     [Fact]
     public async Task Confirming_an_order_that_has_moved_on_is_a_rejection()
     {
-        // The other side of the same branch. A cancelled order will refuse this
-        // command on the fifth attempt exactly as on the first, so retrying it
-        // is a minute of backoff and an error queue entry §13.6 pages on.
+        // The other side of the branch: no retry changes the answer, so retrying ends in the error queue.
         Guid orderId = await fixture.SeedOrderAsync(Customer);
         await DispatchAsync(new ConfirmStockCommand(orderId));
         await DispatchAsync(new ConfirmOrderCommand(orderId, PaymentReference.Of("psp-first")));
@@ -85,9 +63,7 @@ public sealed class SagaCommandHandlerTests(ServiceFixture fixture) : IAsyncLife
     [Fact]
     public async Task Marking_an_unconfirmed_order_shipped_is_retryable()
     {
-        // Shipping cannot despatch what was never confirmed, so a despatch
-        // arriving first is evidence the confirmation exists and has not
-        // landed — which time fixes.
+        // A despatch arriving first means the confirmation exists and has not landed, which time fixes.
         Guid orderId = await fixture.SeedOrderAsync(Customer);
 
         Result result = await DispatchAsync(
@@ -117,11 +93,7 @@ public sealed class SagaCommandHandlerTests(ServiceFixture fixture) : IAsyncLife
     [Fact]
     public async Task A_reservation_for_an_order_that_moved_on_is_rejected_and_changes_nothing()
     {
-        // §9.6's stock-timeout residual, from the aggregate's side: the saga
-        // cancelled and finalised, Inventory's reservation arrives afterwards,
-        // and this is the refusal that leaves the stock held. The decision log
-        // names it as owed; the behaviour it names is this one, and nothing
-        // pinned it.
+        // §9.6's stock-timeout residual from the aggregate's side: a reservation arriving after the cancellation.
         Guid orderId = await fixture.SeedOrderAsync(Customer);
         await DispatchAsync(
             new CancelOrderCommand(orderId, CancellationReason.StockTimeout, CommandOrigin.System));
@@ -139,8 +111,7 @@ public sealed class SagaCommandHandlerTests(ServiceFixture fixture) : IAsyncLife
     [Fact]
     public async Task A_command_for_an_order_that_does_not_exist_is_not_found()
     {
-        // All three handlers share this first branch, and it is the one a
-        // misrouted correlation id reaches.
+        // All three handlers share this first branch, the one a misrouted correlation id reaches.
         var missing = Guid.CreateVersion7();
 
         (await DispatchAsync(new ConfirmStockCommand(missing))).Error.ShouldBe(OrderErrors.NotFound);
@@ -155,23 +126,8 @@ public sealed class SagaCommandHandlerTests(ServiceFixture fixture) : IAsyncLife
     [Fact]
     public async Task A_system_initiated_cancellation_publishes_the_workflow_origin()
     {
-        // **The half of #123's translation that this tier can reach.**
-        // OrderTests proves the aggregate carries whatever origin it is handed
-        // and the mapper suite proves the enum reaches the wire; the switch
-        // between them was covered by neither, so inverting System and User in
-        // the handler left every test green while making §9.6 discard exactly
-        // the arrivals it exists to fault. Copilot found the gap.
-        //
-        // **Only the System case belongs here, and the reason is §11.4 rather
-        // than convenience.** A User-origin command dispatched in a bare scope
-        // has no principal — ICurrentUser is HttpContextCurrentUser — so the
-        // ownership guard fails closed and returns NotFound before any origin is
-        // written. That is the guard working, so the User half is proved over
-        // HTTP in OrderOwnershipTests, where a caller exists.
-        //
-        // Read off the OUTBOX row rather than the domain event: that is the
-        // payload a consumer sees, so it covers the mapper and the handler in
-        // one assertion and cannot pass on a translation that stops halfway.
+        // The System case alone: a User-origin command has no principal in a bare scope, so §11.4's guard
+        // refuses it first. Read off the outbox row, the payload a consumer sees.
         Guid orderId = await fixture.SeedOrderAsync(Customer);
 
         Result cancelled = await DispatchAsync(

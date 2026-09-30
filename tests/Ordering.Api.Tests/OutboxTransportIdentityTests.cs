@@ -11,35 +11,8 @@ using Xunit;
 
 namespace Ordering.Api.Tests;
 
-/// <summary>
-/// §9.1's single-identity rule, checked where it is actually kept: on the
-/// transport. Body, row, broker header and inbox key are one GUID, and
-/// <c>DeliverAsync</c> copying the row's ids onto the published context is the
-/// hop that makes the last two agree with the first two.
-/// </summary>
-/// <remarks>
-/// <b>Catalog's twin, and the second copy is deliberate.</b> The dispatcher is
-/// common code and this asserts a per-service <em>host</em>: it replaces
-/// `IPublishEndpoint` inside a factory built over <c>Ordering.Api</c>'s
-/// `Program`, and there is no way to write that once for two hosts. What
-/// Catalog's copy cannot say is whether Ordering's registration reaches the
-/// same code — which is exactly the question a second service exists to ask.
-/// <para>
-/// <b>It arrived with PR-21 rather than with the dispatcher</b>, because
-/// staging a Broker row needs a contract this service publishes and §9.3's
-/// allow-list was empty until the saga gave Ordering a reason to publish
-/// <c>OrderPlaced</c>. Catalog's copy has covered the lines since PR-14; this
-/// one covers the wiring under them.
-/// </para>
-/// <para>
-/// A substitute for <c>IPublishEndpoint</c> rather than a harness: §12.4
-/// refuses to bolt an <c>ITestHarness</c> onto this fixture, because it runs
-/// the real host against the real broker on purpose and a harness would
-/// replace the bus configuration the other tests exist to exercise. Capturing
-/// the pipe costs one registration in one factory, disturbs nothing else, and
-/// asserts the same thing.
-/// </para>
-/// </remarks>
+/// <summary>§9.1's single identity on the transport: <c>DeliverAsync</c> copies the row's ids onto it.</summary>
+/// <remarks>A substitute rather than a harness, because §12.4 refuses an <c>ITestHarness</c> here.</remarks>
 [Collection(nameof(IntegrationCollection))]
 public sealed class OutboxTransportIdentityTests(ServiceFixture fixture) : IAsyncLifetime
 {
@@ -61,8 +34,7 @@ public sealed class OutboxTransportIdentityTests(ServiceFixture fixture) : IAsyn
 
         (await dispatcher.ProcessBatchAsync(TestContext.Current.CancellationToken)).ShouldBe(1);
 
-        // Replay the pipe the dispatcher handed the endpoint against a context
-        // that records what is set on it. This is the callback's whole body.
+        // Replays the pipe the dispatcher handed the endpoint against a context that records what is set on it.
         PublishContext context = Substitute.For<PublishContext>();
         await factory.Captured.ShouldNotBeNull().Send(context);
 
@@ -96,11 +68,7 @@ public sealed class OutboxTransportIdentityTests(ServiceFixture fixture) : IAsyn
                         return Task.CompletedTask;
                     });
 
-                // Replaced, not added: the dispatcher resolves one endpoint,
-                // and a second registration would leave MassTransit's real one
-                // last and this substitute never called. The unreachable broker
-                // in the base constructor is deliberate for the same reason —
-                // nothing here should reach a transport.
+                // The unreachable broker in the base constructor is deliberate: nothing here should reach a transport.
                 services.RemoveAll<IPublishEndpoint>();
                 services.AddScoped(_ => endpoint);
             });

@@ -4,13 +4,7 @@ using Common.Infrastructure.Outbox;
 
 namespace Ordering.TestSupport.Outbox;
 
-/// <summary>
-/// Ordinary factories over <see cref="OutboxMessage"/>, staged through the
-/// <b>real</b> <see cref="MessageTypeMap"/> and <see cref="OutboxJson"/>
-/// resolved from the fixture's provider (§12.4). Doubles for either would let
-/// a test stage a row the running host cannot read back, which is the one
-/// thing these builders exist to prove does not happen.
-/// </summary>
+/// <summary>Rows staged through the fixture's real map and payload format, so the host can read each back.</summary>
 public static class OutboxRows
 {
     private static readonly DateTimeOffset Raised = new(2026, 8, 11, 0, 0, 0, TimeSpan.Zero);
@@ -23,11 +17,7 @@ public static class OutboxRows
     public static OutboxMessage Healthy(ServiceFixture fixture) =>
         Local(new NoOpEvent { OccurredAt = Raised }, fixture);
 
-    /// <summary>
-    /// A healthy row carrying an arbitrarily long payload, for the assertion
-    /// that <c>Payload</c> is genuinely <c>nvarchar(max)</c> and not §7.2's
-    /// 400-character string convention wearing that column type.
-    /// </summary>
+    /// <summary>A healthy row with a payload of the test's length, so <c>Payload</c>'s width is asserted.</summary>
     public static OutboxMessage Verbose(ServiceFixture fixture, string note) =>
         Local(new NoOpEvent { OccurredAt = Raised, Note = note }, fixture);
 
@@ -35,31 +25,8 @@ public static class OutboxRows
     public static OutboxMessage Blocking(ServiceFixture fixture) =>
         Local(new BlocksUntilReleased { OccurredAt = Raised }, fixture);
 
-    /// <summary>
-    /// A Broker-lane row carrying a real contract, so the publish half of
-    /// <c>DeliverAsync</c> is exercised against the running broker rather than
-    /// inferred from the staging tests.
-    /// </summary>
-    /// <remarks>
-    /// <b>It arrived with PR-21, which is when it could.</b> Staging this lane
-    /// needs a type <c>Common.Contracts</c> publishes on this service's behalf
-    /// and the §9.3 allow-list mapping something to it — both true only once
-    /// the saga gave Ordering a reason to publish <c>OrderPlaced</c>. Until
-    /// then the three tests that use it would each have asserted against a row
-    /// no code here could produce.
-    /// <para>
-    /// <b><c>OrderCancelled</c> rather than <c>OrderPlaced</c>, and the swap is
-    /// the point.</b> This started as `OrderPlaced` on the reasoning that it is
-    /// the fact §9.6's saga begins on — which is exactly what disqualifies it.
-    /// Ordering consumes its own `OrderPlaced`, so publishing one from a
-    /// generic Broker-lane fixture starts a real workflow beside the test:
-    /// a saga row, an inbox row, a `ReserveStock` and a five-minute timeout,
-    /// all still committing when the next test truncates the schema.
-    /// `OrderCancelled` is published by Ordering and consumed by Inventory and
-    /// Payments (§3.2) — nothing here binds it, so it exercises the lane and
-    /// nothing else. Copilot found it.
-    /// </para>
-    /// </remarks>
+    /// <summary>A Broker-lane row carrying a real contract, so the publish runs against the real broker.</summary>
+    /// <remarks>Not <c>OrderPlaced</c>, which would start §9.6's saga beside the test.</remarks>
     public static OutboxMessage Broker(ServiceFixture fixture, Guid orderId) =>
         OutboxMessage.Stage(
             new OrderCancelled

@@ -8,16 +8,8 @@ using Xunit;
 
 namespace Ordering.Api.Tests;
 
-/// <summary>
-/// ADR-052's method over the real pipeline: authentication, the permission
-/// policy, the dispatcher and Dapper on a real database.
-/// </summary>
-/// <remarks>
-/// Over <c>TestServer</c>: <c>CreateHandler()</c> bypasses the network, so
-/// the h2c negotiation a real Kestrel would need never happens here.
-/// Whether the endpoint is declared <c>Http2</c> is the server's decision
-/// and belongs against a real Kestrel (§9.7).
-/// </remarks>
+/// <summary>ADR-052's method over the real pipeline: authentication, policy, dispatcher and Dapper.</summary>
+/// <remarks>Over <c>TestServer</c>, which negotiates no h2c; <c>Http2</c> is Kestrel's to declare (§9.7).</remarks>
 [Collection(nameof(IntegrationCollection))]
 public sealed class DeliveryAddressServiceTests(ServiceFixture fixture) : IAsyncLifetime
 {
@@ -41,30 +33,15 @@ public sealed class DeliveryAddressServiceTests(ServiceFixture fixture) : IAsync
 
     private DeliveryAddresses.DeliveryAddressesClient Addresses => new(_channel);
 
-    /// <summary>
-    /// The principal a validated <c>shipping-worker</c> token becomes (§11.3),
-    /// as call metadata.
-    /// </summary>
-    /// <remarks>
-    /// Passed per call rather than baked into the channel: a default grant is
-    /// how a suite ends up proving a policy is applied while never once
-    /// arriving without it.
-    /// </remarks>
+    /// <summary>The principal a validated <c>shipping-worker</c> token becomes (§11.3), passed per call.</summary>
     private static Metadata Worker() =>
     [
         new Metadata.Entry(TestAuthHandler.UserHeader, "service-account-shipping-worker"),
         new Metadata.Entry(TestAuthHandler.PermissionsHeader, OrderingPermissions.DeliveryAddress)
     ];
 
-    /// <summary>
-    /// A person holding every permission this service's vocabulary can grant a
-    /// person, including the admin claim that overrides the ownership check.
-    /// </summary>
-    /// <remarks>
-    /// <c>orders:admin</c> is spelt as a literal because §11.4 keeps it out of
-    /// <c>OrderingPermissions</c>: it is a claim <c>CancelOrderHandler</c>
-    /// reads and not a policy an endpoint names.
-    /// </remarks>
+    /// <summary>A person holding every permission a person can be granted, the admin claim included.</summary>
+    /// <remarks><c>orders:admin</c> is a literal, since §11.4 keeps it out of <c>OrderingPermissions</c>.</remarks>
     private static Metadata EveryUserPermission() =>
     [
         new Metadata.Entry(TestAuthHandler.UserHeader, Guid.CreateVersion7().ToString()),
@@ -85,9 +62,7 @@ public sealed class DeliveryAddressServiceTests(ServiceFixture fixture) : IAsync
     [Fact]
     public async Task A_caller_with_no_token_is_Unauthenticated()
     {
-        // No principal: the channel with no metadata. Without this the whole
-        // credential mechanism ADR-052 mints could be missing and every other
-        // test here would still be green.
+        // No principal: the channel with no metadata, refused without ADR-052's credential.
         StatusCode status = await StatusOfAsync(
             () => Addresses
                 .GetAsync(For(Guid.CreateVersion7()), cancellationToken: TestContext.Current.CancellationToken)
@@ -99,11 +74,7 @@ public sealed class DeliveryAddressServiceTests(ServiceFixture fixture) : IAsync
     [Fact]
     public async Task A_person_holding_every_user_permission_is_PermissionDenied()
     {
-        // The half the first test cannot make: a host that stopped routing
-        // answers Unauthenticated to everything, so "no token is refused" is
-        // satisfiable by a service that is not there. This one says the
-        // permission is doing the work — orders:delivery-address belongs to a
-        // host and to no person (ADR-052), so even the admin claim is refused.
+        // The permission does the work: it belongs to a host and to no person (ADR-052), so even admin is refused.
         Guid order = await fixture.SeedOrderAsync(Guid.CreateVersion7());
 
         StatusCode status = await StatusOfAsync(
@@ -133,8 +104,7 @@ public sealed class DeliveryAddressServiceTests(ServiceFixture fixture) : IAsync
         reply.PostCode.ShouldBe("050000");
         reply.Country.ShouldBe("KZ");
 
-        // Nothing of the order travels. A reply that grew a status or a total
-        // would make the reader able to decide things ADR-052 keeps here.
+        // Nothing of the order travels, so the reader can decide nothing ADR-052 keeps here.
         reply.ToString().ShouldNotContain("AwaitingStock");
         reply.ToString().ShouldNotContain("19.99");
     }
@@ -156,9 +126,7 @@ public sealed class DeliveryAddressServiceTests(ServiceFixture fixture) : IAsync
     [Fact]
     public async Task A_cancelled_order_is_NotFound_rather_than_an_address()
     {
-        // ADR-052's "does not exist is wider than a missing record": all three
-        // cases answer NotFound so the client maps a status and never reads an
-        // order's state.
+        // ADR-052: "does not exist" is wider than a missing record, so all three cases answer NotFound.
         Guid order = await fixture.SeedOrderAsync(Guid.CreateVersion7());
         await fixture.ExecuteAsync(
             "UPDATE ordering.Orders SET Status = 'Cancelled' WHERE Id = {0};", order);
@@ -174,10 +142,7 @@ public sealed class DeliveryAddressServiceTests(ServiceFixture fixture) : IAsync
     [Fact]
     public async Task An_order_whose_address_erasure_has_cleared_is_NotFound()
     {
-        // §11.7's extension is owed and this is what it will produce: the
-        // order's own record whole and its address gone. Written as raw SQL
-        // because no consumer produces it yet, which is exactly ADR-052's
-        // instruction to design against it rather than meet it later.
+        // What §11.7's erasure will produce, staged as raw SQL since nothing produces it yet (ADR-052).
         Guid order = await fixture.SeedOrderAsync(Guid.CreateVersion7());
         await fixture.ExecuteAsync(
             """
@@ -206,15 +171,10 @@ public sealed class DeliveryAddressServiceTests(ServiceFixture fixture) : IAsync
                     cancellationToken: TestContext.Current.CancellationToken)
                 .ResponseAsync);
 
-        // Untranslated this is Unknown, which rides grpc-status on an HTTP 200
-        // and would reach the worker as neither an answer nor a transient
-        // fault — so the shipment would back off for ever on a request that
-        // can never succeed.
+        // Untranslated this is Unknown, which the worker would back off on for ever.
         thrown.StatusCode.ShouldBe(StatusCode.InvalidArgument);
 
-        // The field, never the value: it is a caller-supplied string arriving
-        // in a message that reaches the logs, and §13.4's redactor cannot see a
-        // value interpolated into one.
+        // The field, never the value, since §13.4's redactor cannot see a value interpolated into a message.
         thrown.Status.Detail.ShouldContain("order_id");
         thrown.Status.Detail.ShouldNotContain("not-a-guid");
     }
