@@ -62,7 +62,7 @@ public sealed class TrackingWorker(
             }
             catch (Exception ex) when (!stoppingToken.IsCancellationRequested)
             {
-                // The claim failed. The token, not the type: a call's own deadline throws the same type.
+                // The token, not the type: a call's own deadline throws the same type.
                 ClaimFailed(log, ex);
             }
         }
