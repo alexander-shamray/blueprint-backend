@@ -1,6 +1,6 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- Settings from Directory.Build.props (§4.4); §4.2's third row permits any package besides. -->
+  <!-- Settings from Directory.Build.props (§4.1); §4.2's third row permits any package besides. -->
 
   <ItemGroup>
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
