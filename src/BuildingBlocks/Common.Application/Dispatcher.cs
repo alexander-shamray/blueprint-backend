@@ -3,29 +3,11 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Common.Application;
 
-/// <summary>
-/// Resolves the handler for a request, wraps it in the registered behaviours
-/// and runs the result. One invoker instance is cached per concrete request
-/// type, result type and kind, so the reflection cost is paid once per
-/// combination rather than once per call (§6.2).
-/// </summary>
-/// <remarks>
-/// Internal: a service registers it through <c>AddDispatcher</c> and depends on
-/// <see cref="IDispatcher"/>. The cache is static and outlives every scope,
-/// which is safe precisely because an invoker holds no state — the provider is
-/// handed to it per call.
-/// </remarks>
+/// <summary>Runs a request through its behaviours to its handler, caching one invoker per shape (§6.2).</summary>
 internal sealed class Dispatcher(IServiceProvider services) : IDispatcher
 {
-    // Keyed on all three parts of what the invoker closes over, because a
-    // request type determines neither of the other two. A record may implement
-    // ICommand<T> twice under different results, and it may implement both
-    // ICommand<T> and IQuery<T> under the same one — and those two collisions
-    // fail differently. The first throws an InvalidCastException from inside
-    // this class, naming neither the request nor the reason. The second does
-    // not throw at all: both invokers derive from Invoker<TResult>, so the cast
-    // succeeds and the query quietly runs the command's handler through the
-    // command's behaviours.
+    // Keyed on all three parts: a request may implement ICommand<T> under two results, or ICommand<T> and
+    // IQuery<T> under one, and a shorter key would hand it the other shape's invoker.
     private static readonly ConcurrentDictionary<(Type Request, Type Result, Type Kind), object> Invokers = new();
 
     public Task<TResult> SendAsync<TResult>(ICommand<TResult> command, CancellationToken ct = default) =>
@@ -57,7 +39,7 @@ internal sealed class Dispatcher(IServiceProvider services) : IDispatcher
 
             NextDelegate<TResult> pipeline = () => handler.HandleAsync(typed, ct);
 
-            // Reversed so the first-registered behaviour is the outermost.
+            // Reversed so the first-registered behaviour is the outermost (§6.3).
             foreach (IPipelineBehavior<TCommand, TResult> behavior in services
                 .GetServices<IPipelineBehavior<TCommand, TResult>>()
                 .Reverse())

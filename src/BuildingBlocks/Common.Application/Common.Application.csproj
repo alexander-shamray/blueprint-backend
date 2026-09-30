@@ -1,28 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!--
-    Settings come from Directory.Build.props (§4.4).
-
-    Common.Domain, §4.2's second row, drawn by PR-14 and not before. The edge
-    belongs to the first type here that genuinely names a domain type, and
-    that is §7.5's IDomainEventCollector — IReadOnlyList&lt;IDomainEvent&gt; in
-    a signature. IIntegrationEventMapper, IProjectionRegistry and
-    DomainEventDispatcher all name one too, and all four arrive together.
-
-    What did NOT draw it is worth keeping, because the argument still governs
-    the two files concerned. Not "TransactionBehavior counts IAggregateRoot",
-    which this comment said until a review checked it: §6.3's behaviour reads
-    IUnitOfWork.ModifiedAggregateCount — an int — and calls
-    IDomainEventDispatcher.DispatchAsync(CancellationToken); neither signature
-    names a domain type. The `is IAggregateRoot` test lives in EfUnitOfWork,
-    over EF's change tracker, and counting behind the port is the whole point.
-    A reference existing is not permission for those two to start using it.
-  -->
+  <!-- Settings from Directory.Build.props (§4.1); Common.Domain for the domain events §7.5's ports carry. -->
 
   <ItemGroup>
-    <!-- IServiceCollection and ILogger<T>. Packages rather than a framework
-         reference: §4.2 keeps ASP.NET Core out of Application, and the shared
-         framework is how a host would otherwise acquire both. -->
+    <!-- Packages, not a framework reference: §4.2 keeps ASP.NET Core out of Application. -->
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
     <!-- The convention scan behind AddPluggableFrom (§6.2). -->
