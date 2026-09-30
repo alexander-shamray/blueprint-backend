@@ -11,7 +11,7 @@ public sealed class PublishProductValidator : AbstractValidator<PublishProductCo
         RuleFor(x => x.CommandId).NotEmpty();
         RuleFor(x => x.Name).NotEmpty().MaximumLength(200);
 
-        // The scheme is the point: a stored javascript: or data: URL is stored XSS in any renderer (§5.7's
+        // The scheme is the point: an href bound to a javascript: or data:text/html URL is stored XSS (§5.7's
         // division: input, not a bug). Absolute, because a relative URI has no scheme to refuse.
         RuleFor(x => x.ThumbnailUrl)
             .MaximumLength(400)
