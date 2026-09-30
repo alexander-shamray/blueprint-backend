@@ -422,7 +422,7 @@ public abstract class ServiceFixture<TFactory, TEntryPoint, TDbContext> : IAsync
     public IIdempotencyStore IdempotencyClaims =>
         Factory.Services.GetRequiredService<IIdempotencyStore>();
 
-    /// <summary>Ages a processed outbox row, so a retention test reaches the window without a fake clock.</summary>
+    /// <summary>Marks an outbox row processed at <paramref name="processedAt"/>.</summary>
     public Task SetOutboxProcessedAtAsync(Guid messageId, DateTimeOffset processedAt) =>
         ExecuteAsync(
             $"UPDATE {_schema}.OutboxMessages SET ProcessedAt = {{0}} WHERE MessageId = {{1}};",
