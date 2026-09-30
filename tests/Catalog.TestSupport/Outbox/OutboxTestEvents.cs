@@ -13,7 +13,7 @@ public sealed record NoOpEvent : IDomainEvent
 {
     public DateTimeOffset OccurredAt { get; init; }
 
-    /// <summary>A payload longer than §7.2's 400-character string convention, which <c>Payload</c> outgrows.</summary>
+    /// <summary>Room for a payload longer than §7.2's 400-character string convention, which <c>Payload</c> outgrows.</summary>
     public string Note { get; init; } = "";
 }
 
