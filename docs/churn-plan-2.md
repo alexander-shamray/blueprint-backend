@@ -79,7 +79,7 @@ Python, shell and YAML:
 |---|---|
 | A pull request or issue number | 220 (642) |
 | Copilot, Grok, CodeQL, "found in review", "round" | 158 (467) |
-| "used to", "went stale", "no longer", "previously", "this comment" | 218 (406, on a narrower pattern) |
+| "used to", "went stale", "no longer", "previously", "this comment" | 218 (406, on the first plan's pattern, which differs) |
 | `**bold**` | 38 (846) |
 | Comment blocks of ten lines or more, `///` included | 944 |
 | `<summary>` blocks | 2,147, of which 343 one-liners |
