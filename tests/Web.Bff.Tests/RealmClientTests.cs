@@ -108,7 +108,7 @@ public class RealmClientTests
                 .Select(c => c.GetProperty("clientId").GetString()!)
         ];
 
-        // Each secret holder is a synchronous coupling (§11.5), so a client ADR-052 did not decide fails.
+        // Each secret holder is a synchronous coupling (§11.5), so an undecided client fails.
         serviceAccounts.ShouldBe([ClientId, WorkerClient], ignoreOrder: true);
     }
 }
