@@ -1,14 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!--
-    No TargetFramework, no LangVersion, no Nullable: Directory.Build.props sets
-    all three for every project in the repository (§4.4). A csproj that restates
-    one of them is a second place for it to drift.
-
-    No PackageReference either, and that is the point of §4.2's first row.
-    Common.Domain is the one project in the solution whose dependency list is
-    empty on purpose — the architecture test at PR-07 asserts it, and the
-    assertion is only meaningful because nothing here needs relaxing.
-  -->
+  <!-- Settings from Directory.Build.props (§4.4); no dependencies at all, per §4.2's first row. -->
 
 </Project>
