@@ -126,7 +126,7 @@ public class IdempotencyMarkerTests(ServiceFixture fixture)
                 "ADR-038 puts the marker's age on the database's clock, and the constraint is the " +
                 "only thing that stamps a row whose INSERT omits the column");
 
-        // Lowered, since SQL Server keeps a constraint's definition in the case it was written in.
+        // Lowered, so the check does not depend on the case SQL Server stores the definition in.
         (await fixture.ScalarAsync<string>(
             """
             SELECT Value = LOWER(d.definition)
