@@ -517,6 +517,20 @@ class TheGateOnARepository(unittest.TestCase):
     def test_a_tree_holding_nothing_it_reads_refuses_the_run(self):
         result = self.run_tree("nowhere")
         self.assertEqual(result.returncode, 2, result.stdout)
+        result = self.run_tree("Old.cs", "nowhere")
+        self.assertEqual(result.returncode, 2, result.stdout)
+        self.assertIn("nowhere", result.stdout)
+
+    def test_the_tree_mode_reads_root_paths_from_any_directory(self):
+        Path(self.repo, ".claude").mkdir()
+        self.write(".claude/Tool.cs", "// Copilot asks\n")
+        self.commit("change")
+        result = subprocess.run(
+            [sys.executable, str(GATE), "--tree", "."],
+            cwd=Path(self.repo, ".claude"), capture_output=True, text=True,
+            encoding="utf-8")
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertIn("judged every line of 1 file(s)", result.stdout)
 
     def test_a_diff_that_changes_nothing_refuses_the_run(self):
         result = self.run_gate(base="HEAD")
