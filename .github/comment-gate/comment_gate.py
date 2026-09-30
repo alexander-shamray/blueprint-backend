@@ -14,9 +14,15 @@ import subprocess
 import sys
 import tokenize
 from dataclasses import dataclass
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 
-BLOCK_LIMIT = 10
+BLOCK_LIMIT = 5
+
+# A section, an ADR or a symbol: the owners a `<remarks>` may exist to cite.
+CITATION = re.compile(r"§|\bADR-[0-9]+|\bcref=")
+
+# The languages whose added lines the report weighs, comment against code.
+REPORTED = {"C#": (".cs",), "scripts": (".py", ".sh")}
 
 # The third field exempts a tree: the harness's helpers are about the
 # reviewers, so a reviewer named there is a subject rather than history.
@@ -681,8 +687,18 @@ def _line_starts(text):
     return starts
 
 
-def judge(path, text, added):
-    """Findings for one file after the change, given its added line numbers."""
+@dataclass(frozen=True)
+class Line:
+    """One line: its number, its comment text, and whether it holds only that."""
+
+    number: int
+    said: str
+    comment: bool
+    blank: bool
+
+
+def scan(path, text):
+    """Each line of a file, as the comment rule reads it."""
     comments = reader_for(path)(text)
     starts = _line_starts(text)
     whole = bytearray(len(text))
@@ -696,29 +712,90 @@ def judge(path, text, added):
     lines = []
     for number, start in enumerate(starts, 1):
         end = starts[number] if number < len(starts) else len(text)
-        lines.append((number, start, _line_end(text, start), end))
-
-    findings = []
-    for number, start, stop, _ in lines:
-        if number not in added:
-            continue
+        stop = _line_end(text, start)
         said = "".join(ch if body[k] else " "
                        for k, ch in enumerate(text[start:stop], start))
+        lines.append(Line(number, said,
+                          _comment_only(text, whole, start, stop, end),
+                          not text[start:stop].strip()))
+    return lines
+
+
+def judge(path, text, added):
+    """Findings for one file after the change, given its added line numbers."""
+    return findings(path, scan(path, text), added)
+
+
+def findings(path, lines, added):
+    """Findings for one scanned file, given the line numbers to judge."""
+    found = []
+    for line in lines:
+        if line.number not in added:
+            continue
         for name, pattern, exempt in PATTERNS:
-            if not path.startswith(exempt) and pattern.search(said):
-                findings.append((path, number, f"a comment names {name}"))
+            if not path.startswith(exempt) and pattern.search(line.said):
+                found.append((path, line.number, f"a comment names {name}"))
 
     run = []
-    for number, start, stop, end in lines + [(None, 0, 0, 0)]:
-        if number is not None and _comment_only(text, whole, start, stop, end):
-            run.append(number)
+    for line in lines + [None]:
+        if line is not None and line.comment:
+            run.append(line.number)
             continue
         if len(run) > BLOCK_LIMIT and added.intersection(run):
-            findings.append((path, run[0],
-                             f"a comment block runs {len(run)} lines, over "
-                             f"{BLOCK_LIMIT}"))
+            found.append((path, run[0],
+                          f"a comment block runs {len(run)} lines, over "
+                          f"{BLOCK_LIMIT}"))
         run = []
-    return findings
+
+    if path.endswith(".cs"):
+        found.extend(_uncited_remarks(path, lines, added))
+    return sorted(found, key=lambda finding: finding[1])
+
+
+def _uncited_remarks(path, lines, added):
+    found = []
+    opened = None
+    for line in lines:
+        if opened is None and "<remarks" in line.said:
+            opened, span, cited = line.number, set(), False
+        if opened is None:
+            continue
+        span.add(line.number)
+        cited = cited or bool(CITATION.search(line.said))
+        if "</remarks>" in line.said or "<remarks/>" in line.said:
+            if not cited and added.intersection(span):
+                found.append((path, opened,
+                              "a <remarks> cites no section, ADR or cref"))
+            opened = None
+    return found
+
+
+def tally(lines, numbers):
+    """The comment lines and the code lines among the given line numbers."""
+    comment = code = 0
+    for line in lines:
+        if line.number not in numbers or line.blank:
+            continue
+        if line.comment:
+            comment += 1
+        else:
+            code += 1
+    return comment, code
+
+
+def _add(totals, path, counts):
+    for name, suffixes in REPORTED.items():
+        if path.endswith(suffixes):
+            comment, code = totals.get(name, (0, 0))
+            totals[name] = (comment + counts[0], code + counts[1])
+
+
+def _report(totals, what):
+    for name in REPORTED:
+        comment, code = totals.get(name, (0, 0))
+        share = round(comment * 100 / (comment + code)) if comment + code else 0
+        print(f"{what}, {name}: {comment} comment line(s), {code} code "
+              f"line(s), {share}% comment")
 
 
 def _comment_only(text, whole, start, stop, end):
@@ -783,11 +860,48 @@ def added_lines(diff):
     return added
 
 
+def tree(roots):
+    """Every line of the tracked files under the roots, as the tree holds them."""
+    try:
+        listed = _git("ls-files", "-z", "--", *roots).decode("utf-8",
+                                                             errors="strict")
+        paths = [p for p in listed.split("\0") if p and reader_for(p)]
+        if not paths:
+            raise Unreadable(f"no file it reads under {' '.join(roots)}")
+        found = []
+        totals = {}
+        for path in sorted(paths):
+            try:
+                text = Path(path).read_bytes().decode("utf-8-sig")
+            except UnicodeDecodeError:
+                raise Unreadable(f"{path} is not UTF-8") from None
+            try:
+                lines = scan(path, text)
+            except Unreadable as error:
+                raise Unreadable(f"{path}: {error}") from None
+            every = {line.number for line in lines}
+            found.extend(findings(path, lines, every))
+            _add(totals, path, tally(lines, every))
+    except (Unreadable, UnicodeDecodeError, OSError) as error:
+        print(f"::error::comment gate refused the run: {error}")
+        return 2
+    for path, line, message in found:
+        print(f"{path}:{line}: {message}")
+    _report(totals, "the tree")
+    print(f"judged every line of {len(paths)} file(s) it reads, "
+          f"{len(found)} finding(s)")
+    return 1 if found else 0
+
+
 def main(argv):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--base", required=True)
+    mode = parser.add_mutually_exclusive_group(required=True)
+    mode.add_argument("--base")
+    mode.add_argument("--tree", nargs="+", metavar="PATH")
     parser.add_argument("--head", default="HEAD")
     args = parser.parse_args(argv[1:])
+    if args.tree:
+        return tree(args.tree)
     span = f"{args.base}...{args.head}"
     try:
         if not _git("diff", "--name-only", "-z", span).strip(b"\0"):
@@ -806,7 +920,8 @@ def main(argv):
         # and the headers around it are read; the file list above has already
         # refused a path that is not.
         added = added_lines(diff.decode("utf-8", errors="replace"))
-        findings = []
+        found = []
+        totals = {}
         judged = 0
         # The file list, not the hunks, says what is read, so a file the diff
         # is silent about is still opened.
@@ -821,18 +936,21 @@ def main(argv):
                 raise Unreadable(f"{path} is not UTF-8") from None
             judged += 1
             try:
-                findings.extend(judge(path, text, numbers))
+                lines = scan(path, text)
             except Unreadable as error:
                 raise Unreadable(f"{path}: {error}") from None
+            found.extend(findings(path, lines, numbers))
+            _add(totals, path, tally(lines, numbers))
     except (Unreadable, UnicodeDecodeError) as error:
         print(f"::error::comment gate refused the run: {error}")
         return 2
-    for path, line, message in findings:
+    for path, line, message in found:
         print(f"::error file={path},line={line}::{message}")
         print(f"{path}:{line}: {message}")
+    _report(totals, "added")
     print(f"judged the added lines of {judged} file(s) it reads, "
-          f"{len(findings)} finding(s)")
-    return 1 if findings else 0
+          f"{len(found)} finding(s)")
+    return 1 if found else 0
 
 
 if __name__ == "__main__":

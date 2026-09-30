@@ -1,8 +1,9 @@
 # The comment gate
 
 **The claim: no comment a pull request adds names an issue, a delivery-plan
-row, a reviewer or a history, stresses a word, or sits in a comment block
-longer than `BLOCK_LIMIT`.** [`docs/style-guide.md`](../../docs/style-guide.md)'s
+row, a reviewer or a history, stresses a word, sits in a comment block
+longer than `BLOCK_LIMIT`, or is part of a C# `<remarks>` that cites no
+section, ADR or `cref`.** [`docs/style-guide.md`](../../docs/style-guide.md)'s
 *Comments* section is the rule; this gate is its mechanical half.
 
 ## What it reads
@@ -56,11 +57,17 @@ judged as its whole block in the file after the change, because one added
 line can push an old block past the limit. A trailing comment is on a line
 of code, so it is never part of a block.
 
+**An uncited `<remarks>`.** A C# `<remarks>`, from its opening tag to its
+closing one, whose comment text holds no `§`, no `ADR-` number and no
+`cref=`, is a finding at its opening line when any line of it is added. The
+pattern is the gate's `CITATION`.
+
 **Added lines only.** The corpus is brought under the rule by the sweeps in
-[`docs/churn-plan.md`](../../docs/churn-plan.md), not by this gate refusing
-every pull request until they land. Editing a line inside an old block that
-already breaks the rule fails, which is the point: the change that touches
-it is the one that cuts it.
+[`docs/churn-plan.md`](../../docs/churn-plan.md) and
+[`docs/churn-plan-2.md`](../../docs/churn-plan-2.md), not by this gate
+refusing every pull request until they land. Editing a line inside an old
+block that already breaks the rule fails, which is the point: the change
+that touches it is the one that cuts it.
 
 **What it leaves to the reviewer**, as the guide says: whether a comment
 says why, cites its owner rather than copying the argument, or counts
@@ -74,6 +81,18 @@ gate over a throwaway git repository, so the diff half is observed rather
 than assumed. It also reads every tracked file in a language the gate reads,
 so a file the lexers cannot parse fails the suite before it fails a pull
 request.
+
+## What it reports
+
+**Beside its findings, the gate prints what the added lines are made of**:
+for C#, and for Python and shell together, the added lines that hold only
+comment against the added lines that hold code, blank lines in neither. The
+languages are the gate's `REPORTED`. The report fails nothing.
+
+**`--tree` judges every line of the tracked files under the paths it is
+given**, as the working tree holds them, instead of a diff, and prints the
+same two lines for the whole tree. It is how a sweep shows that a tree is
+under the rule; CI does not run it.
 
 ## How it runs
 
