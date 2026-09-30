@@ -78,7 +78,6 @@ public class IdempotencyOptInTests
                 "in with anything else is either never protected or fails at its first dispatch, " +
                 "and nothing says so at build time or at startup.");
 
-        // The half with teeth: Result<Money> is constructible today and corrupts in silence on replay.
         candidates
             .Where(pair => pair.Result.IsGenericType)
             .Select(pair => (pair.Command, Value: pair.Result.GetGenericArguments()[0]))
