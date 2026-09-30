@@ -23,3 +23,6 @@ The verdict is scripted by the amount's minor units:
 The reference is `psp_` followed by the request's `Idempotency-Key` header,
 templated from the request, so a replay of the same key answers the same
 reference.
+
+The server's own view is at `http://localhost:5190/__admin/mappings` and
+`/__admin/requests`.
