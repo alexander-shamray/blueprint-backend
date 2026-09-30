@@ -118,7 +118,7 @@ public sealed class Order : AggregateRoot<OrderId>
     // Origin is recorded, never checked: no invariant here turns on who asked,
     // and §11.4 has already decided whether this caller may. It travels because
     // §9.6's saga has to tell its own echo from a cancellation somebody else
-    // caused, and Reason cannot answer that — the endpoint accepts all five
+    // caused, and Reason cannot answer that — the endpoint accepts every
     // codes, so a customer may cancel with the saga's own vocabulary.
     public void Cancel(CancellationReason reason, CancellationOrigin origin, DateTimeOffset now)
     {
