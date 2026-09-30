@@ -4,8 +4,8 @@ namespace Ordering.Domain.Common;
 
 /// <summary>Where an order ships: a value object on §5.3's terms.</summary>
 /// <remarks>
-/// Presence and the shape of an ISO 3166-1 alpha-2 code only, not membership, so <c>ZZ</c> constructs: no postcode
-/// format and no <c>RegionInfo</c>, whose answer depends on the image's ICU data (ADR-053).
+/// Presence and the shape of an ISO 3166-1 alpha-2 code, not membership, so <c>ZZ</c> constructs and whoever ships
+/// the parcel knows better: no postcode format, no <c>RegionInfo</c>, whose answer is the image's ICU data (ADR-053).
 /// </remarks>
 public sealed record Address
 {
