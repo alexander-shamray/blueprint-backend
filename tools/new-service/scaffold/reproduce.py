@@ -7,6 +7,7 @@ output*; this module is the `--verify` that checks it.
 from __future__ import annotations
 
 import io
+import os
 import re
 import subprocess
 import sys
@@ -124,7 +125,7 @@ def render(repo_root: Path, scaffolded: Scaffolded, directory: Path) -> dict[str
         raise ScaffoldError(f"{scaffolded.parent[:8]} carries no scaffold to render {scaffolded.name} with")
     result = subprocess.run(
         [sys.executable, "-B", str(script), *scaffolded.argv, "--repo-root", str(directory)],
-        capture_output=True, check=False)
+        capture_output=True, check=False, env={**os.environ, "PYTHONUTF8": "1"})
     if result.returncode != 0:
         detail = result.stderr.decode("utf-8", errors="replace").strip()
         raise ScaffoldError(f"the scaffold at {scaffolded.parent[:8]} refused the render: {detail}")
