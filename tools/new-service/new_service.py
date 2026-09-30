@@ -44,6 +44,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from scaffold import API_HOST, HOSTS, TEMPLATE, WORKER_HOST, Names, ScaffoldError
+from scaffold import reproduce
 from scaffold.render import (
     BENIGN,
     COMPOSE_INDEX,
@@ -374,7 +375,8 @@ def main(argv: list[str] | None = None) -> int:
         prog="new_service.py",
         description="Render a new service from the Catalog template (Appendix C, PR-11).",
     )
-    parser.add_argument("name", help="the service name, PascalCase — Ordering, Inventory, Payments")
+    parser.add_argument(
+        "name", nargs="?", help="the service name, PascalCase — Ordering, Inventory, Payments")
     parser.add_argument(
         "--port",
         type=int,
@@ -405,7 +407,34 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="the InitialCreate migration id (default: the current UTC timestamp)",
     )
+    parser.add_argument(
+        "--verify",
+        metavar="COMMIT",
+        default=None,
+        help=(
+            "re-render the service COMMIT added with the scaffold its parent carried, and compare; "
+            "the rule is this directory's README.md, and the arguments are read from the commit"
+        ),
+    )
     args = parser.parse_args(argv)
+
+    if args.verify is not None:
+        if args.name is not None or args.port is not None or args.worker or args.migration_id:
+            parser.error("--verify reads the service and its arguments from the commit; pass neither")
+        try:
+            report, failures = reproduce.verify(args.repo_root, args.verify)
+        except ScaffoldError as error:
+            print(f"new_service.py: {error}", file=sys.stderr)
+            return 1
+        print("\n".join(report))
+        for failure in failures:
+            print(f"new_service.py: {failure}", file=sys.stderr)
+        if failures:
+            return 1
+        print("Reproduced: every difference is a known one.")
+        return 0
+    if args.name is None:
+        parser.error("the service name is required")
 
     migration_id = args.migration_id or datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
     try:
