@@ -20,7 +20,7 @@
   <ItemGroup>
     <!-- AddCommonWebDefaults (§13.2), whose ValidationExceptionHandler makes a validation throw §10.5's 400. -->
     <ProjectReference Include="..\..\BuildingBlocks\Common.Web\Common.Web.csproj" />
-    <!-- For OrderLimits only, the bound §4.3 lets both sides of a boundary share (ADR-045). -->
+    <!-- For OrderLimits only (§4.3, ADR-045). The BFF consumes no Ordering message type and must not start. -->
     <ProjectReference Include="..\..\BuildingBlocks\Common.Contracts\Common.Contracts.csproj" />
     <!-- §11.5's client-credentials grant, a building block by ADR-052; the BFF has no Infrastructure (§10.1). -->
     <ProjectReference Include="..\..\BuildingBlocks\Common.Infrastructure\Common.Infrastructure.csproj" />
