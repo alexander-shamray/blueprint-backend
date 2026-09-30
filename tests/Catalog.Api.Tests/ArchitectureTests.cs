@@ -56,7 +56,7 @@ public class ArchitectureTests
             "the exemption should cover Program and its own generated helpers, nothing more");
     }
 
-    /// <summary>The five projects §4.1 gives a service, anchored one type each.</summary>
+    /// <summary>The projects §4.1 gives a service, anchored one type each.</summary>
     /// <remarks>Emitted references, narrower than §4.2's table: an unused ProjectReference emits nothing.</remarks>
     private static readonly Assembly[] ServiceAssemblies =
     [
