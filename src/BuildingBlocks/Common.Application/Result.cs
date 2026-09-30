@@ -1,6 +1,6 @@
 namespace Common.Application;
 
-/// <summary>The outcome of a command that returns nothing; <see cref="Result{TValue}"/> derives from it.</summary>
+/// <summary>The outcome of a command that returns nothing, so there is no Unit and no Result&lt;void&gt;.</summary>
 /// <remarks>One base, so §6.3 tests any command's outcome with one pattern and no reflection.</remarks>
 public class Result
 {
