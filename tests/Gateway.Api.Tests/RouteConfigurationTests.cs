@@ -11,7 +11,7 @@ using Yarp.ReverseProxy.Model;
 
 namespace Gateway.Api.Tests;
 
-/// <summary>The assertions over <c>ReverseProxy:Routes</c> that YARP does not make itself (§12.4).</summary>
+/// <summary>The assertions over <c>ReverseProxy:Routes</c> (§12.4).</summary>
 public sealed class RouteConfigurationTests(GatewayFactory factory) : IClassFixture<GatewayFactory>
 {
     /// <summary>Names YARP resolves itself rather than through <c>IAuthorizationPolicyProvider</c> (§10.2).</summary>
