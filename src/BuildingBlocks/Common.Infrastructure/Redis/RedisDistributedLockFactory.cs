@@ -4,7 +4,6 @@ using StackExchange.Redis;
 namespace Common.Infrastructure.Redis;
 
 /// <summary>The coordination connection, never the cache one, whose eviction would drop a lock (§8.1).</summary>
-/// </summary>
 internal sealed class RedisDistributedLockFactory(
     [FromKeyedServices(RedisConnections.Coordination)] IConnectionMultiplexer redis,
     RedisKeys keys)
