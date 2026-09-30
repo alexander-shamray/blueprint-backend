@@ -38,7 +38,7 @@ public sealed class ProductEndpointsTests(ServiceFixture fixture) : IAsyncLifeti
         DateTimeOffset PublishedAt,
         int? QuantityAvailable);
 
-    /// <summary>A fresh <c>CommandId</c> per call, since a reused one would replay the first publish (§8.5).</summary>
+    /// <summary>A fresh <c>CommandId</c> per call (§8.5).</summary>
     private Task<HttpResponseMessage> PublishAsync(string name, decimal amount = 10m) =>
         PostAsync(
             new
