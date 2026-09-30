@@ -15,24 +15,11 @@ using Response = WireMock.ResponseBuilders.Response;
 
 namespace Payments.Api.Tests;
 
-/// <summary>
-/// The <c>OrderCancelled</c> table of the spec's section 6 over a real broker
-/// and a real engine: an authorised intent is voided and refunded, a declined
-/// one publishes nothing (ADR-047).
-/// </summary>
-/// <remarks>
-/// The race is why this is over containers rather than fakes: the lock that
-/// closes it is the order record's, taken by a raw statement in SQL Server,
-/// and no in-memory double has one.
-/// </remarks>
+/// <summary><c>OrderCancelled</c> over a real broker and engine, since the order's lock is SQL Server's.</summary>
 [Collection(nameof(IntegrationCollection))]
 public sealed class VoidOnCancellationTests(ServiceFixture fixture) : IAsyncLifetime
 {
-    /// <summary>
-    /// How long a sent message is given to settle, on the command suite's
-    /// argument: generous for a loaded runner, bounded because an endpoint
-    /// that binds nothing never answers late, it never answers.
-    /// </summary>
+    /// <summary>How long a sent message is given to settle, generous for a loaded runner.</summary>
     private static readonly TimeSpan DeliveryBudget = TimeSpan.FromSeconds(30);
 
     public async ValueTask InitializeAsync() => await fixture.ResetAsync();
@@ -152,12 +139,7 @@ public sealed class VoidOnCancellationTests(ServiceFixture fixture) : IAsyncLife
         (await RefundCount(order)).ShouldBe(0);
     }
 
-    /// <summary>
-    /// Sends under a transport id of the caller's or a fresh one and, when
-    /// draining, waits for the inbox row under that id: the inbox keys on the
-    /// transport id (§9.5), and the row is written only once the unit has
-    /// committed, so its arrival is the settled state.
-    /// </summary>
+    /// <summary>Sends and, when draining, waits for the inbox row under the transport id (§9.5).</summary>
     private async Task SendAsync(AuthorisePayment message, bool drain = true, Guid? messageId = null)
     {
         Guid id = messageId ?? Guid.CreateVersion7();
@@ -241,11 +223,7 @@ public sealed class VoidOnCancellationTests(ServiceFixture fixture) : IAsyncLife
     private int AuthoriseCalls() =>
         fixture.Provider.LogEntries.Count(e => e.RequestMessage!.Path == "/v1/authorisations");
 
-    /// <summary>
-    /// Polls rather than sleeps, and fails with the last value it saw. The
-    /// budget is a parameter because one outcome here is a redelivery, which
-    /// arrives on the ladder's clock rather than the broker's round trip.
-    /// </summary>
+    /// <summary>Polls rather than sleeps, over a budget a redelivery on the ladder's clock can widen.</summary>
     private static async Task Eventually(Func<Task<int>> read, int expected, string because, TimeSpan? budget = null)
     {
         DateTimeOffset deadline = DateTimeOffset.UtcNow + (budget ?? DeliveryBudget);

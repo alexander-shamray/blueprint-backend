@@ -7,12 +7,7 @@ using Xunit;
 
 namespace Payments.Api.Tests;
 
-/// <summary>
-/// §9.4's wire-to-command boundary for §3.2's one accepted command,
-/// constructed directly: every refusal below is the mapper's own, decided
-/// before a dispatcher or a database is reached, so nothing here needs a
-/// container.
-/// </summary>
+/// <summary>§9.4's wire-to-command boundary for §3.2's accepted command; each refusal is the mapper's own.</summary>
 public sealed class AuthorisePaymentMapperTests
 {
     [Theory]

@@ -8,12 +8,7 @@ using Xunit;
 
 namespace Payments.Api.Tests;
 
-/// <summary>
-/// §9.4's dispatcher, driven explicitly rather than by waiting on a timer.
-/// These cover the behaviour §13.6 alerts on — per-row isolation and attempt
-/// accounting — and neither is observable from a test that lets the background
-/// service run, which is why <see cref="PaymentsApiFactory"/> removes it.
-/// </summary>
+/// <summary>§9.4's dispatcher, a pass at a time, since <see cref="PaymentsApiFactory"/> removes its timer.</summary>
 [Collection(nameof(IntegrationCollection))]
 public sealed class OutboxDispatcherTests(ServiceFixture fixture) : IAsyncLifetime
 {
@@ -50,9 +45,7 @@ public sealed class OutboxDispatcherTests(ServiceFixture fixture) : IAsyncLifeti
 
         (await fixture.ProcessOutboxBatchAsync()).ShouldBe(0);   // 9 → 10
 
-        // Clear the backoff lease, so the second pass is blocked by the
-        // attempt cap and nothing else. Without this the test would pass even
-        // if the cap were removed entirely.
+        // Clears the backoff lease, so the second pass is blocked by the attempt cap alone.
         await fixture.ExpireOutboxLeasesAsync();
 
         (await fixture.ProcessOutboxBatchAsync()).ShouldBe(0);
@@ -65,11 +58,7 @@ public sealed class OutboxDispatcherTests(ServiceFixture fixture) : IAsyncLifeti
     [Fact]
     public async Task A_domain_event_on_the_broker_lane_is_never_published()
     {
-        // §5.5's rule, enforced at the last place able to enforce it. Stage
-        // refuses this pairing, so the row is built the only way the failure
-        // can actually occur: written correctly, then repointed — a rename
-        // that aliased an old Broker name onto a domain event, or a row
-        // edited during an incident.
+        // §5.5's rule at the last place able to enforce it; Stage refuses this pairing, so the row is repointed.
         OutboxMessage row = OutboxRows.Healthy(fixture);
         await fixture.StageOutboxAsync(row);
         await fixture.SetOutboxLaneAsync(row.MessageId, OutboxLane.Broker);
@@ -84,9 +73,7 @@ public sealed class OutboxDispatcherTests(ServiceFixture fixture) : IAsyncLifeti
     [Fact]
     public async Task A_local_row_with_no_registered_handler_fails_loudly()
     {
-        // The one worth keeping forever. It asserts the failure mode that
-        // would otherwise be invisible: a projection that never runs while
-        // every dashboard stays green.
+        // A projection that never runs would otherwise leave every dashboard green.
         await fixture.StageOutboxAsync(OutboxRows.Unhandled(fixture));
 
         await fixture.ProcessOutboxBatchAsync();
@@ -99,12 +86,8 @@ public sealed class OutboxDispatcherTests(ServiceFixture fixture) : IAsyncLifeti
     [Fact]
     public async Task A_row_still_being_delivered_is_not_claimed_by_a_second_pass()
     {
-        // The lease, observed while it is held — which takes two overlapping
-        // passes and cannot be done with sequential ones: a handler that
-        // blocks, a first pass left in flight, and a second pass run while
-        // the first still holds the claim. This is what UPDLOCK, READPAST
-        // and LockedUntil exist for — without them two replicas deliver the
-        // same row at the same time.
+        // The lease, observed while held, which takes two overlapping passes: UPDLOCK, READPAST and LockedUntil
+        // are what stop two replicas delivering one row.
         DeliveryGate.Close();
         try
         {
@@ -140,19 +123,14 @@ public sealed class OutboxDispatcherTests(ServiceFixture fixture) : IAsyncLifeti
 
         (await fixture.ProcessOutboxBatchAsync()).ShouldBe(1);
 
-        // At-least-once is the outbox's promise, but re-delivering a row the
-        // dispatcher has already marked processed would be at-least-once
-        // forever: nothing else in the design ever stops it.
+        // A processed row is never delivered again, since nothing else would ever stop it.
         (await fixture.ProcessOutboxBatchAsync()).ShouldBe(0);
     }
 
     [Fact]
     public async Task A_payload_longer_than_the_string_convention_survives_the_column()
     {
-        // §7.2's convention caps every string property at 400 characters, and
-        // OutboxMessageConfiguration clears the model's max length on
-        // Payload alongside the nvarchar(max) column type — this asserts
-        // the column rather than the setting.
+        // §7.2 caps every string at 400 characters; this asserts the Payload column rather than the setting.
         string note = new('a', 1_000);
 
         await fixture.StageOutboxAsync(OutboxRows.Verbose(fixture, note));

@@ -127,14 +127,8 @@ public sealed class PaymentOrderStoreTests(ServiceFixture fixture) : IAsyncLifet
     }
 
     /// <summary>
-    /// Two connections, two transactions, released at a shared gate so
-    /// neither's first statement for one new order can see the other's: only
-    /// the key-range lock (§6.3's <c>UPDLOCK, HOLDLOCK</c> on
-    /// <see cref="SqlPaymentOrderStore"/>) serialises them onto one row.
-    /// Sequencing one statement fully before starting the other would let
-    /// the second see the first's row and never reach that codepath, so this
-    /// repeats the release across fresh orders rather than trusting one to
-    /// land on the instant both scans overlap.
+    /// Races two transactions' first writes for fresh orders at a shared gate, so only the key-range lock on
+    /// <see cref="SqlPaymentOrderStore"/> serialises them (§6.3).
     /// </summary>
     private async Task RaceConcurrentFirstWritesAsync(
         Func<IPaymentOrderStore, OrderId, Task> first,

@@ -6,12 +6,7 @@ using Xunit;
 
 namespace Payments.Api.Tests;
 
-/// <summary>
-/// §2: Payments' own <c>IIdempotencyStore</c> never claims and never holds,
-/// so ADR-039's purge can still resolve one without Redis. Resolved from the
-/// factory's services rather than named directly — the type is internal to
-/// Payments.Infrastructure, and this project carries no reference to it.
-/// </summary>
+/// <summary>Payments' own store never claims or holds, so ADR-039's purge resolves one without Redis.</summary>
 public sealed class NoClaimsIdempotencyStoreTests
 {
     private static PaymentsApiFactory Factory() =>

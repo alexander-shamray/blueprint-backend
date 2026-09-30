@@ -9,26 +9,11 @@ using Xunit;
 
 namespace Payments.Api.Tests;
 
-/// <summary>
-/// The full async path of §3.2's Consumes column for Payments: an
-/// <c>OrderPlaced</c> or <c>OrderCancelled</c> published on a real broker,
-/// consumed by the real receive endpoint, dispatched through the command
-/// pipeline and written to Payments' own record of the order. The real
-/// transport rather than the harness, since the endpoint and its retry
-/// policy live inside <c>UsingRabbitMq</c>'s callback, which
-/// <c>AddMassTransitTestHarness</c> replaces wholesale. <c>SqlPaymentOrderStore</c>
-/// throws unless the ambient transaction is set (§6.3), so a landed row is unreachable.
-/// </summary>
+/// <summary>§3.2's Consumes column for Payments over a real broker, since the harness replaces the endpoint.</summary>
 [Collection(nameof(IntegrationCollection))]
 public sealed class PaymentsEventEndpointTests(ServiceFixture fixture) : IAsyncLifetime
 {
-    /// <summary>
-    /// How long a published message is given to reach the table. Generous
-    /// because it covers a broker round trip on a runner that is also holding
-    /// two other container sets, and bounded because the failure this suite
-    /// exists to catch — an endpoint that binds nothing — never arrives late,
-    /// it never arrives.
-    /// </summary>
+    /// <summary>How long a published message is given to reach the table, generous for a loaded runner.</summary>
     private static readonly TimeSpan DeliveryBudget = TimeSpan.FromSeconds(30);
 
     public async ValueTask InitializeAsync() => await fixture.ResetAsync();
@@ -70,10 +55,7 @@ public sealed class PaymentsEventEndpointTests(ServiceFixture fixture) : IAsyncL
         Guid order = Guid.CreateVersion7();
         OrderPlaced placed = Placed(order);
 
-        // §9.5's filter counts a drop on messaging.inbox.suppressed before it
-        // returns, so waiting on that instrument is a claim that the second
-        // delivery actually reached the filter and was dropped — a fixed
-        // delay is only a claim that some time passed.
+        // The filter counts a drop before it returns, so waiting on the instrument proves the drop happened (§9.5).
         using SemaphoreSlim suppressed = new(0);
         using MeterListener listener = new();
 
@@ -179,11 +161,7 @@ public sealed class PaymentsEventEndpointTests(ServiceFixture fixture) : IAsyncL
             "SELECT Value = COUNT(*) FROM payments.PaymentOrders WHERE OrderId = {0} AND CancelledAt IS NOT NULL",
             order);
 
-    /// <summary>
-    /// Polls rather than sleeps, and fails with the last value it saw — a
-    /// timeout that says only "expected 1" is indistinguishable from a broker
-    /// that never started.
-    /// </summary>
+    /// <summary>Polls rather than sleeps, and fails with the last value it saw.</summary>
     private static async Task Eventually(Func<Task<int>> read, int expected, string because)
     {
         DateTimeOffset deadline = DateTimeOffset.UtcNow + DeliveryBudget;
@@ -202,10 +180,7 @@ public sealed class PaymentsEventEndpointTests(ServiceFixture fixture) : IAsyncL
         actual.ShouldBe(expected, because);
     }
 
-    /// <summary>
-    /// One tag off a measurement. A span cannot be captured, so the read
-    /// happens inside the callback and only the string escapes.
-    /// </summary>
+    /// <summary>One tag off a measurement, read inside the callback since a span cannot be captured.</summary>
     private static string TagValue(ReadOnlySpan<KeyValuePair<string, object?>> tags, string name)
     {
         foreach (KeyValuePair<string, object?> tag in tags)

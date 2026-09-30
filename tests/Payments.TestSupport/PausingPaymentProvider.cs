@@ -2,25 +2,13 @@ using Payments.Application.Provider;
 
 namespace Payments.TestSupport;
 
-/// <summary>
-/// Holds one authorisation open after the provider has answered and before its
-/// unit commits, so a test owns the interleaving rather than the scheduler
-/// (spec, section 6). Test support only; the host never registers it.
-/// </summary>
-/// <remarks>
-/// The arm lives here rather than on the decorator: the adapter is a typed
-/// client, so a consumer's scope builds its own decorator and an arm stored
-/// there would be invisible to it.
-/// </remarks>
+/// <summary>Holds one authorisation open after the provider answers and before its unit commits.</summary>
+/// <remarks>The arm lives here because each scope builds its own <see cref="PausingPaymentProvider"/>.</remarks>
 public sealed class ProviderGateSeam
 {
     private ProviderGate? _armed;
 
-    /// <summary>
-    /// Arms the next authorisation. One gate at a time, because two armed at
-    /// once would leave which of them caught the call to the order of the
-    /// calls.
-    /// </summary>
+    /// <summary>Arms the next authorisation, one gate at a time.</summary>
     public ProviderGate PauseNextAuthorisation()
     {
         ProviderGate gate = new(this);
@@ -32,22 +20,11 @@ public sealed class ProviderGateSeam
 
     internal void Disarm(ProviderGate gate) => Interlocked.CompareExchange(ref _armed, null, gate);
 
-    /// <summary>
-    /// Takes the arm rather than reading it, so a second authorisation in the
-    /// same run passes straight through: the gate is one call's, not the
-    /// seam's.
-    /// </summary>
+    /// <summary>Takes the arm rather than reading it, so the gate is one call's, not the seam's.</summary>
     internal ProviderGate? Take() => Interlocked.Exchange(ref _armed, null);
 }
 
-/// <summary>
-/// The registered adapter, paused on demand by <see cref="ProviderGateSeam"/>.
-/// </summary>
-/// <remarks>
-/// The pause is after the inner call deliberately: that is the window an
-/// unlocked read would let a cancellation through — it would find no intent,
-/// void nothing, and leave money held on a cancelled order.
-/// </remarks>
+/// <summary>The registered adapter, paused after it answers by <see cref="ProviderGateSeam"/>.</summary>
 public sealed class PausingPaymentProvider(IPaymentProvider inner, ProviderGateSeam seam) : IPaymentProvider
 {
     public async Task<AuthorisationResult> AuthoriseAsync(AuthorisationRequest request, CancellationToken ct)
@@ -64,15 +41,7 @@ public sealed class PausingPaymentProvider(IPaymentProvider inner, ProviderGateS
     public Task VoidAsync(VoidRequest request, CancellationToken ct) => inner.VoidAsync(request, ct);
 }
 
-/// <summary>
-/// One armed pause. <see cref="Reached"/> completes when the authorisation
-/// arrives at it, and the call stays parked until <see cref="Release"/> or
-/// disposal.
-/// </summary>
-/// <remarks>
-/// Disposing releases, so a failing test cannot leave a consumer parked and
-/// the broker redelivering into a unit that never finishes.
-/// </remarks>
+/// <summary>One armed pause; disposing releases it, so a failing test cannot leave a consumer parked.</summary>
 public sealed class ProviderGate(ProviderGateSeam owner) : IDisposable
 {
     private readonly TaskCompletionSource _reached = new(TaskCreationOptions.RunContinuationsAsynchronously);
