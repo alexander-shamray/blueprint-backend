@@ -231,10 +231,10 @@ Each rule names its owner; this file cites and does not restate.
   fact that is false. The one fix for an accepted finding is to cut. A
   round whose only findings are refused changes nothing; each loop judges
   the round after it on its own terms.
-- **A round's touch set is the finding's file.** The primer's *Working in
-  this repo* gains one line: a `fix` commit closing a review finding names
-  the finding in its subject and touches the file the finding is in; a
-  second file is a second commit with its own finding.
+- **A round's touch set is the finding's own sites.** The primer's
+  *Working in this repo* gains one line: a `fix` commit closing a review
+  finding names the finding in its subject and carries that finding's fix
+  and nothing else; any other edit is a second commit with its own finding.
 - **The gate reports what a PR is made of, then refuses.** The comment gate
   prints, per PR, added comment lines against added code lines for C# and
   for the scripts. After the sweeps in section 4 it fails a PR whose added
