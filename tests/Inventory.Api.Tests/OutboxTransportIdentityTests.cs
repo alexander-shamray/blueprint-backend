@@ -67,7 +67,6 @@ public sealed class OutboxTransportIdentityTests(ServiceFixture fixture) : IAsyn
                         return Task.CompletedTask;
                     });
 
-                // Replaced, not added, or MassTransit's real endpoint would stay the one resolved.
                 services.RemoveAll<IPublishEndpoint>();
                 services.AddScoped(_ => endpoint);
             });
