@@ -1,5 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- Settings from Directory.Build.props (§4.4); no dependencies at all, per §4.2's first row. -->
+  <!-- Settings from Directory.Build.props (§4.1); no dependencies at all, per §4.2's first row. -->
 
 </Project>
