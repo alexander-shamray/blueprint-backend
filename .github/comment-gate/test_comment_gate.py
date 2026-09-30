@@ -406,6 +406,8 @@ class TheRemarksRule(unittest.TestCase):
         text = "/// <remarks>Because.\nvoid M();\nint y; // §9\n"
         self.assertEqual([line for _, line, _ in judged("A.cs", text)], [1])
         self.assertEqual(judged("A.cs", text, {3}), [])
+        text = "/// <remarks>Because.\nvoid M();\n// Per §9.\n"
+        self.assertEqual([line for _, line, _ in judged("A.cs", text)], [1])
 
     def test_only_csharp_and_only_comments_are_read(self):
         self.assertEqual(judged("m.py", "# <remarks>x</remarks>\n"), [])
