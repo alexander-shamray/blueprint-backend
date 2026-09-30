@@ -40,8 +40,8 @@ Every deployable is described once, by a JSON file under `deployables/` named
 for its Helm release: `deployables/catalog-api.json` is the release
 `catalog-api`. §15.3 states the rule; this is the schema, and what reads it:
 
-- `deploy.yml` holds a dispatch to `canary.py workloads`, and `realm.yml`'s
-  scheduled job loops over the same list;
+- `deploy.yml` holds a dispatch to its descriptor through `canary.py chart`,
+  and `realm.yml`'s scheduled job loops over `canary.py workloads`;
 - `canary.py` plans, checks and judges each one;
 - `deploy/helm/smoke.sh` takes its cases from `canary.py smoke-cases`.
 

@@ -1292,7 +1292,8 @@ class DescriptorReadTests(unittest.TestCase):
         self.assertTrue(any("notifications" in f and "no descriptor describes" in f for f in failures), failures)
 
     def test_a_workflow_that_reads_no_list_is_refused(self) -> None:
-        text = canary.WORKFLOW.read_text(encoding="utf-8").replace("canary.py workloads", "canary.py steps")
+        text = canary.WORKFLOW.read_text(encoding="utf-8").replace(
+            'if ! python deploy/canary/canary.py chart --workload "$WORKLOAD" >/dev/null; then', "if false; then")
 
         read, failures = self._read(workflow=text)
 

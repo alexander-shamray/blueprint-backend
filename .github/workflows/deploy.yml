@@ -138,13 +138,14 @@ jobs:
           python-version: '3.12'
 
       # The descriptors are the list of deployables (deploy/canary/README.md),
-      # and a name outside it reaches no Helm command.
+      # and a name outside it reaches no Helm command. `chart` looks the name
+      # up as a key, where a line match over `workloads` admits one holding a
+      # newline.
       - name: The workload is a deployable the plan describes
         id: workload
         run: |
           set -euo pipefail
-          WORKLOADS=$(python deploy/canary/canary.py workloads)
-          if ! grep -qxF -- "$WORKLOAD" <<< "$WORKLOADS"; then
+          if ! python deploy/canary/canary.py chart --workload "$WORKLOAD" >/dev/null; then
             echo "::error::The dispatched workload is not a descriptor under deploy/canary/deployables."
             exit 1
           fi

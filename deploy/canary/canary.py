@@ -1335,7 +1335,8 @@ SMOKE_PATH = "deploy/helm/smoke.sh"
 SMOKE = ROOT / SMOKE_PATH
 
 # The runs that read the descriptors, as the workflow and smoke.sh spell them.
-READS_WORKLOADS = re.compile(r"canary\.py\"?\s+workloads\b")
+READS_WORKLOADS = re.compile(
+    r'if ! python deploy/canary/canary\.py chart --workload "\$WORKLOAD" >/dev/null; then')
 READS_SMOKE_CASES = re.compile(r"canary\.py\"?\s+smoke-cases\b")
 # A chart list written into smoke.sh rather than read from the descriptors.
 LISTED_CHARTS = re.compile(r"^\s*[A-Z_]*CHARTS=[\"']?[a-z]", re.MULTILINE)
@@ -1712,8 +1713,8 @@ def main(argv: list[str]) -> int:
     chart = sub.add_parser("chart", help="the chart directory a workload deploys")
     chart.add_argument("--workload", required=True)
 
-    # One name per line, for a shell loop: `deploy.yml` holds a dispatch to it,
-    # and `realm.yml`'s scheduled job judges each release's realm (ADR-043).
+    # One name per line, for the shell loop in which `realm.yml`'s scheduled
+    # job judges each release's realm (ADR-043).
     sub.add_parser("workloads", help="every workload in the plan, one per line")
 
     sub.add_parser("smoke-cases", help="each deployable's smoke.sh cases, one fact per line")
