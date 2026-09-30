@@ -59,7 +59,7 @@ def resolve(repo_root: Path, commit: str) -> str:
         raise ScaffoldError(
             f"{commit} is not a commit in this checkout, whose history a shallow clone lacks") from None
     full_sha = full.decode("ascii").strip()
-    # The render runs the scaffold the parent carried, so only history this checkout already holds.
+    # The render runs the scaffold the parent carried, so only HEAD's own history.
     ancestry = subprocess.run(
         ["git", "-C", str(repo_root), "merge-base", "--is-ancestor", full_sha, "HEAD"],
         capture_output=True, check=False)
