@@ -271,11 +271,9 @@ dotnet run --project src/Services/Ordering/Ordering.Api
 
 `ASPNETCORE_ENVIRONMENT` is the first line for a reason: no project here ships
 a `launchSettings.json`, so `dotnet run` is Production unless something says
-otherwise, and `RequireHttpsMetadata` is on in Production (§11.3). The
-authority above is plain HTTP, so the host refuses to fetch the discovery
-document at all and every bearer request fails before validation begins. The
-container sets the same variable, which is why the Compose path never shows
-this.
+otherwise, and `AddJwtAuthentication` refuses a plain-HTTP authority outside
+Development (§11.3), so the host does not start. The container sets the same
+variable, which is why the Compose path never shows this.
 
 The override excludes the `gateway` too, and running that one on the host takes
 a fourth variable: §10.2's destinations are container names, which resolve on
