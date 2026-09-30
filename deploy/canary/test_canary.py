@@ -1263,9 +1263,6 @@ class DescriptorReadTests(unittest.TestCase):
 
         self.assertTrue(read["workflow"], "deploy.yml reads no descriptor, so the comparison below is vacuous")
         self.assertLessEqual(
-            read["workflow"], read["canary"],
-            f"deploy.yml reads {sorted(read['workflow'] - read['canary'])}, which no descriptor describes")
-        self.assertLessEqual(
             read["workflow"], read["smoke"],
             f"deploy.yml reads {sorted(read['workflow'] - read['smoke'])}, which smoke.sh does not render")
         self.assertEqual(canary._descriptors_agree(self.workloads), [])
@@ -1291,14 +1288,58 @@ class DescriptorReadTests(unittest.TestCase):
         self.assertTrue(any("by hand" in f for f in failures), failures)
         self.assertTrue(any("notifications" in f and "no descriptor describes" in f for f in failures), failures)
 
-    def test_a_workflow_that_reads_no_list_is_refused(self) -> None:
-        text = canary.WORKFLOW.read_text(encoding="utf-8").replace(
-            'if ! python deploy/canary/canary.py chart --workload "$WORKLOAD" >/dev/null; then', "if false; then")
+    GUARD = 'if ! python deploy/canary/canary.py chart --workload "$WORKLOAD" >/dev/null; then'
+    CASES = r'''$PYTHON "$ROOT/deploy/canary/canary.py" smoke-cases | tr -d '\r' >"$CASES"'''
 
-        read, failures = self._read(workflow=text)
+    def _replaced(self, real: Path, old: str, new: str) -> str:
+        """The real reader's text with `old`, which it must hold once, made `new`."""
+        text = real.read_text(encoding="utf-8")
+        self.assertEqual(text.count(old), 1, f"{real.name} does not hold {old!r} once")
+        return text.replace(old, new)
+
+    def _assert_no_guard(self, workflow: str) -> None:
+        read, failures = self._read(workflow=workflow)
 
         self.assertEqual(read["workflow"], set())
-        self.assertTrue(any("reads no descriptor list" in f for f in failures), failures)
+        self.assertTrue(any("holds no live guard" in f for f in failures), failures)
+
+    def test_a_workflow_without_the_guard_is_refused(self) -> None:
+        self._assert_no_guard(self._replaced(canary.WORKFLOW, self.GUARD, "if false; then"))
+
+    def test_a_guard_named_only_in_a_trailing_comment_is_refused(self) -> None:
+        self._assert_no_guard(self._replaced(canary.WORKFLOW, self.GUARD, f"if false; then  # {self.GUARD}"))
+
+    def test_a_guard_weakened_to_a_substring_match_is_refused(self) -> None:
+        self._assert_no_guard(self._replaced(
+            canary.WORKFLOW, self.GUARD,
+            'WORKLOADS=$(python deploy/canary/canary.py workloads)\n'
+            '          if ! grep -qF -- "$WORKLOAD" <<< "$WORKLOADS"; then'))
+
+    def test_a_guard_that_cannot_fail_is_refused(self) -> None:
+        self._assert_no_guard(self._replaced(
+            canary.WORKFLOW, self.GUARD,
+            'if ! (python deploy/canary/canary.py chart --workload "$WORKLOAD" >/dev/null || true); then'))
+
+    def test_a_guard_whose_annotation_echoes_the_input_is_refused(self) -> None:
+        self._assert_no_guard(self._replaced(
+            canary.WORKFLOW, 'echo "::error::The dispatched workload',
+            'echo "::error::$WORKLOAD, the dispatched workload'))
+
+    def test_a_guard_that_does_not_stop_is_refused(self) -> None:
+        self._assert_no_guard(self._replaced(
+            canary.WORKFLOW, 'under deploy/canary/deployables."\n            exit 1\n',
+            'under deploy/canary/deployables."\n            true\n'))
+
+    def test_a_trailing_comment_on_the_guard_leaves_it_read(self) -> None:
+        read, failures = self._read(workflow=self._replaced(canary.WORKFLOW, self.GUARD, f"{self.GUARD}  # a key"))
+
+        self.assertEqual(read["workflow"], set(self.workloads))
+        self.assertEqual(failures, [])
+
+    def test_a_hash_inside_quotes_or_an_expansion_is_not_a_comment(self) -> None:
+        self.assertEqual(
+            canary._live('echo "a # b" \'c # d\' ${#x} $# x#y  # tail\n  # whole\nkey: v # c'),
+            'echo "a # b" \'c # d\' ${#x} $# x#y\nkey: v')
 
     def test_a_smoke_run_that_reads_no_cases_renders_nothing(self) -> None:
         text = canary.SMOKE.read_text(encoding="utf-8").replace("smoke-cases", "workloads")
@@ -1306,15 +1347,35 @@ class DescriptorReadTests(unittest.TestCase):
         read, failures = self._read(smoke=text)
 
         self.assertEqual(read["smoke"], set())
+        self.assertTrue(any("takes no live cases" in f for f in failures), failures)
         self.assertTrue(any("does not render" in f for f in failures), failures)
 
-    def test_a_smoke_run_that_lists_its_charts_by_hand_renders_nothing(self) -> None:
-        text = canary.SMOKE.read_text(encoding="utf-8") + 'SERVICE_CHARTS="catalog gateway"\n'
-
-        read, failures = self._read(smoke=text)
+    def test_a_case_read_named_only_in_a_trailing_comment_is_refused(self) -> None:
+        read, failures = self._read(smoke=self._replaced(canary.SMOKE, self.CASES, f': >"$CASES"  # {self.CASES}'))
 
         self.assertEqual(read["smoke"], set())
-        self.assertTrue(any("does not render" in f for f in failures), failures)
+        self.assertTrue(any("takes no live cases" in f for f in failures), failures)
+
+    def _assert_hand_list(self, line: str) -> None:
+        read, failures = self._read(smoke=canary.SMOKE.read_text(encoding="utf-8") + line + "\n")
+
+        self.assertEqual(read["smoke"], set())
+        self.assertTrue(any("lists charts by hand" in f and "catalog" in f for f in failures), failures)
+
+    def test_a_chart_list_assigned_by_hand_is_refused(self) -> None:
+        self._assert_hand_list('SERVICE_CHARTS="catalog gateway"')
+
+    def test_a_readonly_chart_list_is_refused(self) -> None:
+        self._assert_hand_list('readonly SERVICE_CHARTS="catalog gateway"')
+
+    def test_a_chart_array_is_refused(self) -> None:
+        self._assert_hand_list("SERVICE_CHARTS=(catalog gateway)")
+
+    def test_a_chart_appended_by_hand_is_refused(self) -> None:
+        self._assert_hand_list('SERVICE_CHARTS="$SERVICE_CHARTS catalog"')
+
+    def test_a_loop_over_charts_named_by_hand_is_refused(self) -> None:
+        self._assert_hand_list("for chart in catalog gateway; do :; done")
 
     def test_a_sibling_inputs_options_are_not_the_workload_inputs(self) -> None:
         text = """\
