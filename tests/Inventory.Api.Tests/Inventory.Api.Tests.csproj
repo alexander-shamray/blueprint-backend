@@ -16,7 +16,7 @@
     <PackageReference Include="xunit.runner.visualstudio" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="Shouldly" />
-    <!-- §4.2's architecture gates, which read type-level dependencies. -->
+    <!-- The §4.2 gate that reads type-level dependencies. -->
     <PackageReference Include="NetArchTest.Rules" />
     <!-- WebApplicationFactory over the real Program (§12.4), named directly by these tests. -->
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
