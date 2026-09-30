@@ -140,7 +140,7 @@ public sealed class KeycloakFixture : IAsyncLifetime
     /// <summary>Polls until the imported realm answers, a later event than the process listening (§14.1).</summary>
     private async Task WaitForRealmAsync()
     {
-        // A poll, as UntilHttpRequestIsSucceeded without a port probes the first of this image's two ports.
+        // A poll, as UntilHttpRequestIsSucceeded without a port probes the first exposed port.
         for (int attempt = 0; attempt < 60; attempt++)
         {
             try
