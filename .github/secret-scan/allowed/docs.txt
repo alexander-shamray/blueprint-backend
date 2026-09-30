@@ -19,8 +19,7 @@
 # credential, so its chapter is full of the shape being described. That is the
 # residue the scanner cannot tell from the thing itself, and it is why the
 # value rules end at whitespace, a parenthesis and a backtick rather than at
-# the end of the line. The source half of the same residue is in src.txt and
-# the suite's is in tests.txt.
+# the end of the line. The suite's half of the same residue is in tests.txt.
 
 docs/backend-architecture/14-local-development.md | connection-string-password | 8a11e54d9d5b | Section 14.1 printing the compose file it specifies.
 docs/backend-architecture/14-local-development.md | credential-assignment | 8a11e54d9d5b | The same default in the chapter's own compose excerpt.
