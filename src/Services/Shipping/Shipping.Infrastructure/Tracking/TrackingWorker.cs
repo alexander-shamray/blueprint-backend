@@ -9,48 +9,26 @@ using Shipping.Infrastructure.Carrier;
 
 namespace Shipping.Infrastructure.Tracking;
 
-/// <summary>
-/// The second of this service's two workers (spec, section 4): it asks the
-/// carrier what has happened to each booked shipment and applies the answer.
-/// </summary>
+/// <summary>Asks the carrier what has happened to each booked shipment and applies the answer.</summary>
 /// <remarks>
-/// <c>FulfilmentWorker</c>'s shape, which is <c>OutboxDispatcher</c>'s: the
-/// claim leases its rows, each row fails alone, and the loop's filter asks
-/// the token because no host sets <c>BackgroundServiceExceptionBehavior</c>.
-/// A second loop, not a branch: the two are paced by different things.
+/// <see cref="Fulfilment.FulfilmentWorker"/>'s shape, a second loop rather than a branch, since the two are
+/// paced by different things.
 /// </remarks>
 public sealed class TrackingWorker(
     IServiceScopeFactory scopes,
     ILogger<TrackingWorker> log) : BackgroundService
 {
-    /// <summary>
-    /// How many rows one claim leases, and so how many carrier calls one pass
-    /// has in flight at once. Smaller than the outbox's, because each row here
-    /// is a round trip to a third party rather than a publish.
-    /// </summary>
+    /// <summary>Carrier calls one pass has in flight; smaller than the outbox's, each row being a round trip.</summary>
     public const int ClaimBatchSize = 20;
 
-    /// <summary>
-    /// How long a claim holds its rows: above <c>CarrierHop.TotalRequestTimeout</c>,
-    /// which bounds a pass whose rows are polled together, so a row in flight
-    /// stays out of either worker's next claim.
-    /// </summary>
-    /// <remarks>
-    /// Shorter than <c>FulfilmentWorker.LeaseSeconds</c> and not one constant
-    /// with it: that pass makes two hops and this one makes one, so each lease
-    /// bounds its own worst case.
-    /// </remarks>
+    /// <summary>Above <c>CarrierHop.TotalRequestTimeout</c>, so a row in flight is not claimed again.</summary>
+    /// <remarks>Not <see cref="Fulfilment.FulfilmentWorker.LeaseSeconds"/>: each bounds its own hops.</remarks>
     public const int LeaseSeconds = 45;
 
-    /// <summary>
-    /// ADR-054's tracking age, measured from <c>Shipment.CreatedAt</c>: a
-    /// shipment the carrier has not finished by then is abandoned rather than
-    /// polled. Ninety days: a ceiling past any carrier's delivery.
-    /// </summary>
+    /// <summary>ADR-054's tracking age, measured from <c>Shipment.CreatedAt</c>: a ceiling past any delivery.</summary>
     public static readonly TimeSpan GiveUpAge = TimeSpan.FromDays(90);
 
-    // Compiled once rather than parsed per call — CA1848 (ADR-019), the shape
-    // §9.4's dispatcher takes.
+    // CA1848 (ADR-019), the shape §9.4's dispatcher takes.
     private static readonly Action<ILogger, Exception?> ClaimFailed =
         LoggerMessage.Define(
             LogLevel.Error,
@@ -70,14 +48,10 @@ public sealed class TrackingWorker(
             "Shipment {ShipmentId} of order {OrderId} was not delivered within its tracking age of {GiveUpAge}; " +
             "it is abandoned and no longer polled.");
 
-    // stoppingToken, not ct: CA1725 requires an override to keep the base's
-    // parameter name (ADR-019 makes it an error).
+    // stoppingToken, not ct: CA1725 keeps the base's name, an error under ADR-019.
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        // Due-ness is the row's NextPollAt, stamped after its call returns, so
-        // it falls part-way into a tick. A loop period as long as the poll
-        // interval would claim that row one tick late; this one only bounds
-        // how late a due row is picked up (CarrierHop.TrackingTick).
+        // Shorter than the poll interval, since NextPollAt falls part-way into a tick; it bounds how late a row is.
         using PeriodicTimer timer = new(CarrierHop.TrackingTick);
 
         while (await timer.WaitForNextTickAsync(stoppingToken))
@@ -88,23 +62,13 @@ public sealed class TrackingWorker(
             }
             catch (Exception ex) when (!stoppingToken.IsCancellationRequested)
             {
-                // The claim itself failed — database unreachable. Next tick.
-                // The filter asks the token, not the exception's type: a call
-                // enforcing its own deadline throws OperationCanceledException
-                // while this token is still live, and testing the type would
-                // let that escape and fault the whole background service.
+                // The claim failed. The token, not the type: a call's own deadline throws the same type.
                 ClaimFailed(log, ex);
             }
         }
     }
 
-    /// <summary>
-    /// One claim-and-poll pass. Returns the number of shipments whose page the
-    /// handler applied, or which it abandoned — a claimed row whose command
-    /// refused is not one. Public
-    /// so tests drive it directly instead of racing a timer, the same seam
-    /// <c>OutboxDispatcher.ProcessBatchAsync</c> offers (§12.4).
-    /// </summary>
+    /// <summary>One claim-and-poll pass, public so tests drive it rather than race a timer (§12.4).</summary>
     public async Task<int> ProcessBatchAsync(CancellationToken ct)
     {
         await using AsyncServiceScope claimScope = scopes.CreateAsyncScope();
@@ -112,11 +76,8 @@ public sealed class TrackingWorker(
         TrackingClaims claims = claimScope.ServiceProvider.GetRequiredService<TrackingClaims>();
         IReadOnlyList<TrackingWork> claimed = await claims.ClaimAsync(ct);
 
-        // Every claimed row at once, so a pass lasts one hop rather than one
-        // hop per row, and carrier latency caps no row's turn: the lease is
-        // what bounds it. WhenAll and not a loop that stops at the first
-        // fault, so a row whose backoff could not be written leaves the
-        // others to finish, and the fault still reaches ExecuteAsync.
+        // Every row at once, so a pass lasts one hop and the lease bounds it; WhenAll, so one row's fault
+        // leaves the others to finish and still reaches ExecuteAsync.
         bool[] applied = await Task.WhenAll(claimed.Select(work => PollOrBackOffAsync(claims, work, ct)));
 
         return applied.Count(isApplied => isApplied);
@@ -130,10 +91,7 @@ public sealed class TrackingWorker(
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {
-            // One row's carrier, one row's backoff. A page that cannot be
-            // read is not a fact about any other shipment. Logged before
-            // the backoff is written, as FulfilmentWorker does, so a
-            // database fault in FailAsync cannot hide the carrier's.
+            // Logged before the backoff is written, so a database fault in FailAsync cannot hide the carrier's.
             PollFailed(log, work.Id, work.OrderId, work.PollAttempts + 1, ex);
 
             await claims.FailAsync(work.Id, ct);
@@ -142,23 +100,13 @@ public sealed class TrackingWorker(
         }
     }
 
-    /// <summary>
-    /// One shipment's page: read outside any transaction, applied inside one.
-    /// Answers whether the handler applied it.
-    /// </summary>
-    /// <remarks>
-    /// The call is made before the unit of work opens, which is the whole of
-    /// section 4's bulkhead: a transaction held across a third party's latency
-    /// is a lock nothing downstream can wait out. The claim is what makes that
-    /// safe — the row is this pass's until the lease lapses.
-    /// </remarks>
+    /// <summary>One shipment's page, read outside any transaction and applied inside one.</summary>
     private async Task<bool> PollAsync(TrackingWork work, CancellationToken ct)
     {
         await using AsyncServiceScope scope = scopes.CreateAsyncScope();
         IDispatcher dispatcher = scope.ServiceProvider.GetRequiredService<IDispatcher>();
 
-        // Asked before the carrier is, so a carrier that never answers cannot
-        // hold a shipment, and its address, past the age (ADR-054).
+        // Asked before the carrier is, so a carrier that never answers cannot hold an address past the age (ADR-054).
         if (scope.ServiceProvider.GetRequiredService<TimeProvider>().GetUtcNow() - work.CreatedAt >= GiveUpAge)
         {
             Result abandoned = await dispatcher.SendAsync(new AbandonShipmentCommand(new ShipmentId(work.Id)), ct);
@@ -177,19 +125,12 @@ public sealed class TrackingWorker(
             scope.ServiceProvider.GetRequiredService<TimeProvider>().GetUtcNow()
             + CarrierHop.TrackingPollInterval;
 
-        // The command releases the claim through Shipment.PollApplied, inside
-        // the same unit of work as the page it applied: the lease is dropped by
-        // the commit that used it, never by a second statement that could land
-        // on its own.
+        // The command releases the claim through Shipment.PollApplied, in the commit that applied the page.
         Result result = await dispatcher.SendAsync(
             new ApplyTrackingPageCommand(new ShipmentId(work.Id), page, nextPollAt),
             ct);
 
-        // A refusal is not an applied page, and the caller's count says so:
-        // ShipmentErrors.NotFound is a row the claim projected and the
-        // handler's read no longer found, which no code path here can cause,
-        // and §6.3's behaviour rolled the unit back rather than moving
-        // anything.
+        // A refusal rolled the unit back (§6.3), so it is not an applied page.
         return result.IsSuccess;
     }
 }

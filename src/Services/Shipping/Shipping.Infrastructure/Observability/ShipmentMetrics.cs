@@ -5,20 +5,11 @@ using Shipping.Infrastructure.Carrier;
 
 namespace Shipping.Infrastructure.Observability;
 
-/// <summary>
-/// Spec section 11's gauge over shipments past their first failed pass, by state, and
-/// the wait of the longest-due row each pass would claim, on the carrier's meter.
-/// </summary>
-/// <remarks>
-/// <c>CarrierMetrics.MeterName</c> rather than a string of its own, so §13.2's
-/// one <c>AddMeter</c> line covers them. A class of its own because this one
-/// reads the database, in <c>OutboxMetrics</c>' shape; a singleton built eagerly
-/// by <c>MetricsInitialiser</c>, since the gauge is a callback the meter holds.
-/// </remarks>
+/// <summary>The workers' gauges, waiting by state and overdue by pass (§15.3), on the carrier's meter.</summary>
+/// <remarks>On <see cref="CarrierMetrics.MeterName"/>, so §13.2's one <c>AddMeter</c> line covers them.</remarks>
 public sealed class ShipmentMetrics
 {
-    // LoggerMessage.Define rather than an interpolated call (CA1848), as
-    // OutboxMetrics does.
+    // CA1848 (ADR-019), as OutboxMetrics does.
     private static readonly Action<ILogger, Exception?> GaugeReadFailed =
         LoggerMessage.Define(
             LogLevel.Error,
@@ -38,19 +29,14 @@ public sealed class ShipmentMetrics
     {
         Meter meter = factory.Create(CarrierMetrics.MeterName);
 
-        // Rows past their first backoff, by state. The tag value is the enum's
-        // own name, never a hand-written string: the Status column stores
-        // ToString() and a PromQL query on another spelling matches no series
-        // and never fires, which looks exactly like health.
+        // Tagged with the enum's name, as the Status column stores it, so a query's spelling matches.
         meter.CreateObservableGauge(
             "shipping.shipments.waiting",
             () => PerState(stats, logger),
             unit: "{shipment}",
             description: "Shipments past their first failed pass, by state.");
 
-        // The row no pass has reached yet, which the gauge above cannot see:
-        // healthy, each claim takes a due row within a tick, so an age that
-        // climbs past one is the replicas falling behind their passes.
+        // The row no pass has reached yet, which the gauge above cannot see: an age past a tick is lag.
         meter.CreateObservableGauge(
             "shipping.shipments.overdue",
             () => PerPass(stats, logger),
@@ -58,16 +44,8 @@ public sealed class ShipmentMetrics
             description: "How long the longest-due shipment each pass would claim has waited for one, by pass.");
     }
 
-    /// <summary>
-    /// One measurement per state, read from the enum rather than from a list
-    /// here: a state added to <see cref="ShipmentStatus"/> and forgotten at a
-    /// call site would be a state with no gauge and therefore no alert.
-    /// </summary>
-    /// <remarks>
-    /// The read is contained, because an observable callback that throws does
-    /// not fail alone — <c>MeterListener.RecordObservableInstruments</c> drops
-    /// the rest of the pass with it, as <c>OutboxMetrics.PerLane</c> argues.
-    /// </remarks>
+    /// <summary>States from the enum, so a new state cannot be left without a gauge.</summary>
+    /// <remarks>Contained, since the collector abandons its pass on an exception (§13.6).</remarks>
     private static List<Measurement<double>> PerState(IShipmentStats stats, ILogger logger)
     {
         List<Measurement<double>> measurements = [];
@@ -82,9 +60,7 @@ public sealed class ShipmentMetrics
             }
             catch (Exception exception) when (exception is not OperationCanceledException)
             {
-                // Every state is dropped, not just this one: half a reading is
-                // worse than none, because a state missing from a
-                // `sum by (state)` reads as a healthy zero rather than no data.
+                // Every state is dropped: one missing from a `sum by (state)` reads as a healthy zero, not as no data.
                 GaugeReadFailed(logger, exception);
                 return [];
             }
@@ -95,10 +71,7 @@ public sealed class ShipmentMetrics
         return measurements;
     }
 
-    /// <summary>
-    /// One measurement per pass, both or neither, for <see cref="PerState"/>'s
-    /// reason: a pass missing from a <c>max by (pass)</c> reads as no wait.
-    /// </summary>
+    /// <summary>Both passes or neither: one missing from a <c>max by (pass)</c> reads as no wait.</summary>
     private static List<Measurement<double>> PerPass(IShipmentStats stats, ILogger logger)
     {
         try

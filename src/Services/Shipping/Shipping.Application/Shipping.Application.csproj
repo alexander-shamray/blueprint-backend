@@ -1,15 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!--
-    Settings come from Directory.Build.props (§4.4).
-
-    Domain, Common.Application and Common.Contracts — the §4.2 dependency
-    table's second row, and §4.3's one assembly permitted to cross a service
-    boundary. It crosses inbound at the consumers, which read
-    Common.Contracts.Ordering.V1 directly (§9.4), and outbound at the §9.3
-    mapper — the one place this project names a contract of its own to
-    publish.
-  -->
+  <!-- Settings from Directory.Build.props (§4.1). -->
 
   <ItemGroup>
     <ProjectReference Include="..\Shipping.Domain\Shipping.Domain.csproj" />
@@ -18,28 +9,15 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Dapper is not here yet: §6.5's read side uses it directly, and this
-         project has no query handler to use it. It joins with the first
-         one — an unused package reference is a claim this project would
-         not be making. -->
-    <!-- AbstractValidator for the command validators, and the assembly-scan
-         registration §4.2's sample uses. Both used directly, both referenced
-         directly — a transitive compile against Common.Application's copy
-         would be a claim this project never states. -->
+    <!-- Used directly, so referenced directly: §4.2's assembly-scan registration. -->
     <PackageReference Include="FluentValidation" />
     <PackageReference Include="FluentValidation.DependencyInjectionExtensions" />
-    <!-- VoidShipmentHandler's LoggerMessage.Define call (CA1848 under
-         ADR-019 makes log.LogInformation an error), referenced directly
-         rather than arriving transitively. -->
+    <!-- VoidShipmentHandler's LoggerMessage.Define, which CA1848 requires under ADR-019. -->
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
   </ItemGroup>
 
   <ItemGroup>
-    <!-- §12's Application suite asserts §9.3's allow-list as a whole, and the
-         mapper holding it is internal because §5.5 makes that registry a
-         construction rather than a surface. Named here rather than widened at
-         the member: one line naming the one assembly that reads it commits
-         less than a public member on a type no other assembly may hold. -->
+    <!-- §12's suite asserts §9.3's allow-list, whose mapper stays internal (§5.5). -->
     <InternalsVisibleTo Include="Shipping.Application.Tests" />
   </ItemGroup>
 

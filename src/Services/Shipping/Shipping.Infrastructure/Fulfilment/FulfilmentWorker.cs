@@ -12,41 +12,20 @@ using Shipping.Infrastructure.Carrier;
 
 namespace Shipping.Infrastructure.Fulfilment;
 
-/// <summary>
-/// Spec section 4's first worker: it claims a shipment under a lease, reads its
-/// address through <see cref="IDeliveryAddressSource"/>, books with
-/// <see cref="ICarrierGateway"/>, and services an unanswered cancellation.
-/// </summary>
+/// <summary>Claims a shipment under a lease, reads its address, books it, and services a cancellation.</summary>
 /// <remarks>
-/// The call sits outside any unit of work, between the claim and the commit, so
-/// no transaction spans a third party's latency; a crash between the carrier's
-/// answer and the commit repeats the call under the same key.
+/// Each call sits outside any unit of work, as ADR-052's read does, so no transaction spans a third party's
+/// latency; a crash before the commit repeats the call under the same key.
 /// </remarks>
 public sealed class FulfilmentWorker(IServiceScopeFactory scopes, ILogger<FulfilmentWorker> log) : BackgroundService
 {
-    /// <summary>
-    /// How many rows one claim leases: one, and the number is the arithmetic:
-    /// a row costs up to three calls' totals, the lease is stamped at the
-    /// claim and has to outlive every row's turn, and more throughput is more
-    /// replicas — which is what the lease makes safe (spec, section 4).
-    /// </summary>
+    /// <summary>One, since a row costs up to three calls and the lease must outlive every row's turn.</summary>
     public const int ClaimBatchSize = 1;
 
-    /// <summary>
-    /// How long a claim holds the row it leased. Longer than the three calls
-    /// a pass can make — the address read, the booking and the compensating
-    /// cancel — so a slow pass is not re-claimed underneath itself, and short
-    /// enough that a replica killed mid-call releases its row within the
-    /// minute.
-    /// </summary>
+    /// <summary>Longer than a pass's three calls, so a slow pass is not re-claimed underneath itself.</summary>
     public const int LeaseSeconds = 60;
 
-    /// <summary>
-    /// The reason a shipment carries when it waited past
-    /// <see cref="FulfilmentOptions.GiveUpAge"/>: ADR-052's terminal outcome
-    /// with a reason of its own, so an operator can tell it from an owner or
-    /// a carrier answering that it cannot be done.
-    /// </summary>
+    /// <summary>ADR-052's terminal outcome with a reason of its own, apart from a refusal's.</summary>
     public const string GaveUpReason = "gave_up";
 
     private static readonly Action<ILogger, Guid, Guid, Exception?> PassFailed =
@@ -96,8 +75,7 @@ public sealed class FulfilmentWorker(IServiceScopeFactory scopes, ILogger<Fulfil
             "The carrier did not answer the cancellation of shipment {ShipmentId} on order {OrderId} within its " +
             "give-up age of {GiveUpAge}; it is recorded as refused, and tracking goes on.");
 
-    // stoppingToken, not ct: CA1725 requires an override to keep the base's
-    // parameter name.
+    // stoppingToken, not ct: CA1725 keeps the base's name, an error under ADR-019.
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         using PeriodicTimer timer = new(CarrierHop.FulfilmentTick);
@@ -110,20 +88,13 @@ public sealed class FulfilmentWorker(IServiceScopeFactory scopes, ILogger<Fulfil
             }
             catch (Exception ex) when (!stoppingToken.IsCancellationRequested)
             {
-                // The filter asks the token, not the exception's type. No host
-                // sets BackgroundServiceExceptionBehavior, so the default turns
-                // one escaped exception into a stopped host — and a gateway
-                // enforcing its own deadline throws OperationCanceledException
-                // while this token is still live (spec, section 4).
+                // The token, not the type: a gateway's own deadline throws the same type, and an escape stops the host.
                 ClaimFailed(log, ex);
             }
         }
     }
 
-    /// <summary>
-    /// One claim-and-fulfil pass. Returns the number of rows moved. Public so
-    /// tests drive it directly instead of racing a timer (§12.4).
-    /// </summary>
+    /// <summary>One claim-and-fulfil pass, public so tests drive it rather than race a timer (§12.4).</summary>
     public async Task<int> RunOnceAsync(CancellationToken ct)
     {
         await using AsyncServiceScope claimScope = scopes.CreateAsyncScope();
@@ -135,9 +106,7 @@ public sealed class FulfilmentWorker(IServiceScopeFactory scopes, ILogger<Fulfil
 
         foreach (FulfilmentWork work in claimed)
         {
-            // A scope per row, not per batch: a handler that throws mid-write
-            // would otherwise hand the next row its own tracked, half-mutated
-            // state.
+            // A scope per row, so a row that throws mid-write hands the next none of its tracked state.
             await using AsyncServiceScope row = scopes.CreateAsyncScope();
 
             try
@@ -147,9 +116,7 @@ public sealed class FulfilmentWorker(IServiceScopeFactory scopes, ILogger<Fulfil
             }
             catch (Exception ex) when (!ct.IsCancellationRequested)
             {
-                // Again the token rather than the type, and the address and the
-                // carrier are both here: an outage, a refused credential and a
-                // defect all back the row off, and only the second is counted.
+                // The token again: an outage, a refused credential and a defect all back the row off.
                 PassFailed(log, work.Id, work.OrderId, ex);
                 await claims.FailAsync(work.Id, ct);
             }
@@ -158,11 +125,7 @@ public sealed class FulfilmentWorker(IServiceScopeFactory scopes, ILogger<Fulfil
         return moved;
     }
 
-    /// <summary>
-    /// One leased row, taken as far as the carrier's answers let it go.
-    /// Internal rather than private so a suite can hand it the row a repeated
-    /// commit reloads: the already-booked one cannot be produced on cue.
-    /// </summary>
+    /// <summary>One leased row; internal so a suite can hand it the row a repeated commit reloads.</summary>
     internal async Task<bool> FulfilAsync(IServiceProvider sp, FulfilmentWork work, CancellationToken ct)
     {
         ShipmentId id = new(work.Id);
@@ -173,9 +136,7 @@ public sealed class FulfilmentWorker(IServiceScopeFactory scopes, ILogger<Fulfil
 
         if (work.Status == nameof(ShipmentStatus.Booked))
         {
-            // Asked before the carrier is, and recorded as its refusal: the
-            // parcel may be moving, and what follows a silence is what follows
-            // a "too late" (ADR-054).
+            // Asked before the carrier is, and recorded as its refusal (ADR-054).
             if (now - work.CancellationRequestedAt!.Value >= giveUpAge)
             {
                 CommitOutcome ended = await CommitAsync(
@@ -200,12 +161,8 @@ public sealed class FulfilmentWorker(IServiceScopeFactory scopes, ILogger<Fulfil
             return answered.Moved;
         }
 
-        // Asked before the owner or the carrier is: by the age the saga has
-        // raised the order for review, or is about to, so a booking made now
-        // would ship an order somebody is deciding about (ADR-052). The
-        // contact row stays: nobody answered that the address does not exist,
-        // so it goes on ShippingRetentionService's window like any terminal
-        // shipment's.
+        // Asked before the owner or the carrier is: by this age the saga has raised the order for review (ADR-052).
+        // The contact row stays, to go on ShippingRetentionService's window like any terminal shipment's.
         if (now - work.CreatedAt >= giveUpAge)
         {
             CommitOutcome abandoned = await CommitPendingAsync(
@@ -226,9 +183,7 @@ public sealed class FulfilmentWorker(IServiceScopeFactory scopes, ILogger<Fulfil
 
             if (lookup is AddressLookup.NoSuchOrder)
             {
-                // Terminal, and not retried: ADR-052's fifth row. The order has
-                // no address anybody can be shown, so the shipment cannot be
-                // fulfilled and no later pass would learn otherwise.
+                // Terminal and not retried: ADR-052's fifth row.
                 CommitOutcome unfulfillable = await CommitPendingAsync(
                     sp, id, (shipment, now) => shipment.MarkUnfulfillable("no_such_order", now), ct);
 
@@ -238,9 +193,7 @@ public sealed class FulfilmentWorker(IServiceScopeFactory scopes, ILogger<Fulfil
             AddressLookup.Found found = (AddressLookup.Found)lookup;
             address = found.Address;
 
-            // Committed on its own, before the booking: the pass that crashes
-            // after the carrier has answered repeats from here, and a stored
-            // address is one call this service does not make twice (ADR-052).
+            // Committed before the booking, so a pass repeated after a crash does not read it twice (ADR-052).
             await store.SaveAsync(
                 order, found.CustomerId, address, sp.GetRequiredService<TimeProvider>().GetUtcNow(), ct);
         }
@@ -266,15 +219,13 @@ public sealed class FulfilmentWorker(IServiceScopeFactory scopes, ILogger<Fulfil
         }
         catch (Exception ex)
         {
-            // The row's catch backs it off without the reference, and the
-            // cancel consumer may void it before the next pass rebooks it.
+            // The row backs off without the reference, and the cancel consumer may void it before a rebooking.
             BookingUncommitted(log, work.Id, work.OrderId, booked.Reference, ex);
             throw;
         }
 
-        // The reloaded row decides, not the move: a refused move also comes
-        // back when the execution strategy repeated a commit whose
-        // acknowledgement was lost (§6.3), and that row holds this booking.
+        // The reloaded row decides, not the move: a refused move also comes back when the strategy repeated a
+        // commit whose acknowledgement was lost (§6.3), and that row holds this booking.
         if (committed.Status != ShipmentStatus.Voided)
             return committed.Status == ShipmentStatus.Booked;
 
@@ -283,16 +234,7 @@ public sealed class FulfilmentWorker(IServiceScopeFactory scopes, ILogger<Fulfil
         return false;
     }
 
-    /// <summary>
-    /// The order was cancelled while the carrier was answering, and spec
-    /// section 6 says a Pending shipment is never booked, so the booking goes
-    /// back under the shipment's cancel key. The row is Voided and final, so
-    /// nothing here is left to a later pass: a booking the carrier keeps is
-    /// logged for a person, whether it answered too late or did not answer.
-    /// A booking whose commit threw is logged with its reference before the
-    /// row backs off; a crash before this call leaves no line at all, the
-    /// price of the consumers never waiting on a lease.
-    /// </summary>
+    /// <summary>Hands back a booking made while the order was cancelled, logging one the carrier keeps.</summary>
     private async Task HandBackAsync(
         ICarrierGateway carrier,
         ShipmentId id,
@@ -319,11 +261,8 @@ public sealed class FulfilmentWorker(IServiceScopeFactory scopes, ILogger<Fulfil
     }
 
     /// <summary>
-    /// A leased Pending row's commit, made once more when the cancel consumer
-    /// voided the row between the reload and the save: the strategy does not
-    /// retry a conflict, and a backed-off Voided row is never claimed again.
-    /// Once is enough, because that consumer is the one other writer such a
-    /// row has, and it writes the row once.
+    /// A Pending row's commit, made once more when the cancel consumer voided it between reload and save, since
+    /// the strategy does not retry a conflict and that consumer, the row's one other writer, writes it once.
     /// </summary>
     private static async Task<CommitOutcome> CommitPendingAsync(
         IServiceProvider sp,
@@ -357,9 +296,7 @@ public sealed class FulfilmentWorker(IServiceScopeFactory scopes, ILogger<Fulfil
 
                 bool moved = move(shipment, sp.GetRequiredService<TimeProvider>().GetUtcNow());
 
-                // Released whatever the move decided: a row the pass is done
-                // with must not hold its lease until it lapses, and a
-                // superseded arrival is done with (spec, section 5).
+                // Released whatever the move decided, so a finished row does not hold its lease until it lapses.
                 shipment.ReleaseClaim();
                 await unitOfWork.SaveChangesAsync(inner);
 
@@ -368,9 +305,6 @@ public sealed class FulfilmentWorker(IServiceScopeFactory scopes, ILogger<Fulfil
             ct);
     }
 
-    /// <summary>
-    /// What the move decided, and the state of the row it was decided on —
-    /// the row the last attempt reloaded, when the strategy retried the unit.
-    /// </summary>
+    /// <summary>What the move decided, and the status of the row the last attempt reloaded.</summary>
     private readonly record struct CommitOutcome(bool Moved, ShipmentStatus Status);
 }

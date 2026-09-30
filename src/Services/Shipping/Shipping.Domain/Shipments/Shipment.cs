@@ -3,16 +3,8 @@ using Shipping.Domain.Shipments.Events;
 
 namespace Shipping.Domain.Shipments;
 
-/// <summary>
-/// §3.2's aggregate: one shipment per confirmed order, and the spec's
-/// section 5 table is its states and the only moves between them.
-/// </summary>
-/// <remarks>
-/// Every operation returns whether it moved the shipment; a superseded arrival
-/// returns <c>false</c> rather than throwing, because a throw is a row retried
-/// for ever in a worker and a redelivery loop in a consumer. The backoff, lease
-/// and poll columns are the workers'; the aggregate only resets them.
-/// </remarks>
+/// <summary>§3.2's aggregate, whose moves return <c>false</c> on a superseded arrival rather than throw.</summary>
+/// <remarks>The backoff, lease and poll columns are the workers' (ADR-054); the aggregate only resets them.</remarks>
 public sealed class Shipment : AggregateRoot<ShipmentId>
 {
     private readonly List<TrackingEvent> _trackingEvents = [];
@@ -31,16 +23,10 @@ public sealed class Shipment : AggregateRoot<ShipmentId>
 
     public DateTimeOffset? CancellationRefusedAt { get; private set; }
 
-    /// <summary>
-    /// When the shipment reached a terminal state, and the clock the address
-    /// and tracking retention windows are measured from (ADR-053).
-    /// </summary>
+    /// <summary>The clock the address and tracking retention windows are measured from (ADR-053).</summary>
     public DateTimeOffset? TerminalAt { get; private set; }
 
-    /// <summary>
-    /// When the confirmed order made this shipment, and the clock ADR-052's
-    /// give-up age is measured from.
-    /// </summary>
+    /// <summary>The clock ADR-052's give-up age is measured from.</summary>
     public DateTimeOffset CreatedAt { get; private set; }
 
     /// <summary>The fulfilment pass's failed passes on this row (ADR-054).</summary>
@@ -69,10 +55,8 @@ public sealed class Shipment : AggregateRoot<ShipmentId>
         NextAttemptAt = now;
     }
 
-    /// <summary>The first row of the spec's section 5 table: a confirmed order makes a pending shipment.</summary>
     public static Shipment For(ShipmentId id, OrderId orderId, DateTimeOffset now) => new(id, orderId, now);
 
-    /// <summary>The carrier booked it, and answered with a reference and a tracking number.</summary>
     public bool Book(string carrierReference, string trackingNumber, DateTimeOffset now)
     {
         if (Status != ShipmentStatus.Pending)
@@ -102,11 +86,7 @@ public sealed class Shipment : AggregateRoot<ShipmentId>
         return true;
     }
 
-    /// <summary>
-    /// <c>OrderCancelled</c> arrived. A pending shipment is voided at once and
-    /// is never booked; a booked one only records the request, because the
-    /// parcel may already be moving and the carrier decides (spec, section 6).
-    /// </summary>
+    /// <summary>Voids a pending shipment; on a booked one it records the request, and the carrier decides.</summary>
     public bool Cancel(DateTimeOffset now)
     {
         if (Status == ShipmentStatus.Pending)
@@ -123,7 +103,6 @@ public sealed class Shipment : AggregateRoot<ShipmentId>
         return true;
     }
 
-    /// <summary>The carrier cancelled it.</summary>
     public bool CarrierCancelled(DateTimeOffset now)
     {
         if (Status != ShipmentStatus.Booked || CancellationRequestedAt is null)
@@ -132,20 +111,12 @@ public sealed class Shipment : AggregateRoot<ShipmentId>
         Status = ShipmentStatus.Voided;
         TerminalAt = now;
 
-        // Unscheduled, so the tracking claim's index holds only rows it may
-        // take; the status filter alone would keep a voided row out of the
-        // claim and in the index.
+        // Unscheduled, so the tracking claim's index holds only rows it may take.
         NextPollAt = null;
         return true;
     }
 
-    /// <summary>
-    /// The carrier will not cancel it: it answered that the parcel has gone,
-    /// or it did not answer within the give-up age (ADR-054). Tracking goes on
-    /// and the despatch is published when <c>Collected</c> arrives; the saga's
-    /// <c>CancelledAfterConfirmation</c> review row is the one record of the
-    /// disagreement (spec, section 6).
-    /// </summary>
+    /// <summary>The parcel has gone, or the carrier did not answer within the give-up age (ADR-054).</summary>
     public bool CarrierRefusedCancellation(DateTimeOffset now)
     {
         if (Status != ShipmentStatus.Booked || CancellationRequestedAt is null || CancellationRefusedAt is not null)
@@ -155,12 +126,7 @@ public sealed class Shipment : AggregateRoot<ShipmentId>
         return true;
     }
 
-    /// <summary>
-    /// The carrier never finished it: a booked or despatched shipment past
-    /// ADR-054's tracking age ends here, is no longer polled, and raises
-    /// nothing. <c>TerminalAt</c> starts its address window as any terminal
-    /// state's does (ADR-053).
-    /// </summary>
+    /// <summary>A booked or despatched shipment past ADR-054's tracking age ends here and raises nothing.</summary>
     public bool Abandon(DateTimeOffset now)
     {
         if (Status is not (ShipmentStatus.Booked or ShipmentStatus.Dispatched))
@@ -172,27 +138,18 @@ public sealed class Shipment : AggregateRoot<ShipmentId>
         return true;
     }
 
-    /// <summary>
-    /// One arrival from the carrier's feed. The row is kept whether or not it
-    /// moves the shipment — a carrier's fact is a fact — and the return says
-    /// only whether the state moved.
-    /// </summary>
+    /// <summary>Keeps one carrier arrival whether or not it moves the shipment, and says if it did.</summary>
     public bool Record(string carrierEventId, TrackingStatus status, DateTimeOffset occurredAt, DateTimeOffset now)
     {
         Require(carrierEventId, ShipmentLimits.MaxCarrierEventIdLength, "the carrier's event id");
 
-        // The key makes a repeated page free (spec, section 5), compared the
-        // way the table compares it, so nothing kept here is refused at commit.
+        // The key makes a repeated page free, compared as the table compares it, so nothing is refused at commit.
         if (_trackingEvents.Any(e => SameEventId(e.CarrierEventId, carrierEventId)))
             return false;
 
         _trackingEvents.Add(new TrackingEvent(Id, carrierEventId, status, occurredAt, now));
 
-        // The row keeps the carrier's instant (spec, section 7) and the events
-        // carry the recording one: §9.4 stamps the outbox row with a message's
-        // OccurredAt, and §13.3 measures lag from the raise, so a carrier's
-        // instant would count the poll delay, or a late scan's months, as the
-        // platform's own.
+        // The events carry the recording instant, not the carrier's: §13.3's lag is measured from the raise.
         return status switch
         {
             TrackingStatus.Collected => Dispatch(now),
@@ -201,28 +158,15 @@ public sealed class Shipment : AggregateRoot<ShipmentId>
         };
     }
 
-    /// <summary>
-    /// The fulfilment pass that claimed this row has finished with it: the
-    /// lease is dropped and that pass's backoff reset (spec, section 4).
-    /// Behaviour here rather than in the worker because the columns are this
-    /// row's; the claim and the failure are raw statements, because neither
-    /// has the aggregate in hand.
-    /// </summary>
+    /// <summary>Drops the fulfilment pass's lease and resets its backoff, the claim itself being raw SQL.</summary>
     public void ReleaseClaim()
     {
         LockedUntil = null;
         Attempts = 0;
     }
 
-    /// <summary>
-    /// A tracking pass has been applied: the lease dropped, that pass's
-    /// backoff reset, the next poll due at <paramref name="nextPollAt"/>
-    /// unless the shipment is terminal (spec, section 4).
-    /// </summary>
-    /// <remarks>
-    /// <c>Attempts</c> is left alone: it is the fulfilment pass's, and a feed
-    /// that answers says nothing about a cancellation that does not (ADR-054).
-    /// </remarks>
+    /// <summary>Drops the tracking pass's lease, resets its backoff, and schedules a live row's poll.</summary>
+    /// <remarks><c>Attempts</c> is the fulfilment pass's, and this pass leaves it alone (ADR-054).</remarks>
     public void PollApplied(DateTimeOffset nextPollAt)
     {
         NextPollAt = Status is ShipmentStatus.Booked or ShipmentStatus.Dispatched ? nextPollAt : null;
@@ -245,9 +189,7 @@ public sealed class Shipment : AggregateRoot<ShipmentId>
         if (Status is not (ShipmentStatus.Booked or ShipmentStatus.Dispatched))
             return false;
 
-        // The despatch first when it was never raised. A delivery ahead of a
-        // despatch is not a timeline, and the two consumers of the first event
-        // have already acted by the time the second is read.
+        // The despatch first when it was never raised, so the two events keep their order.
         if (Status == ShipmentStatus.Booked)
             Dispatch(now);
 
@@ -257,11 +199,7 @@ public sealed class Shipment : AggregateRoot<ShipmentId>
         return true;
     }
 
-    /// <summary>
-    /// A value the columns cannot hold is §5.7's broken invariant rather than a
-    /// no-op: the adapter bounds what the carrier sends (spec, section 9), so
-    /// anything arriving here oversized is a defect above this line.
-    /// </summary>
+    /// <summary>Throws: the adapter bounds what the carrier sends, so an oversized value is a defect.</summary>
     private static void Require(string value, int maxLength, string what)
     {
         if (string.IsNullOrWhiteSpace(value))
@@ -271,11 +209,7 @@ public sealed class Shipment : AggregateRoot<ShipmentId>
             throw new DomainException($"{what} is longer than {maxLength} characters; the adapter bounds it.");
     }
 
-    /// <summary>
-    /// Whether two carrier event ids are one key to the table. Case-sensitive,
-    /// as the column's binary collation is, and blind to trailing spaces,
-    /// because SQL Server compares strings ignoring them under every collation.
-    /// </summary>
+    /// <summary>Case-sensitive as the binary collation, and blind to trailing spaces as SQL Server is.</summary>
     private static bool SameEventId(string left, string right) =>
         string.Equals(left.TrimEnd(' '), right.TrimEnd(' '), StringComparison.Ordinal);
 }

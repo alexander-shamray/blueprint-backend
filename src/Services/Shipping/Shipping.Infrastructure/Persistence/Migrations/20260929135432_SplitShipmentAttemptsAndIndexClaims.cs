@@ -2,15 +2,10 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace Shipping.Infrastructure.Persistence.Migrations;
 
-/// <summary>
-/// ADR-054's <c>PollAttempts</c> and one filtered index per claim, generated
-/// from <see cref="ShipmentConfiguration"/>, which argues both; only this
-/// file's dress and the one statement below are hand-authored, and the
-/// <c>.Designer.cs</c> and snapshot are untouched.
-/// </summary>
+/// <summary>ADR-054's <c>PollAttempts</c> and claim indexes, from <see cref="ShipmentConfiguration"/>.</summary>
 public partial class SplitShipmentAttemptsAndIndexClaims : Migration
 {
-    // Fields for CA1861, as AddOutbox argues.
+    // Fields, for CA1861.
     private static readonly string[] FulfilmentIncluded = ["Status", "CancellationRequestedAt", "LockedUntil"];
     private static readonly string[] TrackingIncluded = ["Status", "LockedUntil"];
 

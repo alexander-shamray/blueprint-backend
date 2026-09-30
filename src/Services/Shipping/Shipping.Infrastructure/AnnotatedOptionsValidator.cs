@@ -3,14 +3,7 @@ using Microsoft.Extensions.Options;
 
 namespace Shipping.Infrastructure;
 
-/// <summary>
-/// Runs an options class's annotations at start (§15.4). Written out because
-/// <c>ValidateDataAnnotations</c> ships in
-/// <c>Microsoft.Extensions.Options.DataAnnotations</c>, which
-/// <c>Directory.Packages.props</c> does not pin, and a pin is a package
-/// decision this service has no need of: <c>Validator.TryValidateObject</c> is
-/// what that package runs. The annotations are still the one rule.
-/// </summary>
+/// <summary>Runs an options class's annotations at start (§15.4), without the package that ships its twin.</summary>
 internal sealed class AnnotatedOptionsValidator<TOptions> : IValidateOptions<TOptions>
     where TOptions : class
 {

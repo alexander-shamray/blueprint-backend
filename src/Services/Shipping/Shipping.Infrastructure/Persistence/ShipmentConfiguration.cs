@@ -4,11 +4,6 @@ using Shipping.Domain.Shipments;
 
 namespace Shipping.Infrastructure.Persistence;
 
-/// <summary>
-/// §7.2's pattern: configuration in a class, never in attributes on the domain
-/// type — which would put EF Core in <c>Shipping.Domain</c>, past the gate.
-/// Found by <c>ApplyConfigurationsFromAssembly</c>.
-/// </summary>
 internal sealed class ShipmentConfiguration : IEntityTypeConfiguration<Shipment>
 {
     public void Configure(EntityTypeBuilder<Shipment> builder)
@@ -25,47 +20,31 @@ internal sealed class ShipmentConfiguration : IEntityTypeConfiguration<Shipment>
             .Property(s => s.OrderId)
             .HasConversion(id => id.Value, value => new OrderId(value));
 
-        // One shipment per confirmed order (§3.2), and the database is where
-        // that holds: a consumer redelivered past the inbox would otherwise
-        // write a second shipment nobody reconciles, and the two would then
-        // both be booked with the carrier.
+        // One shipment per confirmed order, held here: a redelivery past the inbox would book a second.
         builder.HasIndex(s => s.OrderId).IsUnique();
 
-        // By name, never by number (§7.2). An enum stored as an int makes the
-        // member order a storage contract: inserting a status in the middle
-        // silently reinterprets every existing row.
+        // §7.2: an enum a reader of the database should be able to name.
         builder.Property(s => s.Status).HasConversion<string>().HasMaxLength(16);
 
         builder.Property(s => s.CarrierReference).HasMaxLength(ShipmentLimits.MaxCarrierReferenceLength);
         builder.Property(s => s.TrackingNumber).HasMaxLength(ShipmentLimits.MaxTrackingNumberLength);
         builder.Property(s => s.UnfulfillableReason).HasMaxLength(ShipmentLimits.MaxUnfulfillableReasonLength);
 
-        // Defaulted in the database although the aggregate always sets it:
-        // while a release rolls out, the version still running inserts
-        // shipments without the column, and §7.4 requires every migration to
-        // be backward compatible with it. The default also stamps the rows
-        // that exist when the column arrives. Their true age is unknown, and
-        // counting it from then can only let one wait longer, where a guess
-        // too old would end a shipment that was still live.
+        // Defaulted although the aggregate sets it: the version still running inserts without it (§7.4). On rows
+        // already there it can only let a wait run longer, where a guess too old would end a live shipment.
         builder.Property(s => s.CreatedAt).HasDefaultValueSql("SYSDATETIMEOFFSET()");
 
-        // The two workers' bookkeeping, mapped here because the columns are
-        // this row's (spec, section 7). The claim, the backoff and the poll
-        // schedule arrive with the workers that run them.
+        // The two workers' bookkeeping, mapped here because the columns are this row's.
         builder.Property(s => s.Attempts);
         builder.Property(s => s.NextAttemptAt);
         builder.Property(s => s.LockedUntil);
         builder.Property(s => s.NextPollAt);
 
-        // Defaulted in the database for CreatedAt's reason: the version still
-        // running during a rollout inserts without it (§7.4).
+        // Defaulted for CreatedAt's reason (§7.4).
         builder.Property(s => s.PollAttempts).HasDefaultValue(0);
 
-        // One index per claim, filtered to the rows it may take, because the
-        // table is never purged and an empty tick would otherwise scan it. The
-        // claims repeat each filter in their predicates, which is what lets the
-        // optimiser match it; a filter cannot say OR, so the fulfilment index
-        // also holds booked rows with no cancellation, which its claim skips.
+        // One filtered index per claim, since the table is never purged (ADR-054); each claim repeats its filter so
+        // the optimiser matches it, and a filter cannot say OR, so booked rows with no cancellation are held too.
         builder
             .HasIndex(s => s.NextAttemptAt)
             .HasDatabaseName("IX_Shipments_FulfilmentClaim")
@@ -82,12 +61,8 @@ internal sealed class ShipmentConfiguration : IEntityTypeConfiguration<Shipment>
 
         builder.Ignore(s => s.DomainEvents);
 
-        // A related entity rather than an owned collection: the tracking event
-        // has a key of its own that the carrier chose, and an owned collection
-        // would give it a synthetic one. The aggregate boundary is kept by
-        // what is absent — no DbSet<TrackingEvent> on the context, and the
-        // entity's constructor is internal — so the only route to an orphan is
-        // the schema permitting one, which IsRequired is what refuses.
+        // Related rather than owned, since an owned collection would replace the carrier's key with a synthetic
+        // one; the boundary is kept by the absent DbSet and the internal constructor, and IsRequired bars an orphan.
         builder
             .HasMany(s => s.TrackingEvents)
             .WithOne()

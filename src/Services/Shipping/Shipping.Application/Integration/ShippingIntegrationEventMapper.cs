@@ -5,30 +5,17 @@ using Shipping.Domain.Shipments.Events;
 
 namespace Shipping.Application.Integration;
 
-/// <summary>
-/// §9.3's allow-list for this service. §5.5 states the principle — never publish a
-/// domain event to the bus — and this is the mechanism that makes it
-/// structural rather than aspirational: a domain event absent from
-/// <see cref="Registry"/> never reaches the bus, by construction, not by
-/// review.
-/// </summary>
+/// <summary>§9.3's allow-list: a domain event not in <see cref="Registry"/> never reaches the bus (§5.5).</summary>
 internal sealed class ShippingIntegrationEventMapper : IIntegrationEventMapper
 {
-    // §3.2's Publishes column for Shipping, and exactly it: two entries. A
-    // tracking event is deliberately not here — the two milestones are the
-    // timeline, and a third contract would carry a carrier's vocabulary onto
-    // the bus for one screen.
+    // §3.2's Publishes column; a tracking event is not here, as it would carry a carrier's vocabulary onto the bus.
     private static readonly Dictionary<Type, Func<IDomainEvent, object>> Registry = new()
     {
         [typeof(ShipmentDispatchedDomainEvent)] = e => ToContract((ShipmentDispatchedDomainEvent)e),
         [typeof(ShipmentDeliveredDomainEvent)] = e => ToContract((ShipmentDeliveredDomainEvent)e)
     };
 
-    /// <summary>
-    /// §12's Application suite asserts the allow-list as a whole rather than
-    /// by entry, so it needs to see the registry without a domain event to
-    /// map through it.
-    /// </summary>
+    /// <summary>The registry's keys, for §12's assertion over the allow-list as a whole.</summary>
     internal static IReadOnlyCollection<Type> RegisteredEvents => Registry.Keys;
 
     public IReadOnlyList<object> Map(IReadOnlyList<IDomainEvent> domainEvents)
@@ -46,9 +33,7 @@ internal sealed class ShippingIntegrationEventMapper : IIntegrationEventMapper
         return mapped;
     }
 
-    // The correlation is the ORDER: §9.6's saga correlates every event about a
-    // fulfilment on it, and the shipment's own id means nothing outside this
-    // service.
+    // The correlation is the order, on which §9.6's saga correlates every fulfilment event.
     private static ShipmentDispatched ToContract(ShipmentDispatchedDomainEvent e) => new()
     {
         MessageId = Guid.CreateVersion7(),
@@ -58,9 +43,7 @@ internal sealed class ShippingIntegrationEventMapper : IIntegrationEventMapper
         TrackingNumber = e.TrackingNumber
     };
 
-    // The shipment's id is not carried, and the contract has no field for one:
-    // a tracking number is what a buyer takes to the carrier, and an identifier
-    // of this service's own would be a coupling nobody asked for (§9.1).
+    // No shipment id: a tracking number is what a buyer takes to the carrier, and this id a coupling (§9.1).
     private static ShipmentDelivered ToContract(ShipmentDeliveredDomainEvent e) => new()
     {
         MessageId = Guid.CreateVersion7(),

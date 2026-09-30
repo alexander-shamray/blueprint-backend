@@ -7,11 +7,7 @@ using Shipping.Application.Addresses;
 
 namespace Shipping.Infrastructure.Addresses;
 
-/// <summary>
-/// ADR-052's client, apart from <c>AddShippingInfrastructure</c> because it
-/// parses its base address at registration and refuses to start without one,
-/// which is a rule about §15.4's key rather than about persistence.
-/// </summary>
+/// <summary>ADR-052's client, apart from <c>AddShippingInfrastructure</c> as its rule is about §15.4's key.</summary>
 public static class DependencyInjection
 {
     private const string Section = "AddressSource";
@@ -21,10 +17,7 @@ public static class DependencyInjection
         this IServiceCollection services,
         IConfiguration configuration)
     {
-        // A key rather than PricingHop's literal because the value is checked
-        // here and inventoried by §15.4, and a checked value is one the
-        // deployment has to supply. No https rule as the carrier has: traffic
-        // inside the cluster is plain HTTP/2 (§9.7), and this hop stays there.
+        // A key the deployment supplies (§15.4). No https rule: in-cluster traffic is plain HTTP/2 (§9.7).
         Uri parsed = ConfiguredBaseUrl.Read(
             configuration,
             BaseUrlKey,
@@ -38,10 +31,7 @@ public static class DependencyInjection
         IHttpClientBuilder client = services
             .AddGrpcClient<DeliveryAddresses.DeliveryAddressesClient>(AddressHop.ClientName, o => o.Address = parsed);
 
-        // Resilience is registered first so that it sits outermost, and the
-        // credential handler runs inside it (§9.7, §11.5): the handler then
-        // runs once per attempt, so a retried attempt asks the token cache
-        // again instead of replaying the first attempt's token.
+        // Resilience first, so it is outermost and a retried attempt asks for a token again (§9.7, §11.5).
         client.AddStandardResilienceHandler(options =>
         {
             options.TotalRequestTimeout.Timeout = AddressHop.TotalRequestTimeout;
@@ -52,8 +42,7 @@ public static class DependencyInjection
             options.Retry.Delay = AddressHop.RetryDelay;
             options.Retry.MaxDelay = AddressHop.MaxRetryDelay;
 
-            // A Retry-After replaces the capped backoff AddressHop's budget is
-            // summed from, so honouring one would spend the total unaccounted.
+            // MaxDelay does not cap a Retry-After, so one long header would spend the budget AddressHop counts on.
             options.Retry.ShouldRetryAfterHeader = false;
 
             options.CircuitBreaker.FailureRatio = AddressHop.CircuitBreakerFailureRatio;

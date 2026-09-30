@@ -1,12 +1,6 @@
 namespace Shipping.Domain.Shipments;
 
-/// <summary>
-/// The platform's own tracking vocabulary, closed (spec, section 5). A carrier
-/// word the translation does not know is stored as <see cref="Unrecognised"/>
-/// and moves nothing: a carrier adds statuses on its own schedule, and a
-/// conformist that faulted on a new one would stop tracking every shipment
-/// until a deploy.
-/// </summary>
+/// <summary>The platform's closed vocabulary; an unknown carrier word is <see cref="Unrecognised"/>.</summary>
 public enum TrackingStatus
 {
     Collected,

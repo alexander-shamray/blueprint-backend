@@ -1,9 +1,6 @@
 namespace Shipping.Application.Carrier;
 
-/// <summary>
-/// A fault from the carrier that is not an answer: the worker's backoff owns
-/// it, and it never becomes a refusal (spec, section 9).
-/// </summary>
+/// <summary>A fault from the carrier that is not an answer, so it backs the row off and never refuses it.</summary>
 public sealed class CarrierUnavailableException : Exception
 {
     public CarrierUnavailableException()

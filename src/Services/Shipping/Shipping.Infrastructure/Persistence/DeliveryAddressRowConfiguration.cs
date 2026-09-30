@@ -10,22 +10,17 @@ internal sealed class DeliveryAddressRowConfiguration : IEntityTypeConfiguration
     {
         builder.ToTable("DeliveryAddresses", "shipping");
 
-        // Keyed by the order and not by the shipment: the address is Ordering's
-        // fact about an order, and the two are one-to-one only because §3.2
-        // gives one shipment per confirmed order (ADR-052).
+        // Keyed by the order, not the shipment: ADR-052's contact row is Ordering's fact about an order.
         builder.HasKey(r => r.OrderId);
         builder.Property(r => r.OrderId).ValueGeneratedNever();
 
-        // Every free-text column is nvarchar, which is the default here and
-        // is the whole of why a Kazakh-script address survives (spec,
-        // section 7).
+        // nvarchar, the default here, so a Kazakh-script address survives.
         builder.Property(r => r.Line1).HasMaxLength(AddressLimits.MaxLineLength).IsRequired();
         builder.Property(r => r.Line2).HasMaxLength(AddressLimits.MaxLineLength);
         builder.Property(r => r.City).HasMaxLength(AddressLimits.MaxCityLength).IsRequired();
         builder.Property(r => r.PostalCode).HasMaxLength(AddressLimits.MaxPostalCodeLength).IsRequired();
 
-        // Two ASCII letters by contract; IsFixedLength plus IsUnicode(false)
-        // is what emits char(2) rather than nvarchar(2).
+        // char(2), not nvarchar(2): two ASCII letters by contract.
         builder.Property(r => r.Country)
             .HasMaxLength(AddressLimits.CountryLength)
             .IsFixedLength()

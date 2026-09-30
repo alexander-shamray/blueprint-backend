@@ -2,13 +2,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace Shipping.Infrastructure.Persistence.Migrations;
 
-/// <summary>
-/// <c>shipping.DeliveryAddresses</c> (spec, section 7), generated from
-/// <see cref="DeliveryAddressRowConfiguration"/> — the configuration is the
-/// source of truth and only this file's dress is hand-authored (file-scoped
-/// namespace, this comment). The <c>.Designer.cs</c> and the snapshot beside
-/// it are machine-owned and untouched.
-/// </summary>
+/// <summary>ADR-052's contact table, generated from <see cref="DeliveryAddressRowConfiguration"/>.</summary>
 public partial class AddDeliveryAddresses : Migration
 {
     protected override void Up(MigrationBuilder migrationBuilder)

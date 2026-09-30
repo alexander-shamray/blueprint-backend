@@ -2,23 +2,10 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace Shipping.Infrastructure.Persistence.Migrations;
 
-/// <summary>
-/// §9.4's outbox table, generated from <see cref="OutboxMessageConfiguration"/>
-/// — the configuration is the source of truth, and only this file's dress
-/// is hand-authored (file-scoped namespace, this comment, the field CA1861
-/// asks for); the <c>.Designer.cs</c> and snapshot beside it are
-/// machine-owned and untouched. <c>IX_Outbox_Unprocessed</c> is filtered and
-/// covering, sized to the backlog rather than the table, because the
-/// dispatcher claims twice a second and only reads rows with a null
-/// <c>ProcessedAt</c>.
-/// </summary>
+/// <summary>§9.4's outbox table, generated from <see cref="OutboxMessageConfiguration"/>.</summary>
 public partial class AddOutbox : Migration
 {
-    // A field rather than the generated `new[] { … }` argument, which is what
-    // CA1861 asks for and the only shape available: Annotation takes an
-    // object, so a collection expression has no target type to convert to.
-    // A CreateIndex call meets the same rule inline, because its columns
-    // parameter is a string[] and a collection expression converts to one.
+    // A field, for CA1861: Annotation takes an object, so a collection expression has no target type there.
     private static readonly string[] IncludedColumns = ["Lane", "Attempts", "LockedUntil"];
 
     protected override void Up(MigrationBuilder migrationBuilder)
