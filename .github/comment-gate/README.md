@@ -57,8 +57,9 @@ judged as its whole block in the file after the change, because one added
 line can push an old block past the limit. A trailing comment is on a line
 of code, so it is never part of a block.
 
-**An uncited `<remarks>`.** A C# `<remarks>`, from its opening tag to its
-closing one, whose comment text holds no `§`, no `ADR-` number and no
+**An uncited `<remarks>`.** A C# `<remarks>`, from the comment its
+opening tag leads to its closing tag, or to the end of that comment block
+when it has none, whose comment text holds no `§`, no `ADR-` number and no
 `cref=`, is a finding at its opening line when any line of it is added. The
 pattern is the gate's `CITATION`.
 
