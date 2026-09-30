@@ -56,7 +56,7 @@ public abstract class ServiceFixture<TFactory, TEntryPoint, TDbContext> : IAsync
     private Respawner? _respawner;
 
     /// <param name="service">The service's name, which names its database, schema and broker account.</param>
-    /// <param name="redis">Whether the host claims keys on real Redis (§8.5) rather than the factory's default.</param>
+    /// <param name="redis">Whether the host claims keys on real Redis (§8.5), not the factory's default.</param>
     /// <param name="schedules">Whether it schedules, which takes §14.1's image for ADR-021's delayed exchange.</param>
     protected ServiceFixture(string service, bool redis = false, bool schedules = false)
     {
@@ -198,7 +198,7 @@ public abstract class ServiceFixture<TFactory, TEntryPoint, TDbContext> : IAsync
         }
         else
         {
-            // §14.1's broker configuration on the stock image, by ADR-036's route for a service that does not schedule.
+            // §14.1's configuration on the stock image, ADR-036's route for a service that does not schedule.
             _rabbit = broker
                 .WithImage("rabbitmq:4.1-management-alpine")
                 // A second copy of the Dockerfile's COPY targets, which check_permissions.py holds to it (ADR-036).
