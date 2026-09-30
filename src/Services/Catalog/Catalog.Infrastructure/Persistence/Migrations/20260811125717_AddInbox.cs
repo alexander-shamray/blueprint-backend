@@ -7,13 +7,9 @@ namespace Catalog.Infrastructure.Persistence.Migrations;
 /// on <c>AddOutbox</c>'s terms: the configuration is the source of truth, and
 /// the <c>.Designer.cs</c> and snapshot beside it are machine-owned.
 /// </summary>
-/// <remarks>
-/// The table ships before a service's first consumer because
-/// <c>RetentionPurgeService</c> runs from first boot and deletes from every
-/// table it was given, and a missing table logs a failed purge every pass.
-/// </remarks>
 public partial class AddInbox : Migration
 {
+    // RetentionPurgeService runs from first boot and deletes from every table it has (§9.5).
     protected override void Up(MigrationBuilder migrationBuilder)
     {
         migrationBuilder.CreateTable(

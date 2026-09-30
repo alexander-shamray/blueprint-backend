@@ -2,14 +2,10 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace Catalog.Infrastructure.Persistence.Migrations;
 
-/// <summary>
-/// §8.5's marker gains the <c>rowversion</c> that
-/// <c>RetentionPurgeService</c>'s <c>DELETE</c> identifies a row by
-/// (ADR-041). ADR-038's ageing <c>SELECT</c> reads <c>CommittedAt</c>, so
-/// that column stays. The empty default is <c>Array.Empty&lt;byte&gt;()</c>
-/// and not the <c>new byte[0]</c> a generated migration carries, which
-/// ADR-019's analyser policy refuses as CA1825 rather than warns about.
-/// </summary>
+/// <summary>§8.5's marker gains the <c>rowversion</c> its purge's <c>DELETE</c> keys on (ADR-041).</summary>
+/// <remarks>
+/// <c>Array.Empty&lt;byte&gt;()</c>, not the generated <c>new byte[0]</c>, which ADR-019 refuses as CA1825.
+/// </remarks>
 public partial class AddIdempotencyMarkerRowVersion : Migration
 {
     protected override void Up(MigrationBuilder migrationBuilder)

@@ -7,9 +7,7 @@ using Common.Web;
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
-// Refuse to start if any registered service has a dependency the container
-// cannot satisfy, or if a singleton captures a scoped one. Both are otherwise
-// discovered on the first request that happens to need them.
+// A missing dependency or a singleton capturing a scoped service stops startup rather than a first request.
 builder.Host.UseDefaultServiceProvider(o =>
 {
     o.ValidateOnBuild = true;
@@ -44,17 +42,12 @@ builder.Services
 WebApplication app = builder.Build();
 
 // Middleware order is behaviour, not formatting (§4.2).
-// §10.6's one header: nosniff on every response, including the ones
-// UseExceptionHandler writes below. Above everything, so nothing can answer
-// without it — and written from OnStarting, so the handler's clear does not
-// take it off the 500.
+// §10.6's nosniff, above everything and written from OnStarting, so the exception handler's 500 carries it.
 app.UseSecurityHeaders();
 app.UseExceptionHandler();        // §10.5 — catches every fault below it
 app.UseCorrelationId();           // §10.4 — above everything else that logs
 
-// §10.5's promise applied to the statuses no handler produces: a challenge and
-// a forbid are written by the middleware below and carry no body, so without
-// this the platform's one error shape would have two holes in it.
+// §10.5's one error shape, for the challenge and forbid the middleware below writes with no body.
 app.UseStatusCodePages();         // §10.5 — 401 and 403 as problem+json
 app.UseAuthentication();          // §11.3 — populates HttpContext.User
 app.UseAuthorization();           // §11.4 — evaluates the permission policies
@@ -71,6 +64,5 @@ app.MapGrpcService<PricingService>();
 
 app.Run();
 
-// Top-level statements compile to an INTERNAL Program, which
-// WebApplicationFactory<Program> cannot see from another assembly (§12.4).
+// Top-level statements compile to an internal Program, which WebApplicationFactory<Program> cannot see (§12.4).
 public partial class Program;

@@ -5,16 +5,10 @@ using MassTransit;
 
 namespace Catalog.Infrastructure.Messaging;
 
-/// <summary>
-/// §3.2's Consumes column for Catalog, and exactly it. This file owns
-/// Catalog's one subscription, and it is Catalog-only, so the scaffold
-/// omits it.
-/// </summary>
+/// <summary>§3.2's Consumes column for Catalog, and exactly it; Catalog-only, so the scaffold omits it.</summary>
 public static class StockLevelConsumer
 {
-    // Public, as Ordering's queue constants are: §9.5's inbox keys each row on
-    // the endpoint name, so the name is part of what an inbox row means and
-    // not this assembly's private detail.
+    // Public, because §9.5's inbox keys each row on the endpoint name.
     public const string Queue = "catalog-inventory-events";
 
     public static void AddStockLevelConsumer(this IBusRegistrationConfigurator x) =>
@@ -27,16 +21,11 @@ public static class StockLevelConsumer
             Queue,
             e =>
             {
-                // RetryPolicy.Standard with nothing excluded, as Ordering's
-                // projection endpoint: IntegrationEventConsumer<T> throws when
-                // the §6.2 scan registered no handler, which no backoff
-                // repairs, and §9.4 wants a misconfigured endpoint loud rather
-                // than quick.
+                // Nothing excluded: no backoff repairs a missing handler, and §9.4 wants that loud, not quick.
                 e.UseMessageRetry(r => RetryPolicy.Standard(r));
 
-                // Inbox before the in-memory outbox (§9.8): filters added first
-                // are outermost, and the outbox flushes after the inner
-                // pipeline returns, so the inbox row is the last write.
+                // Inbox before the in-memory outbox (§9.8): the first filter is outermost, and the outbox flushes
+                // after the inner pipeline returns, so the inbox row is the last write.
                 e.UseConsumeFilter(typeof(InboxFilter<>), context);
                 e.UseInMemoryOutbox(context);
 

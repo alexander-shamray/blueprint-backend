@@ -3,14 +3,8 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace Catalog.Infrastructure.Persistence.Migrations;
 
 /// <summary>
-/// §8.5's marker gains a <c>SYSDATETIMEOFFSET()</c> default on
-/// <c>CommittedAt</c>, generated from
-/// <see cref="IdempotencyMarkerConfiguration"/> on
-/// <c>AddIdempotencyMarkers</c>' terms, which argues the default's why
-/// (ADR-038); only this file's dress is hand-authored, and the
-/// <c>.Designer.cs</c> and snapshot are untouched. The outbox and the inbox
-/// are deliberately not altered the same way: their windows are
-/// housekeeping, where this one purges the row that refuses a duplicate.
+/// §8.5's marker gains a <c>SYSDATETIMEOFFSET()</c> default on <c>CommittedAt</c> (ADR-038), generated from
+/// <see cref="IdempotencyMarkerConfiguration"/>; the outbox and inbox, whose windows are housekeeping, are left alone.
 /// </summary>
 public partial class IdempotencyMarkerCommittedAtDefault : Migration
 {

@@ -2,20 +2,8 @@ using Common.Domain;
 
 namespace Catalog.Domain.Common;
 
-/// <summary>
-/// §5.3's value object, in Catalog's own namespace. Not shared with any other
-/// service: §4.1 rejects the shared kernel an assembly of common domain types
-/// would become, and §3.1's whole argument is that a term must not share a
-/// class across contexts. The always-valid principle applies — the constructor
-/// is private and <see cref="Of"/> is the only way in, so no code downstream
-/// checks for an invalid instance.
-/// </summary>
-/// <remarks>
-/// One hole the language keeps open: a struct always has a default, so
-/// <c>default(Money)</c> exists with a null <see cref="Currency"/> despite
-/// the private constructor. Aggregates guard their own boundary against it —
-/// <c>Product.Publish</c> refuses a default price — because a struct cannot.
-/// </remarks>
+/// <summary>§5.3's always-valid value object, local to Catalog since §4.1 rejects a shared kernel.</summary>
+/// <remarks><c>default(Money)</c> has a null <see cref="Currency"/>, so aggregates guard against it.</remarks>
 public readonly record struct Money
 {
     public decimal Amount { get; }
@@ -33,9 +21,7 @@ public readonly record struct Money
         if (amount < 0)
             throw new DomainException("Money cannot be negative.");
 
-        // Letters as well as length: "1$?" is three characters and no
-        // currency, and a guard that admits it makes the exception message a
-        // stricter claim than the type keeps.
+        // Letters as well as length, or the exception message claims more than the type keeps.
         if (currency is not { Length: 3 } || !currency.All(char.IsAsciiLetter))
             throw new DomainException("Currency must be a 3-letter currency code.");
 
@@ -52,9 +38,7 @@ public readonly record struct Money
 
     public static Money operator *(Money money, int quantity)
     {
-        // Without this guard the operator is a back door past Of: a negative
-        // quantity would construct the negative Money the factory refuses,
-        // and the always-valid claim above would be false.
+        // Without this guard the operator is a back door past Of's refusal of a negative amount.
         if (quantity < 0)
             throw new DomainException("Money cannot be multiplied by a negative quantity.");
 
