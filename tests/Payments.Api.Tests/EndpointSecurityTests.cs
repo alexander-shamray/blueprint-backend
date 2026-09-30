@@ -28,8 +28,7 @@ public class EndpointSecurityTests(HostSmokeTests.UnreachableInfrastructureFacto
     [Fact]
     public async Task The_liveness_probe_still_answers_without_a_token()
     {
-        // Keeps the test above from passing on a host that refuses everything; the liveness probe is Payments' one
-        // anonymous path (§13.5).
+        // Keeps the test above from passing on a host that refuses everything.
         using HttpClient client = factory.CreateClient();
 
         HttpResponseMessage response =
