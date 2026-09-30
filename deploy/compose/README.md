@@ -218,16 +218,17 @@ apply the override (§14.1):
 docker compose -f deploy/compose/docker-compose.yml -f deploy/compose/docker-compose.infra-only.yml up -d --wait
 ```
 
-The host process reads none of the `environment:` blocks above, so the three
-keys a service refuses to start without have to reach it another way — the
-runtime connection string, the bus, and the authority `AddJwtAuthentication`
-reads eagerly (§11.3). Same values, host names in place of service names:
+The host process reads none of the `environment:` blocks above, so every key
+a service refuses to start without, which §14.1 names, has to reach it
+another way. Same values, host names in place of service names:
 
 ```bash
 export ASPNETCORE_ENVIRONMENT=Development
 export ConnectionStrings__Catalog='Server=localhost;Database=Catalog;User Id=sa;Password=Local_Dev_Pa55w0rd!;TrustServerCertificate=True'
 export ConnectionStrings__RabbitMq='amqp://catalog-svc:local-dev-catalog@localhost:5672'
 export Identity__Authority='http://localhost:8080/realms/commerce'
+export ConnectionStrings__RedisCache='localhost:6379'
+export ConnectionStrings__RedisCoordination='localhost:6380'
 # Catalog and Ordering each pin their own ports, and on the host both have to
 # move. Each declares two Kestrel endpoints — 8080 for REST and a second for
 # its gRPC surface, because a cleartext port cannot serve HTTP/1.1 and h2c at
@@ -258,6 +259,8 @@ export ASPNETCORE_ENVIRONMENT=Development
 export ConnectionStrings__Ordering='Server=localhost;Database=Ordering;User Id=sa;Password=Local_Dev_Pa55w0rd!;TrustServerCertificate=True'
 export ConnectionStrings__RabbitMq='amqp://ordering-svc:local-dev-ordering@localhost:5672'
 export Identity__Authority='http://localhost:8080/realms/commerce'
+export ConnectionStrings__RedisCache='localhost:6379'
+export ConnectionStrings__RedisCoordination='localhost:6380'
 # The same two exports Catalog needs, for the same reason and at its own
 # numbers: 5101 is the port §14.1 already allocates this service, and 8082
 # rather than 8081 because 8081 is where the block above puts Catalog's h2c
