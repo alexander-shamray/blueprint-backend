@@ -59,7 +59,6 @@ from scaffold.render import (
     update_env_example,
     update_infra_only,
     update_observability_meters,
-    update_ports_readme,
     update_solution,
 )
 from scaffold.verify import SCAN_REASONS, TOOL_ROOT, update_allowed_secrets
@@ -213,7 +212,7 @@ def plan(repo_root: Path, name: str, port: int | None, migration_id: str,
     if host == API_HOST and port is None:
         raise ScaffoldError(
             "--port is required for an API render: a port is an allocation recorded in "
-            "§14.1 and deploy/compose/README.md")
+            "§14.1 and in the service's own Compose unit")
 
     # And the same test against every service already here, because the
     # template is only the first entry in that set. After Ordering exists,
@@ -327,7 +326,6 @@ def plan(repo_root: Path, name: str, port: int | None, migration_id: str,
         COMPOSE_INDEX: update_compose(repo_root, names, port),
         "deploy/compose/docker-compose.infra-only.yml": update_infra_only(repo_root, names),
         "deploy/compose/.env.example": update_env_example(repo_root, names),
-        "deploy/compose/README.md": update_ports_readme(repo_root, names, port),
         "deploy/compose/rabbitmq/definitions.json":
             update_broker_definitions(repo_root, names),
         OBSERVABILITY: update_observability_meters(repo_root, names),
@@ -383,8 +381,8 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help=(
             "the host port the API publishes. Required for an API render, refused for a "
-            "worker: a port is an allocation recorded in §14.1 and "
-            "deploy/compose/README.md, and a script that guessed one would quietly "
+            "worker: a port is an allocation recorded in §14.1 and in the service's "
+            "own Compose unit, and a script that guessed one would quietly "
             "disagree with a printed chapter"
         ),
     )

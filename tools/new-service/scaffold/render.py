@@ -1068,17 +1068,7 @@ def render_service_compose(repo_root: Path, names: Names, port: int | None) -> s
                 )
             seen[key.casefold()] = key
 
-    header = (
-        f"# {names.pascal}'s deployment (§14.1), included by {COMPOSE_INDEX}.\n"
-        f"# Rendered by tools/new-service from the template service's unit file: the\n"
-        f"# pair rule below belongs to the chapter, and the file boundary belongs to\n"
-        f"# docs/change-locality.md, so a PR for {names.pascal} edits this file and\n"
-        f"# never another service's.\n"
-        f"#\n"
-        f"# `include` resolves a relative path against the directory of the file that\n"
-        f"# declares it, so the repository root — the build context — is three levels up\n"
-        f"# from here.\n"
-    )
+    header = f"# {names.pascal}: the pair tools/new-service renders from the template's unit (§4.5).\n"
     return restore(header + block, newline)
 
 
@@ -1220,31 +1210,3 @@ def update_observability_meters(repo_root: Path, names: Names) -> str:
     # Before the blank line, so the new meter joins the service-prefixed
     # group instead of opening the shared one (§4.1's order, §13.2's export).
     return restore(text.replace("\n" + SHARED_METERS, padded + "\n" + SHARED_METERS), newline)
-
-
-def update_ports_readme(repo_root: Path, names: Names, port: int | None) -> str:
-    """One row in the application-services table — the keyboard inventory (§14.1)."""
-    text, newline = read(repo_root, "deploy/compose/README.md")
-    header = "| Service | Host port(s) | Notes |\n"
-    require_once(text, header, "deploy/compose/README.md")
-
-    start = text.index(header)
-    end = text.index("\n\n", start) + 1
-    # A worker's row is written rather than omitted for the reason §15.3
-    # writes `service.enabled: false` down: an absence is not a decision
-    # anybody can read.
-    row = (
-        f"| {names.pascal} worker | — (no published port) | "
-        f"§3.2 gives it no API; §13.5's `/health/live` and `/health/ready` are its "
-        f"only listener and answer inside the container |\n"
-        if port is None
-        else f"| {names.pascal} API | http://localhost:{port} | "
-             # The token note is not decoration: ADR-030 fallback policy covers
-             # MapOpenApi, so a rendered service document answers 401 to an
-             # anonymous request exactly as Catalog and Ordering do. A row
-             # that omitted it would re-introduce the claim the README was
-             # corrected to remove, once per scaffolded service.
-             f"`/health/live`, `/health/ready`, "
-             f"`/openapi/v1.json` (needs a token — see below) |\n"
-    )
-    return restore(text[:end] + row + text[end:], newline)
