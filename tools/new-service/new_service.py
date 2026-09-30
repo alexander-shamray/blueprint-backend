@@ -419,7 +419,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     if args.verify is not None:
-        if args.name is not None or args.port is not None or args.worker or args.migration_id:
+        if args.name is not None or args.port is not None or args.worker or args.migration_id is not None:
             parser.error("--verify reads the service and its arguments from the commit; pass neither")
         try:
             report, failures = reproduce.verify(args.repo_root, args.verify)
