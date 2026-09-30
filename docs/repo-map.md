@@ -214,14 +214,10 @@ deploy/canary/               §15.5's rollout — the ladder as JSON, the weight
                              Prometheus. It reaches no cluster; the deciding
                              is tested and the acting is not
 tools/new-service/           §4.5's scaffold — see the notes below
-deploy/compose/              §14.1's model: `docker-compose.yml` is an index
-                             that includes `infrastructure.yml` and one file
-                             per deployable unit under `services/`, so a
+deploy/compose/              §14.1's model, laid out in its `README.md`: one
+                             baseline and one file per deployable unit, so a
                              service's environment is a file its own PR owns.
-                             One application pair per service, and the gateway
-                             on 5000 has no migrator beside it because the edge
-                             owns no database. `rabbitmq/` is the one
-                             infrastructure
+                             `rabbitmq/` is the one infrastructure
                              image that is BUILT — ADR-021's delayed-exchange
                              plugin — so its build rides on the compose smoke.
                              It also carries `definitions.json`, the

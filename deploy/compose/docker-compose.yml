@@ -29,12 +29,8 @@ include:
   # so splitting it per service would divide it along a line that is not there.
   - infrastructure.yml
 
-  # One file per deployable unit. A service arriving adds a file and this one
-  # line, and touches nothing already written, which is the whole of why the
-  # split exists. The gateway and the BFF are hosts rather than services —
-  # docs/change-locality.md section 3 says so — and they are here for the
-  # reason `classes.yml` gives them a class at all: a host owns its deployment
-  # exactly as a service owns its own.
+  # One file per deployable unit, a host's as much as a service's; README.md
+  # lists them.
   - services/catalog.yml
   - services/gateway.yml
   - services/ordering.yml

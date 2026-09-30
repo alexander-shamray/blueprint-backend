@@ -1,11 +1,4 @@
-# The gateway's deployment (§14.1), included by
-# deploy/compose/docker-compose.yml. A host rather than a service —
-# docs/change-locality.md section 3 draws that line — and it owns its
-# deployment the way a service owns its own.
-#
-# `include` resolves a relative path against the directory of the file that
-# declares it, so the repository root — the build context — is three levels up
-# from here.
+# The gateway: the single entry point for external clients (§10.1).
 services:
   # The single entry point for external clients (§10.1). No migrator beside it
   # and no pair rule: the gateway owns no database, so there is nothing to

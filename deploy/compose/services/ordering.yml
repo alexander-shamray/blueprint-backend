@@ -1,13 +1,4 @@
-# Ordering's deployment (§14.1), included by
-# deploy/compose/docker-compose.yml. The migrator and the service below are
-# §14.1's pair rule, argued where the template carries it — services/catalog.yml
-# — rather than a second time here. The file boundary belongs to
-# docs/change-locality.md, so an Ordering PR edits this file and never another
-# service's.
-#
-# `include` resolves a relative path against the directory of the file that
-# declares it, so the repository root — the build context — is three levels up
-# from here.
+# Ordering: /v1/orders, where no route is anonymous (ADR-030).
 services:
   ordering-migrator:
     build:
