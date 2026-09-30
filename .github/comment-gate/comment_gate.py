@@ -863,16 +863,22 @@ def added_lines(diff):
 def tree(roots):
     """Every line of the tracked files under the roots, as the tree holds them."""
     try:
-        listed = _git("ls-files", "-z", "--", *roots).decode("utf-8",
-                                                             errors="strict")
-        paths = [p for p in listed.split("\0") if p and reader_for(p)]
-        if not paths:
-            raise Unreadable(f"no file it reads under {' '.join(roots)}")
+        # Paths from the repository root, whatever the working directory:
+        # the workflow reader and the harness exemption both match on them.
+        top = Path(_git("rev-parse", "--show-toplevel").decode().strip())
+        paths = set()
+        for root in roots:
+            listed = _git("ls-files", "-z", "--full-name", "--",
+                          root).decode("utf-8", errors="strict")
+            read = [p for p in listed.split("\0") if p and reader_for(p)]
+            if not read:
+                raise Unreadable(f"no file it reads under {root}")
+            paths.update(read)
         found = []
         totals = {}
         for path in sorted(paths):
             try:
-                text = Path(path).read_bytes().decode("utf-8-sig")
+                text = (top / path).read_bytes().decode("utf-8-sig")
             except UnicodeDecodeError:
                 raise Unreadable(f"{path} is not UTF-8") from None
             try:
