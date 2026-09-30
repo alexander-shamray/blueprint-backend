@@ -94,8 +94,8 @@ public static class DependencyInjection
             sp.GetRequiredService<OutboxTable>()));
         services.AddSingleton<OutboxMetrics>();
 
-        // Instruments appear on first resolve, and nothing injects a metrics class (§6.2); registered before the
-        // bus and the dispatcher, so they exist before the first message.
+        // Resolves the metrics classes at start, before the bus and the dispatcher, so every instrument
+        // exists before the first message (§13.6).
         services.AddHostedService<MetricsInitialiser>();
 
         // §8's two connections, one call by design (§8.2). Both strings are read eagerly, so a missing key
