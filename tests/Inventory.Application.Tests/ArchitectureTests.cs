@@ -47,7 +47,6 @@ public class ArchitectureTests
         unexpected.ShouldBeEmpty($"not on §4.2's list: {string.Join(", ", unexpected)}");
     }
 
-    // Subsumed by the allow-list above and kept, because each names its rule in its own failure message.
     [Fact]
     public void Application_does_not_depend_on_ef_core()
     {
