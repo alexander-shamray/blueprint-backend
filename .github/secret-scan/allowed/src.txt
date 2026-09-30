@@ -7,12 +7,3 @@
 #
 # covers: src/
 
-
-# Comments about the redactor.
-#
-# Section 13.4's redactor is written to find a shape, so its source comments
-# carry the shape they describe. docs.txt argues the whole of this residue;
-# these are the two sites of it that are code.
-
-src/BuildingBlocks/Common.Web/SensitiveDataRedactor.cs | connection-string-password | 6d1d272cf2a9 | A comment showing the shape the redactor is written to find.
-src/BuildingBlocks/Common.Web/SensitiveKeys.cs | connection-string-password | c0f68a414c0e | A doc comment arguing that the separator may carry spaces.
