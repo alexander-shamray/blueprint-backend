@@ -9,7 +9,7 @@ using Microsoft.Extensions.Primitives;
 namespace Web.Bff.Tests;
 
 /// <summary>§12.4's test scheme: callers state themselves in headers for the group's authorization.</summary>
-/// <remarks>Grants permissions under <see cref="PermissionClaim.Type"/>, the claim the policies read.</remarks>
+/// <remarks>Grants permissions under <see cref="PermissionClaim.Type"/>.</remarks>
 public sealed class TestAuthHandler(
     IOptionsMonitor<AuthenticationSchemeOptions> options,
     ILoggerFactory logger,
