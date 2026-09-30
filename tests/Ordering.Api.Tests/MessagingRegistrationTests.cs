@@ -36,7 +36,7 @@ public class MessagingRegistrationTests
                 : [new KeyValuePair<string, string?>("ConnectionStrings:RabbitMq", rabbitConnectionString)])
             .Build();
 
-    /// <summary>Stated, since MassTransit's 1.2-second default is a developer machine's budget.</summary>
+    /// <summary>Stated, since MassTransit's default is a developer machine's budget.</summary>
     private static readonly TimeSpan HarnessInactivityTimeout = TimeSpan.FromSeconds(30);
 
     /// <summary>Larger than the inactivity bound, so the two never race to end a wait.</summary>
