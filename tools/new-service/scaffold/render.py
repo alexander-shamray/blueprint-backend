@@ -1202,7 +1202,7 @@ OBSERVABILITY = "src/BuildingBlocks/Common.Web/ObservabilityExtensions.cs"
 # meter, because a service's meters are listed in §4.1's order and the
 # template's sits at the top of that list. Read rather than assumed: a list
 # this script cannot find is a building block that has moved.
-SHARED_METERS = "                // Shared names, not service-prefixed: every service emits the\n"
+SHARED_METERS = "                // Shared names, not service-prefixed: the service.name resource attribute separates them.\n"
 
 
 def update_observability_meters(repo_root: Path, names: Names) -> str:
