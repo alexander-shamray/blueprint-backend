@@ -134,7 +134,7 @@ the churn it produces is the same, and it was measured in
   shorten or delete it. Never append the correction, and never explain in
   the comment why the previous wording was wrong — that is the sentence the
   next review finds stale. A round whose only findings are refused under
-  this rule changes nothing, and the loop counts it as clean.
+  this rule changes nothing.
 
 What this leaves is short: `Program.cs` says `// §13.2` beside the call that
 implements it, a timeout says in one line why it is longer than its
