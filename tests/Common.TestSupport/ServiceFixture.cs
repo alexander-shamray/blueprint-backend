@@ -336,7 +336,7 @@ public abstract class ServiceFixture<TFactory, TEntryPoint, TDbContext> : IAsync
             .ToListAsync(TestContext.Current.CancellationToken);
     }
 
-    /// <summary>Writes rows directly, for tests about the dispatcher rather than the staging.</summary>
+    /// <summary>Writes outbox rows directly, past the staging.</summary>
     public async Task StageOutboxAsync(params OutboxMessage[] rows)
     {
         await using AsyncServiceScope scope = Factory.Services.CreateAsyncScope();
