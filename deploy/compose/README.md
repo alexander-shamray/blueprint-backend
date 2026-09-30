@@ -70,7 +70,7 @@ are where its host ports are allocated, so this lists every unit, each
 container it declares and what that container publishes:
 
 ```bash
-grep -E '^# |^  [a-z-]+:$|ports:' deploy/compose/services/*.yml
+grep -E '^# |^  [a-z-]+:|ports:' deploy/compose/services/*.yml
 ```
 
 A container with no `ports:` line publishes nothing, and a simulator's
