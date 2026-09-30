@@ -15,7 +15,7 @@ This file is that tree's operational reference, on
 |---|---|
 | `realm.yml`, `check` | `deploy/compose/keycloak/realm-export.json` — [§14.1](../../docs/backend-architecture/14-local-development.md)'s Compose realm, on every change to it, to `AuthenticationExtensions.cs` or to this tree |
 | `deploy.yml` | the realm a deployment is about to be rolled onto — **derived from the chart**, fetched by `read_admin.py`, and judged before the rollout changes anything |
-| `realm.yml`, `deployed` | the realm every deployed release points at, **between rollouts** — the same three calls, hourly and on `workflow_dispatch`, over every workload in `deploy/canary/canary.json` ([ADR-043](../../docs/backend-architecture/adr/ADR-043-the-deployed-realm-is-checked-between-rollouts.md)) |
+| `realm.yml`, `deployed` | the realm every deployed release points at, **between rollouts** — the same three calls, hourly and on `workflow_dispatch`, over every workload `deploy/canary/deployables/` describes ([ADR-043](../../docs/backend-architecture/adr/ADR-043-the-deployed-realm-is-checked-between-rollouts.md)) |
 
 **One predicate judges both subjects**, because a Keycloak realm export and the
 admin API's `RealmRepresentation` are the same document — the export is that

@@ -356,10 +356,10 @@ Each of the Helm filter's outside paths is an input `smoke.sh` actually reads:
   literals on the stated grounds that "the host is the Kubernetes Service
   name" — so renaming a destination without them is a green pull request that
   breaks the next deploy;
-- each service's `appsettings.json` that declares the Kestrel endpoints its
-  Service forwards to — Catalog's and Ordering's — so moving an h2c listener
-  off 8081 would otherwise leave a Service pointing at a closed port with every
-  assertion still passing;
+- each deployable's source, named by its descriptor, and the
+  `appsettings.json` in it that declares the Kestrel endpoints its Service
+  forwards to — so moving an h2c listener off 8081 would otherwise leave a
+  Service pointing at a closed port with every assertion still passing;
 - `Common.Web`'s `HealthCheckExtensions.cs`, which maps the three probe
   paths — the charts are the manifest `Common.Web.Tests`'
   `HealthEndpointTests` warns about by name, "a manifest no compiler reads",
@@ -368,9 +368,10 @@ Each of the Helm filter's outside paths is an input `smoke.sh` actually reads:
 - `.gitattributes`, which pins this tree to LF — without it a CRLF template
   renders a CR onto every line and the script's anchored greps match nothing on
   a Linux runner;
-- `deploy/canary/canary.json`, which names a chart per workload — so a rollout
-  can only target a chart that exists and renders a canary track, and the two
-  halves of that agreement fail from either side rather than at deploy time.
+- `deploy/canary/`, whose descriptors are the charts the script renders and
+  what each is held to — so a rollout can only target a chart that exists and
+  renders a canary track, and the two halves of that agreement fail from
+  either side rather than at deploy time.
 
 **This passage is an argument, not an inventory, and the difference is what
 finally stopped it drifting.** It said "two files", and was made wrong by the
@@ -602,6 +603,14 @@ the exact failure the migration hook exists to prevent.
 
 Each service gets a Helm chart; an umbrella chart deploys the platform.
 
+**A deployable is described once**, by its descriptor under
+`deploy/canary/deployables/`, and everything that needs the list of
+deployables reads it there: the rollout's dispatch and `realm.yml`'s scheduled
+job through `canary.py workloads`, the canary's plan, and
+`deploy/helm/smoke.sh`'s cases. None of them lists a deployable, and neither
+does this chapter; [`deploy/canary/README.md`](../../deploy/canary/README.md)
+owns the schema.
+
 > **One release owns a RESOURCE, and that is what the two install modes
 > cannot share.** Helm stamps `meta.helm.sh/release-name` onto everything it
 > creates, and these charts render fixed names — the Service name is routing
@@ -830,17 +839,17 @@ container form of an unused registration — and it is why no chart carried the
 two Redis connection strings for as long as nothing called
 `AddRedisConnections`.
 
-**Catalog, Ordering and Inventory now do**, because §8.5's
+**The charts whose host calls it now do**, because §8.5's
 `IdempotencyBehavior` claims a `{service}:idem:` key before any protected
 command runs, so each of those charts carries a `redis:` block on `broker`'s
 shape — one Secret, but two distinct keys where the broker needs one — and
-§15.4's column is unconditional for them. The gateway, the BFF, Payments and
-Shipping declare `redis.enabled: false` — written down rather than omitted,
-because a capability is a claim a chart makes rather than one to infer from a
-missing key.
+§15.4's column is unconditional for them. Every other chart declares
+`redis.enabled: false` — written down rather than omitted, because a
+capability is a claim a chart makes rather than one to infer from a missing
+key.
 
-Neither list is restated anywhere else, and `deploy/helm/smoke.sh` is what
-holds both to the charts: it reads each service's source for a call to
+Which charts those are is not listed here. `deploy/helm/smoke.sh` reads each
+deployable's source, named by its descriptor, for a call to
 `AddRedisConnections` and asserts that chart declares `redis` — in **both**
 directions, so a chart that stops calling it and keeps the block fails too.
 
@@ -1416,7 +1425,7 @@ on fire.
 **"Error rate and p99" are read per signal, and a workload is judged on every
 signal it receives:
 [ADR-047](adr/ADR-047-the-canary-judges-each-workload-on-the-signals-it-receives.md).**
-A workload declares its signals in `deploy/canary/canary.json` — its HTTP
+A workload declares its signals in its descriptor (§15.3) — its HTTP
 requests less the health probes, its MassTransit consumes, its saga messages,
 or any of them together — and each must be observed, reach the plan's minimum
 sample on its own and pass, or the step rolls back. A service that registers a

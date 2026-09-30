@@ -212,7 +212,10 @@ deploy/canary/               §15.5's rollout — the ladder as JSON, the weight
                              arithmetic and the promote/rollback verdict as
                              tested stdlib Python, and one file that reads
                              Prometheus. It reaches no cluster; the deciding
-                             is tested and the acting is not
+                             is tested and the acting is not. `deployables/`
+                             is one descriptor per deployable, the list the
+                             workflows and the Helm smoke run read, beside
+                             the canary because its row was the first
 tools/new-service/           §4.5's scaffold — see the notes below
 deploy/compose/              §14.1's model, laid out in its `README.md`: one
                              baseline and one file per deployable unit, so a

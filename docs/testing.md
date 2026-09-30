@@ -222,10 +222,12 @@ pulled, so an image build rides on the `up`.
 **`HELM=` is an override, not a gate run.** The chart gate runs
 `helm dependency update` itself — `file://` dependencies resolve from disk, so
 there is no network step and no chart repository — and this only tells it
-where the executable is when `helm` is not on `PATH`:
+where the executable is when `helm` is not on `PATH`. `PYTHON=` does the same
+for the interpreter that reads its cases out of the deployables' descriptors,
+and on Windows it is `py -3.12`, because `python3` there is the Store's stub:
 
 ```bash
-HELM=/path/to/helm bash deploy/helm/smoke.sh
+HELM=/path/to/helm PYTHON="py -3.12" bash deploy/helm/smoke.sh
 ```
 
 ## Coverage
