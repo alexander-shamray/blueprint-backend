@@ -79,10 +79,10 @@ clean), and the stale restatements `docs/change-locality.md` §2 leaves in
 place — a pre-existing count, "since PR-NN" or second copy of a value that
 this branch did not touch, where the owner site is already correct.
 
-Raise no finding whose subject is a comment's wording, completeness,
-emphasis or argument: `docs/style-guide.md`'s *Comments* section accepts a
-finding against a comment only when the comment states something false,
-and closes it by cutting.
+Raise no finding that asks a true comment keeping `docs/style-guide.md`'s
+*Comments* rules to be reworded, completed or expanded: that section
+accepts a finding against a comment only when the comment is false or
+breaks one of its rules, and closes it by cutting.
 
 ---
 
@@ -106,9 +106,8 @@ and closes it by cutting.
        the file already said so, or the user has said so in this conversation)
      - **false positive** — original finding was wrong; only if re-verification
        shows the claim never held / no longer applies as a defect. An item
-       whose subject is a comment's wording, completeness, emphasis or
-       argument, rather than a false statement, is one: the rule above
-       refuses it
+       that asks a true comment keeping the *Comments* rules to be
+       reworded, completed or expanded is one: the rule above refuses it
 3. **Do not invent new issues** in recheck mode unless verifying a listed item
    surfaces a **direct regression of that item** (same claim, still broken in a
    new place). A full sweep for new findings is `full`, not recheck.

@@ -156,7 +156,8 @@ here because they have to be true before anyone opens the guide:
   budget**: a summary is one sentence, a `<remarks>` is cited and four lines,
   a block is five. The guide's *Comments* section is the rule, it reaches XML
   docs, docstrings and configuration comments alike, and a finding against a
-  comment is accepted only when the comment is false, and closed by cutting.
+  comment is accepted only when the comment is false or breaks one of those
+  rules, and closed by cutting.
 
 ## Working in this repo
 

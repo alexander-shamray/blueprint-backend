@@ -197,11 +197,11 @@ So for each finding, before changing anything:
   quoted a second time where the owner site is already correct is asking
   for the tour `docs/change-locality.md` §2 withdraws — reject it, citing
   that section.
-- **A finding against a comment is judged for falsehood only.** One whose
-  subject is a comment's wording, completeness, emphasis or argument is
-  refused under `docs/style-guide.md`'s *Comments* section, citing it; one
-  showing that a comment states something false is accepted, and the fix
-  is to cut.
+- **A finding against a comment is judged by the comment rules, never by
+  taste.** One asking a true comment that keeps `docs/style-guide.md`'s
+  *Comments* rules to be reworded, completed or expanded is refused, citing
+  that section; one showing a comment that is false or breaks one of those
+  rules is accepted, and the fix is to cut.
 
 ## Classify each finding
 
@@ -209,7 +209,7 @@ So for each finding, before changing anything:
 |---|---|
 | **Accept** | Real defect. Fix it at the owner site and every site inside the touch set. |
 | **Accept, wider** | Real, and the same shape exists elsewhere. Inside the touch set, fix it and say how many. Outside the set but inside the class's tree set, add the path to the row with its reason and fix it (`docs/change-locality.md` §3). Outside the class, file an issue rather than widening the diff. |
-| **Reject — house rule** | Contradicts a settled choice, asks for a restatement `docs/change-locality.md` §2 forbids, or asks a comment that is not false to say something else (`docs/style-guide.md`'s *Comments*). Name the rule. |
+| **Reject — house rule** | Contradicts a settled choice, asks for a restatement `docs/change-locality.md` §2 forbids, or asks a true comment that keeps `docs/style-guide.md`'s *Comments* rules to say something else. Name the rule. |
 | **Reject — wrong** | The claim does not hold. Say what you checked. |
 | **Ask** | Genuine design ambiguity. Surface it; do not pick silently. |
 

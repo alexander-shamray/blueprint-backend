@@ -127,11 +127,11 @@ the churn it produces is the same, and it was measured in
   write it with `/new-adr` and cite it.
 - **No emphasis.** No `**bold**`, `<b>`, capitals or `!` for stress in a
   comment. It is read once, beside the code, by someone who is not skimming.
-- **A finding against a comment is accepted only for falsehood, and closed
-  by cutting.** A review finding whose subject is a comment's wording,
-  completeness, emphasis or argument is refused; one whose subject is a
-  comment stating a fact that is false is accepted, and the fix is to
-  shorten or delete it. Never append the correction, and never explain in
+- **A finding against a comment is accepted when the comment is false or
+  breaks a rule above, and closed by cutting.** A review finding that asks
+  a true comment inside these rules to be reworded, completed or expanded
+  is refused. An accepted one is fixed by shortening or deleting the
+  comment. Never append the correction, and never explain in
   the comment why the previous wording was wrong — that is the sentence the
   next review finds stale. A round whose only findings are refused under
   this rule changes nothing.

@@ -225,12 +225,13 @@ Each rule names its owner; this file cites and does not restate.
   gate fails a `<remarks>` that cites no section, ADR or `cref`. The
   ceiling is set where a cited sentence fits and an argument does not, so
   the argument goes where the guide already sends it — an ADR.
-- **A review finding against a comment is accepted only for falsehood.**
-  The review commands — `review-copilot.md`, `review-branch.md`, the
-  adjudicator `/ship`'s Grok triage dispatches, and `/bug-sweep`'s auditor
-  — refuse a finding whose subject is a comment's wording, completeness,
-  emphasis or argument, and accept one whose subject is a comment stating a
-  fact that is false. The one fix for an accepted finding is to cut. A
+- **A review finding against a comment is accepted only for falsehood or
+  a broken rule.** The review commands — `review-copilot.md`,
+  `review-branch.md`, the adjudicator `/ship`'s Grok triage dispatches, and
+  `/bug-sweep`'s auditor — refuse a finding that asks a true comment inside
+  the style guide's rules to be reworded, completed or expanded, and accept
+  one showing a comment that is false or breaks one of those rules. The one
+  fix for an accepted finding is to cut. A
   round whose only findings are refused changes nothing; each loop judges
   the round after it on its own terms.
 - **A round's touch set is the finding's own sites.** The primer's
