@@ -1,4 +1,4 @@
-# Catalog: /v1/catalog/products (§4.1), and the scaffold's template (§4.5).
+# Catalog: /v1/catalog/products (§10.2), and the scaffold's template (§4.5).
 services:
   # §14.1's pair rule: a {service}-migrator one-shot plus the service itself,
   # gated on `condition: service_completed_successfully` — every service owns
