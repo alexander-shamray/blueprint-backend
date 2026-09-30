@@ -7,18 +7,12 @@ public sealed record LedgerOutcome(IReadOnlyList<ReservedLevel> Levels, IReadOnl
 
 public interface IStockLedger
 {
-    /// <summary>
-    /// Runs §7.3's statement per line in ProductId order under a savepoint;
-    /// rolls back to it when any line is short. Never partial.
-    /// </summary>
+    /// <summary>§7.3's statement per line under a savepoint, rolled back to when any line is short.</summary>
     Task<LedgerOutcome> TryTakeAsync(IReadOnlyList<ReservationLine> lines, CancellationToken ct);
 
-    /// <summary>Returns each line to Available with no guard. Levels after.</summary>
+    /// <summary>Returns each line to Available with no guard, and the levels after.</summary>
     Task<IReadOnlyList<ReservedLevel>> GiveBackAsync(IReadOnlyList<ReservationLine> lines, CancellationToken ct);
 
-    /// <summary>
-    /// Moves each line's Reserved down with no effect on Available. A line
-    /// short of what it holds is a ledger fault, not a business outcome.
-    /// </summary>
+    /// <summary>Moves Reserved down only; a short line is a ledger fault, not a business outcome.</summary>
     Task FulfilAsync(IReadOnlyList<ReservationLine> lines, CancellationToken ct);
 }

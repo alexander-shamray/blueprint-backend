@@ -11,13 +11,8 @@ public sealed class SetOnHandHandler(IStockItemRepository items, TimeProvider cl
     {
         var product = new ProductId(command.ProductId);
 
-        // Ensure, then load, then set: the row exists before it is read, so a
-        // first write and a stock-take are one code path. EnsureAsync's lock
-        // is held to the commit whether the row existed or not, so two admin
-        // writes, or an admin write and a ledger statement, serialise on the
-        // row rather than race — the second waits, then sees the first's
-        // commit. The rowversion is EF's own guard on the update and fires
-        // for nothing this path can meet.
+        // Ensure, then load, then set: one path for a first write and a stock-take, and EnsureAsync's lock, held to
+        // the commit, serialises admin writes and ledger statements on the row.
         DateTimeOffset now = clock.GetUtcNow();
         await items.EnsureAsync(product, now, ct);
         StockItem item = await items.GetAsync(product, ct)

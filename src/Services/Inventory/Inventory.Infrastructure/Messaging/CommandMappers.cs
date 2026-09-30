@@ -16,9 +16,7 @@ public sealed class ReserveStockMapper : ICommandMessageMapper<ReserveStock, Res
         if (message.Lines is null || message.Lines.Count == 0)
             throw new ContractMappingException($"No lines on {nameof(ReserveStock)}.");
 
-        // A null element is a malformed payload, and reading its members
-        // would throw NullReferenceException — a fault the endpoint retries
-        // where this exception is the one it does not.
+        // Refused here, since reading a null line's members would throw a fault the endpoint retries.
         if (message.Lines.Any(l => l is null))
             throw new ContractMappingException($"A null line on {nameof(ReserveStock)}.");
 
@@ -28,15 +26,11 @@ public sealed class ReserveStockMapper : ICommandMessageMapper<ReserveStock, Res
                 $"A quantity outside the contract's bounds on {nameof(ReserveStock)}.");
         }
 
-        // An empty product id is a malformed payload, not an unknown product:
-        // let through, it would reach the ledger, affect no row, and be
-        // published as an out-of-stock decision about a product that is not one.
+        // Malformed, not unknown: let through, an empty product id would be published as out of stock.
         if (message.OrderId == Guid.Empty || message.Lines.Any(l => l.ProductId == Guid.Empty))
             throw new ContractMappingException($"An empty identifier on {nameof(ReserveStock)}.");
 
-        // Every line is a statement under a row lock in one transaction, so a
-        // payload longer than any order can be is refused before it holds a
-        // lock rather than starving the queue while it runs them.
+        // Each line is a statement under a row lock, so an oversized payload is refused before it holds one.
         if (message.Lines.Count > OrderLimits.MaxLines)
             throw new ContractMappingException($"More lines than an order can carry on {nameof(ReserveStock)}.");
 
@@ -53,12 +47,8 @@ public sealed class ReleaseStockMapper : ICommandMessageMapper<ReleaseStock, Rel
 {
     public ReleaseStockCommand Map(ReleaseStock message)
     {
-        // A malformed payload, the same refusal ReserveStockMapper makes for
-        // an empty identifier: on this path a validator failure propagates
-        // out of CommandConsumer as a fault, and spends RetryPolicy.Standard's
-        // whole ladder (RetryPolicy.RetryLimit retries) on it before the
-        // error queue, where a domain rejection is acked, counted and logged
-        // on the first.
+        // ReserveStockMapper's refusal: a validator failure here would fault and spend RetryPolicy's whole ladder,
+        // where a domain rejection is acked on the first attempt (§9.8).
         if (message.OrderId == Guid.Empty)
             throw new ContractMappingException($"An empty identifier on {nameof(ReleaseStock)}.");
 

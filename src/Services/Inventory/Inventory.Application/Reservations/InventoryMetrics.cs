@@ -2,10 +2,7 @@ using System.Diagnostics.Metrics;
 
 namespace Inventory.Application.Reservations;
 
-/// <summary>
-/// §13.3's business-shaped counter. Fired by the projection that claims the
-/// row, never by the handler that writes it.
-/// </summary>
+/// <summary>§13.3's business-shaped counter, fired by the projection that claims the row, not the handler.</summary>
 public sealed class InventoryMetrics
 {
     private readonly Counter<long> _unreserved;

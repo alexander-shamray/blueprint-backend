@@ -2,12 +2,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace Inventory.Infrastructure.Persistence.Migrations;
 
-/// <summary>
-/// §5's second aggregate, generated from <see cref="ReservationConfiguration"/>
-/// — the configuration is the source of truth and only this file's dress is
-/// hand-authored (file-scoped namespace, this comment). The <c>.Designer.cs</c>
-/// and the snapshot beside it are machine-owned and untouched.
-/// </summary>
+/// <summary>§3.2's reservation, generated from <see cref="ReservationConfiguration"/>.</summary>
 public partial class AddReservations : Migration
 {
     protected override void Up(MigrationBuilder migrationBuilder)

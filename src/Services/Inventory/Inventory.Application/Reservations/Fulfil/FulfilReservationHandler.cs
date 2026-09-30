@@ -30,9 +30,7 @@ public sealed class FulfilReservationHandler(
         var order = new OrderId(command.OrderId);
         Reservation? reservation = await reservations.GetForUpdateAsync(order, ct);
 
-        // Read under the lock: the instant is taken once a writer that waited
-        // behind this one has committed, so it cannot stamp earlier than the
-        // one it waited for.
+        // Read under the lock, so it cannot precede the instant of a writer this one waited behind.
         DateTimeOffset now = clock.GetUtcNow();
 
         switch (reservation?.Status)

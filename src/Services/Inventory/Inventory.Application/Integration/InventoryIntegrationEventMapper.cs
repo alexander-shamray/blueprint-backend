@@ -6,18 +6,10 @@ using Inventory.Domain.Stock.Events;
 
 namespace Inventory.Application.Integration;
 
-/// <summary>
-/// §9.3's allow-list for this service. §5.5 states the principle — never publish a
-/// domain event to the bus — and this is the mechanism that makes it
-/// structural rather than aspirational: a domain event absent from
-/// <see cref="Registry"/> never reaches the bus, by construction, not by
-/// review.
-/// </summary>
+/// <summary>§9.3's allow-list: a domain event not in <see cref="Registry"/> never reaches the bus (§5.5).</summary>
 internal sealed class InventoryIntegrationEventMapper : IIntegrationEventMapper
 {
-    // The allow-list, one entry per fact §3.2 gives this service to publish.
-    // An entry with no domain event behind it would not compile, which is
-    // the property that keeps this list honest.
+    // §3.2's Publishes column, one entry per fact.
     private static readonly Dictionary<Type, Func<IDomainEvent, object>> Registry = new()
     {
         [typeof(StockLevelChangedDomainEvent)] = e => ToContract((StockLevelChangedDomainEvent)e),
@@ -41,8 +33,7 @@ internal sealed class InventoryIntegrationEventMapper : IIntegrationEventMapper
         return mapped;
     }
 
-    // The correlation is the PRODUCT: Catalog's projection keys on it, and a
-    // trace over one product's level history is what a support tool follows.
+    // The correlation is the product, which Catalog's projection keys on.
     private static StockLevelChanged ToContract(StockLevelChangedDomainEvent e) => new()
     {
         MessageId = Guid.CreateVersion7(),
@@ -52,9 +43,7 @@ internal sealed class InventoryIntegrationEventMapper : IIntegrationEventMapper
         QuantityAvailable = e.Available
     };
 
-    // A reservation event correlates on its order, not its product: §9.6's
-    // saga is keyed on the order, and a trace over one order's stock decision
-    // is what that saga and a support tool both follow.
+    // A reservation event correlates on its order, which §9.6's saga is keyed on.
     private static StockReserved ToContract(StockReservedDomainEvent e) => new()
     {
         MessageId = Guid.CreateVersion7(),

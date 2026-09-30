@@ -1,13 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!--
-    Settings come from Directory.Build.props (§4.4).
-
-    Domain, Common.Application and Common.Contracts — the §4.2 dependency
-    table's second row, complete now that the mapper's allow-list names
-    StockLevelChanged. §4.3's one assembly that crosses a service boundary,
-    and it crosses at the mapper.
-  -->
+  <!-- Settings from Directory.Build.props (§4.1); §4.2's second row. -->
 
   <ItemGroup>
     <ProjectReference Include="..\Inventory.Domain\Inventory.Domain.csproj" />
@@ -16,19 +9,12 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- The read side of §6.5: GetStockHandler uses Dapper directly, never
-         EF — the architecture gate in Inventory.Application.Tests holds
-         that line. -->
+    <!-- §6.5's read side: the query handlers use Dapper directly, never EF. -->
     <PackageReference Include="Dapper" />
-    <!-- AbstractValidator for the command validators, and the assembly-scan
-         registration §4.2's sample uses. Both used directly, both referenced
-         directly — a transitive compile against Common.Application's copy
-         would be a claim this project never states. -->
+    <!-- Used directly, so referenced directly: §4.2's assembly-scan registration. -->
     <PackageReference Include="FluentValidation" />
     <PackageReference Include="FluentValidation.DependencyInjectionExtensions" />
-    <!-- FulfilReservationHandler's LoggerMessage.Define calls (CA1848 under
-         ADR-019 makes log.LogWarning an error), referenced directly rather
-         than arriving transitively. -->
+    <!-- FulfilReservationHandler's LoggerMessage.Define, which CA1848 requires under ADR-019. -->
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
   </ItemGroup>
 

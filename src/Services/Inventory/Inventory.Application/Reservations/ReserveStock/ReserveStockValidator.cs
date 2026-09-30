@@ -3,10 +3,7 @@ using FluentValidation;
 
 namespace Inventory.Application.Reservations.ReserveStock;
 
-/// <summary>
-/// Ordering's contract bounds, because the saga built this from an order that
-/// already satisfied them: a violation is the sender's bug, not a stock decision.
-/// </summary>
+/// <summary>Ordering's contract bounds: the saga built this from a valid order, so a violation is its bug.</summary>
 public sealed class ReserveStockValidator : AbstractValidator<ReserveStockCommand>
 {
     public ReserveStockValidator()

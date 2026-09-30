@@ -8,23 +8,13 @@ using Microsoft.EntityFrameworkCore.Storage;
 
 namespace Inventory.Infrastructure.Persistence;
 
-/// <summary>
-/// §7.3's targeted pessimistic update, per line, on the transaction the unit
-/// of work opened. Lines run in <c>ProductId</c> order so two reservations
-/// over the same products take their row locks in one sequence.
-/// </summary>
+/// <summary>§7.3's pessimistic update per line, in <c>ProductId</c> order so locks take one sequence.</summary>
 internal sealed class SqlStockLedger(InventoryDbContext db) : IStockLedger
 {
-    // The marker's scope is one call: a second take in the same transaction
-    // rolls back only its own decrements, not the first take's.
+    // One call's scope: a second take in the same transaction rolls back only its own decrements.
     private const string Savepoint = "Reserve";
 
-    // §7.3's statement, as printed, with the additions the spec's section 4
-    // argues: the OUTPUT returns the stamp, and the stamp is monotonic per
-    // row — the clock when it is ahead of the row, one tick past the row
-    // otherwise — so two serialised writers' levels carry strictly ordered
-    // OccurredAt values whatever the server clock does between them.
-    // Zero rows affected is "not enough stock".
+    // §7.3's stamp, monotonic per row, so two serialised writers' levels carry strictly ordered OccurredAt values.
     private const string Stamp =
         "CASE WHEN SYSDATETIMEOFFSET() > UpdatedAt THEN SYSDATETIMEOFFSET() ELSE DATEADD(ns, 100, UpdatedAt) END";
 
@@ -46,10 +36,8 @@ internal sealed class SqlStockLedger(InventoryDbContext db) : IStockLedger
         WHERE ProductId = @ProductId;
         """;
 
-    // The same Stamp expression as the reserve and give-back statements: a
-    // fulfilment publishes no level, but it moves UpdatedAt, and a stamp that
-    // went backwards here would let the next stock-take carry an OccurredAt
-    // behind Catalog's watermark (§7.3's exception).
+    // The same Stamp: a fulfilment publishes no level, but a stamp that went backwards here would put the next
+    // take's OccurredAt behind Catalog's watermark (§7.3).
     private static readonly string FulfilSql =
         $"""
         UPDATE inventory.StockItems
@@ -108,11 +96,8 @@ internal sealed class SqlStockLedger(InventoryDbContext db) : IStockLedger
                 transaction: transaction,
                 cancellationToken: ct));
 
-            // A held line implies its row: a reservation holds stock a
-            // statement decremented, and the row it decremented cannot have
-            // gone. No row is the ledger disagreeing with itself, and a
-            // release that skipped it would publish StockReleased for stock it
-            // never returned; the transaction rolls back instead.
+            // A held line implies its row; a release that skipped it would publish StockReleased for stock it
+            // never returned, so the transaction rolls back instead.
             if (row is null)
                 throw new InvalidOperationException($"Product {line.ProductId} has a held line and no stock row.");
 
@@ -148,9 +133,7 @@ internal sealed class SqlStockLedger(InventoryDbContext db) : IStockLedger
     {
         IDbContextTransaction? current = db.Database.CurrentTransaction;
 
-        // The same refusal EfUnitOfWork.ExecuteRawAsync makes: a statement
-        // with no transaction autocommits on its own, outside the unit the
-        // caller believes it is in.
+        // EfUnitOfWork.ExecuteRawAsync's refusal: with no transaction the statement autocommits outside the unit.
         if (current is null)
         {
             throw new InvalidOperationException(

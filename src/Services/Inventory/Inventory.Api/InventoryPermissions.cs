@@ -1,10 +1,6 @@
 namespace Inventory.Api;
 
-/// <summary>
-/// Inventory's permission vocabulary (§11.4): one name, the gateway's own
-/// <c>inventory:admin</c> (§10.2), re-validated here because §11.3 makes
-/// every service check its own token.
-/// </summary>
+/// <summary>§11.4's vocabulary: the gateway's <c>inventory:admin</c> (§10.2), re-validated here per §11.3.</summary>
 public static class InventoryPermissions
 {
     public const string Admin = "inventory:admin";

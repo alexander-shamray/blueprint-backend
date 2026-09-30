@@ -5,12 +5,8 @@ using Inventory.Domain.Stock.Events;
 
 namespace Inventory.Domain.Reservations;
 
-/// <summary>
-/// One row per order (§3.2). The one aggregate every message-driven command
-/// modifies; the stock counters move underneath it by §7.3's statement. A
-/// <see cref="ReservationStatus.Released"/> row with no lines is ADR-024's
-/// tombstone.
-/// </summary>
+/// <summary>One row per order (§3.2); the stock counters move underneath it by §7.3's statement.</summary>
+/// <remarks>A <see cref="ReservationStatus.Released"/> row with no lines is ADR-024's tombstone.</remarks>
 public sealed class Reservation : AggregateRoot<OrderId>
 {
     private readonly List<ReservationLine> _lines = [];
@@ -152,10 +148,7 @@ public sealed class Reservation : AggregateRoot<OrderId>
 
     private void RaiseLevels(IReadOnlyList<ReservedLevel> levels)
     {
-        // No clock is taken here: a level's instant is the one stamped on the
-        // row the ledger moved, because a product's events are ordered
-        // against that row rather than against the reservation the move
-        // arrived through.
+        // No clock: a product's events are ordered against the row the ledger stamped (§7.3).
         foreach (ReservedLevel level in levels)
             Raise(new StockLevelChangedDomainEvent(level.ProductId, level.Available, level.UpdatedAt));
     }
