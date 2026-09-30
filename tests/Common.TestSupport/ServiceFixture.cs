@@ -198,7 +198,7 @@ public abstract class ServiceFixture<TFactory, TEntryPoint, TDbContext> : IAsync
         }
         else
         {
-            // §14.1's broker configuration on the stock image, by ADR-036's route for a service that runs no saga.
+            // §14.1's broker configuration on the stock image, by ADR-036's route for a service that does not schedule.
             _rabbit = broker
                 .WithImage("rabbitmq:4.1-management-alpine")
                 // A second copy of the Dockerfile's COPY targets, which check_permissions.py holds to it (ADR-036).
