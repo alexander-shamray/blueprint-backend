@@ -1,15 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!--
-    Settings come from Directory.Build.props (§4.4).
-
-    No packages and no project references, and both absences are the point.
-    §4.3 lets exactly one assembly cross a service boundary, and this is it:
-    every consumer of a contract references this project, so anything it
-    referenced would travel with it into every service. A contract is
-    primitives (§9.1) — the interface below and the records under it need
-    nothing but the framework, and the day one of them appears to need a
-    package is the day the contract has stopped being boring.
-  -->
+  <!-- No packages or references: every service references this, so anything here would travel (§4.3, §9.1). -->
 
 </Project>
