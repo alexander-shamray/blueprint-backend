@@ -22,7 +22,7 @@ public static class CancelReasons
 
     public const string PaymentDeclined = "payment_declined";
 
-    /// <summary>Compensates as a decline does, yet is a different incident (§13.3).</summary>
+    /// <summary>Compensates as a decline does, yet is a different incident (§9.6).</summary>
     public const string PaymentTimeout = "payment_timeout";
 
     public const string CustomerRequest = "customer_request";
