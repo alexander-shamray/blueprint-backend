@@ -66,27 +66,8 @@ internal sealed class RedisIdempotencyStore(
     /// </summary>
     private const int TokenLength = 32;
 
-    // Write only over what this claim still owns. GET-compare-SET as one
-    // script, for the reason RedisDistributedLock states one file over: a
-    // check and an act that are two operations are two operations the claim
-    // can expire between, and the loser then overwrites the winner's entry
-    // with no error and no log line (#127).
-    //
-    // KEEPTTL, and it is the whole of #168. This wrote 'PX' with a fresh
-    // retention, which started the entry's window at the COMMIT while §6.3
-    // stamps its marker inside the transaction that precedes it — so the claim
-    // outlived the marker by the commit's tail, ordinarily milliseconds and
-    // unbounded in principle. Preserving what the claim had left makes the
-    // claim's window start at the claim, which is earlier than the stamp by
-    // construction — so this term needs no margin at all.
-    //
-    // That is the start ordering and not the expiry ordering, which #168 alone
-    // does not buy. The expiry ordering is not arithmetic any more either:
-    // §9.5's purge reads UnheldAsync below and deletes only markers this store
-    // has already let go, so it no longer counts a window of its own against
-    // this one (#171, ADR-039). What remains is the marker reaching the
-    // database inside this window at all (#127), which
-    // IdempotencyRetention.MarkerFloor argues.
+    // GET-compare-SET in one script, so a claim that expired cannot overwrite its successor's entry.
+    // KEEPTTL keeps the claim's own window, which therefore starts before §6.3's stamp (§8.5, ADR-039).
     private const string CompleteScript =
         """
         local current = redis.call('get', KEYS[1])
@@ -192,20 +173,7 @@ internal sealed class RedisIdempotencyStore(
         ArgumentNullException.ThrowIfNull(payload);
         ct.ThrowIfCancellationRequested();
 
-        // No retention to pass, because the script preserves the claim's own.
-        // What the caller gets is the remainder of the window the claim opened
-        // rather than a fresh one starting at the commit — the trade #168
-        // records, and the reason the claim's window now STARTS before §6.3's
-        // stamp by construction instead of by an allowance.
-        //
-        // Its start, and not its expiry. That the marker then outlives the
-        // claim is a conclusion drawn from the ordering rather than the
-        // ordering itself, and it used to assume something this line cannot
-        // supply: that the marker's window and this one were counted at one
-        // rate, where Redis counts this and SQL Server counted that (#171).
-        // The purge no longer counts — it asks UnheldAsync — so what is left
-        // to assume is that the handler reaches the database inside this
-        // window at all (#127). IdempotencyRetention's MarkerFloor argues it.
+        // No retention to pass: the script preserves the window the claim opened (§8.5).
         RedisResult written = await redis
             .GetDatabase()
             .ScriptEvaluateAsync(

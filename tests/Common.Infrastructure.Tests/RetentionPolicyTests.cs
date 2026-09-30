@@ -66,38 +66,8 @@ public class RetentionPolicyTests
         Should.Throw<ArgumentOutOfRangeException>(
             () => new RetentionPolicy { IdempotencyWindow = IdempotencyRetention.Window - OneSecond });
 
-        // MATCHING THE CLAIM EXACTLY IS ADMITTED, and this assertion has now
-        // said both things — which is the part worth reading rather than the
-        // current direction. It first said equal was admitted; a review round
-        // established that it was not, because two things put the claim's
-        // expiry after the marker's, and a five-minute allowance was added to
-        // the floor to bound them. Both are now closed at the source: the
-        // completion preserves the claim's remaining life instead of re-arming
-        // it at the commit (#168), so the claim's window starts at the claim
-        // and therefore before the stamp; and the marker is written and aged on
-        // the database's clock (#167), so no pod's clock is party to its age.
-        // The allowance is gone, and equal is admissible again.
-        //
-        // WHAT IS ADMITTED IS STILL NOT A GUARANTEE OF NO GAP, and this test
-        // must not read as one — but one of the two things it used to want is
-        // gone. What holds by construction is the START ordering: the claim is
-        // taken before the marker is stamped, one thread inside one dispatch.
-        // That the marker's purge then falls after the claim's expiry wanted
-        // the two windows counted at one rate, where Redis counted the claim's
-        // and the database the marker's (#171); the purge now asks
-        // IIdempotencyStore whether the claim is gone instead of counting, so
-        // that term is closed rather than assumed (ADR-039). What is left is
-        // the marker's INSERT committing inside the claim's own window — later
-        // than "the handler returned", since §6.3 stamps after dispatch and the
-        // row lands only at SaveChangesAsync (#127).
-        // IdempotencyRetention.MarkerFloor argues it. A regression test
-        // asserting a guarantee the implementation declines to make is worse
-        // than no test, because it is the line the next reader trusts instead
-        // of the contract.
-        //
-        // The floor is READ rather than restated, so this assertion is about
-        // the relationship and not about a duration — it stays correct if
-        // IdempotencyRetention.Window is retuned.
+        // Equal is admitted, and that is no promise of no gap: what is left is the marker's INSERT
+        // committing inside the claim's own window (§8.5, ADR-039). The floor is read, not restated.
         new RetentionPolicy { IdempotencyWindow = IdempotencyRetention.Window }
             .IdempotencyWindow
             .ShouldBe(IdempotencyRetention.Window);
