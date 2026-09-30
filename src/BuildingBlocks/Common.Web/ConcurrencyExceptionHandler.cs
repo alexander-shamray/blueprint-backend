@@ -5,29 +5,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Common.Web;
 
-/// <summary>
-/// The 409 row of §10.5's table, and an executor for it in the sense that
-/// section already spells out for the 400: an exception is not a response
-/// until something translates it, and <c>UseExceptionHandler</c>'s fallback
-/// answers 500 — the wrong statement about a race the client can simply retry.
-/// </summary>
-/// <remarks>
-/// <para>
-/// 409 is deliberately not an <c>ErrorType</c> member, which is §10.5's own
-/// argument rather than a choice made here: a concurrency conflict is produced
-/// beside a handler rather than returned by one, and giving <c>Error</c> a
-/// member for it would put two producers on one status. That is also why
-/// <c>Rule</c> maps to 422 — a domain refusal is not a race.
-/// </para>
-/// <para>
-/// The 412 half of that row is <em>not</em> here. It needs a precondition
-/// filter reading <c>If-Match</c>, and nothing in the solution sends or reads
-/// an ETag yet; a handler that answered 412 without one would be inventing a
-/// conversation neither side is having. What distinguishes the two is whether
-/// the client sent a precondition, and until it can, every conflict is the
-/// no-precondition case.
-/// </para>
-/// </remarks>
+/// <summary>Translates <c>DbUpdateConcurrencyException</c> into §10.5's no-precondition 409 row.</summary>
 internal sealed class ConcurrencyExceptionHandler(IProblemDetailsService problemDetails) : IExceptionHandler
 {
     public async ValueTask<bool> TryHandleAsync(
@@ -40,27 +18,13 @@ internal sealed class ConcurrencyExceptionHandler(IProblemDetailsService problem
 
         httpContext.Response.StatusCode = StatusCodes.Status409Conflict;
 
-        // Handled the moment it matched, on ValidationExceptionHandler's
-        // terms: a client whose Accept header refuses problem+json still lost
-        // a race, and reporting "unhandled" here would fall through to the 500
-        // fallback and blame the service for it.
         await problemDetails.TryWriteAsync(new ProblemDetailsContext
         {
             HttpContext = httpContext,
             ProblemDetails = new ProblemDetails
             {
                 Status = StatusCodes.Status409Conflict,
-                // No entity names, no row versions: the rowversion is a
-                // storage detail (§7.3), and a client that retries needs to
-                // know only that its copy was stale.
                 Detail = "The resource was modified by another request. Re-read it and retry.",
-                // §10.5's machine-readable half. `detail` is human-readable by
-                // RFC 9457, so a client that switches on it is parsing English —
-                // and this status now carries instructions that CONTRADICT each
-                // other across its three producers, where before they all said
-                // retry. `code` is where §10.5 already says a client switches;
-                // the Error path has carried one since PR-18 and the exception
-                // path had none.
                 Extensions = { ["code"] = "request.concurrency_conflict" }
             }
         });

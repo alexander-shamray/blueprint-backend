@@ -4,42 +4,11 @@ using Microsoft.AspNetCore.Http;
 
 namespace Common.Web;
 
-/// <summary>
-/// §11.4's one implementation of <see cref="ICurrentUser"/>, reading the
-/// principal <c>UseAuthentication</c> put on the context. Registered scoped by
-/// <c>AddCommonWebDefaults</c> — it is per request — beside the accessor it
-/// depends on, because ASP.NET Core registers no
-/// <see cref="IHttpContextAccessor"/> by default and omitting that line fails
-/// <c>ValidateOnBuild</c> rather than the first ownership check.
-/// </summary>
-/// <remarks>
-/// <c>Common.Web</c> rather than a service's Infrastructure, and the chapter
-/// was amended: the type names no service, and it cannot live in
-/// <c>Common.Infrastructure</c> at all — that project takes no
-/// <c>FrameworkReference</c>, and <see cref="IHttpContextAccessor"/> arrives
-/// with one. This is the only building block that has it.
-/// </remarks>
+/// <summary>§11.4's one implementation of <see cref="ICurrentUser"/>, over the request's principal.</summary>
 public sealed class HttpContextCurrentUser(IHttpContextAccessor accessor) : ICurrentUser
 {
-    /// <summary>
-    /// The caller's authenticated identities and nothing else — every member
-    /// below reads this rather than <c>HttpContext.User</c>, so a claim can
-    /// never be answered from an identity <see cref="IsAuthenticated"/> denies.
-    /// A <see cref="ClaimsIdentity"/> with no authentication type carries
-    /// claims perfectly happily; the two are independent, and reading the
-    /// claims without the check is what turns the interface's fail-closed
-    /// contract into a suggestion.
-    /// </summary>
-    /// <remarks>
-    /// The identities are filtered rather than the principal tested, because
-    /// <see cref="ClaimsPrincipal.Identity"/> is the <em>primary</em> identity
-    /// while <c>FindFirst</c> and <c>HasClaim</c> search every one of them. A
-    /// principal whose first identity is authenticated and whose second is not
-    /// would otherwise answer with the second's subject and grant the second's
-    /// permissions — the same defect as reading <c>HttpContext.User</c>
-    /// directly, one layer in, and a shape any host authenticating over two
-    /// schemes can produce.
-    /// </remarks>
+    /// <summary>The caller's authenticated identities and nothing else, so no claim is read from another.</summary>
+    /// <remarks>Filters identities rather than testing the principal, as <c>FindFirst</c> reads all (§11.4).</remarks>
     private ClaimsPrincipal? Caller
     {
         get
@@ -53,12 +22,7 @@ public sealed class HttpContextCurrentUser(IHttpContextAccessor accessor) : ICur
 
     public bool IsAuthenticated => Caller is not null;
 
-    /// <summary>
-    /// <c>ClaimTypes.NameIdentifier</c>, which is where Keycloak's <c>sub</c>
-    /// lands under the inbound claim mapping <c>JwtBearerOptions</c> leaves on
-    /// (§11.3). §10.3's rate-limit partition key and the test scheme read the
-    /// same claim, so all three agree on which claim identifies a caller.
-    /// </summary>
+    /// <summary>Where Keycloak's <c>sub</c> lands under the inbound claim mapping (§11.3).</summary>
     public Guid Id => Guid.Parse(
         Caller?.FindFirstValue(ClaimTypes.NameIdentifier) ??
             throw new InvalidOperationException(

@@ -3,29 +3,15 @@ using Microsoft.AspNetCore.Http;
 
 namespace Common.Web;
 
-/// <summary>
-/// The one place §10.5's status-code table is executed rather than remembered.
-/// An endpoint returns <c>result.ToHttpResult()</c> and decides nothing.
-/// </summary>
+/// <summary>The one place §10.5's status-code table is executed rather than remembered.</summary>
 public static class ResultExtensions
 {
-    /// <summary>
-    /// 204 on success — a command that returns nothing has no body to send —
-    /// and the problem response its <see cref="Error"/> selects otherwise.
-    /// </summary>
+    /// <summary>204 on success, and the problem response its <see cref="Error"/> selects otherwise.</summary>
     public static IResult ToHttpResult(this Result result) =>
         result.IsSuccess ? Results.NoContent() : Problem(result.Error);
 
-    /// <summary>
-    /// 200 carrying the value, and the same problem response on failure.
-    /// </summary>
-    /// <remarks>
-    /// <see cref="Result{TValue}"/> derives from <see cref="Result"/>, so both
-    /// overloads are applicable to it and only the identity conversion makes
-    /// this one win. A value result held in a <see cref="Result"/>-typed local
-    /// therefore takes the overload above and 204s its payload away — silently,
-    /// since no status code can report a body that was never asked for.
-    /// </remarks>
+    /// <summary>200 carrying the value, and the same problem response on failure.</summary>
+    /// <remarks>A value result typed as <see cref="Result"/> binds the overload above and loses its payload.</remarks>
     public static IResult ToHttpResult<TValue>(this Result<TValue> result) =>
         result.IsSuccess ? Results.Ok(result.Value) : Problem(result.Error);
 
@@ -35,10 +21,7 @@ public static class ResultExtensions
             statusCode: StatusFor(error.Type),
             extensions: new Dictionary<string, object?> { ["code"] = error.Code });
 
-    // Title is left to the framework, which fills in the status phrase RFC 9457
-    // already defines. Code goes into an extension member instead: it is the
-    // stable identifier a client switches on, and a title carrying this
-    // service's vocabulary would make every client parse prose to find it.
+    // Code goes into an extension rather than the title, because it is what a client switches on (§10.5).
     private static int StatusFor(ErrorType type) => type switch
     {
         ErrorType.NotFound => StatusCodes.Status404NotFound,

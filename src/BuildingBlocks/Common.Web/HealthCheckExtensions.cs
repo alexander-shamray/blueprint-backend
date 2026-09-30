@@ -7,83 +7,14 @@ using Microsoft.Extensions.Options;
 
 namespace Common.Web;
 
-/// <summary>
-/// The three probes Kubernetes asks three distinct questions through (§13.5).
-/// Mapped once here rather than per service, since the tag predicates are
-/// identical everywhere and need no configuration — unlike the checks
-/// themselves, which need connection strings and are registered by each
-/// service's own Infrastructure.
-/// </summary>
+/// <summary>The three probes Kubernetes asks three distinct questions through (§13.5).</summary>
 public static class HealthCheckExtensions
 {
-    // The tag §13.5 names, spelled once: the two predicates below and the
-    // startup guard have to be asking about the same set, and a tag that
-    // matched in one place and not the other would fail open in exactly the
-    // direction this guard exists to close.
+    // Spelled once, so the predicates and the startup guard ask about the same set.
     private const string Ready = "ready";
 
-    /// <summary>
-    /// Maps <c>/health/live</c>, <c>/health/ready</c> and
-    /// <c>/health/startup</c>. Called by <c>Program.cs</c> after
-    /// <c>builder.Build()</c> (§4.2).
-    /// </summary>
-    /// <remarks>
-    /// <b>An empty predicate set is a passing predicate set</b>, so a host that
-    /// registers no readiness checks answers <c>/health/ready</c> with 200
-    /// having verified anything — and §15.1 removes the smoke stage by name
-    /// on the grounds that this probe already gates the rollout. "Forgot to
-    /// wire it up" and "gates readiness on nothing" therefore look identical
-    /// from outside, and only one of them is a deploy that should proceed.
-    /// <para>
-    /// <paramref name="ownsNoReadinessDependencies"/> is what separates them. The rule
-    /// §13.5 states — a host with a connection string has a readiness check,
-    /// and a host without one does not — is mechanised here rather than left as
-    /// prose: the default refuses to start a host whose readiness set is empty,
-    /// and the gateway and the BFF, which own no database, say so at the call
-    /// site. A service whose readiness set goes missing entirely in a
-    /// refactor then fails at startup instead of reporting ready, which is the
-    /// direction §13.5's own restart-storm argument already accepts.
-    /// </para>
-    /// <para>
-    /// <b>The guard tests the set, not any member of it.</b>
-    /// <c>AnyReadinessCheck</c> asks whether <i>one</i> registration carries
-    /// the tag, so a service that loses its <c>AddSqlServer(...)</c> while
-    /// keeping its Redis and broker checks starts exactly as before. Catching
-    /// that would take a per-service count, which is the assertion the
-    /// paragraph below says nothing generates for a scaffolded service — so
-    /// the bound is deliberate rather than an oversight, and it is stated
-    /// here because a guard read as stronger than it is buys a confidence
-    /// nobody checked.
-    /// </para>
-    /// <para>
-    /// This is deliberately a claim made at the call site rather than a count
-    /// asserted per service. <c>HostSmokeTests</c> pins Catalog's four
-    /// registrations and Ordering's, and nothing generates an equivalent
-    /// assertion for a scaffolded service (§4.5) — so the guard that travels
-    /// with the building block is the one every future service inherits.
-    /// </para>
-    /// </remarks>
-    /// <param name="app">The route builder to map the three probes on.</param>
-    /// <param name="ownsNoReadinessDependencies">
-    /// <see langword="true"/> for a host that deliberately gates readiness on
-    /// nothing. Passing it is a written decision; the default is a startup
-    /// failure.
-    /// <para>
-    /// <b>Named for the readiness set rather than for dependencies at large,
-    /// because the BFF has one and still passes this.</b> §9.7's synchronous
-    /// hop to Catalog is a dependency by any ordinary reading, and it is
-    /// deliberately not a readiness one — a BFF that reported unready when
-    /// Catalog is down would take itself out of rotation for a fault it is
-    /// meant to degrade around. The first spelling was
-    /// <c>ownsNoDependencies</c>, which made a false claim at exactly that
-    /// call site, in a parameter whose whole purpose is to be a written
-    /// decision.
-    /// </para>
-    /// </param>
-    /// <exception cref="InvalidOperationException">
-    /// The host registered no <c>ready</c>-tagged health check and did not
-    /// declare that it gates readiness on nothing.
-    /// </exception>
+    /// <summary>Maps the live, ready and startup probes, refusing an empty readiness set by default.</summary>
+    /// <remarks>An empty predicate set passes, so a host with none must say so at the call site (§13.5).</remarks>
     public static IEndpointRouteBuilder MapCommonHealthEndpoints(
         this IEndpointRouteBuilder app,
         bool ownsNoReadinessDependencies = false)
@@ -99,8 +30,7 @@ public static class HealthCheckExtensions
                 "gates readiness on nothing.");
         }
 
-        // AllowAnonymous is required, not cosmetic: the kubelet sends no token,
-        // so an authenticated probe fails and the pod is restarted in a loop.
+        // The kubelet sends no token, so an authenticated probe restarts the pod in a loop.
         app
             .MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => false })
             .AllowAnonymous();
@@ -116,10 +46,7 @@ public static class HealthCheckExtensions
         return app;
     }
 
-    // Read from the options rather than from HealthCheckService: the service
-    // exposes no registration list, and the options are what the predicates
-    // above are evaluated against — so this asks the same question the probe
-    // will ask, rather than one that merely correlates with it.
+    // The options, because they are what the predicates above are evaluated against.
     private static bool AnyReadinessCheck(IEndpointRouteBuilder app)
     {
         HealthCheckServiceOptions options = app.ServiceProvider
