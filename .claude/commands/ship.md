@@ -913,10 +913,7 @@ because asking failed.
      a rule ending on the first clean pass stops at exactly the round that
      should not end it. Requiring two also subsumes "never end on a round
      that produced a fix", since a round with findings is not clean and
-     resets the count. A pass whose `suggestions.md` holds only items the
-     triage refuses under `docs/style-guide.md`'s *Comments* rule — a
-     comment's wording, not its truth — changes nothing, so it counts as
-     clean, and the recheck after it settles those items as false positives.
+     resets the count.
 
      Failing that, stop when `grok-ledger.sh <n> count` reaches `CEILING`
      and hand over what survives — saying plainly that the loop ended on its
@@ -1156,13 +1153,6 @@ because asking failed.
       skipped: a review can read "generated no new comments" above a
       suppressed finding worth fixing, and no second round is there to catch
       a block that went unread.
-
-      **One exception, and it follows triage rather than replacing it.** A
-      round whose findings `/review-copilot` refuses, every one, under
-      `docs/style-guide.md`'s *Comments* rule — a comment's wording, not its
-      truth — changes nothing and pushes nothing. Once its threads are
-      answered and resolved, it ends the loop as a clean round would, and
-      the report names it as that round rather than as a clean one.
 
       **Anything short of all three is a round with findings.** Run
       `/review-copilot` **paused at its marker step**: let it
