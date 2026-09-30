@@ -12,6 +12,7 @@ anything — is owned elsewhere and cited from here by name, never restated.
 | [`docs/change-locality.md`](docs/change-locality.md) | The operating contract: the trust order, the one rule, the change classes and their touch sets |
 | [`docs/change-locality-plan.md`](docs/change-locality-plan.md) | The PRs that make the contract fully true |
 | [`docs/churn-plan.md`](docs/churn-plan.md) | Where the corpus churns, measured on a named commit, and the refactor sequence that reduces it |
+| [`docs/churn-plan-2.md`](docs/churn-plan-2.md) | The same, measured again once that sequence landed: the comment budget, and the work that brings the corpus under it |
 | [`docs/pr-decision-log.md`](docs/pr-decision-log.md) | What each PR in its range decided — closed; the record since is commit bodies and PR bodies |
 | [`docs/lessons.md`](docs/lessons.md) | Lessons that generalise past the PR that found them — closed |
 | [`docs/harness-boundaries.md`](docs/harness-boundaries.md) | What the harness grants these commands, and refuses |
