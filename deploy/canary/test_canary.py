@@ -1288,6 +1288,25 @@ class DescriptorReadTests(unittest.TestCase):
         self.assertTrue(any("by hand" in f for f in failures), failures)
         self.assertTrue(any("notifications" in f and "no descriptor describes" in f for f in failures), failures)
 
+    def test_a_menu_written_one_option_per_line_is_refused(self) -> None:
+        text = canary.WORKFLOW.read_text(encoding="utf-8").replace(
+            "        type: string\n",
+            "        type: choice\n        options:\n          - catalog-api\n          - notifications\n", 1)
+
+        read, failures = self._read(workflow=text)
+
+        self.assertIn("notifications", read["workflow"])
+        self.assertTrue(any("by hand (catalog-api, notifications)" in f for f in failures), failures)
+        self.assertTrue(any("notifications" in f and "no descriptor describes" in f for f in failures), failures)
+
+    def test_a_choice_input_with_no_options_is_refused(self) -> None:
+        text = canary.WORKFLOW.read_text(encoding="utf-8").replace("        type: string\n", "        type: choice\n", 1)
+
+        _, failures = self._read(workflow=text)
+
+        self.assertEqual(canary._dispatch_options(canary._live(text)), set())
+        self.assertTrue(any("by hand:" in f and "`type: choice`" in f for f in failures), failures)
+
     GUARD = 'if ! python deploy/canary/canary.py chart --workload="$WORKLOAD" >/dev/null 2>&1; then'
     CASES = r'''$PYTHON "$ROOT/deploy/canary/canary.py" smoke-cases | tr -d '\r' >"$CASES"'''
 
@@ -1415,6 +1434,20 @@ on:
         options: [catalog-api]
 """
         self.assertEqual(canary._dispatch_options(text), {"catalog-api"})
+
+    def test_a_list_at_the_options_keys_own_indentation_is_read(self) -> None:
+        text = """on:
+  workflow_dispatch:
+    inputs:
+      workload:
+        type: string
+        options:
+        - catalog-api
+        - 'gateway'
+      region:
+        type: string
+"""
+        self.assertEqual(canary._dispatch_options(text), {"catalog-api", "gateway"})
 
 
 class DescriptorTests(unittest.TestCase):

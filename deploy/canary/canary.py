@@ -1493,19 +1493,23 @@ def _smoke_reads(name: str, entry: dict, root: Path) -> list[str]:
 
 
 def _dispatch_options(text: str) -> set[str] | None:
-    """The `workload:` input's own `options:` list, or None where it has none.
+    """The names in the `workload:` input's menu, or None where it has none.
 
-    Scoped to that input's child indentation, so a sibling input's list or a
-    description naming `options:` is not read as this input's.
+    Any `options:` key or `type: choice` at that input's own indentation is a
+    menu, in whatever form; a sibling input's list or a description is not.
     """
     block = re.search(r"(?m)^([ \t]*)workload:\n((?:\1[ \t].*\n?)*)", text)
     child_indent = block and re.match(r"[ \t]+", block.group(2))
-    options = child_indent and re.search(
-        rf"(?m)^{re.escape(child_indent.group(0))}options:\s*\[([^\]]*)\]", block.group(2)
-    )
-    if not options:
+    if not child_indent:
         return None
-    return {item.strip() for item in options.group(1).split(",") if item.strip()}
+    own, body = re.escape(child_indent.group(0)), block.group(2)
+    options = re.search(rf"(?m)^{own}options:(.*(?:\n{own}(?:[ \t]|-[ \t]).*)*)", body)
+    choice = re.search(rf"""(?m)^{own}type:[ \t]*(["']?)choice\1[ \t]*$""", body)
+    if not options and not choice:
+        return None
+    parts = re.split(r"[\[\],\n]", options.group(1) if options else "")
+    items = (re.sub(r"^-[ \t]+", "", part.strip()).strip("'\"") for part in parts)
+    return {item for item in items if item}
 
 
 def _reader_texts(workflow: Path, smoke: Path) -> tuple[str, str]:
@@ -1550,9 +1554,11 @@ def _descriptors_agree(workloads: dict, workflow: Path = WORKFLOW, smoke: Path =
     failures = []
     menu = _dispatch_options(workflow_text)
     if menu is not None:
+        named = f" ({', '.join(sorted(menu))})" if menu else ""
         failures.append(
-            f"{WORKFLOW_PATH} lists its workloads by hand ({', '.join(sorted(menu))}), "
-            "a second copy of the descriptors under deploy/canary/deployables"
+            f"{WORKFLOW_PATH} lists its workloads by hand{named}: the workload input's "
+            "`options:` or `type: choice` is a menu, a second copy of the descriptors "
+            "under deploy/canary/deployables"
         )
     if not DISPATCH_GUARD.search(workflow_text):
         failures.append(
