@@ -271,7 +271,7 @@ public sealed class ServiceFixture : IAsyncLifetime
     public OutboxJson OutboxJson =>
         Factory.Services.GetRequiredService<OutboxJson>();
 
-    /// <summary>Runs exactly one claim-and-deliver pass. No timers, no waiting.</summary>
+    /// <summary>Runs exactly one claim-and-deliver pass, with no timers and no waiting.</summary>
     public Task<int> ProcessOutboxBatchAsync() =>
         Factory.Services
             .GetRequiredService<OutboxDispatcher>()
@@ -381,7 +381,7 @@ public sealed class ServiceFixture : IAsyncLifetime
             processedAt,
             messageId);
 
-    /// <summary>Runs exactly one retention pass over every table. No timers, no waiting.</summary>
+    /// <summary>Runs exactly one retention pass over every table, with no timers and no waiting.</summary>
     public Task<(int Outbox, int Inbox, int Idempotency)> PurgeRetentionAsync() =>
         Factory.Services
             .GetRequiredService<RetentionPurgeService>()
