@@ -5,7 +5,7 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
     <PackageReference Include="Dapper" />
-    <!-- Carried by the EF provider too; referenced because SqlConnectionFactory names it (§6.5). -->
+    <!-- Carried by the EF provider too; referenced because this project names its types (§6.5). -->
     <PackageReference Include="Microsoft.Data.SqlClient" />
     <PackageReference Include="AspNetCore.HealthChecks.SqlServer" />
     <!-- The bus (§9); no RabbitMQ health-check package, as AddMassTransit registers the bus check itself. -->
@@ -15,7 +15,7 @@
     <PackageReference Include="Microsoft.Extensions.Caching.Memory" />
     <!-- The carrier's typed client (§3.1's anti-corruption layer) and the address read's pipeline. -->
     <PackageReference Include="Microsoft.Extensions.Http.Resilience" />
-    <!-- IHostEnvironment, which AddCarrierGateway takes for the scheme rule. -->
+    <!-- The hosting abstractions this project names: its workers and IHostEnvironment. -->
     <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
     <!-- The client half of ADR-052's read: one row in Appendix B, as they ship and version together. -->
     <PackageReference Include="Grpc.Net.ClientFactory" />
