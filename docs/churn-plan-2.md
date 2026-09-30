@@ -227,13 +227,14 @@ Each rule names its owner; this file cites and does not restate.
   the argument goes where the guide already sends it — an ADR.
 - **A review finding against a comment is accepted only for falsehood or
   a broken rule.** The review commands — `review-copilot.md`,
-  `review-branch.md`, the adjudicator `/ship`'s Grok triage dispatches, and
-  `/bug-sweep`'s auditor — refuse a finding that asks a true comment inside
-  the style guide's rules to be reworded, completed or expanded, and accept
-  one showing a comment that is false or breaks one of those rules. The one
-  fix for an accepted finding is to cut. A
-  round whose only findings are refused changes nothing; each loop judges
-  the round after it on its own terms.
+  `review-branch.md` and the adjudicator `/ship`'s Grok triage dispatches —
+  refuse a finding that asks a true comment inside the style guide's rules
+  to be reworded, completed or expanded, and accept one showing a comment
+  that is false or breaks one of those rules. `/bug-sweep`'s auditor raises
+  only a false comment, because a style rule is not a defect. The one fix
+  for an accepted finding is to cut. A round whose only findings are
+  refused changes nothing; each loop judges the round after it on its own
+  terms.
 - **A round's touch set is the finding's own sites.** The primer's
   *Working in this repo* gains one line: a `fix` commit closing a review
   finding names the finding in its subject and carries that finding's fix
