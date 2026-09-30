@@ -1240,7 +1240,7 @@ class VerifiedVersionTests(unittest.TestCase):
 class DescriptorReadTests(unittest.TestCase):
     """Every descriptor the workflow reads, the canary and the smoke run read.
 
-    The subject is the text deploy.yml and smoke.sh run; no name is listed here.
+    The subject is the text deploy.yml and smoke.sh run.
     """
 
     def setUp(self) -> None:
