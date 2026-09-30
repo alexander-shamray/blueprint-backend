@@ -16,7 +16,7 @@ public sealed class GrpcPathTests(GatewayFactory factory) : IClassFixture<Gatewa
         "/ordering.delivery.v1.DeliveryAddresses/Get"
     ];
 
-    /// <summary>The port both gRPC endpoints bind (§9.7, ADR-052).</summary>
+    /// <summary>The port the gRPC endpoints bind (§9.7, ADR-052).</summary>
     private const string GrpcPort = ":8081";
 
     [Theory]
