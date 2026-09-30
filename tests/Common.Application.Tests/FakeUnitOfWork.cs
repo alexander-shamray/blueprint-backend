@@ -1,6 +1,6 @@
 namespace Common.Application.Tests;
 
-/// <summary>Logs every member the behaviour touches to the shared <see cref="PipelineLog"/>.</summary>
+/// <summary>Logs the unit-of-work calls the behaviour makes to the shared <see cref="PipelineLog"/>.</summary>
 public sealed class FakeUnitOfWork(PipelineLog log) : IUnitOfWork
 {
     /// <summary>What <see cref="ModifiedAggregateCount"/> reports.</summary>
