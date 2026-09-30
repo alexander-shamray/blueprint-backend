@@ -1,23 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!--
-    NOT a test project (§4.1), on the same terms as Catalog.TestSupport and
-    Ordering.TestSupport: a Library that a suite references, holding a fixture
-    the suite cannot hold itself.
-
-    **And the reason it cannot is a compiler rule rather than a sharing one.**
-    §4.1 gives a service a TestSupport project when two suites need one fixture
-    and cannot reference each other. There is one BFF suite, so that argument
-    does not apply here and a different one does: the stub Catalog is a gRPC
-    SERVER, which means generating server code from pricing.proto — and
-    Web.Bff already generates the client half of the same file. Generated into
-    a suite that also references Web.Bff, every message type exists twice in
-    one compilation, and CS0436 makes each use an error under ADR-019.
-
-    Two assemblies, one .proto, one half each, is also the honest model of
-    contract-first: a server and a client generate independently from one
-    contract, which is exactly what would happen if these were separate repos.
-  -->
+  <!-- Not a test project (§4.1). The stub's server half of pricing.proto, compiled beside Web.Bff's client half,
+       would define every message twice in one compilation, and CS0436 is an error under ADR-019. -->
 
   <PropertyGroup>
     <IsPackable>false</IsPackable>
@@ -37,11 +21,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- The SERVER half of the contract Web.Bff compiles as a client. This
-         project deliberately references no Web.Bff and no Catalog assembly:
-         it consumes the .proto and nothing else, which is what keeps §4.3
-         true — Common.Contracts is still the only assembly crossing a service
-         boundary. -->
+    <!-- The server half of the contract Web.Bff compiles as a client, from the .proto alone (§4.3). -->
     <Protobuf
       Include="..\..\src\Services\Catalog\Catalog.Api\Protos\pricing.proto"
       Link="Protos\pricing.proto"

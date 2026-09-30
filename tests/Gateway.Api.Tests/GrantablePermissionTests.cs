@@ -6,36 +6,9 @@ using Xunit;
 namespace Gateway.Api.Tests;
 
 /// <summary>
-/// Every permission the gateway requires is one somebody can be granted.
+/// Every permission the gateway requires is a role the shipped realm file can grant, read on
+/// <c>RealmImportTests</c>' terms (§11.4).
 /// </summary>
-/// <remarks>
-/// <para>
-/// <b>This test exists because PR-17 shipped without it and was wrong.</b> The
-/// gateway registered a policy over <c>inventory:admin</c> and named it on a
-/// route, and the realm's <c>commerce-api</c> client held one role —
-/// <c>catalog:write</c>. So <c>/api/v1/inventory</c> answered 403 to every
-/// principal the realm could issue, permanently, and nothing said a word:
-/// §11.4's constant makes a misspelling a compile error and says nothing about
-/// a name the identity provider has never heard of.
-/// </para>
-/// <para>
-/// <c>RealmImportTests</c> in <c>Common.Web.Tests</c> asserts the same realm's
-/// role list is closed, and could not catch this — it compares against a
-/// literal because that assembly is a building block and cannot reference a
-/// host to read its constants. The check has to run from the side that owns
-/// the constant, which is here. <b>Catalog owes the same test</b>, and
-/// <c>catalog:write</c> is grantable today only because PR-16 added the role
-/// and the policy in one change rather than because anything checks it.
-/// </para>
-/// <para>
-/// Reading the shipped realm file rather than a live Keycloak, on
-/// <c>RealmImportTests</c>' terms: what is being asserted is a name in a
-/// document, and a container would prove the same thing an order of magnitude
-/// more slowly. Grantable is the bar, not granted — which development login
-/// holds a permission is the realm's decision (§14.1), and
-/// <c>RealmImportTests</c> pins it.
-/// </para>
-/// </remarks>
 public sealed class GrantablePermissionTests
 {
     /// <summary>The client that owns the permission roles (§11.5).</summary>
@@ -58,12 +31,7 @@ public sealed class GrantablePermissionTests
                 .OfType<string>()
         ];
 
-        // Read off the type, not listed by hand. Naming `InventoryAdmin`
-        // explicitly made this a second manual registry — a permission added to
-        // GatewayPermissions and required by a route would not enter this
-        // assertion, which is the exact defect the test exists to prevent,
-        // one level up. Reflection over the constants is what makes a new one
-        // arrive here without anybody remembering to bring it.
+        // Read off the type, so a permission added to GatewayPermissions arrives here unasked.
         string[] required =
         [
             .. typeof(GatewayPermissions)
@@ -72,8 +40,7 @@ public sealed class GrantablePermissionTests
                 .Select(f => (string)f.GetRawConstantValue()!)
         ];
 
-        // The guard against the whole thing passing vacuously: a vocabulary
-        // that emptied would satisfy every assertion below.
+        // A vocabulary that emptied would satisfy every assertion below.
         required.ShouldNotBeEmpty();
 
         foreach (string permission in required)
@@ -85,11 +52,7 @@ public sealed class GrantablePermissionTests
         }
     }
 
-    /// <summary>
-    /// The same walk <c>RealmImportTests</c> makes, and for the same reason: a
-    /// test asserting a repository file has to find it from a bin directory
-    /// whose depth is a build detail.
-    /// </summary>
+    /// <summary>Walks up to <c>Platform.slnx</c>, since the bin directory's depth is a build detail.</summary>
     private static string RepositoryFile(string relativePath)
     {
         DirectoryInfo? directory = new(AppContext.BaseDirectory);
@@ -105,8 +68,7 @@ public sealed class GrantablePermissionTests
 
         string path = Path.Combine(directory.FullName, relativePath);
 
-        // An absent file must fail here rather than as an empty realm that
-        // satisfies nothing and asserts nothing.
+        // An absent file fails here rather than as an empty realm that asserts nothing.
         return File.Exists(path)
             ? path
             : throw new FileNotFoundException(

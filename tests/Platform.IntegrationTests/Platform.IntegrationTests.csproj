@@ -15,20 +15,12 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!--
-      The platform's contracts are a single assembly that itself references
-      nothing (§4.3), so the contract assertions are about the whole assembly
-      rather than about any service in it.
-    -->
+    <!-- The contracts are one assembly referencing nothing (§4.3), so the assertions are about all of it. -->
     <ProjectReference Include="..\..\src\BuildingBlocks\Common.Contracts\Common.Contracts.csproj" />
   </ItemGroup>
 
   <ItemGroup>
-    <!--
-      §3.2 holds Payments' redelivery ladder to Ordering's payment timeout
-      without either service reading the other's assembly (§4.2); this suite
-      is where the two constants are read side by side instead.
-    -->
+    <!-- §3.2's two timings, read side by side here, since neither service reads the other's assembly (§4.2). -->
     <ProjectReference Include="..\..\src\Services\Ordering\Ordering.Infrastructure\Ordering.Infrastructure.csproj" />
     <ProjectReference Include="..\..\src\Services\Payments\Payments.Infrastructure\Payments.Infrastructure.csproj" />
   </ItemGroup>

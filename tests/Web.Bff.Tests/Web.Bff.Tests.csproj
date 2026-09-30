@@ -17,37 +17,20 @@
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="Shouldly" />
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
-    <!-- Grpc.Core's StatusCode, which the tests queue on the stub to drive the
-         retry and the failure mappings. Carried transitively; named here
-         because these tests name the type, on the register's honesty rule. -->
+    <!-- Grpc.Core's StatusCode, named directly by these tests though carried transitively. -->
     <PackageReference Include="Grpc.Net.ClientFactory" />
-    <!-- HttpStandardResilienceOptions, read back off the built host to assert
-         §9.7's hierarchy. Carried transitively by Web.Bff; named here for the
-         same reason. -->
+    <!-- HttpStandardResilienceOptions, read off the built host (§9.7); named for the same reason. -->
     <PackageReference Include="Microsoft.Extensions.Http.Resilience" />
-    <!-- §11.5's suite, and the only one in the solution that runs a real
-         Keycloak. The audience mapper it proves is realm configuration, so
-         nothing in the solution compiles differently when it is missing. -->
+    <!-- §11.5's suite, the one that runs a real Keycloak. -->
     <PackageReference Include="Testcontainers.Keycloak" />
-    <!-- JwtSecurityTokenHandler, which KeycloakIdentityTests reads `aud` with.
-         It arrives transitively through Common.Web's JwtBearer reference and is
-         named here anyway, on the same honesty rule the two rows above cite:
-         a project that names a type pays for the package. -->
+    <!-- JwtSecurityTokenHandler, named for the same reason though Common.Web's JwtBearer carries it. -->
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\BFF\Web.Bff\Web.Bff.csproj" />
-    <!-- StubCatalog, and the generated SERVER half of pricing.proto with it.
-         In its own library rather than here, because Web.Bff already exports
-         the CLIENT half's message types: generated into this compilation as
-         well, every one of them would be a CS0436 — an error under ADR-019 —
-         and that project's own file argues it at length.
-
-         The consequence for anyone adding a test here: this suite must not
-         name a generated type. It never does today, and the moment one is
-         named the two copies become ambiguous. Drive the stub through its own
-         surface instead, which is what it is shaped for. -->
+    <!-- StubCatalog and pricing.proto's server half. This suite names no generated type, as both halves'
+         copies would then be ambiguous; drive the stub through its own surface. -->
     <ProjectReference Include="..\Web.Bff.TestSupport\Web.Bff.TestSupport.csproj" />
   </ItemGroup>
 

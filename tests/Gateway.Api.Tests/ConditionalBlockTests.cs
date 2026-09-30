@@ -5,20 +5,7 @@ using Xunit;
 
 namespace Gateway.Api.Tests;
 
-/// <summary>
-/// §4.2's two conditional blocks — forwarded headers and CORS — and the rule
-/// that governs both: each is optional, and REQUIRED once switched on. "Off"
-/// and "on but unconfigured" are different states, the first a valid topology
-/// and the second a silent defect.
-/// </summary>
-/// <remarks>
-/// Both configuration reads are hoisted out of their callbacks in
-/// <c>Program.cs</c>, and these tests are why. An options callback runs when
-/// the options are first resolved — for CORS, on the first request that needs
-/// a policy — so the same <c>GetRequiredSection</c> read from inside one
-/// throws at a request rather than at a deployment, which is the deferral the
-/// pair of flags exists to avoid.
-/// </remarks>
+/// <summary>§4.2's conditional blocks, forwarded headers and CORS: optional, and required once switched on.</summary>
 public sealed class ConditionalBlockTests
 {
     [Fact]
@@ -29,9 +16,6 @@ public sealed class ConditionalBlockTests
         InvalidOperationException thrown =
             Should.Throw<InvalidOperationException>(() => _ = factory.Services);
 
-        // Enabled but unset would otherwise yield WithOrigins([]), which
-        // rejects every browser request while starting cleanly — surfacing as
-        // a CORS error in a console rather than as the missing setting it is.
         thrown.Message.ShouldContain("Cors:Origins");
     }
 
@@ -48,49 +32,13 @@ public sealed class ConditionalBlockTests
 
         response.Headers.GetValues("Access-Control-Allow-Origin").Single().ShouldBe(CorsFactory.Origin);
 
-        // WithExposedHeaders only has an observable effect on the actual
-        // response — CORS's preflight answer carries Allow-* headers, never
-        // Expose-Headers, so this is asserted here and not against one of the
-        // OPTIONS cases below. Neither header named is CORS-safelisted, so
-        // without an entry here a browser client cannot read either value:
-        // Retry-After is what §10.3's rejection handler goes to the trouble
-        // of computing, and the correlation id header is written on every
-        // response and is the one the design spec this route was added for
-        // reads the correlation id from — the problem body's own
-        // `correlationId` extension member is the fallback for a response
-        // that has no problem body, not the other way round.
-        //
-        // Both, asserted individually rather than as one loose "contains
-        // Retry-After": a single ShouldContain(predicate) is satisfied by
-        // either header alone, so it would still pass with one silently
-        // dropped from WithExposedHeaders' argument list.
+        // Here and not on a preflight, whose answer never carries Expose-Headers.
         string[] exposed = [.. response.Headers.GetValues("Access-Control-Expose-Headers")];
         exposed.ShouldContain(h => h.Contains("Retry-After", StringComparison.OrdinalIgnoreCase));
         exposed.ShouldContain(h => h.Contains(CorrelationIdExtensions.Header, StringComparison.OrdinalIgnoreCase));
     }
 
-    /// <summary>
-    /// The browser flow that actually breaks: an <c>OPTIONS</c> preflight to a
-    /// proxied route, asking to send an <c>Authorization</c> header.
-    /// </summary>
-    /// <remarks>
-    /// A simple GET to a health probe — which is all the test above does —
-    /// exercises none of what makes CORS fragile here. The preflight carries
-    /// **no token by construction**, and the route it names carries §10.2's
-    /// <c>authenticated</c> policy, so anything that let authorization see this
-    /// request would answer 401 and the browser would report a CORS failure for
-    /// a request the server never intended to refuse.
-    /// Raised by Copilot as a gap, and it is: the flag tests prove the policy
-    /// is configured, not that a browser can use it.
-    ///
-    /// <para>
-    /// This route carries **no** method constraint — a claim that it did stood
-    /// here for one round and was wrong, since <c>catalog-public</c> is the
-    /// only route in §10.2 that limits methods. That case is the one below,
-    /// because a preflight crossing a <c>Match:Methods</c> asks a different
-    /// question from one crossing an authorization policy.
-    /// </para>
-    /// </remarks>
+    /// <summary>A preflight carries no token, so CORS answers it before authorization runs (§4.2).</summary>
     [Fact]
     public async Task Cors_answers_a_preflight_for_a_proxied_route_that_requires_a_token()
     {
@@ -104,11 +52,7 @@ public sealed class ConditionalBlockTests
 
         HttpResponseMessage response = await client.SendAsync(preflight, TestContext.Current.CancellationToken);
 
-        // The status, not "not 401". A browser rejects a preflight on any
-        // non-success status whatever headers came with it, so 403, 429 and
-        // 500 all leave the flow just as unusable as the 401 this test was
-        // written for — and the weaker assertion passed for every one of them.
-        // The CORS middleware short-circuits a valid preflight with 204.
+        // The status itself, since a browser rejects a preflight on any non-success status.
         response.StatusCode.ShouldBe(HttpStatusCode.NoContent);
 
         response.Headers.GetValues("Access-Control-Allow-Origin").Single().ShouldBe(CorsFactory.Origin);
@@ -118,18 +62,7 @@ public sealed class ConditionalBlockTests
             h => h.Contains("authorization", StringComparison.OrdinalIgnoreCase));
     }
 
-    /// <summary>
-    /// The same preflight against the one route that limits methods, which is
-    /// the shipped platform's only public path.
-    /// </summary>
-    /// <remarks>
-    /// A preflight is an <c>OPTIONS</c>, and <c>catalog-public</c> matches
-    /// <c>GET</c> alone (§10.2) — so this is the case where the CORS
-    /// middleware must answer before YARP's method constraint refuses, and the
-    /// browser flow that a real SPA actually makes. Nothing covered it until
-    /// Copilot pointed out that the route named in the case above carries no
-    /// <c>Match:Methods</c> at all.
-    /// </remarks>
+    /// <summary>A preflight is an <c>OPTIONS</c>, a method <c>catalog-public</c> does not match (§10.2).</summary>
     [Fact]
     public async Task Cors_answers_a_preflight_for_the_method_limited_public_route()
     {
@@ -146,10 +79,6 @@ public sealed class ConditionalBlockTests
         response.Headers.GetValues("Access-Control-Allow-Origin").Single().ShouldBe(CorsFactory.Origin);
     }
 
-    /// <summary>
-    /// The other half of the flag, without which the test above proves only
-    /// that CORS headers exist rather than that anything turns them on.
-    /// </summary>
     [Fact]
     public async Task Cors_left_off_answers_the_same_browser_with_no_header()
     {
@@ -164,19 +93,7 @@ public sealed class ConditionalBlockTests
         response.Headers.Contains("Access-Control-Allow-Origin").ShouldBeFalse();
     }
 
-    /// <summary>
-    /// A section that exists and holds nothing usable, which is the shape
-    /// <c>GetRequiredSection</c> cannot see.
-    /// </summary>
-    /// <remarks>
-    /// <c>Cors__Origins__0=</c> is the commonest way a deployment gets this
-    /// wrong, and it binds to an array holding one empty string:
-    /// <c>WithOrigins</c> accepts it, the host starts, and every browser
-    /// request is rejected by a policy matching no origin at all. The same
-    /// finding <c>AddJwtAuthentication</c> already carried for
-    /// <c>Identity:Authority</c> (§11.3) — blank counts as missing — learned
-    /// once there and not applied here until Copilot said so.
-    /// </remarks>
+    /// <summary><c>Cors__Origins__0=</c> binds one empty string, which <c>GetRequiredSection</c> cannot see.</summary>
     [Fact]
     public void Cors_enabled_with_a_blank_origin_refuses_to_start()
     {
@@ -188,38 +105,17 @@ public sealed class ConditionalBlockTests
         thrown.Message.ShouldContain("Cors:Origins");
     }
 
-    /// <summary>
-    /// A value that is present, non-blank, and still not an origin.
-    /// </summary>
-    /// <remarks>
-    /// <c>https//spa.example</c> — one missing colon — is what a typo produces,
-    /// and <c>WithOrigins</c> takes it as a literal to compare against rather
-    /// than rejecting it. The host starts healthy and matches no browser ever,
-    /// which is the blank entry's outcome reached by another route. The guard
-    /// grew in three rounds — empty, then <c>*</c>, then this — and each was a
-    /// value the one before it admitted.
-    /// </remarks>
+    /// <summary>A non-blank value that is no browser origin, which <c>WithOrigins</c> would take literally.</summary>
     [Theory]
-    // A missing colon. Present, non-blank, and taken literally by WithOrigins.
     [InlineData("https//spa.example")]
-    // A trailing slash, which every parsed property agrees is harmless —
-    // `AbsolutePath` is "/" with it and without — while the browser's Origin
-    // header never carries one, so the configured value matches nothing. The
-    // one case the guard could not see through the Uri it parsed.
+    // The browser's Origin header never carries a trailing slash.
     [InlineData("https://spa.example/")]
-    // Not an origin at all: an origin is scheme, host and optional port.
     [InlineData("https://spa.example/app")]
-    // Credentials in the authority — parses cleanly, and a browser never sends
-    // one, so the value matches nothing.
     [InlineData("https://user:password@spa.example")]
-    // An explicit default port. A browser serialises the origin without it, so
-    // these match nothing either — the seventh value class, and the one that
-    // turned the guard from a list of prohibitions into a single equality
-    // against the canonical authority form.
+    // A browser serialises an origin without its scheme's default port.
     [InlineData("https://spa.example:443")]
     [InlineData("http://spa.example:80")]
-    // A host that differs only in case, which the same equality now catches:
-    // the canonical form is lowercase and WithOrigins compares ordinally.
+    // The canonical form is lowercase and WithOrigins compares ordinally.
     [InlineData("https://SPA.example")]
     public void Cors_enabled_with_a_value_that_is_not_an_origin_refuses_to_start(string configured)
     {
@@ -230,26 +126,11 @@ public sealed class ConditionalBlockTests
 
         thrown.Message.ShouldContain("index 0");
 
-        // And the offending value is NOT in the message. One of the rejected
-        // shapes is credentials in the authority, and an exception message
-        // reaches the logs — where §13.4's redactor scrubs keyed attributes and
-        // cannot see a secret interpolated into a string. This assertion is the
-        // whole reason the message reports an index: without it, the guard that
-        // rejects a password would be the thing that published one.
+        // A rejected shape carries credentials, and §13.4's redactor cannot see a secret inside a message.
         thrown.Message.ShouldNotContain(configured);
     }
 
-    /// <summary>
-    /// The wildcard, which fails for the opposite reason: it is a legal CORS
-    /// value that <c>AllowCredentials</c> makes invalid.
-    /// </summary>
-    /// <remarks>
-    /// Its own case rather than a row above, because its message names the
-    /// value — <c>*</c> carries no secret, and naming it is what makes the
-    /// error actionable. The eager guard had no test at all until Copilot said
-    /// so: deleting it left the whole suite green and deferred the failure to
-    /// the first preflight, which is precisely what it exists to prevent.
-    /// </remarks>
+    /// <summary>A wildcard is ruled out by <c>AllowCredentials</c>, and named, as it holds no secret.</summary>
     [Fact]
     public void Cors_enabled_with_a_wildcard_origin_refuses_to_start()
     {
@@ -269,18 +150,11 @@ public sealed class ConditionalBlockTests
         InvalidOperationException thrown =
             Should.Throw<InvalidOperationException>(() => _ = factory.Services);
 
-        // Left empty, ASP.NET Core trusts nothing beyond loopback and silently
-        // keeps the proxy's address, so the rate limiter partitions all traffic
-        // into one bucket and its per-client limit becomes a global cap.
+        // Left empty, only loopback is trusted, so anonymous callers share one §10.3 partition.
         thrown.Message.ShouldContain("Ingress:TrustedNetworks");
     }
 
-    /// <summary>
-    /// A network that will not parse is the same class of defect as a section
-    /// that is absent, and it must fail in the same place. This is what pins
-    /// the parse to startup: it runs inside an options callback, which would
-    /// otherwise be entered when the middleware is first constructed.
-    /// </summary>
+    /// <summary>Pins the parse to startup rather than to the middleware's first construction.</summary>
     [Fact]
     public void Ingress_enabled_with_an_unparseable_network_refuses_to_start() =>
         Should.Throw<FormatException>(() =>
@@ -317,15 +191,6 @@ public sealed class ConditionalBlockTests
         ];
     }
 
-    /// <summary>
-    /// CORS on, with whatever single origin the case under test configures.
-    /// </summary>
-    /// <remarks>
-    /// Parameterised rather than one factory per bad value: the guard has now
-    /// grown four times — empty, <c>*</c>, unparseable, trailing slash — and
-    /// each round's value was one the previous guard admitted. A theory row is
-    /// what the fifth costs.
-    /// </remarks>
     private sealed class CorsWithOriginFactory(string origin) : GatewayFactory
     {
         protected override IEnumerable<KeyValuePair<string, string>> AdditionalSettings =>

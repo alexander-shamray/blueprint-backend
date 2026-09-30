@@ -6,11 +6,7 @@ using Xunit;
 
 namespace Web.Bff.Tests;
 
-/// <summary>
-/// The half of §11.5 a host keeps after ADR-052: the grant's code is a
-/// building block's, and the names it cannot write down are this host's to
-/// supply.
-/// </summary>
+/// <summary>The half of §11.5 a host keeps after ADR-052: the names the building block cannot write down.</summary>
 public sealed class IdentityRegistrationTests
 {
     [Fact]
@@ -18,10 +14,7 @@ public sealed class IdentityRegistrationTests
     {
         using BffFactory factory = new();
 
-        // Common.Infrastructure may not name Common.Web, so the key's name
-        // travels as a value and a refused discovery document says which key
-        // to fix. Supplied wrongly, a refused discovery document names a key
-        // nobody can set, and no other test would notice.
+        // Common.Infrastructure may not name Common.Web, so the key's name travels as a value.
         factory.Services.GetRequiredService<AuthorityKeyName>()
             .Name.ShouldBe(AuthenticationExtensions.AuthorityKey);
     }

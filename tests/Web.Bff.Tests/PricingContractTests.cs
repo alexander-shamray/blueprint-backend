@@ -7,52 +7,16 @@ using Xunit;
 
 namespace Web.Bff.Tests;
 
-/// <summary>
-/// The consumer's half of PR-26: every expectation in
-/// <see cref="PricingContract"/>, driven through the BFF's own screen against a
-/// stub that answers exactly what the contract promises.
-/// </summary>
-/// <remarks>
-/// <para>
-/// <b>This is what makes the contract consumer-DRIVEN rather than a second
-/// provider suite.</b> <c>PricingContractVerificationTests</c> holds the real
-/// Catalog to the same list; this one establishes that the list is a list of
-/// things the consumer actually needs, because each entry is exercised by the
-/// endpoint that needs it. An expectation nobody drives is an expectation the
-/// provider is being held to for nothing, and §12.6 already argues that
-/// direction one artefact over — a sample naming a contract that no longer
-/// exists compiles until the type is deleted.
-/// </para>
-/// <para>
-/// <b>One entry is now the exception that sentence warns about, and it is kept
-/// deliberately.</b> Since ADR-045 the quote bounds its own line count, so the
-/// ceiling refusal fails validation here and never reaches the stub — this
-/// suite drives it and asserts the absence of the hop, which is a weaker thing
-/// than driving the interaction. It is not an expectation held for nothing:
-/// the two ceilings are independent and equal only by coincidence of value, so
-/// the provider verification is what would catch them parting. What it is no
-/// longer is consumer-driven, and saying so is the point of this paragraph —
-/// an exception recorded is a decision, where an exception nobody wrote down
-/// is how a contract quietly becomes a second provider suite.
-/// </para>
-/// <para>
-/// <b>The violation tests in <c>QuoteEndpointTests</c> are the other half and
-/// are deliberately not here.</b> Those drive replies the contract forbids —
-/// a comma decimal, a negative amount, a duplicate, a product nobody asked
-/// about — and assert the endpoint refuses them. A contract says what the
-/// provider owes; that suite says what the consumer does when it is not paid.
-/// </para>
-/// </remarks>
+/// <summary>ADR-023's consumer half: each <see cref="PricingContract"/> entry driven through the screen.</summary>
+/// <remarks>The ceiling refusal no longer reaches the stub, and stays as Catalog still owes it (ADR-045).</remarks>
 public sealed class PricingContractTests : IAsyncLifetime
 {
     private readonly StubCatalog _catalog = new();
 
     private BffFactory _factory = null!;
 
-    /// <summary>The interactions the contract says are answered.</summary>
     public static TheoryData<string> Answered => [.. PricingContract.Answered];
 
-    /// <summary>The interactions the contract says are refused.</summary>
     public static TheoryData<string> Refused => [.. PricingContract.Refusals];
 
     public async ValueTask InitializeAsync()
@@ -78,10 +42,7 @@ public sealed class PricingContractTests : IAsyncLifetime
         using HttpClient client = Caller();
         await client.PostQuote(interaction.Currency, TestContext.Current.CancellationToken, Basket(interaction, published));
 
-        // The same verification the provider run applies to the real Catalog's
-        // reply. Both sides passing it is the whole guarantee this PR buys: the
-        // consumer's suite is driven by a Catalog the real one could be, which
-        // is precisely what a hand-written stub cannot promise.
+        // The provider run's own verification, so the stub is a Catalog the real one could be (ADR-023).
         PricingContract.Verify(interaction, published, _catalog.Replies.ShouldHaveSingleItem());
     }
 
@@ -104,9 +65,7 @@ public sealed class PricingContractTests : IAsyncLifetime
         quote.Lines.Select(line => line.ProductId).ShouldBe(expected, ignoreOrder: true);
         quote.Total.ShouldBe(priced.Aliases.Sum(alias => PricingContract.Product(interaction, alias).Amount));
 
-        // Everything asked about that the contract does not price, named rather
-        // than dropped — which is the promise QuoteResponse.Unpriced makes and
-        // the reason "absent, never zero" is an interaction at all.
+        // Asked about and not priced is named rather than dropped, as QuoteResponse.Unpriced promises.
         quote.Unpriced.ShouldBe(
             [.. PricingContract.RequestedIds(interaction, published).Where(id => !expected.Contains(id))],
             ignoreOrder: true);
@@ -125,23 +84,7 @@ public sealed class PricingContractTests : IAsyncLifetime
             TestContext.Current.CancellationToken,
             Basket(interaction, published));
 
-        // 400, and ADR-045 changed which mechanism produces it. The contract's
-        // one refusal is a basket past Catalog's id ceiling, and the endpoint
-        // used to have no ceiling of its own, so this asserted
-        // UpstreamExceptionHandler's InvalidArgument arm. QuoteRequestValidator
-        // now bounds the request's own line count at OrderLimits.MaxLines,
-        // which is the order's bound and happens to equal Catalog's — so the
-        // refusal is raised here and Catalog is never asked.
-        //
-        // The interaction stays in the contract because Catalog still OWES the
-        // refusal, and PricingContractVerificationTests is what holds it to
-        // that. What the consumer can no longer drive through its own screen it
-        // still needs the provider to promise: the day the two ceilings part,
-        // this is the expectation that says which way.
-        //
-        // The InvalidArgument mapping keeps its coverage in
-        // QuoteEndpointTests.An_upstream_refusal_is_the_callers_400_rather_than_the_hosts_500,
-        // which stubs the status directly rather than provoking it with a size.
+        // QuoteRequestValidator refuses it before the hop since ADR-045, so Catalog is never asked.
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
         _catalog.Calls.ShouldBeEmpty();
     }
@@ -154,25 +97,7 @@ public sealed class PricingContractTests : IAsyncLifetime
         return client;
     }
 
-    /// <summary>
-    /// The interaction as the BFF's own caller would ask it — a basket.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// Through the screen's own request shape rather than through
-    /// <c>PricingContract.Request</c>, deliberately: the consumer's half has to
-    /// establish that the request the ENDPOINT builds is the one the contract
-    /// describes. Handing the endpoint's job to the contract would verify the
-    /// contract against itself.
-    /// </para>
-    /// <para>
-    /// One of each, because quantity is not this contract's subject. Catalog
-    /// prices a product and has no opinion about how many of one a basket
-    /// holds (ADR-045), so a quantity above one would change the quote's
-    /// arithmetic without changing a single field of the question asked
-    /// upstream — which is what these interactions are about.
-    /// </para>
-    /// </remarks>
+    /// <summary>The interaction as a basket of one each, so the endpoint builds the request (§12.6).</summary>
     private static (Guid ProductId, int Quantity)[] Basket(
         PricingInteraction interaction,
         IReadOnlyDictionary<string, Guid> published) =>

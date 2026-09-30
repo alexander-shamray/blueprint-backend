@@ -57,16 +57,11 @@ public sealed class QuoteEndpointTests : IAsyncLifetime
         quote.Currency.ShouldBe("GBP");
         quote.Lines.Count.ShouldBe(2);
 
-        // 2A + B, not A + B, and the difference is the whole of ADR-045. The
-        // quantities are deliberately unequal: at one each, a total that
-        // multiplies and one that does not produce identical bytes, so this
-        // assertion would pass against the endpoint it replaced.
+        // Unequal quantities, since at one each a total that ignored them would match (ADR-045).
         quote.Total.ShouldBe(220.48m);
         quote.Unpriced.ShouldBeEmpty();
 
-        // The unit price keeps its meaning and its name — a cart renders
-        // "£49.99 each" beside the line total — so both are asserted rather
-        // than only the one the total is computed from.
+        // The unit price too, as a cart shows it beside the line total.
         QuoteLine chair = quote.Lines.Single(line => line.ProductId == Chair);
         chair.Amount.ShouldBe(49.99m);
         chair.Quantity.ShouldBe(2);
@@ -81,9 +76,7 @@ public sealed class QuoteEndpointTests : IAsyncLifetime
         QuoteResponse? quote = await client.Quote(
             "GBP", TestContext.Current.CancellationToken, (Chair, 3), (Unknown, 2));
 
-        // The assertion that matters is the second: a form that silently drops
-        // a line the customer chose is worse than one that says it cannot
-        // price it, and "the total is right" is true of both.
+        // The second assertion matters, as a dropped line leaves the total right.
         quote.ShouldNotBeNull();
         quote.Total.ShouldBe(149.97m);
         quote.Unpriced.ShouldBe([Unknown]);
@@ -97,9 +90,7 @@ public sealed class QuoteEndpointTests : IAsyncLifetime
         QuoteResponse? quote = await client.Quote(
             "USD", TestContext.Current.CancellationToken, (Chair, 2), (Desk, 1));
 
-        // Catalog stores one price per product and filters rather than
-        // converts (pricing.proto), so this is the honest answer and not an
-        // error — the BFF must not invent a conversion.
+        // Catalog filters rather than converts (pricing.proto), so this is an answer, not an error.
         quote.ShouldNotBeNull();
         quote.Lines.ShouldBeEmpty();
         quote.Total.ShouldBe(0m);
@@ -114,16 +105,7 @@ public sealed class QuoteEndpointTests : IAsyncLifetime
         QuoteResponse? quote = await client.Quote(
             "GBP", TestContext.Current.CancellationToken, (Chair, 2), (Chair, 1));
 
-        // Merged, not refused and not deduplicated, because that is what
-        // placing the order does with the same basket: PlaceOrderHandler calls
-        // a repeated product legitimate in as many words and Order.AddLine
-        // merges the lines. A quote that refused what the order accepts is the
-        // defect ADR-045 exists to close, pointing the other way — found by
-        // Copilot after the first version of this test asserted the refusal.
-        //
-        // Dropping the duplicate is still wrong and is not what happens: a
-        // repeated LINE carries a quantity, so DistinctBy would discard part
-        // of the customer's basket. The sum is the whole of it.
+        // Merged and summed, as placing the order merges a repeated product (ADR-045).
         quote.ShouldNotBeNull();
 
         QuoteLine line = quote.Lines.ShouldHaveSingleItem();
@@ -131,10 +113,7 @@ public sealed class QuoteEndpointTests : IAsyncLifetime
         line.LineTotal.ShouldBe(149.97m);
         quote.Total.ShouldBe(149.97m);
 
-        // Asserted at the wire as well, because the merge's second job is
-        // upstream and invisible from the response: it is what keeps a caller
-        // from spending Catalog's id ceiling on one product repeated as many
-        // times as OrderLimits.MaxLines allows.
+        // At the wire too, so one repeated product cannot spend Catalog's id ceiling.
         _catalog.Calls.Single().ProductIds.ShouldBe([Chair.ToString()]);
     }
 
@@ -149,10 +128,7 @@ public sealed class QuoteEndpointTests : IAsyncLifetime
             (Chair, OrderLimits.MaxQuantity),
             (Chair, 1));
 
-        // Every LINE here is within the bound and the basket is not, which is
-        // the case a per-line rule cannot see. Without the merged check this
-        // quoted a basket the order refuses — so OrderLimits.MaxQuantity was
-        // not the bound ADR-045 claims it is, on either side.
+        // Each line is within the bound and the basket is not, which a per-line rule cannot see.
         await ShouldBeRefusedWithoutAHop(response);
     }
 
@@ -172,12 +148,6 @@ public sealed class QuoteEndpointTests : IAsyncLifetime
     {
         using HttpClient client = Caller();
 
-        // An explicit JSON "lines": null binds as null. Without Cascade(Stop)
-        // in the validator, NotEmpty records its failure and the count
-        // predicate then dereferences null — turning a malformed request into
-        // a 500. The same guard PlaceOrderValidator carries, for the same
-        // reason, asserted through the status because the throw is not
-        // observable from out here.
         HttpResponseMessage response = await client.PostQuote(
             new QuoteRequest("GBP", null!), TestContext.Current.CancellationToken);
 
@@ -189,15 +159,7 @@ public sealed class QuoteEndpointTests : IAsyncLifetime
     {
         using HttpClient client = Caller();
 
-        // A JSON "lines": [null] binds as a list holding a null: the compiler's
-        // non-nullable element type is not a deserialisation constraint, and
-        // nothing in System.Text.Json enforces one. The null then reaches the
-        // duplicate-product predicate, which projects ProductId off every
-        // element — so a malformed request became a 500 before RuleForEach ever
-        // saw it. Found by Copilot on this pull request.
-        //
-        // Separate from the null-LIST case above, because the two fail in
-        // different rules and a guard on one does nothing for the other.
+        // Apart from the null list, as the two fail in different rules.
         HttpResponseMessage response = await client.PostQuote(
             new QuoteRequest("GBP", [null!]), TestContext.Current.CancellationToken);
 
@@ -217,14 +179,6 @@ public sealed class QuoteEndpointTests : IAsyncLifetime
         HttpResponseMessage response = await client.PostQuote(
             currency, TestContext.Current.CancellationToken, (Chair, 1));
 
-        // The trailing-newline case is the one with a reason beyond
-        // completeness, and it is why the rule is anchored with \z rather than
-        // $: .NET's $ matches before a trailing newline, so "GBP\n" satisfies a
-        // $-anchored pattern and would reach Catalog as a currency label no row
-        // carries. PlaceOrderValidator makes the same choice for the same
-        // reason and has had cases for it since it was written; this rule had
-        // none until Copilot pointed out that every quote test sends GBP or
-        // USD.
         await ShouldBeRefusedWithoutAHop(response);
     }
 
@@ -248,10 +202,7 @@ public sealed class QuoteEndpointTests : IAsyncLifetime
         HttpResponseMessage response = await client.PostQuote(
             "GBP", TestContext.Current.CancellationToken, (Chair, OrderLimits.MaxQuantity + 1));
 
-        // The bound is Ordering's, and that is the point rather than a
-        // convenience: a quote that priced this basket would hand the customer
-        // a number for an order PlaceOrderValidator refuses, and move the
-        // refusal from the cart screen to the checkout screen.
+        // Ordering's bound, so the cart never prices an order PlaceOrderValidator refuses.
         await ShouldBeRefusedWithoutAHop(response);
     }
 
@@ -260,9 +211,7 @@ public sealed class QuoteEndpointTests : IAsyncLifetime
     {
         using HttpClient client = Caller();
 
-        // The boundary from below. Without it the rule could be off by one in
-        // the strict direction and only the rejection test would notice —
-        // which it would not, because it asserts a failure either way.
+        // The boundary from below, where an off-by-one the rejection test cannot see would show.
         QuoteResponse? quote = await client.Quote(
             "GBP", TestContext.Current.CancellationToken, (Chair, OrderLimits.MaxQuantity));
 
@@ -275,12 +224,6 @@ public sealed class QuoteEndpointTests : IAsyncLifetime
     {
         using HttpClient client = Caller();
 
-        // int.MaxValue twice. Enumerable.Sum over int is CHECKED, so the
-        // merged-quantity rule threw OverflowException before the per-line
-        // rule could report either quantity as invalid — turning a malformed
-        // body into a 500, which is the same shape of defect as the null
-        // element two tests up and arrived in the fix for it. Found by
-        // Copilot.
         HttpResponseMessage response = await client.PostQuote(
             "GBP",
             TestContext.Current.CancellationToken,
@@ -295,12 +238,7 @@ public sealed class QuoteEndpointTests : IAsyncLifetime
     {
         using HttpClient client = Caller();
 
-        // The rule is PER PRODUCT, and nothing else here pins that half of it.
-        // Every other quantity case uses one product, so a mistaken
-        // basket-wide sum — the same predicate without its GroupBy — passes
-        // all of them while refusing this, which is a legitimate basket.
-        // Found by Copilot, which reached it by mutating the rule rather than
-        // by reading the tests.
+        // Per product, which a basket-wide sum would refuse while every one-product case passed.
         QuoteResponse? quote = await client.Quote(
             "GBP",
             TestContext.Current.CancellationToken,
@@ -325,11 +263,7 @@ public sealed class QuoteEndpointTests : IAsyncLifetime
         HttpResponseMessage response = await client.PostQuote(
             "GBP", TestContext.Current.CancellationToken, lines);
 
-        // Refused here rather than by Catalog, and the two are different
-        // bounds that happen to agree today: this one is on the request's own
-        // size and is checked before the hop, where GetPricesValidator's is on
-        // how many ids one price query may carry. Were Catalog's raised, this
-        // would still refuse — because the ORDER would.
+        // The order's own bound, before the hop; GetPricesValidator's is a separate one (ADR-045).
         await ShouldBeRefusedWithoutAHop(response);
     }
 
@@ -351,29 +285,20 @@ public sealed class QuoteEndpointTests : IAsyncLifetime
 
         QuoteResponse? quote = await client.Quote("GBP", TestContext.Current.CancellationToken, lines);
 
-        // The boundary from below again, and the last assertion is the one
-        // that would catch a ceiling enforced by batching rather than by
-        // refusing: §9.7 budgets ONE synchronous hop, not one per hundred.
+        // One call, as §9.7 budgets one synchronous hop rather than one per batch.
         quote.ShouldNotBeNull();
         quote.Lines.Count.ShouldBe(OrderLimits.MaxLines);
         quote.Total.ShouldBe(OrderLimits.MaxLines * 1.00m);
         _catalog.Calls.Count.ShouldBe(1);
     }
 
-    /// <summary>
-    /// Both halves of every refusal above. The second is the one worth
-    /// stating: a request that cannot produce anything must not spend the
-    /// pricing hop finding that out (§9.7).
-    /// </summary>
+    /// <summary>A 400 that never spent the pricing hop (§9.7).</summary>
     private async Task ShouldBeRefusedWithoutAHop(HttpResponseMessage response)
     {
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
         response.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
 
-        // Field-keyed, which is what makes this a ValidationProblemDetails
-        // rather than a bare problem response: the client can put the message
-        // beside the input that caused it. Results.Problem could not, and that
-        // is the reason the endpoint throws rather than returning (ADR-045).
+        // Field-keyed errors, which is why the endpoint throws rather than returning a problem (ADR-045).
         string body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         body.ShouldContain("errors");
 
@@ -387,15 +312,10 @@ public sealed class QuoteEndpointTests : IAsyncLifetime
 
         HttpResponseMessage response = await client.PostQuote("GBP", TestContext.Current.CancellationToken, (Chair, 1));
 
-        // §11.2: this host validates its own tokens, whatever the gateway in
-        // front of it did. The group fails closed, so the refusal comes from
-        // RequireAuthorization rather than from anything the endpoint does.
+        // This host validates its own tokens, whatever the gateway did (§11.2).
         response.StatusCode.ShouldBe(HttpStatusCode.Unauthorized);
 
-        // And problem+json, not an empty body — §10.5's promise covers the two
-        // statuses a client meets first, which is what UseStatusCodePages is
-        // in the pipeline for. Asserting the status alone would pass just as
-        // happily against no body at all.
+        // A body too, which §10.5's promise reaches through UseStatusCodePages.
         response.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
 
         _catalog.Calls.ShouldBeEmpty();
@@ -410,10 +330,7 @@ public sealed class QuoteEndpointTests : IAsyncLifetime
 
         HttpResponseMessage response = await client.PostQuote("GBP", TestContext.Current.CancellationToken, (Chair, 1));
 
-        // Catalog refused a request the BFF built out of the caller's own
-        // basket, so the caller is who has to change something. Without
-        // UpstreamExceptionHandler this is a 500, which sends them to read
-        // another service's logs for a mistake in what they sent.
+        // Catalog refused what the BFF built from the caller's basket, so the caller must change something.
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
         response.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
     }
@@ -430,11 +347,7 @@ public sealed class QuoteEndpointTests : IAsyncLifetime
         response.StatusCode.ShouldBe(HttpStatusCode.ServiceUnavailable);
         response.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
 
-        // ONE call, and this test was written expecting three. The count is
-        // the finding: an HTTP resilience pipeline cannot retry a gRPC status,
-        // because a gRPC status travels as an HTTP 200 with grpc-status in the
-        // trailers. UpstreamRetryTests is where both halves of that are
-        // measured and argued.
+        // One call, as an HTTP pipeline cannot retry a gRPC status riding an HTTP 200 (§9.7).
         _catalog.Calls.Count.ShouldBe(1);
     }
 
@@ -447,10 +360,7 @@ public sealed class QuoteEndpointTests : IAsyncLifetime
 
         HttpResponseMessage response = await client.PostQuote("GBP", TestContext.Current.CancellationToken, (Chair, 1));
 
-        // Without this check the endpoint totalled a USD amount and labelled
-        // the quote GBP, because the response's currency came from the REQUEST
-        // rather than from the price. pricing.proto echoes the currency so each
-        // amount is self-describing, and nothing was reading it.
+        // pricing.proto echoes the currency so each amount describes itself.
         response.StatusCode.ShouldBe(HttpStatusCode.InternalServerError);
     }
 
@@ -464,9 +374,7 @@ public sealed class QuoteEndpointTests : IAsyncLifetime
 
         HttpResponseMessage response = await client.PostQuote("GBP", TestContext.Current.CancellationToken, (Chair, 1));
 
-        // Untrusted, the Desk would have been priced and added to a total the
-        // caller never asked for — and Unpriced would not show it, because that
-        // is computed from what came back rather than from what was requested.
+        // An unasked price would join the total unseen by Unpriced, which is computed from the reply.
         response.StatusCode.ShouldBe(HttpStatusCode.InternalServerError);
     }
 
@@ -479,9 +387,7 @@ public sealed class QuoteEndpointTests : IAsyncLifetime
 
         HttpResponseMessage response = await client.PostQuote("GBP", TestContext.Current.CancellationToken, (Chair, 1));
 
-        // The second copy would have been added and totalled, doubling the
-        // quote while every id in it was one the caller asked for — the
-        // failure mode with no visible symptom but the arithmetic.
+        // A second copy would double the total with every id one the caller asked for.
         response.StatusCode.ShouldBe(HttpStatusCode.InternalServerError);
     }
 
@@ -494,12 +400,7 @@ public sealed class QuoteEndpointTests : IAsyncLifetime
 
         HttpResponseMessage response = await client.PostQuote("GBP", TestContext.Current.CancellationToken, (Chair, 1));
 
-        // A contract violation between two services is nobody's caller's
-        // fault, and answering 400 would tell the client to fix a request that
-        // was correct. This is also the assertion that would catch a
-        // culture-sensitive parse: "12,50" is a valid decimal under a
-        // comma-decimal locale, so a host that dropped InvariantCulture would
-        // answer 200 with a hundredfold price.
+        // A contract violation is not the caller's fault, and "12,50" parses under a comma-decimal culture.
         response.StatusCode.ShouldBe(HttpStatusCode.InternalServerError);
     }
 
@@ -512,13 +413,7 @@ public sealed class QuoteEndpointTests : IAsyncLifetime
 
         HttpResponseMessage response = await client.PostQuote("GBP", TestContext.Current.CancellationToken, (Chair, 1));
 
-        // "-12.50" parses perfectly well, which is why this needs its own
-        // assertion rather than riding on the one above: the failure is a
-        // VALID decimal carrying an invalid value, and it reaches the total
-        // and subtracts from it. Catalog's Money.Of refuses a negative, so
-        // nothing well-behaved sends one — and a producer's invariant is not
-        // a consumer's guarantee, which is the whole reason this boundary
-        // reads the currency too.
+        // A valid decimal with an invalid value; Catalog refusing negatives is no guarantee to this consumer.
         response.StatusCode.ShouldBe(HttpStatusCode.InternalServerError);
     }
 }

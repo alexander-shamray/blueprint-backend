@@ -6,27 +6,8 @@ using Common.Contracts.Shipping.V1;
 
 namespace Platform.IntegrationTests;
 
-/// <summary>
-/// One populated instance per contract type, hand-written. This is what keeps
-/// §12.6's suite honest as contracts grow: every member of a V1 contract is
-/// <c>required</c> unless §12.6's additive-member list names it, so there is no
-/// reflection shortcut that constructs one — the consequence survives the
-/// exemption, because the members beside it stay <c>required</c> — and
-/// a new contract without a sample fails <see cref="ContractTests"/> rather
-/// than being quietly skipped — which is the failure mode of every "iterate
-/// over all the types" test that falls back to
-/// <c>Activator.CreateInstance</c>.
-/// </summary>
-/// <remarks>
-/// Every sample carries a <b>distinct, non-default value in every member</b>,
-/// and that is a rule rather than a habit. Two assertions read these, and both
-/// go quiet on a sample of zeroes: the round-trip serialises, deserialises and
-/// re-serialises, so a member a serialiser dropped entirely is absent from both
-/// forms and compares equal; and the wire-member check asks that every declared
-/// property appears in the JSON, which a defaulted one still does. A sample
-/// that cannot distinguish a working serialiser from a broken one is a sample
-/// that turns both assertions into ones that cannot fail.
-/// </remarks>
+/// <summary>One sample per contract, by hand, so a contract with none fails rather than skips (§12.6).</summary>
+/// <remarks>Every member distinct and non-default, or a zeroed sample hides a dropped member (§12.6).</remarks>
 internal static class ContractSamples
 {
     private static readonly Guid Message = new("11111111-1111-1111-1111-111111111111");
@@ -35,9 +16,7 @@ internal static class ContractSamples
     private static readonly Guid Customer = new("44444444-4444-4444-4444-444444444444");
     private static readonly Guid Product = new("55555555-5555-5555-5555-555555555555");
 
-    // A fixed instant with a non-zero offset, on purpose: DateTimeOffset.MinValue
-    // survives every serialiser bug there is, and a UTC-offset sample cannot
-    // catch an options change that normalises the offset away.
+    // A non-zero offset, so an options change that normalises the offset away is caught.
     private static readonly DateTimeOffset Occurred =
         new(2026, 8, 11, 9, 30, 0, TimeSpan.FromHours(2));
 
@@ -189,11 +168,7 @@ internal static class ContractSamples
         }
     };
 
-    /// <summary>
-    /// The sample for one contract type, or a failure naming the type and what
-    /// to do about it. Throwing is the whole design: a caller that returned
-    /// null would let the suite skip a contract nobody wrote a sample for.
-    /// </summary>
+    /// <summary>The sample for one contract, or a failure naming it, never a null the suite could skip.</summary>
     public static object Create(Type contract) =>
         Registry.TryGetValue(contract, out Func<object>? sample) ? sample()
             : throw new InvalidOperationException(
@@ -202,10 +177,6 @@ internal static class ContractSamples
                 "one by reflection — " +
                 "add an entry to ContractSamples.");
 
-    /// <summary>
-    /// The types a sample exists for, so a test can assert the registry holds
-    /// no entry for a type that has since been deleted — the other direction of
-    /// the same drift, and the one throwing cannot catch.
-    /// </summary>
+    /// <summary>The types a sample exists for, so a sample outliving its contract is caught too.</summary>
     public static IReadOnlyCollection<Type> Sampled => Registry.Keys;
 }
