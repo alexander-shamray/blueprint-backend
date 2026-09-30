@@ -23,7 +23,7 @@ public sealed class TestAuthHandler(
 
     protected override Task<AuthenticateResult> HandleAuthenticateAsync()
     {
-        // No header means anonymous, or every 401 test would pass silently.
+        // No header means anonymous, not authenticated as nobody.
         if (!Request.Headers.TryGetValue(UserHeader, out StringValues userId))
             return Task.FromResult(AuthenticateResult.NoResult());
 
