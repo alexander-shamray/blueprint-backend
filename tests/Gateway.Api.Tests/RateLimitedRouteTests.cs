@@ -42,7 +42,7 @@ public sealed class RateLimitedRouteTests(StubDestination stub) : IClassFixture<
         rejected.StatusCode.ShouldBe(HttpStatusCode.TooManyRequests);
         rejected.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
 
-        // Present, not rounded: a minute's window leaves tens of seconds, where floor and ceiling agree.
+        // Present, not rounded: a minute's window leaves tens of seconds, which floor and ceiling both pass.
         rejected.Headers.RetryAfter.ShouldNotBeNull();
         rejected.Headers.RetryAfter!.Delta.ShouldNotBeNull();
         rejected.Headers.RetryAfter.Delta!.Value.ShouldBeGreaterThan(TimeSpan.Zero);
