@@ -176,9 +176,11 @@ The contract's §6 lists what locality leaves in force; these are the rest.
   `## Severity` in the body and the label both have to say it.
 - **A reply is not a resolution.** Resolve a review thread in the same act as
   the reply, and leave an `Ask` open on purpose.
-- **A round's touch set is the finding's file.** A `fix` commit closing a
-  review finding names the finding in its subject and touches the file the
-  finding is in; a second file is a second commit, with its own finding.
+- **A round's touch set is the finding's own sites.** A `fix` commit
+  closing a review finding names the finding in its subject and carries
+  that finding's fix — the owner site and the sites the triage accepted
+  with it — and nothing else; any other edit is a second commit, with its
+  own finding.
 - **A CodeQL alert is a defect in the pull request that raised it, and it is
   fixed there**: break the reported path at its source rather than policing
   the sink, or argue in the commit body why the path cannot be taken.
