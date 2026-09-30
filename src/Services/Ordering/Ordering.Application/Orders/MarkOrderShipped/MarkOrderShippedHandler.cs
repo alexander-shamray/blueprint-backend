@@ -4,10 +4,7 @@ using Ordering.Domain.Orders;
 
 namespace Ordering.Application.Orders.MarkOrderShipped;
 
-/// <summary>
-/// The transition §9.6's saga asks for on <c>ShipmentDispatched</c>, and the
-/// last one the saga makes before finalising.
-/// </summary>
+/// <summary>The transition §9.6's saga asks for on <c>ShipmentDispatched</c>.</summary>
 public sealed class MarkOrderShippedHandler(IOrderRepository orders, TimeProvider clock)
     : ICommandHandler<MarkOrderShippedCommand, Result>
 {
@@ -17,11 +14,7 @@ public sealed class MarkOrderShippedHandler(IOrderRepository orders, TimeProvide
         if (order is null)
             return Result.Failure(OrderErrors.NotFound);
 
-        // The same split ConfirmOrderHandler makes, one state later. An order
-        // that has not reached Confirmed yet is waiting on a command still in
-        // flight — Shipping cannot despatch what was never confirmed, so the
-        // fact this arrived is evidence the confirmation exists and has not
-        // landed. Time fixes that; §9.8's backoff is what waits.
+        // ConfirmOrderHandler's split one state later: the confirmation is in flight, and §9.8's backoff waits.
         if (order.Status is OrderStatus.AwaitingStock or OrderStatus.AwaitingPayment)
             return Result.Failure(OrderErrors.NotConfirmed);
 

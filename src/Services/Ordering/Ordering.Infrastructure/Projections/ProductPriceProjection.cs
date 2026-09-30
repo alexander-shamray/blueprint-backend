@@ -5,68 +5,17 @@ using Dapper;
 
 namespace Ordering.Infrastructure.Projections;
 
-/// <summary>
-/// §6.6's price projection: Catalog's three product events, applied to
-/// <c>ordering.ProductPrices</c>. Infrastructure rather than Application
-/// because it is raw SQL over a connection factory (§6.6), and registered by
-/// <c>AddOrderingInfrastructure</c>'s scan (§6.2) — Application's scan would
-/// not see it.
-/// </summary>
+/// <summary>§6.6's price projection, the read model <c>PlaceOrder</c>'s write path depends on.</summary>
 /// <remarks>
-/// <b>This is the read model a WRITE path depends on</b>, which is what makes
-/// it the more consequential of §6.6's two:
-/// <c>ProjectedPriceReader</c> serves <c>PlaceOrder</c> from it, so a row that
-/// is missing is an order that is refused. §6.6's callout is the standing
-/// consequence — a product <i>this service</i> holds no price for in the
-/// asked-for currency produces <c>order.products_unavailable</c>, which is a
-/// correct answer from a service with no prices and looks like nothing at all
-/// in a log. <b>The condition is Ordering's knowledge, not Catalog's act</b>:
-/// <c>Product.Publish</c> is Catalog's factory, so every product it holds was
-/// published, and an absent row means neither price-bearing event has been
-/// applied here — dropped before the queue was bound, or still in flight.
-/// <para>
-/// <b>Public, and the modifier is load-bearing.</b> §6.2's scan is
-/// public-only, so an internal handler is registered as nothing at all —
-/// silently, with the endpoint still bound, so every delivery reaches §9.4's
-/// "no handler is registered" throw instead of a table.
-/// </para>
-/// <para>
-/// <b>There is no rebuild path, and §6.6 names the one that is owed.</b> This
-/// service holds no source of truth for prices, so it cannot rebuild the table
-/// from anything of its own — the procedure is Catalog republishing its
-/// catalogue, which does not exist yet. Until it does, every product published
-/// before <c>ordering-catalog-events</c> was first declared is absent, because
-/// the broker drops what no queue is bound for, and each is an order refused
-/// with no fault anywhere — until a <c>PriceChanged</c> for that product
-/// arrives, which runs this same upsert and inserts on the same branch. That
-/// is a door rather than a repair: it carries a price and no name, so the
-/// republish is still what is owed. §6.6 also records the constraint that it has
-/// to meet: it must carry each product's original <c>OccurredAt</c>, since a
-/// fresh one sails past the withdrawal watermark below and re-lists everything
-/// Catalog ever discontinued.
-/// </para>
-/// <para>
-/// <b>Three interfaces, two of them ahead of their publisher.</b> §3.2 gives
-/// Ordering all three of Catalog's events; Catalog's §9.3 allow-list maps one
-/// of them today, because <c>Product</c> has no price-change or discontinue
-/// method yet. Building a third of the class would leave the next PR
-/// re-deciding this file's guard and its normalisation, which is §10.2's
-/// dual-version trap one chapter over. A handler with no publisher costs an
-/// idle queue binding; a partial projection costs a second opinion about what
-/// <c>UpdatedAt</c> means.
-/// </para>
+/// Public, because §6.2's scan is public-only and an internal handler registers as nothing with the endpoint
+/// still bound. It has no rebuild path; §6.6 names the republish that is owed.
 /// </remarks>
 public sealed class ProductPriceProjection(IDbConnectionFactory connections)
     : IIntegrationEventHandler<ProductPublished>,
       IIntegrationEventHandler<PriceChanged>,
       IIntegrationEventHandler<ProductDiscontinued>
 {
-    /// <summary>
-    /// §6.6's upsert, both hints and all. <c>WITH (HOLDLOCK)</c> appears twice
-    /// and guards two different things — a concurrent insert of the same
-    /// price key, and a concurrent withdrawal of the product — and
-    /// <see cref="UpsertAsync"/>'s remarks argue both.
-    /// </summary>
+    /// <summary>§6.6's upsert; each <c>WITH (HOLDLOCK)</c> guards a different absence (§6.6).</summary>
     private const string UpsertSql =
         """
         SET XACT_ABORT ON;
@@ -128,39 +77,10 @@ public sealed class ProductPriceProjection(IDbConnectionFactory connections)
         COMMIT;
         """;
 
-    /// <summary>
-    /// §6.6's discontinue, in two halves: a product-level watermark, and the
-    /// per-currency rows that already exist. Every currency for the product,
-    /// because <c>ProductDiscontinued</c> carries none — a product is
-    /// withdrawn whole or not at all.
-    /// </summary>
+    /// <summary>§6.6's discontinue: a product-level watermark and the existing rows, in one transaction.</summary>
     /// <remarks>
-    /// <c>IsAvailable = 0</c> rather than a <c>DELETE</c>, which is §6.6's
-    /// decision and worth restating where the statement is: an order placed
-    /// last month has to stay explicable, and a row that vanishes takes its
-    /// price with it. The reader filters on the flag, so the customer meets
-    /// the same <c>ProductsUnavailable</c> either way.
-    /// <para>
-    /// <b>The <c>UPDATE</c> alone was wrong, and §6.6 printed it that way.</b>
-    /// It reaches only the rows that exist when it runs, so a withdrawal
-    /// claimed ahead of a still-retrying publish (§9.4 guarantees no ordering)
-    /// touched nothing, and the publish then took the price <c>MERGE</c>'s
-    /// <c>NOT MATCHED</c> branch and inserted an orderable row for a
-    /// discontinued product. A stale price for a currency the withdrawal never
-    /// saw does the same with no reordering at all. Both are covered by
-    /// <see cref="Persistence.ProductWithdrawal"/>, which the upsert consults on exactly
-    /// that branch; both were reproduced as failing tests before this was
-    /// written.
-    /// </para>
-    /// <para>
-    /// <b>One transaction, because the two halves are one fact.</b> The
-    /// watermark without the rows leaves existing prices orderable; the rows
-    /// without the watermark leaves the hole this fixes. At-least-once
-    /// redelivery would repair either, but a message that exhausts its retries
-    /// (§9.8) would not, and <c>SET XACT_ABORT ON</c> is what makes a mid-batch
-    /// failure roll the first statement back rather than leave half of it
-    /// standing.
-    /// </para>
+    /// Flags rather than deletes, so a past order keeps its price; <see cref="Persistence.ProductWithdrawal"/>
+    /// covers the rows that do not exist yet (§6.6).
     /// </remarks>
     private const string DiscontinueSql =
         """
@@ -211,59 +131,8 @@ public sealed class ProductPriceProjection(IDbConnectionFactory connections)
             new { integrationEvent.ProductId, integrationEvent.OccurredAt },
             ct);
 
-    /// <summary>
-    /// One statement for both price-bearing events, because they differ only
-    /// in which fact moved the amount — and because a copy per event is how
-    /// one of the two ends up without the guard (§6.6 makes the same argument
-    /// about <c>OrderSummaries</c>' status transitions).
-    /// </summary>
-    /// <remarks>
-    /// <b><c>WITH (HOLDLOCK)</c> is what makes this statement safe under
-    /// concurrent delivery, and §6.6 prints it because PR-20 amended the
-    /// chapter to.</b> A bare <c>MERGE</c> takes no range
-    /// lock over the key it failed to find, so two deliveries for one
-    /// <c>(ProductId, Currency)</c> can both take the <c>NOT MATCHED</c>
-    /// branch and the second insert violates the primary key — and the
-    /// endpoint sets no <c>ConcurrentMessageLimit</c>, so deliveries can
-    /// overlap and that is an ordinary Tuesday rather than a contrived race.
-    /// The endpoint's retry (§9.8) would absorb it on
-    /// the second attempt, which is exactly why it is worth closing here: a
-    /// correctness property that happens to be repaired by a retry policy is
-    /// one that stops holding the day somebody tunes the retry policy.
-    /// <para>
-    /// <b>The watermark read carries the same hint, for a different absence.</b>
-    /// The upsert's second guard asks whether a withdrawal exists, and at read
-    /// committed the interesting answer — <em>no</em> — is protected by
-    /// nothing: a discontinuation can commit between that read and the insert,
-    /// and the product goes back on sale. <c>HOLDLOCK</c> on
-    /// <c>ProductPrices</c> does not reach <c>ProductWithdrawals</c>, so the
-    /// read takes its own, inside a transaction, and takes it <em>first</em> —
-    /// the order the discontinue statement already uses, which is what keeps
-    /// the two from deadlocking against each other. Copilot found this one, in
-    /// the fix for the bug it had found the round before.
-    /// </para>
-    /// <para>
-    /// <b>No test catches the hint being deleted, and that was measured
-    /// rather than assumed.</b> Removing it left
-    /// <c>ProductPriceProjectionTests</c> green at eight-way and again at
-    /// sixty-four-way concurrency, three runs each: the window between the
-    /// search and the insert is smaller than a test can aim at over a
-    /// connection. So this is a reasoned claim rather than an observed one,
-    /// which is the class PR-17's rate-limiter ordering row is already in —
-    /// and the test says so in its own remarks rather than looking like the
-    /// guard it is not.
-    /// </para>
-    /// <para>
-    /// <b>The currency is upper-cased here, and on the read side too.</b>
-    /// Nothing between Catalog's <c>Money</c> and this statement normalises
-    /// anything: <c>Currency</c> crosses the wire as a <c>string</c> like any
-    /// other, so the value that reaches this parameter is whatever the
-    /// publisher put in the contract. Under a case-sensitive collation an
-    /// unnormalised one writes a row <c>ProjectedPriceReader</c> cannot find,
-    /// and a second primary-key row beside the one it can — so both sides
-    /// upper-case, and neither is redundant.
-    /// </para>
-    /// </remarks>
+    /// <summary>One statement for both price-bearing events, so neither can end up without the guard (§6.6).</summary>
+    /// <remarks>Upper-cased on both sides, since nothing upstream normalises it (§6.4, §6.6).</remarks>
     private Task UpsertAsync(
         Guid productId,
         string currency,
@@ -281,12 +150,7 @@ public sealed class ProductPriceProjection(IDbConnectionFactory connections)
             },
             ct);
 
-    /// <summary>
-    /// Its own connection, never the consumer's <c>DbContext</c> — §6.6 and
-    /// §7.5 both say a projection must not run inside the write transaction,
-    /// and this one does not run inside one at all: it is reached from the
-    /// broker, after Catalog committed, on a connection of its own.
-    /// </summary>
+    /// <summary>Its own connection, never the write transaction (§6.6, §7.5).</summary>
     private async Task ExecuteAsync(string sql, object parameters, CancellationToken ct)
     {
         using IDbConnection connection = connections.Create();

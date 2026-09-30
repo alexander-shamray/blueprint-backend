@@ -3,59 +3,11 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace Ordering.Infrastructure.Persistence.Migrations;
 
-/// <summary>
-/// ADR-032's transactional outbox: the three tables MassTransit's
-/// <c>AddEntityFrameworkOutbox</c> needs, so §9.6's saga can commit its
-/// outgoing messages with its own instance. Generated from
-/// <c>modelBuilder.AddTransactionalOutboxEntities()</c> in
-/// <see cref="OrderingDbContext"/> — that call is the source of truth and only
-/// this file's dress is hand-authored (file-scoped namespace, this comment,
-/// the fields CA1861 asks for). The <c>.Designer.cs</c> and the snapshot beside
-/// it are machine-owned and untouched.
-/// </summary>
-/// <remarks>
-/// <b>These are the second outbox table set in this schema, and the names do
-/// not collide by luck.</b> MassTransit's are singular —
-/// <c>ordering.OutboxMessage</c>, <c>ordering.InboxState</c>,
-/// <c>ordering.OutboxState</c> — where §9.4's and §9.5's are plural
-/// (<c>ordering.OutboxMessages</c>, <c>ordering.InboxMessages</c>). Both sets
-/// live under the schema <c>HasDefaultSchema</c> sets, which is why a reader of
-/// the database sees five tables where the chapters describe two. ADR-032
-/// argues why the second set is admitted and what it costs.
-/// <para>
-/// <c>OutboxMessage</c> carries foreign keys to both state tables, so the
-/// <c>Down</c> below drops it first. That order is the generator's and is
-/// correct; it is worth noticing rather than reformatting, because the reverse
-/// fails at the constraint rather than at the table.
-/// </para>
-/// <para>
-/// No retention index is added here and none is owed. §9.4's
-/// <c>RetentionPurgeService</c> does not read these tables at all, and the
-/// generated set above already carries the indexes the library's own removers
-/// read: <c>IX_InboxState_Delivered</c> for the hosted
-/// <c>InboxCleanupService</c> that <c>AddEntityFrameworkOutbox</c> registers,
-/// which removes <c>InboxState</c> rows once the duplicate-detection window has
-/// elapsed and reads no other table; and
-/// <c>IX_OutboxMessage_InboxMessageId_InboxConsumerId_SequenceNumber</c> for
-/// the outbox middleware, which delivers a consume transaction's staged
-/// messages and removes them once they reach the transport.
-/// </para>
-/// <para>
-/// <b><c>IX_OutboxState_Created</c> serves neither, and the table under it is
-/// unused here.</b> It is read by <c>BusOutboxDeliveryService</c> — the sweeper
-/// behind <c>UseBusOutbox()</c>, which this platform deliberately does not
-/// call (see <c>Messaging/DependencyInjection.cs</c>). Nothing writes, reads or
-/// prunes <c>ordering.OutboxState</c> in this configuration; it is created
-/// because <c>OutboxMessage.OutboxId</c> carries a foreign key to it and the
-/// model would not build otherwise. A permanently empty
-/// <c>ordering.OutboxState</c> is the design rather than a symptom.
-/// </para>
-/// </remarks>
+/// <summary>ADR-032's three MassTransit tables, generated from <c>AddTransactionalOutboxEntities()</c>.</summary>
+/// <remarks>Singular names beside §9.4's plural ones; <c>OutboxState</c> stays empty by design (ADR-032).</remarks>
 public partial class AddTransactionalOutbox : Migration
 {
-    // Fields rather than the generated `new[] { … }` arguments, which is what
-    // CA1861 asks for. The same line AddOutbox and AddFulfilmentSaga carry, for
-    // the same reason.
+    // Fields, for CA1861: Annotation takes an object, so a collection expression has no target type there.
     private static readonly string[] InboxStateKey = ["MessageId", "ConsumerId"];
 
     private static readonly string[] InboxDeliveryColumns =

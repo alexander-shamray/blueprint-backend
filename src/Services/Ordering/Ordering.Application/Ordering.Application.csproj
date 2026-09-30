@@ -1,13 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!--
-    Settings come from Directory.Build.props (§4.4).
-
-    Domain, Common.Application and Common.Contracts — the §4.2 dependency
-    table's second row. Common.Contracts is §4.3's one assembly that
-    crosses a service boundary, and it is crossed here for §9.6's wire
-    vocabulary as well as for §9.3's mapper.
-  -->
+  <!-- Settings from Directory.Build.props (§4.1); §4.2's second row, with Common.Contracts for §9's vocabulary. -->
 
   <ItemGroup>
     <ProjectReference Include="..\Ordering.Domain\Ordering.Domain.csproj" />
@@ -16,13 +9,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- §6.5's read side, used directly by the first query handler this
-         project has. Centrally pinned and already in Appendix B. -->
+    <!-- §6.5's read side: GetDeliveryAddressHandler uses Dapper directly. -->
     <PackageReference Include="Dapper" />
-    <!-- AbstractValidator for the command validators, and the assembly-scan
-         registration §4.2's sample uses. Both used directly, both referenced
-         directly — a transitive compile against Common.Application's copy
-         would be a claim this project never states. -->
+    <!-- Used directly, so referenced directly: §4.2's assembly-scan registration. -->
     <PackageReference Include="FluentValidation" />
     <PackageReference Include="FluentValidation.DependencyInjectionExtensions" />
   </ItemGroup>

@@ -6,16 +6,8 @@ using Ordering.Delivery.V1;
 
 namespace Ordering.Api.Grpc;
 
-/// <summary>
-/// The server half of ADR-052's address read: parse, dispatch, project onto
-/// the reply — the job <c>OrderEndpoints</c> does for HTTP, under §4.2's gate.
-/// </summary>
-/// <remarks>
-/// A permission where Catalog's gRPC service asks only for authentication,
-/// because this answers with somebody's address and an authenticated caller
-/// alone is every client the realm holds. No ownership check either: a
-/// service account's subject owns no order, so the grant bounds it (§11.4).
-/// </remarks>
+/// <summary>The server half of ADR-052's address read, under §4.2's gate like <c>OrderEndpoints</c>.</summary>
+/// <remarks>A permission and no ownership check, since a service account owns no order (§11.4, ADR-052).</remarks>
 [Authorize(OrderingPermissions.DeliveryAddress)]
 internal sealed class DeliveryAddressService(IDispatcher dispatcher) : DeliveryAddresses.DeliveryAddressesBase
 {
@@ -23,10 +15,7 @@ internal sealed class DeliveryAddressService(IDispatcher dispatcher) : DeliveryA
         GetDeliveryAddressRequest request,
         ServerCallContext context)
     {
-        // TryParseExact with "D", not TryParse: the contract says a GUID in its
-        // canonical text form, and TryParse also accepts the N, B and P
-        // formats. Accepting more than the contract states is how two ends stop
-        // agreeing about what the contract is.
+        // "D" only, as the contract states; TryParse would also accept the N, B and P formats.
         if (!Guid.TryParseExact(request.OrderId, "D", out Guid orderId))
             throw new RpcException(new Status(StatusCode.InvalidArgument, "order_id is not a GUID."));
 
@@ -34,10 +23,7 @@ internal sealed class DeliveryAddressService(IDispatcher dispatcher) : DeliveryA
             new GetDeliveryAddressQuery(orderId),
             context.CancellationToken);
 
-        // One status for three facts (ADR-052): no such order, a cancelled
-        // one, and one whose address erasure has cleared. The detail says no
-        // more than the status, so a caller cannot recover the distinction the
-        // handler deliberately collapsed.
+        // One status for three facts, and no detail that would recover the distinction (ADR-052).
         if (address is null)
             throw new RpcException(new Status(StatusCode.NotFound, "No delivery address for that order."));
 

@@ -6,11 +6,7 @@ using Microsoft.EntityFrameworkCore.Storage;
 
 namespace Ordering.Infrastructure.Persistence;
 
-/// <summary>
-/// §6.3's transaction boundary over the Ordering context. Internal — nothing
-/// outside this assembly resolves it by type, only through
-/// <see cref="IUnitOfWork"/>.
-/// </summary>
+/// <summary>§6.3's transaction boundary over the Ordering context.</summary>
 internal sealed class EfUnitOfWork(OrderingDbContext db) : IUnitOfWork
 {
     public bool HasActiveTransaction => db.Database.CurrentTransaction is not null;
@@ -21,44 +17,22 @@ internal sealed class EfUnitOfWork(OrderingDbContext db) : IUnitOfWork
     {
         IExecutionStrategy strategy = db.Database.CreateExecutionStrategy();
 
-        // The token-aware overload, so cancellation is observed by the strategy
-        // itself. With the parameterless one the token reaches only the calls
-        // inside the delegate, so a cancel during a retry backoff is not seen
-        // until the delay elapses and the next attempt happens to reach one.
+        // The token-aware overload, so a cancel during a retry backoff is seen by the strategy itself.
         return await strategy.ExecuteAsync(
             async token =>
             {
-                // Every attempt starts from committed state. EF does not reset
-                // the change tracker when a transaction rolls back, so without
-                // this line a retry re-runs the domain method on attempt 1's
-                // tracked, already-mutated aggregates out of the identity map,
-                // and one SaveChanges commits the mutation twice.
+                // A rollback leaves the tracker as it was, so a retry would re-run on mutated aggregates.
                 db.ChangeTracker.Clear();
 
                 await using IDbContextTransaction tx =
                     await db.Database.BeginTransactionAsync(token);
                 TResult result = await operation(token);
 
-                // The commit decision belongs with the commit. §6.3's behaviour
-                // declines to SaveChanges on a failed Result — but ExecuteRawAsync
-                // writes on this transaction's connection immediately, and only a
-                // rollback undoes that. Returning without committing disposes the
-                // transaction, which rolls it back.
+                // Declining to SaveChanges is not enough: ExecuteRawAsync writes on this transaction's connection
+                // immediately, and only a rollback undoes that. Returning uncommitted disposes, so rolls back.
                 if (result is Result { IsFailure: true })
                 {
-                    // And the tracker is cleared with it, because a rollback that
-                    // leaves the rejected mutations tracked is only half a
-                    // rollback. This line used to be unnecessary and the comment
-                    // above used to say so: "declines to SaveChanges … which is
-                    // enough for tracked changes" was true while this behaviour
-                    // was the only thing that called SaveChanges on the scope.
-                    //
-                    // §9.5's inbox filter is the second caller. It runs after the
-                    // consumer returns and saves unconditionally — it has its own
-                    // row to write — so anything a rejected handler left tracked
-                    // would be persisted by it, outside the transaction that was
-                    // just rolled back. A domain refusal would commit its own
-                    // mutations, which is the one outcome §6.3 exists to prevent.
+                    // Cleared too, since §9.5's inbox filter saves afterwards and would commit what was rolled back.
                     db.ChangeTracker.Clear();
 
                     return result;
@@ -72,24 +46,16 @@ internal sealed class EfUnitOfWork(OrderingDbContext db) : IUnitOfWork
 
     public Task<int> SaveChangesAsync(CancellationToken ct) => db.SaveChangesAsync(ct);
 
-    // Owned children are not roots and do not count — that is the difference
-    // between an aggregate and a table (§6.3, principle 3).
+    // Owned children are not roots and do not count (§6.3).
     public int ModifiedAggregateCount => db.ChangeTracker
         .Entries()
         .Count(e => e.Entity is IAggregateRoot &&
                     e.State is EntityState.Added or EntityState.Modified or EntityState.Deleted);
 
-    // The transaction's own connection and transaction, explicitly passed —
-    // this is what makes a raw write part of the command rather than beside it.
+    // The transaction's own connection and transaction, so a raw write is part of the command.
     public Task ExecuteRawAsync(string sql, object parameters, CancellationToken ct)
     {
-        // Null-conditional here would hand Dapper transaction: null, and a
-        // command with no transaction autocommits — so the one call this member
-        // exists to prevent would succeed silently, on its own connection,
-        // outside the unit the caller believes it is in. The rule is the same
-        // one ModifiedAggregateCount is checked by rather than trusted with
-        // (§6.3): a convention nothing enforces is a convention that fails on
-        // the first handler that has not read the comment.
+        // Throws rather than passing a null transaction, with which Dapper would autocommit outside the unit.
         IDbContextTransaction transaction = db.Database.CurrentTransaction ??
             throw new InvalidOperationException(
                 "ExecuteRawAsync was called outside IUnitOfWork.ExecuteAsync. The write would commit " +

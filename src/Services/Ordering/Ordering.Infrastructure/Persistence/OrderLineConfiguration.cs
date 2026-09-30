@@ -5,18 +5,8 @@ using Ordering.Domain.Orders;
 
 namespace Ordering.Infrastructure.Persistence;
 
-/// <summary>
-/// The lines of an order. A separate configuration because <c>OrderLine</c> is
-/// mapped as a related entity rather than an owned collection —
-/// <see cref="OrderConfiguration"/> carries the argument.
-/// </summary>
-/// <remarks>
-/// Mapping it does not make it reachable. There is no <c>DbSet&lt;OrderLine&gt;</c>
-/// on the context and <c>OrderLine.For</c> is internal to the domain assembly,
-/// so a line is still created and loaded only through <see cref="Order"/> —
-/// which is what §5.4's aggregate boundary asks for. The boundary is a rule
-/// about reachability, not about which EF mapping construct expresses it.
-/// </remarks>
+/// <summary>The lines of an order, a related entity on <see cref="OrderConfiguration"/>'s argument (§7.2).</summary>
+/// <remarks>No <c>DbSet</c> and an internal factory: a line is reached only through <see cref="Order"/>.</remarks>
 internal sealed class OrderLineConfiguration : IEntityTypeConfiguration<OrderLine>
 {
     public void Configure(EntityTypeBuilder<OrderLine> builder)
@@ -45,12 +35,10 @@ internal sealed class OrderLineConfiguration : IEntityTypeConfiguration<OrderLin
                 price.Property(m => m.Currency).HasColumnName("UnitPriceCurrency").HasMaxLength(3);
             });
 
-        // LineTotal is UnitPrice * Quantity, derived on read: a stored copy is
-        // a second source of truth that a quantity change can leave behind.
+        // Derived on read, not stored.
         builder.Ignore(l => l.LineTotal);
 
-        // The one query that reads lines is the repository's Include, which
-        // seeks by the order — so the foreign key is the index that matters.
+        // The repository's Include seeks by the order, so the foreign key is the index that matters.
         builder.HasIndex("OrderId");
     }
 }

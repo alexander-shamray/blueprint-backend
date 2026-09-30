@@ -4,22 +4,8 @@ using Ordering.Domain.Orders;
 
 namespace Ordering.Infrastructure.Persistence;
 
-/// <summary>
-/// <see cref="PaymentReference"/> on the outbox's <c>Local</c> lane, carried by
-/// <c>OrderConfirmedDomainEvent</c>.
-/// </summary>
-/// <remarks>
-/// The silent shape <see cref="MoneyJsonConverter"/> describes, one property
-/// wide: a readonly record struct with a private constructor deserialises to
-/// its default rather than throwing, so a payment reference would come back
-/// null and the incident would be a support question nobody could answer.
-/// <para>
-/// Written as a bare JSON string rather than an object wrapping a
-/// <c>Value</c> member. The type exists to stop a raw string being passed
-/// where a reference belongs; it is still one string, and a payload saying so
-/// is what a human reading an outbox row during an incident needs.
-/// </para>
-/// </remarks>
+/// <summary><see cref="PaymentReference"/> on the <c>Local</c> lane, as a bare JSON string.</summary>
+/// <remarks>Else it deserialises silently to its default, the case <see cref="MoneyJsonConverter"/> closes.</remarks>
 internal sealed class PaymentReferenceJsonConverter : JsonConverter<PaymentReference>
 {
     public override PaymentReference Read(
@@ -36,11 +22,7 @@ internal sealed class PaymentReferenceJsonConverter : JsonConverter<PaymentRefer
         writer.WriteStringValue(value.Value);
 }
 
-/// <summary>
-/// <see cref="TrackingNumber"/> on the <c>Local</c> lane, carried by
-/// <c>OrderShippedDomainEvent</c>. The converter above's argument, for the
-/// other single-string value object.
-/// </summary>
+/// <summary><see cref="TrackingNumber"/> on the <c>Local</c> lane, on the converter above's terms.</summary>
 internal sealed class TrackingNumberJsonConverter : JsonConverter<TrackingNumber>
 {
     public override TrackingNumber Read(

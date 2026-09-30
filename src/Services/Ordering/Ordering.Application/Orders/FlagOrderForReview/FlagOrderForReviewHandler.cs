@@ -2,80 +2,18 @@ using Common.Application;
 
 namespace Ordering.Application.Orders.FlagOrderForReview;
 
-/// <summary>
-/// §9.6's one command that changes no business state. It writes an operations
-/// row and stops, and no aggregate is loaded — but <b>not</b> because nothing
-/// about the order changed. What every reason shares is narrower than
-/// that: a human now has work <b>this workflow cannot finish itself</b>, and
-/// that is a fact about operations rather than about the order.
-///
-/// <b>Not "work the platform has no contract to do", which this said.</b>
-/// True of the waits; false of the money codes, where §3.2 gives
-/// Payments a <c>Refund</c> aggregate and <c>OrderCancelled</c> to act on.
-/// The platform may well do the work — what it cannot do is let this saga
-/// ask for it, or tell whether it happened.
-///
-/// <c>not_despatched</c>, <c>stock_not_released</c> and <c>not_confirmed</c>
-/// are a wait that ran out, where the order's own state genuinely has not
-/// moved. <c>payment_authorised_during_compensation</c> and
-/// <c>cancelled_after_confirmation</c> exist because <b>money is authorised
-/// and cancellation is the workflow's outcome</b>, and §3.2 gives Ordering no
-/// refund command to answer that with. Reading "the process stalled" onto
-/// either row describes the opposite of what happened.
-///
-/// <b>Not "the order is not going to be delivered", which this said and which
-/// the sibling code refutes.</b> <c>cancelled_after_confirmation</c> exists
-/// precisely because Shipping may still despatch — that is the first step of
-/// its procedure. What those two share is authorised money against a workflow
-/// ending in cancellation; whether anything ships is the open question one of
-/// them is raised to ask.
-///
-/// <b>Payments none the less refunds off <c>OrderCancelled</c>, which §3.2 has
-/// it consume and which voids an authorisation already taken.</b> Whether it
-/// has done so when one of these rows is read is <b>not knowable from the
-/// code</b>: §9.4 orders nothing between independent consumers, and on the
-/// decline and payment-timeout doors the cancellation has not even been sent
-/// yet — <c>CancelOrder</c> goes on <c>Compensating</c>'s exit. So the runbook
-/// checks for a refund on both codes and predicts it on neither, and what
-/// separates them is <b>Shipping</b> rather than the money.
-/// <para>
-/// <b>This said they exist BECAUSE the order was cancelled, and that is not
-/// reliably true of <c>payment_authorised_during_compensation</c>.</b> Reached from a
-/// decline or a payment timeout, the saga is in <c>Compensating</c> and
-/// <c>CancelOrder</c> is still owed at the state's exit — so the row can be
-/// written before the cancellation it is named after. The money is the
-/// invariant; the order's state is not.
-/// </para> They are two codes rather than one
-/// because the operator's first step differs, and
-/// <c>ordering.OrderReviews</c> persists no saga state to tell them apart.
-/// </summary>
+/// <summary>§9.6's escalation: an operations row for work the workflow cannot finish, and no aggregate.</summary>
 /// <remarks>
-/// <b>Written through <see cref="IUnitOfWork"/>, not a second connection.</b>
-/// Every command runs inside <c>TransactionBehavior</c> (§6.3); a handler that
-/// opens its own connection commits outside that transaction, so its write
-/// survives a command that failed. Harmless for an idempotent escalation row,
-/// and a data-corruption bug the first time the pattern is copied to a handler
-/// that is not. <c>IDbConnectionFactory</c> belongs to queries (§6.5) and to
-/// projections, which run after commit by design (ADR-018).
+/// Written through <see cref="IUnitOfWork"/>, inside §6.3's transaction; <c>IDbConnectionFactory</c> belongs to
+/// queries and projections (§6.5, ADR-018). The reason codes are argued in §9.6.
 /// </remarks>
 public sealed class FlagOrderForReviewHandler(IUnitOfWork unitOfWork, TimeProvider clock)
     : ICommandHandler<FlagOrderForReviewCommand, Result>
 {
     public async Task<Result> HandleAsync(FlagOrderForReviewCommand command, CancellationToken ct)
     {
-        // Conditional INSERT rather than §9.6's printed IF NOT EXISTS, and the
-        // chapter was amended in the same change. Both spellings read and then
-        // write, so both race — two deliveries of the same escalation can each
-        // find no row and each insert one, and the second violates the primary
-        // key rather than being absorbed. The lock hints are what make the
-        // read a range lock, so the second caller waits for the first to
-        // commit and then sees the row. That is PR-20's finding on §6.6's
-        // MERGE, one table over: a guard against duplicates that is not
-        // range-locked has the defect it was written to fix.
-        //
-        // Absorbed rather than upserted, deliberately: RaisedAt is when the
-        // work first landed on a human, and a second delivery must not move it
-        // forward — §13.6 alerts on how long a review has been outstanding.
+        // The lock hints make the read a range lock, so a duplicate delivery is absorbed rather than violating the
+        // key; absorbed, not upserted, since RaisedAt is what §13.6 alerts on (§9.6).
         await unitOfWork.ExecuteRawAsync(
             """
             INSERT INTO ordering.OrderReviews (OrderId, Reason, RaisedAt)
@@ -89,11 +27,7 @@ public sealed class FlagOrderForReviewHandler(IUnitOfWork unitOfWork, TimeProvid
             new { command.OrderId, command.Reason, RaisedAt = clock.GetUtcNow() },
             ct);
 
-        // The registered clock rather than SYSDATETIMEOFFSET(), which is what
-        // §9.6 printed. RetentionPurgeService already computes its cutoff from
-        // TimeProvider for the reason that applies here too: a test host
-        // substitutes the clock, and a row written on the server's wall clock
-        // is a row no substituted clock can reason about.
+        // RaisedAt from the registered clock, not SYSDATETIMEOFFSET(), so a test host's clock governs it (§9.6).
         return Result.Success();
     }
 }
