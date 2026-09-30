@@ -265,7 +265,7 @@ public sealed class RetentionPurgeTests(ServiceFixture fixture) : IAsyncLifetime
     [Fact]
     public async Task A_backlog_larger_than_one_batch_drains_over_batches_and_stops_at_the_ceiling()
     {
-        // A policy of its own: five rows in batches of two show both edges, where the real batch needs 10,001.
+        // A policy of its own: five rows in batches of two show both edges.
         for (int row = 0; row < 5; row++)
         {
             OutboxMessage processed = OutboxRows.Healthy(fixture);
