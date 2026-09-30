@@ -517,6 +517,11 @@ class TheGateOnARepository(unittest.TestCase):
                       "50% comment", result.stdout)
         self.assertIn("judged every line of 1 file(s)", result.stdout)
 
+    def test_the_tree_mode_refuses_a_head(self):
+        result = self.run_tree("Old.cs", "--head", "HEAD")
+        self.assertEqual(result.returncode, 2, result.stdout)
+        self.assertIn("--tree reads no diff", result.stderr)
+
     def test_the_tree_mode_reads_the_working_tree(self):
         self.write("Moved.cs", "x();\n")
         result = self.run_tree("Moved.cs")
