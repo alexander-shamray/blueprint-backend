@@ -28,7 +28,7 @@
     <PackageReference Include="MassTransit.EntityFrameworkCore" />
     <!-- Captures the IPipe<PublishContext> the dispatcher hands IPublishEndpoint, for §9.1's single identity. -->
     <PackageReference Include="NSubstitute" />
-    <!-- Named although transitive, for GrpcChannel and StatusCode against the gRPC server over loopback. -->
+    <!-- Named although transitive, for GrpcChannel and StatusCode against the gRPC server. -->
     <PackageReference Include="Grpc.Net.ClientFactory" />
   </ItemGroup>
 
