@@ -14,7 +14,7 @@ using Xunit;
 
 namespace Ordering.Api.Tests;
 
-/// <summary>The saga-only handlers' refusals, whose <c>ErrorType</c> decides retry or ack (§9.8).</summary>
+/// <summary>The saga-only handlers' refusals, whose <c>ErrorType</c> decides retry or ack, and a system cancellation (§9.8).</summary>
 /// <remarks>Dispatched, not sent, since the endpoint turns the error into a retry that hides it (§9.8).</remarks>
 [Collection(nameof(IntegrationCollection))]
 public sealed class SagaCommandHandlerTests(ServiceFixture fixture) : IAsyncLifetime
