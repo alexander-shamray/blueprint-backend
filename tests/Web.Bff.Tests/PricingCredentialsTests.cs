@@ -6,7 +6,7 @@ using Xunit;
 
 namespace Web.Bff.Tests;
 
-/// <summary>§11.5's outbound token and §10.4's correlation ID, observed at the far end of the hop.</summary>
+/// <summary>§11.5's outbound token and §10.4's correlation ID on the pricing hop.</summary>
 public sealed class PricingCredentialsTests : IAsyncLifetime
 {
     private static readonly Guid Chair = Guid.Parse("11111111-1111-1111-1111-111111111111");
