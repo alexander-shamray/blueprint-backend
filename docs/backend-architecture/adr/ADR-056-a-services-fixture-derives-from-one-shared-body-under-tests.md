@@ -17,7 +17,7 @@ service's own: its name, its migrator, its factory, the write its harness
 needs, the stubs it starts and the helpers only its suites call.
 `Common.TestSupport` references building blocks and no service, and nothing
 under `src/` references it.
-**Why.** The copies differed only in those parts, so a change to the rest
+**Why.** The copies differed in those parts, so a change to the rest
 was an edit per service; the edits drifted apart in their comments and their
 teardown order, and the scaffold copied Catalog's into each service it
 rendered.
