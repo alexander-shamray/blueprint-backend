@@ -6,34 +6,17 @@ using Xunit;
 
 namespace Gateway.Api.Tests;
 
-/// <summary>
-/// The edge reaches no gRPC method, from both ends: no route matches a method
-/// path, and no cluster dials a gRPC port (§9.7, ADR-052).
-/// </summary>
-/// <remarks>
-/// §10.2 routes HTTP and the two gRPC surfaces are cluster-internal, on the
-/// same footing as the SQL port. A route added under a path like these would
-/// publish an authenticated-only internal call to the internet with nothing
-/// else in this repository to say so.
-/// </remarks>
+/// <summary>The edge reaches no gRPC method, from either end (§9.7, ADR-052).</summary>
 public sealed class GrpcPathTests(GatewayFactory factory) : IClassFixture<GatewayFactory>
 {
-    /// <summary>
-    /// Every gRPC method the platform serves, spelt as
-    /// <c>/&lt;package&gt;.&lt;service&gt;/&lt;method&gt;</c>.
-    /// </summary>
-    /// <remarks>
-    /// By hand, one line per method, on <c>ServiceGroups</c>' terms: reading
-    /// them from the services would mean this project referencing every host,
-    /// which is the coupling §10.1 exists to prevent in test clothing.
-    /// </remarks>
+    /// <summary>Every gRPC method the platform serves, by hand, so this project references no service host.</summary>
     private static readonly string[] MethodPaths =
     [
         "/catalog.pricing.v1.Pricing/GetPrices",
         "/ordering.delivery.v1.DeliveryAddresses/Get"
     ];
 
-    /// <summary>The ports the two gRPC endpoints bind (§9.7, ADR-052).</summary>
+    /// <summary>The port both gRPC endpoints bind (§9.7, ADR-052).</summary>
     private const string GrpcPort = ":8081";
 
     [Theory]
@@ -43,10 +26,7 @@ public sealed class GrpcPathTests(GatewayFactory factory) : IClassFixture<Gatewa
         using HttpClient client = factory.CreateClient();
         using HttpRequestMessage request = new(HttpMethod.Post, path) { Content = new ByteArrayContent([]) };
 
-        // Authenticated, because §11.4's fallback policy answers 401 on every
-        // path an anonymous caller asks for, routed or not. Past it, only an
-        // unmatched path is 404: a route that matched would be refused at its
-        // own policy or handed to the proxy, and either is a published path.
+        // Authenticated past §11.4's fallback policy, so only an unmatched path answers 404.
         request.Headers.Add(TestAuthHandler.UserHeader, "018f4c2e");
 
         using HttpResponseMessage response = await client.SendAsync(request, TestContext.Current.CancellationToken);
@@ -78,8 +58,7 @@ public sealed class GrpcPathTests(GatewayFactory factory) : IClassFixture<Gatewa
                     .Select(destination => (Cluster: cluster.Key, Address: destination["Address"] ?? string.Empty)))
         ];
 
-        // The guard the loop below rests on: over an empty set it passes and
-        // says nothing, which is what a renamed configuration section produces.
+        // Over an empty set the loop passes, which is what a renamed section produces.
         destinations.ShouldNotBeEmpty();
 
         foreach ((string cluster, string address) in destinations)

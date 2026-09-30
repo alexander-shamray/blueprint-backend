@@ -11,57 +11,13 @@ using Yarp.ReverseProxy.Model;
 
 namespace Gateway.Api.Tests;
 
-/// <summary>
-/// PR-17's headline deliverable (Appendix C): the two assertions over
-/// <c>ReverseProxy:Routes</c> that nothing else in the solution can make.
-/// </summary>
-/// <remarks>
-/// <para>
-/// The in-process API tests of §12.4 call each service directly, on the path
-/// it maps, so they exercise everything after the prefix strip and nothing
-/// before it. Path composition is gateway configuration and this is the only
-/// suite that sees it.
-/// </para>
-/// <para>
-/// Policy resolution is the other half, and at the pinned YARP it is louder
-/// than the blueprint described — the host refuses to start rather than
-/// dropping the route, which <see cref="UnresolvablePolicyTests"/> measures
-/// and the chapters were amended for. What that leaves for this class is
-/// everything YARP does <i>not</i> validate: it has no opinion on whether a
-/// route carries a rate limiter at all, on which prefix a route strips, or on
-/// whether the path it forwards is one the service behind it serves.
-/// </para>
-/// </remarks>
+/// <summary>The assertions over <c>ReverseProxy:Routes</c> that YARP does not make itself (§12.4).</summary>
 public sealed class RouteConfigurationTests(GatewayFactory factory) : IClassFixture<GatewayFactory>
 {
-    /// <summary>
-    /// The two policy names YARP resolves itself rather than through
-    /// <c>IAuthorizationPolicyProvider</c> (§10.2).
-    /// </summary>
-    /// <remarks>
-    /// <c>anonymous</c> is <c>AllowAnonymous</c> and <c>default</c> is the
-    /// framework's default policy. Neither is registered anywhere, so a
-    /// resolution test that did not subtract them would fail on a route file
-    /// that is correct — and registering a policy called "anonymous" to make it
-    /// pass would register one that never runs, since YARP intercepts the name
-    /// before the provider sees it.
-    /// </remarks>
+    /// <summary>Names YARP resolves itself rather than through <c>IAuthorizationPolicyProvider</c> (§10.2).</summary>
     private static readonly string[] YarpReserved = ["anonymous", "default"];
 
-    /// <summary>
-    /// What each service serves, as the group its endpoints map (§4.2's
-    /// composition root). Hand-written, one entry per cluster, on the same
-    /// terms as <c>ContractSamples</c> in <c>Platform.IntegrationTests</c>:
-    /// both directions are asserted, so an entry cannot rot into a comment and
-    /// a cluster cannot arrive without one.
-    /// </summary>
-    /// <remarks>
-    /// Hand-written rather than read from the services, because reading them
-    /// would mean this project referencing every service — the coupling §10.1
-    /// exists to prevent, in test clothing. Catalog's entry is the one with a
-    /// file behind it today: <c>ProductEndpoints</c> maps
-    /// <c>/v1/catalog/products</c>, and its own comment names this assertion.
-    /// </remarks>
+    /// <summary>The group each cluster's service maps, by hand so this project references no service.</summary>
     private static readonly IReadOnlyDictionary<string, string> ServiceGroups =
         new Dictionary<string, string>(StringComparer.Ordinal)
         {
@@ -70,27 +26,11 @@ public sealed class RouteConfigurationTests(GatewayFactory factory) : IClassFixt
             ["inventory"] = "/v1/inventory",
             ["payments"] = "/v1/payments",
 
-            // The BFF is a second namespace rather than a service under the
-            // first (§10.2), so /bff is stripped whole and everything it serves
-            // is under the root it receives.
+            // A second namespace (§10.2), stripped whole, so the BFF serves under the root it receives.
             ["web-bff"] = "/"
         };
 
-    /// <summary>
-    /// The first of Appendix C's two, in the strongest form available: not
-    /// "the names in the file resolve" but "the host accepted every route in
-    /// the file". <see cref="IProxyStateLookup"/> is YARP's own answer, so a
-    /// missing cluster, a malformed match and an unresolvable policy all
-    /// report here as one thing — an id that went in and did not come out.
-    /// </summary>
-    /// <remarks>
-    /// The policy half of that reaches this assertion only if a future release
-    /// goes back to dropping rather than throwing; today an unresolvable name
-    /// fails every test in the project, including this one, before it can be
-    /// counted. Which is the right guard either way, and the reason the
-    /// assertion is written against the lookup rather than against a startup
-    /// exception: it states what must be true, not which mechanism enforces it.
-    /// </remarks>
+    /// <summary><see cref="IProxyStateLookup"/> is YARP's answer, so a dropped route shows as a missing id.</summary>
     [Fact]
     public void Every_route_in_the_file_is_a_route_the_proxy_accepted()
     {
@@ -104,11 +44,7 @@ public sealed class RouteConfigurationTests(GatewayFactory factory) : IClassFixt
             "a route in the file that the proxy did not accept is a path that stopped existing (§10.2)");
     }
 
-    /// <summary>
-    /// The resolution itself, asserted separately from the drop above because
-    /// the two fail differently: this one names the policy that could not be
-    /// found, where the lookup can only say which id vanished.
-    /// </summary>
+    /// <summary>Names the policy that could not be found, where the lookup can only say which id vanished.</summary>
     [Fact]
     public async Task Every_authorization_policy_named_resolves()
     {
@@ -123,11 +59,7 @@ public sealed class RouteConfigurationTests(GatewayFactory factory) : IClassFixt
                 .Select(p => p!)
         ];
 
-        // §11.4's guard against a vacuous pass: over a route file naming no
-        // policy at all, "every name resolves" is true and worthless. Sharper
-        // than it was, too — the reserved names are subtracted above, so this
-        // would now also catch a file in which every route had been switched
-        // to "anonymous".
+        // Over a file naming no policy but reserved ones, "every name resolves" is true and worthless (§11.4).
         named.ShouldNotBeEmpty();
 
         foreach (string policy in named.Distinct(StringComparer.Ordinal))
@@ -140,19 +72,7 @@ public sealed class RouteConfigurationTests(GatewayFactory factory) : IClassFixt
         }
     }
 
-    /// <summary>
-    /// The authorization counterpart of the rate-limiter invariant below, and
-    /// the edge half of §11.4's deny-by-default.
-    /// </summary>
-    /// <remarks>
-    /// <c>AddCommonWebDefaults</c> sets a fallback policy, so a route naming no
-    /// policy is no longer public — it inherits "authenticated" and fails
-    /// closed rather than open. That makes this test a readability rule rather
-    /// than a security one, and it is worth having anyway: a public path by
-    /// omission and a public path by decision read identically in a route file,
-    /// and the person deciding whether a path should be public is reading this
-    /// file rather than <c>Common.Web</c>.
-    /// </remarks>
+    /// <summary>A readability rule, since §11.4's fallback fails an omission closed (§10.2).</summary>
     [Fact]
     public void Every_route_names_an_authorization_policy()
     {
@@ -164,11 +84,7 @@ public sealed class RouteConfigurationTests(GatewayFactory factory) : IClassFixt
         }
     }
 
-    /// <summary>
-    /// §10.2's stated invariant, and the one it says to assert rather than
-    /// review for: YARP applies no limit when the property is absent, so a
-    /// route opts out of §10.1's rate limiting by omission.
-    /// </summary>
+    /// <summary>§10.2's invariant, since YARP applies no limit when the property is absent.</summary>
     [Fact]
     public void Every_route_names_a_rate_limiter_policy()
     {
@@ -181,10 +97,7 @@ public sealed class RouteConfigurationTests(GatewayFactory factory) : IClassFixt
     }
 
     /// <summary>
-    /// Both directions against <see cref="GatewayRateLimiterPolicies.All"/>,
-    /// which is the registration's only witness — the rate limiter's policy map
-    /// is internal to the framework, so unlike an authorization policy there is
-    /// no provider to ask.
+    /// Against <see cref="GatewayRateLimiterPolicies.All"/>, since the limiter's policy map has no provider to ask.
     /// </summary>
     [Fact]
     public void The_rate_limiter_policies_named_and_the_ones_registered_are_the_same_set()
@@ -205,13 +118,7 @@ public sealed class RouteConfigurationTests(GatewayFactory factory) : IClassFixt
             "with no reader — the defect §11.4 names for an unused authorization policy");
     }
 
-    /// <summary>
-    /// The strip is a property of the namespace, not of the service: every
-    /// route under <c>/api</c> removes <c>/api</c> and the one under
-    /// <c>/bff</c> removes <c>/bff</c>. Stripping <c>/api/v1</c> on one route
-    /// and <c>/api</c> on another is §10.2's dual-version trap, and it works in
-    /// whichever one was tested first.
-    /// </summary>
+    /// <summary>The strip belongs to the namespace, not the service, against §10.2's dual-version trap.</summary>
     [Fact]
     public void Every_route_strips_exactly_the_namespace_it_matches()
     {
@@ -223,14 +130,7 @@ public sealed class RouteConfigurationTests(GatewayFactory factory) : IClassFixt
         }
     }
 
-    /// <summary>
-    /// Appendix C's second: each route's match minus its strip against the
-    /// group its service maps. A prefix rather than an equality, and Catalog is
-    /// the reason — <c>/api/v1/catalog/{**catch-all}</c> strips to
-    /// <c>/v1/catalog</c> while <c>ProductEndpoints</c> maps
-    /// <c>/v1/catalog/products</c>, so the route carries a whole family of
-    /// paths to a service that serves one of them.
-    /// </summary>
+    /// <summary>A prefix, not an equality, since the catalog routes carry a family of paths to one group.</summary>
     [Fact]
     public void Every_route_forwards_a_path_its_service_serves()
     {
@@ -251,10 +151,7 @@ public sealed class RouteConfigurationTests(GatewayFactory factory) : IClassFixt
         }
     }
 
-    /// <summary>
-    /// The registry's other direction. Without it an entry outlives the cluster
-    /// it described and the test above keeps passing on the routes that remain.
-    /// </summary>
+    /// <summary>The other direction, without which an entry outlives the cluster it described.</summary>
     [Fact]
     public void Every_service_group_entry_names_a_cluster_a_route_uses()
     {
@@ -269,12 +166,7 @@ public sealed class RouteConfigurationTests(GatewayFactory factory) : IClassFixt
         routed.ShouldBe([.. ServiceGroups.Keys.Order(StringComparer.Ordinal)]);
     }
 
-    /// <summary>
-    /// YARP's own view of what it applied, which is a different claim from the
-    /// configuration having said it: the limiter runs off endpoint metadata,
-    /// and a route whose policy did not survive config load would reach the
-    /// destination unmetered.
-    /// </summary>
+    /// <summary>The endpoint metadata the limiter runs off, rather than what the configuration said.</summary>
     [Fact]
     public void Every_proxy_endpoint_carries_the_rate_limiter_policy_its_route_names()
     {
@@ -299,8 +191,7 @@ public sealed class RouteConfigurationTests(GatewayFactory factory) : IClassFixt
         IReadOnlyList<RouteConfiguration> routes =
             RouteConfiguration.ReadAll(factory.Services.GetRequiredService<IConfiguration>());
 
-        // The guard the rest of this class rests on. Every assertion below is a
-        // foreach, and a foreach over nothing passes.
+        // The assertions here are foreach loops, and a foreach over nothing passes.
         routes.ShouldNotBeEmpty();
 
         return routes;

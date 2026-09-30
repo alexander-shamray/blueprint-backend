@@ -16,15 +16,9 @@
     <PackageReference Include="xunit.runner.visualstudio" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="Shouldly" />
-    <!-- WebApplicationFactory over the real Program (§12.4). The gateway has
-         no TestSupport library: §4.1 gives one to a service because two suites
-         share it and cannot reference each other, and there is one suite
-         here. -->
+    <!-- WebApplicationFactory over the real Program (§12.4); one suite, so no TestSupport library (§4.1). -->
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
-    <!-- IProxyStateLookup — the built host's own answer to "which routes did
-         you accept", asserted against the ids in the shipped route file.
-         Carried transitively by Gateway.Api; named directly because these
-         tests name the type, on the register's honesty rule. -->
+    <!-- IProxyStateLookup, named directly by these tests though Gateway.Api carries it. -->
     <PackageReference Include="Yarp.ReverseProxy" />
   </ItemGroup>
 

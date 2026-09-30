@@ -4,80 +4,21 @@ using Grpc.Core;
 
 namespace Web.Bff.TestSupport;
 
-/// <summary>
-/// What <c>Web.Bff</c> needs Catalog's pricing RPC (§9.7) to do — written by the
-/// consumer, honoured by the consumer's stub, and verified against the real
-/// provider.
-/// </summary>
-/// <remarks>
-/// <b>One interaction is verified on the provider side only</b>, and it is
-/// named where it is declared rather than only here: since ADR-045 the quote
-/// bounds its own line count, so a basket past the ceiling is refused before
-/// the hop and never reaches the stub. The expectation stays because Catalog
-/// still owes the refusal. See <see cref="Interactions"/>.
-/// </remarks>
-/// <remarks>
-/// <para>
-/// <b>This is Appendix C's PR-26, and it is not Pact.</b> Pact expresses a
-/// contract in one artefact the consumer authors and the provider verifies, and
-/// that property is the whole of its value — the broker, the wire format and the
-/// Rust core are how Pact ships it across repository boundaries this monorepo
-/// does not have. The one consumer relationship here that is contentious is
-/// gRPC, and Pact's .NET binding cannot express gRPC at all — ADR-023 records
-/// it. So the property is taken and the machinery is not: one file, linked into
-/// both suites, exactly as <c>pricing.proto</c> is.
-/// </para>
-/// <para>
-/// <b>The syntactic contract and the semantic one are now shared the same
-/// way.</b> <c>pricing.proto</c> is Catalog's, because Catalog serves the RPC;
-/// this file is Web.Bff's, because only a consumer can say what it needs. Both
-/// are linked rather than referenced, so no assembly crosses a service boundary
-/// and §4.3 stays true with <c>Common.Contracts</c> as its one exception.
-/// </para>
-/// <para>
-/// <b>Only what the consumer needs is in here.</b> Catalog refuses a malformed
-/// product id and an anonymous caller, and neither is an interaction below:
-/// <c>CheckoutEndpoints</c> always sends canonical ids and always presents a
-/// token, so an expectation about either would be a promise nobody is relying
-/// on. Those stay <c>PricingServiceTests</c>' — provider-owned behaviour, tested
-/// where it is decided. A consumer-driven contract that lists everything the
-/// provider does is a second provider suite wearing the consumer's name.
-/// </para>
-/// </remarks>
+/// <summary>What <c>Web.Bff</c> needs of Catalog's pricing RPC (§9.7), linked into both suites (ADR-023).</summary>
 public static class PricingContract
 {
-    /// <summary>The consumer that authored these expectations.</summary>
     public const string Consumer = "Web.Bff";
 
-    /// <summary>The provider they are verified against.</summary>
     public const string Provider = "Catalog.Api";
 
-    /// <summary>
-    /// The largest basket the consumer expects to be served.
-    /// </summary>
-    /// <remarks>
-    /// <b>The consumer states the ceiling here and nowhere else, and that is not
-    /// a contradiction of <c>CheckoutEndpoints</c>' refusal to hold one.</b>
-    /// Production code holding a copy would refuse requests Catalog would have
-    /// served, which is the drift that comment rules out. A contract holding one
-    /// is the consumer saying which number it is relying on — so lowering
-    /// <c>GetPricesValidator.MaxProductIds</c> breaks a verification run rather
-    /// than a checkout screen, which is the entire point of writing the
-    /// expectation down.
-    /// </remarks>
+    /// <summary>The consumer's ceiling, which <c>CheckoutEndpoints</c> holds no copy of (§12.6).</summary>
     public const int MaxProductIds = 100;
 
     private static readonly ContractProduct Chair = new("chair", "Chair", 49.99m, "GBP");
     private static readonly ContractProduct Desk = new("desk", "Desk", 120.50m, "GBP");
     private static readonly ContractProduct Lamp = new("lamp", "Lamp", 18.00m, "EUR");
 
-    /// <summary>
-    /// Every expectation the consumer has of the provider, each verified on both
-    /// sides of the hop — except the ceiling refusal at the end of this list,
-    /// which the consumer can no longer drive through its own screen and which
-    /// the provider verification alone holds Catalog to (ADR-045). The comment
-    /// above that interaction carries the reason.
-    /// </summary>
+    /// <summary>Every expectation of the provider, each verified on both sides but the last (ADR-045).</summary>
     public static IReadOnlyList<PricingInteraction> Interactions { get; } =
     [
         new PricingInteraction(
@@ -88,10 +29,7 @@ public static class PricingContract
             "GBP",
             PricingOutcome.Prices("chair", "desk")),
 
-        // §6.4's read path is the one that has to be right about money; this is
-        // the screen, and a product priced in another currency has to reach the
-        // caller as unpriced rather than as free. `Unpriced` in QuoteResponse is
-        // computed from what came back, so an entry of zero would be totalled.
+        // Unpriced is computed from what came back, so an entry of zero would be totalled as free.
         new PricingInteraction(
             "a product priced in another currency is absent rather than zero",
             [Chair, Lamp],
@@ -100,9 +38,7 @@ public static class PricingContract
             "GBP",
             PricingOutcome.Prices("chair")),
 
-        // A basket assembled from a stale page names products Catalog has since
-        // withdrawn. The consumer needs the rest of the basket priced anyway —
-        // a whole-request failure would blank a checkout screen over one line.
+        // A basket from a stale page names withdrawn products, and the rest must still be priced.
         new PricingInteraction(
             "a product Catalog has never heard of is absent rather than an error",
             [Chair],
@@ -111,12 +47,7 @@ public static class PricingContract
             "GBP",
             PricingOutcome.Prices("chair")),
 
-        // The currency reaches this hop from the caller's own request body, so
-        // the consumer cannot promise a case. What it needs is that the answer
-        // is the same one either way — and this is the interaction that puts a
-        // reply whose currency is spelled differently from the request through
-        // the consumer's OrdinalIgnoreCase comparison, which nothing did before
-        // this contract existed.
+        // The currency comes from the caller's own body, so the consumer cannot promise its case.
         new PricingInteraction(
             "a currency spelled in another case prices the same products",
             [Chair],
@@ -125,19 +56,7 @@ public static class PricingContract
             "gbp",
             PricingOutcome.Prices("chair")),
 
-        // The two interactions below bracket the ceiling, and neither is
-        // sufficient alone. A provider that quietly lowered its limit to fifty
-        // would still refuse a hundred and one, so the refusal cannot say the
-        // consumer's basket is safe; a provider that raised it would still serve
-        // a hundred, so the answer cannot say a refusal arrives as
-        // InvalidArgument. What the consumer needs is both edges, which is why
-        // it states a number at all.
-        //
-        // A change to GetPricesValidator.MaxProductIds in EITHER direction fails
-        // verification, and that is the agreement being renegotiated rather than
-        // drifting. Pact pins an interaction the same way, and for the same
-        // reason: a provider free to change behaviour a consumer wrote down has
-        // a contract nobody is holding.
+        // This and the next bracket the ceiling, so a move in either direction fails verification (ADR-023).
         new PricingInteraction(
             "a basket at the ceiling is served rather than refused",
             [],
@@ -146,18 +65,7 @@ public static class PricingContract
             "GBP",
             PricingOutcome.Prices()),
 
-        // Served in part instead, a basket past the ceiling would quote a total
-        // that silently omitted lines.
-        //
-        // CheckoutEndpoints used to hold no ceiling of its own and relied on
-        // this refusal to become the caller's 400 (UpstreamExceptionHandler).
-        // Since ADR-045 it bounds its own line count at OrderLimits.MaxLines,
-        // which is the order's bound rather than a copy of this one, and the
-        // two numbers agree today. So the consumer no longer REACHES this
-        // refusal through its screen — and the interaction stays, because what
-        // the consumer stops driving it still needs the provider to promise.
-        // The day the two ceilings part, this is the expectation that says
-        // which way they parted.
+        // The consumer's screen no longer reaches this, and Catalog still owes it (ADR-045).
         new PricingInteraction(
             "a basket past the ceiling is refused rather than served in part",
             [],
@@ -167,54 +75,29 @@ public static class PricingContract
             PricingOutcome.Refused(StatusCode.InvalidArgument))
     ];
 
-    /// <summary>The interactions the contract says are answered.</summary>
-    /// <remarks>
-    /// Descriptions rather than interactions, because both suites feed them to
-    /// an xUnit <c>[MemberData]</c> and the datum has to be serialisable. Here
-    /// rather than in each suite so that the two sides cannot come to verify
-    /// different subsets of one contract.
-    /// </remarks>
+    /// <summary>The answered interactions' descriptions, a serialisable datum for both suites' theories.</summary>
     public static IEnumerable<string> Answered =>
         Interactions
             .Where(interaction => interaction.Then is PricingOutcome.Priced)
             .Select(interaction => interaction.Description);
 
-    /// <summary>The interactions the contract says are refused.</summary>
+    /// <summary>The refused interactions' descriptions.</summary>
     public static IEnumerable<string> Refusals =>
         Interactions
             .Where(interaction => interaction.Then is PricingOutcome.Refusal)
             .Select(interaction => interaction.Description);
 
-    /// <summary>The interaction with this description.</summary>
-    /// <remarks>
-    /// Both suites drive their theories from <see cref="Interactions"/> by
-    /// description rather than by index, because xUnit renders the datum in the
-    /// test name and §12.8 asks for a name readable without opening the file. An
-    /// index would render <c>[3]</c>.
-    /// </remarks>
+    /// <summary>The interaction with this description, which keeps each theory's name readable (§12.8).</summary>
     public static PricingInteraction Named(string description) =>
         Interactions.SingleOrDefault(i => i.Description == description)
         ?? throw new PricingContractException(
             $"No interaction is described as '{description}'.");
 
-    /// <summary>
-    /// An id no product will ever have, so a request can name one deliberately.
-    /// </summary>
-    /// <remarks>
-    /// Derived from the index rather than drawn from a list, because the ceiling
-    /// interaction needs a hundred and one of them. Catalog mints product ids
-    /// with <c>Guid.CreateVersion7()</c>, whose version nibble is 7 and whose
-    /// leading bytes are a timestamp, so nothing it publishes can collide with
-    /// these — and they are canonical D-form, which is what the request itself
-    /// has to be.
-    /// </remarks>
+    /// <summary>A canonical id no product will have, as Catalog mints only version-7 ids.</summary>
     public static Guid UnknownId(int index) =>
         new($"00000000-0000-0000-0000-{index:D12}");
 
-    /// <summary>
-    /// The ids this interaction's request names, in order: the published
-    /// products first, then the ids that name nothing.
-    /// </summary>
+    /// <summary>The ids both sides ask about: the published products, then ids naming nothing (§12.6).</summary>
     public static IReadOnlyList<Guid> RequestedIds(
         PricingInteraction interaction,
         IReadOnlyDictionary<string, Guid> published)
@@ -238,20 +121,7 @@ public static class PricingContract
         return ids;
     }
 
-    /// <summary>
-    /// This interaction as a <c>GetPricesRequest</c> — the <b>provider</b>
-    /// suite's message, and only its.
-    /// </summary>
-    /// <remarks>
-    /// <b>What both sides share is <see cref="RequestedIds"/>, not this.</b> The
-    /// question — which products, in which currency — is built once and asked of
-    /// the stub and the real service alike. The gRPC message is not: the
-    /// consumer suite hands the same ids to the screen as a basket and
-    /// lets <c>CheckoutEndpoints</c> construct its own, because its whole job is
-    /// to establish that the request the ENDPOINT builds is the one this
-    /// contract describes. Building it here for that side too would verify the
-    /// contract against itself.
-    /// </remarks>
+    /// <summary>This interaction as a <c>GetPricesRequest</c>, for the provider suite alone (§12.6).</summary>
     public static GetPricesRequest Request(
         PricingInteraction interaction,
         IReadOnlyDictionary<string, Guid> published)
@@ -262,47 +132,7 @@ public static class PricingContract
         return request;
     }
 
-    /// <summary>
-    /// Whether <paramref name="reply"/> is one the consumer can work with, for
-    /// the interaction that produced it.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// <b>This is the consumer's tolerance and not the provider's behaviour, and
-    /// the difference is what keeps the contract from over-specifying.</b> The
-    /// amount is parsed and compared numerically rather than matched as text,
-    /// because <c>pricing.proto</c> says a consumer must parse it — Catalog's
-    /// column is <c>decimal(19,4)</c> and answers <c>"49.9900"</c>, and a
-    /// migration that changed the scale would change nothing a customer can see.
-    /// The currency is compared case-insensitively for the same reason: which
-    /// spelling Catalog canonicalises to is its own business, and the consumer
-    /// needs only that the two agree.
-    /// </para>
-    /// <para>
-    /// <b>Four of these checks are also defences in <c>CheckoutEndpoints</c>,
-    /// and the rest are expectations of Catalog that no screen enforces.</b> The
-    /// endpoint refuses a malformed amount, a negative one, a currency that
-    /// disagrees with the request, and an id it did not ask about or has already
-    /// been answered — each a 500, because each would otherwise produce a wrong
-    /// quote. Those four are the same tolerance stated as an expectation instead
-    /// of as a defence, which is what lets the provider be held to it before a
-    /// screen is.
-    /// </para>
-    /// <para>
-    /// <b>The others have no counterpart, and that is the half a contract is
-    /// for.</b> A product the contract says is absent and the reply prices, one
-    /// it says is priced and the reply omits, a name that is not the published
-    /// one, an amount that is not the published price — the endpoint answers 200
-    /// to every one of them, quoting a line or reporting it in
-    /// <c>QuoteResponse.Unpriced</c>. It has no published price to compare
-    /// against and no reason to refuse a customer a quote over it. Only a test
-    /// that knows what was published can see any of it, which is exactly why the
-    /// contract carries them and the screen does not.
-    /// </para>
-    /// </remarks>
-    /// <exception cref="PricingContractException">
-    /// The reply is one the consumer could not use.
-    /// </exception>
+    /// <summary>Throws unless <paramref name="reply"/> is within the consumer's own tolerance (§12.6).</summary>
     public static void Verify(
         PricingInteraction interaction,
         IReadOnlyDictionary<string, Guid> published,
@@ -322,33 +152,14 @@ public static class PricingContract
 
         foreach (ProductPrice price in reply.Price)
         {
-            // Canonical D-form, which is what the request carried and what
-            // pricing.proto states — the rule PricingService already enforces on
-            // the way in, on the stated grounds that accepting more than the
-            // contract says is how two ends stop agreeing about what it is.
-            //
-            // STRICTER THAN THE ENDPOINT, deliberately. CheckoutEndpoints parses
-            // the echo with Guid.Parse, which also takes the N, B and P forms, so
-            // a braced id would price correctly there and fail here. That
-            // asymmetry is the design rather than a gap: the endpoint refuses
-            // what would make a quote WRONG and tolerates what would merely make
-            // it unusual, because a customer losing a basket is a worse outcome
-            // than a log line in an odd shape. The contract is where an odd shape
-            // is caught, one release before it costs anything.
-            //
-            // Tightening the endpoint to match was the alternative and is
-            // rejected: it converts a detectable contract violation into a 500
-            // for a value that is not even wrong.
+            // Canonical D-form, as pricing.proto states: stricter than CheckoutEndpoints' Guid.Parse on purpose.
             if (!Guid.TryParseExact(price.ProductId, "D", out Guid productId))
             {
                 throw new PricingContractException(
                     $"'{interaction.Description}': product_id '{price.ProductId}' is not a canonical GUID.");
             }
 
-            // Removing rather than testing membership, for CheckoutEndpoints'
-            // own reason: one operation answers both "was this asked about" and
-            // "has it been answered already", and both faults end as one wrong
-            // total.
+            // Removing answers both "was this asked about" and "has it been answered already".
             if (!outstanding.Remove(productId))
             {
                 throw new PricingContractException(
@@ -361,10 +172,7 @@ public static class PricingContract
                     $"'{interaction.Description}': {productId} was priced, and the contract says it is absent.");
             }
 
-            // NOT NumberStyles.Number: AllowThousands makes "12,50" parse under
-            // the invariant culture as twelve hundred and fifty, which is the
-            // hundredfold error the invariant culture was chosen to rule out.
-            // The same two styles CheckoutEndpoints uses, for the same reason.
+            // Not NumberStyles.Number, whose AllowThousands reads "12,50" as twelve hundred and fifty.
             if (!decimal.TryParse(
                     price.Amount,
                     NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint,
@@ -405,9 +213,7 @@ public static class PricingContract
             }
         }
 
-        // The direction a loop over the reply cannot catch: a product the
-        // contract says is priced and that the reply simply left out. Unchecked,
-        // an empty reply satisfies every assertion above.
+        // A product the reply left out, which the loop over the reply cannot see.
         foreach ((Guid productId, ContractProduct product) in expected)
         {
             if (outstanding.Contains(productId))
@@ -426,26 +232,7 @@ public static class PricingContract
             $"'{interaction.Description}' names no product '{alias}'.");
 }
 
-/// <summary>One expectation the consumer has of the provider.</summary>
-/// <param name="Description">
-/// What the interaction is for, in the consumer's words. It becomes the test
-/// name on both sides of the hop, so it reads as a sentence about the screen
-/// rather than about the RPC.
-/// </param>
-/// <param name="Given">
-/// The products that exist in Catalog when the request is made. Each side
-/// realises this its own way — the stub takes them into a dictionary, the
-/// provider suite publishes them through the real endpoint — and both bind the
-/// alias to the id that came back.
-/// </param>
-/// <param name="Ask">The aliases the request names, in order.</param>
-/// <param name="PlusUnknownIds">
-/// How many ids naming nothing to append to the request. It is what makes the
-/// withdrawn-product and past-the-ceiling interactions expressible without
-/// either side inventing ids of its own.
-/// </param>
-/// <param name="Currency">The currency the request asks for, in the caller's spelling.</param>
-/// <param name="Then">What the consumer needs to happen.</param>
+/// <summary>One expectation of the provider, whose description names the test on both sides of the hop.</summary>
 public sealed record PricingInteraction(
     string Description,
     IReadOnlyList<ContractProduct> Given,
@@ -454,20 +241,10 @@ public sealed record PricingInteraction(
     string Currency,
     PricingOutcome Then);
 
-/// <summary>A product the provider is holding when an interaction runs.</summary>
-/// <param name="Alias">
-/// How the contract names it. Ids are minted by whichever side realises the
-/// state, so nothing in this file can hold one.
-/// </param>
+/// <summary>A product the provider holds when an interaction runs, named by alias as each side mints ids.</summary>
 public sealed record ContractProduct(string Alias, string Name, decimal Amount, string Currency);
 
-/// <summary>What the consumer needs the provider to do with a request.</summary>
-/// <remarks>
-/// A closed hierarchy — the constructor is private, so the only two cases are
-/// the ones nested below. An outcome is either an answer or a refusal, and a
-/// single record carrying both a list and a status would admit a third state
-/// that means nothing.
-/// </remarks>
+/// <summary>What the consumer needs the provider to do: answer or refuse, and nothing between.</summary>
 public abstract record PricingOutcome
 {
     private PricingOutcome()
@@ -480,26 +257,12 @@ public abstract record PricingOutcome
     /// <summary>The provider refuses, with this status.</summary>
     public static PricingOutcome Refused(StatusCode status) => new Refusal(status);
 
-    /// <summary>An answer.</summary>
     public sealed record Priced(IReadOnlyList<string> Aliases) : PricingOutcome;
 
-    /// <summary>A refusal.</summary>
     public sealed record Refusal(StatusCode Status) : PricingOutcome;
 }
 
-/// <summary>
-/// A reply, or a request, that the contract does not permit.
-/// </summary>
-/// <remarks>
-/// Its own exception rather than an assertion-library failure, because this file
-/// is compiled into a library that has no assertion library and into a suite
-/// that has Shouldly — so a type of its own is the only thing that means the
-/// same on both sides. The message is the contract's own words either way.
-/// <para>
-/// The three constructors are CA1032's, exactly as
-/// <c>ContractMappingException</c>'s are.
-/// </para>
-/// </remarks>
+/// <summary>A reply or request the contract forbids, as a type both sides can throw without Shouldly.</summary>
 public sealed class PricingContractException : Exception
 {
     public PricingContractException()

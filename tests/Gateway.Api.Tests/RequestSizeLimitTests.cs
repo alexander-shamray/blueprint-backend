@@ -6,56 +6,14 @@ using Xunit;
 
 namespace Gateway.Api.Tests;
 
-/// <summary>
-/// §10.1's request size limit, over a real Kestrel.
-/// </summary>
-/// <remarks>
-/// <para>
-/// <b>This is the one suite in the project that cannot run on
-/// <c>TestServer</c>, and the reason is the thing being tested.</b> The limit
-/// is a Kestrel option, and <c>TestServer</c> is not Kestrel — it implements
-/// none of the body-size features, so <c>ConfigureKestrel</c> is a no-op under
-/// it and the ceiling simply does not exist. <c>UseKestrel(0)</c> takes an
-/// ephemeral loopback port for the same reason <see cref="StubDestination"/>
-/// does, so parallel classes never collide.
-/// </para>
-/// <para>
-/// <b>Run over <c>TestServer</c> this suite goes red, not green, and the
-/// difference is the both-sides assertion.</b> Measured after a Copilot review
-/// said so: two of the three fail — the oversized bodies reach the stub and
-/// come back 204 where 413 was expected — and exactly one passes, the one
-/// asserting that a body <i>at</i> the ceiling is forwarded. So the silent
-/// outcome the seam is worth guarding against is a suite that tests only the
-/// acceptance: that suite passes on a gateway with no limit at all and proves
-/// nothing. Asserting the refusal is what turns a silent no-op into a loud
-/// one.
-/// </para>
-/// <para>
-/// Both cases carry a token. The ceiling is enforced where the body is read,
-/// which at the edge is inside the forwarder — below authentication and
-/// authorization, neither of which touches the body — so an anonymous
-/// oversized request is answered 401 and its size is never considered.
-/// Measured rather than reasoned: without the header this suite asserts the
-/// challenge and learns nothing about the limit.
-/// </para>
-/// </remarks>
+/// <summary>§10.1's body ceiling over Kestrel, as <c>TestServer</c> has no body-size feature (§12.4).</summary>
+/// <remarks>Every case carries a token: the ceiling is read in the forwarder, below authentication (§10.1).</remarks>
 public sealed class RequestSizeLimitTests(StubDestination stub) : IClassFixture<StubDestination>
 {
-    /// <summary>
-    /// One of the three §10.2 routes that accept a body — only
-    /// <c>catalog-public</c> restricts its methods — and the one reachable
-    /// with an ordinary authenticated principal, since <c>inventory-admin</c>
-    /// wants a permission and the body ceiling has nothing to do with
-    /// authorization.
-    /// </summary>
+    /// <summary>A route that accepts a body from an ordinary authenticated principal (§10.2).</summary>
     private const string Route = "/api/v1/orders";
 
-    /// <summary>
-    /// Exactly the ceiling passes. Kestrel refuses what exceeds the limit
-    /// rather than what reaches it, and asserting the boundary from both sides
-    /// is what separates a configured limit from a limit of zero — every
-    /// oversize test alone would pass against one.
-    /// </summary>
+    /// <summary>Exactly the ceiling passes, which separates a configured limit from a limit of zero.</summary>
     [Fact]
     public async Task A_body_at_the_ceiling_is_forwarded()
     {
@@ -68,21 +26,7 @@ public sealed class RequestSizeLimitTests(StubDestination stub) : IClassFixture<
             "the stub answers 204, so this reached the destination");
     }
 
-    /// <summary>
-    /// One byte past it is refused, in §10.5's shape and with §10.5's status.
-    /// </summary>
-    /// <remarks>
-    /// <b>No exception handler was needed for this, which is worth stating
-    /// because the 400 and 409 rows each needed one.</b> Kestrel throws
-    /// <c>BadHttpRequestException</c> carrying 413, and
-    /// <c>ExceptionHandlerMiddleware</c> takes the status off that exception
-    /// instead of its own 500 default — so the response is already
-    /// <c>application/problem+json</c> with the <c>correlationId</c> and
-    /// <c>traceId</c> members <c>AddCommonProblemDetails</c> adds. Verified by
-    /// running it, because the reverse — YARP absorbing a client-body fault
-    /// into its own 400 — is the outcome the forwarder's error handling makes
-    /// plausible.
-    /// </remarks>
+    /// <summary>§10.5's shape with no handler of its own: the middleware takes 413 off Kestrel's exception.</summary>
     [Fact]
     public async Task A_body_past_the_ceiling_is_refused_as_problem_json()
     {
@@ -100,19 +44,7 @@ public sealed class RequestSizeLimitTests(StubDestination stub) : IClassFixture<
         body.RootElement.GetProperty("correlationId").GetString().ShouldNotBeNullOrWhiteSpace();
     }
 
-    /// <summary>
-    /// A chunked body — no <c>Content-Length</c> for Kestrel to read up front —
-    /// is refused on the same terms.
-    /// </summary>
-    /// <remarks>
-    /// The two are one limit and two enforcement points: a declared length is
-    /// rejected before a byte of the body is read, while a chunked one is
-    /// counted as it arrives and refused when the running total passes the
-    /// ceiling. A test over the first alone would leave the streaming case —
-    /// the one an attacker chooses, because it costs the sender nothing to
-    /// omit a header — resting on an assumption about which of the two Kestrel
-    /// implements.
-    /// </remarks>
+    /// <summary>A chunked body is counted as it arrives, the same limit's second enforcement point.</summary>
     [Fact]
     public async Task A_chunked_body_past_the_ceiling_is_refused_too()
     {
@@ -125,11 +57,6 @@ public sealed class RequestSizeLimitTests(StubDestination stub) : IClassFixture<
         request.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
         request.Headers.TransferEncodingChunked = true;
 
-        // A MemoryStream is seekable, so StreamContent reads its length and
-        // sends Content-Length anyway — which made the first version of this
-        // test a second copy of the one above, passing for the wrong reason.
-        // The assertion is here because it is the only thing that told the
-        // difference.
         request.Content.Headers.ContentLength.ShouldBeNull("otherwise this is the previous test again");
 
         HttpResponseMessage response = await gateway.Client.SendAsync(request, ct);
@@ -137,36 +64,7 @@ public sealed class RequestSizeLimitTests(StubDestination stub) : IClassFixture<
         response.StatusCode.ShouldBe(HttpStatusCode.RequestEntityTooLarge);
     }
 
-    /// <summary>
-    /// Posts <paramref name="bytes"/> with <c>Expect: 100-continue</c>, which
-    /// is what makes the refusal observable rather than a race.
-    /// </summary>
-    /// <remarks>
-    /// <b>Without it this test fails on the FIRST request a process makes, and
-    /// only that one.</b> Measured rather than inferred, six cold runs each
-    /// way: plain, the first request throws
-    /// <c>HttpRequestException → IOException</c> every time and the second
-    /// onwards answer 413; with the expectation, all four of four succeed
-    /// including the first. That is why it looked intermittent — a full suite
-    /// usually ran something else first, and running this class alone did not.
-    /// <para>
-    /// The cause is not the gateway and cannot be fixed there. Kestrel reads
-    /// <c>Content-Length</c>, refuses before a byte of the body, and closes;
-    /// the client is meanwhile writing a megabyte into a socket nobody is
-    /// draining, and an abortive close discards the 413 already sitting in its
-    /// receive buffer. HTTP has one mechanism for this and it is the
-    /// expectation — a client sending a body this size asks first, which is
-    /// exactly what <c>100-continue</c> is for.
-    /// </para>
-    /// <para>
-    /// So this is a more realistic client rather than a weaker test. Kestrel
-    /// still refuses on the declared length and still answers §10.5's shape;
-    /// what changes is only that the client is still listening when it does.
-    /// The chunked case below deliberately keeps the plain framing, because
-    /// there the length is unknown up front — the server has to count as it
-    /// reads, so it drains, and there is no reset to lose the answer to.
-    /// </para>
-    /// </remarks>
+    /// <summary>Posts with <c>Expect: 100-continue</c>, without which an abortive close can discard the 413.</summary>
     private static async Task<HttpResponseMessage> Post(long bytes, string destination, CancellationToken ct)
     {
         using GatewayOnKestrel gateway = new(destination);
@@ -187,16 +85,7 @@ public sealed class RequestSizeLimitTests(StubDestination stub) : IClassFixture<
         return request;
     }
 
-    /// <summary>
-    /// A fixed number of bytes that nothing can measure in advance, which is
-    /// what makes the request chunked.
-    /// </summary>
-    /// <remarks>
-    /// <c>StreamContent</c> asks a seekable stream for its length and sends a
-    /// <c>Content-Length</c> header from it, so the streaming case can only be
-    /// reached with a stream that refuses the question — the shape a client
-    /// producing a body as it goes actually has.
-    /// </remarks>
+    /// <summary>A length nobody can ask, since <c>StreamContent</c> sends one for a seekable stream.</summary>
     private sealed class UnknownLengthStream(long length) : Stream
     {
         private long _remaining = length;
@@ -235,18 +124,7 @@ public sealed class RequestSizeLimitTests(StubDestination stub) : IClassFixture<
         public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
     }
 
-    /// <summary>
-    /// The stubbed gateway served by a real Kestrel on an ephemeral port,
-    /// started eagerly so the client's base address is the listening one.
-    /// </summary>
-    /// <remarks>
-    /// A type rather than three lines repeated in each test, because the order
-    /// is load-bearing and easy to get wrong silently:
-    /// <c>WebApplicationFactory.UseKestrel</c> throws once the host has been
-    /// initialised, and initialisation is what <c>CreateClient</c> does — so a
-    /// factory whose client is taken first is a <c>TestServer</c> again, with
-    /// no limit and no failure to say so.
-    /// </remarks>
+    /// <summary>The stubbed gateway on Kestrel, set before <c>CreateClient</c> initialises it (§12.4).</summary>
     private sealed class GatewayOnKestrel : IDisposable
     {
         private readonly StubbedGatewayFactory _factory;

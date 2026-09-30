@@ -9,61 +9,20 @@ using Xunit;
 
 namespace Gateway.Api.Tests;
 
-/// <summary>
-/// A real HTTP server on an ephemeral loopback port, standing in for whichever
-/// service a route points at. It records the path it was given, and answers
-/// 204 unless the caller asks through the query string for a body —
-/// optionally under a <c>Content-Encoding</c> the stub declares for itself.
-/// </summary>
-/// <remarks>
-/// <para>
-/// <b>A listener rather than an address that refuses.</b> The first version
-/// pointed the clusters at <c>127.0.0.1:1</c> on the reasoning that a refused
-/// connection costs nothing — measured, it cost about two seconds a request,
-/// so the hundred requests §10.3's window admits took three and a half minutes
-/// and the window replenished before the test could exhaust it. The limiter
-/// was working and the test could not see it.
-/// </para>
-/// <para>
-/// What the listener buys beyond speed is the assertion §10.2 says nothing
-/// else in the solution can make: the recorded path is the path a service
-/// receives, so the prefix strip is checked against the wire rather than
-/// against the configuration that describes it.
-/// </para>
-/// </remarks>
+/// <summary>A real server on a loopback port that records each path and answers 204 unless asked for a body.</summary>
+/// <remarks>A listener rather than an address that refuses, which costs seconds a request (§12.4).</remarks>
 public sealed class StubDestination : IAsyncLifetime
 {
-    /// <summary>
-    /// Ask for a body of this many bytes instead of the default 204. Named
-    /// here and read here, so a caller cannot spell it differently and get a
-    /// 204 that looks like a compression failure.
-    /// </summary>
+    /// <summary>Asks for a body of this many bytes instead of the default 204.</summary>
     public const string BodySizeQuery = "body";
 
-    /// <summary>
-    /// Ask for a declared <c>Content-Encoding</c> on that body: <c>gzip</c>
-    /// gzips it as a destination that compressed for itself would, and
-    /// <c>identity</c> declares it unencoded and sends it plain.
-    /// </summary>
-    /// <remarks>
-    /// One switch for two cases because the middleware treats them the same
-    /// way — it declines any response that already carries the header — and
-    /// keeping them apart in the stub would hide that the two tests are
-    /// exercising one rule (ADR-020).
-    /// </remarks>
+    /// <summary>Asks for a declared <c>Content-Encoding</c>; only <c>gzip</c> is applied to the body.</summary>
     public const string ContentEncodingQuery = "encoding";
 
-    /// <summary>
-    /// Ask for that body under <c>Cache-Control: no-transform</c>, which is
-    /// what a representation that must not be rewritten says to every
-    /// intermediary on the path.
-    /// </summary>
+    /// <summary>Asks for the body under <c>Cache-Control: no-transform</c>.</summary>
     public const string NoTransformQuery = "notransform";
 
-    /// <summary>
-    /// Ask for a <c>Vary</c> header of this value on the response — the
-    /// wildcard above all, which an intermediary must leave alone.
-    /// </summary>
+    /// <summary>Asks for a <c>Vary</c> header of this value beside the body.</summary>
     public const string VaryQuery = "vary";
 
     private readonly ConcurrentQueue<string> _paths = new();
@@ -79,8 +38,7 @@ public sealed class StubDestination : IAsyncLifetime
     {
         WebApplicationBuilder builder = WebApplication.CreateSlimBuilder();
 
-        // Port 0: the operating system picks a free one, so parallel test
-        // classes each get their own server and nothing collides on a rerun.
+        // Port 0, so each class fixture gets a free port of its own.
         builder.WebHost.UseUrls("http://127.0.0.1:0");
         builder.Logging.ClearProviders();
 
@@ -93,17 +51,7 @@ public sealed class StubDestination : IAsyncLifetime
             await next();
         });
 
-        // 204 unless the caller asks for a body, which is what keeps every test
-        // written before this one unchanged. A query string rather than a
-        // settable property because it is the one way to vary the response that
-        // YARP forwards untouched, and because per-request beats per-fixture
-        // setup inside a class: nothing has to be reset between tests and no
-        // test depends on the order it runs in.
-        //
-        // NOT for independence between classes — every consumer declares
-        // IClassFixture<StubDestination>, so xUnit already builds one instance
-        // each and no class holds another's. A comment here claimed otherwise
-        // until a review checked the lifetime.
+        // A query string, which YARP forwards untouched, so nothing is reset between tests in a class.
         app.MapFallback((HttpContext context) =>
         {
             if (!int.TryParse(context.Request.Query[BodySizeQuery], out int size))
@@ -114,10 +62,6 @@ public sealed class StubDestination : IAsyncLifetime
             if (!string.IsNullOrEmpty(vary))
                 context.Response.Headers.Vary = vary;
 
-            // The RFC 9111 directive telling intermediaries not to transform
-            // the representation. It reaches every cache and proxy on the path
-            // and stops none of them here, which is the point of the test that
-            // asks for it (ADR-020).
             if (context.Request.Query.ContainsKey(NoTransformQuery))
             {
                 context.Response.Headers.CacheControl = "no-transform";
@@ -125,12 +69,6 @@ public sealed class StubDestination : IAsyncLifetime
                 return Results.Text(new string('a', size), "application/json");
             }
 
-            // A destination that has spoken for its own encoding, whether by
-            // compressing the body itself or by declaring it unencoded. The
-            // middleware's existing-encoding guard skips both alike, because it
-            // reads whether the header is present and never what it says — the
-            // property the two tests over this branch exist to show. ADR-020's
-            // opt-out is the no-transform case above, not this one.
             string? declared = context.Request.Query[ContentEncodingQuery];
 
             if (!string.IsNullOrEmpty(declared))
@@ -142,10 +80,7 @@ public sealed class StubDestination : IAsyncLifetime
                     : Results.Text(new string('a', size), "application/json");
             }
 
-            // One repeated character, so the body is at the compressible end of
-            // what a real JSON response looks like. A compression assertion
-            // wants the encoded form to be unmistakably smaller than the plain
-            // one, and incompressible bytes would leave it measuring noise.
+            // One repeated character, so the encoded form is unmistakably smaller than the plain one.
             return Results.Text(new string('a', size), "application/json");
         });
 
@@ -168,10 +103,7 @@ public sealed class StubDestination : IAsyncLifetime
         using (GZipStream compressor = new(buffer, CompressionLevel.Fastest, leaveOpen: true))
             compressor.Write(Encoding.UTF8.GetBytes(body));
 
-        // Not `[.. buffer]`: CLAUDE.md's spread rule governs materialising a
-        // SEQUENCE, and a MemoryStream is not one — the spread fails to
-        // compile on it (CS9212). Noted here because a review has already
-        // read the rule the other way.
+        // Not a spread: a MemoryStream is not a sequence, and the spread fails to compile on it (CS9212).
         return buffer.ToArray();
     }
 }
