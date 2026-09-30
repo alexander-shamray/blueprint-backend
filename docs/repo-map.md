@@ -61,6 +61,8 @@ docs/change-locality-plan.md the PRs that make the contract fully true
 docs/churn-plan.md           where the corpus churns, measured on a named
                              commit, and the refactor sequence that reduces
                              it
+docs/churn-plan-2.md         the same, measured again once that sequence
+                             landed, and the comment budget's sweeps
 docs/repo-map.md             this file — what every entry here is and why
                              it is shaped that way. It lists itself because
                              the locator in `CLAUDE.md` does, and a map
