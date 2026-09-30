@@ -69,7 +69,7 @@ public class ArchitectureTests
         typeof(Program).Assembly
     ];
 
-    /// <summary>Whether a referenced assembly is this repository's own, told by its missing strong name.</summary>
+    /// <summary>Whether a referenced assembly is this repository's own.</summary>
     private static bool IsFirstParty(AssemblyName reference) =>
         reference.GetPublicKeyToken() is null or [] && reference.Name != "Dapper";
 
