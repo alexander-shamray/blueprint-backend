@@ -61,8 +61,10 @@ change quoted from the review is a risk with no benefit.
 - **The plan rule**, by pointer: when the branch's diff lies wholly under
   `docs/superpowers/`, `.claude/commands/ship.md`'s *A plan is reviewed
   once, for contradiction* owns which findings stand, and one it refuses is
-  `reject-rule`, naming that section. Without the diff, adjudicate as for
-  any branch.
+  `reject-rule`, naming that section. On such a branch a
+  `found-while-adjudicating` row is held to the same bar, because the
+  applying step reads those rows as edit candidates too. Without the diff,
+  adjudicate as for any branch.
 - **The locality contract**, by pointer: `docs/change-locality.md` §2 is
   the owner of what a document may and may not restate, and this profile
   does not copy its list, because a copy is the one that loses an exception.
