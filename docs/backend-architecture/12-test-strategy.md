@@ -601,10 +601,9 @@ public sealed class TestAuthHandler(
     : AuthenticationHandler<AuthenticationSchemeOptions>(options, logger, encoder)
 {
     // SchemeName, not Scheme. AuthenticationHandler<T> already declares a
-    // Scheme — the AuthenticationScheme this handler was resolved
-    // for — so a constant of that name hides it, and CS0108 is an error under
-    // ADR-019's TreatWarningsAsErrors. This sample said Scheme until PR-16
-    // compiled it.
+    // Scheme — the AuthenticationScheme this handler was resolved for — so a
+    // constant of that name hides it, and CS0108 is an error under ADR-019's
+    // TreatWarningsAsErrors.
     public const string SchemeName = "Test";
     public const string UserHeader = "X-Test-User";
     public const string PermissionsHeader = "X-Test-Permissions";
