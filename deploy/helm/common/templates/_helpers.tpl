@@ -367,18 +367,14 @@ Carrier__BaseUrl: {{ include "commerce.requireUrl" (list .Values.carrier.baseUrl
 {{- end }}
 {{- if (.Values.addressSource).enabled }}
 {{- /*
-ADR-052's address read, and the one required address here that `requireUrl`
-must NOT see. TLS terminates at the Ingress (§10.1) and every hop past it is
-plain http, so Ordering's HTTP/2-only endpoint is dialled over cleartext
-exactly as `PricingHop.cs` dials Catalog's — and the host's own guard says so,
-refusing user information and accepting either scheme. NON-BLANK IS NOT AN
-ADDRESS all the same, so the shape `requireUrl` checks is checked here with
-the scheme widened to match — a subset of what the host's parse accepts, on
-that helper's terms.
+ADR-052's address read, which `requireUrl` must not see: TLS ends at the
+Ingress (§10.1), so Ordering's HTTP/2-only endpoint is dialled over cleartext,
+as `PricingHop.cs` dials Catalog's, and the host's guard accepts either scheme.
+The shape is `requireUrl`'s, host class included, with the scheme widened.
 */}}
 {{- $addressSource := include "commerce.require" (list .Values.addressSource.baseUrl "addressSource.baseUrl is required when addressSource.enabled: the worker resolves the address owner eagerly (ADR-052) and does not start without it (§15.4).") }}
-{{- if not (regexMatch "^https?://[^/?#@:\\[\\] ]+(:[0-9]+)?(/[^?#]*)?$" $addressSource) }}
-{{- fail "addressSource.baseUrl is not an address this chart will accept: http or https, a host, optionally a numeric port, and optionally a path. User information, a query and a fragment are refused here rather than at startup (§15.4)." }}
+{{- if not (regexMatch "^https?://[\\p{L}\\p{N}\\p{M}._-]+(:[0-9]+)?(/[^?#]*)?$" $addressSource) }}
+{{- fail "addressSource.baseUrl is not an address this chart will accept: http or https, a host of letters, digits, dots, hyphens and underscores, optionally a numeric port, and optionally a path. User information, a query, a fragment and a wildcard are refused here rather than at startup (§15.4)." }}
 {{- end }}
 {{- $addressPort := regexFind ":[0-9]+$" (regexFind "^https?://[^/]+" $addressSource) }}
 {{- if $addressPort }}
