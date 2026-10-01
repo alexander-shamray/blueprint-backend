@@ -21,12 +21,8 @@ this appendix cites and never restates them.
 
 | Name | Section | What it is |
 |---|---|---|
-| `OrderMetrics` | [§13.3](13-observability.md) | The instruments on `Ordering.Orders`, recorded from §6.6's projection on the committed path. Arrives with that projection; `MetricsInitialiser`'s doc comment says so |
-| `OrderSummaryProjection` | [§6.6](06-cqrs.md) | The projection writing `ordering.OrderSummaries` and `ordering.Products`, printed in full by §6.6 and not yet built ([ADR-027](adr/ADR-027-the-order-summary-stores-product-ids-and-resolves-the-name-locally.md)) |
 | `GetOrderSummariesQuery`, `GetOrderSummariesHandler`, `OrderSummaryDto`, `SummaryProduct` | §6.5, §6.6 | The worked query slice, shown at level 1 and rewritten in place at level 2. The query carries `Cursor` and `Limit` only, the subject being bound from `ICurrentUser` (§11.4); `SummaryProduct` is composed on read from `ordering.Products` |
 | `SummaryRow` | §6.6 | The Dapper row shape behind the level-2 summaries query, `Products` read as JSON |
-| `FulfilmentFact` | §6.6 | `(PlacedAt, ConfirmedAt)` behind the fulfilment claim, non-nullable because the claim's predicate tests both columns for `IS NOT NULL` |
-| `PlacedFact` | §6.6 | `(TotalAmount, Currency)` behind the placement claim, non-nullable for the reason the comment on that claim gives |
 | `GetProductDetailQuery`, `GetProductDetailHandler`, `ProductDetailDto`, `ProductSql` | [§8.2](08-caching-redis.md) | Catalog's cached read slice, the `HybridCache` worked example |
 | `PriceChangedCacheInvalidator` | §8.4 | The cache-only `PriceChanged` handler, which arrives with the first cached projection of Catalog data; §8.4 says so beside the sample |
 | `GetConfiguredOptions` | [§9.7](09-messaging.md) | The helper §9.7's resilience sample calls to read the options under assertion; `ResilienceHierarchyTests` names it as the thing it leaves undefined |
