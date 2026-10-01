@@ -163,15 +163,14 @@ alone.
 {{- end }}
 {{- end }}
 {{- /*
-Case, which the shape test above does not see. `GetLeftPart(UriPartial.Authority)`
-canonicalises scheme and host to lowercase and `WithOrigins` compares
-ordinally, so `https://SPA.example` is refused by the host —
-`ConditionalBlockTests` covers exactly that value. Everything in an origin is
-case-insensitive and canonicalises down, so the whole string must already
-equal its lowercase form.
+Case, which the shape test above does not see. The gateway refuses at
+startup an origin that differs from `GetLeftPart(UriPartial.Authority)`,
+which lowercases scheme and host, so `https://SPA.example` would render a
+release that never starts. Everything in an origin canonicalises down, so
+the whole string must already equal its lowercase form.
 */}}
 {{- if ne $o (lower $o) }}
-{{- fail (printf "cors.origins[%d] is not lowercase. The canonical origin lowercases scheme and host and WithOrigins compares ordinally, so a capital letter matches nothing while looking correct (§10.2)." $i) }}
+{{- fail (printf "cors.origins[%d] is not lowercase. The gateway refuses at startup an origin that is not its canonical form, which lowercases scheme and host (§10.2)." $i) }}
 {{- end }}
 {{- /*
 The TRIMMED value, not the original. Validating `$o` and emitting `$origin`
