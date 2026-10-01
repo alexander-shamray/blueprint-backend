@@ -347,8 +347,8 @@ key is the other half, mounted into the migration Job and nowhere else.
 {{- /*
 §8.1's two connections, both required because AddRedisConnections reads both
 eagerly. Secrets, since each service connects as its own ACL user, and two
-references because the instances differ in eviction policy: the guard above
-keeps idempotency claims off the allkeys-lru one.
+references because the instances differ in eviction policy, which is why
+the guard above refuses one key for both.
 */}}
 - name: ConnectionStrings__RedisCache
   valueFrom:
