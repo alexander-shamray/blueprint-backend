@@ -57,7 +57,7 @@ could have made differently:
 |---|---|
 | A helper or a guarded git command exits non-zero | The step did not run; a report that says otherwise is false. `git pull --ff-only` refusing a diverged branch is the commonest one |
 | This branch's PR was closed unmerged | Reopening a deliberate closure is not a recommended option |
-| A fix to a helper under `.claude/scripts/` lacks its case | Step 2's read refuses it, and the case is a file this session is denied editing, so the run has no fix to make |
+| A fix to a script under `.claude/` lacks its case | Step 2's read refuses it, and the case is a file this session is denied editing, so the run has no fix to make |
 | A requested review never registers | Same shape: the round did not happen, so no verdict may be minted from it |
 | `main` is ahead of `origin/main` at step 0 | Local commits on `main` need a decision this chain has no way to take |
 | CI is not green at step 7 | A merge onto a red `main` is not a judgement call |
@@ -741,8 +741,8 @@ is one round and step 7 cannot buy it a second.
    PR body says so under the rule below rather than claiming a run that did
    not happen — a body that names the class has named the reason.
 
-   **One check holds whatever the class: a fix to a helper under
-   `.claude/scripts/` carries its case.** `CLAUDE.md`'s *Working in this
+   **One check holds whatever the class: a fix to a script under
+   `.claude/` carries its case.** `CLAUDE.md`'s *Working in this
    repo* owns the rule, and this step reads it because every commit in the
    chain passes here — steps 5 and 6 rerun these checks before each fix
    they commit — while step 0 runs before there is a diff or a subject to
@@ -755,13 +755,13 @@ is one round and step 7 cannot buy it a second.
    ```
 
    The change is a fix when one of those subjects opens `fix:` or `fix(`, or
-   when what `/commit` is about to write will. Each path under
-   `.claude/scripts/` that is not a `test_*.py` is then a script, and its
-   suites are the `test_*.py` there whose text names the script's file,
-   which `Grep` finds. One of them must be among the paths. A script no
-   suite names may take its first fix bare and is refused at its second,
-   which a `fix` subject in `git log --format=%s origin/main -- <script>`
-   shows.
+   when what `/commit` is about to write will. Each path under `.claude/`
+   ending `.py` or `.sh` that is not a `test_*.py` is then a script, and its
+   suites are the `test_*.py` under `.claude/scripts/` whose text names the
+   script's file, which `Grep` finds. One of them must be among the paths.
+   A script no suite names may take its first fix bare and is refused at
+   its second, which a `fix` subject in
+   `git log --format=%s origin/main -- <script>` shows.
 
    **A refusal stops the chain**, because the missing case is a file under
    `.claude/scripts/`, which this session is denied editing, so the run has
