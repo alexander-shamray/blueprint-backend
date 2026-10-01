@@ -2280,7 +2280,7 @@ attached is a page to somebody who will have to reason from scratch.
 | `docs/runbooks/redis-cold.md` | Cache-loss load spike on the databases, and how to shed load while it warms |
 
 Write each one when the corresponding alert is created, not after it first
-fires. Every row above landed with PR-24 — including the four whose alert cannot
+fires. Every row above landed with PR-24 — including those whose alert cannot
 fire yet, because a procedure whose queries read tables that already exist is
 useful before its pager is.
 
