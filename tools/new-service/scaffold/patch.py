@@ -324,6 +324,20 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
             '            + "form, which is what keeps a vacuous gate from quietly '
             'becoming a permanent one.");\n',
         ),
+        # Money is Catalog's, and a rendered service has no value object of its own yet.
+        (
+            '                "no converters. Money has a private constructor, so it '
+            'round-trips to a zero " +\n'
+            '                "amount and a null currency and nothing says so (§4.2) — '
+            'an idempotent command " +\n'
+            '                "returns a primitive, a Guid or a DTO, never a domain '
+            'value object.");\n',
+            '                "no converters. A domain value object need not survive '
+            'that round trip, and " +\n'
+            '                "nothing says so (§4.2) — an idempotent command returns '
+            'a primitive, a Guid " +\n'
+            '                "or a DTO, never a domain value object.");\n',
+        ),
     ),
     "tests/Catalog.Application.Tests/ArchitectureTests.cs": (
         ("using Catalog.Domain.Products;\n", "using Catalog.Domain;\n"),
