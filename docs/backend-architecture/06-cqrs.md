@@ -1845,7 +1845,7 @@ public sealed class OrderSummaryProjection(IDbConnectionFactory connections, Ord
             """, args);
 
         // Money.Of, not new Money: the constructor is private (§5.3). Trimmed
-        // first, because CHAR(3) comes back space-padded and Of rejects
+        // defensively first: CHAR(3) pads a shorter value, and Of rejects
         // anything but three letters.
         if (placed is not null)
             metrics.Placed(Money.Of(placed.TotalAmount, placed.Currency.Trim()));
