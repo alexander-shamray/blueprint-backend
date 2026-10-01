@@ -139,7 +139,7 @@ repository can observe**. The metric names in the rule are what such a bridge
 would plausibly export, not names read off a running system.
 
 **Neither file's rule count is written down here on purpose.** The table above
-names all four by alert, so it evidences itself and cannot drift silently; a
+names all three by alert, so it evidences itself and cannot drift silently; a
 bare "eight loaded" would be a number nothing recomputes, and the first rule
 that moves between the files would make it wrong. `CLAUDE.md` makes the same
 argument about its own line count.

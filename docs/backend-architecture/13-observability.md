@@ -2022,7 +2022,7 @@ public void Every_metrics_type_is_forced_or_has_a_stated_reason_not_to_be()
 > ratio — write the expression, not an invented metric name. A name that looks
 > like an instrument and is not is the hardest version of this to spot.
 
-### Four of them have no signal yet
+### Three of them have no signal yet
 
 PR-24 wrote every condition above out as Prometheus rules and found that **four
 of them read an instrument nothing publishes**. That is this section's own
@@ -2050,7 +2050,7 @@ day one of these instruments lands, the gate goes red and names the rule to
 move. Every runbook exists regardless, per §13.9.
 
 > **The cache row is the one the self-clearing claim does not cover, and only
-> reading the package settled why.** The other three are owed a `Create*` call
+> reading the package settled why.** The other two are owed a `Create*` call
 > the gate can see in `src/`. This one was first taken to be owed a
 > **consumer** — at the time nothing called `AddRedisConnections`, so nothing
 > constructed a `HybridCache` — and gating on that call was written, tested
@@ -2080,7 +2080,7 @@ move. Every runbook exists regardless, per §13.9.
 
 ### The gap is per service as well as per metric
 
-A fifth absence sits underneath all of this and is invisible to the checks
+A fourth absence sits underneath all of this and is invisible to the checks
 above, because they are about metric *names*. **The four loaded outbox alerts
 group `by (service_name)`, and a service that hosts §9.4's dispatcher and
 registers no `OutboxMetrics` is absent from every one of them.** Which
