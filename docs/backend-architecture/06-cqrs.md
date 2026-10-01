@@ -1250,11 +1250,13 @@ is an N+1 over the network.
 > meets this same trigger for this same reason one host out, with Catalog's
 > stream feeding the names.
 >
-> **The escalation below is unchanged and still Ordering's**, and so is
-> everything scheduled to arrive with it — §13.3's `OrderMetrics`, whose only
-> call site is `OrderSummaryProjection`, and the `projection.lag` instrument
-> that has no writer until the same projection is built. What moved is one
-> screen, not the progression this section exists to demonstrate.
+> **The escalation below is still Ordering's, and its lifecycle half is
+> built.** `OrderSummaryProjection` keeps `ordering.OrderSummaries` from the
+> five lifecycle events, is §13.3's `OrderMetrics`' only call site, and gives
+> Ordering's `projection.lag` its first writer. `ordering.Products`, its
+> `ProductPublished` handler and the escalated history query are not built:
+> the screen they serve is the BFF's now. What moved is one screen, not the
+> progression this section exists to demonstrate.
 
 The upgrade adds denormalised tables inside Ordering's own database, kept
 current by projections. Two of them serve the history query, one serves

@@ -559,15 +559,7 @@ public static IServiceCollection AddOrderingApplication(this IServiceCollection 
     // RequestMetrics for a dispatched request — which a health probe is not.
     // MetricsInitialiser (§13.6) forces both, and a test there asserts that
     // every registered *Metrics type is on its parameter list.
-    //
-    // ONLY THE SECOND LINE IS BUILT TODAY, and the first is here on
-    // IdempotencyBehavior's terms below — the specified shape, not the shipped
-    // one. OrderMetrics arrives with §6.6's OrderSummaries projection, its only
-    // call site. Copying this block as it stands FAILS THE BUILD, and by
-    // design: the convention test §13.6 describes asserts every registered
-    // *Metrics type is a MetricsInitialiser parameter, so registering a type
-    // the initialiser does not take is exactly what it exists to catch.
-    services.AddSingleton<OrderMetrics>();                               // with §6.6
+    services.AddSingleton<OrderMetrics>();                               // §13.3
     services.AddSingleton<RequestMetrics>();                             // §13.3
 
     // Not AddScoped<IDispatcher, Dispatcher>: Dispatcher is internal to
