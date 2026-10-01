@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using Common.Application;
 using Common.Contracts.Ordering.V1;
 using Common.Infrastructure.Outbox;
 using Microsoft.AspNetCore.Mvc;
@@ -114,7 +115,10 @@ public sealed class OrderOwnershipTests(ServiceFixture fixture) : IAsyncLifetime
 
         response.StatusCode.ShouldBe(HttpStatusCode.NoContent);
 
-        OutboxMessage row = (await fixture.OutboxAsync()).ShouldHaveSingleItem();
+        // The Broker row; §6.6's projection stages the domain event on the Local lane beside it.
+        OutboxMessage row = (await fixture.OutboxAsync())
+            .Where(r => r.Lane == OutboxLane.Broker)
+            .ShouldHaveSingleItem();
 
         row.Payload.ShouldContain(
             $"\"Origin\":\"{CancelOrigins.User}\"",

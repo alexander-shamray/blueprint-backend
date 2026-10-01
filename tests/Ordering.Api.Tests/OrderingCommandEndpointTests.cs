@@ -123,7 +123,8 @@ public sealed class OrderingCommandEndpointTests(ServiceFixture fixture) : IAsyn
 
         // The published confirmation is the part that can be asserted: one Broker row for §3.2's OrderConfirmed.
         (await fixture.OutboxAsync())
-            .Count(r => r.MessageType.Contains("OrderConfirmed", StringComparison.Ordinal))
+            .Count(r => r.Lane == OutboxLane.Broker
+                && r.MessageType.Contains("OrderConfirmed", StringComparison.Ordinal))
             .ShouldBe(1, "confirming stages §9.3's allow-listed contract on the Broker lane");
 
     }

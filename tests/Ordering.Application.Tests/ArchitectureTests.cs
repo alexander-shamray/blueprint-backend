@@ -18,6 +18,7 @@ public class ArchitectureTests
     public void Application_references_only_what_the_dependency_table_allows()
     {
         // §4.2's second row as an allow-list; System.Collections.Immutable is emitted with no source naming it.
+        // System.Diagnostics.DiagnosticSource carries OrderMetrics' Meter and instruments (§13.3).
         string[] allowed =
         [
             "Common.Application",
@@ -31,6 +32,7 @@ public class ArchitectureTests
             "System.Collections",
             "System.Collections.Immutable",
             "System.Data.Common",
+            "System.Diagnostics.DiagnosticSource",
             "System.Linq",
             "System.Linq.Expressions",
             "System.Runtime"
