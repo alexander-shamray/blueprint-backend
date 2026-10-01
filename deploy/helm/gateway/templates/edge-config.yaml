@@ -170,7 +170,7 @@ release that never starts. Everything in an origin canonicalises down, so
 the whole string must already equal its lowercase form.
 */}}
 {{- if ne $o (lower $o) }}
-{{- fail (printf "cors.origins[%d] is not lowercase. The gateway refuses at startup an origin that is not its canonical form, which lowercases scheme and host (§10.2)." $i) }}
+{{- fail (printf "cors.origins[%d] is not lowercase. The gateway refuses at startup an origin that is not its canonical form, which lowercases scheme and host (§4.2)." $i) }}
 {{- end }}
 {{- /*
 The TRIMMED value, not the original. Validating `$o` and emitting `$origin`
