@@ -346,7 +346,7 @@ key is the other half, mounted into the migration Job and nowhere else.
 {{- end }}
 {{- /*
 §8.1's two connections, both required because AddRedisConnections reads both
-eagerly. Secrets, since each service connects as its own ACL user, and two
+eagerly. Secrets, since each string carries a credential (§8.1), and two
 references because the instances differ in eviction policy, which is why
 the guard above refuses one key for both.
 */}}
