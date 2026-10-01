@@ -1099,13 +1099,14 @@ is one round and step 7 cannot buy it a second.
 
 6. **The Copilot loop.** Once the Grok loop has ended — however it ended —
    hand the branch to the second reviewer and alternate the same way. All
-   three of its outcomes come here:
+   four of its outcomes come here:
 
    | Grok ended | Reaches step 6 because |
    |---|---|
    | Clean, on two consecutive passes | Convergence, the outcome the loop is for |
    | Skipped on limits | Quota, not a verdict; reported as skipped, and final |
    | Unconverged at the ceiling | A budget ran out, which is not a reason to withhold the second reviewer |
+   | Ended under *A plan is reviewed once, for contradiction* | That section skips this loop once Grok has given the round, and the skip is reported here |
 
    Step 7 argues that a ceiling is a budget running out rather than a verdict,
    and that argument applies here first: a branch Grok had more to say about is
@@ -1282,8 +1283,9 @@ is one round and step 7 cannot buy it a second.
    one that ran shorter.
 
 7. **Merge, then tear the workspace down.** Both loops have finished — clean,
-   all-resolved, skipped on limits, or unconverged at a ceiling — and the goal
-   of this chain is a merged PR, so it merges.
+   all-resolved, skipped on limits, ended or skipped under *A plan is reviewed
+   once, for contradiction*, or unconverged at a ceiling — and the goal of
+   this chain is a merged PR, so it merges.
 
    **Unconverged is not a reason to hold the PR.** A ceiling is a budget
    running out, not a verdict, and a branch that is green, reviewed and
@@ -1616,12 +1618,14 @@ ledger comments, step 6's timeline events; the report line is the
 human-readable echo), and how it ended, in that loop's own vocabulary: step 5
 clean, skipped on limits (final — one reviewer, not two), or stopped
 unconverged; step 6 **all-resolved, naming the review and the `commit` oid it
-read**, or stopped unconverged. Neither list has an ending that means "a
-finding stopped us" — a decided row and an answered `Ask` belong in the
-decisions section below, and filing one as a stop is the silent-decision
-failure this report exists to prevent. The oid is not decoration — it is the
-whole of step 6's marker, and a later `/ship` compares it against the pushed
-head to decide whether that loop is owed at all.
+read**, or stopped unconverged. On a plan PR either may instead have ended,
+or been skipped, under *A plan is reviewed once, for contradiction*. Neither
+list has an ending that means "a finding stopped us" — a decided row and an
+answered `Ask` belong in the decisions section below, and filing one as a
+stop is the silent-decision failure this report exists to prevent. The oid
+is not decoration — it is the whole of step 6's marker, and a later `/ship`
+compares it against the pushed head to decide whether that loop is owed at
+all.
 
 **Then the decisions.** Every place this chain answered a question that would
 otherwise have stopped it gets a line: the check finding it reconciled and
