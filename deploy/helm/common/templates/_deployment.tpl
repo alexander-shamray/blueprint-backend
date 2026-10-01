@@ -26,14 +26,10 @@ spec:
   {{- end }}
   selector:
     {{- /*
-    The Service's selector PLUS the track, and the difference is load-bearing.
-    Two Deployments sharing a selector each count the other's pods as their own
-    and scale them away; a Service that selected only `stable` would route the
-    canary nothing. One label, in exactly one of the two places.
-
-    Immutable, so this cannot be added to a Deployment that already exists —
-    see `commerce.deploymentSelectorLabels`, which argues why it is being added
-    now rather than when a canary is first wanted.
+    The Service's selector plus the track: two Deployments sharing a selector
+    count each other's pods as their own, and a Service selecting only `stable`
+    would route the canary nothing. Immutable, so it cannot be added to an
+    existing Deployment; ADR-022 records why it was taken before any install.
     */}}
     matchLabels:
       {{- include "commerce.deploymentSelectorLabels" . | nindent 6 }}
