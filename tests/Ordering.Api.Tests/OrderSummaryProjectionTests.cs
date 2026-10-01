@@ -13,7 +13,7 @@ namespace Ordering.Api.Tests;
 
 /// <summary>§6.6's summary over an unordered, at-least-once lane, and §13.3's counters claimed against its row.</summary>
 [Collection(nameof(IntegrationCollection))]
-public sealed class OrderSummaryProjectionTests(ServiceFixture fixture) : IAsyncLifetime, IDisposable
+public sealed class OrderSummaryProjectionTests(ServiceFixture fixture) : IAsyncLifetime
 {
     private static readonly DateTimeOffset Placed = new(2026, 10, 1, 9, 0, 0, TimeSpan.Zero);
 
@@ -34,9 +34,11 @@ public sealed class OrderSummaryProjectionTests(ServiceFixture fixture) : IAsync
         _listener.Start();
     }
 
-    public ValueTask DisposeAsync() => ValueTask.CompletedTask;
-
-    public void Dispose() => _listener.Dispose();
+    public ValueTask DisposeAsync()
+    {
+        _listener.Dispose();
+        return ValueTask.CompletedTask;
+    }
 
     [Fact]
     public async Task A_placement_and_a_cancellation_delivered_twice_each_count_once()
