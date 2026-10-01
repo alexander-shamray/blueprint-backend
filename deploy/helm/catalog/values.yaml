@@ -3,7 +3,7 @@
 # connection-string name.
 
 workload:
-  # NOT derived from the release name, and _helpers.tpl argues why at length:
+  # Not derived from the release name, and _helpers.tpl says why:
   # §10.2's route file dials `http://catalog-api:8080/` and PricingHop.cs dials
   # `http://catalog-api:8081`, both as literals in source. This value is that
   # string, so the Service answers to the name its callers already spell.
