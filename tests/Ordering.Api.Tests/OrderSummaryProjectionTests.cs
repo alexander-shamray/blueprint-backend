@@ -11,7 +11,7 @@ using Xunit;
 
 namespace Ordering.Api.Tests;
 
-/// <summary>§6.6's summary over an unordered, at-least-once lane, and §13.3's counters claimed against its row.</summary>
+/// <summary>§6.6's summary over an unordered, at-least-once lane, and §13.3's counters claimed on its row.</summary>
 [Collection(nameof(IntegrationCollection))]
 public sealed class OrderSummaryProjectionTests(ServiceFixture fixture) : IAsyncLifetime
 {
@@ -46,7 +46,8 @@ public sealed class OrderSummaryProjectionTests(ServiceFixture fixture) : IAsync
         OrderId order = new(Guid.CreateVersion7());
 
         await ProjectAsync(order, PlacedEvent(order), PlacedEvent(order));
-        await ProjectAsync(order, CancelledEvent(order, Placed.AddMinutes(5)), CancelledEvent(order, Placed.AddMinutes(5)));
+        OrderCancelledDomainEvent cancelled = CancelledEvent(order, Placed.AddMinutes(5));
+        await ProjectAsync(order, cancelled, cancelled);
 
         Recorded("orders.placed").ShouldBe([(1d, "EUR")]);
         Recorded("orders.value").ShouldBe([(19.99d, "EUR")]);
