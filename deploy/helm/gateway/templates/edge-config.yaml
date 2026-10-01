@@ -79,10 +79,10 @@ checks below approximate it, each with its own reason.
 */}}
 {{- $o := trim $origin }}
 {{- /*
-The host, then optionally a numeric port, and nothing else. A subset of
-Program.cs's rule, not a copy: an origin an operator plausibly writes that the
-host would refuse is refused here, and an IPv6 literal is refused outright
-rather than half-checked.
+The scheme, the host, then optionally a numeric port: the class excludes
+userinfo, a path, a query, a fragment and an IPv6 literal. A subset of
+Program.cs's rule, not a copy, so a value this admits can still be refused
+at startup.
 */}}
 {{- if not (regexMatch "^https?://[^/?#@:\\[\\] ]+(:[0-9]+)?$" $o) }}
 {{- fail (printf "cors.origins[%d] is not a browser origin this chart will accept: a scheme, a host, and optionally a numeric port. Userinfo, a path, a query, a fragment, a non-numeric port and IPv6 literals are all refused here rather than at startup (§4.2). The value is deliberately not echoed (§13.4)." $i) }}
