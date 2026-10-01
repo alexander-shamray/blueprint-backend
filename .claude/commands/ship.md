@@ -765,8 +765,9 @@ is one round and step 7 cannot buy it a second.
    a script a `feat` commit changed is not asked for a case because a
    review fix elsewhere landed beside it. A script no suite names may take
    its first fix bare and is refused at its second: two `fix` subjects in
-   `git log --format=%s HEAD -- <script>`, counting the one `/commit` is
-   about to write.
+   `git log --format=%s origin/main HEAD -- <script>`, which reads the
+   branch's fixes and those `main` gained after the fork, counting the one
+   `/commit` is about to write.
 
    **A refusal stops the chain**, because the missing case is a file under
    `.claude/scripts/`, which this session is denied editing, so the run has
