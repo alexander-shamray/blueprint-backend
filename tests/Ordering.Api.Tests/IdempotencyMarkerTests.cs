@@ -167,8 +167,8 @@ public class IdempotencyMarkerTests(ServiceFixture fixture)
 
         version.ValueGenerated.ShouldBe(
             ValueGenerated.OnAddOrUpdate,
-            "a version the application supplies is a version a replacement could be given, so " +
-            "identity would no longer hold by construction");
+            "a version the application supplies is a version a replacement could be given, which " +
+            "breaks the identity-by-construction this column exists to give the row");
 
         version.IsConcurrencyToken.ShouldBeTrue("IsRowVersion() is what sets both, and both matter");
 
