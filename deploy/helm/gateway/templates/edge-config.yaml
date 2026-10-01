@@ -1,7 +1,7 @@
 {{/*
 The two keys only Gateway.Api reads, which §15.4 marks gateway only, in a
-ConfigMap this chart renders itself. Each flag is conditionally required
-(§15.4): off is a valid topology, and on but unconfigured is refused at render.
+ConfigMap this chart renders itself. Each flag's list is conditionally
+required (§15.4): off is valid, and on but unconfigured is refused at render.
 The data is a named template so the pod-template checksum can hash this body,
 and its name comes from `extraConfigMaps`, so mount, metadata and hash agree.
 */}}
