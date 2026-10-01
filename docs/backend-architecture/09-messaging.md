@@ -1384,8 +1384,8 @@ It is also not the *handler*. `IntegrationEventConsumer<T>` (§9.4) runs every
 registered `IIntegrationEventHandler<T>` for the message, and one inbox row
 covers them all — which is correct, because they succeed or fail together and
 are retried together. Ordering's `ProductPriceProjection` and the
-`OrderSummaryProjection` §6.6 specifies beside it both handle
-`ProductPublished`, and share one row.
+`ProductPublished` handler §6.6 specifies beside it for `ordering.Products`
+will both handle it, and share one row.
 
 Retention is the same story as the outbox, and needs the same purge — an inbox
 nobody prunes grows for the life of the service and its composite-key index
