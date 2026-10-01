@@ -75,7 +75,7 @@ has begun rolling, so the render refuses them first.
 {{- /*
 Program.cs's rule (§4.2) is built on one equality with
 `GetLeftPart(UriPartial.Authority)`, which a template cannot compute, so the
-checks below approximate it, each with its own reason.
+checks below approximate it.
 */}}
 {{- $o := trim $origin }}
 {{- /*
