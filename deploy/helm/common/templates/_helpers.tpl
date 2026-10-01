@@ -84,9 +84,9 @@ and a label value may not exceed 63 characters.
 {{- end -}}
 
 {{- /*
-The selector carries the workload name and nothing release-derived: these
-pods are found by the Service name §10.2's route file and §9.7's pricing
-hop dial, and a Deployment's selector cannot change once it exists.
+The selector carries the workload name and nothing release-derived: a
+Deployment's selector cannot change once it exists, so a pod's identity
+must not depend on which release installed it.
 */}}
 {{- define "commerce.selectorLabels" -}}
 app.kubernetes.io/name: {{ include "commerce.name" . }}
