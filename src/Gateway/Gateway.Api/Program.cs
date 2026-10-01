@@ -159,7 +159,7 @@ if (corsEnabled)
     if (malformed.Length > 0)
     {
         throw new InvalidOperationException(
-            $"'Cors:Origins' is not a browser origin at index {string.Join(", ", malformed)}. One is an http " +
+            $"'Cors:Origins' is not a canonical origin at index {string.Join(", ", malformed)}. One is an http " +
             "or https scheme, a host and a port only when it is not the scheme's default, in lowercase: the " +
             "check is one equality with that canonical form (§4.2). The value is deliberately not echoed (§13.4).");
     }
