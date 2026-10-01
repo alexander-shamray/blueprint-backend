@@ -99,8 +99,7 @@ public sealed class OrderFulfilmentSagaEndpointTests(ServiceFixture fixture) : I
                 orderId),
             expected: "Compensating",
             because: "a retried delivery has to correlate to the instance the " +
-                "placement created and compensate; reaching the error queue " +
-                "instead is the outcome #123 chose faulting to avoid");
+                "placement created and compensate, not reach the error queue");
     }
 
     [Fact]
@@ -302,7 +301,7 @@ public sealed class OrderFulfilmentSagaEndpointTests(ServiceFixture fixture) : I
             expected: 1,
             because: "LastSequenceNumber is stamped once the messages staged in ordering.OutboxMessage " +
                 "have been delivered — which is the proof they were staged there and not in a " +
-                "process-local buffer that a crash would have discarded (#128, ADR-032)");
+                "process-local buffer that a crash would have discarded (ADR-032)");
     }
 
     [Fact]

@@ -124,7 +124,7 @@ public class OrderFulfilmentSagaAwaitingPaymentTests
                     e => e != null,
                     "an event no transition accepts must reach the error queue §13.6 pages on. " +
                     "Absorbing it silently would answer a lost-command crash and a misroute the " +
-                    "same way it answers a duplicate (#128).");
+                    "same way it answers a duplicate.");
 
             // Read as of now, since a waiting read would give a late second send somewhere to hide.
             harness.Sent

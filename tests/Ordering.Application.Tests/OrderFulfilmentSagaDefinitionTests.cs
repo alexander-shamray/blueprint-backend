@@ -73,8 +73,7 @@ public class OrderFulfilmentSagaDefinitionTests
             .ShouldBe(
                 declared.OrderBy(n => n, StringComparer.Ordinal),
                 "every event this machine declares must be classified as reachable in " +
-                "Compensating or not. An event in neither list is one nobody decided about, " +
-                "which is exactly how PaymentDeclined came to be missing (§9.6).");
+                "Compensating or not; an event in neither list is one nobody decided about (§9.6).");
 
         // .AnyReceived is MassTransit's own, accepted in every state, so it says nothing about a branch.
         saga.NextEvents(saga.Compensating)

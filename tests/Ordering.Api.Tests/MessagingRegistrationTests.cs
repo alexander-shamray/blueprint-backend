@@ -180,7 +180,7 @@ public class MessagingRegistrationTests
         services.ShouldContain(
             d => d.ServiceType == typeof(IOutboxContextFactory<OrderingDbContext>),
             "AddEntityFrameworkOutbox<OrderingDbContext> is what registers it, and nothing else here " +
-            "does — its absence puts §9.6's saga back on the in-memory outbox (#128, ADR-032)");
+            "does — its absence puts §9.6's saga back on the in-memory outbox (ADR-032)");
     }
 
     [Fact]
