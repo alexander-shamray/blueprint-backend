@@ -543,6 +543,8 @@ refuses_chart shipping 'an address source that is not an address fails the rende
 refuses_chart shipping 'an address source carrying credentials fails the render' \
     'not an address this chart will accept' \
     --set-string 'addressSource.baseUrl=http://u:p@ordering-api:8081'
+refuses_chart shipping 'an address source with a wildcard host fails the render' \
+    'not an address this chart will accept' --set-string 'addressSource.baseUrl=http://*.ordering:8081'
 refuses_chart shipping 'an address source on a port past 65535 fails the render' \
     'outside 1-65535' --set-string 'addressSource.baseUrl=http://ordering-api:80810'
 refuses_chart shipping 'an address source with the capability off fails the render' \
