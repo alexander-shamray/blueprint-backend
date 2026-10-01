@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
 using Common.Contracts.Ordering.V1;
 using Ordering.Application;
 using Ordering.Application.Orders;
@@ -172,6 +173,33 @@ public sealed class PlaceOrderTests(ServiceFixture fixture) : IAsyncLifetime
             """);
 
     [Fact]
+    public async Task One_command_id_carrying_a_second_basket_is_refused_and_one_order_exists()
+    {
+        // ADR-057 through the registered pipeline and a real Redis: a 200 here would carry the first basket's
+        // order id and tell the caller the second basket was placed.
+        Guid desk = Guid.CreateVersion7();
+        Guid lamp = Guid.CreateVersion7();
+        await SeedPriceAsync(desk, 19.99m, "EUR");
+        await SeedPriceAsync(lamp, 5m, "EUR");
+        Guid commandId = Guid.CreateVersion7();
+
+        HttpResponseMessage first = await PlaceAsync(desk, quantity: 2, commandId: commandId);
+        first.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        HttpResponseMessage second = await PlaceAsync(lamp, commandId: commandId);
+
+        second.StatusCode.ShouldBe(HttpStatusCode.Conflict);
+
+        using JsonDocument problem = JsonDocument.Parse(
+            await second.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+
+        problem.RootElement.GetProperty("code").GetString().ShouldBe("command.id_reused");
+
+        (await fixture.ScalarAsync<int>("SELECT Value = COUNT(*) FROM ordering.Orders"))
+            .ShouldBe(1, "the second basket never reached the handler");
+    }
+
+    [Fact]
     public async Task A_malformed_request_is_a_400_before_the_domain_sees_it()
     {
         // ValidationBehavior's half, translated by §10.5's handler.
@@ -198,12 +226,16 @@ public sealed class PlaceOrderTests(ServiceFixture fixture) : IAsyncLifetime
         return client;
     }
 
-    /// <summary>A fresh <c>CommandId</c> per call, or a second order would replay the first's result (§8.5).</summary>
-    private Task<HttpResponseMessage> PlaceAsync(Guid product, int quantity = 1, string currency = "EUR") =>
+    /// <summary>A fresh <c>CommandId</c> unless the test pins one, since a repeated id is a retry (§8.5).</summary>
+    private Task<HttpResponseMessage> PlaceAsync(
+        Guid product,
+        int quantity = 1,
+        string currency = "EUR",
+        Guid? commandId = null) =>
         Authenticated().PostAsJsonAsync(
             "/v1/orders",
             new PlaceOrderCommand(
-                Guid.CreateVersion7(),
+                commandId ?? Guid.CreateVersion7(),
                 [new PlaceOrderItem(product, quantity)],
                 new AddressDto("1 Test Street", null, "Almaty", "050000", "KZ"),
                 currency),
