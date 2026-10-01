@@ -21,7 +21,9 @@ public sealed class OrderMetrics
             unit: "{order}",
             description: "Orders successfully placed.");
         _cancelled = meter.CreateCounter<long>("orders.cancelled", unit: "{order}");
-        _value = meter.CreateHistogram<double>("orders.value", unit: "EUR");
+        _value = meter.CreateHistogram<double>(
+            "orders.value",
+            description: "The order total, in the currency its tag names.");
         _fulfilmentSeconds = meter.CreateHistogram<double>(
             "orders.fulfilment.duration",
             unit: "s",
