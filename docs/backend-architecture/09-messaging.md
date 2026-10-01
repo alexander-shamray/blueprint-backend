@@ -1936,7 +1936,7 @@ public static class CancelOrigins
     public const string Workflow = "workflow";   // §9.6's saga compensating
 }
 
-// Likewise a string: PaymentReference is Ordering's value object, and the
+// A string: PaymentReference is Ordering's value object, and the
 // reference itself originates in Payments as an opaque provider token.
 public sealed record ConfirmOrder(Guid OrderId, string PaymentReference);
 ```
