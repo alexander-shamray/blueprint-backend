@@ -86,7 +86,7 @@ host would refuse is refused here, and an IPv6 literal is refused outright
 rather than half-checked.
 */}}
 {{- if not (regexMatch "^https?://[^/?#@:\\[\\] ]+(:[0-9]+)?$" $o) }}
-{{- fail (printf "cors.origins[%d] is not a browser origin this chart will accept: a scheme, a host, and optionally a numeric port. Userinfo, a path, a query, a fragment, a non-numeric port and IPv6 literals are all refused here rather than at startup (§10.2). The value is deliberately not echoed (§13.4)." $i) }}
+{{- fail (printf "cors.origins[%d] is not a browser origin this chart will accept: a scheme, a host, and optionally a numeric port. Userinfo, a path, a query, a fragment, a non-numeric port and IPv6 literals are all refused here rather than at startup (§4.2). The value is deliberately not echoed (§13.4)." $i) }}
 {{- end }}
 {{- $port := regexFind ":[0-9]+$" $o }}
 {{- if $port }}
@@ -101,10 +101,10 @@ renders `:08080` as `:8080`, so the host refuses it at startup. Comparing the
 digits with the integer printed back catches every non-canonical spelling.
 */}}
 {{- if ne $digits (printf "%d" $n) }}
-{{- fail (printf "cors.origins[%d] spells its port non-canonically (leading zeros). The canonical origin drops them and WithOrigins compares text, so this matches nothing while looking correct (§10.2)." $i) }}
+{{- fail (printf "cors.origins[%d] spells its port non-canonically (leading zeros). The gateway refuses at startup an origin that is not its canonical form, which drops them (§4.2)." $i) }}
 {{- end }}
 {{- if or (and (hasPrefix "https://" $o) (eq $n 443)) (and (hasPrefix "http://" $o) (eq $n 80)) }}
-{{- fail (printf "cors.origins[%d] names the scheme's default port. A browser serialises an origin without it, and WithOrigins compares the configured text — so this matches nothing while looking correct (§10.2)." $i) }}
+{{- fail (printf "cors.origins[%d] names the scheme's default port. The gateway refuses at startup an origin that is not its canonical form, which omits it (§4.2)." $i) }}
 {{- end }}
 {{- end }}
 {{- /*
