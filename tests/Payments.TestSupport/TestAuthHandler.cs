@@ -15,7 +15,7 @@ public sealed class TestAuthHandler(
     UrlEncoder encoder)
     : AuthenticationHandler<AuthenticationSchemeOptions>(options, logger, encoder)
 {
-    // SchemeName, not Scheme: AuthenticationHandler<T> declares a protected Scheme, and CS0108 fails the build.
+    // SchemeName, not Scheme: AuthenticationHandler<T> declares a Scheme, and CS0108 fails the build.
     public const string SchemeName = "Test";
     public const string UserHeader = "X-Test-User";
     public const string PermissionsHeader = "X-Test-Permissions";
