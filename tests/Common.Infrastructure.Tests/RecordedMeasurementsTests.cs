@@ -4,7 +4,7 @@ using Xunit;
 
 namespace Common.Infrastructure.Tests;
 
-/// <summary>The listener's own scoping, which every test reading through it leans on.</summary>
+/// <summary>The listener records one factory's meter, not every meter that shares its name.</summary>
 public class RecordedMeasurementsTests
 {
     [Fact]
