@@ -1739,7 +1739,7 @@ public sealed class OutboxMetrics
 > indistinguishable from a healthy one, which is this section's own callout
 > arriving through the instrument. **An alert on the absence itself is what
 > would close it, and is owed** — a further alert, a further runbook and
-> a row in §13.6's table, on the same terms as the four this chapter already
+> a row in §13.6's table, on the same terms as the alerts this chapter already
 > ships unloaded.
 
 `IOutboxStats` is read from a singleton on the collector's schedule, so it must
