@@ -399,8 +399,8 @@ PR is refused by the check and the sweeps' PRs were not.
 lands with the case in its suite that failed before it, and a script with
 no suite gets one before its second fix. `harness-boundaries.md` states
 nothing new. Class D, plus the mutex. Done when the next fix PR under
-`.claude/scripts/` carries its case, and `/ship`'s step 0 refuses one that
-does not.
+`.claude/scripts/` carries its case, and `/ship`'s step 2, the checks,
+refuses one that does not: step 0 runs before a fresh run has a diff.
 
 ## 5. What is deliberately not touched
 
