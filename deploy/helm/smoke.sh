@@ -1110,7 +1110,7 @@ for bad in 'keycloak:8080/realms/commerce' 'ftp://id.example.com/realms' \
 done
 
 # The port's range is a separate refusal with its own message, because the
-# digits satisfy the shape and it is `Uri.TryCreate` that draws the bound.
+# digits satisfy the shape and the range is a test of its own.
 for bad in 'https://id.example.com:65536/realms' 'https://id.example.com:0/realms'; do
     refuses "an authority on port '${bad##*:}' fails the render" 'outside 1-65535' \
         $GATEWAY_OVERLAY --set-string "identity.authority=$bad"
