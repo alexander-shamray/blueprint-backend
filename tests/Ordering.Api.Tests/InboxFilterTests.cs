@@ -346,7 +346,7 @@ public sealed class InboxFilterTests(ServiceFixture fixture) : IAsyncLifetime
         all.ShouldContain(anotherMessage, "the scoped read filtered this row rather than never seeing it");
     }
 
-    /// <summary>Polls until the expected row count appears, since a fixed wait is a sleep §12.8 forbids.</summary>
+    /// <summary>Polls until the expected count appears, since a fixed wait is a sleep §12.8 forbids.</summary>
     private static async Task<IReadOnlyList<T>> Eventually<T>(
         Func<Task<IReadOnlyList<T>>> read,
         int expected)
