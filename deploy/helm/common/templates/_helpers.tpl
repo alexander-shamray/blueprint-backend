@@ -323,7 +323,7 @@ charts, so a further chart growing one is a design change made here.
 {{- end }}
 {{- if .Values.database.enabled }}
 {{- /*
-The RUNTIME connection string (DML only) — §7.1's split identity. The migrator
+The runtime connection string (DML only) — §7.1's split identity. The migrator
 key is the other half, mounted into the migration Job and nowhere else.
 */}}
 - name: ConnectionStrings__{{ include "commerce.require" (list .Values.database.connectionName "database.connectionName is required when database.enabled: it is the .NET configuration key this service's Infrastructure passes to GetConnectionString (§7.1), and it differs per service.") }}
