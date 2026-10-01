@@ -1222,9 +1222,8 @@ refuses_chart catalog 'clearing image.api fails the render' \
     'image.api is required' --set-string 'image.api='
 refuses 'an origin with a non-numeric port fails the render' 'is not a browser origin' \
     $GATEWAY_OVERLAY --set cors.enabled=true --set 'cors.origins={https://shop.example.com:notaport}'
-# Case, which the shape test cannot see: the canonical origin lowercases scheme
-# and host and WithOrigins compares ordinally, so `https://SPA.example` is
-# refused by the host.
+# Case, which the shape test cannot see: the gateway refuses at startup an
+# origin that is not its canonical form, which lowercases scheme and host.
 refuses 'a non-lowercase origin fails the render' 'is not lowercase' \
     $GATEWAY_OVERLAY --set cors.enabled=true --set 'cors.origins={https://SPA.example}'
 
