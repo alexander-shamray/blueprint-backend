@@ -1,9 +1,3 @@
-{{- /*
-The name every object takes, deliberately not derived from the release: the
-gateway's route file (§10.2) and the BFF's pricing hop dial this literal
-Service name, so a release-derived one would make an umbrella install a 502
-rather than a template error.
-*/}}
 {{/*
 `required` fails on nil and the empty string but passes `" "`, which
 `AddJwtAuthentication` treats as missing, so this trims first and a blank
@@ -52,6 +46,12 @@ parsed rather than compared as text, so the host accepts `:08443`.
 {{- $url -}}
 {{- end -}}
 
+{{- /*
+The Service name, which every object's name is built from and which is not
+derived from the release: the gateway's route file (§10.2) and the BFF's
+pricing hop dial it as a literal, so a release-derived one would make an
+umbrella install a 502 rather than a template error.
+*/}}
 {{- define "commerce.name" -}}
 {{- include "commerce.require" (list .Values.workload.name "workload.name is required: it is this deployable's Service name, and therefore the string the gateway's route file and the BFF's pricing hop dial (§10.2, §9.7).") -}}
 {{- end -}}
