@@ -1,62 +1,36 @@
 {{/*
-The two keys no service has (§15.3), in a ConfigMap this chart renders itself
-rather than in the shared one.
-
-They live here because the gateway's chart is not a service chart with the
-database parts deleted: `Ingress__*` and `Cors__*` are read by Gateway.Api's
-Program.cs and by nothing else in the platform, so a shared template carrying
-them would put a conditional in every chart to describe one. §15.4's inventory
-marks both **gateway only**, and this file is where that column is true.
-
-Both flags are the same shape and §15.4 names it: **conditionally required is a
-real category, and it is not the same as optional.** Off is a valid topology;
-on-but-unconfigured is a silent defect — which is how `WithOrigins([])` came to
-reject every browser request while starting cleanly.
-**The data is a named template and the object is a wrapper round it**, so the
-pod-template checksum can hash this body. A library template cannot reach a
-file only one chart has, and hashing `.Values` alone left a real hole: a
-chart-only edit here changed the mounted ConfigMap and not the annotation, so
-Helm updated the object and the gateway kept its old environment indefinitely.
-The name is derived — `<chart>.<suffix>` for each entry in `extraConfigMaps` —
-so the mount, the metadata and the hash all come from one value.
+The two keys only Gateway.Api reads, which §15.4 marks gateway only, in a
+ConfigMap this chart renders itself. Each flag is conditionally required
+(§15.4): off is a valid topology, and on but unconfigured is refused at render.
+The data is a named template so the pod-template checksum can hash this body,
+and its name comes from `extraConfigMaps`, so mount, metadata and hash agree.
 */}}
 {{- define "gateway.edge" -}}
 Ingress__Enabled: {{ .Values.ingress.enabled | quote }}
 {{- if .Values.ingress.enabled }}
 {{- /*
 Indexed keys, because .NET binds an array from `Ingress__TrustedNetworks__0`
-upward (§15.4). Guarded rather than ranged blindly: Program.cs reads this
-through GetRequiredSection, which proves the section EXISTS and nothing more
-— an empty list renders no keys at all, so the section is absent, and the
-gateway throws at startup naming a key an operator never set. Failing the
-render says which chart value is missing instead.
+upward (§15.4). An empty list renders no keys, and Program.cs's
+GetRequiredSection then throws at startup naming a key no operator set, so the
+render names the chart value instead.
 */}}
 {{- if not .Values.ingress.trustedNetworks }}
 {{- fail "ingress.trustedNetworks must hold at least one CIDR when ingress.enabled: the gateway reads Ingress:TrustedNetworks through GetRequiredSection, and without it the rate limiter partitions every anonymous caller into one bucket — a global cap wearing a per-client limit's name (§10.3, §15.3)." }}
 {{- end }}
 {{- range $i, $cidr := .Values.ingress.trustedNetworks }}
 {{- /*
-BLANK COUNTS AS MISSING, and the emptiness check above does not catch it: a
-list holding `" "` is truthy, so it rendered a blank value and the gateway
-threw at startup — after the release had begun rolling, which is the failure
-the render-time guard exists to move earlier. That lesson is already in
-docs/lessons.md, learned against `Identity__Authority` and again against
-`Cors__Origins`, and it was not applied here until Copilot said so.
+Blank counts as missing, and the emptiness check above does not see it: a
+list holding `" "` is truthy, and IPNetwork.Parse throws on the blank value at
+startup, after the rollout has begun.
 */}}
 {{- $n := trim $cidr }}
 {{- if not $n }}
 {{- fail (printf "ingress.trustedNetworks[%d] is blank. IPNetwork.Parse throws on it at startup, so the pod dies after the rollout begins rather than before it (§15.4)." $i) }}
 {{- end }}
 {{- /*
-And the shape, because blank was only the emptiest way to be wrong.
-`not-a-network` rendered, began a rollout and threw out of
-`IPNetwork.Parse` — a case `ConditionalBlockTests` covers on the host side,
-which is exactly the failure this guard exists to move earlier.
-
-IPv4 only, deliberately and stated: an IPv6 CIDR is refused here rather than
-half-validated, on the same terms as the IPv6 origin above. Nothing in this
-platform's ingress documentation uses one, and a guard that half-checks a
-shape is the thing this branch keeps having to fix.
+The shape, since `not-a-network` is not blank and IPNetwork.Parse throws on
+it at startup too. IPv4 only: an IPv6 CIDR is refused rather than
+half-checked, as an IPv6 origin is below.
 */}}
 {{- if not (regexMatch "^[0-9]{1,3}(\\.[0-9]{1,3}){3}/[0-9]{1,2}$" $n) }}
 {{- fail (printf "ingress.trustedNetworks[%d] is not an IPv4 CIDR. IPNetwork.Parse throws on it at startup, after the rollout has begun (§15.4). IPv6 is refused here rather than half-checked." $i) }}
@@ -71,16 +45,11 @@ shape is the thing this branch keeps having to fix.
 {{- fail (printf "ingress.trustedNetworks[%d] has an octet above 255." $i) }}
 {{- end }}
 {{- /*
-AND THE SPELLING, which is the security half rather than a tidiness one.
-MEASURED on .NET 10: `IPNetwork.Parse("010.0.0.0/8")` does not throw and does
-not give `10.0.0.0/8` — it returns **`8.0.0.0/8`**, because the parser reads a
-leading zero as octal. So an operator who writes `010.` to line a column up
-trusts an entirely different network, `KnownIPNetworks` is loaded with it, and
-`X-Forwarded-For` from the real ingress is ignored while some other range can
-spoof it. Nothing in the render, the rollout or the logs says so.
-
-Comparing the text with the integer printed back is the whole test, and it is
-the same one the port above uses.
+The spelling, which is the security half: on .NET 10
+`IPNetwork.Parse("010.0.0.0/8")` reads the leading zero as octal and returns
+`8.0.0.0/8`, so the gateway would trust a different network from the one
+written, silently. Comparing the text with the integer printed back is the
+whole test, as it is for the port below.
 */}}
 {{- if ne $octet (printf "%d" (atoi $octet)) }}
 {{- fail (printf "ingress.trustedNetworks[%d] spells an octet non-canonically (%q). IPNetwork.Parse reads a leading zero as OCTAL — 010.0.0.0/8 parses to 8.0.0.0/8, measured — so the gateway would trust a different network from the one written, silently (§10.3, §15.3)." $i $octet) }}
@@ -97,45 +66,24 @@ Cors__Enabled: {{ .Values.cors.enabled | quote }}
 {{- end }}
 {{- range $i, $origin := .Values.cors.origins }}
 {{- /*
-Blank, then the shape. Program.cs rejects both — a blank entry and anything
-that is not `scheme://host[:port]` — and it rejects them at startup, which is
-after the release has begun rolling. The render is the cheaper place to say
-so, and this is the same list of failures §10.2's own guard spent six review
-rounds accumulating: blank, "*", unparseable, a trailing slash, a path.
+Blank, then the shape: Program.cs refuses both at startup, after the release
+has begun rolling, so the render refuses them first.
 */}}
 {{- if not (trim $origin) }}
 {{- fail (printf "cors.origins[%d] is blank. WithOrigins accepts it and matches nothing, so the host starts healthy and refuses every browser (§15.4)." $i) }}
 {{- end }}
 {{- /*
-The shape, and it has to be the SAME shape Program.cs enforces or the guard
-is theatre. That check is one equality — the configured text must equal
-`GetLeftPart(UriPartial.Authority)` — which a template cannot compute, so
-this approximates it with the four rejections that equality implies. The
-first version here was `^https?://[^/ ]+$`, which let
-`https://user:pass@example.com`, `https://shop.example.com:443` and
-`https://shop.example.com?x` through: each renders, begins a rollout, and
-crashes the new pod, which is precisely what a render-time guard exists to
-prevent.
-
-Userinfo, path, query and fragment are excluded by the character class. The
-default port needs its own test, because a browser omits it and WithOrigins
-compares text — so `https://x:443` matches nothing while looking correct,
-which §10.2's own guard spent seven review rounds arriving at.
+Program.cs's check is one equality with `GetLeftPart(UriPartial.Authority)`
+(§4.2), which a template cannot compute, so the checks below approximate it:
+the character class excludes userinfo, a path, a query and a fragment, and the
+port's range, spelling and default value are tested apart.
 */}}
 {{- $o := trim $origin }}
 {{- /*
-The host, then optionally a numeric port, and nothing else. `:notaport`
-matched the previous shape and `Uri.TryCreate` rejects it, so it rendered,
-began a rollout, and crashed the new pod — which is what this guard exists to
-prevent, twice over now.
-
-**This is deliberately a SUBSET of Program.cs's rule, not a copy of it.** That
-rule is one equality against `GetLeftPart(UriPartial.Authority)`, and a
-template cannot construct a Uri; claiming equivalence would be the more
-dangerous error, because the next shape it misses would be read as accepted.
-What it does promise: every origin an operator plausibly writes that the host
-would reject is refused here instead. An IPv6 literal is refused outright
-rather than half-checked, for the same reason.
+The host, then optionally a numeric port, and nothing else. A subset of
+Program.cs's rule, not a copy: an origin an operator plausibly writes that the
+host would refuse is refused here, and an IPv6 literal is refused outright
+rather than half-checked.
 */}}
 {{- if not (regexMatch "^https?://[^/?#@:\\[\\] ]+(:[0-9]+)?$" $o) }}
 {{- fail (printf "cors.origins[%d] is not a browser origin this chart will accept: a scheme, a host, and optionally a numeric port. Userinfo, a path, a query, a fragment, a non-numeric port and IPv6 literals are all refused here rather than at startup (§10.2). The value is deliberately not echoed (§13.4)." $i) }}
@@ -148,12 +96,9 @@ rather than half-checked, for the same reason.
 {{- fail (printf "cors.origins[%d] names a port outside 1-65535." $i) }}
 {{- end }}
 {{- /*
-And the spelling, not only the number. `:08080` is a valid integer and is not
-a canonical origin: `GetLeftPart(UriPartial.Authority)` renders it `:8080`,
-and `WithOrigins` compares text — so it renders here, rolls, and is rejected
-at startup. Comparing the digits with the integer printed back is the whole
-test, and it catches every non-canonical spelling rather than leading zeros
-alone.
+The spelling, not only the number: `GetLeftPart(UriPartial.Authority)`
+renders `:08080` as `:8080`, so the host refuses it at startup. Comparing the
+digits with the integer printed back catches every non-canonical spelling.
 */}}
 {{- if ne $digits (printf "%d" $n) }}
 {{- fail (printf "cors.origins[%d] spells its port non-canonically (leading zeros). The canonical origin drops them and WithOrigins compares text, so this matches nothing while looking correct (§10.2)." $i) }}
@@ -173,10 +118,8 @@ the whole string must already equal its lowercase form.
 {{- fail (printf "cors.origins[%d] is not lowercase. The gateway refuses at startup an origin that is not its canonical form, which lowercases scheme and host (§4.2)." $i) }}
 {{- end }}
 {{- /*
-The TRIMMED value, not the original. Validating `$o` and emitting `$origin`
-meant `"https://shop.example.com "` passed every check above and then failed
-the host's exact text comparison at startup — a guard that checked one string
-and shipped another.
+The trimmed value, not the original: the host compares the exact text at
+startup, so emitting `$origin` would ship a string the checks above never saw.
 */}}
 Cors__Origins__{{ $i }}: {{ $o | quote }}
 {{- end }}
