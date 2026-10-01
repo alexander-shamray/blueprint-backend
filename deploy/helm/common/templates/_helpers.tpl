@@ -209,7 +209,7 @@ Carrier__BaseUrl: {{ include "commerce.requireUrl" (list .Values.carrier.baseUrl
 ADR-052's address read, which `requireUrl` must not see: TLS ends at the
 Ingress (§10.1), so Ordering's HTTP/2-only endpoint is dialled over cleartext,
 as `PricingHop.cs` dials Catalog's, and the host's guard accepts either scheme.
-The shape is `requireUrl`'s, host class included, with the scheme widened.
+The shape and the port range are `requireUrl`'s, with the scheme widened.
 */}}
 {{- $addressSource := include "commerce.require" (list .Values.addressSource.baseUrl "addressSource.baseUrl is required when addressSource.enabled: the worker resolves the address owner eagerly (ADR-052) and does not start without it (§15.4).") }}
 {{- if not (regexMatch "^https?://[\\p{L}\\p{N}\\p{M}._-]+(:[0-9]+)?(/[^?#]*)?$" $addressSource) }}
