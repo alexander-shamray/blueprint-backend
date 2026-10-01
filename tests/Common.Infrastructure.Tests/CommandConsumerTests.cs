@@ -95,10 +95,11 @@ public class CommandConsumerTests
     [Fact]
     public async Task A_domain_rejection_is_counted_with_the_error_code_as_its_tag()
     {
-        using RecordedMeasurements measurements = new("Commerce.Messaging");
+        using TestMeterFactory factory = new();
+        using RecordedMeasurements measurements = new(factory, "Commerce.Messaging");
 
         CommandConsumer<ProbeMessage, ProbeCommand> consumer =
-            Build(Result.Failure(Refused), Metrics());
+            Build(Result.Failure(Refused), new MessagingMetrics(factory));
 
         await consumer.Consume(Context(new ProbeMessage(Guid.CreateVersion7())));
 
@@ -114,9 +115,11 @@ public class CommandConsumerTests
     [Fact]
     public async Task A_successful_command_records_no_rejection()
     {
-        using RecordedMeasurements measurements = new("Commerce.Messaging");
+        using TestMeterFactory factory = new();
+        using RecordedMeasurements measurements = new(factory, "Commerce.Messaging");
 
-        CommandConsumer<ProbeMessage, ProbeCommand> consumer = Build(Result.Success(), Metrics());
+        CommandConsumer<ProbeMessage, ProbeCommand> consumer =
+            Build(Result.Success(), new MessagingMetrics(factory));
 
         await consumer.Consume(Context(new ProbeMessage(Guid.CreateVersion7())));
 
@@ -140,10 +143,11 @@ public class CommandConsumerTests
     [Fact]
     public async Task An_unavailable_result_is_not_counted_as_a_domain_rejection()
     {
-        using RecordedMeasurements measurements = new("Commerce.Messaging");
+        using TestMeterFactory factory = new();
+        using RecordedMeasurements measurements = new(factory, "Commerce.Messaging");
 
         CommandConsumer<ProbeMessage, ProbeCommand> consumer =
-            Build(Result.Failure(Unreachable), Metrics());
+            Build(Result.Failure(Unreachable), new MessagingMetrics(factory));
 
         await Should.ThrowAsync<UnavailableResultException>(
             () => consumer.Consume(Context(new ProbeMessage(Guid.CreateVersion7()))));

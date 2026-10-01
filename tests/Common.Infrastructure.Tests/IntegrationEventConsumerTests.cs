@@ -150,11 +150,12 @@ public class IntegrationEventConsumerTests
     [Fact]
     public async Task The_delivery_lag_is_measured_from_the_messages_own_timestamp()
     {
-        using RecordedMeasurements measurements = new("Commerce.Messaging");
-
         // Three seconds of travel: the lag is the consumer's clock less OccurredAt (§13.3).
         FakeTimeProvider clock = new(Now.AddSeconds(3));
         await using ServiceProvider provider = BuildProvider(clock);
+
+        using RecordedMeasurements measurements =
+            new(provider.GetRequiredService<IMeterFactory>(), "Commerce.Messaging");
 
         ITestHarness harness = provider.GetRequiredService<ITestHarness>();
         await harness.Start();
