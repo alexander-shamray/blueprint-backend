@@ -284,6 +284,28 @@ fails stops the chain rather than guessing — a cap that resets when its state
 goes missing is no cap, the same argument as never calling a branch clean
 because asking failed.
 
+## A plan is reviewed once, for contradiction
+
+**A pull request whose diff lies wholly under `docs/superpowers/` is a plan,
+and it gets one review round in which only a contradiction is a finding.**
+It is one when every path `git diff --name-only origin/main...HEAD` prints
+starts with that prefix; one path elsewhere and it is reviewed as any other
+branch is. A plan is a pre-build record from the moment it merges and is
+never edited after, so wording, completeness and prose are not findings in
+it. A statement that cannot be true beside the blueprint, or beside another
+plan, is a finding, and its fix lands in the plan this PR adds, because the
+others are already frozen.
+
+**The rule belongs to the PR, not to a reviewer.** It holds for whichever
+reviewer runs the round — Grok's pass and its triage in step 5, Copilot's
+review and its triage in step 6, or a reviewer standing in for either — and
+each loop that runs gives the PR one round. Every finding but a
+contradiction is refused as a house rule naming this section, and a round
+whose findings are all refused is clean. A round naming a contradiction is
+triaged and fixed as any round is, and one more round reads the fix; what
+that one names is fixed the same way and no third is requested, so the loop
+ends on it, clean or not, and the report says which.
+
 ## Steps
 
 0. **Start from the main checkout, on an up-to-date `main`, with no leftover
@@ -913,7 +935,8 @@ because asking failed.
      a rule ending on the first clean pass stops at exactly the round that
      should not end it. Requiring two also subsumes "never end on a round
      that produced a fix", since a round with findings is not clean and
-     resets the count.
+     resets the count. A plan PR is the exception: *A plan is reviewed
+     once, for contradiction* owns how its loop ends.
 
      Failing that, stop when `grok-ledger.sh <n> count` reaches `CEILING`
      and hand over what survives — saying plainly that the loop ended on its
@@ -1170,7 +1193,8 @@ because asking failed.
 
    **This loop does not share step 5's stopping condition, and the asymmetry
    is deliberate.** It ends on the **first** clean round, marked all-resolved,
-   where step 5 still wants two.
+   where step 5 still wants two. A plan PR follows neither: *A plan is
+   reviewed once, for contradiction* owns how both loops end on one.
 
    **An `Ask` thread is answered here rather than left open**, which departs
    from what `/review-copilot` does on its own. That command leaves one

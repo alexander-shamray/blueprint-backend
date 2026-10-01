@@ -112,13 +112,16 @@ third copy of it.
 
 1. **Dispatch.** Spawn **one**
    `review-adjudicator` with two absolute paths — the review and the
-   repository root — the diff's path when $3 was given, and two pointers:
+   repository root — the diff's path when $3 was given, and three pointers:
    `docs/style-guide.md`'s settled
-   choices, and `docs/change-locality.md` §2. The second is what makes a
+   choices, `docs/change-locality.md` §2, and `.claude/commands/ship.md`'s
+   *A plan is reviewed once, for contradiction*. The second is what makes a
    finding that asks for a restated count, a "since PR-NN" sentence, or a
    value quoted a second time where the owner site is already correct a
    `reject-rule` naming that section rather than an `accept` that widens the
-   diff. It enumerates, locates the owner and every site the review names
+   diff; the third does the same for every finding but a contradiction when
+   the diff lies wholly under `docs/superpowers/`. It enumerates, locates
+   the owner and every site the review names
    — it holds no list of changed files, and does not go looking for copies
    the review did not name — adjudicates against the blueprint and returns
    the record; this step does none of that itself.
