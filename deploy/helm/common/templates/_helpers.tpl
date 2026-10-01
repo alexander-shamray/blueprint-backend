@@ -84,7 +84,7 @@ text and a base address is parsed, so `:08443` is accepted by the host here.
 {{- if $port }}
 {{- $n := atoi (trimPrefix ":" $port) }}
 {{- if or (lt $n 1) (gt $n 65535) }}
-{{- fail (printf "%s Its port is outside 1-65535, which the host's own parse rejects (§15.4)." $message) }}
+{{- fail (printf "%s Its port is outside 1-65535 (§15.4)." $message) }}
 {{- end }}
 {{- end }}
 {{- $url -}}
@@ -380,7 +380,7 @@ The shape is `requireUrl`'s, host class included, with the scheme widened.
 {{- if $addressPort }}
 {{- $n := atoi (trimPrefix ":" $addressPort) }}
 {{- if or (lt $n 1) (gt $n 65535) }}
-{{- fail "addressSource.baseUrl's port is outside 1-65535, which the host's own parse rejects (§15.4)." }}
+{{- fail "addressSource.baseUrl's port is outside 1-65535 (§15.4)." }}
 {{- end }}
 {{- end }}
 AddressSource__BaseUrl: {{ $addressSource | quote }}
