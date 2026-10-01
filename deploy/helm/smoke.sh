@@ -1102,7 +1102,7 @@ for bad in 'keycloak:8080/realms/commerce' 'ftp://id.example.com/realms' \
     'http://id.example.com/realms/commerce' 'https://u:p@id.example.com/realms' \
     'https://id.example.com/realms?x' 'https://id.example.com/realms#f' \
     'https://:443/realms' 'https://id.example.com:bad/realms' \
-    'https://[::1/realms'; do
+    'https://[::1/realms' 'https://*.example.com/realms' 'https://id%.example.com/realms'; do
     refuses "an authority of '$bad' fails the render" 'HTTPS address this chart will accept' \
         $GATEWAY_OVERLAY --set-string "identity.authority=$bad"
 done
@@ -1132,7 +1132,7 @@ for bad in 'psp.example.invalid' 'ftp://psp.example.invalid/' \
     'http://psp.example.invalid/' 'https://user:key@psp.example.invalid/' \
     'https://psp.example.invalid/?x' 'https://psp.example.invalid/#f' \
     'https://:443/' 'https://psp.example.invalid:bad/' \
-    'https://[::1/'; do
+    'https://[::1/' 'https://*.psp.example.invalid/'; do
     refuses_payments "a provider address of '$bad' fails the render" \
         'HTTPS address this chart will accept' \
         --set-string "paymentProvider.baseUrl=$bad"
@@ -1164,6 +1164,13 @@ refuses 'an origin naming the default port fails the render' 'default port' \
     $GATEWAY_OVERLAY --set cors.enabled=true --set 'cors.origins={https://shop.example.com:443}'
 refuses 'an origin with a leading-zero port fails the render' 'non-canonically' \
     $GATEWAY_OVERLAY --set cors.enabled=true --set 'cors.origins={https://shop.example.com:08080}'
+# A wildcard subdomain is the commonest CORS mistake, and Uri.TryCreate
+# refuses the host; an underscore it accepts, so that one must render.
+refuses 'a wildcard origin fails the render' 'is not a browser origin' \
+    $GATEWAY_OVERLAY --set cors.enabled=true --set 'cors.origins={https://*.example.com}'
+check 'an origin with an underscore in its host renders' \
+    "$HELM" template gateway "$CHARTS_DIR/gateway" --set-string "image.tag=$TAG" \
+    $GATEWAY_OVERLAY --set cors.enabled=true --set 'cors.origins={https://shop_1.example.com}'
 
 refuses_chart catalog 'disabling a database the chart is configured for fails the render' \
     'database.enabled is false' --set database.enabled=false
