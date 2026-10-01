@@ -2177,8 +2177,9 @@ Verify order-of-magnitude with the **k6 SLO run against staging**
 ([§15.1](15-cicd-deployment.md)) — `deploy/observability/slo/slo.js`, the load
 run in CD, which asserts the five rows of this table it can evaluate — the two
 request rows, the two outbox lanes and own-event staleness, with the other two
-named below — and is the first real gate after the dev deploy. (NBomber was the stated alternative until
-PR-24 picked one; a stage that names two tools names none.)
+named below — and is the first real gate after the dev deploy. (NBomber was
+the stated alternative until PR-24 picked one; a stage that names two tools
+names none.)
 
 **It drives with k6 and adjudicates with Prometheus**, and the split is forced
 by this table rather than chosen. A load generator measures wall-clock at the
