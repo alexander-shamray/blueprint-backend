@@ -8,7 +8,7 @@ namespace Ordering.Infrastructure.Observability;
 /// <summary>Builds every metrics type at startup: an instrument never constructed does not exist (§13.6).</summary>
 /// <remarks>
 /// A type belongs if the service can run for an hour without constructing it, as <see cref="OrderMetrics"/> can
-/// until a projected event arrives. Public for the reason <c>Program</c> is (§4.2).
+/// while no order arrives. Public for the reason <c>Program</c> is (§4.2).
 /// </remarks>
 public sealed class MetricsInitialiser : IHostedService
 {
