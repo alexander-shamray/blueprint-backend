@@ -131,10 +131,10 @@ app.kubernetes.io/track: {{ include "commerce.track" . }}
 {{- end -}}
 
 {{/*
-The migration Job's pod labels, which must not match the Service selector:
-`commerce.labels` would make the migrator an endpoint of the service it
-migrates and count it in the PodDisruptionBudget. The Job object keeps the
-ordinary labels, since endpoints are computed from pods.
+The migration Job's pod labels, which must not match the shared selector:
+`commerce.labels` would count the migrator in the PodDisruptionBudget and,
+where there is a Service, make it an endpoint of the service it migrates.
+The Job object keeps the ordinary labels, since endpoints come from pods.
 */}}
 {{- define "commerce.migrationPodLabels" -}}
 app.kubernetes.io/name: {{ include "commerce.name" . }}-migrate
