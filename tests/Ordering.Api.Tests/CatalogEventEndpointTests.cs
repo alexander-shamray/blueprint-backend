@@ -77,7 +77,7 @@ public sealed class CatalogEventEndpointTests(ServiceFixture fixture) : IAsyncLi
             async () => (await InboxRowsAsync(messageId)).Count,
             expected: 1,
             because: "a delivery that leaves no inbox row reached an endpoint with no filter on it, which " +
-                "§9.8 permits only for the saga and only in writing");
+                "§9.8 permits on no endpoint, the saga's included");
 
         // Held past the first sighting, because the count claim is about a second row.
         await Task.Delay(TimeSpan.FromSeconds(2), TestContext.Current.CancellationToken);
