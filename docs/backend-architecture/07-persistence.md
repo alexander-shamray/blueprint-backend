@@ -312,7 +312,7 @@ job host's composition root — because the hook below runs on every production
 release holding §7.1's DDL identity.
 
 ```csharp
-public partial class AddProducts : Migration
+public partial class AddOrderingProducts : Migration
 {
     protected override void Up(MigrationBuilder migrationBuilder)
     {
