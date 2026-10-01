@@ -25,7 +25,6 @@ this appendix cites and never restates them.
 | `SummaryRow` | §6.6 | The Dapper row shape behind the level-2 summaries query, `Products` read as JSON |
 | `GetProductDetailQuery`, `GetProductDetailHandler`, `ProductDetailDto`, `ProductSql` | [§8.2](08-caching-redis.md) | Catalog's cached read slice, the `HybridCache` worked example |
 | `PriceChangedCacheInvalidator` | §8.4 | The cache-only `PriceChanged` handler, which arrives with the first cached projection of Catalog data; §8.4 says so beside the sample |
-| `GetConfiguredOptions` | [§9.7](09-messaging.md) | The helper §9.7's resilience sample calls to read the options under assertion; `ResilienceHierarchyTests` names it as the thing it leaves undefined |
 | `OrderBuilder`, `AddressBuilder`, `CommandBuilder`, `SeedData` | [§12.3](12-test-strategy.md), §12.4 | The test data builders those sections' samples call |
 | `TestCurrentUser`, `Principals` | §12.4 | The scoped `ICurrentUser` double and the principals a test states, printed in full by §12.4 and not yet built: `Ordering.TestSupport` declares neither, and the ownership tests state a principal through `TestAuthHandler`'s headers instead |
 | `ServiceFixture.DispatchAsync` | §12.4 | The fixture seam §12.4 prints for reaching a handler below HTTP with a stated principal. Not yet on either fixture; `SagaCommandHandlerTests` carries a private helper that opens a scope and states no principal |
