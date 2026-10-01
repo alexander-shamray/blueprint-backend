@@ -74,8 +74,8 @@ The host+port half is `edge-config.yaml`'s origin grammar, which arrived at
 this character class over several review rounds; the optional path is this
 helper's own, because an authority URL is a base address and an origin is not.
 
-**Deliberately a SUBSET of what the hosts accept, not a copy of it**, for the
-reason that guard states: the host's rule is `Uri.TryCreate` and a template
+**Deliberately a SUBSET of what the hosts accept, not a copy of it**: the
+host's rule is `Uri.TryCreate` and a template
 cannot construct a Uri, so claiming equivalence would be the more dangerous
 error — the next shape this misses would be read as accepted. An IPv6 literal
 is refused outright rather than half-checked, on the same terms. What it does
