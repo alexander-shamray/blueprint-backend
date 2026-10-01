@@ -276,13 +276,13 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
             'with the ShouldNotBeEmpty "\n'
             '            + "form, which is what keeps a vacuous gate from quietly '
             'becoming a permanent one. "\n'
-            '            + "RESTORE AuthorizationPolicyTests IN THE SAME CHANGE: §8.5 '
-            'requires an idempotent "\n'
-            '            + "command\'s endpoint to be authenticated, an anonymous one '
-            'collapses every caller "\n'
-            '            + "into the shared system subject, and this service dropped '
-            'that suite as a slice "\n'
-            '            + "file.");\n',
+            '            + "RESTORE OR EXTEND AuthorizationPolicyTests IN THE SAME CHANGE: '
+            '§8.5 requires an "\n'
+            '            + "idempotent command\'s endpoint to be authenticated, an '
+            'anonymous one collapses "\n'
+            '            + "every caller into the shared system subject, and the '
+            'scaffold drops that suite "\n'
+            '            + "as a slice file.");\n',
         ),
         # And a THIRD, for the same reason again — which is the argument for
         # keeping these as data rather than as a rule someone reapplies. §8.5's
