@@ -101,10 +101,10 @@ public class IdempotencyOptInTests
             "This service opts no command into idempotency yet, so the check below is "
             + "vacuous. The day it does, this test fails — replace it with the ShouldNotBeEmpty "
             + "form, which is what keeps a vacuous gate from quietly becoming a permanent one. "
-            + "RESTORE AuthorizationPolicyTests IN THE SAME CHANGE: §8.5 requires an idempotent "
-            + "command's endpoint to be authenticated, an anonymous one collapses every caller "
-            + "into the shared system subject, and this service dropped that suite as a slice "
-            + "file.");
+            + "RESTORE OR EXTEND AuthorizationPolicyTests IN THE SAME CHANGE: §8.5 requires an "
+            + "idempotent command's endpoint to be authenticated, an anonymous one collapses "
+            + "every caller into the shared system subject, and the scaffold drops that suite "
+            + "as a slice file.");
 
         names.Distinct(StringComparer.Ordinal).Count().ShouldBe(
             names.Length,
