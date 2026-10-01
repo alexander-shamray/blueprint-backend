@@ -308,9 +308,6 @@ public interface IAggregateRoot;
 public abstract class Entity<TId> : IEquatable<Entity<TId>>
     where TId : struct
 {
-    // Assigned by whatever creates the entity — a factory after the base
-    // constructor has run, or EF Core materialising through a private
-    // parameterless one (§5.4). Hence a protected setter rather than `init`.
     public TId Id { get; protected set; }
 
     // Type as well as identifier. A comparison that comes down to the Id alone
