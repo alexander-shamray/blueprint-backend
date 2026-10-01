@@ -507,6 +507,13 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
             "    <PackageReference Include=\"Grpc.Net.ClientFactory\" />\n",
             "",
         ),
+        # NSubstitute's one user is OutboxTransportIdentityTests, which render.py
+        # drops, so the package leaves with it on the same rule.
+        (
+            "    <!-- Captures the IPipe<PublishContext> the outbox dispatcher hands IPublishEndpoint (§9.1). -->\n"
+            "    <PackageReference Include=\"NSubstitute\" />\n",
+            "",
+        ),
         # PR-26's linked contract, dropped with the verification suite that
         # compiles it. A rendered service keeps neither: the file is Web.Bff's
         # expectations of CATALOG, so a link to it from Inventory.Api.Tests

@@ -384,6 +384,14 @@ class OmitsTheSlice(unittest.TestCase):
         self.assertNotIn('PackageReference Include="Dapper"', csproj)
         self.assertIn('PackageReference Include="FluentValidation"', csproj)
 
+    def test_the_api_suite_carries_no_nsubstitute_once_its_one_user_is_dropped(self):
+        self.assertNotIn(
+            "tests/Zulu.Api.Tests/OutboxTransportIdentityTests.cs", self.rendered.created
+        )
+        csproj = self.rendered.created["tests/Zulu.Api.Tests/Zulu.Api.Tests.csproj"]
+        self.assertNotIn('PackageReference Include="NSubstitute"', csproj)
+        self.assertIn('PackageReference Include="MassTransit"', csproj)
+
     def test_the_registration_suite_keeps_the_tests_about_the_template(self):
         # The exact set, not a subset. Written as `assertIn`s it both
         # miscounted — the dispatcher test is copied too — and could not fail
