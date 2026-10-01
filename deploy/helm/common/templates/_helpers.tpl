@@ -84,9 +84,9 @@ and a label value may not exceed 63 characters.
 {{- end -}}
 
 {{- /*
-The selector carries the workload name and nothing release-derived: a
-Deployment's selector cannot change once it exists, so a pod's identity
-must not depend on which release installed it.
+The selector carries the workload name and nothing release-derived: the
+Service and PodDisruptionBudget the stable release owns select with it, and
+the canary is a second release whose pods they must match (ADR-022).
 */}}
 {{- define "commerce.selectorLabels" -}}
 app.kubernetes.io/name: {{ include "commerce.name" . }}
