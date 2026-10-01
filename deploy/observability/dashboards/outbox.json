@@ -174,7 +174,7 @@
       "id": 9,
       "type": "timeseries",
       "title": "Read-model staleness, own events, p99 (target 1 s)",
-      "description": "EMPTY TODAY, AND NOT BECAUSE TRAFFIC IS QUIET: projection.lag is recorded by ProjectionInvoker after a registered IProjectionHandler<T> succeeds, and no service registers one — §6.6's OrderSummaries is not built. The instrument is declared and nothing writes to it, which is why §13.7 names this row as not evaluated by the SLO run. When it does fill, it only ever measures a read model this service feeds from its own domain events (§7.5); one fed by another service's contract never touches the outbox and stays empty here.",
+      "description": "projection.lag is recorded by ProjectionInvoker after a registered IProjectionHandler<T> succeeds — Ordering's OrderSummaryProjection on every placed order, Inventory's on an unreserved despatch — so a service with no projection shows nothing here. It only ever measures a read model this service feeds from its own domain events (§7.5); one fed by another service's contract never touches the outbox and stays empty here.",
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 19 },
       "fieldConfig": {
