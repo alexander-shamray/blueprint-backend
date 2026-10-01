@@ -73,11 +73,11 @@ has begun rolling, so the render refuses them first.
 {{- fail (printf "cors.origins[%d] is blank. Program.cs refuses a blank entry at startup, after the rollout has begun (§15.4)." $i) }}
 {{- end }}
 {{- /*
-Program.cs refuses userinfo and otherwise demands one equality with
-`GetLeftPart(UriPartial.Authority)` (§4.2), which a template cannot compute,
-so the checks below approximate both: the character class excludes userinfo,
-a path, a query and a fragment, and the port's range, spelling and default
-value are tested apart.
+Program.cs's rule (§4.2) is built on one equality with
+`GetLeftPart(UriPartial.Authority)`, which a template cannot compute, so the
+checks below approximate it: the pattern admits only http(s), its class
+excludes userinfo, a path, a query and a fragment, and the port's range,
+spelling and default value are tested apart.
 */}}
 {{- $o := trim $origin }}
 {{- /*
