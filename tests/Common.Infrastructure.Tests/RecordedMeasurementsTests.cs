@@ -4,7 +4,7 @@ using Xunit;
 
 namespace Common.Infrastructure.Tests;
 
-/// <summary>The listener's own scoping, which every test that reads a measurement leans on.</summary>
+/// <summary>The listener's own scoping, which every test reading through it leans on.</summary>
 public class RecordedMeasurementsTests
 {
     [Fact]
