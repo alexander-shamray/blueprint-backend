@@ -65,9 +65,10 @@ one nobody chose (§15.3).
 {{- define "commerce.tag" -}}
 {{- $tag := include "commerce.require" (list .Values.image.tag "image.tag is required and values.yaml leaves it empty on purpose: a deploy that cannot name its image must fail rather than roll something nobody chose (§15.3). CI supplies it; a config-only deploy resolves the running tag first (§15.1).") -}}
 {{- /*
-The tag also names the migration Job and `app.kubernetes.io/version`, so it
-must be valid as both: each dot-separated segment a DNS-1123 label. It is
-validated rather than sanitised, so the label names the image that runs.
+Where there is a migrator the tag also names its Job, so each dot-separated
+segment must be a DNS-1123 label, and every chart holds the same shape. It
+is validated rather than sanitised, so the `app.kubernetes.io/version`
+label names the image that runs.
 */}}
 {{- range $segment := splitList "." $tag }}
 {{- if not (regexMatch "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$" $segment) }}
