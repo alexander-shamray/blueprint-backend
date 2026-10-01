@@ -259,7 +259,8 @@ Fulfilment__GiveUpAge: {{ $giveUpAge | quote }}
 {{- /*
 A .NET TimeSpan as this chart accepts one, `[d.]hh:mm[:ss[.fffffff]]` with hours
 under 24 and minutes and seconds under 60, held once for every setting that
-binds one.
+binds one. Hours under 24 because the binder reads `72:00:00` as seventy-two
+days, silently.
 */}}
 {{- define "commerce.timeSpanPattern" -}}
 ^([0-9]+\.)?([01]?[0-9]|2[0-3]):[0-5][0-9](:[0-5][0-9](\.[0-9]{1,7})?)?$
