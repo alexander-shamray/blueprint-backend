@@ -29,7 +29,7 @@ it before anything else.
   `ProductPriceProjection` from Catalog's integration events, which arrive over
   the broker at `ordering-catalog-events` and **never touch this lane**.
   `ordering.Products` **will be** the second, and is not built yet — §6.6
-  specifies it and `OrderSummaryProjection` does not exist in `src/`, so the
+  specifies it and `OrderSummaryProjection` does not write it, so the
   table is not in the database today. Do not go looking for it on this page's
   account: an operator querying it now gets an invalid object name, which is
   the deployment being incomplete rather than the projection being stale.

@@ -1862,9 +1862,7 @@ services.AddSingleton<OutboxMetrics>();
 services.AddSingleton<MessagingMetrics>();
 
 // OrderMetrics and RequestMetrics are NOT registered here — they are
-// Application types, and AddOrderingApplication registers them (§4.2, where
-// OrderMetrics is shown as the specified shape rather than the shipped one).
-// OrderMetrics arrives with §6.6's OrderSummaries projection.
+// Application types, and AddOrderingApplication registers them (§4.2).
 // A second AddSingleton would not fail: the container keeps both and resolves
 // the last, which is the trap. Two instances mean two sets of instruments on
 // one meter, and the one MetricsInitialiser forces need not be the one the
@@ -1888,11 +1886,16 @@ public sealed class MetricsInitialiser : IHostedService
     // Resolving the parameters is the entire job: constructing them registers
     // the instruments with their meters, and nothing here needs to keep them.
     // The guards are what make them READ — see below.
-    public MetricsInitialiser(OutboxMetrics outbox, MessagingMetrics messaging, RequestMetrics requests)
+    public MetricsInitialiser(
+        OutboxMetrics outbox,
+        MessagingMetrics messaging,
+        RequestMetrics requests,
+        OrderMetrics orders)
     {
         ArgumentNullException.ThrowIfNull(outbox);
         ArgumentNullException.ThrowIfNull(messaging);
         ArgumentNullException.ThrowIfNull(requests);
+        ArgumentNullException.ThrowIfNull(orders);
     }
 
     // `cancellationToken`, not this blueprint's usual `ct`: CA1725 requires an
@@ -1917,19 +1920,18 @@ public sealed class MetricsInitialiser : IHostedService
 > mean the container resolved a metrics type to nothing, which is precisely the
 > silent-instrument failure this class exists to prevent.
 
-**`OrderMetrics` is not in that constructor, and its absence is a schedule
-rather than an exemption.** §13.3 puts it in `Ordering.Application` with
-`OrderSummaryProjection` as its only call site, and §6.6's `OrderSummaries`
-projection has not been built. It joins in the pull request that adds that
-projection — and nobody has to remember, because the test below reads the
-container's registrations rather than this list, so an unforced metrics type
-fails a build the day it is registered.
+**`OrderMetrics` is in that constructor although nothing on a request path
+touches it.** §13.3 puts it in `Ordering.Application` with
+`OrderSummaryProjection` as its only call site, so a replica that has
+projected no lifecycle event since it started has never constructed it. And
+nobody had to remember to add it: the test below reads the container's
+registrations rather than this list, so an unforced metrics type fails a
+build the day it is registered.
 
 **The test for membership is not "is it a gauge".** It is *"can this service run
 for an hour without constructing it"* — and for every metrics type in this
 document the answer is yes, which is why each belongs in that constructor as it
-comes to exist. **Three are there today**; `OrderMetrics` is the fourth and
-joins with the projection that is its only call site, per the paragraph above.
+comes to exist. **All four are there.**
 
 That includes `RequestMetrics`, and the reasoning that nearly excluded it is
 worth keeping as the worked example. `LoggingBehavior` injects it, a behaviour
@@ -1967,9 +1969,8 @@ public void Every_metrics_type_is_forced_or_has_a_stated_reason_not_to_be()
     // build. BuildServices() stops one step earlier than BuildProvider().
     //
     // It runs BOTH helpers, which matters here and nowhere else: the types are
-    // split across AddOrderingApplication (RequestMetrics today, OrderMetrics
-    // when it exists) and AddOrderingInfrastructure (OutboxMetrics,
-    // MessagingMetrics). A helper that ran only one half would see a subset and
+    // split across AddOrderingApplication (RequestMetrics, OrderMetrics) and
+    // AddOrderingInfrastructure (OutboxMetrics, MessagingMetrics). A helper that ran only one half would see a subset and
     // fail against a correct MetricsInitialiser — the test reporting a defect
     // in the thing it is guarding.
     IEnumerable<Type> registered = BuildServices()
