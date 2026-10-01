@@ -758,8 +758,9 @@ is one round and step 7 cannot buy it a second.
 
    A commit is a fix when its subject opens `fix:` or `fix(`, and so is the
    one `/commit` is about to write when its subject will. A script is a
-   path under `.claude/` ending `.py` or `.sh` that is not a `test_*.py`,
-   and its suites are the `test_*.py` under `.claude/scripts/` whose text
+   path under `.claude/` that is not a `test_*.py` and is code: one ending
+   `.py`, `.sh` or `.ps1`, or one whose first line is a `#!`. Its suites
+   are the `test_*.py` under `.claude/scripts/` whose text
    names the script's file, which `Grep` finds. Each script a fix touches
    must have one of its suites among the branch's or the tree's paths, so
    a script a `feat` commit changed is not asked for a case because a
