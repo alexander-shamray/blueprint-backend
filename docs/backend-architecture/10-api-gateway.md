@@ -822,6 +822,7 @@ public static IServiceCollection AddCommonProblemDetails(this IServiceCollection
     services.AddExceptionHandler<ConcurrencyExceptionHandler>();
     services.AddExceptionHandler<ConcurrentRequestExceptionHandler>();
     services.AddExceptionHandler<CommandAlreadyCommittedExceptionHandler>();
+    services.AddExceptionHandler<CommandIdReusedExceptionHandler>();
 
     return services.AddProblemDetails(options =>
         options.CustomizeProblemDetails = context =>
@@ -849,7 +850,8 @@ public static IServiceCollection AddCommonProblemDetails(this IServiceCollection
 | Aggregate not found | 404 | |
 | Concurrency conflict, no precondition sent | 409 | From `DbUpdateConcurrencyException`, `code` `request.concurrency_conflict` |
 | A request under this key is still in flight | 409 | From `ConcurrentRequestException` ([§8.5](08-caching-redis.md)), `code` `request.in_progress`. Deliberately not a status of its own: 425 is about replayed TLS early data and 503 says the service is unavailable when it is serving everyone else. This one and the row above both say *retry*, and their `detail` is what separates them |
-| The command under this key has already been applied | 409 | From `CommandAlreadyCommittedException` ([§8.5](08-caching-redis.md), [ADR-037](adr/ADR-037-the-idempotency-marker-is-a-row-in-the-commands-own-transaction.md)), `code` `command.already_committed`. The one 409 here that does **not** say retry, which is why the `detail` carries the whole difference: the work is durable and its result is no longer available — never recorded on the lost-acknowledgement path, recorded and expired on the commoner one — so a retry meets this same refusal until the marker is purged. Read the resource. 200 with an empty body is the tempting alternative and is worse — a success-shaped answer to a request whose result this service cannot produce |
+| The command under this key has already been applied | 409 | From `CommandAlreadyCommittedException` ([§8.5](08-caching-redis.md), [ADR-037](adr/ADR-037-the-idempotency-marker-is-a-row-in-the-commands-own-transaction.md)), `code` `command.already_committed`. A 409 that does **not** say retry, which is why the `detail` carries the whole difference: the work is durable and its result is no longer available — never recorded on the lost-acknowledgement path, recorded and expired on the commoner one — so a retry meets this same refusal until the marker is purged. Read the resource. 200 with an empty body is the tempting alternative and is worse — a success-shaped answer to a request whose result this service cannot produce |
+| The command identifier was already used for a different request | 409 | From `CommandIdReusedException` ([§8.5](08-caching-redis.md), [ADR-057](adr/ADR-057-a-command-id-is-bound-to-the-fingerprint-of-the-command-that-claimed-it.md)), `code` `command.id_reused`. It does **not** say retry either: the key's entry holds another command's result, so the same request under the same identifier meets this refusal for as long as that entry lives. A changed request is a new request and takes a new identifier. 200 with the stored result is what this row replaced — a success-shaped answer to a request that was never applied |
 | `If-Match` / `If-Unmodified-Since` failed | **412** | The client *did* send a precondition and it did not hold. Distinguishing this from 409 tells the client whether retrying with a fresh ETag is the fix |
 | Request body past the edge's ceiling | **413** | The gateway only (§10.1). Kestrel throws `BadHttpRequestException` carrying this status and `ExceptionHandlerMiddleware` reads it off the exception rather than defaulting to 500, so unlike the 400 and 409 rows this one needs no handler of its own |
 | Domain rule violated | 422 | The request was well-formed but not allowed |
@@ -1071,16 +1073,18 @@ client switching on it is parsing English — fine while all three producers of
 this status said *retry*, and not fine the moment one of them said the
 opposite. So each names itself in the extension member §10.5 already reserves
 for exactly this: `request.concurrency_conflict`, `request.in_progress` and
-`command.already_committed`. The `Error` path has carried a `code` since
-PR-18; the exception path carried none until a contradiction made the absence
-cost something.
+`command.already_committed`, and the producer
+[ADR-057](adr/ADR-057-a-command-id-is-bound-to-the-fingerprint-of-the-command-that-claimed-it.md)
+added names itself `command.id_reused` on the same terms. The `Error` path has
+carried a `code` since PR-18; the exception path carried none until a
+contradiction made the absence cost something.
 
-**The two 409s from §8.5 are still told apart by `detail` for a human, and
-that is the design rather than a shortage of statuses.** They share the statement — this
-request conflicts with work already in hand — and differ in what the client
-should do about it, which is prose a client reads and not a code it switches
-on. Inventing a status for the second would be inventing one for a distinction
-HTTP does not draw.
+**The 409s from §8.5 are still told apart by `detail` for a human, and that
+is the design rather than a shortage of statuses.** They share the statement —
+this request conflicts with work already in hand — and differ in what the
+client should do about it, which is prose a client reads and not a code it
+switches on. Inventing a status for one of them would be inventing one for a
+distinction HTTP does not draw.
 
 The 412 half of that row is still unimplemented, deliberately: it needs a
 precondition filter reading `If-Match`, and nothing here sends or reads an
