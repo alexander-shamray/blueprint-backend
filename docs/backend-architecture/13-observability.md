@@ -1970,9 +1970,10 @@ public void Every_metrics_type_is_forced_or_has_a_stated_reason_not_to_be()
     //
     // It runs BOTH helpers, which matters here and nowhere else: the types are
     // split across AddOrderingApplication (RequestMetrics, OrderMetrics) and
-    // AddOrderingInfrastructure (OutboxMetrics, MessagingMetrics). A helper that ran only one half would see a subset and
-    // fail against a correct MetricsInitialiser — the test reporting a defect
-    // in the thing it is guarding.
+    // AddOrderingInfrastructure (OutboxMetrics, MessagingMetrics). A helper
+    // that ran only one half would see a subset and fail against a correct
+    // MetricsInitialiser — the test reporting a defect in the thing it is
+    // guarding.
     IEnumerable<Type> registered = BuildServices()
         .Select(d => d.ServiceType)
         .Where(t => t.Name.EndsWith("Metrics"))
