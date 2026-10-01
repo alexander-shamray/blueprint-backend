@@ -767,7 +767,7 @@ is one round and step 7 cannot buy it a second.
    review fix elsewhere landed beside it. A script no suite names may take
    its first fix bare and is refused at its second: two `fix` subjects in
    `git log --format=%s origin/main HEAD -- <script>`, which reads the
-   branch's fixes and those `main` gained after the fork, counting the one
+   script's whole history on both sides of the fork, counting the one
    `/commit` is about to write only when it touches that script.
 
    **A refusal stops the chain**, because the missing case is a file under
