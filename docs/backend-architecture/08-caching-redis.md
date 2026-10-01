@@ -582,6 +582,11 @@ public sealed class IdempotencyBehavior<TCommand, TResult>(
     // ConcurrentRequestException for a day. This is valid JSON and unambiguous.
     private const string NoValue = "null";
 
+    // What a payload opens with when it carries the fingerprint of the command
+    // that produced it (ADR-057). No JSON value begins with "s", so no bare
+    // value a previous release stored can spell it.
+    private const string FingerprintPrefix = "sha256:";
+
     // Result and Result<T> are the whole universe — Result's summary rules
     // out Unit and Result<void>, and its private protected constructor
     // confines a third shape to this assembly, where ValueTypeOf refuses it
@@ -617,6 +622,11 @@ public sealed class IdempotencyBehavior<TCommand, TResult>(
         // for the reason "Renaming a command changes its keys" gives.
         string key = $"{Subject()}:{TCommand.OperationName}:{command.CommandId}";
 
+        // Before the claim and not beside the replay: a command the serialiser
+        // refuses then throws while it holds no key, where a throw after
+        // TryClaimAsync would leave one held for the whole retention.
+        string fingerprint = CommandFingerprint.Of(command);
+
         // The token names THIS attempt, and every write below carries it.
         // A claim that expired under a long handler cannot then be completed
         // or released over its successor's.
@@ -629,7 +639,7 @@ public sealed class IdempotencyBehavior<TCommand, TResult>(
             if (existing is null || existing.InProgress)
                 throw new ConcurrentRequestException(command.CommandId);
 
-            return Replay(existing.Payload!);
+            return Replay(existing.Payload!, fingerprint, command.CommandId);
         }
 
         // Handed to §6.3, which writes the durable marker under this key inside
@@ -683,7 +693,7 @@ public sealed class IdempotencyBehavior<TCommand, TResult>(
         // window had to carry a margin for a lag nothing bounds. The store now
         // keeps what the claim had left, so the outcome stays replayable for
         // the remainder of that window rather than for a fresh one (ADR-038).
-        await store.CompleteAsync(key, claim, Capture(result), CancellationToken.None);
+        await store.CompleteAsync(key, claim, Capture(result, fingerprint), CancellationToken.None);
         return result;
     }
 
@@ -697,14 +707,35 @@ public sealed class IdempotencyBehavior<TCommand, TResult>(
 
     // Only a success is ever stored, and what is stored is its VALUE — never
     // the Result around it. What that type does and does not survive is
-    // measured in "Trap — JSON round-tripping the Result itself".
-    private static string Capture(TResult result) =>
-        ValueType is null
+    // measured in "Trap — JSON round-tripping the Result itself". The value
+    // goes behind the fingerprint of the command that produced it (ADR-057).
+    private static string Capture(TResult result, string fingerprint)
+    {
+        string value = ValueType is null
             ? NoValue
             : JsonSerializer.Serialize(ValueProperty!.GetValue(result), ValueType);
 
-    private static TResult Replay(string payload)
+        return Envelope(fingerprint) + value;
+    }
+
+    private static string Envelope(string fingerprint) => $"{FingerprintPrefix}{fingerprint}:";
+
+    private static TResult Replay(string payload, string fingerprint, Guid commandId)
     {
+        // Compared before anything is read, the void shape included: the guard
+        // below never looks at the payload. An entry a previous release wrote
+        // opens with no prefix and replays as it stands (ADR-057). The envelope
+        // is stripped by its length, so a ":" inside the value is no separator.
+        if (payload.StartsWith(FingerprintPrefix, StringComparison.Ordinal))
+        {
+            string envelope = Envelope(fingerprint);
+
+            if (!payload.StartsWith(envelope, StringComparison.Ordinal))
+                throw new CommandIdReusedException(commandId);
+
+            payload = payload[envelope.Length..];
+        }
+
         // (TResult)Result.Success() is legal C# under the constraint above and
         // throws InvalidCastException at run time for every TResult that is not
         // exactly Result — the compiler accepts it because Result is TResult's
@@ -743,6 +774,24 @@ public sealed class IdempotencyBehavior<TCommand, TResult>(
     }
 }
 ```
+
+> **Decision — a key is bound to the command that claimed it.** See
+> [ADR-057](adr/ADR-057-a-command-id-is-bound-to-the-fingerprint-of-the-command-that-claimed-it.md).
+> A completed entry is replayed to the command that produced it and to no
+> other. `Capture` stores the value behind `CommandFingerprint.Of(command)` —
+> a SHA-256 of the command as the pipeline holds it, defaults omitted — and
+> `Replay` compares before it reads. A different command under the same key is
+> refused with `CommandIdReusedException`, [§10.5](10-api-gateway.md)'s
+> `command.id_reused`, and is neither replayed nor run: a 200 carrying the
+> first request's result would tell the caller its second request was applied.
+> An in-flight duplicate is still `ConcurrentRequestException` whatever it
+> carries, because the fingerprint is recorded with the outcome.
+>
+> **The shape of an idempotent command is therefore a compatibility surface,
+> on the terms the callout on renaming sets for its result.** Removing or
+> renaming a field changes the fingerprint of requests already answered, so a
+> retry that straddles that deploy is refused as reused; adding an optional
+> field does not, because a default is not hashed.
 
 > **A claimed key belongs to one subject, and that is the invariant rather than
 > the key shape.** `CommandId` is client-generated, and §8.3's store prefix is

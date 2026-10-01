@@ -63,6 +63,7 @@ decision looks wrong.
 | **ADR-054** | [A shipment stops waiting on its carrier at an age](adr/ADR-054-a-shipment-stops-waiting-on-its-carrier-at-an-age.md) |
 | **ADR-055** | [An outbound hop registers beside its layer, and the host calls it](adr/ADR-055-an-outbound-hop-registers-beside-its-layer-and-the-host-calls-it.md) |
 | **ADR-056** | [A service's fixture derives from one shared body under tests/](adr/ADR-056-a-services-fixture-derives-from-one-shared-body-under-tests.md) |
+| **ADR-057** | [A command id is bound to the fingerprint of the command that claimed it](adr/ADR-057-a-command-id-is-bound-to-the-fingerprint-of-the-command-that-claimed-it.md) |
 
 ---
 
