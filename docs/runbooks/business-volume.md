@@ -2,17 +2,10 @@
 
 | | |
 |---|---|
-| Alert | `BusinessVolumeDrop`, in `deploy/observability/alerts/awaiting-signal.yaml` — **not loaded yet** |
+| Alert | `BusinessVolumeDrop`, in `deploy/observability/alerts/platform-alerts.yaml` |
 | Condition | `orders.placed` per hour down > 50% against the same hour last week |
-| Signal | **Owed.** `OrderMetrics` does not exist ([§13.3](../backend-architecture/13-observability.md)) |
+| Signal | `OrderMetrics`, recorded by `OrderSummaryProjection` ([§13.3](../backend-architecture/13-observability.md)) |
 | Owner | The service team ([§13.8](../backend-architecture/13-observability.md)) |
-
-> **This alert cannot fire today.** §13.3 puts `OrderMetrics` in
-> `Ordering.Application` with `OrderSummaryProjection` as its only call site,
-> and §6.6's `OrderSummaries` projection has not been built — PR-20 deferred it
-> by name, and `MetricsInitialiser` carries the same note from the other end.
-> The rule sits in `awaiting-signal.yaml`, unloaded, and this file is the
-> procedure waiting for it.
 
 ## What it means
 
