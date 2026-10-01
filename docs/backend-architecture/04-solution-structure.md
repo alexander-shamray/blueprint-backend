@@ -1044,8 +1044,8 @@ if (corsEnabled)
     // Seven rounds of that produced six clauses and a seventh value, so the
     // check stopped enumerating prohibitions. GetLeftPart(UriPartial.Authority)
     // IS the canonical origin — scheme, host, and a port only when it is not
-    // the default — so demanding the configured text equal it accepts exactly
-    // what a browser sends and rejects every variant at once.
+    // the default — so demanding the configured text equal it rejects every
+    // variant above at once.
     int[] malformed =
     [
         .. origins
