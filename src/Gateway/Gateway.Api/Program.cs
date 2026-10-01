@@ -160,9 +160,10 @@ if (corsEnabled)
     {
         throw new InvalidOperationException(
             $"'Cors:Origins' is not a browser origin at index {string.Join(", ", malformed)}. One is a scheme, " +
-            "a host and a port only when it is not the scheme's default, exactly as a browser serialises it — " +
-            "WithOrigins compares the configured text, so anything else matches nothing and the host would " +
-            "start and refuse every browser (§15.4). The value is deliberately not echoed (§13.4).");
+            "a host and a port only when it is not the scheme's default, in lowercase, exactly as a browser " +
+            "serialises it — WithOrigins lowercases the configured text and compares the rest as written, so a " +
+            "path, a trailing slash or a default port matches nothing and the host would start and refuse every " +
+            "browser (§15.4). The value is deliberately not echoed (§13.4).");
     }
 
     builder.Services
