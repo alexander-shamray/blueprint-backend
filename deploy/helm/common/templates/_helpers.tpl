@@ -63,27 +63,14 @@ nothing more.
 {{- $message := index . 1 -}}
 {{- $url := include "commerce.require" (list $value $message) -}}
 {{- /*
-One regex rather than a parse, because Helm has no URL type. Read left to
-right: HTTPS, a host, an optional numeric port, an optional path. The host
-class excludes `@`, `:`, `[`, `]` and space as well as `/?#`, which is what
-refuses user information, a non-numeric port, an empty host and an IPv6
-literal — `https://:443/`, `https://host:bad/` and `https://[::1/` all
-satisfied a looser class and are all rejected by `Uri.TryCreate`.
-
-The host+port half is `edge-config.yaml`'s origin grammar, which arrived at
-this character class over several review rounds; the optional path is this
-helper's own, because an authority URL is a base address and an origin is not.
-
-Deliberately not a copy of what the hosts accept: the
-host's rule is built on `Uri.TryCreate`, and a template
-cannot construct a Uri, so claiming equivalence would be the more dangerous
-error — the next shape this misses would be read as accepted. An IPv6 literal
-is refused outright rather than half-checked, on the same terms. What it does
-promise is narrower and enough: every address an operator plausibly writes
-that the host would reject is refused here instead of at startup.
+One regex rather than a parse, because Helm has no URL type: HTTPS, a host of
+letters, digits, dots, hyphens and underscores, an optional numeric port and
+an optional path, which leaves out user information, a query, a fragment, a
+wildcard and an IPv6 literal. Not a copy of the hosts' rule, which is built on
+`Uri.TryCreate`: an empty label, for one, renders and is refused at startup.
 */}}
-{{- if not (regexMatch "^https://[^/?#@:\\[\\] ]+(:[0-9]+)?(/[^?#]*)?$" $url) }}
-{{- fail (printf "%s The value is not an HTTPS address this chart will accept: a host, optionally a numeric port, and optionally a path. User information, a query, a fragment, a non-numeric port and IPv6 literals are refused here rather than at startup (§15.4)." $message) }}
+{{- if not (regexMatch "^https://[\\p{L}\\p{N}\\p{M}._-]+(:[0-9]+)?(/[^?#]*)?$" $url) }}
+{{- fail (printf "%s The value is not an HTTPS address this chart will accept: a host of letters, digits, dots, hyphens and underscores, optionally a numeric port, and optionally a path. User information, a query, a fragment, a wildcard and a non-numeric port are refused here rather than at startup, and an IPv6 literal is refused outright (§15.4)." $message) }}
 {{- end }}
 {{- /*
 The port's RANGE, which the digits above do not bound: `:65536` is numeric,
