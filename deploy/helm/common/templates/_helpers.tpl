@@ -65,8 +65,7 @@ one nobody chose (§15.3).
 {{- $tag := include "commerce.require" (list .Values.image.tag "image.tag is required and values.yaml leaves it empty on purpose: a deploy that cannot name its image must fail rather than roll something nobody chose (§15.3). CI supplies it; a config-only deploy resolves the running tag first (§15.1).") -}}
 {{- /*
 The tag also names the migration Job and `app.kubernetes.io/version`, so it
-must be valid as both: each dot-separated segment a DNS-1123 label, checked
-segment by segment because a whole-string pattern admits `release..1`. It is
+must be valid as both: each dot-separated segment a DNS-1123 label. It is
 validated rather than sanitised, so the label names the image that runs.
 */}}
 {{- range $segment := splitList "." $tag }}
