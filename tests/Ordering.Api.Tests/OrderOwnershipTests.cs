@@ -193,8 +193,7 @@ public sealed class OrderOwnershipTests(ServiceFixture fixture) : IAsyncLifetime
         // The exact string, since this customer-facing sentence must be true of both statuses.
         problem.Detail.ShouldBe(
             "An order that has already shipped cannot be cancelled; raise a return instead.",
-            $"a {status} order's customer reads this, and a sentence naming one of the " +
-                "two statuses is false for the other");
+            $"a {status} order's customer reads this, so the sentence has to be true of both statuses");
 
         (await StatusOfAsync(order)).ShouldBe(status, "a refusal must not have cancelled anything");
     }
