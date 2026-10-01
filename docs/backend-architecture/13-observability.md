@@ -339,8 +339,8 @@ indistinguishable from a system doing no work. All three call sites are in
 ```csharp
 // RecordPendingFactsAsync — the placement claim. Money is reassembled from the
 // row rather than taken from the event, because the event that triggers this
-// call may be a cancellation. Through Money.Of (§5.3), which is the only way
-// in and the one that normalises the padded CHAR(3) the row returns.
+// call may be a cancellation. Trimmed, because CHAR(3) comes back padded, then
+// through Money.Of (§5.3), which is the only way in.
 if (placed is not null)
     metrics.Placed(Money.Of(placed.TotalAmount, placed.Currency.Trim()));
 ```

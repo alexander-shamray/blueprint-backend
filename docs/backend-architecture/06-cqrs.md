@@ -1844,9 +1844,9 @@ public sealed class OrderSummaryProjection(IDbConnectionFactory connections, Ord
                 AND PlacedCounted = 0;
             """, args);
 
-        // Money.Of, not new Money: the constructor is private (§5.3) and Of is
-        // the normalising way in. CHAR(3) comes back space-padded, which is
-        // exactly the input the factory exists to clean.
+        // Money.Of, not new Money: the constructor is private (§5.3). Trimmed
+        // first, because CHAR(3) comes back space-padded and Of rejects
+        // anything but three letters.
         if (placed is not null)
             metrics.Placed(Money.Of(placed.TotalAmount, placed.Currency.Trim()));
 
