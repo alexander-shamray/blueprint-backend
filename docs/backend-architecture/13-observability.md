@@ -1920,10 +1920,11 @@ public sealed class MetricsInitialiser : IHostedService
 > mean the container resolved a metrics type to nothing, which is precisely the
 > silent-instrument failure this class exists to prevent.
 
-**`OrderMetrics` is in that constructor although nothing on a request path
-touches it.** §13.3 puts it in `Ordering.Application` with
-`OrderSummaryProjection` as its only call site, so a replica that has
-projected no lifecycle event since it started has never constructed it. And
+**`OrderMetrics` is in that constructor because a replica with no order
+traffic never builds it.** §13.3 puts it in `Ordering.Application` with
+`OrderSummaryProjection` as its only call site, and the first construction
+is the projection registry resolving that handler when an order raises its
+first event; a replica that has taken no order since it started has none. And
 nobody had to remember to add it: the test below reads the container's
 registrations rather than this list, so an unforced metrics type fails a
 build the day it is registered.

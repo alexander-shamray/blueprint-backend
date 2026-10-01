@@ -555,7 +555,7 @@ public static IServiceCollection AddOrderingApplication(this IServiceCollection 
     // is Application.
     //
     // Registration is not construction, and neither of these is reachable
-    // without traffic: OrderMetrics waits for the projection to run (§6.6),
+    // without traffic: OrderMetrics waits for the first order event (§6.6),
     // RequestMetrics for a dispatched request — which a health probe is not.
     // MetricsInitialiser (§13.6) forces both, and a test there asserts that
     // every registered *Metrics type is on its parameter list.
