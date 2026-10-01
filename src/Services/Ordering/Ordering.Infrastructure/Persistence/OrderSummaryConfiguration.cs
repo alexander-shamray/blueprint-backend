@@ -42,7 +42,7 @@ internal sealed class OrderSummaryConfiguration : IEntityTypeConfiguration<Order
     }
 }
 
-/// <summary>A row of the table; the columns the placement writes stay null until it lands (§6.6).</summary>
+/// <summary>A row of the table; CustomerId through PlacedAt stay null until the placement lands (§6.6).</summary>
 internal sealed class OrderSummary
 {
     public Guid OrderId { get; set; }
