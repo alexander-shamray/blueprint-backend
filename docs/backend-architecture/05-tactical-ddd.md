@@ -290,19 +290,14 @@ public interface IDomainEvent
     DateTimeOffset OccurredAt { get; }
 }
 
-/// <summary>
-/// Non-generic markers. Infrastructure filters EF's change tracker by them —
-/// `Entries<IHasDomainEvents>()` in §7.5, `is IAggregateRoot` in §6.3 — and the
-/// tracker holds objects, not `AggregateRoot<TId>` for a known TId. Without a
-/// non-generic interface to test against, those queries would need to know
-/// every key type in the model.
-/// </summary>
+/// <summary>Non-generic, so §7.5 can filter the change tracker by it without a key type.</summary>
 public interface IHasDomainEvents
 {
     IReadOnlyList<IDomainEvent> DomainEvents { get; }
     void ClearDomainEvents();
 }
 
+/// <summary>Non-generic, so §6.3's one-aggregate assertion can test <c>is IAggregateRoot</c>.</summary>
 public interface IAggregateRoot;
 
 /// <summary>
