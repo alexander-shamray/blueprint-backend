@@ -1,35 +1,14 @@
 {{- /*
-The name every object a chart renders takes — and the one thing here that is
-deliberately NOT derived from the release name.
-
-Helm's convention is `{{ .Release.Name }}-{{ .Chart.Name }}`, and it is wrong
-for this platform: these names are ROUTING CONFIGURATION. The gateway's route
-configuration (§10.2, `Gateway.Api/appsettings.json`) dials each workload by
-this literal name, and so does the BFF's one synchronous hop, defined in
-`PricingHop.cs` — both on the record that the host does not vary because it
-is the Kubernetes Service name. A release-derived name makes that false the
-moment the umbrella chart installs the same workload under a different
-release, and the failure is a 502 rather than a template error.
-
-So the name is a value, and it is required. `workload.name` is what the Service
-is called, which is what a peer dials.
+The name every object takes, deliberately not derived from the release: the
+gateway's route file (§10.2) and the BFF's pricing hop dial this literal
+Service name, so a release-derived one would make an umbrella install a 502
+rather than a template error.
 */}}
 {{/*
-`required` is not enough on its own, and every guard in these charts rested on
-it until Copilot said so.
-
-Helm's `required` fails on nil and on the empty string, and passes anything
-else — including `" "`. The hosts do not agree: `AddJwtAuthentication` guards
-with `IsNullOrWhiteSpace` and says in its own comment that an environment
-variable set to the empty string arrives as `""` rather than null. So an
-overlay with `identity.authority: " "` rendered cleanly, began a rollout, and
-died in the new pod — which is the failure every render-time guard here exists
-to move earlier.
-
-BLANK COUNTS AS MISSING is already a lesson in docs/lessons.md, learned twice against
-this exact key. This is the third time, and it goes in one helper so there is
-one place to be wrong. `toString` before `trim` because `trim` errors on a
-non-string, and `tag: 1.2` is a YAML float.
+`required` fails on nil and the empty string but passes `" "`, which
+`AddJwtAuthentication` treats as missing, so this trims first and a blank
+value counts as missing. `toString` comes before `trim` because `trim`
+errors on a non-string, and `tag: 1.2` is a YAML float.
 */}}
 {{- define "commerce.require" -}}
 {{- $value := index . 0 -}}
@@ -38,25 +17,10 @@ non-string, and `tag: 1.2` is a YAML float.
 {{- end -}}
 
 {{/*
-NON-BLANK IS NOT AN ADDRESS, which is the same lesson one step further on.
-
-The keys that call this are base addresses a host parses before it will
-start, and each host rejects far more than the empty string:
-`AddJwtAuthentication`, `AddPaymentProvider` and `AddCarrierGateway` each
-require an absolute HTTP(S) URL with no query and no fragment, over HTTPS
-outside Development, and the two third-party registrations additionally refuse
-user information because each one's credential is its API key alone. Under
-`commerce.require` a value like `keycloak:8080/realms/commerce` or
-`https://u:p@psp/` rendered cleanly, began a rollout and died in the new pod —
-the failure every render-time guard in this file exists to move earlier.
-
-HTTPS unconditionally, where the hosts say "outside Development": a chart is
-how a cluster is deployed and sets no environment, so Production is what runs.
-
-`commerce.tag` already validates a shape rather than a presence, for the same
-reason and with the same argument; this is that helper's sibling, kept apart
-from `commerce.require` because a presence check still has callers that want
-nothing more.
+Non-blank is not an address either: each caller is a base address its host
+parses before it will start, refusing far more than the empty string, so
+this checks the shape. HTTPS unconditionally, where the hosts require it
+only outside Development: a chart sets no environment, so Production runs.
 */}}
 {{- define "commerce.requireUrl" -}}
 {{- $value := index . 0 -}}
@@ -73,12 +37,9 @@ wildcard and an IPv6 literal. Not a copy of the hosts' rule, which is built on
 {{- fail (printf "%s The value is not an HTTPS address this chart will accept: a host of letters, digits, dots, hyphens and underscores, optionally a numeric port, and optionally a path. A query, a fragment, a wildcard and a non-numeric port are refused here rather than at startup, and user information and an IPv6 literal are refused outright (§15.4)." $message) }}
 {{- end }}
 {{- /*
-The port's RANGE, which the digits above do not bound: `:65536` is numeric,
-matches, and is rejected by `Uri.TryCreate` — so it renders, rolls and dies in
-the new pod. `edge-config.yaml` bounds its own port for the same reason and
-this is that test; what is deliberately NOT copied from it is the
-canonical-spelling check, because that one exists for an origin compared as
-text and a base address is parsed, so `:08443` is accepted by the host here.
+The port's range, which the digits above do not bound. Unlike
+`edge-config.yaml` there is no canonical-spelling check: a base address is
+parsed rather than compared as text, so the host accepts `:08443`.
 */}}
 {{- $port := regexFind ":[0-9]+$" (regexFind "^https://[^/]+" $url) }}
 {{- if $port }}
@@ -95,39 +56,17 @@ text and a base address is parsed, so `:08443` is accepted by the host here.
 {{- end -}}
 
 {{- /*
-The image tag, required rather than defaulted.
-
-values.yaml carries `tag: ""` deliberately (§15.3): a deploy that cannot name
-its image must fail rather than roll something nobody chose. CI supplies it
-from the build; a config-only deploy reads the running value back out of the
-cluster first (§15.1). `required` is what turns the empty default into a
-refusal — without it the empty string renders `image: registry/api:` and the
-kubelet resolves that to `:latest`, which is the one tag §15.3 forbids by name.
+The image tag, required rather than defaulted: values.yaml leaves it empty
+on purpose, so a deploy that cannot name its image fails rather than rolls
+one nobody chose (§15.3).
 */}}
 {{- define "commerce.tag" -}}
 {{- $tag := include "commerce.require" (list .Values.image.tag "image.tag is required and values.yaml leaves it empty on purpose: a deploy that cannot name its image must fail rather than roll something nobody chose (§15.3). CI supplies it; a config-only deploy resolves the running tag first (§15.1).") -}}
 {{- /*
-The tag is not only an image reference here: it goes into the migration Job's
-NAME and into `app.kubernetes.io/version`, and the three have different
-alphabets. `Release_1` is a perfectly valid OCI tag, an invalid DNS-1123
-subdomain (uppercase), and therefore a Job the API server refuses — after
-`helm upgrade` has started. The render gate exercised commit SHAs and never
-saw it.
-
-So the accepted shape is the intersection, and the binding constraint is the Job
-name: a DNS-1123 **subdomain** is dot-separated labels, each of lowercase
-alphanumerics and dashes, each starting and ending alphanumeric. Underscores
-are out entirely — legal in a label VALUE and not in a name — and so are empty
-or hyphen-bounded segments.
-
-A single regex over the whole string is what got this wrong the first time:
-`^[a-z0-9]([a-z0-9._-]*[a-z0-9])?$` admits `release_1`, `release..1` and
-`release.-1`, all of which Kubernetes refuses after `helm upgrade` has started.
-The segments have to be checked as segments.
-
-Validating is preferred to sanitising: a derived metadata value that differs
-from the image tag makes `app.kubernetes.io/version` a label naming something
-no registry has.
+The tag also names the migration Job and `app.kubernetes.io/version`, so it
+must be valid as both: each dot-separated segment a DNS-1123 label, checked
+segment by segment because a whole-string pattern admits `release..1`. It is
+validated rather than sanitised, so the label names the image that runs.
 */}}
 {{- range $segment := splitList "." $tag }}
 {{- if not (regexMatch "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$" $segment) }}
@@ -135,11 +74,8 @@ no registry has.
 {{- end }}
 {{- end }}
 {{- /*
-And the length, because `app.kubernetes.io/version` carries the tag on every
-chart — including the two with no migration Job, where the Job-name budget
-never applies. A label value may not exceed 63 characters, and this used to be
-handled by truncating, which produced a version label naming a tag no registry
-has.
+And the length: `app.kubernetes.io/version` carries the tag on every chart,
+and a label value may not exceed 63 characters.
 */}}
 {{- if gt (len $tag) 63 }}
 {{- fail (printf "image.tag is %d characters. It becomes app.kubernetes.io/version, and a label value may not exceed 63 (§15.3)." (len $tag)) }}
@@ -148,20 +84,9 @@ has.
 {{- end -}}
 
 {{- /*
-The selector, which carries the workload name and NOTHING release-derived.
-
-**Because the selector is workload identity, not release bookkeeping.** These
-pods are found by their name: the Service selects them, and that name is the
-string §10.2's route file and §9.7's pricing hop dial. Putting the release into
-the selector would make a pod's identity depend on which command installed it,
-for a field a Deployment will never let you change afterwards.
-
-This comment used to justify it by the standalone-to-umbrella migration, and
-that justification is dead — §15.3 and `platform/values.yaml` now record that
-Helm rejects the adoption outright on ownership, so the migration never reaches
-the API server's immutable-selector check. The conclusion survives its original
-argument, which is worth saying rather than quietly keeping: a release-scoped
-selector would still be wrong, and the reason is now the one above.
+The selector carries the workload name and nothing release-derived: these
+pods are found by the Service name §10.2's route file and §9.7's pricing
+hop dial, and a Deployment's selector cannot change once it exists.
 */}}
 {{- define "commerce.selectorLabels" -}}
 app.kubernetes.io/name: {{ include "commerce.name" . }}
@@ -169,45 +94,20 @@ app.kubernetes.io/part-of: commerce
 {{- end -}}
 
 {{- /*
-§15.5's canary, and the three helpers below are the whole of it in this chart.
-
-**The canary is a SECOND RELEASE of the same chart**, differing in
-`canary.enabled`, its replica count and its image tag. The stable release is
-never touched, which is what makes a rollback cost the canary's own pods and
-nothing else — no `helm rollback`, and no image change on the pods serving the
-rest (ADR-022).
-
-**The schema is not part of that, and this comment used to say it was.** The
-canary release runs §7.4's migration hook — it is the first thing carrying the
-new image — so a rollback removes the pods and leaves the schema migrated.
-ADR-022 says so in its own consequences; what makes it survivable is §15.5's
-requirement that every migration be backward compatible with the previous
-release, which the cheap rollback does not buy and does not excuse.
-
-Traffic splits because BOTH tracks answer to the SAME Service: the selector
-above carries the workload name and nothing about the track, so kube-proxy
-spreads connections across every pod behind it and the share the new version
-serves is `canary / (stable + canary)`. That is also why the weight is
-quantised — `deploy/canary/canary.py` does that arithmetic and refuses the
-weights this cannot express.
+§15.5's canary is a second release of this chart, with `canary.enabled`, its
+own replicas and its own tag. Both tracks answer to one Service, so traffic
+splits by pod count, which `deploy/canary/canary.py` turns into weights. A
+rollback removes the canary's pods and leaves the schema its migration hook
+applied, which §15.5's backward-compatibility rule covers (ADR-022).
 */}}
 {{- define "commerce.track" -}}
 {{- if .Values.canary.enabled }}canary{{ else }}stable{{ end -}}
 {{- end -}}
 
 {{- /*
-The name of every object THIS RELEASE owns, which is not the workload's name.
-
-Helm stamps `meta.helm.sh/release-name` on what it creates and refuses to touch
-another release's objects (§15.3, platform/values.yaml). So the canary release
-cannot render a `catalog-api` Deployment or ConfigMap — those belong to the
-stable release, and the install fails on ownership rather than on anything a
-render could show.
-
-`commerce.name` therefore keeps its job — it is the Service name, and so the
-string §10.2's route file and §9.7's pricing hop dial — and this is what
-Deployments and ConfigMaps are called. On the stable release the two are the
-same string, which is why nothing before PR-25 needed the distinction.
+The name of what this release owns. Helm refuses to touch another release's
+objects, so the canary cannot render the stable release's Deployment;
+`commerce.name` stays the Service name, and the two differ only on a canary.
 */}}
 {{- define "commerce.instanceName" -}}
 {{- if .Values.canary.enabled -}}
@@ -218,20 +118,10 @@ same string, which is why nothing before PR-25 needed the distinction.
 {{- end -}}
 
 {{- /*
-A Deployment's selector, which is the Service's PLUS the track.
-
-**The two Deployments must not select each other's pods.** With identical
-selectors each would count the other's pods as its own and scale them away, so
-the track has to be in here — and it must NOT be in `commerce.selectorLabels`,
-because that one is the Service's and a Service that selected only `stable`
-would send the canary no traffic at all. One label, in exactly one of the two
-places, is the whole mechanism.
-
-**This field is immutable, so adding it is a breaking change to an installed
-release** — the API server refuses the update and the Deployment has to be
-deleted and recreated. It costs nothing today because nothing anywhere has
-installed these charts, and it would cost a downtime window later. That is the
-argument for taking it now rather than when a canary is first wanted.
+A Deployment's selector: the Service's plus the track, so neither track's
+Deployment adopts the other's pods, while the Service, which selects without
+it, sends traffic to both. It is immutable, so changing it means recreating
+the Deployment.
 */}}
 {{- define "commerce.deploymentSelectorLabels" -}}
 {{ include "commerce.selectorLabels" . }}
@@ -239,23 +129,10 @@ app.kubernetes.io/track: {{ include "commerce.track" . }}
 {{- end -}}
 
 {{/*
-The migration Job's POD labels, which must NOT match the Service selector.
-
-A Service selects pods, and the migration Job's pod template carried
-`commerce.labels` — which contains `commerce.selectorLabels` verbatim. So for
-the length of every `pre-upgrade` hook, the migrator became an endpoint of the
-service it was migrating: a pod with a database connection, no HTTP listener,
-and a share of live traffic being routed to it. Measured in the render, not
-inferred — `catalog-api`'s Service selector and the Job's pod labels were the
-same two lines.
-
-The same match put it inside the PodDisruptionBudget, so a one-shot pod counted
-toward the availability of a service it does not serve.
-
-`-migrate` on the name is what breaks both, and `component` says what the pod
-is for anyone reading `kubectl get pods -L`. The Job OBJECT keeps the ordinary
-labels: object labels are not what endpoints are computed from, and losing the
-identity there would cost the one thing these labels are for.
+The migration Job's pod labels, which must not match the Service selector:
+`commerce.labels` would make the migrator an endpoint of the service it
+migrates and count it in the PodDisruptionBudget. The Job object keeps the
+ordinary labels, since endpoints are computed from pods.
 */}}
 {{- define "commerce.migrationPodLabels" -}}
 app.kubernetes.io/name: {{ include "commerce.name" . }}-migrate
@@ -276,10 +153,8 @@ immutable.
 {{ include "commerce.selectorLabels" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
 {{- /*
-Not truncated: `commerce.tag` refuses a tag longer than 63 outright, for the
-reason _migration-job.tpl gives about its own name. Truncating produced a
-version label naming a tag no registry has, and could not be made safe — a cut
-can land on a dot, which `trimSuffix "-"` never touched.
+Not truncated: `commerce.tag` refuses a tag over 63 characters, because a
+cut would name a tag no registry has.
 */}}
 app.kubernetes.io/version: {{ include "commerce.tag" . | quote }}
 app.kubernetes.io/managed-by: {{ .Release.Service }}
@@ -287,71 +162,35 @@ helm.sh/chart: {{ printf "%s-%s" .Chart.Name .Chart.Version | quote }}
 {{- end -}}
 
 {{- /*
-The non-secret half of §15.4's inventory: everything whose Kind column reads
-Config, rendered into the ConfigMap the Deployment mounts with `envFrom`.
-
-The split is §15.4's own and it is mechanical — **if the value contains a
-credential, it is a Secret** — so the two halves of this file are that table
-read down its Kind column, and a key in the wrong one is a password in a
-ConfigMap or a plain string in a Secret.
+The non-secret half of §15.4's inventory, mounted with `envFrom`: a value
+that contains a credential is a Secret, so this half is the Config rows.
 */}}
 {{- define "commerce.config" -}}
 {{- /*
-§15.5's canary needs the two tracks to be distinguishable in the telemetry, and
-this is the line that makes them so.
-
-OTEL_RESOURCE_ATTRIBUTES is the OpenTelemetry SDK's OWN mechanism: the resource
-builder AddObservability configures already honours it, so this adds an
-attribute without Common.Web knowing the word "canary". Asserted end to end in
-`ObservabilityTests.The_resource_carries_the_deployment_track_the_environment_supplies`,
-against the resource a real host exports rather than against the variable.
-
-`service.version` was the obvious discriminator and is not one. BuildInfo
-strips the source-revision suffix deliberately — "a value that changes every
-commit turns one series into thousands" — and nothing in this solution sets an
-assembly version, so every build in the platform reports 1.0.0. A registered
-name is not a live signal.
-
-Two values only, so the cardinality cost is one extra series per track.
+§15.5's canary needs the tracks distinguishable in telemetry. The SDK's own
+OTEL_RESOURCE_ATTRIBUTES adds the attribute without Common.Web knowing the
+word; `service.version` cannot, since every build reports 1.0.0. Two values,
+so one extra series per track.
 */}}
 OTEL_RESOURCE_ATTRIBUTES: {{ printf "deployment.track=%s" (include "commerce.track" .) | quote }}
 Identity__Authority: {{ include "commerce.requireUrl" (list .Values.identity.authority "identity.authority is required for every host, the gateway included (§15.4) — AddJwtAuthentication reads it eagerly and throws naming the key, so an unset value is a pod that never starts.") | quote }}
 OTEL_EXPORTER_OTLP_ENDPOINT: {{ include "commerce.require" (list .Values.observability.otlpEndpoint "observability.otlpEndpoint is required: UseOtlpExporter reads the OpenTelemetry standard variable, and left unset it exports to localhost:4317, where nothing listens in a pod (§15.4).") | quote }}
 {{- if .Values.identity.clientCredentials }}
 {{- /*
-Two of the three client-credential keys are Config and only the secret is a
-Secret (§15.4). They belong to the two hosts that call a peer synchronously
-— the BFF (§9.7, ADR-017) and Shipping's worker (ADR-052); all three are
-[Required] on ServiceIdentityOptions and gated by ValidateOnStart, so a missing
-one is a refusal to boot rather than a 401 somebody reads as the callee's
-fault.
-
-A third chart growing these is a design change, not a configuration change;
-ADR-052 is the record that made it two.
-
-**The switch is its own key, and `clientId` used to be it.** That made the
-opt-out invalid rather than merely odd: clearing `identity.clientId` on the BFF
-dropped all three keys, and `Web.Bff` binds `ServiceIdentityOptions`
-unconditionally — so the release rendered, rolled, and the pod refused to
-start. A whitespace-only value did the same while slipping past
-`commerce.require`, because a truthiness test is not a requirement. §15.4 calls
-this the *required-for-some-hosts* category; an explicit boolean is what makes
-a host say which it is, and every value below is then required rather than
-implied.
+Two of the three client-credential keys are Config; the secret is a Secret
+(§15.4). The BFF and Shipping's worker, the hosts that call a peer, bind
+ServiceIdentityOptions with ValidateOnStart, so a missing key refuses to
+boot. The switch is an explicit boolean, so each value under it is required.
 */}}
 Identity__Client__ClientId: {{ include "commerce.require" (list .Values.identity.clientId "identity.clientId is required when identity.clientCredentials: the hosts that declare it bind ServiceIdentityOptions unconditionally and ValidateOnStart refuses to boot without it (§15.4).") | quote }}
 Identity__Client__Scope: {{ include "commerce.require" (list .Values.identity.scope "identity.scope is required when identity.clientCredentials: it becomes the audience every service validates (§11.5), and ServiceIdentityOptions marks it [Required].") | quote }}
 {{- end }}
 {{- if (.Values.paymentProvider).enabled }}
 {{- /*
-The provider's address (§3.2's payment provider). Config, not a Secret: an
-address is not a credential. Required, and refused at render when empty,
-because the host's own refusal is at start — a clean render followed by a pod
-that will not start is the shape every guard in this file exists to refuse.
-
-`(.Values.paymentProvider).enabled` rather than the dotted form: the other
-charts carry no such block, and the parenthesised form reads a missing map as
-empty where the dotted one fails the render.
+§3.2's payment provider's address: Config, since an address is not a
+credential, and refused at render because the host refuses it at start.
+`(.Values.paymentProvider)` reads a missing map as empty on the charts with
+no such block, where the dotted form fails the render.
 */}}
 PaymentProvider__BaseUrl: {{ include "commerce.requireUrl" (list .Values.paymentProvider.baseUrl "paymentProvider.baseUrl is required when paymentProvider.enabled: AddPaymentProvider reads it eagerly and throws naming the key, so the host does not start (§15.4).") | quote }}
 {{- end }}
@@ -388,13 +227,9 @@ AddressSource__BaseUrl: {{ $addressSource | quote }}
 {{- if (.Values.jurisdiction).enabled }}
 {{- /*
 ADR-053's two statutory windows, required and never defaulted: a window is a
-fact about where a deployment runs, and a chart that guessed one would pick
-somebody's statute for them. The record says refused rather than clamped, and
-this is the render-time half of that — the host's own refusal is at start.
-Each window must also read as a TimeSpan, `[d.]hh:mm[:ss]` with hours under
-24 and minutes and seconds under 60, because a value like `30 days` or
-`72:00:00` is present, renders, and fails binding in the new pod. The range
-is the host's to refuse: ShippingJurisdictionOptions owns its bounds.
+fact about where a deployment runs. Each must read as a TimeSpan, because
+`30 days` renders and fails binding in the new pod; the range is the host's
+to refuse, since ShippingJurisdictionOptions owns its bounds.
 */}}
 {{- $windows := dict
     "addressRetention" (include "commerce.require" (list .Values.jurisdiction.addressRetention "jurisdiction.addressRetention is required when jurisdiction.enabled: ADR-053 makes the window a value the deployment is given, and ShippingJurisdictionOptions refuses to boot without it."))
@@ -431,64 +266,23 @@ binds one.
 {{- end -}}
 
 {{- /*
-The secret half of the same table, and the rule that decides what is in either:
-a variable joins when a host's code READS it, and not before.
-
-That is the rule §14.1's Compose blocks already state — "an env var nothing
-reads is the container form of an unused registration". §15.4's inventory marks
-`ConnectionStrings__RedisCache` and `ConnectionStrings__RedisCoordination`
-required *once the host calls `AddRedisConnections`* — **both or neither** —
-and **that condition is now met**: §8.5's PR gave that helper its first
-callers, in Catalog and Ordering. So the two keys are rendered below, under
-`redis.enabled`, exactly as `Identity__Authority` joined with PR-16.
-
-**The condition is the CALL, not a cache read, and this paragraph said "once a
-host reads a cache" until a review caught it.** The helper reads both
-connection strings eagerly, so a host that caches nothing still fails at
-startup without them — and §8.5's idempotency store reads the *coordination*
-instance, which is not a cache at all and is the `noeviction` half of §8.1's
-split. Keying the requirement on caching would leave the one key this PR
-actually made load-bearing looking optional.
-
-**This paragraph said the opposite in the branch that added them**, which is
-the drift the rule above exists to prevent arriving inside the file it governs:
-the keys went in eighty lines down and the comment explaining their absence
-stayed where it was.
-
-Secrets are REFERENCED, never rendered. External Secrets Operator owns the
-Secret objects (§15.4); a chart that templated a connection string would put a
-password into `helm get values` and into every diff of this repository.
+The secret half of the same table. A variable joins when a host's code reads
+it, and a secret is referenced, never rendered: External Secrets Operator
+owns the Secret objects (§15.4), and a rendered one would put a password
+into `helm get values`.
 */}}
 {{- define "commerce.env" -}}
 {{- /*
-A CAPABILITY IS A FACT ABOUT THE CODE, NOT AN ENVIRONMENT SETTING, and these
-flags were free values until Copilot pointed at six of them at once.
-
-`Catalog.Infrastructure` always calls `GetConnectionString("Catalog")` and
-always registers MassTransit; `Web.Bff` always binds `ServiceIdentityOptions`
-with `ValidateOnStart`. So `database.enabled: false` on Catalog, or
-`clientCredentials: false` on the BFF, is not a smaller deployment — it is a
-clean render followed by a pod that will not start, which is the exact shape
-every guard in this file exists to refuse.
-
-Helm has no immutable value, so the guard is coherence instead: a chart that
-carries the SETTINGS for a capability may not disable it. Only a chart that
-never had them can be off, which is what makes the gateway's `enabled: false`
-lines honest and an overlay's a refusal.
-
-The schema was the other candidate — a `chart:` block naming each capability,
-replacing these flags. It is the better shape and it is not this PR's: it
-renames keys §15.3 prints, at round six of a review, and the coherence check
-closes the same six holes without moving anything a reader has been told to
-look for.
+A capability is a fact about the code, not an environment setting: Catalog
+always resolves its database and the BFF always binds ServiceIdentityOptions,
+so disabling either renders and the pod does not start. Helm has no
+immutable value, so a chart carrying a capability's settings may not disable
+it.
 */}}
 {{- /*
-On Catalog and Ordering the migration Job's own coherence check reaches this
-first and reports a sharper message, so what surfaces there is "a migrator with
-no database is incoherent". This is the general case behind it: a chart with a
-connection name and no migrator — which nothing in the platform is yet, and
-which Shipping and Notifications will not be either — still may not disable the
-database its host unconditionally resolves.
+On Catalog and Ordering the migration Job's own check reports this first,
+more sharply; this is the general case, for a chart that names a connection
+and has no migrator.
 */}}
 {{- if and .Values.database.connectionName (not .Values.database.enabled) }}
 {{- fail "database.enabled is false but database.connectionName is set. A service that carries a connection name reads one at startup (§7.1) — disabling it renders cleanly and produces a pod that cannot resolve its own database. A capability is a fact about the code, not an environment setting." }}
@@ -518,20 +312,10 @@ database its host unconditionally resolves.
 {{- fail "fulfilment.enabled is false but fulfilment.giveUpAge is set. FulfilmentOptions is validated at start (ADR-052), so this renders cleanly and the host does not start." }}
 {{- end }}
 {{- /*
-The other direction, and the one that moves a CREDENTIAL rather than stalling
-a pod. Helm accepts values a chart's `values.yaml` never declares, so
-`--set paymentProvider.enabled=true` on any chart here renders that chart's
-pod with a `secretKeyRef` to Payments' provider Secret — a host that never
-calls `AddPaymentProvider`, holding the credential of one that does. The same
-is true of the BFF's client secret under `identity.clientCredentials`.
-
-The capability blocks already say a capability is a fact about the code, and
-the guards above enforce it downwards. These enforce it upwards, and they name
-the owning charts because that is the fact: `AddPaymentProvider` is in
-`Payments.Api/Program.cs`, `AddCarrierGateway` is in
-`Shipping.Worker/Program.cs`, and `ServiceIdentityOptions` is bound by those
-two hosts that call a peer (§9.7, ADR-052). A further chart growing any of
-them is a design change, and a design change edits this line.
+The other direction moves a credential: Helm accepts values a chart never
+declares, so `paymentProvider.enabled` on another chart would mount Payments'
+provider Secret into a pod that never reads it. These name the owning
+charts, so a further chart growing one is a design change made here.
 */}}
 {{- if and (.Values.paymentProvider).enabled (ne .Chart.Name "payments") }}
 {{- fail (printf "paymentProvider.enabled is true on the %s chart, and only payments registers a provider (§3.2). This would mount the provider's Secret into a pod that never reads it — a credential crossing a service boundary, which no value in an environment file may do." .Chart.Name) }}
@@ -565,26 +349,10 @@ key is the other half, mounted into the migration Job and nowhere else.
 {{- fail "redis.secretRef.cacheKey and redis.secretRef.coordinationKey are the same key. The two instances have different eviction policies (§8.1) — one key points both connections at the same server, and if that is the allkeys-lru instance then §8.5's idempotency claims are evicted under exactly the memory pressure that makes a duplicate write hardest to reproduce. A capability is a fact about the code, not an environment setting." }}
 {{- end }}
 {{- /*
-The guard above was argued in the comment below and not written, until a review
-asked what enforced it. Nothing did: the smoke test renders this repository's
-own values, which differ, so every render was green and a production overlay
-setting both to the cache key would have been too. **An argument in a comment
-is not a control**, and the failure it describes is the one that cannot be
-reproduced afterwards — an evicted claim leaves no trace of having existed.
-*/}}
-{{- /*
-§8.1's two connections, and BOTH are required even where only one is read.
-AddRedisConnections is one call by design (§8.2) and reads both eagerly, so a
-service either has Redis or does not — half-having it is a pod that will not
-start, which is the same shape as every other guard in this file.
-
-Secrets rather than Config, unlike the authority and the OTLP endpoint above,
-and §8.1 is why: each service connects as its OWN ACL user, so the string
-carries a credential. Two references rather than one, because the two instances
-have different eviction policies and therefore different servers (§8.1) — a
-single value would let a chart point idempotency keys at the allkeys-lru
-instance, where they are evicted under exactly the memory pressure that makes
-the duplicate write hardest to reproduce.
+§8.1's two connections, both required because AddRedisConnections reads both
+eagerly. Secrets, since each service connects as its own ACL user, and two
+references because the instances differ in eviction policy: the guard above
+keeps idempotency claims off the allkeys-lru one.
 */}}
 - name: ConnectionStrings__RedisCache
   valueFrom:
