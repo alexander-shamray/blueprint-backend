@@ -200,14 +200,12 @@ network, while §13.7's command and query rows read `request.duration`, which is
 dispatcher entry to result. The authoritative assertions are in `teardown()`,
 one per §13.7 row this run's own traffic can actually produce.
 
-**Three of §13.7's seven rows are not evaluated**, each named in `teardown()`
+**Two of §13.7's seven rows are not evaluated**, each named in `teardown()`
 rather than quietly dropped: availability, because a three-minute run cannot
-compute a monthly objective; `projection.lag`, because no service registers an
-`IProjectionHandler<T>` and so nothing writes to it; and
-`messaging.delivery.lag`, because the consumer that records it handles
-Catalog's product events and neither scenario produces one. Asserting any of
-the three would fail every run on a healthy platform, which is how a gate gets
-switched off.
+compute a monthly objective; and `messaging.delivery.lag`, because the
+consumer that records it handles Catalog's product events and neither
+scenario produces one. Asserting either would fail every run on a healthy
+platform, which is how a gate gets switched off.
 
 **An absent series fails the run.** It is not treated as "no problem observed",
 for the reason the two rule files exist.

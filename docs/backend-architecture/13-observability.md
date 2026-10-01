@@ -2131,20 +2131,13 @@ domain events (§7.5). A read model fed by *another* service's contract never
 touches the outbox at all — Ordering's `ordering.ProductPrices` is the worked
 case (§6.6) — so `projection.lag` is empty for it.
 
-> **And today that row has no producer either, which is a second gap and a
-> sharper one.** `MessagingMetrics.Projected` exists and `ProjectionInvoker`
-> calls it — after a registered `IProjectionHandler<T>` succeeds. **No service
-> registers one**: §6.6's `OrderSummaries` is not built, and Ordering's
-> composition root says so in as many words. So the instrument is declared, the
-> meter is collected, and nothing ever writes to it.
->
-> That is the same shape §13.6 records for the HybridCache meter one section
-> up — **a registered name is not a live signal** — and it is why
-> `deploy/observability/slo/slo.js` names this row as not evaluated instead of
-> asserting it. Asserting a row nothing can satisfy would fail every run on a
-> healthy platform, which is how a gate gets switched off. The row stays in
-> this table because it states the target the projection will be held to; what
-> it does not yet do is measure anything.
+> **Its producer is a registered `IProjectionHandler<T>`.**
+> `MessagingMetrics.Projected` is called by `ProjectionInvoker` only after one
+> succeeds, so a service with no projection declares the instrument and never
+> writes to it — a registered name is not a live signal, as §13.6 records for
+> the HybridCache meter. Ordering's is §6.6's `OrderSummaryProjection`, which
+> every placed order reaches, so `deploy/observability/slo/slo.js` asserts
+> this row against the orders its own run places.
 
 **Broker-fed read-model staleness therefore has no SLO here, and the honest
 move is to say so rather than to point at a row that nearly fits.** The
@@ -2198,7 +2191,7 @@ querying that row's named instrument after the run.
 **An absent series fails that run.** It is not read as "no problem observed",
 for the reason §13.6 gives one section up: empty and healthy look identical.
 
-**Three of the seven are not evaluated there, and each is named in the script
+**Two of the seven are not evaluated there, and each is named in the script
 rather than quietly dropped.** Cutting a row rather than pretending is this
 table's own rule, applied to the gate that reads it — and a gate that fails on
 a healthy platform is a gate that gets switched off:
@@ -2206,15 +2199,14 @@ a healthy platform is a gate that gets switched off:
 | Row | Why the run cannot evaluate it |
 |---|---|
 | Availability | A **monthly** objective; a three-minute run cannot compute one. The run bounds its own error rate instead, says so, and reports no pass for the row |
-| Read-model staleness, own events | `projection.lag` has **no producer** — nothing registers an `IProjectionHandler<T>`, per the callout above |
 | Event end-to-end | `messaging.delivery.lag` is recorded by `IntegrationEventConsumer<T>`; the run places orders, and the consumer that records it handles Catalog's product events, which neither scenario produces |
 
-The remaining four — the two request rows and the two outbox lanes — are what
-the run actually asserts. Not a "smoke test": §15.1 declines to have
-one and §12.1 gives the reason, which is that a stage named for what it actually
-does gets maintained. This is also not a capacity test — it catches the
-regression where a query loses its index and goes from 40 ms to 4 s, which no
-unit test will find.
+The remaining five — the two request rows, the two outbox lanes and own-event
+staleness — are what the run actually asserts. Not a "smoke test": §15.1
+declines to have one and §12.1 gives the reason, which is that a stage named
+for what it actually does gets maintained. This is also not a capacity test —
+it catches the regression where a query loses its index and goes from 40 ms
+to 4 s, which no unit test will find.
 
 ## 13.8 Ownership
 
