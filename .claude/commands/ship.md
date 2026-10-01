@@ -288,12 +288,15 @@ because asking failed.
 
 **A pull request whose diff lies wholly under `docs/superpowers/` is a plan,
 and it gets one review round in which only a contradiction is a finding.**
-It is one when every path `git diff --name-only origin/main...HEAD` prints
-starts with that prefix; one path elsewhere and it is reviewed as any other
-branch is. A plan is a pre-build record from the moment it merges and is
-never edited after, so wording, completeness and prose are not findings in
-it. A statement that cannot be true beside the blueprint, or beside another
-plan, is a finding, and its fix lands in the plan this PR adds, because the
+It is one when every path that
+`git diff --name-only --no-renames origin/main...HEAD` prints starts with
+that prefix; one path elsewhere and it is reviewed as any other branch is.
+`--no-renames` is what makes a move count: without it a file moved into the
+prefix prints only its new path, and the path it left is never tested. A
+plan is a pre-build record from the moment it merges and is never edited
+after, so wording, completeness and prose are not findings in it. A
+statement that cannot be true beside the blueprint, or beside another plan,
+is a finding, and its fix lands in the plan this PR adds, because the
 others are already frozen.
 
 **The rule belongs to the PR, not to a reviewer.** It holds for whichever
