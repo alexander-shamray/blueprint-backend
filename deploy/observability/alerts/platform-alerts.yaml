@@ -1,21 +1,11 @@
-# §13.6's alerts, for every condition whose signal this platform actually
-# publishes today. The three that read an instrument nothing creates yet live in
-# awaiting-signal.yaml and are NOT loaded — see the README beside this file, and
-# check.py, which asserts the split rather than trusting it.
-#
-# Metric names are the OpenTelemetry-to-Prometheus spelling, not the C# one:
-# dots become underscores and a UCUM unit becomes a suffix, so `outbox.oldest.age`
-# with unit `s` is `outbox_oldest_age_seconds`, while the annotation unit
-# `{message}` is dropped and `outbox.pending.count` stays `outbox_pending_count`.
-# check.py applies that same transformation when it matches these expressions
-# against the instruments declared in C#, so the two cannot drift apart in
-# silence.
-#
+# §13.6's alerts whose signal this platform publishes; the rest wait in
+# awaiting-signal.yaml, unloaded. Metric names are the OpenTelemetry-to-
+# Prometheus spelling — dots become underscores, a UCUM unit a suffix — and
+# check.py applies the same transformation against the C# instruments.
+
 # `service_name` assumes the collector promotes the `service.name` resource
-# attribute to a label. That is a collector-config decision rather than
-# something this repository can assert, and it is named here rather than
-# assumed: without the promotion every `by (service_name)` below groups
-# everything into one series and the per-service alerts stop discriminating.
+# attribute to a label; without it every `by (service_name)` below groups
+# all services into one series and the per-service rules stop discriminating.
 groups:
   - name: platform-golden-signals
     rules:

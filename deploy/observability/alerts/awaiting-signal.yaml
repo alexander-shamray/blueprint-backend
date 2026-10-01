@@ -1,27 +1,7 @@
-# §13.6's remaining three alerts, written out and DELIBERATELY NOT LOADED.
-#
-# Each one reads an instrument this platform does not publish yet. Loading them
-# would be the exact defect §13.6 spends a callout on: "Two of the alerts in
-# this document were written against signals that did not exist, and both looked
-# correct: the dashboard is empty either way, whether the system is healthy or
-# the metric was never published." A rule that cannot fire is not a weak alert,
-# it is a silent one — and silence reads as health.
-#
-# So they live here instead, where they are visible, reviewable, and checked.
-# check.py asserts three things about this file, and the third is the one that
-# makes it self-clearing:
-#
-#   1. every rule here has a runbook, exactly as a loaded one does;
-#   2. no rule here also appears in platform-alerts.yaml;
-#   3. every metric named here is one that NOTHING publishes.
-#
-# The third means the day somebody ships the missing instrument, this gate goes
-# red and names the rule to move. An "awaiting signal" list that nothing
-# re-checks would quietly become a list of alerts nobody ever turned on.
-#
-# Naming what is owed rather than shipping a rule that cannot fire is the same
-# move §13.7 makes for broker-fed read-model staleness: "an SLO nobody can
-# compute is worse than an absence somebody has written down".
+# §13.6's alerts whose instrument nothing publishes yet, written out and NOT
+# loaded, because a rule that cannot fire reads as health. check.py asserts
+# each has a runbook, is in no loaded file and reads only metrics nothing
+# publishes, so the day an instrument ships the gate names the rule to move.
 groups:
   - name: awaiting-signal
     rules:
