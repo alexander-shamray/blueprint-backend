@@ -1928,11 +1928,10 @@ public sealed class OrderSummaryProjection(IDbConnectionFactory connections, Ord
 > column from both loses data in both directions, and needs no fault to do it —
 > clock skew between two services is sufficient. A rename stamped ahead of
 > Ordering's clock would push `UpdatedAt` into the future; the next
-> `OrderConfirmed` then fails `target.UpdatedAt < @OccurredAt`, changes
-> nothing, and is marked processed. The order reads `AwaitingStock` for ever,
+> `OrderConfirmed` then fails `target.UpdatedAt < @OccurredAt`, its status is
+> held, and it is marked processed. The order reads `AwaitingStock` for ever,
 > which is the outcome `SetStatusAsync`'s own comment says its `MERGE` exists
-> to prevent, and `ConfirmedAt` is never written either — so the fulfilment
-> claim never fires and `orders.fulfilment.duration` under-reports in silence.
+> to prevent.
 >
 > **An earlier revision bought that separation with a second column on the
 > summary, and a second column was one watermark for as many sequences as the
