@@ -72,7 +72,7 @@ public sealed class PricingCredentialsTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task A_hop_with_no_inbound_id_sends_no_header()
+    public async Task A_hop_with_no_inbound_id_carries_a_minted_one()
     {
         using HttpClient client = Caller();
 
