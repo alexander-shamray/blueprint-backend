@@ -63,11 +63,5 @@ services:
       payments-migrator: { condition: service_completed_successfully }
       psp-simulator: { condition: service_started }
       rabbitmq: { condition: service_healthy }
-      # service_healthy since infrastructure.yml's keycloak declares a
-      # healthcheck. The API
-      # itself does not need it — JwtBearer fetches the discovery document
-      # lazily, on the first request that carries a token — but `up --wait`
-      # gates on every service's health, and the value is for whoever types the
-      # README's token command the moment it returns. Under service_started
-      # that command races the realm import and can be handed a 404.
+      # service_healthy since infrastructure.yml's keycloak declares a healthcheck; the host itself does not need it.
       keycloak: { condition: service_healthy }
