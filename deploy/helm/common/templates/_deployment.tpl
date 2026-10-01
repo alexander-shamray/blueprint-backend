@@ -26,7 +26,7 @@ spec:
   {{- end }}
   selector:
     {{- /*
-    The Service's selector plus the track: two Deployments sharing a selector
+    The shared selector plus the track: two Deployments sharing a selector
     count each other's pods as their own, and a Service selecting only `stable`
     would route the canary nothing. Immutable, so it cannot be added to an
     existing Deployment; ADR-022 records why it was taken before any install.
