@@ -1832,8 +1832,8 @@ public sealed class OrderSummaryProjection(IDbConnectionFactory connections, Ord
         // PlacedAt is the predicate, but TotalAmount and Currency are what come
         // back — non-null only because the MERGE above writes all three in one
         // statement. Keep them in one statement: a future split that sets
-        // PlacedAt earlier would hand this a NULL decimal, and PlacedFact has
-        // nowhere to put it (Appendix D).
+        // PlacedAt earlier would hand this a NULL decimal, and PlacedFact's
+        // non-nullable TotalAmount has nowhere to put it.
         PlacedFact? placed = await connection.QuerySingleOrDefaultAsync<PlacedFact>(
             """
             UPDATE ordering.OrderSummaries
