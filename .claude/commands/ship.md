@@ -743,10 +743,12 @@ is one round and step 7 cannot buy it a second.
 
    **One check holds whatever the class: a fix to a script under
    `.claude/` carries its case.** `CLAUDE.md`'s *Working in this
-   repo* owns the rule, and this step reads it because every commit in the
-   chain passes here — steps 5 and 6 rerun these checks before each fix
-   they commit — while step 0 runs before there is a diff or a subject to
-   read. Every read is granted already:
+   repo* owns the rule, and this step reads it because it runs before
+   every commit steps 3, 5 and 6 make — steps 5 and 6 rerun these checks
+   before each fix they commit — while step 0 runs before there is a diff
+   or a subject to read. A run that never reaches this step reads nothing
+   here: one resumed past it with its commits already made, and step 7's
+   own commit. Every read is granted already:
 
    ```bash
    git log --format=%s origin/main..HEAD     # the branch's subjects
