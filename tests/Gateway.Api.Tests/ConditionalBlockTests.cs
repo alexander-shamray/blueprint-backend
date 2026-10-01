@@ -105,7 +105,7 @@ public sealed class ConditionalBlockTests
         thrown.Message.ShouldContain("Cors:Origins");
     }
 
-    /// <summary>A non-blank value that is no browser origin, which <c>WithOrigins</c> would take literally.</summary>
+    /// <summary>A non-blank value that is no browser origin, which the host refuses at startup.</summary>
     [Theory]
     [InlineData("https//spa.example")]
     // The browser's Origin header never carries a trailing slash.
