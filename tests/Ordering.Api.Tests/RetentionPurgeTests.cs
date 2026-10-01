@@ -269,7 +269,7 @@ public sealed class RetentionPurgeTests(ServiceFixture fixture) : IAsyncLifetime
         // Staged directly and never claimed, so the store reports every key unheld.
         (await fixture.PurgeRetentionAsync()).Idempotency.ShouldBe(
             candidates,
-            "a second chunk that never ran would report a thousand and leave the remainder");
+            "a second chunk that never ran would report the first chunk alone and leave the remainder");
 
         (await fixture.IdempotencyMarkersAsync()).ShouldBeEmpty();
     }
