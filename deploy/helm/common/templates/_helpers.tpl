@@ -70,7 +70,7 @@ wildcard and an IPv6 literal. Not a copy of the hosts' rule, which is built on
 `Uri.TryCreate`: an empty label, for one, renders and is refused at startup.
 */}}
 {{- if not (regexMatch "^https://[\\p{L}\\p{N}\\p{M}._-]+(:[0-9]+)?(/[^?#]*)?$" $url) }}
-{{- fail (printf "%s The value is not an HTTPS address this chart will accept: a host of letters, digits, dots, hyphens and underscores, optionally a numeric port, and optionally a path. User information, a query, a fragment, a wildcard and a non-numeric port are refused here rather than at startup, and an IPv6 literal is refused outright (§15.4)." $message) }}
+{{- fail (printf "%s The value is not an HTTPS address this chart will accept: a host of letters, digits, dots, hyphens and underscores, optionally a numeric port, and optionally a path. A query, a fragment, a wildcard and a non-numeric port are refused here rather than at startup, and user information and an IPv6 literal are refused outright (§15.4)." $message) }}
 {{- end }}
 {{- /*
 The port's RANGE, which the digits above do not bound: `:65536` is numeric,
