@@ -181,9 +181,10 @@ OTEL_EXPORTER_OTLP_ENDPOINT: {{ include "commerce.require" (list .Values.observa
 {{- if .Values.identity.clientCredentials }}
 {{- /*
 Two of the three client-credential keys are Config; the secret is a Secret
-(§15.4). The BFF and Shipping's worker, the hosts that call a peer, bind
-ServiceIdentityOptions with ValidateOnStart, so a missing key refuses to
-boot. The switch is an explicit boolean, so each value under it is required.
+(§15.4). The BFF and Shipping's worker, the hosts that call a peer under
+their own identity, bind ServiceIdentityOptions with ValidateOnStart, so a
+missing key refuses to boot. The switch is an explicit boolean, so each
+value under it is required.
 */}}
 Identity__Client__ClientId: {{ include "commerce.require" (list .Values.identity.clientId "identity.clientId is required when identity.clientCredentials: the hosts that declare it bind ServiceIdentityOptions unconditionally and ValidateOnStart refuses to boot without it (§15.4).") | quote }}
 Identity__Client__Scope: {{ include "commerce.require" (list .Values.identity.scope "identity.scope is required when identity.clientCredentials: it becomes the audience every service validates (§11.5), and ServiceIdentityOptions marks it [Required].") | quote }}
