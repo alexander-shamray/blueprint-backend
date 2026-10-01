@@ -86,8 +86,9 @@ and a label value may not exceed 63 characters.
 
 {{- /*
 The selector carries the workload name and nothing release-derived: the
-Service and PodDisruptionBudget the stable release owns select with it, and
-the canary is a second release whose pods they must match (ADR-022).
+PodDisruptionBudget the stable release owns, and its Service where there is
+one, select with it, and the canary is a second release whose pods they must
+match (ADR-022).
 */}}
 {{- define "commerce.selectorLabels" -}}
 app.kubernetes.io/name: {{ include "commerce.name" . }}
@@ -119,10 +120,10 @@ objects, so the canary cannot render the stable release's Deployment;
 {{- end -}}
 
 {{- /*
-A Deployment's selector: the Service's plus the track, so neither track's
-Deployment adopts the other's pods, while the Service, which selects without
-it, sends traffic to both. It is immutable, so changing it means recreating
-the Deployment.
+A Deployment's selector: the shared one plus the track, so neither track's
+Deployment adopts the other's pods, while a Service, where there is one,
+selects without the track and sends traffic to both. It is immutable, so
+changing it means recreating the Deployment.
 */}}
 {{- define "commerce.deploymentSelectorLabels" -}}
 {{ include "commerce.selectorLabels" . }}
