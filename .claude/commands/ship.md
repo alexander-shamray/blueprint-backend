@@ -1111,7 +1111,7 @@ is one round and step 7 cannot buy it a second.
 
 6. **The Copilot loop.** Once the Grok loop has ended — however it ended —
    hand the branch to the second reviewer and alternate the same way. All
-   four of its outcomes come here:
+   five of its outcomes come here:
 
    | Grok ended | Reaches step 6 because |
    |---|---|
@@ -1119,6 +1119,7 @@ is one round and step 7 cannot buy it a second.
    | Skipped on limits | Quota, not a verdict; reported as skipped, and final |
    | Unconverged at the ceiling | A budget ran out, which is not a reason to withhold the second reviewer |
    | Ended under *A plan is reviewed once, for contradiction* | That section skips this loop once Grok has given the round, and the skip is reported here |
+   | Skipped under *A plan is reviewed once, for contradiction* | Copilot gave the round first, so this loop's would be the PR's second; the skip is reported here |
 
    Step 7 argues that a ceiling is a budget running out rather than a verdict,
    and that argument applies here first: a branch Grok had more to say about is
