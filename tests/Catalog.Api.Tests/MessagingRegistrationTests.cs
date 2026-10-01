@@ -84,7 +84,7 @@ public class MessagingRegistrationTests
             TestContext.Current.CancellationToken)).ShouldBeTrue(
             "the harness replaced the RabbitMQ transport, so a message that publishes but is never " +
             "consumed means the helper's registrations did not compose with the consumer bindings — " +
-            "the transport configuration itself is DatabaseSmokeTests' claim, not this one's, and both " +
+            "the transport configuration itself is not this test's claim, and both " +
             "harness bounds are stated rather than inherited, so a busy runner is not the answer");
     }
 
