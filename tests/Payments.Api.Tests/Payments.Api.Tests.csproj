@@ -25,7 +25,6 @@
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
     <!-- The in-memory harness; core, not MassTransit.RabbitMQ, since the harness swaps the transport out. -->
     <PackageReference Include="MassTransit" />
-    <PackageReference Include="NSubstitute" />
     <!-- The provider's stand-in, loading the simulator's own mappings. -->
     <PackageReference Include="WireMock.Net" />
   </ItemGroup>
