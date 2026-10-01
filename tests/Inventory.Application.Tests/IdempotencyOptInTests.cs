@@ -85,9 +85,9 @@ public class IdempotencyOptInTests
             .Select(pair => $"{pair.Command.Name} -> Result<{pair.Value.Name}>")
             .ShouldBeEmpty(
                 "the stored payload is the success VALUE, serialised with default options and " +
-                "no converters. Money has a private constructor, so it round-trips to a zero " +
-                "amount and a null currency and nothing says so (§4.2) — an idempotent command " +
-                "returns a primitive, a Guid or a DTO, never a domain value object.");
+                "no converters. A domain value object need not survive that round trip, and " +
+                "nothing says so (§4.2) — an idempotent command returns a primitive, a Guid " +
+                "or a DTO, never a domain value object.");
     }
 
     [Fact]
