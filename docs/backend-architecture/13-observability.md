@@ -2173,10 +2173,9 @@ the service is meeting a bar nobody is checking.
 
 Verify order-of-magnitude with the **k6 SLO run against staging**
 ([§15.1](15-cicd-deployment.md)) — `deploy/observability/slo/slo.js`, the load
-run in CD, which asserts the four rows of this table it can evaluate — the two
-request rows and the two outbox lanes, with the other three named below — and is
-the
-first real gate after the dev deploy. (NBomber was the stated alternative until
+run in CD, which asserts the five rows of this table it can evaluate — the two
+request rows, the two outbox lanes and own-event staleness, with the other two
+named below — and is the first real gate after the dev deploy. (NBomber was the stated alternative until
 PR-24 picked one; a stage that names two tools names none.)
 
 **It drives with k6 and adjudicates with Prometheus**, and the split is forced
