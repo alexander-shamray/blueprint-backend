@@ -319,19 +319,19 @@ or not, and the report says which.
 **A plan loop that has ended does not run again, so a resumed run reads
 each loop's spend from the PR before entering it.** On a plan PR that read
 replaces step 5's re-entry and step 6's all-resolved test in *Resume, don't
-restart*, both of which would spend rounds this section has closed. Grok
-gave the round when `grok-ledger.sh <n> count` reads one or more, and its
-rounds are spent at two, or at one that `grok-ledger.sh <n> status` reads
-`converged`. Copilot gave it when Grok's count is zero and
-`copilot-request-count.sh <n>` reads one or more, and its rounds are spent
-at two, or at one whose landed review's `commit` oid is the pushed head with
-no unresolved thread left: an unresolved thread is round one's triage,
-still owed, and a round naming a contradiction pushes its fix after the
-review, so a later head is the second round, still owed. Spent is not
-triaged: at two, a `suggestions.md` still on disk or a thread still
-unresolved may be round two's findings, and a resumed run triages them
-before step 7 without requesting a round, because a triage already applied
-finds its fixes in place and edits nothing. Either read can
+restart*, both of which would spend rounds this section has closed. It
+first triages what the last round left, requesting nothing: a
+`suggestions.md` on disk, or the last landed Copilot review's comments,
+suppressed block and unresolved threads. A ledger slot and a request are
+counted before their review runs, so a count can be spent while its
+findings are untriaged, and a triage already applied finds its fixes in
+place and edits nothing. Grok gave the round when `grok-ledger.sh <n>
+count` reads one or more, and its rounds are spent at two, or at one that
+`grok-ledger.sh <n> status` reads `converged`. Copilot gave it when Grok's
+count is zero and `copilot-request-count.sh <n>` reads one or more, and
+its rounds are spent at two, or at one whose landed review's `commit` oid
+is the pushed head: a round naming a contradiction pushes its fix after
+the review, so a later head is the second round, still owed. Either read can
 take a finished round one for an open one — a `converge` not yet posted, a
 head moved by step 7 — and that costs at most the second round, never a
 third. A request still outstanding is waited for first, as *Resume, don't
