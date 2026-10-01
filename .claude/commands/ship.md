@@ -327,7 +327,11 @@ rounds are spent at two, or at one that `grok-ledger.sh <n> status` reads
 at two, or at one whose landed review's `commit` oid is the pushed head with
 no unresolved thread left: an unresolved thread is round one's triage,
 still owed, and a round naming a contradiction pushes its fix after the
-review, so a later head is the second round, still owed. Either read can
+review, so a later head is the second round, still owed. Spent is not
+triaged: at two, a `suggestions.md` still on disk or a thread still
+unresolved may be round two's findings, and a resumed run triages them
+before step 7 without requesting a round, because a triage already applied
+finds its fixes in place and edits nothing. Either read can
 take a finished round one for an open one — a `converge` not yet posted, a
 head moved by step 7 — and that costs at most the second round, never a
 third. A request still outstanding is waited for first, as *Resume, don't
