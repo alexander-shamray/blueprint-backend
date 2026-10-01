@@ -2507,14 +2507,14 @@ CREATE INDEX IX_OrderReviews_RaisedAt ON ordering.OrderReviews (RaisedAt);
 > escalation to work.
 
 `FlagOrderForReviewHandler` in `Ordering.Application/Orders/FlagOrderForReview`
-is one statement, and the shape of the statement is the decision. The lock
-hints make the read a range lock, so a second delivery waits for the first
-to commit and then sees the row; an `IF NOT EXISTS … INSERT` reads and then
-writes too, so it races, and the loser violates the primary key rather than
-being absorbed — §6.6's `MERGE` makes the same argument one table over. It
-is absorbed rather than upserted because `RaisedAt` is when the work first
-landed on a human, and §13.6 alerts on how long a review has been
-outstanding:
+is one statement, and the shape of the statement is the decision. The
+`UPDLOCK, HOLDLOCK` hints make its `NOT EXISTS` read a range lock, so a
+second delivery waits for the first to commit and then sees the row; an
+`IF NOT EXISTS … INSERT` reads and then writes too, so it races, and the
+loser violates the primary key rather than being absorbed — §6.6's `MERGE`
+makes the same argument one table over. A duplicate is absorbed rather than
+upserted because `RaisedAt` is when the work first landed on a human, and
+§13.6 alerts on how long a review has been outstanding:
 
 ```csharp
 // The lock hints make the read a range lock, so a duplicate delivery is
