@@ -90,10 +90,14 @@ discontinued.
 
 ## 4. Is the outbox moving?
 
-An order that was placed successfully but whose events never left still counts
-as placed, so this will not suppress the metric — but a stalled broker lane
-often accompanies whatever else is wrong. Check
-[`outbox-broker.md`](outbox-broker.md) if the graphs suggest it.
+**This one can fire the alert on its own.** `orders.placed` is counted by
+`OrderSummaryProjection` off the Local lane, after the order commits, so an
+order that committed but was never projected is not counted. Check
+`outbox_oldest_age_seconds{lane="Local"}` and the abandoned rows, and if the
+lane is stuck or the projection keeps throwing, this is
+[`projection-lag.md`](projection-lag.md), not a drop in demand. A stalled
+broker lane does not suppress the metric, but often accompanies whatever else
+is wrong: [`outbox-broker.md`](outbox-broker.md).
 
 ## 5. The client
 
