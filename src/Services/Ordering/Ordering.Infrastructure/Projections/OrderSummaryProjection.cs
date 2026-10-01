@@ -173,7 +173,7 @@ public sealed class OrderSummaryProjection(IDbConnectionFactory connections, Ord
         PlacedFact? placed = await connection.QuerySingleOrDefaultAsync<PlacedFact>(
             new CommandDefinition(ClaimPlacedSql, args, cancellationToken: ct));
 
-        // Money.Of normalises the space-padded CHAR(3) the row returns (§5.3).
+        // Trimmed for the padded CHAR(3) the row returns, then through Money.Of, the only way in (§5.3).
         if (placed is not null)
             metrics.Placed(Money.Of(placed.TotalAmount, placed.Currency.Trim()));
 
