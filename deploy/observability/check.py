@@ -361,10 +361,7 @@ def metrics_in(expression: str) -> set[str]:
     # Duration literals OUTSIDE a range selector, which the bracket strip above
     # does not reach — `offset 1w`, `offset 5m`. The number is not an identifier
     # so the tokeniser skips it, and the unit is left behind as a metric called
-    # `w`. Harmless while the rule sits in awaiting-signal.yaml, because nothing
-    # publishes `w` and check 5 wants exactly that; it becomes a false failure
-    # the day `orders_placed_total` lands and the rule moves to the loaded file,
-    # where check 4 would reject the whole thing over a stray letter.
+    # `w`, which check 4 would reject in BusinessVolumeDrop's week-old baseline.
     text = re.sub(r"\b\d+(?:ms|[smhdwy])\b", " ", text)
     text = re.sub(r"\b(?:by|without|on|ignoring|group_left|group_right)\s*\([^)]*\)", " ", text)
 

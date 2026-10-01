@@ -25,12 +25,12 @@ rather than added.
 | [`skipped-queue.md`](skipped-queue.md) | `SkippedQueueDepth` | yes |
 | [`queue-backlog.md`](queue-backlog.md) | `QueueBacklogGrowing`, `DeliveryLagHigh` | yes |
 | [`migration-failure.md`](migration-failure.md) | `MigrationJobFailed` | yes |
+| [`business-volume.md`](business-volume.md) | `BusinessVolumeDrop` | yes |
 | [`stuck-saga.md`](stuck-saga.md) | `StuckSaga` | **no — signal owed** |
 | [`order-review.md`](order-review.md) | `OrdersAwaitingReview` | **no — signal owed** |
 | [`redis-cold.md`](redis-cold.md) | `CacheHitRatioCollapse` | **no — signal owed** |
-| [`business-volume.md`](business-volume.md) | `BusinessVolumeDrop` | **no — signal owed** |
 
-**Four alerts cannot fire yet**, because nothing publishes the instrument they
+**Three alerts cannot fire yet**, because nothing publishes the instrument they
 read. Their rules sit in `deploy/observability/alerts/awaiting-signal.yaml`,
 unloaded, and each runbook opens by saying so. The procedures still work —
 every query in them reads a table or a log that exists today — which is what

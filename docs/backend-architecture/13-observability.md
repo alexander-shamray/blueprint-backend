@@ -2028,14 +2028,14 @@ PR-24 wrote every condition above out as Prometheus rules and found that **four
 of them read an instrument nothing publishes**. That is this section's own
 callout coming true, at the moment the alerts stopped being a table and became
 files — and it is recorded here rather than resolved by quietly shipping rules
-that cannot fire.
+that cannot fire. Business volume was the fourth, and is loaded now that
+`OrderSummaryProjection` records `orders.placed`; three remain:
 
 | Alert | What is owed |
 |---|---|
 | Saga age | A gauge over `ordering.OrderFulfilmentStates`. §9.6 persists every saga, so the reading is a query away — there is simply no instrument over it |
 | Orders awaiting review | A gauge over `ordering.OrderReviews`, which the `IX_OrderReviews_RaisedAt` index already exists for |
 | Cache hit ratio collapse | **An instrument, and only an instrument — see the callout below.** §13.2 registers the `Microsoft.Extensions.Caching.Hybrid` meter and the package publishes no meter at all. The second half of this row used to be "no host calls `AddRedisConnections` either"; §8.5's PR wired both services, and the alert is exactly as unpublished as it was |
-| Business volume | `OrderMetrics`, which arrives with §6.6's `OrderSummaries` projection |
 
 **The third row is the one worth pausing on**, because it is the failure mode
 this section warns about wearing its best disguise: the `AddMeter` line makes

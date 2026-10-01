@@ -1,4 +1,4 @@
-# §13.6's remaining four alerts, written out and DELIBERATELY NOT LOADED.
+# §13.6's remaining three alerts, written out and DELIBERATELY NOT LOADED.
 #
 # Each one reads an instrument this platform does not publish yet. Loading them
 # would be the exact defect §13.6 spends a callout on: "Two of the alerts in
@@ -242,38 +242,3 @@ groups:
             the databases are sized for a warm cache (ADR-006).
           runbook_url: docs/runbooks/redis-cold.md
 
-      # Owed: orders.placed, on OrderMetrics. §13.3 puts that type in
-      # Ordering.Application with OrderSummaryProjection as its only call site,
-      # and §6.6's OrderSummaries projection has not been built — PR-20 deferred
-      # it by name. MetricsInitialiser carries the same note from the other end.
-      #
-      # Week-over-week rather than a fixed floor, because a volume alert with no
-      # seasonality model is the first pager people mute.
-      - alert: BusinessVolumeDrop
-        # `or vector(0)` ON THE CURRENT SIDE ONLY, and the asymmetry is the
-        # alert. If orders stop completely — a restarted instance, or the total
-        # halt this rule exists for — the counter series is *absent* rather than
-        # a sampled zero, `sum()` over an absent vector is absent too, and the
-        # comparison yields nothing. The alert would go quiet in exactly the
-        # scenario its runbook opens with.
-        #
-        # The baseline keeps no default deliberately: without a week-old series
-        # there is nothing to compare against, and firing on that would page
-        # every new deployment for its first week.
-        expr: |
-          (sum(rate(orders_placed_total[1h])) or vector(0))
-          <
-          0.5 * sum(rate(orders_placed_total[1h] offset 1w))
-        for: 30m
-        labels:
-          severity: page
-          owner: service
-        annotations:
-          summary: "Orders placed down more than 50% week over week"
-          description: >-
-            The most valuable alert here — it catches failures no technical
-            metric detects. §6.6's worked case: ordering.ProductPrices has no
-            row for a product, every order containing it is refused by the
-            domain, and the customer sees a 422 with no exception, no 5xx and no
-            lag anywhere.
-          runbook_url: docs/runbooks/business-volume.md

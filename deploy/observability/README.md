@@ -98,7 +98,7 @@ not covered rather than implied, on `deploy/helm/smoke.sh`'s terms.
 
 ## Why there are two rule files
 
-Four of §13.6's alerts read an instrument this platform does not publish
+Three of §13.6's alerts read an instrument this platform does not publish
 yet. Loading them would be the exact defect that chapter spends a callout on:
 
 > Two of the alerts in this document were written against signals that did not
@@ -114,7 +114,6 @@ and each names the instrument it is waiting for:
 | `StuckSaga` | a gauge over `ordering.OrderFulfilmentStates` |
 | `OrdersAwaitingReview` | a gauge over `ordering.OrderReviews` |
 | `CacheHitRatioCollapse` | an instrument — see below |
-| `BusinessVolumeDrop` | `OrderMetrics`, which arrives with §6.6's `OrderSummaries` projection |
 
 **Check 5 is what keeps that list honest.** It asserts the metrics named there
 are published by *nothing*, so the day somebody ships one of these instruments

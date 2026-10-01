@@ -1,5 +1,5 @@
 # §13.6's alerts, for every condition whose signal this platform actually
-# publishes today. The four that read an instrument nothing creates yet live in
+# publishes today. The three that read an instrument nothing creates yet live in
 # awaiting-signal.yaml and are NOT loaded — see the README beside this file, and
 # check.py, which asserts the split rather than trusting it.
 #
@@ -340,3 +340,31 @@ groups:
             fires for the opposite reason. Check which before promising
             availability.
           runbook_url: docs/runbooks/migration-failure.md
+
+  - name: platform-business
+    rules:
+      # orders.placed, recorded by OrderSummaryProjection once per committed
+      # order (§13.3). Week-over-week rather than a fixed floor, because a
+      # volume alert with no seasonality model is the first pager muted.
+      - alert: BusinessVolumeDrop
+        # `or vector(0)` on the current side only: when orders stop entirely
+        # the series is absent, not zero, and the comparison would yield
+        # nothing in the very case this rule exists for. The baseline keeps no
+        # default, so a deployment with no week-old series does not page.
+        expr: |
+          (sum(rate(orders_placed_total[1h])) or vector(0))
+          <
+          0.5 * sum(rate(orders_placed_total[1h] offset 1w))
+        for: 30m
+        labels:
+          severity: page
+          owner: service
+        annotations:
+          summary: "Orders placed down more than 50% week over week"
+          description: >-
+            The most valuable alert here — it catches failures no technical
+            metric detects. §6.6's worked case: ordering.ProductPrices has no
+            row for a product, every order containing it is refused by the
+            domain, and the customer sees a 422 with no exception, no 5xx and no
+            lag anywhere.
+          runbook_url: docs/runbooks/business-volume.md
