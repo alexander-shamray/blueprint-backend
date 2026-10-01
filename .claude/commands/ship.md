@@ -301,14 +301,15 @@ others are already frozen.
 
 **The rule belongs to the PR, not to a reviewer.** It holds for whichever
 reviewer runs the round — Grok's pass and its triage in step 5, Copilot's
-review and its triage in step 6, or a reviewer standing in for either — and
-each loop that runs gives the PR one round. Every finding but a
-contradiction is refused as a house rule naming this section, and a round
-whose findings are all refused is clean. A round naming a contradiction is
-triaged and fixed as any round is, and one more round reads the fix; what
-that one names is fixed the same way and no third is requested, so the loop
-ends on it, clean or not, and the report says which.
-
+review and its triage in step 6, or a reviewer standing in for either. The
+first loop to run gives the PR its round, and the second is skipped and
+reported as skipped under this section, because its first round would be
+the PR's second. Every finding but a contradiction is refused as a house
+rule naming this section, and a round whose findings are all refused is
+clean. A round naming a contradiction is triaged and fixed as any round is,
+and one more round, in the same loop, reads the fix; what that one names is
+fixed the same way and no third is requested, so the loop ends on it, clean
+or not, and the report says which.
 ## Steps
 
 0. **Start from the main checkout, on an up-to-date `main`, with no leftover
@@ -1197,7 +1198,8 @@ ends on it, clean or not, and the report says which.
    **This loop does not share step 5's stopping condition, and the asymmetry
    is deliberate.** It ends on the **first** clean round, marked all-resolved,
    where step 5 still wants two. A plan PR follows neither: *A plan is
-   reviewed once, for contradiction* owns how both loops end on one.
+   reviewed once, for contradiction* owns its one round and which loop
+   gives it.
 
    **An `Ask` thread is answered here rather than left open**, which departs
    from what `/review-copilot` does on its own. That command leaves one
