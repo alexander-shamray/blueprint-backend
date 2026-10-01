@@ -451,10 +451,8 @@ here rather than left to be noticed.
 
 ```csharp
 // Common.Application — registered by AddOrderingApplication (§4.2) and forced
-// at startup wherever a MetricsInitialiser exists (§13.6) — Ordering has one
-// and Catalog does not, which §13.6 records as a gap and check.py asserts:
-// "a behaviour injects it"
-// is not the same as "something has constructed it".
+// at startup by each service's MetricsInitialiser (§13.6): "a behaviour
+// injects it" is not the same as "something has constructed it".
 public sealed class RequestMetrics
 {
     private readonly Histogram<double> _duration;
