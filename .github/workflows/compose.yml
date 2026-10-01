@@ -31,12 +31,10 @@ concurrency:
 jobs:
   smoke:
     runs-on: ubuntu-latest
-    # 15 image pulls, plus six .NET builds each carrying a restore and a
-    # publish with no layer cache on a fresh runner: the base images are
-    # shared, the restores are not. 15 + 6 × 5 gives 45. The broker image is a
-    # seventh build and carries no restore — a pulled base, a plugin download
-    # and one `rabbitmq-plugins enable` — so it stays out of the
-    # multiplication, which is the guard rather than the count.
+    # Every .NET image builds with its own restore and publish and no layer
+    # cache on a fresh runner, after the infrastructure pulls. A run takes
+    # about six minutes; 45 is headroom for a cold registry, not a sum of
+    # the images, so a new service does not move it.
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
