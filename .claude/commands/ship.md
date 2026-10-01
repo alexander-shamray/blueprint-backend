@@ -63,11 +63,12 @@ could have made differently:
 | CI is not green at step 7 | A merge onto a red `main` is not a judgement call |
 | The PR is not mergeable | Conflicts are the caller's tree, not this chain's |
 
-The first three are questions about *this* run; the other four are questions
-about the repository's state, and no recommended option exists for any of
-them. Two of the four are somebody's decision this chain would otherwise
-undo in silence — commits placed on `main`, and a PR deliberately closed —
-which is a sharper reason to stop than not knowing what to do.
+The helper, missing-case and unregistered-review rows are questions about
+*this* run; the other four are questions about the repository's state, and
+no recommended option exists for any of them. Two of the four are
+somebody's decision this chain would otherwise undo in silence — commits
+placed on `main`, and a PR deliberately closed — which is a sharper reason
+to stop than not knowing what to do.
 
 **The unregistered-review row is Copilot's analogue of a Grok helper exiting
 non-zero, and it is the one failure with no exit code.** Grok's failures are
