@@ -2008,7 +2008,7 @@ each event, what a missing instance means:
 
 ```csharp
 // The one event whose missing instance always faults: Payments produces it,
-// so it is never an echo.
+// so it is never this saga's own echo.
 Event(
     () => PaymentAuthorised,
     x =>
@@ -2018,7 +2018,8 @@ Event(
     });
 
 // Discarded with no instance only for the arrivals NoInstanceForCancellation
-// allows, faulted otherwise.
+// allows, faulted otherwise; the routine one is the aggregate's echo of a
+// CancelOrder this saga sent.
 Event(
     () => OrderCancelled,
     x =>
