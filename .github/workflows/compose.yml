@@ -32,9 +32,9 @@ jobs:
   smoke:
     runs-on: ubuntu-latest
     # Every .NET image builds with its own restore and publish and no layer
-    # cache on a fresh runner, after the infrastructure pulls. A run takes
-    # about six minutes; 45 is headroom for a cold registry, not a sum of
-    # the images, so a new service does not move it.
+    # cache on a fresh runner, after the infrastructure pulls. 45 is
+    # headroom for a cold registry, not a sum of the images, so a new
+    # service does not move it.
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
