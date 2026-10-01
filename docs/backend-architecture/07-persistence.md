@@ -293,7 +293,7 @@ differently:
 | Kind | Examples | Authored by |
 |---|---|---|
 | **Write model** | `Orders`, `OrderLines` | The EF model. `IEntityTypeConfiguration<T>` (§7.2) is the source of truth; `dotnet ef migrations add` produces the DDL |
-| **Read models and technical tables** | `OrderSummaries`, `ordering.Products`, `ProductPrices`, `OutboxMessages`, `InboxMessages`, `IdempotencyMarkers`, `OrderReviews` | Hand-written DDL, because they are shaped for queries and index plans rather than for objects. **`ProductPrices` states the terms of the exception**: PR-18 maps it through an `IEntityTypeConfiguration` so `migrations add` emits it beside the aggregate's tables, and the configuration is then written to produce §6.6's printed types — `char(3)`, `DEFAULT 1` — rather than EF's defaults for the CLR ones. `IdempotencyMarkers` ([§8.5](08-caching-redis.md)) is mapped the same way and for a reason of its own: [ADR-037](adr/ADR-037-the-idempotency-marker-is-a-row-in-the-commands-own-transaction.md)'s store both reads and writes it through the service's `DbContext`, because that is what puts the write inside §6.3's transaction, so the entity has to be in the model whether or not the DDL is emitted from it. The rule is that the shape is the chapter's; which tool writes it is negotiable, and a generated table that drifts from the DDL a later PR copies is not |
+| **Read models and technical tables** | `OrderSummaries`, `ordering.Products`, `ProductPrices`, `OutboxMessages`, `InboxMessages`, `IdempotencyMarkers`, `OrderReviews` | Hand-written DDL, because they are shaped for queries and index plans rather than for objects. **`ProductPrices` states the terms of the exception**: PR-18 maps it through an `IEntityTypeConfiguration` so `migrations add` emits it beside the aggregate's tables, and the configuration is then written to produce §6.6's printed types — `char(3)`, `DEFAULT 1` — rather than EF's defaults for the CLR ones. `OrderSummaries` is mapped on the same terms. `IdempotencyMarkers` ([§8.5](08-caching-redis.md)) is mapped the same way and for a reason of its own: [ADR-037](adr/ADR-037-the-idempotency-marker-is-a-row-in-the-commands-own-transaction.md)'s store both reads and writes it through the service's `DbContext`, because that is what puts the write inside §6.3's transaction, so the entity has to be in the model whether or not the DDL is emitted from it. The rule is that the shape is the chapter's; which tool writes it is negotiable, and a generated table that drifts from the DDL a later PR copies is not |
 | **A library's own technical tables** | `ordering.InboxState`, `ordering.OutboxState`, `ordering.OutboxMessage` | The EF model, from `modelBuilder.AddTransactionalOutboxEntities()` — **the one stated exception to §7.2's rule that mapping lives in `IEntityTypeConfiguration<T>` classes**, and the exception is about ownership rather than about reach ([ADR-032](adr/ADR-032-the-sagas-outbox-is-masstransits-in-the-sagas-own-transaction.md)). The assembly scan would find a configuration for these entities perfectly well — it selects on the *configuration* type's assembly, not the entity's — but MassTransit maps them itself and queries them on that mapping, so writing one here would be a second definition of a schema the library has to agree with, drifting on its next bump. Their shape is not this blueprint's to specify either, which is the difference from the row above: the rule there is that the shape is the chapter's, and here it is the library's. **Singular, where §9.4's and §9.5's tables are plural** — `OutboxMessage` against `OutboxMessages`, so the two sets share the `ordering` schema without colliding, and a reader of the database sees more messaging tables than the chapters name. **No count on either side of that sentence**: it said five against two while §9 owned two, and §8.5's marker joined the cell above without settling whether a marker is a *messaging* table — which is the question a numeral here would have to answer and no chapter does. Ordering is the only service with any of them, because it holds the only saga |
 
 That is why [§6.6](06-cqrs.md) and [§9.4](09-messaging.md) show `CREATE TABLE` and §7.2 does not — the write
@@ -312,7 +312,7 @@ job host's composition root — because the hook below runs on every production
 release holding §7.1's DDL identity.
 
 ```csharp
-public partial class AddOrderSummaries : Migration
+public partial class AddProducts : Migration
 {
     protected override void Up(MigrationBuilder migrationBuilder)
     {
@@ -322,15 +322,9 @@ public partial class AddOrderSummaries : Migration
         // the same job, versioned by the same migration history.
         migrationBuilder.Sql(
             """
-            CREATE TABLE ordering.OrderSummaries ( /* §6.6 */ );
-            CREATE INDEX IX_OrderSummaries_Customer_PlacedAt ...;
-
-            -- Both tables §6.6's projection writes, in one migration. The
-            -- summary stores product ids and resolves the rest from here, so
-            -- a migration carrying one of them leaves the ProductPublished
-            -- handler and the history query pointing at an object that does
-            -- not exist — and Database.Migrate() is the only mechanism, so
-            -- nothing else would create it.
+            -- §6.6's product table, in the migration that ships the
+            -- ProductPublished handler writing it: Database.Migrate() is the
+            -- only mechanism, so nothing else would create it.
             CREATE TABLE ordering.Products ( /* §6.6 */ );
             """);
     }
