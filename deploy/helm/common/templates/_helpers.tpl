@@ -37,7 +37,8 @@ wildcard and an IPv6 literal. Not a copy of the hosts' rule, which is built on
 {{- fail (printf "%s The value is not an HTTPS address this chart will accept: a host of letters, digits, dots, hyphens and underscores, optionally a numeric port, and optionally a path. A query, a fragment, a wildcard and a non-numeric port are refused here rather than at startup, and user information and an IPv6 literal are refused outright (§15.4)." $message) }}
 {{- end }}
 {{- /*
-The port's range, which the digits above do not bound. Unlike
+The port's range, which the digits above do not bound: `Uri.TryCreate`
+refuses `:65536` at startup, and nothing listens on `:0`. Unlike
 `edge-config.yaml` there is no canonical-spelling check: a base address is
 parsed rather than compared as text, so the host accepts `:08443`.
 */}}
