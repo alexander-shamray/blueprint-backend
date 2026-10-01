@@ -215,11 +215,8 @@ services:
       # instead — a symptom nothing connects to a container that was not ready.
       redis-cache:        { condition: service_healthy }
       redis-coordination: { condition: service_healthy }
-      # service_healthy rather than service_started, though the API does not
-      # need Keycloak to boot — JwtBearer fetches the discovery document
-      # lazily. `up --wait` gates on every service's health, and the value is
-      # for whoever types the README's token command the moment it returns:
-      # under service_started that command races the realm import.
+      # service_healthy since keycloak declares a healthcheck. The API does
+      # not need it: JwtBearer fetches the discovery document lazily.
       keycloak:          { condition: service_healthy }
 
   # catalog-api, inventory-api, payments-api, shipping-worker and
