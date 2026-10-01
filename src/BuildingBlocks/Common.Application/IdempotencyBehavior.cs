@@ -18,6 +18,9 @@ public sealed class IdempotencyBehavior<TCommand, TResult>(
     // "null", not the empty string, which a store is likeliest to read as an absent payload.
     private const string NoValue = "null";
 
+    // Opens a payload that carries a fingerprint; no JSON value begins with "s", so no bare value spells it.
+    private const string FingerprintPrefix = "sha256:";
+
     // Resolved once per closed (TCommand, TResult), in declaration order; Result and Result<T> are the only shapes.
     private static readonly Type? ValueType = ValueTypeOf();
 
@@ -35,6 +38,9 @@ public sealed class IdempotencyBehavior<TCommand, TResult>(
         // The store owns the prefix; the subject segment stops one caller naming another's key (§8.5).
         string key = $"{Subject()}:{TCommand.OperationName}:{command.CommandId}";
 
+        // Before the claim, so a command that cannot be serialised holds no key (ADR-057).
+        string fingerprint = CommandFingerprint.Of(command);
+
         // The token makes a write from an expired claim a no-op rather than a clobber of its successor's.
         string? claim = await store.TryClaimAsync(key, Retention, ct);
 
@@ -45,7 +51,7 @@ public sealed class IdempotencyBehavior<TCommand, TResult>(
             if (existing is null || existing.InProgress)
                 throw new ConcurrentRequestException(command.CommandId);
 
-            return Replay(existing.Payload!);
+            return Replay(existing.Payload!, fingerprint, command.CommandId);
         }
 
         // Set after the claim, so a command about to replay hands §6.3 no key.
@@ -77,7 +83,7 @@ public sealed class IdempotencyBehavior<TCommand, TResult>(
         }
 
         // No retention: the claim's window runs from the claim, not the commit (ADR-038).
-        await store.CompleteAsync(key, claim, Capture(result), CancellationToken.None);
+        await store.CompleteAsync(key, claim, Capture(result, fingerprint), CancellationToken.None);
         return result;
     }
 
@@ -85,13 +91,30 @@ public sealed class IdempotencyBehavior<TCommand, TResult>(
     private string Subject() => currentUser.IsAuthenticated ? currentUser.Id.ToString() : "system";
 
     // Only a success's value is stored, since a Result survives no JSON round trip (§8.5).
-    private static string Capture(TResult result) =>
-        ValueType is null
+    private static string Capture(TResult result, string fingerprint)
+    {
+        string value = ValueType is null
             ? NoValue
             : JsonSerializer.Serialize(ValueProperty!.GetValue(result), ValueType);
 
-    private static TResult Replay(string payload)
+        return Envelope(fingerprint) + value;
+    }
+
+    private static string Envelope(string fingerprint) => $"{FingerprintPrefix}{fingerprint}:";
+
+    private static TResult Replay(string payload, string fingerprint, Guid commandId)
     {
+        // Compared before any value is read; an unprefixed entry is the previous release's and replays (ADR-057).
+        if (payload.StartsWith(FingerprintPrefix, StringComparison.Ordinal))
+        {
+            string envelope = Envelope(fingerprint);
+
+            if (!payload.StartsWith(envelope, StringComparison.Ordinal))
+                throw new CommandIdReusedException(commandId);
+
+            payload = payload[envelope.Length..];
+        }
+
         // The guard is required: the cast compiles for every TResult and fails at run time for all but Result.
         if (ValueType is null)
             return (TResult)Result.Success();
