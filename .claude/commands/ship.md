@@ -335,7 +335,9 @@ finds its fixes in place and edits nothing. Either read can
 take a finished round one for an open one — a `converge` not yet posted, a
 head moved by step 7 — and that costs at most the second round, never a
 third. A request still outstanding is waited for first, as *Resume, don't
-restart* says, and both counts at zero is a plan no loop has reviewed yet.
+restart* says, and both counts at zero is a plan neither loop has reviewed.
+A reviewer standing in for either writes neither count, so a run resumed
+after a stand-in round learns of it from whoever resumes it, not the PR.
 
 **The ledger records a Grok plan loop that ended clean, and its count
 records the rest.** A plan loop that ends clean posts step 5's `converge`,
