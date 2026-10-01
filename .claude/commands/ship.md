@@ -751,19 +751,21 @@ is one round and step 7 cannot buy it a second.
    own commit. Every read is granted already:
 
    ```bash
-   git log --format=%s origin/main..HEAD     # the branch's subjects
-   git diff --name-only origin/main...HEAD   # the branch's paths
-   git status --short                        # and the tree's, still to commit
+   git log --format=%s --name-only origin/main..HEAD  # each subject, its paths
+   git diff --name-only origin/main...HEAD            # the branch's paths
+   git status --short                                 # the tree's, to commit
    ```
 
-   The change is a fix when one of those subjects opens `fix:` or `fix(`, or
-   when what `/commit` is about to write will. Each path under `.claude/`
-   ending `.py` or `.sh` that is not a `test_*.py` is then a script, and its
-   suites are the `test_*.py` under `.claude/scripts/` whose text names the
-   script's file, which `Grep` finds. One of them must be among the paths.
-   A script no suite names may take its first fix bare and is refused at
-   its second, which a `fix` subject in
-   `git log --format=%s origin/main -- <script>` shows.
+   A commit is a fix when its subject opens `fix:` or `fix(`, and so is the
+   one `/commit` is about to write when its subject will. A script is a
+   path under `.claude/` ending `.py` or `.sh` that is not a `test_*.py`,
+   and its suites are the `test_*.py` under `.claude/scripts/` whose text
+   names the script's file, which `Grep` finds. Each script a fix touches
+   must have one of its suites among the branch's or the tree's paths, so
+   a script a `feat` commit changed is not asked for a case because a
+   review fix elsewhere landed beside it. A script no suite names may take
+   its first fix bare and is refused at its second, which a `fix` subject
+   in `git log --format=%s origin/main -- <script>` shows.
 
    **A refusal stops the chain**, because the missing case is a file under
    `.claude/scripts/`, which this session is denied editing, so the run has
