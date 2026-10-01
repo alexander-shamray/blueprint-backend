@@ -79,19 +79,22 @@ public class CommandAlreadyCommittedExceptionHandlerTests
     }
 
     [Fact]
-    public async Task The_three_409s_carry_distinct_machine_readable_codes()
+    public async Task The_409s_carry_distinct_machine_readable_codes()
     {
         // A client switches on §10.5's `code`, not on prose, so the codes are pinned.
         string committed = await CodeOfAsync(new CommandAlreadyCommittedException(Key));
         string inProgress = await CodeOfAsync(new ConcurrentRequestException(Guid.CreateVersion7()));
         string conflict = await CodeOfAsync(new DbUpdateConcurrencyException("stale"));
+        string reused = await CodeOfAsync(new CommandIdReusedException(Guid.CreateVersion7()));
 
         committed.ShouldBe("command.already_committed");
         inProgress.ShouldBe("request.in_progress");
         conflict.ShouldBe("request.concurrency_conflict");
+        reused.ShouldBe("command.id_reused");
 
-        // Distinct as a set, since two of the three would satisfy any pair of assertions.
-        new[] { committed, inProgress, conflict }.Distinct().Count().ShouldBe(3);
+        // Distinct as a set, since a code shared by two producers would satisfy each assertion alone.
+        string[] codes = [committed, inProgress, conflict, reused];
+        codes.Distinct().Count().ShouldBe(codes.Length);
     }
 
     private static async Task<string> CodeOfAsync(Exception exception)

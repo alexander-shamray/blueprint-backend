@@ -17,6 +17,8 @@ public static class ProblemDetailsExtensions
 
         services.AddExceptionHandler<CommandAlreadyCommittedExceptionHandler>();
 
+        services.AddExceptionHandler<CommandIdReusedExceptionHandler>();
+
         return services.AddProblemDetails(options =>
             options.CustomizeProblemDetails = context =>
             {
