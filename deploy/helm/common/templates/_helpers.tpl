@@ -99,8 +99,8 @@ app.kubernetes.io/part-of: commerce
 §15.5's canary is a second release of this chart, with `canary.enabled`, its
 own replicas and its own tag. Where there is a Service both tracks answer to
 it, so its traffic splits by pod count, which `deploy/canary/canary.py` plans.
-A rollback removes the canary's pods and leaves the schema its migration hook
-applied, which §15.5's backward-compatibility rule covers (ADR-022).
+A rollback removes the canary's pods and, where there is a migrator, leaves
+the schema its hook applied, which §15.5's backward-compatibility rule covers.
 */}}
 {{- define "commerce.track" -}}
 {{- if .Values.canary.enabled }}canary{{ else }}stable{{ end -}}
