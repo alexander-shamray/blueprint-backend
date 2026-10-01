@@ -756,8 +756,8 @@ is one round and step 7 cannot buy it a second.
    git status --short                                 # the tree's, to commit
    ```
 
-   A commit is a fix when its subject opens `fix:` or `fix(`, and so is the
-   one `/commit` is about to write when its subject will. A script is a
+   A commit is a fix when its subject opens `fix:` or `fix(`, and so is each
+   one `/commit` is about to write whose subject will. A script is a
    path under `.claude/` that is not a `test_*.py` and is code: one ending
    `.py`, `.sh` or `.ps1`, or one whose first line is a `#!`. Its suites
    are the `test_*.py` under `.claude/scripts/` whose text
@@ -767,8 +767,8 @@ is one round and step 7 cannot buy it a second.
    review fix elsewhere landed beside it. A script no suite names may take
    its first fix bare and is refused at its second: two `fix` subjects in
    `git log --format=%s origin/main HEAD -- <script>`, which reads the
-   script's whole history on both sides of the fork, counting the one
-   `/commit` is about to write only when it touches that script.
+   script's whole history on both sides of the fork, and adding each fix
+   `/commit` is about to write that touches that script.
 
    **A refusal stops the chain**, because the missing case is a file under
    `.claude/scripts/`, which this session is denied editing, so the run has
