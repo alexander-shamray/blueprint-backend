@@ -47,7 +47,7 @@ parsed rather than compared as text, so the host accepts `:08443`.
 {{- end -}}
 
 {{- /*
-The Service name, which every object's name is built from and which is not
+The workload name, which every object's name is built from and which is not
 derived from the release: where a peer dials a workload, through the
 gateway's route file (§10.2), the BFF's pricing hop or Shipping's address
 read (ADR-052), it dials this name as a literal, so a release-derived one
@@ -109,7 +109,7 @@ applied, which §15.5's backward-compatibility rule covers (ADR-022).
 {{- /*
 The name of what this release owns. Helm refuses to touch another release's
 objects, so the canary cannot render the stable release's Deployment;
-`commerce.name` stays the Service name, and the two differ only on a canary.
+`commerce.name` stays the workload name, and the two differ only on a canary.
 */}}
 {{- define "commerce.instanceName" -}}
 {{- if .Values.canary.enabled -}}
