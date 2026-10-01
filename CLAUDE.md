@@ -185,6 +185,9 @@ The contract's §6 lists what locality leaves in force; these are the rest.
 - **A CodeQL alert is a defect in the pull request that raised it, and it is
   fixed there**: break the reported path at its source rather than policing
   the sink, or argue in the commit body why the path cannot be taken.
+- **A fix to a script under `.claude/` lands with the case in its suite
+  that failed before it**, and a script with no suite gets one before its
+  second fix: a fix no case pins is one the next PR makes again.
 - **Uncommitted work in the tree belongs in the PR being worked on**, in its
   own commit with a body that argues it. **Never revert it to clean the tree**;
   if it does not belong here, say so and ask rather than decide by deleting.
