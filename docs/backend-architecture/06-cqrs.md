@@ -1687,7 +1687,7 @@ public sealed class OrderSummaryProjection(IDbConnectionFactory connections, Ord
         using IDbConnection connection = connections.Create();
         await connection.ExecuteAsync(
             """
-            MERGE ordering.OrderSummaries AS target
+            MERGE ordering.OrderSummaries WITH (HOLDLOCK) AS target
             USING (SELECT OrderId = @OrderId) AS source
                 ON target.OrderId = source.OrderId
             WHEN NOT MATCHED THEN
@@ -1784,7 +1784,7 @@ public sealed class OrderSummaryProjection(IDbConnectionFactory connections, Ord
 
         await connection.ExecuteAsync(
             """
-            MERGE ordering.OrderSummaries AS target
+            MERGE ordering.OrderSummaries WITH (HOLDLOCK) AS target
             USING (SELECT OrderId = @OrderId) AS source
                 ON target.OrderId = source.OrderId
             -- An UPDATE here would be the whole defect: §9.4 claims ordering
@@ -1794,17 +1794,20 @@ public sealed class OrderSummaryProjection(IDbConnectionFactory connections, Ord
             WHEN NOT MATCHED THEN
                 INSERT (OrderId, Status, UpdatedAt, ConfirmedAt, CancelReason)
                 VALUES (@OrderId, @Status, @OccurredAt, @ConfirmedAt, @CancelReason)
-            -- The guard that makes this safe under at-least-once delivery:
-            -- a redelivered Confirmed must not undo a Shipped that followed.
-            WHEN MATCHED AND target.UpdatedAt < @OccurredAt THEN
+            -- The status guard is per column, not on the branch: a redelivered
+            -- Confirmed must not undo a Shipped that followed, but it must
+            -- still write ConfirmedAt. Guarded on the branch, a Confirmed
+            -- claimed after its Shipped would change nothing, and the
+            -- fulfilment claim below would never fire for that order.
+            WHEN MATCHED THEN
                 UPDATE SET
-                    Status       = @Status,
-                    UpdatedAt    = @OccurredAt,
-                    -- COALESCE, not assignment: Shipped follows Confirmed and
-                    -- passes NULL, and overwriting would erase the timestamp
-                    -- the duration is measured from.
-                    ConfirmedAt  = COALESCE(@ConfirmedAt,  target.ConfirmedAt),
-                    CancelReason = COALESCE(@CancelReason, target.CancelReason);
+                    Status       = CASE WHEN target.UpdatedAt < @OccurredAt
+                                        THEN @Status ELSE target.Status END,
+                    UpdatedAt    = CASE WHEN target.UpdatedAt < @OccurredAt
+                                        THEN @OccurredAt ELSE target.UpdatedAt END,
+                    -- Each happens once, so the first value written stands.
+                    ConfirmedAt  = COALESCE(target.ConfirmedAt,  @ConfirmedAt),
+                    CancelReason = COALESCE(target.CancelReason, @CancelReason);
             """,
             new { OrderId = orderId.Value, Status = status.ToString(), occurredAt, confirmedAt, cancelReason });
 
@@ -1904,13 +1907,9 @@ public sealed class OrderSummaryProjection(IDbConnectionFactory connections, Ord
             -- ProductPriceProjection's two upserts carry it: this branch makes
             -- concurrent deliveries for one key able to both insert, and the
             -- endpoint's retry would absorb the violation rather than surface
-            -- it. Note it is NOT the two OrderSummaries MERGEs in this
-            -- class, which carry none. That asymmetry predates this table and
-            -- is not defended here: §9.4's dispatcher claims with READPAST, so
-            -- a second replica can hold the next batch while the first holds
-            -- its own, and two lifecycle events for one order can be in
-            -- flight together. Whether those MERGEs are owed the same hint is
-            -- an open question rather than a settled no.
+            -- it. The two OrderSummaries MERGEs carry it for the same reason:
+            -- §9.4's dispatcher claims with READPAST, so two lifecycle events
+            -- for one order can be in flight together.
             WHEN MATCHED AND target.UpdatedAt < @OccurredAt THEN
                 UPDATE SET Name = @Name, ThumbnailUrl = @Thumbnail, UpdatedAt = @OccurredAt;
             """,
