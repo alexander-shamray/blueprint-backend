@@ -1,4 +1,5 @@
 using Ordering.Application.Integration;
+using Ordering.Application.Orders;
 using Ordering.Application.Orders.PlaceOrder;
 using Common.Application;
 using FluentValidation;
@@ -23,6 +24,9 @@ public static class DependencyInjection
         // The clock (§5.4) and the request histogram (§13.3), which LoggingBehavior injects.
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton<RequestMetrics>();
+
+        // §13.3's business instruments; Infrastructure's projection is the only caller (§6.6).
+        services.AddSingleton<OrderMetrics>();
 
         // Registration order is pipeline order; idempotency sits inside validation and outside the transaction (§6.3).
         services.AddScoped(typeof(IPipelineBehavior<,>), typeof(LoggingBehavior<,>));

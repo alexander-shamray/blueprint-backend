@@ -135,7 +135,10 @@ public sealed class SagaCommandHandlerTests(ServiceFixture fixture) : IAsyncLife
 
         cancelled.IsSuccess.ShouldBeTrue();
 
-        OutboxMessage row = (await fixture.OutboxAsync()).ShouldHaveSingleItem();
+        // The Broker row; §6.6's projection stages the domain event on the Local lane beside it.
+        OutboxMessage row = (await fixture.OutboxAsync())
+            .Where(r => r.Lane == OutboxLane.Broker)
+            .ShouldHaveSingleItem();
 
         row.Payload.ShouldContain(
             $"\"Origin\":\"{CancelOrigins.Workflow}\"",
