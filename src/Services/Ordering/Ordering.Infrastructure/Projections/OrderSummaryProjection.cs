@@ -173,9 +173,9 @@ public sealed class OrderSummaryProjection(IDbConnectionFactory connections, Ord
         PlacedFact? placed = await connection.QuerySingleOrDefaultAsync<PlacedFact>(
             new CommandDefinition(ClaimPlacedSql, args, cancellationToken: ct));
 
-        // Trimmed defensively, as CHAR(3) pads a shorter value, then through Money.Of, the only way in (§5.3).
+        // The column only ever holds Money's own three letters, so it returns unpadded to Money.Of (§5.3).
         if (placed is not null)
-            metrics.Placed(Money.Of(placed.TotalAmount, placed.Currency.Trim()));
+            metrics.Placed(Money.Of(placed.TotalAmount, placed.Currency));
 
         string? cancelled = await connection.QuerySingleOrDefaultAsync<string>(
             new CommandDefinition(ClaimCancelledSql, args, cancellationToken: ct));

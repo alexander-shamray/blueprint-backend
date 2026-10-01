@@ -1844,11 +1844,11 @@ public sealed class OrderSummaryProjection(IDbConnectionFactory connections, Ord
                 AND PlacedCounted = 0;
             """, args);
 
-        // Money.Of, not new Money: the constructor is private (§5.3). Trimmed
-        // defensively first: CHAR(3) pads a shorter value, and Of rejects
-        // anything but three letters.
+        // Money.Of, not new Money: the constructor is private (§5.3). The
+        // column only ever holds Money's own three letters, so CHAR(3)
+        // returns it unpadded.
         if (placed is not null)
-            metrics.Placed(Money.Of(placed.TotalAmount, placed.Currency.Trim()));
+            metrics.Placed(Money.Of(placed.TotalAmount, placed.Currency));
 
         // PlacedCounted = 1 in the predicate, not merely PlacedAt IS NOT NULL:
         // a cancellation must never be counted before the placement it belongs
