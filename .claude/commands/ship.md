@@ -320,7 +320,9 @@ or not, and the report says which.
 each loop's spend from the PR before entering it.** On a plan PR that read
 replaces step 5's re-entry and step 6's all-resolved test in *Resume, don't
 restart*, both of which would spend rounds this section has closed. It
-first triages what the last round left, requesting nothing: a
+first waits for a request still outstanding, as *Resume, don't restart*
+says, so that the last landed review is the newest, then triages what the
+last round left, requesting nothing: a
 `suggestions.md` on disk, or the last landed Copilot review's comments,
 suppressed block and unresolved threads. A ledger slot and a request are
 counted before their review runs, so a count can be spent while its
@@ -334,8 +336,7 @@ is the pushed head: a round naming a contradiction pushes its fix after
 the review, so a later head is the second round, still owed. Either read can
 take a finished round one for an open one — a `converge` not yet posted, a
 head moved by step 7 — and that costs at most the second round, never a
-third. A request still outstanding is waited for first, as *Resume, don't
-restart* says, and both counts at zero is a plan neither loop has reviewed.
+third. Both counts at zero is a plan neither loop has reviewed.
 A reviewer standing in for either writes neither count, so a run resumed
 after a stand-in round learns of it from whoever resumes it, not the PR.
 
