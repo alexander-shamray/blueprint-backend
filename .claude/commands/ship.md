@@ -133,7 +133,8 @@ re-enters step 5 rather than inferring it ran: `suggestions.md` is absent
 before the first review and after a clean one, and the two states are
 indistinguishable. Re-entering is safe because that loop is idempotent against
 a clean branch — a Grok full review of nothing writes nothing — and a re-run is
-proof where an inference would be a guess.
+proof where an inference would be a guess. A plan PR is the exception: *A plan
+is reviewed once, for contradiction* owns how a resumed run reads its rounds.
 
 **The Copilot loop is the opposite, and deliberately so**: its clean state is
 not a missing file but a landed review, which is durable, on the PR, and
@@ -146,7 +147,9 @@ answered on the record. Anything pushed after that review un-marks it, because
 the oid no longer matches and the clean verdict is then about a state the PR no
 longer carries. That pinning is what makes the inference safe here where it
 would be a guess for Grok: the artefact says which commit it read, and
-`suggestions.md` never could.
+`suggestions.md` never could. On a plan PR, where a refused finding still
+leaves its comment, *A plan is reviewed once, for contradiction* owns when
+step 6 is owed.
 
 **The newer-request clause is not redundant with the oid**, and leaving it out
 is how a resume ships past a review it never read. A run interrupted between
@@ -271,7 +274,9 @@ marker from anyone. Step 6 needs no marker for the same question — its
 outcomes are already on the PR, so a resumed run reads the last landed review
 (comments and suppressed block alike), the commit it read and the
 unresolved-thread list before declaring that loop owed, all-resolved or
-exhausted.
+exhausted. On a plan PR the `converged` marker does excuse re-entry: *A plan
+is reviewed once, for contradiction* reads a plan loop's spend from `count`
+and `status`.
 
 The count read goes through the same helper —
 `bash .claude/scripts/grok-ledger.sh <n> count` — because PR comments are
@@ -310,6 +315,36 @@ clean. A round naming a contradiction is triaged and fixed as any round is,
 and one more round, in the same loop, reads the fix; what that one names is
 fixed the same way and no third is requested, so the loop ends on it, clean
 or not, and the report says which.
+
+**A plan loop that has ended does not run again, so a resumed run reads
+each loop's spend from the PR before entering it.** On a plan PR that read
+replaces step 5's re-entry and step 6's all-resolved test in *Resume, don't
+restart*, both of which would spend rounds this section has closed. Grok
+gave the round when `grok-ledger.sh <n> count` reads one or more, and its
+rounds are spent at two, or at one that `grok-ledger.sh <n> status` reads
+`converged`. Copilot gave it when Grok's count is zero and
+`copilot-request-count.sh <n>` reads one or more, and its rounds are spent
+at two, or at one whose landed review's `commit` oid is the pushed head with
+no unresolved thread left: an unresolved thread is round one's triage,
+still owed, and a round naming a contradiction pushes its fix after the
+review, so a later head is the second round, still owed. Either read can
+take a finished round one for an open one — a `converge` not yet posted, a
+head moved by step 7 — and that costs at most the second round, never a
+third. A request still outstanding is waited for first, as *Resume, don't
+restart* says, and both counts at zero is a plan no loop has reviewed yet.
+
+**The ledger records a Grok plan loop that ended clean, and its count
+records the rest.** A plan loop that ends clean posts step 5's `converge`,
+which is what lets a single spent round read as spent. One that ends on its
+second round with that round's finding fixed and unread posts nothing: the
+ledger's one marker says the loop was clean, which would be false there,
+and a count of two reads as spent whatever `status` prints.
+
+**Step 7 is reached only once both loops have ended or been skipped under
+this section, so its re-entry runs neither.** A commit or rebase made there
+merges without a review reading it, and the report says so, because a plan
+is one round and step 7 cannot buy it a second.
+
 ## Steps
 
 0. **Start from the main checkout, on an up-to-date `main`, with no leftover
@@ -1340,7 +1375,8 @@ or not, and the report says which.
    **Non-empty is not a stop, because there is an obvious right answer.** The
    run goes back: commit — **scoped**, always — push, and re-enter both review
    loops for whatever each has left of its own ceiling — `CEILING` for Grok,
-   step 6's own for Copilot — then return to the **top of
+   step 6's own for Copilot, and on a plan PR whatever *A plan is reviewed
+   once, for contradiction* leaves it — then return to the **top of
    this step**, not to this gate. The top is where `suggestions.md` is
    removed, and re-entering the Grok loop is exactly what puts it back. That
    is what a resumed `/ship` would do from the *on a branch with an open PR*
@@ -1394,9 +1430,11 @@ or not, and the report says which.
    that no longer exists** — and a conflict resolved during the replay changes
    the content the reviewers read, not merely its sha. So this takes the same
    route the non-empty gate above takes: re-enter **both** review loops for
-   whatever each has left of its own ceiling, then return to the **top of this
-   step**. Going back to the checks alone would merge a head no reviewer has
-   seen, which is the thing every loop in this command exists to prevent.
+   whatever each has left of its own ceiling, or on a plan PR whatever
+   *A plan is reviewed once, for contradiction* leaves it, then return to
+   the **top of this step**. Going back to the checks alone would merge a
+   head no reviewer has seen, which is the thing every loop in this command
+   exists to prevent.
 
    Kept to, a branch that is only ever rebased never carries a merge commit
    at all. A branch that already carries one from before this rule is
