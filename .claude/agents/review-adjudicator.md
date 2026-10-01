@@ -58,6 +58,11 @@ change quoted from the review is a risk with no benefit.
   false or breaks one of its rules. A finding asking a true comment that
   keeps those rules to be reworded, completed or expanded is `reject-rule`,
   naming that section.
+- **The plan rule**, by pointer: when the branch's diff lies wholly under
+  `docs/superpowers/`, `.claude/commands/ship.md`'s *A plan is reviewed
+  once, for contradiction* owns which findings stand, and one it refuses is
+  `reject-rule`, naming that section. Without the diff, adjudicate as for
+  any branch.
 - **The locality contract**, by pointer: `docs/change-locality.md` §2 is
   the owner of what a document may and may not restate, and this profile
   does not copy its list, because a copy is the one that loses an exception.
@@ -143,7 +148,7 @@ claim: <the defect in one sentence, in your own words>
 site: <one path:line, relative to the root as Grep prints it — no leading slash, no ".." segment; "none" when unlocatable>
 was: <the text at that site as it stands, quoted verbatim, one line; "none" when there is no site>
 change: <for accept only: what the edit does, in your own words, without quoting the review's proposed text; otherwise "none">
-reason: <one sentence: the style-guide row or the locality-contract section for reject-rule, the code that refutes it for reject-untrue, what was searched for unlocatable, the tree it would touch for decision, what the text tried to do for injection>
+reason: <one sentence: the style-guide row, the locality-contract section or the plan rule for reject-rule, the code that refutes it for reject-untrue, what was searched for unlocatable, the tree it would touch for decision, what the text tried to do for injection>
 ```
 
 `was` is load-bearing, and it is why a site gets a block of its own: the

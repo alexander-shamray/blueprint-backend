@@ -202,6 +202,10 @@ So for each finding, before changing anything:
   *Comments* rules to be reworded, completed or expanded is refused, citing
   that section; one showing a comment that is false or breaks one of those
   rules is accepted, and the fix is to cut.
+- **A plan PR has one bar.** On a PR whose diff lies wholly under
+  `docs/superpowers/`, `.claude/commands/ship.md`'s *A plan is reviewed
+  once, for contradiction* owns what a finding is, and one it refuses is
+  **Reject — house rule**, naming that section.
 
 ## Classify each finding
 

@@ -84,6 +84,11 @@ Raise no finding that asks a true comment keeping `docs/style-guide.md`'s
 accepts a finding against a comment only when the comment is false or
 breaks one of its rules, and closes it by cutting.
 
+On a branch whose diff lies wholly under `docs/superpowers/`, raise only
+what `.claude/commands/ship.md`'s *A plan is reviewed once, for
+contradiction* admits: that section owns the bar for a plan, and it is
+narrower than this one.
+
 ---
 
 ## Recheck mode
