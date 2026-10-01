@@ -85,7 +85,7 @@ rule: stricter on IPv6, which the host accepts, and looser elsewhere, so a
 value this admits can still be refused at startup.
 */}}
 {{- if not (regexMatch "^https?://[^/?#@:\\[\\] ]+(:[0-9]+)?$" $o) }}
-{{- fail (printf "cors.origins[%d] is not a browser origin this chart will accept: a scheme, a host, and optionally a numeric port. Userinfo, a path, a query, a fragment, a non-numeric port and IPv6 literals are all refused here rather than at startup (§4.2). The value is deliberately not echoed (§13.4)." $i) }}
+{{- fail (printf "cors.origins[%d] is not a browser origin this chart will accept: a scheme, a host, and optionally a numeric port. Userinfo, a path, a query, a fragment and a non-numeric port are refused here rather than at startup, and an IPv6 literal is refused outright (§4.2). The value is deliberately not echoed (§13.4)." $i) }}
 {{- end }}
 {{- $port := regexFind ":[0-9]+$" $o }}
 {{- if $port }}
