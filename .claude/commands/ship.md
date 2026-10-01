@@ -346,9 +346,10 @@ second round with that round's finding fixed and unread posts nothing: the
 ledger's one marker says the loop was clean, which would be false there,
 and a count of two reads as spent whatever `status` prints. A slot that
 `grok-review.sh` reserved and then exited before its review ran is spent
-all the same, and a resumed run cannot tell it from one that ran: when it
-was the second, the fix it was to read merges unread, and the stop that
-ended the first run is where that is reported.
+all the same, and a resumed run cannot tell it from one that ran, so in
+either position it costs the round that would read a fix: a fix pushed
+once the count is two merges unread, and the run that pushed it reports
+it unread.
 
 **Step 7 is reached only once both loops have ended or been skipped under
 this section, so its re-entry runs neither.** A commit or rebase made there
