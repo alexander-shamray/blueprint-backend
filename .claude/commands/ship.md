@@ -50,19 +50,20 @@ open by an earlier round can never be reached past — the loop would run to its
 ceiling on every subsequent round with nothing new to fix. Answer, resolve,
 carry on.
 
-**Six things still stop the chain**, and none of them is a decision somebody
+**Seven things still stop the chain**, and none of them is a decision somebody
 could have made differently:
 
 | | |
 |---|---|
 | A helper or a guarded git command exits non-zero | The step did not run; a report that says otherwise is false. `git pull --ff-only` refusing a diverged branch is the commonest one |
 | This branch's PR was closed unmerged | Reopening a deliberate closure is not a recommended option |
+| A fix to a helper under `.claude/scripts/` lacks its case | Step 2's read refuses it, and the case is a file this session is denied editing, so the run has no fix to make |
 | A requested review never registers | Same shape: the round did not happen, so no verdict may be minted from it |
 | `main` is ahead of `origin/main` at step 0 | Local commits on `main` need a decision this chain has no way to take |
 | CI is not green at step 7 | A merge onto a red `main` is not a judgement call |
 | The PR is not mergeable | Conflicts are the caller's tree, not this chain's |
 
-The first two are questions about *this* run; the other four are questions
+The first three are questions about *this* run; the other four are questions
 about the repository's state, and no recommended option exists for any of
 them. Two of the four are somebody's decision this chain would otherwise
 undo in silence — commits placed on `main`, and a PR deliberately closed —
@@ -533,7 +534,7 @@ is one round and step 7 cannot buy it a second.
    merged row beside the open one, so every later read of it has to work out
    which use it is asking about. Report what the workspace
    still holds and the directory holding it, and end there. **That is not one
-   of the six stops** — nothing failed and nothing is being asked; it is a run
+   of the seven stops** — nothing failed and nothing is being asked; it is a run
    that found nothing to do, and saying so is the whole of what it owes.
 
    **Do not spell Finished as "nothing unpushed".** The resume table above
@@ -738,6 +739,34 @@ is one round and step 7 cannot buy it a second.
    check for it would report on a tree it did not touch. A Class A change's
    PR body says so under the rule below rather than claiming a run that did
    not happen — a body that names the class has named the reason.
+
+   **One check holds whatever the class: a fix to a helper under
+   `.claude/scripts/` carries its case.** `CLAUDE.md`'s *Working in this
+   repo* owns the rule, and this step reads it because every commit in the
+   chain passes here — steps 5 and 6 rerun these checks before each fix
+   they commit — while step 0 runs before there is a diff or a subject to
+   read. Every read is granted already:
+
+   ```bash
+   git log --format=%s origin/main..HEAD     # the branch's subjects
+   git diff --name-only origin/main...HEAD   # the branch's paths
+   git status --short                        # and the tree's, still to commit
+   ```
+
+   The change is a fix when one of those subjects opens `fix:` or `fix(`, or
+   when what `/commit` is about to write will. Each path under
+   `.claude/scripts/` that is not a `test_*.py` is then a script, and its
+   suites are the `test_*.py` there whose text names the script's file,
+   which `Grep` finds. One of them must be among the paths. A script no
+   suite names may take its first fix bare and is refused at its second,
+   which a `fix` subject in `git log --format=%s origin/main -- <script>`
+   shows.
+
+   **A refusal stops the chain**, because the missing case is a file under
+   `.claude/scripts/`, which this session is denied editing, so the run has
+   no fix to make. Report the script, the suites looked for and the rule as
+   `CLAUDE.md` words it. The read sees that a suite changed, not that its
+   new case failed before the fix; the commit body argues that half.
 
    **Before `/commit`, not after.** A defect found after the commit costs a
    second commit or a rewrite; found here it is an edit. This is also the step a
