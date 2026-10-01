@@ -324,7 +324,7 @@ charts, so a further chart growing one is a design change made here.
 {{- fail (printf "carrier.enabled is true on the %s chart, and only shipping books with a carrier (§3.2). This would mount the carrier's Secret into a pod that never reads it — a credential crossing a service boundary, which no value in an environment file may do." .Chart.Name) }}
 {{- end }}
 {{- if and .Values.identity.clientCredentials (not (has .Chart.Name (list "web-bff" "shipping"))) }}
-{{- fail (printf "identity.clientCredentials is true on the %s chart, and the two hosts that call a peer synchronously are the BFF (§9.7, ADR-017) and Shipping's worker (ADR-052). This would mount one of their client secrets into a pod that never presents it — a credential crossing a service boundary, which no value in an environment file may do." .Chart.Name) }}
+{{- fail (printf "identity.clientCredentials is true on the %s chart, and the two hosts that call a peer under their own identity are the BFF (§9.7, ADR-017) and Shipping's worker (ADR-052). This would mount one of their client secrets into a pod that never presents it — a credential crossing a service boundary, which no value in an environment file may do." .Chart.Name) }}
 {{- end }}
 {{- if .Values.database.enabled }}
 {{- /*
