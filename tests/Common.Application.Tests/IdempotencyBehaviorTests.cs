@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
 using Xunit;
@@ -36,7 +38,9 @@ public class IdempotencyBehaviorTests
         result.Value.ShouldBe(placed);
         handlerRuns.ShouldBe(1);
         store.Calls.ShouldBe([$"claim {ExpectedKey}", $"complete {ExpectedKey}"]);
-        store.Entries[ExpectedKey].ShouldBe(new IdempotencyEntry(false, $"\"{placed}\""));
+        store.Entries[ExpectedKey].ShouldBe(
+            new IdempotencyEntry(false, $"sha256:{FingerprintOf(BareJson)}:\"{placed}\""),
+            "the value is stored behind the fingerprint of the command that produced it (ADR-057)");
     }
 
     [Fact]
@@ -399,7 +403,252 @@ public class IdempotencyBehaviorTests
         idempotency.Key.ShouldBeNull();
     }
 
+    [Fact]
+    public async Task A_retry_carrying_the_same_command_replays_the_first_result()
+    {
+        RecordingIdempotencyStore store = new();
+        int handlerRuns = 0;
+
+        Task<Result<string>> Handler()
+        {
+            handlerRuns++;
+            return Task.FromResult(Result.Success($"order-{handlerRuns}"));
+        }
+
+        Result<string> first = await Content(store).HandleAsync(
+            new ContentCommand(Command, "two desks"),
+            Handler,
+            TestContext.Current.CancellationToken);
+
+        Result<string> second = await Content(store).HandleAsync(
+            new ContentCommand(Command, "two desks"),
+            Handler,
+            TestContext.Current.CancellationToken);
+
+        handlerRuns.ShouldBe(1, "an equal command under a completed key is the first one repeated");
+        second.Value.ShouldBe(first.Value);
+        store.Calls.ShouldBe(
+            [$"claim {ContentKey}", $"complete {ContentKey}", $"claim {ContentKey}", $"get {ContentKey}"]);
+    }
+
+    [Fact]
+    public async Task A_retry_carrying_a_different_command_is_refused_and_the_handler_does_not_run()
+    {
+        RecordingIdempotencyStore store = new();
+        int handlerRuns = 0;
+
+        Task<Result<string>> Handler()
+        {
+            handlerRuns++;
+            return Task.FromResult(Result.Success("order-1"));
+        }
+
+        await Content(store).HandleAsync(
+            new ContentCommand(Command, "two desks"),
+            Handler,
+            TestContext.Current.CancellationToken);
+
+        IdempotencyEntry recorded = store.Entries[ContentKey];
+
+        CommandIdReusedException thrown = await Should.ThrowAsync<CommandIdReusedException>(
+            () => Content(store).HandleAsync(
+                new ContentCommand(Command, "three desks"),
+                Handler,
+                TestContext.Current.CancellationToken));
+
+        thrown.CommandId.ShouldBe(Command);
+        handlerRuns.ShouldBe(1, "a 200 carrying the first request's result would say the second was applied");
+        store.Entries[ContentKey].ShouldBe(recorded, "the refusal leaves the first request's entry as it found it");
+        store.Calls[^2..].ShouldBe([$"claim {ContentKey}", $"get {ContentKey}"], "neither a release nor a write");
+    }
+
+    [Fact]
+    public async Task An_entry_the_previous_release_wrote_replays_with_no_fingerprint_to_compare()
+    {
+        // The shape before ADR-057: the bare value, which a rolling deploy leaves live for the claim's window.
+        RecordingIdempotencyStore store = new();
+        store.Completed(ContentKey, "\"order-1\"");
+
+        Result<string> result = await Content(store).HandleAsync(
+            new ContentCommand(Command, "whatever the first request carried"),
+            () => throw new InvalidOperationException("the handler must not run on a replay"),
+            TestContext.Current.CancellationToken);
+
+        result.Value.ShouldBe("order-1");
+    }
+
+    [Fact]
+    public async Task A_previous_release_s_string_that_spells_the_prefix_is_still_a_bare_value()
+    {
+        // A JSON string opens with a quote, so the prefix is matched at the payload's first character only.
+        RecordingIdempotencyStore store = new();
+        store.Completed(ContentKey, "\"sha256:not-a-fingerprint\"");
+
+        Result<string> result = await Content(store).HandleAsync(
+            new ContentCommand(Command, "two desks"),
+            () => throw new InvalidOperationException("the handler must not run on a replay"),
+            TestContext.Current.CancellationToken);
+
+        result.Value.ShouldBe("sha256:not-a-fingerprint");
+    }
+
+    [Fact]
+    public async Task A_result_whose_JSON_holds_a_colon_survives_the_envelope()
+    {
+        // The envelope is stripped by its length, never by splitting on the separator.
+        RecordingIdempotencyStore store = new();
+
+        await Content(store).HandleAsync(
+            new ContentCommand(Command, "two desks"),
+            () => Task.FromResult(Result.Success("urn:order:1")),
+            TestContext.Current.CancellationToken);
+
+        Result<string> replayed = await Content(store).HandleAsync(
+            new ContentCommand(Command, "two desks"),
+            () => throw new InvalidOperationException("the handler must not run on a replay"),
+            TestContext.Current.CancellationToken);
+
+        replayed.Value.ShouldBe("urn:order:1");
+    }
+
+    [Fact]
+    public async Task A_void_command_is_stored_behind_its_fingerprint_and_replays()
+    {
+        RecordingIdempotencyStore store = new();
+        int handlerRuns = 0;
+
+        Task<Result> Handler()
+        {
+            handlerRuns++;
+            return Task.FromResult(Result.Success());
+        }
+
+        await Void(store).HandleAsync(new VoidProtectedCommand(Command), Handler, TestContext.Current.CancellationToken);
+
+        Result replayed = await Void(store).HandleAsync(
+            new VoidProtectedCommand(Command),
+            Handler,
+            TestContext.Current.CancellationToken);
+
+        store.Entries[VoidKey].Payload.ShouldBe($"sha256:{FingerprintOf(BareJson)}:null");
+        replayed.IsSuccess.ShouldBeTrue();
+        handlerRuns.ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task A_void_entry_under_another_fingerprint_is_refused_though_it_has_no_value_to_read()
+    {
+        // The comparison runs before the no-value shortcut, or every void command would replay any request.
+        RecordingIdempotencyStore store = new();
+        store.Completed(VoidKey, $"sha256:{new string('0', 64)}:null");
+
+        await Should.ThrowAsync<CommandIdReusedException>(
+            () => Void(store).HandleAsync(
+                new VoidProtectedCommand(Command),
+                () => throw new InvalidOperationException("the handler must not run under a held key"),
+                TestContext.Current.CancellationToken));
+    }
+
+    [Theory]
+    [InlineData(nameof(Stored.UpperCase))]
+    [InlineData(nameof(Stored.Truncated))]
+    [InlineData(nameof(Stored.Unseparated))]
+    public async Task A_stored_fingerprint_that_is_not_this_commands_exactly_is_refused(string stored)
+    {
+        // Ordinal, and fail-closed: an envelope this behaviour did not write is never read as a match.
+        ContentCommand command = new(Command, "two desks");
+        string fingerprint = FingerprintOf($$"""{"CommandId":"{{Command}}","Content":"two desks"}""");
+
+        string payload = stored switch
+        {
+            nameof(Stored.UpperCase) => $"sha256:{fingerprint.ToUpperInvariant()}:\"order-1\"",
+            nameof(Stored.Truncated) => $"sha256:{fingerprint[..32]}:\"order-1\"",
+            _ => $"sha256:{fingerprint}\"order-1\""
+        };
+
+        RecordingIdempotencyStore store = new();
+        store.Completed(ContentKey, payload);
+
+        await Should.ThrowAsync<CommandIdReusedException>(
+            () => Content(store).HandleAsync(
+                command,
+                () => throw new InvalidOperationException("the handler must not run under a held key"),
+                TestContext.Current.CancellationToken));
+    }
+
+    private enum Stored
+    {
+        UpperCase,
+        Truncated,
+        Unseparated
+    }
+
+    [Fact]
+    public async Task An_in_flight_duplicate_carrying_a_different_command_is_still_told_to_retry()
+    {
+        // The fingerprint is recorded with the outcome, so there is nothing to compare until one exists (ADR-057).
+        RecordingIdempotencyStore store = new();
+        store.InFlight(ContentKey);
+
+        await Should.ThrowAsync<ConcurrentRequestException>(
+            () => Content(store).HandleAsync(
+                new ContentCommand(Command, "three desks"),
+                () => throw new InvalidOperationException("the handler must not run under a held key"),
+                TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task A_command_that_cannot_be_fingerprinted_claims_nothing()
+    {
+        // System.Text.Json refuses a System.Type; thrown after the claim, that would hold the key for the window.
+        RecordingIdempotencyStore store = new();
+
+        IdempotencyBehavior<UnserialisableCommand, Result> behaviour =
+            new(store, StubCurrentUser.Authenticated(Caller), new IdempotencyContext());
+
+        await Should.ThrowAsync<NotSupportedException>(
+            () => behaviour.HandleAsync(
+                new UnserialisableCommand(Command, typeof(string)),
+                () => Task.FromResult(Result.Success()),
+                TestContext.Current.CancellationToken));
+
+        store.Calls.ShouldBeEmpty();
+    }
+
+    [Fact]
+    public async Task A_refused_command_stores_nothing_so_its_id_may_carry_a_corrected_request()
+    {
+        RecordingIdempotencyStore store = new();
+
+        await Content(store).HandleAsync(
+            new ContentCommand(Command, "no desks"),
+            () => Task.FromResult(Result.Failure<string>(Error.Rule("test.refused", "No."))),
+            TestContext.Current.CancellationToken);
+
+        Result<string> corrected = await Content(store).HandleAsync(
+            new ContentCommand(Command, "two desks"),
+            () => Task.FromResult(Result.Success("order-1")),
+            TestContext.Current.CancellationToken);
+
+        corrected.Value.ShouldBe("order-1");
+    }
+
+    private static IdempotencyBehavior<ContentCommand, Result<string>> Content(RecordingIdempotencyStore store) =>
+        new(store, StubCurrentUser.Authenticated(Caller), new IdempotencyContext());
+
+    private static IdempotencyBehavior<VoidProtectedCommand, Result> Void(RecordingIdempotencyStore store) =>
+        new(store, StubCurrentUser.Authenticated(Caller), new IdempotencyContext());
+
+    /// <summary>A command carrying its <c>CommandId</c> and nothing else, as the fingerprint serialises it.</summary>
+    private static string BareJson => $$"""{"CommandId":"{{Command}}"}""";
+
+    /// <summary>ADR-057's fingerprint of a command whose JSON the test spells out, so the hashed shape is pinned.</summary>
+    private static string FingerprintOf(string json) =>
+        Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(json)));
+
     private static string ExpectedKey => $"{Caller}:{ProtectedCommand.OperationName}:{Command}";
+
+    private static string ContentKey => $"{Caller}:{ContentCommand.OperationName}:{Command}";
 
     private static string VoidKey => $"{Caller}:{VoidProtectedCommand.OperationName}:{Command}";
 
@@ -441,6 +690,18 @@ public sealed class ProtectedCommandHandler : ICommandHandler<ProtectedCommand, 
 public sealed record VoidProtectedCommand(Guid CommandId) : ICommand<Result>, IIdempotentCommand
 {
     public static string OperationName => "tests.void";
+}
+
+/// <summary>An opted-in command with content, so two requests can share a <c>CommandId</c> and differ.</summary>
+public sealed record ContentCommand(Guid CommandId, string Content) : ICommand<Result<string>>, IIdempotentCommand
+{
+    public static string OperationName => "tests.content";
+}
+
+/// <summary>An opted-in command <c>System.Text.Json</c> refuses to serialise.</summary>
+public sealed record UnserialisableCommand(Guid CommandId, Type Shape) : ICommand<Result>, IIdempotentCommand
+{
+    public static string OperationName => "tests.unserialisable";
 }
 
 /// <summary>Satisfies the behaviour's result constraint but not <see cref="IIdempotentCommand"/>.</summary>
