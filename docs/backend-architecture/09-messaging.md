@@ -1865,13 +1865,8 @@ public sealed record StockLine(Guid ProductId, int Quantity);
 ```csharp
 namespace Common.Contracts.Payments.V1;
 
-// No subject, and the omission is the control (ADR-028). This command decides
-// whose instrument is charged, and that subject is Payments' to derive rather
-// than the sender's to state: it resolves the payer from its own record of the
-// order, built from the OrderPlaced it consumes (§3.2). A CustomerId here
-// would transport an authority the receiver already holds — a second source
-// for a decision that must have one. Amount and Currency stay because they are
-// the instruction rather than the authority.
+// No subject: whose instrument is charged is Payments' to derive from its
+// own record (ADR-028).
 public sealed record AuthorisePayment(Guid OrderId, decimal Amount, string Currency);
 ```
 
@@ -1895,10 +1890,9 @@ public sealed record AuthorisePayment(Guid OrderId, decimal Amount, string Curre
 ```csharp
 namespace Common.Contracts.Ordering.V1;
 
-// Reason is a STRING code, not Ordering's CancellationReason enum. A published
-// contract carrying a domain type drags Ordering.Domain into every service that
-// references the contract assembly (§9.1, §4.3) — and pins the enum's member
-// names as wire format, so renaming one becomes a breaking change to everybody.
+// Sent by the saga, never published; Reason is a CancelReasons code. A
+// command carries no envelope and is deduplicated on the transport's id
+// (§9.1, §9.5).
 public sealed record CancelOrder(Guid OrderId, string Reason);
 
 // Despatch is Shipping's fact; recording it on the order is Ordering's
@@ -1906,12 +1900,8 @@ public sealed record CancelOrder(Guid OrderId, string Reason);
 // ShipmentDispatched directly. The aggregate still enforces the transition.
 public sealed record MarkOrderShipped(Guid OrderId, string TrackingNumber);
 
-// Escalation path for work this workflow cannot finish itself — a wait that
-// ran out, or money authorised against an outcome of cancellation. It does
-// NOT touch the Order aggregate: "a human should look at this" is a fact
-// about operations rather than about the order, and it lands in an
-// operations table instead. The vocabulary is argued under "Where an
-// escalation lands" below.
+// Escalates to a human without touching the Order aggregate; "Where an
+// escalation lands" below argues where it goes instead.
 public sealed record FlagOrderForReview(Guid OrderId, string Reason);
 
 public static class ReviewReasons
@@ -1923,11 +1913,8 @@ public static class ReviewReasons
     public const string NotConfirmed = "not_confirmed";
 }
 
-/// <summary>
-/// The wire vocabulary for CancelOrder.Reason. Ordering's handler parses these
-/// back into CancellationReason; the mapping is one method in one place, and
-/// an unknown code fails loudly rather than defaulting.
-/// </summary>
+/// <summary>The wire codes for CancelOrder.Reason and OrderCancelled.Reason.</summary>
+/// <remarks>Static, so §12.6's contract suite, which asks for concrete types, never reaches it.</remarks>
 public static class CancelReasons
 {
     public const string OutOfStock = "out_of_stock";
@@ -1941,12 +1928,8 @@ public static class CancelReasons
     public const string CustomerRequest = "customer_request";
 }
 
-// The wire vocabulary for OrderCancelled.Origin — who asked, which the
-// reasons above deliberately do not say. Two members and no third, because
-// the question is a partition rather than a list: the saga asks one thing of
-// this field, so every origin that is not Workflow answers the same way, and
-// a member per ingress would invite a consumer to switch on it and forget
-// one.
+// Who asked for a cancellation, as a partition: the saga asks only whether
+// it caused one.
 public static class CancelOrigins
 {
     public const string User = "user";           // §11.4's endpoint
@@ -2024,13 +2007,8 @@ state with no transition for it — the trap below says why — and states, for
 each event, what a missing instance means:
 
 ```csharp
-// Faulted when no instance exists, and it is the one event here ALWAYS
-// treated that way. Payments produces PaymentAuthorised, so it can never be
-// this service's own echo: every state that can receive one has a
-// transition for it, so an authorisation correlating to nothing means the
-// machine stopped waiting while Payments was still going to answer, and
-// money moved on an order this saga cancelled. The arrival reaches the
-// error queue §13.6 pages on, with the message retained.
+// The one event whose missing instance always faults: Payments produces it,
+// so it is never an echo.
 Event(
     () => PaymentAuthorised,
     x =>
@@ -2039,10 +2017,8 @@ Event(
         x.OnMissingInstance(m => m.Fault());
     });
 
-// Discarded when no instance exists ONLY for the arrivals this service can
-// account for, and faulted otherwise. The routine case is the echo: the
-// OrderCancelled the aggregate publishes after a CancelOrder this saga sent.
-// A customer's cancellation overtaking its own OrderPlaced has to be loud.
+// Discarded with no instance only for the arrivals NoInstanceForCancellation
+// allows, faulted otherwise.
 Event(
     () => OrderCancelled,
     x =>
@@ -2530,18 +2506,19 @@ CREATE INDEX IX_OrderReviews_RaisedAt ON ordering.OrderReviews (RaisedAt);
 > escalation to work.
 
 `FlagOrderForReviewHandler` in `Ordering.Application/Orders/FlagOrderForReview`
-is one statement, and the shape of the statement is the decision:
+is one statement, and the shape of the statement is the decision. The lock
+hints make the read a range lock, so a second delivery waits for the first
+to commit and then sees the row; an `IF NOT EXISTS … INSERT` reads and then
+writes too, so it races, and the loser violates the primary key rather than
+being absorbed — §6.6's `MERGE` makes the same argument one table over. It
+is absorbed rather than upserted because `RaisedAt` is when the work first
+landed on a human, and §13.6 alerts on how long a review has been
+outstanding:
 
 ```csharp
-// The lock hints are what make the read a RANGE lock, so a second
-// delivery waits for the first to commit and then sees the row. An
-// IF NOT EXISTS … INSERT reads and then writes too, so it races, and the
-// loser violates the primary key rather than being absorbed — §6.6's
-// MERGE makes the same argument one table over.
-//
-// Absorbed rather than upserted, deliberately: RaisedAt is when the
-// work first landed on a human, and a redelivery must not move it
-// forward — §13.6 alerts on how long a review has been outstanding.
+// The lock hints make the read a range lock, so a duplicate delivery is
+// absorbed rather than violating the key; absorbed, not upserted, since
+// RaisedAt is what §13.6 alerts on.
 await unitOfWork.ExecuteRawAsync(
     """
     INSERT INTO ordering.OrderReviews (OrderId, Reason, RaisedAt)
