@@ -2,18 +2,18 @@ using System.Diagnostics.Metrics;
 
 namespace Common.Infrastructure.Tests;
 
-/// <summary>One meter's measurements and tags, read through a <see cref="MeterListener"/>.</summary>
+/// <summary>One factory's meter through a <see cref="MeterListener"/>, since a meter name is process-wide.</summary>
 internal sealed class RecordedMeasurements : IDisposable
 {
     private readonly MeterListener _listener = new();
     private readonly List<Measurement> _taken = [];
     private readonly Lock _gate = new();
 
-    public RecordedMeasurements(string meterName)
+    public RecordedMeasurements(IMeterFactory factory, string meterName)
     {
         _listener.InstrumentPublished = (instrument, listener) =>
         {
-            if (instrument.Meter.Name == meterName)
+            if (instrument.Meter.Name == meterName && ReferenceEquals(instrument.Meter.Scope, factory))
                 listener.EnableMeasurementEvents(instrument);
         };
 
