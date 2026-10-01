@@ -44,17 +44,17 @@ compare until the first attempt completes; recording it at the claim would
 change the port, both scripts and every implementer of the port, to move one
 answer one retry earlier. The marker row carries no fingerprint: once the claim
 has expired, any reuse of the key is refused with `command.already_committed`
-whatever it carries, which is already a refusal. A refused command still stores
-nothing, so the same id may carry a corrected request. An entry written before
-this record carries no fingerprint and replays to any command for what is left
-of its claim's window. During a rolling deploy, a replica on the previous
-release that meets a new payload fails the replay of a command that returns a
-value with a 500, because it deserialises the prefix, and replays a command that
-returns none as it always did, uncompared; nothing is applied twice, and the
-retry is answered by this record's rule once the rollout completes. A command
-the serialiser refuses now fails before its claim, where it used to run. The
-payload is no longer a JSON document, and it still cannot spell the store's
-in-progress state.
+whatever it carries, which is already a refusal. A command its handler refuses,
+with a failed `Result`, still stores nothing and releases its claim, so that id
+may then carry a corrected request. An entry written before this record carries
+no fingerprint and replays to any command for what is left of its claim's
+window. During a rolling deploy, a replica on the previous release that meets a
+new payload fails the replay of a command that returns a value with a 500,
+because it deserialises the prefix, and replays a command that returns none as
+it always did, uncompared; nothing is applied twice, and the retry is answered
+by this record's rule once the rollout completes. A command the serialiser
+refuses now fails before its claim, where it used to run. The payload is no
+longer a JSON document, and it still cannot spell the store's in-progress state.
 
 ---
 
