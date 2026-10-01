@@ -1147,7 +1147,7 @@ application command it maps to, and its `Consume` is three decisions:
 ```csharp
 // Mapping is explicit: the wire type is a contract, the command is an
 // application type, and CancelOrder.Reason is a string that has to be
-// parsed back into CancellationReason (§9.6).
+// parsed back into CancellationReason by the mapper below.
 TCommand command = mapper.Map(context.Message);
 
 Result result = await dispatcher.SendAsync(command, context.CancellationToken);
