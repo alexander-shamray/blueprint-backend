@@ -344,7 +344,11 @@ records the rest.** A plan loop that ends clean posts step 5's `converge`,
 which is what lets a single spent round read as spent. One that ends on its
 second round with that round's finding fixed and unread posts nothing: the
 ledger's one marker says the loop was clean, which would be false there,
-and a count of two reads as spent whatever `status` prints.
+and a count of two reads as spent whatever `status` prints. A slot that
+`grok-review.sh` reserved and then exited before its review ran is spent
+all the same, and a resumed run cannot tell it from one that ran: when it
+was the second, the fix it was to read merges unread, and the stop that
+ended the first run is where that is reported.
 
 **Step 7 is reached only once both loops have ended or been skipped under
 this section, so its re-entry runs neither.** A commit or rebase made there
