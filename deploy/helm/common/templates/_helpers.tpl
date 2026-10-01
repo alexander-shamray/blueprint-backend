@@ -280,11 +280,6 @@ so disabling either renders and the pod does not start. Helm has no
 immutable value, so a chart carrying a capability's settings may not disable
 it.
 */}}
-{{- /*
-On Catalog and Ordering the migration Job's own check reports this first,
-more sharply; this is the general case, for a chart that names a connection
-and has no migrator.
-*/}}
 {{- if and .Values.database.connectionName (not .Values.database.enabled) }}
 {{- fail "database.enabled is false but database.connectionName is set. A service that carries a connection name reads one at startup (§7.1) — disabling it renders cleanly and produces a pod that cannot resolve its own database. A capability is a fact about the code, not an environment setting." }}
 {{- end }}
