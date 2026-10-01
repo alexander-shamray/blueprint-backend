@@ -70,7 +70,7 @@ Blank, then the shape: Program.cs refuses both at startup, after the release
 has begun rolling, so the render refuses them first.
 */}}
 {{- if not (trim $origin) }}
-{{- fail (printf "cors.origins[%d] is blank. WithOrigins accepts it and matches nothing, so the host starts healthy and refuses every browser (§15.4)." $i) }}
+{{- fail (printf "cors.origins[%d] is blank. Program.cs refuses a blank entry at startup, after the rollout has begun (§15.4)." $i) }}
 {{- end }}
 {{- /*
 Program.cs's check is one equality with `GetLeftPart(UriPartial.Authority)`
