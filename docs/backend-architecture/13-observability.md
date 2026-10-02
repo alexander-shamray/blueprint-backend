@@ -2096,11 +2096,12 @@ service missing from a series rather than through a metric nobody declared.
 
 §13.3 places `OutboxMetrics` in each publishing service's `*.Infrastructure`,
 so the gap closes one service at a time, by registering the type and paying
-for it with a copy. **The template closes it for every service after it**:
-Catalog, which §4.5's scaffold renders, registers the gauges, and the scaffold
-copies them and writes the service's `AddMeter` line — so a rendered service
-publishes them from its first boot, and the exemption list holds a service
-only when somebody writes its reason down.
+for it with a copy. **The template closes it for every publishing service
+after it**: Catalog, which §4.5's scaffold renders, registers the gauges, and
+the scaffold copies them and writes the service's `AddMeter` line — so a
+rendered publisher publishes them from its first boot, a pure consumer hosts
+no dispatcher to owe them, and the exemption list holds a service only when
+somebody writes its reason down.
 
 What the gate adds is that an absence cannot be quiet. `check.py` requires every service hosting the dispatcher to publish the gauges
 **or** to be on a declared exemption with a reason, and it fails in both
