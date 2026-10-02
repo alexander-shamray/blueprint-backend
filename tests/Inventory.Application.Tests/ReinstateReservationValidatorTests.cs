@@ -18,7 +18,7 @@ public class ReinstateReservationValidatorTests
     [Fact]
     public void A_command_id_is_all_the_validator_asks_for()
     {
-        _validator.TestValidate(new ReinstateReservationCommand(Guid.CreateVersion7(), Guid.CreateVersion7()))
+        _validator.TestValidate(new ReinstateReservationCommand(Guid.CreateVersion7(), Guid.Empty))
             .ShouldNotHaveAnyValidationErrors();
     }
 }
