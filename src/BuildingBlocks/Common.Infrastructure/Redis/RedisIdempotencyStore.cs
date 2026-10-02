@@ -13,10 +13,7 @@ internal sealed class RedisIdempotencyStore(
     ILogger<RedisIdempotencyStore> log)
     : IIdempotencyStore
 {
-    /// <summary>
-    /// The state written on a claim, deliberately neither JSON nor <c>sha256:</c>-prefixed, the two shapes a payload
-    /// takes (ADR-057), so no payload can spell it.
-    /// </summary>
+    /// <summary>The state written on a claim, which no payload can spell (ADR-057).</summary>
     private const string InProgressMarker = "in-progress";
 
     /// <summary>Splits the fixed-width token from its state, so a claim stays one <c>SET NX</c>.</summary>
