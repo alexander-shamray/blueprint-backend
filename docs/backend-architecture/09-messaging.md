@@ -1445,7 +1445,10 @@ Both run on a slow schedule, batched so neither holds a long lock.
 it composes the statements each registered table needs, takes its windows and
 its batch size from a registered `RetentionPolicy`, and exposes `PurgeAsync`
 publicly so tests drive one pass rather than racing a timer — the seam
-`OutboxDispatcher.ProcessBatchAsync` already offers, for the same reason.
+`OutboxDispatcher.ProcessBatchAsync` already offers, for the same reason. A
+service that registers no `OutboxTable` — §4.1's pure consumer, which
+publishes nothing — is given no outbox statement, and its pass reports no
+outbox rows rather than failing on a table it never created.
 
 **It purges a third table, and that one is not housekeeping.**
 [§8.5](08-caching-redis.md)'s `IdempotencyMarkers` is the durable half of the

@@ -35,7 +35,8 @@ public sealed class RetentionPurgeService : BackgroundService
     private readonly RetentionPolicy _policy;
     private readonly ILogger<RetentionPurgeService> _log;
 
-    private readonly string _outboxSql;
+    // Null for a service that registers no OutboxTable, which §4.1's pure consumer does not (§9.5).
+    private readonly string? _outboxSql;
     private readonly string _inboxSql;
     private readonly string _idempotencyCandidateSql;
 
@@ -44,12 +45,12 @@ public sealed class RetentionPurgeService : BackgroundService
 
     public RetentionPurgeService(
         IServiceScopeFactory scopes,
-        OutboxTable outbox,
         InboxTable inbox,
         IdempotencyMarkerTable markers,
         IIdempotencyStore claims,
         RetentionPolicy policy,
-        ILogger<RetentionPurgeService> log)
+        ILogger<RetentionPurgeService> log,
+        OutboxTable? outbox = null)
     {
         _scopes = scopes;
         _claims = claims;
@@ -57,12 +58,13 @@ public sealed class RetentionPurgeService : BackgroundService
         _log = log;
 
         // ProcessedAt IS NOT NULL keeps the abandoned rows §13.6's alert surfaces.
-        _outboxSql =
-            $"""
-            DELETE TOP (@BatchSize) FROM {outbox.QualifiedName}
-            WHERE ProcessedAt IS NOT NULL
-                AND ProcessedAt < @Before;
-            """;
+        _outboxSql = outbox is null
+            ? null
+            : $"""
+              DELETE TOP (@BatchSize) FROM {outbox.QualifiedName}
+              WHERE ProcessedAt IS NOT NULL
+                  AND ProcessedAt < @Before;
+              """;
 
         // Age alone: an inbox row has no unfinished state, and the window outlasts redelivery (§9.5).
         _inboxSql =
@@ -116,12 +118,16 @@ public sealed class RetentionPurgeService : BackgroundService
         // The registered clock, which a test host substitutes (§9.5).
         DateTimeOffset now = scope.ServiceProvider.GetRequiredService<TimeProvider>().GetUtcNow();
 
-        int outbox = await DeleteAsync(
-            connection,
-            _outboxSql,
-            new { _policy.BatchSize, Before = now - _policy.OutboxWindow },
-            ct);
-        Purged(_log, outbox, "outbox", null);
+        int outbox = 0;
+        if (_outboxSql is not null)
+        {
+            outbox = await DeleteAsync(
+                connection,
+                _outboxSql,
+                new { _policy.BatchSize, Before = now - _policy.OutboxWindow },
+                ct);
+            Purged(_log, outbox, "outbox", null);
+        }
 
         int inbox = await DeleteAsync(
             connection,
