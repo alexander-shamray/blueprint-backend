@@ -4215,7 +4215,7 @@ the members, beside `UnreachableAuthority`:
     /// <summary>ADR-053 rule 2's made-up language set, Kazakh first so a test reads the set's own order.</summary>
     public static readonly IReadOnlyList<string> InventedLanguages = ["kk", "en"];
 
-    /// <summary>Twelve and three-quarter hours ahead in October, so a date shows its side of midnight.</summary>
+    /// <summary>Thirteen and three-quarter hours ahead in October, so a date shows its side of midnight.</summary>
     public const string InventedTimeZone = "Pacific/Chatham";
 
     /// <summary>A window no deployment would choose, so a test passing under it read its configuration.</summary>
