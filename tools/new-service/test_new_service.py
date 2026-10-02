@@ -1923,7 +1923,24 @@ class EveryGateSeesThePureConsumerRender(unittest.TestCase):
             domain.write_text("<Project />", encoding="utf-8")
             gate.failures = []
             gate.check_outbox_metrics_per_service()
-            self.assertTrue(any(f.startswith(f"{PROBE} has a Domain project") for f in gate.failures), gate.failures)
+            self.assertTrue(
+                any(f.startswith(f"{PROBE} has a Domain project") for f in gate.failures), gate.failures)
+
+    def test_the_observability_gate_refuses_a_dispatcher_with_no_domain_project(self):
+        check = importlib.util.spec_from_file_location(
+            "observability_check", REPO_ROOT / "deploy/observability/check.py")
+        gate = importlib.util.module_from_spec(check)
+        check.loader.exec_module(gate)
+        with tempfile.TemporaryDirectory() as directory:
+            root = template_copy(Path(directory))
+            apply(root, pure_consumer(repo_root=root))
+            hosted = root / f"src/Services/{PROBE}/{PROBE}.Infrastructure/Planted.cs"
+            hosted.write_text("services.AddHostedService<OutboxDispatcher>();", encoding="utf-8")
+            gate.ROOT, gate.failures = root, []
+            gate.check_outbox_metrics_per_service()
+            self.assertTrue(
+                any(f.startswith(f"{PROBE} hosts OutboxDispatcher with no Domain project") for f in gate.failures),
+                gate.failures)
 
     def test_the_broker_gate_reads_it_as_publishing_nothing(self):
         check = importlib.util.spec_from_file_location(

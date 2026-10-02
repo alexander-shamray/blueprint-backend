@@ -321,6 +321,39 @@ class AServiceThatPublishesNothing(unittest.TestCase):
         self.assertTrue(any(gate.publishes(name) for name in gate.messaging_dirs()))
 
 
+class CheckThreeFollowsTheSelector(unittest.TestCase):
+    """What the account owes and may hold, once `publishes` has answered for a service."""
+
+    INTERFACE = "Common.Contracts:IIntegrationEvent"
+    UNPUBLISHED_WRITE = "^(catalog-|MassTransit:)"
+
+    def run_with_catalog(self, publishes: bool, write: str | None = None) -> list[str]:
+        definitions = real()
+        if write is not None:
+            permission(definitions, "catalog-svc")["write"] = write
+        original_publishes, original_prefixes = gate.publishes, gate.contract_prefixes
+        gate.publishes = lambda service: publishes if service == "Catalog" else original_publishes(service)
+        # A service with no Domain project has no contracts namespace either (§4.1).
+        gate.contract_prefixes = lambda: {p for p in original_prefixes() if ".Catalog." not in p or publishes}
+        try:
+            return [f for f in run_against(definitions) if "catalog-svc" in f]
+        finally:
+            gate.publishes, gate.contract_prefixes = original_publishes, original_prefixes
+
+    def test_a_service_that_publishes_nothing_is_refused_a_contract_write(self):
+        failures = self.run_with_catalog(publishes=False)
+        self.assertTrue(
+            any("write COVERS" in f and self.INTERFACE in f for f in failures), failures)
+
+    def test_a_service_that_publishes_nothing_is_not_owed_the_interface_exchange(self):
+        self.assertEqual([], self.run_with_catalog(publishes=False, write=self.UNPUBLISHED_WRITE))
+
+    def test_a_publisher_still_owes_the_interface_exchange(self):
+        failures = self.run_with_catalog(publishes=True, write=self.UNPUBLISHED_WRITE)
+        self.assertTrue(
+            any("write does not cover" in f and self.INTERFACE in f for f in failures), failures)
+
+
 class AScaffoldedServiceIsNotRefused(unittest.TestCase):
     def test_an_account_whose_context_has_no_contracts_yet_is_allowed(self):
         # §4.5's scaffold grants a broker account; `Common.Contracts` gains a
