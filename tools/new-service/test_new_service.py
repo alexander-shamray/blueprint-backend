@@ -332,6 +332,15 @@ class CarriesTheWriteEndpointRule(unittest.TestCase):
             self.assertIn(
                 f".Offenders(Endpoints, typeof({PROBE}.Application.DependencyInjection).Assembly)", suite)
 
+    def test_the_member_rule_reads_the_rendered_service_s_own_commands(self):
+        # ADR-057's member rule travels unpatched: it is empty over a service
+        # that declares no idempotent command, and reads its first one.
+        for suite in self.suites():
+            self.assertIn(
+                "CommandFingerprintRule\n"
+                f"            .Offenders(typeof({PROBE}.Application.DependencyInjection).Assembly)",
+                suite.replace("\r\n", "\n"))
+
     def test_the_floor_is_inverted_and_still_looks_at_a_table(self):
         # A floor naming the template's writes would fail on a host that maps
         # none, and one deleted would leave the rule green over nothing.
