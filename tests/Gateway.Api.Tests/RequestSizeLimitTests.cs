@@ -26,7 +26,7 @@ public sealed class RequestSizeLimitTests(StubDestination stub) : IClassFixture<
             "the stub answers 204, so this reached the destination");
     }
 
-    /// <summary>§10.5's shape with no handler of its own: the middleware takes 413 off Kestrel's exception.</summary>
+    /// <summary>§10.5's 413 row: the forwarder writes no body, so the status-code pages write the problem.</summary>
     [Fact]
     public async Task A_body_past_the_ceiling_is_refused_as_problem_json()
     {
@@ -42,6 +42,8 @@ public sealed class RequestSizeLimitTests(StubDestination stub) : IClassFixture<
         body.RootElement.GetProperty("status").GetInt32().ShouldBe(413);
         body.RootElement.GetProperty("instance").GetString().ShouldBe($"POST {Route}");
         body.RootElement.GetProperty("correlationId").GetString().ShouldNotBeNullOrWhiteSpace();
+        body.RootElement.TryGetProperty("code", out _)
+            .ShouldBeFalse("the forwarder answered the exception, so no exception handler wrote this problem");
     }
 
     /// <summary>A chunked body is counted as it arrives, the same limit's second enforcement point.</summary>
