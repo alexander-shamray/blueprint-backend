@@ -665,11 +665,15 @@ class RendersInsideTheCommentBudget(unittest.TestCase):
         breaches = budget_breaches(worker(), Names(PROBE, new_service.WORKER_HOST))
         self.assertEqual([], breaches, "\n".join(breaches))
 
+    def test_a_pure_consumer_render(self):
+        breaches = budget_breaches(pure_consumer(), Names(PROBE, new_service.WORKER_HOST, True))
+        self.assertEqual([], breaches, "\n".join(breaches))
+
     def test_the_compose_unit_a_render_creates_is_inside_the_budget_whole(self):
         # Created rather than spliced, so the pull request that adds it is every
         # line of it: the gate judges the template's blocks in the copy too.
         gate = comment_gate_module()
-        for rendered in (render(), worker()):
+        for rendered in (render(), worker(), pure_consumer()):
             unit = rendered.created[UNIT].replace("\r\n", "\n")
             lines = gate.scan(UNIT, unit)
             every = {line.number for line in lines}
@@ -1719,6 +1723,127 @@ class EveryGateSeesTheWorkerRender(unittest.TestCase):
             [f"{PROBE}.Migrator", f"{PROBE}.{new_service.WORKER_HOST}"])
 
 
+def pure_consumer(name: str = PROBE, repo_root: Path = REPO_ROOT) -> Plan:
+    return plan(repo_root, name, None, MIGRATION_ID, host=new_service.WORKER_HOST, pure_consumer=True)
+
+
+class RendersAPureConsumer(unittest.TestCase):
+    """§4.1's third shape: a Worker with no Domain project, no outbox and nothing to publish."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.rendered = pure_consumer()
+        cls.prefix = f"src/Services/{PROBE}/{PROBE}.Infrastructure/Persistence/Migrations"
+
+    def created(self, path: str) -> str:
+        return self.rendered.created[path].replace("\r\n", "\n")
+
+    def test_it_writes_seven_projects_and_no_domain(self):
+        projects = sorted(p for p in self.rendered.created if p.endswith(".csproj"))
+        self.assertEqual(
+            [
+                f"src/Services/{PROBE}/{PROBE}.Application/{PROBE}.Application.csproj",
+                f"src/Services/{PROBE}/{PROBE}.Infrastructure/{PROBE}.Infrastructure.csproj",
+                f"src/Services/{PROBE}/{PROBE}.Migrator/{PROBE}.Migrator.csproj",
+                f"src/Services/{PROBE}/{PROBE}.Worker/{PROBE}.Worker.csproj",
+                f"tests/{PROBE}.Application.Tests/{PROBE}.Application.Tests.csproj",
+                f"tests/{PROBE}.TestSupport/{PROBE}.TestSupport.csproj",
+                f"tests/{PROBE}.Worker.Tests/{PROBE}.Worker.Tests.csproj",
+            ],
+            projects)
+        for path, text in self.rendered.created.items():
+            self.assertNotIn(f"{PROBE}.Domain", path)
+            self.assertNotIn(f"{PROBE}.Domain", text, path)
+
+    def test_nothing_rendered_names_the_outbox_the_mapper_or_the_collector(self):
+        # Type names rather than the word, which a comment may use to say there is none,
+        # and the service's code rather than its suites, which name one to assert its absence.
+        for path, text in ((p, t) for p, t in self.rendered.created.items() if p.startswith("src/")):
+            for name in ("OutboxDispatcher", "OutboxPublisher", "OutboxMessage", "OutboxMetrics", "OutboxTable",
+                         "OutboxJson", "MessageTypeMap", "MessageTypeSource", "IntegrationEventMapper",
+                         "DomainEventCollector", "AssemblyMarker", "AddDomainEventDispatcher"):
+                self.assertNotIn(name, text, f"{path} names {name}")
+
+    def test_it_keeps_the_inbox_the_purge_the_migrator_the_probes_and_the_bus(self):
+        infrastructure = self.created(f"src/Services/{PROBE}/{PROBE}.Infrastructure/DependencyInjection.cs")
+        self.assertIn("services.AddSingleton(new InboxTable(schema));", infrastructure)
+        self.assertIn("services.AddSingleton(new IdempotencyMarkerTable(schema));", infrastructure)
+        self.assertIn("services.AddHostedService<RetentionPurgeService>();", infrastructure)
+        self.assertIn("services.AddHostedService<MetricsInitialiser>();", infrastructure)
+        self.assertIn("services.AddMassTransitMessaging(configuration);", infrastructure)
+        program = self.created(f"src/Services/{PROBE}/{PROBE}.Worker/Program.cs")
+        self.assertIn("app.MapCommonHealthEndpoints();", program)
+        self.assertIn(f"src/Services/{PROBE}/{PROBE}.Migrator/MigrationRunner.cs", self.rendered.created)
+
+    def test_the_application_registers_the_dispatcher_that_stages_nothing(self):
+        application = self.created(f"src/Services/{PROBE}/{PROBE}.Application/DependencyInjection.cs")
+        self.assertIn("services.AddScoped<IDomainEventDispatcher, NoDomainEventDispatcher>();", application)
+        self.assertIn(
+            "internal sealed class NoDomainEventDispatcher : IDomainEventDispatcher",
+            self.created(f"src/Services/{PROBE}/{PROBE}.Application/NoDomainEventDispatcher.cs"))
+        self.assertNotIn("IIntegrationEventMapper", application)
+        # The command pipeline stays, and TransactionBehavior is what needs a dispatcher at all.
+        self.assertIn("typeof(TransactionBehavior<,>)", application)
+
+    def test_the_initialiser_forces_what_the_service_still_registers(self):
+        initialiser = self.created(
+            f"src/Services/{PROBE}/{PROBE}.Infrastructure/Observability/MetricsInitialiser.cs")
+        self.assertIn("public MetricsInitialiser(MessagingMetrics messaging, RequestMetrics requests)", initialiser)
+
+    def test_the_migrations_build_the_inbox_and_the_markers_and_no_outbox(self):
+        migrations = sorted(p for p in self.rendered.created if p.startswith(self.prefix))
+        self.assertEqual(11, len(migrations), migrations)
+        for path in migrations:
+            self.assertNotRegex(PurePosixPath(path).name, r"_AddOutbox", path)
+            self.assertNotIn("OutboxMessage", self.rendered.created[path], path)
+
+    def test_the_snapshot_is_the_model_ef_would_write_for_a_pure_consumer(self):
+        snapshot = self.created(f"{self.prefix}/{PROBE}DbContextModelSnapshot.cs")
+        self.assertEqual(2, snapshot.count("modelBuilder.Entity("))
+        self.assertIn('modelBuilder.Entity("Common.Infrastructure.Inbox.InboxMessage"', snapshot)
+        self.assertIn('modelBuilder.Entity("Common.Infrastructure.Idempotency.IdempotencyMarker"', snapshot)
+        # The last block closes the model with no blank line before the pragma, as EF writes it.
+        self.assertIn("                });\n#pragma warning restore 612, 618\n", snapshot)
+
+    def test_the_migration_ids_keep_the_template_s_order(self):
+        names = sorted(PurePosixPath(p).name for p in self.rendered.created
+                       if p.startswith(self.prefix) and not p.endswith(("Designer.cs", "Snapshot.cs")))
+        self.assertEqual(
+            [f"{MIGRATION_ID}_InitialCreate.cs", f"{INBOX_MIGRATION_ID}_AddInbox.cs",
+             "20260809120400_AddIdempotencyMarkers.cs", "20260809120500_IdempotencyMarkerCommittedAtDefault.cs",
+             "20260809120600_AddIdempotencyMarkerRowVersion.cs"],
+            names)
+
+    def test_both_images_restore_a_closure_with_no_domain_project(self):
+        for image in (new_service.WORKER_HOST, "Migrator"):
+            dockerfile = self.created(f"src/Services/{PROBE}/{PROBE}.{image}/Dockerfile")
+            self.assertNotIn(f"{PROBE}.Domain", dockerfile, image)
+
+    def test_the_solution_folder_holds_four_projects_and_three_suites(self):
+        solution = self.rendered.updated["Platform.slnx"]
+        self.assertEqual(4, solution.count(f'<Project Path="src/Services/{PROBE}/'))
+        self.assertEqual(3, solution.count(f'<Project Path="tests/{PROBE}.'))
+
+    def test_the_broker_account_writes_its_own_endpoints_and_no_contract(self):
+        import json
+
+        definitions = json.loads(self.rendered.updated["deploy/compose/rabbitmq/definitions.json"])
+        permission = next(e for e in definitions["permissions"] if e["user"] == f"{PROBE.lower()}-svc")
+        self.assertEqual(f"^({PROBE.lower()}-|MassTransit:)", permission["write"])
+        for verb in ("configure", "read"):
+            self.assertEqual(f"^({PROBE.lower()}-|Common\\.Contracts|MassTransit:)", permission[verb])
+
+    def test_no_outbox_meter_line_is_written(self):
+        self.assertNotIn(new_service.OBSERVABILITY, self.rendered.updated)
+
+    def test_the_compose_pair_is_migrator_and_worker_and_publishes_no_port(self):
+        unit = self.created(UNIT)
+        declared = [line for line in unit.split("\n") if new_service.SERVICE_KEY.fullmatch(line)]
+        self.assertEqual(declared, [f"  {PROBE.lower()}-migrator:", f"  {PROBE.lower()}-worker:"])
+        self.assertNotIn("ports:", unit)
+
+
+
 class RefusesToRun(unittest.TestCase):
     def test_a_name_that_is_not_pascal_case(self):
         # The last two needed `fullmatch`: Python's `$` matches before a
@@ -1837,14 +1962,51 @@ class RefusesToRun(unittest.TestCase):
                 render(name=name)
             self.assertIn("--worker", str(raised.exception))
 
-    def test_the_service_with_no_domain_project_is_refused_in_either_mode(self):
-        # §4.1 gives Notifications no Domain project, which is a second mode
-        # this script does not have.
+    def test_the_service_with_no_domain_project_is_refused_outside_the_pure_consumer_mode(self):
+        # §4.1 gives Notifications no Domain project, so it renders under
+        # --pure-consumer or not at all, and the message names the flag.
         for call in (lambda: render(name="Notifications", port=5198),
                      lambda: worker(name="Notifications")):
             with self.assertRaises(ScaffoldError) as raised:
                 call()
-            self.assertIn("Domain", str(raised.exception))
+            self.assertIn("--pure-consumer", str(raised.exception))
+
+    def test_a_pure_consumer_is_a_worker(self):
+        with self.assertRaises(ScaffoldError) as raised:
+            plan(REPO_ROOT, PROBE, PORT, MIGRATION_ID, pure_consumer=True)
+        self.assertIn("implies --worker", str(raised.exception))
+
+    def test_a_pure_consumer_render_refuses_a_port(self):
+        with self.assertRaises(ScaffoldError) as raised:
+            plan(REPO_ROOT, PROBE, PORT, MIGRATION_ID, host=new_service.WORKER_HOST, pure_consumer=True)
+        self.assertIn("publishes no port", str(raised.exception))
+
+    def test_an_omission_the_manifest_does_not_hold_refuses_the_run(self):
+        stray = scaffold.render.PURE_CONSUMER_OMITTED | {"src/Services/Catalog/Catalog.Api/Nothing.cs"}
+        with mock.patch.object(scaffold.render, "PURE_CONSUMER_OMITTED", stray):
+            with self.assertRaises(ScaffoldError) as raised:
+                pure_consumer()
+        self.assertIn("PURE_CONSUMER_OMITTED names files COPIED does not", str(raised.exception))
+
+    def test_a_pure_consumer_table_naming_an_omitted_file_refuses_the_run(self):
+        omitted = "src/Services/Catalog/Catalog.Infrastructure/Persistence/OutboxPublisher.cs"
+        with mock.patch.dict(scaffold.patch.PURE_CONSUMER_PATCHES, {omitted: (("x", "y"),)}):
+            with self.assertRaises(ScaffoldError) as raised:
+                pure_consumer()
+        self.assertIn("a pure-consumer table names files the mode omits", str(raised.exception))
+
+    def test_a_span_whose_anchor_has_moved_refuses_the_run(self):
+        factory = "tests/Catalog.TestSupport/CatalogApiFactory.cs"
+        spans = (("// an anchor the template does not hold", "}\n", ""),)
+        with mock.patch.dict(scaffold.patch.PURE_CONSUMER_SPANS, {factory: spans}):
+            with self.assertRaises(ScaffoldError) as raised:
+                pure_consumer()
+        self.assertIn(factory, str(raised.exception))
+
+    def test_a_span_whose_last_anchor_comes_first_is_refused(self):
+        with self.assertRaises(ScaffoldError) as raised:
+            scaffold.render.replace_span("b a", "a", "b", "", "probe")
+        self.assertIn("does not follow its first", str(raised.exception))
 
     def test_a_name_refusal_answers_before_the_port_one(self):
         # The name decides the host, so it is answered first: asking a caller
@@ -1854,7 +2016,7 @@ class RefusesToRun(unittest.TestCase):
         self.assertIn("--worker", str(raised.exception))
         with self.assertRaises(ScaffoldError) as raised:
             plan(REPO_ROOT, "Notifications", None, MIGRATION_ID)
-        self.assertIn("Domain", str(raised.exception))
+        self.assertIn("--pure-consumer", str(raised.exception))
 
     def test_a_worker_render_refuses_a_port(self):
         with self.assertRaises(ScaffoldError) as raised:
@@ -2466,6 +2628,20 @@ class TheCommandLine(unittest.TestCase):
             self.assertIn("updated, publishing no port.", out)
             self.assertTrue((root / "src/Services/Zulu/Zulu.Worker/Program.cs").exists())
 
+    def test_a_pure_consumer_run_reports_its_count_and_that_it_publishes_no_port(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = template_copy(Path(directory))
+
+            code, out, err = self.run_main(
+                "Zulu", "--pure-consumer", "--repo-root", str(root), "--migration-id", MIGRATION_ID,
+            )
+
+            self.assertEqual(0, code)
+            self.assertEqual("", err)
+            # Five shared files and not six: no outbox meter line, and no `.github/` here.
+            self.assertIn("53 files created, 5 updated, publishing no port.", out)
+            self.assertFalse((root / "src/Services/Zulu/Zulu.Domain").exists())
+
     def test_fourteen_digits_that_are_not_a_date_refuse_in_one_line(self):
         # MIGRATION_ID checks the shape, which is its job — month thirteen is
         # fourteen digits. next_migration_id is what notices, and strptime's
@@ -2640,6 +2816,42 @@ class VerifiesAScaffoldCommit(unittest.TestCase):
         with contextlib.redirect_stderr(io.StringIO()) as err, self.assertRaises(SystemExit):
             main(["Shipping", "--verify", SHIPPING_SCAFFOLD])
         self.assertIn("reads the service and its arguments from the commit", err.getvalue())
+
+
+class ReadsAScaffoldCommitsShape(unittest.TestCase):
+    """`--verify`'s reading of what a commit added, over a repository built for the case."""
+
+    def test_a_pure_consumer_commit_is_rendered_with_its_own_flag(self):
+        scaffolded = scaffold.reproduce.Scaffolded(
+            "c" * 40, "p" * 40, "Notifications", True, None, MIGRATION_ID, True)
+        self.assertEqual(["Notifications", "--pure-consumer", "--migration-id", MIGRATION_ID], scaffolded.argv)
+
+    def test_a_worker_with_no_domain_project_is_read_as_a_pure_consumer(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+
+            def git(*args: str, stdin: bytes | None = None) -> str:
+                return scaffold.reproduce.git(root, *args, stdin=stdin).decode("ascii").strip()
+
+            identity = ("-c", "user.name=scaffold", "-c", "user.email=scaffold@example.invalid")
+            git("init", "--quiet")
+            empty = git("hash-object", "-w", "-t", "tree", "--stdin", stdin=b"")
+            parent = git(*identity, "commit-tree", empty, "-m", "parent")
+            for relative in (
+                    f"src/Services/{PROBE}/{PROBE}.Worker/Program.cs",
+                    f"src/Services/{PROBE}/{PROBE}.Infrastructure/Persistence/Migrations/"
+                    f"{MIGRATION_ID}_InitialCreate.cs"):
+                (root / relative).parent.mkdir(parents=True, exist_ok=True)
+                (root / relative).write_text("//\n", encoding="utf-8")
+            git("add", "--all")
+            child = git(*identity, "commit-tree", git("write-tree"), "-p", parent, "-m", "render")
+            git("update-ref", "HEAD", child)
+
+            scaffolded = scaffold.reproduce.arguments(root, child)
+
+        self.assertTrue(scaffolded.pure_consumer)
+        self.assertEqual([PROBE, "--pure-consumer", "--migration-id", MIGRATION_ID], scaffolded.argv)
+
 
 
 if __name__ == "__main__":

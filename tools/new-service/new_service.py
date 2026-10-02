@@ -83,25 +83,26 @@ from scaffold.verify import SCAN_ALLOW_LIST, SCAN_GATE, allow_list_trees, load_s
 # because rendering either as an API service would contradict the chapter.
 WORKER_ONLY_SERVICES = frozenset({"Shipping", "Notifications"})
 
-# And the one this script still cannot render at all: §4.1 gives Notifications
-# no Domain project, which is a second mode. It comes off with that mode.
-UNRENDERABLE_SERVICES = frozenset({"Notifications"})
+# The stricter sibling: §4.1 gives these no Domain project, so they render
+# under `--pure-consumer` or not at all.
+PURE_CONSUMER_ONLY_SERVICES = frozenset({"Notifications"})
 
 
-def project_suffixes(host: str) -> tuple[str, ...]:
-    """The nine projects a render creates, by suffix.
+def project_suffixes(host: str, pure_consumer: bool = False) -> tuple[str, ...]:
+    """The projects a render creates, by suffix: nine, or seven for a pure consumer.
 
-    A function of the host rather than a constant, because the host project and
-    its suite take the host's own name — and the identity check below and the
-    solution writer must agree about them.
+    A function of the host and the shape, because the identity check below and
+    the solution writer must agree about both.
     """
+    domain = () if pure_consumer else ("Domain",)
+    domain_tests = () if pure_consumer else ("Domain.Tests",)
     return (
-        "Domain",
+        *domain,
         "Application",
         "Infrastructure",
         "Migrator",
         host,
-        "Domain.Tests",
+        *domain_tests,
         "Application.Tests",
         f"{host}.Tests",
         "TestSupport",
@@ -158,7 +159,7 @@ class Plan:
 
 
 def plan(repo_root: Path, name: str, port: int | None, migration_id: str,
-         host: str = API_HOST) -> Plan:
+         host: str = API_HOST, pure_consumer: bool = False) -> Plan:
     """Everything the run would write, validated. Nothing is written here."""
     if not NAME.fullmatch(name):
         raise ScaffoldError(f"'{name}' is not a PascalCase service name")
@@ -192,15 +193,19 @@ def plan(repo_root: Path, name: str, port: int | None, migration_id: str,
 
     if host not in HOSTS:
         raise ScaffoldError(f"'{host}' is not a host this script renders; §4.1 names {HOSTS}")
+    if pure_consumer and host != WORKER_HOST:
+        raise ScaffoldError(
+            "--pure-consumer implies --worker: a service that publishes nothing and accepts "
+            "no command has no API to serve (§3.2)")
 
     # The name before the port, because the name decides the host and the host
     # decides whether a port is owed. The narrower refusal first: Notifications
-    # is in both sets, and only the message naming what no flag can fix is
-    # worth printing.
-    if name.lower() in {service.lower() for service in UNRENDERABLE_SERVICES}:
+    # is in both sets, and the message naming the stricter flag is the one that
+    # leaves nothing for a second run to refuse.
+    if not pure_consumer and name.lower() in {s.lower() for s in PURE_CONSUMER_ONLY_SERVICES}:
         raise ScaffoldError(
-            f"§4.1 gives {name} no Domain project and this script renders one. That is a "
-            f"second mode, and it joins with the PR that builds the first such host.")
+            f"§4.1 gives {name} no Domain project. Render it with --pure-consumer; a render "
+            f"with a Domain project under this name would contradict the chapter.")
     if host == API_HOST and name.lower() in {s.lower() for s in WORKER_ONLY_SERVICES}:
         raise ScaffoldError(
             f"§4.1 gives {name} a Worker in place of an Api. Render it with --worker; an "
@@ -240,7 +245,7 @@ def plan(repo_root: Path, name: str, port: int | None, migration_id: str,
     if not (repo_root / COPY_ROOTS[0]).is_dir():
         raise ScaffoldError(f"{repo_root} does not look like the repository: no {COPY_ROOTS[0]}")
 
-    names = Names(name, host)
+    names = Names(name, host, pure_consumer)
 
     # Assembly identity first, because it is the more fundamental refusal:
     # "this name can never work here", ahead of "this service already exists".
@@ -255,7 +260,9 @@ def plan(repo_root: Path, name: str, port: int | None, migration_id: str,
     # `COMMON.Domain` does not intersect `Common.Domain` as a string — so the
     # first version of this check let through exactly the case it was written
     # to stop.
-    generated = {f"{names.pascal}.{suffix}": suffix for suffix in project_suffixes(host)}
+    generated = {
+        f"{names.pascal}.{suffix}": suffix for suffix in project_suffixes(host, pure_consumer)
+    }
     existing = {
         path.stem.lower()
         for directory in ("src", "tests")
@@ -329,8 +336,11 @@ def plan(repo_root: Path, name: str, port: int | None, migration_id: str,
         "deploy/compose/.env.example": update_env_example(repo_root, names),
         "deploy/compose/rabbitmq/definitions.json":
             update_broker_definitions(repo_root, names),
-        OBSERVABILITY: update_observability_meters(repo_root, names),
     }
+    # The outbox meter's line, which a pure consumer is owed no more than the
+    # gauges it would collect (§13.6).
+    if not names.pure_consumer:
+        updated[OBSERVABILITY] = update_observability_meters(repo_root, names)
 
     # Last, because it is the only update whose input is every other one. The
     # gate runs over the whole render — the generated tree AND the shared files
@@ -397,6 +407,14 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     parser.add_argument(
+        "--pure-consumer",
+        action="store_true",
+        help=(
+            "render §4.1's pure consumer: a Worker with no Domain project, no outbox and "
+            "nothing to publish; implies --worker"
+        ),
+    )
+    parser.add_argument(
         "--repo-root",
         type=Path,
         default=Path(__file__).resolve().parents[2],
@@ -419,7 +437,8 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     if args.verify is not None:
-        if args.name is not None or args.port is not None or args.worker or args.migration_id is not None:
+        if (args.name is not None or args.port is not None or args.worker or args.pure_consumer
+                or args.migration_id is not None):
             parser.error("--verify reads the service and its arguments from the commit; pass neither")
         try:
             report, failures = reproduce.verify(args.repo_root, args.verify)
@@ -438,8 +457,8 @@ def main(argv: list[str] | None = None) -> int:
 
     migration_id = args.migration_id or datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
     try:
-        host = WORKER_HOST if args.worker else API_HOST
-        rendered = plan(args.repo_root, args.name, args.port, migration_id, host)
+        host = WORKER_HOST if args.worker or args.pure_consumer else API_HOST
+        rendered = plan(args.repo_root, args.name, args.port, migration_id, host, args.pure_consumer)
         apply(args.repo_root, rendered)
     except ScaffoldError as error:
         print(f"new_service.py: {error}", file=sys.stderr)

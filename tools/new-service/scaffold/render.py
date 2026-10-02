@@ -12,7 +12,7 @@ from datetime import datetime, timedelta
 from pathlib import Path, PurePosixPath
 
 from scaffold import API_HOST, TEMPLATE, Names, ScaffoldError, read, require_once, restore
-from scaffold.patch import PATCHES, WORKER_PATCHES
+from scaffold.patch import PATCHES, PURE_CONSUMER_PATCHES, PURE_CONSUMER_SPANS, WORKER_PATCHES
 
 # The five service projects §4.1 gives a service, its three test projects, and
 # Catalog.TestSupport — which §4.1 is explicit is NOT a test project, and which
@@ -214,7 +214,43 @@ OMITTED = frozenset(
     }
 )
 
-# The one file with no counterpart in Catalog, and it is written to be deleted.
+# What a pure consumer is not given, all of it COPIED for every other render:
+# the Domain project and its suite (§4.1), and §9.4's outbox and §9.3's mapper,
+# since a service that publishes nothing stages nothing (§3.2). `classify`
+# refuses an entry COPIED does not hold.
+PURE_CONSUMER_OMITTED = frozenset(
+    {
+        "src/Services/Catalog/Catalog.Domain/Catalog.Domain.csproj",
+        "src/Services/Catalog/Catalog.Application/Integration/CatalogIntegrationEventMapper.cs",
+        "src/Services/Catalog/Catalog.Infrastructure/Persistence/EfDomainEventCollector.cs",
+        "src/Services/Catalog/Catalog.Infrastructure/Persistence/OutboxPublisher.cs",
+        "src/Services/Catalog/Catalog.Infrastructure/Persistence/OutboxMessageConfiguration.cs",
+        "src/Services/Catalog/Catalog.Infrastructure/Observability/IOutboxStats.cs",
+        "src/Services/Catalog/Catalog.Infrastructure/Observability/OutboxStats.cs",
+        "src/Services/Catalog/Catalog.Infrastructure/Observability/OutboxMetrics.cs",
+        "tests/Catalog.Domain.Tests/ArchitectureTests.cs",
+        "tests/Catalog.Domain.Tests/Catalog.Domain.Tests.csproj",
+        "tests/Catalog.Api.Tests/MessageTypeMapValidatorTests.cs",
+        "tests/Catalog.Api.Tests/OutboxDispatcherTests.cs",
+        "tests/Catalog.TestSupport/Outbox/OutboxRows.cs",
+        "tests/Catalog.TestSupport/Outbox/OutboxTestEvents.cs",
+    }
+)
+
+# A pure consumer's one file with no counterpart in Catalog: §6.3's TransactionBehavior
+# needs a dispatcher, and §7.5's needs the collector, mapper and publisher this shape lacks.
+NO_DOMAIN_EVENT_DISPATCHER = """using Common.Application;
+
+namespace Catalog.Application;
+
+/// <summary>§7.5's dispatcher for a service §4.1 gives no Domain project, where no aggregate raises an event.</summary>
+internal sealed class NoDomainEventDispatcher : IDomainEventDispatcher
+{
+    public Task DispatchAsync(CancellationToken ct) => Task.CompletedTask;
+}
+"""
+
+# An API or worker render's one file with no counterpart in Catalog, and it is written to be deleted.
 ASSEMBLY_MARKER = """namespace Catalog.Domain;
 
 /// <summary>The type §4.2's architecture gates anchor on until the first aggregate replaces it.</summary>
@@ -291,6 +327,10 @@ ROW_VERSION_MIGRATION = re.compile(
     r"^\d{14}_AddIdempotencyMarkerRowVersion(\.Designer)?\.cs$"
 )
 LATER_MIGRATION = re.compile(r"^\d{14}_\w+(\.Designer)?\.cs$")
+
+# The template migrations that build §9.4's outbox, which a pure consumer does
+# not copy. Its other migrations keep their offsets, so their ids keep the gaps.
+PURE_CONSUMER_MIGRATIONS = (OUTBOX_MIGRATION, RETENTION_INDEX_MIGRATION)
 
 # The migrations a scaffolded service starts with, in the order they are
 # applied — which is the order their ids have to be generated in. A tuple
@@ -456,17 +496,47 @@ def classify(repo_root: Path, labels: tuple[str, ...]) -> list[str]:
             + ". Remove them from COPIED — with their PATCHES entries — or restore them."
         )
 
-    # And no patch may be inert. A PATCHES or WORKER_PATCHES key for a file
-    # that is not copied never reaches `require_once`, so the anchor it guards
-    # would be unbound while every other anchor still looked enforced. The
-    # parentheses matter: `-` binds tighter than `|`.
-    if (inert := (set(PATCHES) | set(WORKER_PATCHES)) - set(copied)):
+    # And no patch may be inert. A key for a file that is not copied never
+    # reaches `require_once`, so the anchor it guards would be unbound while
+    # every other anchor still looked enforced. The parentheses matter: `-`
+    # binds tighter than `|`.
+    tables = set(PATCHES) | set(WORKER_PATCHES) | set(PURE_CONSUMER_PATCHES) | set(PURE_CONSUMER_SPANS)
+    if (inert := tables - set(copied)):
         raise ScaffoldError(
-            "PATCHES or WORKER_PATCHES names files the scaffold does not copy: "
+            "a patch table names files the scaffold does not copy: "
             + ", ".join(sorted(inert))
             + ". A patch that never runs is an anchor that guards nothing."
         )
+
+    # The pure consumer's two lists, held to the manifest on the same terms: an
+    # omission COPIED does not hold omits nothing, and a patch for a file the
+    # mode omits is an anchor no pure render reaches.
+    if (stray := PURE_CONSUMER_OMITTED - COPIED):
+        raise ScaffoldError(
+            "PURE_CONSUMER_OMITTED names files COPIED does not: " + ", ".join(sorted(stray)))
+    if (unreached := (set(PURE_CONSUMER_PATCHES) | set(PURE_CONSUMER_SPANS)) & PURE_CONSUMER_OMITTED):
+        raise ScaffoldError(
+            "a pure-consumer table names files the mode omits: " + ", ".join(sorted(unreached)))
     return copied
+
+
+def replace_span(text: str, first: str, last: str, replacement: str, where: str) -> str:
+    """The text with everything from `first` through `last` replaced, each anchor bound exactly once."""
+    require_once(text, first, where)
+    require_once(text, last, where)
+    start, end = text.index(first), text.index(last)
+    if end < start + len(first):
+        raise ScaffoldError(f"{where}: a span's last anchor does not follow its first")
+    return text[:start] + replacement + text[end + len(last):]
+
+
+def pure_consumer_omits(relative: str) -> bool:
+    """Whether a pure-consumer render leaves this template file out."""
+    if relative in PURE_CONSUMER_OMITTED:
+        return True
+    name = PurePosixPath(relative).name
+    return relative.startswith(MIGRATIONS + "/") and any(
+        shape.fullmatch(name) for shape in PURE_CONSUMER_MIGRATIONS)
 
 
 SLICE_ENTITY = f'            modelBuilder.Entity("{TEMPLATE}.Domain.Products.Product", b =>\n'
@@ -531,6 +601,23 @@ def without_slice_entity(designer: str) -> str:
             "Catalog has gained a second entity, and the scaffold will not guess which"
         )
     return stripped
+
+
+# §9.4's outbox entity, the last block in every designer after AddOutbox: EF
+# orders entities by name. A pure consumer's model has no outbox, so its
+# designers and its snapshot describe none (§7.4).
+OUTBOX_ENTITY = '\n            modelBuilder.Entity("Common.Infrastructure.Outbox.OutboxMessage", b =>\n'
+LAST_ENTITY_END = "                });\n#pragma warning restore 612, 618\n"
+
+
+def without_outbox_entity(designer: str, where: str) -> str:
+    """The model body with the outbox entity and the blank line above it removed."""
+    require_once(designer, OUTBOX_ENTITY, where)
+    start = designer.index(OUTBOX_ENTITY)
+    end = designer.find(LAST_ENTITY_END, start)
+    if end == -1:
+        raise ScaffoldError(f"{where}: the outbox entity is no longer the model's last block")
+    return designer[:start] + designer[end + len("                });\n"):]
 
 
 def snapshot_from_designer(designer: str, migration_id: str, migration: str) -> str:
@@ -623,11 +710,13 @@ def next_migration_id(migration_id: str, minutes: int = 1) -> str:
 
 def render_projects(repo_root: Path, names: Names, migration_id: str,
                     labels: tuple[str, ...]) -> dict[str, str]:
-    """The nine projects, the marker, the migration and its snapshot."""
+    """The projects §4.1 gives the mode, the marker where one is owed, the migration and its snapshot."""
     created: dict[str, str] = {}
     csharp_newline = ""
 
     for relative in classify(repo_root, labels):
+        if names.pure_consumer and pure_consumer_omits(relative):
+            continue
         text, newline = read(repo_root, relative)
         if relative.endswith(".cs"):
             csharp_newline = newline
@@ -638,6 +727,14 @@ def render_projects(repo_root: Path, names: Names, migration_id: str,
         for needle, replacement in patches:
             require_once(text, needle, relative)
             text = text.replace(needle, replacement)
+        # Spans first, then the pure consumer's own patches, so a patch is bound
+        # against what the spans left rather than against text they remove.
+        if names.pure_consumer:
+            for first, last, replacement in PURE_CONSUMER_SPANS.get(relative, ()):
+                text = replace_span(text, first, last, replacement, relative)
+            for needle, replacement in PURE_CONSUMER_PATCHES.get(relative, ()):
+                require_once(text, needle, relative)
+                text = text.replace(needle, replacement)
 
         # The outbox designer describes Catalog's whole model, aggregate
         # included. Stripped here rather than further down, because the slice
@@ -659,6 +756,8 @@ def render_projects(repo_root: Path, names: Names, migration_id: str,
                 "_AddIdempotencyMarkerRowVersion.Designer.cs",
             )):
             text = without_slice_entity(text)
+            if names.pure_consumer:
+                text = without_outbox_entity(text, relative)
 
         # Before the rename, where a slice token means only itself. Doing this
         # after it — with the requested name masked, as the template check
@@ -714,30 +813,38 @@ def render_projects(repo_root: Path, names: Names, migration_id: str,
 
         created[names.rename(target)] = restore(rendered, newline)
 
-    # The marker is the only file with no template beside it to take endings
-    # from, so it takes the ones the template's own C# has. Observed rather
-    # than assumed: `.gitattributes` decides this, and reading it here means a
-    # change to that rule carries into generated code without a second edit.
+    # The marker, or a pure consumer's dispatcher, is the one file with no
+    # template beside it to take endings from, so it takes the ones the
+    # template's own C# has. Observed rather than assumed: `.gitattributes`
+    # decides this, and reading it here carries a change to that rule through.
     if not csharp_newline:
         raise ScaffoldError("no C# file in the template to take line endings from")
 
-    created[names.rename(f"src/Services/{TEMPLATE}/{TEMPLATE}.Domain/AssemblyMarker.cs")] = (
-        restore(names.rename(ASSEMBLY_MARKER), csharp_newline)
-    )
+    # A pure consumer has no Domain project for the marker to anchor (§4.1), and
+    # the dispatcher it registers in that project's place.
+    if names.pure_consumer:
+        created[names.rename(f"src/Services/{TEMPLATE}/{TEMPLATE}.Application/NoDomainEventDispatcher.cs")] = (
+            restore(names.rename(NO_DOMAIN_EVENT_DISPATCHER), csharp_newline)
+        )
+    else:
+        created[names.rename(f"src/Services/{TEMPLATE}/{TEMPLATE}.Domain/AssemblyMarker.cs")] = (
+            restore(names.rename(ASSEMBLY_MARKER), csharp_newline)
+        )
     return created
 
 
 def update_solution(repo_root: Path, names: Names) -> str:
-    """Five projects in their own solution folder, four test entries, alphabetical."""
+    """The service's projects in their own solution folder and its test entries, alphabetical."""
     text, newline = read(repo_root, "Platform.slnx")
     lines = text.splitlines(keepends=True)
 
+    domain = () if names.pure_consumer else ("Domain",)
     folder = [
         f'  <Folder Name="/src/Services/{names.pascal}/">\n',
         *(
             f'    <Project Path="src/Services/{names.pascal}/{names.pascal}.{layer}'
             f'/{names.pascal}.{layer}.csproj" />\n'
-            for layer in sorted(("Application", "Domain", "Infrastructure", "Migrator", names.host))
+            for layer in sorted(("Application", *domain, "Infrastructure", "Migrator", names.host))
         ),
         "  </Folder>\n",
     ]
@@ -757,9 +864,10 @@ def update_solution(repo_root: Path, names: Names) -> str:
         at = lines.index("  </Folder>\n", last) + 1
     lines[at:at] = folder
 
+    domain_tests = () if names.pure_consumer else ("Domain.Tests",)
     tests = [
         f'    <Project Path="tests/{names.pascal}.{suite}/{names.pascal}.{suite}.csproj" />\n'
-        for suite in sorted(("Application.Tests", "Domain.Tests", "TestSupport", f"{names.host}.Tests"))
+        for suite in sorted(("Application.Tests", *domain_tests, "TestSupport", f"{names.host}.Tests"))
     ]
     entry = re.compile(r'^    <Project Path="tests/([^"]+)" />')
     positions = [(i, m.group(1)) for i, line in enumerate(lines) if (m := entry.match(line))]
@@ -1055,26 +1163,11 @@ def update_env_example(repo_root: Path, names: Names) -> str:
 
 
 def update_broker_definitions(repo_root: Path, names: Names) -> str:
-    """A broker account for the new service (#44).
+    """A broker account for the new service, without which it cannot authenticate (§14.1, ADR-036).
 
-    Since per-service identity, a service that reaches the broker as nobody in
-    `definitions.json` cannot connect AT ALL — and the compose block this
-    script already renders names `{service}-svc`. So the account is not an
-    optional extra: without it the scaffolded service starts and then fails
-    authentication against a broker that has never heard of it.
-
-    Catalog's entry is the template, exactly as it is everywhere else here, so
-    the permissions a new service gets are a PUBLISHER's: its own contracts,
-    the framework's fault exchanges, and nothing of anybody else's. A service
-    that grows a receive endpoint widens its own entry in the same change, and
-    `deploy/compose/rabbitmq/check_permissions.py` is what says so — it derives
-    what each service needs from the code and fails when the grant is short.
-
-    The password is `local-dev-{service}`, on §14.1's terms for every other
-    credential here, and the hash is computed rather than copied: RabbitMQ
-    stores `base64(salt || sha256(salt || utf8(password)))`, so a copied hash
-    would authenticate the template's password under the new name.
-    """
+    Catalog's publisher grant renamed, or a consumer's grant for a pure consumer; check_permissions.py
+    derives what each service needs and fails when a grant is short. The hash is computed, never copied,
+    so the template's password does not authenticate under the new name."""
     import base64
     import hashlib
     import json
@@ -1106,12 +1199,18 @@ def update_broker_definitions(repo_root: Path, names: Names) -> str:
         "hashing_algorithm": "rabbit_password_hashing_sha256",
         "tags": [],
     })
+    grant = {verb: names.rename(template_permission[verb]) for verb in ("configure", "write", "read")}
+    if names.pure_consumer:
+        # A consumer's shape, not the template's publisher's: it declares and reads
+        # the contract exchanges it binds, and writes only its own endpoints and
+        # the fault exchanges, since §3.2 gives it nothing to publish (ADR-036).
+        bound = f"^({names.lower}-|Common\\.Contracts|MassTransit:)"
+        grant = {"configure": bound, "write": f"^({names.lower}-|MassTransit:)", "read": bound}
+
     definitions["permissions"].append({
         "user": user,
         "vhost": template_permission["vhost"],
-        "configure": names.rename(template_permission["configure"]),
-        "write": names.rename(template_permission["write"]),
-        "read": names.rename(template_permission["read"]),
+        **grant,
     })
 
     return restore(json.dumps(definitions, indent=2) + "\n", newline)

@@ -566,6 +566,15 @@ public IServiceCollection AddDomainEventDispatcher()
 }
 ```
 
+**A service §4.1 gives no Domain project is the one that registers a
+dispatcher of its own.** §4.5's pure-consumer mode renders it — a
+`NoDomainEventDispatcher` in the service's Application project that stages
+nothing — because §6.3's `TransactionBehavior` still calls a dispatcher, and
+the real one needs the collector, mapper and publisher such a service has no
+use for. Its premise is a gate rather than a hope: the service's architecture
+suite fails the day any type in it implements `IDomainEvent` or
+`IHasDomainEvents`, and that day the real dispatcher is owed.
+
 **The dispatcher performs no I/O beyond staging rows.** It does not invoke a
 single handler. That is the change that makes the rest of the design safe.
 
