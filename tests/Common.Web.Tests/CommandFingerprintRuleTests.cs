@@ -151,6 +151,12 @@ public class CommandFingerprintRuleTests
         public static string OperationName => "probe.collection";
     }
 
+    public readonly record struct StructWithAHashSet(Guid CommandId, HashSet<Guid> Ids)
+        : ICommand<Result>, IIdempotentCommand
+    {
+        public static string OperationName => "probe.struct-hash-set";
+    }
+
     public sealed record Basket(string Name, HashSet<Guid> Ids);
 
     public sealed record Entry(Guid Id, IShape Shape);
@@ -218,6 +224,7 @@ public class CommandFingerprintRuleTests
         nameof(WithADictionary),
         nameof(WithAnEnumerable),
         nameof(WithACollection),
+        nameof(StructWithAHashSet),
         nameof(WithANestedOffender),
         nameof(WithAnOffendingElement)
     ];
@@ -231,6 +238,7 @@ public class CommandFingerprintRuleTests
         nameof(WriteEndpointRuleTests.Reached),
         nameof(WriteEndpointRuleTests.Built),
         nameof(WriteEndpointRuleTests.Unreached),
+        nameof(WriteEndpointRuleTests.Counted),
         "Keyed"
     ];
 
@@ -317,6 +325,16 @@ public class CommandFingerprintRuleTests
             .ShouldHaveSingleItem()
             .ShouldStartWith(
                 $"{command.Name}.Ids is declared as {declared}, a collection whose type promises no order");
+    }
+
+    [Fact]
+    public void A_struct_command_is_read_as_a_class_one_is()
+    {
+        CommandFingerprintRule
+            .Offenders(typeof(CommandFingerprintRuleTests).Assembly)
+            .ShouldContain(offender => offender.StartsWith(
+                "StructWithAHashSet.Ids is declared as HashSet<Guid>, a collection",
+                StringComparison.Ordinal));
     }
 
     [Fact]

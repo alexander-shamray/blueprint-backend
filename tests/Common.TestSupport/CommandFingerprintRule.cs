@@ -57,11 +57,12 @@ public static class CommandFingerprintRule
     }
 
     /// <summary>An assembly's idempotent commands, as <see cref="WriteEndpointRule"/> selects them too.</summary>
+    /// <remarks>A struct as well as a class: the pipeline's generic TCommand fingerprints either (ADR-057).</remarks>
     internal static IEnumerable<Type> IdempotentCommands(Assembly application) =>
         application
             .GetTypes()
             .Where(typeof(IIdempotentCommand).IsAssignableFrom)
-            .Where(type => type is { IsClass: true, IsAbstract: false });
+            .Where(type => !type.IsAbstract);
 
     // The types enclosing this one, not every type met, so a cycle stops and a type on two paths is read on each.
     private static void Walk(Type type, string path, HashSet<Type> enclosing, List<string> offenders)
