@@ -123,8 +123,8 @@ public sealed class InventoryEventEndpointTests(ServiceFixture fixture) : IAsync
             r => r.MessageType.Contains("DespatchedUnreservedDomainEvent", StringComparison.Ordinal)
                 && r.Lane == OutboxLane.Local);
 
-        HttpResponseMessage reinstate = await Admin().PostAsync(
-            $"/v1/inventory/reservations/{order}/reinstate", null, TestContext.Current.CancellationToken);
+        HttpResponseMessage reinstate =
+            await ReservationTestSupport.ReinstateAsync(Admin(), order, Guid.CreateVersion7());
         reinstate.StatusCode.ShouldBe(
             HttpStatusCode.UnprocessableEntity, "the parcel has gone; there is nothing to reinstate");
         (await Available(product)).ShouldBe(3, "and no stock was re-taken for a shipped order");

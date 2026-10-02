@@ -61,10 +61,9 @@ public class IdempotencyOptInTests
         ];
 
         // The gate's own subject, asserted first, since both checks below are green on an empty selection.
-        candidates.ShouldBeEmpty(
-            "This service opts no command into idempotency yet, so the two shape checks below " +
-            "are vacuous. The day it does, this test fails — restore the ShouldNotBeEmpty " +
-            "form, which is what keeps a vacuous gate from quietly becoming a permanent one.");
+        candidates.ShouldNotBeEmpty(
+            "no command in this assembly implements IIdempotentCommand, so this test is " +
+            "looking at nothing — the interface has been renamed, moved, or not yet applied.");
 
         // Exactly the two shapes ValueTypeOf accepts.
         candidates
@@ -96,15 +95,8 @@ public class IdempotencyOptInTests
         // OperationName is the key's middle segment, so two commands sharing one share a keyspace (§8.5).
         string[] names = [.. Idempotent().Select(OperationNameOf)];
 
-        // With fewer than two idempotent commands the distinctness check cannot fail.
-        names.ShouldBeEmpty(
-            "This service opts no command into idempotency yet, so the check below is "
-            + "vacuous. The day it does, this test fails — replace it with the ShouldNotBeEmpty "
-            + "form, which is what keeps a vacuous gate from quietly becoming a permanent one. "
-            + "RESTORE OR EXTEND AuthorizationPolicyTests IN THE SAME CHANGE: §8.5 requires an "
-            + "idempotent command's endpoint to be authenticated, an anonymous one collapses "
-            + "every caller into the shared system subject, and the scaffold drops that suite "
-            + "as a slice file.");
+        // With fewer than two idempotent commands the distinctness check cannot fail, so this fails on none.
+        names.ShouldNotBeEmpty("Inventory declares an idempotent command; the selector above found none");
 
         names.Distinct(StringComparer.Ordinal).Count().ShouldBe(
             names.Length,

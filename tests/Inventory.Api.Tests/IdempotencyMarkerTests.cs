@@ -220,15 +220,14 @@ public class IdempotencyMarkerTests(ServiceFixture fixture)
     }
 
     [Fact]
-    public async Task This_service_has_no_operation_names_for_the_gate_above_yet()
+    public async Task The_gate_above_is_looking_at_this_service_s_operation_names()
     {
         // The gate's subject, asserted apart, since ShouldBeEmpty is green on an empty selection.
         await Task.CompletedTask;
 
-        Operations().ShouldBeEmpty(
-            "This service opts no command into idempotency yet, so the width gate above is " +
-            "vacuous. The day it does, this test fails — replace it with the ShouldNotBeEmpty " +
-            "form, which is what keeps a vacuous gate from quietly becoming a permanent one.");
+        Operations().ShouldNotBeEmpty(
+            "no command in this assembly declares IIdempotentCommand, so the width gate is " +
+            "looking at nothing — the interface has been renamed, moved, or not yet applied");
     }
 
     private static string[] Operations() =>
