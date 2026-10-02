@@ -4809,7 +4809,8 @@ the suite never publishes to a contract exchange, which the account could
 not: `DeliverAsync` sends to `queue:notifications-events`, which the grant
 covers, and the consumer is chosen by the message's type, not by the
 exchange it came through. The route from Ordering's, Payments' and
-Shipping's real publishers is PR-5's cross-service test.
+Shipping's real publishers is each publisher's own suite and §12.6's contract
+tests; the full journey across them is phase 4's (spec, section 13).
 
 - [ ] **Step 1: The fixture's helpers**
 
