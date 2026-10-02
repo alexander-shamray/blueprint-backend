@@ -286,7 +286,7 @@ INITIAL_CREATE = re.compile(r"^\d{14}_InitialCreate(\.Designer)?\.cs$")
 OUTBOX_MIGRATION = re.compile(r"^\d{14}_AddOutbox(\.Designer)?\.cs$")
 # The inbox table travels for the mirror of the outbox's reason: §9.5 gives
 # every service one, the retention purge runs from first boot and deletes from
-# both, and a service that carried the purge without the table would log a
+# it, and a service that carried the purge without the table would log a
 # failed delete every pass. A service that consumes nothing today still owns
 # the table its first consumer needs.
 INBOX_MIGRATION = re.compile(r"^\d{14}_AddInbox(\.Designer)?\.cs$")
