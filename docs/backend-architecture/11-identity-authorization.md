@@ -824,6 +824,8 @@ public static class OrderEndpoints
                     return result.ToHttpResult();
                 })
             .RequireAuthorization(OrderingPermissions.Cancel)
+            // Order.Cancel returns on a cancelled order, and cancelled is terminal (§5.4).
+            .RetrySafe(RetrySafety.Convergent)
             .WithName("CancelOrder");
     }
 }
