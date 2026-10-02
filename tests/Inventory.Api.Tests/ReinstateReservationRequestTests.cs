@@ -2,25 +2,19 @@ using System.Net;
 using System.Text;
 using System.Text.Json;
 using Inventory.TestSupport;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Mvc.Testing;
 using Shouldly;
 using Xunit;
 
 namespace Inventory.Api.Tests;
 
-/// <summary>What the deployed host answers a reinstatement whose body never binds, with no store to reach.</summary>
+/// <summary>What the host answers a reinstatement whose body never binds, with no store to reach.</summary>
 public class ReinstateReservationRequestTests(HostSmokeTests.AuthenticatedUnreachableFactory factory)
     : IClassFixture<HostSmokeTests.AuthenticatedUnreachableFactory>
 {
     [Fact]
     public async Task A_body_that_does_not_bind_is_400_before_the_pipeline()
     {
-        // Production, since Development's RouteHandlerOptions.ThrowOnBadRequest raises the same refusal as an
-        // exception no §10.5 handler translates.
-        using WebApplicationFactory<Program> production =
-            factory.WithWebHostBuilder(b => b.UseEnvironment("Production"));
-        using HttpClient client = production.CreateClient();
+        using HttpClient client = factory.CreateClient();
         client.DefaultRequestHeaders.Add(TestAuthHandler.UserHeader, Guid.CreateVersion7().ToString());
         client.DefaultRequestHeaders.Add(TestAuthHandler.PermissionsHeader, InventoryPermissions.Admin);
 
@@ -41,6 +35,9 @@ public class ReinstateReservationRequestTests(HostSmokeTests.AuthenticatedUnreac
             using JsonDocument problem = JsonDocument.Parse(content);
             problem.RootElement.TryGetProperty("errors", out _).ShouldBeFalse(
                 $"'{body}' was refused by the validator, so it bound and reached the pipeline");
+            (problem.RootElement.TryGetProperty("code", out JsonElement code) ? code.GetString() : null).ShouldBe(
+                "request.unreadable",
+                $"'{body}' was refused by something other than binding (§10.5)");
         }
     }
 }
