@@ -96,8 +96,7 @@ public sealed class ReservationEndpointsTests(ServiceFixture fixture) : IAsyncLi
             .Count(r => r.MessageType.Contains("StockLevelChanged", StringComparison.Ordinal));
 
         using HttpClient client = Admin();
-        HttpResponseMessage response = await client.PostAsync(
-            $"/v1/inventory/reservations/{order}/reinstate", null, TestContext.Current.CancellationToken);
+        HttpResponseMessage response = await ReinstateAsync(client, order);
 
         response.StatusCode.ShouldBe(HttpStatusCode.NoContent);
         (await StatusAsync(order)).ShouldBe("Reserved");
@@ -117,8 +116,7 @@ public sealed class ReservationEndpointsTests(ServiceFixture fixture) : IAsyncLi
         var order = Guid.CreateVersion7();
         await client.PostAsync(
             $"/v1/inventory/reservations/{order}/release", null, TestContext.Current.CancellationToken);
-        HttpResponseMessage tombstone = await client.PostAsync(
-            $"/v1/inventory/reservations/{order}/reinstate", null, TestContext.Current.CancellationToken);
+        HttpResponseMessage tombstone = await ReinstateAsync(client, order);
         tombstone.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
         (await tombstone.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))
             .ShouldContain("reservation.not_reinstatable");
@@ -132,8 +130,7 @@ public sealed class ReservationEndpointsTests(ServiceFixture fixture) : IAsyncLi
         await EventuallyStatus(held, "Released");
         await fixture.ExecuteAsync("UPDATE inventory.StockItems SET Available = 1 WHERE ProductId = {0}", product);
 
-        HttpResponseMessage shortage = await client.PostAsync(
-            $"/v1/inventory/reservations/{held}/reinstate", null, TestContext.Current.CancellationToken);
+        HttpResponseMessage shortage = await ReinstateAsync(client, held);
         shortage.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
         (await shortage.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))
             .ShouldContain(product.ToString(), customMessage: "the operator needs to know which product is short");
@@ -175,8 +172,7 @@ public sealed class ReservationEndpointsTests(ServiceFixture fixture) : IAsyncLi
 
         using HttpClient client = Admin();
         HttpResponseMessage[] responses = await Task.WhenAll(
-            client.PostAsync(
-                $"/v1/inventory/reservations/{order}/reinstate", null, TestContext.Current.CancellationToken),
+            ReinstateAsync(client, order),
             client.PostAsync(
                 $"/v1/inventory/reservations/{order}/release", null, TestContext.Current.CancellationToken));
 
@@ -223,4 +219,8 @@ public sealed class ReservationEndpointsTests(ServiceFixture fixture) : IAsyncLi
         ReservationTestSupport.SendAsync(fixture, command, drain);
 
     private HttpClient Admin() => ReservationTestSupport.Admin(fixture);
+
+    /// <summary>A fresh command id per call, or a second reinstatement would replay the first's (§8.5).</summary>
+    private static Task<HttpResponseMessage> ReinstateAsync(HttpClient client, Guid orderId) =>
+        ReservationTestSupport.ReinstateAsync(client, orderId, Guid.CreateVersion7());
 }

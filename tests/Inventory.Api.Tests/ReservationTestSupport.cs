@@ -1,3 +1,4 @@
+using System.Net.Http.Json;
 using Common.Contracts.Inventory.V1;
 using Inventory.TestSupport;
 using MassTransit;
@@ -16,13 +17,23 @@ internal static class ReservationTestSupport
     public static readonly TimeSpan DeliveryBudget = TimeSpan.FromSeconds(30);
 
     /// <summary>A client carrying <see cref="InventoryPermissions.Admin"/>.</summary>
-    public static HttpClient Admin(ServiceFixture fixture)
+    public static HttpClient Admin(ServiceFixture fixture) => Admin(fixture, Guid.CreateVersion7());
+
+    /// <summary>The same client as <paramref name="caller"/>, for a test whose subject is §8.5's key.</summary>
+    public static HttpClient Admin(ServiceFixture fixture, Guid caller)
     {
         HttpClient client = fixture.Factory.CreateClient();
-        client.DefaultRequestHeaders.Add(TestAuthHandler.UserHeader, Guid.CreateVersion7().ToString());
+        client.DefaultRequestHeaders.Add(TestAuthHandler.UserHeader, caller.ToString());
         client.DefaultRequestHeaders.Add(TestAuthHandler.PermissionsHeader, InventoryPermissions.Admin);
         return client;
     }
+
+    /// <summary>One reinstatement under <paramref name="commandId"/>, the caller's id for the attempt (§8.5).</summary>
+    public static Task<HttpResponseMessage> ReinstateAsync(HttpClient client, Guid orderId, Guid commandId) =>
+        client.PostAsJsonAsync(
+            $"/v1/inventory/reservations/{orderId}/reinstate",
+            new { commandId },
+            TestContext.Current.CancellationToken);
 
     public static Task SeedStock(ServiceFixture fixture, Guid product, int available) =>
         fixture.ExecuteAsync(

@@ -39,15 +39,24 @@ public static class ReservationEndpoints
                 })
             .WithName("ReleaseReservation");
 
+        // A request record, since the order is the route's and the body carries the attempt's id alone (§8.5).
         group
             .MapPost(
                 "/{orderId:guid}/reinstate",
-                async (Guid orderId, IDispatcher dispatcher, CancellationToken ct) =>
+                async (
+                    Guid orderId,
+                    ReinstateReservationRequest request,
+                    IDispatcher dispatcher,
+                    CancellationToken ct) =>
                 {
-                    Result result = await dispatcher.SendAsync(new ReinstateReservationCommand(orderId), ct);
+                    Result result = await dispatcher.SendAsync(
+                        new ReinstateReservationCommand(request.CommandId, orderId), ct);
 
                     return result.ToHttpResult();
                 })
             .WithName("ReinstateReservation");
     }
 }
+
+/// <summary>The caller's id for this attempt, in the body because §8.5 keeps it a field of the command.</summary>
+public sealed record ReinstateReservationRequest(Guid CommandId);
