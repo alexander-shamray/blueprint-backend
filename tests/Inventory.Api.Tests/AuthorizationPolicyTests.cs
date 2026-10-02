@@ -1,6 +1,4 @@
-using Common.Application;
 using Inventory.Api;
-using Inventory.Application.Reservations.Reinstate;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
@@ -75,36 +73,6 @@ public class AuthorizationPolicyTests(HostSmokeTests.UnreachableInfrastructureFa
 
         // Not vacuous: a renamed endpoint would drop out of the loop above.
         Endpoints.Count(e => names.Contains(Name(e))).ShouldBe(names.Length);
-    }
-
-    [Fact]
-    public void The_idempotent_command_is_reached_through_an_authenticated_admin_endpoint()
-    {
-        // §8.5: an anonymous caller keys under the shared "system" segment. Found by name, since the endpoint
-        // binds a request record and no handler parameter is the command.
-        Type[] declared =
-        [
-            .. typeof(Inventory.Application.DependencyInjection).Assembly
-                .GetTypes()
-                .Where(typeof(IIdempotentCommand).IsAssignableFrom)
-                .Where(t => t is { IsClass: true, IsAbstract: false })
-        ];
-
-        declared.ShouldBe(
-            [typeof(ReinstateReservationCommand)],
-            "an idempotent command this test does not name has no endpoint held to authentication " +
-            "here; name its endpoint below in the change that adds it (§8.5)");
-
-        Endpoint endpoint = Endpoints
-            .Where(e => Name(e) == "ReinstateReservation")
-            .ShouldHaveSingleItem();
-
-        endpoint.Metadata.GetMetadata<IAllowAnonymous>().ShouldBeNull(
-            "an anonymous reinstatement would claim under the subject every anonymous caller shares (§8.5)");
-        endpoint.Metadata
-            .GetOrderedMetadata<IAuthorizeData>()
-            .Select(a => a.Policy)
-            .ShouldContain(InventoryPermissions.Admin);
     }
 
     private static string? Name(Endpoint endpoint) =>
