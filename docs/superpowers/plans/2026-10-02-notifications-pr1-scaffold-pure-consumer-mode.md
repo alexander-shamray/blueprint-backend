@@ -3431,11 +3431,6 @@ returns rather than throws.
 - Produces: `NotificationsDbContext.NotificationLog`;
   `ServiceFixture.ColumnsAsync(string schema, string table)`.
 
-`CompletedAt` where section 4 step 7 says `SentAt`: section 6's table is the
-persistence owner, and one column stamps every terminal outcome.
-`LockedUntil` nullable where section 6 does not mark it: a new row holds no
-lease, and Shipping's column is the same.
-
 - [ ] **Step 1: Write the failing schema tests**
 
 `tests/Notifications.Worker.Tests/NotificationLogSchemaTests.cs`:
