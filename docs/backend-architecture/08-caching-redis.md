@@ -581,11 +581,7 @@ public sealed class IdempotencyBehavior<TCommand, TResult>(
     // runs for an hour spends an hour of its own replay window.
     private static readonly TimeSpan Retention = IdempotencyRetention.Window;
 
-    // "null" and not the empty string. IdempotencyEntry carries a Payload the
-    // store has to tell apart from the in-progress marker it wrote on the
-    // claim, and an empty string is the value an implementation is likeliest to
-    // read as absent — which would replay every void-shaped command as
-    // ConcurrentRequestException for a day. This is valid JSON and unambiguous.
+    // Valid JSON, so the value half of every payload parses (ADR-057).
     private const string NoValue = "null";
 
     // What a payload opens with when it carries the fingerprint of the command

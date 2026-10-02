@@ -15,7 +15,7 @@ public sealed class IdempotencyBehavior<TCommand, TResult>(
 {
     private static readonly TimeSpan Retention = IdempotencyRetention.Window;
 
-    // "null", not the empty string, which a store is likeliest to read as an absent payload.
+    // Valid JSON, so the value half of every payload parses (ADR-057).
     private const string NoValue = "null";
 
     // Opens a payload that carries a fingerprint; no JSON value begins with "s", so no bare value spells it.
