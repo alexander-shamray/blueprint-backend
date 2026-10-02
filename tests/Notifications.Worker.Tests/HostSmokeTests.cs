@@ -47,7 +47,7 @@ public class HostSmokeTests(HostSmokeTests.UnreachableInfrastructureFactory fact
     }
 
     [Fact]
-    public void Ready_probe_reports_the_sql_redis_and_bus_checks()
+    public void Ready_probe_reports_the_sql_and_bus_checks()
     {
         // Registration, asserted directly, since unwired readiness and instant readiness look alike (§13.5).
         HealthCheckServiceOptions options = factory.Services
@@ -55,24 +55,18 @@ public class HostSmokeTests(HostSmokeTests.UnreachableInfrastructureFactory fact
             .Value;
 
         // The count is the assertion, since a readiness check dropped from a growing list turns nothing red.
-        options.Registrations.Count.ShouldBe(4);
+        options.Registrations.Count.ShouldBe(2);
 
         HealthCheckRegistration sql = options.Registrations.Single(r => r.Name == "sql");
         sql.Tags.ShouldContain("ready", "an untagged check is invisible to the /health/ready predicate");
-
-        // A host with a connection string has a readiness check (§13.5), and §8.1 puts the two Redis instances
-        // on different servers.
-        HealthCheckRegistration cache = options.Registrations.Single(r => r.Name == "redis-cache");
-        cache.Tags.ShouldContain("ready", "an untagged check is invisible to the /health/ready predicate");
-
-        HealthCheckRegistration coordination =
-            options.Registrations.Single(r => r.Name == "redis-coordination");
-        coordination.Tags.ShouldContain("ready", "§8.5's claims are written to this instance");
 
         // Registered by AddMassTransit itself, and pinned so a MassTransit major that changes it fails here.
         HealthCheckRegistration bus = options.Registrations.Single(r => r.Name == "masstransit-bus");
         bus.Tags.ShouldContain("ready", "a bus check outside the ready predicate reports to nobody");
         bus.Tags.ShouldContain("masstransit", "both tags are the documented contract (§13.5), so both are pinned");
+
+        // By name, since a dependency added to readiness later is a rollout the relay could block (§15.3).
+        options.Registrations.Select(r => r.Name).ShouldBe(["sql", "masstransit-bus"], ignoreOrder: true);
     }
 
     [Fact]

@@ -83,10 +83,7 @@ public class MetricsRegistrationTests
                 {
                     ["ConnectionStrings:Notifications"] =
                         "Server=notifications-sql.invalid;Database=Notifications;User Id=sa;Password=not-a-real-password",
-                    ["ConnectionStrings:RabbitMq"] = "amqp://guest:guest@notifications-rabbit.invalid:5672",
-                    // AddRedisConnections throws without both, unreachable on the same convention.
-                    ["ConnectionStrings:RedisCache"] = "notifications-redis.invalid:6379",
-                    ["ConnectionStrings:RedisCoordination"] = "notifications-redis.invalid:6380"
+                    ["ConnectionStrings:RabbitMq"] = "amqp://guest:guest@notifications-rabbit.invalid:5672"
                 })
             .Build();
 
