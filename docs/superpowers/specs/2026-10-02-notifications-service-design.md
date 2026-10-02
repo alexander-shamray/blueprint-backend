@@ -29,9 +29,10 @@ holds and never holds.
 [ADR-049](../../backend-architecture/adr/ADR-049-a-cancellation-payments-has-recorded-declines-the-authorisation-that-follows.md)
 decides that a customer who cancelled is never told their payment failed,
 and that the deciding fact is Notifications' own record of the cancellation.
-Shipping's spec already built the worker shape, the grant-checked token
-cache and the client-credentials types in `Common.Infrastructure` that this
-service takes.
+Shipping's spec already built the worker shape and the client-credentials
+types in `Common.Infrastructure`, which this service takes, and Shipping's
+own grant-checked token cache, whose shape this service copies over a
+claim of its own.
 
 This document does not restate any of that. It records what those chapters
 leave open and the decisions taken on each, so the PRs below can be argued
