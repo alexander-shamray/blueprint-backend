@@ -2318,7 +2318,7 @@ why the restartable relay binds a fixed port, and why the fault qualifies on
 - Modify: `src/Services/Notifications/Notifications.Infrastructure/Observability/MetricsInitialiser.cs`
 - Modify: `src/Services/Notifications/Notifications.Infrastructure/DependencyInjection.cs` — the worker, its claims, the metrics
 - Modify: `tests/Notifications.TestSupport/NotificationsWorkerFactory.cs` — the hosted worker's removal
-- Modify: `tests/Notifications.TestSupport/ServiceFixture.cs` — `RunSendPassAsync`, `SendUntilSettledAsync`
+- Modify: `tests/Notifications.TestSupport/ServiceFixture.cs` — `RunSendPassAsync`, `WaitUntilDueAsync`, `SendUntilSettledAsync`
 - Modify: `tests/Notifications.Worker.Tests/MetricsRegistrationTests.cs` — the selector names `NotificationMetrics`
 - Create: `tests/Notifications.Worker.Tests/ResentCounter.cs`
 - Test: `tests/Notifications.Worker.Tests/SendWorkerBudgetTests.cs`
@@ -2349,8 +2349,8 @@ namespace Notifications.Infrastructure.Observability;
 public sealed class NotificationMetrics { public void Resent(); }   // notifications.mail.resent
 ```
 
-and `ServiceFixture.RunSendPassAsync()`, `SendUntilSettledAsync(int)`,
-`ResentCounter.Resent(IServiceProvider)`.
+and `ServiceFixture.RunSendPassAsync()`, `WaitUntilDueAsync(Guid)`,
+`SendUntilSettledAsync(int)`, `ResentCounter.Resent(IServiceProvider)`.
 
 **The pass, step by step, and what each step does with a row.** Each is
 section 4's, and each is driven by a test below.
@@ -2524,6 +2524,7 @@ public sealed class SendWorkerTests(ServiceFixture fixture) : IAsyncLifetime
         (Guid order, Guid customer) = Ids();
         fixture.ContactAnswers(customer, Mailbox, "en-GB");
         await fixture.DeliverAsync(OrderEvents.Placed(order, customer, At));
+        await fixture.WaitUntilDueAsync(order);
 
         (await fixture.RunSendPassAsync()).ShouldBe(new SendPass(1, 1));
 
@@ -2547,6 +2548,7 @@ public sealed class SendWorkerTests(ServiceFixture fixture) : IAsyncLifetime
         (Guid order, Guid customer) = Ids();
         fixture.ContactAnswers(customer, Mailbox);
         await fixture.DeliverAsync(OrderEvents.Placed(order, customer, At));
+        await fixture.WaitUntilDueAsync(order);
 
         await fixture.RunSendPassAsync();
 
@@ -2563,6 +2565,7 @@ public sealed class SendWorkerTests(ServiceFixture fixture) : IAsyncLifetime
         (Guid order, Guid customer) = Ids();
         fixture.ContactAnswers(customer, Mailbox, "en");
         await fixture.DeliverAsync(OrderEvents.Dispatched(order, At));
+        await fixture.WaitUntilDueAsync(order);
 
         (await fixture.RunSendPassAsync()).ShouldBe(new SendPass(1, 0));
 
@@ -2587,6 +2590,7 @@ public sealed class SendWorkerTests(ServiceFixture fixture) : IAsyncLifetime
         fixture.ContactAnswers(customer, Mailbox, "en");
         await fixture.DeliverAsync(OrderEvents.Placed(order, customer, At));
         await fixture.DeliverAsync(OrderEvents.Declined(order, At));
+        await fixture.WaitUntilDueAsync(order);
 
         (await fixture.RunSendPassAsync()).ShouldBe(new SendPass(2, 1), "the placement sends and the decline waits");
         Notification decline = await DeclineAsync(order);
@@ -2902,7 +2906,8 @@ dotnet test tests/Notifications.Worker.Tests --filter "FullyQualifiedName~SendWo
 ```
 
 Expected: compile failure on `Notifications.Infrastructure.Delivery.SendWorker`,
-`SendPass`, `NotificationMetrics` and the fixture's `RunSendPassAsync`.
+`SendPass`, `NotificationMetrics` and the fixture's `RunSendPassAsync` and
+`WaitUntilDueAsync`.
 
 - [ ] **Step 4: The repository's read**
 
@@ -3565,6 +3570,13 @@ last so it is stopped first.
     public Task<SendPass> RunSendPassAsync() =>
         Factory.Services.GetRequiredService<SendWorker>().RunOnceAsync(TestContext.Current.CancellationToken);
 
+    /// <summary>Waits for the engine's clock to reach the order's pending rows, stamped by the host's.</summary>
+    public Task WaitUntilDueAsync(Guid order) =>
+        WaitUntilAsync(async () => await ScalarAsync<int>(
+            "SELECT Value = COUNT(*) FROM notifications.NotificationLog WHERE OrderId = {0} " +
+            "AND Status = 'Pending' AND NextAttemptAt > SYSDATETIMEOFFSET()",
+            order) == 0);
+
     /// <summary>Runs passes, each pending row made due first, until none is pending or a bound is hit.</summary>
     public async Task SendUntilSettledAsync(int maxPasses = 10)
     {
@@ -3584,6 +3596,12 @@ last so it is stopped first.
         throw new TimeoutException($"A notice was still pending after {maxPasses} passes.");
     }
 ```
+
+`WaitUntilDueAsync` is Shipping's `WaitUntilAttemptDueAsync` for a notice: a
+consumer stamps `NextAttemptAt` from the host's clock and the claim compares
+it with the engine's, so a pass run straight after a delivery could find the
+row not yet due. Every such pass waits on it; `SendUntilSettledAsync` makes
+its rows due itself.
 
 `tests/Notifications.Worker.Tests/MetricsRegistrationTests.cs`, in
 `The_metrics_selector_actually_selects_something`, with
@@ -3704,6 +3722,7 @@ public sealed class SendFaultTests(ServiceFixture fixture) : IAsyncLifetime
         (Guid order, Guid customer) = Ids();
         await fixture.StageContactAsync(customer, Mailbox, "en", TimeSpan.FromMinutes(1));
         await fixture.DeliverAsync(OrderEvents.Placed(order, customer, At));
+        await fixture.WaitUntilDueAsync(order);
         await relay.StopAsync(Ct);
 
         (await PassAsync(host)).ShouldBe(new SendPass(1, 0));
@@ -5347,18 +5366,17 @@ Then `/ship`.
 (Task 3); `DeliveryOptions`, `DeliveryOptionsValidator`, the factory's
 `giveUpAge` and `InventedGiveUpAge` (Task 4); the five index names and
 `AddSendAndRetentionIndexes` (Task 5); `CapturedLogs`, `SentCommitFaults`,
-`CommitFault`, `Mailpit.PlainOn`, `StopAsync`, `WaitForAsync`,
-`MessageAsync`, and the fixture's members (Task 6);
-`INotificationRepository.GetAsync`, `SendWork`, `SendPass`, `SendClaims`,
-`SendWorker` with `ClaimBatchSize`, `LeaseSeconds` and `RunOnceAsync`,
-`NotificationMetrics.Resent`, `ResentCounter`, `RunSendPassAsync`,
+`CommitFault`, `Mailpit.PlainOn`, `StopAsync`, `WaitForAsync`, `MessageAsync`,
+and the fixture's members (Task 6); `INotificationRepository.GetAsync`,
+`SendWork`, `SendPass`, `SendClaims`, `SendWorker` with `ClaimBatchSize`,
+`LeaseSeconds` and `RunOnceAsync`, `NotificationMetrics.Resent`,
+`ResentCounter`, `RunSendPassAsync`, `WaitUntilDueAsync`,
 `SendUntilSettledAsync` (Task 7); `WaitingSteps`, `INotificationStats`,
 `NotificationStats` with `ConnectTimeoutSeconds` and `OverdueGrace` (Task 9);
-`NotificationsRetentionService` and `PurgeNotificationsRetentionAsync`
-(Task 10). PR-6 consumes `DeliveryOptions` bound from `Delivery` with
-`GiveUpAge`, the series `notifications_waiting` with `step` ∈ `order_record`,
-`contact`, `relay`, and `notifications_overdue_seconds` with no attribute,
-under these spellings.
+`NotificationsRetentionService` and `PurgeNotificationsRetentionAsync` (Task
+10). PR-6 consumes `DeliveryOptions` bound from `Delivery` with `GiveUpAge`, the
+series `notifications_waiting` with `step` ∈ `order_record`, `contact`, `relay`,
+and `notifications_overdue_seconds` with no attribute, under these spellings.
 
 **Deliberately left.** §11.7's erasure consumer, which marks a pending notice
 `Undeliverable: erased` and replaces the customer's id — owed with that
