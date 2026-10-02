@@ -1818,7 +1818,10 @@ first backoff, by the `step` they wait on. Read the step before anything else:
 - **`contact`** — Keycloak is unreachable or is refusing this host's grant.
   `notifications.contact.refused` rising says it is refusing, which is a
   credential to fix — [`docs/secrets.md`](../secrets.md)'s client-secret
-  procedure — not an outage to wait out.
+  procedure — not an outage to wait out. With Keycloak healthy, the step also
+  counts a row this version cannot render: the worker's error line "stores
+  parameters this version cannot read" names it, and it waits for a replica
+  that can read it or for `DeliveryOptions.GiveUpAge`.
 - **`relay`** — the relay is down or refusing. `notifications.mail.unavailable`
   by `cause` tells an outage (`transient`, `unconfirmed`) from somebody's
   decision (`tls`, `credential`, `rejected`), which backs off and waits for a
