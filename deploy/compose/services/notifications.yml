@@ -38,19 +38,8 @@ services:
       # requires them only of a host that does.
       Identity__Authority: "http://keycloak:8080/realms/commerce"
       OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4317"
-      # §8.1's two connections, both read eagerly by AddRedisConnections (§8.2),
-      # so an absent key is a host that will not start rather than a cache
-      # silently reading the database. 6379 on both: each container listens on
-      # Redis's own port, and 6380 exists only on the host side.
-      ConnectionStrings__RedisCache: "redis-cache:6379"
-      ConnectionStrings__RedisCoordination: "redis-coordination:6379"
     depends_on:
       notifications-migrator: { condition: service_completed_successfully }
       rabbitmq: { condition: service_healthy }
       # service_healthy since infrastructure.yml's keycloak declares a healthcheck; the host itself does not need it.
       keycloak: { condition: service_healthy }
-      # service_healthy, not service_started: AddRedisConnections sets
-      # AbortOnConnectFail = false (§8.1), so the host would start against a
-      # Redis still booting and its first command would fail on §8.5's claim.
-      redis-cache: { condition: service_healthy }
-      redis-coordination: { condition: service_healthy }

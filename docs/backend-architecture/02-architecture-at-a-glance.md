@@ -114,10 +114,11 @@ Three details in this picture are decisions, not layout:
 
 - **Two Redis instances, not one.** Their eviction policies are incompatible
   ([§8.1](08-caching-redis.md)) — a shared instance under `allkeys-lru` will drop a held lock or a
-  revoked token with no error. Payments and Shipping reach neither: both
-  cache nothing, and §8.5's keys belong to HTTP write commands, which neither
-  has — Payments' idempotency is the payment provider's key and its own rows,
-  and Shipping's is the lease its workers take in SQL.
+  revoked token with no error. Payments, Shipping and Notifications reach
+  neither: none caches anything, and §8.5's keys belong to HTTP write commands,
+  which none has — Payments' idempotency is the payment provider's key and its
+  own rows, Shipping's is the lease its workers take in SQL, and Notifications'
+  is §9.5's inbox and the unique key on its record.
 - **Every service validates its own token**, not just the gateway. [§11.2](11-identity-authorization.md) treats
   the network as hostile, so a request arriving by any other path is still
   authenticated. A diagram showing only `GW -.-> IDP` would depict exactly the

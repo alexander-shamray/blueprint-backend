@@ -1,3 +1,4 @@
+using Notifications.Infrastructure.Idempotency;
 using Notifications.Infrastructure.Messaging;
 using Notifications.Infrastructure.Observability;
 using Notifications.Infrastructure.Persistence;
@@ -5,7 +6,6 @@ using Common.Application;
 using Common.Infrastructure.Idempotency;
 using Common.Infrastructure.Inbox;
 using Common.Infrastructure.Messaging;
-using Common.Infrastructure.Redis;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -41,6 +41,9 @@ public static class DependencyInjection
         // fails the first command, not startup: ValidateOnBuild never builds TransactionBehavior's open generic.
         services.AddScoped<IIdempotencyMarkerStore, EfIdempotencyMarkerStore>();
 
+        // §2: no Redis. The purge still asks the claim store (ADR-039), so this one never claims.
+        services.AddSingleton<IIdempotencyStore, NoClaimsIdempotencyStore>();
+
         // One local, so the tables of §9.5 and §8.5 cannot name different schemas; there is no outbox (§3.2).
         const string schema = "notifications";
         services.AddSingleton(new InboxTable(schema));
@@ -56,10 +59,6 @@ public static class DependencyInjection
         // message (§13.6).
         services.AddHostedService<MetricsInitialiser>();
 
-        // §8's two connections, one call by design (§8.2). Both strings are read eagerly, so a missing key
-        // stops the host.
-        services.AddRedisConnections(configuration);
-
         // The bus (§9). AddMassTransit registers its own readiness check.
         services.AddMassTransitMessaging(configuration);
 
@@ -70,19 +69,10 @@ public static class DependencyInjection
         services.AddSingleton<IDbConnectionFactory>(
             new SqlConnectionFactory(configuration.GetConnectionString("Notifications")!));
 
-        // Readiness (§13.5). Both Redis rows: AbortOnConnectFail is false, and §8.1 puts the two instances on
-        // different servers.
+        // Readiness (§13.5): SQL here, and the bus check AddMassTransit registers.
         services
             .AddHealthChecks()
-            .AddSqlServer(configuration.GetConnectionString("Notifications")!, name: "sql", tags: ["ready"])
-            .AddRedis(
-                configuration.GetConnectionString(RedisConnections.Cache)!,
-                name: "redis-cache",
-                tags: ["ready"])
-            .AddRedis(
-                configuration.GetConnectionString(RedisConnections.Coordination)!,
-                name: "redis-coordination",
-                tags: ["ready"]);
+            .AddSqlServer(configuration.GetConnectionString("Notifications")!, name: "sql", tags: ["ready"]);
 
         return services;
     }

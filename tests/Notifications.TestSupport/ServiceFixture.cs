@@ -7,7 +7,7 @@ namespace Notifications.TestSupport;
 
 /// <summary>Notifications's names, migrator and factory over the shared body (ADR-056).</summary>
 public sealed class ServiceFixture()
-    : ServiceFixture<NotificationsWorkerFactory, Program, NotificationsDbContext>("Notifications", redis: true)
+    : ServiceFixture<NotificationsWorkerFactory, Program, NotificationsDbContext>("Notifications")
 {
     /// <summary>Runs the real §7.4 job host; a null argument leaves that key unset.</summary>
     public static Task<int> RunMigratorAsync(
@@ -22,7 +22,5 @@ public sealed class ServiceFixture()
 
     protected override Task<int> MigrateAsync(string connectionString) => RunMigratorAsync(connectionString);
 
-    // Real servers rather than the factory's unreachable default, because §8.5's store claims keys on one.
-    protected override NotificationsWorkerFactory CreateFactory() =>
-        new(ConnectionString, BrokerConnectionString, RedisCacheConnectionString, RedisCoordinationConnectionString);
+    protected override NotificationsWorkerFactory CreateFactory() => new(ConnectionString, BrokerConnectionString);
 }
