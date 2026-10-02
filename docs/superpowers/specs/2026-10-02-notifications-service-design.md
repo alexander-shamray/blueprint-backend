@@ -269,7 +269,7 @@ largest piece of judgement in the service. Each row names its
 |---|---|---|
 | 1 | `feat(notifications): sixth service from the scaffold's pure-consumer mode` — the mode in `tools/new-service` and its suite; the gates told by selector; the render with `AddRedisConnections` stripped and §2's sentence amended; `NotificationLog` and its state rules in `Notifications.Application`, its configuration and the first migration; the Compose pair; `ci.yml`'s filter, outputs, matrix legs and the `images` job's `if:`; the broker account `notifications-svc` | A+D+E |
 | 2 | `feat(notifications): the mail channel and the Compose relay` — `IMailChannel`, the MailKit adapter, `MailHop`'s numbers and the breaker, `MailOptions` with the STARTTLS refusal, the channel counter and its `AddMeter` line, the Mailpit unit, §14.1's, §12.7's and §9.7's amendments, §15.4's rows, Appendix B's three rows, the Kazakh-script subject through the sink. Nothing calls it yet | A+D+E |
-| 3 | `feat(notifications): the notifications-worker client and the contact read` — the realm's client, `realm_check.py`'s predicate, every asserted test ADR-052 names, `docs/secrets.md`'s rows; `IContactSource`, the Keycloak adapter with `ContactHop`, the grant-checked token cache over `realm-management`'s roles, `ContactRecords` and its migration, `ContactOptions`. Nothing calls it yet | A+D+E |
+| 3 | `feat(notifications): the notifications-worker client and the contact read` — the realm's client, `realm_check.py`'s predicate, `RealmClientTests` and `RealmImportTests`' secret test, `docs/secrets.md`'s rows; `IContactSource`, the Keycloak adapter with `ContactHop`, the grant-checked token cache over `realm-management`'s roles, `ContactRecords` and its migration, `ContactOptions`. Nothing calls it yet | A+D+E |
 | 4 | `feat(notifications): the seven consumers, the order record and the templates` — `notifications-events`, the seven consumers writing intent rows, `OrderRecords` and its migration, the twenty-one templates, the renderer and its start-time checks, `NotificationsJurisdictionOptions`, §15.4's rows for it | A+D+E |
 | 5 | `feat(notifications): the send worker` — the claim and its lease, the order-record wait, ADR-049's suppression, ADR-052's five outcomes over PR-3's source, the render, the send with its `Message-ID`, the intent and completion stamps, the give-up age under `DeliveryOptions`, the breaker's park, the retention pass, the waiting and overdue gauges, the order journey through the service's own queue | A+D+E |
 | 6 | `feat(deploy): Notifications' chart, deploy target and canary` — `deploy/helm/notifications` with `service.enabled: false` and `redis.enabled: false`, the library chart's `mail`, `contactSource` and `delivery` capabilities, its `jurisdiction` block generalised to ADR-053 rule 1's three kinds of member with Shipping's chart listing its own, the client-credentials one, `_helpers.tpl`'s list of credentialed charts, the umbrella, the deploy descriptor `deploy/canary/deployables/notifications.json`, the dashboard's service variable, the shared runbook's Notifications half | D |
@@ -829,8 +829,9 @@ there is no Domain project.
     window fails the host at start;
   - `MessagingRegistrationTests`, the readiness-set assertion, and the
     `InboxWindow` refusal.
-- **PR-3's realm half**, in the suites ADR-052's table names: every asserted
-  test there turned to the set of three credentialed clients.
+- **PR-3's realm half**, in the suites ADR-052's table names:
+  `RealmClientTests` and `RealmImportTests`' secret test turned to the set of
+  three credentialed clients.
 - **The order journey**, in PR-5's worker suite: an order's placed,
   confirmed, despatched and delivered events through the real
   `notifications-events` queue produce four `Sent` rows and four messages in
@@ -870,7 +871,7 @@ red, and they go to the PR that turns them:
 | `_helpers.tpl` — asserted | 6 |
 | `smoke.sh` — no longer red: it reads the credentialed set from the descriptors; its two source checks naming hosts become one loop over every chart | 6 |
 | `RealmClientTests` — asserted | 3 |
-| `RealmImportTests` — asserted, both tests | 3 |
+| `RealmImportTests` — asserted; the secret test turns red, the vocabulary test is re-read and stays green | 3 |
 | `realm-export.json`, the client, and the `web-bff` description that counts the others | 3 |
 | `docs/secrets.md` | 3, and 2 for the relay's password |
 | `docs/repo-map.md` and `CLAUDE.md` | not moved: neither counts credentialed hosts today |
