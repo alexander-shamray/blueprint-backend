@@ -65,6 +65,7 @@ decision looks wrong.
 | **ADR-056** | [A service's fixture derives from one shared body under tests/](adr/ADR-056-a-services-fixture-derives-from-one-shared-body-under-tests.md) |
 | **ADR-057** | [A command id is bound to the fingerprint of the command that claimed it](adr/ADR-057-a-command-id-is-bound-to-the-fingerprint-of-the-command-that-claimed-it.md) |
 | **ADR-058** | [A write endpoint is keyed or declares why a repeat is harmless](adr/ADR-058-a-write-endpoint-is-keyed-or-declares-why-a-repeat-is-harmless.md) |
+| **ADR-059** | [An entry with no fingerprint is refused as already committed](adr/ADR-059-an-entry-with-no-fingerprint-is-refused-as-already-committed.md) |
 
 ---
 

@@ -641,7 +641,7 @@ public sealed class IdempotencyBehavior<TCommand, TResult>(
             if (existing is null || existing.InProgress)
                 throw new ConcurrentRequestException(command.CommandId);
 
-            return Replay(existing.Payload!, fingerprint, command.CommandId);
+            return Replay(existing.Payload!, fingerprint, key, command.CommandId);
         }
 
         // Handed to §6.3, which writes the durable marker under this key inside
@@ -722,21 +722,22 @@ public sealed class IdempotencyBehavior<TCommand, TResult>(
 
     private static string Envelope(string fingerprint) => $"{FingerprintPrefix}{fingerprint}:";
 
-    private static TResult Replay(string payload, string fingerprint, Guid commandId)
+    private static TResult Replay(string payload, string fingerprint, string key, Guid commandId)
     {
         // Compared before anything is read, the void shape included: the guard
-        // below never looks at the payload. An entry a previous release wrote
-        // opens with no prefix and replays as it stands (ADR-057). The envelope
-        // is stripped by its length, so a ":" inside the value is no separator.
-        if (payload.StartsWith(FingerprintPrefix, StringComparison.Ordinal))
-        {
-            string envelope = Envelope(fingerprint);
+        // below never looks at the payload. An entry with no fingerprint cannot
+        // be shown to be this command's, so it is refused as committed and not
+        // replayed (ADR-059). The envelope is stripped by its length, so a ":"
+        // inside the value is no separator.
+        if (!payload.StartsWith(FingerprintPrefix, StringComparison.Ordinal))
+            throw new CommandAlreadyCommittedException(key);
 
-            if (!payload.StartsWith(envelope, StringComparison.Ordinal))
-                throw new CommandIdReusedException(commandId);
+        string envelope = Envelope(fingerprint);
 
-            payload = payload[envelope.Length..];
-        }
+        if (!payload.StartsWith(envelope, StringComparison.Ordinal))
+            throw new CommandIdReusedException(commandId);
+
+        payload = payload[envelope.Length..];
 
         // (TResult)Result.Success() is legal C# under the constraint above and
         // throws InvalidCastException at run time for every TResult that is not
@@ -787,7 +788,10 @@ public sealed class IdempotencyBehavior<TCommand, TResult>(
 > `command.id_reused`, and is neither replayed nor run: a 200 carrying the
 > first request's result would tell the caller its second request was applied.
 > An in-flight duplicate is still `ConcurrentRequestException` whatever it
-> carries, because the fingerprint is recorded with the outcome.
+> carries, because the fingerprint is recorded with the outcome. A completed
+> entry with no fingerprint is refused with `CommandAlreadyCommittedException`
+> ([ADR-059](adr/ADR-059-an-entry-with-no-fingerprint-is-refused-as-already-committed.md)),
+> because nothing in it says which command produced it.
 >
 > **The shape of an idempotent command is therefore a compatibility surface, on
 > the terms the callout on renaming sets for its result.** Removing, renaming or
@@ -1630,7 +1634,7 @@ internal sealed class RedisIdempotencyStore(
 ```
 
 > **A value carrying no token is a previous release's entry, and it must read
-> as a replay rather than as an unfinished claim.** The encoding above arrived
+> as a recorded outcome rather than as an unfinished claim.** The encoding above arrived
 > after §8.5 had already shipped a store that wrote the marker or the payload
 > as the *whole* value, so during a rolling deploy `GetAsync` meets entries
 > with no `{claim}:` prefix and still inside their retention. An
@@ -1647,7 +1651,9 @@ internal sealed class RedisIdempotencyStore(
 > valid JSON. **The write side needs no matching case** — both scripts compare
 > a token these values do not carry, so they no-op and log rather than
 > clobbering. Plant both shapes the previous release actually wrote (`null`
-> for a void success, a quoted GUID for `Result<Guid>`) and expect a replay;
+> for a void success, a quoted GUID for `Result<Guid>`) and expect a completed
+> entry, which carries no fingerprint and so is refused as committed
+> ([ADR-059](adr/ADR-059-an-entry-with-no-fingerprint-is-refused-as-already-committed.md));
 > asserting only the marker leaves the half that matters unobserved.
 
 A behaviour constrained on a marker fails open: the command still executes, just
