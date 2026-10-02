@@ -37,10 +37,9 @@ request size limits.
 > what the number caps is the bandwidth and forwarding work a single caller can
 > spend. Capacity planning that reads it as a per-request allocation — and
 > multiplies by concurrency — is planning against a figure the gateway does not
-> have. Kestrel throws past the ceiling and
-> `ExceptionHandlerMiddleware` takes the status off that exception, so a 413
-> arrives in §10.5's shape with no handler written for it — unlike the 400 and
-> 409 rows, which each needed one.
+> have. A 413 arrives in §10.5's shape with no handler written for it, for
+> the reason that section's 413 row gives — unlike the 400 and 409 rows, which
+> each needed one.
 >
 > **The limit is the edge's, and it is the only one.** A service reached
 > directly inside the cluster still carries Kestrel's own default, because
