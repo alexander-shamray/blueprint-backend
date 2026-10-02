@@ -17,10 +17,11 @@ one MailKit `SmtpClient` per attempt inside a Polly `ResiliencePipeline` built
 by hand — total timeout, retry, circuit breaker, attempt timeout, the order
 `AddStandardResilienceHandler` uses — because SMTP is no `HttpClient`. The
 retry repeats only an attempt the relay never took the message in, which is
-§9.7's fourth rule applied to a send that has no idempotency key: a `4xx`, a
-timeout or a refused connection before the data is handed over is
-`transient` and retried; a break after it is `unconfirmed` and is not; `tls`,
-`credential` and `rejected` are decisions, and are not either. Every header
+§9.7's fourth rule applied to a send that has no idempotency key: a `4xx`
+anywhere, or a timeout or a refused connection before the send begins, is
+`transient` and retried; a break or a timeout once it has, the envelope
+included, is `unconfirmed` and is not; `tls`, `credential` and `rejected`
+are decisions, and are not either. Every header
 is configuration, a checked value or the clock; the body is
 `text/plain; charset=utf-8`; the `Message-ID` is the row's event id and
 template key under the domain of `Mail:From`.
@@ -2038,7 +2039,7 @@ public sealed class MailFaultTests(MailpitFixture fixture) : IAsyncLifetime
 
             Stopwatch.GetElapsedTime(started).ShouldBeLessThan(MailHop.TotalTimeout + TimeSpan.FromSeconds(2));
             counted.Of("transient").ShouldBeGreaterThanOrEqualTo(1,
-                "an attempt timeout before the data is the relay's, counted by the pipeline's OnTimeout");
+                "an attempt timeout before the send is the relay's, counted by the pipeline's OnTimeout");
         }
         finally
         {
@@ -2295,7 +2296,7 @@ internal sealed partial class SmtpMailChannel(
             phase = Phase.Sending;
             await client.SendAsync(message, attempt);
         }
-        // The caller's, or an attempt timeout before the data, which the pipeline converts, counts and may retry.
+        // The caller's, or an attempt timeout before the send, which the pipeline converts, counts and may retry.
         catch (OperationCanceledException) when (caller.IsCancellationRequested || phase != Phase.Sending)
         {
             throw;
@@ -2416,8 +2417,8 @@ What each branch is for, against section 4's table:
 | `5xx` to `RCPT TO` | `RecipientNotAccepted`, `>= 500` | `Refused(RecipientRefused)` |
 | a mailbox with CR, LF, a name, a comment or a second address | `Mailbox` | `Refused(NotAMailbox)`, no connection |
 | `4xx` at any command, the data's included | `Transient` | retried, then thrown |
-| refused connection, DNS failure, timeout before the data | `Transient` or the pipeline's `TimeoutRejectedException` | retried, then thrown |
-| a break or a timeout during the data | `Unconfirmed` | thrown, not retried |
+| refused connection, DNS failure, timeout before `SendAsync` began: connecting, TLS, authentication | `Transient` or the pipeline's `TimeoutRejectedException` | retried, then thrown |
+| a break or a timeout inside `SendAsync`, the envelope included | `Unconfirmed` | thrown, not retried |
 | an untrusted certificate, or no `STARTTLS` under `StartTls` | `Tls` | thrown, not retried |
 | `AUTH` refused or not offered | `Credential` | thrown, not retried |
 | `5xx` to the sender or to the data | `Rejected` | thrown, not retried |
@@ -2425,8 +2426,11 @@ What each branch is for, against section 4's table:
 
 A `4xx` answering the data is `transient` too, though the data was sent: the
 relay has said it holds nothing, so a retry cannot be the duplicate §9.7's
-fourth rule guards against, and the spec's "before the message was handed
-over" is read as "before the relay could have taken it".
+fourth rule guards against; the spec's row names that `4xx` itself, and its
+"before the message was handed over" means before `SendAsync` began. An
+envelope stall is the cost of that reading, since `SendAsync` runs
+`MAIL FROM`, `RCPT TO` and the data as one call: it is counted under
+`unconfirmed` and resent over its intent.
 
 `MailKit.Security.AuthenticationException` is the one `Classify` names: the
 file imports `MailKit.Security` and not `System.Security.Authentication`, and

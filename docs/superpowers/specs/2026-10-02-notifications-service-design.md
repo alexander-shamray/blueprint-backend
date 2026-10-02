@@ -360,9 +360,9 @@ two deliveries with one `Message-ID` and one `Sent` row.
 | `250` to the data | `Accepted` | — | `Sent` |
 | a permanent `5xx` to the recipient — no such mailbox, refused | `Refused(RecipientRefused)` | — | `Undeliverable: recipient_refused`, terminal |
 | nothing: the contact's mailbox does not parse, or carries CR or LF | `Refused(NotAMailbox)` | — | `Undeliverable: not_a_mailbox`, terminal |
-| a `4xx` — to the data included, since it says the relay holds nothing — or a timeout or a refused connection **before the message was handed over** | throws `MailUnavailableException`, cause `transient` | yes | backs off |
+| a `4xx` — to the data included, since it says the relay holds nothing — or a timeout or a refused connection **before the message was handed over**, which is before the send began: connecting, TLS, authentication | throws `MailUnavailableException`, cause `transient` | yes | backs off |
 | nothing: `MailHop`'s breaker is open, so no connection is made | throws `MailUnavailableException`, cause `transient` | no | backs off |
-| the connection breaks **after** the message was handed over and before the reply | throws `MailUnavailableException`, cause `unconfirmed` | no | backs off; the next pass sends again under the same `Message-ID` |
+| the connection breaks or times out **after** the message was handed over — anywhere in the send's commands, the envelope included — and before the reply | throws `MailUnavailableException`, cause `unconfirmed` | no | backs off; the next pass sends again under the same `Message-ID` |
 | a TLS session weaker than configured, a refused credential, or a permanent `5xx` about the sender or the message | throws `MailUnavailableException`, cause `tls`, `credential` or `rejected` | no | backs off, logged as an error |
 
 **Retrying the transfer is not idempotent, so the client never does it.**
@@ -372,7 +372,9 @@ the intent stamp exists to record, made silently. So the pipeline retries a
 connection, a greeting or an envelope refused before the data is sent, and
 a `4xx` to the data itself, which is the relay saying it holds nothing; a
 break mid-transfer, which says nothing, goes back to the row, whose next
-pass resends over the intent stamp and counts it.
+pass resends over the intent stamp and counts it. An envelope stall is the
+cost of one MailKit call carrying the envelope and the data together: it is
+counted under `unconfirmed` and resent over its intent.
 
 **The last row backs off rather than terminating**, because each is a
 deployment fault — a relay misconfigured, a session somebody downgraded, a
