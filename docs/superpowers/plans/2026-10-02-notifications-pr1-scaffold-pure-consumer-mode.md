@@ -2924,10 +2924,12 @@ The namespace is `Records`, not `Notifications`: a namespace
 `Notifications.Application.Notifications` would make `Notifications` inside it
 resolve to itself first.
 
-**The moves, against the spec's section 5 table.** Each row is a method; every
-other arrival returns `false` and changes nothing, never a throw, because a
-throw from the worker is a row retried for ever. Three decisions the table
-leaves to the code, each with a test:
+**The moves, against the spec's section 5 table.** Each row is a method but
+the `not_a_mailbox` row, which is left to PR-5: it adds the reason to
+`NotificationReasons.All` with the send that meets it. Every other arrival
+returns `false` and changes nothing, never a throw, because a throw from the
+worker is a row retried for ever. Three decisions the table leaves to the
+code, each with a test:
 
 - **`AssignCustomer`** is a move the table does not list: section 6 says the
   customer's id is copied from the order record when the worker resolves it,
@@ -3897,8 +3899,9 @@ grant. Then `/ship`.
   Task 6's Redis strip is a decision about this service, the same cut Shipping
   made, and not a defect of the render.
 - Section 3, PR-1's row: Tasks 1–11; CI joins (Task 10) and Helm does not.
-- Section 5, the record: Task 8, every row of the table and every terminal
-  arrival as a no-op.
+- Section 5, the record: Task 8, every row of the table but `not_a_mailbox`'s,
+  which PR-5 adds with the send that meets it, and every terminal arrival as
+  a no-op.
 - Section 6, persistence: Task 9, schema `notifications`, the section's
   columns, the unique key and `AddNotificationLog`.
 - Section 10, the broker account: rendered in Task 5 by Task 3's grant, held
