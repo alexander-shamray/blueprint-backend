@@ -3682,9 +3682,9 @@ section 11).
 
 Prove the lease by mutation: set `LeaseSeconds` to `0`, run
 `Two_workers_overlapping_claim_one_row_once`, and see the second worker claim
-the row; restore. Prove the intent by mutation: move the `StartSend` commit
-after the send, run the crash case, and see `SendStartedAt` null on the
-crashed row and the counter at zero; restore. Prove the drain by mutation:
+the row; restore. The intent's order is proved in Task 8, whose stopped relay
+fails the send before a moved commit could run; the crash case cannot, as its
+fault fires only on `MarkSent`. Prove the drain by mutation:
 pass `stoppingToken` as `RunOnceAsync`'s `rows`, run
 `A_host_stopped_mid_pass_finishes_the_send_and_commits_it_once`, and see the
 row still `Pending`; restore.
@@ -3975,7 +3975,10 @@ are written after it, so the red they prove is by mutation:
 - change `ContactAsync`'s filter to catch `ContactSourceRefusedException` too,
   and see the refusing-owner case send to the stale mailbox; restore;
 - change `ContactAge.Stale` in that filter to `!= ContactAge.Absent`, and see
-  the expired case send; restore.
+  the expired case send; restore;
+- move the `StartSend` commit to after `SendAsync`, and see
+  `A_relay_that_stops_leaves_its_row_pending_and_sends_it_when_it_returns`
+  find `SendStartedAt` null on the waiting row; restore.
 
 The stopped relay costs a refused connection and one jittered retry, a few
 seconds; the breaker case two sends of two `451` attempts each, also seconds.
