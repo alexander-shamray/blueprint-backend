@@ -167,6 +167,8 @@ public class DependencyInjectionTests
         services.ShouldContain(d =>
             d.ServiceType == typeof(ICommandHandler<ReinstateReservationCommand, Result>));
         services.ShouldContain(d =>
+            d.ServiceType == typeof(IValidator<ReinstateReservationCommand>));
+        services.ShouldContain(d =>
             d.ServiceType == typeof(IQueryHandler<GetReservationQuery, ReservationDto?>));
         services.ShouldContain(d =>
             d.ServiceType == typeof(ICommandHandler<FulfilReservationCommand, Result>));

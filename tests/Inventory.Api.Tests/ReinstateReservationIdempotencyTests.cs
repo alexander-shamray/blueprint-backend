@@ -1,4 +1,5 @@
 using System.Net;
+using System.Text;
 using Common.Contracts.Inventory.V1;
 using Inventory.TestSupport;
 using Shouldly;
@@ -164,8 +165,35 @@ public sealed class ReinstateReservationIdempotencyTests(ServiceFixture fixture)
         (await Available(product)).ShouldBe(1);
     }
 
+    [Theory]
+    [InlineData("{}")]
+    [InlineData("""{"commandId":"00000000-0000-0000-0000-000000000000"}""")]
+    public async Task An_omitted_or_empty_command_id_is_400_naming_the_field_and_writes_nothing(string body)
+    {
+        (Guid product, Guid order) = await ReleasedAsync();
+        var caller = Guid.CreateVersion7();
+        using HttpClient client = Admin(caller);
+
+        HttpResponseMessage response = await PostAsync(client, order, body);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+        (await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))
+            .ShouldContain("CommandId");
+        (await StatusAsync(order)).ShouldBe("Released");
+        (await Available(product)).ShouldBe(3);
+        (await fixture.IdempotencyClaims.GetAsync(Key(caller, Guid.Empty), TestContext.Current.CancellationToken))
+            .ShouldBeNull("validation runs before any claim (§6.3)");
+    }
+
     /// <summary>§8.5's key as the behaviour builds it: subject, operation, command id.</summary>
     private static string Key(Guid caller, Guid commandId) => $"{caller}:{Operation}:{commandId}";
+
+    /// <summary>A raw body, so a shape no client library would send still reaches the endpoint.</summary>
+    private static Task<HttpResponseMessage> PostAsync(HttpClient client, Guid order, string body) =>
+        client.PostAsync(
+            $"/v1/inventory/reservations/{order}/reinstate",
+            new StringContent(body, Encoding.UTF8, "application/json"),
+            TestContext.Current.CancellationToken);
 
     /// <summary>Two of <paramref name="available"/> reserved and released again, as the runbook finds them.</summary>
     private async Task<(Guid Product, Guid Order)> ReleasedAsync(int available = 3)
