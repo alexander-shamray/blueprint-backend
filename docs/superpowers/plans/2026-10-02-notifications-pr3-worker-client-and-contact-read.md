@@ -51,7 +51,7 @@ in full and
 - The blueprint wins over the spec; the spec wins over this plan.
 - **Class A+D+E.** Touch set:
 
-  `src/Services/Notifications/**`, `src/BuildingBlocks/Common.Infrastructure/Identity/ServiceIdentityOptions.cs`, `src/BuildingBlocks/Common.Web/ObservabilityExtensions.cs`, `tests/Notifications.*`, `tests/Common.Web.Tests/RealmImportTests.cs`, `tests/Common.Web.Tests/ObservabilityTests.cs`, `tests/Web.Bff.Tests/RealmClientTests.cs`, `tests/Web.Bff.Tests/Web.Bff.Tests.csproj`, `tests/Web.Bff.Tests/KeycloakFixture.cs`, `Directory.Packages.props`, `deploy/compose/keycloak/realm-export.json`, `deploy/compose/services/notifications.yml`, `deploy/compose/.env.example`, `deploy/compose/README.md`, `deploy/keycloak/realm_check.py`, `deploy/keycloak/test_realm_check.py`, `deploy/keycloak/README.md`, `.github/secret-scan/allowed/deploy.txt`, `.github/secret-scan/allowed/tests.txt`, `docs/backend-architecture/02-architecture-at-a-glance.md`, `docs/backend-architecture/03-bounded-contexts.md`, `docs/backend-architecture/09-messaging.md`, `docs/backend-architecture/11-identity-authorization.md`, `docs/backend-architecture/12-test-strategy.md`, `docs/backend-architecture/14-local-development.md`, `docs/backend-architecture/15-cicd-deployment.md`, `docs/backend-architecture/appendix-b-licences.md`, `docs/secrets.md`
+  `src/Services/Notifications/**`, `src/BuildingBlocks/Common.Infrastructure/Identity/ServiceIdentityOptions.cs`, `src/BuildingBlocks/Common.Web/ObservabilityExtensions.cs`, `tests/Notifications.*`, `tests/Common.Web.Tests/RealmImportTests.cs`, `tests/Common.Web.Tests/ObservabilityTests.cs`, `tests/Web.Bff.Tests/RealmClientTests.cs`, `tests/Web.Bff.Tests/Web.Bff.Tests.csproj`, `tests/Web.Bff.Tests/KeycloakFixture.cs`, `Directory.Packages.props`, `deploy/compose/keycloak/realm-export.json`, `deploy/compose/services/notifications.yml`, `deploy/compose/.env.example`, `deploy/compose/README.md`, `deploy/keycloak/realm_check.py`, `deploy/keycloak/test_realm_check.py`, `deploy/keycloak/README.md`, `.github/secret-scan/allowed/deploy.txt`, `.github/secret-scan/allowed/tests.txt`, `docs/backend-architecture/02-architecture-at-a-glance.md`, `docs/backend-architecture/03-bounded-contexts.md`, `docs/backend-architecture/04-solution-structure.md`, `docs/backend-architecture/09-messaging.md`, `docs/backend-architecture/11-identity-authorization.md`, `docs/backend-architecture/12-test-strategy.md`, `docs/backend-architecture/14-local-development.md`, `docs/backend-architecture/15-cicd-deployment.md`, `docs/backend-architecture/appendix-b-licences.md`, `docs/secrets.md`
 
   Why each, since the row is paths only: the service's code and its three
   test projects are A, and so are the two building-block files — the one
@@ -4370,7 +4370,7 @@ After:
 they are reached only through the broker" — is about what reaches them, and
 stays true.
 
-- [ ] **Step 3: §9.7**
+- [ ] **Step 3: §9.7 and §4.1**
 
 *The hop budget*'s paragraph, after "…so it spends no hop of this budget and
 §2.3's callout records the departure.", gains one sentence:
@@ -4395,6 +4395,16 @@ first two sentences become:
 
 The rest of the paragraph — the third-party clients, and PR-2's `MailHop` where
 it has landed — is unchanged.
+
+§4.1's Ordering sample makes the same claim in its comment on outbound
+identity, "Outbound identity belongs to the hosts that call a peer (§9.7,
+§11.5), and Ordering is not one of them." Its last sentence becomes:
+
+```csharp
+    // over the broker. Outbound identity belongs to a host that makes a
+    // synchronous call under a grant of its own (§9.7, §11.5), and Ordering is
+    // not one of them.
+```
 
 - [ ] **Step 4: §12**
 
@@ -4697,16 +4707,17 @@ Compose unit's two blocks.
   `docs/secrets.md` (Step 8); `docs/repo-map.md` and `CLAUDE.md` — re-read, and
   **neither counts credentialed hosts today**, so neither moves.
 
-**Places outside section 14's table this PR makes false, and takes.** §9.7's
-"a host that holds client credentials is a host that calls a peer" (Step 3);
-§12.1's outbound-hop row and §12.4's "the one suite in the solution that starts
-a real Keycloak" (Step 4); §11.5's "the **one** suite that runs a real
-Keycloak" (Step 1); Appendix B's Testcontainers row, "the only place the
-solution runs an identity provider", and the JWT row's use (Step 7);
-`ServiceIdentityOptions`' summary, "bound by each host that calls a peer"
-(Task 5 Step 4); `realm_check.py`'s `WORKER_CLIENT` comment, "Notifications'
-client is decided and minted nowhere yet" (Task 2 Step 3); and `realm-export.json`'s
-`web-bff` description, which counts two (Task 2 Step 2).
+**Places outside section 14's table this PR makes false, and takes.** §9.7's "a
+host that holds client credentials is a host that calls a peer" and §4.1's
+"Outbound identity belongs to the hosts that call a peer" (Step 3); §12.1's
+outbound-hop row and §12.4's "the one suite in the solution that starts a real
+Keycloak" (Step 4); §11.5's "the **one** suite that runs a real Keycloak" (Step
+1); Appendix B's Testcontainers row, "the only place the solution runs an
+identity provider", and the JWT row's use (Step 7); `ServiceIdentityOptions`'
+summary, "bound by each host that calls a peer" (Task 5 Step 4);
+`realm_check.py`'s `WORKER_CLIENT` comment, "Notifications' client is decided
+and minted nowhere yet" (Task 2 Step 3); and `realm-export.json`'s `web-bff`
+description, which counts two (Task 2 Step 2).
 
 **Gates this PR turns red, and the task that turns each green.**
 
