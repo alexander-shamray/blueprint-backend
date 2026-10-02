@@ -34,6 +34,19 @@ public sealed class NotificationLogSchemaTests(ServiceFixture fixture) : IAsyncL
     }
 
     [Fact]
+    public async Task The_row_version_is_not_null_as_every_aggregate_table_s_is()
+    {
+        // A shadow byte[] is optional by convention, so the configuration has to say otherwise.
+        (await fixture.ScalarAsync<string>(
+            """
+            SELECT Value = IS_NULLABLE
+            FROM INFORMATION_SCHEMA.COLUMNS
+            WHERE TABLE_SCHEMA = 'notifications' AND TABLE_NAME = 'NotificationLog' AND COLUMN_NAME = 'RowVersion'
+            """))
+            .ShouldBe("NO");
+    }
+
+    [Fact]
     public async Task One_row_per_event_per_template_is_the_database_s_rule()
     {
         Guid eventId = Guid.CreateVersion7();

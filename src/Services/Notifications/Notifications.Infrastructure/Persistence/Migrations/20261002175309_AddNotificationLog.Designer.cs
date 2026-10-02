@@ -12,7 +12,7 @@ using Notifications.Infrastructure.Persistence;
 namespace Notifications.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(NotificationsDbContext))]
-    [Migration("20261002171101_AddNotificationLog")]
+    [Migration("20261002175309_AddNotificationLog")]
     partial class AddNotificationLog
     {
         /// <inheritdoc />
@@ -117,6 +117,7 @@ namespace Notifications.Infrastructure.Persistence.Migrations
 
                     b.Property<byte[]>("RowVersion")
                         .IsConcurrencyToken()
+                        .IsRequired()
                         .ValueGeneratedOnAddOrUpdate()
                         .HasColumnType("rowversion");
 
