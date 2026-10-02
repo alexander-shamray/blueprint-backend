@@ -1,5 +1,5 @@
 # What a scaffold commit carried that its render did not write, one path per
-# line as `<commit> <path> <reason>`. The rule is README.md's *A scaffold PR is
-# the scaffold's output*, and each line records, as of its commit, a path that
-# rule would have refused.
+# line as `<commit> <path> <reason>`. The rule is README.md's *A scaffold
+# commit is the scaffold's output*, and each line records, as of its commit, a
+# path that rule would have refused.
 df82bac4 tests/Common.Web.Tests/ObservabilityTests.cs Shipping.Outbox joins §13.2's Required list by hand, because a scaffold that edited that deliberate second copy would make the assertion agree with itself

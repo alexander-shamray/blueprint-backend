@@ -239,7 +239,7 @@ The suite judges both: the comment gate's own findings over the lines a render
 writes that Catalog does not carry, and the rendered C#'s comment share
 against its `COMMENT_CEILING`.
 
-## A scaffold PR is the scaffold's output
+## A scaffold commit is the scaffold's output
 
 A new service's first pull request holds this script's output as a commit of
 its own, committed as the scaffold left it, which `--verify` proves; the
