@@ -78,6 +78,8 @@ public sealed class Notification
     /// <summary>The order record named the customer; a second answer does not overwrite the first.</summary>
     public bool AssignCustomer(Guid customerId)
     {
+        ArgumentOutOfRangeException.ThrowIfEqual(customerId, Guid.Empty);
+
         if (Status != NotificationStatus.Pending || CustomerId is not null)
             return false;
 
