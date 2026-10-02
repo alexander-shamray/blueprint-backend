@@ -82,7 +82,7 @@ public class MetricsRegistrationTests
                 new Dictionary<string, string?>
                 {
                     ["ConnectionStrings:Notifications"] =
-                        "Server=notifications-sql.invalid;Database=Notifications;User Id=sa;Password=not-a-real-password",
+                        "Server=sql.invalid;Database=Notifications;User Id=sa;Password=not-a-real-password",
                     ["ConnectionStrings:RabbitMq"] = "amqp://guest:guest@notifications-rabbit.invalid:5672"
                 })
             .Build();
