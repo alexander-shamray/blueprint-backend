@@ -1843,6 +1843,100 @@ class RendersAPureConsumer(unittest.TestCase):
         self.assertNotIn("ports:", unit)
 
 
+class EveryGateSeesThePureConsumerRender(unittest.TestCase):
+    """Each gate's own selector, over the render with no Domain project and no outbox."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.rendered = pure_consumer()
+        cls.paths = sorted({**cls.rendered.created, **cls.rendered.updated})
+
+    def test_the_render_is_the_seven_projects_the_suite_is_about(self):
+        projects = [p for p in self.paths if p.endswith(".csproj")]
+        self.assertEqual(len(projects), 7, projects)
+
+    def test_the_licence_gate_walks_every_rendered_project_file(self):
+        gate = gate_module("licence-gate", "licence_gate.py")
+        with tempfile.TemporaryDirectory() as directory:
+            root = template_copy(Path(directory))
+            apply(root, pure_consumer(repo_root=root))
+            walked = {path.relative_to(root).as_posix() for path in gate.find_projects(root)}
+        for path in (p for p in self.rendered.created if p.endswith(".csproj")):
+            self.assertIn(path, walked, f"{path} is outside the licence gate's walk")
+
+    def test_the_secret_scan_s_allow_list_covers_every_rendered_tree(self):
+        gate = load_scan_gate(REPO_ROOT)
+        covers = new_service.allow_list_trees(REPO_ROOT, gate)
+        nested = [p for p in self.paths if "/" in p]
+        self.assertTrue(nested)
+        for path in nested:
+            self.assertTrue(any(gate.covers_path(prefix, path) for prefix in covers), path)
+
+    def test_the_comment_gate_reads_every_rendered_source_file(self):
+        gate = comment_gate_module()
+        unread = [p for p in self.rendered.created if gate.reader_for(p) is None]
+        self.assertTrue(len(unread) < len(self.rendered.created))
+        for path in unread:
+            self.assertTrue(PurePosixPath(path).name == "Dockerfile" or path.endswith(".json"), path)
+
+    def test_the_coverage_filter_sees_no_assembly_of_a_service_with_no_domain_project(self):
+        # §12.9 measures the Domain assemblies, and §4.1 gives this shape none: the
+        # filter's silence about it is the render's fact rather than the filter's miss.
+        module_path = re.search(
+            r"<ModulePath>(.+?)</ModulePath>",
+            (REPO_ROOT / "coverage.runsettings").read_text(encoding="utf-8")).group(1)
+        assemblies = [f"{PurePosixPath(p).stem}.dll" for p in self.rendered.created if p.endswith(".csproj")]
+        self.assertTrue(assemblies)
+        self.assertEqual([], [a for a in assemblies if re.search(module_path, a)])
+
+    def test_the_architecture_gates_name_no_domain_and_hold_the_dispatcher_s_premise(self):
+        worker = self.rendered.created[f"tests/{PROBE}.{new_service.WORKER_HOST}.Tests/ArchitectureTests.cs"]
+        self.assertIn("public void Nothing_in_this_service_raises_a_domain_event()", worker)
+        self.assertIn(f"typeof({PROBE}.Application.DependencyInjection).Assembly,", worker)
+        application = self.rendered.created[f"tests/{PROBE}.Application.Tests/ArchitectureTests.cs"]
+        for body in (worker, application):
+            self.assertNotIn("AssemblyMarker", body)
+            self.assertNotIn(f"{PROBE}.Domain", body)
+
+    def test_the_pipeline_gate_would_see_both_rendered_dockerfiles(self):
+        dockerfiles = [p for p in self.rendered.created if p.endswith("/Dockerfile")]
+        self.assertEqual(
+            sorted(PurePosixPath(p).parent.name for p in dockerfiles),
+            [f"{PROBE}.Migrator", f"{PROBE}.{new_service.WORKER_HOST}"])
+
+    def test_the_observability_gate_owes_it_no_outbox_gauges_and_owes_a_domain_one(self):
+        # check.py's check 8 over a tree holding the template and this render: the
+        # selector is the Domain project, so adding one is what makes a dispatcher owed.
+        check = importlib.util.spec_from_file_location(
+            "observability_check", REPO_ROOT / "deploy/observability/check.py")
+        gate = importlib.util.module_from_spec(check)
+        check.loader.exec_module(gate)
+        with tempfile.TemporaryDirectory() as directory:
+            root = template_copy(Path(directory))
+            apply(root, pure_consumer(repo_root=root))
+            gate.ROOT, gate.failures = root, []
+            gate.check_outbox_metrics_per_service()
+            self.assertEqual([], gate.failures)
+
+            domain = root / f"src/Services/{PROBE}/{PROBE}.Domain/{PROBE}.Domain.csproj"
+            domain.parent.mkdir(parents=True)
+            domain.write_text("<Project />", encoding="utf-8")
+            gate.failures = []
+            gate.check_outbox_metrics_per_service()
+            self.assertTrue(any(f.startswith(f"{PROBE} has a Domain project") for f in gate.failures), gate.failures)
+
+    def test_the_broker_gate_reads_it_as_publishing_nothing(self):
+        check = importlib.util.spec_from_file_location(
+            "broker_check", REPO_ROOT / "deploy/compose/rabbitmq/check_permissions.py")
+        gate = importlib.util.module_from_spec(check)
+        check.loader.exec_module(gate)
+        with tempfile.TemporaryDirectory() as directory:
+            root = template_copy(Path(directory))
+            apply(root, pure_consumer(repo_root=root))
+            gate.SERVICES = root / "src" / "Services"
+            self.assertFalse(gate.publishes(PROBE))
+            self.assertTrue(gate.publishes(new_service.TEMPLATE))
+
 
 class RefusesToRun(unittest.TestCase):
     def test_a_name_that_is_not_pascal_case(self):

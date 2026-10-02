@@ -293,6 +293,34 @@ class TheAccountsThemselves(unittest.TestCase):
             f"the gate accepted a live credential for no service: {failures}")
 
 
+class AServiceThatPublishesNothing(unittest.TestCase):
+    """The selector check 3 reads, over a tree of its own rather than the repository's."""
+
+    def run_over_tree(self, domain: bool) -> bool:
+        with tempfile.TemporaryDirectory() as directory:
+            services = Path(directory)
+            (services / "Probe" / "Probe.Infrastructure" / "Messaging").mkdir(parents=True)
+            if domain:
+                (services / "Probe" / "Probe.Domain").mkdir(parents=True)
+                (services / "Probe" / "Probe.Domain" / "Probe.Domain.csproj").write_text("<Project />")
+            original = gate.SERVICES
+            gate.SERVICES = services
+            try:
+                return gate.publishes("Probe")
+            finally:
+                gate.SERVICES = original
+
+    def test_a_service_with_a_domain_project_publishes(self):
+        self.assertTrue(self.run_over_tree(domain=True))
+
+    def test_a_service_with_no_domain_project_publishes_nothing(self):
+        self.assertFalse(self.run_over_tree(domain=False))
+
+    def test_the_selector_finds_a_publisher_in_the_repository(self):
+        # The floor: a glob that matched nothing would call every service a pure consumer.
+        self.assertTrue(any(gate.publishes(name) for name in gate.messaging_dirs()))
+
+
 class AScaffoldedServiceIsNotRefused(unittest.TestCase):
     def test_an_account_whose_context_has_no_contracts_yet_is_allowed(self):
         # §4.5's scaffold grants a broker account; `Common.Contracts` gains a

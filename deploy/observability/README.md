@@ -43,7 +43,7 @@ a signal and a procedure"* — and the last is the gate watching its own inputs.
 | 5 | Every metric an **awaiting-signal** rule reads is published by **nothing** |
 | 6 | Every dashboard panel's metric is published |
 | 7 | The workflow's triggers cover every path outside this tree that the gate reads |
-| 8 | Every service hosting §9.4's dispatcher publishes outbox gauges, or is on a declared exemption |
+| 8 | Every service with a Domain project hosts §9.4's dispatcher and publishes its gauges, or is on a declared exemption; one with none hosts neither |
 | 9 | §13.6's and §13.9's tables name exactly the runbooks on disk, both ways |
 
 **Check 9 is checks 1 and 2 aimed at the chapter instead of the rule files.**
@@ -73,6 +73,10 @@ empty, because §4.5's template registers the gauges and the scaffold renders
 them into every new service (§13.6); a service lands on it only with a reason
 written down, and the check fails in **both** directions: a new unexempted
 service, and a stale exemption for one that no longer needs it.
+**Which services owe a dispatcher is read from the tree**: one with a Domain
+project raises the events §9.4's outbox carries, and one with none — §4.1's
+pure consumer — publishes nothing, so it hosts no dispatcher and is owed no
+gauges. Both directions fail here too.
 
 **Checks 4, 5 and 6 read C# with comments removed first, and the direction of
 that failure is why.** The instrument scan is a regex over source, so a
