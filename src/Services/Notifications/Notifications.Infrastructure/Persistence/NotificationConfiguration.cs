@@ -25,6 +25,6 @@ internal sealed class NotificationConfiguration : IEntityTypeConfiguration<Notif
         builder.Property(n => n.Status).HasConversion<string>().HasMaxLength(16);
 
         // A shadow property, so the record names no EF type, as §8.5's marker does (§7.2).
-        builder.Property<byte[]>("RowVersion").IsRowVersion();
+        builder.Property<byte[]>("RowVersion").IsRowVersion().IsRequired();
     }
 }

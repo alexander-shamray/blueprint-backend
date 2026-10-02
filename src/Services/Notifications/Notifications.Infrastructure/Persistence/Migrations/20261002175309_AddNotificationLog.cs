@@ -28,7 +28,7 @@ public partial class AddNotificationLog : Migration
                 Attempts = table.Column<int>(type: "int", nullable: false),
                 NextAttemptAt = table.Column<DateTimeOffset>(type: "datetimeoffset(7)", nullable: false),
                 LockedUntil = table.Column<DateTimeOffset>(type: "datetimeoffset(7)", nullable: true),
-                RowVersion = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: true)
+                RowVersion = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false)
             },
             constraints: table =>
             {
