@@ -958,7 +958,10 @@ PURE_CONSUMER_PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
     ),
     "tests/Catalog.Api.Tests/RetentionPurgeTests.cs": (
         ("using Catalog.TestSupport.Outbox;\n", ""),
-        ("/// <summary>§9.4's, §9.5's and §8.5's retention purges,", "/// <summary>§9.5's and §8.5's retention purges,"),
+        (
+            "/// <summary>§9.4's, §9.5's and §8.5's retention purges,",
+            "/// <summary>§9.5's and §8.5's retention purges,",
+        ),
         ("using Common.Infrastructure.Outbox;\n", ""),
         (
             "    public async Task A_skewed_clock_purges_the_outbox_and_the_inbox_and_leaves_the_marker()\n"
