@@ -498,8 +498,7 @@ def classify(repo_root: Path, labels: tuple[str, ...]) -> list[str]:
 
     # And no patch may be inert. A key for a file that is not copied never
     # reaches `require_once`, so the anchor it guards would be unbound while
-    # every other anchor still looked enforced. The parentheses matter: `-`
-    # binds tighter than `|`.
+    # every other anchor still looked enforced.
     tables = set(PATCHES) | set(WORKER_PATCHES) | set(PURE_CONSUMER_PATCHES) | set(PURE_CONSUMER_SPANS)
     if (inert := tables - set(copied)):
         raise ScaffoldError(
