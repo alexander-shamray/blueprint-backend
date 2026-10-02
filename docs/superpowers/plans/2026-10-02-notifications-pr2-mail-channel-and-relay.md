@@ -99,9 +99,12 @@ inequality, the opened circuit) and 14 (§14.1, §12.7, §9.7, Appendix B and
   file or line present, adds nothing, and its PR body says so. That is why the
   meter's name lives in a class of its own rather than on `MailMetrics`, as
   `Shipping.Outbound` lives on `CarrierMetrics`: neither adapter is the
-  other's owner. Three edits are additive in either order and written so:
+  other's owner. Four edits are additive in either order and written so:
   `MetricsInitialiser` gains `MailMetrics` after PR-1's parameters and before
-  or after PR-3's `ContactMetrics`, whichever is there; `Program.cs` holds
+  or after PR-3's `ContactMetrics`, whichever is there;
+  `NotificationsWorkerFactory` gains its six parameters after PR-1's two,
+  leaving PR-3's `contactSourceBaseUrl` after them, every caller naming each
+  parameter it passes; `Program.cs` holds
   one order whichever lands first — `AddNotificationsInfrastructure`, then
   `AddMailChannel`, then PR-3's `AddContactSource`; and
   `MetricsRegistrationTests` gains its `TestEnvironment`, its `BuildServices`
@@ -1344,9 +1347,11 @@ constructing it — is met: a Notifications that has sent nothing constructs
 `MailMetrics` never.
 
 `NotificationsWorkerFactory` gains six parameters after PR-1's two, each
-defaulted so every existing caller compiles unchanged, with
-`using Notifications.Infrastructure.Mail;` and
-`using System.Globalization;` in sorted position:
+defaulted so every existing caller compiles unchanged, and PR-3's
+`contactSourceBaseUrl` keeps its place after them where it has landed, as
+every caller names it; with `using Notifications.Infrastructure.Mail;` and
+`using System.Globalization;` in sorted position, each where absent. On
+PR-1's render alone:
 
 ```csharp
 public class NotificationsWorkerFactory(
