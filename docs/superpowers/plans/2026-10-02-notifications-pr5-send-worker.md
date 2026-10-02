@@ -3727,9 +3727,10 @@ The no-mailbox export of section 12 rides on the same staging, because it is
 the staging where the most lines carrying an exception are written.
 
 **No `Fault<T>` to read, as section 9 says.** "No `Fault<T>` exists to carry
-one, since the worker is not a consumer" (ADR-052), so the `_error` queue's
-depth is the assertion: nothing was published to carry a mailbox. The log is
-the one export that can, and it is searched whole.
+one, since the worker is not a consumer" (spec, section 9) — no consumer
+makes the read under ADR-052 — so the `_error` queue's depth is the
+assertion: nothing was published to carry a mailbox. The log is the one
+export that can, and it is searched whole.
 
 - [ ] **Step 1: Write the tests**
 
