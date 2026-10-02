@@ -320,6 +320,18 @@ class AServiceThatPublishesNothing(unittest.TestCase):
         # The floor: a glob that matched nothing would call every service a pure consumer.
         self.assertTrue(any(gate.publishes(name) for name in gate.messaging_dirs()))
 
+    def test_a_service_that_publishes_nothing_is_refused_a_contract_write(self):
+        definitions = real()
+        consumers = [name for name in gate.messaging_dirs() if not gate.publishes(name)]
+        self.assertTrue(consumers, "no service in the tree publishes nothing: the selector, or the tree")
+        entry = permission(definitions, f"{consumers[0].lower()}-svc")
+        entry["write"] = entry["write"].replace("|MassTransit:", "|Common\\.Contracts|MassTransit:")
+
+        failures = run_against(definitions)
+        self.assertTrue(
+            any("no Domain project to publish from" in f for f in failures),
+            f"the gate accepted a contract write for a service that publishes nothing: {failures}")
+
 
 class CheckThreeFollowsTheSelector(unittest.TestCase):
     """What the account owes and may hold, once `publishes` has answered for a service."""
