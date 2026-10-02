@@ -28,6 +28,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\BuildingBlocks\Common.Web\Common.Web.csproj" />
+    <!-- WriteEndpointRule, whose unit suite sits beside the metadata it reads (ADR-058). -->
+    <ProjectReference Include="..\Common.TestSupport\Common.TestSupport.csproj" />
   </ItemGroup>
 
 </Project>
