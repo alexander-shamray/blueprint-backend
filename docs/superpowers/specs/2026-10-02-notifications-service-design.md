@@ -859,6 +859,7 @@ red, and they go to the PR that turns them:
 |---|---|
 | §2.2's edges from Notifications to Keycloak, the read and the client credentials, drawn as Shipping's pair is | 3 |
 | §3.1's paragraph naming ADR-052's reads, where Shipping's sentence lives; §3.2's table has no column for a read | 3 |
+| §4.1's Ordering sample, "Outbound identity belongs to the hosts that call a peer" | 3 |
 | §9.7's "a host that holds client credentials is a host that calls a peer" | 3 |
 | §11.5's table of realm objects, its counting sentences, "the one suite that runs a real Keycloak" and its last paragraph | 3 |
 | §12.1's outbound-hop row and §12.4's one Keycloak suite | 3 |
