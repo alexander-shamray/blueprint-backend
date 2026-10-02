@@ -5303,9 +5303,8 @@ it runs after the last commit; every block this plan adds is five lines or
 fewer, and the two touched configurations' blocks are judged whole.
 
 **This plan's own text** carries no connection string and no credential; the
-fixture's `Unreachable.Sql` is quoted by name. If §15.1's scan names this file,
-add the entry to `.github/secret-scan/allowed/docs.txt` with the fingerprint
-the scanner computed and a reason naming the literal.
+fixture's `Unreachable.Sql` is quoted by name. A plan file is the branch's that
+wrote it, never this PR's to edit or allow-list.
 
 - [ ] **Step 3: Open the PR**
 
