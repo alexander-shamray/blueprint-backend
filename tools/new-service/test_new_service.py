@@ -2930,7 +2930,7 @@ class VerifiesAScaffoldCommit(unittest.TestCase):
 
 
 class ReadsAScaffoldCommitsShape(unittest.TestCase):
-    """`--verify`'s reading of what a commit added, over a repository built for the case."""
+    """`--verify`'s reading of a scaffold commit's shape, and the arguments it renders that shape with."""
 
     def test_a_pure_consumer_commit_is_rendered_with_its_own_flag(self):
         scaffolded = scaffold.reproduce.Scaffolded(
