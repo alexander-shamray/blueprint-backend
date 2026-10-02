@@ -66,6 +66,15 @@ serialiser refuses now fails before its claim, where it used to run. The payload
 is no longer a JSON document, and it still cannot spell the store's in-progress
 state.
 
+**Amended by
+[ADR-059](ADR-059-an-entry-with-no-fingerprint-is-refused-as-already-committed.md)**,
+which refuses a completed entry with no fingerprint with
+`command.already_committed` rather than replaying it. The decision's clause
+that such an entry is replayed as it stands, and the consequence that one
+written before this record replays to any command, stand as written because
+they were true when they were written, and the record that moved them is
+ADR-059.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)
