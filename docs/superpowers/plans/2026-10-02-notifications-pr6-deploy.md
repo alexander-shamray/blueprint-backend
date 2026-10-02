@@ -1502,6 +1502,7 @@ deploy target because `deploy.yml` reads the descriptors.
 - Modify: `deploy/helm/README.md` — the tree fence, the umbrella command, the
   required-values paragraph and the environment example
 - Modify: `deploy/helm/web-bff/values.yaml` — its first comment block
+- Modify: `deploy/helm/smoke.sh` — one comment line
 - Modify: `deploy/canary/canary.json` — one `$comment` line
 - Modify: `deploy/canary/test_canary.py` — one docstring line
 
@@ -1611,7 +1612,7 @@ the old rule names a set its own chart is outside. The four charts whose
 calls a peer" are not edited: that is a sufficient condition and still true,
 a restatement met in passing.
 
-- [ ] **Step 3: "The worker's chart", in the two places that say it**
+- [ ] **Step 3: "The worker's chart", in the three places that say it**
 
 `deploy/canary/canary.json`'s `$comment` says "The worker's chart sets a
 replica count with no autoscaler at all", which reads as one chart. Before:
@@ -1639,8 +1640,24 @@ after:
         request passes through it, and a worker's sets a replica count
 ```
 
-The docstring stays five lines, which the comment gate judges whole. §15.5
-and `deploy.yml`'s first-rung comment already say "a worker" and move nothing.
+The docstring stays five lines, which the comment gate judges whole.
+
+`deploy/helm/smoke.sh`'s comment over `AUTOSCALED_CHARTS` opens "One chart
+sets a replica count instead of an autoscaler (§15.3), so the", which
+Notifications' `"autoscaled": false` makes two. Before:
+
+```bash
+# One chart sets a replica count instead of an autoscaler (§15.3), so the
+```
+
+After, the block still five lines:
+
+```bash
+# A worker chart sets a replica count instead of an autoscaler (§15.3), so the
+```
+
+§15.5 and `deploy.yml`'s first-rung comment already say "a worker" and move
+nothing.
 
 - [ ] **Step 4: Run; commit**
 
@@ -1650,12 +1667,13 @@ py -3.12 deploy/canary/canary.py check
 PYTHON="py -3.12" bash deploy/helm/smoke.sh
 ```
 
-Expected: all green and unchanged from Task 3 — `canary.json` still parses,
-the suite changed one docstring line, and `smoke.sh` reads no comment.
+Expected: all green and unchanged from Task 3 — `canary.json` still parses, the
+suite changed one docstring line, and `smoke.sh` changed one comment line and
+reads no comment.
 
 ```bash
-git add deploy/helm/README.md deploy/helm/web-bff/values.yaml deploy/canary/canary.json deploy/canary/test_canary.py
-git commit -m "docs: the Helm README names Notifications' required values, and two sentences stop counting one worker"
+git add deploy/helm/README.md deploy/helm/web-bff/values.yaml deploy/helm/smoke.sh deploy/canary/canary.json deploy/canary/test_canary.py
+git commit -m "docs: the Helm README names Notifications' required values, and three sentences stop counting one worker"
 ```
 
 ---
