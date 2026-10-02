@@ -113,13 +113,15 @@ in full and
   `Microsoft.Extensions.Hosting.Abstractions` reference in
   `Notifications.Infrastructure.csproj` are each written by whichever of the
   two lands first; the second finds the file or line present and adds nothing,
-  and its PR body says so. Three edits are additive in both orders and are
+  and its PR body says so. Four edits are additive in both orders and are
   written so: `MetricsInitialiser` gains `ContactMetrics` as its **last**
   parameter, after whatever PR-2 added; `NotificationsWorkerFactory` gains
   one defaulted parameter **after its last one**, which every caller in this
-  plan passes **by name**; and `Program.cs` holds one order whichever lands
+  plan passes **by name**; `Program.cs` holds one order whichever lands
   first — `AddNotificationsInfrastructure`, then PR-2's `AddMailChannel`,
-  then `AddContactSource`.
+  then `AddContactSource`; and `MetricsRegistrationTests` gains its
+  `TestEnvironment`, its `BuildServices` summary and its shared usings from
+  whichever lands first, Shipping's forms in both.
 - **No new pin and no Appendix B identity.** `Microsoft.Extensions.Http.Resilience`,
   `System.IdentityModel.Tokens.Jwt`, `Testcontainers.Keycloak` and
   `WireMock.Net` are pinned and registered; Appendix B's two rows move only in
@@ -3008,7 +3010,7 @@ selector test names the new type. With
 `using Microsoft.Extensions.FileProviders;`,
 `using Microsoft.Extensions.Hosting;` and
 `using ContactRegistration = Notifications.Infrastructure.Contacts.DependencyInjection;`
-in sorted position, in the dictionary:
+in sorted position, each where absent, in the dictionary:
 
 ```csharp
                     // Read eagerly by AddContactSource; HTTPS because the environment below is not Development.
@@ -3029,8 +3031,9 @@ the summary over `BuildServices`, a touched block rewritten whole:
 ```
 
 a `TestEnvironment` class at the foot of the file — Production, Shipping's
-`MetricsRegistrationTests.TestEnvironment` verbatim — unless PR-1's render
-already has one; and in `The_metrics_selector_actually_selects_something`:
+`MetricsRegistrationTests.TestEnvironment` verbatim — unless PR-1's render or
+PR-2 already put one there; and in
+`The_metrics_selector_actually_selects_something`:
 
 ```csharp
         registered.ShouldContain(typeof(ContactMetrics));
