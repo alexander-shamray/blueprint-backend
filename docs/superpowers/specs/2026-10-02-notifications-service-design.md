@@ -230,9 +230,10 @@ Each rides in the PR that makes it true; section 14 lists them by PR.
   service account, `commerce-api` **not** among its client scopes, and on
   `realm-management` the `view-users` role with the two query roles it
   composes and nothing else — ADR-052's grant, and the third credentialed
-  client after `web-bff` and `shipping-worker`. Every asserted row ADR-052's
-  table names that went red for `shipping-worker` goes red again here, and
-  PR-3 takes each.
+  client after `web-bff` and `shipping-worker`. The asserted rows of
+  ADR-052's table this client turns red — `RealmClientTests` and
+  `RealmImportTests`' secret test — PR-3 takes; the chart rows go red with
+  PR-6's chart (section 14).
 - **§14.1 gains Mailpit** — the container, its two loopback ports in the
   endpoint table and the relay's local defaults — in PR-2. §14.2's Aspire
   sample runs no Notifications resource and declares nothing for one, so it
