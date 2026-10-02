@@ -51,7 +51,7 @@ app.MapOpenApi();
 app.MapOrderEndpoints();          // §11.4 — the group fails closed
 
 // ADR-052, on the Http2 endpoint appsettings.json declares; [Authorize] travels on the service class.
-app.MapGrpcService<DeliveryAddressService>();
+app.MapGrpcService<DeliveryAddressService>().RetrySafe(RetrySafety.ReadOnly);   // ADR-052 — Get reads one address
 
 app.Run();
 
