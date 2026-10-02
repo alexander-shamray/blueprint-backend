@@ -1904,7 +1904,7 @@ class EveryGateSeesThePureConsumerRender(unittest.TestCase):
             sorted(PurePosixPath(p).parent.name for p in dockerfiles),
             [f"{PROBE}.Migrator", f"{PROBE}.{new_service.WORKER_HOST}"])
 
-    def test_the_observability_gate_owes_it_no_outbox_gauges_and_owes_a_domain_one(self):
+    def test_the_observability_gate_owes_it_nothing_and_owes_a_domain_one_a_dispatcher(self):
         # check.py's check 8 over a tree holding the template and this render: the
         # selector is the Domain project, so adding one is what makes a dispatcher owed.
         check = importlib.util.spec_from_file_location(
