@@ -2519,7 +2519,7 @@ public class TemplateSetTests
     [Fact]
     public void A_checkout_s_line_endings_change_nothing_a_customer_reads()
     {
-        // .editorconfig checks text out CRLF; the body a customer reads is the same either way.
+        // A Windows checkout may arrive CRLF; the body a customer reads is the same either way.
         TemplateSet lf = TemplateSet.Parse(Minimal());
         TemplateSet crlf = TemplateSet.Parse(
             [.. Minimal().Select(f => f with { Text = f.Text.Replace("\n", "\r\n", StringComparison.Ordinal) })]);
@@ -2559,13 +2559,13 @@ namespace Notifications.Application.Tests;
 /// <summary>The renderer over the shipped files: language by locale, value by culture, date by zone.</summary>
 public class TemplateRendererTests
 {
-    /// <summary>One hour before midnight in Almaty, and so the next day in a zone twelve hours ahead.</summary>
-    private static readonly DateTimeOffset LateEvening = new(2026, 10, 2, 11, 0, 0, TimeSpan.Zero);
+    /// <summary>16:00 in Almaty, and 00:45 the next day in Chatham, thirteen and three-quarter hours ahead.</summary>
+    private static readonly DateTimeOffset LateInTheDay = new(2026, 10, 2, 11, 0, 0, TimeSpan.Zero);
 
     private static readonly NotificationParameters Everything = new()
     {
         OrderId = Guid.Parse("0199a9a0-0000-7000-8000-000000000042"),
-        OccurredAt = LateEvening,
+        OccurredAt = LateInTheDay,
         Amount = 12345.60m,
         Currency = "KZT",
         TrackingNumber = "KZ-0042",
@@ -2649,13 +2649,13 @@ public class TemplateRendererTests
         body.ShouldContain($"12{(char)0x00A0}345,60", Case.Sensitive, "a no-break space groups, a comma separates");
         body.ShouldNotContain(12345.60m.ToString("N2", CultureInfo.InvariantCulture));
         body.ShouldContain("қазан", Case.Sensitive, "October in Kazakh, from the culture's month names");
-        body.ShouldNotContain(LateEvening.ToString("D", CultureInfo.InvariantCulture));
+        body.ShouldNotContain(LateInTheDay.ToString("D", CultureInfo.InvariantCulture));
     }
 
     [Fact]
     public void A_date_at_the_edge_of_a_day_lands_on_the_zone_s_side_of_it()
     {
-        // 11:00 UTC is 17:00 in Almaty and 00:45 the next morning in Chatham.
+        // 11:00 UTC is 16:00 in Almaty and 00:45 the next morning in Chatham.
         string almaty = Renderer(["en"], "Asia/Almaty").Render(TemplateKeys.OrderPlaced, Everything, "en").Body;
         string chatham = Renderer(["en"], "Pacific/Chatham").Render(TemplateKeys.OrderPlaced, Everything, "en").Body;
 
@@ -3373,7 +3373,7 @@ group:
 ```
 
 The twenty-four files, each exactly as below, UTF-8 without a byte-order
-mark and ending in a newline; `.editorconfig` checks them out CRLF and
+mark and ending in a newline; a Windows checkout may arrive CRLF and
 `TemplateSet` reads either ending as LF, which
 `A_checkout_s_line_endings_change_nothing_a_customer_reads` pins.
 
@@ -4190,7 +4190,7 @@ anything resolves it, so `Create` cannot throw in a running host.
 
 **The fixture's values are ADR-053 rule 2's made-up jurisdiction**: `kk`
 then `en`, so a multi-language assertion reads the set's order and not the
-shipped order; `Pacific/Chatham`, twelve and three-quarter hours ahead in
+shipped order; `Pacific/Chatham`, thirteen and three-quarter hours ahead in
 October, so a date at the edge of a day shows which side it landed on;
 windows of 1013, 17 and 71 days, which no real deployment and not Compose
 (Task 10) uses.
@@ -5168,7 +5168,7 @@ namespace Notifications.Worker.Tests;
 [Collection(nameof(IntegrationCollection))]
 public sealed class MadeUpDeploymentTests(ServiceFixture fixture) : IAsyncLifetime
 {
-    /// <summary>17:00 in Almaty and 00:45 the next morning in the fixture's Chatham.</summary>
+    /// <summary>16:00 in Almaty and 00:45 the next morning in the fixture's Chatham.</summary>
     private static readonly DateTimeOffset LateInTheDay = new(2026, 10, 2, 11, 0, 0, TimeSpan.Zero);
 
     public async ValueTask InitializeAsync() => await fixture.ResetAsync();
