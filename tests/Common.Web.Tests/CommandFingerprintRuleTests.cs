@@ -291,7 +291,7 @@ public class CommandFingerprintRuleTests
     [Fact]
     public void An_ignored_base_property_is_named_where_the_serialiser_omits_it_and_only_there()
     {
-        // The fingerprint's own options, so the rule is compared with what is hashed.
+        // CommandFingerprint's options, restated.
         JsonSerializerOptions options = new() { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingDefault };
 
         JsonSerializer.Serialize(new InheritsAnIgnoredNote(Guid.NewGuid()) { Note = "n" }, options)
