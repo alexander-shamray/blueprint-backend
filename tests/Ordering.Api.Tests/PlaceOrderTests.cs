@@ -186,6 +186,13 @@ public sealed class PlaceOrderTests(ServiceFixture fixture) : IAsyncLifetime
         HttpResponseMessage first = await PlaceAsync(desk, quantity: 2, commandId: commandId);
         first.StatusCode.ShouldBe(HttpStatusCode.OK);
 
+        // The same basket again is the retry ADR-057 must still answer, bound through the real binder.
+        HttpResponseMessage retry = await PlaceAsync(desk, quantity: 2, commandId: commandId);
+
+        retry.StatusCode.ShouldBe(HttpStatusCode.OK);
+        (await retry.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))
+            .ShouldBe(await first.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+
         HttpResponseMessage second = await PlaceAsync(lamp, commandId: commandId);
 
         second.StatusCode.ShouldBe(HttpStatusCode.Conflict);
