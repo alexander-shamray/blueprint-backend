@@ -374,8 +374,9 @@ The implementation **must not**:
   ordering guarantees, and one of them will be the one nobody monitors.
 
 All three are mistakes a competent developer makes in good faith, which is why
-they are prohibitions rather than guidance. Each service's `OutboxPublisher`
-in its Infrastructure assembly is the implementation, and it is a thin call to
+they are prohibitions rather than guidance. Each publishing service's
+`OutboxPublisher` in its Infrastructure assembly is the implementation, and it
+is a thin call to
 `OutboxMessage.Stage` (§9.4) on the service's own `DbContext`.
 
 **The third has exactly one recorded exception, and recording it is what keeps
