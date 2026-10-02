@@ -710,6 +710,22 @@ class TheHelperPublishesWhatItRebased(unittest.TestCase):
         self.assertEqual(0, result.returncode, result.stderr)
         self.assertEqual(rewritten, self.remote_tip())
 
+    def test_a_scoped_branch_name_is_replayed_and_published(self):
+        # `/branch` names a branch `type(scope)/kebab`, and the helpers that
+        # fork one, switch to one and look one up all admit the parentheses.
+        scoped = "feat(scope)/x"
+        renamed = run_bash('cd "$W" && git branch -m "$B" && git push -q -u origin "$B"',
+                           W=self.work, B=scoped)
+        self.assertEqual(0, renamed.returncode, renamed.stderr)
+
+        result = self.helper(branch=scoped)
+        self.assertEqual(0, result.returncode, result.stderr)
+        published = run_bash('cd "$W" && git rev-parse "refs/remotes/origin/$B"',
+                             W=self.work, B=scoped).stdout.strip()
+        self.assertEqual(self.at("git rev-parse HEAD").stdout.strip(), published)
+        self.assertEqual("", self.at("git log --oneline HEAD..origin/main").stdout,
+                         "and the branch now holds everything main does")
+
     def test_publish_refuses_a_record_whose_replay_never_ran(self):
         # A conflicted rebase undone by hand leaves the two-field record, and
         # without a head `publish` would force whatever HEAD has since become.
