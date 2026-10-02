@@ -570,12 +570,12 @@ public sealed class HttpPaymentProviderTests : IClassFixture<HttpPaymentProvider
     [Fact]
     public async Task The_callers_own_cancellation_is_not_counted_against_the_provider()
     {
-        using UnavailableCount counted = CountUnavailable(_factory);
+        using UnavailableCount counted = CountUnavailable();
         using CancellationTokenSource cancelled = new();
         await cancelled.CancelAsync();
 
         await Should.ThrowAsync<OperationCanceledException>(() =>
-            Provider(_factory).AuthoriseAsync(Authorisation(42.10m), cancelled.Token));
+            Provider().AuthoriseAsync(Authorisation(42.10m), cancelled.Token));
 
         counted.Value.ShouldBe(0, "a consume cancelled at shutdown is not a provider incident");
     }
