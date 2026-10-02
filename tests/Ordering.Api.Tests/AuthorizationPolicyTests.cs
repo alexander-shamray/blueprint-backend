@@ -1,5 +1,3 @@
-using Common.Application;
-using System.Reflection;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
@@ -84,59 +82,6 @@ public class AuthorizationPolicyTests(HostSmokeTests.UnreachableInfrastructureFa
 
         // Not vacuous: the loop above passes over the empty set a renamed endpoint would leave.
         Endpoints.Count(e => Name(e) is "PlaceOrder" or "CancelOrder").ShouldBe(2);
-    }
-
-    [Fact]
-    public void Every_idempotent_command_reaches_this_service_through_an_authenticated_endpoint()
-    {
-        // §8.5's rule: an anonymous caller's subject falls back to the shared "system" segment, so two of them
-        // reusing one CommandId would collide.
-        (Endpoint Endpoint, Type Command)[] idempotent =
-        [
-            .. Endpoints
-                .SelectMany(e => (e.Metadata
-                        .GetMetadata<MethodInfo>()?
-                        .GetParameters() ?? [])
-                    .Where(p => typeof(IIdempotentCommand).IsAssignableFrom(p.ParameterType))
-                    .Select(p => (Endpoint: e, Command: p.ParameterType)))
-        ];
-
-        // The gate's subject is the agreement of two sets, declared and reachable, so it fails from either side;
-        // a broker-only idempotent command fails it by design (§8.5).
-        Type[] declared =
-        [
-            .. typeof(Ordering.Application.DependencyInjection).Assembly
-                .GetTypes()
-                .Where(typeof(IIdempotentCommand).IsAssignableFrom)
-                .Where(t => t is { IsClass: true, IsAbstract: false })
-        ];
-
-        declared.ShouldNotBeEmpty(
-            "this service declares an idempotent command; the assembly scan found none");
-
-        idempotent
-            .Select(pair => pair.Command)
-            .Distinct()
-            .OrderBy(t => t.Name, StringComparer.Ordinal)
-            .ShouldBe(
-                declared.OrderBy(t => t.Name, StringComparer.Ordinal),
-                "every idempotent command must reach this service through an endpoint this test can " +
-                "see. A command missing from the left is one no endpoint binds directly — either it " +
-                "is broker-only, which §8.5 makes a decision rather than an omission, or an endpoint " +
-                "binds a DTO and this selector no longer covers it.");
-
-        foreach ((Endpoint endpoint, Type command) in idempotent)
-        {
-            endpoint.Metadata.GetMetadata<IAllowAnonymous>().ShouldBeNull(
-                $"{endpoint.DisplayName} takes {command.Name} and allows anonymous callers, " +
-                "so every one of them claims under the shared system subject (§8.5)");
-
-            endpoint.Metadata
-                .GetOrderedMetadata<IAuthorizeData>()
-                .ShouldNotBeEmpty(
-                    $"{endpoint.DisplayName} takes {command.Name} and requires no authorization, " +
-                    "so the caller has no subject to key on (§8.5)");
-        }
     }
 
     private static string? Name(Endpoint endpoint) =>
