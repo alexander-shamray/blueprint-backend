@@ -787,11 +787,12 @@ public sealed class IdempotencyBehavior<TCommand, TResult>(
 > An in-flight duplicate is still `ConcurrentRequestException` whatever it
 > carries, because the fingerprint is recorded with the outcome.
 >
-> **The shape of an idempotent command is therefore a compatibility surface,
-> on the terms the callout on renaming sets for its result.** Removing or
-> renaming a field changes the fingerprint of requests already answered, so a
+> **The shape of an idempotent command is therefore a compatibility surface, on
+> the terms the callout on renaming sets for its result.** Removing, renaming or
+> reordering a field changes the fingerprint of requests already answered, so a
 > retry that straddles that deploy is refused as reused; adding an optional
-> field does not, because a default is not hashed.
+> field whose absent value is its type's default does not, because a default is
+> not hashed.
 
 > **A claimed key belongs to one subject, and that is the invariant rather than
 > the key shape.** `CommandId` is client-generated, and §8.3's store prefix is
