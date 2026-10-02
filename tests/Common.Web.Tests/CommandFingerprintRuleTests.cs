@@ -315,7 +315,8 @@ public class CommandFingerprintRuleTests
         CommandFingerprintRule
             .Offenders(command)
             .ShouldHaveSingleItem()
-            .ShouldStartWith($"{command.Name}.Ids is declared as {declared}, a collection whose type promises no order");
+            .ShouldStartWith(
+                $"{command.Name}.Ids is declared as {declared}, a collection whose type promises no order");
     }
 
     [Fact]
@@ -349,7 +350,8 @@ public class CommandFingerprintRuleTests
     [Fact]
     public void The_assembly_form_names_every_bad_command_and_no_well_formed_one()
     {
-        IReadOnlyList<string> offenders = CommandFingerprintRule.Offenders(typeof(CommandFingerprintRuleTests).Assembly);
+        IReadOnlyList<string> offenders =
+            CommandFingerprintRule.Offenders(typeof(CommandFingerprintRuleTests).Assembly);
 
         foreach (string command in BadCommands)
             offenders.ShouldContain(offender => offender.StartsWith($"{command}.", StringComparison.Ordinal));
