@@ -185,6 +185,24 @@ public class BadHttpRequestExceptionHandlerTests
         body.RootElement.TryGetProperty("pointer", out _).ShouldBeFalse("there is no member to point at");
     }
 
+    [Fact]
+    public async Task A_body_sent_with_no_content_type_is_a_415_with_the_same_code()
+    {
+        using IHost host = await StartBindingAsync("Production");
+        using HttpClient client = host.GetTestClient();
+        using StringContent content = new("""{"onHand":3}""");
+        content.Headers.ContentType = null;
+
+        using HttpResponseMessage response = await client.PostAsync(
+            Route, content, TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.UnsupportedMediaType);
+
+        using JsonDocument body = JsonDocument.Parse(
+            await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+        body.RootElement.GetProperty("code").GetString().ShouldBe("request.unreadable");
+    }
+
     private static async Task<JsonDocument> BodyOfAsync(Exception exception)
     {
         using IHost host = await StartThrowingAsync(exception);
