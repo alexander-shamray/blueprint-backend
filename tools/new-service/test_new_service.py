@@ -1819,7 +1819,7 @@ class RendersAPureConsumer(unittest.TestCase):
             dockerfile = self.created(f"src/Services/{PROBE}/{PROBE}.{image}/Dockerfile")
             self.assertNotIn(f"{PROBE}.Domain", dockerfile, image)
 
-    def test_the_solution_folder_holds_four_projects_and_three_suites(self):
+    def test_the_solution_folder_holds_four_projects_and_three_test_entries(self):
         solution = self.rendered.updated["Platform.slnx"]
         self.assertEqual(4, solution.count(f'<Project Path="src/Services/{PROBE}/'))
         self.assertEqual(3, solution.count(f'<Project Path="tests/{PROBE}.'))
