@@ -51,7 +51,7 @@ public sealed class IdempotencyBehavior<TCommand, TResult>(
             if (existing is null || existing.InProgress)
                 throw new ConcurrentRequestException(command.CommandId);
 
-            return Replay(existing.Payload!, fingerprint, command.CommandId);
+            return Replay(existing.Payload!, fingerprint, key, command.CommandId);
         }
 
         // Set after the claim, so a command about to replay hands §6.3 no key.
@@ -102,18 +102,18 @@ public sealed class IdempotencyBehavior<TCommand, TResult>(
 
     private static string Envelope(string fingerprint) => $"{FingerprintPrefix}{fingerprint}:";
 
-    private static TResult Replay(string payload, string fingerprint, Guid commandId)
+    private static TResult Replay(string payload, string fingerprint, string key, Guid commandId)
     {
-        // Compared before any value is read; an unprefixed entry is the previous release's and replays (ADR-057).
-        if (payload.StartsWith(FingerprintPrefix, StringComparison.Ordinal))
-        {
-            string envelope = Envelope(fingerprint);
+        // Compared before any value is read; an entry with no fingerprint matches no command (ADR-059).
+        if (!payload.StartsWith(FingerprintPrefix, StringComparison.Ordinal))
+            throw new CommandAlreadyCommittedException(key);
 
-            if (!payload.StartsWith(envelope, StringComparison.Ordinal))
-                throw new CommandIdReusedException(commandId);
+        string envelope = Envelope(fingerprint);
 
-            payload = payload[envelope.Length..];
-        }
+        if (!payload.StartsWith(envelope, StringComparison.Ordinal))
+            throw new CommandIdReusedException(commandId);
+
+        payload = payload[envelope.Length..];
 
         // The guard is required: the cast compiles for every TResult and fails at run time for all but Result.
         if (ValueType is null)

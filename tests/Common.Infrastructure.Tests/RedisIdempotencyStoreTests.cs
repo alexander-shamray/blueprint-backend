@@ -256,7 +256,7 @@ public sealed class RedisIdempotencyStoreTests(RedisFixture fixture)
     [Theory]
     [InlineData("legacy-void", "null")]
     [InlineData("legacy-value", "\"0195e4b2-0000-7000-8000-0000000000ff\"")]
-    public async Task A_pre_token_outcome_still_replays(string key, string payload)
+    public async Task A_pre_token_outcome_reads_as_completed_not_in_flight(string key, string payload)
     {
         // Untokened outcomes of the void and value shapes, which a shape test alone cannot tell from a claim.
         await using ServiceProvider provider = fixture.BuildProvider("legacy");
@@ -270,7 +270,7 @@ public sealed class RedisIdempotencyStoreTests(RedisFixture fixture)
         IdempotencyEntry? entry = await store.GetAsync(key, TestContext.Current.CancellationToken);
 
         entry.ShouldNotBeNull();
-        entry.InProgress.ShouldBeFalse("a completed pre-token entry is replayable, not in flight");
+        entry.InProgress.ShouldBeFalse("a completed pre-token entry is a recorded outcome, not in flight");
         entry.Payload.ShouldBe(payload);
     }
 
