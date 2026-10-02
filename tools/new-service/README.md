@@ -243,8 +243,9 @@ against its `COMMENT_CEILING`.
 
 A new service's first pull request holds this script's output as a commit of
 its own, committed as the scaffold left it, which `--verify` proves; the
-service's first feature lands in the pull request after it. The scaffold is
-reviewed once, in its own pull request, and never again per service.
+service's own commits follow it. The render is read through `--verify`, never
+line by line, and a change to the scaffold is reviewed where it lands — a new
+mode with the first service rendered with it.
 
 `--verify` is the proof. It reads the service's name, host, port and
 migration id from what a commit added, renders them into a temporary copy of
