@@ -64,8 +64,8 @@ in full and
   the same claim in the comment over `Testcontainers.Keycloak`'s pin, which
   does not move (Task 8, Step 9). The realm, the Compose unit, `.env.example`,
   the Compose README, the realm gate and its README, the two allow-lists, the
-  chapters and `docs/secrets.md` are D. **The E letter is owed for package references, not pins**:
-  `Notifications.Infrastructure.csproj` takes
+  chapters and `docs/secrets.md` are D. **The E letter is owed for package
+  references, not pins**: `Notifications.Infrastructure.csproj` takes
   `Microsoft.Extensions.Http.Resilience` and `System.IdentityModel.Tokens.Jwt`
   (and `Microsoft.Extensions.Hosting.Abstractions` unless PR-2 landed it), and
   `Notifications.Worker.Tests.csproj` takes `Testcontainers.Keycloak`,
