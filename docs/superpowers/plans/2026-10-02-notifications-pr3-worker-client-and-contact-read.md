@@ -1108,8 +1108,8 @@ editing it puts the block under the gate's limit:
 def realm(*clients, **overrides) -> dict:
     """A realm document of the shape both an export and the admin API produce.
 
-    Every client a check requires by name is appended unless the caller
-    supplied one, so a case about something else need not learn them all."""
+    Every required client but the browser is appended unless the caller
+    supplied one; the browser is the caller's, so its absence can be a case."""
     if clients:
         client_list = list(clients)
         for required in (mobile, worker, contact):
