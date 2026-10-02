@@ -1103,7 +1103,7 @@ app.UseCorrelationId();           // §10.4 — assigns or replaces the client's
 // nothing without it, the same quiet shape the limiter's registration has.
 app.UseResponseCompression();     // §10.1, ADR-020
 
-app.UseStatusCodePages();         // §10.5 — 401, 403 and the forwarder's 413 as problem+json
+app.UseStatusCodePages();         // §10.5
 
 // Above everything that reads the client address, and below the two that do
 // not. Until this runs the address is the proxy's; skipped when the gateway IS

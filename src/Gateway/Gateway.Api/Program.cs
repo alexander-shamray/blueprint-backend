@@ -187,7 +187,7 @@ app.UseCorrelationId();           // §10.4 — assigns or replaces the client's
 app.UseResponseCompression();     // §10.1, ADR-020
 
 // Above the auth pair, because it converts the bodiless challenge and forbid they write.
-app.UseStatusCodePages();         // §10.5 — 401, 403 and the forwarder's 413 as problem+json
+app.UseStatusCodePages();         // §10.5
 
 // Above everything that reads the client address; skipped at the edge (Compose), where a forwarded header
 // would let a caller choose its own rate-limit bucket.
