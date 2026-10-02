@@ -51,7 +51,7 @@ in full and
 - The blueprint wins over the spec; the spec wins over this plan.
 - **Class A+D+E.** Touch set:
 
-  `src/Services/Notifications/**`, `src/BuildingBlocks/Common.Infrastructure/Identity/ServiceIdentityOptions.cs`, `src/BuildingBlocks/Common.Web/ObservabilityExtensions.cs`, `tests/Notifications.*`, `tests/Common.Web.Tests/RealmImportTests.cs`, `tests/Common.Web.Tests/ObservabilityTests.cs`, `tests/Web.Bff.Tests/RealmClientTests.cs`, `tests/Web.Bff.Tests/Web.Bff.Tests.csproj`, `tests/Web.Bff.Tests/KeycloakFixture.cs`, `Directory.Packages.props`, `deploy/compose/keycloak/realm-export.json`, `deploy/compose/services/notifications.yml`, `deploy/compose/.env.example`, `deploy/compose/README.md`, `deploy/keycloak/realm_check.py`, `deploy/keycloak/test_realm_check.py`, `deploy/keycloak/README.md`, `.github/secret-scan/allowed/deploy.txt`, `.github/secret-scan/allowed/tests.txt`, `docs/backend-architecture/02-architecture-at-a-glance.md`, `docs/backend-architecture/03-bounded-contexts.md`, `docs/backend-architecture/04-solution-structure.md`, `docs/backend-architecture/09-messaging.md`, `docs/backend-architecture/11-identity-authorization.md`, `docs/backend-architecture/12-test-strategy.md`, `docs/backend-architecture/14-local-development.md`, `docs/backend-architecture/15-cicd-deployment.md`, `docs/backend-architecture/appendix-b-licences.md`, `docs/secrets.md`
+  `src/Services/Notifications/**`, `src/BuildingBlocks/Common.Infrastructure/Identity/ServiceIdentityOptions.cs`, `src/BuildingBlocks/Common.Web/ObservabilityExtensions.cs`, `tests/Notifications.*`, `tests/Common.Web.Tests/RealmImportTests.cs`, `tests/Common.Web.Tests/ObservabilityTests.cs`, `tests/Web.Bff.Tests/RealmClientTests.cs`, `tests/Web.Bff.Tests/Web.Bff.Tests.csproj`, `tests/Web.Bff.Tests/KeycloakFixture.cs`, `Directory.Packages.props`, `deploy/compose/keycloak/realm-export.json`, `deploy/compose/services/notifications.yml`, `deploy/compose/.env.example`, `deploy/compose/README.md`, `deploy/keycloak/realm_check.py`, `deploy/keycloak/test_realm_check.py`, `deploy/keycloak/test_read_admin.py`, `deploy/keycloak/README.md`, `.github/secret-scan/allowed/deploy.txt`, `.github/secret-scan/allowed/tests.txt`, `docs/backend-architecture/02-architecture-at-a-glance.md`, `docs/backend-architecture/03-bounded-contexts.md`, `docs/backend-architecture/04-solution-structure.md`, `docs/backend-architecture/09-messaging.md`, `docs/backend-architecture/11-identity-authorization.md`, `docs/backend-architecture/12-test-strategy.md`, `docs/backend-architecture/14-local-development.md`, `docs/backend-architecture/15-cicd-deployment.md`, `docs/backend-architecture/appendix-b-licences.md`, `docs/secrets.md`
 
   Why each, since the row is paths only: the service's code and its three
   test projects are A, and so are the two building-block files — the one
@@ -682,6 +682,8 @@ the export.
 - Modify: `deploy/keycloak/test_realm_check.py` — a `contact()` fixture, the
   `realm()` helper, the two documents that list clients by hand, and one
   negative case per limb
+- Modify: `deploy/keycloak/test_read_admin.py` — the two documents that
+  list the admin API's clients by hand
 - Modify: `deploy/keycloak/README.md` — the new obligation
 - Modify: `.github/secret-scan/allowed/deploy.txt` and
   `.github/secret-scan/allowed/tests.txt` — the new local default's findings
@@ -1128,6 +1130,28 @@ counts exactly one problem, so its list becomes
 `}, worker(), contact()],` because `test_the_fields_every_check_reads_do_survive`
 asserts the whole verdict is `[]`. `test_rotation_is_not_checked_without_a_mobile_client`
 asserts with `any(...)` and stands.
+
+`test_read_admin.py` holds two more, for the same reason: each hands the
+admin API three clients written out as literals, and
+`test_what_read_admin_writes_is_what_realm_check_accepts` asserts the verdict
+is `[]` while `test_a_realm_the_fetch_returns_is_judged_and_can_fail` asserts
+exactly one problem. Each client list gains, after the `WORKER_CLIENT` entry,
+in the file's literal form:
+
+```python
+                      {"clientId": realm_check.CONTACT_CLIENT,
+                       "enabled": True,
+                       "standardFlowEnabled": False,
+                       "implicitFlowEnabled": False,
+                       "directAccessGrantsEnabled": False,
+                       "serviceAccountsEnabled": True,
+                       "publicClient": False,
+                       "defaultClientScopes": ["basic", "roles"],
+                       "optionalClientScopes": ["address"],
+                       "webOrigins": []}])
+```
+
+the `])` moving from the worker's entry to this one.
 
 Then the cases:
 
