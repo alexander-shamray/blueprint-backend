@@ -202,17 +202,16 @@ id and the template key rather than a finished header, because the `@domain`
 half is `Mail:From`'s and that is configuration the Application layer never
 sees.
 
-`MailFault` is section 4's five causes, and each member's lowercase name is
-the `cause` attribute `notifications.mail.unavailable` carries: `transient`
-— a `4xx`, a timeout or a refused connection before the message was handed
-over — is retried in the client, and an open circuit is `transient` thrown
-at once; `unconfirmed` — the connection broke after the message was handed
-over and before the reply — is not retried, because the relay may hold it,
-and the row's next pass resends it under the same `Message-ID`; `tls`,
-`credential` and `rejected` — a session weaker than configured, a refused
-credential, a permanent `5xx` about the sender or the message — are a
-deployment's decisions, not retried, and logged by PR-5's worker as errors.
-All five back the row off.
+`MailFault` is section 4's five causes, and each member's lowercase name is the
+`cause` attribute `notifications.mail.unavailable` carries: `transient` — a
+`4xx` anywhere, or a timeout or a refused connection before the send began — is
+retried in the client, and an open circuit is `transient` thrown at once;
+`unconfirmed` — a break or a timeout once the send began, the envelope included
+— is not retried, because the relay may hold it, and the row's next pass resends
+it under the same `Message-ID`; `tls`, `credential` and `rejected` — a session
+weaker than configured, a refused credential, a permanent `5xx` about the sender
+or the message — are a deployment's decisions, not retried, and logged by PR-5's
+worker as errors. All five back the row off.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -433,7 +432,7 @@ public enum MailFault
     /// <summary>The relay never took the message: a <c>4xx</c>, a refused connection, an early timeout.</summary>
     Transient,
 
-    /// <summary>The connection broke while the message was handed over, so the relay may hold it (§9.7).</summary>
+    /// <summary>A break or a timeout once the send began, so the relay may hold the message (§9.7).</summary>
     Unconfirmed,
 
     /// <summary>A session weaker than configured, which is somebody's decision rather than an outage.</summary>
