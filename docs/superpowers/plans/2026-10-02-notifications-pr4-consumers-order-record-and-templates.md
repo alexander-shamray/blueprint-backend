@@ -1679,7 +1679,7 @@ with Shipping's form:
 
 and in `The_nested_dispatch_gate_is_looking_at_this_service_s_handlers`
 replace the `CommandHandlers().ShouldBeEmpty(…);` statement, message and all,
-with `CommandHandlers().ShouldNotBeEmpty();`. The three floors about
+with `CommandHandlers().ShouldNotBeEmpty();`. The two floors about
 `IIdempotentCommand` stay inverted: `RecordNotificationCommand` carries no
 `CommandId`, since the inbox and the unique key are this service's
 idempotency (spec, section 5).
