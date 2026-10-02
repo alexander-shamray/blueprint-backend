@@ -2335,6 +2335,7 @@ public sealed class SendWorker : BackgroundService
 {
     public const int ClaimBatchSize = 10;
     public const int LeaseSeconds = 45;
+    public static readonly TimeSpan DrainBudget;  // twenty-five seconds
     public static readonly TimeSpan CommitRoom;   // five seconds
     public Task<SendPass> RunOnceAsync(CancellationToken ct);
 }
@@ -2432,11 +2433,18 @@ public sealed class SendWorkerBudgetTests
     }
 
     [Fact]
-    public void A_pass_and_its_last_commit_fit_the_host_s_drain()
+    public void The_drain_budget_and_its_last_commit_fit_the_host_s_drain()
     {
         // The default the solution never overrides, measured rather than written down (§15.3).
-        (OneRow + SendWorker.CommitRoom).ShouldBeLessThanOrEqualTo(
-            new HostOptions().ShutdownTimeout, "a stop cancels a pass that outruns its drain budget, mid-send");
+        (SendWorker.DrainBudget + SendWorker.CommitRoom).ShouldBeLessThanOrEqualTo(
+            new HostOptions().ShutdownTimeout, "the host abandons a pass still committing when its drain runs out");
+    }
+
+    [Fact]
+    public void A_pass_fits_the_drain_budget()
+    {
+        OneRow.ShouldBeLessThanOrEqualTo(
+            SendWorker.DrainBudget, "a stop cancels a pass whose calls outrun the drain budget, mid-send");
     }
 
     [Fact]
@@ -3116,7 +3124,6 @@ namespace Notifications.Infrastructure.Delivery;
 /// </remarks>
 public sealed class SendWorker(
     IServiceScopeFactory scopes,
-    IOptions<HostOptions> hostOptions,
     ILogger<SendWorker> log) : BackgroundService
 {
     /// <summary>Rows one pass sends at once; a pass lasts as long as its slowest row.</summary>
@@ -3124,6 +3131,9 @@ public sealed class SendWorker(
 
     /// <summary>Above <c>MailHop.TotalTimeout</c> plus <c>ContactHop.TotalRequestTimeout</c>.</summary>
     public const int LeaseSeconds = 45;
+
+    /// <summary>How long a pass under way at a stop runs before its token fires; above one row's calls.</summary>
+    public static readonly TimeSpan DrainBudget = TimeSpan.FromSeconds(25);
 
     /// <summary>What a pass under way at a stop leaves of the host's drain for its last commit (§15.3).</summary>
     public static readonly TimeSpan CommitRoom = TimeSpan.FromSeconds(5);
@@ -3233,11 +3243,9 @@ public sealed class SendWorker(
     {
         using PeriodicTimer timer = new(MailHop.SendTick);
 
-        // A stop ends the loop, never the pass under way: its token fires CommitRoom short of the host's drain.
-        TimeSpan drainBudget = hostOptions.Value.ShutdownTimeout - CommitRoom;
+        // A stop ends the loop, never the pass under way: its token fires DrainBudget after the stop.
         using CancellationTokenSource drain = new();
-        using CancellationTokenRegistration stopping = stoppingToken.Register(
-            () => drain.CancelAfter(drainBudget > TimeSpan.Zero ? drainBudget : TimeSpan.Zero));
+        using CancellationTokenRegistration stopping = stoppingToken.Register(() => drain.CancelAfter(DrainBudget));
 
         while (!stoppingToken.IsCancellationRequested && await timer.WaitForNextTickAsync(stoppingToken))
         {
@@ -3532,9 +3540,11 @@ Four things in it a reviewer would question:
   cancels `stoppingToken` first, so a pass run under it would be cancelled
   between the relay's 250 and the `MarkSent` commit on every rolling deploy,
   and sent again after the lease. The loop starts no pass once the token
-  fires; the pass under way runs on a token that fires `CommitRoom` short of
-  `HostOptions.ShutdownTimeout`, and `MarkSent` commits on
-  `CancellationToken.None` once the relay has accepted.
+  fires; the pass under way runs on a token that fires `DrainBudget` after
+  it, and `MarkSent` commits on `CancellationToken.None` once the relay has
+  accepted. The budget is a constant, as `HostOptions` is in the hosting
+  package Infrastructure does not reference; `SendWorkerBudgetTests` holds it
+  and `CommitRoom` inside the host's default `ShutdownTimeout`.
 - **`SendAsync` is `internal` and takes `SendClaims`**, which is internal, so
   the member cannot be public; a suite reaches it through
   `InternalsVisibleTo`, as Shipping's reaches `FulfilAsync`. Nothing here
@@ -5389,14 +5399,15 @@ Then `/ship`.
 `CommitFault`, `Mailpit.PlainOn`, `StopAsync`, `WaitForAsync`, `MessageAsync`,
 and the fixture's members (Task 6); `INotificationRepository.GetAsync`,
 `SendWork`, `SendPass`, `SendClaims`, `SendWorker` with `ClaimBatchSize`,
-`LeaseSeconds`, `CommitRoom` and `RunOnceAsync`, `NotificationMetrics.Resent`,
-`ResentCounter`, `RunSendPassAsync`, `WaitUntilDueAsync`,
-`SendUntilSettledAsync` (Task 7); `WaitingSteps`, `INotificationStats`,
-`NotificationStats` with `ConnectTimeoutSeconds` and `OverdueGrace` (Task 9);
-`NotificationsRetentionService` and `PurgeNotificationsRetentionAsync` (Task
-10). PR-6 consumes `DeliveryOptions` bound from `Delivery` with `GiveUpAge`, the
-series `notifications_waiting` with `step` ∈ `order_record`, `contact`, `relay`,
-and `notifications_overdue_seconds` with no attribute, under these spellings.
+`LeaseSeconds`, `DrainBudget`, `CommitRoom` and `RunOnceAsync`,
+`NotificationMetrics.Resent`, `ResentCounter`, `RunSendPassAsync`,
+`WaitUntilDueAsync`, `SendUntilSettledAsync` (Task 7); `WaitingSteps`,
+`INotificationStats`, `NotificationStats` with `ConnectTimeoutSeconds` and
+`OverdueGrace` (Task 9); `NotificationsRetentionService` and
+`PurgeNotificationsRetentionAsync` (Task 10). PR-6 consumes `DeliveryOptions`
+bound from `Delivery` with `GiveUpAge`, the series `notifications_waiting` with
+`step` ∈ `order_record`, `contact`, `relay`, and
+`notifications_overdue_seconds` with no attribute, under these spellings.
 
 **Deliberately left.** §11.7's erasure consumer, which marks a pending notice
 `Undeliverable: erased` and replaces the customer's id — owed with that
