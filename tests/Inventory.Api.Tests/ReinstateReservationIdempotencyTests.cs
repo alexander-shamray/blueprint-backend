@@ -182,7 +182,7 @@ public sealed class ReinstateReservationIdempotencyTests(ServiceFixture fixture)
         (await StatusAsync(order)).ShouldBe("Released");
         (await Available(product)).ShouldBe(3);
         (await fixture.IdempotencyClaims.GetAsync(Key(caller, Guid.Empty), TestContext.Current.CancellationToken))
-            .ShouldBeNull("validation runs before any claim (§6.3)");
+            .ShouldBeNull("the refusal leaves no claim held under the empty command id's key");
     }
 
     /// <summary>§8.5's key as the behaviour builds it: subject, operation, command id.</summary>
