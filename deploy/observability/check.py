@@ -608,6 +608,11 @@ def check_dashboards(instruments: set[str]) -> None:
                         f"declares and EXTERNAL_METRICS does not list")
 
 
+def has_domain_project(service: Path) -> bool:
+    """Whether §4.1 gives a service a Domain project, the selector for owing §9.4's outbox."""
+    return any(service.glob(f"{service.name}.Domain/*.csproj"))
+
+
 def check_outbox_metrics_per_service() -> None:
     """Every service hosting §9.4's dispatcher publishes outbox gauges, or says why not.
 
@@ -623,10 +628,12 @@ def check_outbox_metrics_per_service() -> None:
         fail("found no services under src/Services — the reader, not the tree")
         return
 
-    dispatching, instrumented = set(), set()
+    dispatching, instrumented, owed = set(), set(), set()
     for service in services:
         if not service.is_dir():
             continue
+        if has_domain_project(service):
+            owed.add(service.name)
         for source in service.rglob("*.cs"):
             if "/obj/" in source.as_posix() or "/bin/" in source.as_posix():
                 continue
@@ -641,6 +648,18 @@ def check_outbox_metrics_per_service() -> None:
     if not dispatching:
         fail("found no service hosting OutboxDispatcher — the matcher, not the tree")
         return
+
+    # A Domain project raises the events §9.4's outbox carries, so its service
+    # hosts the dispatcher; a service with none publishes nothing (§3.2), hosts
+    # none, and is owed no gauges. Both directions, read from the tree.
+    for name in sorted(owed - dispatching):
+        fail(
+            f"{name} has a Domain project and hosts no OutboxDispatcher, so the events "
+            f"it raises reach no outbox (§9.4)")
+    for name in sorted(dispatching - owed):
+        fail(
+            f"{name} hosts OutboxDispatcher with no Domain project; §4.1 gives such a "
+            f"service nothing to publish (§3.2)")
 
     for name in sorted(dispatching - instrumented - OUTBOX_METRICS_EXEMPT.keys()):
         fail(

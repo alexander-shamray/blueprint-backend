@@ -308,6 +308,15 @@ jobs:
       - name: Compile the worker it rendered
         run: dotnet build tests/Xray.Worker.Tests/Xray.Worker.Tests.csproj
 
+      # And the pure consumer, whose tables cut what the other two keep: a
+      # template change that leans on the outbox or the Domain project compiles
+      # in both of those and fails here. It publishes no port either.
+      - name: Render a pure consumer
+        run: python tools/new-service/new_service.py Whiskey --pure-consumer
+
+      - name: Compile the pure consumer it rendered
+        run: dotnet build tests/Whiskey.Worker.Tests/Whiskey.Worker.Tests.csproj
+
       # No cleanup step. The scaffold both creates untracked files and edits
       # tracked ones, so undoing it locally takes the commands
       # `tools/new-service/README.md` gives; here the checkout is discarded

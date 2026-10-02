@@ -181,6 +181,15 @@ def private_namespace(directory: Path) -> str | None:
     return None
 
 
+def publishes(service: str) -> bool:
+    """Whether a service can publish at all: §4.1 gives it a Domain project.
+
+    One with none raises no event for §9.3's mapper to translate (§3.2), so its
+    account is owed no write on any `Common.Contracts` exchange.
+    """
+    return any((SERVICES / service).glob(f"{service}.Domain/*.csproj"))
+
+
 def contract_prefixes() -> set[str]:
     """Every `Common.Contracts.<Context>.V1:` exchange prefix, from namespaces."""
     prefixes = set()
@@ -295,12 +304,22 @@ def main() -> int:
                         fail(f"{user}: {verb} does not cover `{derived}`, derived from "
                              f"its receive endpoint `{queue}`")
 
-        # 3. It declares and writes the framework's fault exchanges and the
-        #    polymorphic interface exchange.
-        for resource in (f"{FRAMEWORK_PREFIX}ReceiveFault", INTERFACE_EXCHANGE):
+        # 3. It declares and writes the framework's fault exchanges and, if it
+        #    publishes, the polymorphic interface exchange.
+        service = next(k for k in directories if k.lower() == name)
+        owed = (f"{FRAMEWORK_PREFIX}ReceiveFault", *((INTERFACE_EXCHANGE,) if publishes(service) else ()))
+        for resource in owed:
             for verb in ("configure", "write"):
                 if not matches(entry[verb], resource):
                     fail(f"{user}: {verb} does not cover `{resource}`")
+
+        # 3b. A service that publishes nothing writes no contract exchange at
+        #     all, the interface one and its own context's included (ADR-036).
+        if not publishes(service):
+            for resource in (INTERFACE_EXCHANGE, f"{owned_contract(user)}Anything"):
+                if matches(entry["write"], resource):
+                    fail(f"{user}: write COVERS `{resource}`, and the service has no Domain "
+                         f"project to publish from (§4.1, §3.2)")
 
         # 4. It may publish its OWN context's contracts — WHERE IT HAS ANY.
         #
