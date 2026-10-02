@@ -2911,7 +2911,8 @@ public static class NotificationLimits
 }
 public sealed class Notification
 {
-    public static Notification Pending(Guid eventId, string templateKey, Guid orderId, string parameters, DateTimeOffset now);
+    public static Notification Pending(
+        Guid eventId, string templateKey, Guid orderId, string parameters, DateTimeOffset now);
     public bool AssignCustomer(Guid customerId);
     public bool Suppress(DateTimeOffset now);
     public bool MarkUndeliverable(string reason, DateTimeOffset now);
@@ -2955,7 +2956,7 @@ using Xunit;
 
 namespace Notifications.Application.Tests;
 
-/// <summary>The record's moves, one row per move, and every arrival the row has outgrown as a no-op (ADR-052).</summary>
+/// <summary>The record's moves, a row per move, and every arrival the row has outgrown as a no-op (ADR-052).</summary>
 public class NotificationTests
 {
     private static readonly DateTimeOffset Now = new(2026, 10, 2, 9, 0, 0, TimeSpan.Zero);
@@ -3214,7 +3215,7 @@ public static class NotificationReasons
 ```csharp
 namespace Notifications.Application.Records;
 
-/// <summary>The widths a notification's strings are stored at, named once so the record and its columns agree.</summary>
+/// <summary>The widths a notification's strings are stored at, named once so the record and columns agree.</summary>
 public static class NotificationLimits
 {
     public const int MaxTemplateKeyLength = 64;
@@ -3346,7 +3347,7 @@ public sealed class Notification
     }
 
     /// <summary>The intent, before the send: the version and languages rendered, and when it began.</summary>
-    /// <remarks>Once only: a row claimed with the intent set is resent under it rather than restamped (ADR-052).</remarks>
+    /// <remarks>Once only: a row claimed with the intent set is resent under it, not restamped (ADR-052).</remarks>
     public bool StartSend(int templateVersion, string languages, DateTimeOffset now)
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(templateVersion, 1);
@@ -3448,7 +3449,7 @@ using Xunit;
 
 namespace Notifications.Worker.Tests;
 
-/// <summary>The record's table against the engine the migrator ran on: nothing writes it until its consumers do.</summary>
+/// <summary>The record's table on the engine the migrator ran on: nothing writes it until its consumers do.</summary>
 [Collection(nameof(IntegrationCollection))]
 public sealed class NotificationLogSchemaTests(ServiceFixture fixture) : IAsyncLifetime
 {
