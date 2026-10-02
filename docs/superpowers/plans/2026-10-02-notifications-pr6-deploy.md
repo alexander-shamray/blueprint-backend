@@ -38,17 +38,12 @@ sections 3 (PR-6's row), 4 (`DeliveryOptions.GiveUpAge`), 6 (the jurisdiction
 options' three kinds), 9 (`MailOptions`, the client credential), 11 (the
 chart, its capabilities, the scaling decision, the canary row, the readiness
 set), 12 (delivery lag, the waiting gauge, the dashboard panel) and 14 (the two
-asserted Helm rows of ADR-052's table, §15.1, §15.3). **PR-5's plan is not on
-disk when this plan is written, and PR-4's is still being written, its
-options class not yet among its tasks**; the one fact of it this plan leans
-on is its renderer's API, `TemplateRenderer.Create(TemplateSet,
-IReadOnlyList<string> languages, string timeZone)`, which agrees with a
-list-bound language set. The `Jurisdiction__*` keys,
-`Delivery__GiveUpAge`, `DeliveryOptions`, `NotificationsJurisdictionOptions`
-`notifications.waiting` with its steps and `notifications.overdue` are taken
-from the spec's sections
-4, 6, 11 and 12, and *Global Constraints* names each assumption a later plan
-must keep or this one must follow.
+asserted Helm rows of ADR-052's table, §15.1, §15.3). The `Jurisdiction__*`
+keys, `Delivery__GiveUpAge`, `DeliveryOptions`,
+`NotificationsJurisdictionOptions`, `notifications.waiting` with its steps
+and `notifications.overdue` are the spec's sections 4, 6, 11 and 12, and
+*Global Constraints* names each assumption this plan makes of PR-4's and
+PR-5's plans, every one of which those plans meet as written.
 
 ## Global Constraints
 
@@ -78,8 +73,8 @@ must keep or this one must follow.
   and the chart's `probes` comment cites the rule. So this PR stays a clean
   Class D, the class row is one letter, and `classes.yml` needs no change.
 - **`deploy.yml` is not edited, and `.github/workflows/helm.yml` is not
-  either.** The spec's "`deploy.yml`'s option" predates the descriptors:
-  `deploy.yml`'s `workload` input is a string held to
+  either.** The deploy workflow reads its charts from the descriptors (spec,
+  section 3): `deploy.yml`'s `workload` input is a string held to
   `deploy/canary/deployables/` by its guard step (`canary.py chart`), and
   `canary.py` check 8 refuses a menu. `helm.yml` already filters on
   `src/Services/**`. The descriptor is the deploy target.
@@ -117,38 +112,31 @@ must keep or this one must follow.
     to read; `notifications.contact.refused`, unit `{refusal}`; §15.4's rows
     naming `contactSource.baseUrl`, `contactSource.realm` and
     `notifications-identity`.
-  - PR-4 (**its options class not yet on disk; from spec sections 6 and
-    11**):
-    `NotificationsJurisdictionOptions` bound from section `Jurisdiction` with
-    `Languages`, `TimeZone`, `LogRetention`, `ContactRetention` and
-    `OrderRetention`. **`Languages` is assumed to bind as a list** — a
-    `string[]` or `IReadOnlyList<string>` — so the chart renders it as
+  - PR-4 (on disk): `NotificationsJurisdictionOptions` bound from section
+    `Jurisdiction` with `Languages`, `TimeZone`, `LogRetention`,
+    `ContactRetention` and `OrderRetention`. **`Languages` binds as a list**,
+    an `IReadOnlyList<string>`, so the chart renders it as
     `Jurisdiction__Languages__0…n`, the indexed spelling `docs/secrets.md` and
-    §15.4 already use for `Ingress__TrustedNetworks__0…n`. If PR-4 binds a
-    comma-separated string instead, Task 2's `languages` branch renders one
-    `Jurisdiction__Languages` key with `join ","`, and nothing else in this
-    plan moves. The windows bind as `TimeSpan` in the `[d.]hh:mm[:ss]` form
-    `commerce.timeSpanPattern` accepts, and the zone is an IANA id the host
-    resolves at start. The seven consumers register with `AddConsumer` (check
-    9's `consume`) and derive from `IntegrationEventConsumer<T>`, which is what
-    records `messaging.delivery.lag` (Task 5 verifies it).
-  - PR-5 (**not on disk; from spec sections 4 and 12**): `DeliveryOptions`
-    bound from section `Delivery` with `GiveUpAge`, in `FulfilmentOptions`'
-    form; `notifications.waiting`, an observable gauge created with the literal
-    name at the `CreateObservableGauge` call — `check.py`'s `INSTRUMENT` reads
-    only a literal — on `Notifications.Outbound`, with an annotation unit or
-    none, so its series is `notifications_waiting`, and **a `step` attribute
-    whose values are `order_record`, `contact` and `relay`**; and
+    §15.4 already use for `Ingress__TrustedNetworks__0…n`. The windows bind as
+    `TimeSpan` in the `[d.]hh:mm[:ss]` form `commerce.timeSpanPattern`
+    accepts, and the zone is an IANA id the host resolves at start. The seven
+    consumers register with `AddConsumer` (check 9's `consume`) and derive
+    from `IntegrationEventConsumer<T>`, which is what records
+    `messaging.delivery.lag` (Task 5 verifies it).
+  - PR-5 (on disk): `DeliveryOptions` bound from section `Delivery` with
+    `GiveUpAge`, in `FulfilmentOptions`' form; `notifications.waiting`, an
+    observable gauge created with the literal name at the
+    `CreateObservableGauge` call — `check.py`'s `INSTRUMENT` reads only a
+    literal — on `Notifications.Outbound`, with an annotation unit or none, so
+    its series is `notifications_waiting`, and **a `step` attribute whose
+    values are `order_record`, `contact` and `relay`**; and
     `notifications.overdue`, an observable gauge of `Pending` rows due for a
     pass that no pass has claimed for longer than two ticks, in
-    `shipping.shipments.overdue`'s form — **assumed, as that form is, a
-    duration with unit `s`**, so its series is `notifications_overdue_seconds`,
-    with no `pass` attribute because the send worker is the one pass. If PR-5
-    makes it a count with an annotation unit instead, the series is
-    `notifications_overdue` and Task 5's panel expression and unit follow it.
-    The chart defaults `delivery.giveUpAge` to `1.00:00:00`, the day spec
-    section 4 names; PR-5's Compose value and `DeliveryOptions`' bounds must
-    admit it.
+    `shipping.shipments.overdue`'s form — **a duration with unit `s`**, as
+    that form is, so its series is `notifications_overdue_seconds`, with no
+    `pass` attribute because the send worker is the one pass. The chart
+    defaults `delivery.giveUpAge` to `1.00:00:00`, the day spec section 4
+    names, which PR-5's Compose value and `DeliveryOptions`' bounds admit.
 - **Every key this chart renders is one the host refuses to start without**,
   which is why each is required at render or defaulted with a reason, and the
   chart's own `capabilities.yaml` refuses each capability switched off.
@@ -1677,8 +1665,8 @@ git commit -m "docs: the Helm README names Notifications' required values, and t
 **Interfaces:**
 - Consumes: PR-5's `notifications.waiting` (series `notifications_waiting`,
   attribute `step` ∈ `order_record`, `contact`, `relay`) and
-  `notifications.overdue` (series `notifications_overdue_seconds`, on *Global
-  Constraints*' assumption about its unit); PR-2's
+  `notifications.overdue` (series `notifications_overdue_seconds`, unit `s`);
+  PR-2's
   `notifications.mail.unavailable` (`notifications_mail_unavailable_total`,
   attribute `cause`); PR-3's `notifications.contact.refused`
   (`notifications_contact_refused_total`); `DeliveryOptions.GiveUpAge` and the
@@ -1766,10 +1754,7 @@ ends at `y` 27 plus `h` 8), a row and two panels side by side:
 The row carries the four keys the board's other rows carry and nothing more.
 The existing panels' JSON is formatted one key per line; these three follow
 that form when written into the file — the compact objects above are for
-reading here, and `json.load` reads either. **If PR-5 exported the overdue
-gauge as a count rather than a duration**, panel 13's metric is
-`notifications_overdue`, its unit `short`, and its description says rows
-rather than how long; nothing else moves. Then:
+reading here, and `json.load` reads either. Then:
 
 ```bash
 py -3.12 deploy/observability/check.py
@@ -1912,9 +1897,8 @@ Expected: `check.py` exits 0 — checks 1, 2 and 9 unchanged, because no rule,
 runbook file or chapter table moved; check 6 green over the two new panels.
 The JSON loads. The first `grep` lists PR-4's seven consumer files, the second
 PR-5's two gauges, each name a literal at the `Create` call, and the overdue
-gauge's `unit: "s"` within the lines after it — or, if PR-5 chose a count,
-Step 1's fallback applies before this PR is pushed. **If the first
-prints nothing, stop**: Notifications records no delivery lag and the
+gauge's `unit: "s"` within the lines after it. **If the first prints
+nothing, stop**: Notifications records no delivery lag and the
 runbook's first paragraph is false; that is a defect in PR-4 to report, not a
 sentence to soften here.
 
@@ -1959,12 +1943,12 @@ Rewrap the paragraph at 80 columns and change nothing else in it.
 
 - [ ] **Step 2: §15.3's worker paragraph**
 
-Spec section 14 says §15.3 "names Notifications among the charts with no
-Service and no Redis". **It already does the first and states no list for the
-second**: "**Shipping and Notifications get a service chart with no Service and
-no Ingress.**" stands, and the Redis paragraph says "Which charts those are is
-not listed here", deferring to `smoke.sh`'s source read in both directions,
-which Task 3's run covers for `notifications`. Neither moves. The paragraph
+Spec section 14 says §15.3's "sentence giving Notifications a chart with no
+Service is already true, and its Redis paragraph lists no charts": "**Shipping
+and Notifications get a service chart with no Service and no Ingress.**"
+stands, and the Redis paragraph says "Which charts those are is not listed
+here", deferring to `smoke.sh`'s source read in both directions, which Task
+3's run covers for `notifications`. Neither moves. The paragraph
 that does name one worker is the replica count's. Before:
 
 > **A worker's replica count is a decision and not a copy.** CPU utilisation is
@@ -2066,25 +2050,12 @@ cells read `ConfigMap` and `External Secrets`. After:
 
 Only the *Source* column moves; each row's last cell is PR-2's word for word.
 
-**PR-4's five jurisdiction rows and PR-5's give-up age row are read, not
-assumed**, because neither plan is on disk as this one is written. Each must
-name the Helm key this chart renders, as Shipping's jurisdiction and
-fulfilment rows do. Where one does not — or where PR-4 spelled the language
-set as one key — its *Key* and *Source* cells become, its last cell kept:
-
-```markdown
-| `Jurisdiction__Languages__0…n` | Config | Helm `jurisdiction.languages` → ConfigMap | … |
-| `Jurisdiction__TimeZone` | Config | Helm `jurisdiction.timeZone` → ConfigMap | … |
-| `Jurisdiction__LogRetention` | Config | Helm `jurisdiction.logRetention` → ConfigMap | … |
-| `Jurisdiction__ContactRetention` | Config | Helm `jurisdiction.contactRetention` → ConfigMap | … |
-| `Jurisdiction__OrderRetention` | Config | Helm `jurisdiction.orderRetention` → ConfigMap | … |
-| `Delivery__GiveUpAge` | Config | Helm `delivery.giveUpAge` → ConfigMap, defaulted in the chart | … |
-```
-
+**PR-4's five jurisdiction rows and PR-5's give-up age row need no edit**:
+each already names the Helm key this chart renders — `jurisdiction.languages`
+through `jurisdiction.orderRetention`, and `delivery.giveUpAge` defaulted in
+the chart — as Shipping's jurisdiction and fulfilment rows do.
 `Jurisdiction__Languages__0…n` is §15.4's own spelling of a list, as
-`Cors__Origins__0…n` and `Ingress__TrustedNetworks__0…n` are. If PR-4 bound a
-comma-separated string instead, the chart follows PR-4 (*Global
-Constraints*), and so does this row.
+`Cors__Origins__0…n` and `Ingress__TrustedNetworks__0…n` are.
 
 The paragraph that opens "**Every options type in the solution had to earn
 it.**" is PR-2's, PR-4's and PR-5's to extend with `Mail`, Notifications'
@@ -2102,8 +2073,8 @@ git commit -m "docs: §15.1 and §15.3 name the charts that call out under a gra
 ```
 
 The body says which of ADR-052's rows this discharges — §15.1, and with
-Task 2 the two asserted Helm rows — and why the spec's §15.3 sentence about
-"no Service and no Redis" needed no edit.
+Task 2 the two asserted Helm rows — and why §15.3's no-Service sentence and
+its Redis paragraph needed no edit, as spec section 14 says.
 
 ---
 
@@ -2167,8 +2138,8 @@ nothing — the workload input is a string the descriptors hold.
   the jurisdiction block's change of shape and where the member list moved;
   ADR-052's two Helm rows — the `fail` naming three charts and the source loop
   reading every chart; the descriptor as the whole deploy target; the
-  dashboard variable that hid a pure consumer; and the four assumptions about
-  PR-4 and PR-5 in *Global Constraints*, each stated as met or followed. Then
+  dashboard variable that hid a pure consumer; and the assumptions about PR-4
+  and PR-5 in *Global Constraints*, each met by those plans as written. Then
   `/ship`.
 
 ## Self-review
@@ -2179,9 +2150,8 @@ nothing — the workload input is a string the descriptors hold.
   false` and `redis.enabled: false` (Task 3); the library chart's `mail`,
   `jurisdiction` and `delivery` capabilities and the client-credentials one
   (Task 2); the asserted chart rows ADR-052 names (Task 2); the umbrella
-  (Task 3); `smoke.sh`'s lists, which are the descriptor now (Task 3);
-  `deploy.yml`'s option, which no longer exists and is the descriptor (Task 3,
-  argued in *Global Constraints*); the canary row (Task 3); the shared
+  (Task 3); `smoke.sh`'s lists and the deploy workflow's target, which are the
+  descriptor (Task 3, *Global Constraints*); the canary row (Task 3); the shared
   runbook's Notifications half (Task 5).
 - Section 11 — the chart is Shipping's renamed, with `service.enabled`,
   `ingress.enabled` and `redis.enabled` false and written down (Task 3); every
@@ -2235,8 +2205,8 @@ are consumed under those spellings by Tasks 3, 4 and 6; the keys rendered are
 2 and 3 and used only after. `notifications_waiting` with `step`,
 `notifications_overdue_seconds`, `notifications_mail_unavailable_total` with
 `cause` and `notifications_contact_refused_total` are PR-5's, PR-5's, PR-2's
-and PR-3's, used in Task 5; the overdue gauge's unit is the one assumption
-among them, stated in *Global Constraints* with its fallback.
+and PR-3's, used in Task 5, each as *Global Constraints* reads it from that
+plan.
 
 **Deliberately left.**
 
