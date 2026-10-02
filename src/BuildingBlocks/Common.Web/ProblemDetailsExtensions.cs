@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Common.Web;
@@ -18,6 +19,12 @@ public static class ProblemDetailsExtensions
         services.AddExceptionHandler<CommandAlreadyCommittedExceptionHandler>();
 
         services.AddExceptionHandler<CommandIdReusedExceptionHandler>();
+
+        services.AddExceptionHandler<BadHttpRequestExceptionHandler>();
+
+        // Every environment raises a binding refusal, so the answer cannot vary with IsDevelopment (§10.5);
+        // PostConfigure, since routing's own default is a Configure that may be registered after this call.
+        services.PostConfigure<RouteHandlerOptions>(options => options.ThrowOnBadRequest = true);
 
         return services.AddProblemDetails(options =>
             options.CustomizeProblemDetails = context =>
