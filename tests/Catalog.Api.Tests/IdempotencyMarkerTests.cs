@@ -1,9 +1,9 @@
-using System.Reflection;
 using Catalog.Application;
 using Catalog.Infrastructure.Persistence;
 using Catalog.TestSupport;
 using Common.Application;
 using Common.Infrastructure.Idempotency;
+using Common.TestSupport;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.Extensions.DependencyInjection;
@@ -230,18 +230,8 @@ public class IdempotencyMarkerTests(ServiceFixture fixture)
             "looking at nothing — the interface has been renamed, moved, or not yet applied");
     }
 
-    private static string[] Operations() =>
-        [
-            .. typeof(Catalog.Application.DependencyInjection).Assembly
-                .GetTypes()
-                .Where(t => t is { IsClass: true, IsAbstract: false })
-                .Where(typeof(IIdempotentCommand).IsAssignableFrom)
-                .Select(t => (string)t
-                    .GetProperty(
-                        nameof(IIdempotentCommand.OperationName),
-                        BindingFlags.Public | BindingFlags.Static)!
-                    .GetValue(null)!)
-        ];
+    private static IReadOnlyList<string> Operations() =>
+        CommandFingerprintRule.OperationNames(typeof(Catalog.Application.DependencyInjection).Assembly);
 
     private static string Key() =>
         $"{Guid.CreateVersion7()}:tests.marker:{Guid.CreateVersion7()}";

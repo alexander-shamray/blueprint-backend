@@ -377,6 +377,16 @@ public class CommandFingerprintRuleTests
     }
 
     [Fact]
+    public void The_operation_names_are_read_from_a_struct_command_as_from_a_class_one()
+    {
+        IReadOnlyList<string> names =
+            CommandFingerprintRule.OperationNames(typeof(CommandFingerprintRuleTests).Assembly);
+
+        names.ShouldContain(StructWithAHashSet.OperationName);
+        names.ShouldContain(Positional.OperationName);
+    }
+
+    [Fact]
     public void A_bad_member_one_level_down_is_named_with_its_path()
     {
         CommandFingerprintRule
