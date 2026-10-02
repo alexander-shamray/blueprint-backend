@@ -35,10 +35,14 @@ class Scaffolded:
     worker: bool
     port: int | None
     migration_id: str
+    pure_consumer: bool = False
 
     @property
     def argv(self) -> list[str]:
-        flags = ["--worker"] if self.worker else ["--port", str(self.port)]
+        if self.pure_consumer:
+            flags = ["--pure-consumer"]
+        else:
+            flags = ["--worker"] if self.worker else ["--port", str(self.port)]
         return [self.name, *flags, "--migration-id", self.migration_id]
 
 
@@ -98,6 +102,8 @@ def arguments(repo_root: Path, commit: str) -> Scaffolded:
     name = services[0]
     root = f"{SERVICES}{name}/"
     worker = any(path.startswith(f"{root}{name}.Worker/") for path in added)
+    # A worker with no Domain project is §4.1's pure consumer, the one shape that omits it.
+    pure_consumer = worker and not any(path.startswith(f"{root}{name}.Domain/") for path in added)
     migrations = f"{root}{name}.Infrastructure/Persistence/Migrations/"
     ids = [match.group(1) for path in added if path.startswith(migrations)
            if (match := INITIAL_CREATE.fullmatch(path.removeprefix(migrations)))]
@@ -110,7 +116,7 @@ def arguments(repo_root: Path, commit: str) -> Scaffolded:
         if content is None or (published := PUBLISHED.search(content.decode("utf-8"))) is None:
             raise ScaffoldError(f"{commit} carries no {unit} publishing a port to read {name}'s from")
         port = int(published.group(1))
-    return Scaffolded(full, parent, name, worker, port, ids[0])
+    return Scaffolded(full, parent, name, worker, port, ids[0], pure_consumer)
 
 
 def render(repo_root: Path, scaffolded: Scaffolded, directory: Path) -> dict[str, bytes]:

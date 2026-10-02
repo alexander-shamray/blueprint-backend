@@ -1344,10 +1344,10 @@ the twentieth dependency.
 
 ## 4.5 Adding a service
 
-**Five** of §4.1's six services share the shape below — Catalog, Ordering,
-Inventory and Payments as API hosts, Shipping as a worker — and writing the
-fifth by hand is how it ends up subtly different from the first four. One
-command renders it instead:
+**All six** of §4.1's services share the shape below — Catalog, Ordering,
+Inventory and Payments as API hosts, Shipping as a worker and Notifications
+as a pure consumer — and writing one by hand is how it ends up subtly
+different from the rest. One command renders it instead:
 
 ```bash
 python tools/new-service/new_service.py Yankee --port 5199
@@ -1372,9 +1372,25 @@ table's: the host's name reaches a project, a namespace, a Compose service
 key, a Dockerfile entry point and a test fixture's type, and a patch can
 edit a file's text but not its path.
 
+`--pure-consumer` renders §4.1's third shape and implies `--worker`. §4.1
+gives such a service no Domain project and §3.2 nothing to publish, so the
+render is seven projects with none of §9.4's outbox or §9.3's mapper: no
+outbox table or its two migrations, no dispatcher, publisher or gauges and no
+`AddMeter` line, no collector and no mapper. §9.5's inbox and the purge over
+it, §8.5's marker table, the migrator, the probes and the bus stay. Its
+broker account writes its own endpoints and the fault exchanges and no
+contract exchange
+([ADR-036](adr/ADR-036-the-broker-has-a-per-service-identity.md)). §6.3's
+`TransactionBehavior` still calls a domain-event dispatcher, so the render
+writes one that stages nothing ([§7.5](07-persistence.md)), and the
+service's own architecture gate holds its premise. The mode is a set of
+omissions from the one template rather than a second template, so
+`--verify` reproduces its commit like any other.
+
 It writes §4.1's five service projects, its three test projects and its
-`TestSupport` library — nine in all, and §4.1 is explicit that the last is not
-a test project — with everything the service template has accumulated: the
+`TestSupport` library — nine in all, seven for a pure consumer, and §4.1 is
+explicit that the last is not a test project — with everything the service
+template has accumulated: the
 `DbContext` and its conventions
 ([§7.2](07-persistence.md)), `EfUnitOfWork` ([§6.3](06-cqrs.md)), the
 connection factory ([§6.5](06-cqrs.md)), the readiness checks
@@ -1557,13 +1573,11 @@ gains a template — the deployables today carry six of those includes or seven,
 depending on whether the service owns a database — so the thing worth writing
 down is the rule, not the arithmetic.
 
-**The scaffold refuses `Notifications` by name, and `Shipping` only without
-`--worker`.** Documenting the gap left the script willing to render either
-as an API service, which would have contradicted §4.1 quietly. A note is not
-a guard, so the guard stayed and narrowed: an API render under either name
-is still refused, and `Notifications` is refused in both modes because §4.1
-gives it no Domain project at all — which is a second mode, and it comes off
-with the PR that builds it.
+**The scaffold refuses `Shipping` without `--worker` and `Notifications`
+without `--pure-consumer`.** Documenting the gap left the script willing to
+render either in a shape §4.1 does not give it, which would have contradicted
+the chapter quietly. A note is not a guard, so the guard stayed and narrowed
+with each mode that joined.
 
 ---
 

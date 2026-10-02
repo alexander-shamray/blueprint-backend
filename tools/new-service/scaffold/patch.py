@@ -740,3 +740,369 @@ WORKER_PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
         ),
     ),
 }
+
+# The edits a PURE-CONSUMER render makes on top of PATCHES and WORKER_PATCHES,
+# matched against the text those already produced. §4.1 gives the service no
+# Domain project and §3.2 nothing to publish, so what leaves is everything that
+# names the Domain assembly, §9.4's outbox or §9.3's mapper; what stays is the
+# inbox, the purge, the migrator, the probes and the bus (§9.5).
+PURE_CONSUMER_PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
+    # Both images restore the host's project closure, which has no Domain project to copy.
+    "src/Services/Catalog/Catalog.Api/Dockerfile": (
+        ("COPY src/Services/Catalog/Catalog.Domain/Catalog.Domain.csproj src/Services/Catalog/Catalog.Domain/\n", ""),
+    ),
+    "src/Services/Catalog/Catalog.Migrator/Dockerfile": (
+        ("COPY src/Services/Catalog/Catalog.Domain/Catalog.Domain.csproj src/Services/Catalog/Catalog.Domain/\n", ""),
+    ),
+    "src/Services/Catalog/Catalog.Application/DependencyInjection.cs": (
+        ("using Catalog.Application.Integration;\n", ""),
+        (
+            "        // Explicit rather than scanned, beside the dispatcher it serves —\n"
+            "        // §4.2's registration sample is the shape. §7.5's real dispatcher,\n"
+            "        // and no null one beside it: a dispatcher that drops every domain\n"
+            "        // event is deleted rather than disabled, so nothing can register it\n"
+            "        // back by accident.\n"
+            "        services.AddDomainEventDispatcher();\n"
+            "\n"
+            "        // §9.3's allow-list, explicit so what this service publishes is not whichever types the assembly holds.\n"
+            "        services.AddScoped<IIntegrationEventMapper, CatalogIntegrationEventMapper>();\n",
+            "        // §7.5's dispatcher for a service §4.1 gives no Domain project, where nothing raises an event.\n"
+            "        services.AddScoped<IDomainEventDispatcher, NoDomainEventDispatcher>();\n",
+        ),
+    ),
+    "src/Services/Catalog/Catalog.Application/Catalog.Application.csproj": (
+        (
+            "    Domain and Common.Application, §4.2's second row; Common.Contracts joins with the §9.3 mapper's first entry.\n",
+            "    Common.Application, §4.2's second row without the Domain project §4.1 does not give this service.\n",
+        ),
+        ("    <ProjectReference Include=\"..\\Catalog.Domain\\Catalog.Domain.csproj\" />\n", ""),
+    ),
+    "src/Services/Catalog/Catalog.Infrastructure/Catalog.Infrastructure.csproj": (
+        (
+            "  <!-- Domain and Application, and any package besides, per §4.2's third row. -->\n",
+            "  <!-- Application, and any package besides, per §4.2's third row; §4.1 gives this service no Domain. -->\n",
+        ),
+        (
+            "    <!-- OutboxStats' MemoryCache (§13.6), named directly though Common.Infrastructure carries it. -->\n"
+            "    <PackageReference Include=\"Microsoft.Extensions.Caching.Memory\" />\n",
+            "",
+        ),
+        ("    <ProjectReference Include=\"..\\Catalog.Domain\\Catalog.Domain.csproj\" />\n", ""),
+        (
+            "    <!-- §9.4's outbox, and §8's Redis helpers beside it. -->\n",
+            "    <!-- §9.5's inbox and its purge, and §8's Redis helpers beside them. -->\n",
+        ),
+        (
+            "    <!-- MessageTypeSource's Broker half, through IIntegrationEvent until this service has a contract (§9.4). -->\n"
+            "    <ProjectReference Include=\"..\\..\\..\\BuildingBlocks\\Common.Contracts\\Common.Contracts.csproj\" />\n",
+            "",
+        ),
+    ),
+    "src/Services/Catalog/Catalog.Infrastructure/DependencyInjection.cs": (
+        ("using Catalog.Domain;\n", ""),
+        ("using Common.Contracts;\n", ""),
+        ("using Common.Infrastructure.Outbox;\n", ""),
+        ("using Microsoft.Data.SqlClient;\n", ""),
+        (
+            "        // §7.5's two halves, scoped because the context they share is.\n"
+            "        services.AddScoped<IDomainEventCollector, EfDomainEventCollector>();\n"
+            "        services.AddScoped<IIntegrationEventPublisher, OutboxPublisher>();\n"
+            "\n",
+            "",
+        ),
+        (
+            "        // One local, so the tables of §9.4, §9.5 and §8.5 cannot name different schemas.\n"
+            "        const string schema = \"catalog\";\n"
+            "        services.AddSingleton(new OutboxTable(schema));\n",
+            "        // One local, so the tables of §9.5 and §8.5 cannot name different schemas; there is no outbox (§3.2).\n"
+            "        const string schema = \"catalog\";\n",
+        ),
+        (
+            "        // Resolves the metrics classes at start, before the bus and the dispatcher, so every instrument\n"
+            "        // exists before the first message (§13.6).\n",
+            "        // Resolves the metrics classes at start, before the bus, so every instrument exists before the first\n"
+            "        // message (§13.6).\n",
+        ),
+        (
+            "        // The poll loop of §9.4, by AddHostedService<T> because §12.4's fixture removes it by ImplementationType.\n"
+            "        // After the bus and before the purge: hosted services stop in reverse, so it drains into a live transport.\n"
+            "        services.AddHostedService<OutboxDispatcher>();\n"
+            "\n",
+            "",
+        ),
+    ),
+    "src/Services/Catalog/Catalog.Infrastructure/Observability/MetricsInitialiser.cs": (
+        (
+            "    public MetricsInitialiser(OutboxMetrics outbox, MessagingMetrics messaging, RequestMetrics requests)\n"
+            "    {\n"
+            "        ArgumentNullException.ThrowIfNull(outbox);\n",
+            "    public MetricsInitialiser(MessagingMetrics messaging, RequestMetrics requests)\n"
+            "    {\n",
+        ),
+    ),
+    "src/Services/Catalog/Catalog.Infrastructure/Persistence/InboxMessageConfiguration.cs": (
+        (
+            "/// <summary>§9.5's table, mapped here for the reason <see cref=\"OutboxMessageConfiguration\"/> gives.</summary>\n",
+            "/// <summary>§9.5's table, mapped here because the schema is this service's and the scan looks here.</summary>\n",
+        ),
+    ),
+    "src/Services/Catalog/Catalog.Infrastructure/Persistence/CatalogDbContext.cs": (
+        ("using Common.Infrastructure.Outbox;\n", ""),
+        (
+            "    /// <summary>§9.4's outbox, on this context so a row enlists in the aggregate's transaction.</summary>\n"
+            "    public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();\n"
+            "\n",
+            "",
+        ),
+    ),
+    "src/Services/Catalog/Catalog.Infrastructure/Persistence/Migrations/20260811125717_AddInbox.cs": (
+        (
+            "/// §9.5's inbox table, generated from <see cref=\"InboxMessageConfiguration\"/>\n"
+            "/// on <c>AddOutbox</c>'s terms: the configuration is the source of truth, and\n"
+            "/// the <c>.Designer.cs</c> and snapshot beside it are machine-owned.\n",
+            "/// §9.5's inbox table, generated from <see cref=\"InboxMessageConfiguration\"/>: the\n"
+            "/// configuration is the source of truth, and the <c>.Designer.cs</c> and snapshot\n"
+            "/// beside it are machine-owned.\n",
+        ),
+    ),
+    "src/Services/Catalog/Catalog.Infrastructure/Persistence/Migrations/20260901141908_IdempotencyMarkerCommittedAtDefault.cs": (
+        (
+            "/// <see cref=\"IdempotencyMarkerConfiguration\"/>; the outbox and inbox, whose windows are housekeeping, are left alone.\n",
+            "/// <see cref=\"IdempotencyMarkerConfiguration\"/>; the inbox, whose window is housekeeping, is left alone.\n",
+        ),
+    ),
+    "tests/Catalog.Application.Tests/ArchitectureTests.cs": (
+        ("using System.Reflection;\nusing Catalog.Domain;\n", ""),
+        (
+            "        // §4.2's second row as an allow-list: Dapper is §6.5's read side and brings System.Data.Common, and\n"
+            "        // Common.Domain is here because the mapper's IDomainEvent puts it among the references.\n",
+            "        // §4.2's second row as an allow-list, with no Domain project because §4.1 gives none: Dapper is §6.5's\n"
+            "        // read side and brings System.Data.Common.\n",
+        ),
+        ("            \"Catalog.Domain\",\n", ""),
+        (
+            "    public void Application_and_domain_do_not_reference_masstransit()\n"
+            "    {\n"
+            "        // §9.3's must-not list, whose one exemption is a saga's receive endpoint and its outbox (ADR-032).\n"
+            "        Assembly[] assemblies = [typeof(DependencyInjection).Assembly, typeof(AssemblyMarker).Assembly];\n"
+            "        foreach (Assembly assembly in assemblies)\n"
+            "        {\n"
+            "            Types\n"
+            "                .InAssembly(assembly)\n"
+            "                .ShouldNot().HaveDependencyOn(\"MassTransit\")\n"
+            "                .GetResult().IsSuccessful.ShouldBeTrue(assembly.GetName().Name);\n"
+            "        }\n"
+            "    }\n",
+            "    public void Application_does_not_reference_masstransit()\n"
+            "    {\n"
+            "        // §9.3's must-not list, over the one layer of the two it names that §4.1 gives this service.\n"
+            "        Types\n"
+            "            .InAssembly(typeof(DependencyInjection).Assembly)\n"
+            "            .ShouldNot().HaveDependencyOn(\"MassTransit\")\n"
+            "            .GetResult().IsSuccessful.ShouldBeTrue();\n"
+            "    }\n",
+        ),
+    ),
+    "tests/Catalog.Api.Tests/ArchitectureTests.cs": (
+        ("using Catalog.Domain;\n", "using Common.Domain;\n"),
+        ("        typeof(AssemblyMarker).Assembly,\n", ""),
+        (
+            "    [Fact]\n"
+            "    public void Nothing_in_this_service_references_the_migrator()\n",
+            "    [Fact]\n"
+            "    public void Nothing_in_this_service_raises_a_domain_event()\n"
+            "    {\n"
+            "        // The premise of the dispatcher that stages nothing (§7.5): §4.1 gives this service no Domain project.\n"
+            "        string[] raisers =\n"
+            "        [\n"
+            "            .. ServiceAssemblies\n"
+            "                .SelectMany(assembly => assembly.GetTypes())\n"
+            "                .Where(type => typeof(IDomainEvent).IsAssignableFrom(type) ||\n"
+            "                    typeof(IHasDomainEvents).IsAssignableFrom(type))\n"
+            "                .Select(type => type.FullName ?? type.Name)\n"
+            "        ];\n"
+            "\n"
+            "        raisers.ShouldBeEmpty($\"a domain event needs §7.5's real dispatcher: {string.Join(\", \", raisers)}\");\n"
+            "    }\n"
+            "\n"
+            "    [Fact]\n"
+            "    public void Nothing_in_this_service_references_the_migrator()\n",
+        ),
+    ),
+    "tests/Catalog.Api.Tests/DatabaseSmokeTests.cs": (
+        (
+            "        applied.Length.ShouldBe(7);\n"
+            "        applied[0].ShouldEndWith(\"_InitialCreate\");\n"
+            "        applied[1].ShouldEndWith(\"_AddOutbox\");\n"
+            "        applied[2].ShouldEndWith(\"_AddInbox\");\n"
+            "        applied[3].ShouldEndWith(\"_AddOutboxRetentionIndex\");\n"
+            "        applied[4].ShouldEndWith(\"_AddIdempotencyMarkers\");\n"
+            "        applied[5].ShouldEndWith(\"_IdempotencyMarkerCommittedAtDefault\");\n"
+            "        applied[6].ShouldEndWith(\"_AddIdempotencyMarkerRowVersion\");\n",
+            "        applied.Length.ShouldBe(5);\n"
+            "        applied[0].ShouldEndWith(\"_InitialCreate\");\n"
+            "        applied[1].ShouldEndWith(\"_AddInbox\");\n"
+            "        applied[2].ShouldEndWith(\"_AddIdempotencyMarkers\");\n"
+            "        applied[3].ShouldEndWith(\"_IdempotencyMarkerCommittedAtDefault\");\n"
+            "        applied[4].ShouldEndWith(\"_AddIdempotencyMarkerRowVersion\");\n",
+        ),
+    ),
+    "tests/Catalog.Api.Tests/MetricsRegistrationTests.cs": (
+        ("using System.Diagnostics.Metrics;\n", ""),
+        ("using Microsoft.Extensions.Logging;\nusing Microsoft.Extensions.Logging.Abstractions;\n", ""),
+        (
+            "/// <summary>§13.6's registration rules, over a <c>ServiceCollection</c> and a <see cref=\"Meter\"/>.</summary>\n",
+            "/// <summary>§13.6's registration rules, over a <c>ServiceCollection</c>; there are no outbox gauges (§3.2).</summary>\n",
+        ),
+        ("        registered.ShouldContain(typeof(OutboxMetrics));\n", ""),
+    ),
+    "tests/Catalog.Api.Tests/RetentionPurgeTests.cs": (
+        ("using Catalog.TestSupport.Outbox;\n", ""),
+        ("using Common.Infrastructure.Outbox;\n", ""),
+        (
+            "    public async Task A_skewed_clock_purges_the_outbox_and_the_inbox_and_leaves_the_marker()\n"
+            "    {\n"
+            "        // Two clocks, one age, opposite outcomes: the outbox's and inbox's cutoffs read the skewed clock, the\n",
+            "    public async Task A_skewed_clock_purges_the_inbox_and_leaves_the_marker()\n"
+            "    {\n"
+            "        // Two clocks, one age, opposite outcomes: the inbox's cutoff reads the skewed clock, the\n",
+        ),
+        ("            OutboxWindow = window,\n", ""),
+        (
+            "        // One instant for all three rows, so only the clock a statement read varies.\n",
+            "        // One instant for both rows, so only the clock a statement read varies.\n",
+        ),
+        (
+            "        OutboxMessage row = OutboxRows.Healthy(fixture);\n"
+            "        await fixture.StageOutboxAsync(row);\n"
+            "        await fixture.SetOutboxProcessedAtAsync(row.MessageId, justNow);\n"
+            "\n",
+            "",
+        ),
+        (
+            "        outbox.ShouldBe(1, \"the outbox cutoff is subtracted from the registered clock, which is two days ahead\");\n"
+            "        inbox.ShouldBe(1, \"§9.5 keeps the inbox on that same application-computed cutoff, deliberately\");\n",
+            "        outbox.ShouldBe(0, \"this service registers no outbox table, so the pass has none to purge (§9.5)\");\n"
+            "        inbox.ShouldBe(1, \"the inbox cutoff is subtracted from the registered clock, which is two days ahead\");\n",
+        ),
+        (
+            "        // §9.5 asks for one hosted service covering every table.\n"
+            "        OutboxMessage row = OutboxRows.Healthy(fixture);\n"
+            "        await fixture.StageOutboxAsync(row);\n"
+            "        await fixture.SetOutboxProcessedAtAsync(row.MessageId, LongAgo);\n"
+            "\n",
+            "        // §9.5 asks for one hosted service covering every table this service registers, which has no outbox.\n",
+        ),
+        (
+            "        (await fixture.PurgeRetentionAsync()).ShouldBe((Outbox: 1, Inbox: 1, Idempotency: 1));\n",
+            "        (await fixture.PurgeRetentionAsync()).ShouldBe((Outbox: 0, Inbox: 1, Idempotency: 1));\n",
+        ),
+    ),
+    "tests/Catalog.TestSupport/CatalogApiFactory.cs": (
+        ("using Catalog.TestSupport.Outbox;\nusing Common.Application;\n", ""),
+        ("using Common.Infrastructure.Outbox;\n", ""),
+        (
+            "                // §9.5's purge, removed by the same match, so a test that a row survives retention drives the pass.\n",
+            "                // §9.5's purge, matched by the ImplementationType AddHostedService<T> sets, so a test drives each pass.\n",
+        ),
+    ),
+}
+
+# The pure consumer's larger cuts, each from its first anchor through its last
+# with both bound exactly once, so a whole test leaves without being quoted.
+# Applied before PURE_CONSUMER_PATCHES, which are bound against what is left.
+PURE_CONSUMER_SPANS: dict[str, tuple[tuple[str, str, str], ...]] = {
+    "src/Services/Catalog/Catalog.Infrastructure/DependencyInjection.cs": (
+        (
+            "        // The persisted type names (§9.4).",
+            "        services.AddSingleton<OutboxJson>();\n\n",
+            "",
+        ),
+        (
+            "        // §13.6's per-lane gauges,",
+            "        services.AddSingleton<OutboxMetrics>();\n\n",
+            "",
+        ),
+    ),
+    "tests/Catalog.Application.Tests/DependencyInjectionTests.cs": (
+        (
+            "    [Fact]\n    public void AddCatalogApplication_registers_the_real_domain_event_dispatcher_scoped()\n",
+            "            .ImplementationType!.Name.ShouldBe(\"CatalogIntegrationEventMapper\");\n    }\n",
+            "    [Fact]\n"
+            "    public void AddCatalogApplication_registers_the_dispatcher_that_stages_nothing()\n"
+            "    {\n"
+            "        // Named, since §4.1 gives this service no Domain project and the real one would not resolve (§7.5).\n"
+            "        ServiceCollection services = new();\n"
+            "\n"
+            "        services.AddCatalogApplication();\n"
+            "\n"
+            "        ServiceDescriptor dispatcher = services\n"
+            "            .Where(d => d.ServiceType == typeof(IDomainEventDispatcher))\n"
+            "            .ShouldHaveSingleItem();\n"
+            "        dispatcher.Lifetime.ShouldBe(ServiceLifetime.Scoped);\n"
+            "        dispatcher.ImplementationType!.Name.ShouldBe(\"NoDomainEventDispatcher\");\n"
+            "\n"
+            "        // Nothing is published, so §9.3's mapper and §7.5's registry have nothing to serve.\n"
+            "        services.ShouldNotContain(d => d.ServiceType == typeof(IIntegrationEventMapper));\n"
+            "        services.ShouldNotContain(d => d.ServiceType == typeof(IProjectionRegistry));\n"
+            "    }\n",
+        ),
+    ),
+    "tests/Catalog.Api.Tests/MetricsRegistrationTests.cs": (
+        (
+            "    [Fact]\n    public void The_outbox_gauges_report_one_measurement_per_lane_on_the_registered_meter()\n",
+            "        return \"\";\n    }\n\n",
+            "",
+        ),
+        (
+            "\n    /// <summary>Stands in for an unreachable database.</summary>\n",
+            "        public int AbandonedCount(OutboxLane lane) => lane == OutboxLane.Broker ? 61 : 62;\n    }\n",
+            "",
+        ),
+    ),
+    "tests/Catalog.Api.Tests/RetentionPurgeTests.cs": (
+        (
+            "    [Fact]\n    public async Task A_processed_outbox_row_past_the_window_is_deleted()\n",
+            "        (await fixture.OutboxAsync()).ShouldHaveSingleItem();\n    }\n\n",
+            "",
+        ),
+        (
+            "    [Fact]\n    public async Task A_backlog_larger_than_one_batch_drains_over_batches_and_stops_at_the_ceiling()\n",
+            "        (await fixture.OutboxAsync()).ShouldBeEmpty();\n    }\n",
+            "    [Fact]\n"
+            "    public async Task A_backlog_larger_than_one_batch_drains_over_batches_and_stops_at_the_ceiling()\n"
+            "    {\n"
+            "        // A policy of its own: five inbox rows in batches of two show both edges.\n"
+            "        for (int row = 0; row < 5; row++)\n"
+            "            await fixture.StageInboxAsync(new InboxMessage(Guid.CreateVersion7(), \"catalog-events\", LongAgo));\n"
+            "\n"
+            "        RetentionPolicy twoAtATime = new() { BatchSize = 2, MaxBatchesPerPass = 2 };\n"
+            "\n"
+            "        // Four of five: two batches of two, then the ceiling.\n"
+            "        (await fixture.PurgeWithAsync(twoAtATime)).Inbox.ShouldBe(4);\n"
+            "        (await fixture.InboxAsync()).Count.ShouldBe(1);\n"
+            "\n"
+            "        // The next pass takes the remainder and stops short of its ceiling, on the partial batch.\n"
+            "        (await fixture.PurgeWithAsync(twoAtATime)).Inbox.ShouldBe(1);\n"
+            "        (await fixture.InboxAsync()).ShouldBeEmpty();\n"
+            "    }\n",
+        ),
+    ),
+    "tests/Catalog.TestSupport/CatalogApiFactory.cs": (
+        (
+            "                // Only the outbox dispatcher: MassTransit's bus is a hosted service too.",
+            "                services.AddSingleton<OutboxDispatcher>();\n\n",
+            "",
+        ),
+        (
+            "\n                // §9.4: added to rather than replaced,",
+            "                services.AddPluggableFrom(typeof(AlwaysThrows).Assembly);\n",
+            "",
+        ),
+        (
+            "\nfile static class ServiceDescriptorExtensions\n",
+            "\"assembly's events cannot be added to it before the map is built (§9.4).\");\n}\n",
+            "",
+        ),
+    ),
+}

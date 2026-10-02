@@ -31,10 +31,15 @@ class ScaffoldError(Exception):
 
 @dataclass(frozen=True)
 class Names:
-    """The three casings every rename needs, and the host the service runs as."""
+    """The three casings every rename needs, the host the service runs as, and its shape.
+
+    A pure consumer has no Domain project and publishes nothing (§4.1, §3.2): it
+    changes which files a render copies, never what any of them is renamed to.
+    """
 
     pascal: str
     host: str = API_HOST
+    pure_consumer: bool = False
 
     @property
     def lower(self) -> str:
