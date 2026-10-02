@@ -26,16 +26,10 @@ services:
       ASPNETCORE_ENVIRONMENT: Development
       # Runtime identity (DML only) — never the migrator connection.
       ConnectionStrings__Catalog: "${CATALOG_CONNECTION:-Server=sql;Database=Catalog;User Id=sa;Password=${SQL_PASSWORD:-Local_Dev_Pa55w0rd!};TrustServerCertificate=True}"
-      # The bus (§9), read by AddMassTransitMessaging — which throws without
-      # it, so this line is what lets the host start. A plain value, no ${…}
-      # variable: this is §14.1's local default, not a secret with a
-      # production shape, and .env.example's contract covers variables.
-      #
-      # `catalog-svc` rather than `guest`: that account is tagged
-      # `administrator` and the base image ships `loopback_users.guest =
-      # false`, so one principal reachable from any container could publish
-      # onto `ordering-commands` as system-initiated (§9.4). The broker's
-      # per-service write permissions live in rabbitmq/Dockerfile.
+      # The bus (§9). AddMassTransitMessaging throws without it, so this line is
+      # what lets the host start. A plain value, §14.1's local default rather
+      # than a secret, under this service's own account rather than `guest`,
+      # which is tagged administrator and reachable from any container (ADR-036).
       ConnectionStrings__RabbitMq: "amqp://catalog-svc:local-dev-catalog@rabbitmq:5672"
       # The authority, to validate inbound tokens (§11.2). Read eagerly by
       # AddJwtAuthentication, which throws naming the key — so this line is
@@ -44,16 +38,10 @@ services:
       # requires them only of a host that does.
       Identity__Authority: "http://keycloak:8080/realms/commerce"
       OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4317"
-      # §8.1's two connections. Both keys are required whether or not a
-      # service reads both: AddRedisConnections is one call by design (§8.2),
-      # so a service either has Redis or does not, and it reads both eagerly
-      # and throws naming the missing one — which is what makes an absent key
-      # a host that will not start rather than a cache silently reading the
-      # database. §8.5's IdempotencyBehavior reads the coordination one,
-      # claiming a {service}:idem: key before any command runs.
-      # 6379 on both: the ports differ only on the host side (6379/6380),
-      # and inside the network each container listens on Redis's own port,
-      # so naming 6380 here would reach nothing.
+      # §8.1's two connections, both read eagerly by AddRedisConnections (§8.2),
+      # so an absent key is a host that will not start rather than a cache
+      # silently reading the database. 6379 on both: each container listens on
+      # Redis's own port, and 6380 exists only on the host side.
       ConnectionStrings__RedisCache: "redis-cache:6379"
       ConnectionStrings__RedisCoordination: "redis-coordination:6379"
     ports: [ "127.0.0.1:5102:8080" ]
@@ -62,15 +50,8 @@ services:
       rabbitmq: { condition: service_healthy }
       # service_healthy since infrastructure.yml's keycloak declares a healthcheck; the host itself does not need it.
       keycloak: { condition: service_healthy }
-      # Both Redis instances, and the coordination one is load-bearing since
-      # §8.5's behaviour claims a key before any command runs. Ordered after
-      # keycloak only because this list reads top-down; compose treats every
-      # entry alike.
-      #
       # service_healthy, not service_started: AddRedisConnections sets
-      # AbortOnConnectFail = false (§8.1's "degrade, don't die"), so the host
-      # WOULD start against a Redis still booting — and the first protected
-      # command would then fail on a claim rather than on anything a reader
-      # could connect to a missing container.
+      # AbortOnConnectFail = false (§8.1), so the host would start against a
+      # Redis still booting and its first command would fail on §8.5's claim.
       redis-cache: { condition: service_healthy }
       redis-coordination: { condition: service_healthy }
