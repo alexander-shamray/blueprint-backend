@@ -1,7 +1,7 @@
-"""The scaffold PR's proof: re-render a scaffold commit and compare it.
+"""The scaffold commit's proof: re-render a scaffold commit and compare it.
 
-The rule is `tools/new-service/README.md`'s *A scaffold PR is the scaffold's
-output*; this module is the `--verify` that checks it.
+The rule is `tools/new-service/README.md`'s *A scaffold commit is the
+scaffold's output*; this module is the `--verify` that checks it.
 """
 
 from __future__ import annotations

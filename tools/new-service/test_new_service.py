@@ -2794,7 +2794,7 @@ OBSERVABILITY_TESTS = "tests/Common.Web.Tests/ObservabilityTests.cs"
 
 
 class VerifiesAScaffoldCommit(unittest.TestCase):
-    """`--verify`, the proof of README.md's *A scaffold PR is the scaffold's output*."""
+    """`--verify`, the proof of README.md's *A scaffold commit is the scaffold's output*."""
 
     @classmethod
     def setUpClass(cls):
