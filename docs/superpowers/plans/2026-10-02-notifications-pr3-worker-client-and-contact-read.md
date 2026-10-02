@@ -4598,13 +4598,10 @@ after every `src/` commit, because the command's `Edit` deny on `src/` lasts
 the turn it runs in.
 
 ```bash
-git add docs CLAUDE.md Directory.Packages.props tests/Web.Bff.Tests/Web.Bff.Tests.csproj \
+git add docs Directory.Packages.props tests/Web.Bff.Tests/Web.Bff.Tests.csproj \
     tests/Web.Bff.Tests/KeycloakFixture.cs
 git commit -m "docs: the chapters, Appendix B and docs/secrets.md name the contact reader beside the other credentialed hosts"
 ```
-
-`CLAUDE.md` is in the `git add` only if `/validate-blueprint` reports a line
-there; Task 8 edits none (Self-review).
 
 ---
 
