@@ -70,9 +70,9 @@ a service missing from a series.** The four loaded outbox alerts group `by
 (service_name)`; a service that runs a dispatcher and publishes no gauges is
 "covered" by four alerts that can never fire for it. The exemption list is
 empty, because §4.5's template registers the gauges and the scaffold renders
-them into every new service (§13.6); a service lands on it only with a reason
-written down, and the check fails in **both** directions: a new unexempted
-service, and a stale exemption for one that no longer needs it.
+them into every new publishing service (§13.6); a service lands on it only
+with a reason written down, and the check fails in **both** directions: a new
+unexempted service, and a stale exemption for one that no longer needs it.
 **Which services owe a dispatcher is read from the tree**: one with a Domain
 project raises the events §9.4's outbox carries, and one with none — §4.1's
 pure consumer — publishes nothing, so it hosts no dispatcher and is owed no
