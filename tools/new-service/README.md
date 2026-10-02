@@ -241,13 +241,10 @@ against its `COMMENT_CEILING`.
 
 ## A scaffold PR is the scaffold's output
 
-A new service's first pull request is this script's output and nothing else:
-the render, committed as the scaffold left it, with the service's first
-feature in the pull request after it. The scaffold is reviewed once, in its
-own pull request, and never again per service. A new scaffold mode is the
-one exception: it lands in the same pull request as the first service
-rendered with it, the render a commit of its own that `--verify` proves
-(the Notifications design's §3 argues it).
+A new service's first pull request holds this script's output as a commit of
+its own, committed as the scaffold left it, which `--verify` proves; the
+service's first feature lands in the pull request after it. The scaffold is
+reviewed once, in its own pull request, and never again per service.
 
 `--verify` is the proof. It reads the service's name, host, port and
 migration id from what a commit added, renders them into a temporary copy of
