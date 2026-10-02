@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Not a test project (§4.1): Library output, referenced by each sibling suite that needs containers. -->
+
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- WebApplicationFactory over the real Program (§12.4). -->
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The body every service's ServiceFixture shares (ADR-056). -->
+    <ProjectReference Include="..\Common.TestSupport\Common.TestSupport.csproj" />
+    <ProjectReference Include="..\..\src\Services\Notifications\Notifications.Worker\Notifications.Worker.csproj" />
+    <!-- The migrator, so the fixture drives the real §7.4 job host. -->
+    <ProjectReference Include="..\..\src\Services\Notifications\Notifications.Migrator\Notifications.Migrator.csproj" />
+  </ItemGroup>
+
+</Project>

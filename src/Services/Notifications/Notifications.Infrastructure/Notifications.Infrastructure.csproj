@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Application, and any package besides, per §4.2's third row; §4.1 gives this service no Domain. -->
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
+    <PackageReference Include="Dapper" />
+    <!-- Named directly for SqlConnectionFactory (§6.5), though the EF provider carries it too. -->
+    <PackageReference Include="Microsoft.Data.SqlClient" />
+    <PackageReference Include="AspNetCore.HealthChecks.SqlServer" />
+    <PackageReference Include="AspNetCore.HealthChecks.Redis" />
+    <!-- The bus (§9); no RabbitMQ health-check package, because AddMassTransit registers its own. -->
+    <PackageReference Include="MassTransit.RabbitMQ" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Notifications.Application\Notifications.Application.csproj" />
+    <!-- §9.5's inbox and its purge, and §8's Redis helpers beside them. -->
+    <ProjectReference Include="..\..\..\BuildingBlocks\Common.Infrastructure\Common.Infrastructure.csproj" />
+  </ItemGroup>
+
+</Project>

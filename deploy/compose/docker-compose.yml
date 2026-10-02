@@ -38,3 +38,4 @@ include:
   - services/inventory.yml
   - services/payments.yml
   - services/shipping.yml
+  - services/notifications.yml

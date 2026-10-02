@@ -31,6 +31,12 @@
       "password_hash": "QX8uVt6glh3LsJPKAwhU+ZGOKGa8awMQnB8+IvnLjm+pmnDe",
       "hashing_algorithm": "rabbit_password_hashing_sha256",
       "tags": []
+    },
+    {
+      "name": "notifications-svc",
+      "password_hash": "XXM68DtuY70CPrORji8YNcnMHzkNcb3jKSFnJOw+FaI4RRd/",
+      "hashing_algorithm": "rabbit_password_hashing_sha256",
+      "tags": []
     }
   ],
   "vhosts": [
@@ -73,6 +79,13 @@
       "configure": "^(shipping-|Common\\.Contracts|Shipping\\.Infrastructure\\.Messaging:|MassTransit:)",
       "write": "^(shipping-|Common\\.Contracts(\\.Shipping\\.V1:|:)|Shipping\\.Infrastructure\\.Messaging:|MassTransit:)",
       "read": "^(shipping-|Common\\.Contracts|Shipping\\.Infrastructure\\.Messaging:|MassTransit:)"
+    },
+    {
+      "user": "notifications-svc",
+      "vhost": "/",
+      "configure": "^(notifications-|Common\\.Contracts|MassTransit:)",
+      "write": "^(notifications-|MassTransit:)",
+      "read": "^(notifications-|Common\\.Contracts|MassTransit:)"
     }
   ],
   "topic_permissions": [],
