@@ -8,7 +8,7 @@ using Xunit;
 
 namespace Notifications.Worker.Tests;
 
-/// <summary>§9.4's, §9.5's and §8.5's retention purges, driven a pass at a time against the real tables.</summary>
+/// <summary>§9.5's and §8.5's retention purges, driven a pass at a time against the real tables.</summary>
 [Collection(nameof(IntegrationCollection))]
 public sealed class RetentionPurgeTests(ServiceFixture fixture) : IAsyncLifetime
 {
