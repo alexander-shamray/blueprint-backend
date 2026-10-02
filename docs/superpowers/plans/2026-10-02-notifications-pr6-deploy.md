@@ -1137,7 +1137,7 @@ prints nothing.
 ```yaml
 # Notifications, a worker with no front door: §3.2 gives it no API and no
 # command, so §15.3's worker shape is the chart — no Service, no Ingress, and
-# probes that address the container port directly.
+# probes that reach the container port directly.
 
 workload:
   # Named from the service and not the image: the migration Job is
