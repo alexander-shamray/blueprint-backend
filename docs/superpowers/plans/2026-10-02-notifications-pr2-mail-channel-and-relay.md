@@ -916,9 +916,9 @@ public sealed class MailOptionsTests
 `MetricsRegistrationTests.cs`: `BuildServices()`'s configuration gains the
 relay's six keys, its body calls the hop's registration as `Program.cs` does,
 and the selector test names the new type. With
-`using Notifications.Infrastructure.Mail;`, `using Notifications.TestSupport;`,
-`using Microsoft.Extensions.FileProviders;` and
-`using Microsoft.Extensions.Hosting;` in sorted position, in the dictionary:
+`using Notifications.Infrastructure.Mail;`, `using Notifications.TestSupport;`
+and `using Microsoft.Extensions.FileProviders;` in sorted position, each where
+absent, in the dictionary:
 
 ```csharp
                     // Read eagerly by AddMailChannel; StartTls and a credential, as the environment is not Development.
