@@ -1402,14 +1402,16 @@ declares it owns none (§4.2) — the bus registration of
 [§9](09-messaging.md), whose eager read means a scaffolded host refuses to
 start without `ConnectionStrings:RabbitMq`, the migration job host
 ([§7.4](07-persistence.md)), the `InitialCreate` migration that creates the
-schema and the `AddOutbox` one beside it — §9.4's table is wiring every
-service has, and a service carrying the dispatcher without it would log a
-failed claim twice a second from its first boot — the outbox itself with its
-empty allow-list mapper, §9.5's inbox filter and retention purge, §11.3's JWT
-validation, both images ([§15.2](15-cicd-deployment.md)) and
+schema and, for a publishing service, the `AddOutbox` one beside it —
+§9.4's table is wiring every publishing service has, and a service carrying
+the dispatcher without it would log a failed claim twice a second from its
+first boot — the outbox itself with its empty allow-list mapper (a pure
+consumer has none of the three, above), §9.5's inbox filter and retention
+purge, §11.3's JWT validation, both images ([§15.2](15-cicd-deployment.md)) and
 §4.2's architecture gates. The migrations it copies are `InitialCreate`,
 `AddOutbox`, `AddInbox`, `AddOutboxRetentionIndex`, `AddIdempotencyMarkers`,
-`IdempotencyMarkerCommittedAtDefault` and `AddIdempotencyMarkerRowVersion` —
+`IdempotencyMarkerCommittedAtDefault` and `AddIdempotencyMarkerRowVersion`,
+bar the two outbox ones for a pure consumer —
 the messaging tables ship with the
 dispatcher that reads them, because a service carrying the dispatcher without
 its table logs a failed claim twice a second from its first boot, and §8.5's
@@ -1435,9 +1437,9 @@ excludes both halves of the pair, `.env.example`
 ([§14.1](14-local-development.md)), the broker definitions that grant the new
 service an account of its own — without which it renders a service that starts
 and cannot authenticate, since the broker has held no shared principal since
-#44 — the `AddMeter` line in `Common.Web` for the service's outbox meter,
-without which §13.6's gauges are published and collected by nothing, since
-§13.2's export names meters one by one — and, under
+#44 — the `AddMeter` line in `Common.Web` for a publishing service's outbox
+meter, without which §13.6's gauges are published and collected by nothing,
+since §13.2's export names meters one by one — and, under
 `.github/secret-scan/allowed/`, the file covering each
 entry's tree, one accepted-finding line per
 **distinct** finding the render produces — two lines carrying one value under
