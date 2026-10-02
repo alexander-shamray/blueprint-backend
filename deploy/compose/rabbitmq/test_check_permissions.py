@@ -294,7 +294,7 @@ class TheAccountsThemselves(unittest.TestCase):
 
 
 class AServiceThatPublishesNothing(unittest.TestCase):
-    """The selector check 3 reads, over a tree of its own rather than the repository's."""
+    """The selector check 3 reads, over trees of its own and over the repository's."""
 
     def run_over_tree(self, domain: bool) -> bool:
         with tempfile.TemporaryDirectory() as directory:
