@@ -36,13 +36,14 @@ deploy is refused as reused. The fingerprint is of the bound command, so two
 bodies that bind to equal commands match and two that bind differently do not: a
 reordered list of lines is a different request, and so is an amount sent as
 `10.0` where the first attempt sent `10`. A retry re-sends the bytes it sent.
-The fingerprint is also of what the serialiser writes: a member declared as a
-base type hashes only what that type declares, and a public field, an ignored
-property or a member whose type exposes no public property hashes as nothing, so
-two commands that differ only there replay as one; a collection with no defined
-order, a hash set, may enumerate differently in another process and refuse an
-honest retry. An idempotent command holds none of them. An in-flight duplicate
-with different content is told `request.in_progress` and not
+The fingerprint is also of what the serialiser writes: a member declared as an
+interface or as a base class other than `object` hashes only what that type
+declares, and a public field, an ignored property or a member whose type exposes
+no public property hashes as nothing, so two commands that differ only there
+replay as one; a collection with no defined order, a hash set, may enumerate
+differently in another process and refuse an honest retry. An idempotent command
+holds none of them. An in-flight duplicate with different content is told
+`request.in_progress` and not
 `command.id_reused`, because the fingerprint is recorded with the outcome and
 there is nothing to compare until the first attempt completes; recording it at
 the claim would change the port, both scripts and every implementer of the port,
