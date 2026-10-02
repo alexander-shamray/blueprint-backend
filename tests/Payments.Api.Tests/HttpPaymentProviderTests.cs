@@ -33,7 +33,7 @@ public sealed class HttpPaymentProviderTests : IClassFixture<HttpPaymentProvider
 
     private const string UnreachableRabbit = "amqp://payments-svc:x@rabbit.invalid:5672";
 
-    /// <summary>One server and host for the class, since a host over an unreachable broker is slow to stop.</summary>
+    /// <summary>Shared by the class, since a host over an unreachable broker is slow to stop.</summary>
     public sealed class ProviderHost : IDisposable
     {
         public ProviderHost()
