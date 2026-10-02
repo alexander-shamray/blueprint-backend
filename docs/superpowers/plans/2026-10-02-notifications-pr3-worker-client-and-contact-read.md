@@ -3007,8 +3007,7 @@ public sealed class ContactSourceRegistrationTests
 keys, its body calls the hop's registration as `Program.cs` does, and the
 selector test names the new type. With
 `using Notifications.Infrastructure.Contacts;`,
-`using Microsoft.Extensions.FileProviders;`,
-`using Microsoft.Extensions.Hosting;` and
+`using Microsoft.Extensions.FileProviders;` and
 `using ContactRegistration = Notifications.Infrastructure.Contacts.DependencyInjection;`
 in sorted position, each where absent, in the dictionary:
 
