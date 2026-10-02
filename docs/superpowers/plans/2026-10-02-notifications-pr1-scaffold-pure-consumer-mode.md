@@ -1333,9 +1333,18 @@ snapshot." becomes "The projects §4.1 gives the mode, the marker where one is
 owed, the migration and its snapshot."; `update_solution`'s "Five projects in
 their own solution folder, four test entries, alphabetical." becomes "The
 service's projects in their own solution folder and its test entries,
-alphabetical."; and `update_broker_definitions`' paragraph on a PUBLISHER's
-permissions gains, after "and nothing of anybody else's.", the sentence "A
-pure consumer gets a consumer's grant instead, written below."
+alphabetical."; and `update_broker_definitions`' docstring, whose
+publisher-only paragraph the mode makes false, is rewritten whole, because
+the comment gate judges a touched docstring as one block and this one runs
+twenty lines:
+
+```python
+    """A broker account for the new service, without which it cannot authenticate (§14.1, ADR-036).
+
+    Catalog's publisher grant renamed, or a consumer's grant for a pure consumer; check_permissions.py
+    derives what each service needs and fails when a grant is short. The hash is computed, never copied,
+    so the template's password does not authenticate under the new name."""
+```
 
 - [ ] **Step 6: The two tables**
 
