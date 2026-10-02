@@ -60,7 +60,7 @@ COPIED = frozenset(
         "src/Services/Catalog/Catalog.Infrastructure/Persistence/InboxMessageConfiguration.cs",
         "src/Services/Catalog/Catalog.Infrastructure/Persistence/IdempotencyMarkerConfiguration.cs",
         # §13.6's per-lane gauges. They travel for the reason the outbox table
-        # does: every service hosts the dispatcher, the loaded alerts group by
+        # does: every publishing service hosts the dispatcher, the alerts group by
         # service_name, and a rendered service without them is covered by
         # alerts that can never fire for it — which reads exactly like health.
         "src/Services/Catalog/Catalog.Infrastructure/Observability/IOutboxStats.cs",
@@ -279,10 +279,10 @@ SLICE_TOKEN = re.compile(r"roduct", re.IGNORECASE)
 # The three shapes EF puts in a migrations directory. Anything else there is
 # somebody's addition, and the scaffold refuses rather than dropping it.
 INITIAL_CREATE = re.compile(r"^\d{14}_InitialCreate(\.Designer)?\.cs$")
-# The outbox table is wiring, not slice: §9.4 gives every service one, and a
-# scaffolded service that carried the dispatcher without the table would log a
-# failed claim twice a second from its first boot. So this migration is copied
-# with InitialCreate rather than dropped with Catalog's model changes.
+# The outbox table is wiring, not slice: §9.4 gives every publishing service
+# one, and one that carried the dispatcher without the table would log a failed
+# claim twice a second from its first boot. So this migration is copied with
+# InitialCreate rather than dropped with Catalog's model changes.
 OUTBOX_MIGRATION = re.compile(r"^\d{14}_AddOutbox(\.Designer)?\.cs$")
 # The inbox table travels for the mirror of the outbox's reason: §9.5 gives
 # every service one, the retention purge runs from first boot and deletes from
@@ -552,20 +552,8 @@ ENTITY_END = "\n                });\n\n"
 def without_slice_entity(designer: str) -> str:
     """The model body with Catalog's aggregate removed, and nothing else touched.
 
-    A scaffolded service has the outbox entity and no aggregate, so the model
-    EF would describe for it is exactly Catalog's minus one `Entity(...)`
-    block. Removing that block is the one edit made to a machine-owned file
-    here, and it is anchored at both ends rather than parsed: the opening line
-    is exact and unique, and the closing `});` at that indent is the first one
-    after it. Everything else — property order, annotations, the `using` block
-    — stays byte-for-byte what the tool wrote.
-
-    The alternative was to keep deriving from `InitialCreate.Designer.cs`,
-    which describes an empty model. That stopped being the truth when the
-    outbox joined the template: the snapshot would omit an entity the
-    `DbContext` maps, and the first `migrations add` in a scaffolded service
-    would generate a second `CreateTable` for a table its own InitialCreate had
-    already created.
+    A publishing service maps the outbox entity and no aggregate, so its
+    snapshot is Catalog's minus one `Entity(...)` block, anchored at both ends.
     """
     require_once(designer, SLICE_ENTITY, "the outbox migration's designer")
     start = designer.index(SLICE_ENTITY)
