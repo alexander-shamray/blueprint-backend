@@ -203,14 +203,15 @@ sees.
 
 `MailFault` is section 4's five causes, and each member's lowercase name is
 the `cause` attribute `notifications.mail.unavailable` carries: `transient`
-— a `4xx`, a timeout, a refused connection or an open circuit before the
-message was handed over — is retried in the client; `unconfirmed` — the
-connection broke after the message was handed over and before the reply —
-is not, because the relay may hold it, and the row's next pass resends it
-under the same `Message-ID`; `tls`, `credential` and `rejected` — a session
-weaker than configured, a refused credential, a permanent `5xx` about the
-sender or the message — are a deployment's decisions, not retried, and
-logged by PR-5's worker as errors. All five back the row off.
+— a `4xx`, a timeout or a refused connection before the message was handed
+over — is retried in the client, and an open circuit is `transient` thrown
+at once; `unconfirmed` — the connection broke after the message was handed
+over and before the reply — is not retried, because the relay may hold it,
+and the row's next pass resends it under the same `Message-ID`; `tls`,
+`credential` and `rejected` — a session weaker than configured, a refused
+credential, a permanent `5xx` about the sender or the message — are a
+deployment's decisions, not retried, and logged by PR-5's worker as errors.
+All five back the row off.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -2856,8 +2857,8 @@ git commit -m "docs: §14.1's mail relay, §15.4's six Mail keys, MailHop in §9
   `Accepted`, a recipient's `5xx` to `Refused(RecipientRefused)`, a mailbox
   that does not parse to `Refused(NotAMailbox)` with no connection, and every
   other row a `MailUnavailableException` whose cause is `transient` (retried,
-  the open circuit included), `unconfirmed`, `tls`, `credential` or
-  `rejected` (none retried). `MailHop`'s numbers,
+  but for the open circuit, which is thrown at once), `unconfirmed`, `tls`,
+  `credential` or `rejected` (none retried). `MailHop`'s numbers,
   strictly below `ServiceOptions.OperationTimeout` and above §9.7's band,
   the breaker sized to the tick and asserted able to open, and the tick
   itself → Task 3, with the opened circuit in Task 4. The `Message-ID` form
