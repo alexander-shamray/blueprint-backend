@@ -27,6 +27,8 @@
   <ItemGroup>
     <!-- The outbox, inbox and marker types and the passes the fixture drives (§9.4, §9.5, §8.5). -->
     <ProjectReference Include="..\..\src\BuildingBlocks\Common.Infrastructure\Common.Infrastructure.csproj" />
+    <!-- RetrySafetyMetadata and IdempotentCommandMetadata, which WriteEndpointRule reads (ADR-058). -->
+    <ProjectReference Include="..\..\src\BuildingBlocks\Common.Web\Common.Web.csproj" />
   </ItemGroup>
 
 </Project>
