@@ -184,6 +184,16 @@ public class NotificationTests
     }
 
     [Fact]
+    public void An_empty_customer_id_is_refused_for_the_customer_is_named_once()
+    {
+        Notification notification = Pending();
+
+        Should.Throw<ArgumentOutOfRangeException>(() => notification.AssignCustomer(Guid.Empty));
+
+        notification.CustomerId.ShouldBeNull();
+    }
+
+    [Fact]
     public void A_value_the_columns_cannot_hold_is_refused_at_the_door()
     {
         Should.Throw<ArgumentException>(() =>
