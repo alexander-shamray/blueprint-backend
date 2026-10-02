@@ -120,9 +120,10 @@ PR-5's plans, every one of which those plans meet as written.
     §15.4 already use for `Ingress__TrustedNetworks__0…n`. The windows bind as
     `TimeSpan` in the `[d.]hh:mm[:ss]` form `commerce.timeSpanPattern`
     accepts, and the zone is an IANA id the host resolves at start. The seven
-    consumers register with `AddConsumer` (check 9's `consume`) and derive
-    from `IntegrationEventConsumer<T>`, which is what records
-    `messaging.delivery.lag` (Task 5 verifies it).
+    consumers register with `AddConsumer` (check 9's `consume`) as
+    `Common.Infrastructure`'s sealed `IntegrationEventConsumer<T>`, closed
+    over each event, which is what records `messaging.delivery.lag` (Task 5
+    verifies it).
   - PR-5 (on disk): `DeliveryOptions` bound from section `Delivery` with
     `GiveUpAge`, in `FulfilmentOptions`' form; `notifications.waiting`, an
     observable gauge created with the literal name at the
@@ -1681,9 +1682,9 @@ both cover Notifications the day its queue is declared (spec section 12).
 stays; no rule is added over the gauge, by the spec's own argument that a
 growing waiting set during a relay outage is the breaker working; and check 8's
 outbox-gauge rule is PR-1's, which taught it a service with no dispatcher.
-The lag rule sees Notifications only because its consumers derive from
-`IntegrationEventConsumer<T>`, which is what calls `MessagingMetrics.Delivered`
-— Step 4 checks that rather than trusting it.
+The lag rule sees Notifications only because its consumers are
+`IntegrationEventConsumer<T>`, closed over each event, which is what calls
+`MessagingMetrics.Delivered` — Step 4 checks that rather than trusting it.
 
 **The board's service variable, which spec section 12 now names.** `outbox.json`'s
 `service` variable is `label_values(outbox_pending_count, service_name)`, and
@@ -1892,18 +1893,17 @@ one place an on-call already looking at latency would otherwise not be sent.
 ```bash
 py -3.12 deploy/observability/check.py
 py -3.12 -c "import json; json.load(open('deploy/observability/dashboards/outbox.json', encoding='utf-8'))"
-grep -rln "IntegrationEventConsumer<" src/Services/Notifications
+grep -c "AddConsumer<IntegrationEventConsumer<" src/Services/Notifications/Notifications.Infrastructure/Messaging/DependencyInjection.cs
 grep -rn -A3 '"notifications.waiting"\|"notifications.overdue"' src/Services/Notifications
 ```
 
 Expected: `check.py` exits 0 — checks 1, 2 and 9 unchanged, because no rule,
-runbook file or chapter table moved; check 6 green over the two new panels.
-The JSON loads. The first `grep` lists PR-4's seven consumer files, the second
+runbook file or chapter table moved; check 6 green over the two new panels. The
+JSON loads. The first `grep` prints `7`, PR-4's seven registrations, the second
 PR-5's two gauges, each name a literal at the `Create` call, and the overdue
-gauge's `unit: "s"` within the lines after it. **If the first prints
-nothing, stop**: Notifications records no delivery lag and the
-runbook's first paragraph is false; that is a defect in PR-4 to report, not a
-sentence to soften here.
+gauge's `unit: "s"` within the lines after it. **If the first prints `0`,
+stop**: Notifications records no delivery lag and the runbook's first paragraph
+is false; that is a defect in PR-4 to report, not a sentence to soften here.
 
 - [ ] **Step 5: Commit**
 
