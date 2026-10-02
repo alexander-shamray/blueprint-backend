@@ -2547,7 +2547,9 @@ public sealed class ContactSourceTests : IClassFixture<ContactSourceTests.Keyclo
 
         await ReadAsync(Answer(User()));
 
-        _factory.Tokens.Scopes.Skip(before).ShouldAllBe(s => s == NotificationsWorkerFactory.ContactScope);
+        string[] asked = [.. _factory.Tokens.Scopes.Skip(before)];
+        asked.ShouldNotBeEmpty("the read drew no token");
+        asked.ShouldAllBe(s => s == NotificationsWorkerFactory.ContactScope);
     }
 
     [Theory]
