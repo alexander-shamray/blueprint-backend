@@ -3243,7 +3243,7 @@ public sealed class SendWorker(
     {
         using PeriodicTimer timer = new(MailHop.SendTick);
 
-        // A stop ends the loop, never the pass under way: its token fires DrainBudget after the stop.
+        // A stop ends the loop and a claim in flight, never the rows under way: theirs fires DrainBudget after it.
         using CancellationTokenSource drain = new();
         using CancellationTokenRegistration stopping = stoppingToken.Register(() => drain.CancelAfter(DrainBudget));
 
@@ -3251,9 +3251,9 @@ public sealed class SendWorker(
         {
             try
             {
-                await RunOnceAsync(drain.Token);
+                await RunOnceAsync(stoppingToken, drain.Token);
             }
-            catch (Exception ex) when (!drain.IsCancellationRequested)
+            catch (Exception ex) when (!stoppingToken.IsCancellationRequested)
             {
                 // The token, not the type: a call's own deadline throws the same type, and an escape stops the host.
                 ClaimFailed(log, ex);
@@ -3262,7 +3262,10 @@ public sealed class SendWorker(
     }
 
     /// <summary>One claim-and-send pass, public so tests drive it rather than race a timer (§12.4).</summary>
-    public async Task<SendPass> RunOnceAsync(CancellationToken ct)
+    public Task<SendPass> RunOnceAsync(CancellationToken ct) => RunOnceAsync(ct, ct);
+
+    // The claim on the stop's token, so a stop leases and starts no row; the rows on the drain's (§15.3).
+    private async Task<SendPass> RunOnceAsync(CancellationToken claim, CancellationToken rows)
     {
         await using AsyncServiceScope claimScope = scopes.CreateAsyncScope();
         MailPipeline relay = claimScope.ServiceProvider.GetRequiredService<MailPipeline>();
@@ -3275,11 +3278,11 @@ public sealed class SendWorker(
         }
 
         SendClaims claims = claimScope.ServiceProvider.GetRequiredService<SendClaims>();
-        IReadOnlyList<SendWork> claimed = await claims.ClaimAsync(ct);
+        IReadOnlyList<SendWork> claimed = await claims.ClaimAsync(claim);
 
         // Every row at once, so a pass lasts one row's calls and the lease bounds it; WhenAll, so one row's fault
         // leaves the others to finish.
-        bool[] finished = await Task.WhenAll(claimed.Select(work => SendOrBackOffAsync(claims, work, ct)));
+        bool[] finished = await Task.WhenAll(claimed.Select(work => SendOrBackOffAsync(claims, work, rows)));
 
         return new SendPass(claimed.Count, finished.Count(f => f));
     }
@@ -3540,11 +3543,13 @@ Four things in it a reviewer would question:
   cancels `stoppingToken` first, so a pass run under it would be cancelled
   between the relay's 250 and the `MarkSent` commit on every rolling deploy,
   and sent again after the lease. The loop starts no pass once the token
-  fires; the pass under way runs on a token that fires `DrainBudget` after
-  it, and `MarkSent` commits on `CancellationToken.None` once the relay has
-  accepted. The budget is a constant, as `HostOptions` is in the hosting
-  package Infrastructure does not reference; `SendWorkerBudgetTests` holds it
-  and `CommitRoom` inside the host's default `ShutdownTimeout`.
+  fires, and the claim runs on it, so a claim in flight at the stop is
+  cancelled rather than lease and start rows; the rows already claimed run on
+  a token that fires `DrainBudget` after it, and `MarkSent` commits on
+  `CancellationToken.None` once the relay has accepted. The budget is a
+  constant, as `HostOptions` is in the hosting package Infrastructure does
+  not reference; `SendWorkerBudgetTests` holds it and `CommitRoom` inside the
+  host's default `ShutdownTimeout`.
 - **`SendAsync` is `internal` and takes `SendClaims`**, which is internal, so
   the member cannot be public; a suite reaches it through
   `InternalsVisibleTo`, as Shipping's reaches `FulfilAsync`. Nothing here
@@ -3680,7 +3685,7 @@ Prove the lease by mutation: set `LeaseSeconds` to `0`, run
 the row; restore. Prove the intent by mutation: move the `StartSend` commit
 after the send, run the crash case, and see `SendStartedAt` null on the
 crashed row and the counter at zero; restore. Prove the drain by mutation:
-pass `stoppingToken` to `RunOnceAsync`, run
+pass `stoppingToken` as `RunOnceAsync`'s `rows`, run
 `A_host_stopped_mid_pass_finishes_the_send_and_commits_it_once`, and see the
 row still `Pending`; restore.
 
