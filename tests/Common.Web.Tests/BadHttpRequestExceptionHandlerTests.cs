@@ -203,6 +203,23 @@ public class BadHttpRequestExceptionHandlerTests
         body.RootElement.GetProperty("code").GetString().ShouldBe("request.unreadable");
     }
 
+    [Fact]
+    public async Task A_query_value_that_does_not_bind_is_the_same_400_with_no_pointer()
+    {
+        using IHost host = await StartBindingAsync("Production");
+        using HttpClient client = host.GetTestClient();
+
+        using HttpResponseMessage response = await client.GetAsync(
+            $"{Route}?page=three", TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
+
+        using JsonDocument body = JsonDocument.Parse(
+            await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+        body.RootElement.GetProperty("code").GetString().ShouldBe("request.unreadable");
+        body.RootElement.TryGetProperty("pointer", out _).ShouldBeFalse("a pointer names a member of the body");
+    }
+
     private static async Task<JsonDocument> BodyOfAsync(Exception exception)
     {
         using IHost host = await StartThrowingAsync(exception);
@@ -269,7 +286,11 @@ public class BadHttpRequestExceptionHandlerTests
                 {
                     app.UseExceptionHandler();
                     app.UseRouting();
-                    app.UseEndpoints(endpoints => endpoints.MapPost(Route, (StockRequest _) => Results.NoContent()));
+                    app.UseEndpoints(endpoints =>
+                    {
+                        endpoints.MapPost(Route, (StockRequest _) => Results.NoContent());
+                        endpoints.MapGet(Route, (int page) => Results.NoContent());
+                    });
                 });
             })
             .ConfigureLogging(logging => logging.ClearProviders())
