@@ -110,11 +110,13 @@ in full and
   `Microsoft.Extensions.Hosting.Abstractions` reference in
   `Notifications.Infrastructure.csproj` are each written by whichever of the
   two lands first; the second finds the file or line present and adds nothing,
-  and its PR body says so. Two edits are additive in both orders and are
+  and its PR body says so. Three edits are additive in both orders and are
   written so: `MetricsInitialiser` gains `ContactMetrics` as its **last**
-  parameter, after whatever PR-2 added; and `NotificationsWorkerFactory` gains
+  parameter, after whatever PR-2 added; `NotificationsWorkerFactory` gains
   one defaulted parameter **after its last one**, which every caller in this
-  plan passes **by name**.
+  plan passes **by name**; and `Program.cs` holds one order whichever lands
+  first — `AddNotificationsInfrastructure`, then PR-2's `AddMailChannel`,
+  then `AddContactSource`.
 - **No new pin and no Appendix B identity.** `Microsoft.Extensions.Http.Resilience`,
   `System.IdentityModel.Tokens.Jwt`, `Testcontainers.Keycloak` and
   `WireMock.Net` are pinned and registered; Appendix B's two rows move only in
@@ -2351,8 +2353,8 @@ every existing caller compiles unchanged:
 the members, beside `UnreachableAuthority`:
 
 ```csharp
-    /// <summary>The contact source a host names when a test gives none; <c>.invalid</c> never resolves.</summary>
-    public const string UnreachableContactSource = "http://keycloak.invalid/";
+    /// <summary>The test contact source: HTTPS, which no environment refuses; <c>.invalid</c> never resolves.</summary>
+    public const string UnreachableContactSource = "https://keycloak.invalid/";
 
     /// <summary>The realm every contact is read from: §14.1's, and the realm export's.</summary>
     public const string LocalRealm = "commerce";
@@ -3356,7 +3358,9 @@ contact.
 
 `Notifications.Worker/Program.cs`, after
 `builder.Services.AddNotificationsInfrastructure(builder.Configuration);   // §4.2, §7.1`
-and before the worker's no-permission-policy comment, with
+and after PR-2's `AddMailChannel` line if it is there, so the order is the
+same whichever lands first, and before the worker's no-permission-policy
+comment, with
 `using Common.Infrastructure.Identity;` and
 `using Notifications.Infrastructure.Contacts;` in sorted position:
 

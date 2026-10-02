@@ -100,9 +100,10 @@ inequality, the opened circuit) and 14 (§14.1, §12.7, §9.7, Appendix B and
   `Shipping.Outbound` lives on `CarrierMetrics`: neither adapter is the
   other's owner. Three edits are additive in either order and written so:
   `MetricsInitialiser` gains `MailMetrics` after PR-1's parameters and before
-  or after PR-3's `ContactMetrics`, whichever is there; `Program.cs` gains
-  `AddMailChannel` after the layer's method, beside PR-3's
-  `AddContactSource`; and `MetricsRegistrationTests` gains its `TestEnvironment`
+  or after PR-3's `ContactMetrics`, whichever is there; `Program.cs` holds
+  one order whichever lands first — `AddNotificationsInfrastructure`, then
+  `AddMailChannel`, then PR-3's `AddContactSource`; and
+  `MetricsRegistrationTests` gains its `TestEnvironment`
   and its `BuildServices` summary from whichever lands first, Shipping's
   forms in both.
 - **Three new pins, and why `Polly.Core` is one of them.** `MailKit` and
@@ -1291,7 +1292,8 @@ present and wrong.
 
 In `Notifications.Worker/Program.cs`, after
 `builder.Services.AddNotificationsInfrastructure(builder.Configuration);`
-and beside PR-3's `AddContactSource` line if it is there, with
+and before PR-3's `AddContactSource` line if it is there, so the order is
+the same whichever lands first, with
 `using Notifications.Infrastructure.Mail;` in sorted position:
 
 ```csharp
