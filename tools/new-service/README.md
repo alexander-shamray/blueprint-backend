@@ -219,9 +219,11 @@ writes a `NoDomainEventDispatcher` into the Application project, because
 §6.3's `TransactionBehavior` still needs one, and the worker suite's
 architecture gate holds its premise. Its broker account writes its own
 endpoints and the fault exchanges and no contract. **`Notifications` is
-refused without it.** The mode is three tables in `scaffold/`:
-`PURE_CONSUMER_OMITTED`, `PURE_CONSUMER_PATCHES` and `PURE_CONSUMER_SPANS`,
-the last a cut from one anchor through another, each bound exactly once.
+refused without it.** The mode is four tables in `scaffold/`: `PURE_CONSUMER_OMITTED`,
+`PURE_CONSUMER_PATCHES`, `PURE_CONSUMER_SPANS` — the third a cut from one
+anchor through another, each bound exactly once — and
+`PURE_CONSUMER_MIGRATIONS`, the two outbox migrations it skips, with the
+outbox entity cut from the designers and snapshot.
 
 ## What a rendered comment may say
 
