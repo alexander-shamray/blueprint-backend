@@ -32,6 +32,8 @@
     <!-- StubCatalog and pricing.proto's server half. This suite names no generated type, as both halves'
          copies would then be ambiguous; drive the stub through its own surface. -->
     <ProjectReference Include="..\Web.Bff.TestSupport\Web.Bff.TestSupport.csproj" />
+    <!-- WriteEndpointRule alone (ADR-058); this host has no service fixture to reach it through. -->
+    <ProjectReference Include="..\Common.TestSupport\Common.TestSupport.csproj" />
   </ItemGroup>
 
 </Project>
