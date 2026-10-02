@@ -1634,10 +1634,10 @@ internal sealed class RedisIdempotencyStore(
 ```
 
 > **A value carrying no token is a previous release's entry, and it must read
-> as a recorded outcome rather than as an unfinished claim.** The encoding above arrived
-> after §8.5 had already shipped a store that wrote the marker or the payload
-> as the *whole* value, so during a rolling deploy `GetAsync` meets entries
-> with no `{claim}:` prefix and still inside their retention. An
+> as a recorded outcome rather than as an unfinished claim.** The encoding
+> above arrived after §8.5 had already shipped a store that wrote the marker
+> or the payload as the *whole* value, so during a rolling deploy `GetAsync`
+> meets entries with no `{claim}:` prefix and still inside their retention. An
 > implementation that reported the whole unparseable class as in progress —
 > which is the tidier-looking branch, and the one that shipped first — answers
 > `ConcurrentRequestException` to a retry of work that **already committed**,
