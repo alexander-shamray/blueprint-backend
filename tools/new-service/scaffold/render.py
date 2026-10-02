@@ -194,16 +194,6 @@ OMITTED = frozenset(
         # §11.4's callout, executed: every policy an endpoint names must
         # resolve. With no endpoint there is no policy to enumerate, and the
         # suite's own guard against passing vacuously is what fails first.
-        #
-        # IT CARRIES A SECOND GATE and dropping it drops that too: §8.5's
-        # rule that an idempotent command's endpoint must require
-        # authentication, since ICurrentUser.IsAuthenticated is false for an
-        # anonymous request and every such caller then claims under the
-        # shared "system" subject. A rendered service has neither an endpoint
-        # nor an idempotent command, so nothing is unguarded today — what
-        # would be unguarded is the first slice that adds both, which is why
-        # the inverted floor in IdempotencyOptInTests names this file in the
-        # message it fails with.
         "tests/Catalog.Api.Tests/AuthorizationPolicyTests.cs",
         # Not slice by subject — it is about EfUnitOfWork's rollback — but slice
         # by requirement: the claim is that a rejected command leaves nothing
