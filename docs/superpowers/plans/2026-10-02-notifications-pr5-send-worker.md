@@ -5305,7 +5305,6 @@ dotnet format Platform.slnx --verify-no-changes
 dotnet test Platform.slnx
 py -3.12 -m unittest discover -s deploy/compose/rabbitmq
 py -3.12 deploy/compose/rabbitmq/check_permissions.py
-py -3.12 -m unittest discover -s deploy/observability
 py -3.12 deploy/observability/check.py
 py -3.12 -m unittest discover -s .github/secret-scan
 py -3.12 .github/secret-scan/secret_scan.py
@@ -5319,7 +5318,8 @@ py -3.12 .github/comment-gate/comment_gate.py --base origin/main
 
 Expected: 0 warnings, format exit 0, every suite green, every gate exit 0. A
 gate with a suite is tested and then run, and none of these is in
-`Platform.slnx`. The licence gate sees no new identity: the three package
+`Platform.slnx`; the observability gate has no suite of its own, so it is
+only run. The licence gate sees no new identity: the three package
 references are to pins already registered. The comment gate judges `HEAD`, so
 it runs after the last commit; every block this plan adds is five lines or
 fewer, and the two touched configurations' blocks are judged whole.
