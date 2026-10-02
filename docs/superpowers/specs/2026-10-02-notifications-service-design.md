@@ -206,7 +206,8 @@ Each rides in the PR that makes it true; section 14 lists them by PR.
     never be swallowing one. §7.5 gains the paragraph that says so.
   - `RetentionPurgeService` takes the outbox table unconditionally. Its
     outbox parameter becomes optional, so a service with no outbox purges
-    its inbox and nothing else, and §9.5 gains the sentence.
+    its inbox and its idempotency markers and no outbox, and §9.5 gains the
+    sentence.
   - The two Dockerfiles copy the Domain project's file, and the template's
     Compose unit carries comment blocks the comment gate fails on a new
     file. The mode patches the first; the second is cut in the template, so
