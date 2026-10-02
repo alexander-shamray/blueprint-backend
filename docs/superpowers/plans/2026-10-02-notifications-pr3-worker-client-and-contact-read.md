@@ -4192,8 +4192,8 @@ export Identity__Client__Scope='roles'
 **If neither wrote one, this PR writes none**: a block is a whole host's recipe,
 and a Notifications worker run on the host needs PR-2's relay keys and PR-4's
 jurisdiction too, so the five lines alone would be a recipe that does not
-start. The block is owed by the PR that completes the host's keys, and
-*Self-review* names it.
+start. PR-5 completes the host's keys and leaves the block, as Inventory's API
+has none, and *Self-review* names it.
 
 - [ ] **Step 4: The scan, the image test, and Compose**
 
@@ -4804,8 +4804,8 @@ last, which PR-5 extends after it.
   callout naming the hosts a further `clientCredentials: true` must be argued
   against — PR-6's.
 - **A host-run block for Notifications in `deploy/compose/README.md`**, if no
-  earlier PR wrote one (Task 7 Step 3): owed by the PR that completes the
-  host's required keys.
+  earlier PR wrote one (Task 7 Step 3): none is owed — PR-5 completes the
+  host's required keys and leaves it, as Inventory's API has none.
 - **The latency runbook's slow-peer branch** gains the contact read's symptom —
   a notification waiting on its contact, not latency — with the waiting gauge
   PR-5 adds and the runbook half PR-6 owes.

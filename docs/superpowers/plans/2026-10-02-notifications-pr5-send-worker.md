@@ -5424,6 +5424,9 @@ bound from `Delivery` with `GiveUpAge`, the series `notifications_waiting` with
 **Deliberately left.** §11.7's erasure consumer, which marks a pending notice
 `Undeliverable: erased` and replaces the customer's id — owed with that
 extension (spec, section 6). ADR-053 rule 3's relay country — owed with the
-first real relay (spec, section 9). The chart, its `delivery` capability and
-the runbook's half — PR-6's. A rule over the waiting gauge — the spec's own
-argument that a growing set during an outage is the breaker working.
+first real relay (spec, section 9). The chart, its `delivery` capability and the
+runbook's half — PR-6's. A rule over the waiting gauge — the spec's own argument
+that a growing set during an outage is the breaker working. A host-run block for
+Notifications in `deploy/compose/README.md`, though this PR completes the host's
+required keys — Inventory's API, also excluded by the infra-only override,
+has none, and Compose runs the service whole.
