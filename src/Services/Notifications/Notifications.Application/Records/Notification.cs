@@ -98,7 +98,7 @@ public sealed class Notification
         return true;
     }
 
-    /// <summary>A terminal answer: the customer does not exist, the relay refused them, or the wait ran out.</summary>
+    /// <summary>A terminal answer whose reason is one of <see cref="NotificationReasons.All"/>.</summary>
     public bool MarkUndeliverable(string reason, DateTimeOffset now)
     {
         if (!NotificationReasons.All.Contains(reason))
