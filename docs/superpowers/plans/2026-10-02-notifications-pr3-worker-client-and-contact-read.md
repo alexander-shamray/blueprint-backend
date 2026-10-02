@@ -4666,7 +4666,8 @@ Compose unit's two blocks.
   composed query roles and nothing else → Task 2, verified against the pinned
   export (Task 2 Step 1) and a token Keycloak issued (Task 6).
 - Section 3's PR-3 row — the realm's client, `realm_check.py`'s predicate,
-  every asserted test ADR-052 names, `docs/secrets.md`'s rows (Tasks 2 and 8);
+  `RealmClientTests` and `RealmImportTests`' secret test, `docs/secrets.md`'s
+  rows (Tasks 2 and 8);
   `IContactSource` (Task 1), the Keycloak adapter with `ContactHop` (Tasks 4
   and 5), the grant-checked token cache over `realm-management`'s roles (Task
   4), `ContactRecords` and its migration (Task 3), `ContactOptions` (Task 1).
