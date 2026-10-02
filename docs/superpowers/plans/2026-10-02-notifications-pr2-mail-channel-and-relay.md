@@ -2896,15 +2896,15 @@ git commit -m "docs: §14.1's mail relay, §15.4's six Mail keys, MailHop in §9
 **Type consistency.** `IMailChannel`, `OutboundMail`, `MailMessageId`,
 `MailResult.Accepted/Refused`, `MailRefusal`, `MailFault` and
 `MailUnavailableException` are Task 1's and consumed by Tasks 3 and 4 under
-those spellings. `MailHop`, `OutboundMeter.Name`, `MailMetrics`,
-`MailSecurity`, `MailOptions` with its six keys, `MailOptionsValidator`,
-`MailPipeline` and `AddMailChannel(IConfiguration, IHostEnvironment)`, called
-from `Program.cs` after the layer's method (ADR-055), are Task 3's; `SmtpMailChannel` and its
+those spellings. `MailHop`, `OutboundMeter.Name`, `MailMetrics`, `MailSecurity`,
+`MailOptions` with its six keys, `MailOptionsValidator`, `MailPipeline` and
+`AddMailChannel(IConfiguration, IHostEnvironment)`, called from `Program.cs`
+after the layer's method (ADR-055), are Task 3's; `SmtpMailChannel` and its
 registration are Task 4's. `MetricsInitialiser` leaves Task 3 with three
-parameters — PR-1's two and `MailMetrics` — which is the signature PR-3 and
-PR-5 each extend. `NotificationsWorkerFactory`'s six parameters and four
-constants are Task 3's and read by Tasks 3 and 4; `Mailpit` and its records
-are Task 4's and read by Task 5's image test and, later, PR-5's fixture.
+parameters — PR-1's two and `MailMetrics` — which is the signature PR-3 and PR-5
+each extend. `NotificationsWorkerFactory`'s six parameters and four constants
+are Task 3's and read by Tasks 3 and 4; `Mailpit` and its records are Task 4's
+and read by Task 5's image test and, later, PR-5's fixture.
 
 **Left to a later PR.**
 
