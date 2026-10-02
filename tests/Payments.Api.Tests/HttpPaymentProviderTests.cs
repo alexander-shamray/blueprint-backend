@@ -76,8 +76,7 @@ public sealed class HttpPaymentProviderTests : IClassFixture<HttpPaymentProvider
         _server.ReadStaticMappings(SimulatorMappings.Directory());
     }
 
-    // Patient, since on _factory a slow answer is timed out and retried; a case whose subject is
-    // the attempt timeout, the retry or the total names _factory.
+    // Patient, since on _factory a slow answer is timed out and retried.
     private IPaymentProvider Provider() => Provider(_patient);
 
     private static IPaymentProvider Provider(PaymentsApiFactory factory) =>
