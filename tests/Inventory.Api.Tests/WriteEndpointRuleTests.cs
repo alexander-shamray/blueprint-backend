@@ -23,6 +23,15 @@ public class WriteEndpointRuleTests(HostSmokeTests.UnreachableInfrastructureFact
     }
 
     [Fact]
+    public void Every_idempotent_command_is_made_of_members_its_fingerprint_sees()
+    {
+        // A member the fingerprint does not see lets a different request replay as the first (ADR-057).
+        CommandFingerprintRule
+            .Offenders(typeof(Inventory.Application.DependencyInjection).Assembly)
+            .ShouldBeEmpty();
+    }
+
+    [Fact]
     public void The_rule_above_is_looking_at_the_writes_this_host_maps()
     {
         // The floor: an offender list is as green over an empty selection.
