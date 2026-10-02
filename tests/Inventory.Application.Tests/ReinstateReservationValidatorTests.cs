@@ -9,7 +9,7 @@ public class ReinstateReservationValidatorTests
     private readonly ReinstateReservationValidator _validator = new();
 
     [Fact]
-    public void An_empty_command_id_is_refused_before_any_claim()
+    public void An_empty_command_id_is_refused()
     {
         _validator.TestValidate(new ReinstateReservationCommand(Guid.Empty, Guid.CreateVersion7()))
             .ShouldHaveValidationErrorFor(c => c.CommandId);
