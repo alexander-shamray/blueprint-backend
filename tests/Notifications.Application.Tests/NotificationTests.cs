@@ -175,7 +175,7 @@ public class NotificationTests
     }
 
     [Fact]
-    public void An_empty_event_or_order_id_is_refused_for_it_would_collide_across_events()
+    public void An_empty_event_or_order_id_is_refused_at_the_door()
     {
         Should.Throw<ArgumentOutOfRangeException>(() =>
             Notification.Pending(Guid.Empty, "order-placed", Guid.CreateVersion7(), """{"v":1}""", Now));
