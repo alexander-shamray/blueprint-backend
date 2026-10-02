@@ -4174,9 +4174,9 @@ terms:
 # NOTIFICATIONS_CLIENT_SECRET=local-dev-notifications-secret
 ```
 
-`deploy/compose/README.md` carries a host-run block per service the override
-excludes. **If PR-1 or PR-2 wrote one for `Notifications.Worker`**, it gains
-these five exports after its authority, and its lead sentence gains "and,
+`deploy/compose/README.md` carries host-run blocks for some of the services the
+override excludes. **If PR-1 or PR-2 wrote one for `Notifications.Worker`**, it
+gains these five exports after its authority, and its lead sentence gains "and,
 since it reads contacts from Keycloak, the two `ContactSource__*` keys and the
 three `Identity__Client__*` ones
 ([ADR-052](../../docs/backend-architecture/adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md))":
