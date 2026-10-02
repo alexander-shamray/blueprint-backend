@@ -320,6 +320,30 @@ class RendersTheTemplate(unittest.TestCase):
         )
 
 
+class CarriesTheWriteEndpointRule(unittest.TestCase):
+    """ADR-058's gate travels to both host shapes, over a floor that says the host maps no write."""
+
+    def suites(self):
+        yield render().created[f"tests/{PROBE}.Api.Tests/WriteEndpointRuleTests.cs"]
+        yield worker().created[f"tests/{PROBE}.Worker.Tests/WriteEndpointRuleTests.cs"]
+
+    def test_the_rule_reads_the_rendered_service_s_own_commands(self):
+        for suite in self.suites():
+            self.assertIn(
+                f".Offenders(Endpoints, typeof({PROBE}.Application.DependencyInjection).Assembly)", suite)
+
+    def test_the_floor_is_inverted_and_still_looks_at_a_table(self):
+        # A floor naming the template's writes would fail on a host that maps
+        # none, and one deleted would leave the rule green over nothing.
+        for suite in self.suites():
+            self.assertIn("public void This_host_maps_no_write_for_the_rule_above_to_look_at_yet()", suite)
+            self.assertIn("Names(WriteEndpointRule.Writes(Endpoints)).ShouldBeEmpty(", suite)
+            self.assertIn(
+                "Names(WriteEndpointRule.Unrestricted(Endpoints)).ShouldBe("
+                '["Health checks", "Health checks", "Health checks"]);', suite)
+            self.assertNotIn("gRPC", suite)
+
+
 class OmitsTheSlice(unittest.TestCase):
     def setUp(self):
         self.rendered = render()
@@ -2386,7 +2410,7 @@ class TheCommandLine(unittest.TestCase):
             # A count and not a list: a number a test pins fails when it is
             # wrong. Six and not seven, because this root has no `.github/` and
             # §15.1's allow-list step degrades without it.
-            self.assertIn("70 files created, 6 updated", out)
+            self.assertIn("71 files created, 6 updated", out)
             self.assertIn(f"port {PORT}", out)
             self.assertTrue((root / "src/Services/Zulu/Zulu.Api/Program.cs").exists())
 

@@ -189,7 +189,8 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
             "// gRPC needs HTTP/2, and mapping it says nothing about which port serves it.\n"
             "// The [Authorize] is on the service class, not here, so it travels with the\n"
             "// type rather than with this line.\n"
-            "app.MapGrpcService<PricingService>();\n",
+            "app.MapGrpcService<PricingService>().RetrySafe(RetrySafety.ReadOnly);"
+            "   // §9.7 — GetPrices reads, and writes nothing\n",
             "",
         ),
         # The permission policies leave with the slice that names them. What
@@ -589,6 +590,39 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
             'ShouldNotBeEmpty " +\n'
             '            "form, which is what keeps a vacuous gate from quietly becoming '
             'a permanent one.");\n',
+        ),
+    ),
+    # ADR-058's floor names the writes the template maps, and a rendered host
+    # maps none, so it is inverted on IdempotencyOptInTests' argument above:
+    # the test fails the day the service maps its first write, and says what
+    # to restore. The second list loses the template's gRPC fallbacks.
+    "tests/Catalog.Api.Tests/WriteEndpointRuleTests.cs": (
+        (
+            "    public void The_rule_above_is_looking_at_the_writes_this_host_maps()\n",
+            "    public void This_host_maps_no_write_for_the_rule_above_to_look_at_yet()\n",
+        ),
+        (
+            "        Names(WriteEndpointRule.Writes(Endpoints)).ShouldBe(\n"
+            '            ["PublishProduct", "gRPC - /catalog.pricing.v1.Pricing/GetPrices"]);\n',
+            "        Names(WriteEndpointRule.Writes(Endpoints)).ShouldBeEmpty(\n"
+            '            "This host maps no write endpoint yet, so the rule above is '
+            'vacuous. The day it maps " +\n'
+            '            "one, this test fails — replace it with the ShouldBe form '
+            'naming that endpoint, " +\n'
+            '            "which is what keeps a vacuous gate from quietly becoming '
+            'a permanent one (§8.5).");\n',
+        ),
+        (
+            "        Names(WriteEndpointRule.Unrestricted(Endpoints)).ShouldBe(\n"
+            "            [\n"
+            '                "Health checks",\n'
+            '                "Health checks",\n'
+            '                "Health checks",\n'
+            '                "gRPC - Unimplemented method for catalog.pricing.v1.Pricing",\n'
+            '                "gRPC - Unimplemented service"\n'
+            "            ]);\n",
+            "        Names(WriteEndpointRule.Unrestricted(Endpoints)).ShouldBe("
+            '["Health checks", "Health checks", "Health checks"]);\n',
         ),
     ),
     "tests/Catalog.Api.Tests/DatabaseSmokeTests.cs": (
