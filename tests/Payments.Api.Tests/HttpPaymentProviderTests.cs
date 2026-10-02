@@ -76,7 +76,9 @@ public sealed class HttpPaymentProviderTests : IClassFixture<HttpPaymentProvider
         _server.ReadStaticMappings(SimulatorMappings.Directory());
     }
 
-    private IPaymentProvider Provider() => Provider(_factory);
+    // Patient, since on _factory a slow answer is timed out and retried; a case whose subject is
+    // the attempt timeout, the retry or the total names _factory.
+    private IPaymentProvider Provider() => Provider(_patient);
 
     private static IPaymentProvider Provider(PaymentsApiFactory factory) =>
         factory.Services.CreateScope().ServiceProvider.GetRequiredService<IPaymentProvider>();
@@ -112,7 +114,7 @@ public sealed class HttpPaymentProviderTests : IClassFixture<HttpPaymentProvider
         _server.LogEntries.Count(e => e.RequestMessage!.Path == path);
 
     // This host's meter, never one matched by name, since a MeterListener is process-wide.
-    private UnavailableCount CountUnavailable() => CountUnavailable(_factory);
+    private UnavailableCount CountUnavailable() => CountUnavailable(_patient);
 
     private static UnavailableCount CountUnavailable(PaymentsApiFactory factory)
     {
@@ -168,7 +170,7 @@ public sealed class HttpPaymentProviderTests : IClassFixture<HttpPaymentProvider
             e.RequestMessage!.Headers!["Idempotency-Key"].Single() == $"authorise:{order.Value}");
 
         // The simulator ignores the credential, so only this fails if the adapter stops sending it.
-        string configured = _factory.Services.GetRequiredService<IConfiguration>()[ProviderRegistration.ApiKeyKey]!;
+        string configured = _patient.Services.GetRequiredService<IConfiguration>()[ProviderRegistration.ApiKeyKey]!;
         _server.LogEntries.ShouldAllBe(e =>
             e.RequestMessage!.Headers!["Authorization"].Single() == $"Bearer {configured}");
     }
@@ -208,10 +210,10 @@ public sealed class HttpPaymentProviderTests : IClassFixture<HttpPaymentProvider
     [Fact]
     public async Task A_503_is_retried_in_the_client_then_thrown_as_unavailable_and_counted_per_attempt()
     {
-        using UnavailableCount counted = CountUnavailable();
+        using UnavailableCount counted = CountUnavailable(_factory);
 
         await Should.ThrowAsync<PaymentProviderUnavailableException>(() =>
-            Provider().AuthoriseAsync(Authorisation(10.05m), TestContext.Current.CancellationToken));
+            Provider(_factory).AuthoriseAsync(Authorisation(10.05m), TestContext.Current.CancellationToken));
 
         Calls("/v1/authorisations").ShouldBe(ProviderHop.MaxRetryAttempts + 1);
         counted.Value.ShouldBe(ProviderHop.MaxRetryAttempts + 1, "one per failing attempt, not one per call");
@@ -228,7 +230,7 @@ public sealed class HttpPaymentProviderTests : IClassFixture<HttpPaymentProvider
             .RespondWith(Response.Create().WithStatusCode(503).WithHeader("Retry-After", "60"));
 
         await Should.ThrowAsync<PaymentProviderUnavailableException>(() =>
-            Provider().AuthoriseAsync(Authorisation(42.10m), TestContext.Current.CancellationToken));
+            Provider(_factory).AuthoriseAsync(Authorisation(42.10m), TestContext.Current.CancellationToken));
 
         Calls("/v1/authorisations").ShouldBe(ProviderHop.MaxRetryAttempts + 1);
     }
@@ -261,10 +263,10 @@ public sealed class HttpPaymentProviderTests : IClassFixture<HttpPaymentProvider
             .AtPriority(0)
             .RespondWith(Response.Create().WithStatusCode(201)
                 .WithBody($"{{\"status\":\"approved\",\"reference\":\"psp_x\",\"padding\":\"{padding}\"}}"));
-        using UnavailableCount counted = CountUnavailable();
+        using UnavailableCount counted = CountUnavailable(_factory);
 
         await Should.ThrowAsync<PaymentProviderUnavailableException>(() =>
-            Provider().AuthoriseAsync(Authorisation(42.10m), TestContext.Current.CancellationToken));
+            Provider(_factory).AuthoriseAsync(Authorisation(42.10m), TestContext.Current.CancellationToken));
 
         Calls("/v1/authorisations").ShouldBe(ProviderHop.MaxRetryAttempts + 1);
         counted.Value.ShouldBe(ProviderHop.MaxRetryAttempts + 1);
@@ -281,7 +283,7 @@ public sealed class HttpPaymentProviderTests : IClassFixture<HttpPaymentProvider
             .RespondWith(Response.Create().WithStatusCode(status));
 
         await Should.ThrowAsync<PaymentProviderUnavailableException>(() =>
-            Provider().AuthoriseAsync(Authorisation(42.10m), TestContext.Current.CancellationToken));
+            Provider(_factory).AuthoriseAsync(Authorisation(42.10m), TestContext.Current.CancellationToken));
 
         Calls("/v1/authorisations")
             .ShouldBe(ProviderHop.MaxRetryAttempts + 1, "the pipeline retries both, as it does a 503");
@@ -364,11 +366,10 @@ public sealed class HttpPaymentProviderTests : IClassFixture<HttpPaymentProvider
         _server.Given(Request.Create().WithPath("/v1/authorisations/*/void").UsingPost())
             .AtPriority(0)
             .RespondWith(Response.Create().WithStatusCode(status).WithBody(body));
-        using UnavailableCount counted = CountUnavailable(_patient);
+        using UnavailableCount counted = CountUnavailable();
 
         await Should.ThrowAsync<PaymentProviderUnavailableException>(() =>
-            Provider(_patient)
-                .VoidAsync(new VoidRequest(OrderId.New(), "psp_ref"), TestContext.Current.CancellationToken));
+            Provider().VoidAsync(new VoidRequest(OrderId.New(), "psp_ref"), TestContext.Current.CancellationToken));
 
         counted.Value.ShouldBe(1, "one attempt, answered with something that is not a void");
     }
@@ -570,12 +571,12 @@ public sealed class HttpPaymentProviderTests : IClassFixture<HttpPaymentProvider
     [Fact]
     public async Task The_callers_own_cancellation_is_not_counted_against_the_provider()
     {
-        using UnavailableCount counted = CountUnavailable();
+        using UnavailableCount counted = CountUnavailable(_factory);
         using CancellationTokenSource cancelled = new();
         await cancelled.CancelAsync();
 
         await Should.ThrowAsync<OperationCanceledException>(() =>
-            Provider().AuthoriseAsync(Authorisation(42.10m), cancelled.Token));
+            Provider(_factory).AuthoriseAsync(Authorisation(42.10m), cancelled.Token));
 
         counted.Value.ShouldBe(0, "a consume cancelled at shutdown is not a provider incident");
     }
