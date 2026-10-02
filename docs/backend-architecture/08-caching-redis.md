@@ -1728,7 +1728,7 @@ public void Idempotent_commands_return_a_result_shape_the_behaviour_rebuilds()
         .Where(pair => pair.Value.Assembly.GetName().Name!.EndsWith(".Domain", StringComparison.Ordinal))
         .Select(pair => $"{pair.Command.Name} -> Result<{pair.Value.Name}>")
         .ShouldBeEmpty(
-            "the stored payload is the success VALUE, serialised with default options and " +
+            "the stored value is the success VALUE, serialised with default options and " +
             "no converters. Money has a private constructor, so it round-trips to a zero " +
             "amount and a null currency and nothing says so (§4.2) — an idempotent command " +
             "returns a primitive, a Guid or a DTO, never a domain value object.");
