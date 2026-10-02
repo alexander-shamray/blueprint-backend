@@ -78,7 +78,7 @@ public class IdempotencyBehaviorTests
     {
         RecordingIdempotencyStore store = new();
         Guid placed = Guid.CreateVersion7();
-        store.Completed(ExpectedKey, $"\"{placed}\"");
+        store.Completed(ExpectedKey, $"sha256:{FingerprintOf(BareJson)}:\"{placed}\"");
         int handlerRuns = 0;
 
         Result<Guid> result = await Behaviour(store).HandleAsync(
@@ -96,26 +96,19 @@ public class IdempotencyBehaviorTests
     }
 
     [Fact]
-    public async Task A_void_command_replays_a_success_carrying_no_value()
+    public async Task A_void_entry_with_no_fingerprint_is_refused_though_it_has_no_value_to_read()
     {
+        // The void shape before ADR-057; refused before the no-value shortcut, which never reads the payload.
         RecordingIdempotencyStore store = new();
         store.Completed(VoidKey, "null");
-        int handlerRuns = 0;
 
-        IdempotencyBehavior<VoidProtectedCommand, Result> behaviour =
-            new(store, StubCurrentUser.Authenticated(Caller), new IdempotencyContext());
+        CommandAlreadyCommittedException thrown = await Should.ThrowAsync<CommandAlreadyCommittedException>(
+            () => Void(store).HandleAsync(
+                new VoidProtectedCommand(Command),
+                () => throw new InvalidOperationException("the handler must not run under a held key"),
+                TestContext.Current.CancellationToken));
 
-        Result result = await behaviour.HandleAsync(
-            new VoidProtectedCommand(Command),
-            () =>
-            {
-                handlerRuns++;
-                return Task.FromResult(Result.Success());
-            },
-            TestContext.Current.CancellationToken);
-
-        handlerRuns.ShouldBe(0);
-        result.IsSuccess.ShouldBeTrue();
+        thrown.Key.ShouldBe(VoidKey);
     }
 
     [Fact]
@@ -391,7 +384,7 @@ public class IdempotencyBehaviorTests
     public async Task A_replay_publishes_no_key_because_it_opens_no_transaction()
     {
         RecordingIdempotencyStore store = new();
-        store.Completed(ExpectedKey, $"\"{Guid.CreateVersion7()}\"");
+        store.Completed(ExpectedKey, $"sha256:{FingerprintOf(BareJson)}:\"{Guid.CreateVersion7()}\"");
         IdempotencyContext idempotency = new();
 
         Result<Guid> result = await Behaviour(store, idempotency: idempotency).HandleAsync(
@@ -463,33 +456,36 @@ public class IdempotencyBehaviorTests
     }
 
     [Fact]
-    public async Task An_entry_the_previous_release_wrote_replays_with_no_fingerprint_to_compare()
+    public async Task An_entry_with_no_fingerprint_is_refused_as_already_committed_and_left_as_it_was()
     {
-        // The shape before ADR-057: the bare value, which a rolling deploy leaves live for the claim's window.
+        // The shape before ADR-057, the bare value: nothing shows it is this command's, so it replays to none (ADR-059).
         RecordingIdempotencyStore store = new();
-        store.Completed(ContentKey, "\"order-1\"");
+        store.Completed(ExpectedKey, $"\"{Guid.CreateVersion7()}\"");
+        IdempotencyEntry planted = store.Entries[ExpectedKey];
 
-        Result<string> result = await Content(store).HandleAsync(
-            new ContentCommand(Command, "whatever the first request carried"),
-            () => throw new InvalidOperationException("the handler must not run on a replay"),
-            TestContext.Current.CancellationToken);
+        CommandAlreadyCommittedException thrown = await Should.ThrowAsync<CommandAlreadyCommittedException>(
+            () => Behaviour(store).HandleAsync(
+                new ProtectedCommand(Command),
+                () => throw new InvalidOperationException("the handler must not run under a held key"),
+                TestContext.Current.CancellationToken));
 
-        result.Value.ShouldBe("order-1");
+        thrown.Key.ShouldBe(ExpectedKey);
+        store.Entries[ExpectedKey].ShouldBe(planted, "the refusal leaves the entry as it found it");
+        store.Calls.ShouldBe([$"claim {ExpectedKey}", $"get {ExpectedKey}"], "neither a release nor a write");
     }
 
     [Fact]
-    public async Task A_previous_release_s_string_that_spells_the_prefix_is_still_a_bare_value()
+    public async Task A_bare_string_that_spells_the_prefix_carries_no_fingerprint()
     {
         // A JSON string opens with a quote, so the prefix is matched at the payload's first character only.
         RecordingIdempotencyStore store = new();
         store.Completed(ContentKey, "\"sha256:not-a-fingerprint\"");
 
-        Result<string> result = await Content(store).HandleAsync(
-            new ContentCommand(Command, "two desks"),
-            () => throw new InvalidOperationException("the handler must not run on a replay"),
-            TestContext.Current.CancellationToken);
-
-        result.Value.ShouldBe("sha256:not-a-fingerprint");
+        await Should.ThrowAsync<CommandAlreadyCommittedException>(
+            () => Content(store).HandleAsync(
+                new ContentCommand(Command, "two desks"),
+                () => throw new InvalidOperationException("the handler must not run under a held key"),
+                TestContext.Current.CancellationToken));
     }
 
     [Fact]
