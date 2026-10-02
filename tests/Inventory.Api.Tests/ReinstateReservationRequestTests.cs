@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text;
+using System.Text.Json;
 using Inventory.TestSupport;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -34,7 +35,12 @@ public class ReinstateReservationRequestTests(HostSmokeTests.AuthenticatedUnreac
 
             response.StatusCode.ShouldBe(
                 HttpStatusCode.BadRequest,
-                $"'{body}' reached §6.3's pipeline, which on this host can only fail on an unreachable store");
+                $"'{body}' got past binding, and the pipeline on this host can only fail on an unreachable store");
+
+            string content = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+            using JsonDocument problem = JsonDocument.Parse(content);
+            problem.RootElement.TryGetProperty("errors", out _).ShouldBeFalse(
+                $"'{body}' was refused by the validator, so it bound and reached the pipeline");
         }
     }
 }
