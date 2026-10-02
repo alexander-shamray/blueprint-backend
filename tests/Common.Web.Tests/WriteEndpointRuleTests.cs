@@ -28,6 +28,11 @@ public class WriteEndpointRuleTests
         public static string OperationName => "probe.unreached";
     }
 
+    public readonly record struct Counted(Guid CommandId) : ICommand<Result>, IIdempotentCommand
+    {
+        public static string OperationName => "probe.counted";
+    }
+
     public sealed record Wrapper(Guid Id, [FromBody] Reached Command);
 
     [Fact]
@@ -333,6 +338,17 @@ public class WriteEndpointRuleTests
             offender.StartsWith("Unreached is an idempotent command no endpoint reaches", StringComparison.Ordinal));
         offenders.ShouldNotContain(offender => offender.StartsWith("Reached ", StringComparison.Ordinal));
         offenders.ShouldNotContain(offender => offender.StartsWith("Built ", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void A_struct_command_is_an_idempotent_command_of_its_assembly()
+    {
+        IReadOnlyList<Endpoint> endpoints = Map(app =>
+            app.MapPost("/counted", (Counted command) => Results.NoContent()).RequireAuthorization());
+
+        WriteEndpointRule
+            .Offenders(endpoints, typeof(WriteEndpointRuleTests).Assembly)
+            .ShouldNotContain(offender => offender.StartsWith("Counted ", StringComparison.Ordinal));
     }
 
     [Fact]
