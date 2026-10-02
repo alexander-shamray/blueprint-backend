@@ -22,8 +22,8 @@ command's fingerprint reads the request: `CommandFingerprintRule` names a public
 field, a property marked `[JsonIgnore]`, a member whose type exposes no public
 property, a member declared as a type that is not sealed, and a collection whose
 type promises no order, in every idempotent command the service declares. A gRPC
-method is a POST ([§9.7](../09-messaging.md)) and is inside the rule, declared
-on the builder `MapGrpcService` returns.
+method is a POST, so [§9.7](../09-messaging.md)'s calls are inside the rule,
+declared on the builder `MapGrpcService` returns.
 **Why.** A client whose answer is lost sends the request again, and what the
 repeat does is a property of the endpoint that somebody has to decide. §8.5
 opened by saying every non-idempotent write command carries a `CommandId`,
