@@ -35,7 +35,7 @@ public sealed class RetentionPurgeService : BackgroundService
     private readonly RetentionPolicy _policy;
     private readonly ILogger<RetentionPurgeService> _log;
 
-    // Null for a service that registers no OutboxTable, which §4.1's pure consumer does not (§9.5).
+    // Null when no OutboxTable is registered, as for §4.1's pure consumer (§9.5).
     private readonly string? _outboxSql;
     private readonly string _inboxSql;
     private readonly string _idempotencyCandidateSql;
