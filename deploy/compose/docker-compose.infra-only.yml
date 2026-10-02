@@ -43,3 +43,7 @@ services:
     profiles: [ "excluded" ]
   shipping-worker:
     profiles: [ "excluded" ]
+  notifications-migrator:
+    profiles: [ "excluded" ]
+  notifications-worker:
+    profiles: [ "excluded" ]

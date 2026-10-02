@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <!-- The Web SDK for §13.5's health endpoint, on a host §3.2 gives no API (§15.3). -->
+
+  <ItemGroup>
+    <ProjectReference Include="..\Notifications.Application\Notifications.Application.csproj" />
+    <ProjectReference Include="..\Notifications.Infrastructure\Notifications.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\..\BuildingBlocks\Common.Web\Common.Web.csproj" />
+  </ItemGroup>
+
+</Project>

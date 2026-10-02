@@ -81,3 +81,16 @@ tests/Shipping.Worker.Tests/MetricsRegistrationTests.cs | connection-string-pass
 # Not the render's: the carrier the factory names beside it.
 
 tests/Shipping.TestSupport/ShippingWorkerFactory.cs | credential-assignment | d219e95f003c | The carrier key §14.1 allows as a local-development placeholder; the simulator ignores it.
+
+
+# --- Notifications, rendered by tools/new-service -------------------------
+#
+# One entry per finding the gate reported over this render, carrying the
+# fingerprints it computed rather than any this script worked out. The
+# equivalent literals for a hand-built service are entries above, written
+# the day that service landed; these are the same decision, taken by the
+# tool that rendered them (#161).
+
+tests/Notifications.Worker.Tests/HostSmokeTests.cs | connection-string-password | da3fd0c5abaa | A deliberately unusable value in a host that must not reach a database.
+tests/Notifications.Worker.Tests/MessagingRegistrationTests.cs | credential-assignment | 93e01615a2b7 | A broker URI pointing at a hostname that does not resolve.
+tests/Notifications.Worker.Tests/MetricsRegistrationTests.cs | connection-string-password | da3fd0c5abaa | The same unusable fixture in the metrics registration suite.
