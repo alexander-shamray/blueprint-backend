@@ -2342,6 +2342,7 @@ public sealed class SendWorker : BackgroundService
 {
     public const int ClaimBatchSize = 10;
     public const int LeaseSeconds = 45;
+    public static readonly TimeSpan CommitRoom;   // five seconds
     public Task<SendPass> RunOnceAsync(CancellationToken ct);
 }
 
@@ -2438,11 +2439,11 @@ public sealed class SendWorkerBudgetTests
     }
 
     [Fact]
-    public void A_pass_fits_the_host_s_drain()
+    public void A_pass_and_its_last_commit_fit_the_host_s_drain()
     {
         // The default the solution never overrides, measured rather than written down (§15.3).
-        OneRow.ShouldBeLessThan(
-            new HostOptions().ShutdownTimeout, "a pass outliving the drain is killed between accept and commit");
+        (OneRow + SendWorker.CommitRoom).ShouldBeLessThanOrEqualTo(
+            new HostOptions().ShutdownTimeout, "a stop cancels a pass that outruns its drain budget, mid-send");
     }
 
     [Fact]
@@ -2878,6 +2879,31 @@ public sealed class SendWorkerTests(ServiceFixture fixture) : IAsyncLifetime
         await worker.StopAsync(Ct);
     }
 
+    [Fact]
+    public async Task A_host_stopped_mid_pass_finishes_the_send_and_commits_it_once()
+    {
+        // The owner stalls, so the stop lands inside the pass, ahead of the send and the commit the drain lets run.
+        (Guid order, Guid customer) = Ids();
+        fixture.ContactAnswers(customer, Mailbox, "en", delay: TimeSpan.FromMilliseconds(800));
+        Notification owed = await OwedAsync(order, customer);
+        using NotificationsWorkerFactory host = fixture.NewWorkerHost();
+        using ContactCount resent = ResentCounter.Resent(host.Services);
+        SendWorker worker = host.Services.GetRequiredService<SendWorker>();
+
+        await worker.StartAsync(Ct);
+        await ServiceFixture.WaitUntilAsync(async () => await fixture.ScalarAsync<int>(
+            "SELECT Value = COUNT(*) FROM notifications.NotificationLog WHERE NotificationId = {0} " +
+            "AND Status = 'Pending' AND LockedUntil > SYSDATETIMEOFFSET()",
+            owed.NotificationId) == 1);
+        await worker.StopAsync(Ct);
+
+        Notification sent = await fixture.NotificationAsync(owed.NotificationId);
+        sent.Status.ShouldBe(NotificationStatus.Sent, "a stop drains the pass under way rather than cancel it");
+        sent.Attempts.ShouldBe(0);
+        (await fixture.Relay.SingleAsync(Ct)).ShouldNotBeNull();
+        resent.Value.ShouldBe(0, "nothing is left for a later pass to send again");
+    }
+
     private static (Guid Order, Guid Customer) Ids() => (Guid.CreateVersion7(), Guid.CreateVersion7());
 
     private static bool ClaimFailedLogged(NotificationsWorkerFactory host) =>
@@ -3095,13 +3121,19 @@ namespace Notifications.Infrastructure.Delivery;
 /// <c>FulfilmentWorker</c>'s shape with <c>TrackingWorker</c>'s rows at once. No consumer calls out (ADR-052), and
 /// the intent is committed before the send, so a crash after the relay's accept is a row that says so.
 /// </remarks>
-public sealed class SendWorker(IServiceScopeFactory scopes, ILogger<SendWorker> log) : BackgroundService
+public sealed class SendWorker(
+    IServiceScopeFactory scopes,
+    IOptions<HostOptions> hostOptions,
+    ILogger<SendWorker> log) : BackgroundService
 {
     /// <summary>Rows one pass sends at once; a pass lasts as long as its slowest row.</summary>
     public const int ClaimBatchSize = 10;
 
     /// <summary>Above <c>MailHop.TotalTimeout</c> plus <c>ContactHop.TotalRequestTimeout</c>.</summary>
     public const int LeaseSeconds = 45;
+
+    /// <summary>What a pass under way at a stop leaves of the host's drain for its last commit (§15.3).</summary>
+    public static readonly TimeSpan CommitRoom = TimeSpan.FromSeconds(5);
 
     // CA1848 (ADR-019); every line names the row by its ids and never by its mailbox (§13.4).
     private static readonly Action<ILogger, Exception?> ClaimFailed =
@@ -3208,13 +3240,19 @@ public sealed class SendWorker(IServiceScopeFactory scopes, ILogger<SendWorker> 
     {
         using PeriodicTimer timer = new(MailHop.SendTick);
 
-        while (await timer.WaitForNextTickAsync(stoppingToken))
+        // A stop ends the loop, never the pass under way: its token fires CommitRoom short of the host's drain.
+        TimeSpan drainBudget = hostOptions.Value.ShutdownTimeout - CommitRoom;
+        using CancellationTokenSource drain = new();
+        using CancellationTokenRegistration stopping = stoppingToken.Register(
+            () => drain.CancelAfter(drainBudget > TimeSpan.Zero ? drainBudget : TimeSpan.Zero));
+
+        while (!stoppingToken.IsCancellationRequested && await timer.WaitForNextTickAsync(stoppingToken))
         {
             try
             {
-                await RunOnceAsync(stoppingToken);
+                await RunOnceAsync(drain.Token);
             }
-            catch (Exception ex) when (!stoppingToken.IsCancellationRequested)
+            catch (Exception ex) when (!drain.IsCancellationRequested)
             {
                 // The token, not the type: a call's own deadline throws the same type, and an escape stops the host.
                 ClaimFailed(log, ex);
@@ -3364,7 +3402,7 @@ public sealed class SendWorker(IServiceScopeFactory scopes, ILogger<SendWorker> 
 
         return result switch
         {
-            MailResult.Accepted => await CompleteAsync(sp, work, ct),
+            MailResult.Accepted => await CompleteAsync(sp, work),
             MailResult.Refused refused => await RefusedAsync(sp, work, refused.Reason, ct),
             _ => throw new InvalidOperationException($"Unknown relay answer {result.GetType().Name}.")
         };
@@ -3409,13 +3447,14 @@ public sealed class SendWorker(IServiceScopeFactory scopes, ILogger<SendWorker> 
         return answer;
     }
 
-    private async Task<bool> CompleteAsync(IServiceProvider sp, SendWork work, CancellationToken ct)
+    private async Task<bool> CompleteAsync(IServiceProvider sp, SendWork work)
     {
         try
         {
-            return await CommitAsync(sp, work, (n, now) => n.MarkSent(now), ct);
+            // Never cancelled: the relay holds the message, and an abandoned commit would send it twice.
+            return await CommitAsync(sp, work, (n, now) => n.MarkSent(now), CancellationToken.None);
         }
-        catch (Exception ex) when (!ct.IsCancellationRequested)
+        catch (Exception ex)
         {
             // The relay holds the message and the row does not say so; its intent makes the next pass a counted resend.
             SentUncommitted(log, work.NotificationId, work.OrderId, ex);
@@ -3494,8 +3533,15 @@ public sealed class SendWorker(IServiceScopeFactory scopes, ILogger<SendWorker> 
 }
 ```
 
-Three things in it a reviewer would question:
+Four things in it a reviewer would question:
 
+- **A stop drains the pass; it does not cancel it.** `BackgroundService`
+  cancels `stoppingToken` first, so a pass run under it would be cancelled
+  between the relay's 250 and the `MarkSent` commit on every rolling deploy,
+  and sent again after the lease. The loop starts no pass once the token
+  fires; the pass under way runs on a token that fires `CommitRoom` short of
+  `HostOptions.ShutdownTimeout`, and `MarkSent` commits on
+  `CancellationToken.None` once the relay has accepted.
 - **`SendAsync` is `internal` and takes `SendClaims`**, which is internal, so
   the member cannot be public; a suite reaches it through
   `InternalsVisibleTo`, as Shipping's reaches `FulfilAsync`. Nothing here
@@ -3630,7 +3676,10 @@ Prove the lease by mutation: set `LeaseSeconds` to `0`, run
 `Two_workers_overlapping_claim_one_row_once`, and see the second worker claim
 the row; restore. Prove the intent by mutation: move the `StartSend` commit
 after the send, run the crash case, and see `SendStartedAt` null on the
-crashed row and the counter at zero; restore.
+crashed row and the counter at zero; restore. Prove the drain by mutation:
+pass `stoppingToken` to `RunOnceAsync`, run
+`A_host_stopped_mid_pass_finishes_the_send_and_commits_it_once`, and see the
+row still `Pending`; restore.
 
 - [ ] **Step 10: Commit**
 
@@ -5369,7 +5418,7 @@ Then `/ship`.
 `CommitFault`, `Mailpit.PlainOn`, `StopAsync`, `WaitForAsync`, `MessageAsync`,
 and the fixture's members (Task 6); `INotificationRepository.GetAsync`,
 `SendWork`, `SendPass`, `SendClaims`, `SendWorker` with `ClaimBatchSize`,
-`LeaseSeconds` and `RunOnceAsync`, `NotificationMetrics.Resent`,
+`LeaseSeconds`, `CommitRoom` and `RunOnceAsync`, `NotificationMetrics.Resent`,
 `ResentCounter`, `RunSendPassAsync`, `WaitUntilDueAsync`,
 `SendUntilSettledAsync` (Task 7); `WaitingSteps`, `INotificationStats`,
 `NotificationStats` with `ConnectTimeoutSeconds` and `OverdueGrace` (Task 9);
