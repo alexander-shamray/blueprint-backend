@@ -4400,12 +4400,12 @@ it has landed — is unchanged.
 
 §4.1's Ordering sample makes the same claim in its comment on outbound
 identity, "Outbound identity belongs to the hosts that call a peer (§9.7,
-§11.5), and Ordering is not one of them." Its last sentence becomes:
+§11.5), and Ordering is not one of them." Its last two lines become two, so
+the block stays at five:
 
 ```csharp
-    // over the broker. Outbound identity belongs to a host that makes a
-    // synchronous call under a grant of its own (§9.7, §11.5), and Ordering is
-    // not one of them.
+    // over the broker. Outbound identity belongs to a host calling out under a
+    // grant of its own (§9.7, §11.5), and Ordering is not one.
 ```
 
 - [ ] **Step 4: §12**
