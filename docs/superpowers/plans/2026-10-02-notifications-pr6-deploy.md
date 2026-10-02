@@ -155,8 +155,9 @@ PR-5's plans, every one of which those plans meet as written.
   here is five lines or fewer.
 - **ADR-052 and ADR-047 are not edited.** ADR-052's closing table gives this
   PR `_helpers.tpl` and `smoke.sh` (both asserted) and §15.1; an ADR is
-  superseded, never rewritten. ADR-047 names no workload, so a fourth
-  `consume`-judged deployable with an `httpExemption` moves nothing in it.
+  superseded, never rewritten. ADR-047 names workloads only as examples —
+  Inventory's exemption first, Catalog's consume exemption — none of which a
+  fourth `consume`-judged deployable with an `httpExemption` falsifies.
 - **ADR-052's two asserted Helm rows, as the tree stands now.** `smoke.sh`'s
   credential assertions already read the set from the descriptors
   (`CREDENTIALED_CHARTS="$(charts_where capability clientCredentials)"`), so
@@ -1394,9 +1395,9 @@ migration Job's budget is computed from. `serviceName` is the entry assembly
 with `AddConsumer`, which check 9 finds in the service's tree; no
 `consumeExemption` and no `sagaExemption`, since each would be refused beside
 a declared signal or on a service with nothing to exempt. **ADR-047's analysis
-needs no change**: it judges a workload on the signals it declares, names no
-workload, and a fourth `consume`-judged deployable with an `httpExemption` is
-the case it already decides. **The first rung is not expressible at three
+needs no change**: it judges a workload on the signals it declares, names
+workloads only as examples, and a fourth `consume`-judged deployable with an
+`httpExemption` is the case it already decides. **The first rung is not expressible at three
 replicas** and the rollout scales the stable track before anything rolls, with
 no HPA floor to raise — Shipping's case, which `deploy.yml` already handles.
 
