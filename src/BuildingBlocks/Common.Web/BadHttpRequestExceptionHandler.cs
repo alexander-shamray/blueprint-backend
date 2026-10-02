@@ -12,10 +12,7 @@ using JsonOptions = Microsoft.AspNetCore.Http.Json.JsonOptions;
 namespace Common.Web;
 
 /// <summary>Translates <see cref="BadHttpRequestException"/> into §10.5's unreadable-request row.</summary>
-/// <remarks>
-/// No message is copied, since the framework's can quote a raw value or a header, and the pointer is rebuilt from
-/// the endpoint's JSON contract, so a dictionary key or undeclared member the client sent is never echoed (§10.5).
-/// </remarks>
+/// <remarks>No message is copied and the pointer is rebuilt from the endpoint's contract (§10.5).</remarks>
 internal sealed partial class BadHttpRequestExceptionHandler(
     IProblemDetailsService problemDetails,
     IOptions<JsonOptions> json) : IExceptionHandler
