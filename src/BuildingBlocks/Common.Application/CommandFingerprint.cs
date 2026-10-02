@@ -5,7 +5,7 @@ using System.Text.Json.Serialization;
 namespace Common.Application;
 
 /// <summary>The SHA-256 of a command as the pipeline sees it, which §8.5 stores beside its result.</summary>
-/// <remarks>Defaults are omitted, so a new optional field leaves an old request's fingerprint alone (ADR-057).</remarks>
+/// <remarks>Defaults are omitted: a new optional field leaves an old request's fingerprint alone (ADR-057).</remarks>
 internal static class CommandFingerprint
 {
     private static readonly JsonSerializerOptions Options = new()

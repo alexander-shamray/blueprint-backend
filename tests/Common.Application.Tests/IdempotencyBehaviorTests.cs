@@ -523,7 +523,10 @@ public class IdempotencyBehaviorTests
             return Task.FromResult(Result.Success());
         }
 
-        await Void(store).HandleAsync(new VoidProtectedCommand(Command), Handler, TestContext.Current.CancellationToken);
+        await Void(store).HandleAsync(
+            new VoidProtectedCommand(Command),
+            Handler,
+            TestContext.Current.CancellationToken);
 
         Result replayed = await Void(store).HandleAsync(
             new VoidProtectedCommand(Command),
@@ -660,7 +663,7 @@ public class IdempotencyBehaviorTests
     /// <summary>The <c>ContentCommand</c> carrying "two desks", as the fingerprint serialises it.</summary>
     private static string TwoDesksJson => $$"""{"CommandId":"{{Command}}","Content":"two desks"}""";
 
-    /// <summary>ADR-057's fingerprint of a command whose JSON the test spells out, so the hashed shape is pinned.</summary>
+    /// <summary>ADR-057's fingerprint over JSON the test spells out, so the hashed shape is pinned.</summary>
     private static string FingerprintOf(string json) =>
         Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(json)));
 
