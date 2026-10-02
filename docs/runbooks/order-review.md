@@ -501,6 +501,15 @@ left `AwaitingConfirmation` without ever entering `Confirmed`.
    ends in **reinstating** a reservation if the parcel is still in the
    warehouse, not in releasing one — and where the row came from a despatch
    branch, the parcel is gone and there is nothing to reinstate.
+
+   The reinstatement is
+   `POST /api/v1/inventory/reservations/{orderId}/reinstate` through the
+   gateway with an `inventory:admin` token and the body
+   `{ "commandId": "<guid>" }`. **A new reinstatement takes a new id; only a
+   retry of one whose answer was lost re-sends its id**, because an id that
+   has already reinstated answers 204 again and takes no stock. So confirm
+   with `GET /api/v1/inventory/reservations/{orderId}` rather than from the
+   204.
 3. **If it already shipped, this is a return rather than a cancellation** —
    which is what a customer is told if they try one:
    `order.already_shipped` now reads "an order that has already shipped cannot
