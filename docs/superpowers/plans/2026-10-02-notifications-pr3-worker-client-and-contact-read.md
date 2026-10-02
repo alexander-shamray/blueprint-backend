@@ -1715,7 +1715,7 @@ In `Notifications.Infrastructure.csproj`, in the `PackageReference` group:
 and, **unless PR-2 landed it**, the line PR-2's plan writes for the same type:
 
 ```xml
-    <!-- The hosting abstractions this project names: IHostEnvironment. -->
+    <!-- The hosting abstractions this project names: IHostEnvironment, in each outbound hop's registration. -->
     <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
 ```
 
@@ -2067,9 +2067,8 @@ The five numbers are `AddressHop`'s, and that is the argument rather than a
 copy: both are a worker's read of a party this deployment runs, sized to §9.7's
 bands for that reason, where `MailHop` and `CarrierHop` sit outside them.
 
-`Observability/OutboundMeter.cs`, **unless PR-2 landed it** — PR-2's plan
-writes the same file with a summary naming the relay as well; whichever lands
-first writes the sentence true at that moment:
+`Observability/OutboundMeter.cs`, **unless PR-2 landed it**, the same file
+PR-2's plan writes:
 
 ```csharp
 namespace Notifications.Infrastructure.Observability;
@@ -2242,9 +2241,7 @@ aligned with its neighbours':
 ```
 
 and see it pass. The comment names the calls rather than the relay and the
-contact read, so it is true whichever of PR-2 and PR-3 lands first; PR-2's plan
-spells its own comment differently, and the second to land keeps the first's
-line.
+contact read, so it is true whichever of PR-2 and PR-3 lands first.
 
 - [ ] **Step 5: Run; commit**
 
