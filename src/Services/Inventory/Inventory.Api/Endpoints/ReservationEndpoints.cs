@@ -37,6 +37,8 @@ public static class ReservationEndpoints
 
                     return result.ToHttpResult();
                 })
+            // A released reservation gives nothing back, so a repeat moves no stock (ADR-024).
+            .RetrySafe(RetrySafety.Convergent)
             .WithName("ReleaseReservation");
 
         // A request record, since the order is the route's and the body carries the command id alone (§8.5).
@@ -54,6 +56,8 @@ public static class ReservationEndpoints
 
                     return result.ToHttpResult();
                 })
+            // Built from the route and the body, so no parameter names the command (§8.5).
+            .Idempotent<ReinstateReservationCommand>()
             .WithName("ReinstateReservation");
     }
 }

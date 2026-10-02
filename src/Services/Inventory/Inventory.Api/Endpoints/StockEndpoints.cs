@@ -23,6 +23,8 @@ public static class StockEndpoints
 
                     return result.ToHttpResult();
                 })
+            // An absolute count, so a repeat sets what the first set (ADR-058).
+            .RetrySafe(RetrySafety.Convergent)
             .WithName("SetOnHand");
 
         group
