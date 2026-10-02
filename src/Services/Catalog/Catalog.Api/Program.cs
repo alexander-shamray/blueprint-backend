@@ -53,7 +53,7 @@ app.MapProductEndpoints();        // §11.4
 // gRPC needs HTTP/2, and mapping it says nothing about which port serves it.
 // The [Authorize] is on the service class, not here, so it travels with the
 // type rather than with this line.
-app.MapGrpcService<PricingService>();
+app.MapGrpcService<PricingService>().RetrySafe(RetrySafety.ReadOnly);   // §9.7 — GetPrices reads, and writes nothing
 
 app.Run();
 
