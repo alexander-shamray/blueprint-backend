@@ -92,6 +92,23 @@ public class WriteEndpointRuleTests
     }
 
     [Fact]
+    public void Every_command_an_endpoint_is_keyed_by_is_named()
+    {
+        IReadOnlyList<Endpoint> endpoints = Map(app =>
+            app
+                .MapPost("/keyed", (Reached command) => Results.NoContent())
+                .Idempotent<Built>()
+                .RetrySafe(RetrySafety.Convergent)
+                .WithName("Keyed"));
+
+        IReadOnlyList<string> offenders = WriteEndpointRule.Offenders(endpoints);
+
+        offenders.Count.ShouldBe(2);
+        offenders[0].ShouldStartWith("Keyed is keyed by Reached and Built and requires no authorisation");
+        offenders[1].ShouldStartWith("Keyed is keyed by Reached and Built and declared Convergent");
+    }
+
+    [Fact]
     public void A_declaration_on_a_group_makes_a_keyed_endpoint_inside_it_an_offender()
     {
         // The group's metadata reaches every endpoint mapped in it, a later one included.
