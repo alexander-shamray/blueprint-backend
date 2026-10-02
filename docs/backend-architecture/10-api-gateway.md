@@ -1059,7 +1059,7 @@ transaction when a command's key already carries a committed marker
 ([ADR-037](adr/ADR-037-the-idempotency-marker-is-a-row-in-the-commands-own-transaction.md)),
 so it was a type nothing threw until the marker existed.
 `CommandAlreadyCommittedExceptionHandler` is registered by the same method as
-the other three, and **unregistered it costs more than its neighbour's miss
+the others, and **unregistered it costs more than its neighbour's miss
 did**: a 500 here invites exactly the retry the exception exists to refuse, and
 a client that keeps retrying meets that 500 until the marker's retention
 expires — at which point the command runs a second time. The missing
