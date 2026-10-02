@@ -337,6 +337,7 @@ jobs:
       inventory: ${{ steps.changes.outputs.inventory }}
       payments: ${{ steps.changes.outputs.payments }}
       shipping: ${{ steps.changes.outputs.shipping }}
+      notifications: ${{ steps.changes.outputs.notifications }}
       gateway: ${{ steps.changes.outputs.gateway }}
       bff: ${{ steps.changes.outputs.bff }}
       deploy: ${{ steps.changes.outputs.deploy }}
@@ -396,6 +397,10 @@ jobs:
               - 'src/Services/Shipping/**'
               - 'tests/Shipping.*/**'
               - 'src/Services/Ordering/Ordering.Api/Protos/**'
+            notifications:
+              - *shared
+              - 'src/Services/Notifications/**'
+              - 'tests/Notifications.*/**'
             # The gateway is a deployable like any other — its own image
             # (§15.2), its own chart (§15.3), its own Program.cs and route
             # file. Left out of this list, a change to that route file is never
@@ -595,7 +600,7 @@ jobs:
   # under src/ appears below.
   images:
     needs: [changes, build]
-    if: ${{ needs.changes.outputs.catalog == 'true' || needs.changes.outputs.ordering == 'true' || needs.changes.outputs.gateway == 'true' || needs.changes.outputs.bff == 'true' || needs.changes.outputs.inventory == 'true' || needs.changes.outputs.payments == 'true' || needs.changes.outputs.shipping == 'true' }}
+    if: ${{ needs.changes.outputs.catalog == 'true' || needs.changes.outputs.ordering == 'true' || needs.changes.outputs.gateway == 'true' || needs.changes.outputs.bff == 'true' || needs.changes.outputs.inventory == 'true' || needs.changes.outputs.payments == 'true' || needs.changes.outputs.shipping == 'true' || needs.changes.outputs.notifications == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
@@ -634,6 +639,12 @@ jobs:
           - filter: shipping
             image: shipping-migrator
             dockerfile: src/Services/Shipping/Shipping.Migrator/Dockerfile
+          - filter: notifications
+            image: notifications-worker
+            dockerfile: src/Services/Notifications/Notifications.Worker/Dockerfile
+          - filter: notifications
+            image: notifications-migrator
+            dockerfile: src/Services/Notifications/Notifications.Migrator/Dockerfile
           - filter: gateway
             image: gateway
             dockerfile: src/Gateway/Gateway.Api/Dockerfile
