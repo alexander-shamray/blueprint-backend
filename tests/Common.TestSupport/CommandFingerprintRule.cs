@@ -56,7 +56,7 @@ public static class CommandFingerprintRule
         return offenders;
     }
 
-    /// <summary>The <see cref="IIdempotentCommand.OperationName"/> of each idempotent command, for §8.5's key.</summary>
+    /// <summary>Each idempotent command's <see cref="IIdempotentCommand.OperationName"/>, for §8.5's key.</summary>
     public static IReadOnlyList<string> OperationNames(Assembly application) =>
     [
         .. IdempotentCommands(application)
