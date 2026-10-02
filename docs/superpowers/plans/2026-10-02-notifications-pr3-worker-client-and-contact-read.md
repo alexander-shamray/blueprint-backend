@@ -4752,7 +4752,8 @@ Step 2).
 |---|---|---|
 | `RealmImportTests.No_client_ships_a_secret_but_the_ones_whose_grants_need_one` | a third client ships a secret | Task 2, Step 1 |
 | `RealmClientTests.The_service_account_clients_are_exactly_the_hosts_that_call_a_peer` | a third service-account client; renamed to `…_the_credentialed_hosts`, as this one calls no peer | Task 2, Step 1 |
-| `deploy/keycloak/realm_check.py` | its new predicate requires exactly one `notifications-worker` | Task 2, Steps 2–3 |
+| `deploy/keycloak/realm_check.py` | its new predicate requires exactly one `notifications-worker` | Task 2, Steps 2–4 |
+| `deploy/keycloak/test_realm_check.py` and `test_read_admin.py` | four documents list their clients by hand and count the verdict | Task 2, Step 4 |
 | `.github/secret-scan` | the new local default in the realm, `RealmImportTests`, the Compose unit and the Keycloak fixture | Task 2 Step 6, Task 6 Step 5, Task 7 Step 4 |
 | `MetricsRegistrationTests.Every_metrics_type_is_forced_or_has_a_stated_reason_not_to_be` | `ContactMetrics` registered and not forced | Task 5, Step 4 |
 | `DatabaseSmokeTests.Migrator_exits_zero_and_creates_the_schema` | one more applied migration | Task 3, Step 4 |
