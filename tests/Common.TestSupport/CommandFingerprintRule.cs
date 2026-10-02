@@ -77,7 +77,8 @@ public static class CommandFingerprintRule
         {
             string member = $"{path}.{property.Name}";
 
-            if (property.IsDefined(typeof(JsonIgnoreAttribute), inherit: true))
+            // The serialiser reads the attribute on the declaration it writes, not on an overridden base.
+            if (property.IsDefined(typeof(JsonIgnoreAttribute), inherit: false))
                 offenders.Add($"{member} is marked [JsonIgnore], so it hashes as nothing (ADR-057)");
             else
                 Classify(property.PropertyType, member, enclosing, offenders);

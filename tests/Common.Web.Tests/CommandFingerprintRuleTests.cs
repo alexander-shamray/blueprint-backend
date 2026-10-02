@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using Common.Application;
 using Common.TestSupport;
@@ -64,6 +65,25 @@ public class CommandFingerprintRuleTests
         : ICommand<Result>, IIdempotentCommand
     {
         public static string OperationName => "probe.ignored";
+    }
+
+    public abstract record Noted
+    {
+        [JsonIgnore]
+        public virtual string? Note { get; init; }
+    }
+
+    public sealed record InheritsAnIgnoredNote(Guid CommandId) : Noted, ICommand<Result>, IIdempotentCommand
+    {
+        public static string OperationName => "probe.inherits-ignored";
+    }
+
+    public sealed record OverridesAnIgnoredNote(Guid CommandId, string? Note)
+        : Noted, ICommand<Result>, IIdempotentCommand
+    {
+        public override string? Note { get; init; } = Note;
+
+        public static string OperationName => "probe.overrides-ignored";
     }
 
     // A domain value object: its state is private, so the serialiser writes it as an empty object.
@@ -213,6 +233,7 @@ public class CommandFingerprintRuleTests
     [
         nameof(WithAField),
         nameof(WithAnIgnoredProperty),
+        nameof(InheritsAnIgnoredNote),
         nameof(WithAnOpaqueValue),
         nameof(WithAnOpaqueStruct),
         nameof(WithAnInterface),
@@ -235,6 +256,7 @@ public class CommandFingerprintRuleTests
         nameof(Positional),
         nameof(WithACycle),
         nameof(WithPrivateState),
+        nameof(OverridesAnIgnoredNote),
         nameof(WriteEndpointRuleTests.Reached),
         nameof(WriteEndpointRuleTests.Built),
         nameof(WriteEndpointRuleTests.Unreached),
@@ -264,6 +286,23 @@ public class CommandFingerprintRuleTests
             .Offenders(typeof(WithAnIgnoredProperty))
             .ShouldHaveSingleItem()
             .ShouldStartWith("WithAnIgnoredProperty.Note is marked [JsonIgnore]");
+    }
+
+    [Fact]
+    public void An_ignored_base_property_is_named_where_the_serialiser_omits_it_and_only_there()
+    {
+        // The fingerprint's own options, so the rule is compared with what is hashed.
+        JsonSerializerOptions options = new() { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingDefault };
+
+        JsonSerializer.Serialize(new InheritsAnIgnoredNote(Guid.NewGuid()) { Note = "n" }, options)
+            .ShouldNotContain("Note");
+        CommandFingerprintRule
+            .Offenders(typeof(InheritsAnIgnoredNote))
+            .ShouldHaveSingleItem()
+            .ShouldStartWith("InheritsAnIgnoredNote.Note is marked [JsonIgnore]");
+
+        JsonSerializer.Serialize(new OverridesAnIgnoredNote(Guid.NewGuid(), "n"), options).ShouldContain("Note");
+        CommandFingerprintRule.Offenders(typeof(OverridesAnIgnoredNote)).ShouldBeEmpty();
     }
 
     [Fact]
