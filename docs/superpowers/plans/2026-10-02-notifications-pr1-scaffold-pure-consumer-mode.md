@@ -1327,6 +1327,16 @@ instead, because the template's publisher grant is wrong by construction for a
 service with nothing to publish, and section 2 makes a hand fix after the
 render a scaffold defect.
 
+Three docstrings these edits make false become mode-neutral:
+`render_projects`' "The nine projects, the marker, the migration and its
+snapshot." becomes "The projects §4.1 gives the mode, the marker where one is
+owed, the migration and its snapshot."; `update_solution`'s "Five projects in
+their own solution folder, four test entries, alphabetical." becomes "The
+service's projects in their own solution folder and its test entries,
+alphabetical."; and `update_broker_definitions`' paragraph on a PUBLISHER's
+permissions gains, after "and nothing of anybody else's.", the sentence "A
+pure consumer gets a consumer's grant instead, written below."
+
 - [ ] **Step 6: The two tables**
 
 `tools/new-service/scaffold/patch.py`, after `WORKER_PATCHES`. Every needle
