@@ -1,5 +1,6 @@
 using System.Globalization;
 using Catalog.Pricing.V1;
+using Common.Web;
 using FluentValidation;
 
 namespace Web.Bff.Endpoints;
@@ -110,6 +111,8 @@ public static class CheckoutEndpoints
                         lines.Sum(line => line.LineTotal),
                         [.. requested.Where(id => !priced.Contains(id))]));
                 })
+            // Prices a basket and writes nothing (§9.7).
+            .RetrySafe(RetrySafety.ReadOnly)
             .WithName("Quote");
     }
 }
