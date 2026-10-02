@@ -37,10 +37,11 @@ public static class WriteEndpointRule
         {
             string name = NameOf(endpoint);
             string[] commands = [.. CommandsOf(endpoint).Select(command => command.Name)];
+            string keyedBy = string.Join(" and ", commands);
             RetrySafety[] kinds = [.. KindsOf(endpoint)];
 
             if (commands.Length > 0)
-                offenders.AddRange(Unauthenticated(endpoint, name, commands[0]));
+                offenders.AddRange(Unauthenticated(endpoint, name, keyedBy));
 
             if (!AcceptsAWrite(endpoint))
                 continue;
@@ -55,7 +56,7 @@ public static class WriteEndpointRule
             if (commands.Length > 0 && kinds.Length > 0)
             {
                 offenders.Add(
-                    $"{name} is keyed by {commands[0]} and declared {kinds[0]}: a write endpoint is one or " +
+                    $"{name} is keyed by {keyedBy} and declared {kinds[0]}: a write endpoint is one or " +
                     "the other, and a declaration on its group reaches it (§8.5)");
             }
 
@@ -126,19 +127,19 @@ public static class WriteEndpointRule
         endpoint.Metadata.GetOrderedMetadata<RetrySafetyMetadata>().Select(declared => declared.Kind).Distinct();
 
     // §8.5's subject rule: an anonymous caller claims under the shared system subject.
-    private static IEnumerable<string> Unauthenticated(Endpoint endpoint, string name, string command)
+    private static IEnumerable<string> Unauthenticated(Endpoint endpoint, string name, string keyedBy)
     {
         if (endpoint.Metadata.GetMetadata<IAllowAnonymous>() is not null)
         {
             yield return
-                $"{name} is keyed by {command} and allows anonymous callers, who all claim under the " +
+                $"{name} is keyed by {keyedBy} and allows anonymous callers, who all claim under the " +
                 "shared system subject (§8.5)";
         }
 
         if (endpoint.Metadata.GetOrderedMetadata<IAuthorizeData>().Count == 0)
         {
             yield return
-                $"{name} is keyed by {command} and requires no authorisation, so the caller has no " +
+                $"{name} is keyed by {keyedBy} and requires no authorisation, so the caller has no " +
                 "subject to key on (§8.5)";
         }
     }
