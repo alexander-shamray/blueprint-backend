@@ -823,6 +823,12 @@ public static IServiceCollection AddCommonProblemDetails(this IServiceCollection
     services.AddExceptionHandler<ConcurrentRequestExceptionHandler>();
     services.AddExceptionHandler<CommandAlreadyCommittedExceptionHandler>();
     services.AddExceptionHandler<CommandIdReusedExceptionHandler>();
+    // The unreadable-request row's, for a refusal the framework raises before
+    // the endpoint's delegate is entered. Raised in every environment rather
+    // than under Development alone, which is the framework's default, so a
+    // malformed body has one answer wherever the host runs.
+    services.AddExceptionHandler<BadHttpRequestExceptionHandler>();
+    services.PostConfigure<RouteHandlerOptions>(options => options.ThrowOnBadRequest = true);
 
     return services.AddProblemDetails(options =>
         options.CustomizeProblemDetails = context =>
@@ -845,6 +851,7 @@ public static IServiceCollection AddCommonProblemDetails(this IServiceCollection
 | Situation | Status | Notes |
 |---|---|---|
 | Validation failed | 400 | `errors` extension, field-keyed |
+| The request could not be read — a body that is not JSON, a field of the wrong type, no body at all | 400 | From `BadHttpRequestException`, `code` `request.unreadable`, at the status the exception carries, which is 400 for every binding failure an endpoint raises. **No** `errors` member: the request never reached a validator, and `errors` is what marks a validation refusal. A `pointer` member names the body's member that did not bind, in the form RFC 9457's own example uses, and is rebuilt from the endpoint's JSON contract, so a dictionary key or an undeclared member the client sent is never echoed; the `detail` is fixed, because the framework's message can quote a raw value or a header. Raised and answered alike in every environment, where the framework's default throws under Development alone and writes a bare 400 elsewhere |
 | No or invalid token | 401 | |
 | Authenticated but not permitted | 403 | Do not leak whether the resource exists |
 | Aggregate not found | 404 | |
@@ -853,7 +860,7 @@ public static IServiceCollection AddCommonProblemDetails(this IServiceCollection
 | The command under this key has already been applied | 409 | From `CommandAlreadyCommittedException` ([§8.5](08-caching-redis.md), [ADR-037](adr/ADR-037-the-idempotency-marker-is-a-row-in-the-commands-own-transaction.md)), `code` `command.already_committed`. A 409 that does **not** say retry, which is why the `detail` carries the whole difference: the work is durable and its result is no longer available — never recorded on the lost-acknowledgement path, recorded and expired on the commoner one — so a retry meets this same refusal until the marker is purged. Read the resource. 200 with an empty body is the tempting alternative and is worse — a success-shaped answer to a request whose result this service cannot produce |
 | The command identifier was already used for a different request | 409 | From `CommandIdReusedException` ([§8.5](08-caching-redis.md), [ADR-057](adr/ADR-057-a-command-id-is-bound-to-the-fingerprint-of-the-command-that-claimed-it.md)), `code` `command.id_reused`. It does **not** say retry either: the key's entry holds another command's result, so this request, sent again under the same identifier, meets this refusal for as long as that entry lives. A changed request is a new request and takes a new identifier. 200 with the stored result is what this row replaced — a success-shaped answer to a request that was never applied |
 | `If-Match` / `If-Unmodified-Since` failed | **412** | The client *did* send a precondition and it did not hold. Distinguishing this from 409 tells the client whether retrying with a fresh ETag is the fix |
-| Request body past the edge's ceiling | **413** | The gateway only (§10.1). Kestrel throws `BadHttpRequestException` carrying this status and `ExceptionHandlerMiddleware` reads it off the exception rather than defaulting to 500, so unlike the 400 and 409 rows this one needs no handler of its own |
+| Request body past the edge's ceiling | **413** | The gateway only (§10.1). Kestrel's `BadHttpRequestException` is answered inside the forwarder, which sets this status and writes no body, so it never reaches `UseExceptionHandler` and `UseStatusCodePages` writes the shape. `ExceptionHandlerMiddleware` reads no status off an exception — one that escapes is the unreadable-request row's, at its own status |
 | Domain rule violated | 422 | The request was well-formed but not allowed |
 | Downstream dependency unavailable | 503 | With `Retry-After` where known. Never 500 — the fault is not in this service |
 | Rate limited | 429 | With `Retry-After` |
