@@ -8,8 +8,8 @@ namespace Common.TestSupport;
 
 /// <summary>ADR-057's rule over an idempotent command: each member is one its fingerprint sees, and stably.</summary>
 /// <remarks>
-/// It reads declared types, so it refuses what the serialiser would look past: <see cref="object"/>, a class that is
-/// not sealed, and a collection outside the ordered ones it lists (ADR-058).
+/// It reads declared types, so it refuses the ones it cannot see past: <see cref="object"/>, a class that is not
+/// sealed, and a collection outside the ordered ones it lists (ADR-058).
 /// </remarks>
 public static class CommandFingerprintRule
 {
