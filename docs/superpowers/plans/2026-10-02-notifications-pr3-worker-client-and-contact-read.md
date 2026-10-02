@@ -51,17 +51,20 @@ in full and
 - The blueprint wins over the spec; the spec wins over this plan.
 - **Class A+D+E.** Touch set:
 
-  `src/Services/Notifications/**`, `src/BuildingBlocks/Common.Infrastructure/Identity/ServiceIdentityOptions.cs`, `src/BuildingBlocks/Common.Web/ObservabilityExtensions.cs`, `tests/Notifications.*`, `tests/Common.Web.Tests/RealmImportTests.cs`, `tests/Common.Web.Tests/ObservabilityTests.cs`, `tests/Web.Bff.Tests/RealmClientTests.cs`, `deploy/compose/keycloak/realm-export.json`, `deploy/compose/services/notifications.yml`, `deploy/compose/.env.example`, `deploy/compose/README.md`, `deploy/keycloak/realm_check.py`, `deploy/keycloak/test_realm_check.py`, `deploy/keycloak/README.md`, `.github/secret-scan/allowed/deploy.txt`, `.github/secret-scan/allowed/tests.txt`, `docs/backend-architecture/02-architecture-at-a-glance.md`, `docs/backend-architecture/03-bounded-contexts.md`, `docs/backend-architecture/09-messaging.md`, `docs/backend-architecture/11-identity-authorization.md`, `docs/backend-architecture/12-test-strategy.md`, `docs/backend-architecture/14-local-development.md`, `docs/backend-architecture/15-cicd-deployment.md`, `docs/backend-architecture/appendix-b-licences.md`, `docs/secrets.md`
+  `src/Services/Notifications/**`, `src/BuildingBlocks/Common.Infrastructure/Identity/ServiceIdentityOptions.cs`, `src/BuildingBlocks/Common.Web/ObservabilityExtensions.cs`, `tests/Notifications.*`, `tests/Common.Web.Tests/RealmImportTests.cs`, `tests/Common.Web.Tests/ObservabilityTests.cs`, `tests/Web.Bff.Tests/RealmClientTests.cs`, `tests/Web.Bff.Tests/Web.Bff.Tests.csproj`, `tests/Web.Bff.Tests/KeycloakFixture.cs`, `Directory.Packages.props`, `deploy/compose/keycloak/realm-export.json`, `deploy/compose/services/notifications.yml`, `deploy/compose/.env.example`, `deploy/compose/README.md`, `deploy/keycloak/realm_check.py`, `deploy/keycloak/test_realm_check.py`, `deploy/keycloak/README.md`, `.github/secret-scan/allowed/deploy.txt`, `.github/secret-scan/allowed/tests.txt`, `docs/backend-architecture/02-architecture-at-a-glance.md`, `docs/backend-architecture/03-bounded-contexts.md`, `docs/backend-architecture/09-messaging.md`, `docs/backend-architecture/11-identity-authorization.md`, `docs/backend-architecture/12-test-strategy.md`, `docs/backend-architecture/14-local-development.md`, `docs/backend-architecture/15-cicd-deployment.md`, `docs/backend-architecture/appendix-b-licences.md`, `docs/secrets.md`
 
   Why each, since the row is paths only: the service's code and its three
   test projects are A, and so are the two building-block files — the one
   sentence of `ServiceIdentityOptions` that this PR makes false, and
   `Common.Web`'s `AddMeter` line with its test, under A's
   `src/BuildingBlocks/**` and `tests/**`; `RealmImportTests` and
-  `RealmClientTests` are A, the two suites ADR-052 names as asserted. The
-  realm, the Compose unit, `.env.example`, the Compose README, the realm gate
-  and its README, the two allow-lists, the chapters and `docs/secrets.md` are
-  D. **The E letter is owed for package references, not pins**:
+  `RealmClientTests` are A, the two suites ADR-052 names as asserted, and so
+  are `Web.Bff.Tests.csproj`'s comment and `KeycloakFixture`'s summary, which
+  call that suite's Keycloak the only one; `Directory.Packages.props` is E for
+  the same claim in the comment over `Testcontainers.Keycloak`'s pin, which
+  does not move (Task 8, Step 9). The realm, the Compose unit, `.env.example`,
+  the Compose README, the realm gate and its README, the two allow-lists, the
+  chapters and `docs/secrets.md` are D. **The E letter is owed for package references, not pins**:
   `Notifications.Infrastructure.csproj` takes
   `Microsoft.Extensions.Http.Resilience` and `System.IdentityModel.Tokens.Jwt`
   (and `Microsoft.Extensions.Hosting.Abstractions` unless PR-2 landed it), and
@@ -4245,6 +4248,11 @@ git commit -m "feat(compose): Notifications' contact source and client credentia
 - Modify: `docs/backend-architecture/appendix-b-licences.md` — two rows' use
 - Modify: `docs/secrets.md` — the rotation clause, the procedure's two steps,
   the provisioning paragraph, and the exception row
+- Modify: `Directory.Packages.props` — the comment over
+  `Testcontainers.Keycloak`'s pin
+- Modify: `tests/Web.Bff.Tests/Web.Bff.Tests.csproj` — the comment over its
+  `Testcontainers.Keycloak` reference
+- Modify: `tests/Web.Bff.Tests/KeycloakFixture.cs` — the class summary
 
 Every edit below names the set or cites ADR-052, and none writes a count of
 credentialed hosts.
@@ -4549,14 +4557,48 @@ The five places for the new keys, accounted for: Compose is Task 7's unit and
 `.env.example`; §14.2's Aspire host is not adopted; Helm is PR-6's chart; the
 inventory is Step 6; the fixture is Task 5's `NotificationsWorkerFactory`.
 
-- [ ] **Step 9: Check and commit**
+- [ ] **Step 9: The three build-side statements of one Keycloak**
+
+Each says §11.5's suite is the only place a real Keycloak runs, which Task 6's
+fixture makes false; each loses the claim rather than gaining a count.
+
+`Directory.Packages.props`, the comment over `Testcontainers.Keycloak`'s pin,
+seven lines rewritten whole to the comment gate's five. Before, its opening:
+"§11.5's suite, and the ONE place in the solution that runs a real Keycloak."
+After, the whole block:
+
+```xml
+    <!-- §11.5's suite and ADR-052's contact read, the places the solution runs
+         a real Keycloak. The audience mapper the first proves is realm
+         configuration, which no other test can see: §12.4's fixture points at
+         an unreachable authority on purpose. Same version line as the three
+         above: the Testcontainers modules ship as one release. -->
+```
+
+`tests/Web.Bff.Tests/Web.Bff.Tests.csproj`, the comment over the reference.
+Before: `<!-- §11.5's suite, the one that runs a real Keycloak. -->`. After:
+
+```xml
+    <!-- §11.5's suite, which proves the realm's grants against a real Keycloak. -->
+```
+
+`tests/Web.Bff.Tests/KeycloakFixture.cs`, the class summary. Before: "A real
+Keycloak importing the shipped realm file, the only fixture that runs one
+(§11.5)." After:
+
+```csharp
+/// <summary>A real Keycloak importing the shipped realm file, for §11.5's grants.</summary>
+```
+
+- [ ] **Step 10: Check and commit**
 
 Run `/check-links`, then `/validate-blueprint` — last in the session's run,
 after every `src/` commit, because the command's `Edit` deny on `src/` lasts
 the turn it runs in.
 
 ```bash
-git add docs CLAUDE.md
+git add docs CLAUDE.md Directory.Packages.props tests/Web.Bff.Tests/Web.Bff.Tests.csproj \
+    tests/Web.Bff.Tests/KeycloakFixture.cs
 git commit -m "docs: the chapters, Appendix B and docs/secrets.md name the contact reader beside the other credentialed hosts"
 ```
 
