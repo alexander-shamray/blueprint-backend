@@ -41,7 +41,7 @@ public class BadHttpRequestExceptionHandlerTests
 
         HttpResponseMessage response = await client.GetAsync(Route, TestContext.Current.CancellationToken);
 
-        ((int)response.StatusCode).ShouldBe(status, "a body too large is not a body malformed");
+        ((int)response.StatusCode).ShouldBe(status, "the status is the exception's, not a flat 400");
 
         using JsonDocument body = JsonDocument.Parse(
             await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
