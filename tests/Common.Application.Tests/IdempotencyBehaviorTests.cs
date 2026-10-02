@@ -549,6 +549,21 @@ public class IdempotencyBehaviorTests
                 TestContext.Current.CancellationToken));
     }
 
+    [Fact]
+    public async Task A_stored_fingerprint_that_is_this_commands_exactly_replays()
+    {
+        // Pins the spelled-out JSON to CommandFingerprint.Of, without which a refused envelope proves nothing.
+        RecordingIdempotencyStore store = new();
+        store.Completed(ContentKey, $"sha256:{FingerprintOf(TwoDesksJson)}:\"order-1\"");
+
+        Result<string> result = await Content(store).HandleAsync(
+            new ContentCommand(Command, "two desks"),
+            () => throw new InvalidOperationException("the handler must not run on a replay"),
+            TestContext.Current.CancellationToken);
+
+        result.Value.ShouldBe("order-1");
+    }
+
     [Theory]
     [InlineData(nameof(Stored.UpperCase))]
     [InlineData(nameof(Stored.Truncated))]
@@ -557,7 +572,7 @@ public class IdempotencyBehaviorTests
     {
         // Ordinal, and fail-closed: an envelope this behaviour did not write is never read as a match.
         ContentCommand command = new(Command, "two desks");
-        string fingerprint = FingerprintOf($$"""{"CommandId":"{{Command}}","Content":"two desks"}""");
+        string fingerprint = FingerprintOf(TwoDesksJson);
 
         string payload = stored switch
         {
@@ -641,6 +656,9 @@ public class IdempotencyBehaviorTests
 
     /// <summary>A command carrying its <c>CommandId</c> and nothing else, as the fingerprint serialises it.</summary>
     private static string BareJson => $$"""{"CommandId":"{{Command}}"}""";
+
+    /// <summary>The <c>ContentCommand</c> carrying "two desks", as the fingerprint serialises it.</summary>
+    private static string TwoDesksJson => $$"""{"CommandId":"{{Command}}","Content":"two desks"}""";
 
     /// <summary>ADR-057's fingerprint of a command whose JSON the test spells out, so the hashed shape is pinned.</summary>
     private static string FingerprintOf(string json) =>
