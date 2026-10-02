@@ -1692,7 +1692,6 @@ public void Idempotent_commands_return_a_result_shape_the_behaviour_rebuilds()
     [
         .. typeof(PlaceOrderCommand).Assembly
             .GetTypes()
-            .Where(t => t is { IsClass: true, IsAbstract: false })
             .Where(typeof(IIdempotentCommand).IsAssignableFrom)
             .SelectMany(t => t
                 .GetInterfaces()
