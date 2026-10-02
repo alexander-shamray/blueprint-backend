@@ -3723,7 +3723,9 @@ public sealed class KeycloakFixture : IAsyncLifetime
     }
 
     /// <summary>The real host pointed at this container and holding one client's credential.</summary>
-    /// <remarks>The address is passed and the authority captured, never both of one parameter (CS9107).</remarks>
+    /// <remarks>
+    /// The address is passed and the authority captured, never both of one parameter (CS9107, an error under ADR-019).
+    /// </remarks>
     public sealed class ContactHost(
         string baseAddress,
         string authority,
