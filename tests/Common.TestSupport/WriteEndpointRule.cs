@@ -73,13 +73,7 @@ public static class WriteEndpointRule
         Endpoint[] table = [.. endpoints];
         List<string> offenders = [.. Offenders(table)];
 
-        Type[] declared =
-        [
-            .. application
-                .GetTypes()
-                .Where(typeof(IIdempotentCommand).IsAssignableFrom)
-                .Where(type => type is { IsClass: true, IsAbstract: false })
-        ];
+        Type[] declared = [.. CommandFingerprintRule.IdempotentCommands(application)];
         Type[] reached = [.. table.SelectMany(CommandsOf).Distinct()];
 
         offenders.AddRange(
