@@ -4709,17 +4709,17 @@ Compose unit's two blocks.
   `docs/secrets.md` (Step 8); `docs/repo-map.md` and `CLAUDE.md` — re-read, and
   **neither counts credentialed hosts today**, so neither moves.
 
-**Places outside section 14's table this PR makes false, and takes.** §9.7's "a
-host that holds client credentials is a host that calls a peer" and §4.1's
-"Outbound identity belongs to the hosts that call a peer" (Step 3); §12.1's
-outbound-hop row and §12.4's "the one suite in the solution that starts a real
-Keycloak" (Step 4); §11.5's "the **one** suite that runs a real Keycloak" (Step
-1); Appendix B's Testcontainers row, "the only place the solution runs an
-identity provider", and the JWT row's use (Step 7); `ServiceIdentityOptions`'
-summary, "bound by each host that calls a peer" (Task 5 Step 4);
-`realm_check.py`'s `WORKER_CLIENT` comment, "Notifications' client is decided
-and minted nowhere yet" (Task 2 Step 3); and `realm-export.json`'s `web-bff`
-description, which counts two (Task 2 Step 2).
+**The other places this PR makes false, and takes.** §9.7's "a host that holds
+client credentials is a host that calls a peer" and §4.1's "Outbound identity
+belongs to the hosts that call a peer" (Step 3); §12.1's outbound-hop row and
+§12.4's "the one suite in the solution that starts a real Keycloak" (Step 4);
+§11.5's "the **one** suite that runs a real Keycloak" (Step 1); Appendix B's
+Testcontainers row, "the only place the solution runs an identity provider", and
+the JWT row's use (Step 7); `ServiceIdentityOptions`' summary, "bound by each
+host that calls a peer" (Task 5 Step 4); `realm_check.py`'s `WORKER_CLIENT`
+comment, "Notifications' client is decided and minted nowhere yet" (Task 2 Step
+3); and `realm-export.json`'s `web-bff` description, which counts two (Task 2
+Step 2).
 
 **Gates this PR turns red, and the task that turns each green.**
 
