@@ -2810,6 +2810,8 @@ public sealed class SendWorkerTests(ServiceFixture fixture) : IAsyncLifetime
         fixture.ContactAnswers(customer, Mailbox, "en", delay: TimeSpan.FromMilliseconds(800));
         Notification owed = await OwedAsync(order, customer);
         using NotificationsWorkerFactory second = fixture.NewWorkerHost();
+        // Resolved first, as the host starts on first use and must not spend the stall starting.
+        SendWorker other = second.Services.GetRequiredService<SendWorker>();
 
         Task<SendPass> first = fixture.RunSendPassAsync();
         await ServiceFixture.WaitUntilAsync(async () => await fixture.ScalarAsync<int>(
@@ -2817,8 +2819,7 @@ public sealed class SendWorkerTests(ServiceFixture fixture) : IAsyncLifetime
             "AND Status = 'Pending' AND LockedUntil > SYSDATETIMEOFFSET()",
             owed.NotificationId) == 1);
 
-        (await second.Services.GetRequiredService<SendWorker>().RunOnceAsync(Ct))
-            .ShouldBe(new SendPass(0, 0), "the second worker skipped a leased row");
+        (await other.RunOnceAsync(Ct)).ShouldBe(new SendPass(0, 0), "the second worker skipped a leased row");
         (await first).ShouldBe(new SendPass(1, 1));
 
         (await fixture.NotificationAsync(owed.NotificationId)).Attempts.ShouldBe(0);
