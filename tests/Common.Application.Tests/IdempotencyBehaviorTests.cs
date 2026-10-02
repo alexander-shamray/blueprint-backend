@@ -458,7 +458,7 @@ public class IdempotencyBehaviorTests
     [Fact]
     public async Task An_entry_with_no_fingerprint_is_refused_as_already_committed_and_left_as_it_was()
     {
-        // The shape before ADR-057, the bare value: nothing shows it is this command's, so it replays to none (ADR-059).
+        // The bare value before ADR-057: nothing shows it is this command's (ADR-059).
         RecordingIdempotencyStore store = new();
         store.Completed(ExpectedKey, $"\"{Guid.CreateVersion7()}\"");
         IdempotencyEntry planted = store.Entries[ExpectedKey];
