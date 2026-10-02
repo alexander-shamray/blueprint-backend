@@ -436,6 +436,12 @@ After:
 # its render and the run would abort before this reported.
 ```
 
+The check's pass message beneath it, which names the same old rule, becomes:
+
+```bash
+    pass "exactly the charts whose host calls out under a grant of its own declare client credentials ($credentialed)"
+```
+
 Before, the client-credentials section's head:
 
 ```bash
