@@ -74,20 +74,13 @@ in full.
   `Directory.Packages.props` line, no Appendix B row, no `Platform.slnx`
   line. `.github/locality-gate/locality_gate.py` admits `A+D+E` as the one
   three-member cell, so the row is spelled exactly that way.
-- **`tests/Platform.IntegrationTests` is not in the touch set, and that is the
-  blueprint's decision, not an omission.** The spec's section 13 asks for a
-  cross-service container test there. §12.1's level table gives that project
-  one row — contract shape, reflection only — §12.1 argues there is no "all
-  services in containers" level, and §12.6 keeps that project off a container
-  set. Shipping's spec asked the same of Shipping PR-6, its plan built it as
-  `DespatchFanOutTests`, it was taken out of that pull request, and issue #310
-  was closed *not planned* on 2026-09-30 with the second option: §12 stands, a
-  spec line that contradicts it is withdrawn by precedence, and a container
-  leg there would be a Class C change with an ADR of its own. So Task 11 holds
-  the same facts — four of Ordering's and Shipping's events, as their
-  contracts carry them, delivered to the real queue and sent to a real relay —
-  in `Notifications.Worker.Tests`, where §12.4 already gives this service a
-  container set, and the PR body says the spec's line is withdrawn and why.
+- **`tests/Platform.IntegrationTests` is not in the touch set**, as the spec's
+  section 13 says: the order journey is in PR-5's worker suite, "Not in
+  `Platform.IntegrationTests`", on §12.1's and §12.6's grounds. Task 11 holds
+  it — four of Ordering's and Shipping's events, as their contracts carry
+  them, delivered to the real queue and sent to a real relay — in
+  `Notifications.Worker.Tests`, where §12.4 gives this service a container
+  set.
 - **Depends on PR-1 to PR-4 having merged**, in the spec's order: PR-5
   needs 2, 3 and 4. These are their names, consumed as spelled:
   - PR-1: `Notifications.Application.Records.Notification` with
@@ -3718,12 +3711,10 @@ refusing every attempt, the breaker opens and the next pass claims nothing.
 The no-mailbox export of section 12 rides on the same staging, because it is
 the staging where the most lines carrying an exception are written.
 
-**No `Fault<T>` to read, and the test says why.** Section 9 has the relay's
-exception reach "the `Fault<T>` and the logs" carrying an identifier. A fault
-message is published when a consumer throws, and no consumer here calls the
-relay or the owner — which is the point of the worker (ADR-052) — so the
-`_error` queue's depth is the assertion: nothing was published to carry a
-mailbox. The log is the one export that can, and it is searched whole.
+**No `Fault<T>` to read, as section 9 says.** "No `Fault<T>` exists to carry
+one, since the worker is not a consumer" (ADR-052), so the `_error` queue's
+depth is the assertion: nothing was published to carry a mailbox. The log is
+the one export that can, and it is searched whole.
 
 - [ ] **Step 1: Write the tests**
 
@@ -4979,18 +4970,13 @@ never a window's to delete.
 - Consumes: Tasks 6 and 7; PR-4's `OrderEvents`, `DeliverAsync`,
   `MadeUpDeploymentTests`, `TemplateSet.Embedded.Reasons`.
 
-**Where the spec's cross-service test went, and what is kept of it.** The
-spec's section 13 puts "an order placed, confirmed, despatched and delivered
-across the real publishers produces four `Sent` rows and four messages in
-Mailpit, and a cancelled order its cancellation" in
-`Platform.IntegrationTests`. §12.1 and §12.6 give that project no container
-set, and issue #310 closed the identical request for Shipping by withdrawing
-the spec's line (*Global Constraints*). What §12 lets this PR prove, it
-proves here: the four events, built as their publishers' contracts carry
-them, sent to the real `notifications-events` queue under the narrow account,
-consumed by the real consumers, sent by the real worker to the real relay —
-four `Sent` rows and four messages, and a cancelled order's cancellation with
-its reason's phrase. The publishers' half — that Ordering, Payments and
+**The order journey, where the spec puts it.** Section 13 puts it in PR-5's
+worker suite and "Not in `Platform.IntegrationTests`", on §12.1's and §12.6's
+grounds. So it is proved here: the four events, built as their publishers'
+contracts carry them, sent to the real `notifications-events` queue under the
+narrow account, consumed by the real consumers, sent by the real worker to
+the real relay — four `Sent` rows and four messages, and a cancelled order's
+cancellation with its reason's phrase. The publishers' half — that Ordering, Payments and
 Shipping publish these shapes — is each publisher's own suite and §12.6's
 contract tests, which is how §12 already divides it.
 
@@ -5165,9 +5151,8 @@ git add tests/Notifications.Worker.Tests
 git commit -m "test(notifications): an order's four events reach the relay as four messages, a cancellation says why, and ZZ's deployment sends all seven"
 ```
 
-The body says that the spec's `Platform.IntegrationTests` line is withdrawn by
-§12's precedence, as issue #310 decided for Shipping, and what this suite
-holds in its place.
+The body says the journey sits in this suite, as the spec's section 13 places
+it, and what it holds.
 
 ---
 
@@ -5329,11 +5314,6 @@ Constraints* verbatim, with the reasons under the table, and:
 
 - the dependency on PR-2, PR-3 and PR-4 by name, and the additions to their
   types (*Global Constraints*), each with its reason;
-- **the spec's `Platform.IntegrationTests` line is withdrawn by precedence**:
-  §12.1 and §12.6 give that project no container set; issue #310 settled the
-  same request for Shipping that way on 2026-09-30; `OrderJourneyTests` holds
-  the service's half in `Notifications.Worker.Tests` — written so that no
-  closing keyword precedes the issue's number;
 - the decisions the spec left to the plan: the unreadable payload backs off;
   a `transient` fault after the intent is counted as a resend; the overdue
   gauge subtracts two ticks; the step a row waits on is read from the tables;
@@ -5360,8 +5340,8 @@ Then `/ship`.
   render, the send with its `Message-ID`, the intent and completion stamps
   (Task 7); the give-up age under `DeliveryOptions` (Task 4, Task 7); the
   breaker's park (Tasks 3, 8); the retention pass (Task 10); the waiting
-  gauge (Task 9); the cross-service test — withdrawn by §12's precedence, its
-  service half held (Task 11).
+  gauge (Task 9); the order journey through the service's own queue (Task
+  11).
 - Section 4, whole: `UPDLOCK, READPAST, ROWLOCK` (Task 7's `SendClaims`); the
   lease above `MailHop`'s total plus `ContactHop`'s, held by a test (Task 7's
   `SendWorkerBudgetTests`); `Attempts` and `NextAttemptAt` apart from the
@@ -5390,22 +5370,14 @@ Then `/ship`.
   mailbox or a body, the fault half by the `_error` queue (Task 8).
 - Section 13's worker rows: the inequality and the lease (Task 7); two
   workers, a pass that throws, a lapsed lease (Task 7); a dependency dies
-  (Task 8); the staged crash (Task 7); the log and fault export (Task 8); the
-  made-up deployment sends (Task 11); the `InboxWindow` refusal (Task 4).
+  (Task 8); the staged crash (Task 7); the log and fault export, no
+  `Fault<T>` existing (Task 8); the CR or LF mailbox through a stub of the
+  same answer (Task 7); the made-up deployment sends and the order journey
+  (Task 11); the `InboxWindow` refusal (Task 4).
 - Section 14: §15.4's row and sentence, and the callout with it (Task 12).
 
 **Where this plan departs from the spec, each with the owner that decides.**
 
-- `Platform.IntegrationTests`' container leg: not built. §12.1 and §12.6
-  outrank the spec, and issue #310 decided the same request (Task 11).
-- The CR/LF mailbox "through a realm user": the worker suite meets it through
-  the stub Keycloak answering it as the real one does; PR-3's
-  `KeycloakContactSourceTests`, over the real realm with its profile loosened
-  and its self-check, proves the realm answers it unchanged. One suite cannot
-  hold both fixtures (§12.4's collection), and the two halves meet at
-  `ContactLookup.Found`, which both assert.
-- The `Fault<T>` half of the export test is the empty `_error` queue: no
-  consumer calls out, so none publishes a fault (Task 8).
 - One migration for five indexes, named for its content rather than a table
   (Task 5).
 
