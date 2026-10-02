@@ -175,6 +175,15 @@ public class NotificationTests
     }
 
     [Fact]
+    public void An_empty_event_or_order_id_is_refused_for_it_would_collide_across_events()
+    {
+        Should.Throw<ArgumentOutOfRangeException>(() =>
+            Notification.Pending(Guid.Empty, "order-placed", Guid.CreateVersion7(), """{"v":1}""", Now));
+        Should.Throw<ArgumentOutOfRangeException>(() =>
+            Notification.Pending(Guid.CreateVersion7(), "order-placed", Guid.Empty, """{"v":1}""", Now));
+    }
+
+    [Fact]
     public void A_value_the_columns_cannot_hold_is_refused_at_the_door()
     {
         Should.Throw<ArgumentException>(() =>

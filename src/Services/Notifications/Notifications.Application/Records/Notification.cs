@@ -67,6 +67,8 @@ public sealed class Notification
         string parameters,
         DateTimeOffset now)
     {
+        ArgumentOutOfRangeException.ThrowIfEqual(eventId, Guid.Empty);
+        ArgumentOutOfRangeException.ThrowIfEqual(orderId, Guid.Empty);
         Require(templateKey, NotificationLimits.MaxTemplateKeyLength, nameof(templateKey));
         Require(parameters, NotificationLimits.MaxParametersLength, nameof(parameters));
 
