@@ -39,7 +39,7 @@ public static class ReservationEndpoints
                 })
             .WithName("ReleaseReservation");
 
-        // A request record, since the order is the route's and the body carries the attempt's id alone (§8.5).
+        // A request record, since the order is the route's and the body carries the command id alone (§8.5).
         group
             .MapPost(
                 "/{orderId:guid}/reinstate",
@@ -58,5 +58,5 @@ public static class ReservationEndpoints
     }
 }
 
-/// <summary>The caller's id for this attempt, in the body because §8.5 keeps it a field of the command.</summary>
+/// <summary>The caller's id for this reinstatement, in the body because §8.5 keeps it a field of the command.</summary>
 public sealed record ReinstateReservationRequest(Guid CommandId);

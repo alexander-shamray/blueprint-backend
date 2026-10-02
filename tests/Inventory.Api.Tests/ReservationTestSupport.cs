@@ -28,7 +28,7 @@ internal static class ReservationTestSupport
         return client;
     }
 
-    /// <summary>One reinstatement under <paramref name="commandId"/>, the caller's id for the attempt (§8.5).</summary>
+    /// <summary>One reinstatement under <paramref name="commandId"/>, the caller's id for the act (§8.5).</summary>
     public static Task<HttpResponseMessage> ReinstateAsync(HttpClient client, Guid orderId, Guid commandId) =>
         client.PostAsJsonAsync(
             $"/v1/inventory/reservations/{orderId}/reinstate",
