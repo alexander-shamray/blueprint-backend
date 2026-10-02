@@ -9,6 +9,6 @@ public interface IIdempotentCommand
     /// </summary>
     static abstract string OperationName { get; }
 
-    /// <summary>The client's identity for this attempt: a field, since §4.2 keeps HTTP out of Application.</summary>
+    /// <summary>Names the act the client wants done once: a field, since §4.2 keeps HTTP out of Application.</summary>
     Guid CommandId { get; }
 }
