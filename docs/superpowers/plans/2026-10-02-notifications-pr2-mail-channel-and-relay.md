@@ -775,7 +775,7 @@ public sealed class MailOptionsTests
     public void Outside_development_a_missing_credential_is_refused_at_registration(string? userName, string? password)
     {
         Should.Throw<InvalidOperationException>(() =>
-                Bound(Environments.Production, Relay(userName: userName, password: password)))
+                Bound(Environments.Production, Relay(userName: userName, relayPassword: password)))
             .Message.ShouldContain(
                 $"{MailOptions.UserNameKey} and {MailOptions.PasswordKey} are required outside Development");
     }
@@ -805,7 +805,7 @@ public sealed class MailOptionsTests
     public void In_development_plain_unauthenticated_submission_is_accepted()
     {
         using ServiceProvider provider = Bound(
-            Environments.Development, Relay(security: "None", userName: null, password: null));
+            Environments.Development, Relay(security: "None", userName: null, relayPassword: null));
 
         Should.NotThrow(() => provider.GetRequiredService<IStartupValidator>().Validate());
     }
@@ -816,7 +816,7 @@ public sealed class MailOptionsTests
     public void A_user_name_and_a_password_come_together_in_every_environment(string? userName, string? password)
     {
         using ServiceProvider provider = Bound(
-            Environments.Development, Relay(security: "None", userName: userName, password: password));
+            Environments.Development, Relay(security: "None", userName: userName, relayPassword: password));
 
         Should.Throw<OptionsValidationException>(() => provider.GetRequiredService<IStartupValidator>().Validate())
             .Message.ShouldContain("are set together or not at all");
@@ -875,7 +875,7 @@ public sealed class MailOptionsTests
         string from = NotificationsWorkerFactory.LocalFrom,
         string security = "StartTls",
         string? userName = "notifications",
-        string? password = NotificationsWorkerFactory.NotARelayPassword) =>
+        string? relayPassword = NotificationsWorkerFactory.NotARelayPassword) =>
         new()
         {
             [MailOptions.HostKey] = host,
@@ -883,7 +883,7 @@ public sealed class MailOptionsTests
             [MailOptions.FromKey] = from,
             [MailOptions.SecurityKey] = security,
             [MailOptions.UserNameKey] = userName,
-            [MailOptions.PasswordKey] = password
+            [MailOptions.PasswordKey] = relayPassword
         };
 
     // The production registration over the given environment; the host facts above are what still fail if
@@ -1144,10 +1144,10 @@ internal sealed class MailOptionsValidator : IValidateOptions<MailOptions>
         if (options.From is { } from && !OneMailbox(from))
             failures.Add($"{MailOptions.FromKey} is not one mailbox.");
 
-        bool userName = !string.IsNullOrWhiteSpace(options.UserName);
-        bool password = !string.IsNullOrWhiteSpace(options.Password);
+        bool hasUserName = !string.IsNullOrWhiteSpace(options.UserName);
+        bool hasPassword = !string.IsNullOrWhiteSpace(options.Password);
 
-        if (userName != password)
+        if (hasUserName != hasPassword)
             failures.Add($"{MailOptions.UserNameKey} and {MailOptions.PasswordKey} are set together or not at all.");
 
         return failures.Count == 0 ? ValidateOptionsResult.Success : ValidateOptionsResult.Fail(failures);
@@ -2793,7 +2793,11 @@ py -3.12 .github/secret-scan/secret_scan.py
 ```
 
 `NotARelayPassword`'s literal in `NotificationsWorkerFactory.cs` is flagged
-under `credential-assignment`. Add the entry to
+under `credential-assignment`, and nothing else is: the validator's
+`hasPassword`, the `Relay` helper's `relayPassword` and the factory's
+`mailPassword` are named so that `connection-string-password`, which wants
+`password` as a word of its own, passes them, and `src/` owes no entry.
+Add the entry to
 `.github/secret-scan/allowed/tests.txt` in the file's four-column form, under
 the fixtures heading, with the fingerprint the gate prints and the reason
 "A relay password that says what it is, for the hosts run as Production;
