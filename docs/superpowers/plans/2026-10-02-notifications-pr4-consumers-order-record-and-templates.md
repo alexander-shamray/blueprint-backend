@@ -82,10 +82,10 @@ against PR-1's plan and Shipping's built code, and are not run here.
   `Notifications.Infrastructure.csproj` gains an `InternalsVisibleTo` for the
   worker suite. No repo-wide mutex is held: no `Platform.slnx` line, no
   `Directory.Packages.props` pin, no shared fixture.
-- **Depends on PR-1 and PR-3 having merged.** The spec's order puts PR-4
-  after PR-1 alone; `ContactRetention`'s floor (spec, section 6) reads
-  `ContactOptions.StaleCeiling`, which is PR-3's, so this branch is cut after
-  PR-3 merges. PR-2 is independent of this one in either order.
+- **Depends on PR-1 and PR-3 having merged**, in the spec's order: PR-4
+  comes after 1 and 3, since `ContactRetention`'s floor (spec, section 6)
+  reads `ContactOptions.StaleCeiling`, which is PR-3's, so this branch is cut
+  after PR-3 merges. PR-2 is independent of this one in either order.
   From PR-1: `Notifications.Application.Records`' `Notification`,
   `NotificationStatus`, `NotificationReasons` and `NotificationLimits` (with
   `MaxParametersLength = 2000`); `NotificationsDbContext` with
@@ -4598,15 +4598,13 @@ The body lists the refusals, argues the one validator, and says why
 
 **§9.5's printed form, bare.** The inbox filter outside the in-memory
 outbox, and `UseMessageRetry(RetryPolicy.Standard)` with no `Ignore<>` and no
-`UseDelayedRedelivery` — Shipping's endpoint exactly. The spec's section 10
-asks for the mapping exceptions excluded; §9.8 makes that exclusion the
-command endpoint's alone — "folding the `Ignore` into `RetryPolicy` would
-apply one endpoint's exclusion to three that never raise it" — and no
-handler here maps a command, so `ContractMappingException` cannot reach this
-queue and the blueprint's form is the one written. No redelivery and no
-second ladder, because no consumer meets a fault that is a wait (spec,
-section 10). One queue rather than seven, for the spec's reason: one
-database, no calls, one failure mode, one backlog series.
+`UseDelayedRedelivery` — Shipping's endpoint exactly, and the spec's section
+10 form: §9.8 gives the mapping exceptions' exclusion to a command endpoint
+alone, and no handler here maps a command, so `ContractMappingException`
+cannot reach this queue. No redelivery and no second ladder, because no
+consumer meets a fault that is a wait (spec, section 10). One queue rather
+than seven, for the spec's reason: one database, no calls, one failure mode,
+one backlog series.
 
 **The binding is not provable here**, as Shipping's and Payments' suites say:
 the harness replaces the `UsingRabbitMq` callback where the endpoint is
@@ -4766,8 +4764,8 @@ git add src/Services/Notifications/Notifications.Infrastructure tests/Notificati
 git commit -m "feat(notifications): notifications-events binds §3.2's seven events behind the inbox"
 ```
 
-The body argues the bare retry against the spec's exclusion, with §9.8's
-sentence, and one queue rather than seven.
+The body says the bare retry is the spec's section 10 form, with §9.8's
+reason, and argues one queue rather than seven.
 
 ---
 
@@ -5428,8 +5426,7 @@ PR-3 and why; the broker measurement — the binding test green under the
 unwidened grant, with the reading behind it; the satellite-assembly
 measurement behind `WithCulture="false"`; the three spec readings this plan
 took (the cancellation maps as versioned files, the primary-subtag locale,
-the absent mark) and the one it declined (the mapping exclusion, by §9.8).
-Then `/ship`.
+the absent mark). Then `/ship`.
 
 ## Self-review
 
