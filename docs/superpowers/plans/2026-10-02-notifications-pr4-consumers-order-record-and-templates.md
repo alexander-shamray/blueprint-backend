@@ -5414,9 +5414,8 @@ py -3.12 .github/comment-gate/comment_gate.py --base origin/main
 Expected: 0 warnings, every suite green, every gate exit 0. The comment
 gate judges `HEAD`, so it runs after the last commit; every block added here
 is five lines or fewer and names no pull request or test. **This plan's own
-text** quotes `Unreachable.Sql` by name and no connection string; if §15.1's
-scan names this file, add the entry to `.github/secret-scan/allowed/docs.txt`
-with the fingerprint the scanner computed.
+text** quotes `Unreachable.Sql` by name and no connection string, and a plan
+file is the branch's that wrote it, never this PR's to edit or allow-list.
 
 - [ ] **Step 3: Open the PR**
 
