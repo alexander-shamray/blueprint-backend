@@ -120,8 +120,8 @@ in full and
   plan passes **by name**; `Program.cs` holds one order whichever lands
   first — `AddNotificationsInfrastructure`, then PR-2's `AddMailChannel`,
   then `AddContactSource`; and `MetricsRegistrationTests` gains its
-  `TestEnvironment`, its `BuildServices` summary and its shared usings from
-  whichever lands first, Shipping's forms in both.
+  `TestEnvironment`, its `BuildServices` summary, its selector comment and
+  its shared usings from whichever lands first, Shipping's forms in both.
 - **No new pin and no Appendix B identity.** `Microsoft.Extensions.Http.Resilience`,
   `System.IdentityModel.Tokens.Jwt`, `Testcontainers.Keycloak` and
   `WireMock.Net` are pinned and registered; Appendix B's two rows move only in
@@ -3027,6 +3027,15 @@ the summary over `BuildServices`, a touched block rewritten whole:
 
 ```csharp
     /// <summary>The registration helpers the worker's <c>Program</c> calls, over unreachable configuration.</summary>
+```
+
+the two-line comment opening
+`Every_metrics_type_is_forced_or_has_a_stated_reason_not_to_be`, whose "Both
+helpers run" stops being true once a third registers a metrics type, cut to
+Shipping's one line unless PR-2 already cut it:
+
+```csharp
+        // The collection, not a built provider, which cannot enumerate its registrations.
 ```
 
 a `TestEnvironment` class at the foot of the file — Production, Shipping's
