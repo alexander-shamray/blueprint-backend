@@ -43,7 +43,7 @@ a signal and a procedure"* — and the last is the gate watching its own inputs.
 | 5 | Every metric an **awaiting-signal** rule reads is published by **nothing** |
 | 6 | Every dashboard panel's metric is published |
 | 7 | The workflow's triggers cover every path outside this tree that the gate reads |
-| 8 | Every service with a Domain project hosts §9.4's dispatcher and publishes its gauges, or is on a declared exemption; one with none hosts neither |
+| 8 | Every service with a Domain project hosts §9.4's dispatcher and one with none hosts none; every service hosting it publishes its gauges or is on a declared exemption |
 | 9 | §13.6's and §13.9's tables name exactly the runbooks on disk, both ways |
 
 **Check 9 is checks 1 and 2 aimed at the chapter instead of the rule files.**
