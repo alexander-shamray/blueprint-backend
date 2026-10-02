@@ -371,27 +371,11 @@ switches it already refuses, and a smoke case per chart pins it.
 
 - [ ] **Step 1: Write the failing smoke assertions**
 
-**First, the credential pattern reads a qualified type.** PR-3 attaches the
-handler as `AddHttpMessageHandler<Common.Infrastructure.Identity.ClientCredentialsHandler>()`,
-which `ATTACHES_CREDENTIALS` cannot see. Before (`deploy/helm/smoke.sh`, beside
-`CALLS_REDIS`):
-
-```bash
-# The worker's credential attachment, in the same form and for the same
-# reason: Shipping.Worker's Program.cs names the handler in a comment too.
-ATTACHES_CREDENTIALS='^[[:space:]]*[A-Za-z_][A-Za-z0-9_.]*\.AddHttpMessageHandler<ClientCredentialsHandler>\('
-```
-
-After:
-
-```bash
-# The credential handler's attachment, in the same form and for the same
-# reason, its type named bare or through its namespace: a host's Program.cs
-# names the handler in a comment too.
-ATTACHES_CREDENTIALS='^[[:space:]]*[A-Za-z_][A-Za-z0-9_.]*\.AddHttpMessageHandler<([A-Za-z_][A-Za-z0-9_]*\.)*ClientCredentialsHandler>\('
-```
-
-And two self-tests after `ATTACHES_CREDENTIALS accepts the real attachment`:
+**First, the credential pattern must read a qualified type.** PR-3 attaches
+the handler as `AddHttpMessageHandler<Common.Infrastructure.Identity.ClientCredentialsHandler>()`,
+which `ATTACHES_CREDENTIALS` cannot see; Step 3 widens the pattern. Here, two
+self-tests in `deploy/helm/smoke.sh` after `ATTACHES_CREDENTIALS accepts the
+real attachment`:
 
 ```bash
 check 'ATTACHES_CREDENTIALS accepts the attachment through a qualified type name' \
@@ -586,7 +570,7 @@ is required when jurisdiction.enabled`, so the needle is not found). Every
 source-loop case passes already: the BFF and Shipping attach the handler and
 declare the capability, and the other five neither.
 
-- [ ] **Step 3: Write the library templates**
+- [ ] **Step 3: Write the library templates, and widen the credential pattern**
 
 `deploy/helm/common/templates/_helpers.tpl`. **A TimeSpan helper**, after
 `commerce.timeSpanPattern`, so the three settings that bind one share one
@@ -842,6 +826,24 @@ design change made here" and stands.
 The parenthesised form, so `--set mail.passwordSecretRef=null` with the
 capability on is a named refusal rather than a nil-pointer error out of the
 template engine.
+
+**The credential pattern reads a qualified type**, which Step 1's self-test
+holds it to. Before (`deploy/helm/smoke.sh`, beside `CALLS_REDIS`):
+
+```bash
+# The worker's credential attachment, in the same form and for the same
+# reason: Shipping.Worker's Program.cs names the handler in a comment too.
+ATTACHES_CREDENTIALS='^[[:space:]]*[A-Za-z_][A-Za-z0-9_.]*\.AddHttpMessageHandler<ClientCredentialsHandler>\('
+```
+
+After:
+
+```bash
+# The credential handler's attachment, in the same form and for the same
+# reason, its type named bare or through its namespace: a host's Program.cs
+# names the handler in a comment too.
+ATTACHES_CREDENTIALS='^[[:space:]]*[A-Za-z_][A-Za-z0-9_.]*\.AddHttpMessageHandler<([A-Za-z_][A-Za-z0-9_]*\.)*ClientCredentialsHandler>\('
+```
 
 - [ ] **Step 4: Shipping's chart names the members its host binds**
 
