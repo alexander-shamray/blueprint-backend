@@ -1,9 +1,9 @@
-using System.Reflection;
 using Shipping.Application;
 using Shipping.Infrastructure.Persistence;
 using Shipping.TestSupport;
 using Common.Application;
 using Common.Infrastructure.Idempotency;
+using Common.TestSupport;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.Extensions.DependencyInjection;
@@ -231,18 +231,8 @@ public class IdempotencyMarkerTests(ServiceFixture fixture)
             "form, which is what keeps a vacuous gate from quietly becoming a permanent one.");
     }
 
-    private static string[] Operations() =>
-        [
-            .. typeof(Shipping.Application.DependencyInjection).Assembly
-                .GetTypes()
-                .Where(t => t is { IsClass: true, IsAbstract: false })
-                .Where(typeof(IIdempotentCommand).IsAssignableFrom)
-                .Select(t => (string)t
-                    .GetProperty(
-                        nameof(IIdempotentCommand.OperationName),
-                        BindingFlags.Public | BindingFlags.Static)!
-                    .GetValue(null)!)
-        ];
+    private static IReadOnlyList<string> Operations() =>
+        CommandFingerprintRule.OperationNames(typeof(Shipping.Application.DependencyInjection).Assembly);
 
     private static string Key() =>
         $"{Guid.CreateVersion7()}:tests.marker:{Guid.CreateVersion7()}";

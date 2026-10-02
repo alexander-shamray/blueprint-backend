@@ -56,6 +56,15 @@ public static class CommandFingerprintRule
         return offenders;
     }
 
+    /// <summary>The <see cref="IIdempotentCommand.OperationName"/> of each idempotent command, for §8.5's key.</summary>
+    public static IReadOnlyList<string> OperationNames(Assembly application) =>
+    [
+        .. IdempotentCommands(application)
+            .Select(command => (string)command
+                .GetProperty(nameof(IIdempotentCommand.OperationName), BindingFlags.Public | BindingFlags.Static)!
+                .GetValue(null)!)
+    ];
+
     /// <summary>An assembly's idempotent commands, as <see cref="WriteEndpointRule"/> selects them too.</summary>
     /// <remarks>A struct as well as a class: the pipeline's generic TCommand fingerprints either (ADR-057).</remarks>
     internal static IEnumerable<Type> IdempotentCommands(Assembly application) =>
