@@ -1346,6 +1346,17 @@ twenty lines:
     so the template's password does not authenticate under the new name."""
 ```
 
+Two comments about the marker are false in the mode too, since a pure
+consumer writes no marker and its dispatcher is the file with no template.
+The one over `ASSEMBLY_MARKER`, "The one file with no counterpart in
+Catalog, and it is written to be deleted.", becomes "An API or worker
+render's one file with no counterpart in Catalog, and it is written to be
+deleted."; and the four-line block in `render_projects` that opens "The
+marker is the only file with no template beside it to take endings from"
+opens instead "The marker, or a pure consumer's dispatcher, is the one file
+with no template beside it to take endings from", the rest unchanged and the
+block rewrapped to stay four lines.
+
 - [ ] **Step 6: The two tables**
 
 `tools/new-service/scaffold/patch.py`, after `WORKER_PATCHES`. Every needle
