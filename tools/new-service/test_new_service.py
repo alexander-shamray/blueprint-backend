@@ -665,6 +665,16 @@ class RendersInsideTheCommentBudget(unittest.TestCase):
         breaches = budget_breaches(worker(), Names(PROBE, new_service.WORKER_HOST))
         self.assertEqual([], breaches, "\n".join(breaches))
 
+    def test_the_compose_unit_a_render_creates_is_inside_the_budget_whole(self):
+        # Created rather than spliced, so the pull request that adds it is every
+        # line of it: the gate judges the template's blocks in the copy too.
+        gate = comment_gate_module()
+        for rendered in (render(), worker()):
+            unit = rendered.created[UNIT].replace("\r\n", "\n")
+            lines = gate.scan(UNIT, unit)
+            every = {line.number for line in lines}
+            self.assertEqual([], [message for _, _, message in gate.findings(UNIT, lines, every)])
+
     def test_a_template_that_argues_is_refused(self):
         run = "app.Run();\n"
 
