@@ -5,8 +5,10 @@ using System.Text.Json;
 using Common.Contracts.Payments.V1;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Http.Resilience;
 using Payments.Application;
 using Payments.Application.Provider;
 using Payments.Domain.Orders;
@@ -39,14 +41,19 @@ public sealed class HttpPaymentProviderTests : IClassFixture<HttpPaymentProvider
             // Loopback, not every interface, which a workstation firewall stops to ask about.
             Server = WireMockServer.Start(new WireMockServerSettings { Urls = ["http://127.0.0.1:0"] });
             Factory = new PaymentsApiFactory(UnreachableSql, UnreachableRabbit, Server.Urls[0] + "/");
+            Patient = new PatientFactory(Server.Urls[0] + "/");
         }
 
         public WireMockServer Server { get; }
 
         public PaymentsApiFactory Factory { get; }
 
+        /// <summary>A second host over the same server, built only when a test first reads its services.</summary>
+        public PaymentsApiFactory Patient { get; }
+
         public void Dispose()
         {
+            Patient.Dispose();
             Factory.Dispose();
             Server.Stop();
         }
@@ -54,11 +61,13 @@ public sealed class HttpPaymentProviderTests : IClassFixture<HttpPaymentProvider
 
     private readonly WireMockServer _server;
     private readonly PaymentsApiFactory _factory;
+    private readonly PaymentsApiFactory _patient;
 
     public HttpPaymentProviderTests(ProviderHost host)
     {
         _server = host.Server;
         _factory = host.Factory;
+        _patient = host.Patient;
 
         // Each test starts from the simulator's files alone: no stub another
         // test added, and no request it made.
@@ -78,6 +87,22 @@ public sealed class HttpPaymentProviderTests : IClassFixture<HttpPaymentProvider
         ProviderHost own = new();
         own.Server.ReadStaticMappings(SimulatorMappings.Directory());
         return own;
+    }
+
+    /// <summary>A host whose provider times out no attempt, since a timed-out attempt is retried and counted.</summary>
+    private sealed class PatientFactory(string providerBaseUrl)
+        : PaymentsApiFactory(UnreachableSql, UnreachableRabbit, providerBaseUrl)
+    {
+        protected override void ConfigureWebHost(IWebHostBuilder builder)
+        {
+            base.ConfigureWebHost(builder);
+
+            // The generator, as Timeout is range-checked: Polly applies no timeout for a non-positive span,
+            // and the total still bounds the call.
+            builder.ConfigureTestServices(services =>
+                services.PostConfigureAll<HttpStandardResilienceOptions>(options =>
+                    options.AttemptTimeout.TimeoutGenerator = _ => ValueTask.FromResult(Timeout.InfiniteTimeSpan)));
+        }
     }
 
     private static AuthorisationRequest Authorisation(decimal amount, OrderId? order = null) =>
@@ -339,10 +364,11 @@ public sealed class HttpPaymentProviderTests : IClassFixture<HttpPaymentProvider
         _server.Given(Request.Create().WithPath("/v1/authorisations/*/void").UsingPost())
             .AtPriority(0)
             .RespondWith(Response.Create().WithStatusCode(status).WithBody(body));
-        using UnavailableCount counted = CountUnavailable();
+        using UnavailableCount counted = CountUnavailable(_patient);
 
         await Should.ThrowAsync<PaymentProviderUnavailableException>(() =>
-            Provider().VoidAsync(new VoidRequest(OrderId.New(), "psp_ref"), TestContext.Current.CancellationToken));
+            Provider(_patient)
+                .VoidAsync(new VoidRequest(OrderId.New(), "psp_ref"), TestContext.Current.CancellationToken));
 
         counted.Value.ShouldBe(1, "one attempt, answered with something that is not a void");
     }
