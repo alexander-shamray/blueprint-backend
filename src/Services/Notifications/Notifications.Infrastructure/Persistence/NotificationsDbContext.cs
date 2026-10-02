@@ -1,6 +1,7 @@
 using Common.Infrastructure.Idempotency;
 using Common.Infrastructure.Inbox;
 using Microsoft.EntityFrameworkCore;
+using Notifications.Application.Records;
 
 namespace Notifications.Infrastructure.Persistence;
 
@@ -10,6 +11,9 @@ namespace Notifications.Infrastructure.Persistence;
 /// </summary>
 public sealed class NotificationsDbContext(DbContextOptions<NotificationsDbContext> options) : DbContext(options)
 {
+    /// <summary>§3.2's record of every notice owed, and the one table here that is the service's own.</summary>
+    public DbSet<Notification> NotificationLog => Set<Notification>();
+
     /// <summary>§9.5's inbox, declared so this context states its whole model.</summary>
     public DbSet<InboxMessage> InboxMessages => Set<InboxMessage>();
 
