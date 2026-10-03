@@ -1545,7 +1545,7 @@ git commit -m "feat(bff): Web.Bff.Migrator applies AddOrderProjection, proved ov
 
 **Interfaces:**
 - Produces: `Web.Bff.BffPersistence.AddBffPersistence(IServiceCollection,
-  IConfiguration)` and `BffPersistence.ConnectionName` (`"Bff"`); an
+  IConfiguration)`, reading the literal key `"Bff"`; an
   `IDbConnectionFactory` singleton over the runtime key; `InboxTable("bff")`,
   `RetentionPolicy`, the hosted `RetentionPurgeService` with no outbox and no
   marker half; the health check `sql`, tagged `ready`.
@@ -1754,17 +1754,15 @@ namespace Web.Bff;
 /// <summary>ADR-051's schema as this host reaches it: context, connection port, purge and readiness.</summary>
 public static class BffPersistence
 {
-    /// <summary>§7.1's runtime key; the migrator reads its own.</summary>
-    public const string ConnectionName = "Bff";
-
     public static IServiceCollection AddBffPersistence(this IServiceCollection services, IConfiguration configuration)
     {
         // Eager, so a host with no database does not start; an empty environment variable counts as none.
-        string? connectionString = configuration.GetConnectionString(ConnectionName);
+        // A literal key, as every service spells it, because smoke.sh holds the chart to the key it greps (§15.3).
+        string? connectionString = configuration.GetConnectionString("Bff");
         if (string.IsNullOrWhiteSpace(connectionString))
         {
             throw new InvalidOperationException(
-                $"ConnectionStrings:{ConnectionName} is not configured. The buyer's order read is a projection " +
+                "ConnectionStrings:Bff is not configured. The buyer's order read is a projection " +
                 "this host owns (ADR-051), and it cannot be written or read without its database (§7.1).");
         }
 
