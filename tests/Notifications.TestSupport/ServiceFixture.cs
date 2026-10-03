@@ -245,7 +245,7 @@ public sealed class ServiceFixture()
     }
 
     /// <summary>Keycloak answering one user with a status: a refusal, an outage, or, at 404, no such user.</summary>
-    /// <remarks>A 404 carries the admin API's own error body, which is what the adapter reads as no such user.</remarks>
+    /// <remarks>A 404 carries the admin API's own error body, which ADR-052 reads as no such customer.</remarks>
     public void ContactAnswers(Guid customer, int status)
     {
         IResponseBuilder response = Response.Create().WithStatusCode(status);
