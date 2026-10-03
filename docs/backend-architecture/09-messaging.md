@@ -203,7 +203,10 @@ rather than the breaking-change paragraph below.
 **Breaking changes** — removing a field, renaming, changing a type, changing
 semantics — require a new version. The publisher then emits both V1 and V2 for a
 deprecation window, consumers migrate independently, and V1 is retired once
-telemetry confirms no consumer remains on it.
+telemetry confirms no consumer remains on it. The first three fail the build:
+[§12.6](12-test-strategy.md)'s recorded shape holds every versioned contract
+to the members it was recorded with, and a change of semantics stays a
+review's.
 
 There is no shortcut here. A "just this once" breaking change to a live contract
 means a coordinated deploy, and coordinated deploys are the thing this
