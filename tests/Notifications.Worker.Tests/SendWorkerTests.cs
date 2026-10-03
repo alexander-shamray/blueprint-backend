@@ -369,6 +369,8 @@ public sealed class SendWorkerTests(ServiceFixture fixture) : IAsyncLifetime
         crashed.Status.ShouldBe(NotificationStatus.Pending);
         crashed.SendStartedAt.ShouldNotBeNull("the intent precedes the send, so the row says it may be out");
 
+        // The contact now picks another language, so a fresh render would differ from the stamped one.
+        await fixture.StageContactAsync(customer, Mailbox, "kk", TimeSpan.FromMinutes(1));
         await fixture.ClearBackoffAsync(owed.NotificationId);
         (await fixture.RunSendPassAsync()).ShouldBe(new SendPass(1, 1));
 
@@ -376,10 +378,15 @@ public sealed class SendWorkerTests(ServiceFixture fixture) : IAsyncLifetime
         delivered.Select(m => m.MessageId.Trim('<', '>')).Distinct().ShouldHaveSingleItem()
             .ShouldBe($"{owed.EventId:N}.{TemplateKeys.OrderConfirmed}@commerce.test");
         delivered.Select(m => m.Subject).Distinct().ShouldHaveSingleItem("a resend renders the stamped text");
+        (await Task.WhenAll(delivered.Select(m => fixture.Relay.HeadersAsync(m.Id, Ct))))
+            .Select(h => h["Content-Language"].Single()).Distinct()
+            .ShouldHaveSingleItem("a resend keeps the stamped language")
+            .ShouldBe("en");
 
         Notification sent = await fixture.NotificationAsync(owed.NotificationId);
         sent.Status.ShouldBe(NotificationStatus.Sent);
         sent.SendStartedAt.ShouldBe(crashed.SendStartedAt, "a second start keeps the first stamp");
+        sent.Languages.ShouldBe("en", "the stamp outlives the contact's new locale");
         resent.Value.ShouldBe(1);
     }
 
