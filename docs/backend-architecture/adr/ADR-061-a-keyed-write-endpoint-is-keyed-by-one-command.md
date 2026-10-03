@@ -19,10 +19,12 @@ reaches. That list exists to catch exactly that command, and nothing else
 tells a reviewer the declaration is wrong.
 **Consequences.** An endpoint that really dispatches two idempotent commands
 cannot say so. It becomes two endpoints, or one command that does both, each
-keyed once. None exists today: the five hosts' endpoint tables pass the rule
+keyed once. None exists today: every host's endpoint table passes the rule
 unchanged. The rule reads types, not behaviour, so a single declaration of the
-wrong command, with nothing bound, still passes, as it did under ADR-058; a
-declaration is a claim there, as `RetrySafe` is.
+wrong command, with nothing bound, passes it. The command the endpoint really
+sends is then named as one no endpoint reaches, unless another endpoint
+reaches it or it is not an idempotent command at all, where nothing names it;
+a declaration is a claim there, as `RetrySafe` is.
 
 ---
 
