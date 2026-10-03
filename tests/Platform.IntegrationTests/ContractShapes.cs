@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Reflection;
 using System.Text.Encodings.Web;
 using System.Text.Json;
@@ -112,16 +113,25 @@ internal static class ContractShapes
         if (!type.IsGenericType)
             return type.FullName + mark;
 
-        string name = type.GetGenericTypeDefinition().FullName!;
         Type[] arguments = type.GetGenericArguments();
+        List<string> parts = [];
+        int taken = 0;
 
-        string rendered = string.Join(
-            ", ",
-            arguments.Select((argument, i) => Render(argument, nullability.GenericTypeArguments[i])));
+        // Each nested part takes its own arity's arguments, so Outer<T>.Inner and Outer.Inner<T> differ.
+        foreach (string part in type.GetGenericTypeDefinition().FullName!.Split('+'))
+        {
+            string[] split = part.Split('`');
+            int arity = split.Length > 1 ? int.Parse(split[1], CultureInfo.InvariantCulture) : 0;
 
-        // Each part loses only its arity, so a type nested in a generic keeps its own name.
-        string bare = string.Join('+', name.Split('+').Select(part => part.Split('`')[0]));
+            string[] own =
+            [
+                .. Enumerable.Range(taken, arity).Select(i => Render(arguments[i], nullability.GenericTypeArguments[i]))
+            ];
 
-        return $"{bare}<{rendered}>{mark}";
+            taken += arity;
+            parts.Add(arity > 0 ? $"{split[0]}<{string.Join(", ", own)}>" : split[0]);
+        }
+
+        return string.Join('+', parts) + mark;
     }
 }

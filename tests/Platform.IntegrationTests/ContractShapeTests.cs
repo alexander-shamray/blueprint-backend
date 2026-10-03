@@ -61,7 +61,9 @@ public class ContractShapeTests
                 ["Pair"] = "System.Collections.Generic.KeyValuePair<System.String, System.Int32>?",
                 ["Labels"] = "required System.Collections.Generic.IReadOnlyList<System.String?>",
                 ["Map"] = "required System.Collections.Generic.Dictionary<System.String, System.Int32[]>",
-                ["Keys"] = "required System.Collections.Generic.Dictionary+KeyCollection<System.String, System.Int32>"
+                ["Keys"] = "required System.Collections.Generic.Dictionary<System.String, System.Int32>+KeyCollection",
+                ["OuterGeneric"] = "Platform.IntegrationTests.ContractShapeTests+Outer<System.Int32>+Inner?",
+                ["InnerGeneric"] = "Platform.IntegrationTests.ContractShapeTests+Outer+Inner<System.Int32>?"
             },
             ignoreOrder: true);
     }
@@ -129,5 +131,23 @@ public class ContractShapeTests
         public required Dictionary<string, int[]> Map { get; init; }
 
         public required Dictionary<string, int>.KeyCollection Keys { get; init; }
+
+        public Outer<int>.Inner? OuterGeneric { get; init; }
+
+        public Outer.Inner<int>? InnerGeneric { get; init; }
+    }
+
+    public sealed class Outer<T>
+    {
+        public sealed class Inner
+        {
+        }
+    }
+
+    public sealed class Outer
+    {
+        public sealed class Inner<T>
+        {
+        }
     }
 }
