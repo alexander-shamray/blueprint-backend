@@ -1,7 +1,6 @@
 {{- /* §7.4's migration hook, for ADR-007's reasons, and idempotent, so a
 config-only deploy runs it again safely (§15.1). A chart that owns no database
-carries no `migrate-job.yaml`, and smoke.sh asserts that agrees with its
-`image.migrator`. */}}
+carries no `migrate-job.yaml`. */}}
 {{- define "commerce.migrationJob" -}}
 {{- /* Required rather than an `if`: only a chart that owns a database includes
 this template, and an opt-out here would roll application pods against an
