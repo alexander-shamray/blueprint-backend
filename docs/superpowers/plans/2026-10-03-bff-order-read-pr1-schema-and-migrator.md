@@ -11,7 +11,7 @@ readiness check, refuses to start without `ConnectionStrings:Bff`, and drops
 `ownsNoReadinessDependencies`. `RetentionPurgeService` takes its idempotency
 half as optional, both or neither. The suite gains a `ServiceFixture` under
 the name `Bff`; Compose gains the migrator pair; CI builds the
-`web-bff-migrator` image; the chart turns on its database and its migration
+`bff-migrator` image; the chart turns on its database and its migration
 Job, because a chart that deploys this host without a database deploys a pod
 that does not start; and the chapters ADR-051 lists as describing a BFF with
 no schema are amended where this PR makes them false.
@@ -1510,7 +1510,7 @@ the collection starts. Docker must be running; without it they fail on
 - [ ] **Step 7: The image builds**
 
 ```bash
-docker build -f src/BFF/Web.Bff.Migrator/Dockerfile -t web-bff-migrator:local .
+docker build -f src/BFF/Web.Bff.Migrator/Dockerfile -t bff-migrator:local .
 ```
 
 Expected: a successful build. A NETSDK1004 names a project the restore block
@@ -2130,7 +2130,7 @@ In `ci.yml`'s `images` matrix, after the `web-bff` entry:
 
 ```yaml
           - filter: bff
-            image: web-bff-migrator
+            image: bff-migrator
             dockerfile: src/BFF/Web.Bff.Migrator/Dockerfile
 ```
 
@@ -2151,7 +2151,7 @@ Expected: both pass.
 
 ```bash
 git add .github/workflows/ci.yml
-git commit -m "ci: the images job builds web-bff-migrator"
+git commit -m "ci: the images job builds bff-migrator"
 ```
 
 ---
@@ -2196,7 +2196,7 @@ image:
   # ADR-051's projection schema, applied by the pre-upgrade hook (§7.4) before
   # any pod of this tag starts; smoke.sh asserts the key and
   # templates/migrate-job.yaml agree.
-  migrator: web-bff-migrator
+  migrator: bff-migrator
   tag: ""
   pullPolicy: IfNotPresent
 ```
