@@ -10,8 +10,8 @@ using Xunit;
 namespace Notifications.Application.Tests;
 
 /// <summary>
-/// Each of §3.2's seven handlers maps its contract to the command and nothing else: the intake tests build commands by
-/// hand, so a handler reading the wrong member, of which three are Guids, would pass every one of them.
+/// Each of §3.2's seven handlers maps its contract to the command and nothing else: commands built by hand would
+/// pass a handler that read the wrong member, of which three are Guids.
 /// </summary>
 public class IntakeMappingTests
 {
@@ -219,7 +219,8 @@ public class IntakeMappingTests
         // §3.2's seven, one each: a handler added without a key, or a key with none, fails here.
         Type[] handlers =
         [
-            .. typeof(OrderPlacedHandler).Assembly.GetTypes()
+            .. typeof(OrderPlacedHandler).Assembly
+                .GetTypes()
                 .Where(t => t.GetInterfaces().Any(i =>
                     i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IIntegrationEventHandler<>)))
         ];
