@@ -52,6 +52,7 @@ public static class ObservabilityExtensions
                 .AddMeter("Payments.Outbox")                       // §13.6 per-lane
                 .AddMeter("Shipping.Outbound")                     // §3.2's carrier, and the address read
                 .AddMeter("Shipping.Outbox")                       // §13.6 per-lane
+                .AddMeter("Notifications.Outbound")                // Notifications' outbound calls (§3.2)
 
                 // Shared names, not service-prefixed: the service.name resource attribute separates them.
                 .AddMeter("Commerce.Requests")                     // §13.3, §13.7
