@@ -1080,7 +1080,7 @@ In `tests/Common.TestSupport/ServiceFixture.cs`, beside the other protected
 members:
 
 ```csharp
-    /// <summary>False while <c>definitions.json</c> grants the account nothing, so the harness widens no grant.</summary>
+    /// <summary>False while <c>definitions.json</c> grants the account nothing, so no grant is widened.</summary>
     protected virtual bool BrokerAccountGranted => true;
 ```
 
