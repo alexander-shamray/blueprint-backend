@@ -2972,11 +2972,12 @@ Under *A broker credential*, the opening sentence becomes:
 ```
 
 the rest of the paragraph unchanged. In the local-development table, the
-RabbitMQ cell becomes:
-
-```markdown
-| RabbitMQ | `<name>-svc` / `local-dev-<name>` for every account `definitions.json` declares — `catalog-svc` / `local-dev-catalog`, and the BFF's `bff-svc` / `local-dev-bff` |
-```
+RabbitMQ cell gains the BFF's pair after the pairs it already lists, in the
+form those pairs take, with `bff` as the name: the account `bff-svc` and the
+password `local-dev-<name>` derives, which is the one `ServiceFixture`
+derives (`ServiceFixture.cs:181`) and `definitions.json`'s hash encodes.
+This plan names the derivation rather than printing the value, because the
+secret scan reads `docs/superpowers/` too.
 
 The password reaches the broker by `definitions.json`'s import, so it has no
 `${…}` seam, and the paragraph below that table already says why.
