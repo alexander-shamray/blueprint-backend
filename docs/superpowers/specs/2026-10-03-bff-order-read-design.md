@@ -224,8 +224,11 @@ object; the detail route adds members to it.
 - **`cancellable`** is true exactly when `status` is `placed` or
   `confirmed`, `Order.Cancel`'s rule read from a projection that lags it —
   §10.7's hint and not an authority.
-- **`total`** is null and **`lines`** empty only for an owned row no placed
-  or confirmed event has reached (section 1).
+- **`total`** is null and **`lines`** empty for an owned row no placed or
+  confirmed event has reached (section 1), and for one whose currency could
+  not be stored: the handler drops the currency and the total together, as
+  section 5's constraint pairs them, and a line's amount then has no currency
+  to carry.
 - **`lineTotal`** is quantity times unit price, computed by the server.
 - **`asOf`** is the row's last write by the BFF's clock, per order.
 
