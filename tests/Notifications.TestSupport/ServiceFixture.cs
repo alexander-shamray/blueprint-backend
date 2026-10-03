@@ -116,15 +116,6 @@ public sealed class ServiceFixture()
         return (row[1], row[2], row[3]);
     }
 
-    /// <summary>The messages waiting in one queue, or zero when the broker has never declared it.</summary>
-    public async Task<int> QueueDepthAsync(string queue)
-    {
-        string[]? row = (await BrokerRowsAsync(["list_queues", "name", "messages"]))
-            .SingleOrDefault(columns => columns.Length == 2 && columns[0] == queue);
-
-        return row is null ? 0 : int.Parse(row[1], System.Globalization.CultureInfo.InvariantCulture);
-    }
-
     /// <summary>Polls to <see cref="StepDeadline"/> and throws when it lapses.</summary>
     public static async Task WaitUntilAsync(Func<Task<bool>> predicate)
     {
