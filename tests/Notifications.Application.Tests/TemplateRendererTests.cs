@@ -1,5 +1,6 @@
 using System.Globalization;
 using Common.Contracts.Ordering.V1;
+using Notifications.Application.Records;
 using Notifications.Application.Rendering;
 using Shouldly;
 using Xunit;
@@ -171,6 +172,18 @@ public class TemplateRendererTests
             .ShouldBe(["The language set is empty; ADR-053 makes it a set of at least one."]);
         TemplateRenderer.Refusals(TemplateSet.Embedded, ["en", "en"], "UTC")
             .ShouldBe(["The language set names 'en' twice."]);
+    }
+
+    [Fact]
+    public void A_language_set_too_long_for_the_row_s_languages_column_is_refused()
+    {
+        string[] languages = ["en", "kk", "ru", "de", "fr", "es", "it", "pt", "nl", "pl", "tr", "uk"];
+
+        TemplateRenderer.Refusals(TemplateSet.Embedded, languages, "UTC").ShouldContain(
+            $"The language set joins to 35 characters, past the {NotificationLimits.MaxLanguagesLength} "
+            + "a notification's Languages column holds.");
+        TemplateRenderer.Refusals(TemplateSet.Embedded, languages[..11], "UTC").ShouldAllBe(
+            refusal => !refusal.StartsWith("The language set joins", StringComparison.Ordinal));
     }
 
     [Fact]
