@@ -8,7 +8,7 @@ using Shapes = System.Collections.Generic.Dictionary<
 
 namespace Platform.IntegrationTests;
 
-/// <summary>The public shape of each contract, keyed by type and member, and what counts as breaking it (§9.2).</summary>
+/// <summary>Each contract's public members as declarations, and which changes break a consumer (§9.2).</summary>
 internal static class ContractShapes
 {
     internal const string FileName = "contract-shapes.json";
@@ -61,7 +61,7 @@ internal static class ContractShapes
     }
 
     /// <summary>Every difference a consumer built against <paramref name="recorded"/> can fail on.</summary>
-    /// <remarks>A rename reads as a member gone; a new required member fails every payload staged before it (§9.2).</remarks>
+    /// <remarks>A rename reads as a member gone; a new required member fails an older payload (§9.2).</remarks>
     internal static string[] Breaks(Shapes recorded, Shapes live)
     {
         List<string> breaks = [];
@@ -91,12 +91,15 @@ internal static class ContractShapes
     }
 
     /// <summary>Sorted ordinally, so the file is the same text whatever order reflection returns.</summary>
-    internal static string Serialise(Shapes shapes) =>
-        JsonSerializer.Serialize(
-            new SortedDictionary<string, SortedDictionary<string, string>>(
-                shapes.ToDictionary(t => t.Key, t => new SortedDictionary<string, string>(t.Value, StringComparer.Ordinal)),
-                StringComparer.Ordinal),
-            Written) + "\n";
+    internal static string Serialise(Shapes shapes)
+    {
+        SortedDictionary<string, SortedDictionary<string, string>> sorted = new(StringComparer.Ordinal);
+
+        foreach ((string type, Dictionary<string, string> members) in shapes)
+            sorted[type] = new SortedDictionary<string, string>(members, StringComparer.Ordinal);
+
+        return JsonSerializer.Serialize(sorted, Written) + "\n";
+    }
 
     private static string Render(Type type, NullabilityInfo nullability)
     {
