@@ -94,7 +94,7 @@ public class RealmClientTests
     /// <summary>The second client ADR-052 mints, and the reader of Ordering's address.</summary>
     private const string WorkerClient = "shipping-worker";
 
-    /// <summary>The third, and the reader of a customer's mailbox from the realm itself (ADR-052).</summary>
+    /// <summary>ADR-052's contact reader, which reads a customer's mailbox from the realm itself.</summary>
     private const string ContactClient = "notifications-worker";
 
     [Fact]
