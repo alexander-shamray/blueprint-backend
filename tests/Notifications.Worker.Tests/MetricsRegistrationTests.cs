@@ -67,6 +67,7 @@ public class MetricsRegistrationTests
         registered.ShouldContain(typeof(RequestMetrics));
         registered.ShouldContain(typeof(MailMetrics));
         registered.ShouldContain(typeof(ContactMetrics));
+        registered.ShouldContain(typeof(NotificationMetrics));
     }
 
     [Fact]

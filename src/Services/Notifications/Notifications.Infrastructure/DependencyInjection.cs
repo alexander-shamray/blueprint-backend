@@ -96,6 +96,13 @@ public static class DependencyInjection
             .ValidateOnStart();
         services.AddSingleton<IValidateOptions<DeliveryOptions>, DeliveryOptionsValidator>();
 
+        // The send worker's instruments, a singleton so one meter holds one set (§13.6).
+        services.AddSingleton<NotificationMetrics>();
+
+        // The send pass; the generic overload, so a suite can remove it by its ImplementationType (§12.4).
+        services.AddScoped<SendClaims>();
+        services.AddHostedService<SendWorker>();
+
         // The one retention service §9.5 asks for, registered last so it is stopped first.
         services.AddHostedService<RetentionPurgeService>();
 

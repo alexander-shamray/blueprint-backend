@@ -14,12 +14,14 @@ public sealed class MetricsInitialiser : IHostedService
         MessagingMetrics messaging,
         RequestMetrics requests,
         MailMetrics mail,
-        ContactMetrics contact)
+        ContactMetrics contact,
+        NotificationMetrics notifications)
     {
         ArgumentNullException.ThrowIfNull(messaging);
         ArgumentNullException.ThrowIfNull(requests);
         ArgumentNullException.ThrowIfNull(mail);
         ArgumentNullException.ThrowIfNull(contact);
+        ArgumentNullException.ThrowIfNull(notifications);
     }
 
     // `cancellationToken`, not `ct`: CA1725 matches the interface's parameter name, and ADR-019 makes it an error.

@@ -9,6 +9,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Notifications.Application.Contacts;
 using Notifications.Application.Records;
 using Notifications.Application.Rendering;
+using Notifications.Infrastructure.Delivery;
 using WireMock.RequestBuilders;
 using WireMock.ResponseBuilders;
 using WireMock.Server;
@@ -351,6 +352,36 @@ public sealed class ServiceFixture()
             "WHERE NotificationId = {0};",
             notificationId,
             (int)age.TotalSeconds);
+
+    /// <summary>Runs exactly one send pass on the fixture's host, with no timers and no waiting.</summary>
+    public Task<SendPass> RunSendPassAsync() =>
+        Factory.Services.GetRequiredService<SendWorker>().RunOnceAsync(TestContext.Current.CancellationToken);
+
+    /// <summary>Waits for the engine's clock to reach the order's pending rows, stamped by the host's.</summary>
+    public Task WaitUntilDueAsync(Guid order) =>
+        WaitUntilAsync(async () => await ScalarAsync<int>(
+            "SELECT Value = COUNT(*) FROM notifications.NotificationLog WHERE OrderId = {0} " +
+            "AND Status = 'Pending' AND NextAttemptAt > SYSDATETIMEOFFSET()",
+            order) == 0);
+
+    /// <summary>Runs passes, each pending row made due first, until none is pending or a bound is hit.</summary>
+    public async Task SendUntilSettledAsync(int maxPasses = 10)
+    {
+        const string Pending = "SELECT Value = COUNT(*) FROM notifications.NotificationLog WHERE Status = 'Pending'";
+
+        for (int pass = 0; pass < maxPasses; pass++)
+        {
+            if (await ScalarAsync<int>(Pending) == 0)
+                return;
+
+            await ExecuteAsync(
+                "UPDATE notifications.NotificationLog SET NextAttemptAt = DATEADD(second, -1, SYSDATETIMEOFFSET()) " +
+                "WHERE Status = 'Pending';");
+            await RunSendPassAsync();
+        }
+
+        throw new TimeoutException($"A notice was still pending after {maxPasses} passes.");
+    }
 
     /// <summary>Seeds the failed passes a notice has had, through the column the backoff writes.</summary>
     public Task SetAttemptsAsync(Guid notificationId, int attempts) =>
