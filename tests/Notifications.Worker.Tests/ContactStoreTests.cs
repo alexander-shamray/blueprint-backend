@@ -85,7 +85,7 @@ public sealed class ContactStoreTests(ServiceFixture fixture) : IAsyncLifetime
     [Fact]
     public async Task A_mailbox_carrying_a_line_break_is_stored_as_it_arrived()
     {
-        // The mail channel refuses it as no mailbox (spec, section 8); a store that cleaned it would hide that.
+        // The mail channel refuses it as no mailbox (MailRefusal.NotAMailbox); a store that cleaned it would hide that.
         Guid customer = Guid.CreateVersion7();
         ContactLookup.Found broken = new("aigerim@example.test\r\nbcc: someone@example.test", null);
 
