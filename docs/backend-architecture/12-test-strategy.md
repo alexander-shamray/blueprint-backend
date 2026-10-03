@@ -2543,9 +2543,9 @@ retired at the end of its deprecation window.
 
 **Three things it does not hold.** A change of meaning stays a review's, as §9.2
 says. The values of the static vocabularies beside the records — `CancelReasons`
-and its kin — are constants rather than members, so a changed code passes it.
-And the BFF's HTTP contract is not a `Common.Contracts` type, so it is out of
-this suite's reach by construction.
+and its kin — are static classes, which the discovery does not reach, so a
+changed code passes it. And the BFF's HTTP contract is not a `Common.Contracts`
+type, so it is out of this suite's reach by construction.
 
 ### Consumer-driven contracts
 
