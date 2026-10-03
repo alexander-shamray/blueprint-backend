@@ -1446,9 +1446,7 @@ for chart in $SERVICE_CHARTS; do
         test "$(count 'app.kubernetes.io/track: stable' "$OUT/$chart-canary.yaml")" -eq 0
 
     # Helm refuses to touch an object another release owns (§15.3), so every
-    # name the canary release emits has to differ from the stable one's. On a
-    # chart with no Service, Ingress or HPA the budget is the live case; the rest
-    # stay in the loop, because what a canary must not own holds on every chart.
+    # name the canary release emits has to differ from the stable one's.
     for kind in Service Ingress HorizontalPodAutoscaler PodDisruptionBudget; do
         check "$chart: the canary renders no $kind" \
             test "$(count "^kind: $kind\$" "$OUT/$chart-canary.yaml")" -eq 0
