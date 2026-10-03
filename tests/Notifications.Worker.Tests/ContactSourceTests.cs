@@ -59,7 +59,7 @@ public sealed class ContactSourceTests : IClassFixture<ContactSourceTests.Keyclo
 
     /// <summary>A host whose contact hop times out no attempt, so a cold first read cannot fill the breaker.</summary>
     /// <remarks>The generator, as <c>Timeout</c> is range-checked; the total still bounds every read (§9.7).</remarks>
-    public sealed class PatientFactory(string contactSourceBaseUrl)
+    public class PatientFactory(string contactSourceBaseUrl)
         : NotificationsWorkerFactory(Unreachable.Sql, Unreachable.Rabbit, contactSourceBaseUrl: contactSourceBaseUrl)
     {
         protected override void ConfigureWebHost(IWebHostBuilder builder)
