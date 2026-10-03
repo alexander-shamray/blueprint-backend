@@ -349,8 +349,9 @@ public sealed class PriceChangedCacheInvalidator(HybridCache cache)
 Every endpoint a write verb reaches is one of two things, and the build fails
 on one that is neither or both
 ([ADR-058](adr/ADR-058-a-write-endpoint-is-keyed-or-declares-why-a-repeat-is-harmless.md)).
-It is **keyed** — it dispatches a command carrying a client-generated
-`CommandId`, and the key is claimed atomically before any work happens — or it
+It is **keyed** — it dispatches one command carrying a client-generated
+`CommandId`, and the key is claimed atomically before any work happens
+([ADR-061](adr/ADR-061-a-keyed-write-endpoint-is-keyed-by-one-command.md)) — or it
 **declares why a repeat is harmless**: `RetrySafety.Convergent`, where the same
 request repeated leaves the state the first one left, or
 `RetrySafety.ReadOnly`, where the endpoint writes nothing. What a key buys is

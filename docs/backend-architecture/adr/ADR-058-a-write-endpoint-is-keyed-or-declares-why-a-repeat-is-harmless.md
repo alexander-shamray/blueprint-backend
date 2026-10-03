@@ -78,6 +78,13 @@ the gate compares with the endpoints. `Common.TestSupport` gains a reference to
 `Common.TestSupport` for the gate: the BFF's, and `Common.Web.Tests`, which
 holds the gate's own.
 
+**Amended by
+[ADR-061](ADR-061-a-keyed-write-endpoint-is-keyed-by-one-command.md)**,
+which refuses an endpoint keyed by two different commands. The decision's
+clause that a keyed endpoint dispatches an `IIdempotentCommand` stands as
+written because it was true when it was written, and the record that made the
+gate refuse a second is ADR-061.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)

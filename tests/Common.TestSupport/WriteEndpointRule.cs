@@ -46,6 +46,13 @@ public static class WriteEndpointRule
             if (!AcceptsAWrite(endpoint))
                 continue;
 
+            if (commands.Length > 1)
+            {
+                offenders.Add(
+                    $"{name} is keyed by {keyedBy}: a keyed endpoint dispatches one command, so it binds that " +
+                    "command or declares it, and a second names a command it does not send (§8.5)");
+            }
+
             if (commands.Length == 0 && kinds.Length == 0)
             {
                 offenders.Add(
