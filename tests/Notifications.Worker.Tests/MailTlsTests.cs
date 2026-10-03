@@ -52,7 +52,7 @@ public sealed class MailTlsTests(MailpitFixture fixture) : IAsyncLifetime
         using NotificationsWorkerFactory factory = StartTls(Mailpit.CertificateName, fixture.SelfSigned.Port);
         using WebApplicationFactory<Program> production =
             factory.WithWebHostBuilder(b => b.UseEnvironment("Production"));
-        using MailCount counted = MailCounter.Unavailable(production.Services);
+        using OutboundCount counted = OutboundCounter.Unavailable(production.Services);
 
         MailUnavailableException thrown = await Should.ThrowAsync<MailUnavailableException>(() =>
             production.Services.GetRequiredService<IMailChannel>().SendAsync(Mail(), ct));
@@ -109,7 +109,7 @@ public sealed class MailTlsTests(MailpitFixture fixture) : IAsyncLifetime
             mailHost: "127.0.0.1",
             mailPort: stalled.Port,
             mailSecurity: "StartTls");
-        using MailCount counted = MailCounter.Unavailable(development.Services);
+        using OutboundCount counted = OutboundCounter.Unavailable(development.Services);
 
         MailUnavailableException thrown = await Should.ThrowAsync<MailUnavailableException>(() => development.Services
             .GetRequiredService<IMailChannel>()
