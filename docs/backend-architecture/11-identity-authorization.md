@@ -809,7 +809,7 @@ public static class OrderEndpoints
                     {
                         return Results.ValidationProblem(new Dictionary<string, string[]>
                         {
-                            ["reason"] = [$"Unknown cancellation reason '{request.Reason}'."]
+                            [nameof(request.Reason)] = ["Not a known cancellation reason."]
                         });
                     }
 
