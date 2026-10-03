@@ -34,8 +34,7 @@ spec:
   template:
     metadata:
       labels:
-        {{/* Not `commerce.labels`, which the Service selects on: this pod has no
-        HTTP listener and must not be an endpoint of the service it migrates. */}}
+        {{/* Not `commerce.labels`, for the reason `commerce.migrationPodLabels` gives. */}}
         {{- include "commerce.migrationPodLabels" . | nindent 8 }}
     spec:
       restartPolicy: Never
