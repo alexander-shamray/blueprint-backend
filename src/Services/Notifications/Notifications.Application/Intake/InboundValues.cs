@@ -1,10 +1,11 @@
+using System.Globalization;
 using Notifications.Application.Records;
 
 namespace Notifications.Application.Intake;
 
 /// <summary>Checks each value another service wrote before it is stored, and drops one unsafe to render.</summary>
 /// <remarks>
-/// A kept value is bounded and holds no control, line-separator or bidirectional-formatting character; a dropped one
+/// A kept value is bounded and holds no control, format, line-separator or broken character; a dropped one
 /// is absent, never a fault, since a throw would carry another service's bytes to <c>_error</c> (§9.8).
 /// </remarks>
 public static class InboundValues
@@ -23,16 +24,12 @@ public static class InboundValues
 
         for (int i = 0; i < value.Length; i++)
         {
-            char c = value[i];
-
-            if (char.IsHighSurrogate(c) && i + 1 < value.Length && char.IsLowSurrogate(value[i + 1]))
-            {
-                i++;
-                continue;
-            }
-
-            if (char.IsSurrogate(c) || char.IsControl(c) || IsLineBreaking(c) || IsBidiFormatting(c))
+            // Read per code point, so a pair is one character and a lone half reads as Surrogate.
+            if (IsInvisibleOrBroken(CharUnicodeInfo.GetUnicodeCategory(value, i)))
                 return null;
+
+            if (char.IsHighSurrogate(value[i]))
+                i++;
         }
 
         return value;
@@ -57,12 +54,9 @@ public static class InboundValues
     public static string? Currency(string? value) =>
         value is { Length: 3 } && value.All(char.IsAsciiLetterUpper) ? value : null;
 
-    // U+2028 and U+2029, which break a line wherever a renderer honours them.
-    private static bool IsLineBreaking(char c) => c is (char)0x2028 or (char)0x2029;
-
-    // Marks, embeddings, overrides and isolates: each changes the order text displays in without being visible.
-    private static bool IsBidiFormatting(char c) =>
-        c is (char)0x061C or (char)0x200E or (char)0x200F
-            or (>= (char)0x202A and <= (char)0x202E)
-            or (>= (char)0x2066 and <= (char)0x2069);
+    // Format holds the bidirectional marks, overrides and isolates as well as the zero-width characters: each changes
+    // what a customer reads, or what they copy, without being seen.
+    private static bool IsInvisibleOrBroken(UnicodeCategory category) =>
+        category is UnicodeCategory.Control or UnicodeCategory.Format or UnicodeCategory.LineSeparator
+            or UnicodeCategory.ParagraphSeparator or UnicodeCategory.Surrogate;
 }
