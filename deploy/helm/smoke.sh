@@ -1238,12 +1238,12 @@ for bad in Release_1 release_1 release..1 release.-1 -release release-; do
         fail "image.tag=$bad renders — Kubernetes would refuse the Job it names"
     else
         check "image.tag=$bad fails the render" \
-            grep -q 'not usable as Kubernetes metadata' "$OUT/badtag.txt"
+            grep -q 'which is not a DNS-1123 label' "$OUT/badtag.txt"
     fi
 done
 # Aimed at a chart with no migrator, where a message naming its Job would be false.
 refuses 'the tag-shape message holds on a chart with no migrator' \
-    'migration Job.s name where there is one' $GATEWAY_OVERLAY --set-string 'image.tag=Release_1'
+    'migration Job.s name needs where there is one' $GATEWAY_OVERLAY --set-string 'image.tag=Release_1'
 
 for good in 1.2.3 0000000000000000000000000000000000000000 v1-2-3; do
     check "image.tag=$good still renders" \
