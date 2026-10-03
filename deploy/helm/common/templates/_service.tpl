@@ -1,25 +1,7 @@
-{{- /*
-A ClusterIP Service, rendered only where something dials this workload by name.
-
-`service.enabled: false` is what Shipping and Notifications will set (§15.3):
-they consume from the broker and expose no API, so their only listener is the
-health endpoint §13.5 requires — and the probes reach a container port
-directly, without a Service in front of it. Telemetry is pushed to the
-collector rather than scraped (§13.2), so nothing else wants a stable name for
-those pods either.
-
-The key is `false` rather than absent on purpose, and the callout in §15.3 is
-about this exact line: a worker's safety comes from having no route, so the
-absence of a route is the thing to assert. A missing key looks the same whether
-it was considered or forgotten.
-*/}}
-{{- /*
-The canary release renders none of this, and that is the mechanism rather than
-an optimisation. §15.5 splits traffic by having BOTH tracks answer to the ONE
-Service the stable release owns; a second Service of the same name is an
-ownership failure at install time, and a second Service of a different name
-would be a second front door nothing dials.
-*/}}
+{{- /* Rendered only where something dials this workload by name, and never on
+the canary release: §15.5 splits traffic by both tracks answering to the one
+Service the stable release owns. A worker writes `service.enabled: false`
+rather than omitting it (§15.3). */}}
 {{- define "commerce.service" -}}
 {{- if and .Values.service.enabled (not .Values.canary.enabled) -}}
 apiVersion: v1
@@ -33,12 +15,9 @@ spec:
   selector:
     {{- include "commerce.selectorLabels" . | nindent 4 }}
   ports:
-    {{- /*
-    The Service port is the container port, not a remapping. Callers dial
-    `http://catalog-api:8080/` (§10.2's route file) and `http://catalog-api:8081`
-    (PricingHop), and both numbers are literals in source — so a Service that
-    renumbered its front door would be a 502 nothing in this chart could see.
-    */}}
+    {{- /* The Service port is the container port, not a remapping: callers dial
+    both ports as literals in source (§10.2, §9.7), so a renumbered Service would
+    fail in a way nothing in this chart could see. */}}
     {{- range .Values.ports }}
     - name: {{ .name }}
       port: {{ .containerPort }}

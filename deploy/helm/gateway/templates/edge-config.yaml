@@ -1,37 +1,29 @@
-{{/*
-The two keys only Gateway.Api reads, which §15.4 marks gateway only, in a
+{{/* The two keys only Gateway.Api reads, which §15.4 marks gateway only, in a
 ConfigMap this chart renders itself. Each flag's list is conditionally
 required (§15.4): off is valid, and on but unconfigured is refused at render.
 The data is a named template so the pod-template checksum can hash it. Its
-name and metadata must match the `extraConfigMaps` suffix the mount uses.
-*/}}
+name and metadata must match the `extraConfigMaps` suffix the mount uses. */}}
 {{- define "gateway.edge" -}}
 Ingress__Enabled: {{ .Values.ingress.enabled | quote }}
 {{- if .Values.ingress.enabled }}
-{{- /*
-Indexed keys, because .NET binds an array from `Ingress__TrustedNetworks__0`
+{{- /* Indexed keys, because .NET binds an array from `Ingress__TrustedNetworks__0`
 upward (§15.4). An empty list renders no keys, and Program.cs's
 GetRequiredSection then throws at startup naming a key no operator set, so the
-render names the chart value instead.
-*/}}
+render names the chart value instead. */}}
 {{- if not .Values.ingress.trustedNetworks }}
 {{- fail "ingress.trustedNetworks must hold at least one CIDR when ingress.enabled: the gateway reads Ingress:TrustedNetworks through GetRequiredSection, and without it the rate limiter partitions every anonymous caller into one bucket — a global cap wearing a per-client limit's name (§10.3, §15.3)." }}
 {{- end }}
 {{- range $i, $cidr := .Values.ingress.trustedNetworks }}
-{{- /*
-Blank counts as missing, and the emptiness check above does not see it: a
+{{- /* Blank counts as missing, and the emptiness check above does not see it: a
 list holding `" "` is truthy, and IPNetwork.Parse throws on the blank value at
-startup, after the rollout has begun.
-*/}}
+startup, after the rollout has begun. */}}
 {{- $n := trim $cidr }}
 {{- if not $n }}
 {{- fail (printf "ingress.trustedNetworks[%d] is blank. IPNetwork.Parse throws on it at startup, so the pod dies after the rollout begins rather than before it (§15.4)." $i) }}
 {{- end }}
-{{- /*
-The shape, since `not-a-network` is not blank and IPNetwork.Parse throws on
+{{- /* The shape, since `not-a-network` is not blank and IPNetwork.Parse throws on
 it at startup too. IPv4 only: an IPv6 CIDR is refused rather than
-half-checked, as an IPv6 origin is below.
-*/}}
+half-checked, as an IPv6 origin is below. */}}
 {{- if not (regexMatch "^[0-9]{1,3}(\\.[0-9]{1,3}){3}/[0-9]{1,2}$" $n) }}
 {{- fail (printf "ingress.trustedNetworks[%d] is not an IPv4 CIDR. IPNetwork.Parse throws on it at startup, after the rollout has begun (§15.4). IPv6 is refused here rather than half-checked." $i) }}
 {{- end }}
@@ -44,13 +36,11 @@ half-checked, as an IPv6 origin is below.
 {{- if gt (atoi $octet) 255 }}
 {{- fail (printf "ingress.trustedNetworks[%d] has an octet above 255." $i) }}
 {{- end }}
-{{- /*
-The spelling, which is the security half: on .NET 10
+{{- /* The spelling, which is the security half: on .NET 10
 `IPNetwork.Parse("010.0.0.0/8")` reads the leading zero as octal and returns
 `8.0.0.0/8`, so the gateway would trust a different network from the one
 written, silently. Comparing the text with the integer printed back is the
-whole test, as it is for the port below.
-*/}}
+whole test, as it is for the port below. */}}
 {{- if ne $octet (printf "%d" (atoi $octet)) }}
 {{- fail (printf "ingress.trustedNetworks[%d] spells an octet non-canonically (%q). IPNetwork.Parse reads a leading zero as OCTAL — 010.0.0.0/8 parses to 8.0.0.0/8, measured — so the gateway would trust a different network from the one written, silently (§10.3, §15.3)." $i $octet) }}
 {{- end }}
@@ -65,26 +55,20 @@ Cors__Enabled: {{ .Values.cors.enabled | quote }}
 {{- fail "cors.origins must hold at least one origin when cors.enabled: Program.cs refuses to start on an empty or blank entry, because WithOrigins([]) yields a policy matching nothing while the host reports healthy (§15.4)." }}
 {{- end }}
 {{- range $i, $origin := .Values.cors.origins }}
-{{- /*
-Blank, then the shape: Program.cs refuses both at startup, after the release
-has begun rolling, so the render refuses them first.
-*/}}
+{{- /* Blank, then the shape: Program.cs refuses both at startup, after the release
+has begun rolling, so the render refuses them first. */}}
 {{- if not (trim $origin) }}
 {{- fail (printf "cors.origins[%d] is blank. Program.cs refuses a blank entry at startup, after the rollout has begun (§15.4)." $i) }}
 {{- end }}
-{{- /*
-Program.cs's rule (§4.2) is built on one equality with
+{{- /* Program.cs's rule (§4.2) is built on one equality with
 `GetLeftPart(UriPartial.Authority)`, which a template cannot compute, so the
-checks below approximate it.
-*/}}
+checks below approximate it. */}}
 {{- $o := trim $origin }}
-{{- /*
-The scheme, a host of letters, digits, dots, hyphens and underscores, then
+{{- /* The scheme, a host of letters, digits, dots, hyphens and underscores, then
 optionally a numeric port, which leaves out userinfo, a path, a query, a
 fragment, a wildcard and an IPv6 literal, though the host accepts the last.
 Not Program.cs's rule: an empty label or an all-digit host, for two, renders
-and is refused at startup.
-*/}}
+and is refused at startup. */}}
 {{- if not (regexMatch "^https?://[\\p{L}\\p{N}\\p{M}._-]+(:[0-9]+)?$" $o) }}
 {{- fail (printf "cors.origins[%d] is not a browser origin this chart will accept: a scheme, a host of letters, digits, dots, hyphens and underscores, and optionally a numeric port. Userinfo, a path, a query, a fragment, a wildcard and a non-numeric port are refused here rather than at startup, and an IPv6 literal is refused outright (§4.2). The value is deliberately not echoed (§13.4)." $i) }}
 {{- end }}
@@ -95,11 +79,9 @@ and is refused at startup.
 {{- if or (lt $n 1) (gt $n 65535) }}
 {{- fail (printf "cors.origins[%d] names a port outside 1-65535." $i) }}
 {{- end }}
-{{- /*
-The spelling, not only the number: `GetLeftPart(UriPartial.Authority)`
+{{- /* The spelling, not only the number: `GetLeftPart(UriPartial.Authority)`
 renders `:08080` as `:8080`, so the host refuses it at startup. Comparing the
-digits with the integer printed back catches every non-canonical spelling.
-*/}}
+digits with the integer printed back catches every non-canonical spelling. */}}
 {{- if ne $digits (printf "%d" $n) }}
 {{- fail (printf "cors.origins[%d] spells its port non-canonically (leading zeros). The gateway refuses at startup an origin that is not its canonical form, which drops them (§4.2)." $i) }}
 {{- end }}
@@ -107,20 +89,16 @@ digits with the integer printed back catches every non-canonical spelling.
 {{- fail (printf "cors.origins[%d] names the scheme's default port. The gateway refuses at startup an origin that is not its canonical form, which omits it (§4.2)." $i) }}
 {{- end }}
 {{- end }}
-{{- /*
-Case, which the shape test above does not see. The gateway refuses at
+{{- /* Case, which the shape test above does not see. The gateway refuses at
 startup an origin that differs from `GetLeftPart(UriPartial.Authority)`,
 which lowercases scheme and host, so `https://SPA.example` would render a
 release that never starts. Everything in an origin canonicalises down, so
-the whole string must already equal its lowercase form.
-*/}}
+the whole string must already equal its lowercase form. */}}
 {{- if ne $o (lower $o) }}
 {{- fail (printf "cors.origins[%d] is not lowercase. The gateway refuses at startup an origin that is not its canonical form, which lowercases scheme and host (§4.2)." $i) }}
 {{- end }}
-{{- /*
-The trimmed value, not the original: the host compares the exact text at
-startup, so emitting `$origin` would ship a string the checks above never saw.
-*/}}
+{{- /* The trimmed value, not the original: the host compares the exact text at
+startup, so emitting `$origin` would ship a string the checks above never saw. */}}
 Cors__Origins__{{ $i }}: {{ $o | quote }}
 {{- end }}
 {{- end }}
