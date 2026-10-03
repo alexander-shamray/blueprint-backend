@@ -74,9 +74,7 @@ spec:
         {{- end }}
       containers:
         - name: {{ include "commerce.name" . }}
-          {{- /* Both halves required, like the tag: either one cleared renders a
-          valid string, an invalid image reference and a Deployment that never
-          pulls. */}}
+          {{- /* Both halves required, like the tag. */}}
           image: "{{ include "commerce.require" (list .Values.image.registry "image.registry is required: cleared, the image reference has no host and the Deployment never pulls (§15.3).") }}/{{ include "commerce.require" (list .Values.image.api "image.api is required: cleared, the image reference names no repository (§15.3).") }}:{{ include "commerce.tag" . }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           securityContext:
