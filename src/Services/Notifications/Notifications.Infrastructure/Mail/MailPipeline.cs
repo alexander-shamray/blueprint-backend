@@ -13,8 +13,17 @@ namespace Notifications.Infrastructure.Mail;
 /// </remarks>
 internal sealed class MailPipeline
 {
-    public MailPipeline(MailMetrics metrics) =>
-        Pipeline = new ResiliencePipelineBuilder()
+    private readonly TimeProvider _clock;
+    private readonly CircuitBreakerStateProvider _state = new();
+
+    // UTC ticks until which the breaker's break runs, or zero before a break is recorded.
+    private long _parkedUntil;
+
+    public MailPipeline(MailMetrics metrics, TimeProvider clock)
+    {
+        _clock = clock;
+
+        Pipeline = new ResiliencePipelineBuilder { TimeProvider = clock }
             .AddTimeout(MailHop.TotalTimeout)
             .AddRetry(new RetryStrategyOptions
             {
@@ -37,7 +46,17 @@ internal sealed class MailPipeline
                 FailureRatio = MailHop.CircuitBreakerFailureRatio,
                 MinimumThroughput = MailHop.CircuitBreakerMinimumThroughput,
                 SamplingDuration = MailHop.CircuitBreakerSamplingDuration,
-                BreakDuration = MailHop.CircuitBreakerBreakDuration
+                BreakDuration = MailHop.CircuitBreakerBreakDuration,
+                StateProvider = _state,
+
+                // The break's end, which the send worker parks its claim until; the state alone never lapses.
+                OnOpened = args =>
+                {
+                    Interlocked.Exchange(ref _parkedUntil, (clock.GetUtcNow() + args.BreakDuration).UtcTicks);
+                    return ValueTask.CompletedTask;
+                },
+                OnHalfOpened = _ => Unpark(),
+                OnClosed = _ => Unpark()
             })
             .AddTimeout(new TimeoutStrategyOptions
             {
@@ -51,6 +70,29 @@ internal sealed class MailPipeline
                 }
             })
             .Build();
+    }
 
     public ResiliencePipeline Pipeline { get; }
+
+    /// <summary>When the open breaker's break ends, or null while none is recorded.</summary>
+    public DateTimeOffset? ParkedUntil
+    {
+        get
+        {
+            long ticks = Interlocked.Read(ref _parkedUntil);
+
+            return ticks == 0 ? null : new DateTimeOffset(ticks, TimeSpan.Zero);
+        }
+    }
+
+    /// <summary>Open until its break passes; then a pass claims, and its first send is the probe (§9.7).</summary>
+    public bool IsOpen =>
+        (_state.CircuitState is CircuitState.Open or CircuitState.Isolated)
+        && (ParkedUntil is not { } until || _clock.GetUtcNow() < until);
+
+    private ValueTask Unpark()
+    {
+        Interlocked.Exchange(ref _parkedUntil, 0);
+        return ValueTask.CompletedTask;
+    }
 }

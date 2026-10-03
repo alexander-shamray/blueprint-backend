@@ -175,6 +175,7 @@ public sealed class MailOptionsTests
         ServiceCollection services = new();
         services.AddSingleton(configuration);
         services.AddMetrics();
+        services.AddSingleton(TimeProvider.System);
         services.AddMailChannel(configuration, new TestEnvironment { EnvironmentName = environment });
 
         return services;
