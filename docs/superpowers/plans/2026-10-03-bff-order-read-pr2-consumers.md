@@ -3089,12 +3089,11 @@ PR of the sequence closes.
 - **Spec section 11.** Container-free: the map, the rank. Over SQL: each
   handler, redelivery, the pairs, the disagreeing customer, the gauge. Over
   SQL and RabbitMQ: registration, binding, the grant, an order's events
-  through the queue. **Deviation, stated:** section 11 says the events are
-  "published to the real exchange"; under `bff-svc` a publish is refused by
-  the grant the binding test measures, and widening it in the harness would
-  measure a grant nothing deploys. So they are sent to the queue, which runs
-  the same endpoint, filter and handlers, and the binding test proves the
-  exchange-to-queue half.
+  through the queue, as section 11 says: under `bff-svc` a publish is
+  refused by the grant the binding test measures, and widening it in the
+  harness would measure a grant nothing deploys. So they are sent to the
+  queue, which runs the same endpoint, filter and handlers, and the binding
+  test proves the exchange-to-queue half.
 - **Spec section 12, the rows taken by 2.** §2.2, §3.2, §12.1, §14.1's broker
   key, §14.2's broker reference, ADR-036's callout, `Web.Bff.csproj`'s
   sentence (Tasks 6, 9). `docs/secrets.md`'s rows (Task 9).

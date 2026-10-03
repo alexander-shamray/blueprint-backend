@@ -42,20 +42,21 @@ stdlib Python 3.12 for the output gate and its suite.
 **Spec:** `docs/superpowers/specs/2026-10-03-bff-order-read-design.md`,
 sections 1 (*The rebuild, and what it reads*), 3 (the rebuild tool, its suite
 and its procedure), 4 (PR-4's row, and that it follows PR-2), 8 (the tool's
-five steps and the window), 11 (the rebuild's testing line) and 12 (§10.7's
+six steps and the window), 11 (the rebuild's testing line) and 12 (§10.7's
 sentence and ADR-051's callout, both PR-4's).
 
-**Departures from the spec, each argued where it lands:**
+**Four spec decisions with consequences in the tree, each argued where it
+lands:**
 
 1. **The procedure is `tools/bff-replay/README.md`, not a file under
-   `docs/runbooks/`.** That directory is one runbook per alert, both ways:
+   `docs/runbooks/`** (spec section 8). That directory is one runbook per alert, both ways:
    `deploy/observability/check.py` fails a runbook no alert names, and its
    `NOT_A_RUNBOOK` admits `README.md` alone (`check.py:67-69`,
    `docs/runbooks/README.md`'s first line). PR-4 adds no alert, so a runbook
    here would fail the gate; the procedure sits beside its tool, as
    `tools/new-service/README.md` does, and PR-5's runbook for the
    unattributed-order rule points at it (*Interfaces for PR-5*).
-2. **The output gate walks `tools/`.** A `.csproj` under `tools/` that
+2. **The output gate walks `tools/`** (spec sections 4 and 8). A `.csproj` under `tools/` that
    `Platform.slnx` lists fails it twice — the subject reconciliation reports
    the listed project as one "the walk over src/ or tests/ did not find"
    (`output_gate.py:123-130`), and `ThisRepository` fails any solution entry
@@ -66,17 +67,16 @@ sentence and ADR-051's callout, both PR-4's).
    nothing — and that reason is gone. So the gate, its suite, its README,
    `ci.yml`'s byte-identical step and §4.1's two sentences name the third
    tree.
-3. **`--reset` keeps `bff.Products`.** Section 8 says it deletes "the BFF's
-   projection rows". A product's name is published once, usually long before
+3. **`--reset` keeps `bff.Products`** (spec section 8, step 3). A product's
+   name is published once, usually long before
    any outbox window, so deleting the table loses every name Catalog's
    window no longer holds, permanently, and the history then reads
    `productName: null` for products that had one. The upsert guards on
    `OccurredAt`, so a replayed `ProductPublished` over a kept row is harmless.
    The README says how to clear the table when it is the table that is wrong.
-4. **A preflight between section 8's steps 1 and 2.** As written, the reset
-   precedes the first step that can fail on an unreachable source. The tool
-   opens and probes all four outboxes and waits for the broker to answer
-   before it deletes anything.
+4. **The preflight is section 8's step 2**, before the reset in step 3: the
+   tool opens and probes all four outboxes and waits for the broker to
+   answer before it deletes anything.
 
 **Not run before it was written.** Every anchor quoted below was read from
 the tree at `cc453404`, and PR-1's and PR-2's names from their plans. The
@@ -94,7 +94,7 @@ not carried.
   Why each, since the row is paths only. **A**: the BFF's one suite, which
   gains the tool's tests, the fixture's two members and the publishers'
   outbox harness. **D**: the tool and its README; the output gate, its suite
-  and README, and the CI step that names the same trees (departure 2); §4.1's
+  and README, and the CI step that names the same trees (decision 2); §4.1's
   tree entry and two sentences; §10.7's sentence and ADR-051's callout (spec,
   section 12); the repo map's and `CLAUDE.md`'s trees, each one line per
   entry and each false without it. **E**: `Platform.slnx` and the tool's
@@ -323,7 +323,7 @@ git add .github/output-gate .github/workflows/ci.yml docs/backend-architecture/0
 git commit -m "chore(output-gate): walk tools/, which now holds a project the solution builds"
 ```
 
-The body argues departure 2: the tool is listed in the solution so that the
+The body argues decision 2: the tool is listed in the solution so that the
 format check and this gate reach it, and the gate's stated reason for
 omitting `tools/` — a scaffold that restores nothing — no longer describes
 the directory.
@@ -1646,8 +1646,8 @@ git add tools/bff-replay tests/Web.Bff.Tests/BffServiceFixture.cs tests/Web.Bff.
 git commit -m "feat(tools): bff-replay resets, replays to bff-order-events alone and reports the window each publisher reached"
 ```
 
-The body states departures 3 and 4 — `bff.Products` kept, and the preflight
-— and why each.
+The body states decisions 3 and 4 — `bff.Products` kept, and the preflight
+— and why each (spec section 8).
 
 ---
 
@@ -1787,7 +1787,7 @@ git add tools/bff-replay/README.md
 git commit -m "docs(tools): bff-replay's README, the rebuild's procedure, window and grant"
 ```
 
-The body states departure 1: `docs/runbooks/` pairs each runbook with an
+The body states decision 1 (spec section 8): `docs/runbooks/` pairs each runbook with an
 alert both ways and this PR adds none, so the procedure sits beside its tool
 as the scaffold's does, and PR-5's runbook points at it.
 
@@ -1936,7 +1936,7 @@ git diff --name-only origin/main...HEAD
 
 and run `main`'s `locality_gate.py --map classes.yml` over the drafted body
 and that list, in the input shape `.github/workflows/locality-gate.yml`
-gives it. The body names the four departures and carries a bare `Refs #425`;
+gives it. The body names the four decisions and carries a bare `Refs #425`;
 it closes the issue this PR was filed under, and not #425, which the last
 pull request of the sequence closes.
 
@@ -1971,25 +1971,26 @@ pull request of the sequence closes.
   first section and the callout; neither sentence rewritten — Task 7 Steps 1
   and 2 add and edit nothing above them.
 - **Spec, section 3:** the tool under `tools/`, its suite (the BFF's) and its
-  procedure — Tasks 3 to 6; the procedure is a README, departure 1.
+  procedure — Tasks 3 to 6; the procedure is a README, decision 1.
 - **Spec, section 4:** PR-4's row — the tool, the suite, the procedure,
   §10.7's sentence and ADR-051's callout; strictly after PR-2, whose queue
   name, account and handlers Task 1 verifies and Task 4's tests hold the tool
   to.
 - **Spec, section 8, step by step:** 1, six connections from the
   environment, refused with any missing — `ReplaySettings.FromEnvironment`
-  and Task 3's tests, every missing key named; 2, `--reset` in one
+  and Task 3's tests, every missing key named; 2, every connection opened
+  and each outbox and the broker probed before anything is deleted —
+  decision 4, and the fourth and fifth tests; 3, `--reset` in one
   transaction, the projection's order rows and the queue's inbox rows, and
   without it a repair the inbox makes partial — `ProjectionReset` and
-  Task 5's second and third tests; `bff.Products` kept, departure 3; 3, each
+  Task 5's second and third tests; `bff.Products` kept, decision 3; 4, each
   publisher's processed `Broker`-lane rows of the eight, oldest first —
   `OutboxRows.ReadSql`, and the first test's unprocessed row and its two
-  types outside the eight never sent; 4, to `queue:bff-order-events` alone,
+  types outside the eight never sent; 5, to `queue:bff-order-events` alone,
   never the exchange, with `MessageId`, `CorrelationId` and `OccurredAt` —
-  the `Send`, the account's grant, and the skipped queue left empty; 5, a
+  the `Send`, the account's grant, and the skipped queue left empty; 6, a
   count per type and the oldest `OccurredAt` per publisher —
-  `ReplayReport.Describe` and the type lines, asserted in the first test. A
-  preflight between 1 and 2, departure 4, and the fourth and fifth tests.
+  `ReplayReport.Describe` and the type lines, asserted in the first test.
   The references are `Common.Infrastructure` (with `Common.Contracts`) and
   `Web.Bff.Persistence` for the schema's name, and no service.
 - **Spec, section 8, the window paragraph:** the README opens with it, says
