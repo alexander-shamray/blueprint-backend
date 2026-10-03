@@ -20,8 +20,9 @@ wording moves.
 **Consequences.** The `detail` text changes, and a client that matched on it
 breaks. That is the risk RFC 9457 already assigns to parsing `detail`, and
 §10.5's `code` is unchanged and remains the field to switch on. A later path
-that raises this exception has to keep the wording true; a test pins that
-the `detail` claims no loss, not the sentence as a whole.
+that raises this exception has to keep the wording true, and nothing checks
+that for it: a test pins only that the `detail` says it cannot be returned and
+not that it is no longer available.
 
 ---
 
