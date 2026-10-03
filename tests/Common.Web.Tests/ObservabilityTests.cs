@@ -33,6 +33,7 @@ public class ObservabilityTests
         "Payments.Outbox",
         "Shipping.Outbound",
         "Shipping.Outbox",
+        "Notifications.Outbound",
         "Commerce.Requests",
         "Commerce.Messaging",
         "MassTransit",
