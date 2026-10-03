@@ -218,6 +218,9 @@ public class NotificationIntakeTests
         public Task<bool> ExistsAsync(Guid eventId, string templateKey, CancellationToken ct) =>
             Task.FromResult(Added.Exists(n => n.EventId == eventId && n.TemplateKey == templateKey));
 
+        public Task<Notification?> GetAsync(Guid notificationId, CancellationToken ct) =>
+            Task.FromResult(Added.Find(n => n.NotificationId == notificationId));
+
         public void Add(Notification notification) => Added.Add(notification);
     }
 
