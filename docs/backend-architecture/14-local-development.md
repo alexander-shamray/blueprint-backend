@@ -317,6 +317,8 @@ docker compose -f deploy/compose/docker-compose.yml up -d --wait
 | Keycloak | http://localhost:8080 (admin/admin) |
 | RabbitMQ management | http://localhost:15672 — **no login ships**; see below |
 | Grafana | http://localhost:3000 |
+| Mail sink (Mailpit) | http://localhost:8025 — every message the stack sends; no login |
+| Mail relay (SMTP) | `localhost:1025` — plain and unauthenticated, Development's alone |
 
 > **Every published port binds `127.0.0.1`, not `0.0.0.0`.** The credentials
 > in the table above are development defaults on purpose, which makes the
@@ -342,7 +344,8 @@ every port and credential of the seven infrastructure services, beside the
 file it describes. The table above is the finished platform's surface, and its
 Gateway row arrived with the gateway's image
 ([Appendix C](appendix-c-delivery-plan.md), PR-17); the Keycloak, RabbitMQ and
-Grafana rows have been true since PR-06.
+Grafana rows have been true since PR-06. The two mail rows arrived with
+Notifications' relay.
 
 The gateway's own block takes no `depends_on` on a service it routes to except
 the ones that exist — Compose rejects a dependency it cannot see, and one
@@ -365,6 +368,21 @@ routes to services that may not exist, where the BFF *calls* one that does
 (§9.7). Its hop is over `catalog-api:8081` — a second, HTTP/2-only Kestrel
 endpoint, because a cleartext port cannot serve HTTP/1.1 and h2c at once — and
 that port is published to no host and reached by no route.
+
+**Notifications' relay is a sink, and both its ports bind loopback alone.**
+Mailpit runs in Notifications' own unit beside the worker that submits to it,
+which reaches it as `mailpit:1025` on the Compose network. Its SMTP port and
+its web UI and HTTP API are published on `127.0.0.1:1025` and
+`127.0.0.1:8025`, the endpoint table's two rows: the UI because it shows
+every message the stack has sent to whoever reaches the port, and SMTP so a
+worker run on the host under the override below has a relay, at
+`Mail__Host` `localhost`. The relay's local defaults are `Mail__Host`
+`mailpit`, `Mail__Port` `1025` and `Mail__Security` `None`, with no
+`Mail__UserName` and no `Mail__Password`: the sink takes unauthenticated
+submission, and plain, unauthenticated submission is Development's alone —
+the host refuses either anywhere else ([§15.4](15-cicd-deployment.md)). The
+image's tag is the unit file's, and the suite starts the same one, so the
+sink a person watches is the sink the tests read.
 
 The collector's mounted configuration is the smallest correct pipeline —
 OTLP in on both protocols, a batch processor, OTLP out to the LGTM

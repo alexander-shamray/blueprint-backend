@@ -1263,6 +1263,12 @@ namespace read access.
 | `Jurisdiction__AddressRetention` | Config | Helm `jurisdiction.addressRetention` → ConfigMap | ✓ — **Shipping only**; ADR-053's statutory window for a delivery address, and the host refuses to start without it |
 | `Jurisdiction__TrackingRetention` | Config | Helm `jurisdiction.trackingRetention` → ConfigMap | ✓ — **Shipping only**; ADR-053's statutory window for a shipment's tracking events, and the host refuses to start without it |
 | `Fulfilment__GiveUpAge` | Config | Helm `fulfilment.giveUpAge` → ConfigMap, defaulted in the chart | ✓ — **Shipping only**; [ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)'s give-up age for a pending shipment, and [ADR-054](adr/ADR-054-a-shipment-stops-waiting-on-its-carrier-at-an-age.md)'s for an unanswered cancellation; the host refuses to start without it |
+| `Mail__Host` | Config | ConfigMap | ✓ — **Notifications only**; the relay's host name, and the host refuses to start without it |
+| `Mail__Port` | Config | ConfigMap | ✓ — **Notifications only**; the relay's submission port |
+| `Mail__From` | Config | ConfigMap | ✓ — **Notifications only**; the one sender every message carries, and the domain each `Message-ID` is minted under |
+| `Mail__Security` | Config | ConfigMap | ✓ — **Notifications only**; `StartTls` or `None`, and `None` refuses to start outside Development |
+| `Mail__UserName` | Config | ConfigMap | ✓ **outside Development** — **Notifications only**; set with the password or not at all |
+| `Mail__Password` | Secret | External Secrets | ✓ **outside Development** — **Notifications only**; the relay's credential, and absent in Compose, where the sink takes unauthenticated submission |
 
 | Kind | Source | Example |
 |---|---|---|
@@ -1296,7 +1302,8 @@ services
 ```
 
 **Every options type in the solution had to earn it.**
-`Identity:Client` holds a secret that differs per environment, `Jurisdiction`
+`Identity:Client` holds a secret that differs per environment, `Mail` holds
+Notifications' relay and its credential on the same terms, `Jurisdiction`
 holds the statutory windows
 [ADR-053](adr/ADR-053-a-jurisdiction-is-a-value-the-deployment-is-given.md)
 makes values a deployment is given, and `Fulfilment` holds the give-up age

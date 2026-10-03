@@ -2902,10 +2902,11 @@ configuration-validation test at startup.
 1. **Timeout.** One to two seconds per attempt, per the table above; never
    infinite. Where in that band is decided by the arithmetic below, not by
    taste — the attempts plus their backoff have to fit the client total. A
-   third party sits outside the band, and `ProviderHop` and `CarrierHop` are
-   each sized to theirs: a third party's latency is not a peer's, and neither
-   call has a waiting caller — the provider's fits the saga's payment wait
-   (§9.6), and the carrier's a worker's leased row.
+   third party sits outside the band, and `ProviderHop`, `CarrierHop` and
+   `MailHop` are each sized to theirs: a third party's latency is not a
+   peer's, and none of the three calls has a waiting caller — the provider's
+   fits the saga's payment wait (§9.6), and the carrier's and the relay's a
+   worker's leased row.
 2. **Circuit breaker.** After a threshold of failures, fail fast rather than
    queueing threads against a dead service.
 3. **A fallback.** Cached data, a degraded response, or a clear error — decided
@@ -2933,16 +2934,16 @@ pricing hop; Shipping's worker registers the address read
 [ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)
 gives it, off every request path. The outbound clients of the other kind call
 third parties — Payments' `ProviderHop`, behind the anti-corruption layer §3.1
-gives Payments, and Shipping's `CarrierHop`, to the carrier — and each is
-registered by the service that makes the call. `PricingHop`,
-beside the BFF's registration, names the client and Catalog's address once:
-`http`, not `https`,
-because TLS terminates at the ingress and traffic inside the cluster is plain
-(§10.1); the host is the Service name YARP also routes to (§10.2); and a
-second, HTTP/2-only port rather than the REST one, because a cleartext Kestrel
-endpoint cannot serve HTTP/1.1 and h2c at once, which Catalog's own
-`appsettings.json` argues. The configuration satisfies the table rather than
-merely gesturing at it, and the budget is worked out including the waiting:
+gives Payments, Shipping's `CarrierHop`, to the carrier, and Notifications'
+`MailHop`, to its relay — and each is registered by the service that makes the
+call. `PricingHop`, beside the BFF's registration, names the client and
+Catalog's address once: `http`, not `https`, because TLS terminates at the
+ingress and traffic inside the cluster is plain (§10.1); the host is the Service
+name YARP also routes to (§10.2); and a second, HTTP/2-only port rather than the
+REST one, because a cleartext Kestrel endpoint cannot serve HTTP/1.1 and h2c at
+once, which Catalog's own `appsettings.json` argues. The configuration satisfies
+the table rather than merely gesturing at it, and the budget is worked out
+including the waiting:
 
 ```csharp
 // The client is NAMED, and the name is load-bearing rather than tidy:
