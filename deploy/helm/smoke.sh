@@ -1090,6 +1090,9 @@ refuses 'a whitespace-only OTLP endpoint fails the render' 'observability.otlpEn
     $GATEWAY_OVERLAY --set-string 'observability.otlpEndpoint=   '
 refuses 'a whitespace-only workload name fails the render' 'workload.name is required' \
     $GATEWAY_OVERLAY --set-string 'workload.name= '
+# Aimed at a chart with no Service, where a message naming one would be false.
+refuses_chart shipping 'the workload-name message holds on a chart with no Service' \
+    'the Service included where there is one' --set-string 'workload.name= '
 
 # --------------------------------------------------------------------------
 section 'Non-blank is not an address either'
@@ -1206,6 +1209,9 @@ for bad in Release_1 release_1 release..1 release.-1 -release release-; do
             grep -q 'not usable as Kubernetes metadata' "$OUT/badtag.txt"
     fi
 done
+# Aimed at a chart with no migrator, where a message naming its Job would be false.
+refuses 'the tag-shape message holds on a chart with no migrator' \
+    'migration Job.s name where there is one' $GATEWAY_OVERLAY --set-string 'image.tag=Release_1'
 
 for good in 1.2.3 0000000000000000000000000000000000000000 v1-2-3; do
     check "image.tag=$good still renders" \
