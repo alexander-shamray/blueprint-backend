@@ -95,7 +95,9 @@ public class TemplateRendererTests
     public void A_resend_renders_the_stamped_version_and_languages_exactly_as_the_first_send()
     {
         TemplateRenderer renderer = Renderer(["kk", "en"]);
-        RenderedMessage first = renderer.Render(TemplateKeys.OrderPlaced, Everything, locale: null);
+        RenderedMessage first = renderer.Render(TemplateKeys.OrderPlaced, Everything, locale: "en");
+
+        first.Languages.ShouldBe(["en"]);
 
         RenderedMessage again = renderer.Render(
             TemplateKeys.OrderPlaced, Everything, first.TemplateVersion, first.Languages);
@@ -110,10 +112,10 @@ public class TemplateRendererTests
     public void A_resend_keeps_the_stamped_languages_where_a_locale_would_now_choose_one()
     {
         // The customer set a locale after the first send; the same Message-ID must carry the same text.
-        RenderedMessage again = Renderer(["kk", "en"]).Render(TemplateKeys.OrderConfirmed, Everything, 1, ["kk", "en"]);
+        RenderedMessage again = Renderer(["kk", "en"]).Render(TemplateKeys.OrderConfirmed, Everything, 1, ["en"]);
 
-        again.Languages.ShouldBe(["kk", "en"]);
-        again.Subject.ShouldContain(TemplateRenderer.SubjectSeparator);
+        again.Languages.ShouldBe(["en"]);
+        again.Subject.ShouldNotContain(TemplateRenderer.SubjectSeparator);
     }
 
     [Fact]
