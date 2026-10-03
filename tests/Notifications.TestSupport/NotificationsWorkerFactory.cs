@@ -5,9 +5,11 @@ using Common.Web;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
+using Notifications.Infrastructure.Jurisdiction;
 using Notifications.Infrastructure.Mail;
 using ContactRegistration = Notifications.Infrastructure.Contacts.DependencyInjection;
 
@@ -23,11 +25,31 @@ public class NotificationsWorkerFactory(
     string? mailUserName = null,
     string? mailPassword = null,
     string mailFrom = NotificationsWorkerFactory.LocalFrom,
-    string contactSourceBaseUrl = NotificationsWorkerFactory.UnreachableContactSource)
+    string contactSourceBaseUrl = NotificationsWorkerFactory.UnreachableContactSource,
+    IReadOnlyList<string>? languages = null,
+    string timeZone = NotificationsWorkerFactory.InventedTimeZone,
+    string logRetention = NotificationsWorkerFactory.InventedLogRetention,
+    string contactRetention = NotificationsWorkerFactory.InventedContactRetention,
+    string orderRetention = NotificationsWorkerFactory.InventedOrderRetention)
     : WebApplicationFactory<Program>
 {
     /// <summary>The authority every host must name (§11.3); <c>.invalid</c> never resolves.</summary>
     public const string UnreachableAuthority = "https://identity.invalid/realms/test";
+
+    /// <summary>ADR-053 rule 2's made-up language set, Kazakh first so a test reads the set's own order.</summary>
+    public static readonly IReadOnlyList<string> InventedLanguages = ["kk", "en"];
+
+    /// <summary>Thirteen and three-quarter hours ahead in October, so a date shows its side of midnight.</summary>
+    public const string InventedTimeZone = "Pacific/Chatham";
+
+    /// <summary>A window no deployment would choose, so a test passing under it read its configuration.</summary>
+    public const string InventedLogRetention = "1013.00:00:00";
+
+    /// <inheritdoc cref="InventedLogRetention"/>
+    public const string InventedContactRetention = "17.00:00:00";
+
+    /// <inheritdoc cref="InventedLogRetention"/>
+    public const string InventedOrderRetention = "71.00:00:00";
 
     /// <summary>The relay a host names when a test gives none; <c>.invalid</c> never resolves.</summary>
     public const string UnreachableRelay = "relay.invalid";
@@ -70,6 +92,18 @@ public class NotificationsWorkerFactory(
             .UseSetting($"{ServiceIdentityOptions.SectionName}:ClientId", "notifications-worker-test")
             .UseSetting($"{ServiceIdentityOptions.SectionName}:ClientSecret", "not-a-real-secret")
             .UseSetting($"{ServiceIdentityOptions.SectionName}:Scope", ContactScope)
+            .UseSetting($"{NotificationsJurisdictionOptions.SectionName}:TimeZone", timeZone)
+            .UseSetting($"{NotificationsJurisdictionOptions.SectionName}:LogRetention", logRetention)
+            .UseSetting($"{NotificationsJurisdictionOptions.SectionName}:ContactRetention", contactRetention)
+            .UseSetting($"{NotificationsJurisdictionOptions.SectionName}:OrderRetention", orderRetention)
+            // A list binds by index, and an empty one sets no key at all, which is the refusal a test asks for.
+            .ConfigureAppConfiguration(configuration =>
+                configuration.AddInMemoryCollection(
+                    (languages ?? InventedLanguages)
+                        .Select((language, index) => new KeyValuePair<string, string?>(
+                            $"{NotificationsJurisdictionOptions.SectionName}:Languages:" +
+                            index.ToString(CultureInfo.InvariantCulture),
+                            language))))
             .ConfigureServices(services =>
             {
                 ConfigureAuthentication(services);

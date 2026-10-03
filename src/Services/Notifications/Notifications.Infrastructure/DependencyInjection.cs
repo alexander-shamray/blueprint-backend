@@ -1,6 +1,8 @@
 using Notifications.Application.Contacts;
 using Notifications.Application.Records;
+using Notifications.Application.Rendering;
 using Notifications.Infrastructure.Idempotency;
+using Notifications.Infrastructure.Jurisdiction;
 using Notifications.Infrastructure.Messaging;
 using Notifications.Infrastructure.Observability;
 using Notifications.Infrastructure.Persistence;
@@ -11,6 +13,7 @@ using Common.Infrastructure.Messaging;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 namespace Notifications.Infrastructure;
 
@@ -65,6 +68,24 @@ public static class DependencyInjection
 
         // The bus (§9). AddMassTransit registers its own readiness check.
         services.AddMassTransitMessaging(configuration);
+
+        // ADR-053's one options class, bound beside the renderer that reads its language set and zone (§15.4).
+        services
+            .AddOptions<NotificationsJurisdictionOptions>()
+            .BindConfiguration(NotificationsJurisdictionOptions.SectionName)
+            .ValidateOnStart();
+        services.AddSingleton<
+            IValidateOptions<NotificationsJurisdictionOptions>,
+            NotificationsJurisdictionValidator>();
+
+        // Built from options the validator passed at start, so a refusal is the host's and never a send's.
+        services.AddSingleton(sp =>
+        {
+            NotificationsJurisdictionOptions jurisdiction =
+                sp.GetRequiredService<IOptions<NotificationsJurisdictionOptions>>().Value;
+
+            return TemplateRenderer.Create(TemplateSet.Embedded, jurisdiction.Languages!, jurisdiction.TimeZone!);
+        });
 
         // The one retention service §9.5 asks for, registered last so it is stopped first.
         services.AddHostedService<RetentionPurgeService>();
