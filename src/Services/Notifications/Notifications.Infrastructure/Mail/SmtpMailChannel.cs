@@ -73,12 +73,15 @@ internal sealed partial class SmtpMailChannel(
     {
         // Validated at start (§15.4), so none of these is null here.
         MailOptions relay = options.Value;
+
+        // Outside the try, so a host the validator should have stopped is a defect and not a counted retry.
+        SecureSocketOptions socket = Socket(relay.Security);
         Phase phase = Phase.Connecting;
         using SmtpClient client = new();
 
         try
         {
-            await client.ConnectAsync(relay.Host!, relay.Port!.Value, Socket(relay.Security), attempt);
+            await client.ConnectAsync(relay.Host!, relay.Port!.Value, socket, attempt);
 
             phase = Phase.LoggingIn;
             if (relay.UserName is { Length: > 0 } userName && relay.Password is { Length: > 0 } password)
