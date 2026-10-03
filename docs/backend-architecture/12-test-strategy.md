@@ -2518,12 +2518,12 @@ public parameterless constructor must mark every settable property.
 
 Every rule above is true of any contract, and none holds a contract to **its own
 earlier shape**, which is what [§9.2](09-messaging.md)'s breaking-change rule is
-about: a member removed or retyped leaves them all green once its sample is
-edited to match. So the shape is recorded. `contract-shapes.json`, beside the
-suite, holds every public member of every contract — its type, its nullability
-and whether it is always supplied — and `ContractShapeTests` compares the
-assembly with it. The contracts are found by the discovery above, so a new
-service's are held from its first one, with no list to extend.
+about: a member retyped leaves them all green once its sample is edited to
+match. So the shape is recorded. `contract-shapes.json`, beside the suite, holds
+every public member of every contract — its type, its nullability and whether it
+is always supplied — and `ContractShapeTests` compares the assembly with it. The
+contracts are found by the discovery above, so a new service's are held from its
+first one, with no list to extend.
 
 A change breaks when a consumer built against the record could fail on it: a
 contract or a member gone, a rename, which reads as one gone, any change to a
