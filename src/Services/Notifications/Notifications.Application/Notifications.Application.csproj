@@ -1,11 +1,14 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <!--
-    Common.Application, §4.2's second row without the Domain project §4.1 does not give this service.
+    Common.Application and Common.Contracts, §4.2's second row without the Domain project §4.1 does not give this
+    service; Contracts arrives with the seven events §3.2 subscribes it to, not with a mapper it will never have.
   -->
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\BuildingBlocks\Common.Application\Common.Application.csproj" />
+    <!-- §3.2's seven events and CancelReasons' codes, the one assembly §4.3 lets cross a service boundary. -->
+    <ProjectReference Include="..\..\..\BuildingBlocks\Common.Contracts\Common.Contracts.csproj" />
   </ItemGroup>
 
   <ItemGroup>
