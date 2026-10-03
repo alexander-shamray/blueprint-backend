@@ -103,13 +103,37 @@ public sealed class TemplateRenderer
     {
         ArgumentNullException.ThrowIfNull(parameters);
 
-        int version = _templates.CurrentVersion(templateKey);
-        string[] languages = LanguagesFor(locale);
+        return Compose(templateKey, parameters, _templates.CurrentVersion(templateKey), LanguagesFor(locale));
+    }
+
+    /// <summary>A resend, at the version and in the languages the row's intent stamped (ADR-053 rule 4).</summary>
+    public RenderedMessage Render(
+        string templateKey,
+        NotificationParameters parameters,
+        int version,
+        IReadOnlyList<string> languages)
+    {
+        ArgumentNullException.ThrowIfNull(parameters);
+        ArgumentNullException.ThrowIfNull(languages);
+
+        return Compose(templateKey, parameters, version, [.. languages]);
+    }
+
+    private RenderedMessage Compose(
+        string templateKey,
+        NotificationParameters parameters,
+        int version,
+        string[] languages)
+    {
         List<string> subjects = [];
         List<string> bodies = [];
 
         foreach (string language in languages)
         {
+            // A stamp may name a language a later deployment dropped, and only the set's have a culture here.
+            if (!_cultures.ContainsKey(language))
+                throw new InvalidOperationException($"{language} is not in the deployment's language set.");
+
             // Create refused every gap at start, so a miss here is a set that changed beneath a running host.
             Template template = _templates.Find(templateKey, version, language) ??
                 throw new InvalidOperationException($"{templateKey} v{version} has no {language} template.");
