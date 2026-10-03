@@ -16,6 +16,8 @@
     <!-- Referenced directly because used directly, for §4.2's assembly-scan registration. -->
     <PackageReference Include="FluentValidation" />
     <PackageReference Include="FluentValidation.DependencyInjectionExtensions" />
+    <!-- RecordNotificationHandler's LoggerMessage.Define, which CA1848 requires under ADR-019. -->
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
   </ItemGroup>
 
 </Project>

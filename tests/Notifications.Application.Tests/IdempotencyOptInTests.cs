@@ -27,13 +27,10 @@ public class IdempotencyOptInTests
     }
 
     [Fact]
-    public void This_service_has_no_commands_for_the_gate_above_to_look_at_yet()
+    public void The_opt_in_gate_is_looking_at_this_service_s_commands()
     {
         // The gate-coverage rule: the offender list above is as green when the selector matches nothing.
-        Commands().ShouldBeEmpty(
-            "This service declares no commands yet, so the gate above is vacuous. The day it "
-            + "gains its first command this test fails — replace it with the ShouldNotBeEmpty "
-            + "form, which is what keeps a vacuous gate from quietly becoming a permanent one.");
+        Commands().ShouldNotBeEmpty();
     }
 
     [Fact]
@@ -134,10 +131,7 @@ public class IdempotencyOptInTests
     [Fact]
     public void The_nested_dispatch_gate_is_looking_at_this_service_s_handlers()
     {
-        CommandHandlers().ShouldBeEmpty(
-            "This service declares no command handlers yet, so the gate above is "
-            + "vacuous. The day it gains one this test fails — restore the ShouldNotBeEmpty "
-            + "form, which is what keeps a vacuous gate from quietly becoming a permanent one.");
+        CommandHandlers().ShouldNotBeEmpty();
     }
 
     private static Type[] CommandHandlers() =>
