@@ -108,9 +108,40 @@ public class WriteEndpointRuleTests
 
         IReadOnlyList<string> offenders = WriteEndpointRule.Offenders(endpoints);
 
-        offenders.Count.ShouldBe(2);
+        offenders.Count.ShouldBe(3);
         offenders[0].ShouldStartWith("Keyed is keyed by Reached and Built and requires no authorisation");
-        offenders[1].ShouldStartWith("Keyed is keyed by Reached and Built and declared Convergent");
+        offenders[1].ShouldStartWith("Keyed is keyed by Reached and Built: a keyed endpoint dispatches one command");
+        offenders[2].ShouldStartWith("Keyed is keyed by Reached and Built and declared Convergent");
+    }
+
+    [Fact]
+    public void An_endpoint_keyed_by_a_binding_and_a_declaration_of_another_command_is_named()
+    {
+        // The declaration counts Built as reached, so the unreached-command check stops seeing it (ADR-061).
+        IReadOnlyList<Endpoint> endpoints = Map(app =>
+            app
+                .MapPost("/keyed", (Reached command) => Results.NoContent())
+                .Idempotent<Built>()
+                .RequireAuthorization()
+                .WithName("Keyed"));
+
+        WriteEndpointRule
+            .Offenders(endpoints)
+            .ShouldHaveSingleItem()
+            .ShouldStartWith("Keyed is keyed by Reached and Built: a keyed endpoint dispatches one command");
+    }
+
+    [Fact]
+    public void A_declaration_of_the_command_the_endpoint_binds_is_one_command()
+    {
+        IReadOnlyList<Endpoint> endpoints = Map(app =>
+            app
+                .MapPost("/keyed", (Reached command) => Results.NoContent())
+                .Idempotent<Reached>()
+                .RequireAuthorization()
+                .WithName("Keyed"));
+
+        WriteEndpointRule.Offenders(endpoints).ShouldBeEmpty();
     }
 
     [Fact]
