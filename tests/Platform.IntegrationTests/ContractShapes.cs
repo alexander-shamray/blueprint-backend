@@ -23,8 +23,7 @@ internal static class ContractShapes
     /// <summary>The live shape, written to the output directory for the record to be replaced from.</summary>
     internal static string Received => Path.Combine(AppContext.BaseDirectory, "contract-shapes.received.json");
 
-    internal static Type[] Contracts() =>
-        [.. typeof(OrderPlaced).Assembly.GetTypes().Where(ContractTests.IsContract)];
+    internal static Type[] Contracts() => [.. typeof(OrderPlaced).Assembly.GetTypes().Where(ContractTests.IsContract)];
 
     internal static Shapes Live() => Of(Contracts());
 
