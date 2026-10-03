@@ -17,7 +17,7 @@ public sealed class TemplateRenderer
     /// <summary>The fixed rule between the bodies of a message rendered in more than one language.</summary>
     public const string LanguageRule = "\n\n----------------------------------------\n\n";
 
-    /// <summary>What a dropped value renders as: one mark in every language, so no phrase is owed.</summary>
+    /// <summary>A dropped value's mark in every language; a dropped reason renders its map's generic phrase.</summary>
     public const string Absent = "—";
 
     private readonly TemplateSet _templates;
