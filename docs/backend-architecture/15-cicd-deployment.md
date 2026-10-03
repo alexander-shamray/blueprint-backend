@@ -850,15 +850,18 @@ evictions only: without a spread, every replica on one node is a legal
 schedule, and that node's loss takes the workload to zero. The two halves
 differ on purpose. Across nodes the constraint is `DoNotSchedule`, so a
 replica that cannot be placed evenly waits as a pending pod and a rollout
-stops where anyone can see it; the cost is that on a small cluster one node
-that is full or cordoned can hold a rollout until it frees, which is why the
-choice is a value. Across zones it is `ScheduleAnyway`, because the hard form
-excludes every node with no zone label, and a cluster that labels no zones
-would schedule nothing. Each constraint counts only its own track and, through
-`matchLabelKeys`, only its own revision, so neither a canary rung nor a rolling
-update's surge is held back by where the other pods sit. The skew and both
-choices are values, and the library chart refuses a policy the API server
-would refuse only after the upgrade had begun.
+stops where anyone can see it; the cost is that on a small cluster one full
+node can hold a rollout or a scale-out until it frees, which is why the
+choice is a value. A node whose taints the pods do not tolerate is no domain
+at all (`nodeTaintsPolicy: Honor`), or an empty control-plane node would hold
+every other node to one replica for good. Across zones it is
+`ScheduleAnyway`, because the hard form excludes every node with no zone
+label, and a cluster that labels no zones would schedule nothing. Each
+constraint counts only its own track and, through `matchLabelKeys`, only its
+own revision, so neither a canary rung nor a rolling update's surge is held
+back by where the other pods sit. The skew and both choices are values, and
+the library chart refuses a policy the API server would refuse only after the
+upgrade had begun.
 
 **A key joins a chart when a host's code reads it, and not before.** That is
 §14.1's rule for Compose blocks — an environment variable nothing reads is the

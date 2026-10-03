@@ -701,6 +701,9 @@ for chart in $SERVICE_CHARTS; do
         test "$(spread_when "$OUT/$chart.yaml" topology.kubernetes.io/zone)" = ScheduleAnyway
     check "$chart counts each revision's pods apart" \
         test "$(count 'matchLabelKeys: \[pod-template-hash\]' "$OUT/$chart.yaml")" -eq 2
+    # A tainted node counted as an empty domain would hold every other node to one.
+    check "$chart counts no node its pods cannot run on" \
+        test "$(count 'nodeTaintsPolicy: Honor' "$OUT/$chart.yaml")" -eq 2
 done
 check 'every Deployment in the umbrella carries a spread' \
     test "$(count '^ *topologySpreadConstraints:$' "$OUT/platform.yaml")" \
