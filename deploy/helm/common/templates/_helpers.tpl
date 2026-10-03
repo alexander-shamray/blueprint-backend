@@ -44,7 +44,7 @@ gateway's route file (§10.2), the BFF's pricing hop or Shipping's address
 read (ADR-052), it dials this name as a literal, so a release-derived one
 would leave an umbrella install dialling a name nothing answers to. */}}
 {{- define "commerce.name" -}}
-{{- include "commerce.require" (list .Values.workload.name "workload.name is required: it is this deployable's Service name, and therefore the string the gateway's route file and the BFF's pricing hop dial (§10.2, §9.7).") -}}
+{{- include "commerce.require" (list .Values.workload.name "workload.name is required: every object this release renders is named from it, the Service included where there is one, and a peer that dials this workload dials it as a literal (§10.2, §9.7).") -}}
 {{- end -}}
 
 {{- /* The image tag, required rather than defaulted: values.yaml leaves it empty
@@ -58,7 +58,7 @@ is validated rather than sanitised, so the `app.kubernetes.io/version`
 label names the image that runs. */}}
 {{- range $segment := splitList "." $tag }}
 {{- if not (regexMatch "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$" $segment) }}
-{{- fail (printf "image.tag %q is not usable as Kubernetes metadata: the segment %q is not a DNS-1123 label. The tag becomes the migration Job's name and app.kubernetes.io/version, so each dot-separated segment must be lowercase alphanumerics and dashes, starting and ending alphanumeric — which every commit SHA and ordinary semver already is (§15.3)." $tag $segment) }}
+{{- fail (printf "image.tag %q is not usable as Kubernetes metadata: the segment %q is not a DNS-1123 label. The tag becomes app.kubernetes.io/version on every chart, and the migration Job's name where there is one, so each dot-separated segment must be lowercase alphanumerics and dashes, starting and ending alphanumeric — which every commit SHA and ordinary semver already is (§15.3)." $tag $segment) }}
 {{- end }}
 {{- end }}
 {{- /* And the length: `app.kubernetes.io/version` carries the tag on every chart,
