@@ -134,6 +134,13 @@ public sealed class SendWorker(
             new EventId(15, nameof(Outgrown)),
             "Notification {NotificationId} on order {OrderId} moved beneath this pass; it is left as it stands.");
 
+    private static readonly Action<ILogger, Guid, Guid, Exception?> BackOffFailed =
+        LoggerMessage.Define<Guid, Guid>(
+            LogLevel.Error,
+            new EventId(16, nameof(BackOffFailed)),
+            "Backoff for notification {NotificationId} on order {OrderId} failed; its lease lapses and a later pass " +
+            "reclaims it.");
+
     // stoppingToken, not ct: CA1725 keeps the base's name, an error under ADR-019.
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -196,7 +203,16 @@ public sealed class SendWorker(
         {
             // Logged before the backoff is written, so a database fault there cannot hide this one.
             Fault(work, ex);
-            await claims.BackOffAsync(work.NotificationId, ct);
+
+            try
+            {
+                await claims.BackOffAsync(work.NotificationId, ct);
+            }
+            catch (Exception backOff) when (!ct.IsCancellationRequested)
+            {
+                // The claim held, so the loop's line would be false; the lease lapses and a later pass reclaims it.
+                BackOffFailed(log, work.NotificationId, work.OrderId, backOff);
+            }
 
             return false;
         }
