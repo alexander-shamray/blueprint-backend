@@ -5,13 +5,17 @@ using Common.Web;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Notifications.Infrastructure.Delivery;
 using Notifications.Infrastructure.Jurisdiction;
 using Notifications.Infrastructure.Mail;
+using Notifications.Infrastructure.Persistence;
 using ContactRegistration = Notifications.Infrastructure.Contacts.DependencyInjection;
 
 namespace Notifications.TestSupport;
@@ -80,6 +84,12 @@ public class NotificationsWorkerFactory(
     /// <summary>The token source the credential handler draws on, so no test needs an identity provider.</summary>
     public RecordingTokenCache Tokens { get; } = new();
 
+    /// <summary>The host's commit fault on a notice marked sent, disarmed until a test arms it.</summary>
+    public SentCommitFaults CommitFaults { get; } = new();
+
+    /// <summary>The host's log, captured beside the providers the host configures rather than replacing them.</summary>
+    public CapturedLogs CapturedLogs { get; } = new();
+
     /// <summary>The settings a worker needs to start; the host must not read <c>NotificationsMigrator</c>.</summary>
     protected override void ConfigureWebHost(IWebHostBuilder builder) =>
         builder
@@ -110,6 +120,7 @@ public class NotificationsWorkerFactory(
                             $"{NotificationsJurisdictionOptions.SectionName}:Languages:" +
                             index.ToString(CultureInfo.InvariantCulture),
                             language))))
+            .ConfigureLogging(logging => logging.AddProvider(CapturedLogs))
             .ConfigureServices(services =>
             {
                 ConfigureAuthentication(services);
@@ -123,7 +134,9 @@ public class NotificationsWorkerFactory(
                 services.Remove(purge);
 
                 services.AddSingleton<RetentionPurgeService>();
-            });
+            })
+            .ConfigureTestServices(services =>
+                services.ConfigureDbContext<NotificationsDbContext>(o => o.AddInterceptors(CommitFaults)));
 
     /// <summary>Swaps the JWT scheme for <see cref="TestAuthHandler"/> (§12.4); a host may override it.</summary>
     protected virtual void ConfigureAuthentication(IServiceCollection services)

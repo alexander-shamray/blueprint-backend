@@ -31,6 +31,9 @@ public sealed class Mailpit : IAsyncDisposable
     /// <summary>Plain SMTP with the Chaos API on, as Compose runs it.</summary>
     public static Mailpit Plain() => new(Builder().Build());
 
+    /// <summary>Plain SMTP on a host port the caller chose, which a stop and a start keep (§14.1).</summary>
+    public static Mailpit PlainOn(int smtpHostPort) => new(Builder(smtpHostPort).Build());
+
     /// <summary>STARTTLS under a certificate Mailpit signs itself, which no trust store holds.</summary>
     public static Mailpit SelfSigned() =>
         new(Builder()
@@ -47,10 +50,21 @@ public sealed class Mailpit : IAsyncDisposable
     public async Task StartAsync(CancellationToken ct)
     {
         await _container.StartAsync(ct);
+
+        // A restarted container maps its API afresh, so the client is rebuilt on every start.
+        _api?.Dispose();
         _api = new HttpClient
         {
             BaseAddress = new Uri($"http://{_container.Hostname}:{_container.GetMappedPublicPort(ApiPort)}/api/v1/")
         };
+    }
+
+    /// <summary>Stops the relay as an outage would; <see cref="StartAsync"/> brings it back.</summary>
+    public async Task StopAsync(CancellationToken ct)
+    {
+        _api?.Dispose();
+        _api = null;
+        await _container.StopAsync(ct);
     }
 
     /// <summary>No messages and no Chaos trigger, so a test sees only what it sent and what it staged.</summary>
@@ -101,6 +115,34 @@ public sealed class Mailpit : IAsyncDisposable
         throw new TimeoutException($"No message reached Mailpit within {ArrivalDeadline}.");
     }
 
+    /// <summary>The sink's messages once it holds <paramref name="count"/>, waited for; more is a failure.</summary>
+    public async Task<IReadOnlyList<MailpitSummary>> WaitForAsync(int count, CancellationToken ct)
+    {
+        DateTimeOffset deadline = DateTimeOffset.UtcNow + ArrivalDeadline;
+
+        while (DateTimeOffset.UtcNow < deadline)
+        {
+            IReadOnlyList<MailpitSummary> messages = await MessagesAsync(ct);
+            if (messages.Count > count)
+            {
+                throw new InvalidOperationException(
+                    $"Mailpit holds {messages.Count} messages where {count} were sent.");
+            }
+
+            if (messages.Count == count)
+                return messages;
+
+            await Task.Delay(TimeSpan.FromMilliseconds(100), ct);
+        }
+
+        throw new TimeoutException($"{count} message(s) did not reach Mailpit within {ArrivalDeadline}.");
+    }
+
+    /// <summary>One message, read whole.</summary>
+    public async Task<MailpitMessage> MessageAsync(string id, CancellationToken ct) =>
+        await Api.GetFromJsonAsync<MailpitMessage>($"message/{Uri.EscapeDataString(id)}", Json, ct)
+        ?? throw new InvalidOperationException("Mailpit answered a message read with no body.");
+
     /// <summary>A message's headers as the relay received them, by name in any case.</summary>
     public async Task<IReadOnlyDictionary<string, string[]>> HeadersAsync(string id, CancellationToken ct)
     {
@@ -126,10 +168,11 @@ public sealed class Mailpit : IAsyncDisposable
         response.EnsureSuccessStatusCode();
     }
 
-    private static ContainerBuilder Builder() =>
-        new ContainerBuilder()
+    private static ContainerBuilder Builder(int? smtpHostPort = null) =>
+        (smtpHostPort is { } port
+                ? new ContainerBuilder().WithPortBinding(port, SmtpPort)
+                : new ContainerBuilder().WithPortBinding(SmtpPort, assignRandomHostPort: true))
             .WithImage(Image)
-            .WithPortBinding(SmtpPort, assignRandomHostPort: true)
             .WithPortBinding(ApiPort, assignRandomHostPort: true)
             .WithEnvironment("MP_ENABLE_CHAOS", "true")
             .WithWaitStrategy(Wait.ForUnixContainer()

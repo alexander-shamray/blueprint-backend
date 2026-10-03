@@ -9,6 +9,8 @@
   <ItemGroup>
     <!-- WebApplicationFactory over the real Program (§12.4). -->
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
+    <!-- Keycloak's admin API, in process on loopback, as the worker suites meet it (§12.7). -->
+    <PackageReference Include="WireMock.Net" />
   </ItemGroup>
 
   <ItemGroup>
