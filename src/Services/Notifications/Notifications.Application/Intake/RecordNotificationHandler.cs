@@ -22,7 +22,7 @@ public sealed class RecordNotificationHandler(
         LoggerMessage.Define<string, Guid, string>(
             LogLevel.Warning,
             new EventId(1, nameof(Dropped)),
-            "Dropped {Member} of event {EventId} for {TemplateKey}: it failed the intake's check and renders absent.");
+            "Dropped {Member} of event {EventId} for {TemplateKey}: it failed the intake's check and was dropped.");
 
     private static readonly Action<ILogger, Guid, string, Exception?> AlreadyOwed =
         LoggerMessage.Define<Guid, string>(

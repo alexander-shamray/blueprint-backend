@@ -40,7 +40,7 @@ public static class DependencyInjection
 
         services.AddScoped<IUnitOfWork, EfUnitOfWork>();                     // §6.3
 
-        // §6.3's repositories: the notices owed, and the order record four of them wait on for a customer.
+        // §5.6's repositories: the notices owed, and the order record four of them wait on for a customer.
         services.AddScoped<INotificationRepository, NotificationRepository>();
         services.AddScoped<IOrderRecordRepository, OrderRecordRepository>();
 
