@@ -84,6 +84,24 @@ public sealed class SmtpMailChannelTests(MailpitFixture fixture) : IAsyncLifetim
     }
 
     [Theory]
+    [InlineData("Commerce <no-reply@xn--80aa6ae.test>")]
+    [InlineData("Commerce <no-reply@алма.test>")]
+    public async Task A_sender_on_an_internationalised_domain_mints_an_ascii_message_id(string from)
+    {
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        MailMessageId id = new(Guid.CreateVersion7(), "order-placed");
+
+        // A host of its own, because the sender is configuration.
+        using NotificationsWorkerFactory host = MailpitFixture.Development(fixture.Plain, from: from);
+
+        MailResult result = await host.Services.GetRequiredService<IMailChannel>().SendAsync(Mail(id: id), ct);
+
+        result.ShouldBe(new MailResult.Accepted());
+        MailpitMessage arrived = await fixture.Plain.SingleAsync(ct);
+        arrived.MessageId.Trim('<', '>').ShouldBe($"{id.LocalPart}@xn--80aa6ae.test");
+    }
+
+    [Theory]
     [InlineData("aigerim@алма.test")]
     [InlineData("aigerim@xn--80aa6ae.test")]
     public async Task A_mailbox_on_an_internationalised_domain_is_sent_in_either_form(string recipient)
