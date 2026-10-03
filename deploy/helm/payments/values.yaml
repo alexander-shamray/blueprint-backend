@@ -61,7 +61,7 @@ podDisruptionBudget:
 # Two receive endpoints and an outbox dispatcher to drain, and one thing the
 # other charts do not have: a provider call already in flight, bounded by
 # ProviderHop.TotalRequestTimeout. Neither number is written here — the value
-# must exceed the host's HostOptions.ShutdownTimeout, and _deployment.tpl
+# must exceed the host's HostOptions.ShutdownTimeout, and §15.3
 # carries the argument for the margin.
 terminationGracePeriodSeconds: 45
 

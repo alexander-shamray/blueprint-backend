@@ -66,7 +66,7 @@ podDisruptionBudget:
 # drain — fulfilment, tracking and retention — with a call in flight bounded by
 # CarrierHop.TotalRequestTimeout and AddressHop.TotalRequestTimeout. No number
 # is taken from those here: the value must exceed HostOptions.ShutdownTimeout,
-# and _deployment.tpl carries the argument.
+# and §15.3 carries the argument.
 terminationGracePeriodSeconds: 45
 
 probes:
