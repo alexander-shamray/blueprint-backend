@@ -7,7 +7,7 @@ namespace Notifications.Infrastructure.Persistence;
 
 /// <summary>The only reader and writer of <c>notifications.ContactRecords</c> (ADR-052).</summary>
 /// <remarks>
-/// On its own connection: the worker saves before it renders or sends, outside any unit. The save is one
+/// On its own connection: a send worker is to save before it renders or sends, outside any unit. The save is one
 /// transaction, as ADR-052 accepts two replicas resolving one customer at once.
 /// </remarks>
 internal sealed class SqlContactStore(IDbConnectionFactory connections) : IContactStore
