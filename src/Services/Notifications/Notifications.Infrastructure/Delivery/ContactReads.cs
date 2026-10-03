@@ -3,7 +3,7 @@ using Notifications.Application.Contacts;
 
 namespace Notifications.Infrastructure.Delivery;
 
-/// <summary>One send pass's contact reads, one per customer, which every row of that customer shares (ADR-052).</summary>
+/// <summary>One send pass's contact reads, one per customer and shared by all their rows (ADR-052).</summary>
 /// <remarks>
 /// ADR-052 bounds one customer's concurrent reads by the replica count, so a pass holding several of their rows
 /// starts one read; a row served a stale contact finds the owner's fault beside it, to say so on its own line.

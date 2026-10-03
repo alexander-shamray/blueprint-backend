@@ -334,7 +334,7 @@ public sealed class SendWorker(
         };
     }
 
-    /// <summary>The customer's contact, read once a pass for all their rows (ADR-052); a read's fault throws here.</summary>
+    /// <summary>The customer's contact, read once a pass for all their rows (ADR-052).</summary>
     private async Task<ContactLookup> ContactAsync(
         IServiceProvider sp,
         SendWork work,
