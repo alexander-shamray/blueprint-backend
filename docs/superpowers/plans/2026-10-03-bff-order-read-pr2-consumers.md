@@ -3101,9 +3101,10 @@ PR of the sequence closes.
 - **Spec section 10.** `bff.orders.unattributed` on `Web.Bff.Projection`,
   seconds, zero when empty, by the registered clock, with its `AddMeter`
   line (Task 7). The rule and runbook are PR-5's.
-- **Spec section 11.** Container-free: the map, the rank. Over SQL: each
+- **Spec section 11.** Container-free: the map, the rank, and
+  registration, which composes over the in-memory harness. Over SQL: each
   handler, redelivery, the pairs, the disagreeing customer, the gauge. Over
-  SQL and RabbitMQ: registration, binding, the grant, an order's events
+  SQL and RabbitMQ: binding, the grant, an order's events
   through the queue, as section 11 says: under `bff-svc` a publish is
   refused by the grant the binding test measures, and widening it in the
   harness would measure a grant nothing deploys. So they are sent to the

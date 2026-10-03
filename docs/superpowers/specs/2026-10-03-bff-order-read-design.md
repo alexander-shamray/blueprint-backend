@@ -547,26 +547,30 @@ By [§12](../../backend-architecture/12-test-strategy.md)'s layers, in the
 one suite `Web.Bff.Tests`, with `Web.Bff.TestSupport` beside it; the
 container tests are `Category=Integration` and never skipped.
 
-- **Without containers**: the rank over every subset of the five steps; §10.7's
-  cancellation map, a row per line of its table plus an unknown reason under
-  each origin; `cancellable` per status; an undecodable cursor serving the first
-  page; `RetentionPurgeService`'s optional half refused when only one of the
-  pair is supplied. - **Over SQL Server**, through the real migrator: each
-  handler against an empty table and against every row shape another handler
-  leaves; redelivery writing nothing; every pair of events in both orders, as
+- **Without containers**: the rank over every subset of the five steps;
+  §10.7's cancellation map, a row per line of its table plus an unknown
+  reason under each origin; `cancellable` per status; an undecodable cursor
+  serving the first page; `RetentionPurgeService`'s optional half refused
+  when only one of the pair is supplied; `MessagingRegistrationTests`, which
+  composes the bus over MassTransit's in-memory test harness.
+- **Over SQL Server**, through the real migrator: each handler against an
+  empty table and against every row shape another handler leaves;
+  redelivery writing nothing; every pair of events in both orders, as
   section 6 lists; a disagreeing customer left alone; the unattributed gauge
-  over owned and unowned rows. - **Over SQL Server and RabbitMQ**:
-  `MessagingRegistrationTests`, the broker-binding test, and an order's eight
-  events sent to `bff-order-events` producing the row §10.7 describes — sent to
-  the queue rather than published, as Notifications' suite does, because
-  `bff-svc` writes no contract exchange and widening the test's grant would undo
-  what the binding test proves. - **Through the host**: both routes for the
-  owner, another buyer and an unowned row; the clamp; a page boundary between
-  two orders with one `FirstSeenAt`; a null `productName`; an owned row with no
-  lines; no outbound call during either route; the readiness set is exactly
-  `sql` and `masstransit-bus`. - **The rebuild**, in PR-4: rows staged in four
-  publisher schemas, a `--reset` run producing the projection the consumers
-  produced from the same events, and a type outside the eight never sent.
+  over owned and unowned rows.
+- **Over SQL Server and RabbitMQ**: the broker-binding test, and an order's
+  eight events sent to `bff-order-events` producing the row §10.7 describes
+  — sent to the queue rather than published, as Notifications' suite does,
+  because `bff-svc` writes no contract exchange and widening the test's
+  grant would undo what the binding test proves.
+- **Through the host**: both routes for the owner, another buyer and an
+  unowned row; the clamp; a page boundary between two orders with one
+  `FirstSeenAt`; a null `productName`; an owned row with no lines; no
+  outbound call during either route; the readiness set is exactly `sql` and
+  `masstransit-bus`.
+- **The rebuild**, in PR-4: rows staged in four publisher schemas, a
+  `--reset` run producing the projection the consumers produced from the
+  same events, and a type outside the eight never sent.
 
 ## 12. The chapters that move, by PR
 
