@@ -86,7 +86,8 @@ time.
 The rule reaches `//` and `///` in C# — `/* */` appears only as the one-line
 elision inside a sample block, never as a comment, so a block comment is
 itself a finding — `#` and docstrings in Python, `#` in shell, and the
-comment syntax of YAML, MSBuild and `.editorconfig`. Its mechanical half —
+comment syntax of YAML, MSBuild, `.editorconfig` and a Helm template's
+`{{/* */}}`. Its mechanical half —
 the names and history a search can find, emphasis, a block's length, an
 uncited `<remarks>` and added C# that is more comment than code — is
 enforced on the lines a pull request adds by
@@ -124,7 +125,9 @@ the churn it produces is the same, and it was measured in
   an ADR or a `cref`, and is four lines or fewer. A comment block, in any
   syntax above — a `///` run and a docstring among them — is five lines or
   fewer, its tags included, so a one-line summary and a four-line
-  `<remarks>` fill it. The ceiling sits where a cited sentence fits and an
+  `<remarks>` fill it. A delimiter on a line of its own is a line of the
+  block, a docstring's `"""` and Helm's `{{- /*` and `*/}}` alike, so a Helm
+  comment opens on its first line of text and closes on its last. The ceiling sits where a cited sentence fits and an
   argument does not: an argument is a decision, and a decision is an ADR —
   write it with `/new-adr` and cite it.
 - **No emphasis.** No `**bold**`, `<b>`, capitals or `!` for stress in a
