@@ -7,6 +7,7 @@ using Notifications.Infrastructure.Jurisdiction;
 using Notifications.Infrastructure.Messaging;
 using Notifications.Infrastructure.Observability;
 using Notifications.Infrastructure.Persistence;
+using Notifications.Infrastructure.Retention;
 using Common.Application;
 using Common.Infrastructure.Idempotency;
 using Common.Infrastructure.Inbox;
@@ -114,6 +115,10 @@ public static class DependencyInjection
         // The send pass; the generic overload, so a suite can remove it by its ImplementationType (§12.4).
         services.AddScoped<SendClaims>();
         services.AddHostedService<SendWorker>();
+
+        // ADR-053's three windows, applied by a pass of its own; by implementation type, which §12.4's fixture
+        // removes it by, so its start-up pass never races a seed.
+        services.AddHostedService<NotificationsRetentionService>();
 
         // The one retention service §9.5 asks for, registered last so it is stopped first.
         services.AddHostedService<RetentionPurgeService>();
