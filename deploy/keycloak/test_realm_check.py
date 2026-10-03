@@ -88,26 +88,39 @@ def worker(**overrides) -> dict:
     return client
 
 
+def contact(**overrides) -> dict:
+    """A compliant `notifications-worker`: confidential, service accounts on,
+    no interactive flow, roles a default scope, and commerce-api in neither."""
+    client = {
+        "clientId": realm_check.CONTACT_CLIENT,
+        "enabled": True,
+        "standardFlowEnabled": False,
+        "implicitFlowEnabled": False,
+        "directAccessGrantsEnabled": False,
+        "serviceAccountsEnabled": True,
+        "publicClient": False,
+        "defaultClientScopes": ["web-origins", "acr", "profile", "roles", "basic", "email"],
+        "optionalClientScopes": ["address", "phone", "organization"],
+        "webOrigins": [],
+    }
+    client.update(overrides)
+    return client
+
+
 def realm(*clients, **overrides) -> dict:
     """A realm document of the shape both an export and the admin API produce.
 
-    `mobile-app` and `shipping-worker` are each appended unless the caller
-    already supplied one. Most fixtures construct a realm to make a point
-    about something else entirely — a lifetime override, a malformed flag —
-    and none of those cases should have to learn every client exists just to
-    keep passing. A case that IS about one of those clients supplies its own,
-    by name, and this helper gets out of its way.
-    """
+    Every required client but the browser is appended unless the caller
+    supplied one; the browser is the caller's, so its absence can be a case."""
     if clients:
         client_list = list(clients)
-        if not any(isinstance(c, dict) and c.get("clientId") == realm_check.MOBILE_CLIENT
-                   for c in client_list):
-            client_list.append(mobile())
-        if not any(isinstance(c, dict) and c.get("clientId") == realm_check.WORKER_CLIENT
-                   for c in client_list):
-            client_list.append(worker())
+        for required in (mobile, worker, contact):
+            name = required()["clientId"]
+            if not any(isinstance(c, dict) and c.get("clientId") == name
+                       for c in client_list):
+                client_list.append(required())
     else:
-        client_list = [browser(), mobile(), worker()]
+        client_list = [browser(), mobile(), worker(), contact()]
 
     document = {
         "realm": "commerce",
@@ -451,6 +464,56 @@ class TheWorkerClient(Fixture):
         self.assertTrue(any("service accounts disabled" in problem for problem in found), found)
 
 
+class TheContactClient(Fixture):
+    def test_a_missing_contact_client_is_caught_rather_than_passed(self):
+        """The vacuous half: every check below is a property of one client."""
+        document = realm(browser(), mobile())
+        document["clients"] = [c for c in document["clients"]
+                               if c.get("clientId") != realm_check.CONTACT_CLIENT]
+        self.assertIn("notifications-worker", self.one(document))
+
+    def test_a_public_contact_client_is_caught(self):
+        self.assertIn("publicClient", self.one(realm(browser(), contact(publicClient=True))))
+
+    def test_service_accounts_turned_off_is_caught(self):
+        self.assertIn("service accounts disabled",
+                      self.one(realm(browser(), contact(serviceAccountsEnabled=False))))
+
+    def test_a_disabled_contact_client_is_caught(self):
+        self.assertIn("disabled", self.one(realm(browser(), contact(enabled=False))))
+
+    def test_each_interactive_flow_is_caught_on_its_own(self):
+        for flag in ("standardFlowEnabled", "directAccessGrantsEnabled", "implicitFlowEnabled"):
+            with self.subTest(flag=flag):
+                found = self.problems(realm(browser(), contact(**{flag: True})))
+                # The implicit flow is also refused for every client; this limb's wording is what is matched.
+                limb = f"client {realm_check.CONTACT_CLIENT!r} has {flag}="
+                self.assertTrue(any(limb in problem for problem in found), found)
+
+    def test_commerce_api_as_a_default_scope_is_caught(self):
+        found = self.one(realm(browser(), contact(defaultClientScopes=["roles", "commerce-api"])))
+        self.assertIn("commerce-api", found)
+
+    def test_commerce_api_as_an_optional_scope_is_caught(self):
+        found = self.one(realm(browser(), contact(optionalClientScopes=["address", "commerce-api"])))
+        self.assertIn("commerce-api", found)
+
+    def test_roles_in_neither_list_is_caught(self):
+        found = self.one(realm(browser(), contact(defaultClientScopes=["basic"], optionalClientScopes=[])))
+        self.assertIn("roles", found)
+
+    def test_roles_as_an_optional_scope_is_accepted(self):
+        """The control for the case above: the worker names it, so either list serves."""
+        document = realm(browser(), contact(defaultClientScopes=["basic"], optionalClientScopes=["roles"]))
+        self.assertEqual(self.problems(document), [])
+
+    def test_a_string_service_account_flag_is_refused_rather_than_read_as_on(self):
+        """Both the boolean check and this limb see a string, and each is asserted."""
+        found = self.problems(realm(browser(), contact(serviceAccountsEnabled="true")))
+        self.assertTrue(any("boolean" in problem for problem in found), found)
+        self.assertTrue(any("service accounts disabled" in problem for problem in found), found)
+
+
 class TheWebOrigins(Fixture):
     """The CORS grant the token exchange needs, which is not the redirect URI.
 
@@ -790,7 +853,7 @@ class WhatTheGateIsLookingAt(Fixture):
     def test_a_realm_missing_the_mobile_client_is_refused(self):
         """The refresh-token obligation is a property of `mobile-app` and cannot be checked without it."""
         other = {"clientId": "commerce-api"}
-        found = self.problems(realm(clients=[browser(), other, worker()]))
+        found = self.problems(realm(clients=[browser(), other, worker(), contact()]))
         self.assertEqual(len(found), 1, found)
         self.assertIn("0 time(s)", found[0])
 
@@ -1349,7 +1412,7 @@ class WhatTheGateHolds(unittest.TestCase):
                     "web-origins", "acr", "profile", "roles", "basic", "commerce-api", "email"],
                 "attributes": {"use.refresh.tokens": "true",
                                "pkce.code.challenge.method": "S256"},
-            }, worker()],
+            }, worker(), contact()],
         }
 
     def test_no_credential_bearing_field_survives_the_projection(self):

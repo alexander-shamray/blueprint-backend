@@ -945,7 +945,7 @@
       "id": "1fcb9f88-54ab-44a9-a768-ef111ceaef00",
       "clientId": "web-bff",
       "name": "Web BFF",
-      "description": "One of the two hosts that call a service synchronously and hold client credentials (§9.7, §11.5, ADR-052). Service accounts only: no browser flow, and nothing can obtain a token as a person through it.",
+      "description": "A host holding client credentials (§11.5, ADR-052), and the one that calls a service on a request path (§9.7). Service accounts only: no browser flow, and nothing can obtain a token as a person through it.",
       "surrogateAuthRequired": false,
       "enabled": true,
       "alwaysDisplayInConsole": false,
@@ -1078,6 +1078,57 @@
         "basic",
         "email",
         "commerce-api"
+      ],
+      "optionalClientScopes": [
+        "address",
+        "phone",
+        "organization",
+        "offline_access",
+        "microprofile-jwt"
+      ],
+      "access": {
+        "view": true,
+        "configure": true,
+        "manage": true
+      }
+    },
+    {
+      "id": "5328d314-4c27-43f1-937f-5f5637c38259",
+      "clientId": "notifications-worker",
+      "name": "Notifications worker",
+      "description": "ADR-052's contact reader: a Notifications worker reading a customer's mailbox and locale from the admin API. Service accounts only, view-users on realm-management and nothing else, and no commerce-api scope, so no service accepts its token.",
+      "surrogateAuthRequired": false,
+      "enabled": true,
+      "alwaysDisplayInConsole": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "local-dev-notifications-secret",
+      "redirectUris": [],
+      "webOrigins": [],
+      "notBefore": 0,
+      "bearerOnly": false,
+      "consentRequired": false,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "publicClient": false,
+      "frontchannelLogout": false,
+      "protocol": "openid-connect",
+      "attributes": {
+        "realm_client": "false",
+        "backchannel.logout.session.required": "true",
+        "backchannel.logout.revoke.offline.tokens": "false"
+      },
+      "authenticationFlowBindingOverrides": {},
+      "fullScopeAllowed": true,
+      "nodeReRegistrationTimeout": -1,
+      "defaultClientScopes": [
+        "web-origins",
+        "acr",
+        "profile",
+        "roles",
+        "basic",
+        "email"
       ],
       "optionalClientScopes": [
         "address",
@@ -2778,6 +2829,16 @@
       "clientRoles": {
         "commerce-api": [
           "orders:delivery-address"
+        ]
+      }
+    },
+    {
+      "username": "service-account-notifications-worker",
+      "enabled": true,
+      "serviceAccountClientId": "notifications-worker",
+      "clientRoles": {
+        "realm-management": [
+          "view-users"
         ]
       }
     }
