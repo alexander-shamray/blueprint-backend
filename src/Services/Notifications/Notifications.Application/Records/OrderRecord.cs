@@ -18,7 +18,7 @@ public sealed class OrderRecord
     /// <summary>A <c>CancelReasons</c> code as published, or null when it failed the intake's check.</summary>
     public string? CancelReason { get; private set; }
 
-    /// <summary>A <c>CancelOrigins</c> code, or null for a publisher that predates it (§9.2).</summary>
+    /// <summary>A <c>CancelOrigins</c> code as published, or null when absent (§9.2) or failing the check.</summary>
     public string? CancelOrigin { get; private set; }
 
     /// <summary>When this service first heard of the order, the instant <c>OrderRetention</c> ages it from.</summary>
