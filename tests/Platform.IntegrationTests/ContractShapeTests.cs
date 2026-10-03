@@ -97,7 +97,7 @@ public class ContractShapeTests
         ContractShapes.Breaks(Baseline(), []).ShouldHaveSingleItem();
 
         Shapes added = Baseline();
-        added["Another"] = new() { ["Id"] = "required System.Guid" };
+        added["Another"] = new Dictionary<string, string> { ["Id"] = "required System.Guid" };
 
         ContractShapes.Breaks(Baseline(), added).ShouldBeEmpty();
     }
