@@ -2516,35 +2516,36 @@ public parameterless constructor must mark every settable property.
 
 ### The recorded shape
 
-Every rule above is true of any contract, and none holds a contract to **its
-own earlier shape**, which is what [§9.2](09-messaging.md)'s breaking-change
-rule is about: a member removed or retyped leaves them all green once its
-sample is edited to match. So the shape is recorded. `contract-shapes.json`,
-beside the suite, holds every public member of every contract — its type, its
-nullability and whether it is always supplied — and `ContractShapeTests`
-compares the assembly with it. The contracts are found by the discovery above,
-so a new service's are held from its first one, with no list to extend.
+Every rule above is true of any contract, and none holds a contract to **its own
+earlier shape**, which is what [§9.2](09-messaging.md)'s breaking-change rule is
+about: a member removed or retyped leaves them all green once its sample is
+edited to match. So the shape is recorded. `contract-shapes.json`, beside the
+suite, holds every public member of every contract — its type, its nullability
+and whether it is always supplied — and `ContractShapeTests` compares the
+assembly with it. The contracts are found by the discovery above, so a new
+service's are held from its first one, with no list to extend.
 
 A change breaks when a consumer built against the record could fail on it: a
 contract or a member gone, a rename, which reads as one gone, any change to a
 recorded member's declaration, `required` in either direction included, and a
-new member that is `required` — the trap above, since a payload staged before
-it fails to deserialise. A new optional member or a new contract is additive:
-a local run records it, and CI, which cannot commit, fails until the record is
-committed. The comparer is driven through a synthetic shape for each kind of
-change and the renderer through a probe of each nullability, for the reason
-the subject rule ships with controls.
+new member that is `required` — the trap above, since a payload staged before it
+fails to deserialise. A new optional member or a new contract is additive, and
+still fails the test that compares the record with the assembly until the record
+is replaced from the live shape that test writes to its output directory, so an
+added member is held from the commit that adds it. The comparer is driven
+through a synthetic shape for each kind of change and the renderer through a
+probe of each nullability, for the reason the subject rule ships with controls.
 
-**The record is edited by hand in two cases, and each is argued in its
-commit**: a contract changed in place under §9.2's no-consumer exception,
-beside the ADR that exception requires, and a version retired at the end of
-its deprecation window.
+**A replacement that removes or changes a recorded line lands in two cases, and
+each is argued in its commit**: a contract changed in place under §9.2's
+no-consumer exception, beside the ADR that exception requires, and a version
+retired at the end of its deprecation window.
 
-**Three things it does not hold.** A change of meaning stays a review's, as
-§9.2 says. The values of the static vocabularies beside the records —
-`CancelReasons` and its kin — are constants rather than members, so a changed
-code passes it. And the BFF's HTTP contract is not a `Common.Contracts` type,
-so it is out of this suite's reach by construction.
+**Three things it does not hold.** A change of meaning stays a review's, as §9.2
+says. The values of the static vocabularies beside the records — `CancelReasons`
+and its kin — are constants rather than members, so a changed code passes it.
+And the BFF's HTTP contract is not a `Common.Contracts` type, so it is out of
+this suite's reach by construction.
 
 ### Consumer-driven contracts
 
