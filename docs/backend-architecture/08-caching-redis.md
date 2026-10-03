@@ -352,7 +352,8 @@ on one that is neither or both
 It is **keyed** — it dispatches one command
 ([ADR-061](adr/ADR-061-a-keyed-write-endpoint-is-keyed-by-one-command.md))
 carrying a client-generated `CommandId`, and the key is claimed atomically
-before any work happens — or it **declares why a repeat is harmless**: `RetrySafety.Convergent`, where the same
+before any work happens — or it
+**declares why a repeat is harmless**: `RetrySafety.Convergent`, where the same
 request repeated leaves the state the first one left, or
 `RetrySafety.ReadOnly`, where the endpoint writes nothing. What a key buys is
 **at most one commit per key while the marker survives**.
