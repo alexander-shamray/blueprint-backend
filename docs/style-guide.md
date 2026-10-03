@@ -86,8 +86,7 @@ time.
 The rule reaches `//` and `///` in C# — `/* */` appears only as the one-line
 elision inside a sample block, never as a comment, so a block comment is
 itself a finding — `#` and docstrings in Python, `#` in shell, and the
-comment syntax of YAML, MSBuild, `.editorconfig` and a Helm template's
-`{{/* */}}`. Its mechanical half —
+comment syntax of YAML, MSBuild and `.editorconfig`. Its mechanical half —
 the names and history a search can find, emphasis, a block's length, an
 uncited `<remarks>` and added C# that is more comment than code — is
 enforced on the lines a pull request adds by
