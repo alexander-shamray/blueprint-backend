@@ -10,7 +10,7 @@ public sealed class MailpitFixture : IAsyncLifetime
 
     public Mailpit SelfSigned { get; } = Mailpit.SelfSigned();
 
-    /// <summary>Shared by the rows that end in an answer; a fault row builds its own.</summary>
+    /// <summary>Shared by the rows that need no host of their own.</summary>
     public NotificationsWorkerFactory Host { get; private set; } = null!;
 
     /// <summary>A Development host over one sink, with a pipeline and so a breaker of its own.</summary>

@@ -7,7 +7,7 @@ using Xunit;
 
 namespace Notifications.Worker.Tests;
 
-/// <summary>The relay's rows that end in an answer, over one host and a real relay (§12.7).</summary>
+/// <summary>The relay's rows against a real relay (§12.7).</summary>
 [Collection(nameof(MailpitCollection))]
 public sealed class SmtpMailChannelTests(MailpitFixture fixture) : IAsyncLifetime
 {
