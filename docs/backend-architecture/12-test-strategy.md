@@ -1806,9 +1806,10 @@ public async Task The_service_receives_the_path_with_the_namespace_prefix_remove
 
 ### The outbound hop
 
-The pyramid's outbound-hop row is `Web.Bff.Tests` for §9.7's pricing hop,
-which has three properties no other suite can reach: a timeout hierarchy, a
-credential handler's *position*, and a realm that nothing compiles against.
+The pyramid's outbound-hop row is each caller's own suite. `Web.Bff.Tests`
+holds §9.7's pricing hop, whose three properties no suite outside this row
+can reach: a timeout hierarchy, a credential handler's *position*, and a
+realm that nothing compiles against.
 `Shipping.Worker.Tests` holds the first two for the address read
 [ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)
 adds, against a stub Ordering on loopback. `Notifications.Worker.Tests` holds
