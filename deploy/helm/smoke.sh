@@ -1445,13 +1445,10 @@ for chart in $SERVICE_CHARTS; do
     check "$chart: no stable object leaks into the canary render" \
         test "$(count 'app.kubernetes.io/track: stable' "$OUT/$chart-canary.yaml")" -eq 0
 
-    # Helm refuses to render an object another release owns (§15.3), so every
-    # name the canary release emits has to differ from the stable one's. These
-    # are the four the stable release keeps.
-    # On a chart whose stable release renders no Service, Ingress or HPA, three
-    # of these four pass by construction; the PodDisruptionBudget is the live
-    # one there. Left in the loop rather than special-cased: the claim is about
-    # what a canary release must not own, and it is true of every chart.
+    # Helm refuses to touch an object another release owns (§15.3), so every
+    # name the canary release emits has to differ from the stable one's. On a
+    # chart with no Service, Ingress or HPA the budget is the live case; the rest
+    # stay in the loop, because what a canary must not own holds on every chart.
     for kind in Service Ingress HorizontalPodAutoscaler PodDisruptionBudget; do
         check "$chart: the canary renders no $kind" \
             test "$(count "^kind: $kind\$" "$OUT/$chart-canary.yaml")" -eq 0
