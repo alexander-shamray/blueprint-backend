@@ -63,7 +63,7 @@ divergence they find is fixed in the task, not carried.
 - The blueprint wins over the spec; the spec wins over this plan.
 - **Class A+D+E.** Touch set:
 
-  `src/BuildingBlocks/Common.Infrastructure/Messaging/RetentionPurgeService.cs`, `tests/Common.Infrastructure.Tests/**`, `tests/Common.TestSupport/ServiceFixture.cs`, `src/BFF/**`, `tests/Web.Bff.Tests/**`, `Platform.slnx`, `.github/workflows/ci.yml`, `.github/secret-scan/allowed/deploy.txt`, `.github/secret-scan/allowed/docs.txt`, `deploy/compose/services/web-bff.yml`, `deploy/compose/docker-compose.infra-only.yml`, `deploy/compose/.env.example`, `deploy/compose/README.md`, `deploy/helm/web-bff/**`, `deploy/helm/smoke.sh`, `deploy/canary/deployables/web-bff.json`, `deploy/canary/canary.py`, `deploy/canary/test_canary.py`, `docs/repo-map.md`, `docs/backend-architecture/04-solution-structure.md`, `docs/backend-architecture/09-messaging.md`, `docs/backend-architecture/13-observability.md`, `docs/backend-architecture/14-local-development.md`, `docs/backend-architecture/15-cicd-deployment.md`
+  `src/BuildingBlocks/Common.Infrastructure/Messaging/RetentionPurgeService.cs`, `tests/Common.Infrastructure.Tests/**`, `tests/Common.TestSupport/ServiceFixture.cs`, `src/BFF/**`, `tests/Web.Bff.Tests/**`, `Platform.slnx`, `.github/workflows/ci.yml`, `.github/secret-scan/allowed/deploy.txt`, `.github/secret-scan/allowed/docs.txt`, `deploy/compose/services/web-bff.yml`, `deploy/compose/docker-compose.infra-only.yml`, `deploy/compose/.env.example`, `deploy/compose/README.md`, `deploy/helm/web-bff/**`, `deploy/helm/smoke.sh`, `deploy/canary/deployables/web-bff.json`, `deploy/canary/canary.py`, `deploy/canary/test_canary.py`, `docs/repo-map.md`, `docs/backend-architecture/02-architecture-at-a-glance.md`, `docs/backend-architecture/04-solution-structure.md`, `docs/backend-architecture/09-messaging.md`, `docs/backend-architecture/12-test-strategy.md`, `docs/backend-architecture/13-observability.md`, `docs/backend-architecture/14-local-development.md`, `docs/backend-architecture/15-cicd-deployment.md`
 
   Why each, since the row is paths only. **A**: one building block,
   `Common.Infrastructure`'s purge, with its suite and the shared fixture's
@@ -75,8 +75,8 @@ divergence they find is fixed in the task, not carried.
   `smoke.sh`'s one comment that names the BFF as databaseless, the
   descriptor, `canary.py`'s docstring and the one test that asserts the BFF
   renders no Job; the repo map's BFF entry; and the chapters the spec's
-  section 12 gives this PR — the sentences it makes false, and §15.3's one
-  new paragraph. **E**: `Platform.slnx` and the `*.csproj`
+  section 12 gives this PR — the sentences it makes false, among them §2.2's
+  database edge and §12.1's schema level, and §15.3's one new paragraph. **E**: `Platform.slnx` and the `*.csproj`
   files, which sit under `src/BFF/**` and `tests/Web.Bff.Tests/**` already.
 - **Mutexes held**: `Platform.slnx`, `deploy/compose/docker-compose.infra-only.yml`
   and `tests/Common.TestSupport/ServiceFixture.cs` from the repo-wide list;
@@ -2354,7 +2354,9 @@ not start.
 ### Task 8: The chapters and the repo map
 
 **Files:**
+- Modify: `docs/backend-architecture/02-architecture-at-a-glance.md` — §2.2
 - Modify: `docs/backend-architecture/04-solution-structure.md` — §4.1, §4.2
+- Modify: `docs/backend-architecture/12-test-strategy.md` — §12.1
 - Modify: `docs/backend-architecture/13-observability.md` — §13.5
 - Modify: `docs/backend-architecture/14-local-development.md` — §14.1, §14.2
 - Modify: `docs/backend-architecture/15-cicd-deployment.md` — §15.2, §15.3
@@ -2587,6 +2589,28 @@ src/BFF/                     the third host, Web.Bff, and the one that calls
                              migrator references no web host
 ```
 
+- [ ] **Step 7a: §2.2's database edge and §12.1's schema level**
+
+In §2.2's container view, after `NOT --> SQL`:
+
+```
+    BFF --> SQL
+```
+
+The node's label, `Web BFF<br/>aggregation only`, stays: the host holds a
+schema nothing writes until its consumers arrive, and the label is the
+consumers' sentence to move (spec, section 12). No broker edge either, for
+the same reason.
+
+In §12.1's pyramid table, after the `Outbound hop` row:
+
+```
+| Host projection | The BFF's own schema (ADR-051): the migrator's run, the tables' constraints and the inbox purge | Real SQL Server (container), `WebApplicationFactory` | < 1 s | One suite | `Web.Bff.Tests` |
+```
+
+The row names the schema level this PR's container tests are; the consumer
+level joins it with the consumers.
+
 - [ ] **Step 8: Check, accept the scan's chapter findings, and validate**
 
 ```bash
@@ -2611,7 +2635,7 @@ before the commit, and record the direction in the commit body.
 
 ```bash
 git add docs/backend-architecture docs/repo-map.md .github/secret-scan/allowed/docs.txt
-git commit -m "docs: §4.1, §4.2, §13.5, §14.1, §14.2, §15.2 and §15.3 give the BFF ADR-051's schema"
+git commit -m "docs: §2.2, §4.1, §4.2, §12.1, §13.5, §14.1, §14.2, §15.2 and §15.3 give the BFF ADR-051's schema"
 ```
 
 ---
@@ -2764,7 +2788,8 @@ Against the spec, section by section:
 - **Section 11**: the SQL Server items PR-1 can hold — the migrator, the
   schema, the purge, the readiness set; the handler and route items are
   PR-2's and PR-3's. ✓
-- **Section 12**: §4.1 and §4.2 (Task 8), §13.5 (Task 8), §14.1's SQL half
+- **Section 12**: §2.2's database edge and §12.1's schema level (Task 8,
+  Step 7a), §4.1 and §4.2 (Task 8), §13.5 (Task 8), §14.1's SQL half
   (Tasks 5 and 8), §14.2's database half (Task 8), §15.2 and §15.3 (Task 8),
   `docs/repo-map.md` (Task 8), `Web.Bff.csproj`'s "one project" comment
   (Task 4), §9.5 (Task 1). ✓

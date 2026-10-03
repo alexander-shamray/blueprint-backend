@@ -576,11 +576,11 @@ set or cite ADR-051, never to write a count**.
 
 | ADR-051's row | Taken by |
 |---|---|
-| §2.2 — the BFF as aggregation only, one outbound edge | 2: the broker edge, the database and the label |
+| §2.2 — the BFF as aggregation only, one outbound edge | 1 for the database edge; 2 for the broker edge and the label |
 | §3.2 — no BFF row in the subscription table | 2 |
 | §4.1 — one project under `BFF/`, no migrator | 1 |
 | §4.2 — the argument for the readiness exemption | 1 |
-| §12.1 — one BFF suite, no level for a consumer or a schema | 2: the row names the levels the suite gains in PR-1 and PR-2 |
+| §12.1 — one BFF suite, no level for a consumer or a schema | 1 for the schema level; 2 for the consumer level |
 | §13.5 — the BFF as one of two hosts whose dependencies do not gate readiness | 1 |
 | §14.1 — no connection string and no broker credential | 1 for SQL and the migrator; 2 for the broker |
 | §14.2 — an AppHost resource referencing Catalog alone | 1 for the database and the migrator; 2 for the broker |

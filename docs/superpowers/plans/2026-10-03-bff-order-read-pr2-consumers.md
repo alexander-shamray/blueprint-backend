@@ -2885,16 +2885,11 @@ Each names a set or cites ADR-051, never a count (spec section 12).
 
 - [ ] **Step 1: §2.2**
 
-In the container view, `BFF[Web BFF<br/>aggregation only]` becomes:
+PR-1 drew the database edge, `BFF --> SQL`, and left the label. In the
+container view, `BFF[Web BFF<br/>aggregation only]` becomes:
 
 ```
         BFF[Web BFF<br/>aggregation and the order projection]
-```
-
-after `NOT --> SQL`:
-
-```
-    BFF --> SQL
 ```
 
 and after `NOT <--> MQ`:
@@ -2929,7 +2924,13 @@ becomes
 
 - [ ] **Step 3: §12.1**
 
-In the pyramid's table, after the `Outbound hop` row:
+PR-1 added the schema level. In the pyramid's table, its row
+
+```
+| Host projection | The BFF's own schema (ADR-051): the migrator's run, the tables' constraints and the inbox purge | Real SQL Server (container), `WebApplicationFactory` | < 1 s | One suite | `Web.Bff.Tests` |
+```
+
+becomes:
 
 ```
 | Host projection | The BFF's own schema and the consumers that write it (ADR-051): the migrator's run, each handler against every row shape another leaves, the broker binding under its account | Real SQL Server and RabbitMQ (containers), `WebApplicationFactory` | < 1 s | One suite | `Web.Bff.Tests` |
@@ -3108,7 +3109,8 @@ PR of the sequence closes.
   harness would measure a grant nothing deploys. So they are sent to the
   queue, which runs the same endpoint, filter and handlers, and the binding
   test proves the exchange-to-queue half.
-- **Spec section 12, the rows taken by 2.** §2.2, §3.2, §12.1, §14.1's broker
+- **Spec section 12, the rows taken by 2.** §2.2's broker edge and label,
+  §3.2, §12.1's consumer level, §14.1's broker
   key, §14.2's broker reference, ADR-036's callout, `Web.Bff.csproj`'s
   sentence (Tasks 6, 9). `docs/secrets.md`'s rows (Task 9).
 - **Not here, by the spec.** The routes, `cancellable` and the cursor
