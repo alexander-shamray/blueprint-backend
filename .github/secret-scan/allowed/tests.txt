@@ -94,3 +94,7 @@ tests/Shipping.TestSupport/ShippingWorkerFactory.cs | credential-assignment | d2
 tests/Notifications.Worker.Tests/HostSmokeTests.cs | connection-string-password | da3fd0c5abaa | A deliberately unusable value in a host that must not reach a database.
 tests/Notifications.Worker.Tests/MessagingRegistrationTests.cs | credential-assignment | 93e01615a2b7 | A broker URI pointing at a hostname that does not resolve.
 tests/Notifications.Worker.Tests/MetricsRegistrationTests.cs | connection-string-password | da3fd0c5abaa | The same unusable fixture in the metrics registration suite.
+
+# Not the render's: the relay credential the factory names for the hosts run as Production.
+
+tests/Notifications.TestSupport/NotificationsWorkerFactory.cs | credential-assignment | ab3b082d4e53 | A relay password that says what it is, for the hosts run as Production; nothing accepts it.

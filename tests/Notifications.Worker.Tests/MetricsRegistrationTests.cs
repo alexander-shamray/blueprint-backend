@@ -1,10 +1,13 @@
 using Notifications.Application;
 using Notifications.Infrastructure;
+using Notifications.Infrastructure.Mail;
 using Notifications.Infrastructure.Observability;
+using Notifications.TestSupport;
 using Common.Application;
 using Common.Infrastructure.Messaging;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 using Shouldly;
 using Xunit;
@@ -20,8 +23,7 @@ public class MetricsRegistrationTests
     [Fact]
     public void Every_metrics_type_is_forced_or_has_a_stated_reason_not_to_be()
     {
-        // The collection, not a built provider, which cannot enumerate its registrations. Both helpers run,
-        // since the types are split between AddNotificationsApplication and AddNotificationsInfrastructure.
+        // The collection, not a built provider, which cannot enumerate its registrations.
         Type[] registered =
         [
             .. BuildServices()
@@ -62,6 +64,7 @@ public class MetricsRegistrationTests
 
         registered.ShouldContain(typeof(MessagingMetrics));
         registered.ShouldContain(typeof(RequestMetrics));
+        registered.ShouldContain(typeof(MailMetrics));
     }
 
     [Fact]
@@ -74,7 +77,7 @@ public class MetricsRegistrationTests
             .ShouldContain(typeof(MetricsInitialiser));
     }
 
-    /// <summary>Both registration helpers, over configuration that reaches nothing (§12.4).</summary>
+    /// <summary>The registration helpers the worker's <c>Program</c> calls, over unreachable configuration.</summary>
     private static ServiceCollection BuildServices()
     {
         IConfiguration configuration = new ConfigurationBuilder()
@@ -83,14 +86,35 @@ public class MetricsRegistrationTests
                 {
                     ["ConnectionStrings:Notifications"] =
                         "Server=sql.invalid;Database=Notifications;User Id=sa;Password=not-a-real-password",
-                    ["ConnectionStrings:RabbitMq"] = "amqp://guest:guest@notifications-rabbit.invalid:5672"
+                    ["ConnectionStrings:RabbitMq"] = "amqp://guest:guest@notifications-rabbit.invalid:5672",
+
+                    // Read eagerly by AddMailChannel; StartTls and a credential, as the environment is not Development.
+                    [MailOptions.HostKey] = "notifications-relay.invalid",
+                    [MailOptions.PortKey] = "587",
+                    [MailOptions.FromKey] = NotificationsWorkerFactory.LocalFrom,
+                    [MailOptions.SecurityKey] = "StartTls",
+                    [MailOptions.UserNameKey] = "notifications",
+                    [MailOptions.PasswordKey] = NotificationsWorkerFactory.NotARelayPassword
                 })
             .Build();
 
         ServiceCollection services = new();
         services.AddNotificationsApplication();
         services.AddNotificationsInfrastructure(configuration);
+        services.AddMailChannel(configuration, new TestEnvironment());
 
         return services;
+    }
+
+    /// <summary>A minimal <see cref="IHostEnvironment"/>; the registration reads only its name.</summary>
+    private sealed class TestEnvironment : IHostEnvironment
+    {
+        public string ApplicationName { get; set; } = "Notifications.Worker.Tests";
+
+        public string EnvironmentName { get; set; } = Environments.Production;
+
+        public string ContentRootPath { get; set; } = string.Empty;
+
+        public IFileProvider ContentRootFileProvider { get; set; } = new NullFileProvider();
     }
 }
