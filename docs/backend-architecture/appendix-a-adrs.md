@@ -66,6 +66,7 @@ decision looks wrong.
 | **ADR-057** | [A command id is bound to the fingerprint of the command that claimed it](adr/ADR-057-a-command-id-is-bound-to-the-fingerprint-of-the-command-that-claimed-it.md) |
 | **ADR-058** | [A write endpoint is keyed or declares why a repeat is harmless](adr/ADR-058-a-write-endpoint-is-keyed-or-declares-why-a-repeat-is-harmless.md) |
 | **ADR-059** | [An entry with no fingerprint is refused as already committed](adr/ADR-059-an-entry-with-no-fingerprint-is-refused-as-already-committed.md) |
+| **ADR-060** | [The already-committed refusal says its result cannot be returned](adr/ADR-060-the-already-committed-refusal-says-its-result-cannot-be-returned.md) |
 
 ---
 

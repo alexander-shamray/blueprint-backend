@@ -148,6 +148,13 @@ deletes it is a retention window this repository chooses.
 > three with a floor, and why what the floor now bounds — how long the
 > guarantee lasts — is worth bounding.
 
+**Amended by
+[ADR-060](ADR-060-the-already-committed-refusal-says-its-result-cannot-be-returned.md)**,
+which has the refusal say its result cannot be returned. The consequence that
+it says the result is no longer available stands as written because it was
+true of both paths when it was written, and the record that moved it is
+ADR-060.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)

@@ -6,7 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace Common.Web;
 
 /// <summary>Translates <see cref="CommandAlreadyCommittedException"/> into §10.5's non-retryable 409 row.</summary>
-/// <remarks>409 rather than 200 or 500, and the detail says read rather than retry (§10.5, ADR-037).</remarks>
+/// <remarks>409 rather than 200 or 500, and the detail says read rather than retry (§10.5, ADR-037, ADR-060).</remarks>
 internal sealed class CommandAlreadyCommittedExceptionHandler(IProblemDetailsService problemDetails)
     : IExceptionHandler
 {
@@ -28,8 +28,8 @@ internal sealed class CommandAlreadyCommittedExceptionHandler(IProblemDetailsSer
                 Status = StatusCodes.Status409Conflict,
                 // No key in the body, because it carries the subject segment (§8.5).
                 Detail =
-                    "This command has already been applied and its result is no longer " +
-                    "available; read the resource rather than retrying.",
+                    "This command has already been applied and its result cannot be " +
+                    "returned; read the resource rather than retrying.",
                 Extensions = { ["code"] = "command.already_committed" }
             }
         });

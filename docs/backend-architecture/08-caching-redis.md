@@ -1031,9 +1031,10 @@ not the transaction committed, which the next callout is about.
 > ran slowly reaches this state sooner than a fast one, the handler's runtime
 > having come out of the same window.
 > `CommandAlreadyCommittedException` answers §10.5's 409 saying the command was
-> applied and its result is no longer available — not that it was never
-> recorded, which would be false on the path most callers take. Read the
-> resource.
+> applied and its result cannot be returned
+> ([ADR-060](adr/ADR-060-the-already-committed-refusal-says-its-result-cannot-be-returned.md))
+> — not that it was never recorded, which would be false on the path most
+> callers take. Read the resource.
 >
 > **That second path is a change to what a late retry does, and it is the price
 > of dropping the exception from this section's opening sentence.** Before the
