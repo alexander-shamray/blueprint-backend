@@ -2,8 +2,8 @@ namespace Notifications.Application.Rendering;
 
 /// <summary>The values a notification's placeholders take, which with its version reproduce what was sent.</summary>
 /// <remarks>
-/// ADR-053 rule 4's evidence, so nothing here names a person. Every text member was written by another
-/// service and arrives checked or absent (<c>InboundValues</c>); absent renders as an absent mark.
+/// ADR-053 rule 4's evidence, so nothing here names a person. Every text member another service wrote arrives
+/// checked or absent (<c>InboundValues</c>); absent renders as a mark, and an absent reason as its map's generic phrase.
 /// </remarks>
 public sealed record NotificationParameters
 {
