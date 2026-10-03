@@ -76,8 +76,8 @@ public static class ParametersFormat
         catch (Exception e) when (e is JsonException or KeyNotFoundException or FormatException
                                       or InvalidOperationException)
         {
-            // The inner exception names a position and never the text, so no stored value reaches a log.
-            throw new UnreadableParametersException($"The stored parameters are not version {Version}'s shape.", e);
+            // Not chained: the reader's message can quote the stored text, and none may reach a log.
+            throw new UnreadableParametersException($"The stored parameters are not version {Version}'s shape.");
         }
     }
 
