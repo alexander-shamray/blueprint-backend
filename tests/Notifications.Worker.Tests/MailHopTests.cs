@@ -30,12 +30,16 @@ public sealed class MailHopTests
     [Fact]
     public void The_breaker_opens_inside_one_window_at_the_workers_slowest_rate()
     {
-        // The breaker sits inside the retry, so a failed send is MaxRetryAttempts + 1 attempts against the throughput.
+        // The breaker sits inside the retry, so a transient failure is MaxRetryAttempts + 1 attempts, any other one.
         int sends = (int)Math.Ceiling(
             (double)MailHop.CircuitBreakerMinimumThroughput / (MailHop.MaxRetryAttempts + 1));
 
         (MailHop.SendTick * sends).ShouldBeLessThan(MailHop.CircuitBreakerSamplingDuration,
             "a breaker whose throughput a loop at one send a tick never reaches would never open");
+
+        (MailHop.SendTick * MailHop.CircuitBreakerMinimumThroughput).ShouldBeLessThan(
+            MailHop.CircuitBreakerSamplingDuration,
+            "a send no retry repeats is one attempt, so failures of that kind alone must open the breaker too");
     }
 
     [Fact]

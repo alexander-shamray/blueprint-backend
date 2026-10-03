@@ -23,7 +23,7 @@ public static class MailHop
 
     public const double CircuitBreakerFailureRatio = 0.5;
 
-    /// <summary>Sized to a worker's call rate: two failed sends open it, where a hundred never would.</summary>
+    /// <summary>Sized to a worker's call rate: two transiently failed sends open it; a hundred never would.</summary>
     public const int CircuitBreakerMinimumThroughput = 4;
 
     public static readonly TimeSpan CircuitBreakerSamplingDuration = TimeSpan.FromSeconds(60);
