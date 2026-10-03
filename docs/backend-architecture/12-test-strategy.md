@@ -24,7 +24,7 @@
 | Outbound hop | One of §9.7's synchronous calls, from its caller's host: the timeout hierarchy, the credential handler's position inside the resilience pipeline, and §11.5's realm for a caller whose grant is proved there | `WebApplicationFactory` + the callee on loopback — a real gRPC server or a stub HTTP one; a class in a suite proving a grant also runs a real Keycloak | < 1 s, and seconds for a Keycloak class | One suite per caller | `Web.Bff.Tests`, `Shipping.Worker.Tests`, `Notifications.Worker.Tests` |
 | Pipeline behaviour | One §6.3 behaviour against recording fakes — the branches its handler-level tests cannot reach | None | < 10 ms | One suite per behaviour | `Common.Application.Tests` |
 | Saga | One whole saga, coordination only | MassTransit in-memory harness — no infrastructure | < 100 ms per positive assertion (§12.5) | A few | `*.Application.Tests` |
-| Contract shape | Every published contract against the rules it must obey | Both assemblies, reflection only | < 1 s | One suite | `Platform.IntegrationTests` |
+| Contract shape | Every published contract against the rules it must obey and the shape it was recorded with | Both assemblies by reflection, and the recorded shape | < 1 s | One suite | `Platform.IntegrationTests` |
 
 **Neither is there an "all services in containers" level, nor an E2E one.** Both
 are rows that get written into a strategy and never built — the second needs a
@@ -42,8 +42,9 @@ the whole inactivity timeout — once per test, however many negatives it
 asserts. §12.5's traps price that and name the correctness hazard that comes
 with it, and between them they are the reason these tests are "a few" rather
 than hundreds. **Contract compatibility** —
-does the message one service publishes still mean what its consumers expect —
-is a reflection test over the contract assembly, and it is why
+does the message one service publishes still have the shape its consumers were
+built against — is a reflection test over the contract assembly and a record of
+its shape, and it is why
 `Platform.IntegrationTests` exists; what else that suite holds is §12.6's.
 Contract compatibility is **not the only thing genuinely between services** —
 §9.7's synchronous calls are another, and §12.6 tests the two in almost
