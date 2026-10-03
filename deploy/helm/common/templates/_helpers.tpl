@@ -160,11 +160,8 @@ no such block, where the dotted form fails the render. */}}
 PaymentProvider__BaseUrl: {{ include "commerce.requireUrl" (list .Values.paymentProvider.baseUrl "paymentProvider.baseUrl is required when paymentProvider.enabled: AddPaymentProvider reads it eagerly and throws naming the key, so the host does not start (§15.4).") | quote }}
 {{- end }}
 {{- if (.Values.carrier).enabled }}
-{{- /* §3.2's carrier, on the provider's pattern one service over and for the same
-reason: an address is not a credential, so it is Config, and it is required
-because the host parses it before it will start (§15.4). HTTPS unconditionally,
-which `commerce.requireUrl` argues — a chart is how a cluster is deployed and
-sets no environment, so Production is what runs. */}}
+{{- /* §3.2's carrier, on the provider's terms above; HTTPS unconditionally, which
+`commerce.requireUrl` argues. */}}
 Carrier__BaseUrl: {{ include "commerce.requireUrl" (list .Values.carrier.baseUrl "carrier.baseUrl is required when carrier.enabled: Shipping's carrier registration reads it eagerly and throws naming the key, so the host does not start (§15.4).") | quote }}
 {{- end }}
 {{- if (.Values.addressSource).enabled }}
@@ -202,9 +199,7 @@ Jurisdiction__AddressRetention: {{ $windows.addressRetention | quote }}
 Jurisdiction__TrackingRetention: {{ $windows.trackingRetention | quote }}
 {{- end }}
 {{- if (.Values.fulfilment).enabled }}
-{{- /* ADR-052's give-up age, on the jurisdiction windows' TimeSpan terms: present is
-not enough, because `3 days` renders and fails binding in the new pod. The
-range is the host's to refuse: FulfilmentOptions owns its bounds. */}}
+{{- /* ADR-052's give-up age, on the jurisdiction windows' TimeSpan terms above. */}}
 {{- $giveUpAge := include "commerce.require" (list .Values.fulfilment.giveUpAge "fulfilment.giveUpAge is required when fulfilment.enabled: ADR-052 makes the give-up age a value the deployment is given, and FulfilmentOptions refuses to boot without it.") }}
 {{- if not (regexMatch (include "commerce.timeSpanPattern" .) $giveUpAge) }}
 {{- fail (printf "fulfilment.giveUpAge is %q, which is not a TimeSpan this chart will accept: [d.]hh:mm[:ss], as in 3.00:00:00 for three days. FulfilmentOptions binds it at start (ADR-052)." $giveUpAge) }}
