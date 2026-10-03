@@ -387,6 +387,9 @@ public sealed class ServiceFixture()
             await RunSendPassAsync();
         }
 
+        if (await ScalarAsync<int>(Pending) == 0)
+            return;
+
         throw new TimeoutException($"A notice was still pending after {maxPasses} passes.");
     }
 
