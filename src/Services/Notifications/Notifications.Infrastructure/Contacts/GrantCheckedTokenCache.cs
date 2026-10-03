@@ -60,7 +60,7 @@ public sealed partial class GrantCheckedTokenCache(
     }
 
     /// <summary>The roles on <c>realm-management</c>, read and never validated: a signature sizes no grant.</summary>
-    /// <remarks>Decoded by hand, as the handler flattens the nested claim to text (ADR-052).</remarks>
+    /// <remarks>Decoded by hand: the handler flattens a nested claim to text, and ADR-052's claim is nested.</remarks>
     private string[] Roles(string token)
     {
         JwtSecurityToken jwt;
