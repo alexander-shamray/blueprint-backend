@@ -10,6 +10,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Notifications.TestSupport;
 using Testcontainers.Keycloak;
 using Xunit;
+using ContactRegistration = Notifications.Infrastructure.Contacts.DependencyInjection;
 
 namespace Notifications.Worker.Tests;
 
@@ -74,6 +75,9 @@ public sealed class KeycloakFixture : IAsyncLifetime
     /// <summary>The contact reader's id with a secret the realm does not hold.</summary>
     public ContactHost WrongSecret { get; private set; } = null!;
 
+    /// <summary>The granted host reading a realm of a valid name that this server does not hold.</summary>
+    public ContactHost WrongRealm { get; private set; } = null!;
+
     public async ValueTask InitializeAsync()
     {
         await _keycloak.StartAsync();
@@ -87,6 +91,7 @@ public sealed class KeycloakFixture : IAsyncLifetime
         Ungranted = Host(UngrantedClient, UngrantedSecret, grantChecked: true);
         UncheckedUngranted = Host(UngrantedClient, UngrantedSecret, grantChecked: false);
         WrongSecret = Host(ContactClient, "not-the-realms-secret", grantChecked: true);
+        WrongRealm = Host(ContactClient, ContactSecret, grantChecked: true, realm: Realm + "x");
     }
 
     public async ValueTask DisposeAsync()
@@ -147,9 +152,9 @@ public sealed class KeycloakFixture : IAsyncLifetime
         return await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
     }
 
-    private ContactHost Host(string clientId, string secret, bool grantChecked)
+    private ContactHost Host(string clientId, string secret, bool grantChecked, string realm = Realm)
     {
-        ContactHost host = new(BaseAddress, Authority, clientId, secret, grantChecked);
+        ContactHost host = new(BaseAddress, Authority, clientId, secret, grantChecked, realm);
         _hosts.Add(host);
 
         return host;
@@ -271,7 +276,8 @@ public sealed class KeycloakFixture : IAsyncLifetime
         string authority,
         string clientId,
         string secret,
-        bool grantChecked)
+        bool grantChecked,
+        string realm)
         : ContactSourceTests.PatientFactory(baseAddress)
     {
         protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -281,6 +287,7 @@ public sealed class KeycloakFixture : IAsyncLifetime
             // A later setting replaces an earlier one, so these supersede the unreachable authority and the fake.
             builder
                 .UseSetting(AuthenticationExtensions.AuthorityKey, authority)
+                .UseSetting(ContactRegistration.RealmKey, realm)
                 .UseSetting($"{ServiceIdentityOptions.SectionName}:ClientId", clientId)
                 .UseSetting($"{ServiceIdentityOptions.SectionName}:ClientSecret", secret);
         }

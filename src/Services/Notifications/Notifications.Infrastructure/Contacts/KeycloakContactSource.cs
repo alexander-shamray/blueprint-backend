@@ -11,6 +11,9 @@ namespace Notifications.Infrastructure.Contacts;
 /// </remarks>
 internal sealed class KeycloakContactSource(HttpClient http, ContactMetrics metrics) : IContactSource
 {
+    /// <summary>The pinned Keycloak's error for an id its realm holds no user under.</summary>
+    private const string UserNotFound = "User not found";
+
     public async Task<ContactLookup> GetAsync(Guid customerId, CancellationToken ct)
     {
         if (customerId == Guid.Empty)
@@ -19,9 +22,17 @@ internal sealed class KeycloakContactSource(HttpClient http, ContactMetrics metr
         using HttpRequestMessage message = new(HttpMethod.Get, $"users/{customerId:D}");
         using HttpResponseMessage response = await http.SendAsync(message, ct);
 
-        // No such user; the disabled and the mailbox-less below collapse into the same answer (ADR-052).
+        // No such user, which the disabled and the mailbox-less below join (ADR-052); a wrong realm or route is a 404
+        // too, and is thrown, as a deployment fault taken for an answer would end every customer's work.
         if (response.StatusCode == HttpStatusCode.NotFound)
-            return new ContactLookup.NoSuchCustomer();
+        {
+            return await IsNoSuchUserAsync(response, ct)
+                ? new ContactLookup.NoSuchCustomer()
+                : throw new HttpRequestException(
+                    "Keycloak answered the contact read with a 404 that is no answer about a user.",
+                    inner: null,
+                    HttpStatusCode.NotFound);
+        }
 
         if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
         {
@@ -95,6 +106,25 @@ internal sealed class KeycloakContactSource(HttpClient http, ContactMetrics metr
         && LanguageTag.IsOne(locale[0].GetString())
             ? locale[0].GetString()
             : null;
+
+    // Matched whole and never quoted, so a body that is not Keycloak's error is no answer and leaves no trace (§13.4).
+    private static async Task<bool> IsNoSuchUserAsync(HttpResponseMessage response, CancellationToken ct)
+    {
+        try
+        {
+            await using Stream body = await response.Content.ReadAsStreamAsync(ct);
+            using JsonDocument answer = await JsonDocument.ParseAsync(body, cancellationToken: ct);
+
+            return answer.RootElement.ValueKind == JsonValueKind.Object
+                && answer.RootElement.TryGetProperty("error", out JsonElement error)
+                && error.ValueKind == JsonValueKind.String
+                && error.ValueEquals(UserNotFound);
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
 
     // The parser's exception is dropped, as its message can quote the body (§13.4).
     private static async Task<JsonDocument> ParseAsync(HttpResponseMessage response, CancellationToken ct)
