@@ -1,5 +1,6 @@
 using Notifications.Application;
 using Notifications.Infrastructure;
+using Notifications.Infrastructure.Mail;
 using Common.Web;
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
@@ -14,6 +15,9 @@ builder.Host.UseDefaultServiceProvider(o =>
 builder.AddCommonWebDefaults();                 // §13.2
 builder.Services.AddNotificationsApplication();       // §6.2
 builder.Services.AddNotificationsInfrastructure(builder.Configuration);   // §4.2, §7.1
+
+// The relay behind IMailChannel (ADR-055); plain or anonymous submission is refused outside Development.
+builder.Services.AddMailChannel(builder.Configuration, builder.Environment);
 
 // A worker names no endpoint, so it registers no permission policy (§3.2); the token middleware below stays (§11.2).
 

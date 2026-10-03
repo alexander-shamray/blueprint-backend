@@ -1,6 +1,7 @@
 using Common.Application;
 using Common.Infrastructure.Messaging;
 using Microsoft.Extensions.Hosting;
+using Notifications.Infrastructure.Mail;
 
 namespace Notifications.Infrastructure.Observability;
 
@@ -8,10 +9,11 @@ namespace Notifications.Infrastructure.Observability;
 public sealed class MetricsInitialiser : IHostedService
 {
     /// <summary>Resolving the parameters is the whole job; the guards are the read CS9113 asks for.</summary>
-    public MetricsInitialiser(MessagingMetrics messaging, RequestMetrics requests)
+    public MetricsInitialiser(MessagingMetrics messaging, RequestMetrics requests, MailMetrics mail)
     {
         ArgumentNullException.ThrowIfNull(messaging);
         ArgumentNullException.ThrowIfNull(requests);
+        ArgumentNullException.ThrowIfNull(mail);
     }
 
     // `cancellationToken`, not `ct`: CA1725 matches the interface's parameter name, and ADR-019 makes it an error.
