@@ -500,13 +500,14 @@ the window.
 **PR-1's keys** are `ConnectionStrings__Bff` and
 `ConnectionStrings__BffMigrator`; **PR-2's** is `ConnectionStrings__RabbitMq`
 with the `bff-svc` account. Compose gains the migrator as the services' pair
-rule draws it — the host depends on the migrator completing — and SQL and
-RabbitMQ in the host's `depends_on`. **The broker password is the one new
-secret, and it is PR-2's**, and it is not one of `docs/secrets.md`'s five
-places: RabbitMQ imports its accounts from `definitions.json` with no
-environment override, which that file already says, so it takes the
-broker sentence and the local-defaults row `notifications-svc` has. The
-SQL keys use the shared SQL login every service's local default uses.
+rule draws it: SQL is the migrator's dependency, and the host depends on the
+migrator completing, in PR-1, and on RabbitMQ, in PR-2. **The broker password
+is the one new secret, and it is PR-2's**, and it is not one of
+`docs/secrets.md`'s five places: RabbitMQ imports its accounts from
+`definitions.json` with no environment override, which that file already
+says, so it takes the broker sentence and the local-defaults row
+`notifications-svc` has. The SQL keys use the shared SQL login every
+service's local default uses.
 
 **The chart moves in two halves**, section 4 says why. PR-1 turns on the
 library chart's `database` capability, adds the migrator image and the
