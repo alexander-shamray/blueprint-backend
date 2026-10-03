@@ -21,7 +21,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Services\Notifications\Notifications.Application\Notifications.Application.csproj" />
-    <!-- TestSupport, Infrastructure and the EF provider return with the first handler test (§12.1). -->
+    <!-- No Notifications.TestSupport and no Docker: the handlers here run against hand-rolled fakes, and §12.4
+         reads a level as what a test exercises, not as an assembly. -->
   </ItemGroup>
 
 </Project>
