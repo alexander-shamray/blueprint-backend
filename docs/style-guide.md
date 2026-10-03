@@ -122,11 +122,12 @@ the churn it produces is the same, and it was measured in
   says what its summary would say has none. A `<remarks>` exists only to
   cite an owner or to state an invariant nothing checks, cites a section,
   an ADR or a `cref`, and is four lines or fewer. A comment block, in any
-  syntax above — a `///` run and a docstring among them — is five lines or
-  fewer, its tags included, so a one-line summary and a four-line
-  `<remarks>` fill it. A delimiter on a line of its own is a line of the
-  block, a docstring's `"""` and Helm's `{{- /*` and `*/}}` alike, so a Helm
-  comment opens on its first line of text and closes on its last. The ceiling
+  syntax above or in a Helm template, which the gate does not read — a `///`
+  run and a docstring among them — is five lines or fewer, its tags
+  included, so a one-line summary and a four-line `<remarks>` fill it. A
+  delimiter on a line of its own is a line of the block, a docstring's `"""`
+  and Helm's `{{- /*` and `*/}}` alike, so a Helm comment opens on its first
+  line of text and closes on its last. The ceiling
   sits where a cited sentence fits and an argument does not: an argument is a
   decision, and a decision is an ADR — write it with `/new-adr` and cite it.
 - **No emphasis.** No `**bold**`, `<b>`, capitals or `!` for stress in a
