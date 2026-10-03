@@ -166,7 +166,7 @@ public class ContractTests
     }
 
     /// <summary>Required, or taken by every public constructor, since one that omits it is a way round.</summary>
-    private static bool IsAlwaysSupplied(PropertyInfo property, Type type)
+    internal static bool IsAlwaysSupplied(PropertyInfo property, Type type)
     {
         if (property.IsDefined(typeof(RequiredMemberAttribute), inherit: false))
             return true;
