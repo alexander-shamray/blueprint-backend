@@ -13,8 +13,9 @@ namespace Notifications.Infrastructure.Mail;
 
 /// <summary>The one place that speaks SMTP, and the platform's first output encoding.</summary>
 /// <remarks>
-/// A relay's exception can quote the mailbox, in its message or in the server's reply, so none leaves this class:
-/// each becomes a <see cref="MailUnavailableException"/> naming the message, the phase and the reply code (§13.4).
+/// A relay's exception can quote the mailbox, in its message or in the server's reply, so none leaves this class
+/// with its words: a fault becomes a <see cref="MailUnavailableException"/> naming the message, the phase and the
+/// reply code (§13.4).
 /// </remarks>
 internal sealed partial class SmtpMailChannel(
     IOptions<MailOptions> options,
