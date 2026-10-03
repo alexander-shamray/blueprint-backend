@@ -345,7 +345,7 @@ public sealed record OrderTimeline(
 public sealed record OrderLineSummary(Guid ProductId, string? ProductName, Money LineTotal);
 
 /// <summary>One order as both routes carry it (§10.7, ADR-051).</summary>
-/// <param name="Total">Null, and <paramref name="Lines"/> empty, until a placed or confirmed event.</param>
+/// <param name="Total">Null, and <paramref name="Lines"/> empty, while the order has no stored currency.</param>
 /// <param name="AsOf">The BFF's clock at the row's last write: when it learned, not that nothing followed.</param>
 public sealed record OrderSummary(
     Guid OrderId,
