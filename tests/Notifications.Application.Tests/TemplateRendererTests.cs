@@ -92,6 +92,46 @@ public class TemplateRendererTests
     }
 
     [Fact]
+    public void A_resend_renders_the_stamped_version_and_languages_exactly_as_the_first_send()
+    {
+        TemplateRenderer renderer = Renderer(["kk", "en"]);
+        RenderedMessage first = renderer.Render(TemplateKeys.OrderPlaced, Everything, locale: null);
+
+        RenderedMessage again = renderer.Render(
+            TemplateKeys.OrderPlaced, Everything, first.TemplateVersion, first.Languages);
+
+        again.Subject.ShouldBe(first.Subject);
+        again.Body.ShouldBe(first.Body);
+        again.TemplateVersion.ShouldBe(first.TemplateVersion);
+        again.LanguageList.ShouldBe(first.LanguageList);
+    }
+
+    [Fact]
+    public void A_resend_keeps_the_stamped_languages_where_a_locale_would_now_choose_one()
+    {
+        // The customer set a locale after the first send; the same Message-ID must carry the same text.
+        RenderedMessage again = Renderer(["kk", "en"]).Render(TemplateKeys.OrderConfirmed, Everything, 1, ["kk", "en"]);
+
+        again.Languages.ShouldBe(["kk", "en"]);
+        again.Subject.ShouldContain(TemplateRenderer.SubjectSeparator);
+    }
+
+    [Fact]
+    public void A_resend_of_a_version_the_set_does_not_hold_throws_rather_than_sending_another()
+    {
+        Should.Throw<InvalidOperationException>(() =>
+            Renderer(["kk", "en"]).Render(TemplateKeys.OrderPlaced, Everything, 2, ["kk"]));
+    }
+
+    [Fact]
+    public void A_resend_in_a_language_the_deployment_dropped_throws_rather_than_rendering_without_a_culture()
+    {
+        Should.Throw<InvalidOperationException>(() =>
+            Renderer(["kk", "en"]).Render(TemplateKeys.OrderPlaced, Everything, 1, ["ru"]))
+            .Message.ShouldContain("ru");
+    }
+
+    [Fact]
     public void A_kazakh_date_and_amount_differ_from_the_invariant_culture_s()
     {
         // Both need ICU and tzdata, which the -chiseled-extra image carries and the plain one does not (§15.2).
