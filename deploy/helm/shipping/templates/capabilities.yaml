@@ -1,9 +1,7 @@
-{{- /*
-Shipping registers each of these unconditionally, so on this chart every one is
+{{- /* Shipping registers each of these unconditionally, so on this chart every one is
 a fact about the code: switched off with its settings cleared, the library
 chart's coherence guard has nothing to refuse and the pod does not start. So
-this chart refuses the switches themselves (§15.4).
-*/}}
+this chart refuses the switches themselves (§15.4). */}}
 {{- if not (.Values.carrier).enabled }}
 {{- fail "carrier.enabled is false on the shipping chart. Shipping registers its carrier unconditionally and does not start without both keys (§15.4)." }}
 {{- end }}
