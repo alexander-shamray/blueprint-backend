@@ -162,8 +162,8 @@ realm gate reads (ADR-052), so a deployed realm is held to them here.
 `shipping-worker`'s service account holds `orders:delivery-address` on
 `commerce-api` and nothing else. `notifications-worker`'s holds `view-users`
 on `realm-management` — Keycloak composes `query-groups` and `query-users`
-into it — and nothing else, with `commerce-api` in neither of its scope
-lists and `roles` in one. Each worker refuses a token wider than its grant at
+into it — and nothing else; its scope lists are the realm gate's to check.
+Each worker refuses a token wider than its grant at
 its first read; a grant on some other client is outside that check, and this
 paragraph is what says it must not exist.
 
