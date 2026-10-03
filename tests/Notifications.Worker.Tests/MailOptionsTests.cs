@@ -127,6 +127,15 @@ public sealed class MailOptionsTests
     }
 
     [Fact]
+    public void A_host_that_names_a_relay_starts()
+    {
+        // The control for the fact below: the same unreachable hosts start, so a refusal there is the missing relay's.
+        using NotificationsWorkerFactory factory = new(Unreachable.Sql, Unreachable.Rabbit);
+
+        Should.NotThrow(() => factory.CreateClient());
+    }
+
+    [Fact]
     public void A_host_that_names_no_relay_does_not_start()
     {
         using NotificationsWorkerFactory factory = new(Unreachable.Sql, Unreachable.Rabbit, mailHost: "");
