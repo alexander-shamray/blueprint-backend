@@ -112,15 +112,15 @@ per environment; §15.4 names the types that have earned one.
 ## Rotation
 
 **A running host holds a datastore credential, or the credential of an
-outbound call it makes itself** — `Identity__Client__ClientSecret`, for the
-BFF and, since
-[ADR-052](backend-architecture/adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md),
-for Shipping's worker — the two hosts that call a peer synchronously
-([§9.7](backend-architecture/09-messaging.md),
-[§11.5](backend-architecture/11-identity-authorization.md), ADR-017),
+outbound call it makes itself** — `Identity__Client__ClientSecret`, for each
+host §15.4's rows name — the BFF, which calls a peer on a request path
+([§9.7](backend-architecture/09-messaging.md), ADR-017), and every worker
+[ADR-052](backend-architecture/adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)
+gives a read of its own
+([§11.5](backend-architecture/11-identity-authorization.md)),
 `PaymentProvider__ApiKey`, for Payments' provider behind §3.2's
-anti-corruption layer, `Carrier__ApiKey`, for Shipping's carrier behind
-the same, and `Mail__Password`, for Notifications' relay
+anti-corruption layer, `Carrier__ApiKey`, for Shipping's carrier behind the
+same, and `Mail__Password`, for Notifications' relay
 ([§15.4](backend-architecture/15-cicd-deployment.md)).
 
 **The fourth subsection below is not a host's, and that is why the sentence
@@ -137,7 +137,8 @@ flip.
 
 1. Add the new secret in Keycloak, keeping the old one valid.
 2. Update the vault entry — `web-bff-identity` for the BFF,
-   `shipping-identity` for Shipping's worker. Each chart names its own under
+   `shipping-identity` for Shipping's worker, `notifications-identity` for
+   Notifications' worker. Each chart names its own under
    `identity.clientSecretRef`, and they are never one Secret.
 3. Wait for External Secrets to reconcile, then restart the pods of the host
    whose secret this is — configuration is read at startup, so a reconciled
@@ -145,11 +146,24 @@ flip.
 4. Confirm the host is authenticating. For the BFF that is pricing calls to
    Catalog succeeding; for Shipping's worker it is shipments leaving
    `Pending`, and `shipping.address.refused` staying flat — ADR-052 counts a
-   refused credential separately from an outage for exactly this moment.
+   refused credential separately from an outage for exactly this moment; for
+   Notifications' worker it is `notifications.contact.refused` staying flat,
+   the same separate count for the same moment.
 5. Retire the old secret in Keycloak.
 
 **Step 3 is the one that gets skipped**, and skipping it produces a rotation
 that appears to work until the next unrelated restart.
+
+**What each worker's client holds is a provisioning obligation, because no
+gate can read it.** A service account's roles are in neither document the
+realm gate reads (ADR-052), so a deployed realm is held to them here.
+`shipping-worker`'s service account holds `orders:delivery-address` on
+`commerce-api` and nothing else. `notifications-worker`'s holds `view-users`
+on `realm-management` — Keycloak composes `query-groups` and `query-users`
+into it — and nothing else, with `commerce-api` in neither of its scope
+lists and `roles` in one. Each worker refuses a token wider than its grant at
+its first read; a grant on some other client is outside that check, and this
+paragraph is what says it must not exist.
 
 ### A database credential
 
@@ -338,6 +352,7 @@ to be tidied away:
 | Payment provider key | `local-dev-psp` |
 | Carrier key | `local-dev-carrier` |
 | Shipping worker client secret | `${SHIPPING_CLIENT_SECRET:-local-dev-shipping-secret}` |
+| Notifications worker client secret | `${NOTIFICATIONS_CLIENT_SECRET:-local-dev-notifications-secret}` |
 
 These defaults are what make `docker compose up` work with no prior setup, and
 **the environment variable in front of each is the seam** that keeps them out of
