@@ -215,8 +215,9 @@ contains "both halves". The three existing tests pass.
 - [ ] **Step 3: Make the marker half optional**
 
 In `RetentionPurgeService.cs`, replace the field block from `private readonly
-IIdempotencyStore _claims;` through `private readonly string _markerTable;`
-and the constructor with:
+IServiceScopeFactory _scopes;` through `private readonly string _markerTable;`
+— every field below `RowsPerDelete`, `_scopes` included, since the
+replacement declares it — and the constructor with:
 
 ```csharp
     private readonly IServiceScopeFactory _scopes;
