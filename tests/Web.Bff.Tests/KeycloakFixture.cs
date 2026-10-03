@@ -6,7 +6,7 @@ using Xunit;
 
 namespace Web.Bff.Tests;
 
-/// <summary>A real Keycloak importing the shipped realm file, the only fixture that runs one (§11.5).</summary>
+/// <summary>A real Keycloak importing the shipped realm file, for §11.5's grants.</summary>
 public sealed class KeycloakFixture : IAsyncLifetime
 {
     /// <summary>The realm the platform's tokens come from (§14.1).</summary>
