@@ -12,7 +12,7 @@ public class ArchitectureTests
     public void Application_references_only_what_the_dependency_table_allows()
     {
         // §4.2's second row as an allow-list, with no Domain project because §4.1 gives none: Dapper is §6.5's
-        // read side and brings System.Data.Common.
+        // read side and brings System.Data.Common, and System.Text.Json is the stored parameters' format.
         string[] allowed =
         [
             "Common.Application",
@@ -26,7 +26,8 @@ public class ArchitectureTests
             "System.Data.Common",
             "System.Linq",
             "System.Linq.Expressions",
-            "System.Runtime"
+            "System.Runtime",
+            "System.Text.Json"
         ];
 
         string[] unexpected =
