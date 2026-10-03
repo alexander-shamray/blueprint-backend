@@ -11,6 +11,7 @@ using Common.Application;
 using Common.Infrastructure.Idempotency;
 using Common.Infrastructure.Inbox;
 using Common.Infrastructure.Messaging;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -96,7 +97,18 @@ public static class DependencyInjection
             .ValidateOnStart();
         services.AddSingleton<IValidateOptions<DeliveryOptions>, DeliveryOptionsValidator>();
 
-        // The send worker's instruments, a singleton so one meter holds one set (§13.6).
+        // The gauges' reader on the runtime key (§7.1), with a bounded connect timeout no query inherits, since a
+        // callback that waits stalls every other one; through a factory, so the container disposes what it built.
+        string metricsConnectionString =
+            new SqlConnectionStringBuilder(configuration.GetConnectionString("Notifications"))
+            {
+                ConnectTimeout = NotificationStats.ConnectTimeoutSeconds
+            }.ConnectionString;
+
+        services.AddSingleton<INotificationStats>(
+            _ => new NotificationStats(new SqlConnectionFactory(metricsConnectionString)));
+
+        // The send worker's counter and gauges, a singleton so one meter holds one set (§13.6).
         services.AddSingleton<NotificationMetrics>();
 
         // The send pass; the generic overload, so a suite can remove it by its ImplementationType (§12.4).

@@ -11,6 +11,8 @@
     <!-- The bus (§9); no RabbitMQ health-check package, because AddMassTransit registers its own. -->
     <PackageReference Include="MassTransit.RabbitMQ" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" />
+    <!-- NotificationStats' MemoryCache (§13.6), named directly though Common.Infrastructure carries it. -->
+    <PackageReference Include="Microsoft.Extensions.Caching.Memory" />
     <!-- The relay's adapter: MailKit submits, MimeKit builds the message and encodes its headers. -->
     <PackageReference Include="MailKit" />
     <PackageReference Include="MimeKit" />
