@@ -1080,7 +1080,7 @@ response describes a principal.
 
 **Every 409 carries a `code`, and this section is where that stopped being
 optional.** `detail` is human-readable by RFC 9457's own definition, so a
-client switching on it is parsing English — fine while all three producers of
+client switching on it is parsing English — fine while every producer of
 this status said *retry*, and not fine the moment one of them said the
 opposite. So each names itself in the extension member §10.5 already reserves
 for exactly this: `request.concurrency_conflict`, `request.in_progress` and
