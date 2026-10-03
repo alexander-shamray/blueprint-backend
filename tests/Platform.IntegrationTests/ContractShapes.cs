@@ -118,6 +118,9 @@ internal static class ContractShapes
             ", ",
             arguments.Select((argument, i) => Render(argument, nullability.GenericTypeArguments[i])));
 
-        return $"{name[..name.IndexOf('`', StringComparison.Ordinal)]}<{rendered}>{mark}";
+        // Each part loses only its arity, so a type nested in a generic keeps its own name.
+        string bare = string.Join('+', name.Split('+').Select(part => part.Split('`')[0]));
+
+        return $"{bare}<{rendered}>{mark}";
     }
 }
