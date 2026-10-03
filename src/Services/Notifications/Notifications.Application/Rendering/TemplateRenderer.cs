@@ -134,7 +134,7 @@ public sealed class TemplateRenderer
             if (!_cultures.ContainsKey(language))
                 throw new InvalidOperationException($"{language} is not in the deployment's language set.");
 
-            // Create refused every gap at start, so a miss here is a set that changed beneath a running host.
+            // Create checks current versions only, so a miss is another build's stamp or a set changed under the host.
             Template template = _templates.Find(templateKey, version, language) ??
                 throw new InvalidOperationException($"{templateKey} v{version} has no {language} template.");
 
