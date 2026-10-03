@@ -2526,16 +2526,16 @@ contract — its type, its nullability and whether it is always supplied — and
 the discovery above, so a new service's are held from its first one, with no
 list to extend.
 
-A change breaks when a consumer built against the record could fail on it: a
-contract or a member gone, a rename, which reads as one gone, any change to a
-recorded member's declaration, `required` in either direction included, and a
-new member that is `required`, which a payload staged before it does not carry.
-A new optional member or a new contract is additive, and still fails the test
-that compares the record with the assembly until the record is replaced from the
-live shape that test writes to its output directory, so an added member is held
-from the commit that adds it. The comparer is driven through a synthetic shape
-for each kind of change and the renderer through a probe of each nullability,
-for the reason the subject rule ships with controls.
+A change breaks when a consumer or a payload built against the record could fail
+on it: a contract or a member gone, a rename, which reads as one gone, any
+change to a recorded member's declaration, `required` in either direction
+included, and a new member that is `required`, which a payload staged before it
+does not carry. A new optional member or a new contract is additive, and still
+fails the test that compares the record with the assembly until the record is
+replaced from the live shape that test writes to its output directory, so an
+added member is held from the commit that adds it. The comparer is driven
+through a synthetic shape for each kind of change and the renderer through a
+probe of each nullability, for the reason the subject rule ships with controls.
 
 **A replacement that removes or changes a recorded line lands in two cases, and
 each is argued in its commit**: a contract changed in place under §9.2's
