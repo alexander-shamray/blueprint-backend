@@ -176,7 +176,7 @@ public sealed class SmtpMailChannelTests(MailpitFixture fixture) : IAsyncLifetim
     {
         CancellationToken ct = TestContext.Current.CancellationToken;
         await fixture.Plain.RefuseRecipientsAsync(550, ct);
-        using MailCount counted = MailCounter.Unavailable(fixture.Host.Services);
+        using OutboundCount counted = OutboundCounter.Unavailable(fixture.Host.Services);
 
         MailResult result = await Channel().SendAsync(Mail(), ct);
 

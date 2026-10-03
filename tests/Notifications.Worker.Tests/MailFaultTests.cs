@@ -53,7 +53,7 @@ public sealed class MailFaultTests(MailpitFixture fixture) : IAsyncLifetime
     {
         CancellationToken ct = TestContext.Current.CancellationToken;
         await fixture.Plain.RefuseRecipientsAsync(451, ct);
-        using MailCount counted = MailCounter.Unavailable(_host.Services);
+        using OutboundCount counted = OutboundCounter.Unavailable(_host.Services);
 
         MailUnavailableException thrown = await Should.ThrowAsync<MailUnavailableException>(() =>
             Channel().SendAsync(Mail(), ct));
@@ -70,7 +70,7 @@ public sealed class MailFaultTests(MailpitFixture fixture) : IAsyncLifetime
     {
         CancellationToken ct = TestContext.Current.CancellationToken;
         await fixture.Plain.RefuseSendersAsync(550, ct);
-        using MailCount counted = MailCounter.Unavailable(_host.Services);
+        using OutboundCount counted = OutboundCounter.Unavailable(_host.Services);
 
         MailUnavailableException thrown = await Should.ThrowAsync<MailUnavailableException>(() =>
             Channel().SendAsync(Mail(), ct));
@@ -112,7 +112,7 @@ public sealed class MailFaultTests(MailpitFixture fixture) : IAsyncLifetime
             Unreachable.Rabbit,
             mailHost: "127.0.0.1",
             mailPort: closed);
-        using MailCount counted = MailCounter.Unavailable(refusing.Services);
+        using OutboundCount counted = OutboundCounter.Unavailable(refusing.Services);
 
         MailUnavailableException thrown = await Should.ThrowAsync<MailUnavailableException>(() =>
             refusing.Services.GetRequiredService<IMailChannel>()
@@ -151,7 +151,7 @@ public sealed class MailFaultTests(MailpitFixture fixture) : IAsyncLifetime
                 Unreachable.Rabbit,
                 mailHost: "127.0.0.1",
                 mailPort: port);
-            using MailCount counted = MailCounter.Unavailable(host.Services);
+            using OutboundCount counted = OutboundCounter.Unavailable(host.Services);
             long started = Stopwatch.GetTimestamp();
 
             await Should.ThrowAsync<MailUnavailableException>(() => host.Services
@@ -179,7 +179,7 @@ public sealed class MailFaultTests(MailpitFixture fixture) : IAsyncLifetime
             Unreachable.Rabbit,
             mailHost: "127.0.0.1",
             mailPort: stalled.Port);
-        using MailCount counted = MailCounter.Unavailable(host.Services);
+        using OutboundCount counted = OutboundCounter.Unavailable(host.Services);
 
         MailUnavailableException thrown = await Should.ThrowAsync<MailUnavailableException>(() => host.Services
             .GetRequiredService<IMailChannel>()
@@ -203,7 +203,7 @@ public sealed class MailFaultTests(MailpitFixture fixture) : IAsyncLifetime
             Unreachable.Rabbit,
             mailHost: "127.0.0.1",
             mailPort: stalled.Port);
-        using MailCount counted = MailCounter.Unavailable(host.Services);
+        using OutboundCount counted = OutboundCounter.Unavailable(host.Services);
         using CancellationTokenSource caller = CancellationTokenSource.CreateLinkedTokenSource(
             TestContext.Current.CancellationToken);
         caller.CancelAfter(TimeSpan.FromSeconds(1));
@@ -223,7 +223,7 @@ public sealed class MailFaultTests(MailpitFixture fixture) : IAsyncLifetime
             "250-relay.test\r\n250 AUTH PLAIN",
             "454 4.7.0 Temporary authentication failure");
         using NotificationsWorkerFactory host = Credentialed(relay.Port);
-        using MailCount counted = MailCounter.Unavailable(host.Services);
+        using OutboundCount counted = OutboundCounter.Unavailable(host.Services);
 
         MailUnavailableException thrown = await Should.ThrowAsync<MailUnavailableException>(() => host.Services
             .GetRequiredService<IMailChannel>()
@@ -244,7 +244,7 @@ public sealed class MailFaultTests(MailpitFixture fixture) : IAsyncLifetime
             "250-relay.test\r\n250 AUTH PLAIN",
             "535 5.7.8 Authentication credentials invalid");
         using NotificationsWorkerFactory host = Credentialed(relay.Port);
-        using MailCount counted = MailCounter.Unavailable(host.Services);
+        using OutboundCount counted = OutboundCounter.Unavailable(host.Services);
 
         MailUnavailableException thrown = await Should.ThrowAsync<MailUnavailableException>(() => host.Services
             .GetRequiredService<IMailChannel>()
@@ -261,7 +261,7 @@ public sealed class MailFaultTests(MailpitFixture fixture) : IAsyncLifetime
     {
         CancellationToken ct = TestContext.Current.CancellationToken;
         await fixture.Plain.RefuseRecipientsAsync(451, ct);
-        using MailCount counted = MailCounter.Unavailable(_host.Services);
+        using OutboundCount counted = OutboundCounter.Unavailable(_host.Services);
 
         while (counted.Value < MailHop.CircuitBreakerMinimumThroughput)
         {

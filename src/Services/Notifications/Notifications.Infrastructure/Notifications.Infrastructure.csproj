@@ -18,6 +18,10 @@
     <PackageReference Include="Polly.Core" />
     <!-- The hosting abstractions this project names: IHostEnvironment, in each outbound hop's registration. -->
     <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
+    <!-- The contact read's typed client and its pipeline (§9.7), as Shipping's address read takes it. -->
+    <PackageReference Include="Microsoft.Extensions.Http.Resilience" />
+    <!-- JwtSecurityTokenHandler, with which the grant check reads the token this host was issued (ADR-052). -->
+    <PackageReference Include="System.IdentityModel.Tokens.Jwt" />
   </ItemGroup>
 
   <ItemGroup>

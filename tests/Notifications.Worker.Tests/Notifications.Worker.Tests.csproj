@@ -24,6 +24,12 @@
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
     <!-- The in-memory harness; core, not MassTransit.RabbitMQ, since the harness swaps the transport out. -->
     <PackageReference Include="MassTransit" />
+    <!-- The contact read's owner, a real Keycloak importing the shipped realm (§11.5, ADR-052). -->
+    <PackageReference Include="Testcontainers.Keycloak" />
+    <!-- A stub Keycloak on loopback, where a fault has to be staged (§12.7). -->
+    <PackageReference Include="WireMock.Net" />
+    <!-- Named although transitive, because the live suite reads the token Keycloak issued. -->
+    <PackageReference Include="System.IdentityModel.Tokens.Jwt" />
   </ItemGroup>
 
   <ItemGroup>
