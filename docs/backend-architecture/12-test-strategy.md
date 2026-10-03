@@ -1860,8 +1860,8 @@ presented.ShouldBe(["Bearer token-1", "Bearer token-2"]);
 
 The realm is the third, and only a suite that holds it starts a real Keycloak
 (§11.5). Everything else points at an unreachable authority on
-purpose, so an audience mapper missing from the realm export is invisible to
-every other test here — nothing compiles differently when it is gone.
+purpose, so no other test here validates a token Keycloak issued — nothing
+compiles differently when the realm is wrong.
 
 ## 12.5 Testing the saga
 
