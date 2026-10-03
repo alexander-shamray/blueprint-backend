@@ -43,7 +43,7 @@ internal sealed class MailPipeline
             {
                 Timeout = MailHop.AttemptTimeout,
 
-                // The one place an attempt timeout before the send is distinguishable from the caller cancelling.
+                // Only Polly tells an attempt's own timeout from the total's, so an attempt's is counted here.
                 OnTimeout = _ =>
                 {
                     metrics.Unavailable(MailFault.Transient);
