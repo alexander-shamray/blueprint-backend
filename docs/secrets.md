@@ -119,8 +119,8 @@ for Shipping's worker — the two hosts that call a peer synchronously
 ([§9.7](backend-architecture/09-messaging.md),
 [§11.5](backend-architecture/11-identity-authorization.md), ADR-017),
 `PaymentProvider__ApiKey`, for Payments' provider behind §3.2's
-anti-corruption layer, and `Carrier__ApiKey`, for Shipping's carrier behind
-the same
+anti-corruption layer, `Carrier__ApiKey`, for Shipping's carrier behind
+the same, and `Mail__Password`, for Notifications' relay
 ([§15.4](backend-architecture/15-cicd-deployment.md)).
 
 **The fourth subsection below is not a host's, and that is why the sentence
@@ -357,6 +357,12 @@ met the realm-check service account should not have to infer that from a
 silence. The provider and carrier keys have no seam because nothing checks
 them: each simulator ignores its key, so a variable would override a value no
 local party compares.
+
+**The relay has no row, because Compose carries no relay credential at all.**
+Mailpit takes unauthenticated submission and the host allows that in
+Development alone, so `Mail__UserName` and `Mail__Password` are absent from
+the unit rather than defaulted, and the one place a relay password is a fake
+is the test fixture, for the hosts it runs as Production.
 
 Note how the connection strings nest — `${CATALOG_CONNECTION:-…Password=${SQL_PASSWORD:-…}…}`
 — so overriding the password alone keeps every connection string correct. That

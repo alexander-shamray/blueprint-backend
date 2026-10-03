@@ -2653,6 +2653,7 @@ which point Pact is the answer after all.
 | Own broker | Real container, or the MassTransit test harness |
 | Another service (HTTP) | WireMock.Net — a real HTTP server with stubbed responses |
 | Third-party API | WireMock.Net, plus a nightly contract test against their sandbox |
+| Third-party relay (SMTP) | Mailpit — a real SMTP server in a container, read back through its HTTP API |
 | Clock | `FakeTimeProvider` from `Microsoft.Extensions.TimeProvider.Testing` |
 | Random / GUIDs | Inject a seam; never call `Guid.NewGuid()` where the value is asserted |
 
