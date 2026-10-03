@@ -1300,7 +1300,7 @@ namespace read access.
 | `Jurisdiction__LogRetention` | Config | ConfigMap | ✓ — **Notifications only**; ADR-053 rule 4's statutory window for the record of a send, and the host refuses to start without it |
 | `Jurisdiction__ContactRetention` | Config | ConfigMap | ✓ — **Notifications only**; ADR-052's contact row's window, refused at start when shorter than `ContactOptions.StaleCeiling` |
 | `Jurisdiction__OrderRetention` | Config | ConfigMap | ✓ — **Notifications only**; the order record's window, and the host refuses to start without it |
-| `Delivery__GiveUpAge` | Config | Helm `delivery.giveUpAge` → ConfigMap, defaulted in the chart | ✓ — **Notifications only**; [ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)'s give-up age for a notice still pending, past which it is undeliverable with the reason `NotificationReasons.GaveUp`; the host refuses to start without it, or with one longer than `RetentionPolicy.InboxWindow` |
+| `Delivery__GiveUpAge` | Config | Helm `delivery.giveUpAge` → ConfigMap, defaulted in the chart | ✓ — **Notifications only**; [ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)'s give-up age for a notification still pending, past which it is undeliverable with the reason `NotificationReasons.GaveUp`; the host refuses to start without it, or with one longer than `RetentionPolicy.InboxWindow` |
 
 | Kind | Source | Example |
 |---|---|---|
@@ -1343,7 +1343,7 @@ service that writes to customers the language set and the time zone too —
 and `Fulfilment` and Notifications' `Delivery` each hold the give-up age
 [ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)
 makes one — a deadline that decides whether a day's shipments, or a day's
-notices, survive a long outage, which is an operator's call and not a
+notifications, survive a long outage, which is an operator's call and not a
 build's. The tempting next one is
 a `ServiceOptions`-shaped bag — batch sizes, poll intervals, retry caps — bound
 to an `Ordering` section that no environment ever sets. It costs nothing to
