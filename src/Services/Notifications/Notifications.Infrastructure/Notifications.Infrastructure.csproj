@@ -30,4 +30,9 @@
     <ProjectReference Include="..\..\..\BuildingBlocks\Common.Infrastructure\Common.Infrastructure.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- The worker suite drives the production validator over a binding of its own (§15.4). -->
+    <InternalsVisibleTo Include="Notifications.Worker.Tests" />
+  </ItemGroup>
+
 </Project>
