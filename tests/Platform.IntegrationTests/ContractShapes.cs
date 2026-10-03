@@ -79,9 +79,10 @@ internal static class ContractShapes
                     breaks.Add($"{type}.{member} was '{declared}' and is '{now}'");
             }
 
-            breaks.AddRange(current
-                .Where(m => !members.ContainsKey(m.Key) && m.Value.StartsWith(Required, StringComparison.Ordinal))
-                .Select(m => $"{type}.{m.Key} is new and required"));
+            breaks.AddRange(
+                current
+                    .Where(m => !members.ContainsKey(m.Key) && m.Value.StartsWith(Required, StringComparison.Ordinal))
+                    .Select(m => $"{type}.{m.Key} is new and required"));
         }
 
         return [.. breaks];
