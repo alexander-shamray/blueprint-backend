@@ -18,6 +18,16 @@ services:
       sql: { condition: service_healthy }
     restart: "no"
 
+  # Notifications' relay, a sink: every message the stack sends lands here and nowhere else. Both ports bind
+  # loopback alone: the UI shows every message to whoever reaches it, and SMTP is what a worker run on the host
+  # under docker-compose.infra-only.yml submits to. The tag is the one the suite starts (§14.1).
+  mailpit:
+    image: axllent/mailpit:v1.31.3
+    environment:
+      # The API that stages a refusing or failing relay, at PUT /api/v1/chaos.
+      MP_ENABLE_CHAOS: "true"
+    ports: [ "127.0.0.1:1025:1025", "127.0.0.1:8025:8025" ]
+
   notifications-worker:
     build:
       context: ../../..
@@ -38,8 +48,15 @@ services:
       # requires them only of a host that does.
       Identity__Authority: "http://keycloak:8080/realms/commerce"
       OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4317"
+      # The relay, read and validated at start (§15.4). None and no credential are Development's alone: the
+      # sink takes plain, unauthenticated submission, so this unit carries no Mail__UserName or Mail__Password.
+      Mail__Host: "mailpit"
+      Mail__Port: "1025"
+      Mail__From: "Commerce <no-reply@commerce.test>"
+      Mail__Security: "None"
     depends_on:
       notifications-migrator: { condition: service_completed_successfully }
       rabbitmq: { condition: service_healthy }
+      mailpit: { condition: service_healthy }
       # service_healthy since infrastructure.yml's keycloak declares a healthcheck; the host itself does not need it.
       keycloak: { condition: service_healthy }
