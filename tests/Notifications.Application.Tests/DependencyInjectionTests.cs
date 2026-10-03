@@ -1,4 +1,5 @@
 using Common.Application;
+using Notifications.Application.Contacts;
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
 using Xunit;
@@ -104,6 +105,20 @@ public class DependencyInjectionTests
         carrier.Lifetime.ShouldBe(
             ServiceLifetime.Scoped,
             "a singleton would carry one command's key into every other command in the process");
+    }
+
+    [Fact]
+    public void AddNotificationsApplication_registers_the_records_contact_numbers()
+    {
+        ServiceCollection services = new();
+
+        services.AddNotificationsApplication();
+
+        ServiceDescriptor options = services
+            .Where(d => d.ServiceType == typeof(ContactOptions))
+            .ShouldHaveSingleItem();
+        options.Lifetime.ShouldBe(ServiceLifetime.Singleton);
+        options.ImplementationInstance.ShouldBe(new ContactOptions());
     }
 
     // The first handler of either kind and the first validator each bring back their own registration test (§6.2).

@@ -1,6 +1,7 @@
 using Common.Application;
 using FluentValidation;
 using Microsoft.Extensions.DependencyInjection;
+using Notifications.Application.Contacts;
 
 namespace Notifications.Application;
 
@@ -18,6 +19,9 @@ public static class DependencyInjection
         // The clock (§5.4) and the request histogram (§13.3), which LoggingBehavior injects.
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton<RequestMetrics>();
+
+        // ADR-052's two freshness numbers, registered rather than const so the service can change them.
+        services.AddSingleton(new ContactOptions());
 
         // Ordered and explicit: registration order is pipeline order (§6.3). Idempotency sits inside validation,
         // so a malformed command claims no key, and outside the transaction, so the claim precedes any work.
