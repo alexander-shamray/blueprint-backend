@@ -61,6 +61,15 @@ services:
       Identity__Client__ClientId: "notifications-worker"
       Identity__Client__ClientSecret: "${NOTIFICATIONS_CLIENT_SECRET:-local-dev-notifications-secret}"
       Identity__Client__Scope: "roles"
+      # Made-up values: a developer's stack is no jurisdiction, and a real one belongs in a values file (ADR-053
+      # rule 1). Every shipped language, so a local message shows all three; a list binds by index (§15.4).
+      Jurisdiction__Languages__0: "en"
+      Jurisdiction__Languages__1: "kk"
+      Jurisdiction__Languages__2: "ru"
+      Jurisdiction__TimeZone: "Asia/Kathmandu"
+      Jurisdiction__LogRetention: "1001.00:00:00"
+      Jurisdiction__ContactRetention: "13.00:00:00"
+      Jurisdiction__OrderRetention: "97.00:00:00"
     depends_on:
       notifications-migrator: { condition: service_completed_successfully }
       rabbitmq: { condition: service_healthy }

@@ -1271,6 +1271,11 @@ namespace read access.
 | `Mail__Password` | Secret | External Secrets | ✓ **outside Development** — **Notifications only**; the relay's credential, and absent in Compose, where the sink takes unauthenticated submission |
 | `ContactSource__BaseUrl` | Config | ConfigMap | ✓ — **Notifications only**; Keycloak's address for [ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)'s contact read, HTTPS outside Development, and the host refuses to start without it |
 | `ContactSource__Realm` | Config | ConfigMap | ✓ — **Notifications only**; the realm whose users are read, the one that issues this host's token, and the host refuses to start without it |
+| `Jurisdiction__Languages__0…n` | Config | ConfigMap | ✓ — **Notifications only**; ADR-053's language set, in the order a message in every language shows them; the host refuses to start unless every language has every template and a culture |
+| `Jurisdiction__TimeZone` | Config | ConfigMap | ✓ — **Notifications only**; the IANA zone a customer's dates are rendered in, resolved at start, so a zone the image does not know refuses the host |
+| `Jurisdiction__LogRetention` | Config | ConfigMap | ✓ — **Notifications only**; ADR-053 rule 4's statutory window for the record of a send, and the host refuses to start without it |
+| `Jurisdiction__ContactRetention` | Config | ConfigMap | ✓ — **Notifications only**; ADR-052's contact row's window, refused at start when shorter than `ContactOptions.StaleCeiling` |
+| `Jurisdiction__OrderRetention` | Config | ConfigMap | ✓ — **Notifications only**; the order record's window, and the host refuses to start without it |
 
 | Kind | Source | Example |
 |---|---|---|
@@ -1306,9 +1311,11 @@ services
 **Every options type in the solution had to earn it.**
 `Identity:Client` holds a secret that differs per environment, `Mail` holds
 Notifications' relay and its credential on the same terms, `Jurisdiction`
-holds the statutory windows
+holds what
 [ADR-053](adr/ADR-053-a-jurisdiction-is-a-value-the-deployment-is-given.md)
-makes values a deployment is given, and `Fulfilment` holds the give-up age
+makes values a deployment is given — the statutory windows, and for the
+service that writes to customers the language set and the time zone too —
+and `Fulfilment` holds the give-up age
 [ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)
 makes one — a deadline that decides whether a day's shipments survive a long
 outage, which is an operator's call and not a build's. The tempting next one is
@@ -1326,10 +1333,11 @@ a key that never varies has nothing to validate.
 > (§9.4), the dispatcher's tick, the saga's schedule delays (§9.6) and
 > `ServiceOptions.OperationTimeout` are all constants for exactly this reason.
 > `Identity:Client` earns its options type by holding a secret that must differ
-> per environment, and `Jurisdiction` earns one because a statutory window is a
-> fact about where a deployment runs: a deployment is given its windows
-> (ADR-053 rule 1), so a developer's stack, which is no jurisdiction, carries
-> invented ones, and a real window belongs in a values file. `Fulfilment` passes
+> per environment, and `Jurisdiction` earns one because a statutory window, the
+> languages a customer is owed and the zone their dates are read in are facts
+> about where a deployment runs: a deployment is given them (ADR-053 rule 1),
+> so a developer's stack, which is no jurisdiction, carries invented ones, and
+> real ones belong in a values file. `Fulfilment` passes
 > on ADR-052's word rather than on this test: its age is the same everywhere
 > until an outage makes an operator lengthen it, and that record makes the end
 > of waiting a value of the deployment so that the change is a values edit and
