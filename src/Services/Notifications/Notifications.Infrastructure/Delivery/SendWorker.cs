@@ -185,19 +185,24 @@ public sealed class SendWorker(
 
         // Every row at once, so a pass lasts one row's calls and the lease bounds it; WhenAll, so one row's fault
         // leaves the others to finish.
-        bool[] finished = await Task.WhenAll(claimed.Select(work => SendOrBackOffAsync(claims, work, rows)));
+        ContactReads reads = new();
+        bool[] finished = await Task.WhenAll(claimed.Select(work => SendOrBackOffAsync(claims, work, reads, rows)));
 
         return new SendPass(claimed.Count, finished.Count(f => f));
     }
 
-    private async Task<bool> SendOrBackOffAsync(SendClaims claims, SendWork work, CancellationToken ct)
+    private async Task<bool> SendOrBackOffAsync(
+        SendClaims claims,
+        SendWork work,
+        ContactReads reads,
+        CancellationToken ct)
     {
         try
         {
             // A scope per row, so a row that throws mid-write hands the next none of its tracked state.
             await using AsyncServiceScope row = scopes.CreateAsyncScope();
 
-            return await SendAsync(row.ServiceProvider, claims, work, ct);
+            return await SendAsync(row.ServiceProvider, claims, work, reads, ct);
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {
@@ -219,7 +224,12 @@ public sealed class SendWorker(
     }
 
     /// <summary>One leased row, step by step; true when it reached an outcome (ADR-049, ADR-052).</summary>
-    internal async Task<bool> SendAsync(IServiceProvider sp, SendClaims claims, SendWork work, CancellationToken ct)
+    internal async Task<bool> SendAsync(
+        IServiceProvider sp,
+        SendClaims claims,
+        SendWork work,
+        ContactReads reads,
+        CancellationToken ct)
     {
         TimeProvider clock = sp.GetRequiredService<TimeProvider>();
         TimeSpan giveUpAge = sp.GetRequiredService<IOptions<DeliveryOptions>>().Value.GiveUpAge!.Value;
@@ -269,7 +279,7 @@ public sealed class SendWorker(
         if (work.CustomerId is null)
             await CommitAsync(sp, work, (n, _) => n.AssignCustomer(customer), ct);
 
-        if (await ContactAsync(sp, work, customer, ct) is not ContactLookup.Found contact)
+        if (await ContactAsync(sp, work, customer, reads, ct) is not ContactLookup.Found contact)
         {
             bool unknown = await CommitAsync(
                 sp, work, (n, now) => n.MarkUndeliverable(NotificationReasons.NoSuchCustomer, now), ct);
@@ -324,10 +334,27 @@ public sealed class SendWorker(
         };
     }
 
-    /// <summary>ADR-052's five outcomes over the stored row and the owner; any other fault throws.</summary>
+    /// <summary>The customer's contact, read once a pass for all their rows (ADR-052); a read's fault throws here.</summary>
     private async Task<ContactLookup> ContactAsync(
         IServiceProvider sp,
         SendWork work,
+        Guid customer,
+        ContactReads reads,
+        CancellationToken ct)
+    {
+        // The row whose read is kept awaits it in its own scope, so no read outlives the scope it runs in.
+        (ContactLookup answer, Exception? stale) =
+            await reads.GetOrStart(customer, () => ReadContactAsync(sp, customer, ct));
+
+        if (stale is not null)
+            ServedStale(log, work.NotificationId, work.OrderId, customer, stale);
+
+        return answer;
+    }
+
+    /// <summary>ADR-052's five outcomes over the stored row and the owner; any other fault throws.</summary>
+    private static async Task<(ContactLookup Answer, Exception? Stale)> ReadContactAsync(
+        IServiceProvider sp,
         Guid customer,
         CancellationToken ct)
     {
@@ -338,7 +365,7 @@ public sealed class SendWorker(
         ContactAge age = SendRules.AgeOf(stored, clock.GetUtcNow(), sp.GetRequiredService<ContactOptions>());
 
         if (age == ContactAge.Fresh)
-            return new ContactLookup.Found(stored!.Email, stored.Locale);
+            return (new ContactLookup.Found(stored!.Email, stored.Locale), null);
 
         ContactLookup answer;
 
@@ -350,8 +377,7 @@ public sealed class SendWorker(
         catch (Exception ex) when (
             ex is not ContactSourceRefusedException && age == ContactAge.Stale && !ct.IsCancellationRequested)
         {
-            ServedStale(log, work.NotificationId, work.OrderId, customer, ex);
-            return new ContactLookup.Found(stored!.Email, stored.Locale);
+            return (new ContactLookup.Found(stored!.Email, stored.Locale), ex);
         }
 
         // Kept before the send, so a pass repeated after a crash reads it from the row and not the owner (ADR-052).
@@ -360,7 +386,7 @@ public sealed class SendWorker(
         else
             await store.DeleteAsync(customer, ct);
 
-        return answer;
+        return (answer, null);
     }
 
     private async Task<bool> CompleteAsync(IServiceProvider sp, SendWork work)
