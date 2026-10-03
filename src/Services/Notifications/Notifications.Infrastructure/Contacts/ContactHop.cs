@@ -26,7 +26,7 @@ public static class ContactHop
 
     public const double CircuitBreakerFailureRatio = 0.5;
 
-    /// <summary>Sized to a worker's call rate: a loop never reaches the endpoint default's hundred.</summary>
+    /// <summary>Sized to one worker's call rate rather than the endpoint default's hundred.</summary>
     public const int CircuitBreakerMinimumThroughput = 4;
 
     public static readonly TimeSpan CircuitBreakerSamplingDuration = TimeSpan.FromSeconds(60);
