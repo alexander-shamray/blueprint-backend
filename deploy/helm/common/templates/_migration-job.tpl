@@ -26,9 +26,8 @@ metadata:
   annotations:
     "helm.sh/hook": pre-install,pre-upgrade
     "helm.sh/hook-weight": "-5"
-    {{- /* `hook-succeeded` too, because the name embeds the tag and
-    `before-hook-creation` never meets the previous Job. A failed Job stays, and
-    no TTL is set, because `migration-failure.md` starts from it. */}}
+    {{- /* `hook-succeeded` too, because the name embeds the tag. A failed Job
+    stays, and no TTL is set, because `migration-failure.md` starts from it. */}}
     "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
 spec:
   backoffLimit: 2
