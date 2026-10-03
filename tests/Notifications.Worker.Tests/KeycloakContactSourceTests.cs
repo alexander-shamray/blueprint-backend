@@ -128,8 +128,11 @@ public sealed class KeycloakContactSourceTests(KeycloakFixture keycloak)
         using OutboundCount counted = OutboundCounter.ContactRefused(keycloak.Ungranted.Services);
         Guid customer = await keycloak.CreateUserAsync(Mailbox());
 
-        await Should.ThrowAsync<ContactSourceRefusedException>(() => ReadAsync(keycloak.Ungranted, customer));
+        ContactSourceRefusedException refused =
+            await Should.ThrowAsync<ContactSourceRefusedException>(() => ReadAsync(keycloak.Ungranted, customer));
 
+        // GrantCheckedTokenCache's wording, since Keycloak's own 403 would throw and count the same.
+        refused.Message.ShouldContain("realm-management role(s)");
         counted.Value.ShouldBe(1, "counted where the refusal was decided");
     }
 
@@ -140,9 +143,10 @@ public sealed class KeycloakContactSourceTests(KeycloakFixture keycloak)
         using OutboundCount counted = OutboundCounter.ContactRefused(keycloak.UncheckedUngranted.Services);
         Guid customer = await keycloak.CreateUserAsync(Mailbox());
 
-        await Should.ThrowAsync<ContactSourceRefusedException>(
+        ContactSourceRefusedException refused = await Should.ThrowAsync<ContactSourceRefusedException>(
             () => ReadAsync(keycloak.UncheckedUngranted, customer));
 
+        refused.Message.ShouldContain("Keycloak refused");
         counted.Value.ShouldBe(1);
     }
 
