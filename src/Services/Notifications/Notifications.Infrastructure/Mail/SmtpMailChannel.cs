@@ -95,6 +95,13 @@ internal sealed partial class SmtpMailChannel(
         {
             throw;
         }
+        // MailKit wraps whatever ends a STARTTLS handshake, so its cancellation is unwrapped to be treated as above.
+        catch (SslHandshakeException e)
+            when (e.InnerException is OperationCanceledException && attempt.IsCancellationRequested)
+        {
+            caller.ThrowIfCancellationRequested();
+            throw new OperationCanceledException(attempt);
+        }
         catch (SmtpCommandException e)
             when (e.ErrorCode == SmtpErrorCode.RecipientNotAccepted && (int)e.StatusCode >= 500)
         {
@@ -107,7 +114,7 @@ internal sealed partial class SmtpMailChannel(
 
             string code = status is { } reply ? $" {reply}" : "";
             throw new MailUnavailableException(
-                $"Message {id.LocalPart} met {e.GetType().Name}{code} while {Describe(phase)}.",
+                $"Message {id.LocalPart} met {Named(e)}{code} while {Describe(phase)}.",
                 cause,
                 status);
         }
@@ -173,12 +180,18 @@ internal sealed partial class SmtpMailChannel(
         SmtpCommandException c when (int)c.StatusCode < 500 => (MailFault.Transient, (int)c.StatusCode),
         SmtpCommandException c when phase == Phase.LoggingIn => (MailFault.Credential, (int)c.StatusCode),
         SmtpCommandException c => (MailFault.Rejected, (int)c.StatusCode),
+        SslHandshakeException { InnerException: IOException or SocketException or OperationCanceledException } =>
+            (MailFault.Transient, null),
         SslHandshakeException => (MailFault.Tls, null),
         NotSupportedException when phase == Phase.Connecting => (MailFault.Tls, null),
         AuthenticationException or NotSupportedException when phase == Phase.LoggingIn => (MailFault.Credential, null),
         _ when phase == Phase.Sending => (MailFault.Unconfirmed, null),
         _ => (MailFault.Transient, null)
     };
+
+    // Type names alone, the wrapped one's too, which tells a trust refusal from a reset without the relay's words.
+    private static string Named(Exception e) =>
+        e.InnerException is { } inner ? $"{e.GetType().Name} ({inner.GetType().Name})" : e.GetType().Name;
 
     private static string Describe(Phase phase) => phase switch
     {
