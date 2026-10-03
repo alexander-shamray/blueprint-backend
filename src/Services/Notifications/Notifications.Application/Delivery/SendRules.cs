@@ -29,22 +29,14 @@ public static class SendRules
         return templateKey == TemplateKeys.PaymentDeclined && CustomerCancelled(order);
     }
 
-    /// <summary>Who cancelled, by the origin when it is one of two, and otherwise by the reason (ADR-049).</summary>
+    /// <summary>Whether the customer cancelled: any origin but the workflow's, never the reason (ADR-049).</summary>
     public static bool CustomerCancelled(OrderRecord order)
     {
         ArgumentNullException.ThrowIfNull(order);
 
-        if (order.CancelledAt is null)
-            return false;
-
-        return order.CancelOrigin switch
-        {
-            CancelOrigins.User => true,
-            CancelOrigins.Workflow => false,
-
-            // An older publisher sends no origin and a newer one may send a third: the payment reasons are the saga's.
-            _ => order.CancelReason is not (CancelReasons.PaymentDeclined or CancelReasons.PaymentTimeout)
-        };
+        // The reason is what somebody asserted (§9.6), so an absent or third origin is the customer's; a workflow
+        // cancellation from an older publisher loses only the decline, as the cancellation notice gives the reason.
+        return order.CancelledAt is not null && order.CancelOrigin != CancelOrigins.Workflow;
     }
 
     /// <summary>A stored contact against ADR-052's two numbers; the ceiling's instant is not served.</summary>
