@@ -1,7 +1,7 @@
 namespace Notifications.Infrastructure.Contacts;
 
 /// <summary>The contact read's budget, inside §9.7's bands, since Keycloak is this deployment's own.</summary>
-/// <remarks>Public for the reason <c>Program</c> is (§4.2); the send worker's lease is sized above its total.</remarks>
+/// <remarks>Public for the reason <c>Program</c> is (§4.2); a send worker's lease must sit above its total.</remarks>
 public static class ContactHop
 {
     /// <summary>Explicit rather than the typed client's type name, so the pipeline can be read back by it.</summary>
