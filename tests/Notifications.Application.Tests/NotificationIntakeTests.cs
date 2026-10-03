@@ -73,7 +73,7 @@ public class NotificationIntakeTests
         row.TemplateKey.ShouldBe(TemplateKeys.OrderPlaced);
         row.OrderId.ShouldBe(order);
         row.Status.ShouldBe(NotificationStatus.Pending);
-        row.CustomerId.ShouldBeNull("the worker copies the customer from the order record (ADR-053 rule 4)");
+        row.CustomerId.ShouldBeNull("the worker copies the customer from the order record");
         row.CreatedAt.ShouldBe(Now);
         ParametersFormat.Read(row.Parameters).ShouldBe(command.Parameters);
     }
