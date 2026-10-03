@@ -75,8 +75,9 @@ lands:**
    `OccurredAt`, so a replayed `ProductPublished` over a kept row is harmless.
    The README says how to clear the table when it is the table that is wrong.
 4. **The preflight is section 8's step 2**, before the reset in step 3: the
-   tool opens and probes all four outboxes and waits for the broker to
-   answer before it deletes anything.
+   tool opens and probes the BFF's own database and all four outboxes and
+   waits for the broker to answer before it deletes or sends anything, in a
+   repair run as in a reset.
 
 **Not run before it was written.** Every anchor quoted below was read from
 the tree at `cc453404`, and PR-1's and PR-2's names from their plans. The
@@ -1362,11 +1363,34 @@ public sealed class ReplayTests(BffServiceFixture fixture) : IAsyncLifetime
         (await fixture.OrderAsync(placed.OrderId)).ShouldNotBeNull();
     }
 
+    [Fact]
+    public async Task A_bff_database_it_cannot_reach_stops_a_repair_before_anything_is_sent()
+    {
+        Guid order = Guid.CreateVersion7();
+        await _outboxes.StageAsync(Named("Ordering"), Processed, OrderEvents.Placed(order, Guid.CreateVersion7(), At));
+        string absent = new SqlConnectionStringBuilder(fixture.ConnectionString)
+        {
+            InitialCatalog = "NoSuchProjection"
+        }.ConnectionString;
+
+        SqlException refused = await Should.ThrowAsync<SqlException>(() =>
+            Replay.RunAsync(
+                Settings(bff: absent),
+                reset: false,
+                TextWriter.Null,
+                Replay.BrokerDeadline,
+                TestContext.Current.CancellationToken));
+
+        // 4060, from the preflight, which runs before the bus starts, so the staged row was never sent.
+        refused.Number.ShouldBe(4060);
+        (await fixture.OrderAsync(order)).ShouldBeNull();
+    }
+
     private static Publisher Named(string name) => Publisher.All.Single(p => p.Name == name);
 
-    private ReplaySettings Settings(string? broker = null, string? publishers = null) =>
+    private ReplaySettings Settings(string? broker = null, string? publishers = null, string? bff = null) =>
         new(
-            fixture.ConnectionString,
+            bff ?? fixture.ConnectionString,
             broker ?? fixture.BrokerAddress,
             [.. Publisher.All.Select(p => new PublisherConnection(p, publishers ?? _outboxes.ConnectionString))]);
 }
@@ -1401,6 +1425,11 @@ namespace BffReplay;
 /// </remarks>
 public static class ProjectionReset
 {
+    /// <summary>Reads no row, and fails on a missing table or grant: the preflight's question of the BFF.</summary>
+    public static readonly string ProbeSql =
+        $"SELECT TOP (0) OrderId FROM [{BffSchema.Name}].Orders; " +
+        $"SELECT TOP (0) MessageId FROM {new InboxTable(BffSchema.Name).QualifiedName};";
+
     /// <summary>Lines first, so the delete is complete without leaning on the foreign key's cascade.</summary>
     public static readonly string Sql =
         $"""
@@ -1512,6 +1541,13 @@ public static class Replay
 
         try
         {
+            // The BFF's database answers first, so neither a repair nor a reset meets it broken mid-run.
+            await using (SqlConnection bff = new(settings.Bff))
+            {
+                await bff.OpenAsync(ct);
+                await bff.ExecuteAsync(new CommandDefinition(ProjectionReset.ProbeSql, cancellationToken: ct));
+            }
+
             // Every source answers before the reset, so a reset never precedes a read that cannot run.
             foreach (PublisherConnection source in settings.Publishers)
             {
@@ -1633,7 +1669,7 @@ dotnet build Platform.slnx
 dotnet test tests/Web.Bff.Tests --no-build --filter "FullyQualifiedName~ReplayTests|FullyQualifiedName~ReplayTargetTests|FullyQualifiedName~ReplayCommandTests"
 ```
 
-Expected: 19 passed — 5 replay tests over the containers, 9 target tests, 5
+Expected: 20 passed — 6 replay tests over the containers, 9 target tests, 5
 command tests. A binding or permission failure on the first send is the
 grant, measured: `bff-svc` sending to its own queue under the BFF's own
 account is exactly what PR-2's fixture already does, so a refusal here means
@@ -1743,9 +1779,9 @@ ranks facts and never overwrites one
 ([§10.7](../../docs/backend-architecture/10-api-gateway.md)) — so the run
 needs no maintenance window.
 
-Before it deletes anything it opens all four outboxes and waits for the
-broker to answer, so an unreachable source stops a `--reset` with the
-projection untouched.
+Before it deletes or sends anything it opens the BFF's database and all
+four outboxes and waits for the broker to answer, so an unreachable
+connection stops a repair or a `--reset` with the projection untouched.
 
 ## Reading what it prints
 
@@ -1978,9 +2014,9 @@ pull request of the sequence closes.
   to.
 - **Spec, section 8, step by step:** 1, six connections from the
   environment, refused with any missing — `ReplaySettings.FromEnvironment`
-  and Task 3's tests, every missing key named; 2, every connection opened
-  and each outbox and the broker probed before anything is deleted —
-  decision 4, and the fourth and fifth tests; 3, `--reset` in one
+  and Task 3's tests, every missing key named; 2, every connection opened —
+  the BFF's database, each outbox and the broker probed before anything is
+  deleted or sent — decision 4, and the fourth, fifth and sixth tests; 3, `--reset` in one
   transaction, the projection's order rows and the queue's inbox rows, and
   without it a repair the inbox makes partial — `ProjectionReset` and
   Task 5's second and third tests; `bff.Products` kept, decision 3; 4, each
