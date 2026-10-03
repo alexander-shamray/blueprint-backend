@@ -100,14 +100,16 @@ BROWSER_CLIENT = "web-app"
 # first spelling. The same derivation trap applies as to BROWSER_CLIENT.
 MOBILE_CLIENT = "mobile-app"
 
-# The address reader ADR-052 mints, named for the same reason the two above
-# are: its obligations are properties of one client and cannot be checked
-# without finding it. It is required from the change that mints it in the
-# local export; a deployed realm is no committed file (ADR-042), so an
-# operator creates the client there with a generated secret, and this gate
-# refuses that realm until one has. Notifications' client is decided and
-# minted nowhere yet, so it is deliberately not here.
+# The address reader ADR-052 mints, named because its obligations are a
+# client's. Required in the local export; a deployed realm is no committed file
+# (ADR-042), so an operator creates the client there, and this gate refuses
+# that realm until one has.
 WORKER_CLIENT = "shipping-worker"
+
+# The contact reader, on the address reader's terms. It reads Keycloak itself
+# and calls no service, so its scope obligations invert: commerce-api is in
+# neither of its lists, and roles, the scope it requests, is in one.
+CONTACT_CLIENT = "notifications-worker"
 
 # The two entries Keycloak accepts in `webOrigins` that are not origins, named
 # because the check below has to tell them apart rather than refuse both alike.
@@ -431,6 +433,14 @@ def check_realm(realm: dict, kind: str, lifetime: int) -> list[str]:
             "client by what it reads when its secret is stolen, and every "
             "obligation below is a property of the client object")
 
+    contact = [c for c in clients if isinstance(c, dict) and c.get("clientId") == CONTACT_CLIENT]
+    if len(contact) != 1:
+        problems.append(
+            f"the realm declares the contact reader {CONTACT_CLIENT!r} "
+            f"{len(contact)} time(s), expected exactly one. ADR-052 sizes that "
+            "client by what it reads when its secret is stolen, and every "
+            "obligation below is a property of the client object")
+
     problems += check_flags_are_booleans(clients)
     problems += check_lifetime(realm, clients, lifetime)
     problems += check_implicit_flow(clients)
@@ -443,6 +453,8 @@ def check_realm(realm: dict, kind: str, lifetime: int) -> list[str]:
         problems += check_refresh_token_rotation(realm)
     if worker:
         problems += check_worker_client(worker[0])
+    if contact:
+        problems += check_contact_client(contact[0])
     return problems
 
 
@@ -684,35 +696,29 @@ def check_mobile_client(client: dict) -> list[str]:
     return problems
 
 
-def check_worker_client(client: dict) -> list[str]:
-    """ADR-052's ceiling on the address reader, as far as a realm document reaches.
-
-    The grant itself is out of reach and that record says so: a service
-    account's roles live on its user, which the client list `read_admin.py`
-    fetches does not carry and `judged` does not keep even where an export
-    does. What is left here is the rest of a stolen secret's blast radius —
-    that the client is confidential, mints tokens for itself alone, and carries
-    the scope whose mapper writes the `permission` claim at all.
-    """
+def check_service_account_client(
+        client: dict, name: str, read: str, leak: str) -> tuple[list[str], list, list]:
+    """What every ADR-052 service-account reader shares: confidential, enabled,
+    minting for itself alone. Returns the problems and its two scope lists."""
     problems: list[str] = []
 
     if client.get("enabled") is not True:
         problems.append(
-            f"client {WORKER_CLIENT!r} is disabled. Every obligation below "
-            "then holds because the client mints nothing, and the address read "
+            f"client {name!r} is disabled. Every obligation below "
+            f"then holds because the client mints nothing, and the {read} read "
             "fails as a refused credential in whichever environment imported "
             "this realm")
 
     if client.get("publicClient") is not False:
         problems.append(
-            f"client {WORKER_CLIENT!r} has publicClient="
+            f"client {name!r} has publicClient="
             f"{client.get('publicClient')!r}. A public client presents no "
             "secret, so the grant ADR-052 gives this reader is one Keycloak "
             "refuses outright")
 
     if client.get("serviceAccountsEnabled") is not True:
         problems.append(
-            f"client {WORKER_CLIENT!r} has service accounts disabled. Keycloak "
+            f"client {name!r} has service accounts disabled. Keycloak "
             "refuses the client-credentials grant with unauthorized_client, "
             "which reaches the worker as a refused credential — ADR-052's "
             "fourth row, a defect somebody must see rather than an outage")
@@ -722,15 +728,27 @@ def check_worker_client(client: dict) -> list[str]:
                        ("implicitFlowEnabled", "an implicit flow")):
         if client.get(flag) is not False:
             problems.append(
-                f"client {WORKER_CLIENT!r} has {flag}={client.get(flag)!r}, "
-                f"which gives it {what}. Its secret is a deployment value, so "
-                "the blast radius of that secret leaking has to stay one order's "
-                "address and never a token for a person in this realm (ADR-052)")
+                f"client {name!r} has {flag}={client.get(flag)!r}, "
+                f"which gives it {what}. {leak} (ADR-052)")
 
     defaults = client.get("defaultClientScopes")
-    defaults = defaults if isinstance(defaults, list) else []
     optional = client.get("optionalClientScopes")
-    optional = optional if isinstance(optional, list) else []
+    return (problems,
+            defaults if isinstance(defaults, list) else [],
+            optional if isinstance(optional, list) else [])
+
+
+def check_worker_client(client: dict) -> list[str]:
+    """ADR-052's ceiling on the address reader, as far as a realm document reaches.
+
+    Its grant lives on its service account's user, out of reach of both
+    documents this gate reads; what is left is the client's own shape and the
+    scope whose mapper writes the `permission` claim at all."""
+    problems, defaults, optional = check_service_account_client(
+        client, WORKER_CLIENT, "address",
+        "Its secret is a deployment value, so the blast radius of that secret "
+        "leaking has to stay one order's address and never a token for a "
+        "person in this realm")
 
     if "commerce-api" not in defaults:
         problems.append(
@@ -745,6 +763,34 @@ def check_worker_client(client: dict) -> list[str]:
             f"client {WORKER_CLIENT!r} also holds commerce-api as an OPTIONAL "
             "scope. Keycloak's admin console will create that state and it "
             "resolves in the wrong direction for a grant that names no scope")
+
+    return problems
+
+
+def check_contact_client(client: dict) -> list[str]:
+    """ADR-052's ceiling on the contact reader, as far as a realm document reaches.
+
+    Its grant lives on its service account's user, out of reach for the reason
+    `check_worker_client` gives; what is left is a client that mints for itself
+    alone, and a token no service of this platform accepts."""
+    problems, defaults, optional = check_service_account_client(
+        client, CONTACT_CLIENT, "contact",
+        "Its secret already reads every user's profile, so a leak of it must "
+        "never also be a token for a person in this realm")
+
+    if "commerce-api" in defaults or "commerce-api" in optional:
+        problems.append(
+            f"client {CONTACT_CLIENT!r} holds commerce-api as a client scope. "
+            "Its read is Keycloak's own admin API, so the audience every "
+            "service validates would make a secret that reads every user also "
+            "one every service accepts (ADR-052)")
+
+    if "roles" not in defaults and "roles" not in optional:
+        problems.append(
+            f"client {CONTACT_CLIENT!r} holds the roles scope in neither list. "
+            "The worker requests it by name and Keycloak refuses a scope the "
+            "client does not hold; its mapper is also what writes "
+            "resource_access, the claim the worker's grant check reads")
 
     return problems
 

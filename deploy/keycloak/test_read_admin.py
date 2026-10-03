@@ -447,6 +447,16 @@ class WhatItWrites(Stubbed):
                        "publicClient": False,
                        "defaultClientScopes": ["basic", "commerce-api"],
                        "optionalClientScopes": ["address"],
+                       "webOrigins": []},
+                      {"clientId": realm_check.CONTACT_CLIENT,
+                       "enabled": True,
+                       "standardFlowEnabled": False,
+                       "implicitFlowEnabled": False,
+                       "directAccessGrantsEnabled": False,
+                       "serviceAccountsEnabled": True,
+                       "publicClient": False,
+                       "defaultClientScopes": ["basic", "roles"],
+                       "optionalClientScopes": ["address"],
                        "webOrigins": []}])
         self.assertEqual(self.run_main(), 0)
 
@@ -490,6 +500,16 @@ class WhatItWrites(Stubbed):
                        "serviceAccountsEnabled": True,
                        "publicClient": False,
                        "defaultClientScopes": ["basic", "commerce-api"],
+                       "optionalClientScopes": ["address"],
+                       "webOrigins": []},
+                      {"clientId": realm_check.CONTACT_CLIENT,
+                       "enabled": True,
+                       "standardFlowEnabled": False,
+                       "implicitFlowEnabled": False,
+                       "directAccessGrantsEnabled": False,
+                       "serviceAccountsEnabled": True,
+                       "publicClient": False,
+                       "defaultClientScopes": ["basic", "roles"],
                        "optionalClientScopes": ["address"],
                        "webOrigins": []}])
         self.run_main()

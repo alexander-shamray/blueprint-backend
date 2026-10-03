@@ -76,6 +76,15 @@ py -3.12 deploy/keycloak/realm_check.py check --kind local
   deployed realm's client list does not carry and the projection drops from an
   export, so `check_worker_client` reaches the client object and the token
   client's own check is the other half (ADR-052).
+- **`notifications-worker`'s own shape**, as far as a client object reaches:
+  one such client, confidential, service accounts on, no interactive flow,
+  `commerce-api` in neither scope list and `roles` in one — cited rather than
+  enumerated here, because
+  [ADR-052](../../docs/backend-architecture/adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)
+  argues each of them and `check_contact_client` is the list. Its grant,
+  `view-users` on `realm-management`, is out of reach for the reason the
+  bullet above gives, and the worker's check on its own token is the other
+  half.
 
 ## What it does not check
 

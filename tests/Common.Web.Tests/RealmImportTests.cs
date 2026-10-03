@@ -340,11 +340,20 @@ public class RealmImportTests
 
     private const string DocumentedLocalWorkerSecret = "local-dev-shipping-secret";
 
+    /// <summary>ADR-052's contact reader, and its own default.</summary>
+    private const string ContactCredentialClient = "notifications-worker";
+
+    private const string DocumentedLocalContactSecret = "local-dev-notifications-secret";
+
+    /// <summary>The client Keycloak's admin roles live on, the contact reader's among them (ADR-052).</summary>
+    private const string RealmManagement = "realm-management";
+
     private static readonly Dictionary<string, string> DocumentedLocalSecrets =
         new(StringComparer.Ordinal)
         {
             [CredentialClient] = DocumentedLocalSecret,
-            [WorkerCredentialClient] = DocumentedLocalWorkerSecret
+            [WorkerCredentialClient] = DocumentedLocalWorkerSecret,
+            [ContactCredentialClient] = DocumentedLocalContactSecret
         };
 
     [Fact]
@@ -408,6 +417,53 @@ public class RealmImportTests
         clients.ShouldBe([Audience]);
         account.TryGetProperty("realmRoles", out _).ShouldBeFalse();
         account.TryGetProperty("groups", out _).ShouldBeFalse();
+    }
+
+    [Fact]
+    public void The_contact_service_account_holds_exactly_view_users_on_realm_management()
+    {
+        JsonElement account = Root.GetProperty("users").EnumerateArray()
+            .Single(u => u.TryGetProperty("serviceAccountClientId", out JsonElement client) &&
+                         client.GetString() == ContactCredentialClient);
+
+        // One client and one role on it, since ADR-052 sizes this credential by what it reads when stolen.
+        string[] clients = [.. account.GetProperty("clientRoles").EnumerateObject().Select(c => c.Name)];
+        clients.ShouldBe([RealmManagement]);
+
+        string[] granted =
+        [
+            .. account.GetProperty("clientRoles").GetProperty(RealmManagement).EnumerateArray()
+                .Select(r => r.GetString()).OfType<string>()
+        ];
+
+        granted.ShouldBe(["view-users"]);
+        account.TryGetProperty("realmRoles", out _).ShouldBeFalse();
+        account.TryGetProperty("groups", out _).ShouldBeFalse();
+    }
+
+    [Fact]
+    public void View_users_composes_exactly_the_two_query_roles_and_neither_composes_further()
+    {
+        // The pinned Keycloak's own composition, exported with the realm: the worker's check reads the expanded set.
+        JsonElement[] management = [.. Root.GetProperty("roles").GetProperty("client").GetProperty(RealmManagement)
+            .EnumerateArray()];
+
+        JsonElement viewUsers = management.Single(r => r.GetProperty("name").GetString() == "view-users");
+
+        string[] composed =
+        [
+            .. viewUsers.GetProperty("composites").GetProperty("client").GetProperty(RealmManagement).EnumerateArray()
+                .Select(r => r.GetString()).OfType<string>()
+        ];
+
+        composed.ShouldBe(["query-groups", "query-users"], ignoreOrder: true);
+
+        foreach (string role in composed)
+        {
+            management.Single(r => r.GetProperty("name").GetString() == role)
+                .GetProperty("composite").GetBoolean()
+                .ShouldBeFalse($"'{role}' composing further would widen the grant past the three roles ADR-052 names");
+        }
     }
 
     [Fact]

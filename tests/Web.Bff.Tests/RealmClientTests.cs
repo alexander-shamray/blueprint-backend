@@ -94,8 +94,11 @@ public class RealmClientTests
     /// <summary>The second client ADR-052 mints, and the reader of Ordering's address.</summary>
     private const string WorkerClient = "shipping-worker";
 
+    /// <summary>The third, and the reader of a customer's mailbox from the realm itself (ADR-052).</summary>
+    private const string ContactClient = "notifications-worker";
+
     [Fact]
-    public void The_service_account_clients_are_exactly_the_hosts_that_call_a_peer()
+    public void The_service_account_clients_are_exactly_the_credentialed_hosts()
     {
         string[] serviceAccounts =
         [
@@ -109,6 +112,6 @@ public class RealmClientTests
         ];
 
         // Each secret holder is a synchronous coupling (§11.5), so an undecided client fails.
-        serviceAccounts.ShouldBe([ClientId, WorkerClient], ignoreOrder: true);
+        serviceAccounts.ShouldBe([ClientId, WorkerClient, ContactClient], ignoreOrder: true);
     }
 }
