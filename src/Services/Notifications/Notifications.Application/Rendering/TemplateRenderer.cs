@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using Notifications.Application.Records;
 
 namespace Notifications.Application.Rendering;
 
@@ -70,6 +71,15 @@ public sealed class TemplateRenderer
         foreach (string language in repeated)
         {
             refusals.Add($"The language set names '{language}' twice.");
+        }
+
+        // A customer with no locale is sent the whole set, and the row stamps it in a bounded column.
+        int joined = string.Join(',', languages).Length;
+        if (joined > NotificationLimits.MaxLanguagesLength)
+        {
+            refusals.Add(
+                $"The language set joins to {joined} characters, past the {NotificationLimits.MaxLanguagesLength} "
+                + "a notification's Languages column holds.");
         }
 
         foreach (string language in languages.Distinct(StringComparer.Ordinal))
