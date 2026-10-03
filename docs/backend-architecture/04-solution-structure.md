@@ -725,8 +725,8 @@ public static IServiceCollection AddOrderingInfrastructure(
     // No ITokenCache, no ClientCredentialsHandler and no ServiceIdentityOptions
     // here. Ordering makes no synchronous outbound call — the price it needs
     // comes from a local projection (§6.4) and everything else it says goes
-    // over the broker. Outbound identity belongs to the hosts that call a peer
-    // (§9.7, §11.5), and Ordering is not one of them.
+    // over the broker. Outbound identity belongs to a host calling out under a
+    // grant of its own (§9.7, §11.5), and Ordering is not one.
 
     // Registered by type, not by factory: the generic overload records an
     // ImplementationType, and the integration-test fixture matches on it to

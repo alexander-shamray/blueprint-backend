@@ -2846,7 +2846,9 @@ services and it is on no request path at all:
 [ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)
 has a Shipping worker read a delivery address from Ordering with nothing
 waiting on the answer, so it spends no hop of this budget and §2.3's callout
-records the departure. The fan-out allowance is stated because it is the rule
+records the departure. The same record has a Notifications worker read a
+mailbox from Keycloak's admin API on the same terms, which reaches no service
+of the platform at all. The fan-out allowance is stated because it is the rule
 a reviewer needs.
 
 That said, fan-out is not free — each additional call adds a failure mode and
@@ -2929,21 +2931,24 @@ configuration-validation test at startup.
 
 For a peer call, the caller's own `Program.cs` (§4.1) registers it and §4.2's
 helper deliberately registers none of it, so a host that holds client
-credentials is a host that calls a peer (§11.5). `Web.Bff` registers the
-pricing hop; Shipping's worker registers the address read
+credentials is a host that makes a synchronous call under a grant of its own
+(§11.5). `Web.Bff` registers the pricing hop; Shipping's worker registers the
+address read
 [ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)
-gives it, off every request path. The outbound clients of the other kind call
-third parties — Payments' `ProviderHop`, behind the anti-corruption layer §3.1
-gives Payments, Shipping's `CarrierHop`, to the carrier, and Notifications'
-`MailHop`, to its relay — and each is registered by the service that makes the
-call. `PricingHop`, beside the BFF's registration, names the client and
-Catalog's address once: `http`, not `https`, because TLS terminates at the
-ingress and traffic inside the cluster is plain (§10.1); the host is the Service
-name YARP also routes to (§10.2); and a second, HTTP/2-only port rather than the
-REST one, because a cleartext Kestrel endpoint cannot serve HTTP/1.1 and h2c at
-once, which Catalog's own `appsettings.json` argues. The configuration satisfies
-the table rather than merely gesturing at it, and the budget is worked out
-including the waiting:
+gives it, and Notifications' worker the contact read the same record gives it,
+both off every request path, and `ContactHop` sits inside the band because
+Keycloak is the deployment's own and no third party. The outbound clients of the
+other kind call third parties — Payments' `ProviderHop`, behind the
+anti-corruption layer §3.1 gives Payments, Shipping's `CarrierHop`, to the
+carrier, and Notifications' `MailHop`, to its relay — and each is registered by
+the service that makes the call. `PricingHop`, beside the BFF's registration,
+names the client and Catalog's address once: `http`, not `https`, because TLS
+terminates at the ingress and traffic inside the cluster is plain (§10.1); the
+host is the Service name YARP also routes to (§10.2); and a second, HTTP/2-only
+port rather than the REST one, because a cleartext Kestrel endpoint cannot serve
+HTTP/1.1 and h2c at once, which Catalog's own `appsettings.json` argues. The
+configuration satisfies the table rather than merely gesturing at it, and the
+budget is worked out including the waiting:
 
 ```csharp
 // The client is NAMED, and the name is load-bearing rather than tidy:

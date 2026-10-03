@@ -1172,16 +1172,16 @@ silent defect, while leaving it off is a valid topology. Writing such a key as
 `WithOrigins([])` came to reject every browser request while starting cleanly.
 
 **Required-for-some-hosts is a third category, and the mistake it invites runs
-the other way.** `Identity__Client__*` is mandatory for a host that calls
-another service and meaningless for one that does not — which in this blueprint
-is **every host but the BFF and, since
-[ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md),
-Shipping's worker**. The gateway forwards the caller's token rather than
-minting its own; every other service exchanges events over the broker and
-reads local projections ([§6.4](06-cqrs.md), ADR-002). Two sets of
-credentials in the whole platform today, and the count is the point: it is
-the number of synchronous couplings, and it moves only by a decision that
-says what each new one reads when it is stolen. Supplying the rest "for
+the other way.** `Identity__Client__*` is mandatory for a host that makes a
+synchronous call under a grant of its own and meaningless for one that does
+not — which in this blueprint is **every host but the BFF and the workers
+[ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)
+gives a read**. The gateway forwards the caller's token rather than minting
+its own; every other service exchanges events over the broker and reads local
+projections ([§6.4](06-cqrs.md), ADR-002). One set of credentials per such
+host, and the number is the point: it is the number of synchronous couplings,
+and it moves only by a decision that says what each new one reads when it is
+stolen. Supplying the rest "for
 consistency" is not harmless padding — it provisions a Keycloak client, a
 secret in the vault and a mount, all of which must be rotated and audited, for
 credentials no code path ever sends. Over-supply has no failing test to catch
@@ -1246,9 +1246,9 @@ namespace read access.
 | `ConnectionStrings__RedisCoordination` | **Secret** | External Secrets — separate ACL user, `noeviction` instance | ✓ **when the host calls `AddRedisConnections`** — both or neither |
 | `ConnectionStrings__RabbitMq` | Secret | External Secrets — carries the per-service broker account of [ADR-036](adr/ADR-036-the-broker-has-a-per-service-identity.md) | ✓ — the Secret is named per service (`catalog-rabbitmq`, `ordering-rabbitmq`) and never shared |
 | `Identity__Authority` | Config | Helm `identity.authority` → ConfigMap | ✓ — **every host**, including the gateway |
-| `Identity__Client__ClientId` | Config | Helm `identity.clientId` | ✓ **for a host that calls a peer** — the BFF ([§9.7](09-messaging.md), [§11.5](11-identity-authorization.md)), and Shipping's worker, for [ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)'s address read |
-| `Identity__Client__Scope` | Config | Helm `identity.scope` | ✓ **for a host that calls a peer**, as above |
-| `Identity__Client__ClientSecret` | Secret | `web-bff-identity` and `shipping-identity`; one per host, never shared — two hosts on one grant is one host able to act as the other (§11.5) | ✓ **for a host that calls a peer**, as above |
+| `Identity__Client__ClientId` | Config | Helm `identity.clientId` | ✓ **for a host that calls out under a grant of its own** — the BFF ([§9.7](09-messaging.md), [§11.5](11-identity-authorization.md)), and each worker [ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md) gives a read |
+| `Identity__Client__Scope` | Config | Helm `identity.scope` | ✓ **for a host that calls out under a grant of its own**, as above |
+| `Identity__Client__ClientSecret` | Secret | `web-bff-identity`, `shipping-identity` and `notifications-identity`; one per host, never shared — two hosts on one grant is one host able to act as the other (§11.5) | ✓ **for a host that calls out under a grant of its own**, as above |
 | `Cors__Enabled` | Config | Helm `cors.enabled` → ConfigMap — **gateway only** | ✓ |
 | `Cors__Origins__0…n` | Config | Helm `cors.origins` → ConfigMap — **gateway only** | ✓ **when `Cors__Enabled`** |
 | `Ingress__Enabled` | Config | Helm `ingress.enabled` → ConfigMap — **gateway only** | ✓ — true in Kubernetes, false only where the gateway is the edge (Compose) |
@@ -1269,6 +1269,8 @@ namespace read access.
 | `Mail__Security` | Config | ConfigMap | ✓ — **Notifications only**; `StartTls` or `None`, and `None` refuses to start outside Development |
 | `Mail__UserName` | Config | ConfigMap | ✓ **outside Development** — **Notifications only**; set with the password or not at all |
 | `Mail__Password` | Secret | External Secrets | ✓ **outside Development** — **Notifications only**; the relay's credential, and absent in Compose, where the sink takes unauthenticated submission |
+| `ContactSource__BaseUrl` | Config | ConfigMap | ✓ — **Notifications only**; Keycloak's address for [ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)'s contact read, HTTPS outside Development, and the host refuses to start without it |
+| `ContactSource__Realm` | Config | ConfigMap | ✓ — **Notifications only**; the realm whose users are read, the one that issues this host's token, and the host refuses to start without it |
 
 | Kind | Source | Example |
 |---|---|---|

@@ -68,6 +68,8 @@ graph TB
 
     SHP -->|gRPC, the address read| ORD
     SHP -.->|client credentials| IDP
+    NOT -->|HTTPS, the contact read| IDP
+    NOT -.->|client credentials| IDP
 
     PAY -->|HTTPS, authorise and void| PSP
     SHP -->|HTTPS, book and cancel| CAR
