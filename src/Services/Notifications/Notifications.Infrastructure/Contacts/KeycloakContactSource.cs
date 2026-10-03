@@ -7,7 +7,7 @@ namespace Notifications.Infrastructure.Contacts;
 /// <summary>The client half of ADR-052's contact read, over Keycloak's admin API.</summary>
 /// <remarks>
 /// Binds <c>enabled</c>, <c>email</c> and <c>attributes.locale</c> and nothing else (ADR-052), so a name or
-/// another attribute never reaches a type. A transient outcome escapes for the worker's backoff.
+/// another attribute never reaches a type. A transient outcome escapes to the caller.
 /// </remarks>
 internal sealed class KeycloakContactSource(HttpClient http, ContactMetrics metrics) : IContactSource
 {
