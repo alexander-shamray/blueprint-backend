@@ -37,6 +37,12 @@ public class NotificationTests
             NotificationReasons.RecipientRefused
         },
         {
+            "the contact's mailbox is not one a message can be addressed to",
+            n => n.MarkUndeliverable(NotificationReasons.NotAMailbox, Later),
+            NotificationStatus.Undeliverable,
+            NotificationReasons.NotAMailbox
+        },
+        {
             "the give-up age passes",
             n => n.MarkUndeliverable(NotificationReasons.GaveUp, Later),
             NotificationStatus.Undeliverable,
@@ -172,6 +178,15 @@ public class NotificationTests
     public void A_reason_outside_the_closed_set_is_the_caller_s_defect()
     {
         Should.Throw<ArgumentOutOfRangeException>(() => Pending().MarkUndeliverable("relay_down", Later));
+    }
+
+    [Fact]
+    public void The_closed_set_is_every_terminal_reason_the_record_names()
+    {
+        // ADR-052's outcomes, the relay's two refusals and §11.7's erasure, and nothing a caller could misspell.
+        NotificationReasons.All.ShouldBe(
+            ["no_such_customer", "recipient_refused", "not_a_mailbox", "gave_up", "erased"],
+            ignoreOrder: true);
     }
 
     [Fact]
