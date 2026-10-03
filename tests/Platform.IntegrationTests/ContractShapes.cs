@@ -102,7 +102,7 @@ internal static class ContractShapes
     private static string Render(Type type, NullabilityInfo nullability)
     {
         if (Nullable.GetUnderlyingType(type) is Type underlying)
-            return Render(underlying, nullability.GenericTypeArguments.FirstOrDefault() ?? nullability) + "?";
+            return Render(underlying, nullability) + "?";
 
         string mark = !type.IsValueType && nullability.ReadState == NullabilityState.Nullable ? "?" : "";
 
