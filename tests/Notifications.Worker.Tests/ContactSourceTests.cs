@@ -2,6 +2,7 @@ using System.Text.Json.Nodes;
 using Common.Infrastructure.Identity;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Http.Resilience;
 using Microsoft.Extensions.Options;
@@ -23,25 +24,52 @@ namespace Notifications.Worker.Tests;
 public sealed class ContactSourceTests : IClassFixture<ContactSourceTests.KeycloakStub>
 {
     /// <summary>One stub and one host for the class, as a host over an unreachable broker is slow to stop.</summary>
-    public sealed class KeycloakStub : IDisposable
+    public sealed class KeycloakStub : IAsyncLifetime
     {
-        public KeycloakStub()
+        public WireMockServer Server { get; private set; } = null!;
+
+        public PatientFactory Factory { get; private set; } = null!;
+
+        public async ValueTask InitializeAsync()
         {
-            Server = WireMockServer.Start(new WireMockServerSettings { Urls = ["http://127.0.0.1:0"] });
-            Factory = new NotificationsWorkerFactory(
-                Unreachable.Sql,
-                Unreachable.Rabbit,
-                contactSourceBaseUrl: Server.Urls[0] + "/");
+            Server = await StartStubAsync();
+            Factory = new PatientFactory(Server.Urls[0] + "/");
         }
 
-        public WireMockServer Server { get; }
-
-        public NotificationsWorkerFactory Factory { get; }
-
-        public void Dispose()
+        public ValueTask DisposeAsync()
         {
             Factory.Dispose();
             Server.Stop();
+            return ValueTask.CompletedTask;
+        }
+    }
+
+    /// <summary>A loopback stub, asked once first, since its first answer can outlast ContactHop's total.</summary>
+    internal static async Task<WireMockServer> StartStubAsync()
+    {
+        WireMockServer server = WireMockServer.Start(new WireMockServerSettings { Urls = ["http://127.0.0.1:0"] });
+
+        using HttpClient warm = new();
+        using HttpResponseMessage answered =
+            await warm.GetAsync(server.Urls[0] + "/", TestContext.Current.CancellationToken);
+        server.ResetLogEntries();
+
+        return server;
+    }
+
+    /// <summary>A host whose contact hop times out no attempt, so a cold first read cannot fill the breaker.</summary>
+    /// <remarks>The generator, as <c>Timeout</c> is range-checked; the total still bounds every read (§9.7).</remarks>
+    public sealed class PatientFactory(string contactSourceBaseUrl)
+        : NotificationsWorkerFactory(Unreachable.Sql, Unreachable.Rabbit, contactSourceBaseUrl: contactSourceBaseUrl)
+    {
+        protected override void ConfigureWebHost(IWebHostBuilder builder)
+        {
+            base.ConfigureWebHost(builder);
+
+            builder.ConfigureTestServices(services =>
+                services.PostConfigure<HttpStandardResilienceOptions>(
+                    ContactHop.ResilienceOptionsName,
+                    o => o.AttemptTimeout.TimeoutGenerator = _ => ValueTask.FromResult(Timeout.InfiniteTimeSpan)));
         }
     }
 
@@ -51,7 +79,7 @@ public sealed class ContactSourceTests : IClassFixture<ContactSourceTests.Keyclo
     private const int StartAttempts = 5;
 
     private readonly WireMockServer _keycloak;
-    private readonly NotificationsWorkerFactory _factory;
+    private readonly PatientFactory _factory;
 
     public ContactSourceTests(KeycloakStub stub)
     {
@@ -281,8 +309,7 @@ public sealed class ContactSourceTests : IClassFixture<ContactSourceTests.Keyclo
     [Fact]
     public async Task A_base_address_with_a_path_keeps_it_and_the_realm_follows_it()
     {
-        using NotificationsWorkerFactory prefixed = new(
-            Unreachable.Sql, Unreachable.Rabbit, contactSourceBaseUrl: _keycloak.Urls[0] + "/auth");
+        using PatientFactory prefixed = new(_keycloak.Urls[0] + "/auth");
         Guid customer = Guid.CreateVersion7();
         _keycloak.Given(Request.Create().WithPath("/auth" + PathOf(customer)).UsingGet())
             .RespondWith(Response.Create().WithStatusCode(200).WithBody(User().ToJsonString()));

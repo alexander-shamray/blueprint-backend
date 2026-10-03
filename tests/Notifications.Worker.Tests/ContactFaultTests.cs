@@ -6,29 +6,31 @@ using Shouldly;
 using WireMock.RequestBuilders;
 using WireMock.ResponseBuilders;
 using WireMock.Server;
-using WireMock.Settings;
 using Xunit;
 
 namespace Notifications.Worker.Tests;
 
 /// <summary>The contact read's transient answers, a host each, since the breaker they fill opens.</summary>
-public sealed class ContactFaultTests : IDisposable
+public sealed class ContactFaultTests : IAsyncLifetime
 {
-    private readonly WireMockServer _keycloak =
-        WireMockServer.Start(new WireMockServerSettings { Urls = ["http://127.0.0.1:0"] });
+    private WireMockServer _keycloak = null!;
 
-    private readonly NotificationsWorkerFactory _factory;
+    private ContactSourceTests.PatientFactory _factory = null!;
 
     private readonly Guid _customer = Guid.CreateVersion7();
 
-    public ContactFaultTests() =>
-        _factory = new NotificationsWorkerFactory(
-            Unreachable.Sql, Unreachable.Rabbit, contactSourceBaseUrl: _keycloak.Urls[0] + "/");
+    // A warmed stub and a patient host, so a cold first read is no fault; the stalled owner below meets the total.
+    public async ValueTask InitializeAsync()
+    {
+        _keycloak = await ContactSourceTests.StartStubAsync();
+        _factory = new ContactSourceTests.PatientFactory(_keycloak.Urls[0] + "/");
+    }
 
-    public void Dispose()
+    public ValueTask DisposeAsync()
     {
         _factory.Dispose();
         _keycloak.Stop();
+        return ValueTask.CompletedTask;
     }
 
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
@@ -124,6 +126,9 @@ public sealed class ContactFaultTests : IDisposable
     {
         using NotificationsWorkerFactory dead = new(Unreachable.Sql, Unreachable.Rabbit);
 
-        await Should.ThrowAsync<HttpRequestException>(() => ReadAsync(dead));
+        // A slow NXDOMAIN can meet the timeout first, so the kind of fault is not asserted, only that it is one.
+        Exception thrown = await Should.ThrowAsync<Exception>(() => ReadAsync(dead));
+
+        thrown.ShouldNotBeOfType<ContactSourceRefusedException>();
     }
 }
