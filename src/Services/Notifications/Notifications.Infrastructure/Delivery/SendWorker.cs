@@ -34,7 +34,7 @@ public sealed class SendWorker(
     /// <summary>What a pass under way at a stop leaves of the host's drain for its last commit (§15.3).</summary>
     public static readonly TimeSpan CommitRoom = TimeSpan.FromSeconds(5);
 
-    // CA1848 (ADR-019); every line names the row by its ids and never by its mailbox (§13.4).
+    // CA1848 (ADR-019); a line about a row names it by its ids and never by its mailbox (§13.4).
     private static readonly Action<ILogger, Exception?> ClaimFailed =
         LoggerMessage.Define(
             LogLevel.Error,
