@@ -173,7 +173,8 @@ public sealed class SendWorker(
         await using AsyncServiceScope claimScope = scopes.CreateAsyncScope();
         MailPipeline relay = claimScope.ServiceProvider.GetRequiredService<MailPipeline>();
 
-        // The breaker parks the claim, not the messages: rows keep their backoff and nothing reaches a queue (§9.7).
+        // An open breaker parks the claim, so unclaimed rows keep their backoff and nothing reaches a queue (§9.7).
+        // Past the break a pass claims as usual; its first send probes and rows the breaker rejects back off.
         if (relay.IsOpen)
         {
             Parked(log, relay.ParkedUntil, null);
