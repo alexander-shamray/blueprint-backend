@@ -1,0 +1,11 @@
+Subject: Your order has been delivered
+
+Hello,
+
+Your order has been delivered.
+
+Order: {OrderId}
+Delivered: {Date}
+Tracking number: {TrackingNumber}
+
+This is a service message about an order you placed with us.

@@ -1,0 +1,11 @@
+Subject: Your refund has been issued
+
+Hello,
+
+We have refunded your payment for this order. Depending on your bank, it may take a few working days to reach your account.
+
+Order: {OrderId}
+Refunded: {Date}
+Amount: {Amount} {Currency}
+
+This is a service message about an order you placed with us.
