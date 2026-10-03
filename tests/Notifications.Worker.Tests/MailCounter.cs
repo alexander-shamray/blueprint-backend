@@ -12,7 +12,7 @@ internal static class MailCounter
 {
     public static MailCount Unavailable(IServiceProvider services)
     {
-        // The counter is created in MailMetrics' constructor; a listener started first would see nothing published.
+        // MailMetrics' constructor creates the counter, so Start publishes it at once and Enabled is checkable below.
         services.GetRequiredService<MailMetrics>();
         Meter mine = services.GetRequiredService<IMeterFactory>().Create(OutboundMeter.Name);
         MailCount count = new(mine);
