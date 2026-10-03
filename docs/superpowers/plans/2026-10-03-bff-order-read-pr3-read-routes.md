@@ -308,6 +308,15 @@ public sealed class OrderViewTests
     }
 
     [Fact]
+    public void A_despatch_whose_number_was_not_stored_still_has_its_shipment()
+    {
+        // PR-2's handler drops a tracking number wider than its column and still records the despatch.
+        OrderDetail order = OrderView.Detail(Placed() with { DispatchedAt = At.AddDays(1) }, [Line()]);
+
+        order.Shipment.ShouldBe(new ShipmentFacts(TrackingNumber: null, At.AddDays(1), DeliveredAt: null));
+    }
+
+    [Fact]
     public void An_owned_row_no_step_has_reached_is_a_handler_defect_and_says_so() =>
         Should.Throw<InvalidOperationException>(() =>
                 OrderView.Summary(new OrderReadRow { OrderId = Order, FirstSeenAt = At, AsOf = At }, []))
@@ -369,8 +378,8 @@ public sealed record OrderLineDetail(
 /// <summary>The payment outcome there is to give; a decline has none, and the status says so (§10.7).</summary>
 public sealed record PaymentFacts(DateTimeOffset? AuthorisedAt, Money? Amount, Money? RefundedAmount);
 
-/// <summary>Shipping's two milestones and the number a buyer takes to the carrier (§10.7).</summary>
-public sealed record ShipmentFacts(string TrackingNumber, DateTimeOffset? DispatchedAt, DateTimeOffset? DeliveredAt);
+/// <summary>Shipping's two milestones and the number a buyer takes to the carrier, null if unstorable (§10.7).</summary>
+public sealed record ShipmentFacts(string? TrackingNumber, DateTimeOffset? DispatchedAt, DateTimeOffset? DeliveredAt);
 
 /// <summary>One order as the detail route carries it: the summary's members and the three it adds (§10.7).</summary>
 public sealed record OrderDetail(
@@ -533,15 +542,21 @@ public static class OrderView
                 row.RefundedAmount is { } refunded ? new Money(refunded, row.PaymentCurrency) : null);
 
     private static ShipmentFacts? ShipmentOf(OrderReadRow row) =>
-        row.TrackingNumber is null ? null : new ShipmentFacts(row.TrackingNumber, row.DispatchedAt, row.DeliveredAt);
+        (row.DispatchedAt ?? row.DeliveredAt) is null
+            ? null
+            : new ShipmentFacts(row.TrackingNumber, row.DispatchedAt, row.DeliveredAt);
 }
 ```
 
 `PaymentOf` keys on `PaymentCurrency` because PR-1's
 `CK_Orders_PaymentCurrency` holds it present exactly when either amount is,
 so it is the one column that says a payment event has reached the row.
-`ShipmentOf` keys on `TrackingNumber` because both shipment events carry it
-and PR-2's handlers set it with either.
+`ShipmentOf` keys on the two shipment steps, `DispatchedAt ?? DeliveredAt`,
+because each shipment event sets its own step and that is what spec section 2
+means by "null until either shipment event". It does not key on
+`TrackingNumber`: PR-2's handlers drop a number wider than its column and
+still record the step, so the number is nullable in `ShipmentFacts` and null
+only in that case.
 
 - [ ] **Step 4: Run it to see it pass**
 
@@ -549,7 +564,7 @@ and PR-2's handlers set it with either.
 dotnet test tests/Web.Bff.Tests --filter "FullyQualifiedName~OrderViewTests"
 ```
 
-Expected: 19 passed.
+Expected: 20 passed.
 
 - [ ] **Step 5: Commit**
 
