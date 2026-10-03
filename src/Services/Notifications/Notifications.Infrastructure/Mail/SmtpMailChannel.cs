@@ -156,13 +156,15 @@ internal sealed partial class SmtpMailChannel(
     }
 
     // The parser's answer compared back to the input, so a display name, a comment or a second address is refused.
+    // The parser decodes an ACE domain, so the input may equal either the parsed form or its IDN-encoded one.
     private static MailboxAddress? Mailbox(string recipient) =>
         !string.IsNullOrWhiteSpace(recipient)
         && recipient.Length <= MaxMailboxLength
         && !recipient.Any(char.IsControl)
         && MailboxAddress.TryParse(StrictAddresses, recipient, out MailboxAddress? parsed)
         && parsed is { Name: null or "", Route.Count: 0 }
-        && string.Equals(parsed.Address, recipient, StringComparison.Ordinal)
+        && (string.Equals(parsed.Address, recipient, StringComparison.Ordinal)
+            || string.Equals(parsed.GetAddress(idnEncode: true), recipient, StringComparison.Ordinal))
             ? parsed
             : null;
 
