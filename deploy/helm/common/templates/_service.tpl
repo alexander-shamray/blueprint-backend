@@ -15,8 +15,7 @@ spec:
   selector:
     {{- include "commerce.selectorLabels" . | nindent 4 }}
   ports:
-    {{- /* The Service port is the container port, not a remapping: callers dial
-    it by number (§10.2, §9.7). */}}
+    {{- /* The Service port is the container port, not a remapping (§10.2, §9.7). */}}
     {{- range .Values.ports }}
     - name: {{ .name }}
       port: {{ .containerPort }}
