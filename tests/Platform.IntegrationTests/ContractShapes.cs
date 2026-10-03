@@ -1,5 +1,4 @@
 using System.Reflection;
-using System.Runtime.CompilerServices;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using Common.Contracts.Ordering.V1;
@@ -22,6 +21,9 @@ internal static class ContractShapes
         NewLine = "\n",
         WriteIndented = true
     };
+
+    /// <summary>The live shape, written to the output directory for the record to be replaced from.</summary>
+    internal static string Received => Path.Combine(AppContext.BaseDirectory, "contract-shapes.received.json");
 
     internal static Type[] Contracts() =>
         [.. typeof(OrderPlaced).Assembly.GetTypes().Where(ContractTests.IsContract)];
@@ -95,10 +97,6 @@ internal static class ContractShapes
                 shapes.ToDictionary(t => t.Key, t => new SortedDictionary<string, string>(t.Value, StringComparer.Ordinal)),
                 StringComparer.Ordinal),
             Written) + "\n";
-
-    /// <summary>Writes beside the source, which a path-mapped CI build cannot reach and is never asked to.</summary>
-    internal static void Record(Shapes shapes, [CallerFilePath] string source = "") =>
-        File.WriteAllText(Path.Combine(Path.GetDirectoryName(source)!, FileName), Serialise(shapes));
 
     private static string Render(Type type, NullabilityInfo nullability)
     {

@@ -9,39 +9,27 @@ namespace Platform.IntegrationTests;
 /// <summary>§9.2's breaking-change rule, held against the shape each contract was recorded with.</summary>
 public class ContractShapeTests
 {
-    private static bool OnCi => Environment.GetEnvironmentVariable("CI") == "true";
-
     [Fact]
     public void No_contract_breaks_its_recorded_shape()
     {
         string[] breaks = ContractShapes.Breaks(ContractShapes.Recorded(), ContractShapes.Live());
 
         breaks.ShouldBeEmpty(
-            "a breaking change is a new version (§9.2); a contract with no consumer is changed in place " +
-            $"under an ADR, and its entry in {ContractShapes.FileName} is edited by hand: " +
+            "a breaking change is a new version (§9.2); a contract with no consumer is changed in place under " +
+            $"an ADR, and {ContractShapes.FileName} is replaced in the commit that argues it: " +
             string.Join("; ", breaks));
     }
 
     [Fact]
     public void The_recorded_shapes_are_the_live_ones()
     {
-        Shapes recorded = ContractShapes.Recorded();
-        Shapes live = ContractShapes.Live();
+        string live = ContractShapes.Serialise(ContractShapes.Live());
+        File.WriteAllText(ContractShapes.Received, live);
 
-        if (ContractShapes.Serialise(recorded) == ContractShapes.Serialise(live))
-            return;
-
-        // Only an additive change is recorded, and only where the file can be committed.
-        if (!OnCi && ContractShapes.Breaks(recorded, live).Length == 0)
-        {
-            ContractShapes.Record(live);
-            return;
-        }
-
-        ContractShapes.Serialise(recorded).ShouldBe(
-            ContractShapes.Serialise(live),
-            $"{ContractShapes.FileName} is not the contracts' shape: run this suite locally, which records an " +
-            "additive change, and commit the file");
+        ContractShapes.Serialise(ContractShapes.Recorded()).ShouldBe(
+            live,
+            $"{ContractShapes.FileName} is not the contracts' shape: replace it from {ContractShapes.Received} " +
+            "and commit it with the change");
     }
 
     [Fact]
