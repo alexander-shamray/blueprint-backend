@@ -138,14 +138,13 @@ public sealed class SendWorkerTests(ServiceFixture fixture) : IAsyncLifetime
     }
 
     [Theory]
-    [InlineData(CancelReasons.PaymentTimeout, null, NotificationStatus.Sent)]
-    [InlineData(CancelReasons.CustomerRequest, null, NotificationStatus.Suppressed)]
-    [InlineData(CancelReasons.PaymentDeclined, "system", NotificationStatus.Sent)]
-    [InlineData(CancelReasons.OutOfStock, "system", NotificationStatus.Suppressed)]
-    public async Task A_cancellation_with_no_known_origin_is_read_from_its_reason(
+    [InlineData(CancelReasons.PaymentTimeout, null)]
+    [InlineData(CancelReasons.PaymentDeclined, null)]
+    [InlineData(CancelReasons.PaymentDeclined, "system")]
+    [InlineData(CancelReasons.CustomerRequest, "system")]
+    public async Task A_cancellation_with_no_known_origin_suppresses_the_decline_whatever_its_reason(
         string reason,
-        string? origin,
-        NotificationStatus decline)
+        string? origin)
     {
         (Guid order, Guid customer) = Ids();
         fixture.ContactAnswers(customer, Mailbox, "en");
@@ -155,7 +154,7 @@ public sealed class SendWorkerTests(ServiceFixture fixture) : IAsyncLifetime
 
         await fixture.SendUntilSettledAsync();
 
-        (await DeclineAsync(order)).Status.ShouldBe(decline);
+        (await DeclineAsync(order)).Status.ShouldBe(NotificationStatus.Suppressed, "only the workflow's sends it");
     }
 
     [Fact]

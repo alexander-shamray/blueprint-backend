@@ -25,25 +25,25 @@ public class SendRulesTests
     public static TheoryData<string> EveryKeyButTheDecline() =>
         [.. TemplateKeys.Placeholders.Keys.Where(k => k != TemplateKeys.PaymentDeclined)];
 
-    /// <summary>ADR-049's reading: the origin when it is one of two, otherwise the reason.</summary>
+    /// <summary>ADR-049's reading: the workflow's origin, and no other, is not the customer's.</summary>
     public static TheoryData<string?, string?, bool> Readings() => new()
     {
-        // One of CancelOrigins' two: the origin decides, whatever the reason.
-        { CancelReasons.CustomerRequest, CancelOrigins.User, true },
-        { CancelReasons.PaymentDeclined, CancelOrigins.User, true },
+        // The workflow's, whatever the reason.
         { CancelReasons.PaymentDeclined, CancelOrigins.Workflow, false },
+        { CancelReasons.PaymentTimeout, CancelOrigins.Workflow, false },
         { CancelReasons.OutOfStock, CancelOrigins.Workflow, false },
 
-        // Absent, as an older publisher sends it: the two payment reasons are the saga's, every other the customer's.
-        { CancelReasons.PaymentDeclined, null, false },
-        { CancelReasons.PaymentTimeout, null, false },
+        // The customer's, whatever the reason: a caller may assert a payment one (§9.6).
+        { CancelReasons.CustomerRequest, CancelOrigins.User, true },
+        { CancelReasons.PaymentDeclined, CancelOrigins.User, true },
+
+        // Absent, as an older publisher sends it, or a third a newer one could send: the reason is never read.
+        { CancelReasons.PaymentDeclined, null, true },
+        { CancelReasons.PaymentTimeout, null, true },
         { CancelReasons.OutOfStock, null, true },
-        { CancelReasons.StockTimeout, null, true },
         { CancelReasons.CustomerRequest, null, true },
         { null, null, true },
-
-        // Outside the two, as a newer publisher could send it: read as an absent one is.
-        { CancelReasons.PaymentTimeout, "system", false },
+        { CancelReasons.PaymentDeclined, "system", true },
         { CancelReasons.CustomerRequest, "system", true },
     };
 
