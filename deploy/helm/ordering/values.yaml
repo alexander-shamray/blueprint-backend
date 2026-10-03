@@ -68,7 +68,7 @@ podDisruptionBudget:
 # Ordering is the host with the most to drain: four receive endpoints, a saga
 # and an outbox dispatcher on a two-second tick (§9.4, §9.6). The number is
 # still the framework's shutdown ceiling plus a margin rather than a per-service
-# estimate — _deployment.tpl argues why 30 is not a margin over 30.
+# estimate — §15.3 argues why 30 is not a margin over 30.
 terminationGracePeriodSeconds: 45
 
 probes:

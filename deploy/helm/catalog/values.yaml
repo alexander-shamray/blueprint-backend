@@ -75,7 +75,7 @@ podDisruptionBudget:
   minAvailable: 2
 
 # Must exceed the host's own shutdown timeout, which is 30 s and measured
-# rather than assumed — _deployment.tpl carries the argument.
+# rather than assumed — §15.3 carries the argument.
 terminationGracePeriodSeconds: 45
 
 probes:
