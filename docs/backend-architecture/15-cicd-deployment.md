@@ -728,6 +728,13 @@ podDisruptionBudget:
   enabled: true
   minAvailable: 2
 
+# Spread across nodes as a rule and across zones as a preference (§15.3).
+topologySpread:
+  maxSkew: 1
+  whenUnsatisfiable:
+    node: DoNotSchedule
+    zone: ScheduleAnyway
+
 # Must exceed the host's own shutdown timeout — see the note below, where the
 # number is measured rather than chosen.
 terminationGracePeriodSeconds: 45
@@ -836,6 +843,22 @@ present, every `helm upgrade` writes the chart's value and the autoscaler
 writes it back — so a config-only deploy (§15.1) scales the service down and it
 climbs out again over the following minutes, with nothing in the deploy log
 saying so.
+
+**Every Deployment spreads its replicas across nodes as a rule and across
+zones as a preference**, because a disruption budget covers voluntary
+evictions only: without a spread, three replicas on one node is a legal
+schedule, and that node's loss takes the workload to zero. The two halves
+differ on purpose. Across nodes the constraint is `DoNotSchedule`, so a
+replica that cannot be placed evenly waits as a pending pod and a rollout
+stops where anyone can see it; the cost is that on a small cluster one node
+that is full or cordoned can hold a rollout until it frees, which is why the
+choice is a value. Across zones it is `ScheduleAnyway`, because the hard form
+excludes every node with no zone label, and a cluster that labels no zones
+would schedule nothing. Each constraint counts only its own track and, through
+`matchLabelKeys`, only its own revision, so neither a canary rung nor a rolling
+update's surge is held back by where the other pods sit. The skew and both
+choices are values, and the library chart refuses a policy the API server
+would refuse only after the upgrade had begun.
 
 **A key joins a chart when a host's code reads it, and not before.** That is
 §14.1's rule for Compose blocks — an environment variable nothing reads is the
@@ -979,10 +1002,11 @@ wrongly without:
 # deploy/helm/gateway/values.yaml — an excerpt, on the same terms as Ordering's
 # above. The keys every chart shares are omitted here rather than repeated:
 # `workload.name` (required, and `gateway`), `ports`, `probes.probePort`,
-# `terminationGracePeriodSeconds`, `observability`, `image.pullPolicy`, and
-# `database.enabled` / `broker.enabled`, both `false` because this host owns
-# neither. `service.enabled` is NOT among them — it is in the fence below,
-# because this section spends a page arguing that key must be written down.
+# `terminationGracePeriodSeconds`, `topologySpread`, `observability`,
+# `image.pullPolicy`, and `database.enabled` / `broker.enabled`, both `false`
+# because this host owns neither. `service.enabled` is NOT among them — it is
+# in the fence below, because this section spends a page arguing that key must
+# be written down.
 replicaCount: 3
 
 image:

@@ -58,6 +58,13 @@ podDisruptionBudget:
   enabled: true
   minAvailable: 2
 
+# Spread across nodes as a rule and across zones as a preference (§15.3).
+topologySpread:
+  maxSkew: 1
+  whenUnsatisfiable:
+    node: DoNotSchedule
+    zone: ScheduleAnyway
+
 # Two receive endpoints and an outbox dispatcher to drain, and one thing the
 # other charts do not have: a provider call already in flight, bounded by
 # ProviderHop.TotalRequestTimeout. Neither number is written here — the value
