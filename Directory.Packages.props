@@ -182,10 +182,9 @@
     <PackageVersion Include="Testcontainers.Redis" Version="4.6.0" />
     <PackageVersion Include="Testcontainers.RabbitMq" Version="4.6.0" />
     <!-- §11.5's suite and ADR-052's contact read, the places the solution runs
-         a real Keycloak. The audience mapper the first proves is realm
-         configuration, which no other test can see: §12.4's fixture points at
-         an unreachable authority on purpose. Same version line as the three
-         above: the Testcontainers modules ship as one release. -->
+         a real Keycloak; §12.4's fixture points at an unreachable authority on
+         purpose. Same version line as the three above: the Testcontainers
+         modules ship as one release. -->
     <PackageVersion Include="Testcontainers.Keycloak" Version="4.6.0" />
     <!-- Transitive of the three rows above, pinned deliberately, and the third
          instance of the shape Microsoft.OpenApi and System.Security.Cryptography.Xml
