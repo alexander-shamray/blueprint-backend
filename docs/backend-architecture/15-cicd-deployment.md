@@ -846,7 +846,7 @@ saying so.
 
 **Every Deployment spreads its replicas across nodes as a rule and across
 zones as a preference**, because a disruption budget covers voluntary
-evictions only: without a spread, three replicas on one node is a legal
+evictions only: without a spread, every replica on one node is a legal
 schedule, and that node's loss takes the workload to zero. The two halves
 differ on purpose. Across nodes the constraint is `DoNotSchedule`, so a
 replica that cannot be placed evenly waits as a pending pod and a rollout
