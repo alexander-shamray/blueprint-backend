@@ -4,7 +4,7 @@ using Notifications.Application.Rendering;
 namespace Notifications.Application.Intake;
 
 /// <summary>An event owes a notice; one of Ordering's also says what the order record keeps.</summary>
-/// <remarks>Its values are as published; <see cref="RecordNotificationHandler"/> checks each one.</remarks>
+/// <remarks>Its values are as published; <see cref="RecordNotificationHandler"/> checks each text value.</remarks>
 public sealed record RecordNotificationCommand(
     Guid EventId,
     string TemplateKey,
