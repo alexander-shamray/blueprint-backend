@@ -3,7 +3,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   {{- /* The instance name, not the workload name: the two differ on the canary
-  release, because Helm refuses to render an object another release owns
+  release, because Helm refuses to touch an object another release owns
   (§15.3). */}}
   name: {{ include "commerce.instanceName" . }}
   labels:
