@@ -19,5 +19,8 @@ internal sealed class ContactRecordRowConfiguration : IEntityTypeConfiguration<C
 
         // varchar: a language tag is ASCII by the shape the adapter holds it to before a row is written.
         builder.Property(r => r.Locale).HasMaxLength(LanguageTag.MaxLength).IsUnicode(false);
+
+        // ContactRetention's purge, which deletes a row by the instant it was last fetched (ADR-052).
+        builder.HasIndex(r => r.FetchedAt);
     }
 }

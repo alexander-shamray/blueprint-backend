@@ -17,5 +17,8 @@ internal sealed class OrderRecordConfiguration : IEntityTypeConfiguration<OrderR
 
         builder.Property(r => r.CancelReason).HasMaxLength(OrderRecordLimits.MaxCodeLength);
         builder.Property(r => r.CancelOrigin).HasMaxLength(OrderRecordLimits.MaxCodeLength);
+
+        // OrderRetention's purge, by the instant this service first heard of the order.
+        builder.HasIndex(r => r.RecordedAt);
     }
 }

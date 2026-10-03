@@ -16,6 +16,25 @@ internal sealed class NotificationConfiguration : IEntityTypeConfiguration<Notif
         // One row per event per template, the second line behind §9.5's inbox rather than the first.
         builder.HasIndex(n => new { n.EventId, n.TemplateKey }).IsUnique();
 
+        // The send claim's population, its filter repeated by SendClaims.Claimable so the optimiser matches it.
+        builder
+            .HasIndex(n => n.NextAttemptAt)
+            .HasDatabaseName("IX_NotificationLog_SendClaim")
+            .HasFilter("[Status] = 'Pending'")
+            .IncludeProperties(n => new { n.LockedUntil });
+
+        // OrderRetention's floor: an order record goes only once no pending notice names its order.
+        builder
+            .HasIndex(n => n.OrderId)
+            .HasDatabaseName("IX_NotificationLog_PendingOrder")
+            .HasFilter("[Status] = 'Pending'");
+
+        // LogRetention's purge, over terminal rows by the instant each ended (ADR-053).
+        builder
+            .HasIndex(n => n.CompletedAt)
+            .HasDatabaseName("IX_NotificationLog_CompletedAt")
+            .HasFilter("[CompletedAt] IS NOT NULL");
+
         builder.Property(n => n.TemplateKey).HasMaxLength(NotificationLimits.MaxTemplateKeyLength);
         builder.Property(n => n.Languages).HasMaxLength(NotificationLimits.MaxLanguagesLength);
         builder.Property(n => n.Parameters).HasMaxLength(NotificationLimits.MaxParametersLength);
