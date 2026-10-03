@@ -70,6 +70,9 @@ services:
       Jurisdiction__LogRetention: "1001.00:00:00"
       Jurisdiction__ContactRetention: "13.00:00:00"
       Jurisdiction__OrderRetention: "97.00:00:00"
+      # ADR-052's give-up age: a notice a day late is worse than none, and an
+      # operator lengthens it during an outage rather than a release.
+      Delivery__GiveUpAge: "1.00:00:00"
     depends_on:
       notifications-migrator: { condition: service_completed_successfully }
       rabbitmq: { condition: service_healthy }

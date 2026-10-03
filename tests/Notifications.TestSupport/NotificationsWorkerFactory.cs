@@ -9,6 +9,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
+using Notifications.Infrastructure.Delivery;
 using Notifications.Infrastructure.Jurisdiction;
 using Notifications.Infrastructure.Mail;
 using ContactRegistration = Notifications.Infrastructure.Contacts.DependencyInjection;
@@ -30,7 +31,8 @@ public class NotificationsWorkerFactory(
     string timeZone = NotificationsWorkerFactory.InventedTimeZone,
     string logRetention = NotificationsWorkerFactory.InventedLogRetention,
     string contactRetention = NotificationsWorkerFactory.InventedContactRetention,
-    string orderRetention = NotificationsWorkerFactory.InventedOrderRetention)
+    string orderRetention = NotificationsWorkerFactory.InventedOrderRetention,
+    string giveUpAge = NotificationsWorkerFactory.InventedGiveUpAge)
     : WebApplicationFactory<Program>
 {
     /// <summary>The authority every host must name (§11.3); <c>.invalid</c> never resolves.</summary>
@@ -50,6 +52,9 @@ public class NotificationsWorkerFactory(
 
     /// <inheritdoc cref="InventedLogRetention"/>
     public const string InventedOrderRetention = "71.00:00:00";
+
+    /// <summary>A give-up age no deployment would choose, inside <c>RetentionPolicy.InboxWindow</c>'s week.</summary>
+    public const string InventedGiveUpAge = "2.07:00:00";
 
     /// <summary>The relay a host names when a test gives none; <c>.invalid</c> never resolves.</summary>
     public const string UnreachableRelay = "relay.invalid";
@@ -96,6 +101,7 @@ public class NotificationsWorkerFactory(
             .UseSetting($"{NotificationsJurisdictionOptions.SectionName}:LogRetention", logRetention)
             .UseSetting($"{NotificationsJurisdictionOptions.SectionName}:ContactRetention", contactRetention)
             .UseSetting($"{NotificationsJurisdictionOptions.SectionName}:OrderRetention", orderRetention)
+            .UseSetting($"{DeliveryOptions.SectionName}:GiveUpAge", giveUpAge)
             // A list binds by index, and an empty one sets no key at all, which is the refusal a test asks for.
             .ConfigureAppConfiguration(configuration =>
                 configuration.AddInMemoryCollection(
