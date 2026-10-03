@@ -103,7 +103,10 @@ chart half rides the PR that makes the host need it), 5 (the tables,
     asserting exactly `["sql"]`, which Task 6 changes in the same commit that
     adds the bus.
   - `tests/Web.Bff.Tests/BffServiceFixture.cs` (named `Bff`, so the account
-    `bff-svc` and its local password), `BffIntegrationCollection`,
+    `bff-svc` and its local password), overriding
+    `ServiceFixture<,,>.BrokerAccountGranted` to `false` because
+    `definitions.json` grants `bff-svc` nothing in PR-1 — Task 5 deletes that
+    override in the commit that adds the account; `BffIntegrationCollection`,
     `BffFactory.DatabaseConnectionString`, `BffFactory.UnreachableDatabase`,
     `OptionsValidationTests.MissingSettingFactory` and
     `PersistenceRegistrationTests.NoDatabaseFactory`.
@@ -596,6 +599,8 @@ git commit -m "feat(broker): check_permissions.py reads a host's Messaging direc
 - Modify: `src/BFF/Web.Bff/Web.Bff.csproj`
 - Modify: `deploy/compose/rabbitmq/definitions.json`
 - Modify: `deploy/compose/rabbitmq/test_check_permissions.py`
+- Modify: `tests/Web.Bff.Tests/BffServiceFixture.cs` — the
+  `BrokerAccountGranted` override goes
 - Modify: `deploy/helm/web-bff/values.yaml`
 - Modify: `deploy/canary/deployables/web-bff.json`
 - Modify: `.github/secret-scan/allowed/deploy.txt`
@@ -940,6 +945,14 @@ empty `tags` — and after `notifications-svc`'s permissions entry:
 The pure consumer's shape `tools/new-service` renders for Notifications:
 it declares and reads the contract exchanges it binds and writes only its own
 endpoints and the fault exchanges.
+
+In the same step, delete PR-1's override from
+`tests/Web.Bff.Tests/BffServiceFixture.cs` — the
+`protected override bool BrokerAccountGranted => false;` line and the comment
+above it. The account now has a grant, so the override's one claim — that
+`definitions.json` grants `bff-svc` nothing — is false from this commit, and
+it would silently skip any `HarnessWrite` a later test adds. With it gone,
+`ServiceFixture<,,>` reads the grant as it does every service's.
 
 - [ ] **Step 7: The chart's broker block and the descriptor's signal**
 

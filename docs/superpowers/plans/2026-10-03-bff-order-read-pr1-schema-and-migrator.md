@@ -977,10 +977,13 @@ git commit -m "feat(bff): Web.Bff.Persistence holds ADR-051's three tables and t
 - Create: `tests/Web.Bff.Tests/ProjectionSchemaTests.cs`
 - Modify: `tests/Web.Bff.Tests/BffFactory.cs`
 - Modify: `tests/Web.Bff.Tests/Web.Bff.Tests.csproj`
+- Modify: `tests/Common.TestSupport/ServiceFixture.cs` — `BrokerAccountGranted`
 - Modify: `Platform.slnx`
 
 **Interfaces:**
-- Produces: `Web.Bff.Migrator.MigratorHost.Build(string[])`, reading
+- Produces: `ServiceFixture<,,>.BrokerAccountGranted`, a protected virtual
+  `bool` that is `true` unless a derived fixture says otherwise;
+  `Web.Bff.Migrator.MigratorHost.Build(string[])`, reading
   `ConnectionStrings:BffMigrator`; `MigrationRunner.RunAsync`;
   `BffServiceFixture` with `RunMigratorAsync`; `BffIntegrationCollection`;
   `BffFactory.DatabaseConnectionString` and `BffFactory.UnreachableDatabase`.
@@ -992,13 +995,21 @@ there would put every generated message in one compilation twice — §4.1's
 CS0436 argument for why the support project exists at all. The suite already
 references both and names no generated type.
 
-**The fixture's broker is started and unused here.** `ServiceFixture<,,>`
-starts one per collection under the account `bff-svc`, which
-`definitions.json` does not grant until PR-2; `HarnessWrite` returns null, so
-nothing reads the grant, and no code in this PR connects. If the container's
-own wait fails, that is the measurement saying the account is needed now, and
-PR-2's `definitions.json` entry moves here rather than the fixture growing a
-switch.
+**The fixture's broker is started and unused here, and the shared body has
+to be told so.** `ServiceFixture<,,>` starts one per collection, and
+`InitializeAsync` always calls `WidenWriteForTheHarnessAsync`, which reads the
+account's grant out of `definitions.json` through `ImportedGrant()` **before**
+it asks `HarnessWrite` whether any widening is wanted — and `ImportedGrant`
+throws when the file grants `bff-svc` nothing
+(`tests/Common.TestSupport/ServiceFixture.cs:133-172`). `definitions.json` does
+not grant `bff-svc` until PR-2, and moving the account here would fail
+`check_permissions.py`'s "has broker permissions and no service" check, since
+the gate learns `src/BFF` with PR-2's consumers too (spec, sections 3 and 4).
+So the shared body gains `BrokerAccountGranted`, true for every service as
+today, and `WidenWriteForTheHarnessAsync` returns before reading the grant when
+it is false; `BffServiceFixture` overrides it to false, and PR-2 deletes the
+override in the task that adds the account. No code in this PR connects to the
+broker.
 
 - [ ] **Step 1: The factory's database key**
 
@@ -1064,6 +1075,25 @@ missing database instead of the missing credential once Task 4 lands:
         ];
 ```
 
+In `tests/Common.TestSupport/ServiceFixture.cs`, beside the other protected
+members:
+
+```csharp
+    /// <summary>False while <c>definitions.json</c> grants the account nothing, so the harness widens no grant.</summary>
+    protected virtual bool BrokerAccountGranted => true;
+```
+
+and at the top of `WidenWriteForTheHarnessAsync`, before `ImportedGrant()`:
+
+```csharp
+        // An account with no grant has no scope to preserve, and its host does not connect yet (ADR-036).
+        if (!BrokerAccountGranted)
+            return;
+```
+
+Every existing fixture inherits `true`, so the services' suites run exactly as
+before.
+
 - [ ] **Step 2: Write the failing container tests**
 
 `tests/Web.Bff.Tests/BffIntegrationCollection.cs`:
@@ -1107,6 +1137,9 @@ public sealed class BffServiceFixture()
     protected override Task<int> MigrateAsync(string connectionString) => RunMigratorAsync(connectionString);
 
     protected override BffFactory CreateFactory() => new() { DatabaseConnectionString = ConnectionString };
+
+    // definitions.json holds no bff-svc row yet; the account arrives with the host's consumers.
+    protected override bool BrokerAccountGranted => false;
 }
 ```
 
@@ -1523,7 +1556,7 @@ git add src/BFF/Web.Bff.Migrator src/BFF/Web.Bff.Persistence/Migrations Platform
         tests/Web.Bff.Tests/BffServiceFixture.cs tests/Web.Bff.Tests/BffIntegrationCollection.cs \
         tests/Web.Bff.Tests/DatabaseSmokeTests.cs tests/Web.Bff.Tests/ProjectionSchemaTests.cs \
         tests/Web.Bff.Tests/BffFactory.cs tests/Web.Bff.Tests/OptionsValidationTests.cs \
-        tests/Web.Bff.Tests/Web.Bff.Tests.csproj
+        tests/Web.Bff.Tests/Web.Bff.Tests.csproj tests/Common.TestSupport/ServiceFixture.cs
 git commit -m "feat(bff): Web.Bff.Migrator applies AddOrderProjection, proved over a real SQL Server"
 ```
 
@@ -2676,6 +2709,11 @@ consumes them as written:
   `BffFactory.DatabaseConnectionString` and `BffFactory.UnreachableDatabase`.
   PR-2's `BffFactory` needs a placeholder `ConnectionStrings:RabbitMq` the
   same way, and `MissingSettingFactory` and `NoDatabaseFactory` must carry it.
+- **Broker account in the fixture**: `BffServiceFixture` overrides
+  `ServiceFixture<,,>.BrokerAccountGranted` to `false`, because
+  `definitions.json` grants `bff-svc` nothing in PR-1; PR-2 deletes that
+  override in the task that adds the account, so the harness widens its grant
+  from then on.
 - **Deploy**: the chart has `database.enabled: true` and `broker.enabled:
   false`; the descriptor `migrator: true` and `signals: ["http"]`. PR-2's
   `GetConnectionString("RabbitMq")` in `src/BFF/Web.Bff` makes `smoke.sh`
