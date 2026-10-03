@@ -53,7 +53,7 @@ public class NotificationsWorkerFactory(
     /// <summary>The token source the credential handler draws on, so no test needs an identity provider.</summary>
     public RecordingTokenCache Tokens { get; } = new();
 
-    /// <summary>Supplies only §7.1's runtime connection; the host must not read <c>NotificationsMigrator</c>.</summary>
+    /// <summary>The settings a worker needs to start; the host must not read <c>NotificationsMigrator</c>.</summary>
     protected override void ConfigureWebHost(IWebHostBuilder builder) =>
         builder
             .UseSetting("ConnectionStrings:Notifications", connectionString)
