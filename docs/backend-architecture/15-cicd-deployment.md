@@ -1300,6 +1300,7 @@ namespace read access.
 | `Jurisdiction__LogRetention` | Config | ConfigMap | ✓ — **Notifications only**; ADR-053 rule 4's statutory window for the record of a send, and the host refuses to start without it |
 | `Jurisdiction__ContactRetention` | Config | ConfigMap | ✓ — **Notifications only**; ADR-052's contact row's window, refused at start when shorter than `ContactOptions.StaleCeiling` |
 | `Jurisdiction__OrderRetention` | Config | ConfigMap | ✓ — **Notifications only**; the order record's window, and the host refuses to start without it |
+| `Delivery__GiveUpAge` | Config | Helm `delivery.giveUpAge` → ConfigMap, defaulted in the chart | ✓ — **Notifications only**; [ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)'s give-up age for a notice still pending, past which it is undeliverable with the reason `gave_up`; the host refuses to start without it, or with one longer than `RetentionPolicy.InboxWindow` |
 
 | Kind | Source | Example |
 |---|---|---|
@@ -1339,10 +1340,11 @@ holds what
 [ADR-053](adr/ADR-053-a-jurisdiction-is-a-value-the-deployment-is-given.md)
 makes values a deployment is given — the statutory windows, and for the
 service that writes to customers the language set and the time zone too —
-and `Fulfilment` holds the give-up age
+and `Fulfilment` and Notifications' `Delivery` each hold the give-up age
 [ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)
-makes one — a deadline that decides whether a day's shipments survive a long
-outage, which is an operator's call and not a build's. The tempting next one is
+makes one — a deadline that decides whether a day's shipments, or a day's
+notices, survive a long outage, which is an operator's call and not a
+build's. The tempting next one is
 a `ServiceOptions`-shaped bag — batch sizes, poll intervals, retry caps — bound
 to an `Ordering` section that no environment ever sets. It costs nothing to
 write and it is not free: `ValidateOnStart` now gates boot on a section nobody
@@ -1361,8 +1363,8 @@ a key that never varies has nothing to validate.
 > languages a customer is owed and the zone their dates are read in are facts
 > about where a deployment runs: a deployment is given them (ADR-053 rule 1),
 > so a developer's stack, which is no jurisdiction, carries invented ones, and
-> real ones belong in a values file. `Fulfilment` passes
-> on ADR-052's word rather than on this test: its age is the same everywhere
+> real ones belong in a values file. `Fulfilment` and `Delivery` pass
+> on ADR-052's word rather than on this test: each age is the same everywhere
 > until an outage makes an operator lengthen it, and that record makes the end
 > of waiting a value of the deployment so that the change is a values edit and
 > not a release.
