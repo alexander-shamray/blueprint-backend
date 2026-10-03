@@ -1,7 +1,6 @@
 using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
-using System.Text;
 using Microsoft.Extensions.DependencyInjection;
 using Notifications.Application.Mail;
 using Notifications.Infrastructure.Mail;
@@ -163,7 +162,8 @@ public sealed class MailFaultTests(MailpitFixture fixture) : IAsyncLifetime
     [Fact]
     public async Task A_relay_that_stalls_inside_the_envelope_is_unconfirmed_and_never_retried()
     {
-        await using EnvelopeStall stalled = new();
+        // Answers EHLO, then never answers MAIL FROM.
+        await using ScriptedRelay stalled = new("250 relay.test");
         using NotificationsWorkerFactory host = new(
             Unreachable.Sql,
             Unreachable.Rabbit,
@@ -202,73 +202,5 @@ public sealed class MailFaultTests(MailpitFixture fixture) : IAsyncLifetime
 
         (await fixture.Plain.MessagesAsync(ct)).ShouldBeEmpty(
             "once open, the breaker refuses without a connection, which is what stops a pass hammering a dead relay");
-    }
-
-    /// <summary>A relay that greets and answers <c>EHLO</c>, then never answers <c>MAIL FROM</c>.</summary>
-    private sealed class EnvelopeStall : IAsyncDisposable
-    {
-        private readonly TcpListener _listener = new(IPAddress.Loopback, 0);
-        private readonly CancellationTokenSource _stop = new();
-        private readonly Task _accepting;
-        private int _connections;
-
-        public EnvelopeStall()
-        {
-            _listener.Start();
-            _accepting = AcceptAsync(_stop.Token);
-        }
-
-        public int Port => ((IPEndPoint)_listener.LocalEndpoint).Port;
-
-        public int Connections => Volatile.Read(ref _connections);
-
-        public async ValueTask DisposeAsync()
-        {
-            await _stop.CancelAsync();
-            _listener.Stop();
-            await _accepting;
-            _stop.Dispose();
-        }
-
-        private async Task AcceptAsync(CancellationToken ct)
-        {
-            List<Task> conversations = [];
-
-            try
-            {
-                while (true)
-                {
-                    TcpClient client = await _listener.AcceptTcpClientAsync(ct);
-                    Interlocked.Increment(ref _connections);
-                    conversations.Add(ConverseAsync(client, ct));
-                }
-            }
-            catch (Exception e) when (e is OperationCanceledException or SocketException or ObjectDisposedException)
-            {
-            }
-
-            await Task.WhenAll(conversations);
-        }
-
-        private static async Task ConverseAsync(TcpClient client, CancellationToken ct)
-        {
-            using (client)
-            {
-                try
-                {
-                    NetworkStream stream = client.GetStream();
-                    using StreamReader reader = new(stream, Encoding.ASCII, leaveOpen: true);
-                    await stream.WriteAsync("220 relay.test ESMTP\r\n"u8.ToArray(), ct);
-                    await reader.ReadLineAsync(ct);
-                    await stream.WriteAsync("250 relay.test\r\n"u8.ToArray(), ct);
-
-                    // Holds the connection open, unanswered, until the test is over.
-                    await Task.Delay(Timeout.Infinite, ct);
-                }
-                catch (Exception e) when (e is OperationCanceledException or IOException)
-                {
-                }
-            }
-        }
     }
 }

@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Notifications.Application.Mail;
+using Notifications.Infrastructure.Mail;
 using Notifications.TestSupport;
 using Shouldly;
 using Xunit;
@@ -13,6 +14,10 @@ namespace Notifications.Worker.Tests;
 [Collection(nameof(MailpitCollection))]
 public sealed class MailTlsTests(MailpitFixture fixture) : IAsyncLifetime
 {
+    // MailKit wraps whatever ends a handshake, so a trust refusal is told from a stall or a reset by what it wraps.
+    private const string TrustRefused =
+        $"{nameof(SslHandshakeException)} ({nameof(System.Security.Authentication.AuthenticationException)})";
+
     public async ValueTask InitializeAsync()
     {
         CancellationToken ct = TestContext.Current.CancellationToken;
@@ -53,7 +58,7 @@ public sealed class MailTlsTests(MailpitFixture fixture) : IAsyncLifetime
             production.Services.GetRequiredService<IMailChannel>().SendAsync(Mail(), ct));
 
         thrown.Cause.ShouldBe(MailFault.Tls);
-        thrown.Message.ShouldContain(nameof(SslHandshakeException), Case.Sensitive, "STARTTLS was offered and refused");
+        thrown.Message.ShouldContain(TrustRefused, Case.Sensitive, "the trust store refused the certificate");
         counted.Of("tls").ShouldBe(1, "a TLS refusal is a deployment's decision: counted apart, and not retried");
         (await fixture.SelfSigned.MessagesAsync(ct)).ShouldBeEmpty();
     }
@@ -90,6 +95,29 @@ public sealed class MailTlsTests(MailpitFixture fixture) : IAsyncLifetime
 
         // Development relaxes None and the credential, and never the trust store.
         thrown.Cause.ShouldBe(MailFault.Tls);
-        thrown.Message.ShouldContain(nameof(SslHandshakeException), Case.Sensitive, "STARTTLS was offered and refused");
+        thrown.Message.ShouldContain(TrustRefused, Case.Sensitive, "the trust store refused the certificate");
+    }
+
+    [Fact]
+    public async Task A_handshake_that_stalls_is_a_retried_timeout_and_never_a_tls_refusal()
+    {
+        // Offers STARTTLS and agrees to it, then never answers the client's hello.
+        await using ScriptedRelay stalled = new("250-relay.test\r\n250 STARTTLS", "220 2.0.0 Ready to start TLS");
+        using NotificationsWorkerFactory development = new(
+            Unreachable.Sql,
+            Unreachable.Rabbit,
+            mailHost: "127.0.0.1",
+            mailPort: stalled.Port,
+            mailSecurity: "StartTls");
+        using MailCount counted = MailCounter.Unavailable(development.Services);
+
+        MailUnavailableException thrown = await Should.ThrowAsync<MailUnavailableException>(() => development.Services
+            .GetRequiredService<IMailChannel>()
+            .SendAsync(Mail(), TestContext.Current.CancellationToken));
+
+        thrown.Cause.ShouldBe(MailFault.Transient);
+        stalled.Connections.ShouldBe(MailHop.MaxRetryAttempts + 1, "a timeout before the send is retried");
+        counted.Of("transient").ShouldBe(MailHop.MaxRetryAttempts + 1, "each attempt timeout, counted by OnTimeout");
+        counted.Of("tls").ShouldBe(0, "a stalled relay is an outage, not a session weaker than configured");
     }
 }
