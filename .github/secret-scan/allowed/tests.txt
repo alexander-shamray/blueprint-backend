@@ -96,6 +96,9 @@ tests/Notifications.Worker.Tests/HostSmokeTests.cs | connection-string-password 
 tests/Notifications.Worker.Tests/MessagingRegistrationTests.cs | credential-assignment | 93e01615a2b7 | A broker URI pointing at a hostname that does not resolve.
 tests/Notifications.Worker.Tests/MetricsRegistrationTests.cs | connection-string-password | da3fd0c5abaa | The same unusable fixture in the metrics registration suite.
 
-# Not the render's: the relay credential the factory names for the hosts run as Production.
+# Not the render's: the relay credential the factory names for the hosts run
+# as Production, and the realm's local client defaults the Keycloak fixture holds.
 
 tests/Notifications.TestSupport/NotificationsWorkerFactory.cs | credential-assignment | ab3b082d4e53 | A relay password that says what it is, for the hosts run as Production; nothing accepts it.
+tests/Notifications.Worker.Tests/KeycloakFixture.cs | credential-assignment | c9e80f5d4b22 | ADR-052's contact reader's local client default, held where the fixture and the realm meet.
+tests/Notifications.Worker.Tests/KeycloakFixture.cs | credential-assignment | eb26d4a9a0ef | The BFF's local client default, the realm's ungranted credential the refusal is proved with.
