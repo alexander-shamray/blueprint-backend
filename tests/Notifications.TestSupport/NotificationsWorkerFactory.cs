@@ -29,7 +29,7 @@ public class NotificationsWorkerFactory(
     public const string UnreachableRelay = "relay.invalid";
 
     /// <summary>Mailpit's SMTP port, the one §14.1's unit reaches on the Compose network.</summary>
-    public const int LocalRelayPort = 1025;
+    public const int LocalRelayPort = Mailpit.SmtpPort;
 
     /// <summary>The sender a host names when a test gives none, on a domain RFC 2606 reserves.</summary>
     public const string LocalFrom = "Commerce <no-reply@commerce.test>";
