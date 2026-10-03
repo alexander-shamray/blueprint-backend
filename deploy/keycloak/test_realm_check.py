@@ -863,6 +863,12 @@ class WhatTheGateIsLookingAt(Fixture):
         self.assertEqual(len(found), 1, found)
         self.assertIn("2 time(s)", found[0])
 
+    def test_a_duplicated_contact_client_is_refused(self):
+        """Two contact-reader entries mean the compliant one could be the one not used."""
+        found = self.problems(realm(browser(), contact(), contact()))
+        self.assertEqual(len(found), 1, found)
+        self.assertIn("2 time(s)", found[0])
+
     def test_an_unknown_realm_kind_judges_nothing(self):
         """The kind has no default, and a typo must not silently pick one."""
         found = realm_check.check_realm(realm(), "production", self.lifetime)
