@@ -1,6 +1,8 @@
 using Notifications.Application;
 using Notifications.Infrastructure;
+using Notifications.Infrastructure.Contacts;
 using Notifications.Infrastructure.Mail;
+using Common.Infrastructure.Identity;
 using Common.Web;
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
@@ -18,6 +20,36 @@ builder.Services.AddNotificationsInfrastructure(builder.Configuration);   // §4
 
 // The relay behind IMailChannel (ADR-055); plain or anonymous submission is refused outside Development.
 builder.Services.AddMailChannel(builder.Configuration, builder.Environment);
+
+// ADR-052's contact read; its address is read, and its scheme checked, eagerly (ADR-055).
+builder.Services.AddContactSource(builder.Configuration, builder.Environment);
+
+// §11.5's client-credentials registrations, this host's own (§15.4, ADR-055).
+builder.Services.AddTransient<ClientCredentialsHandler>();
+builder.Services.AddSingleton<CachingTokenClient>();
+
+// ADR-052: this host holds itself to its grant, because the realm gate cannot read a service account's roles.
+builder.Services.AddSingleton<ITokenCache>(sp => new GrantCheckedTokenCache(
+    sp.GetRequiredService<CachingTokenClient>(),
+    sp.GetRequiredService<ContactMetrics>(),
+    sp.GetRequiredService<ILogger<GrantCheckedTokenCache>>()));
+
+// Validated at start: IOptions<T> always resolves, so ValidateOnBuild cannot see a forgotten binding (§15.4).
+builder.Services
+    .AddOptions<ServiceIdentityOptions>()
+    .BindConfiguration(ServiceIdentityOptions.SectionName)
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
+
+// The token client's transport carries no ClientCredentialsHandler, which would recurse.
+string authority = builder.Configuration[AuthenticationExtensions.AuthorityKey]!;
+
+builder.Services
+    .AddHttpClient(CachingTokenClient.HttpClientName, client =>
+        client.BaseAddress = new Uri(authority.TrimEnd('/') + "/"));
+
+// The key's name, so a refused discovery document says which key to fix (§11.3, §11.5).
+builder.Services.AddSingleton(new AuthorityKeyName(AuthenticationExtensions.AuthorityKey));
 
 // A worker names no endpoint, so it registers no permission policy (§3.2); the token middleware below stays (§11.2).
 

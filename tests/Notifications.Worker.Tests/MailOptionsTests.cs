@@ -2,7 +2,6 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using Notifications.Infrastructure.Mail;
@@ -179,17 +178,5 @@ public sealed class MailOptionsTests
         services.AddMailChannel(configuration, new TestEnvironment { EnvironmentName = environment });
 
         return services;
-    }
-
-    /// <summary>A minimal <see cref="IHostEnvironment"/>; the registration reads only its name.</summary>
-    private sealed class TestEnvironment : IHostEnvironment
-    {
-        public string ApplicationName { get; set; } = "Notifications.Worker.Tests";
-
-        public string EnvironmentName { get; set; } = Environments.Production;
-
-        public string ContentRootPath { get; set; } = string.Empty;
-
-        public IFileProvider ContentRootFileProvider { get; set; } = new NullFileProvider();
     }
 }
