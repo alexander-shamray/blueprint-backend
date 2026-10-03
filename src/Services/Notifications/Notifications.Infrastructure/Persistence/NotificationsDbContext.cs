@@ -17,7 +17,7 @@ public sealed class NotificationsDbContext(DbContextOptions<NotificationsDbConte
     /// <summary>§9.5's inbox.</summary>
     public DbSet<InboxMessage> InboxMessages => Set<InboxMessage>();
 
-    /// <summary>§8.5's durable idempotency markers, declared on the same terms.</summary>
+    /// <summary>§8.5's durable idempotency markers.</summary>
     public DbSet<IdempotencyMarker> IdempotencyMarkers => Set<IdempotencyMarker>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
