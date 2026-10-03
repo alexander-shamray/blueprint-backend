@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Notifications.Application.Contacts;
 using Notifications.Infrastructure.Contacts;
@@ -97,12 +98,14 @@ public sealed class ContactFaultTests : IAsyncLifetime
     {
         _keycloak.Given(Request.Create().WithPath(Path).UsingGet())
             .RespondWith(Response.Create().WithStatusCode(200).WithBody(User).WithDelay(TimeSpan.FromSeconds(10)));
-        DateTimeOffset started = DateTimeOffset.UtcNow;
+        using OutboundCount counted = OutboundCounter.ContactRefused(_factory.Services);
+        long started = Stopwatch.GetTimestamp();
 
         Exception thrown = await Should.ThrowAsync<Exception>(() => ReadAsync());
 
         thrown.ShouldNotBeOfType<ContactSourceRefusedException>();
-        (DateTimeOffset.UtcNow - started).ShouldBeLessThan(ContactHop.TotalRequestTimeout + TimeSpan.FromSeconds(2));
+        Stopwatch.GetElapsedTime(started).ShouldBeLessThan(ContactHop.TotalRequestTimeout + TimeSpan.FromSeconds(2));
+        counted.Value.ShouldBe(0, "an outage is not a refusal");
     }
 
     [Fact]
