@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net.Sockets;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -135,7 +136,8 @@ internal sealed partial class SmtpMailChannel(
         {
             Subject = mail.Subject,
             Date = clock.GetUtcNow(),
-            MessageId = $"{mail.MessageId.LocalPart}@{from.Domain}",
+            // The parser decodes an ACE domain, and a msg-id is ASCII (RFC 5322 section 3.6.4), so it is encoded back.
+            MessageId = $"{mail.MessageId.LocalPart}@{new IdnMapping().GetAscii(from.Domain)}",
             Body = body
         };
         message.From.Add(from);
