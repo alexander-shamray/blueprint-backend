@@ -39,7 +39,8 @@ public sealed class NotificationMetrics
             unit: "{notification}",
             description: "Pending notifications past their first failed pass, by the step they wait on.");
 
-        // The row no pass has reached, which the gauge above cannot see; one that climbs is too few replicas.
+        // The row no pass has reached, which the gauge above cannot see; one that climbs while the relay answers
+        // is too few replicas.
         meter.CreateObservableGauge(
             "notifications.overdue",
             () => Overdue(stats, logger),
