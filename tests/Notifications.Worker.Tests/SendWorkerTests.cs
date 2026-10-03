@@ -190,6 +190,23 @@ public sealed class SendWorkerTests(ServiceFixture fixture) : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_customer_owed_three_notices_in_one_pass_is_asked_for_once()
+    {
+        // The owner stalls, so every row reaches the empty table before any answer is kept there.
+        Guid customer = Guid.CreateVersion7();
+        fixture.ContactAnswers(customer, Mailbox, "en", delay: TimeSpan.FromMilliseconds(500));
+        Guid[] orders = [Guid.CreateVersion7(), Guid.CreateVersion7(), Guid.CreateVersion7()];
+
+        foreach (Guid order in orders)
+            await OwedAsync(order, customer);
+
+        (await fixture.RunSendPassAsync()).ShouldBe(new SendPass(3, 3));
+
+        fixture.ContactCalls(customer).ShouldBe(1, "ADR-052 resolves a customer once per pass");
+        (await fixture.Relay.WaitForAsync(3, Ct)).Count.ShouldBe(3);
+    }
+
+    [Fact]
     public async Task A_customer_the_owner_does_not_know_is_undeliverable_and_their_contact_row_goes()
     {
         (Guid order, Guid customer) = Ids();
