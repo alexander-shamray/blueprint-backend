@@ -134,6 +134,14 @@ public class NotificationsWorkerFactory(
                 services.Remove(purge);
 
                 services.AddSingleton<RetentionPurgeService>();
+
+                // The send pass, by the same match, so its tick cannot send a row underneath an assertion.
+                ServiceDescriptor send = services.Single(d =>
+                    d.ServiceType == typeof(IHostedService) &&
+                    d.ImplementationType == typeof(SendWorker));
+                services.Remove(send);
+
+                services.AddSingleton<SendWorker>();
             })
             .ConfigureTestServices(services =>
                 services.ConfigureDbContext<NotificationsDbContext>(o => o.AddInterceptors(CommitFaults)));
