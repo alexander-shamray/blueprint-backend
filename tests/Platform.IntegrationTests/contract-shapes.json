@@ -1,0 +1,162 @@
+{
+  "Common.Contracts.Catalog.V1.PriceChanged": {
+    "Amount": "required System.Decimal",
+    "CorrelationId": "required System.Guid",
+    "Currency": "required System.String",
+    "MessageId": "required System.Guid",
+    "OccurredAt": "required System.DateTimeOffset",
+    "ProductId": "required System.Guid"
+  },
+  "Common.Contracts.Catalog.V1.ProductDiscontinued": {
+    "CorrelationId": "required System.Guid",
+    "MessageId": "required System.Guid",
+    "OccurredAt": "required System.DateTimeOffset",
+    "ProductId": "required System.Guid"
+  },
+  "Common.Contracts.Catalog.V1.ProductPublished": {
+    "Amount": "required System.Decimal",
+    "CorrelationId": "required System.Guid",
+    "Currency": "required System.String",
+    "MessageId": "required System.Guid",
+    "Name": "required System.String",
+    "OccurredAt": "required System.DateTimeOffset",
+    "ProductId": "required System.Guid",
+    "ThumbnailUrl": "required System.String?"
+  },
+  "Common.Contracts.Inventory.V1.ReleaseStock": {
+    "OrderId": "required System.Guid"
+  },
+  "Common.Contracts.Inventory.V1.ReserveStock": {
+    "Lines": "required System.Collections.Generic.IReadOnlyList<Common.Contracts.Inventory.V1.StockLine>",
+    "OrderId": "required System.Guid"
+  },
+  "Common.Contracts.Inventory.V1.StockLevelChanged": {
+    "CorrelationId": "required System.Guid",
+    "MessageId": "required System.Guid",
+    "OccurredAt": "required System.DateTimeOffset",
+    "ProductId": "required System.Guid",
+    "QuantityAvailable": "required System.Int32"
+  },
+  "Common.Contracts.Inventory.V1.StockLine": {
+    "ProductId": "required System.Guid",
+    "Quantity": "required System.Int32"
+  },
+  "Common.Contracts.Inventory.V1.StockReleased": {
+    "CorrelationId": "required System.Guid",
+    "MessageId": "required System.Guid",
+    "OccurredAt": "required System.DateTimeOffset",
+    "OrderId": "required System.Guid"
+  },
+  "Common.Contracts.Inventory.V1.StockReservationFailed": {
+    "CorrelationId": "required System.Guid",
+    "MessageId": "required System.Guid",
+    "OccurredAt": "required System.DateTimeOffset",
+    "OrderId": "required System.Guid",
+    "UnavailableProductIds": "required System.Collections.Generic.IReadOnlyList<System.Guid>"
+  },
+  "Common.Contracts.Inventory.V1.StockReserved": {
+    "CorrelationId": "required System.Guid",
+    "MessageId": "required System.Guid",
+    "OccurredAt": "required System.DateTimeOffset",
+    "OrderId": "required System.Guid"
+  },
+  "Common.Contracts.Ordering.V1.CancelOrder": {
+    "OrderId": "required System.Guid",
+    "Reason": "required System.String"
+  },
+  "Common.Contracts.Ordering.V1.ConfirmOrder": {
+    "OrderId": "required System.Guid",
+    "PaymentReference": "required System.String"
+  },
+  "Common.Contracts.Ordering.V1.ConfirmedLine": {
+    "ProductId": "required System.Guid",
+    "Quantity": "required System.Int32",
+    "UnitPrice": "required System.Decimal"
+  },
+  "Common.Contracts.Ordering.V1.FlagOrderForReview": {
+    "OrderId": "required System.Guid",
+    "Reason": "required System.String"
+  },
+  "Common.Contracts.Ordering.V1.MarkOrderShipped": {
+    "OrderId": "required System.Guid",
+    "TrackingNumber": "required System.String"
+  },
+  "Common.Contracts.Ordering.V1.OrderCancelled": {
+    "CorrelationId": "required System.Guid",
+    "CustomerId": "required System.Guid",
+    "MessageId": "required System.Guid",
+    "OccurredAt": "required System.DateTimeOffset",
+    "OrderId": "required System.Guid",
+    "Origin": "System.String?",
+    "Reason": "required System.String"
+  },
+  "Common.Contracts.Ordering.V1.OrderConfirmed": {
+    "CorrelationId": "required System.Guid",
+    "Currency": "required System.String",
+    "CustomerId": "required System.Guid",
+    "Lines": "required System.Collections.Generic.IReadOnlyList<Common.Contracts.Ordering.V1.ConfirmedLine>",
+    "MessageId": "required System.Guid",
+    "OccurredAt": "required System.DateTimeOffset",
+    "OrderId": "required System.Guid",
+    "TotalAmount": "required System.Decimal"
+  },
+  "Common.Contracts.Ordering.V1.OrderPlaced": {
+    "CorrelationId": "required System.Guid",
+    "Currency": "required System.String",
+    "CustomerId": "required System.Guid",
+    "Lines": "required System.Collections.Generic.IReadOnlyList<Common.Contracts.Ordering.V1.PlacedLine>",
+    "MessageId": "required System.Guid",
+    "OccurredAt": "required System.DateTimeOffset",
+    "OrderId": "required System.Guid",
+    "TotalAmount": "required System.Decimal"
+  },
+  "Common.Contracts.Ordering.V1.PlacedLine": {
+    "ProductId": "required System.Guid",
+    "Quantity": "required System.Int32",
+    "UnitPrice": "required System.Decimal"
+  },
+  "Common.Contracts.Payments.V1.AuthorisePayment": {
+    "Amount": "required System.Decimal",
+    "Currency": "required System.String",
+    "OrderId": "required System.Guid"
+  },
+  "Common.Contracts.Payments.V1.PaymentAuthorised": {
+    "Amount": "required System.Decimal",
+    "CorrelationId": "required System.Guid",
+    "Currency": "required System.String",
+    "MessageId": "required System.Guid",
+    "OccurredAt": "required System.DateTimeOffset",
+    "OrderId": "required System.Guid",
+    "Reference": "required System.String"
+  },
+  "Common.Contracts.Payments.V1.PaymentDeclined": {
+    "CorrelationId": "required System.Guid",
+    "MessageId": "required System.Guid",
+    "OccurredAt": "required System.DateTimeOffset",
+    "OrderId": "required System.Guid",
+    "Reason": "required System.String"
+  },
+  "Common.Contracts.Payments.V1.PaymentRefunded": {
+    "Amount": "required System.Decimal",
+    "CorrelationId": "required System.Guid",
+    "Currency": "required System.String",
+    "MessageId": "required System.Guid",
+    "OccurredAt": "required System.DateTimeOffset",
+    "OrderId": "required System.Guid",
+    "Reference": "required System.String"
+  },
+  "Common.Contracts.Shipping.V1.ShipmentDelivered": {
+    "CorrelationId": "required System.Guid",
+    "MessageId": "required System.Guid",
+    "OccurredAt": "required System.DateTimeOffset",
+    "OrderId": "required System.Guid",
+    "TrackingNumber": "required System.String"
+  },
+  "Common.Contracts.Shipping.V1.ShipmentDispatched": {
+    "CorrelationId": "required System.Guid",
+    "MessageId": "required System.Guid",
+    "OccurredAt": "required System.DateTimeOffset",
+    "OrderId": "required System.Guid",
+    "TrackingNumber": "required System.String"
+  }
+}

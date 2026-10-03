@@ -25,4 +25,9 @@
     <ProjectReference Include="..\..\src\Services\Payments\Payments.Infrastructure\Payments.Infrastructure.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Read from the output directory, as a path-mapped CI build has no source path to read it from. -->
+    <None Update="contract-shapes.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>
