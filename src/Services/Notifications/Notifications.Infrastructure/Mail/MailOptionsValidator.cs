@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.Globalization;
 using Microsoft.Extensions.Options;
 using MimeKit;
 
@@ -32,9 +33,24 @@ internal sealed class MailOptionsValidator : IValidateOptions<MailOptions>
         return failures.Count == 0 ? ValidateOptionsResult.Success : ValidateOptionsResult.Fail(failures);
     }
 
-    // A display name is allowed; a second address, a group or a line break is not.
+    // A display name is allowed; a second address, a group or a line break is not, nor a domain
+    // IdnMapping cannot encode, because SmtpMailChannel mints the Message-ID on its ASCII form.
     private static bool OneMailbox(string text) =>
         !text.Any(char.IsControl)
         && MailboxAddress.TryParse(text, out MailboxAddress? parsed)
-        && parsed is { Domain.Length: > 0 };
+        && parsed is { Domain.Length: > 0 }
+        && Encodes(parsed.Domain);
+
+    private static bool Encodes(string domain)
+    {
+        try
+        {
+            _ = new IdnMapping().GetAscii(domain);
+            return true;
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
+    }
 }

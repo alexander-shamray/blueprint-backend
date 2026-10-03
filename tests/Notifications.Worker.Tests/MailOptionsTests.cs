@@ -94,6 +94,9 @@ public sealed class MailOptionsTests
     [InlineData("not-an-address")]
     [InlineData("a@example.test, b@example.test")]
     [InlineData("a@example.test\r\nBcc: b@example.test")]
+    [InlineData("a@xn--zz.test")]
+    [InlineData("a@xn--a-.test")]
+    [InlineData("a@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.test")]
     public void A_sender_that_is_not_one_mailbox_stops_the_host(string from)
     {
         using ServiceProvider provider = Bound(Environments.Production, Relay(from: from));
