@@ -175,10 +175,13 @@ internal sealed partial class SmtpMailChannel(
     };
 
     // A 4xx is the relay declining for now; a break mid-send leaves the message's fate unknown, so is never retried.
+    // A failed AUTH's reply is the SmtpCommandException MailKit wraps, so its code is read there and never its words.
     private static (MailFault Cause, int? Status) Classify(Exception e, Phase phase) => e switch
     {
+        AuthenticationException { InnerException: SmtpCommandException c } when (int)c.StatusCode < 500 =>
+            (MailFault.Transient, (int)c.StatusCode),
+        AuthenticationException { InnerException: SmtpCommandException c } => (MailFault.Credential, (int)c.StatusCode),
         SmtpCommandException c when (int)c.StatusCode < 500 => (MailFault.Transient, (int)c.StatusCode),
-        SmtpCommandException c when phase == Phase.LoggingIn => (MailFault.Credential, (int)c.StatusCode),
         SmtpCommandException c => (MailFault.Rejected, (int)c.StatusCode),
         SslHandshakeException { InnerException: IOException or SocketException or OperationCanceledException } =>
             (MailFault.Transient, null),

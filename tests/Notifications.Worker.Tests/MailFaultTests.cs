@@ -38,6 +38,16 @@ public sealed class MailFaultTests(MailpitFixture fixture) : IAsyncLifetime
             id ?? new MailMessageId(Guid.CreateVersion7(), "order-placed"),
             ["en"]);
 
+    // Plain submission with a credential, which Development allows, so the relay is asked to judge one.
+    private static NotificationsWorkerFactory Credentialed(int port) =>
+        new(
+            Unreachable.Sql,
+            Unreachable.Rabbit,
+            mailHost: "127.0.0.1",
+            mailPort: port,
+            mailUserName: "notifications",
+            mailPassword: NotificationsWorkerFactory.NotARelayPassword);
+
     [Fact]
     public async Task A_relay_declining_for_now_is_retried_then_thrown_as_unavailable_and_counted_per_attempt()
     {
@@ -181,6 +191,46 @@ public sealed class MailFaultTests(MailpitFixture fixture) : IAsyncLifetime
         stalled.Connections.ShouldBe(1, "a send the relay may hold is not made again in the client");
         counted.Of("unconfirmed").ShouldBe(1);
         counted.Of("transient").ShouldBe(0, "the attempt timeout's OnTimeout never saw a cancellation");
+    }
+
+    [Fact]
+    public async Task An_authentication_the_relay_declines_for_now_is_retried_under_its_code()
+    {
+        await using ScriptedRelay relay = new(
+            "250-relay.test\r\n250 AUTH PLAIN",
+            "454 4.7.0 Temporary authentication failure");
+        using NotificationsWorkerFactory host = Credentialed(relay.Port);
+        using MailCount counted = MailCounter.Unavailable(host.Services);
+
+        MailUnavailableException thrown = await Should.ThrowAsync<MailUnavailableException>(() => host.Services
+            .GetRequiredService<IMailChannel>()
+            .SendAsync(Mail(), TestContext.Current.CancellationToken));
+
+        thrown.Cause.ShouldBe(MailFault.Transient);
+        thrown.SmtpStatus.ShouldBe(454);
+        relay.Connections.ShouldBe(MailHop.MaxRetryAttempts + 1, "a 4xx to AUTH is the relay declining for now");
+        counted.Of("transient").ShouldBe(MailHop.MaxRetryAttempts + 1);
+        counted.Of("credential").ShouldBe(0, "the credential was never judged");
+        thrown.ToString().ShouldNotContain("Temporary", Case.Insensitive, "the reply text is the relay's words");
+    }
+
+    [Fact]
+    public async Task An_authentication_the_relay_refuses_for_good_is_a_credential_fault_and_is_not_retried()
+    {
+        await using ScriptedRelay relay = new(
+            "250-relay.test\r\n250 AUTH PLAIN",
+            "535 5.7.8 Authentication credentials invalid");
+        using NotificationsWorkerFactory host = Credentialed(relay.Port);
+        using MailCount counted = MailCounter.Unavailable(host.Services);
+
+        MailUnavailableException thrown = await Should.ThrowAsync<MailUnavailableException>(() => host.Services
+            .GetRequiredService<IMailChannel>()
+            .SendAsync(Mail(), TestContext.Current.CancellationToken));
+
+        thrown.Cause.ShouldBe(MailFault.Credential);
+        thrown.SmtpStatus.ShouldBe(535);
+        relay.Connections.ShouldBe(1, "a refused credential is a deployment's fault, which a retry cannot mend");
+        counted.Of("credential").ShouldBe(1);
     }
 
     [Fact]
