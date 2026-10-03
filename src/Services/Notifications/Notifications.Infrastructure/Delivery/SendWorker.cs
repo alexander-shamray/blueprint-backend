@@ -352,7 +352,10 @@ public sealed class SendWorker(
         return answer;
     }
 
-    /// <summary>ADR-052's five outcomes over the stored row and the owner; any other fault throws.</summary>
+    /// <summary>
+    /// ADR-052's five outcomes over the stored row and the owner; a stale row is served on any fault but a refusal,
+    /// and every other fault throws.
+    /// </summary>
     private static async Task<(ContactLookup Answer, Exception? Stale)> ReadContactAsync(
         IServiceProvider sp,
         Guid customer,
