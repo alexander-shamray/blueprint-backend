@@ -6,5 +6,8 @@ public interface INotificationRepository
     /// <summary>Whether this event already owes this template's notice, as a redelivery past the inbox finds.</summary>
     Task<bool> ExistsAsync(Guid eventId, string templateKey, CancellationToken ct);
 
+    /// <summary>One notice by its id, tracked, for the send worker to move and commit.</summary>
+    Task<Notification?> GetAsync(Guid notificationId, CancellationToken ct);
+
     void Add(Notification notification);
 }
