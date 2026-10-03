@@ -197,6 +197,7 @@ internal sealed partial class SmtpMailChannel(
         }
     }
 
-    [GeneratedRegex("^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$")]
+    // \z, not $, which also matches before a final line feed.
+    [GeneratedRegex(@"^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*\z")]
     private static partial Regex LanguageTag();
 }

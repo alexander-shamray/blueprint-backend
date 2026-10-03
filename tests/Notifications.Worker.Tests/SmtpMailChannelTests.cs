@@ -119,6 +119,7 @@ public sealed class SmtpMailChannelTests(MailpitFixture fixture) : IAsyncLifetim
 
     [Theory]
     [InlineData("en\r\nBcc: someone@example.test")]
+    [InlineData("en\n")]
     [InlineData("english")]
     [InlineData("")]
     public async Task A_language_that_is_not_a_tag_is_a_defect_and_nothing_is_sent(string language)
