@@ -60,7 +60,8 @@ public class ContractShapeTests
                 ["Count"] = "System.Int32?",
                 ["Pair"] = "System.Collections.Generic.KeyValuePair<System.String, System.Int32>?",
                 ["Labels"] = "required System.Collections.Generic.IReadOnlyList<System.String?>",
-                ["Map"] = "required System.Collections.Generic.Dictionary<System.String, System.Int32[]>"
+                ["Map"] = "required System.Collections.Generic.Dictionary<System.String, System.Int32[]>",
+                ["Keys"] = "required System.Collections.Generic.Dictionary+KeyCollection<System.String, System.Int32>"
             },
             ignoreOrder: true);
     }
@@ -126,5 +127,7 @@ public class ContractShapeTests
         public required IReadOnlyList<string?> Labels { get; init; }
 
         public required Dictionary<string, int[]> Map { get; init; }
+
+        public required Dictionary<string, int>.KeyCollection Keys { get; init; }
     }
 }
