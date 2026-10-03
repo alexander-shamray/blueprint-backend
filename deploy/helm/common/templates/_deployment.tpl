@@ -67,6 +67,7 @@ spec:
         - topologyKey: {{ $topologyKey }}
           maxSkew: {{ $skew }}
           whenUnsatisfiable: {{ $when }}
+          nodeTaintsPolicy: Honor
           labelSelector:
             matchLabels:
               {{- include "commerce.deploymentSelectorLabels" $ | nindent 14 }}
