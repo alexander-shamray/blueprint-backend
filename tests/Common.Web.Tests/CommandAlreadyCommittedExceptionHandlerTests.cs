@@ -79,6 +79,16 @@ public class CommandAlreadyCommittedExceptionHandlerTests
     }
 
     [Fact]
+    public async Task The_detail_does_not_say_the_result_is_gone()
+    {
+        // An entry with no fingerprint still holds its result; it is refused, not lost (ADR-059, ADR-060).
+        string committed = await DetailOfAsync(new CommandAlreadyCommittedException(Key));
+
+        committed.ShouldNotContain("no longer");
+        committed.ShouldContain("cannot be returned");
+    }
+
+    [Fact]
     public async Task The_409s_carry_distinct_machine_readable_codes()
     {
         // A client switches on §10.5's `code`, not on prose, so the codes are pinned.
