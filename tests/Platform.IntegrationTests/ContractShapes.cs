@@ -16,7 +16,7 @@ internal static class ContractShapes
     private static readonly JsonSerializerOptions Written = new()
     {
         Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping, // so a generic reads as C#, not as \u003C
-        NewLine = "\n",
+        NewLine = "\r\n",
         WriteIndented = true
     };
 
@@ -96,7 +96,7 @@ internal static class ContractShapes
         foreach ((string type, Dictionary<string, string> members) in shapes)
             sorted[type] = new SortedDictionary<string, string>(members, StringComparer.Ordinal);
 
-        return JsonSerializer.Serialize(sorted, Written) + "\n";
+        return JsonSerializer.Serialize(sorted, Written) + "\r\n";
     }
 
     private static string Render(Type type, NullabilityInfo nullability)
