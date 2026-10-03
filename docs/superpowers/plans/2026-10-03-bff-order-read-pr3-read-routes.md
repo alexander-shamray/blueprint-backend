@@ -378,7 +378,7 @@ public sealed record OrderLineDetail(
 /// <summary>The payment outcome there is to give; a decline has none, and the status says so (§10.7).</summary>
 public sealed record PaymentFacts(DateTimeOffset? AuthorisedAt, Money? Amount, Money? RefundedAmount);
 
-/// <summary>Shipping's two milestones and the number a buyer takes to the carrier, null if unstorable (§10.7).</summary>
+/// <summary>Shipping's two milestones, and the number a buyer takes to the carrier when stored (§10.7).</summary>
 public sealed record ShipmentFacts(string? TrackingNumber, DateTimeOffset? DispatchedAt, DateTimeOffset? DeliveredAt);
 
 /// <summary>One order as the detail route carries it: the summary's members and the three it adds (§10.7).</summary>
