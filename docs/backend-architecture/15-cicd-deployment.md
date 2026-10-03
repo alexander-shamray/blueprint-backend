@@ -1300,7 +1300,7 @@ namespace read access.
 | `Jurisdiction__LogRetention` | Config | ConfigMap | ✓ — **Notifications only**; ADR-053 rule 4's statutory window for the record of a send, and the host refuses to start without it |
 | `Jurisdiction__ContactRetention` | Config | ConfigMap | ✓ — **Notifications only**; ADR-052's contact row's window, refused at start when shorter than `ContactOptions.StaleCeiling` |
 | `Jurisdiction__OrderRetention` | Config | ConfigMap | ✓ — **Notifications only**; the order record's window, and the host refuses to start without it |
-| `Delivery__GiveUpAge` | Config | Helm `delivery.giveUpAge` → ConfigMap, defaulted in the chart | ✓ — **Notifications only**; [ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)'s give-up age for a notice still pending, past which it is undeliverable with the reason `gave_up`; the host refuses to start without it, or with one longer than `RetentionPolicy.InboxWindow` |
+| `Delivery__GiveUpAge` | Config | Helm `delivery.giveUpAge` → ConfigMap, defaulted in the chart | ✓ — **Notifications only**; [ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)'s give-up age for a notice still pending, past which it is undeliverable with the reason `NotificationReasons.GaveUp`; the host refuses to start without it, or with one longer than `RetentionPolicy.InboxWindow` |
 
 | Kind | Source | Example |
 |---|---|---|
