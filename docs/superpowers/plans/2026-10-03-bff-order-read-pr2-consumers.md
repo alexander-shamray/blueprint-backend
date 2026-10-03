@@ -86,6 +86,7 @@ chart half rides the PR that makes the host need it), 5 (the tables,
     `TrackingNumberMaxLength` and `CancelOutcomeMaxLength`, and the
     vocabulary `CancelOutcomes.Cancelled`, `OutOfStock` and `Declined`.
   - The constraints every statement below respects:
+    `CK_Orders_Total` (`Currency` with `TotalAmount`),
     `CK_Orders_Cancellation` (`CancelledAt` with `CancelOutcome`),
     `CK_Orders_Authorisation` (`AuthorisedAt` with `AuthorisedAmount`),
     `CK_Orders_Refund` (`RefundedAt` with `RefundedAmount`),
@@ -1662,6 +1663,21 @@ public sealed class OrderProjectionTests(BffServiceFixture fixture) : IAsyncLife
     }
 
     [Fact]
+    public async Task An_order_whose_currency_cannot_be_stored_keeps_its_owner_and_lines_and_drops_its_total()
+    {
+        Guid order = Guid.CreateVersion7();
+
+        await ApplyAsync(OrderEvents.Placed(order, _customer, At) with { Currency = "POUNDS" });
+
+        ProjectedOrder row = (await fixture.OrderAsync(order)).ShouldNotBeNull(
+            "a value that cannot fit is dropped, never faulted on, or the endpoint stalls on it");
+        row.CustomerId.ShouldBe(_customer);
+        row.Currency.ShouldBeNull();
+        row.TotalAmount.ShouldBeNull("CK_Orders_Total refuses a total stored without its currency");
+        (await fixture.LinesAsync(order)).ShouldNotBeEmpty();
+    }
+
+    [Fact]
     public async Task A_later_name_replaces_an_earlier_one_and_an_earlier_one_does_not()
     {
         Guid product = Guid.CreateVersion7();
@@ -1935,8 +1951,12 @@ public sealed class OrderProjection(
             new EventId(2, nameof(ValueDropped)),
             "Dropped {Field} on order {OrderId}: longer than its column's {Width} characters.");
 
-    public Task HandleAsync(OrderPlaced integrationEvent, CancellationToken ct) =>
-        AttributeAsync(
+    public Task HandleAsync(OrderPlaced integrationEvent, CancellationToken ct)
+    {
+        // CK_Orders_Total holds the pair together, so a currency that cannot be stored takes its total with it.
+        string? currency = CurrencyOf(integrationEvent.Currency, integrationEvent.OrderId);
+
+        return AttributeAsync(
             PlacedSql,
             integrationEvent.OrderId,
             integrationEvent.CustomerId,
@@ -1944,16 +1964,21 @@ public sealed class OrderProjection(
             {
                 integrationEvent.OrderId,
                 integrationEvent.CustomerId,
-                Currency = CurrencyOf(integrationEvent.Currency, integrationEvent.OrderId),
-                integrationEvent.TotalAmount,
+                Currency = currency,
+                TotalAmount = currency is null ? (decimal?)null : integrationEvent.TotalAmount,
                 integrationEvent.OccurredAt,
                 Now = clock.GetUtcNow(),
                 Lines = LinesJson(integrationEvent.Lines.Select(l => (l.ProductId, l.Quantity, l.UnitPrice)))
             },
             ct);
+    }
 
-    public Task HandleAsync(OrderConfirmed integrationEvent, CancellationToken ct) =>
-        AttributeAsync(
+    public Task HandleAsync(OrderConfirmed integrationEvent, CancellationToken ct)
+    {
+        // CK_Orders_Total holds the pair together, so a currency that cannot be stored takes its total with it.
+        string? currency = CurrencyOf(integrationEvent.Currency, integrationEvent.OrderId);
+
+        return AttributeAsync(
             ConfirmedSql,
             integrationEvent.OrderId,
             integrationEvent.CustomerId,
@@ -1961,13 +1986,14 @@ public sealed class OrderProjection(
             {
                 integrationEvent.OrderId,
                 integrationEvent.CustomerId,
-                Currency = CurrencyOf(integrationEvent.Currency, integrationEvent.OrderId),
-                integrationEvent.TotalAmount,
+                Currency = currency,
+                TotalAmount = currency is null ? (decimal?)null : integrationEvent.TotalAmount,
                 integrationEvent.OccurredAt,
                 Now = clock.GetUtcNow(),
                 Lines = LinesJson(integrationEvent.Lines.Select(l => (l.ProductId, l.Quantity, l.UnitPrice)))
             },
             ct);
+    }
 
     public Task HandleAsync(OrderCancelled integrationEvent, CancellationToken ct) =>
         AttributeAsync(
@@ -2218,7 +2244,7 @@ dotnet test tests/Web.Bff.Tests --filter "FullyQualifiedName~OrderProjectionTest
 dotnet test tests/Web.Bff.Tests --filter "Category!=Integration"
 ```
 
-Expected: the first run passes 37 tests over SQL Server and RabbitMQ
+Expected: the first run passes 38 tests over SQL Server and RabbitMQ
 containers — Docker must be running, and a missing daemon fails on
 `Failed to connect to Docker endpoint` rather than skipping; the second
 passes every container-free test, the quote, identity and pipeline suites
