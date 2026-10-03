@@ -21,7 +21,7 @@
     <PackageReference Include="Grpc.Net.ClientFactory" />
     <!-- HttpStandardResilienceOptions, read off the built host (§9.7); named for the same reason. -->
     <PackageReference Include="Microsoft.Extensions.Http.Resilience" />
-    <!-- §11.5's suite, the one that runs a real Keycloak. -->
+    <!-- §11.5's suite, which proves the realm's grants against a real Keycloak. -->
     <PackageReference Include="Testcontainers.Keycloak" />
     <!-- JwtSecurityTokenHandler, named directly though Common.Web's JwtBearer carries it. -->
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" />
