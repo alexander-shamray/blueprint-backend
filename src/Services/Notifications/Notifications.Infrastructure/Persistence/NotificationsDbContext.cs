@@ -14,7 +14,7 @@ public sealed class NotificationsDbContext(DbContextOptions<NotificationsDbConte
     /// <summary>§3.2's record of every notice owed.</summary>
     public DbSet<Notification> NotificationLog => Set<Notification>();
 
-    /// <summary>§9.5's inbox, declared so this context states its whole model.</summary>
+    /// <summary>§9.5's inbox.</summary>
     public DbSet<InboxMessage> InboxMessages => Set<InboxMessage>();
 
     /// <summary>§8.5's durable idempotency markers, declared on the same terms.</summary>
