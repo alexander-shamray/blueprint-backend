@@ -2671,7 +2671,8 @@ consumes them as written:
   and PR-2 changes that assertion to `["sql", "masstransit-bus"]` in the same
   commit.
 - **Tests**: `BffServiceFixture` (in `tests/Web.Bff.Tests`, name `Bff`, so
-  account `bff-svc` and password `local-dev-bff`), `BffIntegrationCollection`,
+  account `bff-svc` and the password `ServiceFixture` derives as
+  `local-dev-<schema>`, `ServiceFixture.cs:181`), `BffIntegrationCollection`,
   `BffFactory.DatabaseConnectionString` and `BffFactory.UnreachableDatabase`.
   PR-2's `BffFactory` needs a placeholder `ConnectionStrings:RabbitMq` the
   same way, and `MissingSettingFactory` and `NoDatabaseFactory` must carry it.
