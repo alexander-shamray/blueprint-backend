@@ -186,8 +186,8 @@ services:
       ConnectionStrings__RabbitMq: "amqp://ordering-svc:local-dev-ordering@rabbitmq:5672"
       # The authority, to validate inbound tokens (§11.2). No Identity__Client__*:
       # Ordering calls no peer synchronously — prices come from a local
-      # projection (§6.4) and the rest goes over the broker. A host holds
-      # client credentials when it calls a peer (§9.7, §11.5, ADR-052).
+      # projection (§6.4) and the rest goes over the broker. §15.4 says which
+      # hosts hold client credentials (§11.5, ADR-052).
       Identity__Authority: "http://keycloak:8080/realms/commerce"
       OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4317"
       # §8.1's two connections, joined on the rule that brought every line
@@ -588,9 +588,10 @@ var authority = ReferenceExpression.Create($"{keycloak.GetEndpoint("http")}/real
 // authority, which fails only at first request.
 //
 // Client credentials are a SEPARATE concern with a narrower audience: only a
-// host that calls another service (§11.5) presents them. Passing a clientId to
-// a host that makes no outbound call provisions a Keycloak client, prompts for
-// a secret and mounts it, all for credentials nothing ever sends.
+// host that makes a synchronous call under a grant of its own (§11.5) presents
+// them. Passing a clientId to a host that makes no outbound call provisions a
+// Keycloak client, prompts for a secret and mounts it, all for credentials
+// nothing ever sends.
 IResourceBuilder<ProjectResource> WithPlatformIdentity(
     IResourceBuilder<ProjectResource> project,
     string? callerClientId = null)

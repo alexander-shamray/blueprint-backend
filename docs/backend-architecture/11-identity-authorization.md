@@ -1293,13 +1293,16 @@ resolves to nothing.
 
 ## 11.5 Service-to-service authentication
 
-A host that calls a peer authenticates with the OAuth 2.0 client credentials
-grant, holding its own client ID and secret with a narrow scope. Never reuse a
-user's token for a background operation — it expires, it carries the wrong
-permissions, and it makes the audit trail lie about who did what.
+A host that calls out under a grant of its own authenticates with the OAuth
+2.0 client credentials grant, holding its own client ID and secret with a
+narrow scope. Never reuse a user's token for a background operation — it
+expires, it carries the wrong permissions, and it makes the audit trail lie
+about who did what.
 
-**In this blueprint that is two hosts: the BFF** (§9.7) **and Shipping's
-worker** ([ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)).
+**In this blueprint those are the hosts the table below gives a client of
+their own**, each by the decision its row cites — the BFF by §9.7, and the
+workers by
+[ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md).
 The gateway forwards the caller's token unchanged rather than exchanging it
 for one of its own; every other service exchanges events over the broker and
 reads local projections ([§6.4](06-cqrs.md), ADR-002), so none of them ever
@@ -1313,19 +1316,15 @@ host gets the full identity block" is the natural-looking generalisation and
 the wrong one; so is reading this section and concluding the services talk to
 each other.
 
-> **One more host is decided and not built.** Shipping's client is minted
-> here, in the pull request that gives Ordering the method it reads, and is
-> first used by the pull request that gives Shipping's worker
-> [ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)'s
-> address read; Notifications' is still owed, and reads a mailbox from
-> Keycloak, because
+> **Each host ADR-052 decides holds a client of its own, sized by what it
+> reads.** Shipping's holds one role on `commerce-api`, because the address
+> owner serves its read as a method; Notifications' holds `view-users` on
+> `realm-management`, because the mailbox's owner is the realm itself.
 > [ADR-035](adr/ADR-035-an-integration-event-carries-identifiers-not-personal-data.md)
-> left neither value a way to arrive by event. The argument above is why
-> that took a record rather than a registration: the count of hosts holding
-> a client secret is the count of synchronous couplings, and it moves only
-> by a decision that says what each new secret reads when it is stolen.
-> Shipping's joined it with Ordering's method rather than with Shipping,
-> because the grant is the address owner's to serve.
+> left neither value a way to arrive by event. The argument above is why each
+> took a record rather than a registration: the count of hosts holding a
+> client secret is the count of synchronous couplings, and it moves only by a
+> decision that says what each new secret reads when it is stolen.
 
 Mechanically this is a `DelegatingHandler` attached to every outbound client
 that calls a peer (§9.7), so no call site has to remember it:
@@ -1404,7 +1403,9 @@ no user to blame it on.
 The realm has to close the gap. In Keycloak the client scope `commerce-api`
 needs an **audience mapper** adding `commerce-api` to `aud`, and the BFF's
 service-account client needs that scope assigned as default, and so does
-Shipping's, for the same reason and by the same mapper (ADR-052):
+Shipping's, for the same reason and by the same mapper (ADR-052).
+Notifications' takes neither the scope nor the audience, because the one thing
+it calls is the realm's own admin API:
 
 | Realm object | Setting | Why |
 |---|---|---|
@@ -1413,6 +1414,7 @@ Shipping's, for the same reason and by the same mapper (ADR-052):
 | Client `commerce-api` | No flow enabled, holds the permission roles | The API as an object in the realm, so permissions are a closed set somebody can grant. Nothing can obtain a token *as* it |
 | Client `web-bff` | Service accounts enabled, `commerce-api` a **default** client scope | Client-credentials tokens request no scope explicitly; a client scope left optional is silently absent. **Arrives with the BFF** (PR-19) — the scope and its mappers ship now, the client with the host that uses it |
 | Client `shipping-worker` | Service accounts enabled, `commerce-api` a **default** client scope, the client role `orders:delivery-address` on its service account | The second synchronous coupling, and the first grant a host holds ([ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)). The role is what the `permission` mapper emits for a service account, so without it the token is valid and the read is 403 |
+| Client `notifications-worker` | Service accounts enabled, `commerce-api` in neither scope list, `view-users` on `realm-management` for its service account — with the two query roles that role composes | The contact reader ([ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)). It reads the realm's admin API, so it holds no audience any service validates: a stolen secret reads every user's profile and calls no service. The worker refuses a token whose `realm-management` roles are not exactly those three |
 | Clients for browser flows | Same scope, so a user's token validates at the same services | One audience for the whole platform (§11.3) — per-service audiences are a later split, not a v1 one |
 
 This is realm configuration, not code, which is exactly why it earns a test
@@ -1438,8 +1440,8 @@ satisfy.
 > half matters more than the positive: a mapper that emitted every role would
 > pass every other check and hand the platform to any user the realm holds.
 
-It is also the **one** suite that runs a real Keycloak, and it arrives with the
-BFF (PR-19) because client credentials were the BFF's mechanism alone until
+It arrives with the BFF (PR-19), because client credentials were the BFF's
+mechanism alone until
 [ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)
 minted `shipping-worker`, whose grant the same suite proves both ways. §12.4's
 fixture deliberately does the opposite: it points at an unreachable authority
@@ -1493,6 +1495,12 @@ to a suite whose subject is a token, and it would still be asserting exactly
 this. The suite lives in `Web.Bff.Tests`, which already runs Keycloak, and
 asserts the BFF's and `shipping-worker`'s grants there rather than buying
 `Shipping.Worker.Tests` a second Keycloak container.
+`notifications-worker`'s grant is the exception that reason does not reach,
+and it is proved in `Notifications.Worker.Tests` against a Keycloak of that
+suite's own: the contact read *is* the realm's admin API, so the owner its
+adapter is tested against and the realm its grant is proved in are one
+container, and the container is what the read costs rather than what the
+grant does.
 
 ## 11.6 Secrets
 

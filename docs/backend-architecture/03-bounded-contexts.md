@@ -40,12 +40,13 @@ ends are Ordering: `ConfirmOrder` out to the aggregate and `OrderConfirmed`
 back. It is asynchronous on exactly these terms, and the Consumes cell below is
 where it is recorded.
 
-One collaboration is of another kind, and the map leaves it undrawn because it
-draws messages: a Shipping worker reads a delivery address from Ordering over
-gRPC, off every request path
+ADR-052's reads are of another kind, and the map leaves them undrawn because
+it draws messages: a Shipping worker reads a delivery address from Ordering
+over gRPC, and a Notifications worker reads a mailbox from Keycloak's admin
+API, each off every request path
 ([ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)).
-It is the departure [§2.3](02-architecture-at-a-glance.md)'s callout records,
-not a round trip whose return leg is an event.
+Each is the departure [§2.3](02-architecture-at-a-glance.md)'s callout
+records, not a round trip whose return leg is an event.
 
 | Context | Type | Why it is separate |
 |---|---|---|
