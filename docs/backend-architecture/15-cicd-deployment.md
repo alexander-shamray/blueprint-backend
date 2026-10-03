@@ -1002,14 +1002,11 @@ one of those differences is something it will not start without, or will start
 wrongly without:
 
 ```yaml
-# deploy/helm/gateway/values.yaml — an excerpt, on the same terms as Ordering's
-# above. The keys every chart shares are omitted here rather than repeated:
-# `workload.name` (required, and `gateway`), `ports`, `probes.probePort`,
+# deploy/helm/gateway/values.yaml — an excerpt on Ordering's terms. Omitted as
+# shared: `workload.name` (`gateway`), `ports`, `probes.probePort`,
 # `terminationGracePeriodSeconds`, `topologySpread`, `observability`,
 # `image.pullPolicy`, and `database.enabled` / `broker.enabled`, both `false`
-# because this host owns neither. `service.enabled` is NOT among them — it is
-# in the fence below, because this section spends a page arguing that key must
-# be written down.
+# because this host owns neither.
 replicaCount: 3
 
 image:
