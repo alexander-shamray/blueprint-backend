@@ -109,7 +109,7 @@ public class GrantCheckedTokenCacheTests
         await Should.ThrowAsync<HttpRequestException>(() =>
             Cache(services, new FixedTokenCache(new HttpRequestException("down"))).GetAsync("roles", Ct));
 
-        counted.Value.ShouldBe(1, "the transport fault backs off uncounted");
+        counted.Value.ShouldBe(1, "the transport fault passes uncounted");
     }
 
     [Fact]
