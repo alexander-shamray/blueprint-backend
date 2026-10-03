@@ -1,5 +1,6 @@
 using System.Buffers.Text;
 using System.IdentityModel.Tokens.Jwt;
+using System.Net;
 using System.Text.Json;
 using Common.Web;
 using Microsoft.Extensions.DependencyInjection;
@@ -40,6 +41,18 @@ public sealed class KeycloakContactSourceTests(KeycloakFixture keycloak)
     public async Task No_such_user_is_no_such_customer()
     {
         (await ReadAsync(keycloak.Granted, Guid.CreateVersion7())).ShouldBeOfType<ContactLookup.NoSuchCustomer>();
+    }
+
+    [Fact]
+    public async Task A_realm_this_server_does_not_hold_is_a_fault_rather_than_no_such_customer()
+    {
+        Guid customer = await keycloak.CreateUserAsync(Mailbox());
+
+        HttpRequestException thrown = await Should.ThrowAsync<HttpRequestException>(
+            () => ReadAsync(keycloak.WrongRealm, customer));
+
+        // Keycloak answers this 404 too, and a terminal answer here would end every customer's work (ADR-052).
+        thrown.StatusCode.ShouldBe(HttpStatusCode.NotFound);
     }
 
     [Fact]

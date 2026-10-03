@@ -1,3 +1,4 @@
+using System.Net;
 using System.Text.Json.Nodes;
 using Common.Infrastructure.Identity;
 using Microsoft.AspNetCore.Hosting;
@@ -74,6 +75,9 @@ public sealed class ContactSourceTests : IClassFixture<ContactSourceTests.Keyclo
     }
 
     private const string Mailbox = "aigerim@example.test";
+
+    /// <summary>The pinned Keycloak's body for an id its realm holds no user under.</summary>
+    private const string UserNotFound = """{"error":"User not found"}""";
 
     // Five starts, because a run that loses the race below five times over has something else wrong with it.
     private const int StartAttempts = 5;
@@ -199,9 +203,32 @@ public sealed class ContactSourceTests : IClassFixture<ContactSourceTests.Keyclo
     [Fact]
     public async Task No_such_user_is_no_such_customer_after_one_call()
     {
-        Guid customer = Answer(404);
+        Guid customer = Answer(404, UserNotFound);
 
         (await ReadAsync(customer)).ShouldBeOfType<ContactLookup.NoSuchCustomer>();
+        Calls(PathOf(customer)).ShouldBe(1);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("""{"error":"Realm not found."}""")]
+    [InlineData("""{"error":"Unable to find matching target resource method"}""")]
+    [InlineData("""{"error":"user not found"}""")]
+    [InlineData("""{"error":null}""")]
+    [InlineData("not json")]
+    [InlineData("[]")]
+    public async Task A_404_that_is_not_keycloaks_no_such_user_is_thrown_rather_than_read_as_an_absence(string? body)
+    {
+        using OutboundCount counted = OutboundCounter.ContactRefused(_factory.Services);
+        Guid customer = Answer(404, body);
+
+        HttpRequestException thrown = await Should.ThrowAsync<HttpRequestException>(() => ReadAsync(customer));
+
+        // A wrong realm, prefix or route answers 404 too, and would otherwise end every customer's work (ADR-052).
+        thrown.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        thrown.InnerException.ShouldBeNull("the parser's message can quote the body");
+        thrown.Message.ShouldNotContain("found");
+        counted.Value.ShouldBe(0, "a misaddressed read is no refused credential");
         Calls(PathOf(customer)).ShouldBe(1);
     }
 
