@@ -44,7 +44,7 @@ gateway's route file (§10.2), the BFF's pricing hop or Shipping's address
 read (ADR-052), it dials this name as a literal, so a release-derived one
 would leave an umbrella install dialling a name nothing answers to. */}}
 {{- define "commerce.name" -}}
-{{- include "commerce.require" (list .Values.workload.name "workload.name is required: every object this release renders is named from it, the Service included where there is one, and a peer that dials this workload dials it as a literal (§10.2, §9.7).") -}}
+{{- include "commerce.require" (list .Values.workload.name "workload.name is required: every object this chart renders is named from it, the Service included where there is one, and a peer that dials this workload dials it as a literal (§10.2, §9.7).") -}}
 {{- end -}}
 
 {{- /* The image tag, required rather than defaulted: values.yaml leaves it empty
