@@ -9,7 +9,7 @@ public sealed class OrderRecord
 {
     public Guid OrderId { get; private set; }
 
-    /// <summary>Pseudonymous personal data, so the record has a window and an erasure path (§11.7).</summary>
+    /// <summary>Pseudonymous personal data, so the record owes a window and an erasure path (§11.7).</summary>
     public Guid CustomerId { get; private set; }
 
     /// <summary>The cancellation's own instant, or null while no <c>OrderCancelled</c> has arrived.</summary>
