@@ -3,7 +3,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Notifications.TestSupport;
 
-/// <summary>Every line the host logs, with its state values and exception text, so a search misses none.</summary>
+/// <summary>Every line the host logs, with scopes, state values and exception text, so a search misses none.</summary>
 /// <remarks>§13.4 keeps a mailbox out of every log attribute and every exception's text.</remarks>
 public sealed class CapturedLogs : ILoggerProvider
 {
@@ -23,8 +23,20 @@ public sealed class CapturedLogs : ILoggerProvider
 
     private sealed class Logger(ConcurrentQueue<string> lines) : ILogger
     {
+        // Common.Web sets IncludeScopes, so a scope's state reaches an exporter and is searched too.
         public IDisposable? BeginScope<TState>(TState state)
-            where TState : notnull => null;
+            where TState : notnull
+        {
+            lines.Enqueue(state.ToString() ?? string.Empty);
+
+            if (state is IEnumerable<KeyValuePair<string, object?>> values)
+            {
+                foreach (KeyValuePair<string, object?> value in values)
+                    lines.Enqueue($"{value.Key}={value.Value}");
+            }
+
+            return NoScope.Instance;
+        }
 
         // No filtering of its own: what the host's rules let through is what an exporter receives.
         public bool IsEnabled(LogLevel logLevel) => true;
@@ -47,6 +59,15 @@ public sealed class CapturedLogs : ILoggerProvider
 
             if (exception is not null)
                 lines.Enqueue(exception.ToString());
+        }
+    }
+
+    private sealed class NoScope : IDisposable
+    {
+        public static readonly NoScope Instance = new();
+
+        public void Dispose()
+        {
         }
     }
 }
