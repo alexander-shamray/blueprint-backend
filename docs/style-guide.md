@@ -127,9 +127,9 @@ the churn it produces is the same, and it was measured in
   fewer, its tags included, so a one-line summary and a four-line
   `<remarks>` fill it. A delimiter on a line of its own is a line of the
   block, a docstring's `"""` and Helm's `{{- /*` and `*/}}` alike, so a Helm
-  comment opens on its first line of text and closes on its last. The ceiling sits where a cited sentence fits and an
-  argument does not: an argument is a decision, and a decision is an ADR —
-  write it with `/new-adr` and cite it.
+  comment opens on its first line of text and closes on its last. The ceiling
+  sits where a cited sentence fits and an argument does not: an argument is a
+  decision, and a decision is an ADR — write it with `/new-adr` and cite it.
 - **No emphasis.** No `**bold**`, `<b>`, capitals or `!` for stress in a
   comment. It is read once, beside the code, by someone who is not skimming.
 - **A finding against a comment is accepted when the comment is false or
