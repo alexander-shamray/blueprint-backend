@@ -2312,8 +2312,9 @@ git add deploy/helm deploy/canary
 git commit -m "feat(deploy): web-bff's chart renders its database and migration Job"
 ```
 
-The body argues the departure from the spec: `smoke.sh` holds the chart to
-the code, and a chart behind the code is a pod that does not start.
+The body argues why the chart moves here (spec section 4): `smoke.sh`
+holds the chart to the code, and a chart behind the code is a pod that does
+not start.
 
 ---
 

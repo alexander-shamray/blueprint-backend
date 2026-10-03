@@ -80,12 +80,12 @@ host tests) and 12 (§10.7's sentence and §10.1's re-read).
     `Currency`, `TrackingNumber` and the product `Lamp`); the readiness set
     `["sql", "masstransit-bus"]`; `BffFactory`'s placeholder broker key, so
     container-free suites still start.
-- **Departures from the spec, each argued in its task and listed in the
-  report to the parent**: an unreadable cursor gets the first page through
-  `Common.Application.Cursor` rather than a 400 (Task 3); neither GET
-  declares `RetrySafe(RetrySafety.ReadOnly)`, because ADR-058's rule selects
-  writes and a GET is none (Task 5); `unitPrice` is a `Money`, as every
-  amount on the wire is (Task 2).
+- **Three spec decisions this plan carries out**, each in its task: an
+  unreadable cursor gets the first page through `Common.Application.Cursor`
+  (spec section 7; Task 3); neither GET declares a retry safety, because
+  ADR-058's rule selects writes and a GET is none (spec section 7; Task 5);
+  `unitPrice` is a money object, as every amount on the wire is (spec
+  section 2; Task 2).
 - **This plan prints no credential and no connection string**: the secret
   scan reads `docs/superpowers/` too. Nothing here needs one.
 - **Comments obey `docs/style-guide.md`'s *Comments* budget**: a summary is
@@ -131,10 +131,9 @@ rename is named in the first commit's body.
 
 Every rule the response states lives in `OrderView`, a pure function of the
 rows, so each is tested here without a container and the reader below only
-fetches. **`unitPrice` is a `Money`**: spec section 2 names the member and
-not its type, and §10.7 says every amount travels with its currency, so a
-bare number here would be the one amount on the wire a client had to label
-itself.
+fetches. **`unitPrice` is a `Money`**, as spec section 2 says: §10.7 has
+every amount travel with its currency, so a bare number here would be the
+one amount on the wire a client had to label itself.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -576,15 +575,12 @@ one.
 - Create: `tests/Web.Bff.Tests/OrderPageTests.cs`
 - Create: `tests/Web.Bff.Tests/OrderReaderTests.cs`
 
-**An unreadable cursor gets the first page, and that is a departure from
-spec section 7.** The spec has the BFF mint its own encoding and refuse an
-undecodable cursor with §10.5's 400. The tree already owns both halves:
+**An unreadable cursor gets the first page**, as spec section 7 says.
 `Common.Application.Cursor` encodes exactly a `(DateTimeOffset, Guid)` keyset
 position — Catalog's list and §6.6's history query both use it — and its
 `Decode` returns null for anything unreadable, "so an edited cursor gets the
 first page". A second encoding in the BFF would be a second owner of §6.5's
-opaque cursor, and a 400 would make this one list behave unlike the
-platform's other. So the read calls `Cursor` and inherits its answer, and a
+opaque cursor, so the read calls `Cursor` and inherits its answer, and a
 host test pins it.
 
 **The clamp is 20 by default and 50 at most, owned by `OrderPage`.** A list
@@ -982,8 +978,8 @@ git commit -m "feat(bff): OrderReader, the keyset list and the owner-bound detai
 ```
 
 The body argues: the cursor is `Common.Application.Cursor`'s, so an edited
-one gets the first page as every other list's does (a departure from spec
-section 7, stated); the clamp is 50 because a row carries its lines; a page
+one gets the first page as every other list's does (spec section 7); the
+clamp is 50 because a row carries its lines; a page
 is two statements whatever its size, the second keyed by one JSON parameter
 (§6.6); the detail filters both statements on the customer, so another
 buyer's order and an unknown id are one answer by construction.
@@ -1256,8 +1252,8 @@ outbound call".
 **Files:**
 - Modify: `tests/Web.Bff.Tests/WriteEndpointRuleTests.cs`
 
-**Neither GET declares `RetrySafe(RetrySafety.ReadOnly)`, and that departs
-from spec section 7.** ADR-058's rule, `WriteEndpointRule`, selects endpoints
+**Neither GET declares `RetrySafe(RetrySafety.ReadOnly)`**, as spec section
+7 says. ADR-058's rule, `WriteEndpointRule`, selects endpoints
 whose methods include `POST`, `PUT`, `PATCH` or `DELETE`; a GET is not one,
 so a declaration on it is metadata no rule reads, and Catalog's own
 `GetProducts` declares none. `RetrySafety.ReadOnly` exists for a **write**
@@ -1313,8 +1309,8 @@ git add tests/Web.Bff.Tests/WriteEndpointRuleTests.cs
 git commit -m "feat(bff): WriteEndpointRuleTests sees the order reads in its table and outside its writes"
 ```
 
-The body argues the departure: a `RetrySafe` declaration on a GET is
-metadata no rule reads, Catalog's list declares none, and the test proves the
+The body argues it: a `RetrySafe` declaration on a GET is metadata no rule
+reads, Catalog's list declares none, and the test proves the
 rule saw the two reads rather than that they were absent.
 
 ## Task 6: §10.7's sentence, and §10.1 re-read
@@ -1416,7 +1412,7 @@ keyword.
 - [ ] **Step 3: Open the PR**
 
 `/pr`. The checks section says `/validate-blueprint` and `/check-links` ran
-(Task 6), and lists the three departures from the spec with their reasons.
+(Task 6).
 
 ## Self-review
 
@@ -1447,9 +1443,9 @@ Against the spec, section by section:
   the read owns; one seek plus one lines statement per page, the ids as one
   parameter; the detail one query on id and customer for the row and its
   lines; §10.5's error shape for the 404; no outbound call, asserted (Tasks
-  3, 4). **Two departures, argued**: the cursor is `Common.Application.Cursor`
-  and an unreadable one gets the first page rather than a 400 (Task 3); no
-  `RetrySafe` on a GET, because ADR-058's rule reads writes (Task 5).
+  3, 4); the cursor is `Common.Application.Cursor` and an unreadable one
+  gets the first page (Task 3); no `RetrySafe` on a GET, because ADR-058's
+  rule reads writes (Task 5).
 - **Section 11, through the host**: owner, another buyer and an unowned row
   on both routes; the clamp; the page-boundary tie; a null `productName`; an
   owned row with no lines; no outbound call (Tasks 3, 4). The readiness set

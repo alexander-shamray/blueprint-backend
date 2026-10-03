@@ -57,9 +57,9 @@ PR-4's.
   the chart's halves (spec section 4); the gauge and its `AddMeter` line are
   PR-2's. This pull request reads names those plans published and writes none
   of its own outside the five files.
-- **§13.6 and §13.9 move, and the spec said §13.6 would not.** Section 12's
-  *places outside that table* says "§13.6 gains nothing in prose: the rule's
-  alert table is the alert file's". `check.py`'s check 9
+- **§13.6 and §13.9 each gain a row**, as spec section 12's *places outside
+  that table* says, with `docs/runbooks/README.md`'s index row. `check.py`'s
+  check 9
   (`deploy/observability/check.py`, the two `fail` calls in
   `check_chapter_inventories`) fails a runbook that no §13.6 row names bare in
   its Runbook column, and one §13.9's table does not name with its
@@ -543,8 +543,7 @@ here alone is the silent case. A ticket, because the order and its money
 are untouched.
 
 check.py's check 9 fails a runbook neither of chapter 13's tables names,
-so §13.6 gains the alert's row and §13.9 the runbook's; the spec said
-§13.6 would not move, and the gate is what says otherwise.
+so §13.6 gains the alert's row and §13.9 the runbook's (spec section 12).
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_01Qmua5TeJ385zzCX7sVFk6E
@@ -737,9 +736,9 @@ spec's section 4 says #425 closes with the last.
   queue (steps 3 and 4) — all three the spec names — and adds the two it does
   not: an order Ordering never had, and the deletion that closes a row nothing
   will attribute.
-- **Spec section 12.** §13.6 moves where the spec said it would not, because
-  `check.py`'s check 9 requires the row; §13.9 moves with it; reported as a
-  spec defect. No count is written anywhere: the chapter's tables gain rows,
+- **Spec section 12.** §13.6 and §13.9 each gain a row, which `check.py`'s
+  check 9 requires, and the runbooks index its row. No count is written
+  anywhere: the chapter's tables gain rows,
   and no sentence totals them.
 - **Names consumed** match PR-1's and PR-2's interface sections: `bff.Orders`'
   columns, `bff.InboxMessages`' three, `bff-order-events`, the meter and the
