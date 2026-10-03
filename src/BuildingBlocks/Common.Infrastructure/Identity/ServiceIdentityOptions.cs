@@ -2,7 +2,7 @@ using System.ComponentModel.DataAnnotations;
 
 namespace Common.Infrastructure.Identity;
 
-/// <summary>§15.4's options for §11.5's client-credentials grant, bound by each host that calls a peer.</summary>
+/// <summary>§15.4's options for §11.5's client-credentials grant, bound by each host that holds one.</summary>
 public sealed class ServiceIdentityOptions
 {
     public const string SectionName = "Identity:Client";

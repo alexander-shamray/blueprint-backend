@@ -1,5 +1,6 @@
 using Notifications.Application;
 using Notifications.Infrastructure;
+using Notifications.Infrastructure.Contacts;
 using Notifications.Infrastructure.Mail;
 using Notifications.Infrastructure.Observability;
 using Notifications.TestSupport;
@@ -7,10 +8,10 @@ using Common.Application;
 using Common.Infrastructure.Messaging;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 using Shouldly;
 using Xunit;
+using ContactRegistration = Notifications.Infrastructure.Contacts.DependencyInjection;
 
 namespace Notifications.Worker.Tests;
 
@@ -65,6 +66,7 @@ public class MetricsRegistrationTests
         registered.ShouldContain(typeof(MessagingMetrics));
         registered.ShouldContain(typeof(RequestMetrics));
         registered.ShouldContain(typeof(MailMetrics));
+        registered.ShouldContain(typeof(ContactMetrics));
     }
 
     [Fact]
@@ -94,7 +96,11 @@ public class MetricsRegistrationTests
                     [MailOptions.FromKey] = NotificationsWorkerFactory.LocalFrom,
                     [MailOptions.SecurityKey] = "StartTls",
                     [MailOptions.UserNameKey] = "notifications",
-                    [MailOptions.PasswordKey] = NotificationsWorkerFactory.NotARelayPassword
+                    [MailOptions.PasswordKey] = NotificationsWorkerFactory.NotARelayPassword,
+
+                    // Read eagerly by AddContactSource; HTTPS because the environment below is not Development.
+                    [ContactRegistration.BaseUrlKey] = "https://notifications-keycloak.invalid/",
+                    [ContactRegistration.RealmKey] = "commerce"
                 })
             .Build();
 
@@ -102,19 +108,8 @@ public class MetricsRegistrationTests
         services.AddNotificationsApplication();
         services.AddNotificationsInfrastructure(configuration);
         services.AddMailChannel(configuration, new TestEnvironment());
+        services.AddContactSource(configuration, new TestEnvironment());
 
         return services;
-    }
-
-    /// <summary>A minimal <see cref="IHostEnvironment"/>; the registration reads only its name.</summary>
-    private sealed class TestEnvironment : IHostEnvironment
-    {
-        public string ApplicationName { get; set; } = "Notifications.Worker.Tests";
-
-        public string EnvironmentName { get; set; } = Environments.Production;
-
-        public string ContentRootPath { get; set; } = string.Empty;
-
-        public IFileProvider ContentRootFileProvider { get; set; } = new NullFileProvider();
     }
 }
