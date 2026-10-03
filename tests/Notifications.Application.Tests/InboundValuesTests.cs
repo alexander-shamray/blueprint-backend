@@ -4,7 +4,7 @@ using Xunit;
 
 namespace Notifications.Application.Tests;
 
-/// <summary>Every value another service wrote is bounded and renders as itself, or is dropped.</summary>
+/// <summary>Every value another service wrote is bounded and checked by its shape, or is dropped.</summary>
 public class InboundValuesTests
 {
     [Theory]

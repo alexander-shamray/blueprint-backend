@@ -16,7 +16,7 @@ public static class InboundValues
     /// <summary>A code as <c>CancelReasons</c> and <c>CancelOrigins</c> spell them, at its column's width.</summary>
     public const int MaxCodeLength = OrderRecordLimits.MaxCodeLength;
 
-    /// <summary>Free text, kept when it is bounded and every character renders as itself.</summary>
+    /// <summary>Free text, kept when bounded and holding no control, format, separator or broken character.</summary>
     public static string? Text(string? value, int maxLength)
     {
         if (string.IsNullOrWhiteSpace(value) || value.Length > maxLength)
