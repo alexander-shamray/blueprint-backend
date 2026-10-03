@@ -92,11 +92,36 @@ public sealed class MailFaultTests(MailpitFixture fixture) : IAsyncLifetime
     [Fact]
     public async Task A_refused_connection_is_unavailable_rather_than_a_refusal()
     {
-        // The factory's default relay, whose .invalid name never resolves.
-        using NotificationsWorkerFactory unreachable = new(Unreachable.Sql, Unreachable.Rabbit);
+        // A loopback port bound and released, so nothing listens and the connect is refused.
+        TcpListener released = new(IPAddress.Loopback, 0);
+        released.Start();
+        int closed = ((IPEndPoint)released.LocalEndpoint).Port;
+        released.Stop();
+
+        using NotificationsWorkerFactory refusing = new(
+            Unreachable.Sql,
+            Unreachable.Rabbit,
+            mailHost: "127.0.0.1",
+            mailPort: closed);
+        using MailCount counted = MailCounter.Unavailable(refusing.Services);
 
         MailUnavailableException thrown = await Should.ThrowAsync<MailUnavailableException>(() =>
-            unreachable.Services.GetRequiredService<IMailChannel>()
+            refusing.Services.GetRequiredService<IMailChannel>()
+                .SendAsync(Mail(), TestContext.Current.CancellationToken));
+
+        thrown.Cause.ShouldBe(MailFault.Transient);
+        thrown.Message.ShouldContain(nameof(SocketException), Case.Sensitive, "a refused connect, not a timeout");
+        counted.Of("transient").ShouldBe(MailHop.MaxRetryAttempts + 1, "a refused connect is retried");
+    }
+
+    [Fact]
+    public async Task A_relay_name_that_never_resolves_is_unavailable_rather_than_a_refusal()
+    {
+        // The factory's default relay, whose .invalid name never resolves.
+        using NotificationsWorkerFactory unresolved = new(Unreachable.Sql, Unreachable.Rabbit);
+
+        MailUnavailableException thrown = await Should.ThrowAsync<MailUnavailableException>(() =>
+            unresolved.Services.GetRequiredService<IMailChannel>()
                 .SendAsync(Mail(), TestContext.Current.CancellationToken));
 
         thrown.Cause.ShouldBe(MailFault.Transient);
