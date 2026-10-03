@@ -30,7 +30,7 @@ public static class DependencyInjection
         // A singleton, so the breaker inside it is the host's and not a scope's.
         services.AddSingleton<MailPipeline>();
 
-        // A singleton, so every scope shares the pipeline above rather than meeting a dead relay afresh.
+        // A singleton, as it holds no state between sends and everything it takes is one too.
         services.AddSingleton<IMailChannel, SmtpMailChannel>();
 
         return services;
