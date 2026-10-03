@@ -2929,11 +2929,10 @@ configuration-validation test at startup.
    500, because a contract violation between two services is nobody's caller's
    fault.
 
-For a peer call, the caller's own `Program.cs` (§4.1) registers it and §4.2's
-helper deliberately registers none of it, so a host that holds client
-credentials is a host that makes a synchronous call under a grant of its own
-(§11.5). `Web.Bff` registers the pricing hop; Shipping's worker registers the
-address read
+For a synchronous call under a grant of its own, the caller's own `Program.cs`
+(§4.1) registers it and §4.2's helper deliberately registers none of it, so a
+host that holds client credentials is a host that makes one (§11.5). `Web.Bff`
+registers the pricing hop; Shipping's worker registers the address read
 [ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)
 gives it, and Notifications' worker the contact read the same record gives it,
 both off every request path, and `ContactHop` sits inside the band because

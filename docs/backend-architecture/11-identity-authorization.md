@@ -1300,7 +1300,7 @@ expires, it carries the wrong permissions, and it makes the audit trail lie
 about who did what.
 
 **In this blueprint those are the hosts the table below gives a client of
-their own**, each by the decision its row cites — the BFF by §9.7, and the
+their own**, each by the decision that minted it — the BFF by §9.7, and the
 workers by
 [ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md).
 The gateway forwards the caller's token unchanged rather than exchanging it
@@ -1440,8 +1440,8 @@ satisfy.
 > half matters more than the positive: a mapper that emitted every role would
 > pass every other check and hand the platform to any user the realm holds.
 
-It arrives with the BFF (PR-19), because client credentials were the BFF's
-mechanism alone until
+The suite that runs a real Keycloak against that realm arrives with the BFF
+(PR-19), because client credentials were the BFF's mechanism alone until
 [ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)
 minted `shipping-worker`, whose grant the same suite proves both ways. §12.4's
 fixture deliberately does the opposite: it points at an unreachable authority
