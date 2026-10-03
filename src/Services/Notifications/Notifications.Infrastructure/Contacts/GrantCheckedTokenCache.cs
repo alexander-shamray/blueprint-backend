@@ -53,7 +53,7 @@ public sealed partial class GrantCheckedTokenCache(
             GrantIsWrong(log);
 
             throw new ContactSourceRefusedException(
-                $"The realm issued this host {granted.Length} realm-management role(s) where ADR-052 names three.");
+                $"The realm issued {granted.Length} realm-management role(s) where ADR-052 names {Grant.Length}.");
         }
 
         return token;
