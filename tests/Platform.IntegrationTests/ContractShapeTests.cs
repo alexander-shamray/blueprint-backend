@@ -106,7 +106,7 @@ public class ContractShapeTests
     private static Shapes Baseline() =>
         new()
         {
-            ["Contract"] = new()
+            ["Contract"] = new Dictionary<string, string>
             {
                 ["Id"] = "required System.Guid",
                 ["Optional"] = "System.String?"
