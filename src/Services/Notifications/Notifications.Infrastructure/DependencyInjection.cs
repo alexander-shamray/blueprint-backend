@@ -1,3 +1,4 @@
+using Notifications.Application.Contacts;
 using Notifications.Infrastructure.Idempotency;
 using Notifications.Infrastructure.Messaging;
 using Notifications.Infrastructure.Observability;
@@ -68,6 +69,9 @@ public static class DependencyInjection
         // §6.5's read side, a singleton as §4.2's sample has it, on §7.1's runtime key.
         services.AddSingleton<IDbConnectionFactory>(
             new SqlConnectionFactory(configuration.GetConnectionString("Notifications")!));
+
+        // ADR-052's contact row, the one table here a mailbox lands in.
+        services.AddScoped<IContactStore, SqlContactStore>();
 
         // Readiness (§13.5): SQL here, and the bus check AddMassTransit registers.
         services
