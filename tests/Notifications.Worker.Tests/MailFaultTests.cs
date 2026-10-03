@@ -194,6 +194,29 @@ public sealed class MailFaultTests(MailpitFixture fixture) : IAsyncLifetime
     }
 
     [Fact]
+    public async Task The_callers_cancellation_during_the_send_is_not_counted_against_the_relay()
+    {
+        // Answers EHLO, then never answers MAIL FROM, so the send has begun when the caller gives up.
+        await using ScriptedRelay stalled = new("250 relay.test");
+        using NotificationsWorkerFactory host = new(
+            Unreachable.Sql,
+            Unreachable.Rabbit,
+            mailHost: "127.0.0.1",
+            mailPort: stalled.Port);
+        using MailCount counted = MailCounter.Unavailable(host.Services);
+        using CancellationTokenSource caller = CancellationTokenSource.CreateLinkedTokenSource(
+            TestContext.Current.CancellationToken);
+        caller.CancelAfter(TimeSpan.FromSeconds(1));
+
+        await Should.ThrowAsync<OperationCanceledException>(() => host.Services
+            .GetRequiredService<IMailChannel>()
+            .SendAsync(Mail(), caller.Token));
+
+        counted.Value.ShouldBe(0, "a pass cancelled at shutdown is not a relay incident, whichever phase it was in");
+        stalled.Connections.ShouldBe(1, "the send began, and was not made again");
+    }
+
+    [Fact]
     public async Task An_authentication_the_relay_declines_for_now_is_retried_under_its_code()
     {
         await using ScriptedRelay relay = new(

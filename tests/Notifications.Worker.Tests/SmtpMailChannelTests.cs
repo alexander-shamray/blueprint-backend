@@ -183,16 +183,4 @@ public sealed class SmtpMailChannelTests(MailpitFixture fixture) : IAsyncLifetim
         result.ShouldBe(new MailResult.Refused(MailRefusal.RecipientRefused));
         counted.Value.ShouldBe(0, "a refusal is an answer, so the pipeline neither retries it nor counts it");
     }
-
-    [Fact]
-    public async Task The_callers_own_cancellation_is_not_counted_against_the_relay()
-    {
-        using MailCount counted = MailCounter.Unavailable(fixture.Host.Services);
-        using CancellationTokenSource cancelled = new();
-        await cancelled.CancelAsync();
-
-        await Should.ThrowAsync<OperationCanceledException>(() => Channel().SendAsync(Mail(), cancelled.Token));
-
-        counted.Value.ShouldBe(0, "a pass cancelled at shutdown is not a relay incident");
-    }
 }
