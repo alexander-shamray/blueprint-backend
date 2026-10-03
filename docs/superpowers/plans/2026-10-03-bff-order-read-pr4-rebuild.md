@@ -918,7 +918,7 @@ public sealed record OutboxRow(
     string Payload,
     DateTimeOffset OccurredAt);
 
-/// <summary>Step three of the rebuild: a publisher's processed Broker-lane rows of its share of the eight.</summary>
+/// <summary>Step four of the rebuild: a publisher's processed Broker-lane rows of its share of the eight.</summary>
 public static class OutboxRows
 {
     /// <summary>Named from the row type, so a renamed column fails the build rather than reading nothing.</summary>
@@ -1394,7 +1394,7 @@ using Web.Bff.Persistence;
 
 namespace BffReplay;
 
-/// <summary>Step two of the rebuild: the order rows and the queue's inbox rows, deleted in one transaction.</summary>
+/// <summary>Step three of the rebuild: the order rows and the queue's inbox rows, deleted in one transaction.</summary>
 /// <remarks>
 /// <c>bff.Products</c> survives: a name is published once and usually predates every outbox window, and its upsert
 /// guards on <c>OccurredAt</c>, so a replayed <c>ProductPublished</c> over a kept row is harmless (ADR-051, §6.6).
