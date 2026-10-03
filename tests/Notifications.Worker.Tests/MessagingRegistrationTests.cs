@@ -1,3 +1,7 @@
+using Common.Contracts.Ordering.V1;
+using Common.Contracts.Payments.V1;
+using Common.Contracts.Shipping.V1;
+using Common.Infrastructure.Messaging;
 using Notifications.Infrastructure.Messaging;
 using MassTransit;
 using MassTransit.Testing;
@@ -102,7 +106,30 @@ public class MessagingRegistrationTests
             "MassTransit starts the bus from a hosted service; without it the registration is inert");
     }
 
+    [Fact]
+    public void Every_event_in_the_consumes_column_is_registered()
+    {
+        // §3.2's Consumes column; the binding is a separate claim, provable only against a real queue.
+        ServiceCollection services = new();
 
+        services.AddMassTransitMessaging(Configuration());
+
+        foreach (Type consumer in new[]
+                 {
+                     typeof(IntegrationEventConsumer<OrderPlaced>),
+                     typeof(IntegrationEventConsumer<OrderConfirmed>),
+                     typeof(IntegrationEventConsumer<OrderCancelled>),
+                     typeof(IntegrationEventConsumer<PaymentDeclined>),
+                     typeof(IntegrationEventConsumer<PaymentRefunded>),
+                     typeof(IntegrationEventConsumer<ShipmentDispatched>),
+                     typeof(IntegrationEventConsumer<ShipmentDelivered>)
+                 })
+        {
+            services.ShouldContain(
+                d => d.ImplementationType == consumer || d.ServiceType == consumer,
+                $"{consumer.Name} is in §3.2's Consumes column and has no AddConsumer");
+        }
+    }
 
     [Fact]
     public void The_consumer_assertion_can_actually_see_a_consumer()
