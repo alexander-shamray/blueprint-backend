@@ -1393,7 +1393,8 @@ every retry replays the token the first attempt built — see the ordering in
 
 ### The scope has to become an audience
 
-`ServiceIdentityOptions.Scope` is `commerce-api` ([§14.1](14-local-development.md), [§15.4](15-cicd-deployment.md)) and §11.3
+For a host that calls a service, `ServiceIdentityOptions.Scope` is
+`commerce-api` ([§14.1](14-local-development.md), [§15.4](15-cicd-deployment.md)) and §11.3
 validates `Audience = "commerce-api"`. Those are **not** the same claim, and
 nothing so far makes one imply the other: a client-credentials token carries
 `scope: commerce-api` and, by default, an `aud` of `account`. Catalog would
@@ -1414,7 +1415,7 @@ it calls is the realm's own admin API:
 | Client `commerce-api` | No flow enabled, holds the permission roles | The API as an object in the realm, so permissions are a closed set somebody can grant. Nothing can obtain a token *as* it |
 | Client `web-bff` | Service accounts enabled, `commerce-api` a **default** client scope | Client-credentials tokens request no scope explicitly; a client scope left optional is silently absent. **Arrives with the BFF** (PR-19) — the scope and its mappers ship now, the client with the host that uses it |
 | Client `shipping-worker` | Service accounts enabled, `commerce-api` a **default** client scope, the client role `orders:delivery-address` on its service account | The second synchronous coupling, and the first grant a host holds ([ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)). The role is what the `permission` mapper emits for a service account, so without it the token is valid and the read is 403 |
-| Client `notifications-worker` | Service accounts enabled, `commerce-api` in neither scope list, `view-users` on `realm-management` for its service account — with the two query roles that role composes | The contact reader ([ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)). It reads the realm's admin API, so it holds no audience any service validates: a stolen secret reads every user's profile and calls no service. The worker refuses a token whose `realm-management` roles are not exactly that set |
+| Client `notifications-worker` | Service accounts enabled, `commerce-api` in neither scope list, `roles` the scope its host requests, `view-users` on `realm-management` for its service account — with the two query roles that role composes | The contact reader ([ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)). It reads the realm's admin API, so it holds no audience any service validates: a stolen secret reads every user's profile and calls no service. The worker refuses a token whose `realm-management` roles are not exactly that set |
 | Clients for browser flows | Same scope, so a user's token validates at the same services | One audience for the whole platform (§11.3) — per-service audiences are a later split, not a v1 one |
 
 This is realm configuration, not code, which is exactly why it earns a test
