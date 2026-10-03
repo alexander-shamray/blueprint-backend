@@ -1,8 +1,6 @@
 using Shouldly;
 using Xunit;
-using Shapes = System.Collections.Generic.Dictionary<
-    string,
-    System.Collections.Generic.Dictionary<string, string>>;
+using Shapes = System.Collections.Generic.Dictionary<string, System.Collections.Generic.Dictionary<string, string>>;
 
 namespace Platform.IntegrationTests;
 

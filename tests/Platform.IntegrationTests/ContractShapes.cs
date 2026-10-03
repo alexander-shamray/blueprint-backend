@@ -2,9 +2,7 @@ using System.Reflection;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using Common.Contracts.Ordering.V1;
-using Shapes = System.Collections.Generic.Dictionary<
-    string,
-    System.Collections.Generic.Dictionary<string, string>>;
+using Shapes = System.Collections.Generic.Dictionary<string, System.Collections.Generic.Dictionary<string, string>>;
 
 namespace Platform.IntegrationTests;
 
