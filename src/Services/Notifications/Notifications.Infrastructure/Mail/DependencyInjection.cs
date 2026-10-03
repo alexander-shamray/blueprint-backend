@@ -2,6 +2,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
+using Notifications.Application.Mail;
 
 namespace Notifications.Infrastructure.Mail;
 
@@ -28,6 +29,9 @@ public static class DependencyInjection
 
         // A singleton, so the breaker inside it is the host's and not a scope's.
         services.AddSingleton<MailPipeline>();
+
+        // A singleton, so every scope shares the pipeline above rather than meeting a dead relay afresh.
+        services.AddSingleton<IMailChannel, SmtpMailChannel>();
 
         return services;
     }
