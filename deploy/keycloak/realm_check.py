@@ -699,7 +699,7 @@ def check_mobile_client(client: dict) -> list[str]:
 def check_service_account_client(
         client: dict, name: str, read: str, leak: str) -> tuple[list[str], list, list]:
     """What every ADR-052 service-account reader shares: confidential, enabled,
-    minting for itself alone. Returns the problems and its two scope lists."""
+    minting for itself alone."""
     problems: list[str] = []
 
     if client.get("enabled") is not True:
