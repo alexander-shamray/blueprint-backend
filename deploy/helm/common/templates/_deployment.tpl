@@ -30,8 +30,7 @@ spec:
       annotations:
         {{- /* The values, the rendered ConfigMap and each extra ConfigMap's body,
         so that a config-only deploy rolls the pods (§15.3). An extra body is the
-        chart's named template `<chart>.<suffix>`, which is the one form of a
-        chart's file a library template can reach. */}}
+        chart's named template `<chart>.<suffix>`. */}}
         {{- $extra := "" }}
         {{- range .Values.extraConfigMaps }}
         {{- $extra = printf "%s%s" $extra (include (printf "%s.%s" $.Chart.Name .) $) }}
