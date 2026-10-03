@@ -10,7 +10,7 @@ internal static class ResentCounter
 {
     public static OutboundCount Resent(IServiceProvider services)
     {
-        // The counter is created in NotificationMetrics' constructor; a listener started first would see nothing.
+        // The metrics type's constructor creates the counter, so Start publishes it at once and Enabled is checkable.
         services.GetRequiredService<NotificationMetrics>();
         Meter mine = services.GetRequiredService<IMeterFactory>().Create(OutboundMeter.Name);
         OutboundCount count = new(mine, "notifications.mail.resent");
