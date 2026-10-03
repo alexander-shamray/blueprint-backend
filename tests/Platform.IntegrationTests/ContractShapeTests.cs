@@ -58,6 +58,7 @@ public class ContractShapeTests
                 ["Text"] = "required System.String",
                 ["Optional"] = "System.String?",
                 ["Count"] = "System.Int32?",
+                ["Pair"] = "System.Collections.Generic.KeyValuePair<System.String, System.Int32>?",
                 ["Labels"] = "required System.Collections.Generic.IReadOnlyList<System.String?>",
                 ["Map"] = "required System.Collections.Generic.Dictionary<System.String, System.Int32[]>"
             },
@@ -119,6 +120,8 @@ public class ContractShapeTests
         public string? Optional { get; init; }
 
         public int? Count { get; init; }
+
+        public KeyValuePair<string, int>? Pair { get; init; }
 
         public required IReadOnlyList<string?> Labels { get; init; }
 
