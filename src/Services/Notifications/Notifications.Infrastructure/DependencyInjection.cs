@@ -1,4 +1,5 @@
 using Notifications.Application.Contacts;
+using Notifications.Application.Records;
 using Notifications.Infrastructure.Idempotency;
 using Notifications.Infrastructure.Messaging;
 using Notifications.Infrastructure.Observability;
@@ -36,7 +37,9 @@ public static class DependencyInjection
 
         services.AddScoped<IUnitOfWork, EfUnitOfWork>();                     // §6.3
 
-        // §5.6's repository registrations join with the first aggregate.
+        // §6.3's repositories: the notices owed, and the order record four of them wait on for a customer.
+        services.AddScoped<INotificationRepository, NotificationRepository>();
+        services.AddScoped<IOrderRecordRepository, OrderRecordRepository>();
 
         // §8.5's durable half, on the DbContext alias above and so in EfUnitOfWork's transaction. Its loss
         // fails the first command, not startup: ValidateOnBuild never builds TransactionBehavior's open generic.

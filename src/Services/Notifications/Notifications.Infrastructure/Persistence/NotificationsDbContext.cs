@@ -14,6 +14,9 @@ public sealed class NotificationsDbContext(DbContextOptions<NotificationsDbConte
     /// <summary>§3.2's record of every notice owed.</summary>
     public DbSet<Notification> NotificationLog => Set<Notification>();
 
+    /// <summary>ADR-017's local projection of Ordering's events, which four notices wait on for a customer.</summary>
+    public DbSet<OrderRecord> OrderRecords => Set<OrderRecord>();
+
     /// <summary>§9.5's inbox.</summary>
     public DbSet<InboxMessage> InboxMessages => Set<InboxMessage>();
 
