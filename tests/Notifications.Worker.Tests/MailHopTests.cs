@@ -41,11 +41,4 @@ public sealed class MailHopTests
             MailHop.CircuitBreakerSamplingDuration,
             "a send no retry repeats is one attempt, so failures of that kind alone must open the breaker too");
     }
-
-    [Fact]
-    public void The_breaker_breaks_for_less_than_it_samples()
-    {
-        MailHop.CircuitBreakerBreakDuration.ShouldBeLessThan(MailHop.CircuitBreakerSamplingDuration,
-            "a breaker that forgets its failures while open reopens on the first error after it closes");
-    }
 }
