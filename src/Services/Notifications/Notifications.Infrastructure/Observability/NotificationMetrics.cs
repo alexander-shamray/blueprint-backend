@@ -26,11 +26,12 @@ public sealed class NotificationMetrics
     {
         Meter meter = factory.Create(OutboundMeter.Name);
 
-        // The record a possible duplicate leaves: the row holds the intent, and this counts each send over one.
+        // A count of possible duplicates: the row holds the intent, and this counts each send over one, a retry
+        // after a transient fault included.
         _resent = meter.CreateCounter<long>(
             "notifications.mail.resent",
             unit: "{send}",
-            description: "Sends started over an intent already stamped, each one a message the relay may hold twice.");
+            description: "Sends started over an intent already stamped; a count of possible duplicates, an outage's retries included.");
 
         // Past a first backoff, by what the row waits on; a relay step rising during an outage is the breaker working.
         meter.CreateObservableGauge(
