@@ -57,7 +57,7 @@ internal static class ContractShapes
         return shapes;
     }
 
-    /// <summary>Every difference a consumer or a payload built against <paramref name="recorded"/> can fail on.</summary>
+    /// <summary>What a consumer or a payload built against <paramref name="recorded"/> can fail on.</summary>
     /// <remarks>A rename reads as a member gone; an older payload lacks a new required member (§9.2).</remarks>
     internal static string[] Breaks(Shapes recorded, Shapes live)
     {
