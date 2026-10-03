@@ -88,8 +88,7 @@ the schema its hook applied, which §15.5's backward-compatibility rule covers. 
 {{- end -}}
 
 {{- /* The name of what this release owns. Helm refuses to touch another release's
-objects, so the canary cannot render the stable release's Deployment;
-`commerce.name` stays the workload name, and the two differ only on a canary. */}}
+objects; `commerce.name` stays the workload name, and the two differ only on a canary. */}}
 {{- define "commerce.instanceName" -}}
 {{- if .Values.canary.enabled -}}
 {{ include "commerce.name" . }}-canary
