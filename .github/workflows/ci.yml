@@ -493,10 +493,10 @@ jobs:
             exit 1
           fi
 
-      # The build reads .editorconfig only for its rules at `warning` (ADR-019).
-      # This reads the rest — charset, line endings, indentation — over every
-      # project Platform.slnx lists; docs/style-guide.md owns which rules those
-      # are. After the byte-identical check, which no formatter run may precede.
+      # This reads what IDE0055 cannot — the byte-order mark and the final
+      # newline — over every project Platform.slnx lists; docs/style-guide.md
+      # owns which rules those are. After the byte-identical check, which no
+      # formatter run may precede.
       - name: The source matches .editorconfig
         run: dotnet format Platform.slnx --verify-no-changes --no-restore
 
