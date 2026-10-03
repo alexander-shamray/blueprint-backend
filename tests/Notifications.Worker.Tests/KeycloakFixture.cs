@@ -186,7 +186,8 @@ public sealed class KeycloakFixture : IAsyncLifetime
         // Keycloak drops a user's locale while internationalisation is off, whatever the unmanaged policy.
         using HttpRequestMessage realm = new(HttpMethod.Put, $"{BaseAddress}admin/realms/{Realm}")
         {
-            Content = JsonContent.Create(new { internationalizationEnabled = true, supportedLocales = SupportedLocales })
+            Content = JsonContent.Create(
+                new { internationalizationEnabled = true, supportedLocales = SupportedLocales })
         };
         using HttpResponseMessage localised = await AsAdminAsync(realm);
         localised.EnsureSuccessStatusCode();
