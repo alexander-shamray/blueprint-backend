@@ -28,6 +28,8 @@
     <PackageReference Include="Testcontainers.Keycloak" />
     <!-- A stub Keycloak on loopback, where a fault has to be staged (§12.7). -->
     <PackageReference Include="WireMock.Net" />
+    <!-- FakeTimeProvider, which holds the relay breaker's break still (§9.7). -->
+    <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
     <!-- Named although transitive, because the live suite reads the token Keycloak issued. -->
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" />
   </ItemGroup>
