@@ -74,6 +74,13 @@ podDisruptionBudget:
   enabled: true
   minAvailable: 2
 
+# Spread across nodes as a rule and across zones as a preference (§15.3).
+topologySpread:
+  maxSkew: 1
+  whenUnsatisfiable:
+    node: DoNotSchedule
+    zone: ScheduleAnyway
+
 # Must exceed the host's own shutdown timeout, which is 30 s and measured
 # rather than assumed — §15.3 carries the argument.
 terminationGracePeriodSeconds: 45

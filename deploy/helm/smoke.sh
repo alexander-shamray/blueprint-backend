@@ -684,6 +684,35 @@ for chart in $SERVICE_CHARTS; do
 done
 
 # --------------------------------------------------------------------------
+section 'Replicas spread across nodes and zones (§15.3)'
+# --------------------------------------------------------------------------
+# A disruption budget covers voluntary evictions only, so without a spread
+# three replicas on one node is a legal schedule that one node's loss empties.
+spread_when() {
+    # spread_when <render> <topologyKey> -> the whenUnsatisfiable that key carries
+    awk -v k="$2" '$0 ~ "topologyKey: " k "$" { f = 1; next }
+        f && /whenUnsatisfiable:/ { print $2; exit }' "$1"
+}
+
+for chart in $SERVICE_CHARTS; do
+    check "$chart spreads across nodes as a rule" \
+        test "$(spread_when "$OUT/$chart.yaml" kubernetes.io/hostname)" = DoNotSchedule
+    check "$chart spreads across zones as a preference" \
+        test "$(spread_when "$OUT/$chart.yaml" topology.kubernetes.io/zone)" = ScheduleAnyway
+    check "$chart counts each revision's pods apart" \
+        test "$(count 'matchLabelKeys: \[pod-template-hash\]' "$OUT/$chart.yaml")" -eq 2
+done
+check 'every Deployment in the umbrella carries a spread' \
+    test "$(count '^ *topologySpreadConstraints:$' "$OUT/platform.yaml")" \
+    -eq "$(count '^kind: Deployment$' "$OUT/platform.yaml")"
+
+refuses_chart catalog 'a spread policy the API server does not know fails the render' \
+    'topologySpread.whenUnsatisfiable.node is "Never"' \
+    --set-string 'topologySpread.whenUnsatisfiable.node=Never'
+refuses_chart catalog 'a spread with no skew fails the render' 'topologySpread.maxSkew is required' \
+    --set 'topologySpread.maxSkew=0'
+
+# --------------------------------------------------------------------------
 section 'The grace period exceeds the host shutdown timeout'
 # --------------------------------------------------------------------------
 # HostOptions.ShutdownTimeout defaults to 30 s and nothing in this solution
@@ -1379,6 +1408,13 @@ for chart in $SERVICE_CHARTS; do
             }
             END { exit found ? 0 : 1 }
         ' "$OUT/$chart-canary.yaml"
+
+    # The spread counts the canary's own pods, so the stable track's placement
+    # never holds a rung back.
+    check "$chart: the canary's spread counts its own track" \
+        awk '/^      topologySpreadConstraints:$/ { s = 1 } /^      containers:$/ { s = 0 }
+            s && /app.kubernetes.io\/track: canary$/ { n++ } END { exit n == 2 ? 0 : 1 }' \
+        "$OUT/$chart-canary.yaml"
 
     # And the two Deployments must not select each other's pods, or each
     # scales the other away. The track label has to be in the Deployment's

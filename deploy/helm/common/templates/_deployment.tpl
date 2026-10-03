@@ -51,6 +51,27 @@ spec:
         readOnlyRootFilesystem is a decision no chapter has taken, and is not
         asserted untested against these images. */}}
         runAsNonRoot: true
+      {{- /* Across nodes and zones (§15.3), counted per track and per revision so
+      that neither the canary nor a rollout's surge is held back by the other
+      pods' placement. */}}
+      {{- $skew := int ((.Values.topologySpread).maxSkew | default 0) }}
+      {{- if lt $skew 1 }}
+      {{- fail "topologySpread.maxSkew is required and must be at least 1: it is how unevenly a workload's replicas may sit across nodes and zones (§15.3)." }}
+      {{- end }}
+      topologySpreadConstraints:
+        {{- range $key, $topologyKey := dict "node" "kubernetes.io/hostname" "zone" "topology.kubernetes.io/zone" }}
+        {{- $when := get ((($.Values.topologySpread).whenUnsatisfiable) | default dict) $key | default "" | toString }}
+        {{- if not (has $when (list "DoNotSchedule" "ScheduleAnyway")) }}
+        {{- fail (printf "topologySpread.whenUnsatisfiable.%s is %q, and must be DoNotSchedule or ScheduleAnyway: the API server accepts nothing else, and refuses it after the upgrade has started (§15.3)." $key $when) }}
+        {{- end }}
+        - topologyKey: {{ $topologyKey }}
+          maxSkew: {{ $skew }}
+          whenUnsatisfiable: {{ $when }}
+          labelSelector:
+            matchLabels:
+              {{- include "commerce.deploymentSelectorLabels" $ | nindent 14 }}
+          matchLabelKeys: [pod-template-hash]
+        {{- end }}
       containers:
         - name: {{ include "commerce.name" . }}
           {{- /* Both halves required, like the tag: either one cleared renders a
