@@ -18,9 +18,7 @@ spec:
   minReplicas: {{ .Values.autoscaling.minReplicas }}
   maxReplicas: {{ .Values.autoscaling.maxReplicas }}
   metrics:
-    {{- /* Utilisation is a percentage of the request, which is why §15.3 sets a
-    CPU request and no CPU limit: a limit would throttle a busy pod below the
-    utilisation that would have scaled it out. */}}
+    {{- /* Utilisation is a percentage of the CPU request (§15.3). */}}
     - type: Resource
       resource:
         name: cpu
