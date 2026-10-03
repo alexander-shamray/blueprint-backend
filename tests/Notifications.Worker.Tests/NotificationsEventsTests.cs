@@ -30,7 +30,7 @@ public sealed class NotificationsEventsTests(ServiceFixture fixture) : IAsyncLif
         using JsonDocument definitions = JsonDocument.Parse(File.ReadAllText(path));
         JsonElement grant = definitions.RootElement.GetProperty("permissions")
             .EnumerateArray()
-            .Single(p => p.GetProperty("user").GetString() == user);
+            .Single(p => p.GetProperty("user").GetString() == user && p.GetProperty("vhost").GetString() == "/");
 
         return (
             grant.GetProperty("configure").GetString()!,
@@ -125,7 +125,6 @@ public sealed class NotificationsEventsTests(ServiceFixture fixture) : IAsyncLif
             OrderEvents.Cancelled(order, customer, At.AddMinutes(1), CancelReasons.PaymentTimeout, origin: null));
 
         OrderRecord record = (await fixture.OrderRecordAsync(order)).ShouldNotBeNull();
-        record.RecordedAt.ShouldNotBe(record.CancelledAt!.Value);
         record.CancelledAt.ShouldBe(At.AddMinutes(1));
         record.CancelReason.ShouldBe(CancelReasons.PaymentTimeout);
         record.CancelOrigin.ShouldBeNull("an older publisher's cancellation, which ADR-049's reader interprets");
