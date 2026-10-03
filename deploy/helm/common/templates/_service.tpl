@@ -16,8 +16,7 @@ spec:
     {{- include "commerce.selectorLabels" . | nindent 4 }}
   ports:
     {{- /* The Service port is the container port, not a remapping: callers dial
-    both ports as literals in source (§10.2, §9.7), so a renumbered Service would
-    fail in a way nothing in this chart could see. */}}
+    it by number (§10.2, §9.7). */}}
     {{- range .Values.ports }}
     - name: {{ .name }}
       port: {{ .containerPort }}
