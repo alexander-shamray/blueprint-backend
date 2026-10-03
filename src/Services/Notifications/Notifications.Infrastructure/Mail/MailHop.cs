@@ -28,7 +28,6 @@ public static class MailHop
 
     public static readonly TimeSpan CircuitBreakerSamplingDuration = TimeSpan.FromSeconds(60);
 
-    /// <summary>Shorter than the window, so the breaker keeps its failures while open.</summary>
     public static readonly TimeSpan CircuitBreakerBreakDuration = TimeSpan.FromSeconds(30);
 
     /// <summary>How often the send worker claims, paced by new events rather than by the relay.</summary>
