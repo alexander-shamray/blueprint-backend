@@ -10,6 +10,7 @@ using Notifications.Application.Contacts;
 using Notifications.Application.Records;
 using Notifications.Application.Rendering;
 using Notifications.Infrastructure.Delivery;
+using Notifications.Infrastructure.Retention;
 using WireMock.RequestBuilders;
 using WireMock.ResponseBuilders;
 using WireMock.Server;
@@ -352,6 +353,12 @@ public sealed class ServiceFixture()
             "WHERE NotificationId = {0};",
             notificationId,
             (int)age.TotalSeconds);
+
+    /// <summary>Runs exactly one pass of ADR-053's three windows, with no timer.</summary>
+    public Task<(int Notifications, int Contacts, int Orders)> PurgeNotificationsRetentionAsync() =>
+        Factory.Services
+            .GetRequiredService<NotificationsRetentionService>()
+            .PurgeAsync(TestContext.Current.CancellationToken);
 
     /// <summary>Runs exactly one send pass on the fixture's host, with no timers and no waiting.</summary>
     public Task<SendPass> RunSendPassAsync() =>

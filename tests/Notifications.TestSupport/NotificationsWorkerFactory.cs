@@ -16,6 +16,7 @@ using Notifications.Infrastructure.Delivery;
 using Notifications.Infrastructure.Jurisdiction;
 using Notifications.Infrastructure.Mail;
 using Notifications.Infrastructure.Persistence;
+using Notifications.Infrastructure.Retention;
 using ContactRegistration = Notifications.Infrastructure.Contacts.DependencyInjection;
 
 namespace Notifications.TestSupport;
@@ -142,6 +143,14 @@ public class NotificationsWorkerFactory(
                 services.Remove(send);
 
                 services.AddSingleton<SendWorker>();
+
+                // The statutory windows' pass, by the same match and for the same reason.
+                ServiceDescriptor retention = services.Single(d =>
+                    d.ServiceType == typeof(IHostedService) &&
+                    d.ImplementationType == typeof(NotificationsRetentionService));
+                services.Remove(retention);
+
+                services.AddSingleton<NotificationsRetentionService>();
             })
             .ConfigureTestServices(services =>
                 services.ConfigureDbContext<NotificationsDbContext>(o => o.AddInterceptors(CommitFaults)));
