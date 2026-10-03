@@ -357,23 +357,24 @@ inbox, and no outbox and no idempotency markers:
 | `Products` | `ProductId` | `Name`, `PublishedAt` |
 
 **Every `Orders` column but the key and the two BFF instants is nullable**,
-because any of the eight events can create the row and each knows only its own
-facts. `FirstSeenAt` is set at insert and `AsOf` at every write that changes the
-row, both from the registered `TimeProvider`. The read's index is `(CustomerId,
-FirstSeenAt DESC, OrderId DESC)`, filtered to `CustomerId IS NOT NULL`, so the
-keyset seek never reads an unowned row; the gauge's is `FirstSeenAt` filtered to
-`CustomerId IS NULL`, which PR-2 adds with the gauge. **`PaymentCurrency` is the
-payment events' own**, written by whichever of `PaymentAuthorised` and
-`PaymentRefunded` arrives first and labelling both amounts, because a payment
-event can create the row before Ordering's `Currency` exists and an amount
-without its currency is a number the client cannot render. A payment event whose
-currency does not fit the column writes neither, and is logged at warning with
-the order's id: a constraint holds the two together, and dropping the amount is
-better than storing a number with no label. `CancelOutcome` is a bounded string
-holding one of the three members, and a check constraint holds it to them.
-Amounts are `decimal(19,4)`, the precision every service's money columns take;
-widths come from constants in the persistence project, which the configurations
-and the migration both read.
+because any of the seven order events can create the row and each knows only its
+own facts; `ProductPublished` feeds `Products` alone. `FirstSeenAt` is set at
+insert and `AsOf` at every write that changes the row, both from the registered
+`TimeProvider`. The read's index is `(CustomerId, FirstSeenAt DESC, OrderId
+DESC)`, filtered to `CustomerId IS NOT NULL`, so the keyset seek never reads an
+unowned row; the gauge's is `FirstSeenAt` filtered to `CustomerId IS NULL`,
+which PR-2 adds with the gauge. **`PaymentCurrency` is the payment events'
+own**, written by whichever of `PaymentAuthorised` and `PaymentRefunded` arrives
+first and labelling both amounts, because a payment event can create the row
+before Ordering's `Currency` exists and an amount without its currency is a
+number the client cannot render. A payment event whose currency does not fit the
+column writes neither, and is logged at warning with the order's id: a
+constraint holds the two together, and dropping the amount is better than
+storing a number with no label. `CancelOutcome` is a bounded string holding one
+of the three members, and a check constraint holds it to them. Amounts are
+`decimal(19,4)`, the precision every service's money columns take; widths come
+from constants in the persistence project, which the configurations and the
+migration both read.
 
 **`CustomerId` is written once, by the first Ordering event, and never
 changed.** All three carry it, and a later one disagreeing would be a

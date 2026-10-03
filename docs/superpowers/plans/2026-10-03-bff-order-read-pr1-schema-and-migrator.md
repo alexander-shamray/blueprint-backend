@@ -22,7 +22,7 @@ references it, and neither references the other. Writes and reads arrive in
 PR-2 and PR-3 as Dapper over `IDbConnectionFactory`, so EF here defines the
 schema and the inbox row the filter stages, and nothing else; the row types
 have no behaviour. Every `bff.Orders` column but the key and the two BFF
-instants is nullable, because any of the eight events can create a row.
+instants is nullable, because any of the seven order events can create a row.
 Four check constraints hold the pairs one handler writes together — a total
 and its currency, a cancellation and its member, an authorisation and its
 amount, a refund and its amount; a fifth holds `CancelOutcome` to §10.7's three members, which
@@ -473,7 +473,7 @@ public sealed class ProjectionModelTests
     }
 
     [Fact]
-    public void Any_event_can_create_an_order_row_so_only_the_key_and_the_two_instants_are_required()
+    public void Any_order_event_can_create_an_order_row_so_only_the_key_and_the_two_instants_are_required()
     {
         using BffDbContext db = Context();
         IEntityType orders = db.GetService<IDesignTimeModel>().Model.FindEntityType(typeof(OrderRow))!;
@@ -655,7 +655,7 @@ namespace Web.Bff.Persistence;
 /// <summary>One order as the projection knows it: a column per fact §10.7 returns, each set once (ADR-051).</summary>
 /// <remarks>
 /// Written and read through SQL, never through this type, which exists to define the table (§7.2). Every column
-/// but the key and the two BFF instants is nullable, because any of the eight events can create the row.
+/// but the key and the two BFF instants is nullable, because any of the seven order events can create it.
 /// </remarks>
 public sealed class OrderRow
 {
@@ -1182,7 +1182,7 @@ public sealed class ProjectionSchemaTests(BffServiceFixture fixture) : IAsyncLif
     [Fact]
     public async Task An_order_row_needs_only_its_key_and_the_two_instants()
     {
-        // Any of the eight events can create the row, so every fact column has to start empty.
+        // Any of the seven order events can create the row, so every fact column has to start empty.
         Guid orderId = Guid.CreateVersion7();
 
         await fixture.ExecuteAsync(
