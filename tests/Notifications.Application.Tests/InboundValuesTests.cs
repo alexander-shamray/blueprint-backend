@@ -24,7 +24,10 @@ public class InboundValuesTests
     [InlineData(0x000D)]
     [InlineData(0x007F)]
     [InlineData(0x0085)]
+    [InlineData(0x00AD)]
     [InlineData(0x061C)]
+    [InlineData(0x200B)]
+    [InlineData(0x200D)]
     [InlineData(0x200E)]
     [InlineData(0x200F)]
     [InlineData(0x202A)]
@@ -33,11 +36,16 @@ public class InboundValuesTests
     [InlineData(0x2029)]
     [InlineData(0x2066)]
     [InlineData(0x2069)]
+    [InlineData(0x2060)]
+    [InlineData(0xFEFF)]
     [InlineData(0xD800)]
     [InlineData(0xDC00)]
-    public void A_tracking_number_holding_a_control_bidi_or_broken_character_is_dropped(int codePoint)
+    [InlineData(0xE0041)]
+    public void A_tracking_number_holding_an_invisible_or_broken_character_is_dropped(int codePoint)
     {
-        string value = $"1Z999{(char)codePoint}AA1";
+        // ConvertFromUtf32 refuses a lone surrogate, which is the case the cast is kept for.
+        string character = codePoint > 0xFFFF ? char.ConvertFromUtf32(codePoint) : ((char)codePoint).ToString();
+        string value = $"1Z999{character}AA1";
 
         InboundValues.Text(value, InboundValues.MaxTrackingNumberLength).ShouldBeNull();
     }
