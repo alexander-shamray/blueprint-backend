@@ -81,7 +81,8 @@ py -3.12 deploy/keycloak/realm_check.py check --kind local
   `commerce-api` in neither scope list and `roles` in one — cited rather than
   enumerated here, because
   [ADR-052](../../docs/backend-architecture/adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)
-  argues each of them and `check_contact_client` is the list. Its grant,
+  and [§11.5](../../docs/backend-architecture/11-identity-authorization.md)'s
+  table argue them and `check_contact_client` is the list. Its grant,
   `view-users` on `realm-management`, is out of reach for the reason the
   bullet above gives, and the worker's check on its own token is the other
   half.
