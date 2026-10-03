@@ -47,7 +47,7 @@ spec:
       terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
       securityContext:
         {{- /* An assertion about the image, which already runs as a non-root user
-        (§15.2), so a base image that starts running as root fails to schedule.
+        (§15.2), so a base image that starts running as root fails to start.
         readOnlyRootFilesystem is a decision no chapter has taken, and is not
         asserted untested against these images. */}}
         runAsNonRoot: true
