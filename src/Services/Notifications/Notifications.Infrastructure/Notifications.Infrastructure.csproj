@@ -11,6 +11,13 @@
     <!-- The bus (§9); no RabbitMQ health-check package, because AddMassTransit registers its own. -->
     <PackageReference Include="MassTransit.RabbitMQ" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" />
+    <!-- The relay's adapter: MailKit submits, MimeKit builds the message and encodes its headers. -->
+    <PackageReference Include="MailKit" />
+    <PackageReference Include="MimeKit" />
+    <!-- The relay's pipeline, built by hand because SMTP is no HttpClient (§9.7's rules, Polly's engine). -->
+    <PackageReference Include="Polly.Core" />
+    <!-- The hosting abstractions this project names: IHostEnvironment, in each outbound hop's registration. -->
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
   </ItemGroup>
 
   <ItemGroup>

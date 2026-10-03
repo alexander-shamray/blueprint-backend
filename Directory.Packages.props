@@ -34,6 +34,9 @@
          §8 argues about — it stores no domain data and crosses no process. -->
     <PackageVersion Include="Microsoft.Extensions.Caching.Memory" Version="10.0.0" />
     <PackageVersion Include="Microsoft.Extensions.Http.Resilience" Version="10.0.0" />
+    <!-- The engine under the row above, named directly where no HttpClient carries it: Notifications' relay
+         pipeline. The version the row above already resolves, so pinning it moves no other graph. -->
+    <PackageVersion Include="Polly.Core" Version="8.4.2" />
     <!-- IHttpClientFactory, which Common.Infrastructure's token client fetches
          its grant over (§11.5). ASP.NET Core's shared framework carries it and
          that building block takes no framework reference, so it pays for the
@@ -71,6 +74,10 @@
          by name, and referencing what is actually used keeps the register
          honest. -->
     <PackageVersion Include="Microsoft.Data.SqlClient" Version="6.1.1" />
+    <!-- Notifications' SMTP client and the message it submits (Appendix B). MimeKit is MailKit's own dependency at
+         exactly this version, pinned because the adapter names its types; the two ship as one release. -->
+    <PackageVersion Include="MailKit" Version="4.18.1" />
+    <PackageVersion Include="MimeKit" Version="4.18.1" />
     <!-- Exact major. v9 is commercially licensed — see ADR-003. The core
          package is a transitive of the transport one, pinned separately
          because projects reference it directly for the IPublishEndpoint the
