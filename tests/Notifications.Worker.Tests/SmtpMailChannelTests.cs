@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.Extensions.DependencyInjection;
 using Notifications.Application.Mail;
 using Notifications.TestSupport;
@@ -30,6 +31,13 @@ public sealed class SmtpMailChannelTests(MailpitFixture fixture) : IAsyncLifetim
             body,
             id ?? new MailMessageId(Guid.CreateVersion7(), "order-placed"),
             languages ?? ["en"]);
+
+    // Either form of a domain names one mailbox, so the two are compared in the one a relay without SMTPUTF8 reads.
+    private static string Ascii(string address)
+    {
+        int at = address.LastIndexOf('@');
+        return $"{address[..at]}@{new IdnMapping().GetAscii(address[(at + 1)..])}";
+    }
 
     [Fact]
     public async Task A_message_arrives_as_plain_utf8_text_under_the_message_id_it_was_given()
@@ -73,6 +81,20 @@ public sealed class SmtpMailChannelTests(MailpitFixture fixture) : IAsyncLifetim
 
         // SMTP's line ending is CRLF whatever the body's was (RFC 5321 section 2.3.8), so lines are compared.
         arrived.Text.ReplaceLineEndings("\n").TrimEnd('\n').ShouldBe(body);
+    }
+
+    [Theory]
+    [InlineData("aigerim@алма.test")]
+    [InlineData("aigerim@xn--80aa6ae.test")]
+    public async Task A_mailbox_on_an_internationalised_domain_is_sent_in_either_form(string recipient)
+    {
+        CancellationToken ct = TestContext.Current.CancellationToken;
+
+        MailResult result = await Channel().SendAsync(Mail(recipient: recipient), ct);
+
+        result.ShouldBe(new MailResult.Accepted());
+        MailpitMessage arrived = await fixture.Plain.SingleAsync(ct);
+        Ascii(arrived.To.ShouldHaveSingleItem().Address).ShouldBe(Ascii(recipient));
     }
 
     [Theory]
