@@ -1,0 +1,6 @@
+out_of_stock: Some of the items in it were out of stock.
+stock_timeout: We could not reserve the items in it in time.
+payment_declined: The payment for it was not accepted.
+payment_timeout: We did not receive confirmation of the payment in time.
+customer_request: It was cancelled at your request.
+*: We were unable to complete it.

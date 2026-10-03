@@ -1,0 +1,11 @@
+Subject: We have received your order
+
+Hello,
+
+Thank you for your order. We are now checking that everything is in stock and taking your payment, and we will write again when the order is confirmed.
+
+Order: {OrderId}
+Placed: {Date}
+Total: {Amount} {Currency}
+
+This is a service message about an order you placed with us.

@@ -20,4 +20,9 @@
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Named by path, so a refusal prints the file; WithCulture, since MSBuild reads ".en." as a satellite. -->
+    <EmbeddedResource Include="Templates\*.txt" LogicalName="Templates/%(Filename)%(Extension)" WithCulture="false" />
+  </ItemGroup>
+
 </Project>

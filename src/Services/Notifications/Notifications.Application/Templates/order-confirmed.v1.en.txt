@@ -1,0 +1,11 @@
+Subject: Your order is confirmed
+
+Hello,
+
+Your order is confirmed and your payment has been accepted. We will write again when it has been despatched.
+
+Order: {OrderId}
+Confirmed: {Date}
+Total: {Amount} {Currency}
+
+This is a service message about an order you placed with us.

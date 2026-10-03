@@ -27,6 +27,7 @@ public class ArchitectureTests
             "System.Data.Common",
             "System.Linq",
             "System.Linq.Expressions",
+            "System.Memory",
             "System.Runtime",
             "System.Text.Json"
         ];

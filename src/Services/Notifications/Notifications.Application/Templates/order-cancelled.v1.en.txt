@@ -1,0 +1,12 @@
+Subject: Your order has been cancelled
+
+Hello,
+
+We are sorry to tell you that your order has been cancelled. {CancelReason}
+
+Order: {OrderId}
+Cancelled: {Date}
+
+If a payment was taken for this order, we will write to you separately when it has been refunded.
+
+This is a service message about an order you placed with us.

@@ -1,0 +1,10 @@
+Subject: Your payment was not accepted
+
+Hello,
+
+The payment for your order was not accepted. We will write to you separately about what this means for the order.
+
+Order: {OrderId}
+Date: {Date}
+
+This is a service message about an order you placed with us.

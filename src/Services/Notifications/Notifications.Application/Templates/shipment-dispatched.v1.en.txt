@@ -1,0 +1,11 @@
+Subject: Your order is on its way
+
+Hello,
+
+Your order has been despatched. You can follow its delivery with the carrier using the tracking number below.
+
+Order: {OrderId}
+Despatched: {Date}
+Tracking number: {TrackingNumber}
+
+This is a service message about an order you placed with us.
