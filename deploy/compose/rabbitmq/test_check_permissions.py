@@ -333,6 +333,35 @@ class AServiceThatPublishesNothing(unittest.TestCase):
             f"the gate accepted a contract write for a service that publishes nothing: {failures}")
 
 
+class AHostsMessagingIsReadToo(unittest.TestCase):
+    """The second glob in `messaging_dirs`, over a host tree of its own (ADR-051)."""
+
+    def found_over(self, layout: str) -> dict:
+        with tempfile.TemporaryDirectory() as directory:
+            hosts = Path(directory) / "Edge"
+            (hosts / layout).mkdir(parents=True)
+            original = gate.HOSTS
+            gate.HOSTS = hosts
+            try:
+                return gate.messaging_dirs()
+            finally:
+                gate.HOSTS = original
+
+    def test_a_host_s_messaging_directory_is_keyed_by_its_tree(self):
+        # Keyed as a service's is, by the directory above the project, so the BFF's account is bff-svc.
+        self.assertIn("Edge", self.found_over("Edge.Api/Messaging"))
+
+    def test_a_messaging_directory_deeper_in_a_host_is_not_read(self):
+        # A host has no Infrastructure project (§10.1), so only its own project's root is the selector.
+        self.assertNotIn("Edge", self.found_over("Edge.Api/Orders/Messaging"))
+
+    def test_the_services_are_still_read_beside_a_host(self):
+        self.assertIn("Catalog", self.found_over("Edge.Api/Messaging"))
+
+    def test_the_hosts_tree_is_one_of_the_inputs_the_workflow_watches(self):
+        self.assertIn("src/BFF", gate.SOURCE_INPUTS)
+
+
 class CheckThreeFollowsTheSelector(unittest.TestCase):
     """What the account owes and may hold, once `publishes` has answered for a service."""
 

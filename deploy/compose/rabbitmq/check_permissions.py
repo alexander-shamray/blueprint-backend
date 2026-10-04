@@ -47,6 +47,9 @@ WORKFLOW_PATH = ".github/workflows/broker-permissions.yml"
 WORKFLOW = ROOT / WORKFLOW_PATH
 
 SERVICES = ROOT / "src" / "Services"
+# The hosts' tree (§4.1). A host has no Infrastructure project (§10.1), so a
+# consuming host keeps its Messaging directory at its own project's root.
+HOSTS = ROOT / "src" / "BFF"
 CONTRACTS = ROOT / "src" / "BuildingBlocks" / "Common.Contracts"
 DOCKERFILE = HERE / "Dockerfile"
 TESTS = ROOT / "tests"
@@ -67,6 +70,7 @@ BROKER_CONTAINER = re.compile(r"\bnew\s+RabbitMqBuilder\s*\(")
 # check 7 here.
 SOURCE_INPUTS = [
     "src/Services",
+    "src/BFF",
     "src/BuildingBlocks/Common.Contracts",
     "tests",
 ]
@@ -134,13 +138,17 @@ def derived_names(queue: str) -> set[str]:
 
 
 def messaging_dirs() -> dict[str, Path]:
-    """Every service's Messaging directory, keyed by the service's name.
+    """Every service's and consuming host's Messaging directory, keyed by its tree's name.
 
     Globbed rather than listed, so a service §4.5's scaffold renders tomorrow
-    is read by this gate on the day it lands.
+    is read by this gate on the day it lands. A host is keyed by the tree
+    above its project, as a service is, which makes the BFF's account bff-svc.
     """
     found = {}
     for path in sorted(SERVICES.glob("*/*.Infrastructure/Messaging")):
+        if path.is_dir():
+            found[path.parents[1].name] = path
+    for path in sorted(HOSTS.glob("*/Messaging")):
         if path.is_dir():
             found[path.parents[1].name] = path
     return found
@@ -201,7 +209,7 @@ def contract_prefixes() -> set[str]:
 
 
 def main() -> int:
-    for path in (DEFINITIONS, WORKFLOW, SERVICES, CONTRACTS, DOCKERFILE, TESTS):
+    for path in (DEFINITIONS, WORKFLOW, SERVICES, HOSTS, CONTRACTS, DOCKERFILE, TESTS):
         if not path.exists():
             fail(f"missing: {path.relative_to(ROOT).as_posix()}")
     if failures:
@@ -269,8 +277,8 @@ def main() -> int:
     named = {name.lower() for name in directories}
     for user in services:
         if user[: -len(USER_SUFFIX)] not in named:
-            fail(f"{user}: has broker permissions and no service under src/Services. "
-                 f"Delete the account or restore the service")
+            fail(f"{user}: has broker permissions and no messaging source under "
+                 f"src/Services or src/BFF. Delete the account or restore the source")
     for name in sorted(directories):
         if f"{name.lower()}{USER_SUFFIX}" not in users:
             fail(f"{name}: has messaging source and no broker account in "
