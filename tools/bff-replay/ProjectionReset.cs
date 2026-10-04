@@ -33,13 +33,24 @@ public static class ProjectionReset
     /// <summary>Every order the buyers placed is deleted here, which the 30 s default might not finish.</summary>
     public static readonly TimeSpan CommandTimeout = TimeSpan.FromMinutes(10);
 
-    public static async Task RunAsync(string connectionString, CancellationToken ct)
+    /// <summary>The key <c>InboxFilter</c> writes: the receive address's path, which a named vhost prefixes.</summary>
+    public static string EndpointFor(string broker, string queue)
+    {
+        string vhost = new Uri(broker).AbsolutePath.Trim('/');
+
+        // %2F is AMQP's spelling of the default vhost, which MassTransit's address leaves out.
+        return vhost.Length == 0 || vhost.Equals("%2F", StringComparison.OrdinalIgnoreCase)
+            ? queue
+            : $"{vhost}/{queue}";
+    }
+
+    public static async Task RunAsync(string connectionString, string broker, CancellationToken ct)
     {
         await using SqlConnection connection = new(connectionString);
         await connection.ExecuteAsync(
             new CommandDefinition(
                 Sql,
-                new { Endpoint = Replay.Queue },
+                new { Endpoint = EndpointFor(broker, Replay.Queue) },
                 commandTimeout: (int)CommandTimeout.TotalSeconds,
                 cancellationToken: ct));
     }

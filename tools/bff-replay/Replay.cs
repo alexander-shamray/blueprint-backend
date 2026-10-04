@@ -64,7 +64,7 @@ public static class Replay
                         ReplayPayload.Read(row, types, json);
                 }
 
-                await ProjectionReset.RunAsync(settings.Bff, ct);
+                await ProjectionReset.RunAsync(settings.Bff, settings.Broker, ct);
                 await output.WriteLineAsync($"Reset: the order rows and {Queue}'s inbox rows are deleted.");
             }
 
