@@ -1229,22 +1229,23 @@ makes every unknown member a rendering fault met in production.
 | `placed` | `OrderPlaced` |
 | `confirmed` | `OrderConfirmed` |
 | `dispatched` | `ShipmentDispatched` |
-| `delivered` | `ShipmentDelivered` |
 | `cancelled` | `OrderCancelled`, below |
 | `out_of_stock` | `OrderCancelled`, below |
 | `declined` | `OrderCancelled`, below |
+| `delivered` | `ShipmentDelivered` |
 
 **The status is the highest-ranked member the projection has absorbed, never
-the latest one.** Rank descends as the table reads, `delivered` highest and
-`placed` lowest, with the three `OrderCancelled` members sharing one rank
-because one event decides between them. §9.4 orders nothing between
-consumers, so `ShipmentDispatched` arriving before `OrderConfirmed` is
-ordinary rather than exotic, and a redelivery of either is ordinary too.
-Ranking rather than overwriting is what makes both harmless. §6.6 buys the
-same property for `ordering.OrderSummaries` with `UpdatedAt < @OccurredAt`,
-and **that guard cannot be copied here**: its timestamps are minted by
-Ordering's one clock, while these are minted by four hosts. A rank is
-monotonic without a clock, which is why this projection uses one.
+the latest one.** Rank rises as the table reads, `placed` lowest and
+`delivered` highest, with the three `OrderCancelled` members sharing one rank
+because one event decides between them; `BuyerStatus.Of` is the order. §9.4
+orders nothing between consumers, so `ShipmentDispatched` arriving before
+`OrderConfirmed` is ordinary rather than exotic, and a redelivery of either is
+ordinary too. Ranking rather than overwriting is what makes both harmless.
+§6.6 buys the same property for `ordering.OrderSummaries` with
+`UpdatedAt < @OccurredAt`, and **that guard cannot be copied here**: its
+timestamps are minted by Ordering's one clock, while these are minted by four
+hosts. A rank is monotonic without a clock, which is why this projection uses
+one.
 
 A cancellation therefore outranks a despatch, and the case is real rather
 than defensive. `Order.Cancel` refuses once the order is `Shipped`, so an
