@@ -1,11 +1,15 @@
 using Common.Infrastructure.Identity;
+using Common.Infrastructure.Messaging;
 using Common.Web;
 using Grpc.Net.ClientFactory;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
+using Web.Bff.Persistence;
 
 namespace Web.Bff.Tests;
 
@@ -19,7 +23,14 @@ public class BffFactory : WebApplicationFactory<Program>
     /// <summary>The scope the fixture's credentials ask for (§11.5).</summary>
     public const string Scope = "commerce-api";
 
+    /// <summary>A server that does not resolve, so a route that queries it fails and no other route notices.</summary>
+    public const string UnreachableDatabase =
+        "Server=tcp:sql.invalid,1433;Database=Bff;Encrypt=False;Connect Timeout=1";
+
     public Uri? PricingAddress { get; set; }
+
+    /// <summary>The runtime key (§7.1), which <c>BffServiceFixture</c> points at its container.</summary>
+    public string DatabaseConnectionString { get; set; } = UnreachableDatabase;
 
     /// <summary>The credential handler's token source, in place of <see cref="CachingTokenClient"/>.</summary>
     public RecordingTokenCache Tokens { get; } = new();
@@ -30,7 +41,8 @@ public class BffFactory : WebApplicationFactory<Program>
         new(AuthenticationExtensions.AuthorityKey, UnreachableAuthority),
         new($"{ServiceIdentityOptions.SectionName}:ClientId", "web-bff-test"),
         new($"{ServiceIdentityOptions.SectionName}:ClientSecret", "not-a-real-secret"),
-        new($"{ServiceIdentityOptions.SectionName}:Scope", Scope)
+        new($"{ServiceIdentityOptions.SectionName}:Scope", Scope),
+        new("ConnectionStrings:Bff", DatabaseConnectionString)
     ];
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -42,8 +54,22 @@ public class BffFactory : WebApplicationFactory<Program>
         {
             ConfigureAuthentication(services);
 
+            // The shared fixture's SQL helpers resolve the context from the host (ADR-056).
+            services.AddDbContext<BffDbContext>(o => o.UseSqlServer(DatabaseConnectionString));
+
             services.RemoveAll<ITokenCache>();
             services.AddSingleton<ITokenCache>(Tokens);
+
+            // §9.5's purge, matched by the ImplementationType AddHostedService<T> sets, so a test drives each pass.
+            ServiceDescriptor? purge = services.SingleOrDefault(d =>
+                d.ServiceType == typeof(IHostedService) &&
+                d.ImplementationType == typeof(RetentionPurgeService));
+
+            if (purge is not null)
+            {
+                services.Remove(purge);
+                services.AddSingleton<RetentionPurgeService>();
+            }
 
             // After the host's AddGrpcClient, so this wins; the address is not configuration (§15.4).
             if (PricingAddress is not null)

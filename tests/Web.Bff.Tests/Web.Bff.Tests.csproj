@@ -27,6 +27,8 @@
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" />
     <!-- UseSqlServer, named by the model and schema tests though Web.Bff.Persistence carries it. -->
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
+    <!-- SqlException, named by the schema tests to read a refusal's number. -->
+    <PackageReference Include="Microsoft.Data.SqlClient" />
   </ItemGroup>
 
   <ItemGroup>
@@ -36,7 +38,9 @@
     <!-- StubCatalog and pricing.proto's server half. This suite names no generated type, as both halves'
          copies would then be ambiguous; drive the stub through its own surface. -->
     <ProjectReference Include="..\Web.Bff.TestSupport\Web.Bff.TestSupport.csproj" />
-    <!-- WriteEndpointRule alone (ADR-058); this host has no service fixture to reach it through. -->
+    <!-- §7.4's job host, which the fixture runs for real against its container. -->
+    <ProjectReference Include="..\..\src\BFF\Web.Bff.Migrator\Web.Bff.Migrator.csproj" />
+    <!-- WriteEndpointRule (ADR-058) and the shared ServiceFixture body (ADR-056). -->
     <ProjectReference Include="..\Common.TestSupport\Common.TestSupport.csproj" />
   </ItemGroup>
 
