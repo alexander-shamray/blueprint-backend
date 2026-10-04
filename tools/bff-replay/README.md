@@ -89,6 +89,11 @@ handler's write and the inbox row commit separately
 handled just before the reset whose inbox row lands just after it loses its
 facts for good: the replay is then dropped as a duplicate.
 
+A replay records each event's delivery lag as the time since its
+`OccurredAt`, so replaying days-old events will likely raise `DeliveryLagHigh`
+for `Web.Bff`, and a repair that applies events can too; the alert is the
+replay's, not a fault.
+
 The BFF is the queue's only consumer, so the replayed events wait on
 `bff-order-events` until it is back. When the run has finished, resume the
 BFF, then watch the queue's depth fall to zero — the broker's own view of
