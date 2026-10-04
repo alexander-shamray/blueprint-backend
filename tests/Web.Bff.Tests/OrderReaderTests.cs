@@ -1,4 +1,5 @@
 using Common.Application;
+using Common.Contracts.Ordering.V1;
 using Microsoft.Extensions.DependencyInjection;
 using Shouldly;
 using Web.Bff.Orders;
@@ -6,7 +7,7 @@ using Xunit;
 
 namespace Web.Bff.Tests;
 
-/// <summary>The read against rows the real handlers wrote: ownership, the keyset and one statement per page.</summary>
+/// <summary>The read against rows the real handlers wrote: ownership, the keyset and the lines each page carries.</summary>
 [Collection(nameof(BffIntegrationCollection))]
 public sealed class OrderReaderTests(BffServiceFixture fixture) : IAsyncLifetime
 {
@@ -93,6 +94,29 @@ public sealed class OrderReaderTests(BffServiceFixture fixture) : IAsyncLifetime
         OrderLineSummary line = listed.Lines.ShouldHaveSingleItem();
         line.ProductName.ShouldBe("Walnut desk lamp");
         line.LineTotal.Amount.ShouldBe(OrderEvents.Total);
+    }
+
+    [Fact]
+    public async Task Each_order_on_one_page_carries_its_own_lines_and_no_other()
+    {
+        Guid older = Guid.CreateVersion7();
+        Guid newer = Guid.CreateVersion7();
+        Guid olderProduct = Guid.CreateVersion7();
+        Guid newerProduct = Guid.CreateVersion7();
+
+        await fixture.DeliverAsync(
+            OrderEvents.Placed(older, _buyer, At) with { Lines = [new PlacedLine(olderProduct, 1, 5m)] });
+        await fixture.DeliverAsync(
+            OrderEvents.Placed(newer, _buyer, At.AddMinutes(1)) with
+            {
+                Lines = [new PlacedLine(newerProduct, 2, 7m), new PlacedLine(olderProduct, 4, 9m)]
+            });
+
+        IReadOnlyList<OrderSummary> items = (await Reader.ListAsync(_buyer, null, OrderPage.DefaultLimit, Ct)).Items;
+
+        items.Select(o => o.OrderId).ShouldBe([newer, older]);
+        items[0].Lines.Select(l => l.ProductId).ShouldBe([newerProduct, olderProduct]);
+        items[1].Lines.Select(l => l.ProductId).ShouldBe([olderProduct]);
     }
 
     [Fact]
