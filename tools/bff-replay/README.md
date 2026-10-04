@@ -11,8 +11,8 @@ nothing a consumer has acknowledged, so the last copy of a delivered event is
 its publisher's processed outbox row, kept for `RetentionPolicy.OutboxWindow`
 ([§9.4](../../docs/backend-architecture/09-messaging.md)). An order whose
 every event is older than that window, which every service registers as one
-`new RetentionPolicy()`, is not restored by any run of this tool: after `--reset` it is simply absent from
-the buyer's history. Recovering that is the BFF database's backup, not this.
+`new RetentionPolicy()`, is not restored by any run of this tool: after
+`--reset` it is simply absent from the buyer's history. Recovering that is the BFF database's backup, not this.
 
 So, in order of preference:
 
@@ -81,12 +81,17 @@ projection ranks facts and never overwrites one
 needs no maintenance window.
 
 **`--reset` needs the BFF's consumption stopped.** Scale the `web-bff`
-deployment to zero (or stop its Compose service) before the run and resume it
-once the run has finished and the queue has drained, because the handler's
-write and the inbox row commit separately
+deployment to zero (or stop its Compose service) before the run, because the
+handler's write and the inbox row commit separately
 ([§9.5](../../docs/backend-architecture/09-messaging.md)), so a message
 handled just before the reset whose inbox row lands just after it loses its
 facts for good: the replay is then dropped as a duplicate.
+
+The BFF is the queue's only consumer, so the replayed events wait on
+`bff-order-events` until it is back. When the run has finished, resume the
+BFF, then watch the queue's depth fall to zero — the broker's own view of
+`bff-order-events`, the depth `QueueBacklogGrowing` alerts on — and trust
+the projection only once it has.
 
 Before it deletes or sends anything it opens the BFF's database and all
 four outboxes and waits for the broker to answer, so an unreachable
