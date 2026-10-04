@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
 
-  <!-- The host, with ADR-051's schema beside it in Web.Bff.Persistence: §10.1 gives the BFF no domain layer. -->
+  <!-- The host, with ADR-051's schema beside it in Web.Bff.Persistence: §4.1's tree gives it no Domain or Application project. -->
 
   <ItemGroup>
     <!-- The client half of §9.7's hop; a client-only project has to name Grpc.Tools itself. -->
@@ -35,9 +35,12 @@
   <ItemGroup>
     <!-- AddCommonWebDefaults (§13.2), whose ValidationExceptionHandler makes a validation throw §10.5's 400. -->
     <ProjectReference Include="..\..\BuildingBlocks\Common.Web\Common.Web.csproj" />
-    <!-- OrderLimits (§4.3, ADR-045) and the events ADR-051's projection consumes; nothing else crosses §4.2. -->
+    <!--
+      The events ADR-051's projection consumes, and the Ordering types its callout names:
+      CancelReasons, CancelOrigins and OrderLimits.
+    -->
     <ProjectReference Include="..\..\BuildingBlocks\Common.Contracts\Common.Contracts.csproj" />
-    <!-- §11.5's client-credentials grant, a building block by ADR-052; the BFF has no Infrastructure (§10.1). -->
+    <!-- §11.5's client-credentials grant, a building block by ADR-052; §4.1's tree gives the BFF no Infrastructure project. -->
     <ProjectReference Include="..\..\BuildingBlocks\Common.Infrastructure\Common.Infrastructure.csproj" />
     <!-- ADR-051's schema, which the migrator applies and this host reads and writes. -->
     <ProjectReference Include="..\Web.Bff.Persistence\Web.Bff.Persistence.csproj" />
