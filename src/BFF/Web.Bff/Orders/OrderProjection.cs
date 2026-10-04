@@ -353,7 +353,7 @@ public sealed class OrderProjection(
     private string? TrackingOf(string? trackingNumber, Guid orderId) =>
         Fitting(trackingNumber, ProjectionLimits.TrackingNumberMaxLength, "TrackingNumber", orderId);
 
-    /// <summary>Another service's text, kept only when non-blank and fitting; a stored value is never replaced.</summary>
+    /// <summary>Another service's text, kept only when non-blank and fitting; a stored one is never replaced.</summary>
     private string? Fitting(string? value, int width, string field, Guid orderId)
     {
         if (value is null)
