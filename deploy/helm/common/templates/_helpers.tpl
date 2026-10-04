@@ -145,12 +145,11 @@ Identity__Authority: {{ include "commerce.requireUrl" (list .Values.identity.aut
 OTEL_EXPORTER_OTLP_ENDPOINT: {{ include "commerce.require" (list .Values.observability.otlpEndpoint "observability.otlpEndpoint is required: UseOtlpExporter reads the OpenTelemetry standard variable, and left unset it exports to localhost:4317, where nothing listens in a pod (§15.4).") | quote }}
 {{- if .Values.identity.clientCredentials }}
 {{- /* Two of the three client-credential keys are Config; the secret is a Secret
-(§15.4). The BFF and Shipping's worker, the hosts that call a peer under
-their own identity, bind ServiceIdentityOptions with ValidateOnStart, so a
-missing key refuses to boot. The switch is an explicit boolean, so each
-value under it is required. */}}
+(§15.4). The hosts that call out under a grant of their own (ADR-052) bind
+ServiceIdentityOptions with ValidateOnStart, so a missing key refuses to
+boot. The switch is an explicit boolean, so each value under it is required. */}}
 Identity__Client__ClientId: {{ include "commerce.require" (list .Values.identity.clientId "identity.clientId is required when identity.clientCredentials: the hosts that declare it bind ServiceIdentityOptions unconditionally and ValidateOnStart refuses to boot without it (§15.4).") | quote }}
-Identity__Client__Scope: {{ include "commerce.require" (list .Values.identity.scope "identity.scope is required when identity.clientCredentials: it becomes the audience every service validates (§11.5), and ServiceIdentityOptions marks it [Required].") | quote }}
+Identity__Client__Scope: {{ include "commerce.require" (list .Values.identity.scope "identity.scope is required when identity.clientCredentials: it is the scope the host's token is requested under (§11.5, ADR-052), and ServiceIdentityOptions marks it [Required].") | quote }}
 {{- end }}
 {{- if (.Values.paymentProvider).enabled }}
 {{- /* §3.2's payment provider's address: Config, since an address is not a
@@ -183,28 +182,90 @@ The shape and the port range are `requireUrl`'s, with the scheme widened. */}}
 AddressSource__BaseUrl: {{ $addressSource | quote }}
 {{- end }}
 {{- if (.Values.jurisdiction).enabled }}
-{{- /* ADR-053's two statutory windows, required and never defaulted: a window is a
-fact about where a deployment runs. Each must read as a TimeSpan, because
-`30 days` renders and fails binding in the new pod; the range is the host's
-to refuse, since ShippingJurisdictionOptions owns its bounds. */}}
-{{- $windows := dict
-    "addressRetention" (include "commerce.require" (list .Values.jurisdiction.addressRetention "jurisdiction.addressRetention is required when jurisdiction.enabled: ADR-053 makes the window a value the deployment is given, and ShippingJurisdictionOptions refuses to boot without it."))
-    "trackingRetention" (include "commerce.require" (list .Values.jurisdiction.trackingRetention "jurisdiction.trackingRetention is required when jurisdiction.enabled: ADR-053's second window, on the same terms.")) }}
-{{- range $key, $window := $windows }}
-{{- if not (regexMatch (include "commerce.timeSpanPattern" $) $window) }}
-{{- fail (printf "jurisdiction.%s is %q, which is not a TimeSpan this chart will accept: [d.]hh:mm[:ss], as in 30.00:00:00 for thirty days. ShippingJurisdictionOptions binds it at start (ADR-053)." $key $window) }}
+{{- /* ADR-053 rule 1's three kinds, none defaulted: a language set, the zone dates
+are rendered in, and every other member a statutory window. Which members a
+host binds is its chart's to say, in capabilities.yaml, since a member removed
+outright renders nothing here. */}}
+{{- $jurisdiction := .Values.jurisdiction }}
+{{- if hasKey $jurisdiction "languages" }}
+{{- $languages := $jurisdiction.languages | default list }}
+{{- if not (kindIs "slice" $languages) }}
+{{- fail "jurisdiction.languages is not a list. ADR-053's language set renders one indexed key per language, as §15.4 spells a list." }}
+{{- end }}
+{{- if not $languages }}
+{{- fail "jurisdiction.languages must hold at least one language: ADR-053 makes the set a value the deployment is given, and the host refuses an empty one at start." }}
+{{- end }}
+{{- range $i, $language := $languages }}
+{{- $tag := include "commerce.require" (list $language (printf "jurisdiction.languages[%d] is blank: each entry is a language the deployment sends in (ADR-053)." $i)) }}
+{{- if not (regexMatch "^[a-z]{2,3}(-[A-Za-z0-9]{1,8})*$" $tag) }}
+{{- fail (printf "jurisdiction.languages[%d] is %q, which is not a language tag this chart will accept, as in en or kk. Whether the deployment ships it is the host's to refuse at start (ADR-053)." $i $tag) }}
+{{- end }}
+Jurisdiction__Languages__{{ $i }}: {{ $tag | quote }}
 {{- end }}
 {{- end }}
-Jurisdiction__AddressRetention: {{ $windows.addressRetention | quote }}
-Jurisdiction__TrackingRetention: {{ $windows.trackingRetention | quote }}
+{{- if hasKey $jurisdiction "timeZone" }}
+{{- $zone := include "commerce.require" (list $jurisdiction.timeZone "jurisdiction.timeZone is required when jurisdiction.enabled: ADR-053 makes the zone dates are rendered in a value the deployment is given.") }}
+{{- if not (regexMatch "^[A-Za-z][A-Za-z0-9_+-]*(/[A-Za-z0-9_+-]+)*$" $zone) }}
+{{- fail (printf "jurisdiction.timeZone is %q, which is not an IANA zone id this chart will accept, as in Europe/London. Whether the image knows the zone is the host's to refuse at start (ADR-053)." $zone) }}
+{{- end }}
+Jurisdiction__TimeZone: {{ $zone | quote }}
+{{- end }}
+{{- range $key, $window := omit $jurisdiction "enabled" "languages" "timeZone" }}
+{{- $value := include "commerce.timeSpan" (list $window (printf "jurisdiction.%s" $key) (printf "jurisdiction.%s is required when jurisdiction.enabled: ADR-053 makes every window a value the deployment is given, and the host's jurisdiction options refuse to boot without it." $key) "The host's jurisdiction options bind it at start (ADR-053).") }}
+Jurisdiction__{{ upper (substr 0 1 $key) }}{{ substr 1 (len $key) $key }}: {{ $value | quote }}
+{{- end }}
 {{- end }}
 {{- if (.Values.fulfilment).enabled }}
-{{- /* ADR-052's give-up age, on the jurisdiction windows' TimeSpan terms above. */}}
-{{- $giveUpAge := include "commerce.require" (list .Values.fulfilment.giveUpAge "fulfilment.giveUpAge is required when fulfilment.enabled: ADR-052 makes the give-up age a value the deployment is given, and FulfilmentOptions refuses to boot without it.") }}
-{{- if not (regexMatch (include "commerce.timeSpanPattern" .) $giveUpAge) }}
-{{- fail (printf "fulfilment.giveUpAge is %q, which is not a TimeSpan this chart will accept: [d.]hh:mm[:ss], as in 3.00:00:00 for three days. FulfilmentOptions binds it at start (ADR-052)." $giveUpAge) }}
+{{- /* ADR-052's give-up age for a pending shipment; FulfilmentOptions owns its range. */}}
+Fulfilment__GiveUpAge: {{ include "commerce.timeSpan" (list .Values.fulfilment.giveUpAge "fulfilment.giveUpAge" "fulfilment.giveUpAge is required when fulfilment.enabled: ADR-052 makes the give-up age a value the deployment is given, and FulfilmentOptions refuses to boot without it." "FulfilmentOptions binds it at start (ADR-052).") | quote }}
 {{- end }}
-Fulfilment__GiveUpAge: {{ $giveUpAge | quote }}
+{{- if (.Values.mail).enabled }}
+{{- /* The relay's five Config keys (§15.4); its password is commerce.env's. A chart
+sets no environment, so Production is what runs, where the host refuses plain
+or anonymous submission: StartTls and a user name are therefore required. */}}
+{{- $mail := .Values.mail }}
+{{- $host := include "commerce.require" (list $mail.host "mail.host is required when mail.enabled: the relay is a value the deployment is given (ADR-053), and MailOptions refuses to boot without it (§15.4).") }}
+{{- if not (regexMatch "^[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?(\\.[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?)*$" $host) }}
+{{- fail (printf "mail.host is %q, which is not a host name this chart will accept: letters, digits, hyphens and dots, with no scheme, port or path — the port is mail.port (§15.4)." $host) }}
+{{- end }}
+{{- $port := include "commerce.require" (list $mail.port "mail.port is required when mail.enabled: MailOptions marks it [Required] (§15.4).") }}
+{{- if or (not (regexMatch "^[0-9]+$" $port)) (lt (atoi $port) 1) (gt (atoi $port) 65535) }}
+{{- fail (printf "mail.port is %q, which is not a port: a whole number in 1-65535 (§15.4)." $port) }}
+{{- end }}
+{{- $from := include "commerce.require" (list $mail.from "mail.from is required when mail.enabled: it is the one sender every message carries and the domain each Message-ID is minted under (§15.4).") }}
+{{- if not (regexMatch "^[^,;\\r\\n@]*@[^,;\\r\\n@]+$" $from) }}
+{{- fail (printf "mail.from is %q, which is not one mailbox this chart will accept: one address with one @, optionally behind a display name, and no second address. MailOptions parses it at start (§15.4)." $from) }}
+{{- end }}
+{{- $security := include "commerce.require" (list $mail.security "mail.security is required when mail.enabled: MailOptions marks it [Required] (§15.4).") }}
+{{- if ne $security "StartTls" }}
+{{- fail (printf "mail.security is %q, and this chart accepts StartTls alone: the host refuses None outside Development, and a chart sets no environment, so Production is what runs (§15.4)." $security) }}
+{{- end }}
+{{- $userName := include "commerce.require" (list $mail.userName "mail.userName is required when mail.enabled: the host refuses anonymous submission outside Development, and the password beside it is mail.passwordSecretRef (§15.4).") }}
+Mail__Host: {{ $host | quote }}
+Mail__Port: {{ $port | quote }}
+Mail__From: {{ $from | quote }}
+Mail__Security: {{ $security | quote }}
+Mail__UserName: {{ $userName | quote }}
+{{- end }}
+{{- if (.Values.contactSource).enabled }}
+{{- /* ADR-052's contact read. Keycloak can serve its admin API on a hostname of its
+own, so the base is not derived from the authority; HTTPS unconditionally, as
+`commerce.requireUrl` argues. The realm is the authority's, because the realm
+whose users are read is the one that issues this host's token. */}}
+ContactSource__BaseUrl: {{ include "commerce.requireUrl" (list .Values.contactSource.baseUrl "contactSource.baseUrl is required when contactSource.enabled: the worker reads it eagerly (ADR-052) and does not start without it (§15.4).") | quote }}
+{{- $realm := include "commerce.require" (list .Values.contactSource.realm "contactSource.realm is required when contactSource.enabled: the worker builds its admin path from it at start (§15.4).") }}
+{{- if or (not (regexMatch "^[A-Za-z0-9._-]+$" $realm)) (eq $realm ".") (eq $realm "..") }}
+{{- fail (printf "contactSource.realm is %q, which is not a realm name this chart will accept: one path segment of letters, digits, dots, hyphens and underscores (§15.4)." $realm) }}
+{{- end }}
+{{- $issuer := base (trimSuffix "/" (toString .Values.identity.authority)) }}
+{{- if ne $realm $issuer }}
+{{- fail (printf "contactSource.realm is %q and identity.authority names the realm %q: the realm whose users this host reads is the one that issues its token (ADR-052), so the two must agree." $realm $issuer) }}
+{{- end }}
+ContactSource__Realm: {{ $realm | quote }}
+{{- end }}
+{{- if (.Values.delivery).enabled }}
+{{- /* ADR-052's give-up age for a waiting notification; DeliveryOptions owns its range. */}}
+Delivery__GiveUpAge: {{ include "commerce.timeSpan" (list .Values.delivery.giveUpAge "delivery.giveUpAge" "delivery.giveUpAge is required when delivery.enabled: ADR-052's give-up age is a value the deployment is given, and DeliveryOptions refuses to boot without it." "DeliveryOptions binds it at start (ADR-052).") | quote }}
 {{- end }}
 {{- end -}}
 
@@ -214,6 +275,18 @@ binds one. Hours under 24 because the binder reads `72:00:00` as seventy-two
 days, silently. */}}
 {{- define "commerce.timeSpanPattern" -}}
 ^([0-9]+\.)?([01]?[0-9]|2[0-3]):[0-5][0-9](:[0-5][0-9](\.[0-9]{1,7})?)?$
+{{- end -}}
+
+{{- /* A TimeSpan setting, required and shaped, because `3 days` renders and fails
+binding in the new pod. The range is the host's, whose options type owns its
+bounds. Arguments: the value, its values path, the message for a blank one,
+and the sentence naming what binds it. */}}
+{{- define "commerce.timeSpan" -}}
+{{- $value := include "commerce.require" (list (index . 0) (index . 2)) -}}
+{{- if not (regexMatch (include "commerce.timeSpanPattern" .) $value) -}}
+{{- fail (printf "%s is %q, which is not a TimeSpan this chart will accept: [d.]hh:mm[:ss], as in 3.00:00:00 for three days. %s" (index . 1) $value (index . 3)) -}}
+{{- end -}}
+{{- $value -}}
 {{- end -}}
 
 {{- /* The secret half of the same table. A variable joins when a host's code reads
@@ -247,11 +320,26 @@ it. */}}
 {{- if and (.Values.addressSource).baseUrl (not (.Values.addressSource).enabled) }}
 {{- fail "addressSource.enabled is false but addressSource.baseUrl is set. The worker resolves ADR-052's address owner at startup, so this renders cleanly and the host does not start." }}
 {{- end }}
-{{- if and (or (.Values.jurisdiction).addressRetention (.Values.jurisdiction).trackingRetention) (not (.Values.jurisdiction).enabled) }}
-{{- fail "jurisdiction.enabled is false but a jurisdiction window is set. ShippingJurisdictionOptions is validated at start (ADR-053), so this renders cleanly and the host does not start." }}
+{{- $jurisdictionSet := false }}
+{{- range $key, $value := omit (.Values.jurisdiction | default dict) "enabled" }}
+{{- if $value }}
+{{- $jurisdictionSet = true }}
+{{- end }}
+{{- end }}
+{{- if and $jurisdictionSet (not (.Values.jurisdiction).enabled) }}
+{{- fail "jurisdiction.enabled is false but a jurisdiction setting is set. The host's jurisdiction options are validated at start (ADR-053), so this renders cleanly and the host does not start." }}
 {{- end }}
 {{- if and (.Values.fulfilment).giveUpAge (not (.Values.fulfilment).enabled) }}
 {{- fail "fulfilment.enabled is false but fulfilment.giveUpAge is set. FulfilmentOptions is validated at start (ADR-052), so this renders cleanly and the host does not start." }}
+{{- end }}
+{{- if and (or (.Values.mail).host (.Values.mail).port (.Values.mail).from (.Values.mail).security (.Values.mail).userName (.Values.mail).passwordSecretRef) (not (.Values.mail).enabled) }}
+{{- fail "mail.enabled is false but a mail setting is set. The worker reads the relay's keys eagerly (§15.4), so this renders cleanly and the host does not start. A capability is a fact about the code, not an environment setting." }}
+{{- end }}
+{{- if and (or (.Values.contactSource).baseUrl (.Values.contactSource).realm) (not (.Values.contactSource).enabled) }}
+{{- fail "contactSource.enabled is false but a contactSource setting is set. The worker reads ADR-052's contact source at startup, so this renders cleanly and the host does not start." }}
+{{- end }}
+{{- if and (.Values.delivery).giveUpAge (not (.Values.delivery).enabled) }}
+{{- fail "delivery.enabled is false but delivery.giveUpAge is set. DeliveryOptions is validated at start (ADR-052), so this renders cleanly and the host does not start." }}
 {{- end }}
 {{- /* The other direction moves a credential: Helm accepts values a chart never
 declares, so `paymentProvider.enabled` on another chart would mount Payments'
@@ -263,8 +351,11 @@ charts, so a further chart growing one is a design change made here. */}}
 {{- if and (.Values.carrier).enabled (ne .Chart.Name "shipping") }}
 {{- fail (printf "carrier.enabled is true on the %s chart, and only shipping books with a carrier (§3.2). This would mount the carrier's Secret into a pod that never reads it — a credential crossing a service boundary, which no value in an environment file may do." .Chart.Name) }}
 {{- end }}
-{{- if and .Values.identity.clientCredentials (not (has .Chart.Name (list "web-bff" "shipping"))) }}
-{{- fail (printf "identity.clientCredentials is true on the %s chart, and the two hosts that call a peer under their own identity are the BFF (§9.7, ADR-017) and Shipping's worker (ADR-052). This would mount one of their client secrets into a pod that never presents it — a credential crossing a service boundary, which no value in an environment file may do." .Chart.Name) }}
+{{- if and (.Values.mail).enabled (ne .Chart.Name "notifications") }}
+{{- fail (printf "mail.enabled is true on the %s chart, and only notifications submits to a relay (§3.2). This would mount the relay's Secret into a pod that never reads it — a credential crossing a service boundary, which no value in an environment file may do." .Chart.Name) }}
+{{- end }}
+{{- if and .Values.identity.clientCredentials (not (has .Chart.Name (list "web-bff" "shipping" "notifications"))) }}
+{{- fail (printf "identity.clientCredentials is true on the %s chart, and the hosts that call out under a grant of their own are the BFF (§9.7, ADR-017) and the workers ADR-052 gives a read. This would mount one of their client secrets into a pod that never presents it — a credential crossing a service boundary, which no value in an environment file may do." .Chart.Name) }}
 {{- end }}
 {{- if .Values.database.enabled }}
 {{- /* The runtime connection string (DML only) — §7.1's split identity. The migrator
@@ -321,5 +412,12 @@ the guard above refuses one key for both. */}}
     secretKeyRef:
       name: {{ include "commerce.require" (list .Values.carrier.apiKeySecretRef.name "carrier.apiKeySecretRef.name is required when carrier.enabled. The key is a reference, never a value (§15.3).") | quote }}
       key: {{ include "commerce.require" (list .Values.carrier.apiKeySecretRef.key "carrier.apiKeySecretRef.key is required when carrier.enabled.") | quote }}
+{{- end }}
+{{- if (.Values.mail).enabled }}
+- name: Mail__Password
+  valueFrom:
+    secretKeyRef:
+      name: {{ include "commerce.require" (list (.Values.mail.passwordSecretRef).name "mail.passwordSecretRef.name is required when mail.enabled. The password is a reference, never a value (§15.3).") | quote }}
+      key: {{ include "commerce.require" (list (.Values.mail.passwordSecretRef).key "mail.passwordSecretRef.key is required when mail.enabled.") | quote }}
 {{- end }}
 {{- end -}}

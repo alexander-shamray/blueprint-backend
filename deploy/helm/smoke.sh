@@ -75,7 +75,6 @@ done
 SOURCE_INPUTS="
 src/Gateway/Gateway.Api
 src/BFF/Web.Bff
-src/Services/Shipping
 src/BuildingBlocks/Common.Web/HealthCheckExtensions.cs
 .gitattributes
 deploy/canary
@@ -153,6 +152,21 @@ refuses_chart() {
     fi
 }
 
+# A member removed outright, which a blank value does not reach: Helm applies
+# every --set-string after every --set, so the overlay is passed without the
+# key rather than overridden, and the removal is the case's own --set.
+refuses_removed() {
+    # refuses_removed <chart> <key> <needle>
+    local chart="$1" key="$2" needle="$3"
+    if "$HELM" template "$chart" "$CHARTS_DIR/$chart" --set-string "image.tag=$TAG" \
+        $(field "$chart" overlay | awk -v k="$key=" 'index($0, k) != 1' | sed 's/^/--set-string /' | tr '\n' ' ') \
+        --set "$key=null" >"$OUT/removed.txt" 2>&1; then
+        fail "$chart: $key removed outright renders — it must not"
+    else
+        check "$chart: $key removed outright fails the render" grep -q "$needle" "$OUT/removed.txt"
+    fi
+}
+
 # --------------------------------------------------------------------------
 section 'The gate covers every chart on disk'
 # --------------------------------------------------------------------------
@@ -191,17 +205,17 @@ else
     fail "AUTOSCALED_CHARTS + FIXED_REPLICA_CHARTS ($scaled) do not partition SERVICE_CHARTS ($listed)"
 fi
 
-# ADR-052 made ADR-017's budget two: the BFF's pricing hop and Shipping's
-# address read. Named rather than counted — a count of two is satisfied by the
-# wrong two charts, and which host holds a grant is the whole claim. Read from
-# the values files rather than from a render, because a chart outside the two
-# setting it fails its render and the run would abort before this reported.
+# The charts whose host calls out under a grant of its own (ADR-052), named by
+# their descriptors rather than counted: a count is satisfied by the wrong
+# charts, and which host holds a grant is the whole claim. Read from the values
+# files rather than a render, because a chart outside the set setting it fails
+# its render and the run would abort before this reported.
 CREDENTIALED_CHARTS="$(charts_where capability clientCredentials)"
 credentialed="$(grep -l 'clientCredentials: true' "$CHARTS_DIR"/*/values.yaml |
     sed -E 's|.*/([^/]+)/values\.yaml|\1|' | sort | tr '\n' ' ' | sed 's/ *$//')"
 want_credentialed="$(printf '%s\n' $CREDENTIALED_CHARTS | sort | tr '\n' ' ' | sed 's/ *$//')"
 if [ "$credentialed" = "$want_credentialed" ]; then
-    pass "exactly the charts whose host calls a peer declare client credentials ($credentialed)"
+    pass "exactly the charts whose host calls out under a grant of its own declare client credentials ($credentialed)"
 else
     fail "charts declaring client credentials ($credentialed) are not ($want_credentialed)"
 fi
@@ -219,9 +233,10 @@ fi
 # the safe direction. Declared here so the self-test below runs against the
 # same string the gate uses.
 CALLS_REDIS='^[[:space:]]*[A-Za-z_][A-Za-z0-9_.]*\.AddRedisConnections\('
-# The worker's credential attachment, in the same form and for the same
-# reason: Shipping.Worker's Program.cs names the handler in a comment too.
-ATTACHES_CREDENTIALS='^[[:space:]]*[A-Za-z_][A-Za-z0-9_.]*\.AddHttpMessageHandler<ClientCredentialsHandler>\('
+# The credential handler's attachment, in the same form and for the same
+# reason, its type named bare or through its namespace: a host's Program.cs
+# names the handler in a comment too.
+ATTACHES_CREDENTIALS='^[[:space:]]*[A-Za-z_][A-Za-z0-9_.]*\.AddHttpMessageHandler<([A-Za-z_][A-Za-z0-9_]*\.)*ClientCredentialsHandler>\('
 
 declares() {
     # declares <chart> <block> -> exit 0 when that block sets enabled: true
@@ -236,6 +251,7 @@ declares() {
 # The negation, as a function rather than a `!` at the call site: `check` runs
 # its argument through "$@", which cannot carry a shell keyword.
 lacks() { ! declares "$1" "$2"; }
+disowns() { ! owns "$1" "$2"; }
 
 src_of() { echo "$ROOT/$(field "$1" source)"; }
 
@@ -268,10 +284,18 @@ for chart in $SERVICE_CHARTS; do
     fi
 done
 
-check 'the BFF binds ServiceIdentityOptions in src/, so its chart declares credentials' \
-    grep -rq 'ServiceIdentityOptions' "$ROOT/src/BFF/Web.Bff"
-check "the worker attaches ClientCredentialsHandler in src/, so its chart declares credentials" \
-    grep -rqE "$ATTACHES_CREDENTIALS" "$ROOT/src/Services/Shipping"
+# A descriptor declares client credentials exactly when its host attaches the
+# handler that presents them, read from src/ in both directions (ADR-052): a
+# chart whose host stopped presenting a grant would still mount its Secret.
+for chart in $SERVICE_CHARTS; do
+    if grep -rqE "$ATTACHES_CREDENTIALS" "$(src_of "$chart")"; then
+        check "$chart attaches ClientCredentialsHandler in src/, so its descriptor declares clientCredentials" \
+            owns "$chart" clientCredentials
+    else
+        check "$chart attaches no ClientCredentialsHandler in src/, so its descriptor declares none" \
+            disowns "$chart" clientCredentials
+    fi
+done
 
 # --------------------------------------------------------------------------
 section 'The source-detection patterns select code, not prose'
@@ -309,6 +333,12 @@ check 'ATTACHES_CREDENTIALS refuses a registration that attaches nothing' \
 check 'ATTACHES_CREDENTIALS accepts the real attachment' \
     sh -c 'printf "        client.AddHttpMessageHandler<ClientCredentialsHandler>();\n" |
         grep -qE "$0"' "$ATTACHES_CREDENTIALS"
+check 'ATTACHES_CREDENTIALS accepts the attachment through a qualified type name' \
+    sh -c 'printf "        client.AddHttpMessageHandler<Common.Infrastructure.Identity.ClientCredentialsHandler>();\n" |
+        grep -qE "$0"' "$ATTACHES_CREDENTIALS"
+check 'ATTACHES_CREDENTIALS refuses a handler whose name only ends in the word' \
+    sh -c 'printf "        client.AddHttpMessageHandler<NoClientCredentialsHandler>();\n" |
+        grep -qvE "$0"' "$ATTACHES_CREDENTIALS"
 
 # --------------------------------------------------------------------------
 section 'The workflow watches everything this script reads'
@@ -483,7 +513,7 @@ fi
 pass 'paymentProvider renders both keys and refuses an empty address or an address while off'
 
 # --------------------------------------------------------------------------
-section 'The worker chart declares its capabilities, and each is required'
+section "Shipping's chart declares its capabilities, and each is required"
 # --------------------------------------------------------------------------
 # Shipping's host reads every key below before it will start (§15.4), so each
 # state that renders cleanly here is a pod that never starts. Asserted by
@@ -562,11 +592,13 @@ refuses_chart shipping 'a retention window counted in hours past 23 fails the re
     'not a TimeSpan this chart will accept' \
     --set-string 'jurisdiction.addressRetention=72:00:00'
 refuses_chart shipping 'a jurisdiction the capability is off for fails the render' \
-    'but a jurisdiction window is set' --set jurisdiction.enabled=false
+    'but a jurisdiction setting is set' --set jurisdiction.enabled=false
 refuses_chart shipping 'the jurisdiction off and cleared fails the render' \
     'jurisdiction.enabled is false on the shipping chart' \
     --set jurisdiction.enabled=false --set-string 'jurisdiction.addressRetention=' \
     --set-string 'jurisdiction.trackingRetention='
+refuses_removed shipping jurisdiction.trackingRetention \
+    'jurisdiction.trackingRetention is required on the shipping chart'
 refuses_chart shipping 'client credentials off with a client id fails the render' \
     'identity.clientCredentials is false but identity.clientId is set' \
     --set identity.clientCredentials=false
@@ -824,11 +856,11 @@ check 'every ConnectionStrings__ value comes from a secretKeyRef' \
     -eq "$(awk '/- name: ConnectionStrings__/ { want = 1; next } want && /secretKeyRef/ { n++; want = 0 } END { print n + 0 }' "$OUT/platform.yaml")"
 
 # --------------------------------------------------------------------------
-section 'Client credentials: the hosts that call a peer (§11.5, §15.3, ADR-052)'
+section 'Client credentials: the hosts that call out under a grant of their own (§11.5, §15.3, ADR-052)'
 # --------------------------------------------------------------------------
-# A third chart growing an identity.clientId is a design change, not a
-# configuration change: it means a host started calling a peer synchronously,
-# which is ADR-017's budget being spent a third time.
+# A further chart growing an identity.clientId is a design change, not a
+# configuration change: it means another host began calling out under a grant
+# of its own, which ADR-017's budget or ADR-052's reads have to argue for.
 credentialed_count="$(printf '%s\n' $CREDENTIALED_CHARTS | grep -c . || true)"
 check "exactly the credentialed charts hold a client secret ($CREDENTIALED_CHARTS)" \
     test "$(count 'Identity__Client__ClientSecret' "$OUT/platform.yaml")" -eq "$credentialed_count"
@@ -850,7 +882,7 @@ check 'and each reads a Secret of its own' \
 # service's Secret in another's pod by turning a credential-bearing capability
 # on. The library holds which chart owns each and the descriptors declare it;
 # the two are held to each other here in both directions.
-CREDENTIAL_CAPABILITIES="paymentProvider carrier clientCredentials"
+CREDENTIAL_CAPABILITIES="paymentProvider carrier mail clientCredentials"
 enable_args() {
     case "$1" in
         paymentProvider) printf '%s' "--set paymentProvider.enabled=true
@@ -861,6 +893,12 @@ enable_args() {
             --set-string carrier.baseUrl=https://carrier.example.invalid/
             --set-string carrier.apiKeySecretRef.name=shipping-carrier
             --set-string carrier.apiKeySecretRef.key=api-key" ;;
+        mail) printf '%s' "--set mail.enabled=true
+            --set-string mail.host=relay.example.invalid --set mail.port=587
+            --set-string mail.from=no-reply@commerce.example.invalid
+            --set-string mail.security=StartTls --set-string mail.userName=notifications
+            --set-string mail.passwordSecretRef.name=notifications-mail
+            --set-string mail.passwordSecretRef.key=password" ;;
         clientCredentials) printf '%s' "--set identity.clientCredentials=true
             --set-string identity.clientId=x --set-string identity.scope=y
             --set-string identity.clientSecretRef.name=web-bff-identity
@@ -1018,26 +1056,25 @@ for key in Identity__Authority OTEL_EXPORTER_OTLP_ENDPOINT; do
 done
 
 # --------------------------------------------------------------------------
-section 'The worker shape, on the chart that has it'
+section 'The worker shape, on the charts that have it'
 # --------------------------------------------------------------------------
 # §15.3 specifies `service.enabled: false` and `ingress.enabled: false` for
-# Shipping and Notifications. Shipping's chart is on disk, so these read it
-# rather than a stand-in rendered under a name nothing dials.
-check 'shipping renders no Service' \
-    test "$(count '^kind: Service$' "$OUT/shipping.yaml")" -eq 0
-check 'and no Ingress' \
-    test "$(count '^kind: Ingress$' "$OUT/shipping.yaml")" -eq 0
-check 'and the workload survives' \
-    test "$(count '^kind: Deployment$' "$OUT/shipping.yaml")" -eq 1
-check 'and so does its migration hook' \
-    test "$(count '^kind: Job$' "$OUT/shipping.yaml")" -eq 1
-check 'and the probes still address the container port directly' \
-    test "$(count 'path: /health/ready$' "$OUT/shipping.yaml")" -eq 1
-# The pair is not independent: an Ingress backend is this workload's Service,
-# so a values copy that turned the route on would install cleanly and answer
-# 503 for every request (_ingress.tpl).
-refuses_chart shipping 'an Ingress on the worker chart fails the render' \
-    'ingress.enabled requires service.enabled' --set ingress.enabled=true
+# Shipping and Notifications, and each chart is read from its own render.
+worker_shape() {
+    # worker_shape <chart>
+    local chart="$1"
+    check "$chart renders no Service" test "$(count '^kind: Service$' "$OUT/$chart.yaml")" -eq 0
+    check "$chart renders no Ingress" test "$(count '^kind: Ingress$' "$OUT/$chart.yaml")" -eq 0
+    check "$chart keeps its workload" test "$(count '^kind: Deployment$' "$OUT/$chart.yaml")" -eq 1
+    check "$chart keeps its migration hook" test "$(count '^kind: Job$' "$OUT/$chart.yaml")" -eq 1
+    check "$chart probes the container port directly" \
+        test "$(count 'path: /health/ready$' "$OUT/$chart.yaml")" -eq 1
+    # An Ingress backend is this workload's Service, so a values copy that turned
+    # the route on would install cleanly and answer 503 (_ingress.tpl).
+    refuses_chart "$chart" "an Ingress on $chart fails the render" \
+        'ingress.enabled requires service.enabled' --set ingress.enabled=true
+}
+worker_shape shipping
 
 # --------------------------------------------------------------------------
 section 'A value the gateway requires only when another is set'
