@@ -1,10 +1,7 @@
 #!/usr/bin/env python3
 """Fail the build when it has left output directories beside the source.
 
-What it reads and why is `README.md`'s; the rule is Section 4.1's, over
-`SOURCE_ROOTS`. Run on its own it needs a restore and a build in front of it:
-
-    python .github/output-gate/output_gate.py
+What it reads and why is `README.md`'s; the rule is Section 4.1's.
 """
 from __future__ import annotations
 
