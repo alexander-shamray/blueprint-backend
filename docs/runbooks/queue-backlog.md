@@ -178,11 +178,14 @@ does.
 past two ticks, in `shipping.shipments.overdue`'s form, and it sees the row no
 pass has reached yet, which the waiting gauge cannot: that one counts only
 rows a pass has already backed off. Healthy, it stays near zero. One that
-climbs while `notifications.mail.unavailable` and
-`notifications.contact.refused` are flat is a send worker that cannot keep up
-with its population, and the answer is `replicaCount`, as the paragraph on a
-worker's replica count above says; one that climbs with them is the relay or
-Keycloak holding every pass to its budget, so read those first.
+climbs while the relay and Keycloak both answer promptly is a send worker that
+cannot keep up with its population, and the answer is `replicaCount`, as the
+paragraph on a worker's replica count above says. One that climbs with either
+slow is a dependency holding every pass to its budget, so read those first:
+`notifications.mail.unavailable` and the `contact` step above, and the
+worker's outbound request duration by `server_address`.
+`notifications.contact.refused` counts a refusal and never a slow answer, so a
+flat one does not clear Keycloak.
 
 ```promql
 max(notifications_overdue_seconds)
