@@ -1,7 +1,7 @@
 {{- /* Shipping registers each of these unconditionally, so on this chart every one is
 a fact about the code: switched off with its settings cleared, the library
 chart's coherence guard has nothing to refuse and the pod does not start. So
-this chart refuses the switches themselves (§15.4). */}}
+this chart refuses the switches, and the members its host binds (§15.4). */}}
 {{- if not (.Values.carrier).enabled }}
 {{- fail "carrier.enabled is false on the shipping chart. Shipping registers its carrier unconditionally and does not start without both keys (§15.4)." }}
 {{- end }}
@@ -10,6 +10,11 @@ this chart refuses the switches themselves (§15.4). */}}
 {{- end }}
 {{- if not (.Values.jurisdiction).enabled }}
 {{- fail "jurisdiction.enabled is false on the shipping chart. ShippingJurisdictionOptions is bound and validated at start (ADR-053), so the host does not start without both windows." }}
+{{- end }}
+{{- range $member := list "addressRetention" "trackingRetention" }}
+{{- if not (hasKey $.Values.jurisdiction $member) }}
+{{- fail (printf "jurisdiction.%s is required on the shipping chart: ShippingJurisdictionOptions binds it at start (ADR-053), and a member removed outright renders no key at all." $member) }}
+{{- end }}
 {{- end }}
 {{- if not (.Values.fulfilment).enabled }}
 {{- fail "fulfilment.enabled is false on the shipping chart. FulfilmentOptions is bound and validated at start (ADR-052), so the host does not start without a give-up age." }}
