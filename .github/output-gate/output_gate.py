@@ -1,37 +1,8 @@
 #!/usr/bin/env python3
 """Fail the build when it has left output directories beside the source.
 
-Section 4.1 states the invariant as a property of the tree: the source trees
-(`SOURCE_ROOTS`) hold source, and nothing a build wrote. This gate checks the
-half that is true of any working tree, that no `bin/` or `obj/` exists under
-any of them. The other half, that the trees are otherwise untouched, needs a before
-to compare against, so `ci.yml` asserts it beside this gate's step where
-`actions/checkout` supplies one; run here it would fail on whatever a
-developer has in flight.
-
-`Directory.Build.props` makes the invariant true, and its `Output` comment
-argues how. This gate keeps the outcome true and carries none of that
-reasoning (`docs/change-locality.md` section 2).
-
-The check has three parts.
-
-It proves a restore and a build both ran before reporting that neither wrote
-here, because a checkout nobody has touched has no `obj/` under `src/` either.
-Every project must be found under `artifacts/obj/` and under `artifacts/bin/`:
-a restore alone creates the first and not the second, so `obj` answers whether
-the restore's output landed in `artifacts/` and `bin` whether anything
-compiled.
-
-The subject is checked rather than assumed. A walk that finds no project
-satisfies every assertion above, so the projects found under the walked
-roots are reconciled with the ones `Platform.slnx` lists, in both
-directions.
-
-The two are reconciled by path, because `UseArtifactsOutput` pivots a
-project's output on `MSBuildProjectName`, the `.csproj` stem. Two projects
-sharing a stem share one `artifacts/obj/` entry, and keying on the stem would
-let a listed project stand in for an unlisted one, so a duplicate stem is
-refused before anything is looked up by name.
+What it reads and why is `README.md`'s; the rule is Section 4.1's, over
+`SOURCE_ROOTS`. Run on its own it needs a restore and a build in front of it:
 
     python .github/output-gate/output_gate.py
 """
