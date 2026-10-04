@@ -658,6 +658,9 @@ jobs:
           - filter: bff
             image: web-bff
             dockerfile: src/BFF/Web.Bff/Dockerfile
+          - filter: bff
+            image: bff-migrator
+            dockerfile: src/BFF/Web.Bff.Migrator/Dockerfile
     steps:
       # The index has to resolve, and nothing else here would say if it did
       # not. `needs.changes.outputs[matrix.filter]` on a name no filter defines
