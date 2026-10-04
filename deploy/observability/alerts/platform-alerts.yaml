@@ -210,7 +210,7 @@ groups:
             order that no Ordering event has attributed to a buyer, so neither
             order route returns it to anyone (§10.7). A payment or shipment
             event beating OrderPlaced is ordinary and resolves in seconds; this
-            is past every cause that resolves itself or pages on its own.
+            is past every cause that resolves itself or raises its own alert.
           runbook_url: docs/runbooks/unattributed-order.md
 
   - name: platform-infrastructure
