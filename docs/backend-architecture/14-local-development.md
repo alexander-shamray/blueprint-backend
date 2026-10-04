@@ -635,7 +635,7 @@ IResourceBuilder<ProjectResource> WithPlatformIdentity(
 // Migrations run as a job here exactly as they do in Compose and Helm —
 // ADR-007 forbids migrating at application startup, so without this the
 // schema is never created and every service fails on its first query.
-// One per service, because one database per service (§7.1).
+// One per database, because one database per service or host (§7.1, ADR-051).
 var orderingMigrator = builder
     .AddProject<Projects.Ordering_Migrator>("ordering-migrator")
     .WithReference(orderingDb, connectionName: "OrderingMigrator")
