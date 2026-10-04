@@ -28,8 +28,8 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       # Runtime identity (DML only) — never the migrator connection. The host
-      # refuses to start without it, and it is the one readiness check here:
-      # Catalog's hop deliberately is not, since a BFF unready whenever
+      # refuses to start without it, and SQL and the bus are its readiness
+      # checks: Catalog's hop deliberately is not, since a BFF unready whenever
       # Catalog is down takes itself out of rotation for a fault it exists to
       # degrade around (§13.5).
       ConnectionStrings__Bff: "${BFF_CONNECTION:-Server=sql;Database=Bff;User Id=sa;Password=${SQL_PASSWORD:-Local_Dev_Pa55w0rd!};TrustServerCertificate=True}"
