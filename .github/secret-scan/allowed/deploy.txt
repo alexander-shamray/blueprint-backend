@@ -128,6 +128,7 @@ deploy/compose/services/notifications.yml | credential-assignment | c0515ae77855
 deploy/compose/services/notifications.yml | credential-assignment | 3dc3f9162b8b | Section 14.1's broker default for Notifications, the per-service account that replaced guest.
 deploy/compose/services/notifications.yml | credential-assignment | c9e80f5d4b22 | Section 14.1's local default for ADR-052's contact reader's client secret, behind its own variable; the realm export holds the same value.
 deploy/compose/rabbitmq/definitions.json | credential-assignment | b2545904ce16 | The Notifications service account's password hash, Section 14.1's local default.
+deploy/compose/rabbitmq/definitions.json | credential-assignment | e7c92ddd32e2 | The BFF's broker account's password hash, Section 14.1's local default (ADR-051).
 deploy/compose/services/web-bff.yml | connection-string-password | 8a11e54d9d5b | Section 14.1's local database default, nested inside the BFF's two connection defaults.
 deploy/compose/services/web-bff.yml | credential-assignment | c0f9cb4d3e51 | The BFF's local connection default, in-cluster hostname; both keys share the shape.
 deploy/compose/README.md | credential-assignment | fa837a4d0011 | Section 14.1's local database default, in the BFF's host-run export.

@@ -113,10 +113,15 @@ database:
     name: web-bff-migrator-secret
     key: connection-string
 
-# This host reads no ConnectionStrings:RabbitMq, and smoke.sh holds that to
-# src/ in the direction it can read.
+# The bus (§9), under the BFF's own account: one Secret per host, never a
+# shared one (ADR-036). It must carry a connection string for `bff-svc`, which
+# deploy/compose/rabbitmq/definitions.json declares and check_permissions.py
+# holds to the code; provisioning it on a deployed broker is §15.4's obligation.
 broker:
-  enabled: false
+  enabled: true
+  secretRef:
+    name: web-bff-rabbitmq
+    key: connection-string
 
 # §8.1's Redis connections, and this host takes neither. Written down rather
 # than omitted, on database and broker's terms (§15.3): a capability is a claim
