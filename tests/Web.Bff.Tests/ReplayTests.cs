@@ -180,6 +180,7 @@ public sealed class ReplayTests(BffServiceFixture fixture) : IAsyncLifetime
             TestContext.Current.CancellationToken);
 
         report.SentMessageIds.ShouldBe([inWindow.MessageId]);
+        await BffServiceFixture.WaitUntilAsync(async () => (await fixture.InboxAsync(inWindow.MessageId)).Count == 1);
     }
 
     [Fact]
