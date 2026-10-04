@@ -32,12 +32,15 @@ public static class OutboxRows
         $"SELECT TOP (0) {Columns}, {nameof(OutboxMessage.ProcessedAt)}, {nameof(OutboxMessage.Lane)} " +
         $"FROM {publisher.Outbox};";
 
-    /// <summary>Processed rows only: an unprocessed one is still the dispatcher's, and reaches the queue so.</summary>
+    /// <summary>The publisher's own clock, which stamps <c>ProcessedAt</c> (§9.4), read when the run begins.</summary>
+    public const string CutoffSql = "SELECT SYSDATETIMEOFFSET();";
+
+    /// <summary>Rows processed by the cutoff; a later or unprocessed one is live traffic, queued already.</summary>
     public static string ReadSql(Publisher publisher) =>
         $"""
         SELECT {Columns}
         FROM {publisher.Outbox}
-        WHERE {nameof(OutboxMessage.ProcessedAt)} IS NOT NULL
+        WHERE {nameof(OutboxMessage.ProcessedAt)} <= @Cutoff
             AND {nameof(OutboxMessage.Lane)} = @Lane
             AND {nameof(OutboxMessage.MessageType)} IN @Names
         ORDER BY {nameof(OutboxMessage.OccurredAt)}, {nameof(OutboxMessage.Id)};
@@ -47,8 +50,9 @@ public static class OutboxRows
     public static IAsyncEnumerable<OutboxRow> ReadAsync(
         SqlConnection connection,
         Publisher publisher,
-        IReadOnlyList<string> names) =>
+        IReadOnlyList<string> names,
+        DateTimeOffset cutoff) =>
         connection.QueryUnbufferedAsync<OutboxRow>(
             ReadSql(publisher),
-            new { Lane = nameof(OutboxLane.Broker), Names = names });
+            new { Lane = nameof(OutboxLane.Broker), Names = names, Cutoff = cutoff });
 }
