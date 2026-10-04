@@ -448,11 +448,11 @@ public abstract class ServiceFixture<TFactory, TEntryPoint, TDbContext> : IAsync
         RetentionPurgeService purge = new(
             Factory.Services.GetRequiredService<IServiceScopeFactory>(),
             Factory.Services.GetRequiredService<InboxTable>(),
-            Factory.Services.GetRequiredService<IdempotencyMarkerTable>(),
-            claims,
             policy,
             Factory.Services.GetRequiredService<ILogger<RetentionPurgeService>>(),
-            Factory.Services.GetService<OutboxTable>());
+            outbox: Factory.Services.GetService<OutboxTable>(),
+            markers: Factory.Services.GetRequiredService<IdempotencyMarkerTable>(),
+            claims: claims);
 
         return purge.PurgeAsync(TestContext.Current.CancellationToken);
     }
@@ -470,11 +470,11 @@ public abstract class ServiceFixture<TFactory, TEntryPoint, TDbContext> : IAsync
                 Factory.Services.GetRequiredService<IServiceScopeFactory>(),
                 new SkewedClock(skew)),
             Factory.Services.GetRequiredService<InboxTable>(),
-            Factory.Services.GetRequiredService<IdempotencyMarkerTable>(),
-            Factory.Services.GetRequiredService<IIdempotencyStore>(),
             policy,
             Factory.Services.GetRequiredService<ILogger<RetentionPurgeService>>(),
-            Factory.Services.GetService<OutboxTable>());
+            outbox: Factory.Services.GetService<OutboxTable>(),
+            markers: Factory.Services.GetService<IdempotencyMarkerTable>(),
+            claims: Factory.Services.GetService<IIdempotencyStore>());
 
         return purge.PurgeAsync(TestContext.Current.CancellationToken);
     }
