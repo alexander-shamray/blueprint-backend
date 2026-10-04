@@ -82,7 +82,10 @@ timeout hierarchy — `ServiceOptions.OperationTimeout` is 20 s and a request
 sitting near it is a peer that has stopped answering rather than one that is
 merely slow. Shipping's worker calls Ordering for an address (ADR-052), and
 a slow answer there shows up as a shipment that has not booked rather than
-as latency: nothing is waiting on it, and the row backs off.
+as latency: nothing is waiting on it, and the row backs off. Notifications'
+worker reads a mailbox from Keycloak on the same terms, and a slow answer
+there is a notification waiting at `contact` on `notifications.waiting`,
+which [`queue-backlog.md`](queue-backlog.md) reads.
 
 Everything else crosses the broker and cannot make an HTTP request wait. If a
 trace shows a command handler blocking on a message, that is a design defect and

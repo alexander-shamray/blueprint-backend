@@ -14,7 +14,7 @@
         "label": "Service",
         "type": "query",
         "datasource": { "type": "prometheus", "uid": "${datasource}" },
-        "query": "label_values(outbox_pending_count, service_name)",
+        "query": "label_values({__name__=~\"outbox_pending_count|messaging_delivery_lag_seconds_count\"}, service_name)",
         "refresh": 2,
         "includeAll": true,
         "multi": true
@@ -209,6 +209,42 @@
         {
           "expr": "sum by (service_name, message, error) (rate(command_domain_rejected_total{service_name=~\"$service\"}[5m]))",
           "legendFormat": "{{message}} — {{error}}"
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "type": "row",
+      "title": "Work a worker keeps in its own tables — what delivery lag cannot see",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 35 }
+    },
+    {
+      "id": 12,
+      "type": "timeseries",
+      "title": "Notifications waiting, by step",
+      "description": "notifications.waiting — Pending rows past their first backoff, by the step they wait on: order_record, contact or relay. Delivery lag stops when a consumer starts, and Notifications' consumers only write a row, so this is the send worker's wait that the panel above cannot see. Every replica reads the same table, so the series are combined with max, not sum. A rise on relay during an outage is the breaker parking the queue of rows, not a fault; docs/runbooks/queue-backlog.md says how to read each step.",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 36 },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "targets": [
+        {
+          "expr": "max by (service_name, step) (notifications_waiting{service_name=~\"$service\"})",
+          "legendFormat": "{{service_name}} — {{step}}"
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "type": "timeseries",
+      "title": "Notifications overdue — the send worker's capacity",
+      "description": "notifications.overdue — how long Pending rows due for a pass have gone unclaimed past two ticks, in shipping.shipments.overdue's form. The waiting gauge beside it counts only rows a pass has already backed off, so a row no pass has reached is visible here alone. Healthy, it stays near zero; one that climbs with the relay and Keycloak answering is too few replicas, and the fix is replicaCount in deploy/helm/notifications/values.yaml (§15.3).",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 36 },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "targets": [
+        {
+          "expr": "max by (service_name) (notifications_overdue_seconds{service_name=~\"$service\"})",
+          "legendFormat": "{{service_name}}"
         }
       ]
     }
