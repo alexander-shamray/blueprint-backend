@@ -484,9 +484,9 @@ jobs:
       # the tree looked like first. Run locally this check would fail on the
       # developer's own work in progress, so it lives where the precondition is
       # true and nowhere else.
-      - name: The build left src/ and tests/ byte-identical
+      - name: The build left src/, tests/ and tools/ byte-identical
         run: |
-          wrote="$(git status --porcelain --ignored -- src tests)"
+          wrote="$(git status --porcelain --ignored -- src tests tools)"
           if [ -n "$wrote" ]; then
             echo "The restore or the build wrote into a source tree:"
             echo "$wrote"

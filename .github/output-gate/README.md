@@ -1,6 +1,6 @@
 # The output gate
 
-**The claim: no `bin/` or `obj/` exists under `src/` or `tests/`, and every
+**The claim: no `bin/` or `obj/` exists under `src/`, `tests/` or `tools/`, and every
 project's output is under `artifacts/` instead.** It checks
 [§4.1](../../docs/backend-architecture/04-solution-structure.md)'s rule that
 those trees hold source and nothing a build wrote. `Directory.Build.props`
@@ -9,8 +9,8 @@ outcome true and carries none of that reasoning.
 
 ## What it reads
 
-- The directory trees under `src/` and `tests/`, for a `bin/` or `obj/`
-  anywhere beneath either.
+- The directory trees under `src/`, `tests/` and `tools/`, for a `bin/` or
+  `obj/` anywhere beneath any of them.
 - `artifacts/obj/` and `artifacts/bin/`, where every project must be found.
   The negative half alone is weak — a checkout nobody has touched has no
   `obj/` under `src/` either — so the gate proves a restore and a build both
