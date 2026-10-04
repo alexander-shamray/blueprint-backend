@@ -1222,7 +1222,8 @@ Rules for the read side:
   a **ceiling on the list**, enforced by `GetPricesValidator.MaxProductIds`,
   because an unbounded `IN` list is the same unbounded read wearing a
   different hat.
-- `limit` is clamped server-side. A client asking for 100,000 rows gets 100.
+- `limit` is clamped server-side, to a ceiling each read owns. A client
+  asking for 100,000 rows gets that ceiling, not an error.
 - Avoid `COUNT(*)` alongside a page. Fetching `limit + 1` rows answers "is there
   more?" without scanning the table. Return a total only where the UI genuinely
   displays one.

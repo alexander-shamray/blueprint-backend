@@ -1216,7 +1216,8 @@ order another buyer owns answers **404 rather than 403**, as cancel already
 does, because 403 confirms that the order exists.
 
 The list returns `CursorPage<T>`; pagination is mandatory and cursor-based by
-default (§6.5, ADR-016), and `limit` is clamped server-side.
+default (§6.5, ADR-016), and `limit` is clamped server-side to
+`OrderPage.MaxLimit`.
 
 ### The status a buyer is shown
 
