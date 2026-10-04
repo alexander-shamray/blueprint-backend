@@ -92,4 +92,8 @@ public sealed class ReplayCommandTests
         settings.Publishers.Select(p => p.Publisher).ShouldBe(Publisher.All);
         settings.Publishers.ShouldAllBe(p => p.ConnectionString == $"value-of-{p.Publisher.Key}");
     }
+
+    [Fact]
+    public void The_tool_sends_to_the_queue_the_bff_consumes() =>
+        Replay.Queue.ShouldBe(Web.Bff.Messaging.DependencyInjection.EventsQueue);
 }

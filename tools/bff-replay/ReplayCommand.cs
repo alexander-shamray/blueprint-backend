@@ -3,7 +3,7 @@ namespace BffReplay;
 /// <summary>The command line: no argument repairs, <c>--reset</c> rebuilds, and anything else is refused.</summary>
 public static class ReplayCommand
 {
-    /// <summary>The replay ran to the end. A run that fails throws, and the process exits non-zero on it.</summary>
+    /// <summary>The replay ran to the end; a run that fails throws.</summary>
     public const int Succeeded = 0;
 
     /// <summary>Refused before anything was opened: a bad argument or a missing connection.</summary>
