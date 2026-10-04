@@ -453,13 +453,12 @@ jobs:
 
       - run: dotnet build Platform.slnx --no-restore -c Release
 
-      # §4.1's "src/ and tests/ hold source, and nothing a build wrote", as a
-      # property CI re-measures. It runs behind both the restore and the build
-      # and ahead of the test stages, because it reads what the two of them
-      # left: the restore writes one half of what would otherwise land beside a
-      # `.csproj` and the build the other, so this is the first moment the
-      # question has an answer and the last before anything else touches the
-      # tree.
+      # §4.1's rule that the source trees hold nothing a build wrote, as a
+      # property CI re-measures. It runs behind the restore and the build and
+      # ahead of the test stages: the restore writes one half of what would
+      # otherwise land beside a `.csproj` and the build the other, so this is
+      # the first moment the question has an answer and the last before
+      # anything else touches the tree.
 
       # What the outcome rests on, and why it is held by a gate rather than by
       # a second MSBuild property, is argued in `Directory.Build.props`' Output

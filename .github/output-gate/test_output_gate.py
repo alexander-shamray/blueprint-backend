@@ -137,7 +137,7 @@ class Residue(TemporaryRepository):
         self.assertIn("src/Services/Catalog/Catalog.Domain/obj/", output)
 
     def test_a_bin_under_tests_fails(self) -> None:
-        """Both roots are walked. `tests/` is source too (Section 4.1)."""
+        """Every root is walked. `tests/` is source too (Section 4.1)."""
         tree(self.root, {"Catalog.Domain.Tests": "tests/Catalog.Domain.Tests"})
         (self.root / "tests/Catalog.Domain.Tests/bin").mkdir()
 

@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Fail the build when it has left output directories beside the source.
 
-Section 4.1 states the invariant as a property of the tree: `src/` and
-`tests/` hold source, and nothing a build wrote. This gate checks the half
-that is true of any working tree, that no `bin/` or `obj/` exists under either
-root. The other half, that the trees are otherwise untouched, needs a before
+Section 4.1 states the invariant as a property of the tree: the source trees
+(`SOURCE_ROOTS`) hold source, and nothing a build wrote. This gate checks the
+half that is true of any working tree, that no `bin/` or `obj/` exists under
+any of them. The other half, that the trees are otherwise untouched, needs a before
 to compare against, so `ci.yml` asserts it beside this gate's step where
 `actions/checkout` supplies one; run here it would fail on whatever a
 developer has in flight.
@@ -23,8 +23,8 @@ the restore's output landed in `artifacts/` and `bin` whether anything
 compiled.
 
 The subject is checked rather than assumed. A walk that finds no project
-satisfies every assertion above, so the projects found under `src/` and
-`tests/` are reconciled with the ones `Platform.slnx` lists, in both
+satisfies every assertion above, so the projects found under the walked
+roots are reconciled with the ones `Platform.slnx` lists, in both
 directions.
 
 The two are reconciled by path, because `UseArtifactsOutput` pivots a
@@ -56,6 +56,7 @@ def spoken(conjunction: str) -> str:
     """The roots as a sentence lists them: `src/, tests/ and tools/`."""
     names = [f"{name}/" for name in SOURCE_ROOTS]
     return f"{', '.join(names[:-1])} {conjunction} {names[-1]}"
+
 
 # What MSBuild writes beside a `.csproj` when the redirect is not in force.
 # Matched without regard to case, which is `.gitignore`'s spelling of the same
