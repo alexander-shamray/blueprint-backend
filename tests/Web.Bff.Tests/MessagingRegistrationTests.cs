@@ -18,9 +18,6 @@ namespace Web.Bff.Tests;
 /// <summary>The production helper composes under the in-memory transport the harness swaps in.</summary>
 public sealed class MessagingRegistrationTests
 {
-    /// <summary>Unresolvable and credential-free, so a test reaching for the real transport fails (§12.4).</summary>
-    private const string UnreachableBroker = "amqp://bff-rabbit.invalid:5672";
-
     /// <summary>ADR-051's eight events, the BFF's row in §3.2's Consumes column.</summary>
     public static readonly Type[] Consumed =
     [
@@ -38,7 +35,7 @@ public sealed class MessagingRegistrationTests
 
     private static readonly TimeSpan HarnessTestTimeout = TimeSpan.FromSeconds(60);
 
-    private static IConfiguration Configuration(string? rabbitConnectionString = UnreachableBroker) =>
+    private static IConfiguration Configuration(string? rabbitConnectionString = BffFactory.UnreachableBroker) =>
         new ConfigurationBuilder()
             .AddInMemoryCollection(rabbitConnectionString is null
                 ? []
