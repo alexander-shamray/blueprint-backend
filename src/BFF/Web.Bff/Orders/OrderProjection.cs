@@ -192,7 +192,7 @@ public sealed class OrderProjection(
         LoggerMessage.Define<string, Guid, int>(
             LogLevel.Warning,
             new EventId(2, nameof(ValueDropped)),
-            "Dropped {Field} on order {OrderId}: longer than its column's {Width} characters.");
+            "Dropped {Field} on order {OrderId}: blank or longer than its column's {Width} characters.");
 
     public Task HandleAsync(OrderPlaced integrationEvent, CancellationToken ct)
     {
@@ -353,10 +353,13 @@ public sealed class OrderProjection(
     private string? TrackingOf(string? trackingNumber, Guid orderId) =>
         Fitting(trackingNumber, ProjectionLimits.TrackingNumberMaxLength, "TrackingNumber", orderId);
 
-    /// <summary>Another service's text, kept only when it fits its column, so it never faults the endpoint.</summary>
+    /// <summary>Another service's text, kept only when non-blank and fitting, as a stored value is never replaced.</summary>
     private string? Fitting(string? value, int width, string field, Guid orderId)
     {
-        if (value is null || value.Length <= width)
+        if (value is null)
+            return null;
+
+        if (!string.IsNullOrWhiteSpace(value) && value.Length <= width)
             return value;
 
         ValueDropped(log, field, orderId, width, null);

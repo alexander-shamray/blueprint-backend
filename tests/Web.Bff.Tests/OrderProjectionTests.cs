@@ -105,7 +105,7 @@ public sealed class OrderProjectionTests(BffServiceFixture fixture) : IAsyncLife
         await ApplyAsync(
             OrderEvents.Cancelled(order, _customer, At, CancelReasons.OutOfStock, CancelOrigins.Workflow));
         ProjectedOrder cancelled = (await fixture.OrderAsync(order)).ShouldNotBeNull();
-        cancelled.TotalAmount.ShouldBeNull("OrderCancelled carries no total, which PR-3's read reports as null");
+        cancelled.TotalAmount.ShouldBeNull("OrderCancelled carries no total, which the read reports as null (§10.7)");
         (await fixture.LinesAsync(order)).ShouldBeEmpty();
 
         await ApplyAsync(OrderEvents.Placed(order, _customer, At.AddMinutes(-1)));
@@ -137,7 +137,7 @@ public sealed class OrderProjectionTests(BffServiceFixture fixture) : IAsyncLife
         ProjectedOrder row = (await fixture.OrderAsync(order)).ShouldNotBeNull();
         row.CustomerId.ShouldBe(_customer);
         row.FirstSeenAt.ShouldBe(unowned.FirstSeenAt, "the list's keyset column never moves (ADR-051)");
-        row.AsOf.ShouldBeGreaterThanOrEqualTo(unowned.AsOf);
+        row.AsOf.ShouldBeGreaterThan(unowned.AsOf, "a write that changes the row moves AsOf");
     }
 
     [Fact]
@@ -214,12 +214,16 @@ public sealed class OrderProjectionTests(BffServiceFixture fixture) : IAsyncLife
             member);
 
     [Fact]
-    public async Task The_schema_refuses_a_member_the_map_never_produces() =>
-        await Should.ThrowAsync<Exception>(() => fixture.ExecuteAsync(
+    public async Task The_schema_refuses_a_member_the_map_never_produces()
+    {
+        Exception refused = await Should.ThrowAsync<Exception>(() => fixture.ExecuteAsync(
             "INSERT INTO bff.Orders (OrderId, CancelledAt, CancelOutcome, FirstSeenAt, AsOf) " +
             "VALUES ({0}, SYSDATETIMEOFFSET(), {1}, SYSDATETIMEOFFSET(), SYSDATETIMEOFFSET());",
             Guid.CreateVersion7(),
             "refunded"));
+
+        refused.Message.ShouldContain("CK_Orders_CancelOutcome");
+    }
 
     [Fact]
     public async Task A_tracking_number_past_its_column_is_dropped_and_the_step_kept()
@@ -233,6 +237,37 @@ public sealed class OrderProjectionTests(BffServiceFixture fixture) : IAsyncLife
             "a value that cannot fit is dropped, never faulted on, or the endpoint stalls on it");
         row.DispatchedAt.ShouldBe(At);
         row.TrackingNumber.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task A_blank_tracking_number_is_not_stored_and_a_later_real_one_is()
+    {
+        Guid order = Guid.CreateVersion7();
+
+        await ApplyAsync(OrderEvents.Dispatched(order, At, "   "));
+        await ApplyAsync(OrderEvents.Delivered(order, At.AddMinutes(1)));
+
+        ProjectedOrder row = (await fixture.OrderAsync(order)).ShouldNotBeNull();
+        row.DispatchedAt.ShouldBe(At);
+        row.TrackingNumber.ShouldBe(OrderEvents.TrackingNumber, "a stored blank would hold the column against it");
+    }
+
+    [Fact]
+    public async Task A_blank_currency_is_not_stored_and_takes_its_total_with_it()
+    {
+        Guid order = Guid.CreateVersion7();
+
+        await ApplyAsync(OrderEvents.Placed(order, _customer, At) with { Currency = "   " });
+
+        ProjectedOrder placed = (await fixture.OrderAsync(order)).ShouldNotBeNull();
+        placed.Currency.ShouldBeNull();
+        placed.TotalAmount.ShouldBeNull("CK_Orders_Total refuses a total stored without its currency");
+
+        await ApplyAsync(OrderEvents.Confirmed(order, _customer, At.AddMinutes(1)));
+
+        ProjectedOrder confirmed = (await fixture.OrderAsync(order)).ShouldNotBeNull();
+        confirmed.Currency.ShouldBe(OrderEvents.Currency, "a stored blank would hold the column against it");
+        confirmed.TotalAmount.ShouldBe(OrderEvents.Total);
     }
 
     [Fact]
