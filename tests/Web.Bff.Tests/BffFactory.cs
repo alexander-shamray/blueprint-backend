@@ -5,11 +5,9 @@ using Grpc.Net.ClientFactory;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
-using Web.Bff.Persistence;
 
 namespace Web.Bff.Tests;
 
@@ -54,22 +52,16 @@ public class BffFactory : WebApplicationFactory<Program>
         {
             ConfigureAuthentication(services);
 
-            // The shared fixture's SQL helpers resolve the context from the host (ADR-056).
-            services.AddDbContext<BffDbContext>(o => o.UseSqlServer(DatabaseConnectionString));
-
             services.RemoveAll<ITokenCache>();
             services.AddSingleton<ITokenCache>(Tokens);
 
             // §9.5's purge, matched by the ImplementationType AddHostedService<T> sets, so a test drives each pass.
-            ServiceDescriptor? purge = services.SingleOrDefault(d =>
+            ServiceDescriptor purge = services.Single(d =>
                 d.ServiceType == typeof(IHostedService) &&
                 d.ImplementationType == typeof(RetentionPurgeService));
+            services.Remove(purge);
 
-            if (purge is not null)
-            {
-                services.Remove(purge);
-                services.AddSingleton<RetentionPurgeService>();
-            }
+            services.AddSingleton<RetentionPurgeService>();
 
             // After the host's AddGrpcClient, so this wins; the address is not configuration (§15.4).
             if (PricingAddress is not null)

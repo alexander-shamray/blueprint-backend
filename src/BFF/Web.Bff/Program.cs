@@ -29,6 +29,9 @@ builder.Services.AddSingleton<ITokenCache, CachingTokenClient>();
 
 builder.Services.AddSingleton(TimeProvider.System);
 
+// ADR-051's projection: its schema, its inbox purge and its readiness check (§7.1, §9.5, §13.5).
+builder.Services.AddBffPersistence(builder.Configuration);
+
 // Validated at start: IOptions<T> always resolves, so ValidateOnBuild cannot see a forgotten binding (§15.4).
 builder.Services
     .AddOptions<ServiceIdentityOptions>()
@@ -91,8 +94,8 @@ app.UseStatusCodePages();         // §10.5 — 401 and 403 as problem+json
 app.UseAuthentication();          // §11.3 — populates HttpContext.User
 app.UseAuthorization();           // §11.4
 
-// No database, so no readiness check (§13.5); Catalog is left out, or its outage would unready this host too.
-app.MapCommonHealthEndpoints(ownsNoReadinessDependencies: true);   // §13.5 — anonymous; kubelet carries no token
+// SQL gates readiness (§13.5); Catalog is left out, or its outage would unready this host too.
+app.MapCommonHealthEndpoints();   // §13.5 — anonymous; kubelet carries no token
 app.MapCheckoutEndpoints();
 
 app.Run();
