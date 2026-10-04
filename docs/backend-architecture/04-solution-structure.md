@@ -88,10 +88,10 @@ A monorepo makes cross-cutting changes and contract updates atomic and reviewabl
 │   │                                   gRPC server on loopback, ADR-051's
 │   │                                   schema through the real migrator, and
 │   │                                   the ONE suite in the solution that runs
-│   │                                   a real
-│   │                                   Keycloak — the audience mapper it proves
-│   │                                   is realm configuration, so nothing
-│   │                                   compiles differently when it is missing
+│   │                                   a real Keycloak — the audience mapper
+│   │                                   it proves is realm configuration, so
+│   │                                   nothing compiles differently when it is
+│   │                                   missing
 │   ├── Web.Bff.TestSupport/            The stub Catalog, the SERVER half of
 │   │                                   pricing.proto with it, and PR-26's
 │   │                                   PricingContract — the BFF's expectations
@@ -897,8 +897,8 @@ readiness on nothing. The parameterless call is now the claim that this service
 **does** gate readiness on something, and [§13.5](13-observability.md)'s helper
 refuses to start it when no `ready`-tagged check is registered. A service whose
 readiness set goes missing whole in a refactor therefore fails at startup rather
-than taking traffic it cannot serve; the two hosts entitled to an empty set say
-so at the call site instead, and the gateway below is one of them.
+than taking traffic it cannot serve; the one host entitled to an empty set says
+so at the call site instead, and it is the gateway below.
 
 **Whole, and not one member of it** — the guard asks whether *any* registration
 carries the tag, so a service that drops its `AddSqlServer(...)` while keeping
@@ -1132,7 +1132,7 @@ app.MapReverseProxy();
 
 // The edge owns no database and no broker, so its readiness set is empty and
 // that is the whole of §10.1's design rather than a gap. Declared rather than
-// implied: an empty predicate set passes, so the two hosts entitled to one say
+// implied: an empty predicate set passes, so the one host entitled to it says
 // so at the call site and every other host fails to start without checks.
 app.MapCommonHealthEndpoints(ownsNoReadinessDependencies: true);   // §13.5 — anonymous; kubelet carries no token
 
@@ -1193,7 +1193,8 @@ One host passes it — this one, which §13.5 names as the host whose
 dependencies do not gate readiness. It does not own *none*: it proxies the
 services it routes to. The BFF does not pass it, because its projection is a
 schema of its own
-([ADR-051](adr/ADR-051-the-buyers-order-read-is-a-projection-in-the-bff.md)) and so a readiness check of its own, which
+([ADR-051](adr/ADR-051-the-buyers-order-read-is-a-projection-in-the-bff.md))
+and so a readiness check of its own, which
 Catalog's hop is deliberately not part of (§9.7). Every service fails to start
 without its own checks.
 
