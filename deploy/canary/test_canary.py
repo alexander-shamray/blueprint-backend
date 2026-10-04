@@ -1552,7 +1552,7 @@ class DescriptorTests(unittest.TestCase):
 
         self.assertFalse(any("payments-api.smoke.overlay" in f for f in failures), failures)
 
-    def test_a_list_smoke_sh_would_split_at_its_comma_is_refused(self) -> None:
+    def test_a_comma_is_refused_even_inside_a_list(self) -> None:
         workloads = json.loads(json.dumps(canary.load_plan()["workloads"]))
         workloads["payments-api"]["smoke"]["overlay"] = ["jurisdiction.languages={en,kk}"]
 
