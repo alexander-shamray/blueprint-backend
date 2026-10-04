@@ -45,6 +45,12 @@ internal sealed class OrderRowConfiguration : IEntityTypeConfiguration<OrderRow>
             .HasDatabaseName("IX_Orders_Owned")
             .IsDescending(false, true, true)
             .HasFilter("[CustomerId] IS NOT NULL");
+
+        // The unattributed gauge's seek: unowned rows alone, oldest first.
+        builder
+            .HasIndex(o => o.FirstSeenAt)
+            .HasDatabaseName("IX_Orders_Unattributed")
+            .HasFilter("[CustomerId] IS NULL");
     }
 
     private static string Together(string first, string second) =>

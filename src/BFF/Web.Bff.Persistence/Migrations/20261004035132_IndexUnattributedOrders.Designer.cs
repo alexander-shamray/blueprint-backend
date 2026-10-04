@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Web.Bff.Persistence;
 
@@ -11,9 +12,11 @@ using Web.Bff.Persistence;
 namespace Web.Bff.Persistence.Migrations
 {
     [DbContext(typeof(BffDbContext))]
-    partial class BffDbContextModelSnapshot : ModelSnapshot
+    [Migration("20261004035132_IndexUnattributedOrders")]
+    partial class IndexUnattributedOrders
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

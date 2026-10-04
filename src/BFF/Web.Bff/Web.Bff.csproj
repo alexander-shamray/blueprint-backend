@@ -28,6 +28,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- ProjectionStats and SqlConnectionFactory are internal; the gauge's suite builds both. -->
+    <InternalsVisibleTo Include="Web.Bff.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- AddCommonWebDefaults (§13.2), whose ValidationExceptionHandler makes a validation throw §10.5's 400. -->
     <ProjectReference Include="..\..\BuildingBlocks\Common.Web\Common.Web.csproj" />
     <!-- OrderLimits (§4.3, ADR-045) and the events ADR-051's projection consumes; nothing else crosses §4.2. -->
