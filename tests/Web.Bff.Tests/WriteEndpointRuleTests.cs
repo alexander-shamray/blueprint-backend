@@ -30,6 +30,17 @@ public class WriteEndpointRuleTests(BffFactory factory) : IClassFixture<BffFacto
         Names(WriteEndpointRule.Unrestricted(Endpoints)).ShouldBe(["Health checks", "Health checks", "Health checks"]);
     }
 
+    [Fact]
+    public void The_order_reads_are_in_the_table_and_outside_the_writes()
+    {
+        string[] mapped = Names(Endpoints);
+
+        // In the table the rule reads, so leaving them out of Writes is the rule's judgement and not a blind spot.
+        mapped.ShouldContain("ListOrders");
+        mapped.ShouldContain("GetOrder");
+        Names(WriteEndpointRule.Writes(Endpoints)).ShouldBe(["Quote"]);
+    }
+
     private static string[] Names(IEnumerable<Endpoint> endpoints) =>
         [.. endpoints.Select(Name).Order(StringComparer.Ordinal)];
 
