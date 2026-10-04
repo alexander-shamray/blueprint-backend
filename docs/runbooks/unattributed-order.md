@@ -169,12 +169,17 @@ WHERE MessageId = @MessageId;
 
 ## Delete a row nothing will attribute
 
-Safe, for three reasons: no route returns the row; it holds no lines, because
-lines arrive only with an Ordering event and that event brings the owner too;
-and if an Ordering event for it ever does arrive, the projection inserts the
-row again with what that event carries; a repair run
-(`tools/bff-replay/README.md`) restores the payment and shipment facts still
-in their publishers' windows.
+Safe for the buyer, for two reasons: no route returns the row, and it holds no
+lines, because lines arrive only with an Ordering event and that event brings
+the owner too.
+
+**Weigh what it costs the projection before deleting.** If an Ordering event
+for the order ever does arrive, the projection inserts the row again with what
+that event carries and nothing more: the BFF's inbox still holds the payment
+and shipment events' ids, so a repair run drops their replays. Those facts
+return only through a full `--reset` rebuild inside their publishers' window,
+which clears the inbox
+([`tools/bff-replay/README.md`](../../tools/bff-replay/README.md)).
 
 ```sql
 DELETE FROM bff.Orders
@@ -198,8 +203,7 @@ The alert clears when the oldest unowned row is attributed or deleted. Run the
 find query again first: it is what says the rows are gone. Then read the gauge,
 which should be back to zero within a minute.
 
-**A gauge that falls when traffic stops is not a recovery.** No payment or
-shipment events means no new unowned rows, but an old row still there keeps
-the age where it is: it does not clear on a quiet hour, and falls only when
-the oldest row is attributed or deleted. The find query is the answer, not the
-graph.
+**A gauge that does not clear on a quiet hour is not a recovery.** No payment
+or shipment events means no new unowned rows, but an old row still there keeps
+the age rising: it falls only when the oldest row is attributed or deleted.
+The find query is the answer, not the graph.
