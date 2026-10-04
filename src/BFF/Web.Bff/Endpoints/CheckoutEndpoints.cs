@@ -5,7 +5,7 @@ using FluentValidation;
 
 namespace Web.Bff.Endpoints;
 
-/// <summary>The BFF's one screen, and the only thing in this host that spends §9.7's hop budget.</summary>
+/// <summary>The checkout screen, and the only thing in this host that spends §9.7's hop budget.</summary>
 public static class CheckoutEndpoints
 {
     public static void MapCheckoutEndpoints(this IEndpointRouteBuilder app)

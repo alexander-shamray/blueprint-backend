@@ -106,6 +106,7 @@ app.UseAuthorization();           // §11.4
 // SQL and the bus gate readiness (§13.5); Catalog is left out, or its outage would unready this host too.
 app.MapCommonHealthEndpoints();   // §13.5 — anonymous; kubelet carries no token
 app.MapCheckoutEndpoints();
+app.MapOrderEndpoints();          // §10.7 — ADR-051's projection, no hop
 
 app.Run();
 
