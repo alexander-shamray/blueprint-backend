@@ -1,0 +1,24 @@
+{{- /* Notifications registers each of these unconditionally, so on this chart every
+one is a fact about the code: switched off with its settings cleared, the
+library chart's coherence guard has nothing to refuse and the pod does not
+start. So this chart refuses the switches, and the members its host binds. */}}
+{{- if not (.Values.mail).enabled }}
+{{- fail "mail.enabled is false on the notifications chart. The worker registers its relay unconditionally and does not start without its keys (§15.4)." }}
+{{- end }}
+{{- if not (.Values.contactSource).enabled }}
+{{- fail "contactSource.enabled is false on the notifications chart. The worker reads ADR-052's contact source at startup and does not start without it." }}
+{{- end }}
+{{- if not (.Values.jurisdiction).enabled }}
+{{- fail "jurisdiction.enabled is false on the notifications chart. NotificationsJurisdictionOptions is bound and validated at start (ADR-053), so the host does not start without its language set, zone and windows." }}
+{{- end }}
+{{- range $member := list "languages" "timeZone" "logRetention" "contactRetention" "orderRetention" }}
+{{- if not (hasKey $.Values.jurisdiction $member) }}
+{{- fail (printf "jurisdiction.%s is required on the notifications chart: NotificationsJurisdictionOptions binds it at start (ADR-053), and a member removed outright renders no key at all." $member) }}
+{{- end }}
+{{- end }}
+{{- if not (.Values.delivery).enabled }}
+{{- fail "delivery.enabled is false on the notifications chart. DeliveryOptions is bound and validated at start (ADR-052), so the host does not start without a give-up age." }}
+{{- end }}
+{{- if not .Values.identity.clientCredentials }}
+{{- fail "identity.clientCredentials is false on the notifications chart. The worker binds ServiceIdentityOptions with ValidateOnStart (ADR-052) and does not start without all three values (§15.4)." }}
+{{- end }}

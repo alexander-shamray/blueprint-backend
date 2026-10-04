@@ -1,0 +1,12 @@
+apiVersion: v2
+name: notifications
+description: >-
+  Notifications (§4.1) — a worker with a migrator hook, no Service and no
+  Ingress (§3.2, §15.3), and the two outbound calls §9 gives it: Keycloak for
+  a contact and a relay for the send.
+type: application
+version: 0.1.0
+dependencies:
+  - name: commerce-common
+    version: 0.1.0
+    repository: file://../common

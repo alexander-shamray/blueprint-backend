@@ -118,6 +118,17 @@ check() {
 # the assertions are written to match one claim per line.
 count() { grep -c "$1" "$2" 2>/dev/null || true; }
 
+# Whether a ConfigMap's data in a render holds a line matching an ERE. The
+# pattern travels through the environment, because awk -v rewrites escapes.
+in_configmap() {
+    # in_configmap <file> <ERE>
+    want="$2" awk '/^kind: ConfigMap$/ { in_cm = 1 }
+        /^---$/ { in_cm = 0 }
+        in_cm && $0 ~ ENVIRON["want"] { found = 1 }
+        END { exit found ? 0 : 1 }' "$1"
+}
+outside_configmap() { ! in_configmap "$@"; }
+
 section() { printf '\n%s\n' "$1"; }
 
 refuses_foreign() {
@@ -619,6 +630,127 @@ check 'a retention window in days-and-time form still renders' \
     $(overlay_for shipping) --set-string 'jurisdiction.addressRetention=1.12:30'
 
 # --------------------------------------------------------------------------
+section "Notifications' chart declares its capabilities, and each is required"
+# --------------------------------------------------------------------------
+# The worker reads every key below before it will start (§15.4), so each state
+# that renders cleanly here is a pod that never starts. Asserted by placement:
+# §15.4 puts the relay's password in a Secret and every other key in Config.
+N="$OUT/notifications-capability.yaml"
+"$HELM" template notifications "$CHARTS_DIR/notifications" \
+    --set-string image.tag="$TAG" $(overlay_for notifications) >"$N"
+
+check 'notifications: the relay host is in the ConfigMap' in_configmap "$N" '^ *Mail__Host: "relay[.]example[.]invalid"$'
+check 'notifications: the submission port is in the ConfigMap' in_configmap "$N" '^ *Mail__Port: "587"$'
+check 'notifications: the sender is in the ConfigMap' \
+    in_configmap "$N" '^ *Mail__From: "no-reply@commerce[.]example[.]invalid"$'
+check 'notifications: StartTls is in the ConfigMap' in_configmap "$N" '^ *Mail__Security: "StartTls"$'
+check 'notifications: the relay user is in the ConfigMap' in_configmap "$N" '^ *Mail__UserName: "notifications"$'
+check 'notifications: Mail__Password comes from a secretKeyRef, not a literal' \
+    awk '/^ *- name: Mail__Password$/ { at = NR }
+         at && NR == at + 1 && /^ *valueFrom:$/ { vf = 1 }
+         vf && NR == at + 2 && /^ *secretKeyRef:$/ { found = 1 }
+         END { exit found ? 0 : 1 }' "$N"
+check 'notifications: no ConfigMap carries Mail__Password' outside_configmap "$N" 'Mail__Password'
+check 'notifications: the contact source is in the ConfigMap' \
+    in_configmap "$N" '^ *ContactSource__BaseUrl: "https://id[.]example[.]invalid/"$'
+check 'notifications: its realm is in the ConfigMap' in_configmap "$N" '^ *ContactSource__Realm: "commerce"$'
+check 'notifications: the language set is in the ConfigMap' in_configmap "$N" '^ *Jurisdiction__Languages__0: "en"$'
+check 'notifications: the zone is in the ConfigMap' in_configmap "$N" '^ *Jurisdiction__TimeZone: "Europe/London"$'
+check 'notifications: its three windows are in the ConfigMap' \
+    awk '/^kind: ConfigMap$/ { in_cm = 1 }
+         /^---$/ { in_cm = 0 }
+         in_cm && /^ *Jurisdiction__[A-Za-z]+Retention: / { n++ }
+         END { exit n == 3 ? 0 : 1 }' "$N"
+check 'notifications: the give-up age is in the ConfigMap' in_configmap "$N" '^ *Delivery__GiveUpAge: "1[.]00:00:00"$'
+check "notifications: the token is asked for under ADR-052's roles scope" \
+    in_configmap "$N" '^ *Identity__Client__Scope: "roles"$'
+check 'notifications: three languages render three indexed keys, in order' \
+    sh -c '"$0" template notifications "$1" --set-string "image.tag=$2" $3 \
+        --set-string "jurisdiction.languages={en,kk,ru}" | grep -q "Jurisdiction__Languages__2: \"ru\""' \
+    "$HELM" "$CHARTS_DIR/notifications" "$TAG" "$(overlay_for notifications)"
+check 'notifications: a sender with a display name renders' \
+    "$HELM" template notifications "$CHARTS_DIR/notifications" --set-string "image.tag=$TAG" \
+    $(overlay_for notifications) --set-string 'mail.from=Commerce <no-reply@commerce.example.invalid>'
+
+refuses_chart notifications 'a cleared relay host fails the render' \
+    'mail.host is required' --set-string 'mail.host='
+refuses_chart notifications 'a relay host written as an address fails the render' \
+    'not a host name this chart will accept' --set-string 'mail.host=smtp://relay.example.invalid'
+refuses_chart notifications 'a relay port past 65535 fails the render' \
+    'which is not a port' --set mail.port=65536
+refuses_chart notifications 'a relay port that is a word fails the render' \
+    'which is not a port' --set-string mail.port=smtp
+refuses_chart notifications 'a cleared sender fails the render' \
+    'mail.from is required' --set-string 'mail.from='
+refuses_chart notifications 'two senders fail the render' \
+    'not one mailbox this chart will accept' --set-string 'mail.from=a@x.invalid;b@y.invalid'
+refuses_chart notifications 'plain submission fails the render' \
+    'this chart accepts StartTls alone' --set-string mail.security=None
+refuses_chart notifications 'anonymous submission fails the render' \
+    'mail.userName is required' --set-string 'mail.userName='
+refuses_chart notifications 'a relay password with no Secret named fails the render' \
+    'mail.passwordSecretRef.name is required' --set mail.passwordSecretRef=null
+refuses_chart notifications 'a relay setting with the capability off fails the render' \
+    'but a mail setting is set' --set mail.enabled=false
+refuses_chart notifications 'the relay off and cleared fails the render' \
+    'mail.enabled is false on the notifications chart' \
+    --set mail.enabled=false --set mail.port=null --set mail.security=null \
+    --set mail.passwordSecretRef=null --set-string 'mail.host=' \
+    --set-string 'mail.from=' --set-string 'mail.userName='
+refuses_chart notifications 'a cleared contact source fails the render' \
+    'contactSource.baseUrl is required' --set-string 'contactSource.baseUrl='
+refuses_chart notifications 'a plain-HTTP contact source fails the render' \
+    'HTTPS address this chart will accept' --set-string 'contactSource.baseUrl=http://id.example.invalid/'
+refuses_chart notifications 'a realm that is not one path segment fails the render' \
+    'not a realm name this chart will accept' --set-string 'contactSource.realm=commerce/x'
+refuses_chart notifications 'a realm the authority does not name fails the render' \
+    'so the two must agree' --set-string 'contactSource.realm=master'
+refuses_chart notifications 'a contact source with the capability off fails the render' \
+    'but a contactSource setting is set' --set contactSource.enabled=false
+refuses_chart notifications 'the contact source off and cleared fails the render' \
+    'contactSource.enabled is false on the notifications chart' \
+    --set contactSource.enabled=false --set contactSource.realm=null \
+    --set-string 'contactSource.baseUrl='
+refuses_chart notifications 'an empty language set fails the render' \
+    'must hold at least one language' --set-string 'jurisdiction.languages='
+refuses_chart notifications 'a language that is not a tag fails the render' \
+    'not a language tag this chart will accept' --set-string 'jurisdiction.languages={EN_gb}'
+refuses_chart notifications 'a cleared zone fails the render' \
+    'jurisdiction.timeZone is required' --set-string 'jurisdiction.timeZone='
+refuses_chart notifications 'a zone that is not an IANA id fails the render' \
+    'not an IANA zone id this chart will accept' --set-string 'jurisdiction.timeZone=Europe/../London'
+refuses_chart notifications 'a cleared window fails the render' \
+    'jurisdiction.orderRetention is required' --set-string 'jurisdiction.orderRetention='
+refuses_chart notifications 'a window counted in hours past 23 fails the render' \
+    'not a TimeSpan this chart will accept' --set-string 'jurisdiction.logRetention=72:00:00'
+refuses_chart notifications 'a jurisdiction the capability is off for fails the render' \
+    'but a jurisdiction setting is set' --set jurisdiction.enabled=false
+refuses_chart notifications 'the jurisdiction off and cleared fails the render' \
+    'jurisdiction.enabled is false on the notifications chart' \
+    --set jurisdiction.enabled=false --set-string 'jurisdiction.languages=' \
+    --set-string 'jurisdiction.timeZone=' --set-string 'jurisdiction.logRetention=' \
+    --set-string 'jurisdiction.contactRetention=' --set-string 'jurisdiction.orderRetention='
+refuses_removed notifications jurisdiction.languages \
+    'jurisdiction.languages is required on the notifications chart'
+refuses_removed notifications jurisdiction.orderRetention \
+    'jurisdiction.orderRetention is required on the notifications chart'
+refuses_chart notifications 'a cleared give-up age fails the render' \
+    'delivery.giveUpAge is required' --set-string 'delivery.giveUpAge='
+refuses_chart notifications 'a give-up age that is not a TimeSpan fails the render' \
+    'not a TimeSpan this chart will accept' --set-string 'delivery.giveUpAge=1 day'
+refuses_chart notifications 'a give-up age with the capability off fails the render' \
+    'but delivery.giveUpAge is set' --set delivery.enabled=false
+refuses_chart notifications 'the give-up age off and cleared fails the render' \
+    'delivery.enabled is false on the notifications chart' \
+    --set delivery.enabled=false --set-string 'delivery.giveUpAge='
+refuses_chart notifications 'client credentials off with a client id fails the render' \
+    'identity.clientCredentials is false but identity.clientId is set' \
+    --set identity.clientCredentials=false
+refuses_chart notifications 'client credentials off and cleared fails the render' \
+    'identity.clientCredentials is false on the notifications chart' \
+    --set identity.clientCredentials=false --set-string 'identity.clientId='
+
+# --------------------------------------------------------------------------
 section 'Probes — three per workload (§13.5)'
 # --------------------------------------------------------------------------
 for chart in $SERVICE_CHARTS; do
@@ -851,6 +983,8 @@ check 'no ConfigMap carries a connection string' \
     test "$(count 'ConnectionStrings__' "$OUT/configmap-keys.txt")" -eq 0
 check 'no ConfigMap carries a client secret' \
     test "$(count 'Identity__Client__ClientSecret' "$OUT/configmap-keys.txt")" -eq 0
+check 'no ConfigMap carries the relay password' \
+    test "$(count 'Mail__Password' "$OUT/configmap-keys.txt")" -eq 0
 check 'every ConnectionStrings__ value comes from a secretKeyRef' \
     test "$(count 'ConnectionStrings__' "$OUT/platform.yaml")" \
     -eq "$(awk '/- name: ConnectionStrings__/ { want = 1; next } want && /secretKeyRef/ { n++; want = 0 } END { print n + 0 }' "$OUT/platform.yaml")"
@@ -1075,6 +1209,7 @@ worker_shape() {
         'ingress.enabled requires service.enabled' --set ingress.enabled=true
 }
 worker_shape shipping
+worker_shape notifications
 
 # --------------------------------------------------------------------------
 section 'A value the gateway requires only when another is set'
