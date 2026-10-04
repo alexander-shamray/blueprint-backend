@@ -217,8 +217,8 @@ The second is the Helm tree (PR-23). A workflow path-filtered to
 `file://` dependencies, lints each one, and then renders every one and asserts
 what comes out: three probes per workload, a memory limit and no CPU limit, the
 hook annotations of [§7.4](07-persistence.md), the ConfigMap/Secret split of
-§15.4, and a client secret on each of the charts whose host calls a peer and
-on none of the others (§11.5,
+§15.4, and a client secret on each of the charts whose host calls out under
+a grant of its own and on none of the others (§11.5,
 [ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)).
 Rendering only — no cluster is reached, so schema validation against a live API
 server stays a deploy-time gate and is named in the script as not covered.
@@ -933,15 +933,20 @@ paragraph says how.
 
 **A worker's replica count is a decision and not a copy.** CPU utilisation is
 the wrong signal for a host that waits on a queue and on a third party — it
-idles through a carrier outage and through a backlog alike — so Shipping's
-chart sets `autoscaling.enabled: false` and `replicaCount: 3`, three for
-availability across a node drain. **What says three is too few is
-`shipping.shipments.overdue`**, not the queue: §13.6's queue-backlog rule
-watches Shipping's receive endpoint, and its consumers only write a row — a
-`Pending` shipment, or a cancellation — so the replica-bound work is the
-fulfilment and tracking workers'. The gauge is the wait of the longest-due row
-each pass would claim, by pass, and
-[`queue-backlog.md`](../runbooks/queue-backlog.md) says how to read it.
+idles through a carrier's or a relay's outage and through a backlog alike —
+so each worker's chart, Shipping's and Notifications', sets
+`autoscaling.enabled: false` and `replicaCount: 3`, three for availability
+across a node drain. **What says three is too few is
+`shipping.shipments.overdue` for Shipping and `notifications.overdue` for
+Notifications**, not the queue: §13.6's queue-backlog rule watches each
+service's receive endpoint, and each one's consumers only write a row — a
+`Pending` shipment or a cancellation, a `Pending` notification or an order
+record — so the replica-bound work is the workers': Shipping's fulfilment and
+tracking passes, and Notifications' send worker. Each gauge is the wait of
+the rows a pass is due to claim and has not — Shipping's by pass,
+Notifications' for its one — and `notifications.waiting`, by the step a row
+waits on, is the dependency's wait beside it rather than the pass's.
+[`queue-backlog.md`](../runbooks/queue-backlog.md) says how to read them.
 `deploy/helm/smoke.sh` partitions the charts into the autoscaled and the
 fixed-replica, and holds each chart's values to its side, because a branch
 driven by the file it is judging asserts nothing.
@@ -967,12 +972,13 @@ considered or forgotten.
 > can. A safety argument aimed at a copy nobody would perform protects nothing,
 > and reads as though it does.
 
-The charts whose host calls a peer carry client credentials and no other
-chart does, and which charts those are is the design rather than an oversight
+The charts whose host calls out under a grant of its own carry client
+credentials and no other chart does, and which charts those are is the design
+rather than an oversight
 ([ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)):
 
 ```yaml
-# deploy/helm/web-bff/values.yaml — one of the two charts with an Identity:Client
+# deploy/helm/web-bff/values.yaml — one of the charts with an Identity:Client
 identity:
   authority: https://id.example.com/realms/commerce
   # Required by ValidateOnStart (§15.4): this host does call a peer (§9.7).
@@ -990,11 +996,12 @@ identity:
 ```
 
 > **A further chart setting `identity.clientCredentials: true` is a design
-> change, not a configuration change.** It means another host started calling a
-> peer synchronously, which is ADR-017's budget being spent — so the review
-> question is not "does the secret exist" but "why is this call not an event".
-> ADR-052 is where that question was answered for Shipping's worker, so a
-> review of this chart cites that record rather than arguing it again.
+> change, not a configuration change.** It means another host started calling
+> out under a grant of its own, which is ADR-017's budget being spent — so the
+> review question is not "does the secret exist" but "why is this call not an
+> event". ADR-052 is where that question was answered for each worker it gives
+> a read, so a review of those charts cites that record rather than arguing it
+> again.
 
 The gateway's chart is not a service chart with the database parts deleted. It
 has no migrator, no client credentials, and two keys no service has — and every
@@ -1287,19 +1294,19 @@ namespace read access.
 | `Jurisdiction__AddressRetention` | Config | Helm `jurisdiction.addressRetention` → ConfigMap | ✓ — **Shipping only**; ADR-053's statutory window for a delivery address, and the host refuses to start without it |
 | `Jurisdiction__TrackingRetention` | Config | Helm `jurisdiction.trackingRetention` → ConfigMap | ✓ — **Shipping only**; ADR-053's statutory window for a shipment's tracking events, and the host refuses to start without it |
 | `Fulfilment__GiveUpAge` | Config | Helm `fulfilment.giveUpAge` → ConfigMap, defaulted in the chart | ✓ — **Shipping only**; [ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)'s give-up age for a pending shipment, and [ADR-054](adr/ADR-054-a-shipment-stops-waiting-on-its-carrier-at-an-age.md)'s for an unanswered cancellation; the host refuses to start without it |
-| `Mail__Host` | Config | ConfigMap | ✓ — **Notifications only**; the relay's host name, and the host refuses to start without it |
-| `Mail__Port` | Config | ConfigMap | ✓ — **Notifications only**; the relay's submission port |
-| `Mail__From` | Config | ConfigMap | ✓ — **Notifications only**; the one sender every message carries, and the domain each `Message-ID` is minted under |
-| `Mail__Security` | Config | ConfigMap | ✓ — **Notifications only**; `StartTls` or `None`, and `None` refuses to start outside Development |
-| `Mail__UserName` | Config | ConfigMap | ✓ **outside Development** — **Notifications only**; set with the password or not at all |
-| `Mail__Password` | Secret | External Secrets | ✓ **outside Development** — **Notifications only**; the relay's credential, and absent in Compose, where the sink takes unauthenticated submission |
-| `ContactSource__BaseUrl` | Config | ConfigMap | ✓ — **Notifications only**; Keycloak's address for [ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)'s contact read, HTTPS outside Development, and the host refuses to start without it |
-| `ContactSource__Realm` | Config | ConfigMap | ✓ — **Notifications only**; the realm whose users are read, the one that issues this host's token, and the host refuses to start without it |
-| `Jurisdiction__Languages__0…n` | Config | ConfigMap | ✓ — **Notifications only**; ADR-053's language set, in the order a message in every language shows them; the host refuses to start unless every language has every template and a culture |
-| `Jurisdiction__TimeZone` | Config | ConfigMap | ✓ — **Notifications only**; the IANA zone a customer's dates are rendered in, resolved at start, so a zone the image does not know refuses the host |
-| `Jurisdiction__LogRetention` | Config | ConfigMap | ✓ — **Notifications only**; ADR-053 rule 4's statutory window for the record of a send, and the host refuses to start without it |
-| `Jurisdiction__ContactRetention` | Config | ConfigMap | ✓ — **Notifications only**; ADR-052's contact row's window, refused at start when shorter than `ContactOptions.StaleCeiling` |
-| `Jurisdiction__OrderRetention` | Config | ConfigMap | ✓ — **Notifications only**; the order record's window, and the host refuses to start without it |
+| `Mail__Host` | Config | Helm `mail.host` → ConfigMap | ✓ — **Notifications only**; the relay's host name, and the host refuses to start without it |
+| `Mail__Port` | Config | Helm `mail.port` → ConfigMap, defaulted in the chart | ✓ — **Notifications only**; the relay's submission port |
+| `Mail__From` | Config | Helm `mail.from` → ConfigMap | ✓ — **Notifications only**; the one sender every message carries, and the domain each `Message-ID` is minted under |
+| `Mail__Security` | Config | Helm `mail.security` → ConfigMap, which admits `StartTls` alone | ✓ — **Notifications only**; `StartTls` or `None`, and `None` refuses to start outside Development |
+| `Mail__UserName` | Config | Helm `mail.userName` → ConfigMap | ✓ **outside Development** — **Notifications only**; set with the password or not at all |
+| `Mail__Password` | Secret | Helm `mail.passwordSecretRef` → External Secrets | ✓ **outside Development** — **Notifications only**; the relay's credential, and absent in Compose, where the sink takes unauthenticated submission |
+| `ContactSource__BaseUrl` | Config | Helm `contactSource.baseUrl` → ConfigMap | ✓ — **Notifications only**; Keycloak's address for [ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)'s contact read, HTTPS outside Development, and the host refuses to start without it |
+| `ContactSource__Realm` | Config | Helm `contactSource.realm` → ConfigMap, defaulted in the chart | ✓ — **Notifications only**; the realm whose users are read, the one that issues this host's token, and the host refuses to start without it |
+| `Jurisdiction__Languages__0…n` | Config | Helm `jurisdiction.languages` → ConfigMap | ✓ — **Notifications only**; ADR-053's language set, in the order a message in every language shows them; the host refuses to start unless every language has every template and a culture |
+| `Jurisdiction__TimeZone` | Config | Helm `jurisdiction.timeZone` → ConfigMap | ✓ — **Notifications only**; the IANA zone a customer's dates are rendered in, resolved at start, so a zone the image does not know refuses the host |
+| `Jurisdiction__LogRetention` | Config | Helm `jurisdiction.logRetention` → ConfigMap | ✓ — **Notifications only**; ADR-053 rule 4's statutory window for the record of a send, and the host refuses to start without it |
+| `Jurisdiction__ContactRetention` | Config | Helm `jurisdiction.contactRetention` → ConfigMap | ✓ — **Notifications only**; ADR-052's contact row's window, refused at start when shorter than `ContactOptions.StaleCeiling` |
+| `Jurisdiction__OrderRetention` | Config | Helm `jurisdiction.orderRetention` → ConfigMap | ✓ — **Notifications only**; the order record's window, and the host refuses to start without it |
 | `Delivery__GiveUpAge` | Config | Helm `delivery.giveUpAge` → ConfigMap, defaulted in the chart | ✓ — **Notifications only**; [ADR-052](adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)'s give-up age for a notification still pending, past which it is undeliverable with the reason `NotificationReasons.GaveUp`; the host refuses to start without it, or with one longer than `RetentionPolicy.InboxWindow` |
 
 | Kind | Source | Example |
