@@ -186,19 +186,20 @@ restart, verify readiness (`/health/ready` covers SQL —
 `definitions.json` declares** — each service's, and the BFF's under
 [ADR-051](backend-architecture/adr/ADR-051-the-buyers-order-read-is-a-projection-in-the-bff.md)
 — since
-[ADR-036](backend-architecture/adr/ADR-036-the-broker-has-a-per-service-identity.md):
-`catalog-rabbitmq`, `ordering-rabbitmq` and `web-bff-rabbitmq`, never a
-shared Secret. That is
-the half of the rotation worth knowing first: rotating the broker is now N
-rotations rather than one, and rotating *one* affects exactly one service.
+[ADR-036](backend-architecture/adr/ADR-036-the-broker-has-a-per-service-identity.md);
+each chart's `values.yaml` names its own `*-rabbitmq` Secret, never a shared
+one. That is the half of the rotation worth knowing first: rotating the broker
+is now N rotations rather than one, and rotating *one* affects exactly one
+service.
 
 A rotation that reaches the vault and not the pod presents, for a publishing
 service, as [`runbooks/outbox-broker.md`](runbooks/outbox-broker.md) — the
 broker lane stalls with authentication failures in the log. The BFF has no
 outbox: its `masstransit-bus` readiness check fails and `bff-order-events`
-backs up. Both are worth knowing before rotating rather than during. **The permissions are not the vault's to
-rotate**: they are declared in `deploy/compose/rabbitmq/definitions.json` for
-the local broker, and are an obligation on whoever provisions a deployed one.
+backs up. Both are worth knowing before rotating rather than during.
+**The permissions are not the vault's to rotate**: they are declared in
+`deploy/compose/rabbitmq/definitions.json` for the local broker, and are an
+obligation on whoever provisions a deployed one.
 
 ### A realm-check credential
 
@@ -355,7 +356,7 @@ to be tidied away:
 | SQL Server | `${SQL_PASSWORD:-Local_Dev_Pa55w0rd!}` |
 | BFF client secret | `${BFF_CLIENT_SECRET:-local-dev-secret}` |
 | Keycloak admin | `admin` / `admin` |
-| RabbitMQ | `catalog-svc` / `local-dev-catalog`, `ordering-svc` / `local-dev-ordering`, `bff-svc` / `local-dev-bff` |
+| RabbitMQ | one `<name>-svc` / `local-dev-<name>` per account in `deploy/compose/rabbitmq/definitions.json` |
 | Payment provider key | `local-dev-psp` |
 | Carrier key | `local-dev-carrier` |
 | Shipping worker client secret | `${SHIPPING_CLIENT_SECRET:-local-dev-shipping-secret}` |
