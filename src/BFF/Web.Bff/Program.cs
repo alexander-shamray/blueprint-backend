@@ -88,6 +88,9 @@ pricing.AddHttpMessageHandler<CorrelationIdHandler>();
 builder.Services.AddOrderProjection();
 builder.Services.AddMassTransitMessaging(builder.Configuration);
 
+// §10.7's read over the projection; a singleton, as the connection factory it holds is (§6.5).
+builder.Services.AddSingleton<OrderReader>();
+
 WebApplication app = builder.Build();
 
 // Middleware order is behaviour, not formatting (§4.2); forwarded headers, CORS and the limiter are the edge's.
