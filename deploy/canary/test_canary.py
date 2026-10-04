@@ -1280,24 +1280,24 @@ class DescriptorReadTests(unittest.TestCase):
     def test_a_workflow_only_name_is_refused(self) -> None:
         text = canary.WORKFLOW.read_text(encoding="utf-8").replace(
             "        type: string\n",
-            "        type: choice\n        options: [catalog-api, notifications]\n", 1)
+            "        type: choice\n        options: [catalog-api, no-such-release]\n", 1)
 
         read, failures = self._read(workflow=text)
 
-        self.assertIn("notifications", read["workflow"])
+        self.assertIn("no-such-release", read["workflow"])
         self.assertTrue(any("by hand" in f for f in failures), failures)
-        self.assertTrue(any("notifications" in f and "no descriptor describes" in f for f in failures), failures)
+        self.assertTrue(any("no-such-release" in f and "no descriptor describes" in f for f in failures), failures)
 
     def test_a_menu_written_one_option_per_line_is_refused(self) -> None:
         text = canary.WORKFLOW.read_text(encoding="utf-8").replace(
             "        type: string\n",
-            "        type: choice\n        options:\n          - catalog-api\n          - notifications\n", 1)
+            "        type: choice\n        options:\n          - catalog-api\n          - no-such-release\n", 1)
 
         read, failures = self._read(workflow=text)
 
-        self.assertIn("notifications", read["workflow"])
-        self.assertTrue(any("by hand (catalog-api, notifications)" in f for f in failures), failures)
-        self.assertTrue(any("notifications" in f and "no descriptor describes" in f for f in failures), failures)
+        self.assertIn("no-such-release", read["workflow"])
+        self.assertTrue(any("by hand (catalog-api, no-such-release)" in f for f in failures), failures)
+        self.assertTrue(any("no-such-release" in f and "no descriptor describes" in f for f in failures), failures)
 
     def test_a_choice_input_with_no_options_is_refused(self) -> None:
         text = canary.WORKFLOW.read_text(encoding="utf-8").replace(
@@ -1308,13 +1308,13 @@ class DescriptorReadTests(unittest.TestCase):
         self.assertEqual(canary._dispatch_options(canary._live(text)), set())
         self.assertTrue(any("by hand:" in f and "`type: choice`" in f for f in failures), failures)
 
-    MENU = "        type: choice\n        options: [catalog-api, notifications]\n"
+    MENU = "        type: choice\n        options: [catalog-api, no-such-release]\n"
 
     def _assert_menu(self, workflow: str) -> None:
         read, failures = self._read(workflow=workflow)
 
-        self.assertIn("notifications", read["workflow"])
-        self.assertTrue(any("by hand (catalog-api, notifications)" in f for f in failures), failures)
+        self.assertIn("no-such-release", read["workflow"])
+        self.assertTrue(any("by hand (catalog-api, no-such-release)" in f for f in failures), failures)
 
     def test_a_menu_past_a_blank_line_in_its_input_is_refused(self) -> None:
         self._assert_menu(canary.WORKFLOW.read_text(encoding="utf-8").replace(
@@ -1327,7 +1327,7 @@ class DescriptorReadTests(unittest.TestCase):
     def test_a_menu_in_a_flow_mapping_on_the_key_line_is_refused(self) -> None:
         self._assert_menu(re.sub(
             r"(?m)^      workload:\n(?:        .*\n)*",
-            "      workload: {type: choice, options: [catalog-api, 'notifications']}\n",
+            "      workload: {type: choice, options: [catalog-api, 'no-such-release']}\n",
             canary.WORKFLOW.read_text(encoding="utf-8"), count=1))
 
     CALLED = "  workflow_call:\n    inputs:\n      workload:\n        type: string\n"
@@ -1535,6 +1535,26 @@ class DescriptorTests(unittest.TestCase):
     def test_a_case_smoke_sh_would_split_into_two_words_is_refused(self) -> None:
         workloads = json.loads(json.dumps(canary.load_plan()["workloads"]))
         workloads["payments-api"]["smoke"]["overlay"] = ["paymentProvider.baseUrl=https://a b/"]
+
+        failures = canary.check({**canary.load_plan(), "workloads": workloads})
+
+        self.assertTrue(any("payments-api.smoke.overlay" in f for f in failures), failures)
+
+    def test_an_address_and_a_one_item_list_are_one_word_each(self) -> None:
+        workloads = json.loads(json.dumps(canary.load_plan()["workloads"]))
+        workloads["payments-api"]["smoke"]["overlay"] = [
+            "paymentProvider.baseUrl=https://psp.example.invalid/",
+            "mail.from=no-reply@commerce.example.invalid",
+            "jurisdiction.languages={en}",
+        ]
+
+        failures = canary.check({**canary.load_plan(), "workloads": workloads})
+
+        self.assertFalse(any("payments-api.smoke.overlay" in f for f in failures), failures)
+
+    def test_a_list_smoke_sh_would_split_at_its_comma_is_refused(self) -> None:
+        workloads = json.loads(json.dumps(canary.load_plan()["workloads"]))
+        workloads["payments-api"]["smoke"]["overlay"] = ["jurisdiction.languages={en,kk}"]
 
         failures = canary.check({**canary.load_plan(), "workloads": workloads})
 
