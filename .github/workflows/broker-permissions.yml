@@ -15,6 +15,7 @@ on:
       - 'deploy/compose/rabbitmq/**'
       - '.github/workflows/broker-permissions.yml'
       - 'src/Services/**'
+      - 'src/BFF/**'
       - 'src/BuildingBlocks/Common.Contracts/**'
       - 'tests/**'
   push:
@@ -23,6 +24,7 @@ on:
       - 'deploy/compose/rabbitmq/**'
       - '.github/workflows/broker-permissions.yml'
       - 'src/Services/**'
+      - 'src/BFF/**'
       - 'src/BuildingBlocks/Common.Contracts/**'
       - 'tests/**'
 
