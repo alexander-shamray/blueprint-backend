@@ -107,6 +107,15 @@ needs from its own source and asserts that no service may write another's, so a
 new receive endpoint, a new peer queue or a sixth bounded context fails the
 build rather than the deployment.
 
+> **The BFF holds an account under this record, and nothing here has been
+> edited.** [ADR-051](ADR-051-the-buyers-order-read-is-a-projection-in-the-bff.md)
+> gives `Web.Bff` consumers, so it authenticates as `bff-svc`, which writes
+> its own `bff-` endpoints and the fault exchanges and no contract: it
+> publishes nothing, the case this record argued from Notifications.
+> `check_permissions.py` reads the host's `Messaging` directory by the same
+> derivation as a service's, so the account is held to its source as theirs
+> are.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)

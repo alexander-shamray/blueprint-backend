@@ -182,9 +182,12 @@ restart, verify readiness (`/health/ready` covers SQL —
 
 ### A broker credential
 
-`ConnectionStrings__RabbitMq`, and there is **one per service** since
-[ADR-036](backend-architecture/adr/ADR-036-the-broker-has-a-per-service-identity.md)
-— `catalog-rabbitmq` and `ordering-rabbitmq`, never a shared Secret. That is
+`ConnectionStrings__RabbitMq`, and there is **one per account
+`definitions.json` declares** — each service's, and the BFF's under
+[ADR-051](backend-architecture/adr/ADR-051-the-buyers-order-read-is-a-projection-in-the-bff.md)
+— since
+[ADR-036](backend-architecture/adr/ADR-036-the-broker-has-a-per-service-identity.md):
+`catalog-rabbitmq` and `ordering-rabbitmq`, never a shared Secret. That is
 the half of the rotation worth knowing first: rotating the broker is now N
 rotations rather than one, and rotating *one* affects exactly one service.
 
@@ -350,7 +353,7 @@ to be tidied away:
 | SQL Server | `${SQL_PASSWORD:-Local_Dev_Pa55w0rd!}` |
 | BFF client secret | `${BFF_CLIENT_SECRET:-local-dev-secret}` |
 | Keycloak admin | `admin` / `admin` |
-| RabbitMQ | `catalog-svc` / `local-dev-catalog`, `ordering-svc` / `local-dev-ordering` |
+| RabbitMQ | `catalog-svc` / `local-dev-catalog`, `ordering-svc` / `local-dev-ordering`, `bff-svc` / `local-dev-bff` |
 | Payment provider key | `local-dev-psp` |
 | Carrier key | `local-dev-carrier` |
 | Shipping worker client secret | `${SHIPPING_CLIENT_SECRET:-local-dev-shipping-secret}` |
