@@ -193,6 +193,26 @@ groups:
             records the message again, so check the consume error rate first.
           runbook_url: docs/runbooks/queue-backlog.md
 
+      # An age, so no `for`, by the lanes' argument above: the wait is the
+      # metric. `max` because the gauge reads the database and every replica
+      # exports it. A ticket, because the order and its money are untouched and
+      # only one buyer's history lacks it (§10.7); the runbook argues the
+      # threshold, and §13.6's row states it.
+      - alert: UnattributedOrders
+        expr: max by (service_name) (bff_orders_unattributed_seconds) > 900
+        labels:
+          severity: ticket
+          owner: service
+        annotations:
+          summary: "An order with no owner for over 15 min on {{ $labels.service_name }}"
+          description: >-
+            The BFF's order projection holds payment or shipment facts for an
+            order that no Ordering event has attributed to a buyer, so neither
+            order route returns it to anyone (§10.7). A payment or shipment
+            event beating OrderPlaced is ordinary and resolves in seconds; this
+            is past every cause that resolves itself or pages on its own.
+          runbook_url: docs/runbooks/unattributed-order.md
+
   - name: platform-infrastructure
     rules:
       # The rules whose signal comes from an exporter rather than from this
