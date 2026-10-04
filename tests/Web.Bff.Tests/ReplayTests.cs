@@ -182,15 +182,21 @@ public sealed class ReplayTests(BffServiceFixture fixture) : IAsyncLifetime
         OrderPlaced placed = OrderEvents.Placed(Guid.CreateVersion7(), Guid.CreateVersion7(), At);
         await fixture.DeliverAsync(placed);
 
+        string secret = Guid.NewGuid().ToString("N");
+        UriBuilder address = new(BffFactory.UnreachableBroker) { UserName = "bff-svc", Password = secret };
+        string unreachable = address.Uri.AbsoluteUri;
+
         InvalidOperationException refused = await Should.ThrowAsync<InvalidOperationException>(() =>
             Replay.RunAsync(
-                Settings(broker: BffFactory.UnreachableBroker),
+                Settings(broker: unreachable),
                 reset: true,
                 TextWriter.Null,
                 TimeSpan.FromSeconds(5),
                 TestContext.Current.CancellationToken));
 
         refused.Message.ShouldContain("did not answer");
+        refused.Message.ShouldNotContain(secret);
+        refused.InnerException.ShouldBeNull();
         (await fixture.OrderAsync(placed.OrderId)).ShouldNotBeNull();
         (await fixture.InboxAsync()).Count.ShouldBe(1);
     }
@@ -238,7 +244,51 @@ public sealed class ReplayTests(BffServiceFixture fixture) : IAsyncLifetime
 
         // 4060, from the preflight, which runs before the bus starts, so the staged row was never sent.
         refused.Number.ShouldBe(4060);
+        await Task.Delay(TimeSpan.FromSeconds(2), TestContext.Current.CancellationToken);
         (await fixture.OrderAsync(order)).ShouldBeNull();
+        (await fixture.InboxAsync()).ShouldBeEmpty();
+        (await fixture.QueueDepthAsync(Replay.Queue)).ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task A_refused_login_is_reported_with_its_kind_and_never_its_password()
+    {
+        string secret = Guid.NewGuid().ToString("N");
+        UriBuilder wrong = new(fixture.BrokerAddress) { Password = secret };
+
+        InvalidOperationException refused = await Should.ThrowAsync<InvalidOperationException>(() =>
+            Replay.RunAsync(
+                Settings(broker: wrong.Uri.AbsoluteUri),
+                reset: true,
+                TextWriter.Null,
+                TimeSpan.FromSeconds(10),
+                TestContext.Current.CancellationToken));
+
+        refused.Message.ShouldContain("did not answer");
+        refused.Message.ShouldContain("RabbitMqConnectionException", Case.Sensitive, "the failure's kind is named");
+        refused.Message.ShouldNotContain(secret);
+        refused.InnerException.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task A_row_that_cannot_be_decoded_stops_a_reset_before_anything_is_deleted()
+    {
+        Guid order = Guid.CreateVersion7();
+        OrderPlaced placed = OrderEvents.Placed(order, Guid.CreateVersion7(), At);
+        await fixture.DeliverAsync(placed);
+        await _outboxes.StageAsync(Named("Ordering"), Processed, placed);
+        await _outboxes.CorruptPayloadsAsync(Named("Ordering"));
+
+        await Should.ThrowAsync<Exception>(() =>
+            Replay.RunAsync(
+                Settings(),
+                reset: true,
+                TextWriter.Null,
+                Replay.BrokerDeadline,
+                TestContext.Current.CancellationToken));
+
+        (await fixture.OrderAsync(order)).ShouldNotBeNull();
+        (await fixture.InboxAsync()).Count.ShouldBe(1);
     }
 
     private static Publisher Named(string name) => Publisher.All.Single(p => p.Name == name);

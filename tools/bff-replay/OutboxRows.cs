@@ -28,7 +28,9 @@ public static class OutboxRows
         nameof(OutboxMessage.OccurredAt));
 
     /// <summary>Reads no row, and fails on a missing table, column or grant: the preflight's question.</summary>
-    public static string ProbeSql(Publisher publisher) => $"SELECT TOP (0) {Columns} FROM {publisher.Outbox};";
+    public static string ProbeSql(Publisher publisher) =>
+        $"SELECT TOP (0) {Columns}, {nameof(OutboxMessage.ProcessedAt)}, {nameof(OutboxMessage.Lane)} " +
+        $"FROM {publisher.Outbox};";
 
     /// <summary>Processed rows only: an unprocessed one is still the dispatcher's, and reaches the queue so.</summary>
     public static string ReadSql(Publisher publisher) =>

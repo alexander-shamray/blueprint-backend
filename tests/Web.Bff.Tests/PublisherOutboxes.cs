@@ -84,4 +84,11 @@ internal sealed class PublisherOutboxes(string serverConnectionString)
                 });
         }
     }
+
+    /// <summary>Rewrites every payload in one publisher's outbox to JSON that is no event at all.</summary>
+    public async Task CorruptPayloadsAsync(Publisher publisher)
+    {
+        await using SqlConnection connection = new(ConnectionString);
+        await connection.ExecuteAsync($"UPDATE {publisher.Outbox} SET Payload = N'[]';");
+    }
 }

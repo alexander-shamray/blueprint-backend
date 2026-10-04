@@ -6,7 +6,7 @@ using Microsoft.Data.SqlClient;
 
 namespace BffReplay;
 
-/// <summary>ADR-051's rebuild: every source answers, then an optional reset, then the eight events are replayed.</summary>
+/// <summary>ADR-051's rebuild: every source answers, then an optional reset, then the eight are replayed.</summary>
 public static class Replay
 {
     /// <summary>The BFF's queue, held equal to the host's own constant by its suite.</summary>
@@ -53,6 +53,17 @@ public static class Replay
 
             if (reset)
             {
+                // A row that cannot be decoded fails here, since the same row after the delete would fail every rerun.
+                for (int i = 0; i < settings.Publishers.Count; i++)
+                {
+                    Publisher publisher = settings.Publishers[i].Publisher;
+                    string[] names = [.. ReplayedEvents.PublishedBy(publisher).Select(types.NameOf)];
+
+                    IAsyncEnumerable<OutboxRow> rows = OutboxRows.ReadAsync(sources[i], publisher, names);
+                    await foreach (OutboxRow row in rows.WithCancellation(ct))
+                        ReplayPayload.Read(row, types, json);
+                }
+
                 await ProjectionReset.RunAsync(settings.Bff, ct);
                 await output.WriteLineAsync($"Reset: the order rows and {Queue}'s inbox rows are deleted.");
             }
@@ -119,10 +130,11 @@ public static class Replay
             exception is RabbitMqConnectionException
             || (exception is OperationCanceledException && !ct.IsCancellationRequested))
         {
-            // The inner exception is not carried: a connection fault can print the address, and the address holds
-            // the account's credential.
+            // The type is named and the inner exception is not carried: a fault's text can print the address, and
+            // the address holds the account's credential.
             throw new InvalidOperationException(
-                $"The broker at {host} did not answer within {deadline}, so nothing was deleted or sent.");
+                $"The broker at {host} did not answer within {deadline} ({exception.GetType().Name}), so nothing " +
+                "was deleted or sent.");
         }
 
         BusHealthStatus health = await bus.WaitForHealthStatus(BusHealthStatus.Healthy, deadline);
