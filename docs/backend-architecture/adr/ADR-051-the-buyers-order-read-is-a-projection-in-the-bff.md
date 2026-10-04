@@ -122,9 +122,9 @@ broker's retention window and not from anything a reader can select from.
 >
 > **What the BFF can select from is still nothing.** The tool is an
 > operator's, run against the publishers' tables out of band, and no path in
-> the host reads them. An order every one of whose events is older than the
-> shortest publisher's window is not rebuilt; recovering it is the database's
-> backup.
+> the host reads them. An order every one of whose events is older than
+> `RetentionPolicy.OutboxWindow` is not rebuilt; recovering it is the
+> database's backup.
 
 ---
 
