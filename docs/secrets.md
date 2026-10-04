@@ -187,14 +187,16 @@ restart, verify readiness (`/health/ready` covers SQL —
 [ADR-051](backend-architecture/adr/ADR-051-the-buyers-order-read-is-a-projection-in-the-bff.md)
 — since
 [ADR-036](backend-architecture/adr/ADR-036-the-broker-has-a-per-service-identity.md):
-`catalog-rabbitmq` and `ordering-rabbitmq`, never a shared Secret. That is
+`catalog-rabbitmq`, `ordering-rabbitmq` and `web-bff-rabbitmq`, never a
+shared Secret. That is
 the half of the rotation worth knowing first: rotating the broker is now N
 rotations rather than one, and rotating *one* affects exactly one service.
 
-A rotation that reaches the vault and not the pod presents as
-[`runbooks/outbox-broker.md`](runbooks/outbox-broker.md) — the broker lane
-stalls with authentication failures in the log — which is worth knowing
-before rotating rather than during. **The permissions are not the vault's to
+A rotation that reaches the vault and not the pod presents, for a publishing
+service, as [`runbooks/outbox-broker.md`](runbooks/outbox-broker.md) — the
+broker lane stalls with authentication failures in the log. The BFF has no
+outbox: its `masstransit-bus` readiness check fails and `bff-order-events`
+backs up. Both are worth knowing before rotating rather than during. **The permissions are not the vault's to
 rotate**: they are declared in `deploy/compose/rabbitmq/definitions.json` for
 the local broker, and are an obligation on whoever provisions a deployed one.
 
