@@ -96,6 +96,16 @@ than leaving to a realm-file description.
 > next scheduled run — nominally within the hour, and only as reliably as
 > GitHub runs a schedule — rather than at the next rollout.
 
+> **The BFF's client secret is no longer its only credential, and nothing
+> above has been edited.**
+> [ADR-051](ADR-051-the-buyers-order-read-is-a-projection-in-the-bff.md)
+> gives `Web.Bff` a schema and consumers, so it also holds database logins
+> for its projection and the `bff-svc` broker account
+> ([ADR-036](ADR-036-the-broker-has-a-per-service-identity.md)). The
+> statement this record cites from §11.5 holds for client credentials: the
+> secret is still the BFF's one client credential, and that is what
+> terminating the flow in `Web.Bff` would not survive.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)

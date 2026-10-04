@@ -120,7 +120,7 @@ Validation is cheap; assume the network is hostile.
 > not taken here.** ADR-034 argues why: it is an OIDC handler, a cookie stack,
 > antiforgery on every state-changing route, a realm change and a gateway route
 > change — an Appendix C row rather than an edit, and §11.5's account of the
-> BFF's one credential would not survive it.
+> BFF's one client credential would not survive it.
 
 > **The realm also enables `directAccessGrantsEnabled` on `web-app`, and that
 > belongs in this chapter rather than only in a realm-file description.** It is
