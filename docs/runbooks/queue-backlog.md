@@ -98,10 +98,10 @@ itself is the problem. Scaling out is safe for every consumer in this platform
 claims rows under a lease, so two replicas of a consumer do not double anything.
 
 **A worker's replica count is a chart value and not an autoscaler's.**
-[§15.3](../backend-architecture/15-cicd-deployment.md) gives Shipping
-`autoscaling.enabled: false`, so scaling it out is `replicaCount` in
-`deploy/helm/shipping/values.yaml` rather than a `kubectl scale` that the next
-deploy undoes.
+[§15.3](../backend-architecture/15-cicd-deployment.md) gives each worker's
+chart `autoscaling.enabled: false`, so scaling one out is `replicaCount` in its
+own `deploy/helm/<chart>/values.yaml` rather than a `kubectl scale` that the
+next deploy undoes.
 
 ## What this does not cover
 
@@ -126,6 +126,67 @@ slow enough to hold every pass to its request timeout does the same, so read
 `shipping.carrier.unavailable` and the carrier's latency before scaling. With
 the carrier healthy, the answer is `replicaCount`, as the paragraph on a
 worker's replica count above says.
+
+**Notifications is the same shape, and its lag ends even earlier.** Its seven
+consumers write a `Pending` row in `NotificationLog` — and, for Ordering's
+three events, the order record — and acknowledge. Everything that leaves the
+service, the contact read and the send, is the send worker's. So
+`messaging.delivery.lag` for `Notifications.Worker` stops when a consumer
+starts and never sees the worker's wait on Keycloak or on the relay, and
+`notifications-events` stays shallow while every notification waits behind a
+relay that is down: its breaker parks the queue of rows rather than the
+messages, so nothing piles up on the broker and nothing reaches `_error`.
+
+Its signal is `notifications.waiting`, the gauge of `Pending` rows past their
+first backoff, by the `step` they wait on. Read the step before anything else:
+
+- **`order_record`** — the event reached Notifications before its order's
+  `OrderPlaced`, which §9.4 does not order, or a decline is waiting for the
+  cancellation ADR-049 makes it read. Look upstream first: Ordering's outbox,
+  and whether the Ordering events are arriving on `notifications-events` at
+  all.
+- **`contact`** — Keycloak is unreachable or is refusing this host's grant.
+  `notifications.contact.refused` rising says it is refusing, which is a
+  credential to fix — [`docs/secrets.md`](../secrets.md)'s client-secret
+  procedure — not an outage to wait out. With Keycloak healthy, the step also
+  counts a row this version cannot render: the worker's error line "stores
+  parameters this version cannot read" names it, and it waits for a replica
+  that can read it or for `DeliveryOptions.GiveUpAge`.
+- **`relay`** — the relay is down or refusing. `notifications.mail.unavailable`
+  by `cause` tells an outage (`transient`, `unconfirmed`) from somebody's
+  decision (`tls`, `credential`, `rejected`), which backs off and waits for a
+  fix rather than clearing on its own.
+
+```promql
+max by (step) (notifications_waiting)
+
+sum by (cause) (rate(notifications_mail_unavailable_total[10m]))
+
+sum(rate(notifications_contact_refused_total[10m]))
+```
+
+`max` and not `sum`, because every replica reads the same table and reports
+the same rows. **Waiting has an end**: a row `Pending` past
+`DeliveryOptions.GiveUpAge` becomes `Undeliverable: gave_up`, so a waiting set
+that falls without the dependency recovering is notifications given up rather
+than sent, and the rows' `Reason` says which. A rising `order_record` alone
+during an Ordering backlog is the one step that clears itself when upstream
+does.
+
+**The overdue gauge is the one that says three replicas are too few.**
+`notifications.overdue` is how long rows due for a pass have gone unclaimed
+past two ticks, in `shipping.shipments.overdue`'s form, and it sees the row no
+pass has reached yet, which the waiting gauge cannot: that one counts only
+rows a pass has already backed off. Healthy, it stays near zero. One that
+climbs while `notifications.mail.unavailable` and
+`notifications.contact.refused` are flat is a send worker that cannot keep up
+with its population, and the answer is `replicaCount`, as the paragraph on a
+worker's replica count above says; one that climbs with them is the relay or
+Keycloak holding every pass to its budget, so read those first.
+
+```promql
+max(notifications_overdue_seconds)
+```
 
 **The lag alert is measured at consumer start, and a failure can raise it.**
 `messaging.delivery.lag` is recorded at the top of `Consume`, before a handler
