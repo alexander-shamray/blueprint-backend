@@ -183,8 +183,7 @@ public sealed class ReplayTests(BffServiceFixture fixture) : IAsyncLifetime
         await fixture.DeliverAsync(placed);
 
         string secret = Guid.NewGuid().ToString("N");
-        UriBuilder address = new(BffFactory.UnreachableBroker) { UserName = "bff-svc", Password = secret };
-        string unreachable = address.Uri.AbsoluteUri;
+        string unreachable = WithKey(BffFactory.UnreachableBroker, secret);
 
         InvalidOperationException refused = await Should.ThrowAsync<InvalidOperationException>(() =>
             Replay.RunAsync(
@@ -254,11 +253,11 @@ public sealed class ReplayTests(BffServiceFixture fixture) : IAsyncLifetime
     public async Task A_refused_login_is_reported_with_its_kind_and_never_its_password()
     {
         string secret = Guid.NewGuid().ToString("N");
-        UriBuilder wrong = new(fixture.BrokerAddress) { Password = secret };
+        string wrong = WithKey(fixture.BrokerAddress, secret);
 
         InvalidOperationException refused = await Should.ThrowAsync<InvalidOperationException>(() =>
             Replay.RunAsync(
-                Settings(broker: wrong.Uri.AbsoluteUri),
+                Settings(broker: wrong),
                 reset: true,
                 TextWriter.Null,
                 TimeSpan.FromSeconds(10),
@@ -289,6 +288,15 @@ public sealed class ReplayTests(BffServiceFixture fixture) : IAsyncLifetime
 
         (await fixture.OrderAsync(order)).ShouldNotBeNull();
         (await fixture.InboxAsync()).Count.ShouldBe(1);
+    }
+
+    // The account's name with a key it was never given, spelt as a URI so no connection string is written out.
+    private static string WithKey(string address, string key)
+    {
+        Uri parsed = new(address);
+        string account = parsed.UserInfo.Length == 0 ? "bff-svc" : Uri.UnescapeDataString(parsed.UserInfo.Split(':')[0]);
+
+        return $"{parsed.Scheme}://{account}:{key}@{parsed.Authority}{parsed.PathAndQuery}";
     }
 
     private static Publisher Named(string name) => Publisher.All.Single(p => p.Name == name);
