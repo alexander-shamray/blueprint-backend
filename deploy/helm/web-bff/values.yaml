@@ -100,9 +100,9 @@ identity:
     key: client-secret
 
 # ADR-051's projection. GetConnectionString("Bff") at runtime, "BffMigrator"
-# in the hook. It is the one readiness check (§13.5): Catalog's hop is not,
-# since a BFF unready whenever Catalog is down takes itself out of rotation
-# for a fault it exists to degrade around.
+# in the hook. SQL is a readiness check (§13.5, which owns the set): Catalog's
+# hop is not, since a BFF unready whenever Catalog is down takes itself out of
+# rotation for a fault it exists to degrade around.
 database:
   enabled: true
   connectionName: Bff
