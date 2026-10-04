@@ -10,8 +10,8 @@ event still exists: its publisher's outbox.
 nothing a consumer has acknowledged, so the last copy of a delivered event is
 its publisher's processed outbox row, kept for `RetentionPolicy.OutboxWindow`
 ([§9.4](../../docs/backend-architecture/09-messaging.md)). An order whose
-every event is older than the shortest of the four publishers' windows is not
-restored by any run of this tool: after `--reset` it is simply absent from
+every event is older than that window, which every service registers as one
+`new RetentionPolicy()`, is not restored by any run of this tool: after `--reset` it is simply absent from
 the buyer's history. Recovering that is the BFF database's backup, not this.
 
 So, in order of preference:
@@ -73,12 +73,20 @@ dotnet run --project tools/bff-replay            # repair
 dotnet run --project tools/bff-replay -- --reset # rebuild
 ```
 
-The BFF must be running: the tool only sends, and the BFF's own consumers
-apply what it sends, through the same handlers and the same inbox as live
-traffic. Live events arriving during a rebuild are harmless — the projection
-ranks facts and never overwrites one
-([§10.7](../../docs/backend-architecture/10-api-gateway.md)) — so the run
+The BFF must be running for a repair: the tool only sends, and the BFF's own
+consumers apply what it sends, through the same handlers and the same inbox as
+live traffic. Live events arriving during a repair are harmless — the
+projection ranks facts and never overwrites one
+([§10.7](../../docs/backend-architecture/10-api-gateway.md)) — so a repair
 needs no maintenance window.
+
+**`--reset` needs the BFF's consumption stopped.** Scale the `web-bff`
+deployment to zero (or stop its Compose service) before the run and resume it
+once the run has finished and the queue has drained, because the handler's
+write and the inbox row commit separately
+([§9.5](../../docs/backend-architecture/09-messaging.md)), so a message
+handled just before the reset whose inbox row lands just after it loses its
+facts for good: the replay is then dropped as a duplicate.
 
 Before it deletes or sends anything it opens the BFF's database and all
 four outboxes and waits for the broker to answer, so an unreachable
@@ -95,12 +103,12 @@ outside it. Then a count per event type, and the total.
 |---|---|
 | 0 | The window was sent |
 | 2 | Refused before anything was opened: a bad argument or a missing key |
-| any other | The run failed part-way, and the lines above say which publishers finished. A repair can be run again as it is; a failed `--reset` has left the projection partial, so run `--reset` again |
+| any other | The run failed part-way, and the lines above say which publishers finished. A repair can be run again as it is. For a `--reset`, look for the `Reset:` line: without it nothing was deleted, so fix the cause and run again; with it the projection is partial, and `--reset` run again completes it, unless the same failure repeats, in which case restore the BFF's database instead |
 
 ## What it does not do
 
-- It never writes to a publisher's database and never publishes to an
-  exchange.
+- It never writes to a publisher's database and never sends to a
+  contract's exchange.
 - It sends no unprocessed row: those are still the publisher's dispatcher's,
   and reach the queue that way.
 - It sends nothing outside ADR-051's eight, whatever else the outboxes hold.
