@@ -47,7 +47,7 @@ WORKFLOW_PATH = ".github/workflows/broker-permissions.yml"
 WORKFLOW = ROOT / WORKFLOW_PATH
 
 SERVICES = ROOT / "src" / "Services"
-# The hosts' tree (§4.1). A host has no Infrastructure project (§10.1), so a
+# The hosts' tree (§4.1). A host has no Infrastructure project (§4.1), so a
 # consuming host keeps its Messaging directory at its own project's root.
 HOSTS = ROOT / "src" / "BFF"
 CONTRACTS = ROOT / "src" / "BuildingBlocks" / "Common.Contracts"
