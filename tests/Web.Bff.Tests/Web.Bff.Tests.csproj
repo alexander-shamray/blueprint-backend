@@ -25,10 +25,14 @@
     <PackageReference Include="Testcontainers.Keycloak" />
     <!-- JwtSecurityTokenHandler, named directly though Common.Web's JwtBearer carries it. -->
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" />
+    <!-- UseSqlServer, named by the model and schema tests though Web.Bff.Persistence carries it. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\BFF\Web.Bff\Web.Bff.csproj" />
+    <!-- ADR-051's schema, which the model and schema tests read and the fixture migrates. -->
+    <ProjectReference Include="..\..\src\BFF\Web.Bff.Persistence\Web.Bff.Persistence.csproj" />
     <!-- StubCatalog and pricing.proto's server half. This suite names no generated type, as both halves'
          copies would then be ambiguous; drive the stub through its own surface. -->
     <ProjectReference Include="..\Web.Bff.TestSupport\Web.Bff.TestSupport.csproj" />

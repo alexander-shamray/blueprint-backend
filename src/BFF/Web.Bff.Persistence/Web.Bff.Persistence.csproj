@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- ADR-051's schema and its migrations, and nothing a web host carries, so the migrator need not reference one. -->
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- §9.5's InboxMessage, the one row here the BFF does not define. -->
+    <ProjectReference Include="..\..\BuildingBlocks\Common.Infrastructure\Common.Infrastructure.csproj" />
+  </ItemGroup>
+
+</Project>
