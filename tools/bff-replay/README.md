@@ -77,7 +77,8 @@ dotnet run --project tools/bff-replay -- --reset # rebuild
 The BFF must be running for a repair: the tool only sends, and the BFF's own
 consumers apply what it sends, through the same handlers and the same inbox as
 live traffic. Live events arriving during a repair are harmless — the
-projection ranks facts and never overwrites one
+projection never overwrites an order's fact, and a product's name only
+with a later publish
 ([§10.7](../../docs/backend-architecture/10-api-gateway.md)) — so a repair
 needs no maintenance window.
 
