@@ -16,7 +16,8 @@ public sealed class ReplayTests(BffServiceFixture fixture) : IAsyncLifetime
 {
     private static readonly DateTimeOffset At = new(2026, 10, 3, 9, 0, 0, TimeSpan.Zero);
 
-    private static readonly DateTimeOffset Processed = At.AddDays(3);
+    // Past, as every publisher's own clock reads it, since a row processed after the run began is not in the window.
+    private static readonly DateTimeOffset Processed = At.AddHours(1);
 
     private readonly PublisherOutboxes _outboxes = new(fixture.ConnectionString);
 
@@ -158,7 +159,27 @@ public sealed class ReplayTests(BffServiceFixture fixture) : IAsyncLifetime
         ProjectedOrder after = (await fixture.OrderAsync(order)).ShouldNotBeNull();
         after.DispatchedAt.ShouldBe(missed.OccurredAt);
         (after with { DispatchedAt = null, TrackingNumber = null, AsOf = before.AsOf }).ShouldBe(before);
-        (await fixture.InboxAsync(placed.MessageId)).Count.ShouldBe(1, "the inbox drops a copy it has handled");
+        (await fixture.InboxAsync(placed.MessageId)).Count.ShouldBe(1, "a repair leaves a handled event unsent");
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task A_row_processed_after_the_run_began_is_live_traffic_and_is_not_sent(bool reset)
+    {
+        OrderPlaced inWindow = OrderEvents.Placed(Guid.CreateVersion7(), Guid.CreateVersion7(), At);
+        OrderPlaced live = OrderEvents.Placed(Guid.CreateVersion7(), Guid.CreateVersion7(), At.AddMinutes(1));
+        await _outboxes.StageAsync(Named("Ordering"), Processed, inWindow);
+        await _outboxes.StageAsync(Named("Ordering"), DateTimeOffset.UtcNow.AddDays(1), live);
+
+        ReplayReport report = await Replay.RunAsync(
+            Settings(),
+            reset,
+            TextWriter.Null,
+            Replay.BrokerDeadline,
+            TestContext.Current.CancellationToken);
+
+        report.SentMessageIds.ShouldBe([inWindow.MessageId]);
     }
 
     [Fact]

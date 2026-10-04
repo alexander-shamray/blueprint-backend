@@ -77,6 +77,10 @@ dotnet run --project tools/bff-replay            # repair
 dotnet run --project tools/bff-replay -- --reset # rebuild
 ```
 
+Run a repair once `bff-order-events` is empty: an event still queued was
+processed before the run began but not yet handled, so it would be sent again,
+dropped by the inbox and left on `bff-order-events_skipped`, which pages.
+
 The BFF must be running for a repair: the tool only sends, and the BFF's own
 consumers apply what it sends, through the same handlers and the same inbox as
 live traffic. Live events arriving during a repair are harmless — the

@@ -25,6 +25,7 @@ public static class Replay
         MessageTypeMap types = new([typeof(IIntegrationEvent).Assembly]);
         OutboxJson json = new([]);
         List<SqlConnection> sources = [];
+        List<DateTimeOffset> cutoffs = [];
         IBusControl bus = Bus.Factory.CreateUsingRabbitMq(cfg => cfg.Host(new Uri(settings.Broker)));
         bool started = false;
 
@@ -45,6 +46,10 @@ public static class Replay
                 await connection.OpenAsync(ct);
                 await connection.ExecuteAsync(
                     new CommandDefinition(OutboxRows.ProbeSql(source.Publisher), cancellationToken: ct));
+
+                // Each publisher's own clock, as it stamps ProcessedAt; later rows are live traffic the BFF receives.
+                cutoffs.Add(await connection.ExecuteScalarAsync<DateTimeOffset>(
+                    new CommandDefinition(OutboxRows.CutoffSql, cancellationToken: ct)));
             }
 
             started = await StartAsync(bus, settings.Broker, brokerDeadline, ct);
@@ -59,7 +64,7 @@ public static class Replay
                     Publisher publisher = settings.Publishers[i].Publisher;
                     string[] names = [.. ReplayedEvents.PublishedBy(publisher).Select(types.NameOf)];
 
-                    IAsyncEnumerable<OutboxRow> rows = OutboxRows.ReadAsync(sources[i], publisher, names);
+                    IAsyncEnumerable<OutboxRow> rows = OutboxRows.ReadAsync(sources[i], publisher, names, cutoffs[i]);
                     await foreach (OutboxRow row in rows.WithCancellation(ct))
                         ReplayPayload.Read(row, types, json);
                 }
@@ -77,7 +82,8 @@ public static class Replay
                 Publisher publisher = settings.Publishers[i].Publisher;
                 string[] names = [.. ReplayedEvents.PublishedBy(publisher).Select(types.NameOf)];
 
-                await foreach (OutboxRow row in OutboxRows.ReadAsync(sources[i], publisher, names).WithCancellation(ct))
+                await foreach (OutboxRow row in OutboxRows.ReadAsync(sources[i], publisher, names, cutoffs[i])
+                    .WithCancellation(ct))
                 {
                     if (handled.Contains(row.MessageId))
                     {
