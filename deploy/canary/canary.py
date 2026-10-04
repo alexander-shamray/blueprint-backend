@@ -1345,11 +1345,12 @@ CHARTS_ASSIGNED = re.compile(
     r"(?im)(?:^|[\s;&|])(?:(?:readonly|declare|typeset|local|export)(?:[ \t]+-\w+)*[ \t]+)?\w*charts\+?=")
 FOR_LIST = re.compile(r"(?m)(?:^|[\s;&|])for[ \t]+\w+[ \t]+in[ \t]")
 
-# What smoke.sh splits a case into words by, so no value may hold a space or a
-# shell metacharacter. The capability names are smoke.sh's own vocabulary.
+# What smoke.sh splits a case into words by, so no value may hold a space, a
+# comma or a character a shell acts on in an expansion's result. Braces are not
+# one: bash expands them before it substitutes, so a one-item list stays a word.
 SOURCE_PATH = re.compile(r"src(/[A-Za-z0-9_-][A-Za-z0-9._-]*)+")
 CAPABILITY = re.compile(r"[A-Za-z]+")
-OVERLAY = re.compile(r"[A-Za-z][A-Za-z0-9]*(\.[A-Za-z][A-Za-z0-9]*)+=[A-Za-z0-9._:/-]*")
+OVERLAY = re.compile(r"[A-Za-z][A-Za-z0-9]*(\.[A-Za-z][A-Za-z0-9]*)+=[A-Za-z0-9._:/@{}-]*")
 
 
 def _live(text: str) -> str:
