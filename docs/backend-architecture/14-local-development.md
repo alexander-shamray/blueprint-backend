@@ -258,6 +258,18 @@ services:
       payments-api: { condition: service_started }
       web-bff: { condition: service_started }
 
+  # §14.1's pair rule for ADR-051's projection: the migrator one-shot the
+  # host gates on.
+  bff-migrator:
+    build:
+      context: ../../..
+      dockerfile: src/BFF/Web.Bff.Migrator/Dockerfile
+    environment:
+      ConnectionStrings__BffMigrator: "${BFF_MIGRATOR_CONNECTION:-Server=sql;Database=Bff;User Id=sa;Password=${SQL_PASSWORD:-Local_Dev_Pa55w0rd!};TrustServerCertificate=True}"
+    depends_on:
+      sql: { condition: service_healthy }
+    restart: "no"
+
   # Client credentials, because this host calls a peer synchronously (§9.7);
   # §15.4 says which other hosts do (ADR-052). Named web-bff, matching the
   # Aspire resource (§14.2) and the YARP destination (§10.2) — the gateway
@@ -269,6 +281,7 @@ services:
       dockerfile: src/BFF/Web.Bff/Dockerfile
     environment:
       ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__Bff: "${BFF_CONNECTION:-Server=sql;Database=Bff;User Id=sa;Password=${SQL_PASSWORD:-Local_Dev_Pa55w0rd!};TrustServerCertificate=True}"
       Identity__Authority: "http://keycloak:8080/realms/commerce"
       # Required by ValidateOnStart (§15.4) — this host refuses to boot
       # without them. Local values only; production mounts a secret.
@@ -278,7 +291,8 @@ services:
       OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4317"
     ports: [ "127.0.0.1:5200:8080" ]
     depends_on:
-      # Keycloak only. catalog-api is elided from this file (see the comment
+      bff-migrator: { condition: service_completed_successfully }
+      # Keycloak. catalog-api is elided from this file (see the comment
       # above the gateway), and Compose rejects a dependency on a service it
       # cannot see — one undefined name fails the whole `up`, not one service.
       keycloak: { condition: service_healthy }
@@ -566,12 +580,13 @@ var coordination = builder
 // AppHost runs Ordering, so it does not have that excuse.
 var mq = builder.AddRabbitMQ("RabbitMq").WithManagementPlugin();
 
-// One database per service that this AppHost runs. The rest are omitted
+// One database per service or host that this AppHost runs. The rest are omitted
 // deliberately — adding a database without the service and migrator
 // resources that own it creates a schema nothing maintains, which is the
 // shape §4.1 rules out.
 var orderingDb = sql.AddDatabase("Ordering");
 var catalogDb = sql.AddDatabase("Catalog");
+var bffDb = sql.AddDatabase("Bff");
 
 var keycloak = builder
     .AddKeycloak("keycloak", 8080)
@@ -627,6 +642,11 @@ var orderingMigrator = builder
 var catalogMigrator = builder
     .AddProject<Projects.Catalog_Migrator>("catalog-migrator")
     .WithReference(catalogDb, connectionName: "CatalogMigrator")
+    .WaitFor(sql);
+
+var bffMigrator = builder
+    .AddProject<Projects.Web_Bff_Migrator>("bff-migrator")
+    .WithReference(bffDb, connectionName: "BffMigrator")
     .WaitFor(sql);
 
 var ordering = WithPlatformIdentity(
@@ -706,6 +726,8 @@ WithPlatformIdentity(
 // added that calls a peer, ADR-017's hop budget is the first check.
 WithPlatformIdentity(
     builder.AddProject<Projects.Web_Bff>("web-bff")
+        .WithReference(bffDb).WaitFor(bffDb)
+        .WaitForCompletion(bffMigrator)
         .WithReference(catalog)
         .WithHttpHealthCheck("/health/ready"),
     callerClientId: "web-bff");

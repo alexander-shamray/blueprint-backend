@@ -1506,12 +1506,14 @@ outside, and only one of them is a deploy that should proceed.
 
 The rule that separates them — **a host with a connection string has a
 readiness check, and a host without one does not** — is mechanised by the
-guard above rather than left as prose. The **gateway** and the **BFF** own no
-database (§4.2), so they declare their empty set at the call site and an
-absence becomes a written decision. Every other host fails to start: each
-service owns a schema, including the two with no public API, since Shipping
-and Notifications both ship a migrator and both register a SQL check (§4.1,
-[§3.2](03-bounded-contexts.md)).
+guard above rather than left as prose. The **gateway** owns no database
+(§4.2), so it declares its empty set at the call site and an absence becomes
+a written decision. Every other host fails to start: each service owns a
+schema, including the two with no public API, since Shipping and
+Notifications both ship a migrator and both register a SQL check (§4.1,
+[§3.2](03-bounded-contexts.md)), and so does the BFF, whose projection is a
+schema of its own
+([ADR-051](adr/ADR-051-the-buyers-order-read-is-a-projection-in-the-bff.md)).
 
 **The guard tests the set, not any member of it**, and the bound is stated
 rather than left to be discovered, because a guard read as stronger than it is

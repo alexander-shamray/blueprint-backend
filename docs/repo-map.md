@@ -297,11 +297,14 @@ src/Gateway/Gateway.Api/     the edge, and the second host. One
                              no database, so neither layer has anything to
                              hold. appsettings.json is the deliverable as much
                              as Program.cs is, and is under test
-src/BFF/Web.Bff/             the third host, and the one that calls a peer
-                             synchronously on a request path (§9.7, ADR-017)
-                             — it holds client credentials because of it, as
-                             every caller of a peer does (§11.5, ADR-052).
-                             Same shape as the gateway
+src/BFF/                     the third host, Web.Bff, and the one that calls
+                             a peer synchronously on a request path (§9.7,
+                             ADR-017) — it holds client credentials because
+                             of it, as every caller of a peer does (§11.5,
+                             ADR-052). Beside it, Web.Bff.Persistence and
+                             Web.Bff.Migrator: ADR-051's projection is a
+                             schema of its own, kept out of the host so the
+                             migrator references no web host
 src/Services/Catalog/        §4.1's project set — Domain, Application,
                              Infrastructure, Migrator, Api. The first real
                              service, the scaffold's template, and the first

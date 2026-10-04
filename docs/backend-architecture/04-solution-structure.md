@@ -26,12 +26,16 @@ A monorepo makes cross-cutting changes and contract updates atomic and reviewabl
 │   │   └── Gateway.Api/                YARP host
 │   │
 │   ├── BFF/
-│   │   └── Web.Bff/                    Aggregation for the web client (§10.1).
-│   │                                   The only host that calls a service
-│   │                                   synchronously on a request path (§9.7,
-│   │                                   ADR-052); it binds Identity:Client, and
-│   │                                   the grant's code is
-│   │                                   Common.Infrastructure's (§11.5)
+│   │   ├── Web.Bff/                    Aggregation for the web client (§10.1).
+│   │   │                               The only host that calls a service
+│   │   │                               synchronously on a request path (§9.7,
+│   │   │                               ADR-052); it binds Identity:Client, and
+│   │   │                               the grant's code is
+│   │   │                               Common.Infrastructure's (§11.5)
+│   │   ├── Web.Bff.Persistence/        ADR-051's projection schema: the
+│   │   │                               context and its migrations, and nothing
+│   │   │                               a web host carries
+│   │   └── Web.Bff.Migrator/           Migration job host (§7.4)
 │   │
 │   └── Services/
 │       ├── Catalog/
@@ -81,8 +85,10 @@ A monorepo makes cross-cutting changes and contract updates atomic and reviewabl
 │   ├── Web.Bff.Tests/                  §9.7's hop and §11.5's credentials: the
 │   │                                   resilience hierarchy read off the built
 │   │                                   host, the quote endpoint over a real
-│   │                                   gRPC server on loopback, and the ONE
-│   │                                   suite in the solution that runs a real
+│   │                                   gRPC server on loopback, ADR-051's
+│   │                                   schema through the real migrator, and
+│   │                                   the ONE suite in the solution that runs
+│   │                                   a real
 │   │                                   Keycloak — the audience mapper it proves
 │   │                                   is realm configuration, so nothing
 │   │                                   compiles differently when it is missing
@@ -1183,9 +1189,12 @@ because an empty predicate set is a passing predicate set. The parameter is the
 only thing that separates them, and the **default is the failure** — so the
 burden falls on the host with nothing to declare rather than on the one that
 quietly forgot.
-Two hosts pass it — this one and the BFF, which §13.5 names as the two whose
-dependencies do not gate readiness. Neither owns *none*: the gateway proxies
-four services and the BFF calls Catalog (§9.7). Every service fails to start
+One host passes it — this one, which §13.5 names as the host whose
+dependencies do not gate readiness. It does not own *none*: it proxies the
+services it routes to. The BFF does not pass it, because its projection is a
+schema of its own
+([ADR-051](adr/ADR-051-the-buyers-order-read-is-a-projection-in-the-bff.md)) and so a readiness check of its own, which
+Catalog's hop is deliberately not part of (§9.7). Every service fails to start
 without its own checks.
 
 What matters as much is that the probes stay **anonymous**: mapped inline after
