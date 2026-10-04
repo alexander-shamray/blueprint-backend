@@ -137,6 +137,18 @@ public sealed class OrderEndpointTests(BffServiceFixture fixture) : IAsyncLifeti
         fixture.Factory.Tokens.Issued.ShouldBe(before, "the read makes no synchronous call (ADR-051)");
     }
 
+    [Fact]
+    public async Task A_malformed_id_is_refused_as_not_found_and_never_as_a_fault()
+    {
+        using HttpClient client = As(_buyer);
+
+        HttpResponseMessage response = await client.GetAsync("/v1/orders/not-a-guid", Ct);
+
+        // The {id:guid} constraint leaves no route to match, so the status-code pages answer, not the handler.
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        response.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
+    }
+
     private static async Task<(int Status, string? Code, string? Detail)> Problem(HttpResponseMessage response)
     {
         using JsonDocument body = JsonDocument.Parse(await response.Content.ReadAsStringAsync(Ct));
