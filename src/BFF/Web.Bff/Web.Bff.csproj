@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
 
-  <!-- The host, with ADR-051's schema beside it in Web.Bff.Persistence: §4.1's tree gives it no Domain or Application project. -->
+  <!-- The host, with ADR-051's schema in Web.Bff.Persistence: §4.1 gives it no Domain or Application project. -->
 
   <ItemGroup>
     <!-- The client half of §9.7's hop; a client-only project has to name Grpc.Tools itself. -->
@@ -40,7 +40,7 @@
       CancelReasons, CancelOrigins and OrderLimits.
     -->
     <ProjectReference Include="..\..\BuildingBlocks\Common.Contracts\Common.Contracts.csproj" />
-    <!-- §11.5's client-credentials grant, a building block by ADR-052; §4.1's tree gives the BFF no Infrastructure project. -->
+    <!-- §11.5's client-credentials grant, a building block by ADR-052; §4.1 gives the BFF no Infrastructure project. -->
     <ProjectReference Include="..\..\BuildingBlocks\Common.Infrastructure\Common.Infrastructure.csproj" />
     <!-- ADR-051's schema, which the migrator applies and this host reads and writes. -->
     <ProjectReference Include="..\Web.Bff.Persistence\Web.Bff.Persistence.csproj" />

@@ -7,7 +7,7 @@ using Xunit;
 
 namespace Web.Bff.Tests;
 
-/// <summary>The read against rows the real handlers wrote: ownership, the keyset and the lines each page carries.</summary>
+/// <summary>The read against rows the real handlers wrote: ownership, the keyset and each page's lines.</summary>
 [Collection(nameof(BffIntegrationCollection))]
 public sealed class OrderReaderTests(BffServiceFixture fixture) : IAsyncLifetime
 {

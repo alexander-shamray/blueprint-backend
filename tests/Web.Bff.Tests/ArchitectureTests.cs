@@ -6,7 +6,7 @@ using Xunit;
 
 namespace Web.Bff.Tests;
 
-/// <summary>§4.2's <c>*.Migrator</c> rules over the BFF's three projects (§4.1), which no service suite reaches.</summary>
+/// <summary>§4.2's <c>*.Migrator</c> rules over the BFF's three projects (§4.1), which no other suite does.</summary>
 public class ArchitectureTests
 {
     /// <summary>The projects §4.1 gives the BFF, anchored one type each.</summary>
