@@ -13,6 +13,7 @@
   <Folder Name="/src/BFF/">
     <Project Path="src/BFF/Web.Bff/Web.Bff.csproj" />
     <Project Path="src/BFF/Web.Bff.Persistence/Web.Bff.Persistence.csproj" />
+    <Project Path="src/BFF/Web.Bff.Migrator/Web.Bff.Migrator.csproj" />
   </Folder>
   <Folder Name="/src/Services/" />
   <Folder Name="/src/Services/Catalog/">

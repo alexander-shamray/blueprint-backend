@@ -74,6 +74,7 @@ public class OptionsValidationTests
         protected override IEnumerable<KeyValuePair<string, string?>> Settings =>
         [
             new(AuthenticationExtensions.AuthorityKey, UnreachableAuthority),
+            new("ConnectionStrings:Bff", UnreachableDatabase),
             .. Members.Select(name => new KeyValuePair<string, string?>(
                 $"{ServiceIdentityOptions.SectionName}:{name}",
                 string.Equals(name, member, StringComparison.Ordinal) ? "" : "supplied"))
