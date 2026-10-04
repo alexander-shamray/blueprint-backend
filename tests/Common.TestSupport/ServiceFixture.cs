@@ -100,9 +100,6 @@ public abstract class ServiceFixture<TFactory, TEntryPoint, TDbContext> : IAsync
     /// <summary>The write grant the harness needs past ADR-036's, or null where the imported one serves.</summary>
     protected virtual string? HarnessWrite(string granted) => null;
 
-    /// <summary>False while <c>definitions.json</c> grants the account nothing, so no grant is widened.</summary>
-    protected virtual bool BrokerAccountGranted => true;
-
     protected virtual Task StartStubsAsync() => Task.CompletedTask;
 
     protected virtual void ResetStubs()
@@ -135,10 +132,6 @@ public abstract class ServiceFixture<TFactory, TEntryPoint, TDbContext> : IAsync
     /// <summary>Grants <see cref="HarnessWrite"/>'s write, keeping the imported configure and read.</summary>
     private async Task WidenWriteForTheHarnessAsync()
     {
-        // An account with no grant has no scope to preserve, and its host does not connect yet (ADR-036).
-        if (!BrokerAccountGranted)
-            return;
-
         string user = $"{_schema}-svc";
         (string configure, string granted, string read) = ImportedGrant();
 
