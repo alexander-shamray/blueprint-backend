@@ -3,6 +3,7 @@ using Common.Contracts.Catalog.V1;
 using Common.Contracts.Ordering.V1;
 using Common.Contracts.Payments.V1;
 using Common.Contracts.Shipping.V1;
+using Dapper;
 using Microsoft.Data.SqlClient;
 using Shouldly;
 using Xunit;
@@ -136,6 +137,42 @@ public sealed class ReplayTests(BffServiceFixture fixture) : IAsyncLifetime
         await _outboxes.StageAsync(Named("Payments"), Processed, authorised);
         await _outboxes.StageAsync(Named("Shipping"), Processed, missed);
 
+        int skippedBefore = await fixture.QueueDepthAsync($"{Replay.Queue}_skipped");
+
+        StringWriter output = new();
+        ReplayReport report = await Replay.RunAsync(
+            Settings(),
+            reset: false,
+            output,
+            Replay.BrokerDeadline,
+            TestContext.Current.CancellationToken);
+
+        report.SentMessageIds.ShouldBe([missed.MessageId], "a repair sends only what the inbox has not handled");
+        report.SkippedCount.ShouldBe(2);
+        output.ToString().ShouldContain("Skipped 2 event(s)");
+        await BffServiceFixture.WaitUntilAsync(async () => (await fixture.InboxAsync()).Count == 3);
+        await BffServiceFixture.WaitUntilAsync(async () => await fixture.QueueDepthAsync(Replay.Queue) == 0);
+        (await fixture.QueueDepthAsync($"{Replay.Queue}_skipped"))
+            .ShouldBe(skippedBefore, "a handled copy was sent and dropped by the inbox");
+
+        ProjectedOrder after = (await fixture.OrderAsync(order)).ShouldNotBeNull();
+        after.DispatchedAt.ShouldBe(missed.OccurredAt);
+        (after with { DispatchedAt = null, TrackingNumber = null, AsOf = before.AsOf }).ShouldBe(before);
+        (await fixture.InboxAsync(placed.MessageId)).Count.ShouldBe(1, "the inbox drops a copy it has handled");
+    }
+
+    [Fact]
+    public async Task A_repair_still_sends_a_row_whose_inbox_entry_was_purged()
+    {
+        OrderPlaced placed = OrderEvents.Placed(Guid.CreateVersion7(), Guid.CreateVersion7(), At);
+        await fixture.DeliverAsync(placed);
+        await using (SqlConnection connection = new(fixture.ConnectionString))
+        {
+            await connection.ExecuteAsync("DELETE FROM bff.InboxMessages;");
+        }
+
+        await _outboxes.StageAsync(Named("Ordering"), Processed, placed);
+
         ReplayReport report = await Replay.RunAsync(
             Settings(),
             reset: false,
@@ -143,14 +180,9 @@ public sealed class ReplayTests(BffServiceFixture fixture) : IAsyncLifetime
             Replay.BrokerDeadline,
             TestContext.Current.CancellationToken);
 
-        report.SentMessageIds.Count.ShouldBe(3, "a repair sends the window and leaves the inbox to drop what it has");
-        await BffServiceFixture.WaitUntilAsync(async () => (await fixture.InboxAsync()).Count == 3);
-        await BffServiceFixture.WaitUntilAsync(async () => await fixture.QueueDepthAsync(Replay.Queue) == 0);
-
-        ProjectedOrder after = (await fixture.OrderAsync(order)).ShouldNotBeNull();
-        after.DispatchedAt.ShouldBe(missed.OccurredAt);
-        (after with { DispatchedAt = null, TrackingNumber = null, AsOf = before.AsOf }).ShouldBe(before);
-        (await fixture.InboxAsync(placed.MessageId)).Count.ShouldBe(1, "the inbox drops a copy it has handled");
+        report.SentMessageIds.ShouldBe([placed.MessageId]);
+        report.SkippedCount.ShouldBe(0);
+        await BffServiceFixture.WaitUntilAsync(async () => (await fixture.InboxAsync()).Count == 1);
     }
 
     [Fact]

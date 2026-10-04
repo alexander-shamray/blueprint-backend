@@ -159,8 +159,8 @@ WHERE MessageId = @MessageId;
 - **The outbox row from 2 still exists**: run the rebuild tool's repair, the
   run without `--reset`, per
   [`tools/bff-replay/README.md`](../../tools/bff-replay/README.md). It sends
-  every processed row in the window, not this one alone, to the BFF's queue
-  only, and the BFF's inbox drops what it has already handled. **Never
+  every processed row in the window the BFF's inbox has not handled, not this
+  one alone, to the BFF's queue only. **Never
   republish the row to the exchange**, which would deliver it a second time to
   every other consumer of the event.
 - **It is gone**: nothing the platform still holds can attribute this order
