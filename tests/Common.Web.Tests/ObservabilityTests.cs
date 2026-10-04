@@ -34,6 +34,7 @@ public class ObservabilityTests
         "Shipping.Outbound",
         "Shipping.Outbox",
         "Notifications.Outbound",
+        "Web.Bff.Projection",
         "Commerce.Requests",
         "Commerce.Messaging",
         "MassTransit",

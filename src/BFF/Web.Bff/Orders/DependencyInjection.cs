@@ -1,5 +1,6 @@
 using Common.Application;
 using Common.Infrastructure.Messaging;
+using Web.Bff.Observability;
 
 namespace Web.Bff.Orders;
 
@@ -13,6 +14,11 @@ public static class DependencyInjection
 
         // The inbox filter's and the consumer's instruments (§13.3).
         services.AddSingleton<MessagingMetrics>();
+
+        // The unattributed gauge, and the start-time construction §13.6 asks of every instrument.
+        services.AddSingleton<IProjectionStats, ProjectionStats>();
+        services.AddSingleton<ProjectionMetrics>();
+        services.AddHostedService<MetricsInitialiser>();
 
         return services;
     }
