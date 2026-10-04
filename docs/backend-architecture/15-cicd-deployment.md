@@ -997,11 +997,11 @@ identity:
 
 > **A further chart setting `identity.clientCredentials: true` is a design
 > change, not a configuration change.** It means another host started calling
-> out under a grant of its own, which is ADR-017's budget being spent — so the
-> review question is not "does the secret exist" but "why is this call not an
-> event". ADR-052 is where that question was answered for each worker it gives
-> a read, so a review of those charts cites that record rather than arguing it
-> again.
+> out under a grant of its own, which ADR-017's budget or ADR-052's reads have
+> to argue for — so the review question is not "does the secret exist" but "why
+> is this call not an event". ADR-052 is where that question was answered for
+> each worker it gives a read, so a review of those charts cites that record
+> rather than arguing it again.
 
 The gateway's chart is not a service chart with the database parts deleted. It
 has no migrator, no client credentials, and two keys no service has — and every
