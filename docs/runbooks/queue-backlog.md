@@ -182,10 +182,13 @@ climbs while the relay and Keycloak both answer promptly is a send worker that
 cannot keep up with its population, and the answer is `replicaCount`, as the
 paragraph on a worker's replica count above says. One that climbs with either
 slow is a dependency holding every pass to its budget, so read those first:
-`notifications.mail.unavailable` and the `contact` step above, and the
-worker's outbound request duration by `server_address`.
-`notifications.contact.refused` counts a refusal and never a slow answer, so a
-flat one does not clear Keycloak.
+for Keycloak, the `contact` step above and the worker's outbound HTTP request
+duration by `server_address`. `notifications.contact.refused` counts a refusal
+and never a slow answer, so a flat one does not clear Keycloak. The relay is
+not HTTP and no instrument times a submission: `notifications.mail.unavailable`
+counts a fault and never a slow answer either, so a relay that answers slowly
+inside `MailHop`'s budget shows in none of these, and is ruled out at the relay
+before `replicaCount` is raised.
 
 ```promql
 max(notifications_overdue_seconds)
