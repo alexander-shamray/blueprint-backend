@@ -40,7 +40,7 @@
       CancelReasons, CancelOrigins and OrderLimits.
     -->
     <ProjectReference Include="..\..\BuildingBlocks\Common.Contracts\Common.Contracts.csproj" />
-    <!-- §11.5's client-credentials grant, a building block by ADR-052; §4.1 gives the BFF no Infrastructure project. -->
+    <!-- §11.5's client-credentials grant, a building block (ADR-052); §4.1 gives the BFF no Infrastructure. -->
     <ProjectReference Include="..\..\BuildingBlocks\Common.Infrastructure\Common.Infrastructure.csproj" />
     <!-- ADR-051's schema, which the migrator applies and this host reads and writes. -->
     <ProjectReference Include="..\Web.Bff.Persistence\Web.Bff.Persistence.csproj" />
