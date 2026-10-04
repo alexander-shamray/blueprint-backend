@@ -196,7 +196,9 @@ it holds cross-boundary facts about each, and this is one.
 > because ADR-051 serves the buyer's order read from a projection rather
 > than from a fan-out. Reaching across §4.2 through a project reference
 > is still refused; a published contract is the supported way across, and
-> the reference itself still carries `OrderLimits` and nothing else.
+> what the reference carries is published contracts alone: `OrderLimits`,
+> the events ADR-051 consumes, and the `CancelReasons` and `CancelOrigins`
+> codes that map `OrderCancelled` to a buyer's status.
 
 ---
 
