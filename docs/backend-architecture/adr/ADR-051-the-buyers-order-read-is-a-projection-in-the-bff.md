@@ -125,6 +125,14 @@ broker's retention window and not from anything a reader can select from.
 > the host reads them. An order every one of whose events is older than
 > `RetentionPolicy.OutboxWindow` is not rebuilt; recovering it is the
 > database's backup.
+>
+> **The three events are not the only Ordering types the BFF reaches.** It
+> also names `CancelReasons` and `CancelOrigins`, to map `OrderCancelled`'s
+> reason and origin to [§10.7](../10-api-gateway.md)'s status, and
+> `OrderLimits`, to bound the checkout quote
+> ([ADR-045](ADR-045-the-checkout-quote-takes-quantities.md)). All three sit
+> in `Common.Contracts.Ordering.V1` beside the events, so the boundary the
+> supersession above protects holds: nothing of Ordering's own crosses it.
 
 ---
 
