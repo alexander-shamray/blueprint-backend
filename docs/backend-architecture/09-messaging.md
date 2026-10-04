@@ -1306,8 +1306,9 @@ The outbox guarantees **at-least-once** delivery, never exactly-once. A crash
 between publishing and marking processed republishes the message. This is
 correct and expected — which is why consumers must be idempotent.
 
-Retain processed rows for a few days for debugging, then delete them on a
-schedule. An outbox table nobody prunes grows without bound and eventually
+Retain processed rows for a few days, for debugging and as the last copy of
+a delivered event that [§10.7](10-api-gateway.md)'s rebuild replays, then
+delete them on a schedule. An outbox table nobody prunes grows without bound and eventually
 degrades the filtered index scan.
 
 ```sql
@@ -1458,9 +1459,9 @@ outbox rows rather than failing on a table it never created.
 [§8.5](08-caching-redis.md)'s `IdempotencyMarkers` is the durable half of the
 command idempotency key, composed against a registered `IdempotencyMarkerTable`
 on the same terms as the pair above. What it costs to purge is different in
-kind: a purged outbox row loses a debugging record and a purged inbox row
-loses a suppression the broker will not exercise again, where a purged marker
-loses the row that refuses a retry of a command that already committed. That
+kind: a purged outbox row loses a debugging record and a replayable event, a
+purged inbox row loses a suppression the broker will not exercise again, and
+a purged marker loses the row that refuses a retry of a command that already committed. That
 is why `RetentionPolicy.IdempotencyWindow` is the one window with a **floor** —
 it may not be shorter than the Redis claim it backs up
 ([ADR-037](adr/ADR-037-the-idempotency-marker-is-a-row-in-the-commands-own-transaction.md)),

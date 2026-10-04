@@ -13,7 +13,7 @@ public sealed record RetentionPolicy
     private readonly int _batchSize = 5000;
     private readonly int _maxBatchesPerPass = 20;
 
-    /// <summary>A soft window, because processed rows are kept only for debugging (§9.4).</summary>
+    /// <summary>A soft window, because processed rows are kept for debugging and for §10.7's replay (§9.4).</summary>
     public TimeSpan OutboxWindow
     {
         get => _outboxWindow;
