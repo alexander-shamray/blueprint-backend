@@ -1,3 +1,4 @@
+using System.Globalization;
 using Common.Contracts;
 using Common.TestSupport;
 using MassTransit;
@@ -56,6 +57,16 @@ public sealed class BffServiceFixture()
         // The inbox row is written after the handler's statement commits (§9.5), so its rows are there to read.
         await WaitUntilAsync(async () => (await InboxAsync(message.MessageId)).Count == 1);
     }
+
+    /// <summary>The container's broker, under the fixture's derived account, for a client outside the host.</summary>
+    public string BrokerAddress => BrokerConnectionString;
+
+    /// <summary>The messages on one queue, or zero for a queue the broker has never declared.</summary>
+    public async Task<int> QueueDepthAsync(string queue) =>
+        (await BrokerRowsAsync(["list_queues", "name", "messages"]))
+            .Where(columns => columns.Length == 2 && columns[0] == queue)
+            .Select(columns => int.Parse(columns[1], CultureInfo.InvariantCulture))
+            .SingleOrDefault();
 
     /// <summary>The exchanges bound to one queue, read from the broker itself.</summary>
     public async Task<string[]> BindingsAsync(string queue) =>
