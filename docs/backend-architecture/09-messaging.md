@@ -1476,9 +1476,9 @@ than the window's, and §8.5 owns that argument. A host that runs no command
 pipeline writes no marker — the BFF, whose projection only consumers write
 ([ADR-051](adr/ADR-051-the-buyers-order-read-is-a-projection-in-the-bff.md))
 — so it registers neither the marker table nor the claim store, and is given
-no marker statement. One registered without the other is refused when the
-service is built, because a marker the pass cannot ask about is one it could
-delete only by guessing.
+no marker statement. One registered without the other is refused by
+`RetentionPurgeService`'s constructor when the host starts, because a marker
+the pass cannot ask about is one it could delete only by guessing.
 
 **Its pass is two statements where the other two are one, and the cutoff it
 computes for itself *selects* rather than decides.** The two above are handed
@@ -1552,9 +1552,10 @@ instead of holding a connection until it is empty.
 
 **The claim store reaches the first of those, and the direction it fails in is
 the reason it is a constructor argument.** `RetentionPurgeService` takes
-`IIdempotencyStore`, so a service that has markers and no store fails to
-resolve at startup rather than running a pass that deletes what it should have
-asked about. An unreachable store then throws out of `UnheldAsync` into the
+`IIdempotencyStore` beside the marker table, and its constructor refuses one
+without the other, so a service that has markers and no store fails when the
+host starts rather than running a pass that deletes what it should have asked
+about. An unreachable store then throws out of `UnheldAsync` into the
 same `catch`, which logs, deletes nothing and retries next interval — so a
 Redis outage costs the marker pass rather than a guarantee, and no more than
 that, since the outbox and the inbox are deleted before `UnheldAsync` is called

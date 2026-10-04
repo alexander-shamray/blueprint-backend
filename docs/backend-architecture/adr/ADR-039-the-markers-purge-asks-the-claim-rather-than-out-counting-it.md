@@ -220,6 +220,16 @@ This decision keeps the TTL and moves the question instead.
 > belongs beside the record it corrects, where a reader of ADR-039 will meet
 > it.
 
+> **A missing store is refused by the constructor rather than by DI, and
+> nothing above has been edited.**
+> [ADR-051](ADR-051-the-buyers-order-read-is-a-projection-in-the-bff.md)'s
+> BFF runs no command pipeline and writes no marker, so
+> `RetentionPurgeService` takes the marker table and the store as optional,
+> and its own guard throws when exactly one is registered. A service that has
+> markers without the store still fails when the host starts, rather than
+> running a pass that deletes what it should have asked about; what changed
+> is the exception, not the direction.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)
