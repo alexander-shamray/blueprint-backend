@@ -27,10 +27,10 @@ canary:
 image:
   registry: registry.example.com/commerce
   api: web-bff
-  # No migrator key: the BFF owns no database (§4.2), so there is nothing to
-  # migrate — and this chart carries no templates/migrate-job.yaml either, so
-  # the absence is structural rather than a value that happens to be unset.
-  # smoke.sh asserts the two halves agree.
+  # ADR-051's projection schema, applied by the pre-upgrade hook (§7.4) before
+  # any pod of this tag starts; smoke.sh asserts the key and
+  # templates/migrate-job.yaml agree.
+  migrator: bff-migrator
   tag: ""
   pullPolicy: IfNotPresent
 
@@ -41,6 +41,13 @@ ports:
 resources:
   requests: { cpu: 100m, memory: 128Mi }
   limits:   { memory: 256Mi }
+
+migrationJob:
+  # Smaller than the host's: the migrator opens one connection, applies a
+  # migration and exits (§7.4). It is not serving anything.
+  resources:
+    requests: { cpu: 50m, memory: 128Mi }
+    limits:   { memory: 256Mi }
 
 autoscaling:
   enabled: true
@@ -92,16 +99,22 @@ identity:
     name: web-bff-identity
     key: client-secret
 
-# No connection strings of any kind, and therefore no readiness check (§13.5):
-# a host with a connection string has one and a host without one does not.
-# /health/ready answers immediately here, correctly — and the host declares
-# that rather than inheriting it from an empty set that would pass either way:
-# MapCommonHealthEndpoints(ownsNoReadinessDependencies: true). Catalog's synchronous hop
-# (§9.7) is deliberately not a readiness dependency, since a BFF that reports
-# unready when Catalog is down takes itself out of rotation for a fault it is
-# meant to degrade around.
+# ADR-051's projection. GetConnectionString("Bff") at runtime, "BffMigrator"
+# in the hook. It is the one readiness check (§13.5): Catalog's hop is not,
+# since a BFF unready whenever Catalog is down takes itself out of rotation
+# for a fault it exists to degrade around.
 database:
-  enabled: false
+  enabled: true
+  connectionName: Bff
+  runtimeSecretRef:
+    name: web-bff-database
+    key: connection-string
+  migratorSecretRef:
+    name: web-bff-migrator-secret
+    key: connection-string
+
+# This host reads no ConnectionStrings:RabbitMq, and smoke.sh holds that to
+# src/ in the direction it can read.
 broker:
   enabled: false
 

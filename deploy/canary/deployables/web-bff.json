@@ -4,7 +4,7 @@
   "source": "src/BFF/Web.Bff",
   "signals": ["http"],
   "smoke": {
-    "migrator": false,
+    "migrator": true,
     "autoscaled": true,
     "capabilities": ["clientCredentials"],
     "overlay": []

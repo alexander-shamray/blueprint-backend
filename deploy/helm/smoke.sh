@@ -936,11 +936,11 @@ for chart in $MIGRATOR_CHARTS; do
         grep -q 'app.kubernetes.io/component: migrator' "$OUT/$chart.yaml"
 done
 
-# The gateway and the BFF own no database (§10.1, §4.2), so the hook has
-# nothing to run for them. The output assertion alone is vacuous — those
-# charts carry no migration template at all (§15.3) — so the subject is the
-# agreement between the two halves: a chart has a migration template exactly
-# when its values name a migrator image, and it fires broken from either side.
+# The gateway owns no database (§10.1, §4.2), so the hook has nothing to run
+# for it. The output assertion alone is vacuous — that chart carries no
+# migration template at all (§15.3) — so the subject is the agreement between
+# the two halves: a chart has a migration template exactly when its values
+# name a migrator image, and it fires broken from either side.
 for chart in $DATABASELESS_CHARTS; do
     check "$chart renders no migration Job" test "$(count '^kind: Job$' "$OUT/$chart.yaml")" -eq 0
     check "$chart mounts no connection string at all" \
