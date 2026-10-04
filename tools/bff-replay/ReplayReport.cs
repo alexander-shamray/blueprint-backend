@@ -13,6 +13,9 @@ public sealed class ReplayReport
 
     public IReadOnlyDictionary<string, int> SentByType => _byType;
 
+    /// <summary>Rows in the window the BFF's inbox had already recorded, which a repair leaves unsent.</summary>
+    public int SkippedCount { get; private set; }
+
     /// <summary>The oldest <c>OccurredAt</c> a publisher held: the window this replay reached there.</summary>
     public DateTimeOffset? OldestFrom(Publisher publisher) =>
         _byPublisher.TryGetValue(publisher.Name, out (int Count, DateTimeOffset Oldest) reached)
@@ -23,7 +26,9 @@ public sealed class ReplayReport
     public string Describe(Publisher publisher) =>
         _byPublisher.TryGetValue(publisher.Name, out (int Count, DateTimeOffset Oldest) reached)
             ? $"{publisher.Name}: {reached.Count} event(s) sent, the oldest from {reached.Oldest:O}."
-            : $"{publisher.Name}: none of ADR-051's eight in its outbox window.";
+            : $"{publisher.Name}: no event of ADR-051's eight sent from its outbox window.";
+
+    internal void Skipped() => SkippedCount++;
 
     internal void Sent(Publisher publisher, string messageType, OutboxRow row)
     {

@@ -17,9 +17,12 @@ BFF database's backup, not this.
 
 So, in order of preference:
 
-1. **Repair** — run with no argument. Every row in the window is sent; the
-   BFF's inbox drops each one it has already handled, and the rest fill what
-   the projection never received. Nothing is deleted. This is the answer to
+1. **Repair** — run with no argument. Every row in the window whose message
+   the BFF's inbox has not recorded is sent, and fills what the projection
+   never received; a row it has recorded is left unsent, since a copy the
+   inbox drops would sit on `bff-order-events_skipped`, which pages. A row
+   whose inbox entry retention has purged is sent again, harmlessly, as the
+   projection's writes are set-once. Nothing is deleted. This is the answer to
    a gap: an order stuck as unattributed, a missing despatch.
 2. **Rebuild** — run with `--reset`. The projection's order rows, their lines
    and the queue's inbox rows are deleted in one transaction, then the window
@@ -109,7 +112,8 @@ connection stops a repair or a `--reset` with the projection untouched.
 One line per publisher as it finishes — how many events it sent, and the
 `OccurredAt` of the oldest. **That oldest instant is the window the rebuild
 actually reached**: an order placed before the oldest of the four lines is
-outside it. Then a count per event type, and the total.
+outside it. Then a count per event type, and, for a repair, the number of
+rows it left unsent because the inbox had handled them.
 
 | Exit | Meaning |
 |---|---|

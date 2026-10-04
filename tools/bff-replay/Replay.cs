@@ -68,6 +68,8 @@ public static class Replay
                 await output.WriteLineAsync($"Reset: the order rows and {Queue}'s inbox rows are deleted.");
             }
 
+            // A copy the inbox would drop is dropped before the queue, where it would land in _skipped, which pages.
+            HashSet<Guid> handled = reset ? [] : await ProjectionReset.HandledAsync(settings.Bff, settings.Broker, ct);
             ReplayReport report = new();
 
             for (int i = 0; i < settings.Publishers.Count; i++)
@@ -77,6 +79,12 @@ public static class Replay
 
                 await foreach (OutboxRow row in OutboxRows.ReadAsync(sources[i], publisher, names).WithCancellation(ct))
                 {
+                    if (handled.Contains(row.MessageId))
+                    {
+                        report.Skipped();
+                        continue;
+                    }
+
                     IIntegrationEvent message = ReplayPayload.Read(row, types, json);
 
                     // To the queue alone; the grant would refuse a contract's exchange in any case (ADR-036).
@@ -98,6 +106,9 @@ public static class Replay
 
             foreach ((string type, int count) in report.SentByType)
                 await output.WriteLineAsync($"  {type}: {count}");
+
+            if (!reset)
+                await output.WriteLineAsync($"Skipped {report.SkippedCount} event(s) the BFF's inbox had handled.");
 
             return report;
         }

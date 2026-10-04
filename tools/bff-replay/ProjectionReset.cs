@@ -44,6 +44,21 @@ public static class ProjectionReset
             : $"{vhost}/{queue}";
     }
 
+    /// <summary>The ids the queue's inbox holds, in one read, so a repair can leave them unsent.</summary>
+    public static async Task<HashSet<Guid>> HandledAsync(string connectionString, string broker, CancellationToken ct)
+    {
+        await using SqlConnection connection = new(connectionString);
+
+        return
+        [
+            .. await connection.QueryAsync<Guid>(
+                new CommandDefinition(
+                    $"SELECT MessageId FROM {new InboxTable(BffSchema.Name).QualifiedName} WHERE Endpoint = @Endpoint;",
+                    new { Endpoint = EndpointFor(broker, Replay.Queue) },
+                    cancellationToken: ct))
+        ];
+    }
+
     public static async Task RunAsync(string connectionString, string broker, CancellationToken ct)
     {
         await using SqlConnection connection = new(connectionString);
