@@ -30,10 +30,17 @@ public static class ProjectionReset
         COMMIT;
         """;
 
+    /// <summary>Every order the buyers placed is deleted here, which the 30 s default would not finish.</summary>
+    public static readonly TimeSpan CommandTimeout = TimeSpan.FromMinutes(10);
+
     public static async Task RunAsync(string connectionString, CancellationToken ct)
     {
         await using SqlConnection connection = new(connectionString);
         await connection.ExecuteAsync(
-            new CommandDefinition(Sql, new { Endpoint = Replay.Queue }, cancellationToken: ct));
+            new CommandDefinition(
+                Sql,
+                new { Endpoint = Replay.Queue },
+                commandTimeout: (int)CommandTimeout.TotalSeconds,
+                cancellationToken: ct));
     }
 }
