@@ -294,7 +294,9 @@ public sealed class ReplayTests(BffServiceFixture fixture) : IAsyncLifetime
     private static string WithKey(string address, string key)
     {
         Uri parsed = new(address);
-        string account = parsed.UserInfo.Length == 0 ? "bff-svc" : Uri.UnescapeDataString(parsed.UserInfo.Split(':')[0]);
+        string account = parsed.UserInfo.Length == 0
+            ? "bff-svc"
+            : Uri.UnescapeDataString(parsed.UserInfo.Split(':')[0]);
 
         return $"{parsed.Scheme}://{account}:{key}@{parsed.Authority}{parsed.PathAndQuery}";
     }
