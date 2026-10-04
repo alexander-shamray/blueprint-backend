@@ -25,10 +25,16 @@ public class BffFactory : WebApplicationFactory<Program>
     public const string UnreachableDatabase =
         "Server=tcp:sql.invalid,1433;Database=Bff;Encrypt=False;Connect Timeout=1";
 
+    /// <summary>A broker that does not resolve and carries no credential; the bus's start does not wait.</summary>
+    public const string UnreachableBroker = "amqp://bff-rabbit.invalid:5672";
+
     public Uri? PricingAddress { get; set; }
 
     /// <summary>The runtime key (§7.1), which <c>BffServiceFixture</c> points at its container.</summary>
     public string DatabaseConnectionString { get; set; } = UnreachableDatabase;
+
+    /// <summary>The bus's key (§9), which <c>BffServiceFixture</c> points at its container.</summary>
+    public string BrokerConnectionString { get; set; } = UnreachableBroker;
 
     /// <summary>The credential handler's token source, in place of <see cref="CachingTokenClient"/>.</summary>
     public RecordingTokenCache Tokens { get; } = new();
@@ -40,7 +46,8 @@ public class BffFactory : WebApplicationFactory<Program>
         new($"{ServiceIdentityOptions.SectionName}:ClientId", "web-bff-test"),
         new($"{ServiceIdentityOptions.SectionName}:ClientSecret", "not-a-real-secret"),
         new($"{ServiceIdentityOptions.SectionName}:Scope", Scope),
-        new("ConnectionStrings:Bff", DatabaseConnectionString)
+        new("ConnectionStrings:Bff", DatabaseConnectionString),
+        new("ConnectionStrings:RabbitMq", BrokerConnectionString)
     ];
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)

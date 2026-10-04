@@ -75,6 +75,7 @@ public class OptionsValidationTests
         [
             new(AuthenticationExtensions.AuthorityKey, UnreachableAuthority),
             new("ConnectionStrings:Bff", UnreachableDatabase),
+            new("ConnectionStrings:RabbitMq", UnreachableBroker),
             .. Members.Select(name => new KeyValuePair<string, string?>(
                 $"{ServiceIdentityOptions.SectionName}:{name}",
                 string.Equals(name, member, StringComparison.Ordinal) ? "" : "supplied"))

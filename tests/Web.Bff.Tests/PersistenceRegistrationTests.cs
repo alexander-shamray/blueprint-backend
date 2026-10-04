@@ -31,7 +31,7 @@ public sealed class PersistenceRegistrationTests
     }
 
     [Fact]
-    public void The_readiness_set_is_the_projections_sql_check()
+    public void The_readiness_set_is_sql_and_the_bus()
     {
         // Registration, asserted directly, since unwired readiness and instant readiness look alike (§13.5).
         using BffFactory factory = new();
@@ -39,9 +39,9 @@ public sealed class PersistenceRegistrationTests
             .GetRequiredService<IOptions<HealthCheckServiceOptions>>()
             .Value;
 
-        // Exactly this, so Catalog's hop joining the set fails here rather than in an outage (§9.7).
-        options.Registrations.Select(r => r.Name).ShouldBe(["sql"]);
-        options.Registrations.Single().Tags.ShouldContain("ready");
+        // Exactly these, so Catalog's hop joining the set fails here rather than in an outage (§9.7).
+        options.Registrations.Select(r => r.Name).ShouldBe(["sql", "masstransit-bus"], ignoreOrder: true);
+        options.Registrations.ShouldAllBe(r => r.Tags.Contains("ready"));
     }
 
     private sealed class NoDatabaseFactory : BffFactory

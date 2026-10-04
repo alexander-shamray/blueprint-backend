@@ -6,6 +6,8 @@ using Microsoft.Extensions.Http.Resilience;
 using Polly;
 using Web.Bff;
 using Web.Bff.Endpoints;
+using Web.Bff.Messaging;
+using Web.Bff.Orders;
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
@@ -82,6 +84,10 @@ pricing.AddHttpMessageHandler<ClientCredentialsHandler>();
 builder.Services.AddTransient<CorrelationIdHandler>();
 pricing.AddHttpMessageHandler<CorrelationIdHandler>();
 
+// ADR-051's projection and the bus that feeds it; the bus's check joins SQL's in readiness (§13.5).
+builder.Services.AddOrderProjection();
+builder.Services.AddMassTransitMessaging(builder.Configuration);
+
 WebApplication app = builder.Build();
 
 // Middleware order is behaviour, not formatting (§4.2); forwarded headers, CORS and the limiter are the edge's.
@@ -94,7 +100,7 @@ app.UseStatusCodePages();         // §10.5 — 401 and 403 as problem+json
 app.UseAuthentication();          // §11.3 — populates HttpContext.User
 app.UseAuthorization();           // §11.4
 
-// SQL gates readiness (§13.5); Catalog is left out, or its outage would unready this host too.
+// SQL and the bus gate readiness (§13.5); Catalog is left out, or its outage would unready this host too.
 app.MapCommonHealthEndpoints();   // §13.5 — anonymous; kubelet carries no token
 app.MapCheckoutEndpoints();
 
