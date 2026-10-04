@@ -1199,7 +1199,7 @@ services it routes to. The BFF does not pass it, because its projection is a
 schema of its own
 ([ADR-051](adr/ADR-051-the-buyers-order-read-is-a-projection-in-the-bff.md))
 and so a readiness check of its own, which
-Catalog's hop is deliberately not part of (§9.7). Every service fails to start
+Catalog's hop is deliberately not part of (§13.5). Every service fails to start
 without its own checks.
 
 What matters as much is that the probes stay **anonymous**: mapped inline after
