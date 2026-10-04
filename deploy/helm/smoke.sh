@@ -671,6 +671,9 @@ check 'notifications: three languages render three indexed keys, in order' \
 check 'notifications: a sender with a display name renders' \
     "$HELM" template notifications "$CHARTS_DIR/notifications" --set-string "image.tag=$TAG" \
     $(overlay_for notifications) --set-string 'mail.from=Commerce <no-reply@commerce.example.invalid>'
+check 'notifications: a quoted display name holding a comma renders' \
+    "$HELM" template notifications "$CHARTS_DIR/notifications" --set-string "image.tag=$TAG" \
+    $(overlay_for notifications) --set-string 'mail.from="Commerce\, Inc." <no-reply@commerce.example.invalid>'
 
 refuses_chart notifications 'a cleared relay host fails the render' \
     'mail.host is required' --set-string 'mail.host='
@@ -684,6 +687,8 @@ refuses_chart notifications 'a cleared sender fails the render' \
     'mail.from is required' --set-string 'mail.from='
 refuses_chart notifications 'two senders fail the render' \
     'not one mailbox this chart will accept' --set-string 'mail.from=a@x.invalid;b@y.invalid'
+refuses_chart notifications 'a sender with an unbalanced quote fails the render' \
+    'not one mailbox this chart will accept' --set-string 'mail.from="Commerce <no-reply@commerce.example.invalid>'
 refuses_chart notifications 'plain submission fails the render' \
     'this chart accepts StartTls alone' --set-string mail.security=None
 refuses_chart notifications 'anonymous submission fails the render' \
