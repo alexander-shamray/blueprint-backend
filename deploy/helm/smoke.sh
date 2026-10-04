@@ -674,6 +674,12 @@ check 'notifications: a sender with a display name renders' \
 check 'notifications: a quoted display name holding a comma renders' \
     "$HELM" template notifications "$CHARTS_DIR/notifications" --set-string "image.tag=$TAG" \
     $(overlay_for notifications) --set-string 'mail.from="Commerce\, Inc." <no-reply@commerce.example.invalid>'
+check 'notifications: a display name with an escaped quote renders' \
+    "$HELM" template notifications "$CHARTS_DIR/notifications" --set-string "image.tag=$TAG" \
+    $(overlay_for notifications) --set-string 'mail.from="Commerce \\"Shop\\"" <no-reply@commerce.example.invalid>'
+check 'notifications: a display name quoted after a word renders' \
+    "$HELM" template notifications "$CHARTS_DIR/notifications" --set-string "image.tag=$TAG" \
+    $(overlay_for notifications) --set-string 'mail.from=Commerce "Shop\, Ltd" <no-reply@commerce.example.invalid>'
 
 refuses_chart notifications 'a cleared relay host fails the render' \
     'mail.host is required' --set-string 'mail.host='
