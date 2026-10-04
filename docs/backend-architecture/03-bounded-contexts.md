@@ -75,6 +75,7 @@ subscriber silently executing your business commands.
 | **Payments** | PaymentIntent, Refund | `PaymentAuthorised`, `PaymentDeclined`, `PaymentRefunded` | `OrderPlaced`, `OrderCancelled` | `AuthorisePayment` |
 | **Shipping** | Shipment, TrackingEvent | `ShipmentDispatched`, `ShipmentDelivered` | `OrderConfirmed`, `OrderCancelled` | — |
 | **Notifications** | NotificationLog | — | `OrderPlaced`, `OrderConfirmed`, `OrderCancelled`, `PaymentDeclined`, `PaymentRefunded`, `ShipmentDispatched`, `ShipmentDelivered` | — |
+| **Web.Bff** — a host, not a service (§10.1) | The buyer's order projection, a read model owning no fact ([ADR-051](adr/ADR-051-the-buyers-order-read-is-a-projection-in-the-bff.md)) | — | `OrderPlaced`, `OrderConfirmed`, `OrderCancelled`, `PaymentAuthorised`, `PaymentRefunded`, `ShipmentDispatched`, `ShipmentDelivered`, `ProductPublished` | — |
 
 Every cell enumerates. "All customer-relevant events" would be shorter and is
 not a contract: it cannot be versioned, reviewed, or checked against what
@@ -282,8 +283,9 @@ Note the shapes this produces. **Shipping** and **Notifications** expose no
 public API at all — they are reached only through the broker, and
 [ADR-051](adr/ADR-051-the-buyers-order-read-is-a-projection-in-the-bff.md)
 settles the one read that would otherwise have asked Shipping for one.
-Only Notifications is a *pure* consumer, though: the table above gives
-Shipping two events to publish, and ADR-051's projection is built on them.
+Only Notifications is a *pure* consumer among the services, though: the
+table above gives Shipping two events to publish, and ADR-051's projection
+— the BFF's row, a host's rather than a service's — is built on them.
 **Notifications** is the simplest possible service and the last one built,
 and those two facts are not in tension. It contains almost no domain logic,
 which is what makes it cheap; it also publishes nothing and subscribes to

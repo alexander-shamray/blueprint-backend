@@ -282,6 +282,7 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       ConnectionStrings__Bff: "${BFF_CONNECTION:-Server=sql;Database=Bff;User Id=sa;Password=${SQL_PASSWORD:-Local_Dev_Pa55w0rd!};TrustServerCertificate=True}"
+      ConnectionStrings__RabbitMq: "amqp://bff-svc:local-dev-bff@rabbitmq:5672"
       Identity__Authority: "http://keycloak:8080/realms/commerce"
       # Required by ValidateOnStart (§15.4) — this host refuses to boot
       # without them. Local values only; production mounts a secret.
@@ -292,6 +293,7 @@ services:
     ports: [ "127.0.0.1:5200:8080" ]
     depends_on:
       bff-migrator: { condition: service_completed_successfully }
+      rabbitmq: { condition: service_healthy }
       # Keycloak. catalog-api is elided from this file (see the comment
       # above the gateway), and Compose rejects a dependency on a service it
       # cannot see — one undefined name fails the whole `up`, not one service.
@@ -727,6 +729,7 @@ WithPlatformIdentity(
 WithPlatformIdentity(
     builder.AddProject<Projects.Web_Bff>("web-bff")
         .WithReference(bffDb).WaitFor(bffDb)
+        .WithReference(mq).WaitFor(mq)
         .WaitForCompletion(bffMigrator)
         .WithReference(catalog)
         .WithHttpHealthCheck("/health/ready"),

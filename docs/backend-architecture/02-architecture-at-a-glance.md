@@ -28,7 +28,7 @@ graph TB
 graph TB
     subgraph Edge
         GW[API Gateway<br/>YARP]
-        BFF[Web BFF<br/>aggregation only]
+        BFF[Web BFF<br/>aggregation and the order projection]
         IDP[Keycloak<br/>OIDC provider]
     end
 
@@ -102,6 +102,7 @@ graph TB
     PAY <--> MQ
     SHP <--> MQ
     NOT <--> MQ
+    MQ --> BFF
 
     CAT --> OTEL
     ORD --> OTEL
