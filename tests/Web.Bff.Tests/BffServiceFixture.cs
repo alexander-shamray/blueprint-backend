@@ -57,6 +57,23 @@ public sealed class BffServiceFixture()
         await WaitUntilAsync(async () => (await InboxAsync(message.MessageId)).Count == 1);
     }
 
+    /// <summary>The exchanges bound to one queue, read from the broker itself.</summary>
+    public async Task<string[]> BindingsAsync(string queue) =>
+    [
+        .. (await BrokerRowsAsync(["list_bindings", "source_name", "destination_name"]))
+            .Where(columns => columns.Length == 2 && columns[1] == queue)
+            .Select(columns => columns[0])
+    ];
+
+    /// <summary>One account's grant on the default vhost, as the broker holds it rather than as a file says.</summary>
+    public async Task<(string Configure, string Write, string Read)> BrokerPermissionsAsync(string user)
+    {
+        string[] row = (await BrokerRowsAsync(["list_permissions"]))
+            .Single(columns => columns.Length == 4 && columns[0] == user);
+
+        return (row[1], row[2], row[3]);
+    }
+
     /// <summary>Polls to <see cref="StepDeadline"/> and throws when it lapses.</summary>
     public static async Task WaitUntilAsync(Func<Task<bool>> predicate)
     {
