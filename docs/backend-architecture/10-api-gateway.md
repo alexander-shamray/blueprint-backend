@@ -1358,9 +1358,13 @@ owner is never returned by either route.** It is invisible to everyone until
 an Ordering event supplies the customer, and if none ever arrives it stays
 invisible. That is the correct failure: an unattributable order shown to the
 wrong buyer is the one outcome this contract must not produce, and §11.4's
-subject rule is not satisfied by a best guess. ADR-051's rebuild replays from
-the broker's retention window, so an order whose `OrderPlaced` has aged out
-and whose `ShipmentDelivered` has not is exactly such a row.
+subject rule is not satisfied by a best guess. ADR-051's rebuild replays what
+the publishers' outboxes still hold, so an order whose `OrderPlaced` has aged
+out and whose `ShipmentDelivered` has not is exactly such a row. **That window
+is the publishers' outboxes**: RabbitMQ keeps nothing a consumer has
+acknowledged, so the last copy of a delivered event is its publisher's
+processed outbox row, kept for `RetentionPolicy.OutboxWindow` (§9.4), and
+`tools/bff-replay` replays those rows to this projection's queue alone.
 
 > **What Shipping settled, and what it was not asked for.** The shipment
 > half of the detail route is as rich as Shipping's published events, and
