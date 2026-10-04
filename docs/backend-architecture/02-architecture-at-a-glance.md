@@ -111,6 +111,7 @@ graph TB
     SHP --> OTEL
     NOT --> OTEL
     GW  --> OTEL
+    BFF --> OTEL
     OTEL --> GRAF
 ```
 
