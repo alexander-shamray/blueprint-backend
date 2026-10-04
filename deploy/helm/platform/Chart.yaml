@@ -27,6 +27,9 @@ dependencies:
   - name: shipping
     version: 0.1.0
     repository: file://../shipping
+  - name: notifications
+    version: 0.1.0
+    repository: file://../notifications
   - name: gateway
     version: 0.1.0
     repository: file://../gateway

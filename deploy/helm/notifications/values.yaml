@@ -1,0 +1,178 @@
+# Notifications, a worker with no front door: §3.2 gives it no API and no
+# command, so §15.3's worker shape is the chart — no Service, no Ingress, and
+# probes that reach the container port directly.
+
+workload:
+  # Named from the service and not the image: the migration Job is
+  # `<name>-migrate-<tag>`, and `notifications-worker` would leave a full
+  # commit SHA past the budget _migration-job.tpl enforces (ADR-050).
+  name: notifications
+
+# Three, and a decision rather than a copy: CPU is the wrong signal for a host
+# that waits on a relay and on Keycloak, and it idles through either outage
+# alike. Three is for availability across a node drain (§15.3).
+replicaCount: 3
+
+# §15.5's canary track, and off is what every ordinary release means. Turned
+# on, this chart renders the second of two Deployments, and the stable release
+# keeps the names it owns (ADR-022). Set by the rollout, not by an operator.
+canary:
+  enabled: false
+
+image:
+  # Registry namespace only; each workload appends its own name (§7.4).
+  registry: registry.example.com/commerce
+  # `-worker`, not `-api`: the image is the host, and this host is a worker.
+  api: notifications-worker
+  migrator: notifications-migrator
+  # Supplied by CI, never "latest", and empty rather than defaulted: a deploy
+  # that cannot name its tag must fail, not roll something (§15.3).
+  tag: ""
+  pullPolicy: IfNotPresent
+
+ports:
+  # §13.5's health endpoint and nothing else, declared because the kubelet
+  # reaches a container port without a Service in front of it (§15.3).
+  - name: http
+    containerPort: 8080
+
+resources:
+  requests: { cpu: 100m, memory: 256Mi }
+  limits:   { memory: 512Mi }          # No CPU limit — §15.3.
+
+migrationJob:
+  resources:
+    requests: { cpu: 50m, memory: 128Mi }
+    limits:   { memory: 256Mi }
+
+# Off, which is the other half of replicaCount above, and written down rather
+# than omitted on service.enabled's terms (§15.3).
+autoscaling:
+  enabled: false
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 2
+
+# Spread across nodes as a rule and across zones as a preference (§15.3).
+topologySpread:
+  maxSkew: 1
+  whenUnsatisfiable:
+    node: DoNotSchedule
+    zone: ScheduleAnyway
+
+# One receive endpoint and the send worker to drain, with a call in flight
+# bounded by MailHop's and ContactHop's totals. No number is taken from those
+# here: the value must exceed HostOptions.ShutdownTimeout, and _deployment.tpl
+# carries the argument.
+terminationGracePeriodSeconds: 45
+
+probes:
+  probePort: http
+  # Readiness is SQL and the bus alone (§13.5): no Service routes here, so it
+  # gates a rollout and nothing else, and a relay or Keycloak in it could only
+  # block the deploy that fixes them.
+  liveness:  { path: /health/live,  initialDelaySeconds: 10, periodSeconds: 10 }
+  readiness: { path: /health/ready, initialDelaySeconds: 5,  periodSeconds: 5 }
+  startup:   { path: /health/startup, failureThreshold: 30,  periodSeconds: 2 }
+
+service:
+  # False, and the key §15.3's callout is about: a worker's safety comes from
+  # having no route, so the absence of a route is the thing to assert.
+  enabled: false
+
+ingress:
+  # False, and refused with the Service off anyway (_ingress.tpl): an Ingress
+  # whose backend does not exist installs cleanly and answers 503.
+  enabled: false
+
+identity:
+  # The authority, to validate incoming JWTs (§11.2), and the issuer this host
+  # asks for its own token (ADR-052).
+  authority: https://id.example.com/realms/commerce
+  # True: the worker presents this grant to read a mailbox from Keycloak
+  # (ADR-052). The scope is `roles`, whose mapper writes the claim the grant is
+  # checked against; this client holds no commerce-api (§15.4).
+  clientCredentials: true
+  clientId: notifications-worker
+  scope: roles
+  clientSecretRef:
+    # Its own Secret, never another host's: two hosts holding one grant is one
+    # host able to act as the other (§11.5).
+    name: notifications-identity
+    key: client-secret
+
+database:
+  enabled: true
+  # GetConnectionString("Notifications") at runtime, "NotificationsMigrator"
+  # in the hook.
+  connectionName: Notifications
+  runtimeSecretRef:
+    name: notifications-database
+    key: connection-string
+  migratorSecretRef:
+    name: notifications-migrator-secret
+    key: connection-string
+
+# The bus (§9), one Secret per service: a connection string for the
+# `notifications-svc` account, whose permissions definitions.json declares and
+# check_permissions.py holds to the code (ADR-036). Provisioning it on a
+# deployed broker is an obligation stated and not checked (§15.4).
+broker:
+  enabled: true
+  secretRef:
+    name: notifications-rabbitmq
+    key: connection-string
+
+# No Redis (§8.1): the send worker claims rows under a lease in SQL, nothing
+# is cached, and no HTTP command takes a §8.5 key. Declared rather than
+# omitted (§15.3).
+redis:
+  enabled: false
+
+# The relay, a processor with a country (ADR-053), so its host, sender and user
+# name are the deployment's to state and have no default. 587 is the
+# submission port and StartTls the one security the render admits; the
+# password is a Secret reference, never a value (§15.4).
+mail:
+  enabled: true
+  host: ""
+  port: 587
+  from: ""
+  security: StartTls
+  userName: ""
+  passwordSecretRef:
+    name: notifications-mail
+    key: password
+
+# ADR-052's contact read. Keycloak can serve its admin API on a hostname of its
+# own, so the base is the deployment's to state rather than derived from the
+# authority; the realm must be the authority's, and the render refuses it
+# otherwise.
+contactSource:
+  enabled: true
+  baseUrl: ""
+  realm: commerce
+
+# ADR-053's three kinds — a language set, the zone dates are rendered in, and
+# the statutory windows — none defaulted: each is a fact about where a
+# deployment runs, refused rather than guessed, at render and again at start.
+jurisdiction:
+  enabled: true
+  languages: []
+  timeZone: ""
+  logRetention: ""
+  contactRetention: ""
+  orderRetention: ""
+
+# ADR-052's give-up age: how long a notification stays Pending before it is
+# given up. Defaulted, because a notice a day late is worse than none in every
+# cluster; the host refuses one past the inbox window at start.
+delivery:
+  enabled: true
+  giveUpAge: "1.00:00:00"
+
+observability:
+  otlpEndpoint: http://otel-collector.observability:4317
+
+extraConfigMaps: []

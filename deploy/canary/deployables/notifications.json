@@ -1,0 +1,23 @@
+{
+  "serviceName": "Notifications.Worker",
+  "chart": "notifications",
+  "source": "src/Services/Notifications",
+  "signals": ["consume"],
+  "httpExemption": "Notifications has no HTTP surface at all (§3.2): its chart renders no Service, no route reaches it, and its only listener is §13.5's health endpoint, which the http templates exclude by route. A declared http signal would read a series that is empty by construction, and an empty result rolls every rung back, so the rollout could only ever fail. Its seven events arrive on the broker and are judged by consume. The send worker is where this service's risk sits and it is no consumer, so the contact read and the relay carry no canary signal of their own — notifications.waiting, notifications.mail.unavailable and notifications.contact.refused are what watch them, outside the rollout, and docs/runbooks/queue-backlog.md says what neither sees.",
+  "smoke": {
+    "migrator": true,
+    "autoscaled": false,
+    "capabilities": ["mail", "clientCredentials"],
+    "overlay": [
+      "mail.host=relay.example.invalid",
+      "mail.from=no-reply@commerce.example.invalid",
+      "mail.userName=notifications",
+      "contactSource.baseUrl=https://id.example.invalid/",
+      "jurisdiction.languages={en}",
+      "jurisdiction.timeZone=Europe/London",
+      "jurisdiction.logRetention=2190.00:00:00",
+      "jurisdiction.contactRetention=30.00:00:00",
+      "jurisdiction.orderRetention=90.00:00:00"
+    ]
+  }
+}
