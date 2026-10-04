@@ -87,6 +87,7 @@ graph TB
     PAY --> SQL
     SHP --> SQL
     NOT --> SQL
+    BFF --> SQL
 
     CAT --> RC
     ORD --> RC

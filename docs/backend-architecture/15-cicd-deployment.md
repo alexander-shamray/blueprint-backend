@@ -508,15 +508,16 @@ at the first query rather than at build. Every service here talks to SQL
 Server, so every image takes the variant. What `-extra` adds is ICU and
 tzdata, nothing else; the shell and the package manager stay gone.
 
-**Two of the fourteen open no connection at all** — the gateway ([§10.1](10-api-gateway.md)) and the
-BFF, whose one synchronous hop is gRPC rather than SQL ([§9.7](09-messaging.md)) — so the sentence
-above is the reason for twelve images and not for those two. Twelve because
-each of the six services builds **two**, a host and a migrator (§4.1), and both
-talk to SQL Server. The other two take the variant for uniformity: one base
-across the platform means what a host does with a culture-sensitive comparison
-never depends on which suffix somebody picked for its image, and the saving
-from dropping ICU on two deployables does not pay for a second answer to that
-question.
+**One image opens no connection at all** — the gateway's
+([§10.1](10-api-gateway.md)) — so the sentence above is the reason for every
+other image and not for that one. Every other deployable builds **two**, a
+host and a migrator, and both talk to SQL Server: each service by §4.1, and
+the BFF because its projection is a schema of its own
+([ADR-051](adr/ADR-051-the-buyers-order-read-is-a-projection-in-the-bff.md)).
+The gateway takes the variant for uniformity: one base across the platform
+means what a host does with a culture-sensitive comparison never depends on
+which suffix somebody picked for its image, and the saving from dropping ICU
+on one deployable does not pay for a second answer to that question.
 
 ### Every service builds two images
 
@@ -1002,6 +1003,13 @@ identity:
 > is this call not an event". ADR-052 is where that question was answered for
 > each worker it gives a read, so a review of those charts cites that record
 > rather than arguing it again.
+
+**The BFF's chart carries a migrator, as a service's does.** Its projection
+is a schema of its own
+([ADR-051](adr/ADR-051-the-buyers-order-read-is-a-projection-in-the-bff.md)),
+so its values name `image.migrator`, it renders `templates/migrate-job.yaml`,
+and its descriptor says `migrator: true` — the gateway is the chart below
+that has none of the three.
 
 The gateway's chart is not a service chart with the database parts deleted. It
 has no migrator, no client credentials, and two keys no service has — and every
