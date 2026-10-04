@@ -140,9 +140,8 @@ def derived_names(queue: str) -> set[str]:
 def messaging_dirs() -> dict[str, Path]:
     """Every service's and consuming host's Messaging directory, keyed by its tree's name.
 
-    Globbed rather than listed, so a service §4.5's scaffold renders tomorrow
-    is read by this gate on the day it lands. A host is keyed by the tree
-    above its project, as a service is, which makes the BFF's account bff-svc.
+    Globbed, so a service §4.5's scaffold renders tomorrow is read on the day
+    it lands. A host is keyed as a service is, which makes the BFF bff-svc.
     """
     found = {}
     for path in sorted(SERVICES.glob("*/*.Infrastructure/Messaging")):
