@@ -1,7 +1,7 @@
 # The output gate
 
-**The claim: no `bin/` or `obj/` exists under `src/`, `tests/` or `tools/`, and every
-project's output is under `artifacts/` instead.** It checks
+**The claim: no `bin/` or `obj/` exists under `src/`, `tests/` or `tools/`, and
+every project's output is under `artifacts/` instead.** It checks
 [§4.1](../../docs/backend-architecture/04-solution-structure.md)'s rule that
 those trees hold source and nothing a build wrote. `Directory.Build.props`
 makes the rule true, and its `Output` comment argues how; this gate keeps the
