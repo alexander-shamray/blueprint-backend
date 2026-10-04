@@ -1323,6 +1323,10 @@ what the buyer is owed is the outcome it works towards, and that arrives as
 - **Money as the server's numbers**, an amount and a currency per line and in
   total. The client formats and never computes: §10.1's rule against
   aggregating a figure the client has to redo is the same rule one field down.
+  **An order no placed or confirmed event has reached has no lines and a null
+  total**: `OrderCancelled` supplies the customer and nothing priced, and the
+  row it created is shown as far as the projection knows it rather than
+  hidden until it knows more.
 
 The detail route adds the quantity and unit price each line was placed with,
 and the payment outcome where there is one to give — an authorisation or a
