@@ -1308,8 +1308,8 @@ correct and expected — which is why consumers must be idempotent.
 
 Retain processed rows for a few days, for debugging and as the last copy of
 a delivered event that [§10.7](10-api-gateway.md)'s rebuild replays, then
-delete them on a schedule. An outbox table nobody prunes grows without bound and eventually
-degrades the filtered index scan.
+delete them on a schedule. An outbox table nobody prunes grows without bound
+and eventually degrades the filtered index scan.
 
 ```sql
 -- ProcessedAt IS NOT NULL is load-bearing, not defensive. Purging on age
@@ -1461,8 +1461,8 @@ command idempotency key, composed against a registered `IdempotencyMarkerTable`
 on the same terms as the pair above. What it costs to purge is different in
 kind: a purged outbox row loses a debugging record and a replayable event, a
 purged inbox row loses a suppression the broker will not exercise again, and
-a purged marker loses the row that refuses a retry of a command that already committed. That
-is why `RetentionPolicy.IdempotencyWindow` is the one window with a **floor** —
+a purged marker loses the row that refuses a retry of a command that already
+committed. That is why `RetentionPolicy.IdempotencyWindow` is the one window with a **floor** —
 it may not be shorter than the Redis claim it backs up
 ([ADR-037](adr/ADR-037-the-idempotency-marker-is-a-row-in-the-commands-own-transaction.md)),
 and matching the claim exactly is admitted, because the claim is taken before
