@@ -1462,7 +1462,8 @@ on the same terms as the pair above. What it costs to purge is different in
 kind: a purged outbox row loses a debugging record and a replayable event, a
 purged inbox row loses a suppression the broker will not exercise again, and
 a purged marker loses the row that refuses a retry of a command that already
-committed. That is why `RetentionPolicy.IdempotencyWindow` is the one window with a **floor** —
+committed. That is why `RetentionPolicy.IdempotencyWindow` is the one window
+with a **floor** —
 it may not be shorter than the Redis claim it backs up
 ([ADR-037](adr/ADR-037-the-idempotency-marker-is-a-row-in-the-commands-own-transaction.md)),
 and matching the claim exactly is admitted, because the claim is taken before

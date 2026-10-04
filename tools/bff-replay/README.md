@@ -12,7 +12,8 @@ its publisher's processed outbox row, kept for `RetentionPolicy.OutboxWindow`
 ([§9.4](../../docs/backend-architecture/09-messaging.md)). An order whose
 every event is older than that window, which every service registers as one
 `new RetentionPolicy()`, is not restored by any run of this tool: after
-`--reset` it is simply absent from the buyer's history. Recovering that is the BFF database's backup, not this.
+`--reset` it is simply absent from the buyer's history. Recovering that is the
+BFF database's backup, not this.
 
 So, in order of preference:
 
