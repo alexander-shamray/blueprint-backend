@@ -8,18 +8,19 @@ can be rolled on its own — which is what §15.1's per-service path filters
 produce — and an environment can be stood up whole.
 
 ```
-common/      the library chart: every template, once
-catalog/     ┐
-ordering/    │
-inventory/   │ Chart.yaml + values.yaml + one-line templates that include
-payments/    │ the library's. The values ARE the per-service decisions.
-shipping/    │ Payments and Shipping each carry one template more: the guard
-web-bff/     ┘ on the capabilities their hosts register unconditionally.
-gateway/     the same, plus edge-config.yaml — the two keys no service has
-             (§15.3), in a template only this chart carries
-platform/    the umbrella — one dependency per service chart and no values
-             of its own
-smoke.sh     renders every chart and the umbrella and asserts what comes out
+common/        the library chart: every template, once
+catalog/       ┐
+ordering/      │
+inventory/     │ Chart.yaml + values.yaml + one-line templates that include
+payments/      │ the library's. The values ARE the per-service decisions.
+shipping/      │ A chart whose host registers a capability unconditionally
+notifications/ │ carries one template more: the guard on it.
+web-bff/       ┘
+gateway/       the same, plus edge-config.yaml — the two keys no service has
+               (§15.3), in a template only this chart carries
+platform/      the umbrella — one dependency per service chart and no values
+               of its own
+smoke.sh       renders every chart and the umbrella and asserts what comes out
 ```
 
 ## Setup is one command per chart
@@ -97,6 +98,7 @@ helm upgrade --install platform deploy/helm/platform \
     --set-string inventory.image.tag="$INVENTORY_SHA" \
     --set-string payments.image.tag="$PAYMENTS_SHA" \
     --set-string shipping.image.tag="$SHIPPING_SHA" \
+    --set-string notifications.image.tag="$NOTIFICATIONS_SHA" \
     --set-string gateway.image.tag="$GATEWAY_SHA" \
     --set-string web-bff.image.tag="$BFF_SHA"
 ```
@@ -108,7 +110,11 @@ render is refused until an environment names it, and the values file is where
 it belongs. Shipping's carrier address and its two retention windows are the
 same case for the same reason — a third party's address and a jurisdiction's
 statute are facts about one deployment, and ADR-053 says a window is refused
-rather than guessed.
+rather than guessed. Notifications' relay, sender and relay user, Keycloak's
+admin base, and its language set, zone and windows are the same case: the
+relay is a processor the deployment chooses and the rest are facts about where
+it runs (ADR-053), and the language set is a list, which is the other reason it
+belongs in a values file rather than behind `--set-string`'s comma.
 
 `--set-string` is the wrong door for it, and this is the hazard
 `.github/workflows/deploy.yml` already spells out for the image tag: Helm
@@ -148,6 +154,24 @@ shipping:
     # neither, so a render without both is refused.
     addressRetention: "30.00:00:00"
     trackingRetention: "90.00:00:00"
+notifications:
+  mail:
+    # The relay this deployment submits to, a processor with a country
+    # (ADR-053). Its password is the notifications-mail Secret.
+    host: smtp.staging.example.com
+    from: "Commerce <no-reply@staging.example.com>"
+    userName: notifications
+  contactSource:
+    # Keycloak's admin base; its realm is the authority's, which the chart
+    # refuses to differ.
+    baseUrl: https://id.example.com/
+  jurisdiction:
+    # ADR-053: the deployment's to state, and the chart ships none of them.
+    languages: [ "en", "kk", "ru" ]
+    timeZone: Asia/Almaty
+    logRetention: "2190.00:00:00"
+    contactRetention: "30.00:00:00"
+    orderRetention: "90.00:00:00"
 ```
 
 ## What is deliberately not here

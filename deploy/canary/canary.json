@@ -14,7 +14,7 @@
     "§15.3's autoscaling.maxReplicas is 20 on every one of them but one,",
     "exactly 19 stable plus one canary. The exception is the gateway's, 30,",
     "so there the 19 is what the weight costs rather than all the chart",
-    "allows. The worker's chart sets a replica count with no autoscaler at",
+    "allows. A worker's chart sets a replica count with no autoscaler at",
     "all, so no maxReplicas bounds it and the rollout's first rung is what",
     "scales its stable track (§15.3).",
     "On the charts whose maxReplicas is 20, the smallest configuration in",

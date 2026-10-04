@@ -201,7 +201,7 @@ else
     fail "MIGRATOR_CHARTS + DATABASELESS_CHARTS ($both) do not partition SERVICE_CHARTS ($listed)"
 fi
 
-# One chart sets a replica count instead of an autoscaler (§15.3), so the
+# A worker chart sets a replica count instead of an autoscaler (§15.3), so the
 # assertions below branch — and the branch is driven by a declared list rather
 # than by each chart's own values. Read from the values alone, a file flipped
 # by itself would change what is asserted rather than fail it, which is this
