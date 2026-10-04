@@ -147,10 +147,10 @@ def _read_object(path: Path) -> dict:
 def migration_prefix(workload: str, plan_document: dict, root: Path = ROOT) -> str | None:
     """The `<workload>-migrate-` a Job name would start with, where there is one.
 
-    None for a chart that renders no migration Job — the gateway and the BFF
-    own no database (§10.1, §15.3), so their tags are bounded only by the label
-    length. Derived from the templates on disk rather than listed, because a
-    sixth service's chart gains a migrator by having the file.
+    None for a chart that renders no migration Job — the gateway owns no
+    database (§10.1, §15.3), so its tags are bounded only by the label length.
+    Derived from the templates on disk rather than listed, because a sixth
+    service's chart gains a migrator by having the file.
     """
     workloads = entries(plan_document.get("workloads", {}))
     chart = workloads.get(workload, {}).get("chart")

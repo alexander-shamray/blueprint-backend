@@ -224,15 +224,19 @@ class TagTests(unittest.TestCase):
         self.assertIn("job-name", str(raised.exception))
 
     def test_a_databaseless_workload_has_no_migration_budget(self) -> None:
-        """The gateway and the BFF own no database (§10.1), so their charts
-        render no Job and their tags are bounded only by the label."""
+        """The gateway owns no database (§10.1), so its chart renders no Job
+        and its tags are bounded only by the label."""
         plan = canary.load_plan()
 
-        for workload in ("gateway", "web-bff"):
-            with self.subTest(workload=workload):
-                self.assertIsNone(canary.migration_prefix(workload, plan))
-
+        self.assertIsNone(canary.migration_prefix("gateway", plan))
         canary.validate_tag("a" * 63, canary.migration_prefix("gateway", plan))
+
+    def test_the_bff_spends_its_tag_budget_on_a_migration_job(self) -> None:
+        """ADR-051's projection gives the BFF a schema, so its chart renders
+        the hook and its tag is bounded by the Job's name."""
+        plan = canary.load_plan()
+
+        self.assertEqual(canary.migration_prefix("web-bff", plan), "web-bff-migrate-")
 
     def test_length_and_emptiness(self) -> None:
         with self.assertRaises(canary.PlanError):
