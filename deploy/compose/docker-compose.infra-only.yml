@@ -29,6 +29,8 @@ services:
     profiles: [ "excluded" ]
   ordering-api:
     profiles: [ "excluded" ]
+  bff-migrator:
+    profiles: [ "excluded" ]
   web-bff:
     profiles: [ "excluded" ]
   inventory-migrator:

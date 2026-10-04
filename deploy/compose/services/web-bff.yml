@@ -1,19 +1,38 @@
-# The BFF: POST /v1/checkout/quote (ADR-045), minting its own token (§11.5).
+# The BFF: POST /v1/checkout/quote (ADR-045), minting its own token (§11.5),
+# and ADR-051's order projection, migrated by the one-shot beside it.
 services:
+  # §14.1's pair rule: a migrator one-shot and the host it gates, on
+  # `condition: service_completed_successfully`, because no host may migrate
+  # at startup (§4.1, ADR-007). Named bff-migrator for the key it reads.
+  bff-migrator:
+    build:
+      context: ../../..
+      dockerfile: src/BFF/Web.Bff.Migrator/Dockerfile
+    environment:
+      # Migrator identity (DDL) — §7.1. Locally both keys resolve to the one
+      # sa login (§14.2's stated simplification); the KEY still differs.
+      ConnectionStrings__BffMigrator: "${BFF_MIGRATOR_CONNECTION:-Server=sql;Database=Bff;User Id=sa;Password=${SQL_PASSWORD:-Local_Dev_Pa55w0rd!};TrustServerCertificate=True}"
+    depends_on:
+      sql: { condition: service_healthy }
+    restart: "no"
+
   # Client credentials, because this host calls a peer synchronously (§9.7);
   # §15.4 says which other hosts do. Named web-bff, matching the Aspire
   # resource (§14.2) and the YARP destination (§10.2) — the gateway resolves
   # the destination by hostname, so the container name is the routing
   # configuration.
-  #
-  # No migrator beside it and no pair rule: the BFF owns no database, so there
-  # is nothing to migrate — the same shape services/gateway.yml has.
   web-bff:
     build:
       context: ../../..
       dockerfile: src/BFF/Web.Bff/Dockerfile
     environment:
       ASPNETCORE_ENVIRONMENT: Development
+      # Runtime identity (DML only) — never the migrator connection. The host
+      # refuses to start without it, and it is the one readiness check here:
+      # Catalog's hop deliberately is not, since a BFF unready whenever
+      # Catalog is down takes itself out of rotation for a fault it exists to
+      # degrade around (§13.5).
+      ConnectionStrings__Bff: "${BFF_CONNECTION:-Server=sql;Database=Bff;User Id=sa;Password=${SQL_PASSWORD:-Local_Dev_Pa55w0rd!};TrustServerCertificate=True}"
       Identity__Authority: "http://keycloak:8080/realms/commerce"
       # Required by ValidateOnStart (§15.4) — this host refuses to boot without
       # all three, which is the whole point of the [Required] attributes on
@@ -30,20 +49,9 @@ services:
       # mapper makes one imply the other.
       Identity__Client__Scope: "commerce-api"
       OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4317"
-      # No connection strings of any kind, and therefore no readiness check
-      # (§13.5): a host with a connection string has one and a host without
-      # one does not. /health/ready answers immediately here, correctly — not
-      # because the BFF depends on nothing, but because its one dependency is
-      # §9.7's synchronous hop to Catalog and that deliberately does not gate
-      # readiness: a BFF reporting unready whenever Catalog is down would take
-      # itself out of rotation for a fault it exists to degrade around. The
-      # host declares that at the call site rather than leaving an empty
-      # readiness set to pass on its own:
-      # MapCommonHealthEndpoints(ownsNoReadinessDependencies: true), which is
-      # what stops "declared empty" and "was never wired up" reading
-      # identically from out here.
     ports: [ "127.0.0.1:5200:8080" ]
     depends_on:
+      bff-migrator: { condition: service_completed_successfully }
       # Keycloak, because this host mints its own token and would otherwise
       # discover that on the first request.
       keycloak: { condition: service_healthy }
