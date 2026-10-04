@@ -31,29 +31,38 @@ public sealed class RetentionPurgeService : BackgroundService
     private const int RowsPerDelete = 900;
 
     private readonly IServiceScopeFactory _scopes;
-    private readonly IIdempotencyStore _claims;
     private readonly RetentionPolicy _policy;
     private readonly ILogger<RetentionPurgeService> _log;
 
     // Null when no OutboxTable is registered, as for §4.1's pure consumer (§9.5).
     private readonly string? _outboxSql;
     private readonly string _inboxSql;
-    private readonly string _idempotencyCandidateSql;
 
-    // The delete is composed per chunk, since its VALUES list is as long as the chunk.
-    private readonly string _markerTable;
+    // Null when neither marker half is registered, as for a host with no command pipeline (§9.5).
+    private readonly MarkerHalf? _markers;
 
     public RetentionPurgeService(
         IServiceScopeFactory scopes,
         InboxTable inbox,
-        IdempotencyMarkerTable markers,
-        IIdempotencyStore claims,
         RetentionPolicy policy,
         ILogger<RetentionPurgeService> log,
-        OutboxTable? outbox = null)
+        OutboxTable? outbox = null,
+        IdempotencyMarkerTable? markers = null,
+        IIdempotencyStore? claims = null)
     {
+        // A marker table with no store to ask could only be purged by guessing whether its claim is gone (ADR-039).
+        if ((markers is null) != (claims is null))
+        {
+            string given = markers is null ? nameof(IIdempotencyStore) : nameof(IdempotencyMarkerTable);
+            string missing = markers is null ? nameof(IdempotencyMarkerTable) : nameof(IIdempotencyStore);
+
+            throw new InvalidOperationException(
+                $"{nameof(RetentionPurgeService)} was given an {given} and no {missing}. The marker purge needs " +
+                "both halves (§9.5, ADR-039): register both for a host that runs commands, or neither for one that " +
+                "runs none.");
+        }
+
         _scopes = scopes;
-        _claims = claims;
         _policy = policy;
         _log = log;
 
@@ -75,16 +84,17 @@ public sealed class RetentionPurgeService : BackgroundService
 
         // Candidates only: the store decides (ADR-039), and the cutoff is on the database's clock (ADR-038).
         // Oldest first, so the rows likeliest still claimed sit at the tail where a pass stops.
-        _idempotencyCandidateSql =
-            $"""
-            SELECT TOP (@BatchSize) [Key], {IdempotencyMarker.RowVersionColumn}
-            FROM {markers.QualifiedName}
-            WHERE CommittedAt < DATEADD(second, -@WindowSeconds, SYSDATETIMEOFFSET())
-            ORDER BY CommittedAt;
-            """;
-
-        // Deleted by (Key, RowVersion), since a retry can commit a fresh marker under a selected key (ADR-041).
-        _markerTable = markers.QualifiedName;
+        _markers = markers is null
+            ? null
+            : new MarkerHalf(
+                $"""
+                SELECT TOP (@BatchSize) [Key], {IdempotencyMarker.RowVersionColumn}
+                FROM {markers.QualifiedName}
+                WHERE CommittedAt < DATEADD(second, -@WindowSeconds, SYSDATETIMEOFFSET())
+                ORDER BY CommittedAt;
+                """,
+                markers.QualifiedName,
+                claims!);
     }
 
     // stoppingToken, not ct: CA1725 keeps the base's name, an error under ADR-019.
@@ -137,14 +147,18 @@ public sealed class RetentionPurgeService : BackgroundService
         Purged(_log, inbox, "inbox", null);
 
         // No `now`: the markers' cutoff is the database's clock (ADR-038).
-        int idempotency = await PurgeMarkersAsync(connection, ct);
-        Purged(_log, idempotency, "idempotency", null);
+        int idempotency = 0;
+        if (_markers is not null)
+        {
+            idempotency = await PurgeMarkersAsync(_markers, connection, ct);
+            Purged(_log, idempotency, "idempotency", null);
+        }
 
         return (outbox, inbox, idempotency);
     }
 
     /// <summary>§8.5's markers past their window whose claim the store has already let go (ADR-039).</summary>
-    private async Task<int> PurgeMarkersAsync(IDbConnection connection, CancellationToken ct)
+    private async Task<int> PurgeMarkersAsync(MarkerHalf markers, IDbConnection connection, CancellationToken ct)
     {
         // A duration, not a cutoff (ADR-038), rounded up so no marker is selected before its window.
         int windowSeconds = (int)Math.Ceiling(_policy.IdempotencyWindow.TotalSeconds);
@@ -155,7 +169,7 @@ public sealed class RetentionPurgeService : BackgroundService
         {
             MarkerCandidate[] candidates = [.. await connection.QueryAsync<MarkerCandidate>(
                 new CommandDefinition(
-                    _idempotencyCandidateSql,
+                    markers.CandidateSql,
                     new { _policy.BatchSize, WindowSeconds = windowSeconds },
                     cancellationToken: ct))];
 
@@ -165,11 +179,12 @@ public sealed class RetentionPurgeService : BackgroundService
             string[] keys = [.. candidates.Select(candidate => candidate.Key)];
 
             // Not caught: a failed lookup leaves every marker for the next pass rather than deleting one.
-            IReadOnlyCollection<string> unheld = await _claims.UnheldAsync(keys, ct);
+            IReadOnlyCollection<string> unheld = await markers.Claims.UnheldAsync(keys, ct);
 
             HashSet<string> gone = [.. unheld];
 
             int deleted = await DeleteRowsAsync(
+                markers.Table,
                 connection,
                 [.. candidates.Where(candidate => gone.Contains(candidate.Key))],
                 ct);
@@ -185,7 +200,8 @@ public sealed class RetentionPurgeService : BackgroundService
     }
 
     /// <summary>Deletes the given (key, version) rows in chunks; fewer means another replica was first.</summary>
-    private async Task<int> DeleteRowsAsync(
+    private static async Task<int> DeleteRowsAsync(
+        string table,
         IDbConnection connection,
         IReadOnlyCollection<MarkerCandidate> rows,
         CancellationToken ct)
@@ -205,14 +221,14 @@ public sealed class RetentionPurgeService : BackgroundService
             }
 
             deleted += await connection.ExecuteAsync(
-                new CommandDefinition(DeleteSql(chunk.Length), parameters, cancellationToken: ct));
+                new CommandDefinition(DeleteSql(table, chunk.Length), parameters, cancellationToken: ct));
         }
 
         return deleted;
     }
 
     /// <summary>The delete for a chunk of <paramref name="rows"/> rows; every value travels as a parameter.</summary>
-    private string DeleteSql(int rows)
+    private static string DeleteSql(string table, int rows)
     {
         string pairs = string.Join(
             ", ",
@@ -220,7 +236,7 @@ public sealed class RetentionPurgeService : BackgroundService
 
         return $"""
             DELETE marker
-            FROM {_markerTable} marker
+            FROM {table} marker
             INNER JOIN (VALUES {pairs}) AS selected([Key], {IdempotencyMarker.RowVersionColumn})
                 ON marker.[Key] = selected.[Key]
                 AND marker.{IdempotencyMarker.RowVersionColumn} = selected.{IdempotencyMarker.RowVersionColumn};
@@ -253,4 +269,7 @@ public sealed class RetentionPurgeService : BackgroundService
 
     /// <summary>A key and the <c>rowversion</c> that tells a marker from its replacement (ADR-041).</summary>
     private sealed record MarkerCandidate(string Key, byte[] RowVersion);
+
+    /// <summary>The marker purge's two statements' table and the store that decides between them (ADR-039).</summary>
+    private sealed record MarkerHalf(string CandidateSql, string Table, IIdempotencyStore Claims);
 }

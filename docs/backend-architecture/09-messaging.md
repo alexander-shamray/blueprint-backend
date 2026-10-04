@@ -1470,7 +1470,13 @@ long
 ([ADR-038](adr/ADR-038-the-marker-and-its-claim-are-ordered-by-construction-not-a-margin.md)).
 What the floor bounds is how long the guarantee lasts rather than whether it
 holds: keeping the marker alive while the claim is, is the purge's job rather
-than the window's, and §8.5 owns that argument.
+than the window's, and §8.5 owns that argument. A host that runs no command
+pipeline writes no marker — the BFF, whose projection only consumers write
+([ADR-051](adr/ADR-051-the-buyers-order-read-is-a-projection-in-the-bff.md))
+— so it registers neither the marker table nor the claim store, and is given
+no marker statement. One registered without the other is refused when the
+service is built, because a marker the pass cannot ask about is one it could
+delete only by guessing.
 
 **Its pass is two statements where the other two are one, and the cutoff it
 computes for itself *selects* rather than decides.** The two above are handed

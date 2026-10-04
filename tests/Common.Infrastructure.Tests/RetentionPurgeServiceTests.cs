@@ -54,20 +54,61 @@ public class RetentionPurgeServiceTests
             && sql.Contains("ProcessedAt", StringComparison.Ordinal));
     }
 
-    private static ServiceCollection Registrations(List<string> statements, bool withOutbox)
+    [Fact]
+    public async Task It_composes_no_marker_statement_for_a_host_that_registers_neither_half()
+    {
+        // ValidateOnBuild first, as every host builds: a host with no command pipeline writes no marker (§9.5).
+        List<string> statements = [];
+        using ServiceProvider provider = Registrations(statements, withOutbox: false, withMarkers: false,
+            withClaims: false).BuildServiceProvider(new ServiceProviderOptions { ValidateOnBuild = true });
+
+        (int outbox, int inbox, int idempotency) =
+            await provider.GetRequiredService<RetentionPurgeService>().PurgeAsync(CancellationToken.None);
+
+        outbox.ShouldBe(0);
+        inbox.ShouldBe(0);
+        idempotency.ShouldBe(0);
+        statements.ShouldNotBeEmpty();
+        statements.ShouldNotContain(sql => sql.Contains("CommittedAt", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public void It_refuses_one_idempotency_half_without_the_other(bool withMarkers, bool withClaims)
+    {
+        using ServiceProvider provider =
+            Registrations([], withOutbox: false, withMarkers, withClaims).BuildServiceProvider();
+
+        // The message, not the type: the container's own missing-service error is an InvalidOperationException too.
+        InvalidOperationException thrown = Should.Throw<InvalidOperationException>(
+            () => provider.GetRequiredService<RetentionPurgeService>());
+
+        thrown.Message.ShouldContain("both halves");
+    }
+
+    private static ServiceCollection Registrations(
+        List<string> statements,
+        bool withOutbox,
+        bool withMarkers = true,
+        bool withClaims = true)
     {
         ServiceCollection services = new();
         services.AddLogging();
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton(new InboxTable("probe"));
-        services.AddSingleton(new IdempotencyMarkerTable("probe"));
-        services.AddSingleton(Substitute.For<IIdempotencyStore>());
         services.AddSingleton(new RetentionPolicy());
         services.AddSingleton<RetentionPurgeService>();
         services.AddSingleton(RecordingFactory(statements));
 
         if (withOutbox)
             services.AddSingleton(new OutboxTable("probe"));
+
+        if (withMarkers)
+            services.AddSingleton(new IdempotencyMarkerTable("probe"));
+
+        if (withClaims)
+            services.AddSingleton(Substitute.For<IIdempotencyStore>());
 
         return services;
     }
