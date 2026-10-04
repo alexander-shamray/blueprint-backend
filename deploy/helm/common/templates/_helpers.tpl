@@ -233,8 +233,8 @@ or anonymous submission: StartTls and a user name are therefore required. */}}
 {{- fail (printf "mail.port is %q, which is not a port: a whole number in 1-65535 (§15.4)." $port) }}
 {{- end }}
 {{- $from := include "commerce.require" (list $mail.from "mail.from is required when mail.enabled: it is the one sender every message carries and the domain each Message-ID is minted under (§15.4).") }}
-{{- /* A quoted display name may hold a comma or an @, so it is set aside first; a quote left over is unbalanced. */}}
-{{- if not (regexMatch "^[^,;\\r\\n@\"]*@[^,;\\r\\n@\"]+$" (regexReplaceAll "^\\s*\"[^\"\\r\\n]*\"" $from "")) }}
+{{- /* A quoted string may hold a comma, an @ or an escaped quote, so each is set aside first; a quote left over is unbalanced. */}}
+{{- if not (regexMatch "^[^,;\\r\\n@\"]*@[^,;\\r\\n@\"]+$" (regexReplaceAll "\"(?:[^\"\\\\\\r\\n]|\\\\.)*\"" $from "")) }}
 {{- fail (printf "mail.from is %q, which is not one mailbox this chart will accept: one address with one @, optionally behind a display name, and no second address. MailOptions parses it at start (§15.4)." $from) }}
 {{- end }}
 {{- $security := include "commerce.require" (list $mail.security "mail.security is required when mail.enabled: MailOptions marks it [Required] (§15.4).") }}
