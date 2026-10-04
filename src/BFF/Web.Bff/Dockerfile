@@ -28,6 +28,7 @@ COPY src/BuildingBlocks/Common.Application/Common.Application.csproj src/Buildin
 COPY src/BuildingBlocks/Common.Contracts/Common.Contracts.csproj src/BuildingBlocks/Common.Contracts/
 COPY src/BuildingBlocks/Common.Infrastructure/Common.Infrastructure.csproj src/BuildingBlocks/Common.Infrastructure/
 COPY src/BuildingBlocks/Common.Web/Common.Web.csproj src/BuildingBlocks/Common.Web/
+COPY src/BFF/Web.Bff.Persistence/Web.Bff.Persistence.csproj src/BFF/Web.Bff.Persistence/
 COPY src/BFF/Web.Bff/Web.Bff.csproj src/BFF/Web.Bff/
 RUN dotnet restore src/BFF/Web.Bff/Web.Bff.csproj
 
@@ -52,14 +53,11 @@ COPY src/Services/Catalog/Catalog.Api/Protos/ src/Services/Catalog/Catalog.Api/P
 RUN dotnet publish src/BFF/Web.Bff/Web.Bff.csproj \
     -c $BUILD_CONFIGURATION -o /app/publish --no-restore /p:UseAppHost=false
 
-# -extra, like every other image here. §15.2 argued the suffix from
-# Microsoft.Data.SqlClient, which refuses to open a connection under
-# globalization-invariant mode — and this host, like the gateway, opens no
-# database connection at all; its hop is gRPC (§9.7). It takes the
-# variant anyway, for the second reason that chapter gives: one base image
-# across the platform, so what a host does with a culture-sensitive comparison
-# never depends on which suffix somebody picked for its image. ICU and tzdata
-# are the whole difference; no shell, no root.
+# -extra, like every other image here, for §15.2's reason:
+# Microsoft.Data.SqlClient refuses to open a connection under
+# globalization-invariant mode, and this host opens one to its projection's
+# database (ADR-051). ICU and tzdata are the whole difference; no shell, no
+# root.
 FROM mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled-extra AS final
 WORKDIR /app
 COPY --from=build /app/publish .

@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
 
-  <!-- One project, like the gateway: §10.1 gives the BFF no domain and no database. -->
+  <!-- The host, with ADR-051's schema beside it in Web.Bff.Persistence: §10.1 gives the BFF no domain layer. -->
 
   <ItemGroup>
     <!-- The client half of §9.7's hop; a client-only project has to name Grpc.Tools itself. -->
@@ -15,6 +15,12 @@
     <PackageReference Include="Microsoft.Extensions.Http.Resilience" />
     <!-- QuoteRequestValidator (ADR-045); referenced directly because this project names its types. -->
     <PackageReference Include="FluentValidation" />
+    <!-- UseSqlServer, for ADR-051's projection; Web.Bff.Persistence carries it, and this project names it. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
+    <!-- SqlConnectionFactory (§6.5). -->
+    <PackageReference Include="Microsoft.Data.SqlClient" />
+    <!-- The SQL readiness check (§13.5). -->
+    <PackageReference Include="AspNetCore.HealthChecks.SqlServer" />
   </ItemGroup>
 
   <ItemGroup>
@@ -24,6 +30,8 @@
     <ProjectReference Include="..\..\BuildingBlocks\Common.Contracts\Common.Contracts.csproj" />
     <!-- §11.5's client-credentials grant, a building block by ADR-052; the BFF has no Infrastructure (§10.1). -->
     <ProjectReference Include="..\..\BuildingBlocks\Common.Infrastructure\Common.Infrastructure.csproj" />
+    <!-- ADR-051's schema, which the migrator applies and this host reads and writes. -->
+    <ProjectReference Include="..\Web.Bff.Persistence\Web.Bff.Persistence.csproj" />
   </ItemGroup>
 
   <ItemGroup>

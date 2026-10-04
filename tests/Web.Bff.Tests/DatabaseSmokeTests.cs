@@ -1,3 +1,5 @@
+using System.Diagnostics;
+using System.Net;
 using Shouldly;
 using Xunit;
 
@@ -20,6 +22,30 @@ public sealed class DatabaseSmokeTests(BffServiceFixture fixture)
         string[] applied = await fixture.AppliedMigrationsAsync();
         applied.Length.ShouldBe(1);
         applied[0].ShouldEndWith("_AddOrderProjection");
+    }
+
+    [Fact]
+    public async Task Ready_probe_answers_200_against_the_migrated_database()
+    {
+        using HttpClient client = fixture.Factory.CreateClient();
+
+        // A poll, because the SQL check runs on each request and the first can race the container's first login.
+        HttpStatusCode status = HttpStatusCode.ServiceUnavailable;
+        Stopwatch stopwatch = Stopwatch.StartNew();
+
+        while (stopwatch.Elapsed < TimeSpan.FromSeconds(30))
+        {
+            using HttpResponseMessage response =
+                await client.GetAsync("/health/ready", TestContext.Current.CancellationToken);
+            status = response.StatusCode;
+
+            if (status == HttpStatusCode.OK)
+                break;
+
+            await Task.Delay(TimeSpan.FromMilliseconds(250), TestContext.Current.CancellationToken);
+        }
+
+        status.ShouldBe(HttpStatusCode.OK, "the projection's database is up and migrated");
     }
 
     [Fact]
