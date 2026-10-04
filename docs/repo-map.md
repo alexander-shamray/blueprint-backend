@@ -220,7 +220,7 @@ tools/new-service/           §4.5's scaffold — see the notes below
 tools/bff-replay/            ADR-051's rebuild — a console replaying the
                              publishers' processed outbox rows to the BFF's
                              queue alone. Its README is the procedure, since
-                             a runbook here is one per alert; its suite is
+                             every runbook here pairs with an alert; its suite is
                              the BFF's, which proves it against the consumers
 deploy/compose/              §14.1's model, laid out in its `README.md`: one
                              baseline and one file per deployable unit, so a
