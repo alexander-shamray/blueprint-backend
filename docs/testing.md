@@ -111,11 +111,12 @@ real daemon — so a claim that a run started nothing is checked with
 green exit under an override.
 
 The category goes on a **collection** rather than a project because the two
-can differ: `Web.Bff.Tests` is one project whose tests mostly need no
-container and a few need an identity provider, so a project-level split would
-have had nothing to split. What the category buys there is a container start
-rather than a fast suite, because §9.7's resilience tests wait on real
-timeouts either way.
+can differ: `Web.Bff.Tests` is one project in which some tests need no
+container, some need an identity provider, and those over ADR-051's
+projection need SQL Server and the broker through `BffIntegrationCollection`,
+so a project-level split would have had nothing to split. What the category
+buys there is a container start rather than a fast suite, because §9.7's
+resilience tests wait on real timeouts either way.
 
 **A test class that needs a container and forgets the collection fails loudly
 rather than quietly**, which is the direction this has to fail in. It has no
