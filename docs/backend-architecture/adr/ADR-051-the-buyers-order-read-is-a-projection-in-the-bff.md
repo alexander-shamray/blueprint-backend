@@ -112,6 +112,20 @@ Ordering's in one respect worth stating plainly — it is fed by four services'
 streams rather than by one database's tables, so a rebuild replays from the
 broker's retention window and not from anything a reader can select from.
 
+> **The rebuild's window is the publishers' outboxes, and nothing above has
+> been edited.** RabbitMQ's classic queues keep nothing a consumer has
+> acknowledged, so the window the consequences call the broker's is held by
+> the publishers: each keeps its processed outbox rows for
+> `RetentionPolicy.OutboxWindow` ([§9.4](../09-messaging.md)), and
+> `tools/bff-replay` sends those rows to the BFF's queue alone, under the ids
+> and times they were published with.
+>
+> **What the BFF can select from is still nothing.** The tool is an
+> operator's, run against the publishers' tables out of band, and no path in
+> the host reads them. An order every one of whose events is older than the
+> shortest publisher's window is not rebuilt; recovering it is the database's
+> backup.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)

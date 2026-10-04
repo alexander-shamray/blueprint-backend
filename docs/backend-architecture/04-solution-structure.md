@@ -149,6 +149,10 @@ A monorepo makes cross-cutting changes and contract updates atomic and reviewabl
 │                                       keeps the strategy
 │
 ├── tools/
+│   ├── bff-replay/                     ADR-051's rebuild: a console that
+│   │                                   replays the publishers' outbox rows to
+│   │                                   the BFF's queue. Built with the
+│   │                                   solution; its suite is Web.Bff.Tests
 │   └── new-service/                    The scaffold of §4.5 and its tests.
 │                                       Stdlib Python, no restore — it renders
 │                                       a service from Catalog at run time
@@ -157,8 +161,8 @@ A monorepo makes cross-cutting changes and contract updates atomic and reviewabl
 │                                       publish take a subdirectory per project,
 │                                       package groups by configuration.
 │                                       Generated and git-ignored, and drawn
-│                                       here because it is the reason src/ and
-│                                       tests/ above hold source alone
+│                                       here because it is the reason src/,
+│                                       tests/ and tools/ above hold source alone
 │
 ├── coverage.runsettings                What `--collect:"Code Coverage"` measures:
 │                                       the report filtered to `.*\.Domain\.dll$`,
