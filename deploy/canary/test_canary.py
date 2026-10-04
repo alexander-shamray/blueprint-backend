@@ -716,7 +716,7 @@ class SignalTests(unittest.TestCase):
     def test_every_workload_declares_a_signal_it_actually_receives(self) -> None:
         """Inventory is the sharp case: its HTTP surface is the admin route,
         and its commands and events arrive on the broker, so HTTP alone judges
-        none of its work. The edge and the BFF consume nothing."""
+        none of its work. The edge consumes nothing."""
         declared = {
             name: set(entry.get("signals", []))
             for name, entry in canary.entries(self.document["workloads"]).items()
@@ -726,7 +726,7 @@ class SignalTests(unittest.TestCase):
         self.assertEqual(declared["payments-api"], {"consume"})
         self.assertEqual(declared["ordering-api"], {"http", "consume", "saga"})
         self.assertEqual(declared["gateway"], {"http"})
-        self.assertEqual(declared["web-bff"], {"http"})
+        self.assertEqual(declared["web-bff"], {"http", "consume"})
         self.assertEqual(declared["catalog-api"], {"http"})
 
     def test_a_workload_with_no_signal_fails_the_plan(self) -> None:
@@ -764,7 +764,7 @@ class ConsumerScanTests(unittest.TestCase):
         self.assertTrue(found["catalog-api"])
         self.assertTrue(found["payments-api"])
         self.assertFalse(found["gateway"])
-        self.assertFalse(found["web-bff"])
+        self.assertTrue(found["web-bff"])
 
     def test_a_consumer_service_declaring_no_consume_signal_is_named(self) -> None:
         document = json.loads(json.dumps(self.document))

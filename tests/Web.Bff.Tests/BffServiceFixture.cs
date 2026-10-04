@@ -23,7 +23,4 @@ public sealed class BffServiceFixture()
     protected override Task<int> MigrateAsync(string connectionString) => RunMigratorAsync(connectionString);
 
     protected override BffFactory CreateFactory() => new() { DatabaseConnectionString = ConnectionString };
-
-    // definitions.json holds no bff-svc row yet; the account arrives with the host's consumers.
-    protected override bool BrokerAccountGranted => false;
 }

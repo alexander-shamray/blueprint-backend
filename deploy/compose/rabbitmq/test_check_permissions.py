@@ -361,6 +361,33 @@ class AHostsMessagingIsReadToo(unittest.TestCase):
     def test_the_hosts_tree_is_one_of_the_inputs_the_workflow_watches(self):
         self.assertIn("src/BFF", gate.SOURCE_INPUTS)
 
+    def test_the_repository_s_bff_is_read(self):
+        # The floor over the real tree: a glob that matched nothing would leave bff-svc an orphan account.
+        self.assertIn("BFF", gate.messaging_dirs())
+
+    def test_a_host_publishes_nothing(self):
+        self.assertFalse(gate.publishes("BFF"))
+
+    def test_the_bff_account_is_refused_a_contract_write(self):
+        definitions = real()
+        entry = permission(definitions, "bff-svc")
+        entry["write"] = entry["write"].replace("|MassTransit:", "|Common\\.Contracts|MassTransit:")
+
+        failures = run_against(definitions)
+        self.assertTrue(
+            any("bff-svc" in f and "no Domain project to publish from" in f for f in failures),
+            f"the gate accepted a contract write for a host that publishes nothing: {failures}")
+
+    def test_a_host_with_messaging_and_no_account_is_refused(self):
+        definitions = real()
+        definitions["users"] = [u for u in definitions["users"] if u["name"] != "bff-svc"]
+        definitions["permissions"] = [e for e in definitions["permissions"] if e["user"] != "bff-svc"]
+
+        failures = run_against(definitions)
+        self.assertTrue(
+            any(f.startswith("BFF:") for f in failures),
+            f"the gate accepted a consuming host with no broker account: {failures}")
+
 
 class CheckThreeFollowsTheSelector(unittest.TestCase):
     """What the account owes and may hold, once `publishes` has answered for a service."""

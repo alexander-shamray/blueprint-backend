@@ -29,6 +29,8 @@
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
     <!-- SqlException, named by the schema tests to read a refusal's number. -->
     <PackageReference Include="Microsoft.Data.SqlClient" />
+    <!-- The in-memory harness; core, not MassTransit.RabbitMQ, since the harness swaps the transport out. -->
+    <PackageReference Include="MassTransit" />
   </ItemGroup>
 
   <ItemGroup>

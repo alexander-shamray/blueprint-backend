@@ -37,6 +37,12 @@
       "password_hash": "XXM68DtuY70CPrORji8YNcnMHzkNcb3jKSFnJOw+FaI4RRd/",
       "hashing_algorithm": "rabbit_password_hashing_sha256",
       "tags": []
+    },
+    {
+      "name": "bff-svc",
+      "password_hash": "H/yV1JTPZnIxv7Mjb1gi3jVd7lO3+zPgD2hgMcA7D2DfTpXs",
+      "hashing_algorithm": "rabbit_password_hashing_sha256",
+      "tags": []
     }
   ],
   "vhosts": [
@@ -86,6 +92,13 @@
       "configure": "^(notifications-|Common\\.Contracts|MassTransit:)",
       "write": "^(notifications-|MassTransit:)",
       "read": "^(notifications-|Common\\.Contracts|MassTransit:)"
+    },
+    {
+      "user": "bff-svc",
+      "vhost": "/",
+      "configure": "^(bff-|Common\\.Contracts|MassTransit:)",
+      "write": "^(bff-|MassTransit:)",
+      "read": "^(bff-|Common\\.Contracts|MassTransit:)"
     }
   ],
   "topic_permissions": [],

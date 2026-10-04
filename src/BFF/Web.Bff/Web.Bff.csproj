@@ -21,6 +21,10 @@
     <PackageReference Include="Microsoft.Data.SqlClient" />
     <!-- The SQL readiness check (§13.5). -->
     <PackageReference Include="AspNetCore.HealthChecks.SqlServer" />
+    <!-- UsingRabbitMq for ADR-051's consumers; Common.Infrastructure carries MassTransit's core alone. -->
+    <PackageReference Include="MassTransit.RabbitMQ" />
+    <!-- The projection's statements, §6.6's form; named directly though Common.Infrastructure carries it. -->
+    <PackageReference Include="Dapper" />
   </ItemGroup>
 
   <ItemGroup>
