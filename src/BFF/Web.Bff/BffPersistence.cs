@@ -25,7 +25,7 @@ public static class BffPersistence
         services.AddDbContext<BffDbContext>(o =>
             o.UseSqlServer(connectionString, sql => sql.EnableRetryOnFailure()));
 
-        // §6.5's port, which the purge reads through and the projection's SQL will too.
+        // §6.5's port, which the purge, the projection's handlers and the read go through.
         services.AddSingleton<IDbConnectionFactory>(new SqlConnectionFactory(connectionString));
 
         // No OutboxTable and no marker half: the BFF publishes nothing and runs no command pipeline (§9.5).
