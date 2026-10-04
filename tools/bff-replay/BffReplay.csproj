@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- ADR-051's rebuild, an operator's console: the publishers' outbox rows, sent to the BFF's queue alone. -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The send to bff-order-events; Common.Infrastructure carries MassTransit's core and no transport. -->
+    <PackageReference Include="MassTransit.RabbitMQ" />
+    <!-- The outbox reads and the reset, named directly, as every caller of either names them. -->
+    <PackageReference Include="Dapper" />
+    <PackageReference Include="Microsoft.Data.SqlClient" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- MessageTypeMap, OutboxJson and the table types: the code that wrote the rows reads them back (§9.4). -->
+    <ProjectReference Include="..\..\src\BuildingBlocks\Common.Infrastructure\Common.Infrastructure.csproj" />
+    <!-- BffSchema.Name, so the reset deletes from the schema its owner declares. -->
+    <ProjectReference Include="..\..\src\BFF\Web.Bff.Persistence\Web.Bff.Persistence.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -31,6 +31,8 @@
     <PackageReference Include="Microsoft.Data.SqlClient" />
     <!-- The in-memory harness; core, not MassTransit.RabbitMQ, since the harness swaps the transport out. -->
     <PackageReference Include="MassTransit" />
+    <!-- The publishers' outbox harness stages rows through this, named directly though Web.Bff carries it. -->
+    <PackageReference Include="Dapper" />
   </ItemGroup>
 
   <ItemGroup>
@@ -44,6 +46,8 @@
     <ProjectReference Include="..\..\src\BFF\Web.Bff.Migrator\Web.Bff.Migrator.csproj" />
     <!-- WriteEndpointRule (ADR-058) and the shared ServiceFixture body (ADR-056). -->
     <ProjectReference Include="..\Common.TestSupport\Common.TestSupport.csproj" />
+    <!-- ADR-051's rebuild, proved against the consumers it feeds, which is why its suite is this one. -->
+    <ProjectReference Include="..\..\tools\bff-replay\BffReplay.csproj" />
   </ItemGroup>
 
 </Project>
