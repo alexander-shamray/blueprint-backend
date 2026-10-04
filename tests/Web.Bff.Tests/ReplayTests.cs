@@ -94,6 +94,9 @@ public sealed class ReplayTests(BffServiceFixture fixture) : IAsyncLifetime
         await _outboxes.StageAsync(Named("Shipping"), Processed, dispatched);
         await _outboxes.StageAsync(Named("Shipping"), null, undispatched);
 
+        // The queue is the collection's, so a copy the inbox dropped in an earlier test is already skipped there.
+        int skippedBefore = await fixture.QueueDepthAsync($"{Replay.Queue}_skipped");
+
         StringWriter output = new();
         ReplayReport report = await Replay.RunAsync(
             Settings(),
@@ -110,7 +113,7 @@ public sealed class ReplayTests(BffServiceFixture fixture) : IAsyncLifetime
         (await fixture.LinesAsync(kept)).ShouldBe(keptLines);
         (await fixture.LinesAsync(cancelled)).ShouldBe(cancelledLines);
         (await fixture.QueueDepthAsync($"{Replay.Queue}_skipped"))
-            .ShouldBe(0, "a type the queue does not bind was sent");
+            .ShouldBe(skippedBefore, "a type the queue does not bind was sent");
 
         report.OldestFrom(Named("Catalog")).ShouldBe(published.OccurredAt);
         output.ToString().ShouldContain("Shipping: 1 event(s) sent");
