@@ -299,7 +299,8 @@ path the PR exists to stop answering 502.
 The BFF is excluded too, and it needs more than an authority — its
 projection's database (ADR-051), which the override leaves running and the
 excluded `bff-migrator` would have migrated, so run the migrator first with
-`ConnectionStrings__BffMigrator` set to the same value; §15.4's three
+`ConnectionStrings__BffMigrator` set to the same value; the broker that
+feeds it, under the BFF's own account (ADR-036); §15.4's three
 `Identity__Client__*` rows are required of a host that calls a peer,
 `ValidateOnStart` refuses to boot without all three, and its own hop needs
 Catalog's **gRPC** port rather than its REST one:
@@ -307,6 +308,7 @@ Catalog's **gRPC** port rather than its REST one:
 ```bash
 export ASPNETCORE_ENVIRONMENT=Development
 export ConnectionStrings__Bff='Server=localhost;Database=Bff;User Id=sa;Password=Local_Dev_Pa55w0rd!;TrustServerCertificate=True'
+export ConnectionStrings__RabbitMq='amqp://bff-svc:local-dev-bff@localhost:5672'
 export Identity__Authority='http://localhost:8080/realms/commerce'
 export Identity__Client__ClientId='web-bff'
 export Identity__Client__ClientSecret='local-dev-secret'
