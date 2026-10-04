@@ -33,6 +33,9 @@ services:
       # Catalog is down takes itself out of rotation for a fault it exists to
       # degrade around (§13.5).
       ConnectionStrings__Bff: "${BFF_CONNECTION:-Server=sql;Database=Bff;User Id=sa;Password=${SQL_PASSWORD:-Local_Dev_Pa55w0rd!};TrustServerCertificate=True}"
+      # The bus (§9), under the BFF's own account, which writes no contract (ADR-036, ADR-051).
+      # A plain value, §14.1's local default; AddMassTransitMessaging throws without it.
+      ConnectionStrings__RabbitMq: "amqp://bff-svc:local-dev-bff@rabbitmq:5672"
       Identity__Authority: "http://keycloak:8080/realms/commerce"
       # Required by ValidateOnStart (§15.4) — this host refuses to boot without
       # all three, which is the whole point of the [Required] attributes on
@@ -52,6 +55,7 @@ services:
     ports: [ "127.0.0.1:5200:8080" ]
     depends_on:
       bff-migrator: { condition: service_completed_successfully }
+      rabbitmq: { condition: service_healthy }
       # Keycloak, because this host mints its own token and would otherwise
       # discover that on the first request.
       keycloak: { condition: service_healthy }
