@@ -47,10 +47,15 @@ from pathlib import Path
 GATE_DIR = Path(__file__).resolve().parent
 REPO_ROOT = GATE_DIR.parents[1]
 
-# The two trees Section 4.1 names. `tools/` is deliberately absent: the
-# scaffold is stdlib Python that restores nothing, so a directory MSBuild never
-# enters cannot fail this gate for the reason the gate exists.
-SOURCE_ROOTS = ("src", "tests")
+# The trees Section 4.1 names. `tools/` is one because it holds a project the
+# solution builds, and a project outside the walk is reconciled against nothing.
+SOURCE_ROOTS = ("src", "tests", "tools")
+
+
+def spoken(conjunction: str) -> str:
+    """The roots as a sentence lists them: `src/, tests/ and tools/`."""
+    names = [f"{name}/" for name in SOURCE_ROOTS]
+    return f"{', '.join(names[:-1])} {conjunction} {names[-1]}"
 
 # What MSBuild writes beside a `.csproj` when the redirect is not in force.
 # Matched without regard to case, which is `.gitignore`'s spelling of the same
@@ -113,14 +118,14 @@ def compare_subject(walked: list[Path], listed: list[Path]) -> list[str]:
     absent from this walk.
     """
     if not walked and not listed:
-        roots = " and ".join(f"{name}/" for name in SOURCE_ROOTS)
+        roots = spoken("and")
         return [
             f"no projects found at all - {roots} hold no .csproj and Platform.slnx "
             f"lists none. Every check below passes over an empty set, which is a "
             f"gate reporting on nothing rather than a tree with nothing wrong"]
 
     findings: list[str] = []
-    roots = " or ".join(f"{name}/" for name in SOURCE_ROOTS)
+    roots = spoken("or")
 
     for path in sorted(set(listed) - set(walked)):
         findings.append(
@@ -265,16 +270,16 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Output gate: {len(findings)} finding(s).\n")
         for finding in findings:
             print(f"  {finding}")
-        print("\nSection 4.1: src/ and tests/ hold source, and nothing a build wrote. "
+        print(f"\nSection 4.1: {spoken('and')} hold source, and nothing a build wrote. "
               "Directory.Build.props owns where output goes; see its Output comment.")
         return 1
 
     projects = walked_projects(repo_root)
-    roots = " and ".join(f"{name}/" for name in SOURCE_ROOTS)
+    roots = spoken("and")
     # Output stays ASCII. A gate whose job is to report a failure must not be the
     # thing that fails, and stdout encoding on a runner is not ours to assume.
     print(f"Output gate: {len(projects)} project(s) under {roots}. Every one restored "
-          f"and built into artifacts/, and neither tree holds a bin/ or obj/ of its own.")
+          f"and built into artifacts/, and no tree holds a bin/ or obj/ of its own.")
     return 0
 
 

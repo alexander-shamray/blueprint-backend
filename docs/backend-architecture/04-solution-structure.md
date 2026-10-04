@@ -172,10 +172,10 @@ A monorepo makes cross-cutting changes and contract updates atomic and reviewabl
 └── Platform.slnx
 ```
 
-**`src/` and `tests/` hold source, and nothing a build wrote.** A project
-directory carrying its own `bin/` and `obj/` buries the files a reader came for
-under the ones a build wrote, and every gate that walks a source tree pays for
-it again in a skip list that silently decides what the gate reads.
+**`src/`, `tests/` and `tools/` hold source, and nothing a build wrote.** A
+project directory carrying its own `bin/` and `obj/` buries the files a reader
+came for under the ones a build wrote, and every gate that walks a source tree
+pays for it again in a skip list that silently decides what the gate reads.
 
 Moving the output retires none of those lists, and expecting it to is the way
 to get this wrong: a gate that walks the repository root has to decline
@@ -184,10 +184,10 @@ before the move. What it does buy is that the tree a reader browses and the
 tree a gate reads are the same tree, and that a directory left out of a skip
 list is a gate reading too much rather than a gate reading a build.
 
-**That `src/` and `tests/` hold nothing a build wrote is checked rather than
-asserted**, by [`.github/output-gate/`](../../.github/output-gate/README.md),
-whose README owns what it reads and which half of this sentence it leaves to
-a CI step.
+**That `src/`, `tests/` and `tools/` hold nothing a build wrote is checked
+rather than asserted**, by
+[`.github/output-gate/`](../../.github/output-gate/README.md), whose README
+owns what it reads and which half of this sentence it leaves to a CI step.
 
 `.slnx` is the XML solution format, supported by the SDK from .NET 9 and by
 Visual Studio 2022 17.13 onward. The `global.json` pin below already puts every

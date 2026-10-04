@@ -105,6 +105,15 @@ class CleanTree(TemporaryRepository):
         # says the same thing whether it looked at every project or at none.
         self.assertIn("2 project(s)", output)
 
+    def test_a_project_under_tools_in_the_solution_is_walked(self) -> None:
+        tree(self.root, {"Catalog.Domain": "src/Services/Catalog/Catalog.Domain",
+                         "BffReplay": "tools/bff-replay"})
+
+        code, output = run(self.root)
+
+        self.assertEqual(code, 0)
+        self.assertIn("2 project(s) under src/, tests/ and tools/", output)
+
     def test_a_directory_merely_named_like_output_elsewhere_is_not_a_finding(self) -> None:
         """`bin` and `obj` are matched as directory names, not as substrings."""
         tree(self.root, {"Catalog.Domain": "src/Services/Catalog/Catalog.Domain"})
@@ -136,6 +145,16 @@ class Residue(TemporaryRepository):
 
         self.assertEqual(code, 1)
         self.assertIn("tests/Catalog.Domain.Tests/bin/", output)
+
+    def test_an_obj_beside_a_project_under_tools_fails(self) -> None:
+        """`tools/` holds a project the solution builds, so it is source too."""
+        tree(self.root, {"BffReplay": "tools/bff-replay"})
+        (self.root / "tools/bff-replay/obj").mkdir()
+
+        code, output = run(self.root)
+
+        self.assertEqual(code, 1)
+        self.assertIn("tools/bff-replay/obj/", output)
 
     def test_output_is_caught_at_any_depth_not_only_beside_a_csproj(self) -> None:
         """The claim is about the tree, not about project directories.
@@ -208,7 +227,7 @@ class Subject(TemporaryRepository):
         code, output = run(self.root)
 
         self.assertEqual(code, 1)
-        self.assertIn("the walk over src/ or tests/ did not find", output)
+        self.assertIn("the walk over src/, tests/ or tools/ did not find", output)
 
     def test_a_project_outside_the_walked_roots_is_not_called_missing(self) -> None:
         """On disk, and outside this walk — two different things to be told.
@@ -248,7 +267,7 @@ class Subject(TemporaryRepository):
         code, output = run(self.root)
 
         self.assertEqual(code, 1)
-        self.assertIn("did not find", output)
+        self.assertIn("the walk over src/, tests/ or tools/ did not find", output)
         self.assertIn("absent from Platform.slnx", output)
 
     def test_a_subject_mismatch_suppresses_the_other_findings(self) -> None:
