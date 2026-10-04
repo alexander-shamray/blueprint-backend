@@ -1345,11 +1345,10 @@ contract names it rather than leaving a client to meet it.
 
 ### An order the projection cannot yet attribute
 
-Five of the eight events carry an order id and no customer: both shipment
-events and all three payment events, the last by ADR-028's decision that a
-money movement carries no subject. They are attributed by joining to a row
-one of Ordering's three events created, and §9.4 does not promise that one
-did.
+Both shipment events and the payment events ADR-051 lists carry an order id
+and no customer, the payments by ADR-028's decision that a money movement
+carries no subject. They are attributed by joining to a row one of Ordering's
+three events created, and §9.4 does not promise that one did.
 
 **So the projection inserts on a missing row rather than dropping the event**
 — §6.6's own remedy, whose absence it names as a defect that leaves an order
