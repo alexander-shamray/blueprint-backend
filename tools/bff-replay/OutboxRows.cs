@@ -35,7 +35,7 @@ public static class OutboxRows
     /// <summary>The publisher's own clock, which stamps <c>ProcessedAt</c> (§9.4), read when the run begins.</summary>
     public const string CutoffSql = "SELECT SYSDATETIMEOFFSET();";
 
-    /// <summary>Rows processed by the cutoff; a later or unprocessed one is live traffic, queued already.</summary>
+    /// <summary>Rows processed by the cutoff; any other row is live traffic, which the dispatcher delivers.</summary>
     public static string ReadSql(Publisher publisher) =>
         $"""
         SELECT {Columns}
