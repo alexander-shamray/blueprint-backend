@@ -211,7 +211,8 @@ owns the list) runs `docker compose config -q`, then `up --wait` — which
 fails if any healthcheck never passes, or a container exits before the wait
 completes — then holds the local Grafana's loaded rules and dashboards to
 `deploy/observability/`, then `down -v` (PR-06 in
-[Appendix C](appendix-c-delivery-plan.md)). It is what makes [§14.2](14-local-development.md)'s "Compose runs in CI" true.
+[Appendix C](appendix-c-delivery-plan.md)). It is what makes
+[§14.2](14-local-development.md)'s "Compose runs in CI" true.
 
 The second is the Helm tree (PR-23). A workflow path-filtered to
 `deploy/helm/**` runs `deploy/helm/smoke.sh`, which resolves the charts'

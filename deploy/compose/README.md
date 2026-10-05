@@ -77,7 +77,8 @@ curl -s 'http://localhost:3000/api/search?type=dash-db' |
 ```
 
 A rule reads `"health":"unknown"` until Prometheus first evaluates its group,
-and the Compose smoke runs the same comparison on every change to either side.
+and the Compose smoke runs that comparison, over alerting rules, on every
+change to either side.
 
 ## Application services
 
