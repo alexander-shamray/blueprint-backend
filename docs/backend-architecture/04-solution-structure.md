@@ -855,6 +855,7 @@ WebApplication app = builder.Build();
 app.UseSecurityHeaders();
 app.UseExceptionHandler();        // §10.5 — catches every fault below it
 app.UseCorrelationId();           // §10.4 — above everything else that logs
+app.UseRequestTimeouts();         // §9.7, ADR-066 — below the exception handler
 // §10.5's promise applied to the statuses no handler produces: a challenge
 // and a forbid are written by the middleware below and carry NO BODY, so the
 // platform's one error shape had two holes in it until PR-17 measured a 401.
@@ -883,6 +884,7 @@ because each one produces a defect that no test catches by accident:
 |---|---|
 | `UseSecurityHeaders` outermost, above `UseExceptionHandler` | A response written by anything above it carries no `nosniff` ([§10.6](10-api-gateway.md), [ADR-031](adr/ADR-031-the-service-owns-nosniff-the-ingress-owns-hsts.md)). Outermost is only half the rule, though, and the other half is not an ordering at all: the extension writes from `Response.OnStarting` rather than before `next`, because `UseExceptionHandler` **clears** the response before writing §10.5's problem body. A header assigned on the way in is gone from exactly the 500 where a caller-supplied value is most likely to be reflected — so this line placed first and assigning eagerly would still lose the case it exists for |
 | `UseCorrelationId` before everything that logs, `UseExceptionHandler` immediately above it | Early log lines and traces have no correlation ID, so the one request you need to follow is the one you cannot. The handler is the deliberate exception — it has to wrap the middleware below it to catch their faults, and it reaches the ID through `Request.Headers` rather than the log scope ([§10.4](10-api-gateway.md)). This row said the handler was **alone** above it until `UseSecurityHeaders` landed; that line sits above both and decides nothing about correlation, which is why "immediately" is the word doing the work |
+| `UseRequestTimeouts` below `UseExceptionHandler` | Above it, the handler answers the cancelled request first, as a 499, and §10.5's 504 is never written ([ADR-066](adr/ADR-066-a-request-past-its-hosts-deadline-is-answered-504.md)) |
 | `UseAuthentication` before `UseAuthorization` | **Every authenticated request 401s** — in a `WebApplication` too. Omitting a call is repaired by auto-insertion; writing both in the wrong order is not, because the markers they set suppress it. See the callout below |
 | `UseAuthentication` before `UseRateLimiter` (gateway only) | Same empty `User`, but this one does not 403 — §10.3's per-user partition key silently degrades to per-IP, and everyone behind one NAT shares a single bucket. **Silent is the measured half**: reversing the two leaves every test in `Gateway.Api.Tests` green, the authenticated-partition test included, so nothing in the repository is watching this line (see below) |
 | `UseForwardedHeaders` above the limiter, and **below** the handler and the correlation ID (gateway only) | Two rules meeting, and this sample had them the wrong way round until PR-17: putting it first means a fault parsing a forwarded header unwinds past no exception handler, and anything the middleware logs runs outside the correlation scope. Neither of those two reads the address, so nothing is lost by letting them wrap it — while the limiter, which does read it, stays below. `ForwardedHeadersTests` covers the lower half: below `UseRateLimiter`, two forwarded addresses collapse onto the one connection the gateway can see |
@@ -940,7 +942,7 @@ applied (§10.1); a service behind it does not call `UseRateLimiter`:
 // Gateway.Api/Program.cs
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
-builder.AddCommonWebDefaults();                                  // §13.2
+builder.AddCommonWebDefaults(GatewayLimits.RequestTimeout);      // §13.2, ADR-066
 
 // §10.1's body ceiling, and the only one in the platform. Kestrel's 30 MB is a
 // web server's default rather than a choice; GatewayLimits argues the number.
@@ -1105,6 +1107,7 @@ WebApplication app = builder.Build();
 app.UseSecurityHeaders();
 app.UseExceptionHandler();
 app.UseCorrelationId();           // §10.4 — assigns or replaces the client's
+app.UseRequestTimeouts();         // §9.7, ADR-066 — below the exception handler
 
 // High enough to wrap every writer below it, because this middleware acts by
 // replacing the response body feature. Nothing here is an ordering rule a test
@@ -1132,7 +1135,13 @@ app.UseAuthentication();
 app.UseRateLimiter();             // §10.3 — needs the user, precedes policy work
 app.UseAuthorization();
 
-app.MapReverseProxy();
+app.MapReverseProxy(proxy =>
+{
+    proxy.Use(ProxyDeadline.RethrowAsync);   // ADR-066 — the edge's deadline is a 504
+    proxy.UseSessionAffinity();
+    proxy.UseLoadBalancing();
+    proxy.UsePassiveHealthChecks();
+});
 
 // The edge owns no database and no broker, so its readiness set is empty and
 // that is the whole of §10.1's design rather than a gap. Declared rather than
@@ -1242,6 +1251,12 @@ will fill it before writing the mapper, not after.
 *mechanism*, not shared *model*: base classes, the dispatcher, the outbox. That
 is legitimate, but keep them small and treat every addition sceptically — a
 shared library used by six services and the BFF is a coordination point.
+
+`CurrencyMinorUnits` in `Common.Domain` is the one reference table among them
+([ADR-067](adr/ADR-067-a-currencys-minor-unit-is-iso-4217s-held-once.md)):
+ISO 4217's minor units, which every context that counts money must read alike
+and no domain project can reach in `Common.Contracts`. It passes the bound's
+test above and is admitted on it; no other model data is.
 
 ## 4.4 Pinning the toolchain and packages
 

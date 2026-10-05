@@ -2894,8 +2894,8 @@ continues — consuming a connection and a thread for an answer nobody will read
 
 | Layer | Typical | Constraint |
 |---|---|---|
-| Gateway request timeout | 30–60 s | Highest |
-| Service operation total | 10–30 s | < gateway |
+| Gateway request timeout | `GatewayLimits.RequestTimeout` | Highest, inside the host's drain ([§15.3](15-cicd-deployment.md)) |
+| Service operation total | `ServiceOptions.OperationTimeout` | < gateway |
 | Outbound client total (incl. retries) | 3–5 s | < service operation |
 | Outbound per-attempt | 1–2 s | (× attempts) **+ backoff** ≤ client total |
 

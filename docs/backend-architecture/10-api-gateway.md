@@ -849,14 +849,15 @@ public sealed class CorrelationIdHandler(IHttpContextAccessor context) : Delegat
 > resting on less.
 
 **A notice's mail is the one message that leaves the platform, and it carries
-the ID as well.** Notifications' send worker puts the originating event's
-`CorrelationId` on every message it hands the relay, in the header this section
-names — `SmtpMailChannel.CorrelationIdHeader`, held equal to
+a correlation under this section's header name.** Notifications' send worker
+puts the originating event's `CorrelationId` on every message it hands the
+relay, as `SmtpMailChannel.CorrelationIdHeader`, held equal to
 `CorrelationIdExtensions.Header` by a test, because the project that speaks
-SMTP does not reference `Common.Web`. The value is the GUID the notice's row
-kept from its event, formatted by code, so no text another process wrote
-reaches the header; a message in a sink joins the trace and the order behind
-it, and a send repeated after a crash is two messages under one ID.
+SMTP does not reference `Common.Web`. The value is the event's business
+correlation, which [§9.3](09-messaging.md) sets to the order, not the request's
+ID this section propagates: a message in a sink joins the order behind it, and
+a send repeated after a crash is two messages under one value. It is a GUID
+formatted by code, so no text another process wrote reaches the header.
 
 ## 10.5 Error responses
 

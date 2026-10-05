@@ -20,7 +20,13 @@ Configure once in `Common.Web` ([§4.1](04-solution-structure.md)), referenced b
 single call every `Program.cs` makes (§4.2):
 
 ```csharp
-public static IHostApplicationBuilder AddCommonWebDefaults(this IHostApplicationBuilder builder)
+public static IHostApplicationBuilder AddCommonWebDefaults(this IHostApplicationBuilder builder) =>
+    builder.AddCommonWebDefaults(ServiceOptions.OperationTimeout);
+
+// The gateway passes its own, longer deadline (§9.7, ADR-066).
+public static IHostApplicationBuilder AddCommonWebDefaults(
+    this IHostApplicationBuilder builder,
+    TimeSpan requestTimeout)
 {
     builder.AddObservability();                           // this section
 
@@ -67,6 +73,7 @@ public static IHostApplicationBuilder AddCommonWebDefaults(this IHostApplication
     builder.Services.AddScoped<ICurrentUser, HttpContextCurrentUser>();
 
     builder.Services.AddCommonProblemDetails();           // §10.5
+    builder.Services.AddCommonRequestTimeouts(requestTimeout);   // §9.7
 
     // Liveness only — it must not touch dependencies (§13.5), and Common.Web
     // has no connection strings anyway. Readiness checks are registered by

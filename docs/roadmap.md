@@ -417,27 +417,13 @@ that reads like clean-up is a third of the plan.
 
 Six things, ordered by how much of the total they can move.
 
-**The domain question is unsettled, and it is the largest single risk.** Both
-READMEs call the e-commerce domain "illustrative only", while
-[§4.1](backend-architecture/04-solution-structure.md) and Appendix C name six
-services concretely. PR-10, PR-18, PR-19, PR-20 and now PR-21 have all landed
-on the illustrative domain, so substitution means reworking shipped code for
-every one of them — **there is no longer a service PR on this list that is
-merely re-specified**. Together that is 21 of the 99 days, and the five that
-carry the most design argument. Nothing else on this list is close, and the
-share of it that is rework rather than respecification stopped growing only
-because it has reached all of it.
-
-**This item said "settle it before M2", and M2 has now been reached with it
-still open.** That advice is spent, and what replaces it is worse rather than
-milder: PR-10 has landed, so substitution is a rework of shipped code and not
-a re-specification, and every service PR after this one adds to what would
-have to be reworked. **The deadline this item named was PR-18, and it has
-passed** — the second service was where a domain nobody has agreed to stopped
-being one service's problem, and it shipped with the question still open. What
-remains is not a deadline but a rising bill: PR-19, PR-20 and PR-21 have all
-landed on top of it, and the saga is the heaviest deposit yet — a state
-machine whose every transition names an e-commerce fact.
+**The domain question is settled: the domain is a reference implementation**
+([ADR-062](backend-architecture/adr/ADR-062-the-domain-is-a-reference-implementation.md)).
+The six services [§4.1](backend-architecture/04-solution-structure.md) and
+Appendix C name are the worked example an adopter replaces, so the 21 of the
+99 days PR-10, PR-18, PR-19, PR-20 and PR-21 took are the example's cost, not a
+rework this plan owes. This item priced the question as open and the largest
+risk on the page; settled, it moves no total.
 
 PR-11 and PR-12 are the delivered pull requests that do **not** move if the
 domain changes, and both were built that way deliberately: the scaffold
@@ -446,9 +432,8 @@ aggregate, no command and no endpoint (§4.5) — and the Redis helpers are
 shared mechanism in `Common.Infrastructure`, naming no aggregate, no key and
 no cache entry that belongs to any one service
 ([§8](backend-architecture/08-caching-redis.md)). That is seven of the 99 days
-taken off this risk rather than added to it — small, and worth stating,
-because these are the only places where a landed PR has narrowed the largest
-item on this page.
+an adopter keeps when they replace the domain, which is the split ADR-062
+draws between the example and what is kept.
 
 **That parenthetical used to read "wired to no service at all", and PR-28
 falsified it.** Both `Catalog.Infrastructure` and `Ordering.Infrastructure`

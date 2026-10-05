@@ -46,7 +46,11 @@ namespace-wide allow list, a service mesh — so the shape is recorded: names
 because a workload's name is already the contract its callers dial, both ends
 of every edge because a policy is enforced at each, and peers required because
 a plausible default is a security decision taken for a cluster nobody has
-seen, as `ingress.trustedNetworks` already argues.
+seen, as `ingress.trustedNetworks` already argues. DNS and the OTLP endpoint
+are the two peers with defaults — the cluster's DNS pods and an
+`observability` namespace — because each names one place and so fails closed:
+in a cluster without it the rule admits nothing, and the cost is a lookup or a
+trace lost, never a wider fence.
 **Consequences.** A policy is enforced only where the cluster's network plugin
 enforces one; elsewhere it renders, installs and changes nothing, and nothing
 here can tell which. Every deployment states its peers before this chart
