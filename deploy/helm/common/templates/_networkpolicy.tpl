@@ -16,6 +16,17 @@ every address is refused for the same reason (ADR-065). */}}
 {{- toYaml $peers }}
 {{- end -}}
 
+{{- /* The one egress rule every pod carries, the migrator's included. */}}
+{{- define "commerce.networkPolicyDns" -}}
+- to:
+    {{- include "commerce.networkPolicyPeers" (list (.dns).to "dns.to" "every pod resolves its peers' names.") | nindent 4 }}
+  ports:
+    - port: 53
+      protocol: UDP
+    - port: 53
+      protocol: TCP
+{{- end -}}
+
 {{- /* One egress rule: the peers, and one TCP port. */}}
 {{- define "commerce.networkPolicyEgress" -}}
 {{- $peers := index . 0 -}}
@@ -80,13 +91,7 @@ spec:
   ingress: []
   {{- end }}
   egress:
-    - to:
-        {{- include "commerce.networkPolicyPeers" (list ($np.dns).to "dns.to" "every pod resolves its peers' names.") | nindent 8 }}
-      ports:
-        - port: 53
-          protocol: UDP
-        - port: 53
-          protocol: TCP
+    {{- include "commerce.networkPolicyDns" $np | nindent 4 }}
     {{- /* Every host exports its telemetry (§13.2) and validates tokens against the
     identity provider (§11.2), whether or not it holds a grant of its own. */}}
     {{- include "commerce.networkPolicyEgress" (list ($np.telemetry).to "telemetry.to" "every host exports to the OTLP endpoint (§13.2)." (($np.telemetry).port | default (include "commerce.urlPort" .Values.observability.otlpEndpoint))) | nindent 4 }}
@@ -122,4 +127,33 @@ spec:
         - port: {{ include "commerce.require" (list .port "networkPolicy.egressTo[].port is required (ADR-065).") }}
           protocol: TCP
     {{- end }}
+{{- end -}}
+
+{{- /* The migration Job's fence, DNS and its database out and nothing in
+(ADR-069): a hook weighted ahead of the Job, because Helm applies every
+pre-install hook before any other object, the workload's policy included. */}}
+{{- define "commerce.migrationNetworkPolicy" -}}
+{{- $np := .Values.networkPolicy | default dict -}}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "commerce.instanceName" . }}-migrate
+  labels:
+    {{- include "commerce.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-6"
+    {{- /* Not `hook-succeeded`, which Helm may act on while the Job it fences
+    still has a pod running, as a Job past Helm's timeout does. */}}
+    "helm.sh/hook-delete-policy": before-hook-creation
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "commerce.name" . }}-migrate
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  policyTypes: [Ingress, Egress]
+  ingress: []
+  egress:
+    {{- include "commerce.networkPolicyDns" $np | nindent 4 }}
+    {{- include "commerce.networkPolicyEgress" (list ($np.database).to "database.to" "database.enabled says this host and its migrator reach a database." ($np.database).port) | nindent 4 }}
 {{- end -}}

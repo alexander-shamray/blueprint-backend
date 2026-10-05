@@ -10,6 +10,9 @@ unmigrated schema without an error. */}}
 {{- fail "image.migrator is set but database.enabled is false. A migrator with no database is incoherent — the Job would mount a connection string the service is not configured to use (§7.1)." }}
 {{- end }}
 {{- $tag := include "commerce.tag" . -}}
+{{- /* Emitted here, so no chart carries the Job without its fence. */}}
+{{ include "commerce.migrationNetworkPolicy" . }}
+---
 apiVersion: batch/v1
 kind: Job
 metadata:

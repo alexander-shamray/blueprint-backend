@@ -503,11 +503,22 @@ pass 'platform renders'
 # --------------------------------------------------------------------------
 section 'Every workload is fenced by a default-deny NetworkPolicy (ADR-065)'
 # --------------------------------------------------------------------------
-# The policy document alone, from its kind line to the end of its document, so
-# a CIDR or a port elsewhere in the render cannot satisfy a case below.
-policy_of() {
-    awk '/^kind: NetworkPolicy$/ { p = 1 } /^---$/ { p = 0 } p' "$1"
+# The documents of one kind alone, Helm hooks or the rest, so a CIDR or a port
+# elsewhere in the render cannot satisfy a case below.
+docs_of() {
+    # docs_of <render> <kind> <hook|plain> -> those documents, each closed by ---
+    kind="$2" want="$3" awk 'function flush() {
+            if (k && (h ? "hook" : "plain") == ENVIRON["want"]) printf "%s---\n", doc
+            doc = ""; k = h = 0
+        }
+        /^---$/ { flush(); next }
+        { doc = doc $0 "\n" }
+        $0 == "kind: " ENVIRON["kind"] { k = 1 }
+        /^    "helm\.sh\/hook":/ { h = 1 }
+        END { flush() }' "$1"
 }
+# The workload's policy, which ADR-065 owns; the migrator's is a hook.
+policy_of() { docs_of "$1" NetworkPolicy plain; }
 workload_of() {
     awk '/^workload:/ { w = 1; next } /^[a-z]/ { w = 0 } w && /^  name:/ { print $2; exit }' \
         "$CHARTS_DIR/$1/values.yaml"
@@ -516,8 +527,8 @@ cidr_of() { printf '%s\n' $NETPOL_PEERS | sed -n "s/^$1=//p"; }
 
 for chart in $SERVICE_CHARTS; do
     policy_of "$OUT/$chart.yaml" >"$OUT/$chart.policy.yaml"
-    check "$chart renders exactly one NetworkPolicy" \
-        test "$(count '^kind: NetworkPolicy$' "$OUT/$chart.yaml")" -eq 1
+    check "$chart renders exactly one workload NetworkPolicy" \
+        test "$(count '^kind: NetworkPolicy$' "$OUT/$chart.policy.yaml")" -eq 1
     check "$chart's policy isolates its pods in both directions" \
         grep -qE '^  policyTypes: \[Ingress, Egress\]$' "$OUT/$chart.policy.yaml"
     check "$chart's policy selects its own workload's stable pods" \
@@ -606,6 +617,54 @@ for chart in $SERVICE_CHARTS; do
     check "$chart's canary policy carries the stable policy's rules" \
         cmp -s <(sed -n '/^  policyTypes:/,$p' "$OUT/$chart.policy.yaml") \
                <(sed -n '/^  policyTypes:/,$p' "$OUT/$chart.canary-policy.yaml")
+done
+
+# The migration Job's pods carry labels of their own and run as a hook before
+# any other object exists (§7.4), so the subject is the Job's pod template:
+# some policy in the render must select it, and that policy must be a hook
+# weighted ahead of the Job, or the migrator runs unfenced (ADR-069).
+job_pod_labels() {
+    awk '/^kind: Job$/ { j = 1 } j && /^  template:/ { t = 1 } t && /^      labels:/ { l = 1; next }
+         l && /^ *$/ { next } l && /^        [^ ]/ { sub(/^ +/, ""); print; next } l { exit }' "$1"
+}
+selected_by_a_policy() {
+    # selected_by_a_policy <render> <labels> -> exit 0 when a policy's matchLabels all hold in <labels>
+    awk 'function judge() { if (np && n > 0 && !miss) found = 1; np = ps = n = miss = 0 }
+         NR == FNR { have[$0] = 1; next }
+         /^---$/ { judge(); next }
+         /^kind: NetworkPolicy$/ { np = 1 }
+         np && /^  podSelector:/ { ps = 1; next }
+         ps && /^      [^ ]/ { l = $0; sub(/^ +/, "", l); n++; if (!(l in have)) miss = 1; next }
+         ps && !/^    matchLabels:/ { ps = 0 }
+         END { judge(); exit found ? 0 : 1 }' "$2" "$1"
+}
+weight_of() { sed -n 's/^    "helm.sh\/hook-weight": "\(-*[0-9]*\)"$/\1/p' "$1" | head -n 1; }
+for chart in $MIGRATOR_CHARTS; do
+    for track in "" .canary; do
+        render="$OUT/$chart$track.yaml"
+        job_pod_labels "$render" >"$OUT/$chart$track.job-labels.txt"
+        docs_of "$render" NetworkPolicy hook >"$OUT/$chart$track.migrate-policy.yaml"
+        docs_of "$render" Job hook >"$OUT/$chart$track.job.yaml"
+        check "$chart${track:+ (canary)}: the migration Job's pod labels were read" \
+            test -s "$OUT/$chart$track.job-labels.txt"
+        check "$chart${track:+ (canary)}: a NetworkPolicy selects the migration Job's pods" \
+            selected_by_a_policy "$OUT/$chart$track.migrate-policy.yaml" "$OUT/$chart$track.job-labels.txt"
+    done
+    policy="$OUT/$chart.migrate-policy.yaml"
+    check "$chart: the migrator's policy runs on the Job's hook events" \
+        grep -q '^    "helm.sh/hook": pre-install,pre-upgrade$' "$policy"
+    check "$chart: the migrator's policy is weighted ahead of the Job" \
+        test "$(weight_of "$policy")" -lt "$(weight_of "$OUT/$chart.job.yaml")"
+    # Helm may delete a succeeded hook while the Job it fences still has a pod
+    # running, as a Job past Helm's timeout does.
+    check "$chart: the migrator's policy outlives the Job's pods" \
+        grep -q '^    "helm.sh/hook-delete-policy": before-hook-creation$' "$policy"
+    check "$chart: the migrator's policy admits nothing in" grep -qE '^  ingress: \[\]$' "$policy"
+    check "$chart: the migrator's policy reaches its database" \
+        grep -q "cidr: $(cidr_of database)$" "$policy"
+    check "$chart: and no other address outside the namespace" test "$(count 'cidr:' "$policy")" -eq 1
+    check "$chart: and no egress rule but DNS and its database" \
+        test "$(count '^    - to:$' "$policy")" -eq 2
 done
 
 # A capability that is on with no peer stated is refused: a rule with no peer
@@ -1096,16 +1155,16 @@ section 'Migration hook (§7.4, ADR-007)'
 for chart in $MIGRATOR_CHARTS; do
     check "$chart renders a migration Job" test "$(count '^kind: Job$' "$OUT/$chart.yaml")" -eq 1
     check "$chart runs it pre-install,pre-upgrade" \
-        grep -q '"helm.sh/hook": pre-install,pre-upgrade' "$OUT/$chart.yaml"
-    check "$chart weights the hook ahead of any other" \
-        grep -q '"helm.sh/hook-weight": "-5"' "$OUT/$chart.yaml"
+        grep -q '"helm.sh/hook": pre-install,pre-upgrade' "$OUT/$chart.job.yaml"
+    check "$chart weights the Job ahead of every hook but its fence" \
+        grep -q '"helm.sh/hook-weight": "-5"' "$OUT/$chart.job.yaml"
     # BOTH policies. `before-hook-creation` matches on NAME and the name embeds
     # the tag, so on its own every new SHA leaves its completed Job behind for
     # ever — and §13.6's runbook then looks for the failed one in a list of
     # every migration that ever succeeded. `hook-failed` is deliberately absent:
     # the failed Job is the artefact that runbook needs.
     check "$chart deletes the previous hook rather than accumulating them" \
-        grep -q '"helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded' "$OUT/$chart.yaml"
+        grep -q '"helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded' "$OUT/$chart.job.yaml"
     check "$chart keeps a FAILED migration Job for the runbook" \
         test "$(count 'hook-failed' "$OUT/$chart.yaml")" -eq 0
     check "$chart mounts the MIGRATOR connection string, not the runtime one" \
@@ -1881,7 +1940,7 @@ for chart in $MIGRATOR_CHARTS; do
     check "$chart: the canary runs the migration hook (ADR-022)" \
         test "$(count '^kind: Job$' "$OUT/$chart-canary.yaml")" -eq 1
     check "$chart: and it is the same hook the stable release runs" \
-        test "$(count '"helm.sh/hook": pre-install,pre-upgrade' "$OUT/$chart-canary.yaml")" -eq 1
+        test "$(docs_of "$OUT/$chart-canary.yaml" Job hook | count '"helm.sh/hook": pre-install,pre-upgrade' /dev/stdin)" -eq 1
 done
 
 for chart in $DATABASELESS_CHARTS; do
