@@ -23,6 +23,12 @@ set -e
 root=$(mktemp -d)
 git init -q -b main "$root/origin"
 git -C "$root/origin" -c user.name=t -c user.email=t@t commit -q --allow-empty -m base
+if [ "$HOOK" = yes ]; then
+  mkdir -p "$root/origin/.claude/hooks"
+  printf 'import os\\nopen("hook-ran", "w").write(os.getcwd())\\n' > "$root/origin/.claude/hooks/refresh-index.py"
+  git -C "$root/origin" add .claude
+  git -C "$root/origin" -c user.name=t -c user.email=t@t commit -q -m hook
+fi
 git clone -q "$root/origin" "$root/checkout"
 if [ "$IGNORE" = yes ]; then printf '.claude/worktrees/\\n' > "$root/checkout/.gitignore"; fi
 mkdir -p "$root/checkout/src"
@@ -33,8 +39,8 @@ printf '%s\\n' "$root"
 class ForkShape(unittest.TestCase):
     """The helper forks `.claude/worktrees/<name>` from the main checkout only."""
 
-    def fixture(self, ignore="yes"):
-        made = run_bash(FIXTURE, IGNORE=ignore)
+    def fixture(self, ignore="yes", hook="no"):
+        made = run_bash(FIXTURE, IGNORE=ignore, HOOK=hook)
         self.assertEqual(0, made.returncode, made.stderr)
         root = made.stdout.strip()
         self.addCleanup(lambda: run_bash('rm -rf "$TARGET"', TARGET=root))
@@ -56,6 +62,23 @@ class ForkShape(unittest.TestCase):
         # out of every `git status` the chain reads.
         status = run_bash('git -C "$C" status --porcelain', C=f"{root}/checkout")
         self.assertNotIn(".claude", status.stdout)
+
+    def test_the_new_worktree_runs_its_own_index_refresh(self):
+        # /branch enters the worktree mid-session, where no `SessionStart`
+        # fires, so the fork starts the refresh that hook would have. The stub
+        # is committed on origin/main, so the copy that runs is the worktree's.
+        root = self.fixture(hook="yes")
+        result = self.fork(f"{root}/checkout", ".claude/worktrees/probe")
+        self.assertEqual(0, result.returncode, result.stderr)
+        ran = run_bash(
+            'for _ in $(seq 300); do '
+            '[ -s "$W/hook-ran" ] && exec cat "$W/hook-ran"; sleep 0.1; '
+            'done; exit 1',
+            W=f"{root}/checkout/.claude/worktrees/probe")
+        self.assertEqual(0, ran.returncode, "the fork never ran the refresh")
+        self.assertTrue(
+            ran.stdout.strip().replace("\\", "/").endswith("/.claude/worktrees/probe"),
+            ran.stdout)
 
     def test_any_other_path_is_refused(self):
         root = self.fixture()

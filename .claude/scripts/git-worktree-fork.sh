@@ -52,3 +52,14 @@ git show-ref --verify --quiet refs/remotes/origin/main ||
 # the right one. origin/main is fixed because step 5 forks only from the
 # fetched base.
 git worktree add --no-track -b "$branch" "$path" origin/main
+# Seed the new worktree's code index now: /branch enters it mid-session, where
+# no `SessionStart` fires. Its own hook does the work, silenced as its hook
+# entries are, and with no event it takes the working directory; it detaches
+# its own refresh, so the `&` only spares a wait. python3 stands in where the
+# `py` launcher the hooks name does not exist.
+hook=.claude/hooks/refresh-index.py
+if [ -f "$path/$hook" ]; then
+  python=python3
+  command -v py >/dev/null 2>&1 && python="py -3.12"
+  (cd "$path" && env -u CLAUDE_PROJECT_DIR $python "$hook") </dev/null >/dev/null 2>&1 &
+fi
