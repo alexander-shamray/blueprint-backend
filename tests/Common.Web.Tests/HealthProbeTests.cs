@@ -28,6 +28,23 @@ public class HealthProbeTests
         }
     }
 
+    private sealed class SlowAfterFirst(TimeSpan delay) : IHealthCheck
+    {
+        public readonly TaskCompletionSource Slowed = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private int _calls;
+
+        public async Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken ct)
+        {
+            if (Interlocked.Increment(ref _calls) > 1)
+            {
+                Slowed.TrySetResult();
+                await Task.Delay(delay, ct);
+            }
+
+            return HealthCheckResult.Healthy();
+        }
+    }
+
     private static async Task<(WebApplication App, string Port)> StartAsync(IHealthCheck check)
     {
         WebApplicationBuilder builder = WebApplication.CreateSlimBuilder();
@@ -87,15 +104,18 @@ public class HealthProbeTests
     [Fact]
     public async Task A_readiness_answer_slower_than_the_timeout_exits_one()
     {
-        // Healthy once it answers, so only the timeout can make this a 1.
-        Counted check = new(HealthStatus.Healthy, TimeSpan.FromSeconds(10));
+        // Healthy once it answers, so only the timeout can make this a 1; the warm-up spends the cold
+        // pipeline's start outside the timed probe, whose budget then reaches the slow check.
+        SlowAfterFirst check = new(Generous);
         (WebApplication app, string port) = await StartAsync(check);
         await using (app)
         {
-            int exit = await HealthProbe.RunAsync(port, TimeSpan.FromMilliseconds(200));
+            (await HealthProbe.RunAsync(port, Generous)).ShouldBe(0);
+
+            int exit = await HealthProbe.RunAsync(port, TimeSpan.FromSeconds(1));
 
             exit.ShouldBe(1);
-            check.Calls.ShouldBe(1);
+            await check.Slowed.Task.WaitAsync(Generous, TestContext.Current.CancellationToken);
         }
     }
 
