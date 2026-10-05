@@ -2727,7 +2727,7 @@ class TheCommandLine(unittest.TestCase):
             # A count and not a list: a number a test pins fails when it is
             # wrong. Seven and not eight, because this root has no `.github/` and
             # §15.1's allow-list step degrades without it.
-            self.assertIn("71 files created, 7 updated", out)
+            self.assertIn("72 files created, 7 updated", out)
             self.assertIn(f"port {PORT}", out)
             self.assertTrue((root / "src/Services/Zulu/Zulu.Api/Program.cs").exists())
 
@@ -2775,7 +2775,7 @@ class TheCommandLine(unittest.TestCase):
             self.assertEqual(0, code)
             self.assertEqual("", err)
             # Six shared files and not seven: no outbox meter line, and no `.github/` here.
-            self.assertIn("53 files created, 6 updated, publishing no port.", out)
+            self.assertIn("54 files created, 6 updated, publishing no port.", out)
             self.assertFalse((root / "src/Services/Zulu/Zulu.Domain").exists())
 
     def test_fourteen_digits_that_are_not_a_date_refuse_in_one_line(self):

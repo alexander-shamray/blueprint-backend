@@ -94,6 +94,9 @@ COPIED = frozenset(
         # ADR-058's gate travels, so a rendered host is born under the rule;
         # PATCHES inverts the floor that names the template's own writes.
         "tests/Catalog.Api.Tests/WriteEndpointRuleTests.cs",
+        # ADR-017's gate travels on the same terms; PATCHES inverts its
+        # consumer floor, since a rendered host registers no consumer.
+        "tests/Catalog.Api.Tests/ConsumerCallRuleTests.cs",
         "tests/Catalog.TestSupport/Catalog.TestSupport.csproj",
         "tests/Catalog.TestSupport/CatalogApiFactory.cs",
         # §12.4's test scheme. Copied rather than omitted even though a

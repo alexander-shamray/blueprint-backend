@@ -2882,6 +2882,9 @@ having failed its own SLO.
 > operation into one that fails when the callee is down — discarding the main
 > reason to have used a broker. Where it is genuinely unavoidable, it requires a
 > written architecture-review exception recorded as an ADR, not a code comment.
+> `ConsumerCallRule` fails a host whose consumer reaches an outbound client
+> with no declared exception, and stops at consumers: a worker loop calling
+> out over a row it leases is the shape ADR-052 chose, not a consumer.
 
 If you find yourself needing a second hop, the answer is almost always that the
 data should have arrived by event and been projected locally.
