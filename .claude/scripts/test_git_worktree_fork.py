@@ -60,6 +60,10 @@ class ForkShape(unittest.TestCase):
         return run_bash('cat "$W/.claude/settings.local.json"',
                         W=f"{root}/checkout/.claude/worktrees/probe")
 
+    def checkout_file(self, root, name, text):
+        made = run_bash('printf %s "$T" > "$C/$N"', C=f"{root}/checkout", N=name, T=text)
+        self.assertEqual(0, made.returncode, made.stderr)
+
     def test_the_documented_shape_forks_with_no_upstream(self):
         root = self.fixture()
         result = self.fork(f"{root}/checkout", ".claude/worktrees/probe")
@@ -134,6 +138,19 @@ class ForkShape(unittest.TestCase):
                 self.assertEqual(0, result.returncode, result.stderr)
                 self.assertIn("could not copy the MCP approval", result.stderr)
                 self.assertNotEqual(0, self.probe_settings(root).returncode)
+
+    def test_a_json_module_at_the_checkout_root_is_not_imported(self):
+        # The approval is read by a Python run from the checkout root, whose
+        # untracked files must not shadow the standard library.
+        root = self.fixture()
+        self.checkout_file(root, "json.py", 'raise SystemExit("shadowed")')
+        self.local_settings(root, json.dumps({"enabledMcpjsonServers": ["codebase-index"]}))
+        result = self.fork(f"{root}/checkout", ".claude/worktrees/probe")
+        self.assertEqual(0, result.returncode, result.stderr)
+        copied = self.probe_settings(root)
+        self.assertEqual(0, copied.returncode, copied.stderr)
+        self.assertEqual({"enabledMcpjsonServers": ["codebase-index"]},
+                         json.loads(copied.stdout))
 
     def test_any_other_path_is_refused(self):
         root = self.fixture()
