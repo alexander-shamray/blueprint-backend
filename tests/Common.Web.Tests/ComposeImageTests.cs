@@ -45,6 +45,23 @@ public class ComposeImageTests
     [InlineData("sql")]
     [InlineData("redis-cache")]
     [InlineData("redis-coordination")]
+    [InlineData("keycloak")]
     public void The_shipped_baseline_names_an_image_for_every_service_a_fixture_starts(string service) =>
         ComposeImage.Of(service).ShouldNotBeNullOrWhiteSpace();
+
+    [Fact]
+    public void A_build_context_reads_the_one_image_its_dockerfile_starts_from() =>
+        ComposeImage.BaseOf(["# FROM in a comment is no stage", "", "from broker:4.1-alpine", "RUN true"])
+            .ShouldBe("broker:4.1-alpine");
+
+    [Theory]
+    [InlineData("RUN true")]
+    [InlineData("FROM builder:1 AS build", "FROM broker:4.1-alpine")]
+    public void A_dockerfile_with_no_single_base_is_refused_not_guessed_at(params string[] dockerfile) =>
+        Should.Throw<InvalidOperationException>(() => ComposeImage.BaseOf(dockerfile))
+            .Message.ShouldContain("base images");
+
+    [Fact]
+    public void The_shipped_broker_context_starts_from_a_stock_broker_image() =>
+        ComposeImage.BaseOf("rabbitmq").ShouldStartWith("rabbitmq:");
 }

@@ -200,7 +200,7 @@ public abstract class ServiceFixture<TFactory, TEntryPoint, TDbContext> : IAsync
         {
             // §14.1's configuration on the stock image, ADR-036's route for a service that does not schedule.
             _rabbit = broker
-                .WithImage("rabbitmq:4.1-management-alpine")
+                .WithImage(ComposeImage.BaseOf("rabbitmq"))
                 // A second copy of the Dockerfile's COPY targets, which check_permissions.py holds to it (ADR-036).
                 .WithResourceMapping(
                     new FileInfo(Path.Combine(BrokerContextPath(), "definitions.json")),

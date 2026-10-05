@@ -1,5 +1,6 @@
 using System.Net.Http.Json;
 using System.Text.Json;
+using Common.TestSupport;
 using DotNet.Testcontainers.Builders;
 using Testcontainers.Keycloak;
 using Xunit;
@@ -25,7 +26,7 @@ public sealed class KeycloakFixture : IAsyncLifetime
         ["basic", "profile", "email", "roles", "acr", "web-origins"];
 
     private readonly KeycloakContainer _keycloak = new KeycloakBuilder()
-        .WithImage("quay.io/keycloak/keycloak:26.0")
+        .WithImage(ComposeImage.Of("keycloak"))
         .WithUsername(AdminUser)
         .WithPassword(AdminPassword)
         .WithResourceMapping(

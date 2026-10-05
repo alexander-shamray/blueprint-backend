@@ -315,9 +315,9 @@ public sealed class ServiceFixture : IAsyncLifetime
         .WithCommand("--maxmemory-policy", "noeviction")
         .Build();
 
-    // 4.1 rather than a floating 4, because that is the base tag §14.1's
-    // broker Dockerfile builds from and this fixture's whole claim is that a
-    // test and a developer machine cannot disagree about the engine.
+    // The base tag §14.1's broker Dockerfile builds from, read from its FROM
+    // line for the reason the SQL tag is read: a test and a developer machine
+    // cannot disagree about the engine.
     //
     // A service that SCHEDULES cannot use a tag at all. Since ADR-021 §14.1
     // builds the broker rather than pulling it, and the delayed exchange lives
@@ -328,7 +328,7 @@ public sealed class ServiceFixture : IAsyncLifetime
     // schedules, and the schedule that does then HANGS on a declare the broker
     // refuses. ADR-021 has the measurement.
     private readonly RabbitMqContainer _rabbit = new RabbitMqBuilder()
-        .WithImage("rabbitmq:4.1-management-alpine")
+        .WithImage(ComposeImage.BaseOf("rabbitmq"))
         .Build();
 
     public WebApplicationFactory<Program> Factory { get; private set; } = null!;
