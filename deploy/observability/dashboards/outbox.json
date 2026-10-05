@@ -39,7 +39,7 @@
       "id": 2,
       "type": "timeseries",
       "title": "Broker lane — oldest unprocessed (alert: OutboxBrokerLaneStalled)",
-      "description": "Other services are working from stale data and sagas stop advancing. The threshold is an order of magnitude above the local lane's because this one crosses a network and should absorb a short RabbitMQ blip or a rolling restart. Runbook: docs/runbooks/outbox-broker.md",
+      "description": "Other services are working from stale data and sagas stop advancing. Its threshold is wider than OutboxLocalLaneStalled's because this lane crosses a network and should absorb a short RabbitMQ blip or a rolling restart. Runbook: docs/runbooks/outbox-broker.md",
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 1 },
       "fieldConfig": {
@@ -143,7 +143,7 @@
     {
       "id": 8,
       "type": "timeseries",
-      "title": "Event end-to-end p95 (target 2 s)",
+      "title": "Event end-to-end p95 (§13.7's target)",
       "description": "messaging.delivery.lag — OccurredAt to consumer start. IT DOES NOT COVER BROKER-FED READ MODELS: IntegrationEventConsumer<T> records this at the top of Consume, BEFORE it resolves a handler, so the measurement stops where the projection starts. This panel can sit inside its target while ordering.ProductPrices is stale or was never written. §13.7 records that gap as owed.",
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 19 },
@@ -153,8 +153,7 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green", "value": null },
-              { "color": "red", "value": 2 }
+              { "color": "green", "value": null }
             ]
           }
         },
@@ -170,7 +169,7 @@
     {
       "id": 9,
       "type": "timeseries",
-      "title": "Read-model staleness, own events, p99 (target 1 s)",
+      "title": "Read-model staleness, own events, p99 (§13.7's target)",
       "description": "projection.lag is recorded by ProjectionInvoker after a registered IProjectionHandler<T> succeeds — Ordering's OrderSummaryProjection on every placed order, Inventory's on an unreserved despatch — so a service with no projection shows nothing here. It only ever measures a read model this service feeds from its own domain events (§7.5); one fed by another service's contract never touches the outbox and stays empty here.",
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 19 },
@@ -180,8 +179,7 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green", "value": null },
-              { "color": "red", "value": 1 }
+              { "color": "green", "value": null }
             ]
           }
         },
