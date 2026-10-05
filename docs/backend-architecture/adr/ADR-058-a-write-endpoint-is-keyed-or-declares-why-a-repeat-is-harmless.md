@@ -85,6 +85,10 @@ clause that a keyed endpoint dispatches an `IIdempotentCommand` stands as
 written because it was true when it was written, and the record that made the
 gate refuse a second is ADR-061.
 
+**Note, 2026-10-05.** Notifications, which arrived after this record, holds a
+`WriteEndpointRuleTests` too; the hosts named above were every one that held
+the suite when it was written.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)
