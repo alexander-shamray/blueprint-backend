@@ -60,6 +60,9 @@ public static class DependencyInjection
                     EventsQueue,
                     e =>
                     {
+                        // A cancellation's void calls the provider, so an outage stops this endpoint as well.
+                        e.UseKillSwitch(ProviderKillSwitch.Configure);
+
                         e.UseMessageRetry(r =>
                         {
                             // A provider's 409 on the void key is terminal: the same key
@@ -82,6 +85,8 @@ public static class DependencyInjection
                     CommandsQueue,
                     e =>
                     {
+                        e.UseKillSwitch(ProviderKillSwitch.Configure);
+
                         // Outermost: a record that has not arrived is a wait (§3.2), so the
                         // message is released and delivered again later rather than held.
                         e.UseDelayedRedelivery(r =>
