@@ -288,8 +288,8 @@ jobs:
       - name: Render a service
         run: python tools/new-service/new_service.py Yankee --port 5199
 
-      # Build, do not run. The failure class is compile-time, and the rendered
-      # tests need SQL and RabbitMQ containers to execute — minutes for very
+      # Compiled here, and only the architecture tests run, below: the rest of
+      # the rendered tests need SQL and RabbitMQ containers, minutes for very
       # little extra signal.
       #
       # The test project rather than the service: it references the whole
@@ -316,6 +316,25 @@ jobs:
 
       - name: Compile the pure consumer it rendered
         run: dotnet build tests/Whiskey.Worker.Tests/Whiskey.Worker.Tests.csproj
+
+      # Each mode's architecture tests, which read the rendered assemblies and
+      # start no container: a template change that renders a layering violation
+      # compiles above and fails here. Every project must run at least one,
+      # because `dotnet test` exits zero on a filter that selected nothing.
+      - name: Run the architecture tests it rendered
+        run: |
+          set -euo pipefail
+          projects="Yankee.Domain Yankee.Application Yankee.Api Xray.Domain Xray.Application Xray.Worker"
+          projects="$projects Whiskey.Application Whiskey.Worker"
+          for project in $projects; do
+            dotnet test "tests/$project.Tests/$project.Tests.csproj" \
+              --filter "FullyQualifiedName~ArchitectureTests" \
+              --logger "trx;LogFileName=$project.trx" --results-directory TestResults/scaffold
+            if ! grep -Eq 'total="[1-9][0-9]*"' "TestResults/scaffold/$project.trx"; then
+              echo "::error::$project.Tests ran no architecture test"
+              exit 1
+            fi
+          done
 
       # No cleanup step. The scaffold both creates untracked files and edits
       # tracked ones, so undoing it locally takes the commands
