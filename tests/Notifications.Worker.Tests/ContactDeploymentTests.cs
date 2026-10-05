@@ -1,5 +1,4 @@
 using System.Text.Json;
-using System.Text.RegularExpressions;
 using Notifications.TestSupport;
 using Shouldly;
 using Xunit;
@@ -8,7 +7,7 @@ namespace Notifications.Worker.Tests;
 
 /// <summary>The realm and the Compose unit hold one client, one secret, one scope and one realm (§11.5).</summary>
 /// <remarks>An unknown client id passes <c>ValidateOnStart</c> and fails every contact read (§15.4).</remarks>
-public sealed partial class ContactDeploymentTests
+public sealed class ContactDeploymentTests
 {
     private static string File(params string[] path) =>
         System.IO.File.ReadAllText(Path.Combine([RepositoryRoot.Locate(), .. path]));
@@ -53,16 +52,4 @@ public sealed partial class ContactDeploymentTests
 
         held.ShouldContain(NotificationsWorkerFactory.ContactScope);
     }
-
-    [Fact]
-    public void The_suites_keycloak_is_the_image_compose_runs()
-    {
-        Match image = KeycloakImage().Match(File("deploy", "compose", "infrastructure.yml"));
-
-        image.Success.ShouldBeTrue("infrastructure.yml names no Keycloak image");
-        image.Groups["image"].Value.ShouldBe(KeycloakFixture.Image);
-    }
-
-    [GeneratedRegex(@"^\s*image:\s*(?<image>quay\.io/keycloak/keycloak:\S+)\s*$", RegexOptions.Multiline)]
-    private static partial Regex KeycloakImage();
 }

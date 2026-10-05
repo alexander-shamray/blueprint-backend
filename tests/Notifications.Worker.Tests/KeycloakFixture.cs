@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Common.Infrastructure.Identity;
+using Common.TestSupport;
 using Common.Web;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
@@ -21,9 +22,6 @@ namespace Notifications.Worker.Tests;
 /// </remarks>
 public sealed class KeycloakFixture : IAsyncLifetime
 {
-    /// <summary>§14.1's image, which a file test holds equal to the Compose baseline's.</summary>
-    public const string Image = "quay.io/keycloak/keycloak:26.0";
-
     public const string Realm = NotificationsWorkerFactory.LocalRealm;
 
     private const string ContactScope = NotificationsWorkerFactory.ContactScope;
@@ -44,7 +42,7 @@ public sealed class KeycloakFixture : IAsyncLifetime
     private static readonly string[] SupportedLocales = ["en"];
 
     private readonly KeycloakContainer _keycloak = new KeycloakBuilder()
-        .WithImage(Image)
+        .WithImage(ComposeImage.Of("keycloak"))
         .WithUsername(AdminUser)
         .WithPassword(AdminPassword)
         .WithResourceMapping(

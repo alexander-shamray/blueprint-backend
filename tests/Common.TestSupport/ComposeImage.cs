@@ -34,6 +34,27 @@ public static partial class ComposeImage
         throw new InvalidOperationException($"The Compose baseline names no image for '{service}' (§14.1).");
     }
 
+    /// <summary>The stock image a baseline build context's Dockerfile starts <c>FROM</c> (§14.1).</summary>
+    public static string BaseOf(string context) =>
+        BaseOf(File.ReadAllLines(Path.Combine(RepositoryRoot(), "deploy", "compose", context, "Dockerfile")));
+
+    public static string BaseOf(IReadOnlyList<string> dockerfile)
+    {
+        string[] bases =
+        [
+            .. dockerfile
+                .Select(line => From().Match(line))
+                .Where(from => from.Success)
+                .Select(from => from.Groups["image"].Value)
+        ];
+
+        // A second stage would leave the image a fixture should run a guess.
+        return bases.Length == 1
+            ? bases[0]
+            : throw new InvalidOperationException(
+                $"A Compose Dockerfile names {bases.Length} base images where one was expected (§14.1).");
+    }
+
     private static string RepositoryRoot()
     {
         for (DirectoryInfo? dir = new(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
@@ -47,4 +68,7 @@ public static partial class ComposeImage
 
     [GeneratedRegex(@"^ {4}image:\s*(?<image>\S+)\s*$")]
     private static partial Regex Image();
+
+    [GeneratedRegex(@"^FROM\s+(?:--\S+\s+)*(?<image>\S+)(?:\s+AS\s+\S+)?\s*$", RegexOptions.IgnoreCase)]
+    private static partial Regex From();
 }
