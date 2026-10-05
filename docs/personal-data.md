@@ -41,7 +41,6 @@ that carries it.
 |---|---|---|---|---|---|
 | `ordering.Orders` | Ordering | The customer's id and the shipping address | No window: the order is the financial record | Anonymise: the id replaced, the address cleared (§11.7) | Ordering's database |
 | `ordering.OrderSummaries` | Ordering | The customer's id, as the key of the buyer's list | No window, as its order | None decided: §11.7 draws Ordering's step over `Orders` alone | Ordering's database |
-| `ordering.OrderFulfilmentStates` | Ordering | The customer's id on the saga's instance | Until the saga finalises, which deletes the row ([§9.6](backend-architecture/09-messaging.md)) | Lifetime only | Ordering's database |
 | `ordering.OutboxMessages` | Ordering | The customer's id in the payloads of the order events that carry one | `RetentionPolicy.OutboxWindow` after dispatch; an abandoned row until an operator acts on it ([§9.4](backend-architecture/09-messaging.md)) | Lifetime only | Ordering's database |
 | `payments.PaymentOrders` | Payments | The customer's id, read from `OrderPlaced` as the payer ([ADR-028](backend-architecture/adr/ADR-028-a-money-movement-command-carries-no-subject.md)) | No window | None decided: §11.7 draws no step for Payments | Payments' database |
 | `shipping.DeliveryAddresses` | Shipping | The customer's id and the postal address read from Ordering ([ADR-052](backend-architecture/adr/ADR-052-a-contact-is-read-from-its-owner-by-a-worker-and-kept-in-the-readers-own-table.md)) | `ShippingJurisdictionOptions.AddressRetention` after its shipment is terminal | Delete (ADR-052) | Shipping's database |
@@ -58,7 +57,11 @@ a command by its id under `RetentionPolicy.IdempotencyWindow`, and Redis, whose
 coordination keys hold claims and locks and whose cache no read fills
 ([§8.2](backend-architecture/08-caching-redis.md)).
 Shipping's `Shipments` holds an order id and a tracking number, which identify
-a parcel and nobody until joined to the order.
+a parcel and nobody until joined to the order. Ordering's
+`OrderFulfilmentStates` keeps a `CustomerId` column only for §7.4's expand and
+contract: the saga cannot read it, and it is left at the empty GUID, which
+names nobody
+([ADR-028](backend-architecture/adr/ADR-028-a-money-movement-command-carries-no-subject.md)).
 
 ## Stores the platform writes to and does not run
 
