@@ -288,7 +288,7 @@ public abstract class ServiceFixture<TFactory, TEntryPoint, TDbContext> : IAsync
         await using AsyncServiceScope scope = Factory.Services.CreateAsyncScope();
         TDbContext db = scope.ServiceProvider.GetRequiredService<TDbContext>();
 
-        await db.Database.ExecuteSqlRawAsync(sql, parameters, TestContext.Current.CancellationToken);
+        await db.Database.ExecuteSqlRawAsync(sql, Sized(parameters), TestContext.Current.CancellationToken);
     }
 
     /// <summary>Reads one scalar outside any unit of work; a <c>{0}</c> placeholder is a SQL parameter.</summary>
@@ -298,9 +298,13 @@ public abstract class ServiceFixture<TFactory, TEntryPoint, TDbContext> : IAsync
         TDbContext db = scope.ServiceProvider.GetRequiredService<TDbContext>();
 
         return await db.Database
-            .SqlQueryRaw<T>(sql, parameters)
+            .SqlQueryRaw<T>(sql, Sized(parameters))
             .SingleAsync(TestContext.Current.CancellationToken);
     }
+
+    // EF types a bare decimal as decimal(18,2); an unsized SqlParameter keeps the value's own precision and scale.
+    private static object[] Sized(object[] parameters) =>
+        [.. parameters.Select(p => p is decimal amount ? new SqlParameter { Value = amount } : p)];
 
     /// <summary>The migrations EF considers applied, asked through EF rather than its history table.</summary>
     public async Task<string[]> AppliedMigrationsAsync()
