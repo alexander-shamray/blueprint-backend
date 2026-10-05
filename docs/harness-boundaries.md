@@ -144,9 +144,9 @@ behind the lock's coalescing. A commit changes no file, and that same `update`
 is what moves the index's recorded HEAD.
 
 **A linked worktree with no index is seeded from its main checkout's, and
-nothing is ever built.** `.claude/cache/` is ignored, so every `/branch`
-worktree starts without one, and the first query there used to run a full
-`index` inside the agent's turn: 230 s here, where copying the main
+nothing is ever built.** `.claude/cache/codebase-index/` is ignored, so every
+`/branch` worktree starts without one, and the first query there used to run
+a full `index` inside the agent's turn: 230 s here, where copying the main
 checkout's `index.sqlite` took 0.4 s and the `update` after it 5 s. The
 worker seeds under the refresh lock before it updates, through SQLite's
 backup rather than a file copy, because the main checkout's index may be
