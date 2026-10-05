@@ -385,14 +385,15 @@ def arriving(entries: list) -> list[str]:
 def ignored_paths(paths: list[str], root: Path) -> set[str]:
     """Which of `paths` the ignore rules of the tree holding `root` exclude, asked of git.
 
-    `--no-index` because a force-added file is tracked, and git otherwise
-    never reports a tracked path as ignored."""
+    `--no-index` because a force-added file is tracked, which git otherwise never reports as ignored,
+    and case-folded because the Windows checkouts that read these files fold `.MCP.json` to `.mcp.json`."""
     if not paths:
         return set()
     try:
         top = subprocess.run(["git", "-C", str(root), "rev-parse", "--show-toplevel"],
                              capture_output=True, encoding="utf-8", check=True).stdout.strip()
-        result = subprocess.run(["git", "check-ignore", "--no-index", "--stdin", "-z"], cwd=top,
+        result = subprocess.run(["git", "-c", "core.ignorecase=true", "check-ignore", "--no-index", "--stdin", "-z"],
+                                cwd=top,
                                 input="\0".join(paths) + "\0", capture_output=True, encoding="utf-8")
     except (OSError, subprocess.CalledProcessError) as error:
         raise InputRefused(f"git could not say which changed paths the tree ignores: {error}") from error
