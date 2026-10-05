@@ -938,10 +938,11 @@ the migrator connection string of §7.1 — and no template here sets an
 environment name for any workload, so every deployed migrator runs as
 `Production`. Turning seeding on in a cluster would therefore take a new entry
 in the library chart's Job template as well as a `seed.enabled: true` in a
-values file, both of them lines somebody reviews. That is this section's rule
-that a key joins a chart when a host's code reads it, applied to the one
-workload running with DDL rights: neither line belongs here until a
-`*.Migrator` holds a seeder to switch on, and none does.
+values file, both of them lines somebody reviews. That is an exception to
+this section's rule that a key joins a chart when a host's code reads it:
+`CatalogSeeder` and `InventorySeeder` sit behind a gate that reads the flag,
+and the workload running with DDL rights is where the key stays out, which
+`deploy/helm/smoke.sh` asserts of every render.
 
 **Shipping and Notifications get a service chart with no Service and no
 Ingress.** They consume from the broker and expose no API, so their only
