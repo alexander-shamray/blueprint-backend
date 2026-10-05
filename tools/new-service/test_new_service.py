@@ -983,6 +983,18 @@ class EditsTheSharedFiles(unittest.TestCase):
                 f"{mapping} publishes on every interface",
             )
 
+    def test_the_host_probes_itself_and_waits_on_no_seed_consumer(self):
+        # §14.1's healthcheck runs the rendered host's own dll, and §14.3's
+        # start order is the template's seed and not the rendered service's.
+        unit = self.rendered.created[UNIT].replace("\r\n", "\n")
+        self.assertIn('test: [ "CMD", "dotnet", "Zulu.Api.dll", "--probe" ]', unit)
+        self.assertNotIn("ordering-api:", unit)
+        self.assertNotIn("web-bff:", unit)
+        template = (REPO_ROOT / TEMPLATE_UNIT).read_text(encoding="utf-8")
+        self.assertIn(scaffold.render.TEMPLATE_START_ORDER, template)
+        program = self.rendered.created["src/Services/Zulu/Zulu.Api/Program.cs"]
+        self.assertIn("Environment.Exit(await HealthProbe.RunAsync());", program)
+
     def test_the_compose_pair_keeps_the_two_key_split_of_section_7_1(self):
         unit = self.rendered.created[UNIT]
         self.assertIn("ConnectionStrings__ZuluMigrator:", unit)
@@ -1670,6 +1682,10 @@ class RendersAWorker(unittest.TestCase):
         self.assertEqual(declared, [f"  {PROBE.lower()}-migrator:", f"  {PROBE.lower()}-worker:"])
         self.assertNotIn("ports:", unit)
 
+    def test_the_healthcheck_runs_the_worker_s_own_dll(self):
+        unit = self.rendered.created[UNIT].replace("\r\n", "\n")
+        self.assertIn(f'test: [ "CMD", "dotnet", "{PROBE}.Worker.dll", "--probe" ]', unit)
+
     def test_the_infra_only_override_excludes_the_worker_half(self):
         override = self.rendered.updated["deploy/compose/docker-compose.infra-only.yml"]
         self.assertIn(
@@ -2037,6 +2053,15 @@ class RefusesToRun(unittest.TestCase):
         self.assertIn(
             "src/Services/CATALOGSearch/CATALOGSearch.Domain/AssemblyMarker.cs", rendered.created
         )
+
+    def test_a_template_unit_whose_start_order_moved(self):
+        # Copied as it stands, the template's wait on its seed's consumers
+        # would hold every rendered service behind hosts it shares no data with.
+        moved = scaffold.render.TEMPLATE_START_ORDER.replace("web-bff", "web-bff-moved")
+        with mock.patch.object(scaffold.render, "TEMPLATE_START_ORDER", moved):
+            with self.assertRaises(ScaffoldError) as raised:
+                render()
+        self.assertIn("catalog.yml", str(raised.exception))
 
     def test_the_compose_header_is_one_line_naming_the_service(self):
         # The line the README's listing command prints for this unit.

@@ -225,6 +225,14 @@ services:
       ConnectionStrings__RedisCache: "redis-cache:6379,user=ordering-svc,password=local-dev-ordering"
       ConnectionStrings__RedisCoordination: "redis-coordination:6379,user=ordering-svc,password=local-dev-ordering"
     ports: [ "127.0.0.1:5101:8080" ]
+    # §13.5's readiness, asked by the host itself through HealthProbe, because
+    # the image has no shell or HTTP client. Every application unit has one.
+    healthcheck:
+      test: [ "CMD", "dotnet", "Ordering.Api.dll", "--probe" ]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
     depends_on:
       ordering-migrator: { condition: service_completed_successfully }
       rabbitmq:          { condition: service_healthy }
@@ -313,10 +321,9 @@ services:
     depends_on:
       bff-migrator: { condition: service_completed_successfully }
       rabbitmq: { condition: service_healthy }
-      # Keycloak. catalog-api is elided from this file (see the comment
-      # above the gateway), and Compose rejects a dependency on a service it
-      # cannot see — one undefined name fails the whole `up`, not one service.
       keycloak: { condition: service_healthy }
+      # No catalog-api: the pricing hop is made per request and kept out of
+      # readiness (§13.5), and Catalog's seed waits on this host instead (§14.3).
 
 volumes:
   sql-data:
@@ -345,6 +352,11 @@ silently drops the built-in scopes and with them `sub`.
 ```bash
 docker compose -f deploy/compose/docker-compose.yml up -d --wait
 ```
+
+`--wait` returns once each host is ready, not once it has started: every
+application unit's healthcheck runs the host's own `HealthProbe`, which asks
+its [§13.5](13-observability.md) readiness endpoint over loopback, and a unit
+that waits on a peer with `service_healthy` waits on that same answer.
 
 | Endpoint | URL |
 |---|---|
@@ -833,8 +845,11 @@ outbox row `PublishProduct` stages, and each count with the
 `StockLevelChanged` row `SetOnHand` stages, so Ordering's prices, the BFF's
 names and Catalog's stock levels fill through the platform's own delivery
 ([§9.4](09-messaging.md)) and the seeded state is one the system could have
-reached. Inventory is seeded directly rather than from Catalog's event,
-because stock reaches it by the admin path ([§10.2](10-api-gateway.md)'s
+reached. §14.1's start order is what makes that delivery arrive: a fanout
+publish with no queue bound to it is dropped, so `catalog-api` waits for its
+consumers to be ready and `inventory-api` waits for Catalog. Inventory is
+seeded directly rather than from Catalog's event, because stock reaches it by
+the admin path ([§10.2](10-api-gateway.md)'s
 `inventory-admin` route) and from no event
 ([§3.2](03-bounded-contexts.md)). Both write SQL through the migration's own
 `DbContext`, since [§4.2](04-solution-structure.md) keeps the migrator off

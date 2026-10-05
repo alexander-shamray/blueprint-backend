@@ -73,6 +73,14 @@ services:
       # ADR-052's give-up age: a notice a day late is worse than none, and an
       # operator lengthens it during an outage rather than a release.
       Delivery__GiveUpAge: "1.00:00:00"
+    # §13.5's readiness, asked by the host itself through HealthProbe, because
+    # the image has no shell or HTTP client; the timeout outlasts the probe's.
+    healthcheck:
+      test: [ "CMD", "dotnet", "Notifications.Worker.dll", "--probe" ]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
     depends_on:
       notifications-migrator: { condition: service_completed_successfully }
       rabbitmq: { condition: service_healthy }

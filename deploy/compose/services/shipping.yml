@@ -80,6 +80,14 @@ services:
       # chart's value rather than a made-up one: it is sized to reach
       # OrderFulfilmentSaga.DespatchTimeoutDelay, which a laptop shares.
       Fulfilment__GiveUpAge: "3.00:00:00"
+    # §13.5's readiness, asked by the host itself through HealthProbe, because
+    # the image has no shell or HTTP client; the timeout outlasts the probe's.
+    healthcheck:
+      test: [ "CMD", "dotnet", "Shipping.Worker.dll", "--probe" ]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
     depends_on:
       shipping-migrator: { condition: service_completed_successfully }
       carrier-simulator: { condition: service_started }

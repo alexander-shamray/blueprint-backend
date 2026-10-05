@@ -144,7 +144,8 @@ writes each product with the `ProductPublished` outbox row a publish stages,
 and `InventorySeeder` each count with the `StockLevelChanged` row a stock-take
 stages, so Ordering's prices, the BFF's names and Catalog's stock levels fill
 from the same deliveries an admin's calls would cause — a seeded id is one the
-order recipe below can name.
+order recipe below can name. The units' start order is what makes those
+deliveries arrive, and §14.3 says why.
 
 A seeder skips an id that already has a row, so a second `up` changes
 nothing and an edit to a seeded row survives it; `docker compose down -v` and

@@ -53,16 +53,19 @@ services:
       Identity__Client__Scope: "commerce-api"
       OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4317"
     ports: [ "127.0.0.1:5200:8080" ]
+    # §13.5's readiness, asked by the host itself through HealthProbe, because
+    # the image has no shell or HTTP client; the timeout outlasts the probe's.
+    healthcheck:
+      test: [ "CMD", "dotnet", "Web.Bff.dll", "--probe" ]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
     depends_on:
       bff-migrator: { condition: service_completed_successfully }
       rabbitmq: { condition: service_healthy }
       # Keycloak, because this host mints its own token and would otherwise
       # discover that on the first request.
       keycloak: { condition: service_healthy }
-      # And catalog-api, which services/gateway.yml cannot say about its own
-      # destinations for a different reason — it routes to services that do
-      # not exist yet, where this one calls a service that does. The hop is
-      # over 8081, catalog-api's HTTP/2 endpoint (§9.7): a cleartext port
-      # cannot serve HTTP/1.1 and h2c at once, so Catalog declares two and this
-      # is the second. It is not published to the host and no route reaches it.
-      catalog-api: { condition: service_started }
+      # No catalog-api: the pricing hop is made per request and kept out of
+      # readiness (§13.5), and Catalog's seed waits on this host instead (§14.3).

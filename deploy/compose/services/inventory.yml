@@ -69,6 +69,14 @@ services:
       ConnectionStrings__RedisCache: "redis-cache:6379,user=inventory-svc,password=local-dev-inventory"
       ConnectionStrings__RedisCoordination: "redis-coordination:6379,user=inventory-svc,password=local-dev-inventory"
     ports: [ "127.0.0.1:5103:8080" ]
+    # §13.5's readiness, asked by the host itself through HealthProbe, because
+    # the image has no shell or HTTP client; the timeout outlasts the probe's.
+    healthcheck:
+      test: [ "CMD", "dotnet", "Inventory.Api.dll", "--probe" ]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
     depends_on:
       inventory-migrator: { condition: service_completed_successfully }
       rabbitmq: { condition: service_healthy }
@@ -86,3 +94,6 @@ services:
       # could connect to a missing container.
       redis-cache: { condition: service_healthy }
       redis-coordination: { condition: service_healthy }
+      # §14.3's seed is published once, and a fanout publish with no queue bound
+      # is dropped, so Catalog, which consumes it, is ready first.
+      catalog-api: { condition: service_healthy }

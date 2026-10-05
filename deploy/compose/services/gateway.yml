@@ -30,6 +30,14 @@ services:
       Cors__Origins__1: "https://localhost"
       OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4317"
     ports: [ "127.0.0.1:5000:8080" ]
+    # §13.5's readiness, asked by the host itself through HealthProbe, because
+    # the image has no shell or HTTP client; the timeout outlasts the probe's.
+    healthcheck:
+      test: [ "CMD", "dotnet", "Gateway.Api.dll", "--probe" ]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
     depends_on:
       keycloak: { condition: service_healthy }
       # The destinations in §10.2's route file, each waited on once its
