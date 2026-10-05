@@ -66,6 +66,36 @@ public sealed class InboxFilterTests(ServiceFixture fixture) : IAsyncLifetime
         }
     }
 
+    /// <summary>Each delivery's verdict as the receive pipe left it: undelivered is what MassTransit parks.</summary>
+    public sealed class DeliveryRecorder : IReceiveObserver
+    {
+        public List<(Guid? MessageId, bool Delivered)> Deliveries { get; } = [];
+
+        public Task PreReceive(ReceiveContext context) => Task.CompletedTask;
+
+        public Task PostReceive(ReceiveContext context)
+        {
+            lock (Deliveries)
+                Deliveries.Add((context.GetMessageId(), context.IsDelivered));
+
+            return Task.CompletedTask;
+        }
+
+        public Task PostConsume<T>(ConsumeContext<T> context, TimeSpan duration, string consumerType)
+            where T : class =>
+            Task.CompletedTask;
+
+        public Task ConsumeFault<T>(
+            ConsumeContext<T> context,
+            TimeSpan duration,
+            string consumerType,
+            Exception exception)
+            where T : class =>
+            Task.CompletedTask;
+
+        public Task ReceiveFault(ReceiveContext context, Exception exception) => Task.CompletedTask;
+    }
+
     public async ValueTask InitializeAsync()
     {
         FirstConsumer.Consumed.Clear();
@@ -160,6 +190,45 @@ public sealed class InboxFilterTests(ServiceFixture fixture) : IAsyncLifetime
         (await fixture.InboxAsync(messageId))
             .ShouldHaveSingleItem("one delivery of this message reached the consumer, so one row")
             .Endpoint.ShouldBe(FirstEndpoint);
+    }
+
+    [Fact]
+    public async Task A_dropped_duplicate_is_consumed_rather_than_parked_in_the_skipped_queue()
+    {
+        // A delivery no consumer marked consumed goes to <queue>_skipped, which pages on ordinary redelivery (§13.6).
+        await using ServiceProvider provider = BuildHost<FirstConsumer>();
+        ITestHarness harness = provider.GetRequiredService<ITestHarness>();
+        await harness.Start();
+
+        DeliveryRecorder recorder = new();
+        harness.Bus.ConnectReceiveObserver(recorder);
+
+        var messageId = Guid.CreateVersion7();
+
+        await harness.Bus.Publish(
+            new ProbeMessage(Guid.CreateVersion7()),
+            c => c.MessageId = messageId,
+            TestContext.Current.CancellationToken);
+
+        await Eventually(() => fixture.InboxAsync(messageId), expected: 1);
+
+        await harness.Bus.Publish(
+            new ProbeMessage(Guid.CreateVersion7()),
+            c => c.MessageId = messageId,
+            TestContext.Current.CancellationToken);
+
+        IReadOnlyList<bool> verdicts = await Eventually(
+            () =>
+            {
+                lock (recorder.Deliveries)
+                {
+                    return Task.FromResult<IReadOnlyList<bool>>(
+                        [.. recorder.Deliveries.Where(d => d.MessageId == messageId).Select(d => d.Delivered)]);
+                }
+            },
+            expected: 2);
+
+        verdicts.ShouldBe([true, true], "the inbox's drop must mark the duplicate consumed, or it lands in _skipped");
     }
 
     [Fact]

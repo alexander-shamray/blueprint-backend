@@ -96,7 +96,7 @@ public sealed class ReplayTests(BffServiceFixture fixture) : IAsyncLifetime
         await _outboxes.StageAsync(Named("Shipping"), Processed, dispatched);
         await _outboxes.StageAsync(Named("Shipping"), null, undispatched);
 
-        // The queue is the collection's, so a copy the inbox dropped in an earlier test is already skipped there.
+        // The queue is the collection's, so an earlier test's unbound send may already be parked there.
         int skippedBefore = await fixture.QueueDepthAsync($"{Replay.Queue}_skipped");
 
         StringWriter output = new();
@@ -138,8 +138,6 @@ public sealed class ReplayTests(BffServiceFixture fixture) : IAsyncLifetime
         await _outboxes.StageAsync(Named("Payments"), Processed, authorised);
         await _outboxes.StageAsync(Named("Shipping"), Processed, missed);
 
-        int skippedBefore = await fixture.QueueDepthAsync($"{Replay.Queue}_skipped");
-
         StringWriter output = new();
         ReplayReport report = await Replay.RunAsync(
             Settings(),
@@ -153,8 +151,6 @@ public sealed class ReplayTests(BffServiceFixture fixture) : IAsyncLifetime
         output.ToString().ShouldContain("Skipped 2 event(s)");
         await BffServiceFixture.WaitUntilAsync(async () => (await fixture.InboxAsync()).Count == 3);
         await BffServiceFixture.WaitUntilAsync(async () => await fixture.QueueDepthAsync(Replay.Queue) == 0);
-        (await fixture.QueueDepthAsync($"{Replay.Queue}_skipped"))
-            .ShouldBe(skippedBefore, "a handled copy was sent and dropped by the inbox");
 
         ProjectedOrder after = (await fixture.OrderAsync(order)).ShouldNotBeNull();
         after.DispatchedAt.ShouldBe(missed.OccurredAt);
