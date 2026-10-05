@@ -1593,6 +1593,10 @@ Rules for each service's consumer:
 - **Report completion.** The privacy service tracks which services have
   responded and escalates on timeout. Silence is not success.
 
+Where each holding is — its owner, its window, and which of these paths
+erasure takes there — is [`docs/personal-data.md`](../personal-data.md), this
+section's operational half, as `docs/secrets.md` is §15.4's.
+
 **The log store is answered by a lifetime, not by a delete**: no consumer
 reaches it, and the ids it holds leave it when
 [§13.4](13-observability.md)'s lifetime for logs and traces runs out.
