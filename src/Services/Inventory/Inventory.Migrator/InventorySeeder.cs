@@ -7,8 +7,9 @@ namespace Inventory.Migrator;
 
 /// <summary>§14.3's development stock, each count written with the outbox row its <c>SetOnHand</c> would stage.</summary>
 /// <remarks>
-/// Directly, since stock reaches Inventory by the admin path and from no event (§3.2); in SQL, since §4.2 keeps the
-/// migrator off Application and Domain. The ids are Catalog's seeded ones, which deploy/compose/README.md publishes.
+/// Directly, since stock reaches Inventory by the admin path (§10.2) and from no event (§3.2); in SQL, since §4.2
+/// keeps the migrator off Application and Domain. The ids are Catalog's seeded ones, which deploy/compose/README.md
+/// publishes.
 /// </remarks>
 public sealed class InventorySeeder(InventoryDbContext db, ILogger<InventorySeeder> logger)
 {
