@@ -18,7 +18,7 @@ public static class MailHop
     /// <summary>The bound on one jittered delay, of which <see cref="RetryDelay"/> is only the nominal.</summary>
     public static readonly TimeSpan MaxRetryDelay = TimeSpan.FromSeconds(2);
 
-    /// <summary>Strictly below <c>ServiceOptions.OperationTimeout</c> (§9.7); the worker's lease is above.</summary>
+    /// <summary>Below the send worker's lease, the budget §9.7 sizes this hop to.</summary>
     public static readonly TimeSpan TotalTimeout = TimeSpan.FromSeconds(19);
 
     public const double CircuitBreakerFailureRatio = 0.5;

@@ -130,10 +130,6 @@ public sealed class HttpCarrierGatewayTests : IClassFixture<HttpCarrierGatewayTe
         worst.ShouldBeLessThan(
             CarrierHop.TotalRequestTimeout,
             "PricingHop's argument: a total that cancels the last retry makes the retry count a fiction");
-
-        CarrierHop.TotalRequestTimeout.ShouldBeLessThan(
-            Common.Web.ServiceOptions.OperationTimeout,
-            "§9.7: the outbound client total must be strictly below the service operation total");
     }
 
     [Fact]

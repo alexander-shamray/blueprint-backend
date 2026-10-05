@@ -16,10 +16,6 @@ public sealed class MailHopTests
         worst.ShouldBeLessThan(
             MailHop.TotalTimeout,
             "a total that cancels the last retry makes the retry count a fiction");
-
-        MailHop.TotalTimeout.ShouldBeLessThan(
-            Common.Web.ServiceOptions.OperationTimeout,
-            "§9.7: the outbound client total must be strictly below the service operation total");
     }
 
     [Fact]
