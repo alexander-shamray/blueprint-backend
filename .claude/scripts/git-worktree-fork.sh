@@ -62,7 +62,8 @@ command -v py >/dev/null 2>&1 && python="py -3.12"
 # `permissions` rows are the main checkout's own grants.
 settings=.claude/settings.local.json
 if [ -f "$settings" ] && [ ! -e "$path/$settings" ]; then
-  if ! $python - "$settings" "$path/$settings" <<'PY'; then
+  # -I keeps a checkout-root json.py off the import path, as the hooks' -P does.
+  if ! $python -I - "$settings" "$path/$settings" <<'PY'; then
 import json, os, sys
 local = json.load(open(sys.argv[1], encoding="utf-8"))
 servers = local.get("enabledMcpjsonServers")
