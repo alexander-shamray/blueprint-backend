@@ -13,7 +13,7 @@
 # same one.
 services:
   sql:
-    image: mcr.microsoft.com/mssql/server:2022-latest
+    image: mcr.microsoft.com/mssql/server:2022-CU26-ubuntu-22.04
     environment:
       ACCEPT_EULA: "Y"
       MSSQL_SA_PASSWORD: "${SQL_PASSWORD:-Local_Dev_Pa55w0rd!}"
@@ -132,13 +132,13 @@ services:
       start_period: 20s
 
   otel-collector:
-    image: otel/opentelemetry-collector-contrib:latest
+    image: otel/opentelemetry-collector-contrib:0.158.0
     command: [ "--config=/etc/otel/config.yaml" ]
     volumes: [ ./otel/config.yaml:/etc/otel/config.yaml:ro ]
     ports: [ "127.0.0.1:4317:4317", "127.0.0.1:4318:4318" ]
 
   grafana:
-    image: grafana/otel-lgtm:latest
+    image: grafana/otel-lgtm:0.30.1
     ports: [ "127.0.0.1:3000:3000" ]
 
 volumes:
