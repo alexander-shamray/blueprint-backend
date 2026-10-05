@@ -213,6 +213,24 @@ groups:
             is past every cause that resolves itself or raises its own alert.
           runbook_url: docs/runbooks/unattributed-order.md
 
+      # A rate, because the counter only grows: a refusal last week is not one
+      # now. A page, because a refused read backs off every despatch and no
+      # retry fixes a grant (ADR-052); `for` rides out one rotated secret.
+      - alert: AddressReadRefused
+        expr: sum by (service_name) (rate(shipping_address_refused_total[5m])) > 0
+        for: 5m
+        labels:
+          severity: page
+          owner: service
+        annotations:
+          summary: "Delivery-address reads refused on {{ $labels.service_name }}"
+          description: >-
+            Ordering, or this host's own token, refused the worker's read of an
+            order's delivery address, so every shipment that has no stored
+            address backs off and retries without leaving. The cause is a
+            credential or a grant, which no retry will change.
+          runbook_url: docs/runbooks/address-refused.md
+
   - name: platform-infrastructure
     rules:
       # The rules whose signal comes from an exporter rather than from this
