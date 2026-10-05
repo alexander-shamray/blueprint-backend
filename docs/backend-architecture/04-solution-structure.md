@@ -10,7 +10,7 @@ A monorepo makes cross-cutting changes and contract updates atomic and reviewabl
 /
 ├── src/
 │   ├── BuildingBlocks/
-│   │   ├── Common.Domain/              Entity, AggregateRoot, IDomainEvent (§5.5)
+│   │   ├── Common.Domain/              the base types of §5.5, and §4.3's one table
 │   │   ├── Common.Application/         Dispatcher, pipeline behaviours, Result<T>
 │   │   ├── Common.Infrastructure/      Outbox, inbox, idempotency markers,
 │   │   │                               EF conventions, Redis, and §11.5's

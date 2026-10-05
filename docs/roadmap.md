@@ -415,7 +415,8 @@ that reads like clean-up is a third of the plan.
 
 ## What moves these numbers
 
-Six things, ordered by how much of the total they can move.
+Six things, ordered by how much of the total they could move; the first is
+settled and now moves none.
 
 **The domain question is settled: the domain is a reference implementation**
 ([ADR-062](backend-architecture/adr/ADR-062-the-domain-is-a-reference-implementation.md)).

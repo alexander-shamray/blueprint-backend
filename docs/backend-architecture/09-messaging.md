@@ -2892,15 +2892,16 @@ Timeouts must **decrease** at every level inwards. If an inner timeout exceeds
 an outer one, the outer layer abandons the request while the inner work
 continues — consuming a connection and a thread for an answer nobody will read.
 
-| Layer | Typical | Constraint |
+| Layer | Owner or typical value | Constraint |
 |---|---|---|
 | Gateway request timeout | `GatewayLimits.RequestTimeout` | Highest, inside the host's drain ([§15.3](15-cicd-deployment.md)) |
 | Service operation total | `ServiceOptions.OperationTimeout` | < gateway |
 | Outbound client total (incl. retries) | 3–5 s | < service operation |
 | Outbound per-attempt | 1–2 s | (× attempts) **+ backoff** ≤ client total |
 
-The values are configuration and will differ per system. **The ordering is the
-invariant** — that part is not negotiable, and it is what to assert in a
+The outer two are the platform's constants ([§15.4](15-cicd-deployment.md));
+the outbound pair is set per hop and differs with what each calls. **The
+ordering is the invariant** — that part is not negotiable, and it is what to assert in a
 configuration-validation test at startup.
 
 > **All four layers fire.** The outbound total and the per-attempt timeout are
