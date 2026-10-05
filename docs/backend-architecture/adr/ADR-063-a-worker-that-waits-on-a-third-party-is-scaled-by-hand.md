@@ -32,8 +32,9 @@ between the signal and the replica is the one place the limit is read.
 that builds overnight is worked down in the morning, and the gauges have to be
 watched rather than paged on until the baseline exists. ADR-022's constraint
 holds unchanged: neither track autoscales, and the rollout's first rung scales
-the stable Deployment for its weight and restores the count it found when it
-ends, so a person scales between rollouts and never during one. When
+the stable Deployment for its weight and, when it ends, restores the count it
+found on a rollback and the promoted release's declared count on a promotion,
+so a person scales between rollouts and never during one. When
 [§13.7](../13-observability.md)'s load run gives the overdue gauges a baseline,
 an external-metric autoscaler over them, with a ceiling set against each
 processor's limit, is the candidate that supersedes this record.
