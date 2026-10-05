@@ -19,11 +19,14 @@ retry changes the answer, because the cause is a credential or a grant.
 
 ## What is *not* affected
 
-- **Orders and payments.** Ordering and Payments never wait on Shipping.
+- **Placing and paying.** Ordering takes the order and Payments authorises
+  it without Shipping; only the saga's wait for a despatch lengthens.
 - **A shipment whose address is already stored.** It is booked as usual; only
   the read is refused.
-- **The rows themselves.** Nothing is marked failed or lost: each backed-off
-  row is claimed again on a later pass.
+- **A row younger than its give-up age.** It backs off and is claimed again
+  on a later pass. **A row that reaches `FulfilmentOptions.GiveUpAge` while
+  reads are refused is not**: the worker ends it as unfulfillable with the
+  reason `gave_up`, and by then the saga has raised the order for review.
 
 ## Find the cause
 
@@ -54,6 +57,8 @@ never reach Ordering's logs.
 - **An issuer or audience.** Compare the two hosts' `Identity` configuration;
   both name the one realm ([§11.3](../backend-architecture/11-identity-authorization.md)).
 
-Nothing needs replaying. The backed-off rows are claimed again on their own,
-so once the rate falls to zero, watch `shipping.shipments.waiting` drain and
-the alert resolve.
+The backed-off rows are claimed again on their own, so once the rate falls to
+zero, watch `shipping.shipments.waiting` drain and the alert resolve. **A
+waiting set that falls is not by itself recovery**: rows given up during the
+refusal leave it too. Look for shipments marked unfulfillable with `gave_up`
+since the refusal began, and work their orders from `order-review.md`.
