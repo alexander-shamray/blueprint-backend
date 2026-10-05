@@ -14,11 +14,11 @@ public class HostSmokeTests(HostSmokeTests.UnreachableInfrastructureFactory fact
 {
     // .invalid never resolves, so both checks fail on NXDOMAIN; Connect Timeout=1 bounds a resolver that answers.
     // Declared once, so the two factories below cannot disagree.
-    private const string UnreachableSql =
+    internal const string UnreachableSql =
         "Server=ordering-sql.invalid,1433;Database=Ordering;User Id=sa;" +
         "Password=not-a-real-password;Encrypt=False;Connect Timeout=1";
 
-    private const string UnreachableRabbit = "amqp://guest:guest@ordering-rabbit.invalid:5672";
+    internal const string UnreachableRabbit = "amqp://guest:guest@ordering-rabbit.invalid:5672";
 
     /// <summary>The same host with the base factory's <c>TestAuthHandler</c>, so a caller can authenticate.</summary>
     public sealed class AuthenticatedUnreachableFactory()

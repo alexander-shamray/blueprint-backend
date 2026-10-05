@@ -618,6 +618,24 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
             '["Health checks", "Health checks", "Health checks"]);\n',
         ),
     ),
+    # ADR-017's floor is the template's consumer, which a rendered host does
+    # not inherit, so it is inverted on the same argument: the test fails the
+    # day the service registers its first consumer, and says what to restore.
+    "tests/Catalog.Api.Tests/ConsumerCallRuleTests.cs": (
+        (
+            "    public void The_rule_above_is_looking_at_this_hosts_consumers_and_clients()\n",
+            "    public void This_host_registers_no_consumer_for_the_rule_above_to_look_at_yet()\n",
+        ),
+        (
+            "        ConsumerCallRule.Consumers(factory.Composition, Host).ShouldNotBeEmpty();\n",
+            "        ConsumerCallRule.Consumers(factory.Composition, Host).ShouldBeEmpty(\n"
+            '            "This host registers no consumer yet, so the rule above is vacuous. '
+            'The day it does, " +\n'
+            '            "this test fails — replace it with the ShouldNotBeEmpty form, which '
+            'is what keeps a " +\n'
+            '            "vacuous gate from quietly becoming a permanent one (ADR-017).");\n',
+        ),
+    ),
     "tests/Catalog.Api.Tests/DatabaseSmokeTests.cs": (
         (
             "        schema.ShouldBe(1, \"InitialCreate's hand-written EnsureSchema creates it; "
