@@ -160,13 +160,14 @@ checkout with no index is left alone, because unindexed is not stale.
 `git-worktree-fork.sh` runs the new worktree's own hook once, because
 `/branch` enters it mid-session, where no `SessionStart` fires.
 
-**`SessionStart` runs the same script, for the moves no edit makes.** A merge,
-a switch or a pull rewrites the tree with no tool event behind it, so a session
-opening onto one of those reads an index describing the tree it replaced. The
-event names no file, which is what the `cwd` fallback above is for, and the
-spawn is the same detached one, so a session start waits for nothing. What is
-left to a query's stale report is the tree that moves mid-session, and that is
-the one a person is present for.
+**`SessionStart` runs the same script, for the moves no tool call makes.** A
+merge, a switch or a pull made outside the session rewrites the tree with no
+tool event behind it, so a session opening onto one of those reads an index
+describing the tree it replaced. The event names no file, which is what the
+`cwd` fallback above is for, and the spawn is the same detached one, so a
+session start waits for nothing. What is left to a query's stale report is a
+tree that someone other than the agent moves mid-session, and that is the one
+a person is present for.
 
 **`UserPromptSubmit` runs `.claude/hooks/index-query-hint.py`, because keeping
 the index current never got it read.** The skill's `description` says to
