@@ -67,6 +67,11 @@ here. A new edge is two value edits, one at each end, or the call is refused
 where it is enforced. The migration Job's pods carry labels of their own, so
 they are outside this fence and owed one.
 
+> **The migration Job's fence is
+> [ADR-069](ADR-069-the-migration-job-is-fenced-by-a-hook-policy-of-its-own.md)'s**:
+> a second policy, a hook rendered with the Job.
+
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)

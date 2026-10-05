@@ -1,13 +1,12 @@
 # ADR-070 — Payments calls its provider inside its consumers
 
-**Decision.** Payments' consumers that authorise a payment and void or refund
-one on a cancellation call `IPaymentProvider` synchronously, inside the
-consume. This is the written exception
-[ADR-017](ADR-017-one-synchronous-hop.md) asks for. When the provider is
-unreachable the message is retried, no verdict is recorded, and
+**Decision.** Payments' consumers that authorise a payment and void one on a
+cancellation call `IPaymentProvider` synchronously, inside the consume. This is
+the written exception [ADR-017](ADR-017-one-synchronous-hop.md) asks for. When
+the provider is unreachable the message is retried, no verdict is recorded, and
 `ProviderKillSwitch` stops the endpoint so the rest of the queue waits rather
-than faults: correctness is chosen over availability. When the provider
-answers no, the decline is recorded and published like any other verdict.
+than faults: correctness is chosen over availability. When the provider answers
+no, the decline is recorded and published like any other verdict.
 **Why.** The provider is a third party reached only by a request
 ([§3.1](../03-bounded-contexts.md)'s anti-corruption layer), and the work that
 needs it arrives as a message, so the call has nowhere else to happen. A

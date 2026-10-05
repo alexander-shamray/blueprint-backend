@@ -16,6 +16,12 @@ trade.
 > keeps both off the bus. The read is made by a worker over a row and never
 > inside a consumer, so the exception this record asks for is not spent.
 
+> **Spent once, by
+> [ADR-070](ADR-070-payments-calls-its-provider-inside-its-consumers.md)**,
+> for Payments' provider call inside its consumers; the reads above still
+> spend nothing.
+
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)
