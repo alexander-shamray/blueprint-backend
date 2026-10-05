@@ -201,6 +201,23 @@ backs up. Both are worth knowing before rotating rather than during.
 `deploy/compose/rabbitmq/definitions.json` for the local broker, and are an
 obligation on whoever provisions a deployed one.
 
+### A Redis credential
+
+`ConnectionStrings__RedisCache` and `ConnectionStrings__RedisCoordination`,
+for each service that calls `AddRedisConnections`, and each such service has
+its own: each chart's `values.yaml` names its own `<service>-redis` Secret,
+never a shared one, because a connection string carries its ACL user and
+[§8.1](backend-architecture/08-caching-redis.md) gives every service its own
+on both instances. So rotating Redis is one rotation per service, and rotating
+one affects exactly one service.
+
+A Redis ACL user can hold two passwords at once, which is the overlap a
+rotation needs: add the new password to the service's user on the instance,
+update the vault, reconcile and restart as for a client secret, then remove
+the old password. A rotation that reaches the vault and not the pod fails the
+host's Redis readiness check and, on the coordination instance, every command
+that claims an idempotency key (§8.5).
+
 ### A realm-check credential
 
 `KEYCLOAK_CHECK_CLIENT_SECRET`, and it is the first credential in this

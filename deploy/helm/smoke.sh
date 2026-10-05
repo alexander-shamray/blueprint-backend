@@ -975,6 +975,22 @@ for chart in $SERVICE_CHARTS; do
     fi
 done
 
+# A connection string carries its user, so two charts reading one Redis Secret
+# are one ACL user for two services, which §8.1 says does not happen. Each
+# chart's name is read from its render, and the read itself is checked first.
+redis_charts=0
+redis_secrets=''
+for chart in $SERVICE_CHARTS; do
+    declares "$chart" redis || continue
+    redis_charts=$((redis_charts + 1))
+    redis_secrets="$redis_secrets $(awk '/- name: ConnectionStrings__Redis/ { want = 1; next }
+        want && /name: / { gsub(/"/, "", $2); print $2; want = 0 }' "$OUT/$chart.yaml" | sort -u)"
+done
+check 'a Redis Secret name was read from every chart that declares redis' \
+    test "$(printf '%s\n' $redis_secrets | grep -c .)" -eq "$redis_charts"
+check 'no two service charts render the same Redis Secret' \
+    test "$(printf '%s\n' $redis_secrets | sort | uniq -d | grep -c .)" -eq 0
+
 # --------------------------------------------------------------------------
 section 'The ConfigMap/Secret split is §15.4 read down its Kind column'
 # --------------------------------------------------------------------------
