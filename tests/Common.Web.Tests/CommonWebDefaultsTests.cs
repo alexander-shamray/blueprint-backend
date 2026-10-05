@@ -47,6 +47,9 @@ public class CommonWebDefaultsTests
         CancellationToken ct = TestContext.Current.CancellationToken;
         HostApplicationBuilder builder = TelemetryHost.Builder();
 
+        // Ignore first, because StopHost is also the runtime's default: only the shared defaults can turn it back.
+        builder.Services.Configure<HostOptions>(o =>
+            o.BackgroundServiceExceptionBehavior = BackgroundServiceExceptionBehavior.Ignore);
         builder.AddCommonWebDefaults();
         builder.Services.AddHostedService<EscapingService>();
 
