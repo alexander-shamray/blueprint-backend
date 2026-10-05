@@ -1,9 +1,9 @@
 using Common.Application;
 
-namespace Payments.Infrastructure.Idempotency;
+namespace Common.Infrastructure.Idempotency;
 
-/// <summary>Payments has no IIdempotentCommand, so nothing claims a key; the purge calls this (ADR-039).</summary>
-internal sealed class NoClaimsIdempotencyStore : IIdempotencyStore
+/// <summary>For a service with no IIdempotentCommand: nothing claims a key, and the purge calls it (ADR-039).</summary>
+public sealed class NoClaimsIdempotencyStore : IIdempotencyStore
 {
     public Task<string?> TryClaimAsync(string key, TimeSpan retention, CancellationToken ct) =>
         throw NoIdempotentCommand();
@@ -22,6 +22,6 @@ internal sealed class NoClaimsIdempotencyStore : IIdempotencyStore
         Task.FromResult(keys);
 
     private static InvalidOperationException NoIdempotentCommand() =>
-        new("Payments has no IIdempotentCommand (§8.5); giving it one means registering the " +
+        new("This service has no IIdempotentCommand (§8.5); giving it one means registering the " +
             "Redis-backed IIdempotencyStore, not this one.");
 }
