@@ -64,8 +64,15 @@ settings=.claude/settings.local.json
 if [ -f "$settings" ] && [ ! -e "$path/$settings" ]; then
   if ! $python - "$settings" "$path/$settings" <<'PY'; then
 import json, os, sys
-servers = json.load(open(sys.argv[1], encoding="utf-8")).get("enabledMcpjsonServers")
-if isinstance(servers, list) and servers and all(isinstance(s, str) for s in servers):
+local = json.load(open(sys.argv[1], encoding="utf-8"))
+servers = local.get("enabledMcpjsonServers")
+if servers is None and local.get("enableAllProjectMcpServers"):
+    sys.exit("enableAllProjectMcpServers is not copied; name the servers in enabledMcpjsonServers")
+if servers is None:
+    sys.exit(0)
+if not (isinstance(servers, list) and all(isinstance(s, str) for s in servers)):
+    sys.exit("enabledMcpjsonServers is not a list of server names")
+if servers:
     os.makedirs(os.path.dirname(sys.argv[2]), exist_ok=True)
     with open(sys.argv[2], "w", encoding="utf-8") as out:
         json.dump({"enabledMcpjsonServers": servers}, out)

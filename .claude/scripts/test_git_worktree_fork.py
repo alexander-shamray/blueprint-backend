@@ -122,6 +122,19 @@ class ForkShape(unittest.TestCase):
         self.assertIn("JSONDecodeError", result.stderr)
         self.assertNotEqual(0, self.probe_settings(root).returncode)
 
+    def test_an_approval_the_helper_cannot_copy_warns(self):
+        # Every server approved at once, or a list naming none, would otherwise
+        # leave the worktree's servers pending with nothing said.
+        for text in (json.dumps({"enableAllProjectMcpServers": True}),
+                     json.dumps({"enabledMcpjsonServers": "codebase-index"})):
+            with self.subTest(text=text):
+                root = self.fixture()
+                self.local_settings(root, text)
+                result = self.fork(f"{root}/checkout", ".claude/worktrees/probe")
+                self.assertEqual(0, result.returncode, result.stderr)
+                self.assertIn("could not copy the MCP approval", result.stderr)
+                self.assertNotEqual(0, self.probe_settings(root).returncode)
+
     def test_any_other_path_is_refused(self):
         root = self.fixture()
         for path in ("../sibling", ".claude/worktrees/../x", ".claude/worktrees/a/b",
