@@ -297,19 +297,21 @@ it.
 ```csharp
 public sealed class ServiceFixture : IAsyncLifetime
 {
+    // The tag is the one the Compose baseline runs, read from its file rather
+    // than copied (§14.1), so a suite and a developer's stack run one engine.
     private readonly MsSqlContainer _sql = new MsSqlBuilder()
-        .WithImage("mcr.microsoft.com/mssql/server:2022-latest")
+        .WithImage(ComposeImage.Of("sql"))
         .Build();
 
     // Two Redis containers, matching the production split in §8.1 — otherwise
     // the tests cannot catch a coordination key written to the evicting instance.
     private readonly RedisContainer _cache = new RedisBuilder()
-        .WithImage("redis:7-alpine")
+        .WithImage(ComposeImage.Of("redis-cache"))
         .WithCommand("--maxmemory-policy", "allkeys-lru")
         .Build();
 
     private readonly RedisContainer _coordination = new RedisBuilder()
-        .WithImage("redis:7-alpine")
+        .WithImage(ComposeImage.Of("redis-coordination"))
         .WithCommand("--maxmemory-policy", "noeviction")
         .Build();
 
