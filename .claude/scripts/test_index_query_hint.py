@@ -4,8 +4,10 @@ cases run it as `settings.json` does, a process over stdin, and read what it
 printed."""
 
 import json
+import os
 import re
 import shlex
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -18,8 +20,8 @@ HINT = CLAUDE / "hooks" / "index-query-hint.py"
 SETTINGS = CLAUDE / "settings.json"
 SKILL = CLAUDE / "skills" / "codebase-index" / "SKILL.md"
 EVENT = "UserPromptSubmit"
-COMMAND = ("py -3.12 -P -c \"import runpy; runpy.run_path("
-           "r'${CLAUDE_PROJECT_DIR}/.claude/hooks/index-query-hint.py', run_name='__main__')\"")
+COMMAND = ("py -3.12 -P -c \"import os, runpy; runpy.run_path(os.environ['CLAUDE_PROJECT_DIR']"
+           " + '/.claude/hooks/index-query-hint.py', run_name='__main__')\"")
 
 # One prompt per alternative of each pattern, and the subcommand it routes to.
 CASES = {
@@ -98,13 +100,17 @@ class TheWiring(unittest.TestCase):
     def test_the_registered_command_cannot_erase_a_prompt(self):
         """Python exits 2 on a file it cannot open, a worktree emptied under a
         running session, and exit 2 here erases every prompt; through `runpy`
-        the same failure exits 1, which only reports."""
-        with tempfile.TemporaryDirectory() as gone:
-            for root, hinted in ((CLAUDE.parent, True), (Path(gone), False)):
-                argv = shlex.split(COMMAND.replace("${CLAUDE_PROJECT_DIR}", root.as_posix()))
+        the same failure exits 1. A project path holding a quote still runs."""
+        argv = [sys.executable, *shlex.split(COMMAND)[2:]]
+        event = json.dumps({"hook_event_name": EVENT, "prompt": "where is X"}).encode()
+        with tempfile.TemporaryDirectory() as scratch:
+            quoted = Path(scratch) / "O'Brien"
+            (quoted / ".claude" / "hooks").mkdir(parents=True)
+            shutil.copyfile(HINT, quoted / ".claude" / "hooks" / HINT.name)
+            for root, hinted in ((CLAUDE.parent, True), (quoted, True), (Path(scratch), False)):
                 done = subprocess.run(
-                    [sys.executable, *argv[2:]], capture_output=True, timeout=30, check=False,
-                    input=json.dumps({"hook_event_name": EVENT, "prompt": "where is X"}).encode())
+                    argv, input=event, capture_output=True, timeout=30, check=False,
+                    env=dict(os.environ, CLAUDE_PROJECT_DIR=str(root)))
                 with self.subTest(root=str(root)):
                     self.assertNotEqual(2, done.returncode, done.stderr)
                     self.assertEqual(hinted, bool(context(done)), done.stderr)
