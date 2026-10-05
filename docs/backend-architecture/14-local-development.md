@@ -823,22 +823,33 @@ For a platform this size, roughly one to three days of mechanical work.
 
 Seeding runs from the migrator container, is idempotent, and is
 development-only — and the last of those is a gate rather than an
-instruction, so the rest of this section is that gate. It should produce
+instruction, so most of this section is that gate. It should produce
 enough data to exercise pagination and caching: a catalogue of three products
 hides every performance problem you have.
 
-**Nothing seeds today, and this section is a specification rather than a
-description.** No `*.Migrator` project holds a seeder, and no chart or Compose
-file carries a flag for one. That is why the mechanism is written down now
-rather than after: the container the sentence above names is the one artefact
-guaranteed to run in production — [§15.2](15-cicd-deployment.md) builds a
-migrator image beside every API, and [§7.4](07-persistence.md)'s Job runs it as
-Helm's `pre-install,pre-upgrade` hook on every release, holding the DDL
-identity §7.1 gives it and nothing else in the platform holds. A seeder
-written where the paragraph above tells an implementer to put it, with no
-gate, writes demo rows into a production database on the first
-`helm upgrade` — idempotently, so nothing fails, no hook goes red, and the
-deploy log says only that a migration ran.
+**`CatalogSeeder` and `InventorySeeder` write what their services' own
+commands would have.** Each product goes in with the `ProductPublished`
+outbox row `PublishProduct` stages, and each count with the
+`StockLevelChanged` row `SetOnHand` stages, so Ordering's prices, the BFF's
+names and Catalog's stock levels fill through the platform's own delivery
+([§9.4](09-messaging.md)) and the seeded state is one the system could have
+reached. Inventory is seeded directly rather than from Catalog's event,
+because stock reaches it by the admin path and from no event
+([§3.2](03-bounded-contexts.md)). Both write SQL through the migration's own
+`DbContext`, since [§4.2](04-solution-structure.md) keeps the migrator off
+Application and Domain; each skips an id that already has a row, so a second
+run changes nothing; and the ids are stable, owned by
+[`deploy/compose/README.md`](../../deploy/compose/README.md), which
+publishes them.
+
+**The gate exists because of where they run.** The migrator container is the
+one artefact guaranteed to run in production —
+[§15.2](15-cicd-deployment.md) builds a migrator image beside every API, and
+[§7.4](07-persistence.md)'s Job runs it as Helm's `pre-install,pre-upgrade`
+hook on every release, holding the DDL identity §7.1 gives it and nothing
+else in the platform holds. A seeder there with no gate writes demo rows into
+a production database on the first `helm upgrade` — idempotently, so nothing
+fails, no hook goes red, and the deploy log says only that a migration ran.
 
 **The gate is two conditions at the job host's composition root, and both fail
 closed.** `MigratorHost.Build` is where they go, because that is where this
@@ -851,7 +862,7 @@ seed has no seeder in its container to resolve, so there is exactly one place
 configuration is read.
 
 ```csharp
-// src/Services/Ordering/Ordering.Migrator/MigratorHost.cs, beside the
+// src/Services/Catalog/Catalog.Migrator/MigratorHost.cs, beside the
 // DbContext registration.
 //
 // Read as a string and parsed, never Configuration.GetValue<bool>. A variable
@@ -862,16 +873,16 @@ configuration is read.
 bool requested = bool.TryParse(builder.Configuration["Seed:Enabled"], out bool enabled) && enabled;
 
 if (requested && builder.Environment.IsDevelopment())
-    builder.Services.AddScoped<OrderingSeeder>();
+    builder.Services.AddScoped<CatalogSeeder>();
 
-// src/Services/Ordering/Ordering.Migrator/MigrationRunner.cs. The seeder joins
+// src/Services/Catalog/Catalog.Migrator/MigrationRunner.cs. The seeder joins
 // the primary constructor with a DEFAULT VALUE, and the `= null` is the whole
 // of what makes it optional — see the trap below. The runner is otherwise §7.4's:
 // MigrateAsync, a log line and an exit code.
 public sealed class MigrationRunner(
-    OrderingDbContext db,
+    CatalogDbContext db,
     ILogger<MigrationRunner> logger,
-    OrderingSeeder? seeder = null)
+    CatalogSeeder? seeder = null)
 
 // RunAsync, after MigrateAsync returns. The log line is not decoration: a gate
 // that fails closed in silence is indistinguishable from a seeder that is
@@ -883,18 +894,18 @@ else
 ```
 
 > **Trap — a nullable reference type is not an optional dependency.**
-> `OrderingSeeder?` is an annotation the compiler reads and
+> `CatalogSeeder?` is an annotation the compiler reads and
 > `Microsoft.Extensions.DependencyInjection` never does. A constructor parameter
 > whose service is unregistered and which carries **no default value** makes
 > resolving `MigrationRunner` throw `InvalidOperationException` — *unable to
-> resolve service for type `OrderingSeeder` while attempting to activate
+> resolve service for type `CatalogSeeder` while attempting to activate
 > `MigrationRunner`* — so the migrator that must not seed becomes the migrator
 > that cannot start, and the gate fails the pre-upgrade hook *before* the
 > migration it was guarding. That is the opposite of failing closed: the
 > conditional registration above is only safe because the container falls back
 > to a parameter's default value when it cannot resolve one, which is what
 > `= null` supplies. Resolving it explicitly with
-> `IServiceProvider.GetService<OrderingSeeder>()` is the other correct spelling
+> `IServiceProvider.GetService<CatalogSeeder>()` is the other correct spelling
 > and is not the one taken here, because it puts a service locator inside the
 > one type §7.4 keeps to `Database.Migrate()` and an exit code.
 
@@ -917,12 +928,11 @@ mistake produces.
 > `ASPNETCORE_ENVIRONMENT=Development` set and `DOTNET_ENVIRONMENT` unset,
 > `EnvironmentName` is `Production` and `IsDevelopment()` returns false. So the
 > obvious guard is one that never opens, and what a developer then debugs is
-> the seeder — the gate is silent and the seeder is the visible half. §14.1's
-> two migrator services set no environment name at all today, so the PR that
-> writes the seeder gives them `DOTNET_ENVIRONMENT: Development` beside their
-> connection strings. That line is the local half of the same switch and
-> belongs in the same change as the guard, rather than being discovered by
-> whoever runs `docker compose up` next.
+> the seeder — the gate is silent and the seeder is the visible half. So
+> §14.1's `catalog-migrator` and `inventory-migrator` set
+> `DOTNET_ENVIRONMENT: Development` beside `Seed__Enabled` and their
+> connection strings: the local half of the same switch, carried by the unit
+> that runs the seeder.
 
 **Turning seeding on has to be a diff, and today there is no diff that would do
 it.** The shared migration-Job template renders exactly one `env` entry — the

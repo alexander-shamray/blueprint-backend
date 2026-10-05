@@ -21,6 +21,13 @@ public static class MigratorHost
 
         builder.Services.AddScoped<MigrationRunner>();
 
+        // §14.3's gate, failing closed on both halves: parsed, since GetValue<bool> throws on "" and fails the
+        // hook, and Development only, an environment name no chart sets.
+        bool requested = bool.TryParse(builder.Configuration["Seed:Enabled"], out bool enabled) && enabled;
+
+        if (requested && builder.Environment.IsDevelopment())
+            builder.Services.AddScoped<InventorySeeder>();
+
         return builder.Build();
     }
 }
