@@ -1204,6 +1204,31 @@ for chart in $SERVICE_CHARTS; do
         test "$has_template" = "$has_image"
 done
 
+# --------------------------------------------------------------------------
+section 'No render opens the seed gate (§14.3)'
+# --------------------------------------------------------------------------
+# Both halves of the gate a seeding migrator reads, over every default render:
+# the flag, in the spelling an env entry or a ConfigMap key would carry, and an
+# environment name, without which a migrator runs as Production. Each pattern
+# is first shown the line it must find, or a misspelt one passes every render.
+SEED_KEY='Seed(__|:)Enabled'
+ENVIRONMENT_KEY='(DOTNET|ASPNETCORE)_ENVIRONMENT'
+
+absent() { ! grep -qE "$1" "$2"; }
+
+check 'SEED_KEY finds a container env entry' \
+    sh -c 'printf "            - name: Seed__Enabled\n" | grep -qE "$1"' _ "$SEED_KEY"
+check 'SEED_KEY finds a ConfigMap key' \
+    sh -c 'printf "  Seed__Enabled: \"true\"\n" | grep -qE "$1"' _ "$SEED_KEY"
+check 'ENVIRONMENT_KEY finds the job host'"'"'s variable' \
+    sh -c 'printf "            - name: DOTNET_ENVIRONMENT\n" | grep -qE "$1"' _ "$ENVIRONMENT_KEY"
+
+for render in $SERVICE_CHARTS platform; do
+    check "$render: the render the seed checks read is not empty" test -s "$OUT/$render.yaml"
+    check "$render: no render carries a seed flag" absent "$SEED_KEY" "$OUT/$render.yaml"
+    check "$render: no render sets an environment name" absent "$ENVIRONMENT_KEY" "$OUT/$render.yaml"
+done
+
 # Driven from the chart's own redis block, over every service chart, because
 # redis is not a fact about databases. The expected count is 0 or 2 and never
 # 1: the two connections are provisioned together, and a chart carrying one is
