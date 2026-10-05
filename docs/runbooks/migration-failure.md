@@ -132,7 +132,14 @@ decision.
 1. Fix the migration in a branch.
 2. Verify it against a restored copy of the affected database, not against an
    empty one. Most of these failures are about *existing data* and an empty
-   database proves nothing.
+   database proves nothing. **The copy comes from the deployment's own backup
+   of that database**, restored into a database nothing serves from, by the
+   role that runs its restores
+   ([ADR-064](../backend-architecture/adr/ADR-064-every-store-is-run-outside-this-repository-to-a-stated-recovery-point.md)).
+   This repository runs no store and holds no backup, so where the deployment
+   has none to restore from, this step cannot be run: say so in the fix's pull
+   request rather than verifying against an empty database and calling it
+   verified.
 3. Ship it as a normal deploy. The hook runs again.
 
 **A partially applied migration is the case that needs care.** EF wraps each
