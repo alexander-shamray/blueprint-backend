@@ -7,6 +7,7 @@ public sealed record OutboundMail(
     string Subject,
     string Body,
     MailMessageId MessageId,
+    Guid CorrelationId,
     IReadOnlyList<string> Languages)
 {
     public override string ToString() => $"{nameof(OutboundMail)} {{ {nameof(MessageId)} = {MessageId.LocalPart} }}";

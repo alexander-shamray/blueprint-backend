@@ -12,6 +12,9 @@ public sealed class Notification
     /// <summary>The event the consumer wrote this row for; with the key it is unique (§9.5's second line).</summary>
     public Guid EventId { get; private set; }
 
+    /// <summary>The event's own, which every message sent for this row carries (§10.4).</summary>
+    public Guid CorrelationId { get; private set; }
+
     public string TemplateKey { get; private set; } = "";
 
     public Guid OrderId { get; private set; }
@@ -47,10 +50,17 @@ public sealed class Notification
     // EF Core materialisation only (§5.4).
     private Notification() { }
 
-    private Notification(Guid eventId, string templateKey, Guid orderId, string parameters, DateTimeOffset now)
+    private Notification(
+        Guid eventId,
+        Guid correlationId,
+        string templateKey,
+        Guid orderId,
+        string parameters,
+        DateTimeOffset now)
     {
         NotificationId = Guid.CreateVersion7();
         EventId = eventId;
+        CorrelationId = correlationId;
         TemplateKey = templateKey;
         OrderId = orderId;
         Parameters = parameters;
@@ -62,17 +72,19 @@ public sealed class Notification
     /// <summary>An event's consumer owes a notice: the record's first row.</summary>
     public static Notification Pending(
         Guid eventId,
+        Guid correlationId,
         string templateKey,
         Guid orderId,
         string parameters,
         DateTimeOffset now)
     {
         ArgumentOutOfRangeException.ThrowIfEqual(eventId, Guid.Empty);
+        ArgumentOutOfRangeException.ThrowIfEqual(correlationId, Guid.Empty);
         ArgumentOutOfRangeException.ThrowIfEqual(orderId, Guid.Empty);
         Require(templateKey, NotificationLimits.MaxTemplateKeyLength, nameof(templateKey));
         Require(parameters, NotificationLimits.MaxParametersLength, nameof(parameters));
 
-        return new Notification(eventId, templateKey, orderId, parameters, now);
+        return new Notification(eventId, correlationId, templateKey, orderId, parameters, now);
     }
 
     /// <summary>The order record named the customer; a second answer does not overwrite the first.</summary>

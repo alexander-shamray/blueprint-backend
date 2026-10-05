@@ -33,6 +33,7 @@ public sealed class MailTlsTests(MailpitFixture fixture) : IAsyncLifetime
             "Your order is placed",
             "Order 42 is placed.",
             new MailMessageId(Guid.CreateVersion7(), "order-placed"),
+            Guid.CreateVersion7(),
             ["en"]);
 
     private static NotificationsWorkerFactory StartTls(string host, int port) =>

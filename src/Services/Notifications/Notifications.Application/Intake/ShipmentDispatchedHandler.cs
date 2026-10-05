@@ -11,6 +11,7 @@ public sealed class ShipmentDispatchedHandler(IDispatcher dispatcher) : IIntegra
         await dispatcher.SendAsync(
             new RecordNotificationCommand(
                 integrationEvent.MessageId,
+                integrationEvent.CorrelationId,
                 TemplateKeys.ShipmentDispatched,
                 new NotificationParameters
                 {

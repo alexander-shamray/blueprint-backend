@@ -11,6 +11,7 @@ public sealed class PaymentRefundedHandler(IDispatcher dispatcher) : IIntegratio
         await dispatcher.SendAsync(
             new RecordNotificationCommand(
                 integrationEvent.MessageId,
+                integrationEvent.CorrelationId,
                 TemplateKeys.PaymentRefunded,
                 new NotificationParameters
                 {

@@ -48,6 +48,7 @@ public sealed class FixtureStubsTests(ServiceFixture fixture) : IAsyncLifetime
                 "Your order is placed",
                 "Order 42 is placed.",
                 new MailMessageId(Guid.CreateVersion7(), TemplateKeys.OrderPlaced),
+                Guid.CreateVersion7(),
                 ["en"]),
             Ct);
 

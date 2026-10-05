@@ -23,6 +23,9 @@ internal sealed partial class SmtpMailChannel(
     MailMetrics metrics,
     TimeProvider clock) : IMailChannel
 {
+    /// <summary>§10.4's header, spelled again as this project does not reference <c>Common.Web</c>, its owner.</summary>
+    internal const string CorrelationIdHeader = "X-Correlation-Id";
+
     // RFC 5321 section 4.5.3.1.3's path limit, less its angle brackets.
     private const int MaxMailboxLength = 254;
 
@@ -142,6 +145,7 @@ internal sealed partial class SmtpMailChannel(
         message.From.Add(from);
         message.To.Add(recipient);
         message.Headers.Add(HeaderId.ContentLanguage, string.Join(", ", mail.Languages));
+        message.Headers.Add(CorrelationIdHeader, mail.CorrelationId.ToString("D"));
 
         return message;
     }
@@ -155,6 +159,9 @@ internal sealed partial class SmtpMailChannel(
 
         if (mail.Languages.Count == 0 || !mail.Languages.All(l => LanguageTag().IsMatch(l)))
             throw new ArgumentException("Each language is a BCP 47 tag.", nameof(mail));
+
+        if (mail.CorrelationId == Guid.Empty)
+            throw new ArgumentException("A message carries its event's correlation id.", nameof(mail));
     }
 
     // The parser's answer compared back to the input, so a display name, a comment or a second address is refused.

@@ -64,6 +64,7 @@ public class MailPortTests
             "Your order is placed",
             "Order 42 is placed.",
             new MailMessageId(Guid.CreateVersion7(), "order-placed"),
+            Guid.CreateVersion7(),
             ["kk"]);
 
         string printed = mail.ToString();

@@ -36,6 +36,7 @@ public sealed class MailFaultTests(MailpitFixture fixture) : IAsyncLifetime
             "Your order is placed",
             "Order 42 is placed.",
             id ?? new MailMessageId(Guid.CreateVersion7(), "order-placed"),
+            Guid.CreateVersion7(),
             ["en"]);
 
     // Plain submission with a credential, which Development allows, so the relay is asked to judge one.

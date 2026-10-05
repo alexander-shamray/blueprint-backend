@@ -11,6 +11,7 @@ public sealed class PaymentDeclinedHandler(IDispatcher dispatcher) : IIntegratio
         await dispatcher.SendAsync(
             new RecordNotificationCommand(
                 integrationEvent.MessageId,
+                integrationEvent.CorrelationId,
                 TemplateKeys.PaymentDeclined,
                 new NotificationParameters
                 {

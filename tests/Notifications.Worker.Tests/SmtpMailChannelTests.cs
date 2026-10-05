@@ -30,6 +30,7 @@ public sealed class SmtpMailChannelTests(MailpitFixture fixture) : IAsyncLifetim
             subject,
             body,
             id ?? new MailMessageId(Guid.CreateVersion7(), "order-placed"),
+            Guid.CreateVersion7(),
             languages ?? ["en"]);
 
     // Either form of a domain names one mailbox, so the two are compared in the one a relay without SMTPUTF8 reads.

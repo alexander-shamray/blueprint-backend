@@ -274,7 +274,7 @@ public sealed class ServiceFixture()
             new NotificationParameters { OrderId = order, OccurredAt = created });
 
         Notification notification =
-            Notification.Pending(Guid.CreateVersion7(), templateKey, order, parameters, created);
+            Notification.Pending(Guid.CreateVersion7(), Guid.CreateVersion7(), templateKey, order, parameters, created);
 
         await using AsyncServiceScope scope = Factory.Services.CreateAsyncScope();
         NotificationsDbContext db = scope.ServiceProvider.GetRequiredService<NotificationsDbContext>();

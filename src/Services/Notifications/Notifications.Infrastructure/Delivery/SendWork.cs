@@ -5,6 +5,7 @@ namespace Notifications.Infrastructure.Delivery;
 public sealed record SendWork(
     Guid NotificationId,
     Guid EventId,
+    Guid CorrelationId,
     Guid OrderId,
     Guid? CustomerId,
     string TemplateKey,
