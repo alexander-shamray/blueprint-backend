@@ -2937,6 +2937,10 @@ configuration-validation test at startup.
    rate it is really called at: one paced by a worker's tick or by a saga's
    orders never reaches the library default's minimum throughput, so its own
    is one the hop reaches inside one sampling window at its slowest pace.
+   Called from a consumer, a breaker spares the endpoint's slot but not the
+   message, so Payments' receive endpoints also take `ProviderKillSwitch`,
+   tripped by the provider's unavailability alone, which stops the endpoint
+   and leaves the rest of an outage's messages in their queue.
 3. **A fallback.** Cached data, a degraded response, or a clear error — decided
    in advance, not improvised during an incident.
 4. **Retry only idempotent operations.** Retrying a `POST` that creates a
