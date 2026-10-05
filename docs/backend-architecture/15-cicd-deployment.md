@@ -205,11 +205,12 @@ chapter already defines.
 > subtree that reached this section without a paragraph would be visible here in
 > a way a missing row in a table is not.
 
-The first is the Compose file. A workflow path-filtered to
-`deploy/compose/**` and to itself runs `docker compose config -q`, then
-`up --wait` — which fails if any healthcheck never passes, or a
-container exits before the wait completes — then
-`down -v` (PR-06 in [Appendix C](appendix-c-delivery-plan.md)). It is what
+The first is the Compose file. A workflow path-filtered to the model, the
+observability files it mounts and itself (`.github/workflows/compose.yml`
+owns the list) runs `docker compose config -q`, then `up --wait` — which
+fails if any healthcheck never passes, or a container exits before the wait
+completes — then holds the local Grafana's loaded rules and dashboards to
+`deploy/observability/`, then `down -v` (PR-06 in [Appendix C](appendix-c-delivery-plan.md)). It is what
 makes [§14.2](14-local-development.md)'s "Compose runs in CI" true.
 
 The second is the Helm tree (PR-23). A workflow path-filtered to
