@@ -1,0 +1,13 @@
+# The platform's dashboards from deploy/observability/dashboards/ (§13.8),
+# provisioned beside the image's own providers rather than in their place.
+# Read-only, because a dashboard edited in a UI is lost with the instance.
+apiVersion: 1
+
+providers:
+  - name: platform
+    folder: Platform
+    type: file
+    disableDeletion: true
+    allowUiUpdates: false
+    options:
+      path: /etc/platform/dashboards

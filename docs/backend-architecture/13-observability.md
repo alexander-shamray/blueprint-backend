@@ -2320,6 +2320,9 @@ platform's own workloads, so how these files reach a running stack — a
 `PrometheusRule`, a ConfigMap, a sidecar-discovered folder — is a decision no
 chapter has taken. What the directory guarantees is that the content is
 reviewed, versioned and internally consistent, which is the half a UI loses.
+The local stack is the one place they are loaded: §14.1's `grafana` service
+reads the loaded rule file and both dashboards at start, and
+`deploy/observability/README.md` says how and what it leaves out.
 
 The two dashboards follow the ownership split in the table above rather than
 cutting across it: golden signals are Platform's, and the outbox dashboard

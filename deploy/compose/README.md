@@ -59,6 +59,26 @@ defaults — `localhost` is what each recipe in this file already types, so the
 bind costs them nothing and keeps the stack off the network the laptop is
 sitting on.
 
+## What the local Grafana loads
+
+The `grafana` service starts with `deploy/observability/`'s loaded rule file
+in its bundled Prometheus and both of that tree's dashboards in a *Platform*
+folder; [its README](../observability/README.md#loading-them) says which file
+is left out and why. The rules are Prometheus's, not Grafana-managed, so they
+are read through the data source — `/api/v1/provisioning/alert-rules` and the
+`grafana` ruler stay empty by design. The first two numbers must be equal:
+
+```bash
+curl -s http://localhost:3000/api/prometheus/prometheus/api/v1/rules |
+    python -c 'import json,sys; print(sum(len(g["rules"]) for g in json.load(sys.stdin)["data"]["groups"]))'
+grep -cE '^\s*- alert:' deploy/observability/alerts/platform-alerts.yaml
+curl -s 'http://localhost:3000/api/search?type=dash-db' |
+    python -c 'import json,sys; print([d["title"] for d in json.load(sys.stdin)])'
+```
+
+A rule reads `"health":"unknown"` until Prometheus first evaluates its group,
+and the Compose smoke runs the same comparison on every change to either side.
+
 ## Application services
 
 [§14.1](../../docs/backend-architecture/14-local-development.md)'s model is
