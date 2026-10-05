@@ -110,6 +110,7 @@ class ForkShape(unittest.TestCase):
         self.local_settings(root, json.dumps({"permissions": {"allow": ["Bash(ls:*)"]}}))
         result = self.fork(f"{root}/checkout", ".claude/worktrees/probe")
         self.assertEqual(0, result.returncode, result.stderr)
+        self.assertNotIn("could not copy", result.stderr)
         self.assertNotEqual(0, self.probe_settings(root).returncode)
 
     def test_an_unreadable_approval_still_forks_and_says_so(self):
