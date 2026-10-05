@@ -32,10 +32,12 @@ public static class StockEndpoints
                 "/{productId:guid}",
                 async (Guid productId, IDispatcher dispatcher, CancellationToken ct) =>
                 {
-                    StockDto? stock = await dispatcher.QueryAsync(new GetStockQuery(productId), ct);
+                    Result<StockDto> result = await dispatcher.QueryAsync(new GetStockQuery(productId), ct);
 
-                    return stock is null ? Results.NotFound() : Results.Ok(stock);
+                    return result.ToHttpResult();
                 })
+            .Produces<StockDto>()
+            .ProducesProblem(StatusCodes.Status404NotFound)
             .WithName("GetStock");
     }
 }

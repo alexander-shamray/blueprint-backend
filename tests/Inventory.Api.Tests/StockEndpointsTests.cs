@@ -88,7 +88,7 @@ public sealed class StockEndpointsTests(ServiceFixture fixture) : IAsyncLifetime
     }
 
     [Fact]
-    public async Task An_unknown_product_reads_404()
+    public async Task An_unknown_product_reads_404_carrying_its_code()
     {
         using HttpClient client = Admin();
 
@@ -96,6 +96,9 @@ public sealed class StockEndpointsTests(ServiceFixture fixture) : IAsyncLifetime
             $"/v1/inventory/stock/{Guid.CreateVersion7()}", TestContext.Current.CancellationToken);
 
         get.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        get.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
+        string body = await get.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        body.ShouldContain("\"code\":\"stock.not_found\"");
     }
 
     [Fact]

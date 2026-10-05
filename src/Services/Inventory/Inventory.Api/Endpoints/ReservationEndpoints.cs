@@ -21,10 +21,12 @@ public static class ReservationEndpoints
                 "/{orderId:guid}",
                 async (Guid orderId, IDispatcher dispatcher, CancellationToken ct) =>
                 {
-                    ReservationDto? dto = await dispatcher.QueryAsync(new GetReservationQuery(orderId), ct);
+                    Result<ReservationDto> result = await dispatcher.QueryAsync(new GetReservationQuery(orderId), ct);
 
-                    return dto is null ? Results.NotFound() : Results.Ok(dto);
+                    return result.ToHttpResult();
                 })
+            .Produces<ReservationDto>()
+            .ProducesProblem(StatusCodes.Status404NotFound)
             .WithName("GetReservation");
 
         group

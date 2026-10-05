@@ -153,7 +153,7 @@ public class DependencyInjectionTests
         services.ShouldContain(d =>
             d.ServiceType == typeof(ICommandHandler<SetOnHandCommand, Result>));
         services.ShouldContain(d =>
-            d.ServiceType == typeof(IQueryHandler<GetStockQuery, StockDto?>));
+            d.ServiceType == typeof(IQueryHandler<GetStockQuery, Result<StockDto>>));
         services.ShouldContain(d =>
             d.ServiceType == typeof(IValidator<SetOnHandCommand>));
         services.ShouldContain(d =>
@@ -169,7 +169,7 @@ public class DependencyInjectionTests
         services.ShouldContain(d =>
             d.ServiceType == typeof(IValidator<ReinstateReservationCommand>));
         services.ShouldContain(d =>
-            d.ServiceType == typeof(IQueryHandler<GetReservationQuery, ReservationDto?>));
+            d.ServiceType == typeof(IQueryHandler<GetReservationQuery, Result<ReservationDto>>));
         services.ShouldContain(d =>
             d.ServiceType == typeof(ICommandHandler<FulfilReservationCommand, Result>));
         services.ShouldContain(d =>
