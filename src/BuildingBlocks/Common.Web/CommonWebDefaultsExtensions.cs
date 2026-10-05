@@ -28,6 +28,10 @@ public static class CommonWebDefaultsExtensions
         // Liveness only; readiness checks need connection strings a service owns (§13.5).
         builder.Services.AddHealthChecks();
 
+        // Chosen, not inherited: an escaped exception is a defect, so the host stops and is restarted (§13.5).
+        builder.Services.Configure<HostOptions>(o =>
+            o.BackgroundServiceExceptionBehavior = BackgroundServiceExceptionBehavior.StopHost);
+
         return builder;
     }
 }

@@ -1550,6 +1550,12 @@ wiring mistake and production traffic.
 brief database outage restarts every pod simultaneously, and the restart storm
 outlasts the outage. Liveness answers only "is this process wedged?".
 
+**A background service's escaped exception stops the host, by choice.**
+`AddCommonWebDefaults` sets `BackgroundServiceExceptionBehavior.StopHost`, so
+the orchestrator restarts the pod. Each worker's per-pass catch is the first
+line; an exception that escapes it is a defect, and a host that ignored it
+would leave a worker silently stopped behind a liveness probe still answering.
+
 **Readiness must not check the outbox backlog either.** A growing backlog means
 events are not being *delivered*; the service can still accept commands and
 serve queries perfectly well. Gating readiness on it means a RabbitMQ blip pulls
