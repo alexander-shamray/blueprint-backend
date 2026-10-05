@@ -88,6 +88,25 @@ public sealed class ProjectionSchemaTests(BffServiceFixture fixture) : IAsyncLif
         refused.Message.ShouldContain("CK_Orders_PaymentCurrency");
     }
 
+    [Theory]
+    [InlineData("Currency", "N'GBP'", "CK_Orders_Total")]
+    [InlineData("AuthorisedAmount, PaymentCurrency", "59.97, N'GBP'", "CK_Orders_Authorisation")]
+    [InlineData("RefundedAt", "SYSDATETIMEOFFSET()", "CK_Orders_Refund")]
+    public async Task Half_of_a_pair_is_refused_by_the_constraint_that_holds_it(
+        string columns,
+        string values,
+        string constraint)
+    {
+        // Each row sets one half of one pair and satisfies every other constraint, so only the named one can refuse.
+        SqlException refused = await Should.ThrowAsync<SqlException>(() => fixture.ExecuteAsync(
+            $"INSERT INTO bff.Orders (OrderId, {columns}, FirstSeenAt, AsOf) " +
+            $"VALUES ({{0}}, {values}, SYSDATETIMEOFFSET(), SYSDATETIMEOFFSET());",
+            Guid.CreateVersion7()));
+
+        refused.Number.ShouldBe(ConstraintViolation);
+        refused.Message.ShouldContain(constraint);
+    }
+
     [Fact]
     public async Task A_refund_recorded_before_any_authorisation_is_kept()
     {

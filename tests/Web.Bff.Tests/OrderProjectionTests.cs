@@ -1,6 +1,7 @@
 using Common.Application;
 using Common.Contracts.Ordering.V1;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Shouldly;
 using Web.Bff.Orders;
 using Web.Bff.Persistence;
@@ -152,6 +153,48 @@ public sealed class OrderProjectionTests(BffServiceFixture fixture) : IAsyncLife
         ProjectedOrder row = (await fixture.OrderAsync(order)).ShouldNotBeNull();
         row.CustomerId.ShouldBe(_customer, "moving an order between buyers shows it to the wrong one (§10.7)");
         row.ConfirmedAt.ShouldBe(At.AddMinutes(1), "the step itself still lands");
+    }
+
+    [Fact]
+    public async Task A_disagreeing_customer_is_logged_and_an_agreeing_one_is_not()
+    {
+        // Built by hand for its logger: an inverted comparison would warn on every event and change no row.
+        Guid order = Guid.CreateVersion7();
+        WarningLog log = new();
+        OrderProjection projection = new(new SqlConnectionFactory(fixture.ConnectionString), TimeProvider.System, log);
+
+        await projection.HandleAsync(OrderEvents.Placed(order, _customer, At), TestContext.Current.CancellationToken);
+        await projection.HandleAsync(
+            OrderEvents.Confirmed(order, _customer, At.AddMinutes(1)), TestContext.Current.CancellationToken);
+
+        log.Warnings.ShouldBeEmpty("the customer agreed both times");
+
+        OrderConfirmed stranger = OrderEvents.Confirmed(order, Guid.CreateVersion7(), At.AddMinutes(2));
+        await projection.HandleAsync(stranger, TestContext.Current.CancellationToken);
+
+        log.Warnings.ShouldHaveSingleItem().ShouldBe("CustomerMismatch");
+    }
+
+    [Fact]
+    public async Task Handlers_creating_one_row_at_once_leave_one_row_and_every_fact()
+    {
+        // MERGE's HOLDLOCK is the claim: without it two inserts race and one fails on the key.
+        Guid[] orders = [.. Enumerable.Range(0, 20).Select(_ => Guid.CreateVersion7())];
+
+        await Task.WhenAll(orders.SelectMany(order => new[]
+        {
+            ApplyAsync(OrderEvents.Placed(order, _customer, At)),
+            ApplyAsync(OrderEvents.Authorised(order, At.AddSeconds(5))),
+            ApplyAsync(OrderEvents.Dispatched(order, At.AddDays(1)))
+        }));
+
+        foreach (Guid order in orders)
+        {
+            ProjectedOrder row = (await fixture.OrderAsync(order)).ShouldNotBeNull();
+            row.CustomerId.ShouldBe(_customer);
+            row.AuthorisedAt.ShouldBe(At.AddSeconds(5));
+            row.DispatchedAt.ShouldBe(At.AddDays(1));
+        }
     }
 
     [Fact]
@@ -350,4 +393,27 @@ public sealed class OrderProjectionTests(BffServiceFixture fixture) : IAsyncLife
             "Delivered" => ApplyAsync(OrderEvents.Delivered(order, At.AddMinutes(6))),
             _ => throw new ArgumentOutOfRangeException(nameof(name), name, "not one of the seven order events")
         };
+
+    /// <summary>The names of the warnings a handler logs, which is all a mismatch leaves behind.</summary>
+    private sealed class WarningLog : ILogger<OrderProjection>
+    {
+        public List<string> Warnings { get; } = [];
+
+        public IDisposable? BeginScope<TState>(TState state)
+            where TState : notnull =>
+            null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter)
+        {
+            if (logLevel == LogLevel.Warning)
+                Warnings.Add(eventId.Name ?? "");
+        }
+    }
 }

@@ -109,6 +109,37 @@ public sealed class OrderEndpointTests(BffServiceFixture fixture) : IAsyncLifeti
         page.NextCursor.ShouldNotBeNull();
     }
 
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-5)]
+    public async Task A_limit_of_zero_or_less_is_clamped_to_one_at_the_host(int limit)
+    {
+        await fixture.DeliverAsync(OrderEvents.Placed(Guid.CreateVersion7(), _buyer, At));
+        await fixture.DeliverAsync(OrderEvents.Placed(Guid.CreateVersion7(), _buyer, At.AddSeconds(1)));
+
+        using HttpClient client = As(_buyer);
+        CursorPage<OrderSummary>? page =
+            await client.GetFromJsonAsync<CursorPage<OrderSummary>>($"/v1/orders?limit={limit}", Ct);
+
+        page.ShouldNotBeNull().Items.ShouldHaveSingleItem();
+        page.NextCursor.ShouldNotBeNull("the second order is the next page");
+    }
+
+    [Fact]
+    public async Task Both_routes_carry_the_row_s_own_as_of_instant()
+    {
+        Guid order = Guid.CreateVersion7();
+        await fixture.DeliverAsync(OrderEvents.Placed(order, _buyer, At));
+        DateTimeOffset written = (await fixture.OrderAsync(order)).ShouldNotBeNull().AsOf;
+        using HttpClient client = As(_buyer);
+
+        CursorPage<OrderSummary>? page = await client.GetFromJsonAsync<CursorPage<OrderSummary>>("/v1/orders", Ct);
+        OrderDetail? detail = await client.GetFromJsonAsync<OrderDetail>($"/v1/orders/{order}", Ct);
+
+        page.ShouldNotBeNull().Items.ShouldHaveSingleItem().AsOf.ShouldBe(written);
+        detail.ShouldNotBeNull().AsOf.ShouldBe(written, "the BFF's clock at the row's last write, not the read's");
+    }
+
     [Fact]
     public async Task An_edited_cursor_gets_the_first_page_as_every_list_s_does()
     {
