@@ -43,6 +43,16 @@ public class PublishProductValidatorTests
         Validator.Validate(Valid() with { Amount = 0m }).IsValid.ShouldBeTrue();
     }
 
+    [Fact]
+    public void An_amount_under_storages_bound_once_rounded_to_its_currency_is_valid()
+    {
+        // A three-place currency keeps a fils that two places would round up past decimal(19,4)'s capacity.
+        Validator.Validate(Valid() with { Amount = 999_999_999_999_999.999m, Currency = "KWD" })
+            .IsValid.ShouldBeTrue();
+        Validator.Validate(Valid() with { Amount = 999_999_999_999_998.5m, Currency = "JPY" })
+            .IsValid.ShouldBeTrue();
+    }
+
     public static TheoryData<string, PublishProductCommand> Invalid() => new()
     {
         // An omitted CommandId binds as Guid.Empty, one shared idempotency key rather than an absent one (§8.5).
@@ -74,6 +84,8 @@ public class PublishProductValidatorTests
         // so this value becomes exactly 1e15 and overflows despite sitting
         // under a naive < 1e15 bound.
         { nameof(PublishProductCommand.Amount), Valid() with { Amount = 999_999_999_999_999.995m } },
+        // The same boundary at a currency's own exponent (ADR-067): JPY rounds to whole yen, so .5 reaches 1e15.
+        { nameof(PublishProductCommand.Amount), Valid() with { Amount = 999_999_999_999_999.5m, Currency = "JPY" } },
         { nameof(PublishProductCommand.Currency), Valid() with { Currency = "EURO" } },
         { nameof(PublishProductCommand.Currency), Valid() with { Currency = "" } },
         // Three characters is not three letters — "1$?" must be refused here

@@ -76,7 +76,11 @@ public readonly record struct Money
         if (currency is not { Length: 3 } || !currency.All(char.IsAsciiLetter))
             throw new DomainException("Currency must be a 3-letter currency code.");
 
-        return new Money(decimal.Round(amount, 2, MidpointRounding.ToEven), currency.ToUpperInvariant());
+        // The currency's own exponent, half to even: none for the yen, three
+        // for the dinar (ADR-067).
+        return new Money(
+            decimal.Round(amount, CurrencyMinorUnits.Of(currency), MidpointRounding.ToEven),
+            currency.ToUpperInvariant());
     }
 
     public static Money Zero(string currency) => Of(0m, currency);
@@ -112,6 +116,13 @@ The constructor is private and `Of` is the only way in. An invalid `Money`
 cannot be constructed, so no code downstream needs to check for one. This is the
 **always-valid** principle, and applying it consistently removes a surprising
 amount of defensive code from the rest of the system.
+
+**The rounding is the currency's, not the type's.** `Of` takes its exponent
+from `CurrencyMinorUnits` in `Common.Domain`, ISO 4217's minor units held once
+for every context that keeps its own `Money`
+([ADR-067](adr/ADR-067-a-currencys-minor-unit-is-iso-4217s-held-once.md)).
+That is the one fact the contexts share here: the value object itself stays
+each context's, as [§4.3](04-solution-structure.md) asks.
 
 ## 5.4 An aggregate
 

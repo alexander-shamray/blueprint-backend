@@ -21,9 +21,11 @@ internal sealed class HttpPaymentProvider(HttpClient http, ProviderMetrics metri
 
     public async Task<AuthorisationResult> AuthoriseAsync(AuthorisationRequest request, CancellationToken ct)
     {
+        long amountMinor = ToMinor(request.Amount, request.Currency);
+
         using HttpRequestMessage message = new(HttpMethod.Post, "v1/authorisations")
         {
-            Content = JsonContent.Create(new AuthoriseBody(ToMinor(request.Amount), request.Currency, request.PayerId))
+            Content = JsonContent.Create(new AuthoriseBody(amountMinor, request.Currency, request.PayerId))
         };
         message.Headers.Add(KeyHeader, request.IdempotencyKey);
 
@@ -127,17 +129,8 @@ internal sealed class HttpPaymentProvider(HttpClient http, ProviderMetrics metri
         return response;
     }
 
-    // Derived from PaymentAmounts.MinorUnitPlaces, so the constant and the refusal below cannot disagree.
-    private static readonly decimal MinorUnitFactor =
-        Enumerable.Repeat(10m, PaymentAmounts.MinorUnitPlaces).Aggregate(1m, (factor, ten) => factor * ten);
-
-    private static long ToMinor(decimal amount)
-    {
-        decimal minor = amount * MinorUnitFactor;
-
-        if (minor != decimal.Truncate(minor))
-            throw new PaymentMismatchException($"An amount of {amount} has more precision than minor units.");
-
-        return decimal.ToInt64(minor);
-    }
+    // PaymentAmounts', so this and the mapper's refusal cannot disagree.
+    private static long ToMinor(decimal amount, string currency) =>
+        PaymentAmounts.ToMinorUnits(amount, currency)
+        ?? throw new PaymentMismatchException($"An amount of {amount} {currency} is no whole number of minor units.");
 }

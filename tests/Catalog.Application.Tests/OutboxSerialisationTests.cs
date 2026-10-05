@@ -49,6 +49,19 @@ public class OutboxSerialisationTests
             .ShouldBe(Money.Of(19.99m, "EUR"));
     }
 
+    [Theory]
+    [InlineData("""{"Amount":1500,"Currency":"JPY"}""", 1500)]
+    [InlineData("""{"Amount":1.234,"Currency":"KWD"}""", 1.234)]
+    public void A_money_payload_keeps_its_currencys_exponent(string json, decimal amount)
+    {
+        // Reading goes through Money.Of, so a stored KWD price read back at two places would lose a fils (ADR-067).
+        using ServiceProvider provider = Registered();
+
+        JsonSerializer
+            .Deserialize<Money>(json, provider.GetRequiredService<OutboxJson>().Options)
+            .Amount.ShouldBe(amount);
+    }
+
     [Fact]
     public void There_is_a_stageable_domain_event_to_round_trip()
     {
