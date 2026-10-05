@@ -74,6 +74,10 @@ if local.get("enableAllProjectMcpServers") is True and os.path.isfile(sys.argv[3
     if not isinstance(defined, dict):
         sys.exit(f"{sys.argv[3]} has no mcpServers object")
     servers += [name for name in defined if name not in servers]
+disabled = local.get("disabledMcpjsonServers", [])
+if not isinstance(disabled, list):
+    sys.exit("disabledMcpjsonServers is not a list")
+servers = [s for s in servers if s not in disabled]
 if servers:
     os.makedirs(os.path.dirname(sys.argv[2]), exist_ok=True)
     with open(sys.argv[2], "w", encoding="utf-8") as out:
