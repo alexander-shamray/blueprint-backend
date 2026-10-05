@@ -843,6 +843,16 @@ public sealed class CorrelationIdHandler(IHttpContextAccessor context) : Delegat
 > `""` is merely the shortest of them — which leaves this argument intact and
 > resting on less.
 
+**A notice's mail is the one message that leaves the platform, and it carries
+the ID as well.** Notifications' send worker puts the originating event's
+`CorrelationId` on every message it hands the relay, in the header this section
+names — `SmtpMailChannel.CorrelationIdHeader`, held equal to
+`CorrelationIdExtensions.Header` by a test, because the project that speaks
+SMTP does not reference `Common.Web`. The value is the GUID the notice's row
+kept from its event, formatted by code, so no text another process wrote
+reaches the header; a message in a sink joins the trace and the order behind
+it, and a send repeated after a crash is two messages under one ID.
+
 ## 10.5 Error responses
 
 Every service returns RFC 9457 `application/problem+json`, so clients handle one

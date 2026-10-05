@@ -11,6 +11,7 @@ public sealed class OrderPlacedHandler(IDispatcher dispatcher) : IIntegrationEve
         await dispatcher.SendAsync(
             new RecordNotificationCommand(
                 integrationEvent.MessageId,
+                integrationEvent.CorrelationId,
                 TemplateKeys.OrderPlaced,
                 new NotificationParameters
                 {

@@ -324,6 +324,7 @@ public sealed class SendWorker(
                 message.Subject,
                 message.Body,
                 new MailMessageId(work.EventId, work.TemplateKey),
+                work.CorrelationId,
                 message.Languages),
             ct);
 

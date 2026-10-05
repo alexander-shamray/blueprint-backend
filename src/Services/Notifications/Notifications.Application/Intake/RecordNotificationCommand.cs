@@ -7,6 +7,7 @@ namespace Notifications.Application.Intake;
 /// <remarks>Its values are as published; <see cref="RecordNotificationHandler"/> checks each text value.</remarks>
 public sealed record RecordNotificationCommand(
     Guid EventId,
+    Guid CorrelationId,
     string TemplateKey,
     NotificationParameters Parameters,
     OrderFact? Order) : ICommand<Result>;

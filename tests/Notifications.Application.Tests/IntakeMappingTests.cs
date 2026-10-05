@@ -39,6 +39,7 @@ public class IntakeMappingTests
         _dispatcher.Sent.ShouldHaveSingleItem().ShouldBe(
             new RecordNotificationCommand(
                 placed.MessageId,
+                placed.CorrelationId,
                 TemplateKeys.OrderPlaced,
                 new NotificationParameters
                 {
@@ -70,6 +71,7 @@ public class IntakeMappingTests
         _dispatcher.Sent.ShouldHaveSingleItem().ShouldBe(
             new RecordNotificationCommand(
                 confirmed.MessageId,
+                confirmed.CorrelationId,
                 TemplateKeys.OrderConfirmed,
                 new NotificationParameters
                 {
@@ -100,6 +102,7 @@ public class IntakeMappingTests
         _dispatcher.Sent.ShouldHaveSingleItem().ShouldBe(
             new RecordNotificationCommand(
                 cancelled.MessageId,
+                cancelled.CorrelationId,
                 TemplateKeys.OrderCancelled,
                 new NotificationParameters
                 {
@@ -131,6 +134,7 @@ public class IntakeMappingTests
         sent.ShouldBe(
             new RecordNotificationCommand(
                 declined.MessageId,
+                declined.CorrelationId,
                 TemplateKeys.PaymentDeclined,
                 new NotificationParameters { OrderId = declined.OrderId, OccurredAt = At },
                 Order: null));
@@ -158,6 +162,7 @@ public class IntakeMappingTests
         _dispatcher.Sent.ShouldHaveSingleItem().ShouldBe(
             new RecordNotificationCommand(
                 refunded.MessageId,
+                refunded.CorrelationId,
                 TemplateKeys.PaymentRefunded,
                 new NotificationParameters
                 {
@@ -186,6 +191,7 @@ public class IntakeMappingTests
         _dispatcher.Sent.ShouldHaveSingleItem().ShouldBe(
             new RecordNotificationCommand(
                 dispatched.MessageId,
+                dispatched.CorrelationId,
                 TemplateKeys.ShipmentDispatched,
                 new NotificationParameters { OrderId = dispatched.OrderId, OccurredAt = At, TrackingNumber = "TRK-1" },
                 Order: null));
@@ -208,6 +214,7 @@ public class IntakeMappingTests
         _dispatcher.Sent.ShouldHaveSingleItem().ShouldBe(
             new RecordNotificationCommand(
                 delivered.MessageId,
+                delivered.CorrelationId,
                 TemplateKeys.ShipmentDelivered,
                 new NotificationParameters { OrderId = delivered.OrderId, OccurredAt = At, TrackingNumber = "TRK-2" },
                 Order: null));

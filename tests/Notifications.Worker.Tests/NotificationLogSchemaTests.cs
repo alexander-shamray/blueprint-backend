@@ -26,9 +26,9 @@ public sealed class NotificationLogSchemaTests(ServiceFixture fixture) : IAsyncL
         // ADR-053 rule 4: the record holds no mailbox and no body, so the list is exact rather than a superset.
         columns.ShouldBe(
             [
-                "Attempts", "CompletedAt", "CreatedAt", "CustomerId", "EventId", "Languages", "LockedUntil",
-                "NextAttemptAt", "NotificationId", "OrderId", "Parameters", "Reason", "RowVersion", "SendStartedAt",
-                "Status", "TemplateKey", "TemplateVersion"
+                "Attempts", "CompletedAt", "CorrelationId", "CreatedAt", "CustomerId", "EventId", "Languages",
+                "LockedUntil", "NextAttemptAt", "NotificationId", "OrderId", "Parameters", "Reason", "RowVersion",
+                "SendStartedAt", "Status", "TemplateKey", "TemplateVersion"
             ],
             ignoreOrder: true);
     }
@@ -51,18 +51,23 @@ public sealed class NotificationLogSchemaTests(ServiceFixture fixture) : IAsyncL
     {
         Guid eventId = Guid.CreateVersion7();
 
-        await SaveAsync(Notification.Pending(eventId, "order-placed", Guid.CreateVersion7(), """{"v":1}""", Now));
+        await SaveAsync(Placed(eventId));
 
         // The inbox drops a redelivery first (§9.5); this is the line behind it.
-        await Should.ThrowAsync<DbUpdateException>(() =>
-            SaveAsync(Notification.Pending(eventId, "order-placed", Guid.CreateVersion7(), """{"v":1}""", Now)));
+        await Should.ThrowAsync<DbUpdateException>(() => SaveAsync(Placed(eventId)));
     }
 
     [Fact]
     public async Task A_row_round_trips_with_its_status_by_name()
     {
-        Notification notification =
-            Notification.Pending(Guid.CreateVersion7(), "payment-declined", Guid.CreateVersion7(), """{"v":1}""", Now);
+        Guid correlation = Guid.CreateVersion7();
+        Notification notification = Notification.Pending(
+            Guid.CreateVersion7(),
+            correlation,
+            "payment-declined",
+            Guid.CreateVersion7(),
+            """{"v":1}""",
+            Now);
         notification.AssignCustomer(Guid.CreateVersion7());
         notification.MarkUndeliverable(NotificationReasons.NoSuchCustomer, Now.AddMinutes(1));
 
@@ -77,6 +82,7 @@ public sealed class NotificationLogSchemaTests(ServiceFixture fixture) : IAsyncL
         read.Status.ShouldBe(NotificationStatus.Undeliverable);
         read.Reason.ShouldBe(NotificationReasons.NoSuchCustomer);
         read.CustomerId.ShouldBe(notification.CustomerId);
+        read.CorrelationId.ShouldBe(correlation);
 
         // By name, never by number (§7.2).
         (await fixture.ScalarAsync<string>(
@@ -84,6 +90,9 @@ public sealed class NotificationLogSchemaTests(ServiceFixture fixture) : IAsyncL
             notification.NotificationId))
             .ShouldBe("Undeliverable");
     }
+
+    private static Notification Placed(Guid eventId) =>
+        Notification.Pending(eventId, Guid.CreateVersion7(), "order-placed", Guid.CreateVersion7(), """{"v":1}""", Now);
 
     private async Task SaveAsync(Notification notification)
     {

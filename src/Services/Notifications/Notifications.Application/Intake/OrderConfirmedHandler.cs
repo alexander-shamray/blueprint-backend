@@ -11,6 +11,7 @@ public sealed class OrderConfirmedHandler(IDispatcher dispatcher) : IIntegration
         await dispatcher.SendAsync(
             new RecordNotificationCommand(
                 integrationEvent.MessageId,
+                integrationEvent.CorrelationId,
                 TemplateKeys.OrderConfirmed,
                 new NotificationParameters
                 {

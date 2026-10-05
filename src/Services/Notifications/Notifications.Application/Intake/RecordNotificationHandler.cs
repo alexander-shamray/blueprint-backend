@@ -53,6 +53,7 @@ public sealed class RecordNotificationHandler(
 
         Notification pending = Notification.Pending(
             command.EventId,
+            command.CorrelationId,
             command.TemplateKey,
             orderId,
             ParametersFormat.Write(Checked(command)),

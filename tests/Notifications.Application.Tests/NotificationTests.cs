@@ -10,8 +10,19 @@ public class NotificationTests
     private static readonly DateTimeOffset Now = new(2026, 10, 2, 9, 0, 0, TimeSpan.Zero);
     private static readonly DateTimeOffset Later = Now.AddMinutes(5);
 
-    private static Notification Pending() =>
-        Notification.Pending(Guid.CreateVersion7(), "order-placed", Guid.CreateVersion7(), """{"v":1}""", Now);
+    private static Notification Pending(
+        Guid? eventId = null,
+        Guid? correlationId = null,
+        string templateKey = "order-placed",
+        Guid? orderId = null,
+        string parameters = """{"v":1}""") =>
+        Notification.Pending(
+            eventId ?? Guid.CreateVersion7(),
+            correlationId ?? Guid.CreateVersion7(),
+            templateKey,
+            orderId ?? Guid.CreateVersion7(),
+            parameters,
+            Now);
 
     private static Notification Started()
     {
@@ -190,12 +201,11 @@ public class NotificationTests
     }
 
     [Fact]
-    public void An_empty_event_or_order_id_is_refused_at_the_door()
+    public void An_empty_event_correlation_or_order_id_is_refused_at_the_door()
     {
-        Should.Throw<ArgumentOutOfRangeException>(() =>
-            Notification.Pending(Guid.Empty, "order-placed", Guid.CreateVersion7(), """{"v":1}""", Now));
-        Should.Throw<ArgumentOutOfRangeException>(() =>
-            Notification.Pending(Guid.CreateVersion7(), "order-placed", Guid.Empty, """{"v":1}""", Now));
+        Should.Throw<ArgumentOutOfRangeException>(() => Pending(eventId: Guid.Empty));
+        Should.Throw<ArgumentOutOfRangeException>(() => Pending(correlationId: Guid.Empty));
+        Should.Throw<ArgumentOutOfRangeException>(() => Pending(orderId: Guid.Empty));
     }
 
     [Fact]
@@ -211,17 +221,10 @@ public class NotificationTests
     [Fact]
     public void A_value_the_columns_cannot_hold_is_refused_at_the_door()
     {
-        Should.Throw<ArgumentException>(() =>
-            Notification.Pending(Guid.CreateVersion7(), " ", Guid.CreateVersion7(), """{"v":1}""", Now));
-        Should.Throw<ArgumentException>(() =>
-            Notification.Pending(Guid.CreateVersion7(), "order-placed", Guid.CreateVersion7(), "", Now));
+        Should.Throw<ArgumentException>(() => Pending(templateKey: " "));
+        Should.Throw<ArgumentException>(() => Pending(parameters: ""));
         Should.Throw<ArgumentOutOfRangeException>(() =>
-            Notification.Pending(
-                Guid.CreateVersion7(),
-                new string('k', NotificationLimits.MaxTemplateKeyLength + 1),
-                Guid.CreateVersion7(),
-                """{"v":1}""",
-                Now));
+            Pending(templateKey: new string('k', NotificationLimits.MaxTemplateKeyLength + 1)));
         Should.Throw<ArgumentOutOfRangeException>(() => Pending().StartSend(0, "en", Later));
         Should.Throw<ArgumentOutOfRangeException>(() =>
             Pending().StartSend(1, new string('x', NotificationLimits.MaxLanguagesLength + 1), Later));

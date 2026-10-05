@@ -1,9 +1,11 @@
 using Common.Contracts.Ordering.V1;
+using Common.Web;
 using Microsoft.Extensions.DependencyInjection;
 using Notifications.Application.Contacts;
 using Notifications.Application.Records;
 using Notifications.Application.Rendering;
 using Notifications.Infrastructure.Delivery;
+using Notifications.Infrastructure.Mail;
 using Notifications.TestSupport;
 using Shouldly;
 using Xunit;
@@ -51,6 +53,28 @@ public sealed class SendWorkerTests(ServiceFixture fixture) : IAsyncLifetime
         message.To.ShouldHaveSingleItem().Address.ShouldBe(Mailbox);
         (await fixture.ContactAsync(customer))!.Email.ShouldBe(Mailbox, "the owner's answer is kept (ADR-052)");
     }
+
+    [Fact]
+    public async Task A_sent_message_carries_its_event_s_correlation_id_and_nothing_else_in_that_header()
+    {
+        (Guid order, Guid customer) = Ids();
+        fixture.ContactAnswers(customer, Mailbox, "en-GB");
+
+        // Apart from the order id its publisher sets it to, so the header is shown to be the event's own (§10.4).
+        Guid correlation = Guid.CreateVersion7();
+        await fixture.DeliverAsync(OrderEvents.Placed(order, customer, At) with { CorrelationId = correlation });
+        await fixture.WaitUntilDueAsync(order);
+
+        await fixture.RunSendPassAsync();
+
+        MailpitMessage message = await fixture.Relay.SingleAsync(Ct);
+        (await fixture.Relay.HeadersAsync(message.Id, Ct))["X-Correlation-Id"]
+            .ShouldHaveSingleItem().ShouldBe(correlation.ToString("D"));
+    }
+
+    [Fact]
+    public void The_mail_header_is_the_one_every_host_reads_its_correlation_id_from() =>
+        SmtpMailChannel.CorrelationIdHeader.ShouldBe(CorrelationIdExtensions.Header);
 
     [Fact]
     public async Task A_customer_with_no_locale_is_sent_every_language_of_the_set_in_its_order()

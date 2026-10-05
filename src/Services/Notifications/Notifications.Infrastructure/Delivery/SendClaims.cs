@@ -27,9 +27,9 @@ internal sealed class SendClaims(IDbConnectionFactory connections)
         )
         UPDATE claimable
         SET LockedUntil = DATEADD(second, {SendWorker.LeaseSeconds}, SYSDATETIMEOFFSET())
-        OUTPUT inserted.NotificationId, inserted.EventId, inserted.OrderId, inserted.CustomerId, inserted.TemplateKey,
-            inserted.Parameters, inserted.CreatedAt, inserted.SendStartedAt, inserted.TemplateVersion,
-            inserted.Languages;
+        OUTPUT inserted.NotificationId, inserted.EventId, inserted.CorrelationId, inserted.OrderId, inserted.CustomerId,
+            inserted.TemplateKey, inserted.Parameters, inserted.CreatedAt, inserted.SendStartedAt,
+            inserted.TemplateVersion, inserted.Languages;
         """;
 
     // The dispatcher's ladder, read from its constants so the two cannot drift; the lease drops with it. No count

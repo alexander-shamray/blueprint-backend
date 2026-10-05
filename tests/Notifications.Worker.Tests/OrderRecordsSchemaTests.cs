@@ -69,7 +69,13 @@ public sealed class OrderRecordsSchemaTests(ServiceFixture fixture) : IAsyncLife
         {
             NotificationsDbContext db = scope.ServiceProvider.GetRequiredService<NotificationsDbContext>();
             db.NotificationLog.Add(
-                Notification.Pending(eventId, "order-placed", Guid.CreateVersion7(), """{"v":1}""", Now));
+                Notification.Pending(
+                    eventId,
+                    Guid.CreateVersion7(),
+                    "order-placed",
+                    Guid.CreateVersion7(),
+                    """{"v":1}""",
+                    Now));
             await db.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
 

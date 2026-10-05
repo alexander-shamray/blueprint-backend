@@ -28,12 +28,14 @@ public class NotificationIntakeTests
     private static RecordNotificationCommand Placed(Guid order, Guid customer) =>
         new(
             Guid.CreateVersion7(),
+            Guid.CreateVersion7(),
             TemplateKeys.OrderPlaced,
             For(order) with { Amount = 42.10m, Currency = "KZT" },
             new OrderFact(customer, Cancellation: null));
 
     private static RecordNotificationCommand Confirmed(Guid order, Guid customer) =>
         new(
+            Guid.CreateVersion7(),
             Guid.CreateVersion7(),
             TemplateKeys.OrderConfirmed,
             For(order) with { Amount = 42.10m, Currency = "KZT" },
@@ -42,12 +44,13 @@ public class NotificationIntakeTests
     private static RecordNotificationCommand CancelledBy(Guid order, Guid customer, string reason, string? origin) =>
         new(
             Guid.CreateVersion7(),
+            Guid.CreateVersion7(),
             TemplateKeys.OrderCancelled,
             For(order) with { CancelReason = reason },
             new OrderFact(customer, new OrderCancellation(reason, origin, Cancelled)));
 
     private static RecordNotificationCommand Declined(Guid order) =>
-        new(Guid.CreateVersion7(), TemplateKeys.PaymentDeclined, For(order), Order: null);
+        new(Guid.CreateVersion7(), Guid.CreateVersion7(), TemplateKeys.PaymentDeclined, For(order), Order: null);
 
     /// <summary>Every order the three of Ordering's events can arrive in, since §9.4 orders none of them.</summary>
     public static TheoryData<string[]> EveryArrivalOrder => new()
@@ -166,11 +169,22 @@ public class NotificationIntakeTests
     }
 
     [Fact]
+    public async Task The_notice_keeps_the_correlation_id_its_event_carried()
+    {
+        RecordNotificationCommand command = Declined(Guid.CreateVersion7());
+
+        await Handler().HandleAsync(command, TestContext.Current.CancellationToken);
+
+        _notifications.Added.ShouldHaveSingleItem().CorrelationId.ShouldBe(command.CorrelationId);
+    }
+
+    [Fact]
     public async Task A_tracking_number_that_fails_the_check_is_dropped_and_the_notice_still_recorded()
     {
         // A right-to-left override, which would display a stranger's text in an order nobody wrote.
         string spoofed = $"1Z999{(char)0x202E}AA1";
         RecordNotificationCommand command = new(
+            Guid.CreateVersion7(),
             Guid.CreateVersion7(),
             TemplateKeys.ShipmentDispatched,
             For(Guid.CreateVersion7()) with { TrackingNumber = spoofed },
@@ -194,6 +208,7 @@ public class NotificationIntakeTests
     {
         Guid order = Guid.CreateVersion7();
         RecordNotificationCommand command = new(
+            Guid.CreateVersion7(),
             Guid.CreateVersion7(),
             TemplateKeys.OrderCancelled,
             For(order) with { Currency = "kzt", CancelReason = "Out Of Stock" },

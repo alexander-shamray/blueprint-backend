@@ -11,6 +11,7 @@ public sealed class OrderCancelledHandler(IDispatcher dispatcher) : IIntegration
         await dispatcher.SendAsync(
             new RecordNotificationCommand(
                 integrationEvent.MessageId,
+                integrationEvent.CorrelationId,
                 TemplateKeys.OrderCancelled,
                 new NotificationParameters
                 {
