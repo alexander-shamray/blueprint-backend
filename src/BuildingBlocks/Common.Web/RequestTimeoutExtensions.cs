@@ -27,7 +27,8 @@ public static class RequestTimeoutExtensions
     {
         IProblemDetailsService problems = context.RequestServices.GetRequiredService<IProblemDetailsService>();
 
-        await problems.WriteAsync(new ProblemDetailsContext
+        // Try, so a caller that accepts no problem body still gets the middleware's 504, with no body.
+        await problems.TryWriteAsync(new ProblemDetailsContext
         {
             HttpContext = context,
             ProblemDetails = new ProblemDetails

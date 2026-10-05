@@ -49,6 +49,19 @@ public partial class RequestTimeoutTests
     }
 
     [Fact]
+    public async Task A_stalled_handler_whose_caller_accepts_no_problem_body_is_still_answered_504()
+    {
+        using IHost host = await StartAsync();
+        using HttpClient client = host.GetTestClient();
+        using HttpRequestMessage request = new(HttpMethod.Get, "/stalled");
+        request.Headers.Accept.ParseAdd("text/plain");
+
+        HttpResponseMessage response = await client.SendAsync(request, TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.GatewayTimeout);
+    }
+
+    [Fact]
     public async Task An_endpoint_that_opts_out_outlives_the_deadline()
     {
         using IHost host = await StartAsync();
