@@ -142,14 +142,21 @@ def messaging_dirs() -> dict[str, Path]:
 
     Globbed, so a service §4.5's scaffold renders tomorrow is read on the day
     it lands. A host is keyed as a service is, which makes the BFF bff-svc.
+    Two directories keying to one account are refused, since the second would
+    silently replace the first and its grant would go unchecked.
     """
-    found = {}
-    for path in sorted(SERVICES.glob("*/*.Infrastructure/Messaging")):
-        if path.is_dir():
-            found[path.parents[1].name] = path
-    for path in sorted(HOSTS.glob("*/Messaging")):
-        if path.is_dir():
-            found[path.parents[1].name] = path
+    found: dict[str, Path] = {}
+    paths = [*sorted(SERVICES.glob("*/*.Infrastructure/Messaging")), *sorted(HOSTS.glob("*/Messaging"))]
+    for path in paths:
+        if not path.is_dir():
+            continue
+        key = path.parents[1].name
+        if key in found:
+            fail(f"{key}: two Messaging directories key to one account, "
+                 f"{found[key].relative_to(found[key].parents[2]).as_posix()} and "
+                 f"{path.relative_to(path.parents[2]).as_posix()} — key a host by its project")
+            continue
+        found[key] = path
     return found
 
 
