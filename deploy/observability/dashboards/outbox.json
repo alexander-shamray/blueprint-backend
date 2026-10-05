@@ -38,7 +38,7 @@
     {
       "id": 2,
       "type": "timeseries",
-      "title": "Broker lane — oldest unprocessed (alert: 2 min)",
+      "title": "Broker lane — oldest unprocessed (alert: OutboxBrokerLaneStalled)",
       "description": "Other services are working from stale data and sagas stop advancing. The threshold is an order of magnitude above the local lane's because this one crosses a network and should absorb a short RabbitMQ blip or a rolling restart. Runbook: docs/runbooks/outbox-broker.md",
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 1 },
@@ -48,8 +48,7 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green", "value": null },
-              { "color": "red", "value": 120 }
+              { "color": "green", "value": null }
             ]
           }
         },
@@ -65,7 +64,7 @@
     {
       "id": 3,
       "type": "timeseries",
-      "title": "Local lane — oldest unprocessed (alert: 30 s)",
+      "title": "Local lane — oldest unprocessed (alert: OutboxLocalLaneStalled)",
       "description": "Read models this service feeds from its OWN events are stale. Not the ones another service's contract feeds — those never touch this lane, and §13.7 records that their staleness has no direct signal yet. Runbook: docs/runbooks/projection-lag.md",
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 1 },
@@ -75,8 +74,7 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green", "value": null },
-              { "color": "red", "value": 30 }
+              { "color": "green", "value": null }
             ]
           }
         },
@@ -98,7 +96,7 @@
     {
       "id": 5,
       "type": "timeseries",
-      "title": "Pending rows, per lane (alert: >1000 and rising)",
+      "title": "Pending rows, per lane (alert: OutboxGrowth)",
       "description": "Neither gauge substitutes for the other. A single stuck row pins the age panel above at hours while this one stays at 1, and a backlog of ten thousand rows all seconds old leaves the age panel flat. Runbook: docs/runbooks/outbox-growth.md",
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 10 },
@@ -113,7 +111,7 @@
     {
       "id": 6,
       "type": "stat",
-      "title": "Abandoned rows, per lane (alert: >0)",
+      "title": "Abandoned rows, per lane (alert: OutboxAbandonedRows)",
       "description": "Permanent data loss. A row past §9.4's attempt cap is skipped for ever. IT STAYS COUNTED AS PENDING and keeps the age panel up, so the panels to the left do NOT go green — this looks exactly like an ordinary stall there, which is why this gauge exists: it separates a row nothing will retry from one that is merely waiting. The lane says whose loss: Broker, and other services never learned something; Local, and this service's read model is permanently wrong. Runbook: docs/runbooks/outbox-abandoned.md",
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 10 },
@@ -123,8 +121,7 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green", "value": null },
-              { "color": "red", "value": 1 }
+              { "color": "green", "value": null }
             ]
           }
         },
