@@ -59,9 +59,11 @@ NOT_QUESTIONS = (
 
 
 def run(payload: bytes):
+    """The hook as a process whose text stdin is what a Windows pipe gets, so
+    a case about decoding means the same on every host."""
     return subprocess.run(
         [sys.executable, str(HINT)], input=payload, capture_output=True,
-        timeout=30, check=False)
+        timeout=30, check=False, env=dict(os.environ, PYTHONIOENCODING="cp1252:surrogateescape"))
 
 
 def ask(prompt: str):
