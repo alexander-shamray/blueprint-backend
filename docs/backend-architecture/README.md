@@ -4,11 +4,11 @@
 
 | | |
 |---|---|
-| **Status** | Reference blueprint — adapt, don't copy wholesale. The C# solution it specifies will be built in this repository ([Appendix C](appendix-c-delivery-plan.md)) |
+| **Status** | Reference blueprint — adapt, don't copy wholesale. The C# solution it specifies is built in this repository ([Appendix C](appendix-c-delivery-plan.md)) |
 | **Target runtime** | .NET 10 (LTS), C# 14 |
 | **Last reviewed** | 2026-08-02 |
 | **Availability figures** | Illustrative. The arithmetic of compounding is the point; the inputs are round numbers, not measurements |
-| **Sample domain** | E-commerce (illustrative only) |
+| **Sample domain** | E-commerce, as a reference implementation: the worked example an adopter replaces, while the building blocks, gates, scaffold and operating contract are kept ([ADR-062](adr/ADR-062-the-domain-is-a-reference-implementation.md)) |
 | **Revision** | Revised across successive design reviews. Load-bearing corrections: transaction failure and rollback semantics, outbox type and payload stability, single message identity, business counters as claims rather than calls, public URL shape. Originally merged with a parallel design, which contributed the delivery plan, composition-root gate, Redis eviction isolation, dual DB identities, cursor pagination and hop budget |
 
 ---

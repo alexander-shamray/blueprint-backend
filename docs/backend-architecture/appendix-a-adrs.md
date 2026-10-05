@@ -68,6 +68,7 @@ decision looks wrong.
 | **ADR-059** | [An entry with no fingerprint is refused as already committed](adr/ADR-059-an-entry-with-no-fingerprint-is-refused-as-already-committed.md) |
 | **ADR-060** | [The already-committed refusal says its result cannot be returned](adr/ADR-060-the-already-committed-refusal-says-its-result-cannot-be-returned.md) |
 | **ADR-061** | [A keyed write endpoint is keyed by one command](adr/ADR-061-a-keyed-write-endpoint-is-keyed-by-one-command.md) |
+| **ADR-062** | [The domain is a reference implementation](adr/ADR-062-the-domain-is-a-reference-implementation.md) |
 
 ---
 
