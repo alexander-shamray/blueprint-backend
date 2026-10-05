@@ -635,6 +635,20 @@ to the Dockerfiles; so is the library chart's capability map, in
 > independently afterwards. Nothing in a render can catch a mix; the conflict
 > is an API-server error at install time.
 
+**The charts deploy this platform's workloads and no store.** Each service's
+database and the BFF's, both Redis instances, the broker, Keycloak's database
+and the log and trace stores are run by the deployment, outside this
+repository, and the deployment owes each a stated recovery point and recovery
+time, a role that runs its restore, and a rehearsal of that restore. What each
+store's loss costs differs enough that the demand differs too — a service's
+database is the store of record, and a Redis instance is replaced empty and
+never restored — and the record states it per store, along with what the
+broker's queues are declared as and why.
+
+> **Decision — every store is run outside this repository, to a stated
+> recovery point.** See
+> [ADR-064](adr/ADR-064-every-store-is-run-outside-this-repository-to-a-stated-recovery-point.md).
+
 **The templates live once, in a library chart.** `deploy/helm/common` is a
 `type: library` chart every **deployable** chart takes as a `file://`
 dependency, and each one's templates are one-line includes of it. The umbrella
