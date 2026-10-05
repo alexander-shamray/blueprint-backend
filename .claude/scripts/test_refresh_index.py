@@ -355,6 +355,20 @@ class SeedingAWorktree(Base):
         self.assertFalse(source.exists())
         self.assertFalse((worktree / CACHE / "index.sqlite").exists())
 
+    @unittest.skipUnless(sys.platform == "win32", "an extended-length path is a Windows form")
+    def test_an_extended_length_source_is_seeded(self):
+        """`resolve()` can return one, and a UNC path takes the same route:
+        the URI's authority stays empty, or SQLite refuses to open it."""
+        main = self.main()
+        worktree = self.linked(main)
+        (worktree / CACHE).mkdir(parents=True)
+        source = Path("\\\\?\\" + str((main / CACHE / "index.sqlite").resolve()))
+        self.patch(mock.patch.object(self.mod, "seed_source", lambda _root: source))
+
+        self.mod.seed(worktree)
+
+        self.assertEqual("main", self.origin(worktree / CACHE / "index.sqlite"))
+
     def test_a_main_checkout_with_no_index_seeds_nothing(self):
         """And builds nothing: `update` refuses a cache with no index, and a
         full build is the cost this exists to avoid."""

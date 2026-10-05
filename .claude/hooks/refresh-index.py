@@ -11,6 +11,7 @@ import sqlite3
 import subprocess
 import sys
 import time
+import urllib.parse
 from pathlib import Path
 
 # Where the CLI keeps a checkout's index. A checkout without one is not
@@ -176,9 +177,13 @@ def seed(root: Path) -> None:
     try:
         for leftover in ("-wal", "-shm"):
             index.with_name(index.name + leftover).unlink(missing_ok=True)
-        # `mode=rw` refuses a source gone since `seed_source` looked, where a
-        # plain connect would create an empty index in the main checkout.
-        reading = sqlite3.connect(source.as_uri() + "?mode=rw", uri=True)
+        # The authority stays empty: `as_uri()` puts a UNC server or a `?` there,
+        # and SQLite refuses both. `mode=rw` refuses a source gone since
+        # `seed_source` looked, where a plain connect would create one empty.
+        posix = source.as_posix()
+        reading = sqlite3.connect(
+            "file://" + ("" if posix.startswith("/") else "/") + urllib.parse.quote(posix) + "?mode=rw",
+            uri=True)
         try:
             writing = sqlite3.connect(str(partial))
             try:
