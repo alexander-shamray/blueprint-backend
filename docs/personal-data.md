@@ -86,5 +86,6 @@ with the adopter, not this platform's.
 
 A pull request that adds a table, a column, a contract field, a log attribute
 or an outbound call that carries a person's data adds its row here, and one
-that adds a retention option names it here. Nothing checks either yet; the
-reason is in the commit that wrote this file.
+that adds a retention option names it here. `RetentionMapRule` checks the
+second over the option types each host's suite declares, chart values aside;
+nothing checks the first.
