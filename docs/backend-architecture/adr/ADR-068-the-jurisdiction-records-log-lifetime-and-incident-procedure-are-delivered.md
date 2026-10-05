@@ -8,12 +8,12 @@ lifetime of the log store is the one
 a value each deployment sets in its log and trace stores' own retention, and
 the procedure for a personal-data incident is
 [`docs/personal-data-incident.md`](../../personal-data-incident.md), outside
-`docs/runbooks/` where ADR-053 placed it. The minor-unit table is
+`docs/runbooks/`, as ADR-053 placed it. The minor-unit table is
 [ADR-067](ADR-067-a-currencys-minor-unit-is-iso-4217s-held-once.md)'s, and
 every other item ADR-053 names stays owed.
-**Why.** ADRs are append-only, so ADR-053 cannot be edited to say its debts
-were paid, and a reader of it alone still sees both as open. A record that
-names what discharged each item is the one place that reader is sent, and
+**Why.** ADRs are append-only, so ADR-053's body still lists both as owed and
+gains only a closing note sending its reader here. A record that names what
+discharged each item is the one place that reader is sent, and
 saying which items it does not discharge keeps the remainder visible rather
 than implying the list is settled.
 **Consequences.** ADR-053's consequences now read correctly only beside this

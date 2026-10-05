@@ -137,8 +137,10 @@ coverage.runsettings         the report filtered to `.*\.Domain\.dll$` (§12.9)
                              would cost every run. The job list is the file's
                              own. Unfiltered at its trigger, filtered per job
                              inside
-.github/workflows/compose.yml  path-filtered smoke on deploy/compose/** —
-                             config -q, up --wait, down -v, and an image build
+.github/workflows/compose.yml  path-filtered smoke on deploy/compose/** and the
+                             observability files it mounts — config -q,
+                             up --wait, the local Grafana's loaded rules and
+                             dashboards, down -v, and an image build
 .github/workflows/helm.yml   path-filtered smoke on deploy/helm/** — and on
                              every input smoke.sh reads outside it. **That list
                              is not written down here on purpose**: it lives

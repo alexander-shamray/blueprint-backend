@@ -71,7 +71,6 @@ they are outside this fence and owed one.
 > [ADR-069](ADR-069-the-migration-job-is-fenced-by-a-hook-policy-of-its-own.md)'s**:
 > a second policy, a hook rendered with the Job.
 
-
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)

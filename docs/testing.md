@@ -220,9 +220,9 @@ a healthcheck never passes, and a one-shot that another service gates on with
 `service_completed_successfully` satisfies it by exiting 0, so the migrators'
 exit codes are part of what this proves. `rabbitmq` is built rather than
 pulled, so an image build rides on the `up`. The workflow then holds the
-local Grafana's loaded rules and dashboards to `deploy/observability/`, by
-the reads `deploy/compose/README.md` gives under *What the local Grafana
-loads*.
+local Grafana's loaded rules and dashboards to `deploy/observability/`;
+`deploy/compose/README.md`'s *What the local Grafana loads* gives the reads
+to run it locally.
 
 **`HELM=` is an override, not a gate run.** The chart gate runs
 `helm dependency update` itself — `file://` dependencies resolve from disk, so

@@ -21,7 +21,6 @@ trade.
 > for Payments' provider call inside its consumers; the reads above still
 > spend nothing.
 
-
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)

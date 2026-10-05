@@ -163,7 +163,6 @@ record owes; none of them says a regulator is satisfied.
 > [ADR-068](ADR-068-the-jurisdiction-records-log-lifetime-and-incident-procedure-are-delivered.md),
 > the log lifetime and the incident procedure.
 
-
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)
