@@ -19,8 +19,8 @@ So, in order of preference:
 
 1. **Repair** — run with no argument. Every row in the window whose message
    the BFF's inbox has not recorded is sent, and fills what the projection
-   never received; a row it has recorded is left unsent, since a copy the
-   inbox drops would sit on `bff-order-events_skipped`, which pages. A row
+   never received; a row it has recorded is left unsent, since the inbox
+   would only drop it, and the report counts it instead. A row
    processed after the run began is live traffic and is not sent either. A row
    whose inbox entry retention has purged is sent again, harmlessly, as the
    projection's writes are set-once. Nothing is deleted. This is the answer to
@@ -78,9 +78,9 @@ dotnet run --project tools/bff-replay            # repair
 dotnet run --project tools/bff-replay -- --reset # rebuild
 ```
 
-Run a repair once `bff-order-events` is empty: an event still queued was
-processed before the run began but not yet handled, so it would be sent again,
-dropped by the inbox and left on `bff-order-events_skipped`, which pages.
+A repair need not wait for `bff-order-events` to drain: an event still queued
+was processed before the run began but not yet handled, so it is sent again,
+and whichever copy arrives second the inbox drops as a duplicate.
 
 The BFF must be running for a repair: the tool only sends, and the BFF's own
 consumers apply what it sends, through the same handlers and the same inbox as
@@ -102,15 +102,19 @@ A replay records each event's delivery lag as the time since its
 for `Web.Bff`, and a repair that applies events can too; the alert is the
 replay's, not a fault.
 
-An event processed after the BFF was scaled to zero but before the run's
-cutoff can still be sent twice: the live copy is applied on resume, and the
-replayed copy is dropped to `bff-order-events_skipped`, which raises
-`SkippedQueueDepth`. Those copies are the replay's, not a fault, and are not
-to be moved back to the queue, where they would only be dropped again; once
-the run's report is read and each parked message's id is in the BFF's inbox,
-purge that queue, which
-[`skipped-queue.md`](../../docs/runbooks/skipped-queue.md) otherwise forbids
-doing to clear the graph.
+An event still waiting on `bff-order-events` when the BFF was scaled to zero,
+or processed after that but before the run's cutoff, is sent twice: the live
+copy is applied on resume, and the inbox drops whichever copy arrives second.
+A dropped duplicate is consumed rather than parked, so nothing reaches
+`bff-order-events_skipped` and there is nothing to purge; a message that does
+park there is one the queue binds no consumer for, and
+[`skipped-queue.md`](../../docs/runbooks/skipped-queue.md) is its runbook.
+
+**A reset re-stamps the order list's sort key.** Each row's `FirstSeenAt` is
+the time its first event reached the projection, so after a reset it is the
+replay's arrival time: the list `GET /v1/orders` returns is then roughly in the
+events' own order rather than the order the BFF first saw them in, and a
+cursor a client held from before the reset reads a shifted page.
 
 The BFF is the queue's only consumer, so the replayed events wait on
 `bff-order-events` until it is back. When the run has finished, resume the
