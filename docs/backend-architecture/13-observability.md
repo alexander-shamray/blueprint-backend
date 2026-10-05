@@ -2360,6 +2360,14 @@ catch has to have been seen.
 name — one declared exception, so a second non-runbook file in that directory
 has to be argued for rather than added.
 
+**The one procedure with a statutory clock is outside that directory on
+purpose.** A personal-data incident has no signal, so no alert can point at
+its procedure and the pairing would refuse it;
+[ADR-053](adr/ADR-053-a-jurisdiction-is-a-value-the-deployment-is-given.md)
+places it beside [§11.7](11-identity-authorization.md)'s extension instead, as
+[`docs/personal-data-incident.md`](../personal-data-incident.md), and the
+runbook index points to it.
+
 ---
 
 [← §12 Test strategy](12-test-strategy.md) · [Index](README.md) · [§14 Local development →](14-local-development.md)

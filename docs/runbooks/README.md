@@ -13,6 +13,13 @@ alert with no runbook and a runbook with no alert both fail the build.
 declares that exclusion, so a second non-runbook file here has to be argued for
 rather than added.
 
+**A personal-data incident has its procedure elsewhere**, in
+[`docs/personal-data-incident.md`](../personal-data-incident.md): it has no
+alert, so the pairing would refuse it here, and
+[ADR-053](../backend-architecture/adr/ADR-053-a-jurisdiction-is-a-value-the-deployment-is-given.md)
+places it beside the personal-data extension. Its first line is the reporting
+clock.
+
 | Runbook | Alert | Loaded? |
 |---|---|---|
 | [`error-rate.md`](error-rate.md) | `ErrorRateGateway`, `ErrorRateService` | yes |
