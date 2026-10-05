@@ -82,6 +82,10 @@ docs/secrets.md              how a secret reaches a pod and how each kind is
                              rotated — the operational half of §15.4 on
                              testing.md's exact terms, and §15.4 keeps the
                              inventory and wins any disagreement
+docs/personal-data.md        where personal data lives — a row per holding
+                             with its owner, window, erasure path and store —
+                             the operational half of §11.7 on secrets.md's
+                             terms, and §11.7 wins any disagreement
 docs/runbooks/               NOT one per alert: §13.8's ownership split makes
                              error rate two rules over one procedure, and
                              that one sharer is declared, with its reason, in
