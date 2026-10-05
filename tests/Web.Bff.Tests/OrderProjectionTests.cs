@@ -1,5 +1,6 @@
 using Common.Application;
 using Common.Contracts.Ordering.V1;
+using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Shouldly;
@@ -178,14 +179,15 @@ public sealed class OrderProjectionTests(BffServiceFixture fixture) : IAsyncLife
     [Fact]
     public async Task Handlers_creating_one_row_at_once_leave_one_row_and_every_fact()
     {
-        // MERGE's HOLDLOCK is the claim: without it two inserts race and one fails on the key.
+        // MERGE's HOLDLOCK is the claim: without it two inserts race and one fails on the key. A deadlock victim
+        // is retried, as the endpoint's RetryPolicy retries it (§9.8); a duplicate key is not, so it still fails.
         Guid[] orders = [.. Enumerable.Range(0, 20).Select(_ => Guid.CreateVersion7())];
 
         await Task.WhenAll(orders.SelectMany(order => new[]
         {
-            ApplyAsync(OrderEvents.Placed(order, _customer, At)),
-            ApplyAsync(OrderEvents.Authorised(order, At.AddSeconds(5))),
-            ApplyAsync(OrderEvents.Dispatched(order, At.AddDays(1)))
+            RetriedOnDeadlockAsync(() => ApplyAsync(OrderEvents.Placed(order, _customer, At))),
+            RetriedOnDeadlockAsync(() => ApplyAsync(OrderEvents.Authorised(order, At.AddSeconds(5)))),
+            RetriedOnDeadlockAsync(() => ApplyAsync(OrderEvents.Dispatched(order, At.AddDays(1))))
         }));
 
         foreach (Guid order in orders)
@@ -362,6 +364,24 @@ public sealed class OrderProjectionTests(BffServiceFixture fixture) : IAsyncLife
 
         (await fixture.ScalarAsync<int>("SELECT Value = COUNT(*) FROM bff.Products WHERE ProductId = {0}", product))
             .ShouldBe(0, "a line with no name reads productName null (§10.7), which beats a stalled endpoint");
+    }
+
+    /// <summary>SQL Server's deadlock-victim error, which the endpoint's retry absorbs.</summary>
+    private const int DeadlockVictim = 1205;
+
+    private static async Task RetriedOnDeadlockAsync(Func<Task> apply)
+    {
+        for (int attempt = 1; ; attempt++)
+        {
+            try
+            {
+                await apply();
+                return;
+            }
+            catch (SqlException e) when (e.Number == DeadlockVictim && attempt < 5)
+            {
+            }
+        }
     }
 
     /// <summary>Every handler the host registers for <typeparamref name="T"/>, as the consumer runs them.</summary>
