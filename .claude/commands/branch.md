@@ -86,9 +86,11 @@ because one word is already unambiguous; take the second where it is not.
 **A worktree carries committed files and nothing else.** Anything untracked
 that a build needs would have to be copied across — today nothing is, and a
 fresh worktree restores, builds and tests as it stands. Say so if that ever
-stops being true rather than copying quietly. The one untracked file that does
-cross is the code index, which `git-worktree-fork.sh` has the worktree's own
-refresh hook seed from the main checkout's: a query aid, not a build input.
+stops being true rather than copying quietly. Two untracked things do cross,
+and neither is a build input: the code index, which `git-worktree-fork.sh`
+has the worktree's own refresh hook seed from the main checkout's, and the
+main checkout's approval of its MCP servers, the one key the helper copies
+out of `.claude/settings.local.json` (`docs/harness-boundaries.md`).
 
 `.claude/` is tracked, so it comes with it: the commands, the helper scripts
 the review loops invoke by name, and `settings.json` with its allow and deny

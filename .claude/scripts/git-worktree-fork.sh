@@ -52,14 +52,32 @@ git show-ref --verify --quiet refs/remotes/origin/main ||
 # the right one. origin/main is fixed because step 5 forks only from the
 # fetched base.
 git worktree add --no-track -b "$branch" "$path" origin/main
+# python3 stands in where the `py` launcher the hooks name does not exist.
+python=python3
+command -v py >/dev/null 2>&1 && python="py -3.12"
+# A session started in the worktree reads that directory's own untracked local
+# settings, so the main checkout's approval of its `.mcp.json` servers leaves
+# them pending there; the server list is found by walking up, which the path
+# shape above guarantees. Only the approval key crosses, never the file: its
+# `permissions` rows are the main checkout's own grants.
+settings=.claude/settings.local.json
+if [ -f "$settings" ] && [ ! -e "$path/$settings" ]; then
+  if ! $python - "$settings" "$path/$settings" 2>/dev/null <<'PY'; then
+import json, os, sys
+servers = json.load(open(sys.argv[1], encoding="utf-8")).get("enabledMcpjsonServers")
+if isinstance(servers, list) and servers and all(isinstance(s, str) for s in servers):
+    os.makedirs(os.path.dirname(sys.argv[2]), exist_ok=True)
+    with open(sys.argv[2], "w", encoding="utf-8") as out:
+        json.dump({"enabledMcpjsonServers": servers}, out)
+PY
+    echo "warning: $settings is unreadable; the worktree's MCP servers stay unapproved" >&2
+  fi
+fi
 # Seed the new worktree's code index now: /branch enters it mid-session, where
 # no `SessionStart` fires. Its own hook does the work, silenced as its hook
 # entries are, and with no event it takes the working directory; it detaches
-# its own refresh, so the `&` only spares a wait. python3 stands in where the
-# `py` launcher the hooks name does not exist.
+# its own refresh, so the `&` only spares a wait.
 hook=.claude/hooks/refresh-index.py
 if [ -f "$path/$hook" ]; then
-  python=python3
-  command -v py >/dev/null 2>&1 && python="py -3.12"
   (cd "$path" && env -u CLAUDE_PROJECT_DIR $python "$hook") </dev/null >/dev/null 2>&1 &
 fi

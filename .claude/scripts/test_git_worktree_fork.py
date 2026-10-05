@@ -4,6 +4,7 @@ The shared harness and the reason it shells out rather than
 re-implementing are `review_helpers.py`'s.
 """
 
+import json
 import unittest
 
 from review_helpers import (
@@ -50,6 +51,15 @@ class ForkShape(unittest.TestCase):
         return run_bash('cd "$WHERE" && bash "$FORK" "$P" "$B"',
                         WHERE=where, FORK=str(FORK), P=path, B=branch)
 
+    def local_settings(self, root, text):
+        made = run_bash('mkdir -p "$C/.claude" && printf %s "$T" > "$C/.claude/settings.local.json"',
+                        C=f"{root}/checkout", T=text)
+        self.assertEqual(0, made.returncode, made.stderr)
+
+    def probe_settings(self, root):
+        return run_bash('cat "$W/.claude/settings.local.json"',
+                        W=f"{root}/checkout/.claude/worktrees/probe")
+
     def test_the_documented_shape_forks_with_no_upstream(self):
         root = self.fixture()
         result = self.fork(f"{root}/checkout", ".claude/worktrees/probe")
@@ -79,6 +89,36 @@ class ForkShape(unittest.TestCase):
         self.assertTrue(
             ran.stdout.strip().replace("\\", "/").endswith("/.claude/worktrees/probe"),
             ran.stdout)
+
+    def test_the_mcp_approval_crosses_and_no_permission_does(self):
+        # A session started in the worktree reads that directory's local
+        # settings, so the main checkout's approval is carried there alone.
+        root = self.fixture()
+        self.local_settings(root, json.dumps({
+            "enableAllProjectMcpServers": True,
+            "enabledMcpjsonServers": ["codebase-index"],
+            "permissions": {"allow": ["Bash(ls:*)"]}}))
+        result = self.fork(f"{root}/checkout", ".claude/worktrees/probe")
+        self.assertEqual(0, result.returncode, result.stderr)
+        copied = self.probe_settings(root)
+        self.assertEqual(0, copied.returncode, copied.stderr)
+        self.assertEqual({"enabledMcpjsonServers": ["codebase-index"]},
+                         json.loads(copied.stdout))
+
+    def test_a_checkout_approving_nothing_gives_the_worktree_no_settings(self):
+        root = self.fixture()
+        self.local_settings(root, json.dumps({"permissions": {"allow": ["Bash(ls:*)"]}}))
+        result = self.fork(f"{root}/checkout", ".claude/worktrees/probe")
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertNotEqual(0, self.probe_settings(root).returncode)
+
+    def test_an_unreadable_approval_still_forks_and_says_so(self):
+        root = self.fixture()
+        self.local_settings(root, "{not json")
+        result = self.fork(f"{root}/checkout", ".claude/worktrees/probe")
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertIn("MCP servers stay unapproved", result.stderr)
+        self.assertNotEqual(0, self.probe_settings(root).returncode)
 
     def test_any_other_path_is_refused(self):
         root = self.fixture()
