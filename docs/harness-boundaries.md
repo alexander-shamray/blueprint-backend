@@ -160,6 +160,22 @@ checkout with no index is left alone, because unindexed is not stale.
 `git-worktree-fork.sh` runs the new worktree's own hook once, because
 `/branch` enters it mid-session, where no `SessionStart` fires.
 
+**The approval of `.mcp.json`'s servers belongs to a directory, so the fork
+carries it.** A session started in a worktree reads that worktree's own
+`.claude/settings.local.json`, untracked and so absent, and `claude mcp list`
+there reports `codebase-index` pending approval while every plugin server
+connects; one that enters the worktree mid-session keeps the main checkout's
+approval. The same keys in the tracked `.claude/settings.json` were measured
+to leave the server pending, so the local file is the only place they work.
+`git-worktree-fork.sh` writes the worktree a `settings.local.json` holding the
+main checkout's `enabledMcpjsonServers` and nothing else, because the rest of
+that file is the main checkout's own `permissions` rows, and copying it would
+widen every worktree by them. `.mcp.json` is gitignored and not copied: the
+session finds the main checkout's by walking up, which holds because the
+helper forks only under `.claude/worktrees/`. The residual is that the helper
+writes a file the session's `Edit` is denied, and what it writes is one key
+read from a file the session is denied too.
+
 **`SessionStart` runs the same script, for the moves no tool call makes.** A
 merge, a switch or a pull made outside the session rewrites the tree with no
 tool event behind it, so a session opening onto one of those reads an index
