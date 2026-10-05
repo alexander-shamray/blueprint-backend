@@ -15,7 +15,7 @@ public static class CarrierHop
     /// <summary>The bound on one jittered delay, of which <see cref="RetryDelay"/> is only the nominal.</summary>
     public static readonly TimeSpan MaxRetryDelay = TimeSpan.FromSeconds(2);
 
-    /// <summary>Strictly below <c>ServiceOptions.OperationTimeout</c> (§9.7), and each lease sits above it.</summary>
+    /// <summary>Below each worker's lease, the budget §9.7 sizes this hop to.</summary>
     public static readonly TimeSpan TotalRequestTimeout = TimeSpan.FromSeconds(19);
 
     public const double CircuitBreakerFailureRatio = 0.5;
