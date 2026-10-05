@@ -74,7 +74,7 @@ decision looks wrong.
 | **ADR-065** | [Every workload is fenced by a default-deny NetworkPolicy](adr/ADR-065-every-workload-is-fenced-by-a-default-deny-networkpolicy.md) |
 | **ADR-066** | [A request past its host's deadline is answered 504](adr/ADR-066-a-request-past-its-hosts-deadline-is-answered-504.md) |
 | **ADR-067** | [A currency's minor unit is ISO 4217's, held once](adr/ADR-067-a-currencys-minor-unit-is-iso-4217s-held-once.md) |
-| **ADR-068** | [ADR-053's log lifetime and incident procedure are delivered](adr/ADR-068-adr-053s-log-lifetime-and-incident-procedure-are-delivered.md) |
+| **ADR-068** | [The jurisdiction record's log lifetime and incident procedure are delivered](adr/ADR-068-the-jurisdiction-records-log-lifetime-and-incident-procedure-are-delivered.md) |
 | **ADR-069** | [The migration Job is fenced by a hook policy of its own](adr/ADR-069-the-migration-job-is-fenced-by-a-hook-policy-of-its-own.md) |
 | **ADR-070** | [Payments calls its provider inside its consumers](adr/ADR-070-payments-calls-its-provider-inside-its-consumers.md) |
 

@@ -1,4 +1,4 @@
-# ADR-068 — ADR-053's log lifetime and incident procedure are delivered
+# ADR-068 — The jurisdiction record's log lifetime and incident procedure are delivered
 
 **Decision.** Two of the items
 [ADR-053](ADR-053-a-jurisdiction-is-a-value-the-deployment-is-given.md)'s
