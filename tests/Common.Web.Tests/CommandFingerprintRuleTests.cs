@@ -67,6 +67,14 @@ public class CommandFingerprintRuleTests
         public static string OperationName => "probe.ignored";
     }
 
+    public sealed record WithANeverIgnoredProperty(
+        Guid CommandId,
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? Note)
+        : ICommand<Result>, IIdempotentCommand
+    {
+        public static string OperationName => "probe.never-ignored";
+    }
+
     public abstract record Noted
     {
         [JsonIgnore]
@@ -286,6 +294,18 @@ public class CommandFingerprintRuleTests
             .Offenders(typeof(WithAnIgnoredProperty))
             .ShouldHaveSingleItem()
             .ShouldStartWith("WithAnIgnoredProperty.Note is marked [JsonIgnore]");
+    }
+
+    [Fact]
+    public void A_json_ignore_is_refused_even_on_a_condition_the_serialiser_always_writes()
+    {
+        JsonSerializer.Serialize(new WithANeverIgnoredProperty(Guid.NewGuid(), "n")).ShouldContain("Note");
+
+        CommandFingerprintRule
+            .Offenders(typeof(WithANeverIgnoredProperty))
+            .ShouldHaveSingleItem()
+            .ShouldBe(
+                "WithANeverIgnoredProperty.Note is marked [JsonIgnore], refused whatever its condition (ADR-057)");
     }
 
     [Fact]
