@@ -37,9 +37,9 @@ public sealed partial class GrantCheckedTokenCache(
         {
             token = await inner.GetAsync(scope, ct);
         }
-        catch (InvalidOperationException e)
+        catch (InvalidOperationException e) when (e is not ObjectDisposedException)
         {
-            // Every cause is the deployment's to fix, so each counts; HttpRequestException passes uncounted.
+            // Every cause is the deployment's to fix, so each counts; HttpRequestException and shutdown pass uncounted.
             metrics.Refused();
             throw new ContactSourceRefusedException(
                 "The identity provider did not issue this host a usable token (§11.5).", e);
