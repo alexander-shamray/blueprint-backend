@@ -144,6 +144,7 @@ def template_copy(destination: Path) -> Path:
         "deploy/compose/docker-compose.infra-only.yml",
         "deploy/compose/.env.example",
         "deploy/compose/rabbitmq/definitions.json",
+        "deploy/compose/redis/users.conf",
         "src/BuildingBlocks/Common.Web/ObservabilityExtensions.cs",
     ):
         (destination / shared).parent.mkdir(parents=True, exist_ok=True)
@@ -1026,6 +1027,22 @@ class EditsTheSharedFiles(unittest.TestCase):
         self.assertNotIn("Catalog", permission["write"])
         self.assertNotIn("ordering-", permission["write"])
 
+    def test_the_service_gets_the_redis_user_its_unit_names(self):
+        # §8.1's per-service ACL user: the unit's connection strings name it,
+        # and an instance with no such user refuses every command it sends.
+        unit = self.rendered.created[UNIT].replace("\r\n", "\n")
+        self.assertIn('"redis-cache:6379,user=zulu-svc,password=local-dev-zulu"', unit)
+        self.assertIn('"redis-coordination:6379,user=zulu-svc,password=local-dev-zulu"', unit)
+
+        users = self.rendered.updated["deploy/compose/redis/users.conf"].replace("\r\n", "\n")
+        mine = [line for line in users.split("\n") if line.startswith("user zulu-svc ")]
+        self.assertEqual(1, len(mine), "no single zulu-svc user in users.conf")
+        self.assertIn(" >local-dev-zulu ", mine[0])
+        # The key pattern is the host's ApplicationName, which RedisKeys prefixes (§8.3).
+        self.assertIn(" ~Zulu.Api:* ", mine[0])
+        self.assertNotIn("Catalog", mine[0])
+        self.assertEqual(1, sum(line.startswith("user catalog-svc ") for line in users.split("\n")))
+
     def test_both_halves_of_the_pair_join_the_excluded_profile(self):
         # §14.1's own rule: every unit the index includes joins this list in
         # the same change, or `up` on the override starts a service the
@@ -1065,6 +1082,7 @@ class EditsTheSharedFiles(unittest.TestCase):
                 "deploy/compose/docker-compose.infra-only.yml",
                 "deploy/compose/.env.example",
                 "deploy/compose/rabbitmq/definitions.json",
+                "deploy/compose/redis/users.conf",
             ]),
             sorted(written),
         )
@@ -1574,6 +1592,13 @@ class RendersAWorker(unittest.TestCase):
             f"tests/{PROBE}.Worker.Tests/{PROBE}.Worker.Tests.csproj", self.rendered.created)
         for path in self.rendered.created:
             self.assertNotIn(f"{PROBE}.Api", path)
+
+    def test_the_redis_key_pattern_follows_the_host(self):
+        # A worker's ApplicationName is its Worker project, so its keys are prefixed with that (§8.3).
+        users = self.rendered.updated["deploy/compose/redis/users.conf"].replace("\r\n", "\n")
+        mine = [line for line in users.split("\n") if line.startswith("user zulu-svc ")]
+        self.assertEqual(1, len(mine))
+        self.assertIn(f" ~{PROBE}.Worker:* ", mine[0])
 
     def test_the_fixture_and_the_entry_point_follow_the_host(self):
         factory = f"tests/{PROBE}.TestSupport/{PROBE}WorkerFactory.cs"
@@ -2700,9 +2725,9 @@ class TheCommandLine(unittest.TestCase):
             self.assertEqual(0, code)
             self.assertEqual("", err)
             # A count and not a list: a number a test pins fails when it is
-            # wrong. Six and not seven, because this root has no `.github/` and
+            # wrong. Seven and not eight, because this root has no `.github/` and
             # §15.1's allow-list step degrades without it.
-            self.assertIn("71 files created, 6 updated", out)
+            self.assertIn("71 files created, 7 updated", out)
             self.assertIn(f"port {PORT}", out)
             self.assertTrue((root / "src/Services/Zulu/Zulu.Api/Program.cs").exists())
 
@@ -2749,8 +2774,8 @@ class TheCommandLine(unittest.TestCase):
 
             self.assertEqual(0, code)
             self.assertEqual("", err)
-            # Five shared files and not six: no outbox meter line, and no `.github/` here.
-            self.assertIn("53 files created, 5 updated, publishing no port.", out)
+            # Six shared files and not seven: no outbox meter line, and no `.github/` here.
+            self.assertIn("53 files created, 6 updated, publishing no port.", out)
             self.assertFalse((root / "src/Services/Zulu/Zulu.Domain").exists())
 
     def test_fourteen_digits_that_are_not_a_date_refuse_in_one_line(self):

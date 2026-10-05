@@ -47,8 +47,8 @@ services:
       # whole argument, which is the same one twice. §8.5's IdempotencyBehavior is
       # the code that finally reads a key here: PlaceOrderCommand claims one
       # on the coordination instance before the order exists.
-      ConnectionStrings__RedisCache: "redis-cache:6379"
-      ConnectionStrings__RedisCoordination: "redis-coordination:6379"
+      ConnectionStrings__RedisCache: "redis-cache:6379,user=ordering-svc,password=local-dev-ordering"
+      ConnectionStrings__RedisCoordination: "redis-coordination:6379,user=ordering-svc,password=local-dev-ordering"
     ports: [ "127.0.0.1:5101:8080" ]
     depends_on:
       ordering-migrator: { condition: service_completed_successfully }

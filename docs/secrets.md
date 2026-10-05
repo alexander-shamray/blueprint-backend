@@ -374,6 +374,7 @@ to be tidied away:
 | BFF client secret | `${BFF_CLIENT_SECRET:-local-dev-secret}` |
 | Keycloak admin | `admin` / `admin` |
 | RabbitMQ | one `<name>-svc` / `local-dev-<name>` per account in `deploy/compose/rabbitmq/definitions.json` |
+| Redis | one `<name>-svc` / `local-dev-<name>` per service that calls `AddRedisConnections`, in `deploy/compose/redis/users.conf` |
 | Payment provider key | `local-dev-psp` |
 | Carrier key | `local-dev-carrier` |
 | Shipping worker client secret | `${SHIPPING_CLIENT_SECRET:-local-dev-shipping-secret}` |
@@ -396,7 +397,10 @@ than through a running Keycloak. The two never meet, and a reader who has just
 met the realm-check service account should not have to infer that from a
 silence. The provider and carrier keys have no seam because nothing checks
 them: each simulator ignores its key, so a variable would override a value no
-local party compares.
+local party compares. Redis's per-service users have no seam on RabbitMQ's
+argument: both instances read them from `deploy/compose/redis/users.conf`, so
+a variable would front the unit's half while the server still expected the
+file's, and rotating one locally is an edit to that file and the unit.
 
 **The relay has no row, because Compose carries no relay credential at all.**
 Mailpit takes unauthenticated submission and the host allows that in

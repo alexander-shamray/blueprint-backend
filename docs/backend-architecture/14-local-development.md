@@ -73,8 +73,12 @@ services:
   # Two Redis instances, because eviction policy cannot be shared — §8.1.
   redis-cache:
     image: redis:7-alpine
-    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
+    # §8.1's per-service ACL users, as the configuration file both instances
+    # read: each service's user reaches its own prefix only, and the default
+    # user may PING and nothing else.
+    command: redis-server /usr/local/etc/redis/users.conf --maxmemory 256mb --maxmemory-policy allkeys-lru
     ports: [ "127.0.0.1:6379:6379" ]
+    volumes: [ ./redis/users.conf:/usr/local/etc/redis/users.conf:ro ]
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
 
@@ -83,9 +87,9 @@ services:
     # noeviction: locks and idempotency keys must never be evicted. The
     # {service}:denylist: namespace §8.1 reserves beside them has no writer
     # (ADR-033). Appendonly so a restart does not silently release held locks.
-    command: redis-server --appendonly yes --maxmemory 128mb --maxmemory-policy noeviction
+    command: redis-server /usr/local/etc/redis/users.conf --appendonly yes --maxmemory 128mb --maxmemory-policy noeviction
     ports: [ "127.0.0.1:6380:6379" ]
-    volumes: [ redis-coordination-data:/data ]
+    volumes: [ "redis-coordination-data:/data", "./redis/users.conf:/usr/local/etc/redis/users.conf:ro" ]
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -203,8 +207,8 @@ services:
       #
       # 6379 on both — the host-side ports differ (6379/6380), the
       # container-side ports do not.
-      ConnectionStrings__RedisCache: "redis-cache:6379"
-      ConnectionStrings__RedisCoordination: "redis-coordination:6379"
+      ConnectionStrings__RedisCache: "redis-cache:6379,user=ordering-svc,password=local-dev-ordering"
+      ConnectionStrings__RedisCoordination: "redis-coordination:6379,user=ordering-svc,password=local-dev-ordering"
     ports: [ "127.0.0.1:5101:8080" ]
     depends_on:
       ordering-migrator: { condition: service_completed_successfully }
@@ -340,7 +344,7 @@ docker compose -f deploy/compose/docker-compose.yml up -d --wait
 > in the table above are development defaults on purpose, which makes the
 > interface the control standing in front of them — Compose's short syntax
 > with no host-IP prefix publishes on every interface, so `docker compose up`
-> on a café or office network offers `sa`, two passwordless Redis instances,
+> on a café or office network offers `sa`, every service's Redis user,
 > the realm's service accounts and Keycloak's admin console to every peer on
 > it. Every URL in the table is already a `localhost` one, so the prefix takes
 > nothing away from the workflow this chapter documents.
@@ -463,8 +467,8 @@ export ASPNETCORE_ENVIRONMENT=Development
 export ConnectionStrings__Ordering='Server=localhost;Database=Ordering;User Id=sa;Password=Local_Dev_Pa55w0rd!;TrustServerCertificate=True'
 export ConnectionStrings__RabbitMq='amqp://ordering-svc:local-dev-ordering@localhost:5672'
 export Identity__Authority='http://localhost:8080/realms/commerce'
-export ConnectionStrings__RedisCache='localhost:6379'
-export ConnectionStrings__RedisCoordination='localhost:6380'
+export ConnectionStrings__RedisCache='localhost:6379,user=ordering-svc,password=local-dev-ordering'
+export ConnectionStrings__RedisCoordination='localhost:6380,user=ordering-svc,password=local-dev-ordering'
 # Not a key the host throws without, but a bind it fails: Ordering's
 # appsettings.json pins 8080 and 8081 (ADR-052), and 8080 on the host is
 # Keycloak's. deploy/compose/README.md gives Catalog's pair beside these.

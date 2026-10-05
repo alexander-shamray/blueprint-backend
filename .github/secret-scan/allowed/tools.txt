@@ -15,3 +15,4 @@
 # rendered broker account in the suite as well.
 
 tools/new-service/test_new_service.py | credential-assignment | 1c47d06cedb2 | The scaffold suite pinning the per-service broker account it renders into compose.
+tools/new-service/test_new_service.py | connection-string-password | 19b974097990 | The scaffold suite pinning the per-service Redis user it renders into compose.

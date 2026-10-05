@@ -51,6 +51,7 @@ from scaffold.render import (
     COPY_ROOTS,
     MIGRATION_LABELS,
     OBSERVABILITY,
+    REDIS_USERS,
     TEMPLATE_TOKEN,
     compose_unit,
     render_projects,
@@ -60,6 +61,7 @@ from scaffold.render import (
     update_env_example,
     update_infra_only,
     update_observability_meters,
+    update_redis_users,
     update_solution,
 )
 from scaffold.verify import SCAN_REASONS, TOOL_ROOT, update_allowed_secrets
@@ -336,6 +338,7 @@ def plan(repo_root: Path, name: str, port: int | None, migration_id: str,
         "deploy/compose/.env.example": update_env_example(repo_root, names),
         "deploy/compose/rabbitmq/definitions.json":
             update_broker_definitions(repo_root, names),
+        REDIS_USERS: update_redis_users(repo_root, names),
     }
     # The outbox meter's line, which a pure consumer is owed no more than the
     # gauges it would collect (§13.6).

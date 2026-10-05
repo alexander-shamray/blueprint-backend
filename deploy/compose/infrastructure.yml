@@ -18,18 +18,10 @@ services:
       ACCEPT_EULA: "Y"
       MSSQL_SA_PASSWORD: "${SQL_PASSWORD:-Local_Dev_Pa55w0rd!}"
       MSSQL_PID: Developer
-    # Every mapping in the model is published on 127.0.0.1 rather than on
-    # 0.0.0.0 — this file's and every unit's alike — and the argument is made
-    # once here rather than per service or per file. The
-    # credentials below are deliberate development defaults (§14.1), so the
-    # interface is the control standing in front of them: Compose's short
-    # syntax with no host-IP prefix binds every interface, which offers sa,
-    # two passwordless Redis instances, both broker service accounts and
-    # Keycloak's admin console to every peer on a shared network. Docker
-    # Desktop pre-authorises its own backend through the Windows firewall, so
-    # no prompt stands in the way of that either. deploy/compose/README.md
-    # addresses all of it as localhost already, so the prefix takes nothing
-    # from the documented workflow and closes the shared-Wi-Fi case.
+    # Every mapping in the model publishes on 127.0.0.1, this file's and every
+    # unit's alike: the credentials here are development defaults (§14.1), so
+    # the interface is the control in front of them, and a mapping with no
+    # host-IP prefix binds every interface. §14.1's endpoint callout argues it.
     ports: [ "127.0.0.1:1433:1433" ]
     volumes: [ sql-data:/var/opt/mssql ]
     healthcheck:
@@ -42,8 +34,10 @@ services:
   # Two Redis instances, because eviction policy cannot be shared — §8.1.
   redis-cache:
     image: redis:7-alpine
-    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
+    # §8.1's per-service ACL users, as the configuration file both instances read.
+    command: redis-server /usr/local/etc/redis/users.conf --maxmemory 256mb --maxmemory-policy allkeys-lru
     ports: [ "127.0.0.1:6379:6379" ]
+    volumes: [ ./redis/users.conf:/usr/local/etc/redis/users.conf:ro ]
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
 
@@ -52,9 +46,9 @@ services:
     # noeviction: locks and idempotency keys must never be evicted. The
     # {service}:denylist: namespace §8.1 reserves beside them has no writer
     # (ADR-033). Appendonly so a restart does not silently release held locks.
-    command: redis-server --appendonly yes --maxmemory 128mb --maxmemory-policy noeviction
+    command: redis-server /usr/local/etc/redis/users.conf --appendonly yes --maxmemory 128mb --maxmemory-policy noeviction
     ports: [ "127.0.0.1:6380:6379" ]
-    volumes: [ redis-coordination-data:/data ]
+    volumes: [ "redis-coordination-data:/data", "./redis/users.conf:/usr/local/etc/redis/users.conf:ro" ]
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s

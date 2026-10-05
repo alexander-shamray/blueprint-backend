@@ -1207,6 +1207,28 @@ def update_broker_definitions(repo_root: Path, names: Names) -> str:
     return restore(json.dumps(definitions, indent=2) + "\n", newline)
 
 
+REDIS_USERS = f"{COMPOSE_DIR}/redis/users.conf"
+
+
+def update_redis_users(repo_root: Path, names: Names) -> str:
+    """The template's §8.1 Redis user renamed, which the rendered unit's connection strings name."""
+    text, newline = read(repo_root, REDIS_USERS)
+    lines = text.split("\n")
+
+    user = f"user {names.lower}-svc "
+    if any(line.startswith(user) for line in lines):
+        raise ScaffoldError(f"{REDIS_USERS}: a Redis user named {names.lower}-svc already exists")
+
+    # Renamed whole, so the key pattern follows the host's ApplicationName (§8.3).
+    template = [line for line in lines if line.startswith(f"user {TEMPLATE.lower()}-svc ")]
+    if len(template) != 1:
+        raise ScaffoldError(
+            f"{REDIS_USERS}: expected exactly one {TEMPLATE.lower()}-svc user to copy, "
+            f"found {len(template)} (§8.1)")
+
+    return restore(text.rstrip("\n") + "\n" + names.rename(template[0]) + "\n", newline)
+
+
 # §13.2's export names meters one by one, so a service's own meter is a line in
 # a building block rather than something its own tree can declare. The line is
 # written here for the reason the broker account is: without it the rendered

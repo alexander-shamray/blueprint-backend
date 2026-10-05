@@ -11,8 +11,8 @@ docker compose -f deploy/compose/docker-compose.yml up -d --wait
 | Service | Host port(s) | Credentials |
 |---|---|---|
 | SQL Server | 1433 | `sa` / `Local_Dev_Pa55w0rd!` — override with `SQL_PASSWORD` |
-| Redis (cache) | 6379 | — |
-| Redis (coordination) | 6380 | — |
+| Redis (cache) | 6379 | `<service>-svc` / `local-dev-<service>` per service, in `redis/users.conf` (§8.1) |
+| Redis (coordination) | 6380 | the same users |
 | RabbitMQ | 5672, management http://localhost:15672 | **no login ships** — see below |
 | Keycloak | http://localhost:8080 | admin/admin |
 | OTel collector | 4317 (OTLP gRPC), 4318 (OTLP HTTP) | — |
@@ -226,8 +226,8 @@ export ASPNETCORE_ENVIRONMENT=Development
 export ConnectionStrings__Catalog='Server=localhost;Database=Catalog;User Id=sa;Password=Local_Dev_Pa55w0rd!;TrustServerCertificate=True'
 export ConnectionStrings__RabbitMq='amqp://catalog-svc:local-dev-catalog@localhost:5672'
 export Identity__Authority='http://localhost:8080/realms/commerce'
-export ConnectionStrings__RedisCache='localhost:6379'
-export ConnectionStrings__RedisCoordination='localhost:6380'
+export ConnectionStrings__RedisCache='localhost:6379,user=catalog-svc,password=local-dev-catalog'
+export ConnectionStrings__RedisCoordination='localhost:6380,user=catalog-svc,password=local-dev-catalog'
 # Catalog and Ordering each pin their own ports, and on the host both have to
 # move. Each declares two Kestrel endpoints — 8080 for REST and a second for
 # its gRPC surface, because a cleartext port cannot serve HTTP/1.1 and h2c at
@@ -258,8 +258,8 @@ export ASPNETCORE_ENVIRONMENT=Development
 export ConnectionStrings__Ordering='Server=localhost;Database=Ordering;User Id=sa;Password=Local_Dev_Pa55w0rd!;TrustServerCertificate=True'
 export ConnectionStrings__RabbitMq='amqp://ordering-svc:local-dev-ordering@localhost:5672'
 export Identity__Authority='http://localhost:8080/realms/commerce'
-export ConnectionStrings__RedisCache='localhost:6379'
-export ConnectionStrings__RedisCoordination='localhost:6380'
+export ConnectionStrings__RedisCache='localhost:6379,user=ordering-svc,password=local-dev-ordering'
+export ConnectionStrings__RedisCoordination='localhost:6380,user=ordering-svc,password=local-dev-ordering'
 # The same two exports Catalog needs, for the same reason and at its own
 # numbers: 5101 is the port §14.1 already allocates this service, and 8082
 # rather than 8081 because 8081 is where the block above puts Catalog's h2c
