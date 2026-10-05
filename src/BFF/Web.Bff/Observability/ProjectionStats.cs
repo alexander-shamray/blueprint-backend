@@ -1,6 +1,7 @@
 using System.Data;
 using Common.Application;
 using Dapper;
+using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Caching.Memory;
 
 namespace Web.Bff.Observability;
@@ -15,6 +16,9 @@ internal sealed class ProjectionStats(IDbConnectionFactory connections, TimeProv
 
     /// <summary>Bounded, since a wait inside a gauge callback stalls every other callback in the pass.</summary>
     private const int CommandTimeoutSeconds = 2;
+
+    /// <summary>The open bounded too: SqlClient's default would stall the pass while SQL is unreachable.</summary>
+    private const int ConnectTimeoutSeconds = 2;
 
     /// <summary>Over the filtered index <c>IndexUnattributedOrders</c> adds, so it reads unowned rows alone.</summary>
     private const string OldestSql =
@@ -32,6 +36,9 @@ internal sealed class ProjectionStats(IDbConnectionFactory connections, TimeProv
         {
             entry.AbsoluteExpirationRelativeToNow = CacheFor;
             using IDbConnection connection = connections.Create();
+            connection.ConnectionString =
+                new SqlConnectionStringBuilder(connection.ConnectionString) { ConnectTimeout = ConnectTimeoutSeconds }
+                    .ConnectionString;
 
             DateTimeOffset? oldest = connection.ExecuteScalar<DateTimeOffset?>(
                 new CommandDefinition(OldestSql, commandTimeout: CommandTimeoutSeconds));
