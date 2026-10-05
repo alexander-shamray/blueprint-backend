@@ -59,7 +59,12 @@ sequenceDiagram
 **Services re-validate the token.** The gateway validating it is not sufficient:
 anything that reaches a service by another path — a misconfigured network
 policy, another service, a port-forward — would otherwise be unauthenticated.
-Validation is cheap; assume the network is hostile.
+Validation is cheap; assume the network is hostile. Between the listeners,
+[§15.3](15-cicd-deployment.md)'s default-deny `NetworkPolicy` narrows who can
+reach a service at all
+([ADR-065](adr/ADR-065-every-workload-is-fenced-by-a-default-deny-networkpolicy.md)),
+where the cluster enforces one; it narrows the path and replaces no check at
+either end of it.
 
 > **No refresh token reaches the browser, and the diagram used to say it did.**
 > Everything `W` is issued is readable by any script on the origin, so a

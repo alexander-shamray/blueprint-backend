@@ -27,7 +27,27 @@ TAG="0000000000000000000000000000000000000000"
 # negative test below supplies it too, so a test asserting "no tag is refused"
 # fails on the tag and not on something else.
 CIDR='{10.42.0.0/16}'
-GATEWAY_OVERLAY="--set ingress.trustedNetworks=$CIDR"
+
+# The NetworkPolicy peers a deployment states for what runs outside the
+# namespace (ADR-065), on the same terms: one CIDR per destination, each
+# distinct, so a case below can tell which destination a rendered rule names.
+NETPOL_PEERS="
+database=10.91.0.0/16
+redis=10.92.0.0/16
+broker=10.93.0.0/16
+identity=10.94.0.0/16
+carrier=10.95.0.0/16
+mail=10.96.0.0/16
+paymentProvider=10.97.0.0/16
+"
+NETPOL_OVERLAY=''
+for pair in $NETPOL_PEERS; do
+    NETPOL_OVERLAY="$NETPOL_OVERLAY --set networkPolicy.${pair%%=*}.to[0].ipBlock.cidr=${pair#*=}"
+done
+INGRESS_CONTROLLER_CIDR=10.98.0.0/16
+NETPOL_OVERLAY="$NETPOL_OVERLAY --set networkPolicy.ingressController.from[0].ipBlock.cidr=$INGRESS_CONTROLLER_CIDR"
+
+GATEWAY_OVERLAY="--set ingress.trustedNetworks=$CIDR $NETPOL_OVERLAY"
 PLATFORM_OVERLAY="--set gateway.ingress.trustedNetworks=$CIDR"
 
 # Every case below is a deployable's descriptor's (deploy/canary/README.md),
@@ -65,6 +85,9 @@ for chart in $SERVICE_CHARTS; do
     PLATFORM_SETS="$PLATFORM_SETS --set-string $chart.image.tag=$TAG"
     for pair in $(field "$chart" overlay); do
         PLATFORM_SETS="$PLATFORM_SETS --set-string $chart.$pair"
+    done
+    for setting in $NETPOL_OVERLAY; do
+        [ "$setting" = --set ] || PLATFORM_SETS="$PLATFORM_SETS --set $chart.$setting"
     done
 done
 
@@ -139,7 +162,7 @@ refuses_foreign() {
     # than beside `refuses`, which sits below its first caller.
     local chart="$1" label="$2" needle="$3"
     shift 3
-    if "$HELM" template "$chart" "$CHARTS_DIR/$chart" --set-string "image.tag=$TAG" \
+    if "$HELM" template "$chart" "$CHARTS_DIR/$chart" $NETPOL_OVERLAY --set-string "image.tag=$TAG" \
         $GATEWAY_OVERLAY $(overlay_for "$chart") "$@" >"$OUT/foreign-$chart.txt" 2>&1; then
         fail "$label — it rendered instead"
     else
@@ -155,7 +178,7 @@ refuses_chart() {
     # refuses_chart <chart> <label> <needle> <helm args...>
     local chart="$1" label="$2" needle="$3"
     shift 3
-    if "$HELM" template "$chart" "$CHARTS_DIR/$chart" --set-string "image.tag=$TAG" \
+    if "$HELM" template "$chart" "$CHARTS_DIR/$chart" $NETPOL_OVERLAY --set-string "image.tag=$TAG" \
         $(overlay_for "$chart") "$@" >"$OUT/cap.txt" 2>&1; then
         fail "$label — it rendered instead"
     else
@@ -169,7 +192,7 @@ refuses_chart() {
 refuses_removed() {
     # refuses_removed <chart> <key> <needle>
     local chart="$1" key="$2" needle="$3"
-    if "$HELM" template "$chart" "$CHARTS_DIR/$chart" --set-string "image.tag=$TAG" \
+    if "$HELM" template "$chart" "$CHARTS_DIR/$chart" $NETPOL_OVERLAY --set-string "image.tag=$TAG" \
         $(field "$chart" overlay | awk -v k="$key=" 'index($0, k) != 1' | sed 's/^/--set-string /' | tr '\n' ' ') \
         --set "$key=null" >"$OUT/removed.txt" 2>&1; then
         fail "$chart: $key removed outright renders — it must not"
@@ -444,7 +467,7 @@ fi
 section 'helm lint'
 # --------------------------------------------------------------------------
 for chart in $SERVICE_CHARTS platform; do
-    check "$chart lints" "$HELM" lint "$CHARTS_DIR/$chart" --set-string "image.tag=$TAG" \
+    check "$chart lints" "$HELM" lint "$CHARTS_DIR/$chart" $NETPOL_OVERLAY --set-string "image.tag=$TAG" \
         $PLATFORM_SETS $GATEWAY_OVERLAY $(overlay_for "$chart") $PLATFORM_OVERLAY
 done
 
@@ -456,7 +479,7 @@ section 'A deploy that cannot name its tag fails (§15.3)'
 # the one tag §15.3 forbids by name. This is the assertion that the empty
 # default is a refusal rather than a hole.
 for chart in $SERVICE_CHARTS; do
-    if "$HELM" template "$chart" "$CHARTS_DIR/$chart" $GATEWAY_OVERLAY $(overlay_for "$chart") \
+    if "$HELM" template "$chart" "$CHARTS_DIR/$chart" $NETPOL_OVERLAY $GATEWAY_OVERLAY $(overlay_for "$chart") \
         >"$OUT/untagged-$chart.txt" 2>&1; then
         fail "$chart renders WITHOUT a tag — it must not"
     elif grep -q 'image.tag is required' "$OUT/untagged-$chart.txt"; then
@@ -470,12 +493,131 @@ done
 section 'Rendering'
 # --------------------------------------------------------------------------
 for chart in $SERVICE_CHARTS; do
-    "$HELM" template "$chart" "$CHARTS_DIR/$chart" --set-string "image.tag=$TAG" \
+    "$HELM" template "$chart" "$CHARTS_DIR/$chart" $NETPOL_OVERLAY --set-string "image.tag=$TAG" \
         $GATEWAY_OVERLAY $(overlay_for "$chart") >"$OUT/$chart.yaml"
     pass "$chart renders"
 done
 "$HELM" template platform "$CHARTS_DIR/platform" $PLATFORM_SETS $PLATFORM_OVERLAY >"$OUT/platform.yaml"
 pass 'platform renders'
+
+# --------------------------------------------------------------------------
+section 'Every workload is fenced by a default-deny NetworkPolicy (ADR-065)'
+# --------------------------------------------------------------------------
+# The policy document alone, from its kind line to the end of its document, so
+# a CIDR or a port elsewhere in the render cannot satisfy a case below.
+policy_of() {
+    awk '/^kind: NetworkPolicy$/ { p = 1 } /^---$/ { p = 0 } p' "$1"
+}
+workload_of() {
+    awk '/^workload:/ { w = 1; next } /^[a-z]/ { w = 0 } w && /^  name:/ { print $2; exit }' \
+        "$CHARTS_DIR/$1/values.yaml"
+}
+cidr_of() { printf '%s\n' $NETPOL_PEERS | sed -n "s/^$1=//p"; }
+
+for chart in $SERVICE_CHARTS; do
+    policy_of "$OUT/$chart.yaml" >"$OUT/$chart.policy.yaml"
+    check "$chart renders exactly one NetworkPolicy" \
+        test "$(count '^kind: NetworkPolicy$' "$OUT/$chart.yaml")" -eq 1
+    check "$chart's policy isolates its pods in both directions" \
+        grep -qE '^  policyTypes: \[Ingress, Egress\]$' "$OUT/$chart.policy.yaml"
+    check "$chart's policy selects its own workload's stable pods" \
+        sh -c 'grep -q "^      app.kubernetes.io/name: $1$" "$2" &&
+               grep -q "^      app.kubernetes.io/track: stable$" "$2"' _ "$(workload_of "$chart")" "$OUT/$chart.policy.yaml"
+    check "$chart's policy lets its pods resolve names" \
+        grep -q 'port: 53$' "$OUT/$chart.policy.yaml"
+    # Every host validates tokens against the identity provider (§11.2), so
+    # every one reaches it, whether or not it holds a grant of its own.
+    check "$chart's policy reaches the identity provider" \
+        grep -q "cidr: $(cidr_of identity)$" "$OUT/$chart.policy.yaml"
+    # Egress follows the values: a destination's peers appear exactly when the
+    # chart declares the capability that dials it.
+    for cap in database redis broker carrier mail paymentProvider; do
+        if declares "$chart" "$cap"; then
+            check "$chart declares $cap, so its policy reaches $cap's peers" \
+                grep -q "cidr: $(cidr_of "$cap")$" "$OUT/$chart.policy.yaml"
+        else
+            check "$chart declares no $cap, so its policy has no egress to $cap's peers" \
+                test "$(count "cidr: $(cidr_of "$cap")$" "$OUT/$chart.policy.yaml")" -eq 0
+        fi
+    done
+    # A worker has no Service, so nothing may open a connection to it; the
+    # kubelet's probes come from the node, which a policy never blocks.
+    if grep -qE '^  enabled: false$' <(awk '/^service:/ { s = 1; next } /^[a-z]/ { s = 0 } s' "$CHARTS_DIR/$chart/values.yaml"); then
+        check "$chart has no Service, so its policy admits no ingress at all" \
+            grep -qE '^  ingress: \[\]$' "$OUT/$chart.policy.yaml"
+    fi
+done
+
+check 'only the gateway admits the ingress controller' \
+    test "$(cat "$OUT"/*.policy.yaml | count "cidr: $INGRESS_CONTROLLER_CIDR$" /dev/stdin)" -eq 1
+check 'the gateway admits the ingress controller' \
+    grep -q "cidr: $INGRESS_CONTROLLER_CIDR$" "$OUT/gateway.policy.yaml"
+
+# The route file is the gateway's list of upstreams (§10.2), so its policy is
+# held to it rather than to a second list: each cluster address must be an
+# egress peer, or the route answers 502 wherever the policy is enforced.
+upstreams="$(grep -oE '"Address": "http://[a-z-]+:' "$ROOT/src/Gateway/Gateway.Api/appsettings.json" |
+    sed -E 's|.*//([a-z-]+):|\1|' | sort -u)"
+check 'the gateway route file names its upstreams' test -n "$upstreams"
+for upstream in $upstreams; do
+    check "the gateway's policy reaches its upstream $upstream" \
+        grep -q "app.kubernetes.io/name: $upstream$" "$OUT/gateway.policy.yaml"
+done
+
+# An edge inside the namespace is two rules, one at each end, and a policy is
+# enforced at both: each egress to a workload must meet that workload's ingress
+# from this one on the same port, or the call is refused wherever it is enforced.
+edges_of() {
+    # edges_of <policy> -> "workload port" per in-namespace egress peer
+    awk '/^  egress:/ { e = 1 } e && /app.kubernetes.io\/name: / { w = $2 }
+         e && w && /- port: / { print w, $3; w = "" }' "$1"
+}
+admits() {
+    # admits <policy> <workload> <port> -> exit 0 when an ingress rule admits it
+    awk -v w="$2" -v p="$3" '/^  ingress:/ { i = 1 } /^  egress:/ { i = 0 }
+         i && /- from:/ { want = 0 } i && $0 ~ ("app.kubernetes.io/name: " w "$") { want = 1 }
+         i && want && $0 ~ ("- port: " p "$") { found = 1 }
+         END { exit found ? 0 : 1 }' "$1"
+}
+chart_of() { for c in $SERVICE_CHARTS; do [ "$(workload_of "$c")" = "$1" ] && echo "$c"; done; }
+edges=0
+for chart in $SERVICE_CHARTS; do
+    while read -r peer port; do
+        [ -n "$peer" ] || continue
+        edges=$((edges + 1))
+        check "$chart's egress to $peer on $port meets $peer's ingress from $(workload_of "$chart")" \
+            admits "$OUT/$(chart_of "$peer").policy.yaml" "$(workload_of "$chart")" "$port"
+    done < <(edges_of "$OUT/$chart.policy.yaml")
+done
+check 'the in-namespace edges were read from the renders' test "$edges" -gt 0
+
+# The canary is fenced exactly as the stable track is, or the rollout judges a
+# differently fenced workload (ADR-022): its own object, its own pods, the
+# same rules.
+for chart in $SERVICE_CHARTS; do
+    "$HELM" template "$chart" "$CHARTS_DIR/$chart" $NETPOL_OVERLAY --set-string "image.tag=$TAG" \
+        $GATEWAY_OVERLAY $(overlay_for "$chart") --set canary.enabled=true \
+        --set autoscaling.enabled=false >"$OUT/$chart.canary.yaml"
+    policy_of "$OUT/$chart.canary.yaml" >"$OUT/$chart.canary-policy.yaml"
+    check "$chart's canary release renders its own NetworkPolicy" \
+        grep -q "^  name: $(workload_of "$chart")-canary$" "$OUT/$chart.canary-policy.yaml"
+    check "$chart's canary policy selects the canary track" \
+        grep -q '^      app.kubernetes.io/track: canary$' "$OUT/$chart.canary-policy.yaml"
+    check "$chart's canary policy carries the stable policy's rules" \
+        cmp -s <(sed -n '/^  policyTypes:/,$p' "$OUT/$chart.policy.yaml") \
+               <(sed -n '/^  policyTypes:/,$p' "$OUT/$chart.canary-policy.yaml")
+done
+
+# A capability that is on with no peer stated is refused: a rule with no peer
+# admits every destination on its port, which is the opposite of a fence.
+refuses_chart notifications 'notifications: mail with no relay peer stated fails the render' \
+    'networkPolicy.mail.to is required' --set networkPolicy.mail.to=null
+refuses_chart ordering 'ordering: a database with no peer stated fails the render' \
+    'networkPolicy.database.to is required' --set networkPolicy.database.to=null
+refuses_chart ordering 'ordering: a broker peer of every address fails the render' \
+    'admits every address' --set 'networkPolicy.broker.to[0].ipBlock.cidr=0.0.0.0/0'
+refuses_chart gateway 'gateway: an Ingress with no controller peer stated fails the render' \
+    'networkPolicy.ingressController.from is required' --set networkPolicy.ingressController.from=null
 
 # --------------------------------------------------------------------------
 section 'paymentProvider is a capability, and its address is required'
@@ -484,7 +626,7 @@ section 'paymentProvider is a capability, and its address is required'
 # renders cleanly is a pod that will not start. Asserted in both directions:
 # supplied, the two keys land in the right Kind; absent or contradicted, the
 # render is refused rather than deferred to the cluster.
-PAYMENTS_RENDER=$("$HELM" template payments "$CHARTS_DIR/payments" \
+PAYMENTS_RENDER=$("$HELM" template payments "$CHARTS_DIR/payments" $NETPOL_OVERLAY \
     --set-string image.tag="$TAG" \
     --set-string paymentProvider.baseUrl=https://psp.example.invalid/)
 printf '%s\n' "$PAYMENTS_RENDER" >"$OUT/payments-capability.yaml"
@@ -508,15 +650,15 @@ check 'payments: no ConfigMap carries PaymentProvider__ApiKey' \
          /^---$/ { in_cm = 0 }
          in_cm && /PaymentProvider__ApiKey/ { found = 1 }
          END { exit found ? 1 : 0 }' "$OUT/payments-capability.yaml"
-if "$HELM" template payments "$CHARTS_DIR/payments" --set-string image.tag="$TAG" >/dev/null 2>&1; then
+if "$HELM" template payments "$CHARTS_DIR/payments" $NETPOL_OVERLAY --set-string image.tag="$TAG" >/dev/null 2>&1; then
     fail 'payments: rendered with no paymentProvider.baseUrl; a deploy that forgot it must fail here, not at start'
 fi
-if "$HELM" template payments "$CHARTS_DIR/payments" --set-string image.tag="$TAG" \
+if "$HELM" template payments "$CHARTS_DIR/payments" $NETPOL_OVERLAY --set-string image.tag="$TAG" \
     --set paymentProvider.enabled=false --set paymentProvider.apiKeySecretRef=null \
     --set-string paymentProvider.baseUrl=https://psp.example.invalid/ >/dev/null 2>&1; then
     fail 'payments: rendered an address with the capability off; a setting nothing reads must be refused'
 fi
-if "$HELM" template payments "$CHARTS_DIR/payments" --set-string image.tag="$TAG" \
+if "$HELM" template payments "$CHARTS_DIR/payments" $NETPOL_OVERLAY --set-string image.tag="$TAG" \
     --set paymentProvider.enabled=false --set paymentProvider.apiKeySecretRef=null \
     --set-string paymentProvider.baseUrl= >/dev/null 2>&1; then
     fail 'payments: rendered with the capability off and cleared; the host registers it unconditionally'
@@ -531,7 +673,7 @@ section "Shipping's chart declares its capabilities, and each is required"
 # placement and not by presence: §15.4 puts the credential in a Secret and the
 # addresses, the windows and the give-up age in Config, and a global grep
 # proves neither.
-SHIPPING_RENDER=$("$HELM" template shipping "$CHARTS_DIR/shipping" \
+SHIPPING_RENDER=$("$HELM" template shipping "$CHARTS_DIR/shipping" $NETPOL_OVERLAY \
     --set-string image.tag="$TAG" $(overlay_for shipping))
 printf '%s\n' "$SHIPPING_RENDER" >"$OUT/shipping-capability.yaml"
 
@@ -626,7 +768,7 @@ refuses_chart shipping 'the give-up age off and cleared fails the render' \
     'fulfilment.enabled is false on the shipping chart' \
     --set fulfilment.enabled=false --set-string 'fulfilment.giveUpAge='
 check 'a retention window in days-and-time form still renders' \
-    "$HELM" template shipping "$CHARTS_DIR/shipping" --set-string "image.tag=$TAG" \
+    "$HELM" template shipping "$CHARTS_DIR/shipping" $NETPOL_OVERLAY --set-string "image.tag=$TAG" \
     $(overlay_for shipping) --set-string 'jurisdiction.addressRetention=1.12:30'
 
 # --------------------------------------------------------------------------
@@ -636,7 +778,7 @@ section "Notifications' chart declares its capabilities, and each is required"
 # that renders cleanly here is a pod that never starts. Asserted by placement:
 # §15.4 puts the relay's password in a Secret and every other key in Config.
 N="$OUT/notifications-capability.yaml"
-"$HELM" template notifications "$CHARTS_DIR/notifications" \
+"$HELM" template notifications "$CHARTS_DIR/notifications" $NETPOL_OVERLAY \
     --set-string image.tag="$TAG" $(overlay_for notifications) >"$N"
 
 check 'notifications: the relay host is in the ConfigMap' in_configmap "$N" '^ *Mail__Host: "relay[.]example[.]invalid"$'
@@ -667,18 +809,18 @@ check "notifications: the token is asked for under ADR-052's roles scope" \
 check 'notifications: three languages render three indexed keys, in order' \
     sh -c '"$0" template notifications "$1" --set-string "image.tag=$2" $3 \
         --set-string "jurisdiction.languages={en,kk,ru}" | grep -q "Jurisdiction__Languages__2: \"ru\""' \
-    "$HELM" "$CHARTS_DIR/notifications" "$TAG" "$(overlay_for notifications)"
+    "$HELM" "$CHARTS_DIR/notifications" "$TAG" "$(overlay_for notifications) $NETPOL_OVERLAY"
 check 'notifications: a sender with a display name renders' \
-    "$HELM" template notifications "$CHARTS_DIR/notifications" --set-string "image.tag=$TAG" \
+    "$HELM" template notifications "$CHARTS_DIR/notifications" $NETPOL_OVERLAY --set-string "image.tag=$TAG" \
     $(overlay_for notifications) --set-string 'mail.from=Commerce <no-reply@commerce.example.invalid>'
 check 'notifications: a quoted display name holding a comma renders' \
-    "$HELM" template notifications "$CHARTS_DIR/notifications" --set-string "image.tag=$TAG" \
+    "$HELM" template notifications "$CHARTS_DIR/notifications" $NETPOL_OVERLAY --set-string "image.tag=$TAG" \
     $(overlay_for notifications) --set-string 'mail.from="Commerce\, Inc." <no-reply@commerce.example.invalid>'
 check 'notifications: a display name with an escaped quote renders' \
-    "$HELM" template notifications "$CHARTS_DIR/notifications" --set-string "image.tag=$TAG" \
+    "$HELM" template notifications "$CHARTS_DIR/notifications" $NETPOL_OVERLAY --set-string "image.tag=$TAG" \
     $(overlay_for notifications) --set-string 'mail.from="Commerce \\"Shop\\"" <no-reply@commerce.example.invalid>'
 check 'notifications: a display name quoted after a word renders' \
-    "$HELM" template notifications "$CHARTS_DIR/notifications" --set-string "image.tag=$TAG" \
+    "$HELM" template notifications "$CHARTS_DIR/notifications" $NETPOL_OVERLAY --set-string "image.tag=$TAG" \
     $(overlay_for notifications) --set-string 'mail.from=Commerce "Shop\, Ltd" <no-reply@commerce.example.invalid>'
 
 refuses_chart notifications 'a cleared relay host fails the render' \
@@ -1078,7 +1220,7 @@ for chart in $SERVICE_CHARTS; do
     for cap in $CREDENTIAL_CAPABILITIES; do
         if owns "$chart" "$cap"; then
             check "$cap renders on $chart, whose descriptor declares it" \
-                "$HELM" template "$chart" "$CHARTS_DIR/$chart" --set-string "image.tag=$TAG" \
+                "$HELM" template "$chart" "$CHARTS_DIR/$chart" $NETPOL_OVERLAY --set-string "image.tag=$TAG" \
                 $GATEWAY_OVERLAY $(overlay_for "$chart") $(enable_args "$cap")
         else
             refuses_foreign "$chart" "$cap is refused on $chart, whose descriptor does not declare it" \
@@ -1124,7 +1266,7 @@ check 'every mounted ConfigMap exists in the render' \
 # `cors.origins` rewrites a mounted ConfigMap and leaves the pod template
 # byte-identical — a deploy that reports success and changes nothing.
 gateway_checksum() {
-    "$HELM" template gateway "$CHARTS_DIR/gateway" --set-string "image.tag=$TAG" \
+    "$HELM" template gateway "$CHARTS_DIR/gateway" $NETPOL_OVERLAY --set-string "image.tag=$TAG" \
         $GATEWAY_OVERLAY "$@" |
         awk '/checksum\/values:/ { print $2; exit }'
 }
@@ -1245,7 +1387,7 @@ section 'A value the gateway requires only when another is set'
 # Conditionally required is a real category (§15.4): off is a valid topology,
 # on-but-unconfigured is a silent defect. The gateway's own startup guards
 # catch it, and catching it at render says which chart value is missing.
-if "$HELM" template gateway "$CHARTS_DIR/gateway" --set-string "image.tag=$TAG" \
+if "$HELM" template gateway "$CHARTS_DIR/gateway" $NETPOL_OVERLAY --set-string "image.tag=$TAG" \
     --set 'ingress.trustedNetworks=null' >"$OUT/untrusted.txt" 2>&1; then
     fail 'ingress.enabled with no trustedNetworks renders — it must not'
 else
@@ -1253,7 +1395,7 @@ else
         grep -q 'ingress.trustedNetworks must hold at least one CIDR' "$OUT/untrusted.txt"
 fi
 
-if "$HELM" template gateway "$CHARTS_DIR/gateway" --set-string "image.tag=$TAG" \
+if "$HELM" template gateway "$CHARTS_DIR/gateway" $NETPOL_OVERLAY --set-string "image.tag=$TAG" \
     $GATEWAY_OVERLAY --set cors.enabled=true >"$OUT/uncorsed.txt" 2>&1; then
     fail 'cors.enabled with no origins renders — it must not'
 else
@@ -1268,7 +1410,7 @@ refuses() {
     # refuses <label> <needle> <helm args...>
     local label="$1" needle="$2"
     shift 2
-    if "$HELM" template gateway "$CHARTS_DIR/gateway" --set-string "image.tag=$TAG" \
+    if "$HELM" template gateway "$CHARTS_DIR/gateway" $NETPOL_OVERLAY --set-string "image.tag=$TAG" \
         "$@" >"$OUT/blank.txt" 2>&1; then
         fail "$label — it rendered instead"
     else
@@ -1356,7 +1498,7 @@ done
 refuses_payments() {
     local label="$1" needle="$2"
     shift 2
-    if "$HELM" template payments "$CHARTS_DIR/payments" --set-string "image.tag=$TAG" \
+    if "$HELM" template payments "$CHARTS_DIR/payments" $NETPOL_OVERLAY --set-string "image.tag=$TAG" \
         "$@" >"$OUT/payments-bad-url.txt" 2>&1; then
         fail "$label — it rendered instead"
     else
@@ -1386,7 +1528,7 @@ done
 for good in 'https://psp.example.invalid/' 'https://psp.example.invalid:8443/v1/' \
     'https://psp.example.invalid'; do
     check "a provider address of '$good' renders" \
-        "$HELM" template payments "$CHARTS_DIR/payments" --set-string "image.tag=$TAG" \
+        "$HELM" template payments "$CHARTS_DIR/payments" $NETPOL_OVERLAY --set-string "image.tag=$TAG" \
         --set-string "paymentProvider.baseUrl=$good"
 done
 
@@ -1405,7 +1547,7 @@ refuses 'an origin with a leading-zero port fails the render' 'non-canonically' 
 refuses 'a wildcard origin fails the render' 'is not a browser origin' \
     $GATEWAY_OVERLAY --set cors.enabled=true --set 'cors.origins={https://*.example.com}'
 check 'an origin with an underscore in its host renders' \
-    "$HELM" template gateway "$CHARTS_DIR/gateway" --set-string "image.tag=$TAG" \
+    "$HELM" template gateway "$CHARTS_DIR/gateway" $NETPOL_OVERLAY --set-string "image.tag=$TAG" \
     $GATEWAY_OVERLAY --set cors.enabled=true --set 'cors.origins={https://shop_1.example.com}'
 
 refuses_chart catalog 'disabling a database the chart is configured for fails the render' \
@@ -1432,7 +1574,7 @@ refuses_chart catalog 'clearing the migrator image fails the render' \
 # subdomain is dot-separated labels, so the check is per segment and so are
 # these cases.
 for bad in Release_1 release_1 release..1 release.-1 -release release-; do
-    if "$HELM" template catalog "$CHARTS_DIR/catalog" --set-string "image.tag=$bad" \
+    if "$HELM" template catalog "$CHARTS_DIR/catalog" $NETPOL_OVERLAY --set-string "image.tag=$bad" \
         >"$OUT/badtag.txt" 2>&1; then
         fail "image.tag=$bad renders — Kubernetes would refuse the Job it names"
     else
@@ -1446,14 +1588,14 @@ refuses 'the tag-shape message holds on a chart with no migrator' \
 
 for good in 1.2.3 0000000000000000000000000000000000000000 v1-2-3; do
     check "image.tag=$good still renders" \
-        "$HELM" template catalog "$CHARTS_DIR/catalog" --set-string "image.tag=$good"
+        "$HELM" template catalog "$CHARTS_DIR/catalog" $NETPOL_OVERLAY --set-string "image.tag=$good"
 done
 
 # The name budget, which the per-segment check cannot see: a plain `trunc 63`
 # can cut immediately after a dot, and trimming a trailing hyphen never
 # touches a trailing dot.
 long_tag="$(printf 'a%.0s' $(seq 1 42)).b"
-if "$HELM" template catalog "$CHARTS_DIR/catalog" --set-string "image.tag=$long_tag" \
+if "$HELM" template catalog "$CHARTS_DIR/catalog" $NETPOL_OVERLAY --set-string "image.tag=$long_tag" \
     >"$OUT/longtag.txt" 2>&1; then
     fail 'a tag that overruns the Job-name budget renders — it must not'
 else
@@ -1490,7 +1632,7 @@ refuses 'a trusted network with an octal octet fails the render' 'non-canonicall
 # The rendered value has to be the validated one: a guard that checks one
 # string and ships another passes every test above and fails the host's exact
 # text comparison at startup.
-"$HELM" template gateway "$CHARTS_DIR/gateway" --set-string "image.tag=$TAG" \
+"$HELM" template gateway "$CHARTS_DIR/gateway" $NETPOL_OVERLAY --set-string "image.tag=$TAG" \
     $GATEWAY_OVERLAY --set cors.enabled=true \
     --set 'cors.origins={https://shop.example.com }' >"$OUT/spaced.txt" 2>&1 || true
 check 'the rendered origin is the validated one, not the raw value' \
@@ -1501,7 +1643,7 @@ check 'the rendered origin is the validated one, not the raw value' \
 refuses_bff() {
     local label="$1" needle="$2"
     shift 2
-    if "$HELM" template web-bff "$CHARTS_DIR/web-bff" --set-string "image.tag=$TAG" \
+    if "$HELM" template web-bff "$CHARTS_DIR/web-bff" $NETPOL_OVERLAY --set-string "image.tag=$TAG" \
         "$@" >"$OUT/bff.txt" 2>&1; then
         fail "$label — it rendered instead"
     else
@@ -1588,7 +1730,7 @@ section 'The canary track (§15.5, ADR-022)'
 # library, so a chart that failed to pick it up would be a service with no
 # canary and a rollout that promoted it without ever splitting traffic.
 for chart in $SERVICE_CHARTS; do
-    "$HELM" template "$chart-canary" "$CHARTS_DIR/$chart" --set-string "image.tag=$TAG" \
+    "$HELM" template "$chart-canary" "$CHARTS_DIR/$chart" $NETPOL_OVERLAY --set-string "image.tag=$TAG" \
         --set canary.enabled=true --set autoscaling.enabled=false \
         $GATEWAY_OVERLAY $(overlay_for "$chart") >"$OUT/$chart-canary.yaml"
     pass "$chart renders a canary"

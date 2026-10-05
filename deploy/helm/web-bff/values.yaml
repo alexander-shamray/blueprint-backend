@@ -133,3 +133,23 @@ observability:
   otlpEndpoint: http://otel-collector.observability:4317
 
 extraConfigMaps: []
+
+# ADR-065's fence: denied both ways but for the edges named here. A peer inside
+# the namespace is a workload and a port name; what runs outside it is a list
+# of NetworkPolicy peers the deployment states, and an empty one is refused
+# wherever a capability above dials it, since a rule with no peer admits all.
+networkPolicy:
+  ingressFrom:
+    - { workload: gateway, port: http }
+  egressTo:
+    - { workload: catalog-api, port: grpc }
+  dns:
+    to:
+      - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: kube-system } }
+        podSelector: { matchLabels: { k8s-app: kube-dns } }
+  telemetry:
+    to:
+      - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: observability } }
+  identity: { to: [] }
+  database: { port: 1433, to: [] }
+  broker: { port: 5672, to: [] }

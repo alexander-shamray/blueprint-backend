@@ -157,3 +157,25 @@ cors:
 # an overlay renaming the workload mounted one ConfigMap and rendered another.
 extraConfigMaps:
   - edge
+
+# ADR-065's fence: denied both ways but for the edges named here. A peer inside
+# the namespace is a workload and a port name; what runs outside it is a list
+# of NetworkPolicy peers the deployment states, and an empty one is refused
+# wherever a capability above dials it, since a rule with no peer admits all.
+networkPolicy:
+  ingressController: { from: [] }
+  ingressFrom: []
+  egressTo:
+    - { workload: catalog-api, port: http }
+    - { workload: ordering-api, port: http }
+    - { workload: inventory-api, port: http }
+    - { workload: payments-api, port: http }
+    - { workload: web-bff, port: http }
+  dns:
+    to:
+      - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: kube-system } }
+        podSelector: { matchLabels: { k8s-app: kube-dns } }
+  telemetry:
+    to:
+      - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: observability } }
+  identity: { to: [] }

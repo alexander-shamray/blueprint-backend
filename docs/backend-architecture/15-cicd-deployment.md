@@ -649,6 +649,24 @@ broker's queues are declared as and why.
 > recovery point.** See
 > [ADR-064](adr/ADR-064-every-store-is-run-outside-this-repository-to-a-stated-recovery-point.md).
 
+**Every workload is fenced, both ways, on both tracks.** The library chart
+renders a default-deny `NetworkPolicy` for each release's own pods, and each
+chart's `networkPolicy` values name the edges it is allowed: the in-namespace
+peers by workload name and port name, and everything outside the namespace —
+DNS, the OTLP endpoint, the identity provider, the stores, a carrier, a relay,
+a payment provider — as peers the deployment states. A capability that is on
+with no peer stated refuses to render, and so does a peer of every address.
+**It is enforced only where the cluster's network plugin enforces it**, and a
+hostname cannot be a peer in the core API, so a third party is named by the
+address ranges it publishes, or by a plugin's own hostname policy layered on
+top. `deploy/helm/smoke.sh` holds every chart to rendering one, the egress to
+the capabilities its values enable, both ends of every in-namespace edge to
+each other, and the canary's rules to the stable track's.
+
+> **Decision — every workload is fenced by a default-deny NetworkPolicy.** See
+> [ADR-065](adr/ADR-065-every-workload-is-fenced-by-a-default-deny-networkpolicy.md),
+> which holds the table of who may reach whom.
+
 **The templates live once, in a library chart.** `deploy/helm/common` is a
 `type: library` chart every **deployable** chart takes as a `file://`
 dependency, and each one's templates are one-line includes of it. The umbrella
