@@ -209,13 +209,10 @@ notifications:
   reference to a Secret that does not exist is still a pod that never starts —
   which is why they joined with the PR whose code reads them rather than
   earlier, exactly as §14.1's Compose blocks say.
-- **A fence for the migration Job, and a hostname as a peer.** ADR-065's
-  `NetworkPolicy` selects the workload's pods, and the migrator's pods carry
-  labels of their own so that they are never a Service's endpoint, so the Job
-  runs outside the fence and is owed one. A third party is a peer by the
-  address ranges it publishes, because the core API has no hostname peer; a
-  plugin's own hostname policy is the deployment's to layer on top, and none is
-  rendered here. Whether the cluster's network plugin enforces any of it is a
+- **A hostname as a peer.** A third party is a peer by the address ranges it
+  publishes, because the core API has no hostname peer; a plugin's own
+  hostname policy is the deployment's to layer on top, and none is rendered
+  here. Whether the cluster's network plugin enforces any of it is a
   fact about the cluster the render cannot see.
 - **`readOnlyRootFilesystem`.** The right posture, and a decision no chapter
   has taken. Asserting it untested against the chiselled runtime images would

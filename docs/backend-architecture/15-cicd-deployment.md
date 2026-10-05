@@ -661,13 +661,18 @@ gives.
 **It is enforced only where the cluster's network plugin enforces it**, and a
 hostname cannot be a peer in the core API, so a third party is named by the
 address ranges it publishes, or by a plugin's own hostname policy layered on
-top. `deploy/helm/smoke.sh` holds every chart to rendering one, the egress to
+top. The migration Job's pods are fenced by a hook policy of their own,
+rendered ahead of the Job, for the reason ADR-069 gives.
+`deploy/helm/smoke.sh` holds every chart to rendering one, the egress to
 the capabilities its values enable, both ends of every in-namespace edge to
-each other, and the canary's rules to the stable track's.
+each other, the canary's rules to the stable track's, and every migration
+Job's pods to a policy that exists before them.
 
 > **Decision — every workload is fenced by a default-deny NetworkPolicy.** See
 > [ADR-065](adr/ADR-065-every-workload-is-fenced-by-a-default-deny-networkpolicy.md),
-> which holds the table of who may reach whom.
+> which holds the table of who may reach whom, and
+> [ADR-069](adr/ADR-069-the-migration-job-is-fenced-by-a-hook-policy-of-its-own.md),
+> which fences the migration Job.
 
 **The templates live once, in a library chart.** `deploy/helm/common` is a
 `type: library` chart every **deployable** chart takes as a `file://`
