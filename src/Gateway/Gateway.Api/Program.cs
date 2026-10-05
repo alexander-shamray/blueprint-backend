@@ -8,6 +8,8 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.ResponseCompression;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
+if (args is [HealthProbe.Argument]) Environment.Exit(await HealthProbe.RunAsync());   // §14.1's healthcheck
+
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
 builder.Host.UseDefaultServiceProvider(o =>

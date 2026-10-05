@@ -5,6 +5,8 @@ using Payments.Infrastructure;
 using Payments.Infrastructure.Provider;
 using Common.Web;
 
+if (args is [HealthProbe.Argument]) Environment.Exit(await HealthProbe.RunAsync());   // §14.1's healthcheck
+
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
 // Refuse to start on an unsatisfiable dependency or a captured scope, rather than on the first request.
