@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | Alert | `AddressReadRefused`, in `deploy/observability/alerts/platform-alerts.yaml` |
-| Condition | `shipping.address.refused` rising for 5 minutes |
+| Condition | Any `shipping.address.refused` in the last 5 minutes |
 | Signal | `AddressMetrics`, `src/Services/Shipping/Shipping.Infrastructure/Addresses` ([§13.6](../backend-architecture/13-observability.md)) |
 | Owner | The team that owns Shipping ([§13.8](../backend-architecture/13-observability.md)) |
 
