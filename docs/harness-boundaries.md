@@ -168,10 +168,13 @@ connects; one that enters the worktree mid-session keeps the main checkout's
 approval. The same keys in the tracked `.claude/settings.json` were measured
 to leave the server pending, so of the project's two settings files only the
 local one carries them.
-`git-worktree-fork.sh` writes the worktree a `settings.local.json` holding the
-main checkout's `enabledMcpjsonServers` and nothing else, because the rest of
-that file is the main checkout's own `permissions` rows, and copying it would
-widen every worktree by them. `.mcp.json` is gitignored and not copied: the
+`git-worktree-fork.sh` writes the worktree a `settings.local.json` holding
+one key, `enabledMcpjsonServers`, naming the servers the main checkout
+approves, with an `enableAllProjectMcpServers` expanded to the servers
+`.mcp.json` defines at the fork, and nothing else. The rest of that file is
+the main checkout's own `permissions` rows, and copying it would widen every
+worktree by them; the approve-all itself would approve servers defined after
+the fork. `.mcp.json` is gitignored and not copied: the
 session finds the main checkout's by walking up, because the helper forks
 only under `.claude/worktrees/` and the worktree has none of its own. Two
 residuals stand. The helper writes a file the session's `Edit` is denied, and

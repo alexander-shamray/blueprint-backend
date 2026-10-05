@@ -126,18 +126,31 @@ class ForkShape(unittest.TestCase):
         self.assertIn("JSONDecodeError", result.stderr)
         self.assertNotEqual(0, self.probe_settings(root).returncode)
 
-    def test_an_approval_the_helper_cannot_copy_warns(self):
-        # Every server approved at once, or a list naming none, would otherwise
-        # leave the worktree's servers pending with nothing said.
-        for text in (json.dumps({"enableAllProjectMcpServers": True}),
-                     json.dumps({"enabledMcpjsonServers": "codebase-index"})):
-            with self.subTest(text=text):
+    def test_an_approval_list_that_is_not_names_warns(self):
+        # Anything else would leave the worktree's servers pending with
+        # nothing said.
+        root = self.fixture()
+        self.local_settings(root, json.dumps({"enabledMcpjsonServers": "codebase-index"}))
+        result = self.fork(f"{root}/checkout", ".claude/worktrees/probe")
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertIn("could not copy the MCP approval", result.stderr)
+        self.assertNotEqual(0, self.probe_settings(root).returncode)
+
+    def test_approving_every_server_crosses_as_the_servers_defined(self):
+        # Names cross, not the approve-all, so a server defined later still asks.
+        for local in ({"enableAllProjectMcpServers": True},
+                      {"enableAllProjectMcpServers": True, "enabledMcpjsonServers": ["codebase-index"]}):
+            with self.subTest(local=local):
                 root = self.fixture()
-                self.local_settings(root, text)
+                self.checkout_file(root, ".mcp.json", json.dumps(
+                    {"mcpServers": {"codebase-index": {}, "other": {}}}))
+                self.local_settings(root, json.dumps(local))
                 result = self.fork(f"{root}/checkout", ".claude/worktrees/probe")
                 self.assertEqual(0, result.returncode, result.stderr)
-                self.assertIn("could not copy the MCP approval", result.stderr)
-                self.assertNotEqual(0, self.probe_settings(root).returncode)
+                copied = self.probe_settings(root)
+                self.assertEqual(0, copied.returncode, copied.stderr)
+                self.assertEqual({"enabledMcpjsonServers": ["codebase-index", "other"]},
+                                 json.loads(copied.stdout))
 
     def test_a_json_module_at_the_checkout_root_is_not_imported(self):
         # The approval is read by a Python run from the checkout root, whose

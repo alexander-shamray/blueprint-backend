@@ -89,8 +89,8 @@ fresh worktree restores, builds and tests as it stands. Say so if that ever
 stops being true rather than copying quietly. Two untracked things do cross,
 and neither is a build input: the code index, which `git-worktree-fork.sh`
 has the worktree's own refresh hook seed from the main checkout's, and the
-main checkout's approval of its MCP servers, the one key the helper copies
-out of `.claude/settings.local.json` (`docs/harness-boundaries.md`).
+main checkout's approval of its MCP servers, which the helper writes as the
+one key `enabledMcpjsonServers` (`docs/harness-boundaries.md`).
 
 `.claude/` is tracked, so it comes with it: the commands, the helper scripts
 the review loops invoke by name, and `settings.json` with its allow and deny

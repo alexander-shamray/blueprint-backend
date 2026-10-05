@@ -56,23 +56,24 @@ git worktree add --no-track -b "$branch" "$path" origin/main
 python=python3
 command -v py >/dev/null 2>&1 && python="py -3.12"
 # A session started in the worktree reads that directory's own untracked local
-# settings, so the main checkout's approval of its `.mcp.json` servers leaves
-# them pending there; the server list is found by walking up, which the path
-# shape above guarantees. Only the approval key crosses, never the file: its
-# `permissions` rows are the main checkout's own grants.
+# settings, where the main checkout's approval of its `.mcp.json` servers does
+# not reach, so the approval crosses as the names it covers, an approve-all
+# expanded to the servers defined now; never the file, whose `permissions` rows
+# are the main checkout's own grants. Definitions are found by walking up.
 settings=.claude/settings.local.json
 if [ -f "$settings" ] && [ ! -e "$path/$settings" ]; then
   # -I keeps a checkout-root json.py off the import path, as the hooks' -P does.
-  if ! $python -I - "$settings" "$path/$settings" <<'PY'; then
+  if ! $python -I - "$settings" "$path/$settings" .mcp.json <<'PY'; then
 import json, os, sys
 local = json.load(open(sys.argv[1], encoding="utf-8"))
-servers = local.get("enabledMcpjsonServers")
-if servers is None and local.get("enableAllProjectMcpServers"):
-    sys.exit("enableAllProjectMcpServers is not copied; name the servers in enabledMcpjsonServers")
-if servers is None:
-    sys.exit(0)
+servers = local.get("enabledMcpjsonServers", [])
 if not (isinstance(servers, list) and all(isinstance(s, str) for s in servers)):
     sys.exit("enabledMcpjsonServers is not a list of server names")
+if local.get("enableAllProjectMcpServers") is True and os.path.isfile(sys.argv[3]):
+    defined = json.load(open(sys.argv[3], encoding="utf-8")).get("mcpServers")
+    if not isinstance(defined, dict):
+        sys.exit(f"{sys.argv[3]} has no mcpServers object")
+    servers += [name for name in defined if name not in servers]
 if servers:
     os.makedirs(os.path.dirname(sys.argv[2]), exist_ok=True)
     with open(sys.argv[2], "w", encoding="utf-8") as out:
