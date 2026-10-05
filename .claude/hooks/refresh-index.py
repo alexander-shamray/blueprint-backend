@@ -319,7 +319,7 @@ def main() -> int:
     if len(sys.argv) > 2 and sys.argv[1] == "--worker":
         return work(Path(sys.argv[2]))
 
-    # Bytes, decoded here: Windows hands a pipe over in its console code page,
+    # Bytes, decoded here: Python reads a Windows pipe in the ANSI code page,
     # which turns a non-ASCII checkout path into one that does not exist.
     try:
         event = json.loads(sys.stdin.buffer.read().decode("utf-8", "replace") or "{}")

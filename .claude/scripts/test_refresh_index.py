@@ -70,7 +70,7 @@ class _Completed:
 
 class _Stdin:
     """`sys.stdin` for one call as Windows hands it to `py -3.12`: the bytes
-    as sent, and text decoded in the console code page."""
+    as sent, and text decoded in the ANSI code page."""
 
     def __init__(self, body):
         self.buffer = io.BytesIO(body.encode("utf-8"))
@@ -196,7 +196,7 @@ class ChoosingTheCheckout(Base):
         self.assertEqual([session.resolve()], self.worker_roots())
 
     def test_a_checkout_path_outside_ascii_is_the_one_refreshed(self):
-        """Decoded in the console code page, `\u0141\u00f3d\u017a` becomes a
+        """Decoded in the ANSI code page, `\u0141\u00f3d\u017a` becomes a
         directory that does not exist, and no checkout is found at all."""
         session = self.checkout("\u0141\u00f3d\u017a")
 
