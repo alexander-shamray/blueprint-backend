@@ -954,6 +954,12 @@ driven by the file it is judging asserts nothing.
 §15.5's rollout already supports it: the first rung scales the Deployment and
 raises an HPA floor only where there is one.
 
+> **Decision — a worker that waits on a third party is scaled by hand.** See
+> [ADR-063](adr/ADR-063-a-worker-that-waits-on-a-third-party-is-scaled-by-hand.md).
+> For Shipping and Notifications alike, the backlog procedure is the cue,
+> `queue-backlog.md` carries the step, and the ceiling is the carrier's or the
+> relay's rate limit rather than the queue's depth.
+
 Both keys are still written down rather than left absent, and that half was
 never about the diff. A key that is missing looks the same whether it was
 considered or forgotten.
