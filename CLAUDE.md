@@ -33,9 +33,9 @@ an ADR. **Solution shape** is §4.1's — Catalog, Ordering, Inventory, Payments
 Shipping, Notifications, the building blocks, gateway and BFF — and **service
 build order** is Appendix C.1's: **Catalog → Ordering → Inventory and Payments
 → Shipping → Notifications**, last because it publishes nothing and consumes
-events the others own (§3.2). One thing is **undecided**: the READMEs call the
-e-commerce domain "illustrative only" while §4.1 names six services concretely,
-so build the structure and raise the domain question rather than assuming.
+events the others own (§3.2). **The domain is a reference implementation**
+(ADR-062): the six services are the worked example an adopter replaces, and
+the building blocks, gates, scaffold and operating contract are what is kept.
 **Aspire is not adopted**; Compose is the baseline (§14.1).
 
 ### The tree

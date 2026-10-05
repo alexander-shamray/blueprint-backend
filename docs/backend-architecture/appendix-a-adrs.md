@@ -72,6 +72,7 @@ decision looks wrong.
 | **ADR-063** | [A worker that waits on a third party is scaled by hand](adr/ADR-063-a-worker-that-waits-on-a-third-party-is-scaled-by-hand.md) |
 | **ADR-064** | [Every store is run outside this repository, to a stated recovery point](adr/ADR-064-every-store-is-run-outside-this-repository-to-a-stated-recovery-point.md) |
 | **ADR-065** | [Every workload is fenced by a default-deny NetworkPolicy](adr/ADR-065-every-workload-is-fenced-by-a-default-deny-networkpolicy.md) |
+| **ADR-066** | [A request past its host's deadline is answered 504](adr/ADR-066-a-request-past-its-hosts-deadline-is-answered-504.md) |
 
 ---
 
