@@ -97,6 +97,8 @@ COPIED = frozenset(
         # ADR-017's gate travels on the same terms; PATCHES inverts its
         # consumer floor, since a rendered host registers no consumer.
         "tests/Catalog.Api.Tests/ConsumerCallRuleTests.cs",
+        # The building blocks' windows, which every rendered host holds.
+        "tests/Catalog.Api.Tests/RetentionMapTests.cs",
         "tests/Catalog.TestSupport/Catalog.TestSupport.csproj",
         "tests/Catalog.TestSupport/CatalogApiFactory.cs",
         # §12.4's test scheme. Copied rather than omitted even though a

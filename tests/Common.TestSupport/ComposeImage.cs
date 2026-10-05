@@ -55,7 +55,7 @@ public static partial class ComposeImage
                 $"A Compose Dockerfile names {bases.Length} base images where one was expected (§14.1).");
     }
 
-    private static string RepositoryRoot()
+    internal static string RepositoryRoot()
     {
         for (DirectoryInfo? dir = new(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
         {
