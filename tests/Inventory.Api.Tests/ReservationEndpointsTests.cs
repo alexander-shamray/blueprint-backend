@@ -35,6 +35,20 @@ public sealed class ReservationEndpointsTests(ServiceFixture fixture) : IAsyncLi
     }
 
     [Fact]
+    public async Task An_unknown_order_reads_404_carrying_its_code()
+    {
+        using HttpClient client = Admin();
+
+        HttpResponseMessage get = await client.GetAsync(
+            $"/v1/inventory/reservations/{Guid.CreateVersion7()}", TestContext.Current.CancellationToken);
+
+        get.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        get.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
+        string body = await get.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        body.ShouldContain("\"code\":\"reservation.not_found\"");
+    }
+
+    [Fact]
     public async Task The_runbook_can_release_by_hand_and_the_release_answers_like_the_command()
     {
         var product = Guid.CreateVersion7();

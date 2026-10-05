@@ -6,7 +6,7 @@ namespace Inventory.Application.Stock.GetStock;
 
 /// <summary>§6.5's read side: Dapper over the write table.</summary>
 public sealed class GetStockHandler(IDbConnectionFactory connections)
-    : IQueryHandler<GetStockQuery, StockDto?>
+    : IQueryHandler<GetStockQuery, Result<StockDto>>
 {
     private const string Sql =
         """
@@ -15,11 +15,13 @@ public sealed class GetStockHandler(IDbConnectionFactory connections)
         WHERE ProductId = @ProductId;
         """;
 
-    public async Task<StockDto?> HandleAsync(GetStockQuery query, CancellationToken ct)
+    public async Task<Result<StockDto>> HandleAsync(GetStockQuery query, CancellationToken ct)
     {
         using IDbConnection connection = connections.Create();
 
-        return await connection.QuerySingleOrDefaultAsync<StockDto>(
+        StockDto? stock = await connection.QuerySingleOrDefaultAsync<StockDto>(
             new CommandDefinition(Sql, new { query.ProductId }, cancellationToken: ct));
+
+        return stock is null ? Result.Failure<StockDto>(StockErrors.NotFound) : Result.Success(stock);
     }
 }

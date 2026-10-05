@@ -5,7 +5,7 @@ using Dapper;
 namespace Inventory.Application.Reservations.GetReservation;
 
 public sealed class GetReservationHandler(IDbConnectionFactory connections)
-    : IQueryHandler<GetReservationQuery, ReservationDto?>
+    : IQueryHandler<GetReservationQuery, Result<ReservationDto>>
 {
     private const string Sql =
         """
@@ -13,7 +13,7 @@ public sealed class GetReservationHandler(IDbConnectionFactory connections)
         SELECT ProductId, Quantity FROM inventory.ReservationLines WHERE OrderId = @OrderId ORDER BY ProductId;
         """;
 
-    public async Task<ReservationDto?> HandleAsync(GetReservationQuery query, CancellationToken ct)
+    public async Task<Result<ReservationDto>> HandleAsync(GetReservationQuery query, CancellationToken ct)
     {
         using IDbConnection connection = connections.Create();
         using SqlMapper.GridReader grid = await connection.QueryMultipleAsync(
@@ -23,10 +23,10 @@ public sealed class GetReservationHandler(IDbConnectionFactory connections)
         // tuple's members are Item1..Item3.
         ReservationHead? head = await grid.ReadSingleOrDefaultAsync<ReservationHead>();
         if (head is null)
-            return null;
+            return Result.Failure<ReservationDto>(ReservationErrors.NotFound);
 
         List<ReservationLineDto> lines = (await grid.ReadAsync<ReservationLineDto>()).AsList();
-        return new ReservationDto(head.OrderId, head.Status, lines, head.UpdatedAt);
+        return Result.Success(new ReservationDto(head.OrderId, head.Status, lines, head.UpdatedAt));
     }
 
     private sealed record ReservationHead(Guid OrderId, string Status, DateTimeOffset UpdatedAt);
