@@ -18,7 +18,7 @@ public enum UnreachableChoice
 /// <summary>ADR-017's written exception for one outbound client a consumer reaches.</summary>
 /// <remarks>
 /// <see cref="GrantedBy"/> names the ADR that grants it (§9.7); the two behaviours split unreachable from "answered
-/// no" as §8.1's table does.
+/// no" as ADR-052's table does.
 /// </remarks>
 public sealed record ConsumerCallException(
     Type Client,
