@@ -31,7 +31,8 @@ public sealed class NotificationMetrics
         _resent = meter.CreateCounter<long>(
             "notifications.mail.resent",
             unit: "{send}",
-            description: "Sends started over an intent already stamped; a count of possible duplicates, an outage's retries included.");
+            description: "Sends started over an intent already stamped; a count of possible duplicates, " +
+                "an outage's retries included.");
 
         // Past a first backoff, by what the row waits on; a relay step rising during an outage is the breaker working.
         meter.CreateObservableGauge(

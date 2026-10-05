@@ -53,7 +53,7 @@ internal sealed partial class BadHttpRequestExceptionHandler(
         return true;
     }
 
-    /// <summary>The longest prefix of the reader's path the contract declares, as a URI-fragment JSON pointer.</summary>
+    /// <summary>The longest prefix of the reader's path the body declares, as a URI-fragment JSON pointer.</summary>
     private static string? PointerTo(string path, Type body, JsonSerializerOptions options)
     {
         // The leading `$` names the whole body, which is no member to point at.

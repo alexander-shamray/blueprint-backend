@@ -94,7 +94,8 @@ public sealed class HttpCarrierGatewayTests : IClassFixture<HttpCarrierGatewayTe
         // The whole shape, since a field added to the body is a fact the carrier is shown.
         root.EnumerateObject().Select(p => p.Name).ShouldBe(["shipmentId", "address"], ignoreOrder: true);
         root.GetProperty("address").EnumerateObject().Select(p => p.Name).ShouldBe(
-            ["line1", "line2", "city", "postalCode", "country"], ignoreOrder: true);
+            ["line1", "line2", "city", "postalCode", "country"],
+            ignoreOrder: true);
         root.GetProperty("shipmentId").GetGuid().ShouldBe(shipment.Value);
         root.GetProperty("address").GetProperty("line1").GetString().ShouldBe("1 Abay Avenue");
         call.RequestMessage.Headers!["Authorization"].Single()
@@ -114,22 +115,24 @@ public sealed class HttpCarrierGatewayTests : IClassFixture<HttpCarrierGatewayTe
     public async Task A_refused_connection_is_unavailable_rather_than_a_refusal()
     {
         using ShippingWorkerFactory dead = new(Unreachable.Sql, Unreachable.Rabbit, "http://carrier.invalid/");
+        ICarrierGateway carrier = dead.Services.CreateScope().ServiceProvider.GetRequiredService<ICarrierGateway>();
 
-        await Should.ThrowAsync<CarrierUnavailableException>(() => dead.Services.CreateScope().ServiceProvider
-            .GetRequiredService<ICarrierGateway>()
-            .BookAsync(Booking("050000"), TestContext.Current.CancellationToken));
+        await Should.ThrowAsync<CarrierUnavailableException>(() =>
+            carrier.BookAsync(Booking("050000"), TestContext.Current.CancellationToken));
     }
 
     [Fact]
     public void Every_attempt_and_every_bounded_delay_fit_inside_the_total()
     {
-        TimeSpan worst = CarrierHop.AttemptTimeout * (CarrierHop.MaxRetryAttempts + 1)
-                         + CarrierHop.MaxRetryDelay * CarrierHop.MaxRetryAttempts;
+        TimeSpan worst = CarrierHop.AttemptTimeout * (CarrierHop.MaxRetryAttempts + 1) +
+            CarrierHop.MaxRetryDelay * CarrierHop.MaxRetryAttempts;
 
-        worst.ShouldBeLessThan(CarrierHop.TotalRequestTimeout,
+        worst.ShouldBeLessThan(
+            CarrierHop.TotalRequestTimeout,
             "PricingHop's argument: a total that cancels the last retry makes the retry count a fiction");
 
-        CarrierHop.TotalRequestTimeout.ShouldBeLessThan(Common.Web.ServiceOptions.OperationTimeout,
+        CarrierHop.TotalRequestTimeout.ShouldBeLessThan(
+            Common.Web.ServiceOptions.OperationTimeout,
             "§9.7: the outbound client total must be strictly below the service operation total");
     }
 
@@ -143,7 +146,8 @@ public sealed class HttpCarrierGatewayTests : IClassFixture<HttpCarrierGatewayTe
     [Fact]
     public void The_breaker_samples_over_at_least_two_attempt_timeouts()
     {
-        CarrierHop.CircuitBreakerSamplingDuration.ShouldBeGreaterThanOrEqualTo(CarrierHop.AttemptTimeout * 2,
+        CarrierHop.CircuitBreakerSamplingDuration.ShouldBeGreaterThanOrEqualTo(
+            CarrierHop.AttemptTimeout * 2,
             "the library validates this pair at startup, and a host that will not start is not a budget");
     }
 
@@ -209,7 +213,8 @@ public sealed class HttpCarrierGatewayTests : IClassFixture<HttpCarrierGatewayTe
         IReadOnlyList<CarrierEvent> page = await Carrier()
             .GetEventsAsync("crr_x", TestContext.Current.CancellationToken);
 
-        page.ShouldHaveSingleItem().Status.ShouldBe(TrackingStatus.Unrecognised,
+        page.ShouldHaveSingleItem().Status.ShouldBe(
+            TrackingStatus.Unrecognised,
             "a conformist that faults on a new status stops tracking every shipment until a deploy");
     }
 
@@ -384,8 +389,10 @@ public sealed class HttpCarrierGatewayTests : IClassFixture<HttpCarrierGatewayTe
     [Fact]
     public async Task A_page_longer_than_the_bound_is_refused()
     {
-        string events = string.Join(",", Enumerable.Range(0, CarrierHop.MaxEventsPerPage + 1).Select(i =>
-            $"{{\"id\":\"e{i}\",\"status\":\"in_transit\",\"occurredAt\":\"2026-01-02T09:00:00Z\"}}"));
+        string events = string.Join(
+            ",",
+            Enumerable.Range(0, CarrierHop.MaxEventsPerPage + 1).Select(i =>
+                $"{{\"id\":\"e{i}\",\"status\":\"in_transit\",\"occurredAt\":\"2026-01-02T09:00:00Z\"}}"));
         _server.Given(Request.Create().WithPath("/v1/shipments/crr_x/events").UsingGet())
             .AtPriority(0)
             .RespondWith(Response.Create().WithStatusCode(200).WithBody($"{{\"events\":[{events}]}}"));
@@ -454,7 +461,9 @@ public sealed class HttpCarrierGatewayTests : IClassFixture<HttpCarrierGatewayTe
             Unreachable.Sql, Unreachable.Rabbit, "https://carrier.example/", carrierApiKey: " ");
 
         Should.Throw<InvalidOperationException>(() => factory.Services)
-            .Message.ShouldContain(CarrierRegistration.ApiKeyKey, Case.Sensitive,
+            .Message.ShouldContain(
+                CarrierRegistration.ApiKeyKey,
+                Case.Sensitive,
                 "§15.4 marks the key required; a host must not call a carrier unauthenticated");
     }
 }

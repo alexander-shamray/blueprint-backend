@@ -1,7 +1,7 @@
 namespace Common.Domain;
 
 /// <summary>ISO 4217's minor unit for a currency code, held once for every context's money (ADR-067).</summary>
-/// <remarks>Only codes whose exponent is not <see cref="Default"/> are listed; ADR-067 says why the rest take it.</remarks>
+/// <remarks>Lists only codes whose exponent is not <see cref="Default"/>; ADR-067 says why the rest take it.</remarks>
 public static class CurrencyMinorUnits
 {
     public const int Default = 2;

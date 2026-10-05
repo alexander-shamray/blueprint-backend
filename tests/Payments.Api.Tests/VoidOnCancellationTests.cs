@@ -89,7 +89,8 @@ public sealed class VoidOnCancellationTests(ServiceFixture fixture) : IAsyncLife
 
         gate.Release();
         await Eventually(
-            async () => (await fixture.InboxAsync(command)).Count + (await fixture.InboxAsync(cancelled.MessageId)).Count,
+            async () => (await fixture.InboxAsync(command)).Count +
+                (await fixture.InboxAsync(cancelled.MessageId)).Count,
             expected: 2,
             because: "both deliveries are consumed, the cancellation after the authorisation commits");
 

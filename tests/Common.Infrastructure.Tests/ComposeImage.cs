@@ -8,7 +8,7 @@ internal static partial class ComposeImage
     public static string Of(string service) =>
         Of(service, File.ReadAllLines(Path.Combine(RepositoryRoot(), "deploy", "compose", "infrastructure.yml")));
 
-    /// <summary>The <c>image:</c> among the keys indented under <paramref name="service"/>, in Compose's layout.</summary>
+    /// <summary>The <c>image:</c> among the keys indented under <paramref name="service"/>.</summary>
     public static string Of(string service, IReadOnlyList<string> lines)
     {
         bool under = false;
