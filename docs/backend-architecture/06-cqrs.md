@@ -1238,9 +1238,11 @@ one, and a second record with the same members would be two types to keep in
 step. `QuantityAvailable` keeps the listing's meaning —
 `null` is a level Inventory has never reported, not zero. An unknown id is
 `ProductErrors.NotFound`, returned through `Result<T>` so the 404 carries its
-`code` ([§10.5](10-api-gateway.md)); Catalog retires no product, so the
-listing hides none and no other id answers 404. It is uncached, as the
-listing is, for the reason [§8.2](08-caching-redis.md) gives.
+`code` ([§10.5](10-api-gateway.md)), and the only 404: Catalog has no
+operation that retires a product, so the listing hides none, and the one that
+adds it decides for both reads whether a retired product is hidden (#471). It
+is uncached, as the listing is, for the reason [§8.2](08-caching-redis.md)
+gives.
 
 ## 6.6 The progression — escalating Ordering to a physical split
 

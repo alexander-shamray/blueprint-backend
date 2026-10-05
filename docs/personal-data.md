@@ -55,7 +55,8 @@ that carries it.
 service's inbox — §9.5's `InboxMessage` keeps no payload, under
 `RetentionPolicy.InboxWindow` — the idempotency markers and claims, which key
 a command by its id under `RetentionPolicy.IdempotencyWindow`, and Redis, whose
-cache holds products and whose coordination keys hold claims and locks.
+coordination keys hold claims and locks and whose cache no read fills
+([§8.2](backend-architecture/08-caching-redis.md)).
 Shipping's `Shipments` holds an order id and a tracking number, which identify
 a parcel and nobody until joined to the order.
 

@@ -653,9 +653,11 @@ broker's queues are declared as and why.
 renders a default-deny `NetworkPolicy` for each release's own pods, and each
 chart's `networkPolicy` values name the edges it is allowed: the in-namespace
 peers by workload name and port name, and everything outside the namespace —
-DNS, the OTLP endpoint, the identity provider, the stores, a carrier, a relay,
-a payment provider — as peers the deployment states. A capability that is on
-with no peer stated refuses to render, and so does a peer of every address.
+the identity provider, the stores, a carrier, a relay, a payment provider — as
+peers the deployment states. A capability that is on with no peer stated
+refuses to render, and so does a peer of every address. DNS and the OTLP
+endpoint carry defaults that name one place each, for the reason ADR-065
+gives.
 **It is enforced only where the cluster's network plugin enforces it**, and a
 hostname cannot be a peer in the core API, so a third party is named by the
 address ranges it publishes, or by a plugin's own hostname policy layered on
@@ -725,9 +727,8 @@ must be resolved before `helm lint` or `helm template` will run. `charts/` and
 > from the inside.
 
 ```yaml
-# deploy/helm/ordering/values.yaml — an excerpt. The file also carries `ports`,
-# `migrationJob.resources` and `extraConfigMaps: []`, none of which this section
-# argues about.
+# deploy/helm/ordering/values.yaml — an excerpt of what this section argues;
+# the file holds the rest.
 workload:
   # The Service's name, and therefore the string its callers already spell.
   name: ordering-api
@@ -1055,11 +1056,9 @@ one of those differences is something it will not start without, or will start
 wrongly without:
 
 ```yaml
-# deploy/helm/gateway/values.yaml — an excerpt on Ordering's terms. Omitted as
-# shared: `workload.name` (`gateway`), `ports`, `probes.probePort`,
-# `terminationGracePeriodSeconds`, `topologySpread`, `observability`,
-# `image.pullPolicy`, and `database.enabled` / `broker.enabled`, both `false`
-# because this host owns neither.
+# deploy/helm/gateway/values.yaml — an excerpt on Ordering's terms, of what
+# differs; the file holds the rest, including `database.enabled` and
+# `broker.enabled`, both `false` because this host owns neither.
 replicaCount: 3
 
 image:
@@ -1221,9 +1220,12 @@ per-service estimate, and that is what fixes the number at 45.**
 that long for every hosted service to stop and then exits regardless — and its
 default is **30 seconds**, measured on the pinned SDK rather than read off a
 documentation page, with nothing in this solution overriding it.
-`ServiceOptions.OperationTimeout` (20 s, §15.4) sits inside that window, so the
-ceiling subsumes it. Kubernetes' own default grace period is also 30, which is
-the trap: **30 is not a margin over 30.** A pod left at the default is
+Every request deadline sits inside that window —
+`ServiceOptions.OperationTimeout` and the gateway's longer
+`GatewayLimits.RequestTimeout` alike
+([ADR-066](adr/ADR-066-a-request-past-its-hosts-deadline-is-answered-504.md)) —
+so the ceiling subsumes them. Kubernetes' own default grace period is also 30,
+which is the trap: **30 is not a margin over 30.** A pod left at the default is
 `SIGKILL`ed at the instant the host would have finished draining, and the
 symptom is a request or a message lost on every rolling deploy — attributed to
 anything but the deploy, because nothing logs it.
@@ -1468,12 +1470,10 @@ The service-wide constants that are genuinely not configuration stay static:
 ```csharp
 public static class ServiceOptions
 {
-    // The ceiling §9.7's timeout hierarchy asserts against. Not bound, not
-    // validated, not deployable — it is a compile-time invariant.
-    //
-    // Twenty seconds is the MIDDLE of §9.7's 10–30 s band and not its top: a
-    // gateway taking the floor of its own 30–60 s band is also at 30, and
-    // §9.7's ordering is a strict decrease, so the two would tie.
+    // The deadline a service's request meets (§9.7). Not bound, not
+    // validated, not deployable — it is a compile-time invariant, held below
+    // GatewayLimits.RequestTimeout and inside HostOptions.ShutdownTimeout
+    // (ADR-066).
     public static readonly TimeSpan OperationTimeout = TimeSpan.FromSeconds(20);
 }
 ```
