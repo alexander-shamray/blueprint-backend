@@ -429,8 +429,10 @@ BROKER_CONTEXT = re.compile(
 
 # A tagged broker image is the stock route, whatever else the file builds: one
 # fixture may hold both routes, and its builder cannot excuse the stock image
-# from mapping the configuration.
-STOCK_IMAGE = re.compile(r'\bWithImage\s*\(\s*"rabbitmq:')
+# from mapping the configuration. The tag is a literal or the Dockerfile's base,
+# read through ComposeImage.BaseOf.
+STOCK_IMAGE = re.compile(
+    r'\bWithImage\s*\(\s*(?:"rabbitmq:|ComposeImage\s*\.\s*BaseOf\s*\(\s*"rabbitmq"\s*\))')
 
 
 def _string_end(text: str, start: int) -> int:

@@ -660,6 +660,19 @@ class TheFixtureCheckLooksAtEveryFixture(unittest.TestCase):
             any(PLANTED in f and "starts the stock broker image" in f for f in failures),
             f"a builder excused an unmapped stock route: {failures}")
 
+    def test_a_stock_route_spelt_as_a_literal_tag_is_still_the_stock_route(self):
+        # The tree reads the tag through ComposeImage.BaseOf; a fixture that
+        # writes it out is the same route and owes the same mapping.
+        literal = self.unmapped().replace(
+            'ComposeImage.BaseOf("rabbitmq")', '"rabbitmq:4.1-management-alpine"')
+        self.assertNotIn("ComposeImage.BaseOf", literal, "the case, not the gate")
+        both = "IFutureDockerImage image = " + CHAIN + ".Build();\n" + literal
+        failures = run_over_fixtures({PLANTED: both, "Platform.IntegrationTests": mapping_text()})
+
+        self.assertTrue(
+            any(PLANTED in f and "starts the stock broker image" in f for f in failures),
+            f"a literal stock tag was not read as the stock route: {failures}")
+
     def test_a_search_matching_nothing_is_refused(self):
         failures = run_over_fixtures({})
 
