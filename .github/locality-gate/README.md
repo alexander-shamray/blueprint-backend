@@ -1,9 +1,10 @@
 # The locality gate
 
 **The claim: a pull request's diff sits inside the change class its body
-declares, and inside the touch set it declares.**
-[`docs/change-locality.md`](../../docs/change-locality.md) §3 is the rule;
-this gate is §3 enforced.
+declares, and inside the touch set it declares, and leaves no path in the
+tree that the tree's own `.gitignore` excludes.**
+[`docs/change-locality.md`](../../docs/change-locality.md) §3 is the rule
+for the first two; this gate is §3 enforced.
 
 ## What it reads
 
@@ -21,7 +22,11 @@ this gate is §3 enforced.
   files endpoint, with GitHub's `changedFiles` count beside it: the endpoint
   stops at a ceiling however it is paginated, so a shorter list is refused as
   a prefix. A path that is not a plain path refuses the run, because a
-  verdict with a line withheld reads as complete.
+  verdict with a line withheld reads as complete. Each entry's `status`
+  rides along, so a removal is not read as a path the diff leaves behind.
+- The checkout's `.gitignore` files, through `git check-ignore --no-index`
+  run from the working directory, which in CI is the pull request's merge
+  checkout.
 
 ## What it judges
 
@@ -30,6 +35,13 @@ the declared touch set. The map cannot say "one service" and the row can — a
 Catalog change that also edits Ordering is inside Class A's set and outside
 its own row, and only the second check sees it. A `+`-joined class is the
 union of its members' sets.
+
+**Every path the diff leaves in the tree, against the ignore rules**, because
+a path git ignores can only arrive force-added, and an ignored file is one
+each checkout keeps for itself. A worktree has none of its own at the fork,
+so a tracked copy is what it finds; `docs/harness-boundaries.md` names the
+MCP approval files as the case. A deliberate change un-ignores the path in
+the same pull request, where a reviewer sees the line move.
 
 The glob dialect and the row grammar are `.claude/scripts/pr-locality.sh`'s,
 so a row reads the same in the harness and in CI. The two are separate

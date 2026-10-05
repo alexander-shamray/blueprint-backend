@@ -183,7 +183,10 @@ which the session may edit but whose servers the main checkout's approve-all
 already approves. And the approval names servers rather than
 definitions, so a `.mcp.json` that reaches a worktree through git,
 force-added past the ignore, is found before the main checkout's and
-approved under the same name without a prompt.
+approved under the same name without a prompt. The locality gate refuses a
+pull request that leaves an ignored path in the tree, so neither that file
+nor a `settings.local.json` the fork would write through reaches `main`; a
+branch checked out before its pull request is judged still can.
 
 **`SessionStart` runs the same script, for the moves no tool call makes.** A
 merge, a switch or a pull made outside the session rewrites the tree with no
