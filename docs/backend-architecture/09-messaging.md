@@ -2903,18 +2903,21 @@ The values are configuration and will differ per system. **The ordering is the
 invariant** — that part is not negotiable, and it is what to assert in a
 configuration-validation test at startup.
 
-> **Two of these four layers are enforced today and two are documented.** The
-> outbound total and the per-attempt timeout are properties of the resilience
-> handler, so they fire. The gateway's request timeout and the service
-> operation total are not registered anywhere — no host takes request-timeout
-> middleware — so `ServiceOptions.OperationTimeout` is the ceiling the outbound
-> budget is *checked against* rather than a deadline a request meets.
+> **All four layers fire.** The outbound total and the per-attempt timeout are
+> properties of the resilience handler. The outer two are request-timeout
+> middleware, which `AddCommonWebDefaults` registers in every host:
+> `ServiceOptions.OperationTimeout` is the deadline a service's or the BFF's
+> request meets, and `GatewayLimits.RequestTimeout`, longer, is the edge's. A
+> request past its deadline is answered with [§10.5](10-api-gateway.md)'s 504
+> row ([ADR-066](adr/ADR-066-a-request-past-its-hosts-deadline-is-answered-504.md)).
 >
-> That is what the startup assertion above verifies, and it is worth naming
-> because the word "timeout" invites the stronger reading. Closing the gap
-> means middleware in every host **and** a 504 row in [§10.5](10-api-gateway.md)'s
-> table, which is a decision about the platform's error contract rather than
-> one a single host may take.
+> **The deadline is cooperative.** It cancels the request's token, so a handler
+> that passes its `CancellationToken` on is ended there and one that drops it
+> runs to the end and answers late. `UseRequestTimeouts` sits below
+> `UseExceptionHandler` in every `Program.cs`, because placed above it the
+> middleware would find the cancellation already answered 499. An endpoint that
+> legitimately runs longer opts out with `DisableRequestTimeout` beside its
+> mapping; none does today.
 
 ### Rules for every synchronous call
 
@@ -3117,8 +3120,8 @@ TimeSpan backoff = options.Retry.MaxDelay.Value * options.Retry.MaxRetryAttempts
     "cancelled part-way and the retry never had a chance to help (§9.7).");
 ```
 
-The same file asserts the outbound total strictly below
-`ServiceOptions.OperationTimeout` — an ordering has no ties — that the
+The same file asserts the outbound total strictly below the host's own
+request deadline — an ordering has no ties — that the
 attempt timeout sits inside the band the table names, and that
 `TotalRequestTimeout` is not at its default.
 

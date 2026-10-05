@@ -8,7 +8,13 @@ namespace Common.Web;
 /// <summary>What every host needs identically, in the one call each <c>Program.cs</c> makes (§13.2).</summary>
 public static class CommonWebDefaultsExtensions
 {
-    public static IHostApplicationBuilder AddCommonWebDefaults(this IHostApplicationBuilder builder)
+    public static IHostApplicationBuilder AddCommonWebDefaults(this IHostApplicationBuilder builder) =>
+        builder.AddCommonWebDefaults(ServiceOptions.OperationTimeout);
+
+    /// <summary>The same, for a host whose requests meet a deadline other than a service's (§9.7).</summary>
+    public static IHostApplicationBuilder AddCommonWebDefaults(
+        this IHostApplicationBuilder builder,
+        TimeSpan requestTimeout)
     {
         builder.AddObservability();                            // §13.2
         builder.AddJwtAuthentication();                        // §11.3
@@ -24,6 +30,7 @@ public static class CommonWebDefaultsExtensions
         builder.Services.AddScoped<ICurrentUser, HttpContextCurrentUser>();
 
         builder.Services.AddCommonProblemDetails();            // §10.5
+        builder.Services.AddCommonRequestTimeouts(requestTimeout);   // §9.7
 
         // Liveness only; readiness checks need connection strings a service owns (§13.5).
         builder.Services.AddHealthChecks();

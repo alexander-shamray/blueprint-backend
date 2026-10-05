@@ -60,6 +60,7 @@ WebApplication app = builder.Build();
 app.UseSecurityHeaders();
 app.UseExceptionHandler();        // §10.5 — catches every fault below it
 app.UseCorrelationId();           // §10.4 — above everything else that logs
+app.UseRequestTimeouts();         // §9.7 — below the exception handler, which would answer 499
 
 // §10.5's error shape for the bodiless challenge and forbid the middleware below writes.
 app.UseStatusCodePages();         // §10.5 — 401 and 403 as problem+json

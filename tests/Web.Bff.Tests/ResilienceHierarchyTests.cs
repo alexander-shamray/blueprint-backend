@@ -1,4 +1,5 @@
 using Common.Web;
+using Microsoft.AspNetCore.Http.Timeouts;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Http.Resilience;
 using Microsoft.Extensions.Options;
@@ -23,14 +24,28 @@ public class ResilienceHierarchyTests
             .Get(PricingHop.ResilienceOptionsName);
     }
 
+    /// <summary>The deadline the host's request-timeout middleware ends a request at.</summary>
+    private static TimeSpan RequestDeadline()
+    {
+        using BffFactory factory = new();
+        using HttpClient client = factory.CreateClient();
+
+        return factory.Services
+            .GetRequiredService<IOptions<RequestTimeoutOptions>>()
+            .Value.DefaultPolicy!.Timeout!.Value;
+    }
+
     [Fact]
-    public void The_outbound_total_sits_below_the_service_operation_budget()
+    public void The_outbound_total_sits_below_the_hosts_own_request_deadline()
     {
         HttpStandardResilienceOptions options = Configured();
+        TimeSpan deadline = RequestDeadline();
 
-        // Strictly below; a configuration ordering, as no request-timeout middleware enforces OperationTimeout.
+        deadline.ShouldBe(ServiceOptions.OperationTimeout, "§9.7: a BFF request meets the service operation total.");
+
+        // Strictly below, so the hop's own 503 is written before the host gives up on the request.
         options.TotalRequestTimeout.Timeout.ShouldBeLessThan(
-            ServiceOptions.OperationTimeout,
+            deadline,
             "§9.7: the outbound client total must be below the service operation total.");
     }
 
