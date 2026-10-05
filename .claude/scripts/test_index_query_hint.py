@@ -5,8 +5,10 @@ printed."""
 
 import json
 import re
+import shlex
 import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -16,7 +18,8 @@ HINT = CLAUDE / "hooks" / "index-query-hint.py"
 SETTINGS = CLAUDE / "settings.json"
 SKILL = CLAUDE / "skills" / "codebase-index" / "SKILL.md"
 EVENT = "UserPromptSubmit"
-COMMAND = 'py -3.12 "${CLAUDE_PROJECT_DIR}/.claude/hooks/index-query-hint.py"'
+COMMAND = ("py -3.12 -P -c \"import runpy; runpy.run_path("
+           "r'${CLAUDE_PROJECT_DIR}/.claude/hooks/index-query-hint.py', run_name='__main__')\"")
 
 # One prompt per alternative of each pattern, and the subcommand it routes to.
 CASES = {
@@ -91,6 +94,20 @@ class TheWiring(unittest.TestCase):
         ]
 
         self.assertEqual([EVENT], running)
+
+    def test_the_registered_command_cannot_erase_a_prompt(self):
+        """Python exits 2 on a file it cannot open, a worktree emptied under a
+        running session, and exit 2 here erases every prompt; through `runpy`
+        the same failure exits 1, which only reports."""
+        with tempfile.TemporaryDirectory() as gone:
+            for root, hinted in ((CLAUDE.parent, True), (Path(gone), False)):
+                argv = shlex.split(COMMAND.replace("${CLAUDE_PROJECT_DIR}", root.as_posix()))
+                done = subprocess.run(
+                    [sys.executable, *argv[2:]], capture_output=True, timeout=30, check=False,
+                    input=json.dumps({"hook_event_name": EVENT, "prompt": "where is X"}).encode())
+                with self.subTest(root=str(root)):
+                    self.assertNotEqual(2, done.returncode, done.stderr)
+                    self.assertEqual(hinted, bool(context(done)), done.stderr)
 
     def test_its_entry_has_no_matcher(self):
         """A prompt event takes none; one written would be ignored or read
