@@ -16,7 +16,7 @@ The blueprint uses two levels and shows how to move between them:
 | Store | One database | Write DB + read store |
 | Sync | None needed | Projections from events |
 | Consistency | Strong | Eventual |
-| Used by | Catalog, Inventory, Payments, Shipping | Ordering (section 6.6); the stock level Catalog's listing joins ([§3.2](03-bounded-contexts.md)) |
+| Used by | Catalog, Inventory, Payments, Shipping | Ordering (section 6.6); the stock level Catalog's product reads join ([§3.2](03-bounded-contexts.md)) |
 
 **Start at level 1.** It gives most of the benefit — the write model stays
 clean, queries stay fast — at none of the operational cost. Escalate only where
@@ -1229,6 +1229,18 @@ Rules for the read side:
   displays one.
 - Query handlers never mutate anything and never run inside the transaction
   behaviour.
+
+**Catalog's one-product read returns the listing's row.**
+`GET /v1/catalog/products/{id}` is `GetProductQuery`, and it answers with
+`ProductSummaryDto` because the aggregate holds nothing that row leaves out:
+the rule above asks for the shape the caller needs, both callers need this
+one, and a second record with the same members would be two types to keep in
+step. `QuantityAvailable` keeps the listing's meaning —
+`null` is a level Inventory has never reported, not zero. An unknown id is
+`ProductErrors.NotFound`, returned through `Result<T>` so the 404 carries its
+`code` ([§10.5](10-api-gateway.md)); Catalog retires no product, so the
+listing hides none and no other id answers 404. It is uncached, as the
+listing is, for the reason [§8.2](08-caching-redis.md) gives.
 
 ## 6.6 The progression — escalating Ordering to a physical split
 

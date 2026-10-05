@@ -253,6 +253,63 @@ public sealed class ProductEndpointsTests(ServiceFixture fixture) : IAsyncLifeti
     }
 
     [Fact]
+    public async Task One_product_comes_back_by_its_id_without_a_token()
+    {
+        // Anonymous like the listing (§10.2's catalog-public), and the listing's row: the deep link's whole read.
+        HttpResponseMessage published = await PublishAsync("Walnut desk", 19.99m);
+        Guid id = await published.Content.ReadFromJsonAsync<Guid>(TestContext.Current.CancellationToken);
+
+        HttpResponseMessage response = await _client.GetAsync(
+            $"/v1/catalog/products/{id}",
+            TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+
+        ItemDto? item = await response.Content.ReadFromJsonAsync<ItemDto>(TestContext.Current.CancellationToken);
+        item.ShouldNotBeNull();
+        item.ProductId.ShouldBe(id);
+        item.Name.ShouldBe("Walnut desk");
+        item.Amount.ShouldBe(19.99m);
+        item.Currency.ShouldBe("EUR");
+
+        // The listing's rule for a level Inventory never reported: null, present, and not zero.
+        string body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        body.ShouldContain("\"quantityAvailable\":null");
+    }
+
+    [Fact]
+    public async Task An_unknown_product_id_is_a_404_carrying_its_code()
+    {
+        await PublishAsync("Walnut desk");
+
+        HttpResponseMessage response = await _client.GetAsync(
+            $"/v1/catalog/products/{Guid.CreateVersion7()}",
+            TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
+        response.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
+
+        // The code is what separates this 404 from a route that matched nothing (§10.5).
+        string body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        body.ShouldContain("\"code\":\"product.not_found\"");
+    }
+
+    [Fact]
+    public async Task The_openapi_document_describes_the_one_product_read()
+    {
+        // The document is not anonymous (§11.4), so this caller is named.
+        using HttpRequestMessage request = new(HttpMethod.Get, "/openapi/v1.json");
+        request.Headers.Add(TestAuthHandler.UserHeader, Guid.CreateVersion7().ToString());
+
+        HttpResponseMessage response = await _client.SendAsync(request, TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        string document = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        document.ShouldContain("\"/v1/catalog/products/{id}\"");
+        document.ShouldContain("\"404\"");
+    }
+
+    [Fact]
     public async Task The_listing_pages_forward_with_the_returned_cursor()
     {
         // Three POSTs can share a clock tick, and the id tiebreak is not publish order, so only paging is asserted.

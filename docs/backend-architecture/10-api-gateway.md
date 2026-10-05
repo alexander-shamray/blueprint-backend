@@ -269,6 +269,11 @@ different things: YARP's reserved `AllowAnonymous` in one key and §10.3's
 per-IP window in the other. That is the two-registries point above arriving on
 one route rather than across two, and it is the same point — not a second one.
 
+**The catch-all serves Catalog's one-product read as well as the listing**
+([§6.5](06-cqrs.md)), under the same pair, so a product's deep link needs no
+route of its own and is metered by §10.3's per-IP window like the page that
+linked to it.
+
 > **A name it cannot resolve stops the gateway, and this passage said the
 > opposite for a long time.** It described a silent per-route drop — "the path
 > simply stops existing, and the gateway comes up healthy serving whichever
