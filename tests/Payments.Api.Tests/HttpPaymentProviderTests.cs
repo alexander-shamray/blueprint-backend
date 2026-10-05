@@ -322,9 +322,11 @@ public sealed class HttpPaymentProviderTests : IClassFixture<HttpPaymentProvider
         int calls = (int)Math.Ceiling(
             (double)ProviderHop.CircuitBreakerMinimumThroughput / (ProviderHop.MaxRetryAttempts + 1));
 
-        (ProviderHop.TotalRequestTimeout * calls).ShouldBeLessThan(ProviderHop.CircuitBreakerSamplingDuration,
+        (ProviderHop.TotalRequestTimeout * calls).ShouldBeLessThan(
+            ProviderHop.CircuitBreakerSamplingDuration,
             "a breaker whose throughput one order's back-to-back calls cannot fill never opens at saga pace");
-        ProviderHop.CircuitBreakerSamplingDuration.ShouldBeGreaterThanOrEqualTo(ProviderHop.AttemptTimeout * 2,
+        ProviderHop.CircuitBreakerSamplingDuration.ShouldBeGreaterThanOrEqualTo(
+            ProviderHop.AttemptTimeout * 2,
             "the standard handler's options validation refuses a shorter window at start");
     }
 
