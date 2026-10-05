@@ -75,8 +75,7 @@ __pycache__/
 deploy/helm/*/charts/
 deploy/helm/*/Chart.lock
 
-# The user's local task list, kept current by Claude (CLAUDE.md, Working in
-# this repo), and the plan it is the one-line view of. Local by design: they
-# change too often to go through a PR.
+# The user's one local planning file, kept current by Claude (CLAUDE.md,
+# Working in this repo). Local by design: it changes too often to go through a
+# PR.
 /TODO.md
-/PLAN.md
