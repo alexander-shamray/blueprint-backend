@@ -89,6 +89,11 @@ public static class DependencyInjection
             options.Retry.Delay = ProviderHop.RetryDelay;
             options.Retry.MaxDelay = ProviderHop.MaxRetryDelay;
 
+            options.CircuitBreaker.FailureRatio = ProviderHop.CircuitBreakerFailureRatio;
+            options.CircuitBreaker.MinimumThroughput = ProviderHop.CircuitBreakerMinimumThroughput;
+            options.CircuitBreaker.SamplingDuration = ProviderHop.CircuitBreakerSamplingDuration;
+            options.CircuitBreaker.BreakDuration = ProviderHop.CircuitBreakerBreakDuration;
+
             // MaxDelay does not cap a Retry-After, so one long header would spend the budget ProviderHop counts on.
             options.Retry.ShouldRetryAfterHeader = false;
 

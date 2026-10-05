@@ -14,6 +14,7 @@ using Payments.Application.Provider;
 using Payments.Domain.Orders;
 using Payments.Infrastructure.Provider;
 using Payments.TestSupport;
+using Polly.CircuitBreaker;
 using Shouldly;
 using WireMock.Logging;
 using WireMock.RequestBuilders;
@@ -60,13 +61,11 @@ public sealed class HttpPaymentProviderTests : IClassFixture<HttpPaymentProvider
     }
 
     private readonly WireMockServer _server;
-    private readonly PaymentsApiFactory _factory;
     private readonly PaymentsApiFactory _patient;
 
     public HttpPaymentProviderTests(ProviderHost host)
     {
         _server = host.Server;
-        _factory = host.Factory;
         _patient = host.Patient;
 
         // Each test starts from the simulator's files alone: no stub another
@@ -76,14 +75,14 @@ public sealed class HttpPaymentProviderTests : IClassFixture<HttpPaymentProvider
         _server.ReadStaticMappings(SimulatorMappings.Directory());
     }
 
-    // Patient, since on _factory a slow answer is timed out and retried.
+    // Patient, since on an impatient host a slow answer is timed out and retried.
     private IPaymentProvider Provider() => Provider(_patient);
 
     private static IPaymentProvider Provider(PaymentsApiFactory factory) =>
         factory.Services.CreateScope().ServiceProvider.GetRequiredService<IPaymentProvider>();
 
-    /// <summary>A server of its own, since the simulator logs a stalled request only when its delay ends.</summary>
-    private static ProviderHost StalledHost()
+    /// <summary>A host of its own: a stall is logged only when its delay ends, and faults fill its breaker.</summary>
+    private static ProviderHost OwnHost()
     {
         ProviderHost own = new();
         own.Server.ReadStaticMappings(SimulatorMappings.Directory());
@@ -109,8 +108,10 @@ public sealed class HttpPaymentProviderTests : IClassFixture<HttpPaymentProvider
     private static AuthorisationRequest Authorisation(decimal amount, OrderId? order = null) =>
         new(order ?? OrderId.New(), Guid.CreateVersion7(), amount, "EUR");
 
-    private int Calls(string path) =>
-        _server.LogEntries.Count(e => e.RequestMessage!.Path == path);
+    private int Calls(string path) => Calls(_server, path);
+
+    private static int Calls(WireMockServer server, string path) =>
+        server.LogEntries.Count(e => e.RequestMessage!.Path == path);
 
     // This host's meter, never one matched by name, since a MeterListener is process-wide.
     private UnavailableCount CountUnavailable() => CountUnavailable(_patient);
@@ -209,12 +210,13 @@ public sealed class HttpPaymentProviderTests : IClassFixture<HttpPaymentProvider
     [Fact]
     public async Task A_503_is_retried_in_the_client_then_thrown_as_unavailable_and_counted_per_attempt()
     {
-        using UnavailableCount counted = CountUnavailable(_factory);
+        using ProviderHost own = OwnHost();
+        using UnavailableCount counted = CountUnavailable(own.Factory);
 
         await Should.ThrowAsync<PaymentProviderUnavailableException>(() =>
-            Provider(_factory).AuthoriseAsync(Authorisation(10.05m), TestContext.Current.CancellationToken));
+            Provider(own.Factory).AuthoriseAsync(Authorisation(10.05m), TestContext.Current.CancellationToken));
 
-        Calls("/v1/authorisations").ShouldBe(ProviderHop.MaxRetryAttempts + 1);
+        Calls(own.Server, "/v1/authorisations").ShouldBe(ProviderHop.MaxRetryAttempts + 1);
         counted.Value.ShouldBe(ProviderHop.MaxRetryAttempts + 1, "one per failing attempt, not one per call");
     }
 
@@ -224,14 +226,15 @@ public sealed class HttpPaymentProviderTests : IClassFixture<HttpPaymentProvider
         // A provider's Retry-After replaces the bounded backoff, and nothing
         // caps it at ProviderHop.MaxRetryDelay; honoured, one long header
         // spends the total before the retries the budget test counts on.
-        _server.Given(Request.Create().WithPath("/v1/authorisations").UsingPost())
+        using ProviderHost own = OwnHost();
+        own.Server.Given(Request.Create().WithPath("/v1/authorisations").UsingPost())
             .AtPriority(0)
             .RespondWith(Response.Create().WithStatusCode(503).WithHeader("Retry-After", "60"));
 
         await Should.ThrowAsync<PaymentProviderUnavailableException>(() =>
-            Provider(_factory).AuthoriseAsync(Authorisation(42.10m), TestContext.Current.CancellationToken));
+            Provider(own.Factory).AuthoriseAsync(Authorisation(42.10m), TestContext.Current.CancellationToken));
 
-        Calls("/v1/authorisations").ShouldBe(ProviderHop.MaxRetryAttempts + 1);
+        Calls(own.Server, "/v1/authorisations").ShouldBe(ProviderHop.MaxRetryAttempts + 1);
     }
 
     [Fact]
@@ -258,16 +261,17 @@ public sealed class HttpPaymentProviderTests : IClassFixture<HttpPaymentProvider
         // Read after the pipeline, an oversized body would fail once, uncounted;
         // read inside each attempt, it is a transport fault like any other.
         string padding = new('x', ProviderHop.MaxAnswerBytes);
-        _server.Given(Request.Create().WithPath("/v1/authorisations").UsingPost())
+        using ProviderHost own = OwnHost();
+        own.Server.Given(Request.Create().WithPath("/v1/authorisations").UsingPost())
             .AtPriority(0)
             .RespondWith(Response.Create().WithStatusCode(201)
                 .WithBody($"{{\"status\":\"approved\",\"reference\":\"psp_x\",\"padding\":\"{padding}\"}}"));
-        using UnavailableCount counted = CountUnavailable(_factory);
+        using UnavailableCount counted = CountUnavailable(own.Factory);
 
         await Should.ThrowAsync<PaymentProviderUnavailableException>(() =>
-            Provider(_factory).AuthoriseAsync(Authorisation(42.10m), TestContext.Current.CancellationToken));
+            Provider(own.Factory).AuthoriseAsync(Authorisation(42.10m), TestContext.Current.CancellationToken));
 
-        Calls("/v1/authorisations").ShouldBe(ProviderHop.MaxRetryAttempts + 1);
+        Calls(own.Server, "/v1/authorisations").ShouldBe(ProviderHop.MaxRetryAttempts + 1);
         counted.Value.ShouldBe(ProviderHop.MaxRetryAttempts + 1);
     }
 
@@ -277,15 +281,51 @@ public sealed class HttpPaymentProviderTests : IClassFixture<HttpPaymentProvider
     public async Task A_timeout_or_throttle_status_is_retried_then_thrown_as_unavailable(int status)
     {
         // Stubbed, since the simulator scripts neither status the translation table names.
-        _server.Given(Request.Create().WithPath("/v1/authorisations").UsingPost())
+        using ProviderHost own = OwnHost();
+        own.Server.Given(Request.Create().WithPath("/v1/authorisations").UsingPost())
             .AtPriority(0)
             .RespondWith(Response.Create().WithStatusCode(status));
 
         await Should.ThrowAsync<PaymentProviderUnavailableException>(() =>
-            Provider(_factory).AuthoriseAsync(Authorisation(42.10m), TestContext.Current.CancellationToken));
+            Provider(own.Factory).AuthoriseAsync(Authorisation(42.10m), TestContext.Current.CancellationToken));
 
-        Calls("/v1/authorisations")
+        Calls(own.Server, "/v1/authorisations")
             .ShouldBe(ProviderHop.MaxRetryAttempts + 1, "the pipeline retries both, as it does a 503");
+    }
+
+    [Fact]
+    public async Task An_open_circuit_makes_no_call_at_all()
+    {
+        // The breaker sits inside the retry, so one call is MaxRetryAttempts + 1 attempts toward the throughput.
+        using ProviderHost own = OwnHost();
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        while (Calls(own.Server, "/v1/authorisations") < ProviderHop.CircuitBreakerMinimumThroughput)
+        {
+            await Should.ThrowAsync<PaymentProviderUnavailableException>(() =>
+                Provider(own.Factory).AuthoriseAsync(Authorisation(10.05m), ct));
+        }
+
+        int before = Calls(own.Server, "/v1/authorisations");
+
+        PaymentProviderUnavailableException refused = await Should.ThrowAsync<PaymentProviderUnavailableException>(
+            () => Provider(own.Factory).AuthoriseAsync(Authorisation(42.10m), ct));
+
+        // Once open, it refuses without a request leaving this process, even for an amount the provider approves.
+        Calls(own.Server, "/v1/authorisations").ShouldBe(before);
+        refused.InnerException.ShouldBeAssignableTo<BrokenCircuitException>();
+    }
+
+    [Fact]
+    public void One_orders_own_calls_reach_the_breakers_throughput_inside_its_window()
+    {
+        // A saga sends one order at a time, so the consumer's retries of that order must open it by themselves.
+        int calls = (int)Math.Ceiling(
+            (double)ProviderHop.CircuitBreakerMinimumThroughput / (ProviderHop.MaxRetryAttempts + 1));
+
+        (ProviderHop.TotalRequestTimeout * calls).ShouldBeLessThan(ProviderHop.CircuitBreakerSamplingDuration,
+            "a breaker whose throughput one order's back-to-back calls cannot fill never opens at saga pace");
+        ProviderHop.CircuitBreakerSamplingDuration.ShouldBeGreaterThanOrEqualTo(ProviderHop.AttemptTimeout * 2,
+            "the standard handler's options validation refuses a shorter window at start");
     }
 
     [Theory]
@@ -320,7 +360,7 @@ public sealed class HttpPaymentProviderTests : IClassFixture<HttpPaymentProvider
     [Fact]
     public async Task A_stalled_provider_is_unavailable_within_the_total_budget_and_its_timeouts_count()
     {
-        using ProviderHost own = StalledHost();
+        using ProviderHost own = OwnHost();
         using UnavailableCount counted = CountUnavailable(own.Factory);
         DateTimeOffset started = DateTimeOffset.UtcNow;
 
@@ -583,7 +623,7 @@ public sealed class HttpPaymentProviderTests : IClassFixture<HttpPaymentProvider
     [Fact]
     public async Task A_cancellation_during_an_attempt_is_the_callers_and_is_not_counted()
     {
-        using ProviderHost own = StalledHost();
+        using ProviderHost own = OwnHost();
         using UnavailableCount counted = CountUnavailable(own.Factory);
         using CancellationTokenSource cancelled = CancellationTokenSource.CreateLinkedTokenSource(
             TestContext.Current.CancellationToken);

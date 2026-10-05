@@ -16,6 +16,16 @@ public static class ProviderHop
 
     public static readonly TimeSpan TotalRequestTimeout = TimeSpan.FromSeconds(20);
 
+    public const double CircuitBreakerFailureRatio = 0.5;
+
+    /// <summary>Sized to one order's retries, since at saga pace the default's hundred is never reached.</summary>
+    public const int CircuitBreakerMinimumThroughput = 4;
+
+    /// <summary>Long enough for one order's back-to-back calls to fill the throughput (§9.7).</summary>
+    public static readonly TimeSpan CircuitBreakerSamplingDuration = TimeSpan.FromSeconds(60);
+
+    public static readonly TimeSpan CircuitBreakerBreakDuration = TimeSpan.FromSeconds(30);
+
     /// <summary>Every defined answer is a few short fields, so a larger one is refused unread.</summary>
     public const int MaxAnswerBytes = 64 * 1024;
 }
