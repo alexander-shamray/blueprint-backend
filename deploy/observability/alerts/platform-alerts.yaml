@@ -213,11 +213,12 @@ groups:
             is past every cause that resolves itself or raises its own alert.
           runbook_url: docs/runbooks/unattributed-order.md
 
-      # A rate, because the counter only grows: a refusal last week is not one
-      # now. No `for`: the window holds one refusal for five minutes, and none
-      # is transient. A page, because no retry fixes a grant (ADR-052).
+      # An increase, because the counter only grows, over a window longer than
+      # one row's longest backoff (OutboxDispatcher.BackoffAttemptCap), so a
+      # refusal still under way keeps it firing. No `for`: none is transient,
+      # and no retry fixes a grant (ADR-052), so it pages.
       - alert: AddressReadRefused
-        expr: sum by (service_name) (rate(shipping_address_refused_total[5m])) > 0
+        expr: sum by (service_name) (increase(shipping_address_refused_total[30m])) > 0
         labels:
           severity: page
           owner: service
