@@ -62,8 +62,8 @@ def hint(prompt: str) -> str | None:
 
 
 def main() -> int:
-    # Bytes, decoded here: the console code page would mangle or refuse a
-    # prompt holding a dash, and a refusal must still be silence.
+    # Bytes, decoded here: Python reads a Windows pipe in the ANSI code page,
+    # which would garble a prompt holding anything outside it.
     try:
         event = json.loads(sys.stdin.buffer.read().decode("utf-8", "replace") or "{}")
         prompt = event.get("prompt") if isinstance(event, dict) else None
