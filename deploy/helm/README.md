@@ -140,6 +140,19 @@ gateway:
   ingress:
     host: api.staging.example.com
     trustedNetworks: [ "10.42.0.0/16" ]   # the ingress controller's pod CIDRs
+  networkPolicy:
+    # ADR-065: the peers outside the namespace are this cluster's to state,
+    # and every chart takes its own; a capability with none fails the render.
+    ingressController:
+      from: [ { namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: ingress-nginx } } } ]
+    identity:
+      to: [ { ipBlock: { cidr: "203.0.113.0/28" } } ]   # the identity provider's published range
+ordering:
+  networkPolicy:
+    identity: { to: [ { ipBlock: { cidr: "203.0.113.0/28" } } ] }
+    database: { to: [ { ipBlock: { cidr: "10.60.0.0/24" } } ] }
+    redis:    { to: [ { ipBlock: { cidr: "10.61.0.0/24" } } ] }
+    broker:   { to: [ { namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: messaging } } } ] }
 payments:
   paymentProvider:
     # §3.2's provider, per cluster. An absolute HTTPS address;
@@ -194,6 +207,14 @@ notifications:
   reference to a Secret that does not exist is still a pod that never starts —
   which is why they joined with the PR whose code reads them rather than
   earlier, exactly as §14.1's Compose blocks say.
+- **A fence for the migration Job, and a hostname as a peer.** ADR-065's
+  `NetworkPolicy` selects the workload's pods, and the migrator's pods carry
+  labels of their own so that they are never a Service's endpoint, so the Job
+  runs outside the fence and is owed one. A third party is a peer by the
+  address ranges it publishes, because the core API has no hostname peer; a
+  plugin's own hostname policy is the deployment's to layer on top, and none is
+  rendered here. Whether the cluster's network plugin enforces any of it is a
+  fact about the cluster the render cannot see.
 - **`readOnlyRootFilesystem`.** The right posture, and a decision no chapter
   has taken. Asserting it untested against the chiselled runtime images would
   trade a review question for a CrashLoop. `runAsNonRoot` IS set, because it
