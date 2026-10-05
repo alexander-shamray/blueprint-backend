@@ -16,7 +16,9 @@ internal sealed class SendClaims(IDbConnectionFactory connections)
             AND (LockedUntil IS NULL OR LockedUntil < SYSDATETIMEOFFSET())
         """;
 
-    // One statement selects and leases, so two replicas cannot take one row; READPAST skips another's.
+    // One statement selects and leases, so two replicas cannot take one row; READPAST skips another's. An empty
+    // CorrelationId is the column's default, left by a version that predates it while both run (§7.4), so the row's
+    // order stands in, as AddNotificationCorrelationId's backfill argues.
     private static readonly string ClaimSql =
         $"""
         WITH claimable AS (
@@ -27,9 +29,10 @@ internal sealed class SendClaims(IDbConnectionFactory connections)
         )
         UPDATE claimable
         SET LockedUntil = DATEADD(second, {SendWorker.LeaseSeconds}, SYSDATETIMEOFFSET())
-        OUTPUT inserted.NotificationId, inserted.EventId, inserted.CorrelationId, inserted.OrderId, inserted.CustomerId,
-            inserted.TemplateKey, inserted.Parameters, inserted.CreatedAt, inserted.SendStartedAt,
-            inserted.TemplateVersion, inserted.Languages;
+        OUTPUT inserted.NotificationId, inserted.EventId,
+            COALESCE(NULLIF(inserted.CorrelationId, '{Guid.Empty:D}'), inserted.OrderId) AS CorrelationId,
+            inserted.OrderId, inserted.CustomerId, inserted.TemplateKey, inserted.Parameters, inserted.CreatedAt,
+            inserted.SendStartedAt, inserted.TemplateVersion, inserted.Languages;
         """;
 
     // The dispatcher's ladder, read from its constants so the two cannot drift; the lease drops with it. No count
