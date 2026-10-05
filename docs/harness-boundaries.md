@@ -181,13 +181,10 @@ the skill and not only the command** because the skill's `allowed-tools` is
 the only grant for the `cbx` wrapper, and it holds only while the skill is
 loaded. It reads only the decoded `prompt` string, never the payload's paths,
 writes nothing, spawns nothing and leaves with 0 whatever happened: exit 2
-under this event blocks the prompt and erases it. For the same reason it is
-started through `runpy` from `-c` rather than as a file argument: Python exits
-2 on a file it cannot open, as when a worktree is emptied under a session
-still running in it, and through `runpy` that failure exits 1 and only
-reports. `test_index_query_hint.py`
-holds every command it emits to a row of the route table and a prefix the
-skill approves.
+under this event blocks the prompt and erases it, which is also why it is
+started the way the paragraph on hook commands below says.
+`test_index_query_hint.py` holds every command it emits to a row of the route
+table and a prefix the skill approves.
 
 **`MCP_TIMEOUT` is raised in `.claude/settings.json`'s `env`.** The plugin
 servers started through `npx` — `playwright` and `chrome-devtools` — failed
@@ -213,10 +210,17 @@ preference.** An env-var prefix — `VAR=1 cmd` — is POSIX syntax that `cmd`
 and PowerShell do not run, and a bare `bash` is whatever `PATH` resolves
 first, which on Windows may be Git Bash or the WSL launcher: different
 programs, with different filesystems. Either way the failure lands in the
-redirect and reports nothing. So the form here is `py -3.12` over a file, as
-the `PreToolUse` guards beside it are, and the file sets its own environment
-— `CBX_NO_SKILL_AUTO_UPDATE=1`, which it owes because it calls the CLI
-rather than the `cbx` wrapper that would have set it.
+redirect and reports nothing. So the form here is `py -3.12` with no shell
+syntax, as the `PreToolUse` guards beside it are. The two index hooks are
+started through `runpy` from `-c` rather than as a file argument, because
+Python exits 2 on a file it cannot open, as when a worktree is emptied under
+a session still running in it: under `UserPromptSubmit` that erases every
+prompt, and under `PostToolUse` it reports an error after every call, where
+through `runpy` the failure exits 1 and only reports. They read
+`CLAUDE_PROJECT_DIR` from the environment rather than having it spliced into
+the program, which a path holding a quote would break. The refresh hook sets
+its own environment — `CBX_NO_SKILL_AUTO_UPDATE=1`, which it owes because it
+calls the CLI rather than the `cbx` wrapper that would have set it.
 
 `examples/hooks/settings.json` carries the same block. It sits under
 `examples/`, which Claude Code does not read, so it documents the wiring

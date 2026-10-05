@@ -10,6 +10,7 @@ import importlib.util
 import io
 import json
 import os
+import shlex
 import shutil
 import sqlite3
 import subprocess
@@ -31,7 +32,8 @@ CACHE = Path(".claude") / "cache" / "codebase-index"
 # `not-refresh-index.py` and `refresh-index.py.disabled` both contain the
 # file's name and neither of them runs it — and the hook swallows every
 # failure, so a registration broken that way is green everywhere else.
-COMMAND = 'py -3.12 "${CLAUDE_PROJECT_DIR}/.claude/hooks/refresh-index.py"'
+COMMAND = ("py -3.12 -P -c \"import os, runpy; runpy.run_path(os.environ['CLAUDE_PROJECT_DIR']"
+           " + '/.claude/hooks/refresh-index.py', run_name='__main__')\"")
 
 
 def _load():
@@ -729,6 +731,20 @@ class Registration(Base):
     def test_settings_refreshes_at_session_start(self):
         """The moves no edit makes: a merge, a switch or a pull."""
         self.assertIn("SessionStart", entries_running_the_hook(SETTINGS))
+
+
+class RegisteredCommand(unittest.TestCase):
+    def test_a_missing_hook_file_does_not_exit_2(self):
+        """Python exits 2 on a file it cannot open, a worktree emptied under a
+        running session, and under `PostToolUse` that is an error after every
+        call; through `runpy` the same failure exits 1."""
+        with tempfile.TemporaryDirectory() as gone:
+            done = subprocess.run(
+                [sys.executable, *shlex.split(COMMAND)[2:]], input=b"{}", capture_output=True,
+                timeout=30, check=False, env=dict(os.environ, CLAUDE_PROJECT_DIR=gone))
+
+        self.assertNotEqual(2, done.returncode, done.stderr)
+        self.assertIn(b"FileNotFoundError", done.stderr)
 
 
 class DocumentedConfiguration(unittest.TestCase):
