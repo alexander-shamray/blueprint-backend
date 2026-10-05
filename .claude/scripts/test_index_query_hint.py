@@ -165,14 +165,21 @@ class TheHint(unittest.TestCase):
         self.assertTrue(context(ask("where is it " + "x" * (cap * 4))))
         self.assertEqual(b"", ask("x " * cap + "where is it").stdout.strip())
 
-    def test_a_prompt_in_utf_8_is_read(self):
-        """Raw UTF-8, as the payload arrives: `\u0141` carries a byte the Windows
-        console code page has no character for, so decoding it there fails."""
+    def test_a_prompt_holding_non_ascii_text_is_routed(self):
         payload = json.dumps({"hook_event_name": EVENT,
                               "prompt": "where is the \u0141\u00f3d\u017a relay \u2014 the outbox?"},
                              ensure_ascii=False).encode("utf-8")
 
         self.assertTrue(context(run(payload)))
+
+    def test_the_prompt_is_decoded_as_utf_8(self):
+        """`\u00e9where` asks nothing, `\u00e9` being a word character; read in
+        the ANSI code page Python gives a Windows pipe it becomes `\u00c3\u00a9`,
+        whose `\u00a9` is not, and the hint fires on a prompt with no question."""
+        payload = json.dumps({"hook_event_name": EVENT, "prompt": "\u00e9where is the relay"},
+                             ensure_ascii=False).encode("utf-8")
+
+        self.assertEqual(b"", run(payload).stdout.strip())
 
     def test_input_it_cannot_read_is_silent_and_never_blocks(self):
         for payload in (b"", b"<html>", b"\xff\xfe\x00", b'{"prompt": 7}',
