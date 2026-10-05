@@ -2929,7 +2929,9 @@ configuration-validation test at startup.
    `MailHop` are each sized to theirs: a third party's latency is not a
    peer's, and none of the three calls has a waiting caller — the provider's
    fits the saga's payment wait (§9.6), and the carrier's and the relay's a
-   worker's leased row.
+   worker's leased row. So the hierarchy's "< service operation" does not
+   bind them: `ServiceOptions.OperationTimeout` is a request's deadline, and
+   a hop no request waits on answers to its own caller's budget instead.
 2. **Circuit breaker.** After a threshold of failures, fail fast rather than
    queueing threads against a dead service. Each hop sizes its breaker to the
    rate it is really called at: one paced by a worker's tick or by a saga's
