@@ -186,6 +186,7 @@ extraConfigMaps: []
 # the namespace is a workload and a port name; what runs outside it is a list
 # of NetworkPolicy peers the deployment states, and an empty one is refused
 # wherever a capability above dials it, since a rule with no peer admits all.
+# A port is the peer pod's; one stated here wins over the one its address dials.
 networkPolicy:
   ingressFrom: []
   egressTo:

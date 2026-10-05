@@ -34,9 +34,13 @@ list of NetworkPolicy peers the deployment states in values — an `ipBlock`, or
 a namespace and pod selector for something in the cluster — and a capability
 that is on with no peer stated fails the render, as does a peer of every
 address, because a rule with no peer admits everyone on its port. A port is
-read from the address the host is already given — the authority, the OTLP
-endpoint, the carrier's and the provider's base URLs, `mail.port` — and stated
-only for a database, Redis and the broker, whose addresses live in Secrets.
+matched at the destination pod, after a Service has translated it, so a peer's
+port is its pod port. It is stated for a database, Redis and the broker, whose
+addresses live in Secrets; any other peer's is read from the address the host
+is already given — the authority, the OTLP endpoint, the carrier's and the
+provider's base URLs, `mail.port` — unless the peer states one, which wins. A
+peer behind a Service that maps its port states it; the identity provider's
+covers its admin API too.
 **Why.** [§11.2](../11-identity-authorization.md) says to assume the network is
 hostile, and that held at each listener and nowhere between them: any pod could
 reach any other, and egress was whatever the cluster allowed, while two workers

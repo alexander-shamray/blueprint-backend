@@ -143,6 +143,8 @@ gateway:
   networkPolicy:
     # ADR-065: the peers outside the namespace are this cluster's to state,
     # and every chart takes its own; a capability with none fails the render.
+    # A port is matched at the peer's pod, so a peer behind a Service that maps
+    # its port states the pod's: `identity: { port: 8443, to: [ … ] }`.
     ingressController:
       from: [ { namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: ingress-nginx } } } ]
     identity:

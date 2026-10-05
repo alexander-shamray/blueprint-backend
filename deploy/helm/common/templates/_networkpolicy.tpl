@@ -30,7 +30,8 @@ every address is refused for the same reason (ADR-065). */}}
 {{- end -}}
 
 {{- /* The port an address dials, read from the address its host is given rather
-than stated twice: its own port, or its scheme's. */}}
+than stated twice: its own port, or its scheme's. A policy matches the pod's
+port after a Service translates it, so a peer's stated port wins (ADR-065). */}}
 {{- define "commerce.urlPort" -}}
 {{- $url := . | default "" | toString -}}
 {{- $port := regexFind ":[0-9]+$" (regexFind "^[a-z]+://[^/]+" $url) -}}
@@ -88,9 +89,9 @@ spec:
           protocol: TCP
     {{- /* Every host exports its telemetry (§13.2) and validates tokens against the
     identity provider (§11.2), whether or not it holds a grant of its own. */}}
-    {{- include "commerce.networkPolicyEgress" (list ($np.telemetry).to "telemetry.to" "every host exports to the OTLP endpoint (§13.2)." (include "commerce.urlPort" .Values.observability.otlpEndpoint)) | nindent 4 }}
-    {{- include "commerce.networkPolicyEgress" (list ($np.identity).to "identity.to" "every host validates tokens against the identity provider (§11.2)." (include "commerce.urlPort" .Values.identity.authority)) | nindent 4 }}
-    {{- if and (.Values.contactSource).enabled (ne (include "commerce.urlPort" .Values.contactSource.baseUrl) (include "commerce.urlPort" .Values.identity.authority)) }}
+    {{- include "commerce.networkPolicyEgress" (list ($np.telemetry).to "telemetry.to" "every host exports to the OTLP endpoint (§13.2)." (($np.telemetry).port | default (include "commerce.urlPort" .Values.observability.otlpEndpoint))) | nindent 4 }}
+    {{- include "commerce.networkPolicyEgress" (list ($np.identity).to "identity.to" "every host validates tokens against the identity provider (§11.2)." (($np.identity).port | default (include "commerce.urlPort" .Values.identity.authority))) | nindent 4 }}
+    {{- if and (.Values.contactSource).enabled (not ($np.identity).port) (ne (include "commerce.urlPort" .Values.contactSource.baseUrl) (include "commerce.urlPort" .Values.identity.authority)) }}
     {{- include "commerce.networkPolicyEgress" (list ($np.identity).to "identity.to" "contactSource reads Keycloak's admin API (ADR-052)." (include "commerce.urlPort" .Values.contactSource.baseUrl)) | nindent 4 }}
     {{- end }}
     {{- if .Values.database.enabled }}
@@ -103,13 +104,13 @@ spec:
     {{- include "commerce.networkPolicyEgress" (list ($np.broker).to "broker.to" "broker.enabled says this host reaches the broker (§9)." ($np.broker).port) | nindent 4 }}
     {{- end }}
     {{- if (.Values.paymentProvider).enabled }}
-    {{- include "commerce.networkPolicyEgress" (list ($np.paymentProvider).to "paymentProvider.to" "paymentProvider.enabled says this host calls the provider (§3.2)." (include "commerce.urlPort" .Values.paymentProvider.baseUrl)) | nindent 4 }}
+    {{- include "commerce.networkPolicyEgress" (list ($np.paymentProvider).to "paymentProvider.to" "paymentProvider.enabled says this host calls the provider (§3.2)." (($np.paymentProvider).port | default (include "commerce.urlPort" .Values.paymentProvider.baseUrl))) | nindent 4 }}
     {{- end }}
     {{- if (.Values.carrier).enabled }}
-    {{- include "commerce.networkPolicyEgress" (list ($np.carrier).to "carrier.to" "carrier.enabled says this host calls the carrier (§3.2)." (include "commerce.urlPort" .Values.carrier.baseUrl)) | nindent 4 }}
+    {{- include "commerce.networkPolicyEgress" (list ($np.carrier).to "carrier.to" "carrier.enabled says this host calls the carrier (§3.2)." (($np.carrier).port | default (include "commerce.urlPort" .Values.carrier.baseUrl))) | nindent 4 }}
     {{- end }}
     {{- if (.Values.mail).enabled }}
-    {{- include "commerce.networkPolicyEgress" (list ($np.mail).to "mail.to" "mail.enabled says this host submits to the relay." (.Values.mail.port | toString)) | nindent 4 }}
+    {{- include "commerce.networkPolicyEgress" (list ($np.mail).to "mail.to" "mail.enabled says this host submits to the relay." (($np.mail).port | default .Values.mail.port | toString)) | nindent 4 }}
     {{- end }}
     {{- range $np.egressTo }}
     - to:
