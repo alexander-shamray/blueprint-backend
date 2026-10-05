@@ -166,7 +166,8 @@ carries it.** A session started in a worktree reads that worktree's own
 there reports `codebase-index` pending approval while every plugin server
 connects; one that enters the worktree mid-session keeps the main checkout's
 approval. The same keys in the tracked `.claude/settings.json` were measured
-to leave the server pending, so the local file is the only place they work.
+to leave the server pending, so of the project's two settings files only the
+local one carries them.
 `git-worktree-fork.sh` writes the worktree a `settings.local.json` holding the
 main checkout's `enabledMcpjsonServers` and nothing else, because the rest of
 that file is the main checkout's own `permissions` rows, and copying it would
