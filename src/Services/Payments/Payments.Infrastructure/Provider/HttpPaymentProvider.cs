@@ -8,7 +8,7 @@ using Polly;
 
 namespace Payments.Infrastructure.Provider;
 
-/// <summary>The one place that knows the provider's wire format (§3.2's anti-corruption layer).</summary>
+/// <summary>The one place that knows the provider's wire format (§3.1's anti-corruption layer).</summary>
 internal sealed class HttpPaymentProvider(HttpClient http, ProviderMetrics metrics) : IPaymentProvider
 {
     private const string KeyHeader = "Idempotency-Key";
