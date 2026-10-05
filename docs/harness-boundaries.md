@@ -181,7 +181,11 @@ the skill and not only the command** because the skill's `allowed-tools` is
 the only grant for the `cbx` wrapper, and it holds only while the skill is
 loaded. It reads only the decoded `prompt` string, never the payload's paths,
 writes nothing, spawns nothing and leaves with 0 whatever happened: exit 2
-under this event blocks the prompt and erases it. `test_index_query_hint.py`
+under this event blocks the prompt and erases it. For the same reason it is
+started through `runpy` from `-c` rather than as a file argument: Python exits
+2 on a file it cannot open, as when a worktree is emptied under a session
+still running in it, and through `runpy` that failure exits 1 and only
+reports. `test_index_query_hint.py`
 holds every command it emits to a row of the route table and a prefix the
 skill approves.
 

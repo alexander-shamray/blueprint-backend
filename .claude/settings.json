@@ -127,7 +127,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "py -3.12 \"${CLAUDE_PROJECT_DIR}/.claude/hooks/index-query-hint.py\"",
+            "command": "py -3.12 -P -c \"import runpy; runpy.run_path(r'${CLAUDE_PROJECT_DIR}/.claude/hooks/index-query-hint.py', run_name='__main__')\"",
             "timeout": 5
           }
         ]
