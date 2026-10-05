@@ -228,6 +228,14 @@ public sealed class GetProductDetailHandler(HybridCache cache, IDbConnectionFact
 The `static` lambda with the state parameter avoids allocating a closure per
 call — a small thing that matters on a hot path.
 
+**Catalog's real one-product read is not this handler, and it caches
+nothing.** `GetProductHandler` ([§6.5](06-cqrs.md)) returns the listing's row,
+and that row carries Inventory's stock level, which `StockLevelProjection`
+writes and nothing stages a `Local` invalidation for (§8.4). A cached copy
+would serve a level no event removes, so the read stays where the listing is:
+Dapper over the tables, at level 1. This sample is the shape the first cached
+read takes once its invalidation exists.
+
 ## 8.3 Key naming
 
 A convention, and the important thing about it is that **a call site writes only

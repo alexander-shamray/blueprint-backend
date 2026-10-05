@@ -22,6 +22,22 @@ public sealed class ProxiedRouteTests(StubDestination stub) : IClassFixture<Stub
         stub.ReceivedPaths.Last().ShouldBe("/v1/catalog/products");
     }
 
+    /// <summary>A product's deep link is under the same catch-all and the same anonymous pair (§10.2).</summary>
+    [Fact]
+    public async Task An_anonymous_get_of_one_product_reaches_catalog_public()
+    {
+        using StubbedGatewayFactory factory = new(stub.Address);
+        using HttpClient client = factory.CreateClient();
+        var productId = Guid.CreateVersion7();
+
+        HttpResponseMessage response = await client.GetAsync(
+            $"/api/v1/catalog/products/{productId}",
+            TestContext.Current.CancellationToken);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.NoContent);
+        stub.ReceivedPaths.Last().ShouldBe($"/v1/catalog/products/{productId}");
+    }
+
     /// <summary>Reaching the stub shows <c>catalog-write</c> matched and admitted it (§10.2).</summary>
     [Fact]
     public async Task An_authenticated_post_reaches_catalog_write()

@@ -72,6 +72,13 @@ public class AuthorizationPolicyTests(HostSmokeTests.UnreachableInfrastructureFa
             .ShouldContain(CatalogPermissions.Write);
     }
 
+    [Fact]
+    public void The_one_product_read_is_anonymous_like_the_listing()
+    {
+        // The same catalog-public route serves it (§10.2), and the group fails closed without this metadata.
+        Single("GetProduct").Metadata.GetMetadata<IAllowAnonymous>().ShouldNotBeNull();
+    }
+
     private Endpoint Single(string name) =>
         Endpoints.Single(e => e.Metadata.GetMetadata<IEndpointNameMetadata>()?.EndpointName == name);
 }

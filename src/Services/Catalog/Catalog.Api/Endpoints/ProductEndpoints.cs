@@ -1,3 +1,4 @@
+using Catalog.Application.Products.GetProduct;
 using Catalog.Application.Products.GetProducts;
 using Catalog.Application.Products.PublishProduct;
 using Common.Application;
@@ -46,5 +47,20 @@ public static class ProductEndpoints
             // Anonymous, as §10.2's catalog-public route specifies, and stated because the group fails closed.
             .AllowAnonymous()
             .WithName("GetProducts");
+
+        // The listing's row and its anonymity (§6.5, §10.2); the metadata is what puts the 404 in the document.
+        group
+            .MapGet(
+                "/{id:guid}",
+                async (Guid id, IDispatcher dispatcher, CancellationToken ct) =>
+                {
+                    Result<ProductSummaryDto> result = await dispatcher.QueryAsync(new GetProductQuery(id), ct);
+
+                    return result.ToHttpResult();
+                })
+            .AllowAnonymous()
+            .Produces<ProductSummaryDto>()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .WithName("GetProduct");
     }
 }
