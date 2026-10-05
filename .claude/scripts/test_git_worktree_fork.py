@@ -165,6 +165,19 @@ class ForkShape(unittest.TestCase):
         self.assertEqual({"enabledMcpjsonServers": ["codebase-index"]},
                          json.loads(copied.stdout))
 
+    def test_a_disabled_server_does_not_cross(self):
+        # The worktree may approve no server the main checkout refuses.
+        root = self.fixture()
+        self.local_settings(root, json.dumps({
+            "enabledMcpjsonServers": ["codebase-index", "other"],
+            "disabledMcpjsonServers": ["other"]}))
+        result = self.fork(f"{root}/checkout", ".claude/worktrees/probe")
+        self.assertEqual(0, result.returncode, result.stderr)
+        copied = self.probe_settings(root)
+        self.assertEqual(0, copied.returncode, copied.stderr)
+        self.assertEqual({"enabledMcpjsonServers": ["codebase-index"]},
+                         json.loads(copied.stdout))
+
     def test_any_other_path_is_refused(self):
         root = self.fixture()
         for path in ("../sibling", ".claude/worktrees/../x", ".claude/worktrees/a/b",

@@ -170,7 +170,7 @@ to leave the server pending, so of the project's two settings files only the
 local one carries them.
 `git-worktree-fork.sh` writes the worktree a `settings.local.json` holding
 one key, `enabledMcpjsonServers`, naming the servers the main checkout
-approves, with an `enableAllProjectMcpServers` expanded to the servers
+approves and does not disable, with an `enableAllProjectMcpServers` expanded to the servers
 `.mcp.json` defines at the fork, and nothing else. The rest of that file is
 the main checkout's own `permissions` rows, and copying it would widen every
 worktree by them; the approve-all itself would approve servers defined after
