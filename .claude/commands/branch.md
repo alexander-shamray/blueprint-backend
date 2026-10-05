@@ -302,7 +302,7 @@ not content.
    ```
 
    **The helper is the whole command, and it takes two arguments because
-   everything else about it is fixed.** Its one git command is
+   everything else about it is fixed.** Its one git command that writes is
    `git worktree add --no-track -b <branch> <path> origin/main`, after which
    it starts the new worktree's index refresh — a `Bash(git worktree add:*)`
    grant would also buy `-B`, which does not create a branch but **resets**
