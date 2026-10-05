@@ -251,6 +251,10 @@ waiting work takes the terminal mark rather than the delete. The clause under
 moved is its example, which put Notifications on the deleting side, and ADR-053
 is the record that moved it.
 
+**Note, 2026-10-05.** The comments the `src/BFF/Web.Bff/` and
+`tools/new-service/scaffold/render.py` row names were cut by later comment
+sweeps, so that row describes text no longer in the tree.
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)
