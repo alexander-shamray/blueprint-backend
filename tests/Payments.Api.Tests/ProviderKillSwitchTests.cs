@@ -28,15 +28,30 @@ public sealed class ProviderKillSwitchTests
 
     public sealed record Probe(Guid Id, Fault Fault);
 
-    public sealed class ProbeConsumer : IConsumer<Probe>
+    /// <summary>Every call into the consumer, a retry's as much as a first delivery's.</summary>
+    private sealed class Attempts
     {
-        public Task Consume(ConsumeContext<Probe> context) => context.Message.Fault switch
+        private int _count;
+
+        public int Count => Volatile.Read(ref _count);
+
+        public void Add() => Interlocked.Increment(ref _count);
+    }
+
+    private sealed class ProbeConsumer(Attempts attempts) : IConsumer<Probe>
+    {
+        public Task Consume(ConsumeContext<Probe> context)
         {
-            Fault.Unavailable => throw new PaymentProviderUnavailableException("The provider did not answer."),
-            Fault.Mismatch => throw new PaymentMismatchException("A reused key with different figures."),
-            Fault.Mapping => throw new ContractMappingException("An unmappable message."),
-            _ => Task.CompletedTask
-        };
+            attempts.Add();
+
+            return context.Message.Fault switch
+            {
+                Fault.Unavailable => throw new PaymentProviderUnavailableException("The provider did not answer."),
+                Fault.Mismatch => throw new PaymentMismatchException("A reused key with different figures."),
+                Fault.Mapping => throw new ContractMappingException("An unmappable message."),
+                _ => Task.CompletedTask
+            };
+        }
     }
 
     private sealed class StopObserver : IReceiveEndpointObserver
@@ -59,8 +74,11 @@ public sealed class ProviderKillSwitchTests
     private sealed class ConsumedObserver : IConsumeObserver
     {
         private int _settled;
+        private int _faults;
 
         public int Settled => Volatile.Read(ref _settled);
+
+        public int Faults => Volatile.Read(ref _faults);
 
         public Task PreConsume<T>(ConsumeContext<T> context) where T : class => Task.CompletedTask;
 
@@ -72,12 +90,13 @@ public sealed class ProviderKillSwitchTests
 
         public Task ConsumeFault<T>(ConsumeContext<T> context, Exception exception) where T : class
         {
+            Interlocked.Increment(ref _faults);
             Interlocked.Increment(ref _settled);
             return Task.CompletedTask;
         }
     }
 
-    private static IBusControl Bus(StopObserver stops, ConsumedObserver consumed)
+    private static IBusControl Bus(StopObserver stops, ConsumedObserver consumed, Attempts attempts)
     {
         IBusControl bus = MassTransit.Bus.Factory.CreateUsingInMemory(cfg =>
         {
@@ -92,7 +111,7 @@ public sealed class ProviderKillSwitchTests
                         r.Ignore<PaymentMismatchException>();
                         r.Immediate(Retries);
                     });
-                    e.Consumer<ProbeConsumer>();
+                    e.Consumer(() => new ProbeConsumer(attempts));
                     e.ConnectReceiveEndpointObserver(stops);
                 });
         });
@@ -116,13 +135,18 @@ public sealed class ProviderKillSwitchTests
     {
         StopObserver stops = new();
         ConsumedObserver consumed = new();
-        IBusControl bus = Bus(stops, consumed);
+        Attempts attempts = new();
+        IBusControl bus = Bus(stops, consumed, attempts);
         await bus.StartAsync(TestContext.Current.CancellationToken);
         try
         {
             await SendAsync(bus, Fault.Unavailable, Burst);
 
             await stops.Stopped.Task.WaitAsync(Budget, TestContext.Current.CancellationToken);
+
+            // What TrackingPeriod relies on: the switch counts a message once, after its whole ladder.
+            attempts.Count.ShouldBe(Burst * (Retries + 1), "every message ran its first delivery and every retry");
+            consumed.Faults.ShouldBe(Burst, "each message faulted once, after its retries, not once per attempt");
 
             bus.CheckHealth().Status.ShouldBe(
                 BusHealthStatus.Degraded,
@@ -141,7 +165,7 @@ public sealed class ProviderKillSwitchTests
     {
         StopObserver stops = new();
         ConsumedObserver consumed = new();
-        IBusControl bus = Bus(stops, consumed);
+        IBusControl bus = Bus(stops, consumed, new Attempts());
         await bus.StartAsync(TestContext.Current.CancellationToken);
         try
         {
