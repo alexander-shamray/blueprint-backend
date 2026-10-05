@@ -34,10 +34,10 @@ public class ConsumerCallRuleTests(ConsumerCallRuleTests.ComposedFactory factory
         }
     }
 
-    /// <summary>No ADR grants it; the provider is the anti-corruption layer's (§3.1) and its hop is §9.7's.</summary>
+    /// <summary>The provider call ADR-070 grants, inside the consumers that authorise and cancel.</summary>
     private static readonly ConsumerCallException ProviderCall = new(
         typeof(IPaymentProvider),
-        GrantedBy: "§3.1, §9.7",
+        GrantedBy: "ADR-070",
         WhenUnreachable: "the message is retried and then faulted, and ProviderKillSwitch stops the endpoint; " +
             "no verdict is recorded",
         WhenAnsweredNo: "a decline is recorded and PaymentDeclined staged",
