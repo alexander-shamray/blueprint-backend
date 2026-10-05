@@ -138,12 +138,10 @@ def derived_names(queue: str) -> set[str]:
 
 
 def messaging_dirs() -> dict[str, Path]:
-    """Every service's and consuming host's Messaging directory, keyed by its tree's name.
+    """Every service's and host's Messaging directory, keyed by its tree's name, so the BFF's is bff-svc.
 
-    Globbed, so a service §4.5's scaffold renders tomorrow is read on the day
-    it lands. A host is keyed as a service is, which makes the BFF bff-svc.
-    Two directories keying to one account are refused, since the second would
-    silently replace the first and its grant would go unchecked.
+    Globbed, so a service §4.5's scaffold renders is read the day it lands. A
+    second directory on one key is refused, or it would replace the first unchecked.
     """
     found: dict[str, Path] = {}
     paths = [*sorted(SERVICES.glob("*/*.Infrastructure/Messaging")), *sorted(HOSTS.glob("*/Messaging"))]

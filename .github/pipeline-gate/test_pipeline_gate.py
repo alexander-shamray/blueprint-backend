@@ -210,7 +210,6 @@ class ImageTests(Fixture):
         skipped, and the job goes green having built nothing. Both halves of
         the inventory are still perfectly consistent.
         """
-        # The condition follows the entry, so the job's `if:` is not what fails.
         self.write(WORKFLOW.replace("- filter: gateway", "- filter: edge")
                    .replace("outputs.gateway ==", "outputs.edge =="))
 
