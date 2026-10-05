@@ -53,9 +53,12 @@ public sealed class DatabaseSmokeTests(BffServiceFixture fixture)
     public async Task Migrating_twice_applies_nothing_and_still_exits_zero()
     {
         // §7.4 reruns this on every deploy, so applying nothing has to succeed.
+        string[] before = await fixture.AppliedMigrationsAsync();
+
         int exitCode = await BffServiceFixture.RunMigratorAsync(fixture.ConnectionString);
 
         exitCode.ShouldBe(0);
+        (await fixture.AppliedMigrationsAsync()).ShouldBe(before, "a second run applies nothing");
     }
 
     [Fact]
