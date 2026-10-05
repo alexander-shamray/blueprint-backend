@@ -101,7 +101,24 @@ claims rows under a lease, so two replicas of a consumer do not double anything.
 [§15.3](../backend-architecture/15-cicd-deployment.md) gives each worker's
 chart `autoscaling.enabled: false`, so scaling one out is `replicaCount` in its
 own `deploy/helm/<chart>/values.yaml` rather than a `kubectl scale` that the
-next deploy undoes.
+next deploy undoes
+([ADR-063](../backend-architecture/adr/ADR-063-a-worker-that-waits-on-a-third-party-is-scaled-by-hand.md)).
+Three things before raising it:
+
+- **Read the processor's rate limit first.** Each replica claims its own batch
+  every tick — `FulfilmentWorker.ClaimBatchSize` and
+  `TrackingWorker.ClaimBatchSize` against the carrier,
+  `SendWorker.ClaimBatchSize` against the relay — so replicas multiply the
+  calls a carrier or a relay receives. The lease stops two replicas making one
+  call twice; it does nothing for a limit. A count past the limit turns a slow
+  processor into a throttled one.
+- **Rule the dependency out.** A worker held to its timeout by a slow carrier,
+  relay or Keycloak shows the same overdue climb, and more replicas wait on it
+  faster; the sections below say how to tell.
+- **Not during a rollout.** §15.5's first rung scales the stable Deployment
+  for its weight and restores the count it found when it ends, so a change
+  made meanwhile is either undone or skews the canary's share. Ship the new
+  count with the next deploy, or after the rollout finishes.
 
 ## What this does not cover
 
