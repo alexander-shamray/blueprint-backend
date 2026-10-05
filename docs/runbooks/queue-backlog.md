@@ -116,8 +116,9 @@ Three things before raising it:
   relay or Keycloak shows the same overdue climb, and more replicas wait on it
   faster; the sections below say how to tell.
 - **Not during a rollout.** §15.5's first rung scales the stable Deployment
-  for its weight and restores the count it found when it ends, so a change
-  made meanwhile is either undone or skews the canary's share. Ship the new
+  for its weight and, when it ends, restores the count it found on a rollback
+  and the promoted release's declared count on a promotion, so a change made
+  meanwhile is either undone or skews the canary's share. Ship the new
   count with the next deploy, or after the rollout finishes.
 
 ## What this does not cover
