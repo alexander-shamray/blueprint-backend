@@ -409,12 +409,12 @@ which, and the fence is its sample. Read the fence for the shape of a block;
 a destination still joins the dependency list with the change that builds
 it, so the two would diverge again at the next service.
 
-**The BFF's own block gained a `depends_on` the fence above does not show**, on
-`catalog-api`, and the asymmetry with the gateway is the point: the gateway
-routes to services that may not exist, where the BFF *calls* one that does
-(§9.7). Its hop is over `catalog-api:8081` — a second, HTTP/2-only Kestrel
-endpoint, because a cleartext port cannot serve HTTP/1.1 and h2c at once — and
-that port is published to no host and reached by no route.
+**The BFF's block takes no `depends_on` on `catalog-api`, though it calls it.**
+Its pricing hop is made per request and is outside its readiness set (§13.5),
+and §14.3's start order runs the dependency the other way. The hop is over
+`catalog-api:8081` — a second, HTTP/2-only Kestrel endpoint, because a
+cleartext port cannot serve HTTP/1.1 and h2c at once — and that port is
+published to no host and reached by no route.
 
 **Notifications' relay is a sink, and both its ports bind loopback alone.**
 Mailpit runs in Notifications' own unit beside the worker that submits to it,
