@@ -177,15 +177,16 @@ runs take a number and a `gh` session that CI has and a checkout does not:
 gh pr view <n> --json number,url,body,commits,closingIssuesReferences,headRefOid |
     py -3.12 .github/closure-gate/closure_gate.py
 
-gh api "repos/{owner}/{repo}/pulls/<n>/files" --paginate --jq '.[] | {filename, previous_filename}' |
+gh api "repos/{owner}/{repo}/pulls/<n>/files" --paginate --jq '.[] | {filename, previous_filename, status}' |
     jq -s --argjson pr "$(gh pr view <n> --json number,body,changedFiles)" '$pr + {files: .}' |
     py -3.12 .github/locality-gate/locality_gate.py
 ```
 
 The second reads the paginated files endpoint rather than
-`gh pr view --json files`, which is one page; why it needs `changedFiles` and
-`previous_filename` beside it is
-[its README](../.github/locality-gate/README.md)'s.
+`gh pr view --json files`, which is one page; why it needs `changedFiles`,
+`previous_filename` and `status` beside it is
+[its README](../.github/locality-gate/README.md)'s. It judges ignored paths
+against the checkout it runs in, so run it on the pull request's branch.
 
 **The comment gate needs only a base**, because it diffs the checkout's own
 history, so a branch can run it before it has a pull request:

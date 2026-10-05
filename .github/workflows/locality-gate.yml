@@ -116,7 +116,11 @@ jobs:
       # `shell: bash` rather than the default: the default `run` shell is
       # `bash -e` with no pipefail, so a failing `gh` would be masked by
       # whatever the right-hand side exited with.
-      - name: Every changed path is inside the declared class and touch set
+
+      # `status` travels with each entry so a removal leaves nothing behind to
+      # judge, and the gate runs in this checkout, whose .gitignore says which
+      # of the paths left behind could only have arrived force-added.
+      - name: Every changed path is inside the declared class and touch set, and none is ignored
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -125,6 +129,6 @@ jobs:
         run: |
           set -euo pipefail
           pr_json=$(gh pr view "$PR" --repo "$REPO" --json number,body,changedFiles)
-          gh api "repos/$REPO/pulls/$PR/files" --paginate --jq '.[] | {filename, previous_filename}' |
+          gh api "repos/$REPO/pulls/$PR/files" --paginate --jq '.[] | {filename, previous_filename, status}' |
             jq -s --argjson pr "$pr_json" '$pr + {files: .}' |
             python "$RUNNER_TEMP/locality-gate/locality_gate.py" --map "$RUNNER_TEMP/locality-gate/classes.yml"

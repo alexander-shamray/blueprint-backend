@@ -62,6 +62,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import subprocess
 import sys
 from collections.abc import Callable
 from pathlib import Path
@@ -367,12 +368,58 @@ def check(payload: dict, class_map: dict[str, list[str]]) -> list[str]:
     return problems
 
 
+# --------------------------------------------------------------------------
+# the ignored paths
+# --------------------------------------------------------------------------
+
+def arriving(entries: list) -> list[str]:
+    """The paths a diff leaves in the tree: every destination but a removal's."""
+    paths = []
+    for entry in entries:
+        if isinstance(entry, dict) and entry.get("status") == "removed":
+            continue
+        paths.append(_names(entry)[0])
+    return paths
+
+
+def ignored_paths(paths: list[str], root: Path) -> set[str]:
+    """Which of `paths` the ignore rules of the tree holding `root` exclude, asked of git.
+
+    `--no-index` because a force-added file is tracked, and git otherwise
+    never reports a tracked path as ignored."""
+    if not paths:
+        return set()
+    try:
+        top = subprocess.run(["git", "-C", str(root), "rev-parse", "--show-toplevel"],
+                             capture_output=True, encoding="utf-8", check=True).stdout.strip()
+        result = subprocess.run(["git", "check-ignore", "--no-index", "--stdin", "-z"], cwd=top,
+                                input="\0".join(paths) + "\0", capture_output=True, encoding="utf-8")
+    except (OSError, subprocess.CalledProcessError) as error:
+        raise InputRefused(f"git could not say which changed paths the tree ignores: {error}") from error
+    # Exit 1 is git's "none of them"; anything above it is git failing to answer.
+    if result.returncode not in (0, 1):
+        raise InputRefused(f"git check-ignore failed: {result.stderr.strip()}")
+    return {path for path in result.stdout.split("\0") if path}
+
+
+def check_ignored(payload: dict, root: Path) -> list[str]:
+    """Every path the diff leaves in the tree that `.gitignore` excludes; empty when there is none."""
+    excluded = ignored_paths(arriving(payload["files"]), root)
+    return [
+        f"`{path}` is a path .gitignore excludes, so it can only arrive force-added; "
+        f"leave it out, or un-ignore it in .gitignore in the same pull request"
+        for path in sorted(excluded)
+    ]
+
+
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("payload", nargs="?", type=argparse.FileType(encoding="utf-8"), default=sys.stdin,
                         help="JSON with `number`, `body` and `files`; stdin by default")
     parser.add_argument("--map", type=Path, default=DEFAULT_MAP,
                         help="the class -> tree-set map; classes.yml beside this file by default")
+    parser.add_argument("--root", type=Path, default=Path.cwd(),
+                        help="a directory in the checkout whose .gitignore judges the diff; the current one by default")
     args = parser.parse_args(argv[1:])
 
     try:
@@ -387,6 +434,7 @@ def main(argv: list[str]) -> int:
     try:
         class_map = read_map(args.map.read_text(encoding="utf-8"))
         problems = check(payload, class_map)
+        problems += check_ignored(payload, args.root)
     except InputRefused as refusal:
         print(f"locality-gate: refused: {refusal}", file=sys.stderr)
         return 2
