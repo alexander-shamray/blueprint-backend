@@ -2927,7 +2927,10 @@ configuration-validation test at startup.
    fits the saga's payment wait (§9.6), and the carrier's and the relay's a
    worker's leased row.
 2. **Circuit breaker.** After a threshold of failures, fail fast rather than
-   queueing threads against a dead service.
+   queueing threads against a dead service. Each hop sizes its breaker to the
+   rate it is really called at: one paced by a worker's tick or by a saga's
+   orders never reaches the library default's minimum throughput, so its own
+   is one the hop reaches inside one sampling window at its slowest pace.
 3. **A fallback.** Cached data, a degraded response, or a clear error — decided
    in advance, not improvised during an incident.
 4. **Retry only idempotent operations.** Retrying a `POST` that creates a
