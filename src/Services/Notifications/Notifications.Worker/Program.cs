@@ -5,6 +5,8 @@ using Notifications.Infrastructure.Mail;
 using Common.Infrastructure.Identity;
 using Common.Web;
 
+if (args is [HealthProbe.Argument]) Environment.Exit(await HealthProbe.RunAsync());   // §14.1's healthcheck
+
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
 // A missing dependency or a singleton capturing a scoped service stops startup rather than a first request.

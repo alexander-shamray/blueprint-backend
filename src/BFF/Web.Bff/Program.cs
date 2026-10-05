@@ -9,6 +9,8 @@ using Web.Bff.Endpoints;
 using Web.Bff.Messaging;
 using Web.Bff.Orders;
 
+if (args is [HealthProbe.Argument]) Environment.Exit(await HealthProbe.RunAsync());   // §14.1's healthcheck
+
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
 builder.Host.UseDefaultServiceProvider(o =>
