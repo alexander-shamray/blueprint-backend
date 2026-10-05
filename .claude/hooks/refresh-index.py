@@ -1,13 +1,7 @@
 #!/usr/bin/env python3
-"""Refresh the code index of the checkout the edited file belongs to.
-
-Claude Code runs no `update` of its own, so the index describes a tree that
-has moved until a query reports it stale. The checkout comes from the edited
-path, because after `/branch` the session's directory and the checkout an
-edit is admitted against can be different trees. One refresh owns an index at
-a time, and it returns 0 whatever happens: it runs on every edit, and an
-index that cannot refresh is no reason to fail one.
-"""
+"""Refresh the code index of the checkout an edit or a Bash call changed. One
+refresh owns an index at a time, and it returns 0 whatever happens: an index
+that cannot refresh is no reason to fail the call that provoked it."""
 
 from __future__ import annotations
 

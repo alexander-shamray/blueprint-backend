@@ -685,6 +685,17 @@ class Refreshing(Base):
 
 
 class Registration(Base):
+    def test_settings_calls_it_after_every_bash_call(self):
+        """A commit, a pull, a formatter or an edit script moves the tree
+        through Bash with no edit tool behind it."""
+        matched = {
+            alternative.strip()
+            for entry in entries_running_the_hook(SETTINGS).get("PostToolUse", [])
+            for alternative in entry.get("matcher", "").split("|")
+        }
+
+        self.assertIn("Bash", matched)
+
     def test_settings_calls_it_on_every_edit(self):
         """Every verdict above is silent if settings never runs the file.
 

@@ -119,18 +119,29 @@ extra command runs, write redirections, and `graph` / `clean` / `init` /
 The `cbx` wrapper is the other half — whitelist and
 `CBX_NO_SKILL_AUTO_UPDATE=1` — and is not a substitute for the hook.
 
-**`PostToolUse` runs `.claude/hooks/refresh-index.py` after every edit**, over
-the checkout the **edited path** belongs to, resolved before it is walked.
-`cwd` answers when the event names no file and `CLAUDE_PROJECT_DIR` when it
-names neither, and the three differ exactly when it matters: an edit is
-admitted against the session's tree or the one it forked from, so only the
-file's own path says which of them changed. The hook spawns the CLI detached,
-discards both streams and always returns 0: it runs on every edit, so it may
-not make one wait, and an index that cannot refresh is not a reason to fail
-the edit that provoked it. The exit status is the one thing it does keep, and
-a request whose update failed goes back rather than counting as served:
-contention is what fails here, the streams that would have said so are gone,
-and the loser may be the run carrying the newest edit.
+**`PostToolUse` runs `.claude/hooks/refresh-index.py` after every edit and
+every Bash call**, over the checkout the **edited path** belongs to, resolved
+before it is walked. `cwd` answers when the event names no file,
+`CLAUDE_PROJECT_DIR` when it names neither, and the working directory last,
+and they differ exactly when it matters: an edit is admitted against the
+session's tree or the one it forked from, so only the file's own path says
+which of them changed. The hook spawns the CLI detached, discards both streams
+and always returns 0: it runs on every call, so it may not make one wait, and
+an index that cannot refresh is not a reason to fail the call that provoked
+it. The exit status is the one thing it does keep, and a request whose update
+failed goes back rather than counting as served: contention is what fails
+here, the streams that would have said so are gone, and the loser may be the
+run carrying the newest edit.
+
+**Bash is in the matcher because agents write through it more than through
+any edit tool** — a commit, a pull, a rebase, a formatter, an edit script —
+and each left the index describing the tree it replaced while it reported
+itself fresh. A Bash call names no file, so its `cwd` decides, and that field
+follows the shell into a worktree. It is not gated on the command, which would
+miss every helper and script: a call that wrote nothing costs one `update`
+that changes nothing, measured at about a second on this corpus, detached and
+behind the lock's coalescing. A commit changes no file, and that same `update`
+is what moves the index's recorded HEAD.
 
 **A linked worktree with no index is seeded from its main checkout's, and
 nothing is ever built.** `.claude/cache/` is ignored, so every `/branch`
