@@ -184,6 +184,25 @@ under this event blocks the prompt and erases it. `test_index_query_hint.py`
 holds every command it emits to a row of the route table and a prefix the
 skill approves.
 
+**`MCP_TIMEOUT` is raised in `.claude/settings.json`'s `env`.** The plugin
+servers started through `npx` — `playwright` and `chrome-devtools` — failed
+their first start often enough to drop out of sessions, and Claude Code
+caches such a failure for 15 minutes in the user-level
+`~/.claude/mcp-needs-auth-cache.json`, so every session on the machine then
+started without them. This repository's logs on the owner's workstation, read
+2026-10-05: of the plugin starts under the 30 s default that logged an
+outcome, 104 connected and 28 timed out, and the connected ones reached
+29.7 s with a 95th percentile of 28.3 s and a median of 3.8 s, so the tail
+runs into the limit rather than stopping short of it. Under the raised limit
+none has timed out yet, and three `claude mcp list` runs started at once each
+connected every plugin server within 6 s. It is set high because a long limit
+only delays the report on a server that is truly broken, and the session does
+not wait on it. It covers sessions started here, while the cache is
+user-wide, so the same key in the user's own `settings.json` `env` is what
+closes it everywhere; the owner's already carries it. No failure was a tool
+call, so `MCP_TOOL_TIMEOUT` stays at its default. `.mcp.json`'s
+`codebase-index` is not a plugin, and its failures are never cached.
+
 **A hook command needs no shell, and that is a constraint rather than a
 preference.** An env-var prefix — `VAR=1 cmd` — is POSIX syntax that `cmd`
 and PowerShell do not run, and a bare `bash` is whatever `PATH` resolves
