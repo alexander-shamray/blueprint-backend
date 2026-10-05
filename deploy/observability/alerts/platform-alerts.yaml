@@ -231,6 +231,25 @@ groups:
             credential or a grant, which no retry will change.
           runbook_url: docs/runbooks/address-refused.md
 
+      # AddressReadRefused's form for Notifications' owner read: SendClaims backs
+      # a row off on the same OutboxDispatcher ladder, so the same window
+      # outlasts its longest backoff and a send tick. A page, because a refused
+      # read is never served a stored contact (ADR-052).
+      - alert: ContactReadRefused
+        expr: sum by (service_name) (increase(notifications_contact_refused_total[30m])) > 0
+        labels:
+          severity: page
+          owner: service
+        annotations:
+          summary: "Contact reads refused on {{ $labels.service_name }}"
+          description: >-
+            Keycloak, or this host's own check of the token it was issued,
+            refused the send worker's read of a customer's contact, so every
+            notification with no fresh stored contact backs off and is not
+            sent. The cause is a credential or a grant, which no retry will
+            change.
+          runbook_url: docs/runbooks/contact-refused.md
+
   - name: platform-infrastructure
     rules:
       # The rules whose signal comes from an exporter rather than from this

@@ -147,10 +147,10 @@ flip.
    Catalog succeeding; for Shipping's worker it is shipments leaving
    `Pending`, and `shipping.address.refused` staying flat — ADR-052 counts a
    refused credential separately from an outage for exactly this moment; for
-   Notifications' worker it is `notifications.contact.refused` staying flat,
-   the same separate count for the same moment. A flat count is also what a
-   worker that never reads shows, and nothing calls the contact source yet, so
-   the positive signal arrives with the source's caller.
+   Notifications' worker it is notifications leaving `Pending`, and
+   `notifications.contact.refused` staying flat, the same separate count for
+   the same moment. A flat count is also what a worker that has read nothing
+   since its restart shows, so the rows leaving are the positive signal.
 5. Retire the old secret in Keycloak.
 
 **Step 3 is the one that gets skipped**, and skipping it produces a rotation
