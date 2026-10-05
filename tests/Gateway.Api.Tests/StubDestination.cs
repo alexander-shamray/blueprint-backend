@@ -25,6 +25,9 @@ public sealed class StubDestination : IAsyncLifetime
     /// <summary>Asks for a <c>Vary</c> header of this value beside the body.</summary>
     public const string VaryQuery = "vary";
 
+    /// <summary>Asks for no answer at all, until the caller gives up.</summary>
+    public const string StallQuery = "stall";
+
     private readonly ConcurrentQueue<string> _paths = new();
     private WebApplication? _app;
 
@@ -52,8 +55,11 @@ public sealed class StubDestination : IAsyncLifetime
         });
 
         // A query string, which YARP forwards untouched, so nothing is reset between tests in a class.
-        app.MapFallback((HttpContext context) =>
+        app.MapFallback(async (HttpContext context) =>
         {
+            if (context.Request.Query.ContainsKey(StallQuery))
+                await Task.Delay(Timeout.InfiniteTimeSpan, context.RequestAborted);
+
             if (!int.TryParse(context.Request.Query[BodySizeQuery], out int size))
                 return Results.NoContent();
 

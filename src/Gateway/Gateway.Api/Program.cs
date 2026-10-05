@@ -16,7 +16,7 @@ builder.Host.UseDefaultServiceProvider(o =>
     o.ValidateScopes = true;
 });
 
-builder.AddCommonWebDefaults();                 // §13.2
+builder.AddCommonWebDefaults(GatewayLimits.RequestTimeout);   // §13.2, §9.7
 
 // §10.1's request size limit; GatewayLimits argues the number.
 builder.WebHost.ConfigureKestrel(o => o.Limits.MaxRequestBodySize = GatewayLimits.MaxRequestBodyBytes);
@@ -182,6 +182,7 @@ WebApplication app = builder.Build();
 app.UseSecurityHeaders();
 app.UseExceptionHandler();        // §10.5 — catches every fault below it
 app.UseCorrelationId();           // §10.4 — assigns or replaces the client's
+app.UseRequestTimeouts();         // §9.7 — below the exception handler, which would answer 499
 
 // Above every writer it has to compress, because it works by replacing the response body feature.
 app.UseResponseCompression();     // §10.1, ADR-020
@@ -202,7 +203,14 @@ app.UseAuthentication();          // §11.3
 app.UseRateLimiter();             // §10.3 — needs the user, precedes policy work
 app.UseAuthorization();           // §11.4
 
-app.MapReverseProxy();
+// MapReverseProxy()'s own three steps, beneath the one that keeps the edge's deadline a 504 (§9.7).
+app.MapReverseProxy(proxy =>
+{
+    proxy.Use(ProxyDeadline.RethrowAsync);
+    proxy.UseSessionAffinity();
+    proxy.UseLoadBalancing();
+    proxy.UsePassiveHealthChecks();
+});
 
 // The edge owns no database and no broker, so its readiness set is empty (§10.1).
 app.MapCommonHealthEndpoints(ownsNoReadinessDependencies: true);   // §13.5 — anonymous; kubelet carries no token

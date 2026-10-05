@@ -919,6 +919,7 @@ public static IServiceCollection AddCommonProblemDetails(this IServiceCollection
 | Request body past the edge's ceiling | **413** | The gateway only (§10.1). Kestrel's `BadHttpRequestException` is answered inside the forwarder, which sets this status and writes no body, so it never reaches `UseExceptionHandler` and `UseStatusCodePages` writes the shape. `ExceptionHandlerMiddleware` reads no status off an exception — one that escapes is the unreadable-request row's, at its own status |
 | Domain rule violated | 422 | The request was well-formed but not allowed |
 | Downstream dependency unavailable | 503 | With `Retry-After` where known. Never 500 — the fault is not in this service |
+| The request outlived its host's deadline | **504** | From the request-timeout middleware every host registers ([§9.7](09-messaging.md), [ADR-066](adr/ADR-066-a-request-past-its-hosts-deadline-is-answered-504.md)), `code` `request.timed_out`. Not 503, which says nothing was done: the deadline can fall after a commit, so whether the request took effect is unknown, and a write is retried under its own command identifier rather than a new one |
 | Rate limited | 429 | With `Retry-After` |
 | Unhandled | 500 | **Never** include the exception message or stack trace |
 
