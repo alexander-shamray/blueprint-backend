@@ -288,13 +288,10 @@ jobs:
       - name: Render a service
         run: python tools/new-service/new_service.py Yankee --port 5199
 
-      # Compiled here, and only the architecture tests run, below: the rest of
-      # the rendered tests need SQL and RabbitMQ containers, minutes for very
-      # little extra signal.
-      #
-      # The test project rather than the service: it references the whole
-      # rendered service transitively, so building it compiles both halves, and
-      # the half a text check cannot see is in the tests.
+      # Compiled here, and only the architecture tests run below: the rest need
+      # SQL and RabbitMQ containers. The test project rather than the service:
+      # it references the rendered service transitively, so building it compiles
+      # both halves, and the half a text check cannot see is in the tests.
       - name: Compile what it rendered
         run: dotnet build tests/Yankee.Api.Tests/Yankee.Api.Tests.csproj
 

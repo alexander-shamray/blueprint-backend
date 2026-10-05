@@ -312,9 +312,8 @@ def check_images(root: Path = ROOT) -> list[str]:
 def read_condition_outputs(workflow_text: str, job: str) -> set[str]:
     """The `needs.changes.outputs.<name>` names one job's own `if:` reads.
 
-    The job-level key only, at four spaces, with the continuation lines a
-    folded or literal block gives it; a step's `if:` sits deeper and is not
-    the job's condition.
+    The job-level key at four spaces, with any folded continuation; a step's
+    `if:` sits deeper and is not the job's condition.
     """
     lines = workflow_text.splitlines()
     for index, line in enumerate(lines):
