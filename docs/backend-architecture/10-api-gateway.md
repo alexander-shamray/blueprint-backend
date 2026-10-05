@@ -173,16 +173,60 @@ the subset a resource would need.
         }
       },
       "ordering": {
-        "Destinations": { "d1": { "Address": "http://ordering-api:8080/" } }
+        "LoadBalancingPolicy": "PowerOfTwoChoices",
+        "HealthCheck": {
+          "Active": {
+            "Enabled": true,
+            "Interval": "00:00:10",
+            "Timeout": "00:00:05",
+            "Path": "/health/ready"
+          }
+        },
+        "Destinations": {
+          "d1": { "Address": "http://ordering-api:8080/" }
+        }
       },
       "inventory": {
-        "Destinations": { "d1": { "Address": "http://inventory-api:8080/" } }
+        "LoadBalancingPolicy": "PowerOfTwoChoices",
+        "HealthCheck": {
+          "Active": {
+            "Enabled": true,
+            "Interval": "00:00:10",
+            "Timeout": "00:00:05",
+            "Path": "/health/ready"
+          }
+        },
+        "Destinations": {
+          "d1": { "Address": "http://inventory-api:8080/" }
+        }
       },
       "payments": {
-        "Destinations": { "d1": { "Address": "http://payments-api:8080/" } }
+        "LoadBalancingPolicy": "PowerOfTwoChoices",
+        "HealthCheck": {
+          "Active": {
+            "Enabled": true,
+            "Interval": "00:00:10",
+            "Timeout": "00:00:05",
+            "Path": "/health/ready"
+          }
+        },
+        "Destinations": {
+          "d1": { "Address": "http://payments-api:8080/" }
+        }
       },
       "web-bff": {
-        "Destinations": { "d1": { "Address": "http://web-bff:8080/" } }
+        "LoadBalancingPolicy": "PowerOfTwoChoices",
+        "HealthCheck": {
+          "Active": {
+            "Enabled": true,
+            "Interval": "00:00:10",
+            "Timeout": "00:00:05",
+            "Path": "/health/ready"
+          }
+        },
+        "Destinations": {
+          "d1": { "Address": "http://web-bff:8080/" }
+        }
       }
     }
   }
@@ -303,7 +347,10 @@ blindness of round-robin, at negligible cost.
 
 In Kubernetes, destinations are Service DNS names and the platform handles
 discovery. Active health checks still matter — they let YARP stop routing to a
-pod that is failing but not yet failing its readiness probe.
+pod that is failing but not yet failing its readiness probe — and the argument
+is the same for every cluster, so every cluster carries the same check:
+`Every_cluster_is_health_checked_against_readiness` in `Gateway.Api.Tests`
+holds a new one to it.
 
 ### API versioning and deprecation at the edge
 

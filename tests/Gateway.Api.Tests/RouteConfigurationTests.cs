@@ -44,6 +44,25 @@ public sealed class RouteConfigurationTests(GatewayFactory factory) : IClassFixt
             "a route in the file that the proxy did not accept is a path that stopped existing (§10.2)");
     }
 
+    /// <summary>The clusters YARP accepted, so a new one cannot arrive without §10.2's check.</summary>
+    [Fact]
+    public void Every_cluster_is_health_checked_against_readiness()
+    {
+        ClusterState[] clusters = [.. factory.Services.GetRequiredService<IProxyStateLookup>().GetClusters()];
+        clusters.ShouldNotBeEmpty("with no cluster accepted there is nothing to hold to the rule");
+
+        string[] unprobed =
+        [
+            .. clusters
+                .Where(c => c.Model.Config.HealthCheck?.Active is not { Enabled: true, Path: "/health/ready" }
+                    || c.Model.Config.LoadBalancingPolicy != "PowerOfTwoChoices")
+                .Select(c => c.ClusterId)
+                .Order(StringComparer.Ordinal)
+        ];
+
+        unprobed.ShouldBeEmpty("a cluster YARP does not probe keeps routing to a pod that is failing (§10.2)");
+    }
+
     /// <summary>Names the policy that could not be found, where the lookup can only say which id vanished.</summary>
     [Fact]
     public async Task Every_authorization_policy_named_resolves()
