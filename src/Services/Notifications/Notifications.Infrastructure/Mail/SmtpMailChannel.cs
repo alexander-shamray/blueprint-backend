@@ -23,7 +23,7 @@ internal sealed partial class SmtpMailChannel(
     MailMetrics metrics,
     TimeProvider clock) : IMailChannel
 {
-    /// <summary>§10.4's header, spelled again as this project does not reference <c>Common.Web</c>, its owner.</summary>
+    /// <summary>§10.4's header, spelled here as this project does not reference <c>Common.Web</c>, its owner.</summary>
     internal const string CorrelationIdHeader = "X-Correlation-Id";
 
     // RFC 5321 section 4.5.3.1.3's path limit, less its angle brackets.

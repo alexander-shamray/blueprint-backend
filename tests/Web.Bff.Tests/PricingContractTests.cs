@@ -40,7 +40,10 @@ public sealed class PricingContractTests : IAsyncLifetime
         IReadOnlyDictionary<string, Guid> published = _catalog.Publish(interaction);
 
         using HttpClient client = Caller();
-        await client.PostQuote(interaction.Currency, TestContext.Current.CancellationToken, Basket(interaction, published));
+        await client.PostQuote(
+            interaction.Currency,
+            TestContext.Current.CancellationToken,
+            Basket(interaction, published));
 
         // The provider run's own verification, so the stub is a Catalog the real one could be (ADR-023).
         PricingContract.Verify(interaction, published, _catalog.Replies.ShouldHaveSingleItem());

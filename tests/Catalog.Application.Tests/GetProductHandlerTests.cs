@@ -12,7 +12,7 @@ using Xunit;
 
 namespace Catalog.Application.Tests;
 
-/// <summary>§6.5's one-product read: the listing's row by id, and <see cref="ProductErrors.NotFound"/> otherwise.</summary>
+/// <summary>§6.5's one-product read: the listing's row by id, else <see cref="ProductErrors.NotFound"/>.</summary>
 [Collection(nameof(IntegrationCollection))]
 public sealed class GetProductHandlerTests(ServiceFixture fixture) : IAsyncLifetime
 {
