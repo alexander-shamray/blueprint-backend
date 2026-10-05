@@ -176,7 +176,9 @@ def seed(root: Path) -> None:
     try:
         for leftover in ("-wal", "-shm"):
             index.with_name(index.name + leftover).unlink(missing_ok=True)
-        reading = sqlite3.connect(str(source))
+        # `mode=rw` refuses a source gone since `seed_source` looked, where a
+        # plain connect would create an empty index in the main checkout.
+        reading = sqlite3.connect(source.as_uri() + "?mode=rw", uri=True)
         try:
             writing = sqlite3.connect(str(partial))
             try:
