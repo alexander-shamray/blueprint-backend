@@ -791,10 +791,10 @@ broker:
 
 redis:
   enabled: true
-  # One Secret, two keys, because the two instances differ only in eviction
-  # policy and are provisioned together (§8.1).
+  # This service's own Secret, never another's: each connection string carries
+  # the service's own ACL user (§8.1). Two keys, one per instance.
   secretRef:
-    name: commerce-redis
+    name: ordering-redis
     cacheKey: cache-connection-string
     coordinationKey: coordination-connection-string
 
@@ -1301,7 +1301,7 @@ namespace read access.
 |---|---|---|---|
 | `ConnectionStrings__Ordering` | Secret | External Secrets → runtime identity (§7.1) | ✓ |
 | `ConnectionStrings__OrderingMigrator` | Secret | External Secrets → migrator Job only | ✓ (Job) |
-| `ConnectionStrings__RedisCache` | **Secret** | External Secrets — carries the §8.1 ACL user and password | ✓ **when the host calls `AddRedisConnections`** — see below |
+| `ConnectionStrings__RedisCache` | **Secret** | External Secrets — carries the service's own §8.1 ACL user and password, from a Secret named per service (`catalog-redis`, `ordering-redis`) and never shared | ✓ **when the host calls `AddRedisConnections`** — see below |
 | `ConnectionStrings__RedisCoordination` | **Secret** | External Secrets — separate ACL user, `noeviction` instance | ✓ **when the host calls `AddRedisConnections`** — both or neither |
 | `ConnectionStrings__RabbitMq` | Secret | External Secrets — carries the per-service broker account of [ADR-036](adr/ADR-036-the-broker-has-a-per-service-identity.md) | ✓ — the Secret is named per account (`catalog-rabbitmq`, `ordering-rabbitmq`, `web-bff-rabbitmq`) and never shared |
 | `Identity__Authority` | Config | Helm `identity.authority` → ConfigMap | ✓ — **every host**, including the gateway |

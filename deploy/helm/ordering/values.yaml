@@ -148,12 +148,12 @@ broker:
 # coordination instance before any protected command runs.
 redis:
   enabled: true
-  # One Secret, two keys, because the two instances differ only in eviction
-  # policy and are provisioned together (§8.1). Separate keys rather than one
-  # value: pointing idempotency claims at the allkeys-lru instance is a
-  # duplicate write that only appears under memory pressure.
+  # This service's own Secret, never another's: each connection string carries
+  # the service's own ACL user (§8.1). Two keys rather than one value, because
+  # idempotency claims pointed at the allkeys-lru instance are a duplicate
+  # write that only appears under memory pressure.
   secretRef:
-    name: commerce-redis
+    name: ordering-redis
     cacheKey: cache-connection-string
     coordinationKey: coordination-connection-string
 
