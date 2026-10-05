@@ -7,6 +7,7 @@ the edit landed in, exactly one refresh owns it, or none of them run.
 """
 
 import importlib.util
+import io
 import json
 import os
 import shutil
@@ -68,13 +69,14 @@ class _Completed:
 
 
 class _Stdin:
-    """`sys.stdin` for one call, with only the method the hook uses."""
+    """`sys.stdin` for one call as Windows hands it to `py -3.12`: the bytes
+    as sent, and text decoded in the console code page."""
 
     def __init__(self, body):
-        self.body = body
+        self.buffer = io.BytesIO(body.encode("utf-8"))
 
     def read(self):
-        return self.body
+        return self.buffer.getvalue().decode("cp1252", "surrogateescape")
 
 
 class Base(unittest.TestCase):
@@ -192,6 +194,15 @@ class ChoosingTheCheckout(Base):
                         "tool_input": {"file_path": "src/Thing.cs"}})
 
         self.assertEqual([session.resolve()], self.worker_roots())
+
+    def test_a_checkout_path_outside_ascii_is_the_one_refreshed(self):
+        """Decoded in the console code page, `\u0141\u00f3d\u017a` becomes a
+        directory that does not exist, and no checkout is found at all."""
+        session = self.checkout("\u0141\u00f3d\u017a")
+
+        self.run_hook(json.dumps({"cwd": str(session)}, ensure_ascii=False))
+
+        self.assertEqual([session], self.worker_roots())
 
     def test_an_event_naming_no_file_falls_back_to_the_directory(self):
         session = self.checkout("worktree")
