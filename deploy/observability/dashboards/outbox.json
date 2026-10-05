@@ -257,7 +257,7 @@
     {
       "id": 15,
       "type": "timeseries",
-      "title": "Oldest order with no owner (alert: 15 min)",
+      "title": "Oldest order with no owner (alert: UnattributedOrders)",
       "description": "bff.orders.unattributed (ADR-051): how long the oldest row in the BFF's order projection has waited for an Ordering event to name its buyer. §10.7 returns such a row to nobody, so above zero for long means a buyer's history is missing an order. Seconds is ordinary — a payment or shipment event beat OrderPlaced. Empty is not zero: a failed read is an absent series. Runbook: docs/runbooks/unattributed-order.md.",
       "datasource": { "type": "prometheus", "uid": "${datasource}" },
       "gridPos": { "h": 8, "w": 24, "x": 0, "y": 45 },
@@ -267,8 +267,7 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green", "value": null },
-              { "color": "red", "value": 900 }
+              { "color": "green", "value": null }
             ]
           }
         },
