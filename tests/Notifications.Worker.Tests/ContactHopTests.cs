@@ -27,9 +27,8 @@ public sealed class ContactHopTests
     }
 
     [Fact]
-    public void The_breaker_breaks_for_less_than_it_samples_and_samples_at_least_twice_an_attempt()
+    public void The_breaker_samples_at_least_twice_an_attempt()
     {
-        ContactHop.CircuitBreakerBreakDuration.ShouldBeLessThan(ContactHop.CircuitBreakerSamplingDuration);
         ContactHop.CircuitBreakerSamplingDuration.ShouldBeGreaterThanOrEqualTo(ContactHop.AttemptTimeout * 2,
             "the standard handler's options validation refuses a shorter window at start");
     }

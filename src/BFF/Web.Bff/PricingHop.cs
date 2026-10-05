@@ -31,6 +31,5 @@ public static class PricingHop
 
     public const int CircuitBreakerMinimumThroughput = 10;
 
-    /// <summary>How long the circuit stays open; the default sampling window has to outlive it (§9.7).</summary>
     public static readonly TimeSpan CircuitBreakerBreakDuration = TimeSpan.FromSeconds(15);
 }

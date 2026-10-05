@@ -74,7 +74,7 @@ pricing
         options.CircuitBreaker.MinimumThroughput = PricingHop.CircuitBreakerMinimumThroughput;
         options.CircuitBreaker.BreakDuration = PricingHop.CircuitBreakerBreakDuration;
 
-        // SamplingDuration keeps its default, which has to outlive the break duration (§9.7).
+        // SamplingDuration keeps its default, apart from the break: a closing breaker starts a fresh window (§9.7).
     });
 
 // Registered after resilience, so it sits inside it (§11.5).

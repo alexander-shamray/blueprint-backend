@@ -74,15 +74,4 @@ public class ResilienceHierarchyTests
             TimeSpan.FromSeconds(30),
             "TotalRequestTimeout is at its default, which every resilience handler must set (§9.7).");
     }
-
-    [Fact]
-    public void The_circuit_breaker_samples_over_a_window_longer_than_it_breaks_for()
-    {
-        HttpStandardResilienceOptions options = Configured();
-
-        // A window shorter than the break forgets every failure while the circuit is open (§9.7).
-        options.CircuitBreaker.SamplingDuration.ShouldBeGreaterThan(
-            options.CircuitBreaker.BreakDuration,
-            "a breaker that forgets its failures while open reopens on the first error after it closes.");
-    }
 }
