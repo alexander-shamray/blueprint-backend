@@ -11,7 +11,7 @@ namespace Payments.Infrastructure.Messaging;
 /// </remarks>
 public static class ProviderKillSwitch
 {
-    /// <summary>Attempts a window must exceed first, sized to saga pace, which never reaches the default.</summary>
+    /// <summary>Messages a window must exceed first, sized to saga pace, which never reaches the default.</summary>
     public const int ActivationThreshold = 4;
 
     /// <summary>A percentage: half the window's messages exhausted their retries on an unreachable provider.</summary>
