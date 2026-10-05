@@ -2,7 +2,6 @@ using Notifications.Application.Contacts;
 using Notifications.Application.Records;
 using Notifications.Application.Rendering;
 using Notifications.Infrastructure.Delivery;
-using Notifications.Infrastructure.Idempotency;
 using Notifications.Infrastructure.Jurisdiction;
 using Notifications.Infrastructure.Messaging;
 using Notifications.Infrastructure.Observability;

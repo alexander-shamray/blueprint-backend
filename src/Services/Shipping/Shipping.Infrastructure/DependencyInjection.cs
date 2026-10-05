@@ -2,7 +2,6 @@ using Shipping.Application.Addresses;
 using Shipping.Application.Shipments;
 using Shipping.Domain.Shipments;
 using Shipping.Infrastructure.Fulfilment;
-using Shipping.Infrastructure.Idempotency;
 using Shipping.Infrastructure.Messaging;
 using Shipping.Infrastructure.Observability;
 using Shipping.Infrastructure.Persistence;

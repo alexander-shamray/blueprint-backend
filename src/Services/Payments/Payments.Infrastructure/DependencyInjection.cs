@@ -1,7 +1,6 @@
 using Payments.Application.Orders;
 using Payments.Domain.Intents;
 using Payments.Domain.Refunds;
-using Payments.Infrastructure.Idempotency;
 using Payments.Infrastructure.Messaging;
 using Payments.Infrastructure.Observability;
 using Payments.Infrastructure.Persistence;
