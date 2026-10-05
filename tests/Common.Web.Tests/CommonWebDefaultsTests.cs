@@ -42,6 +42,27 @@ public class CommonWebDefaultsTests
     }
 
     [Fact]
+    public async Task A_background_service_that_lets_an_exception_escape_stops_the_host()
+    {
+        CancellationToken ct = TestContext.Current.CancellationToken;
+        HostApplicationBuilder builder = TelemetryHost.Builder();
+
+        builder.AddCommonWebDefaults();
+        builder.Services.AddHostedService<EscapingService>();
+
+        using IHost host = builder.Build();
+        TaskCompletionSource stopping = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        IHostApplicationLifetime lifetime = host.Services.GetRequiredService<IHostApplicationLifetime>();
+        lifetime.ApplicationStopping.Register(() => stopping.SetResult());
+
+        await host.StartAsync(ct);
+
+        // §13.5: the orchestrator restarts a stopped host, where an ignored exception leaves a worker silently dead.
+        await stopping.Task.WaitAsync(TimeSpan.FromSeconds(30), ct);
+        await host.StopAsync(ct);
+    }
+
+    [Fact]
     public async Task Authorization_is_deny_by_default()
     {
         // §11.4's deny-by-default fallback, read through the provider AuthorizationMiddleware asks.
@@ -188,5 +209,15 @@ public class CommonWebDefaultsTests
             "http://localhost:8080/realms/commerce";
 
         Should.NotThrow(builder.AddCommonWebDefaults);
+    }
+
+    /// <summary>Lets its exception escape on its first pass, as a defect past the per-pass catch would.</summary>
+    private sealed class EscapingService : BackgroundService
+    {
+        protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+        {
+            await Task.Yield();
+            throw new InvalidOperationException("escaped the pass");
+        }
     }
 }
