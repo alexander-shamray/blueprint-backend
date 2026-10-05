@@ -15,8 +15,8 @@ hook ahead of the Job does not yet exist when the migrator connects with the
 one identity holding DDL rights ([§7.1](../07-persistence.md)). Helm may
 delete a `hook-succeeded` hook while a Job past Helm's timeout still runs a
 pod, so the policy is removed only by its replacement. ADRs are append-only,
-so ADR-065 still reads the fence as owed, and this record is where its reader
-is sent.
+so ADR-065's body still calls the fence owed, and its closing note sends its
+reader here.
 **Consequences.** The migrator exports no telemetry and validates no token, so
 neither edge is opened; a migrator that starts to is refused wherever the
 policy is enforced until this one gains the edge. Helm leaves a hook object
