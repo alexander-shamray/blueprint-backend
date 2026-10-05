@@ -157,6 +157,13 @@ round trip through every store and protocol a name or address crosses, and a
 date rendered at the edge of a day in the deployment's zone are the tests this
 record owes; none of them says a regulator is satisfied.
 
+> **Discharged in part** by
+> [ADR-067](ADR-067-a-currencys-minor-unit-is-iso-4217s-held-once.md), the
+> minor-unit table, and
+> [ADR-068](ADR-068-the-jurisdiction-records-log-lifetime-and-incident-procedure-are-delivered.md),
+> the log lifetime and the incident procedure.
+
+
 ---
 
 [Appendix A](../appendix-a-adrs.md) · [Index](../README.md)

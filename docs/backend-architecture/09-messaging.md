@@ -2885,6 +2885,8 @@ having failed its own SLO.
 > `ConsumerCallRule` fails a host whose consumer reaches an outbound client
 > with no declared exception, and stops at consumers: a worker loop calling
 > out over a row it leases is the shape ADR-052 chose, not a consumer.
+> Payments' provider call is the one consumer call granted, by
+> [ADR-070](adr/ADR-070-payments-calls-its-provider-inside-its-consumers.md).
 
 If you find yourself needing a second hop, the answer is almost always that the
 data should have arrived by event and been projected locally.
@@ -2941,9 +2943,11 @@ configuration-validation test at startup.
    orders never reaches the library default's minimum throughput, so its own
    is one the hop reaches inside one sampling window at its slowest pace.
    Called from a consumer, a breaker spares the endpoint's slot but not the
-   message, so Payments' receive endpoints also take `ProviderKillSwitch`,
-   tripped by the provider's unavailability alone, which stops the endpoint
-   and leaves the rest of an outage's messages in their queue.
+   message, so Payments' receive endpoints, whose consumers make the call
+   [ADR-070](adr/ADR-070-payments-calls-its-provider-inside-its-consumers.md)
+   grants, also take `ProviderKillSwitch`, tripped by the provider's
+   unavailability alone, which stops the endpoint and leaves the rest of an
+   outage's messages in their queue.
 3. **A fallback.** Cached data, a degraded response, or a clear error — decided
    in advance, not improvised during an incident.
 4. **Retry only idempotent operations.** Retrying a `POST` that creates a
