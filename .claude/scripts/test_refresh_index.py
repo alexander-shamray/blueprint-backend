@@ -231,8 +231,8 @@ class ChoosingTheCheckout(Base):
         """Unindexed is not stale. Building an index per throwaway worktree
         is a cost this hook was never asked for.
 
-        `CLAUDE_PROJECT_DIR` names an indexed checkout here because the real
-        hook always receives one: without it the assertion passes on a hook
+        `CLAUDE_PROJECT_DIR` names an indexed checkout here because every event
+        Claude Code sends carries one: without it the assertion passes on a hook
         that falls through and refreshes the tree that did not change."""
         bare = self.checkout("fresh", indexed=False)
         indexed = self.checkout("main")
