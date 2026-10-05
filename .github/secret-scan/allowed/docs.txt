@@ -28,10 +28,11 @@ docs/backend-architecture/14-local-development.md | credential-assignment | b3c5
 docs/backend-architecture/14-local-development.md | credential-assignment | 424e668d2839 | The broker default for Ordering, in-cluster hostname, as printed.
 docs/backend-architecture/14-local-development.md | credential-assignment | aa8560d3ac1c | The host-run broker recipe against a published port, as printed.
 docs/backend-architecture/14-local-development.md | credential-assignment | eb26d4a9a0ef | Section 11.5's local BFF client default, as printed.
-docs/backend-architecture/14-local-development.md | credential-assignment | 12e48b0a29c6 | A Redis cache endpoint. Host and port only, no credential in it.
-docs/backend-architecture/14-local-development.md | credential-assignment | 7dd6402e12f4 | A Redis coordination endpoint. Host and port only, no credential.
-docs/backend-architecture/14-local-development.md | credential-assignment | aec8e97ac9c7 | A loopback Redis coordination endpoint. Host and port only.
-docs/backend-architecture/14-local-development.md | credential-assignment | ec22816d99af | A loopback Redis cache endpoint. Host and port only.
+docs/backend-architecture/14-local-development.md | connection-string-password | 88b0952db9ee | Ordering's local Redis default, as printed in the excerpt and the host-run recipe.
+docs/backend-architecture/14-local-development.md | credential-assignment | 04dab3828244 | Ordering's local Redis cache default, under its own ACL user, as printed.
+docs/backend-architecture/14-local-development.md | credential-assignment | 0118199ab2c4 | Ordering's local Redis coordination default, the same ACL user, as printed.
+docs/backend-architecture/14-local-development.md | credential-assignment | 91c4c7dd2ba5 | The host-run coordination endpoint for Ordering, its own ACL user, as printed.
+docs/backend-architecture/14-local-development.md | credential-assignment | 5948bcea6d09 | The host-run cache endpoint for Ordering, its own ACL user, as printed.
 docs/backend-architecture/14-local-development.md | credential-assignment | c0f9cb4d3e51 | The BFF connection defaults in the chapter's compose excerpt, §14.1's local default; both keys share the sha.
 docs/backend-architecture/14-local-development.md | credential-assignment | c786d8c731e5 | The BFF's broker default, as Section 14.1 prints the compose file it specifies (ADR-051).
 docs/superpowers/plans/2026-08-07-pr06-compose.md | env-assignment | 8a11e54d9d5b | PR-06's frozen plan, printing the local database default it introduced.

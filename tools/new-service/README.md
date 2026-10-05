@@ -32,6 +32,7 @@ table matches `plan()`.
 | `deploy/compose/docker-compose.infra-only.yml` | both halves of that pair, excluded |
 | `deploy/compose/.env.example` | the two §7.1 connection variables |
 | `deploy/compose/rabbitmq/definitions.json` | the broker account the service authenticates as, since #44 |
+| `deploy/compose/redis/users.conf` | the §8.1 Redis user the unit's connection strings name, its key pattern the host's `ApplicationName` |
 | `src/BuildingBlocks/Common.Web/ObservabilityExtensions.cs` | the `AddMeter` line for the service's outbox meter, which §13.2's export names one by one; a pure consumer has no outbox and gets none |
 | `.github/secret-scan/allowed/<tree>.txt` | one accepted-finding entry per credential-shaped literal the render carries, in the file covering that entry's tree, since #161 |
 

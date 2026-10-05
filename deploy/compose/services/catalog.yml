@@ -42,8 +42,8 @@ services:
       # so an absent key is a host that will not start rather than a cache
       # silently reading the database. 6379 on both: each container listens on
       # Redis's own port, and 6380 exists only on the host side.
-      ConnectionStrings__RedisCache: "redis-cache:6379"
-      ConnectionStrings__RedisCoordination: "redis-coordination:6379"
+      ConnectionStrings__RedisCache: "redis-cache:6379,user=catalog-svc,password=local-dev-catalog"
+      ConnectionStrings__RedisCoordination: "redis-coordination:6379,user=catalog-svc,password=local-dev-catalog"
     ports: [ "127.0.0.1:5102:8080" ]
     depends_on:
       catalog-migrator: { condition: service_completed_successfully }

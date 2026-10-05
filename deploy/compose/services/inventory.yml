@@ -62,8 +62,8 @@ services:
       # 6379 on both, and the ports differ only on the HOST side (6379/6380).
       # Inside the network each container listens on Redis's own port, so
       # naming 6380 here would reach nothing.
-      ConnectionStrings__RedisCache: "redis-cache:6379"
-      ConnectionStrings__RedisCoordination: "redis-coordination:6379"
+      ConnectionStrings__RedisCache: "redis-cache:6379,user=inventory-svc,password=local-dev-inventory"
+      ConnectionStrings__RedisCoordination: "redis-coordination:6379,user=inventory-svc,password=local-dev-inventory"
     ports: [ "127.0.0.1:5103:8080" ]
     depends_on:
       inventory-migrator: { condition: service_completed_successfully }

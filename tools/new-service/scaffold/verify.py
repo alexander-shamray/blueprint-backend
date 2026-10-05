@@ -171,13 +171,21 @@ SCAN_REASONS = (
         # The host, which appears in the value and never in the key: the key is
         # `ConnectionStrings__RedisCache`, with no hyphen and no colon.
         "redis-cache:",
-        "A Redis cache endpoint. Host and port only, no credential in it.",
+        "Catalog's local Redis cache default, under its own ACL user.",
     ),
     (
         "deploy/compose/services/catalog.yml",
         "credential-assignment",
         "redis-coordination:",
-        "A Redis coordination endpoint. Host and port only, no credential.",
+        "Catalog's local Redis coordination default, the same ACL user.",
+    ),
+    (
+        "deploy/compose/services/catalog.yml",
+        "connection-string-password",
+        # The keyword after the user, on the database row's argument. Its case
+        # differs from that row's, so neither marker matches the other's lines.
+        "user=catalog-svc,password=",
+        "Section 14.1's local Redis default for Catalog's own ACL user, on both instances.",
     ),
     (
         "deploy/compose/rabbitmq/definitions.json",

@@ -245,7 +245,9 @@ deploy/compose/              §14.1's model, laid out in its `README.md`: one
                              mechanism matters: RabbitMQ seeds the default user
                              only on an empty database and skips it when
                              definitions are imported, so a stale volume keeps
-                             it and `down -v` is what makes the removal true
+                             it and `down -v` is what makes the removal true.
+                             `redis/users.conf` is §8.1's per-service ACL
+                             users, read by both Redis instances
 deploy/helm/                 §15.3's charts. `common/` is a LIBRARY chart
                              holding every template once, and a deployable's
                              chart is values plus one-line includes. Two
