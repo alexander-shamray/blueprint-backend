@@ -73,6 +73,26 @@ public sealed class SendWorkerTests(ServiceFixture fixture) : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_row_a_version_before_the_column_writes_is_sent_under_its_order_as_its_correlation_id()
+    {
+        (Guid order, Guid customer) = Ids();
+        fixture.ContactAnswers(customer, Mailbox, "en");
+        Notification owed = await OwedAsync(order, customer);
+
+        // The column's default, which an insert that does not name the column leaves on the row (§7.4).
+        await fixture.ExecuteAsync(
+            "UPDATE notifications.NotificationLog SET CorrelationId = {1} WHERE NotificationId = {0};",
+            owed.NotificationId,
+            Guid.Empty);
+
+        (await fixture.RunSendPassAsync()).ShouldBe(new SendPass(1, 1));
+
+        MailpitMessage message = await fixture.Relay.SingleAsync(Ct);
+        (await fixture.Relay.HeadersAsync(message.Id, Ct))["X-Correlation-Id"]
+            .ShouldHaveSingleItem().ShouldBe(order.ToString("D"));
+    }
+
+    [Fact]
     public void The_mail_header_is_the_one_every_host_reads_its_correlation_id_from() =>
         SmtpMailChannel.CorrelationIdHeader.ShouldBe(CorrelationIdExtensions.Header);
 
