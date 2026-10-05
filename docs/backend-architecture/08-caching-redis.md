@@ -1258,9 +1258,9 @@ would bite.
 > that way for exactly this reason.
 
 **§9.5's retention purge gains a third table, and it is the only one of the
-three whose window is a correctness setting.** A purged outbox row loses a
-debugging record; a purged inbox row loses a suppression the broker will not
-exercise again; a purged marker re-opens the duplicate. So
+three whose window is a correctness setting.** A purged outbox row loses what
+[§9.4](09-messaging.md) keeps it for; a purged inbox row loses a suppression
+the broker will not exercise again; a purged marker re-opens the duplicate. So
 `RetentionPolicy.IdempotencyWindow` has a floor the other two do not — it reads
 `IdempotencyRetention.MarkerFloor` and refuses anything shorter. **What the
 floor is for changed with

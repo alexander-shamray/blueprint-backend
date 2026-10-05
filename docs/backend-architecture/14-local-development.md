@@ -341,8 +341,8 @@ docker compose -f deploy/compose/docker-compose.yml up -d --wait
 > interface the control standing in front of them — Compose's short syntax
 > with no host-IP prefix publishes on every interface, so `docker compose up`
 > on a café or office network offers `sa`, two passwordless Redis instances,
-> two service accounts and Keycloak's admin console to every peer on it.
-> Every URL in the table is already a `localhost` one, so the prefix takes
+> the realm's service accounts and Keycloak's admin console to every peer on
+> it. Every URL in the table is already a `localhost` one, so the prefix takes
 > nothing away from the workflow this chapter documents.
 
 The realm's own logins are `demo/demo`, which holds every permission a shipped
@@ -634,7 +634,7 @@ IResourceBuilder<ProjectResource> WithPlatformIdentity(
 
 // Migrations run as a job here exactly as they do in Compose and Helm —
 // ADR-007 forbids migrating at application startup, so without this the
-// schema is never created and every service fails on its first query.
+// schema is never created and every service and host fails on its first query.
 // One per database, because one database per service or host (§7.1, ADR-051).
 var orderingMigrator = builder
     .AddProject<Projects.Ordering_Migrator>("ordering-migrator")

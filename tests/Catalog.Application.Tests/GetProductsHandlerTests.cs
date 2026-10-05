@@ -109,12 +109,13 @@ public sealed class GetProductsHandlerTests(ServiceFixture fixture) : IAsyncLife
     [Fact]
     public async Task The_limit_is_clamped_server_side_at_both_ends()
     {
-        await SeedAsync([.. Enumerable.Range(0, 101).Select(i => ($"P{i}", Base.AddSeconds(i)))]);
+        int ceiling = GetProductsHandler.MaxLimit;
+        await SeedAsync([.. Enumerable.Range(0, ceiling + 1).Select(i => ($"P{i}", Base.AddSeconds(i)))]);
 
-        // A client asking for everything gets 100 (§6.5) …
+        // A client asking for everything gets the ceiling (§6.5) …
         CursorPage<ProductSummaryDto> greedy = await QueryAsync(null, 100_000);
-        greedy.Items.Count.ShouldBe(100);
-        greedy.NextCursor.ShouldNotBeNull("row 101 is the next page");
+        greedy.Items.Count.ShouldBe(ceiling);
+        greedy.NextCursor.ShouldNotBeNull("the row past the ceiling is the next page");
 
         // … and one asking for nothing still gets a page of one.
         CursorPage<ProductSummaryDto> stingy = await QueryAsync(null, 0);

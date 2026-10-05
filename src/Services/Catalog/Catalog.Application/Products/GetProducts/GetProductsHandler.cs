@@ -11,6 +11,9 @@ namespace Catalog.Application.Products.GetProducts;
 public sealed class GetProductsHandler(IDbConnectionFactory connections)
     : IQueryHandler<GetProductsQuery, CursorPage<ProductSummaryDto>>
 {
+    /// <summary>The list's ceiling (§6.5): a larger <c>limit</c> is clamped to it, never refused.</summary>
+    public const int MaxLimit = 100;
+
     private const string Sql =
         """
         SELECT TOP (@Take)
@@ -31,7 +34,7 @@ public sealed class GetProductsHandler(IDbConnectionFactory connections)
 
     public async Task<CursorPage<ProductSummaryDto>> HandleAsync(GetProductsQuery query, CancellationToken ct)
     {
-        int limit = Math.Clamp(query.Limit, 1, 100);
+        int limit = Math.Clamp(query.Limit, 1, MaxLimit);
         (DateTimeOffset PublishedAt, Guid Id)? after = Cursor.Decode(query.Cursor);
         using IDbConnection connection = connections.Create();
 
