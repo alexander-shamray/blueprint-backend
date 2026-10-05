@@ -79,7 +79,7 @@ def read_rows(body: str) -> tuple[list[str], list[str]]:
     """The class members and the touch-set tokens the body declares.
 
     Exactly one row of each. The refusal messages name the row and never its
-    content, for the reason the module docstring gives.
+    content, for the reason `README.md` gives.
     """
     class_rows = [m.group(1) for m in map(_CLASS_ROW.match, body.splitlines()) if m]
     touch_rows = [m.group(1) for m in map(_TOUCH_ROW.match, body.splitlines()) if m]
