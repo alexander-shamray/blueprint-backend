@@ -178,7 +178,9 @@ is gitignored and not copied: the session finds the main checkout's by
 walking up, because the helper forks only under `.claude/worktrees/` and the
 worktree has none of its own. Two residuals stand. The helper writes a file
 the session's `Edit` is denied, and what it writes is one key read from a
-file the session is denied too. And the approval names servers rather than
+file the session is denied too, or, under an approve-all, from `.mcp.json`,
+which the session may edit but whose servers the main checkout's approve-all
+already approves. And the approval names servers rather than
 definitions, so a `.mcp.json` that reaches a worktree through git,
 force-added past the ignore, is found before the main checkout's and
 approved under the same name without a prompt.
