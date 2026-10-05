@@ -288,8 +288,8 @@ jobs:
       - name: Render a service
         run: python tools/new-service/new_service.py Yankee --port 5199
 
-      # Compiled here, and only the architecture tests run below: the rest need
-      # SQL and RabbitMQ containers. The test project rather than the service:
+      # Compiled here, and the architecture tests run below as the layering gate;
+      # the integration suites need SQL and RabbitMQ. The test project, not the service:
       # it references the rendered service transitively, so building it compiles
       # both halves, and the half a text check cannot see is in the tests.
       - name: Compile what it rendered
