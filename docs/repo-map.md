@@ -123,7 +123,8 @@ coverage.runsettings         the report filtered to `.*\.Domain\.dll$` (§12.9)
 .github/workflows/ci.yml     every gate tested and then run, then
                              restore/build/test in three stages and the
                              coverage report — plus `scaffold-build`, which
-                             renders a service and COMPILES it, because the
+                             renders a service in each mode, COMPILES it and
+                             runs its architecture tests, because the
                              scaffold suite reads text and an SDK in that job
                              would cost every run. The job list is the file's
                              own. Unfiltered at its trigger, filtered per job
