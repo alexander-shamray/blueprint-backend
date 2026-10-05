@@ -1,7 +1,11 @@
+using System.Data;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Common.Application;
 using Common.Contracts.Ordering.V1;
+using Common.Infrastructure.Outbox;
+using Microsoft.Data.SqlClient;
 using Ordering.Application;
 using Ordering.Application.Orders;
 using Ordering.Application.Orders.PlaceOrder;
@@ -61,6 +65,36 @@ public sealed class PlaceOrderTests(ServiceFixture fixture) : IAsyncLifetime
         (await fixture.ScalarAsync<string>(
             "SELECT Value = Status FROM ordering.Orders WHERE Id = {0}", id))
             .ShouldBe("AwaitingStock", "stored by name, never by number (§7.2)");
+    }
+
+    [Theory]
+    [InlineData("JPY", 1500, 3000)]
+    [InlineData("KWD", 1.234, 2.468)]
+    public async Task A_price_keeps_its_currencys_exponent_into_the_line_and_onto_the_wire(
+        string currency,
+        decimal price,
+        decimal total)
+    {
+        // ADR-067: the projected price is read through Money.Of, so two places would cut a fils off every line.
+        Guid product = Guid.CreateVersion7();
+        await SeedPriceAsync(product, price, currency);
+
+        HttpResponseMessage response = await PlaceAsync(product, quantity: 2, currency: currency);
+
+        response.StatusCode.ShouldBe(HttpStatusCode.OK);
+        Guid id = await IdOfAsync(response);
+
+        (await fixture.ScalarAsync<decimal>(
+            "SELECT Value = UnitPriceAmount FROM ordering.OrderLines WHERE OrderId = {0}", id))
+            .ShouldBe(price);
+
+        // The Broker row is OrderPlaced, the contract every other service reads the total from.
+        OutboxMessage placed = (await fixture.OutboxAsync())
+            .Where(r => r.Lane == OutboxLane.Broker)
+            .ShouldHaveSingleItem();
+
+        using JsonDocument payload = JsonDocument.Parse(placed.Payload);
+        payload.RootElement.GetProperty(nameof(OrderPlaced.TotalAmount)).GetDecimal().ShouldBe(total);
     }
 
     [Fact]
@@ -267,6 +301,7 @@ public sealed class PlaceOrderTests(ServiceFixture fixture) : IAsyncLifetime
     private static async Task<Guid> IdOfAsync(HttpResponseMessage response) =>
         await response.Content.ReadFromJsonAsync<Guid>(TestContext.Current.CancellationToken);
 
+    // The amount at the column's own facets: EF types a bare decimal as decimal(18,2) and would round a third place.
     private Task SeedPriceAsync(Guid product, decimal amount, string currency, bool available = true) =>
         fixture.ExecuteAsync(
             """
@@ -275,6 +310,11 @@ public sealed class PlaceOrderTests(ServiceFixture fixture) : IAsyncLifetime
             """,
             product,
             currency,
-            amount,
+            new SqlParameter("@amount", SqlDbType.Decimal)
+            {
+                Precision = OrderAmounts.Precision,
+                Scale = OrderAmounts.Scale,
+                Value = amount
+            },
             available);
 }

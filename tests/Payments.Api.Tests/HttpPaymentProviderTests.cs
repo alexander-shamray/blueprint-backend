@@ -194,6 +194,25 @@ public sealed class HttpPaymentProviderTests : IClassFixture<HttpPaymentProvider
     }
 
     [Theory]
+    [InlineData(1500, "JPY", 1500)]
+    [InlineData(1.234, "KWD", 1234)]
+    public async Task The_minor_amount_takes_its_exponent_from_the_currency(
+        decimal amount,
+        string currency,
+        long minor)
+    {
+        // ADR-067: a yen is its own minor unit and a dinar has a thousand, so a factor of a hundred overcharges one
+        // and refuses the other.
+        await Provider().AuthoriseAsync(
+            new AuthorisationRequest(OrderId.New(), Guid.CreateVersion7(), amount, currency),
+            TestContext.Current.CancellationToken);
+
+        using JsonDocument sent = JsonDocument.Parse(_server.LogEntries.ShouldHaveSingleItem().RequestMessage!.Body!);
+        sent.RootElement.GetProperty("amountMinor").GetInt64().ShouldBe(minor);
+        sent.RootElement.GetProperty("currency").GetString().ShouldBe(currency);
+    }
+
+    [Theory]
     [InlineData(10.01, "card_declined")]
     [InlineData(0.01, "card_declined")]
     [InlineData(10.02, "insufficient_funds")]

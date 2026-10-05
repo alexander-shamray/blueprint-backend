@@ -25,7 +25,10 @@ public readonly record struct Money
         if (currency is not { Length: 3 } || !currency.All(char.IsAsciiLetter))
             throw new DomainException("Currency must be a 3-letter currency code.");
 
-        return new Money(decimal.Round(amount, 2, MidpointRounding.ToEven), currency.ToUpperInvariant());
+        // The currency's own exponent (ADR-067), half to even.
+        return new Money(
+            decimal.Round(amount, CurrencyMinorUnits.Of(currency), MidpointRounding.ToEven),
+            currency.ToUpperInvariant());
     }
 
     public static Money Zero(string currency) => Of(0m, currency);

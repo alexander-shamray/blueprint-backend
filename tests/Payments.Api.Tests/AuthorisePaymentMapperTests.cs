@@ -14,6 +14,9 @@ public sealed class AuthorisePaymentMapperTests
     [InlineData(-1, "EUR")]
     [InlineData(1.001, "EUR")]
     [InlineData(1e15, "EUR")]
+    [InlineData(1500.5, "JPY")]
+    [InlineData(1.2345, "KWD")]
+    [InlineData(999_999_999_999_999, "CLF")]
     [InlineData(1, "")]
     [InlineData(1, "EU")]
     [InlineData(1, "eur")]
@@ -21,6 +24,20 @@ public sealed class AuthorisePaymentMapperTests
     {
         Should.Throw<ContractMappingException>(() =>
             new AuthorisePaymentMapper().Map(new AuthorisePayment(Guid.CreateVersion7(), amount, currency)));
+    }
+
+    [Theory]
+    [InlineData(1500, "JPY")]
+    [InlineData(1.234, "KWD")]
+    public void An_amount_at_its_currencys_own_exponent_is_a_contract_an_order_can_produce(
+        decimal amount,
+        string currency)
+    {
+        // Ordering's Money keeps the currency's exponent (ADR-067), so three places for KWD is an ordinary total.
+        Guid order = Guid.CreateVersion7();
+
+        new AuthorisePaymentMapper().Map(new AuthorisePayment(order, amount, currency))
+            .ShouldBe(new AuthorisePaymentCommand(order, amount, currency));
     }
 
     [Fact]

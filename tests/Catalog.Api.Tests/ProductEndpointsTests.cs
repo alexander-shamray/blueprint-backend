@@ -277,6 +277,37 @@ public sealed class ProductEndpointsTests(ServiceFixture fixture) : IAsyncLifeti
         body.ShouldContain("\"quantityAvailable\":null");
     }
 
+    [Theory]
+    [InlineData("JPY", 1500.5, 1500)]
+    [InlineData("KWD", 1.2345, 1.234)]
+    public async Task A_price_keeps_its_currencys_exponent_through_storage_and_the_wire(
+        string currency,
+        decimal amount,
+        decimal expected)
+    {
+        // ADR-067 from the request to the column and back: decimal(19,4) holds three places and none alike.
+        HttpResponseMessage published = await PostAsync(
+            new
+            {
+                CommandId = Guid.CreateVersion7(),
+                Name = "Walnut desk",
+                ThumbnailUrl = (string?)null,
+                Amount = amount,
+                Currency = currency
+            },
+            CatalogPermissions.Write);
+        published.StatusCode.ShouldBe(HttpStatusCode.OK);
+        Guid id = await published.Content.ReadFromJsonAsync<Guid>(TestContext.Current.CancellationToken);
+
+        ItemDto? item = await _client.GetFromJsonAsync<ItemDto>(
+            $"/v1/catalog/products/{id}",
+            TestContext.Current.CancellationToken);
+
+        item.ShouldNotBeNull();
+        item.Amount.ShouldBe(expected);
+        item.Currency.ShouldBe(currency);
+    }
+
     [Fact]
     public async Task An_unknown_product_id_is_a_404_carrying_its_code()
     {

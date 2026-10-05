@@ -18,18 +18,19 @@ public sealed class AuthorisePaymentMapper : ICommandMessageMapper<AuthorisePaym
         if (message.Amount < 0)
             throw new ContractMappingException($"A negative amount on {nameof(AuthorisePayment)}.");
 
-        // Here, since the cancelled-order path records the amount without converting it to minor units.
-        if (message.Amount >= PaymentAmounts.Ceiling
-            || decimal.Round(message.Amount, PaymentAmounts.MinorUnitPlaces) != message.Amount)
-        {
-            throw new ContractMappingException(
-                $"An amount beyond what Payments can record or send on {nameof(AuthorisePayment)}.");
-        }
-
+        // Before the amount, whose minor units are the currency's (ADR-067).
         if (message.Currency is not { Length: 3 } || !message.Currency.All(char.IsAsciiLetterUpper))
         {
             throw new ContractMappingException(
                 $"A currency that is not three upper-case letters on {nameof(AuthorisePayment)}.");
+        }
+
+        // Here, since the cancelled-order path records the amount without converting it to minor units.
+        if (message.Amount >= PaymentAmounts.Ceiling
+            || PaymentAmounts.ToMinorUnits(message.Amount, message.Currency) is null)
+        {
+            throw new ContractMappingException(
+                $"An amount beyond what Payments can record or send on {nameof(AuthorisePayment)}.");
         }
 
         return new AuthorisePaymentCommand(message.OrderId, message.Amount, message.Currency);
