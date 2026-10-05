@@ -113,8 +113,9 @@ park there is one the queue binds no consumer for, and
 **A reset re-stamps the order list's sort key.** Each row's `FirstSeenAt` is
 the time its first event reached the projection, so after a reset it is the
 replay's arrival time: the list `GET /v1/orders` returns is then roughly in the
-events' own order rather than the order the BFF first saw them in, and a
-cursor a client held from before the reset reads a shifted page.
+events' own order rather than the order the BFF first saw them in. A cursor
+a client held from before the reset points earlier than every re-stamped row,
+so it reads an empty last page; the client has to start again from the first.
 
 The BFF is the queue's only consumer, so the replayed events wait on
 `bff-order-events` until it is back. When the run has finished, resume the
