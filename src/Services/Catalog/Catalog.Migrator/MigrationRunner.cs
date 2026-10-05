@@ -4,8 +4,12 @@ using Microsoft.Extensions.Logging;
 
 namespace Catalog.Migrator;
 
-/// <summary><c>Database.Migrate()</c> and nothing else (§7.4), plus the exit code that makes it a job.</summary>
-public sealed class MigrationRunner(CatalogDbContext db, ILogger<MigrationRunner> logger)
+/// <summary><c>Database.Migrate()</c> (§7.4), then §14.3's gated seed, and the exit code that makes it a job.</summary>
+public sealed class MigrationRunner(
+    CatalogDbContext db,
+    ILogger<MigrationRunner> logger,
+    // The default, not the annotation, is what lets the container build this with no seeder registered (§14.3).
+    CatalogSeeder? seeder = null)
 {
     private static readonly Action<ILogger, int, string, Exception?> Applying =
         LoggerMessage.Define<int, string>(
@@ -32,6 +36,12 @@ public sealed class MigrationRunner(CatalogDbContext db, ILogger<MigrationRunner
             // Not "unchanged": a later migration can fail after an earlier one has committed.
             "Catalog migration failed; the schema may be partially applied. The job exits non-zero.");
 
+    private static readonly Action<ILogger, Exception?> NotSeeding =
+        LoggerMessage.Define(
+            LogLevel.Information,
+            new EventId(5, nameof(NotSeeding)),
+            "Not seeding: Seed:Enabled is not true, or the environment is not Development.");
+
     /// <returns>0 once every pending migration has applied; 1 if the run threw.</returns>
     public async Task<int> RunAsync(CancellationToken ct)
     {
@@ -49,6 +59,13 @@ public sealed class MigrationRunner(CatalogDbContext db, ILogger<MigrationRunner
             await db.Database.MigrateAsync(ct);
 
             Applied(logger, null);
+
+            // Said either way, since a gate closed in silence reads exactly like a seeder that is broken (§14.3).
+            if (seeder is null)
+                NotSeeding(logger, null);
+            else
+                await seeder.SeedAsync(ct);
+
             return 0;
         }
         catch (Exception ex)

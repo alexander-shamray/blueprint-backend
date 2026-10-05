@@ -363,7 +363,31 @@ class OmitsTheSlice(unittest.TestCase):
         # PR-07's state with the later wiring on it, not PR-10's state with
         # the nouns changed.
         for omitted in OMITTED:
+            if omitted in scaffold.render.STAND_INS:
+                continue
             self.assertNotIn(omitted.replace("Catalog", "Zulu"), self.rendered.created)
+
+    def test_a_stand_in_holds_its_own_text_and_none_of_the_template_file(self):
+        # The one exemption above, held to exactly what it renders.
+        for omitted, text in scaffold.render.STAND_INS.items():
+            rendered = self.rendered.created[omitted.replace("Catalog", "Zulu")]
+            self.assertEqual(text.replace("Catalog", "Zulu"), rendered.replace("\r\n", "\n"))
+
+    def test_the_migrator_renders_the_seed_hook_and_no_seed_rows(self):
+        # §14.3: the gate and the runner's optional seeder travel; the template's rows do not.
+        migrator = "src/Services/Zulu/Zulu.Migrator"
+        host = self.rendered.created[f"{migrator}/MigratorHost.cs"]
+        self.assertIn('bool.TryParse(builder.Configuration["Seed:Enabled"]', host)
+        self.assertIn("if (requested && builder.Environment.IsDevelopment())", host)
+        self.assertIn("builder.Services.AddScoped<ZuluSeeder>();", host)
+        runner = self.rendered.created[f"{migrator}/MigrationRunner.cs"]
+        self.assertIn("ZuluSeeder? seeder = null)", runner)
+        self.assertIn("await seeder.SeedAsync(ct);", runner)
+        seeder = self.rendered.created[f"{migrator}/ZuluSeeder.cs"]
+        self.assertIn("public Task SeedAsync(CancellationToken ct)", seeder)
+        self.assertNotIn("INSERT", seeder)
+        self.assertNotIn("5eed", seeder)
+        self.assertIn("tests/Zulu.Api.Tests/SeedGateTests.cs", self.rendered.created)
 
     def test_the_host_maps_no_endpoint_and_says_where_the_first_one_goes(self):
         program = self.rendered.created["src/Services/Zulu/Zulu.Api/Program.cs"]
@@ -2727,7 +2751,7 @@ class TheCommandLine(unittest.TestCase):
             # A count and not a list: a number a test pins fails when it is
             # wrong. Seven and not eight, because this root has no `.github/` and
             # §15.1's allow-list step degrades without it.
-            self.assertIn("73 files created, 7 updated", out)
+            self.assertIn("75 files created, 7 updated", out)
             self.assertIn(f"port {PORT}", out)
             self.assertTrue((root / "src/Services/Zulu/Zulu.Api/Program.cs").exists())
 
@@ -2775,7 +2799,7 @@ class TheCommandLine(unittest.TestCase):
             self.assertEqual(0, code)
             self.assertEqual("", err)
             # Six shared files and not seven: no outbox meter line, and no `.github/` here.
-            self.assertIn("55 files created, 6 updated, publishing no port.", out)
+            self.assertIn("57 files created, 6 updated, publishing no port.", out)
             self.assertFalse((root / "src/Services/Zulu/Zulu.Domain").exists())
 
     def test_fourteen_digits_that_are_not_a_date_refuse_in_one_line(self):

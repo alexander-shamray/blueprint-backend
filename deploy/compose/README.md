@@ -133,6 +133,55 @@ A route in §10.2's file whose service is not running answers 502 on that
 path and costs nothing else; the two configuration tests over the file are
 what let it ship whole.
 
+## Seeded products
+
+`catalog-migrator` and `inventory-migrator` set `Seed__Enabled` and
+`DOTNET_ENVIRONMENT: Development`, the two halves of
+[§14.3](../../docs/backend-architecture/14-local-development.md)'s gate, so a
+fresh stack starts with the catalogue below and its stock. `CatalogSeeder`
+writes each product with the `ProductPublished` outbox row a publish stages,
+and `InventorySeeder` each count with the `StockLevelChanged` row a stock-take
+stages, so Ordering's prices, the BFF's names and Catalog's stock levels fill
+from the same deliveries an admin's calls would cause — a seeded id is one the
+order recipe below can name.
+
+A seeder skips an id that already has a row, so a second `up` changes
+nothing and an edit to a seeded row survives it; `docker compose down -v` and
+`up` is the way back to exactly this table. **This table is the owner of the
+seeded ids**: both seeders' tests read it, and a sibling repository cites it
+rather than copying it.
+
+| Product id | Name | Price | On hand |
+|---|---|---|---|
+| `5eed0000-0000-0000-0000-000000000001` | Oak bookshelf | 189.00 EUR | 40 |
+| `5eed0000-0000-0000-0000-000000000002` | Linen cushion | 24.50 EUR | 120 |
+| `5eed0000-0000-0000-0000-000000000003` | Ceramic mug | 9.90 EUR | 500 |
+| `5eed0000-0000-0000-0000-000000000004` | Desk lamp | 39.00 EUR | 75 |
+| `5eed0000-0000-0000-0000-000000000005` | Wool throw | 59.00 EUR | 60 |
+| `5eed0000-0000-0000-0000-000000000006` | Cast-iron pan | 45.00 EUR | 80 |
+| `5eed0000-0000-0000-0000-000000000007` | Glass carafe | 18.00 EUR | 150 |
+| `5eed0000-0000-0000-0000-000000000008` | A5 notebook | 6.50 EUR | 400 |
+| `5eed0000-0000-0000-0000-000000000009` | Fountain pen | 32.00 EUR | 90 |
+| `5eed0000-0000-0000-0000-000000000010` | Walnut tray | 27.00 EUR | 70 |
+| `5eed0000-0000-0000-0000-000000000011` | Steel kettle | 49.00 EUR | 55 |
+| `5eed0000-0000-0000-0000-000000000012` | Cotton apron | 16.00 EUR | 200 |
+| `5eed0000-0000-0000-0000-000000000013` | Bamboo chopping board | 21.00 EUR | 110 |
+| `5eed0000-0000-0000-0000-000000000014` | Stoneware bowl | 12.00 EUR | 300 |
+| `5eed0000-0000-0000-0000-000000000015` | Wall clock | 35.00 EUR | 45 |
+| `5eed0000-0000-0000-0000-000000000016` | Terracotta plant pot | 14.00 EUR | 250 |
+| `5eed0000-0000-0000-0000-000000000017` | Reading chair | 320.00 EUR | 2 |
+| `5eed0000-0000-0000-0000-000000000018` | Side table | 110.00 EUR | 25 |
+| `5eed0000-0000-0000-0000-000000000019` | Jute rug | 140.00 EUR | 15 |
+| `5eed0000-0000-0000-0000-000000000020` | Candle set | 19.00 EUR | 180 |
+| `5eed0000-0000-0000-0000-000000000021` | Picture frame | 15.00 EUR | 220 |
+| `5eed0000-0000-0000-0000-000000000022` | Coat hook | 8.00 EUR | 350 |
+| `5eed0000-0000-0000-0000-000000000023` | Storage basket | 26.00 EUR | 130 |
+| `5eed0000-0000-0000-0000-000000000024` | Door mat | 22.00 EUR | 0 |
+
+The table runs past one page of the listing's default size, so a cursor is
+exercised from the first request, and its last row is out of stock, so a
+reservation that fails is one order away.
+
 ## Getting a token
 
 PR-16 closed the gap this file used to name: publishing a product now needs a

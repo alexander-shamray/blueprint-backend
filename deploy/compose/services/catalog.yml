@@ -14,6 +14,10 @@ services:
       # inline because .env.example promises every variable one — §14.1's bare
       # `${…}` would break `docker compose up` on a clean checkout.
       ConnectionStrings__CatalogMigrator: "${CATALOG_MIGRATOR_CONNECTION:-Server=sql;Database=Catalog;User Id=sa;Password=${SQL_PASSWORD:-Local_Dev_Pa55w0rd!};TrustServerCertificate=True}"
+      # §14.3's gate, both halves: the flag, and the environment name the job
+      # host reads, which is DOTNET_ENVIRONMENT and not ASPNETCORE_ENVIRONMENT.
+      DOTNET_ENVIRONMENT: Development
+      Seed__Enabled: "true"
     depends_on:
       sql: { condition: service_healthy }
     restart: "no"

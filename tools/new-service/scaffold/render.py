@@ -99,6 +99,8 @@ COPIED = frozenset(
         "tests/Catalog.Api.Tests/ConsumerCallRuleTests.cs",
         # The building blocks' windows, which every rendered host holds.
         "tests/Catalog.Api.Tests/RetentionMapTests.cs",
+        # §14.3's gate travels with the hook it guards, which every migrator holds.
+        "tests/Catalog.Api.Tests/SeedGateTests.cs",
         "tests/Catalog.TestSupport/Catalog.TestSupport.csproj",
         "tests/Catalog.TestSupport/CatalogApiFactory.cs",
         # §12.4's test scheme. Copied rather than omitted even though a
@@ -169,6 +171,10 @@ OMITTED = frozenset(
         "src/Services/Catalog/Catalog.Infrastructure/Persistence/StockLevelConfiguration.cs",
         "src/Services/Catalog/Catalog.Infrastructure/Projections/StockLevelProjection.cs",
         "src/Services/Catalog/Catalog.Infrastructure/Messaging/StockLevelConsumer.cs",
+        # §14.3's rows are the slice's products. The hook is not: MigratorHost
+        # and MigrationRunner travel, and STAND_INS renders this file empty.
+        "src/Services/Catalog/Catalog.Migrator/CatalogSeeder.cs",
+        "tests/Catalog.Api.Tests/CatalogSeederTests.cs",
         "tests/Catalog.Domain.Tests/MoneyTests.cs",
         "tests/Catalog.Domain.Tests/ProductTests.cs",
         "tests/Catalog.Application.Tests/CatalogIntegrationEventMapperTests.cs",
@@ -265,6 +271,36 @@ ASSEMBLY_MARKER = """namespace Catalog.Domain;
 /// <summary>The type §4.2's architecture gates anchor on until the first aggregate replaces it.</summary>
 public sealed class AssemblyMarker;
 """
+
+# §14.3's seeder with no rows, the type the copied MigratorHost registers and
+# MigrationRunner takes. It says so when the gate opens, since a gate opening
+# onto silence reads exactly like a seeder that is broken.
+EMPTY_SEEDER = """using Microsoft.Extensions.Logging;
+
+namespace Catalog.Migrator;
+
+/// <summary>§14.3's development seed, which holds no rows until this service has an aggregate to seed.</summary>
+public sealed class CatalogSeeder(ILogger<CatalogSeeder> logger)
+{
+    private static readonly Action<ILogger, Exception?> NothingToSeed =
+        LoggerMessage.Define(
+            LogLevel.Information,
+            new EventId(1, nameof(NothingToSeed)),
+            "Catalog has no seed rows yet; the gate is open and nothing was written.");
+
+    public Task SeedAsync(CancellationToken ct)
+    {
+        NothingToSeed(logger, null);
+        return Task.CompletedTask;
+    }
+}
+"""
+
+# An OMITTED file whose type the copied wiring still names, rendered from text
+# of its own in the template's place: the hook travels and the slice does not.
+STAND_INS = {
+    "src/Services/Catalog/Catalog.Migrator/CatalogSeeder.cs": EMPTY_SEEDER,
+}
 
 # Anything left in the rendered tree fails the run. `production` and EF's own
 # `ProductVersion` annotation are the two benign substrings, and they are
@@ -519,6 +555,8 @@ def classify(repo_root: Path, labels: tuple[str, ...]) -> list[str]:
     # The pure consumer's two lists, held to the manifest on the same terms: an
     # omission COPIED does not hold omits nothing, and a patch for a file the
     # mode omits is an anchor no pure render reaches.
+    if (stray := set(STAND_INS) - OMITTED):
+        raise ScaffoldError("STAND_INS names files OMITTED does not: " + ", ".join(sorted(stray)))
     if (stray := PURE_CONSUMER_OMITTED - COPIED):
         raise ScaffoldError(
             "PURE_CONSUMER_OMITTED names files COPIED does not: " + ", ".join(sorted(stray)))
@@ -826,6 +864,8 @@ def render_projects(repo_root: Path, names: Names, migration_id: str,
         created[names.rename(f"src/Services/{TEMPLATE}/{TEMPLATE}.Domain/AssemblyMarker.cs")] = (
             restore(names.rename(ASSEMBLY_MARKER), csharp_newline)
         )
+    for template, text in STAND_INS.items():
+        created[names.rename(template)] = restore(names.rename(text), csharp_newline)
     return created
 
 
