@@ -86,6 +86,11 @@ docs/personal-data.md        where personal data lives — a row per holding
                              with its owner, window, erasure path and store —
                              the operational half of §11.7 on secrets.md's
                              terms, and §11.7 wins any disagreement
+docs/personal-data-incident.md
+                             the procedure for a personal-data incident,
+                             opening on the reporting clock. Outside
+                             docs/runbooks/ because no alert can point at
+                             it, as ADR-053 places it
 docs/runbooks/               NOT one per alert: §13.8's ownership split makes
                              error rate two rules over one procedure, and
                              that one sharer is declared, with its reason, in
