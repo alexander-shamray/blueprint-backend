@@ -170,12 +170,21 @@ series and the per-service alerts stop discriminating.
 
 ## Loading them
 
-Neither Prometheus nor Grafana is deployed by this repository — §15.3's charts
-cover the platform's own workloads and nothing else. How these files reach a
-running Prometheus (a `PrometheusRule`, a ConfigMap, a sidecar-discovered
-folder) is a decision for whoever owns the observability stack, and no chapter
-has taken it. What this directory guarantees is that the content is reviewed,
-versioned and internally consistent.
+**Locally, they are loaded at start.** §14.1's `grafana` service mounts
+`platform-alerts.yaml` into the Prometheus its image bundles and provisions
+both dashboards into a *Platform* folder; `deploy/compose/README.md` gives the
+read that lists what it loaded, and the Compose smoke holds the loaded rule
+count to this file's. **`awaiting-signal.yaml` is deliberately not mounted**:
+its rules read instruments that do not exist, which is why it is a second
+file at all.
+
+No deployed environment's Prometheus or Grafana is deployed by this
+repository — §15.3's charts cover the platform's own workloads and nothing
+else. How these files reach a deployed Prometheus (a `PrometheusRule`, a
+ConfigMap, a sidecar-discovered folder) is a decision for whoever owns the
+observability stack, and no chapter has taken it. What this directory
+guarantees is that the content is reviewed, versioned and internally
+consistent.
 
 ## The SLO run
 

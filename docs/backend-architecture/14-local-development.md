@@ -158,7 +158,22 @@ services:
 
   grafana:
     image: grafana/otel-lgtm:0.30.1
+    # The bundled Prometheus takes no rule-file flag or variable, so its own
+    # config gains the rule_files key at start instead of being copied here;
+    # the guard keeps a restart from appending it twice. Only the loaded file
+    # is named, because awaiting-signal.yaml's rules cannot fire (§13.6).
+    command:
+      - bash
+      - -c
+      - >-
+        grep -q '^rule_files:' prometheus.yaml
+        || echo 'rule_files: [ /etc/prometheus/rules/platform-alerts.yaml ]' >> prometheus.yaml;
+        exec ./run-all.sh
     ports: [ "127.0.0.1:3000:3000" ]
+    volumes:
+      - ../observability/alerts/platform-alerts.yaml:/etc/prometheus/rules/platform-alerts.yaml:ro
+      - ../observability/dashboards:/etc/platform/dashboards:ro
+      - ./grafana/dashboards.yaml:/otel-lgtm/grafana/conf/provisioning/dashboards/platform.yaml:ro
 
   # ---- Application services ----
 
@@ -440,6 +455,11 @@ service:
       processors: [batch]
       exporters: [otlphttp]
 ```
+
+The LGTM container loads §13.6's loaded rule file into the Prometheus it
+bundles and §13.8's dashboards into Grafana at start, so a rule can be seen
+to fire on this stack; `deploy/observability/README.md` owns which file is
+left out and `deploy/compose/README.md` the read that lists what loaded.
 
 An override file runs infrastructure in containers while services run on the
 host with a debugger attached — the usual inner-loop compromise:

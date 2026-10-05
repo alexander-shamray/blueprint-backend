@@ -1,8 +1,8 @@
 name: Compose
 
 # A separate workflow rather than a job in ci.yml because path filtering is
-# per-workflow: the smoke pulls every image the model names and proves a file
-# most pull requests never touch, so it runs only when that file or this one
+# per-workflow: the smoke pulls every image the model names, so it runs only
+# when the model, a file it mounts from deploy/observability/, or this one
 # changes. The filter also carries §14.1's pinned image tags, so a bumped pin
 # is smoke-tested here rather than in the solution build.
 
@@ -14,11 +14,15 @@ on:
   pull_request:
     paths:
       - 'deploy/compose/**'
+      - 'deploy/observability/alerts/platform-alerts.yaml'
+      - 'deploy/observability/dashboards/**'
       - '.github/workflows/compose.yml'
   push:
     branches: [main]
     paths:
       - 'deploy/compose/**'
+      - 'deploy/observability/alerts/platform-alerts.yaml'
+      - 'deploy/observability/dashboards/**'
       - '.github/workflows/compose.yml'
 
 permissions:
@@ -55,6 +59,29 @@ jobs:
       # is part of what this smoke asserts.
       - name: Start and wait for healthy
         run: docker compose -f deploy/compose/docker-compose.yml up -d --wait --quiet-pull
+
+      # The grafana service declares no healthcheck, so --wait proved only that
+      # it started. A rule file its Prometheus stopped reading would start
+      # green, so the loaded count is held to the file's, and each dashboard's
+      # uid is read from its own JSON rather than written here.
+      - name: The local Grafana loaded the platform rules and dashboards
+        run: |
+          expected=$(grep -cE '^\s*- alert:' deploy/observability/alerts/platform-alerts.yaml)
+          [ "$expected" -gt 0 ] || { echo "::error::no alert rule counted in the file"; exit 1; }
+          loaded=
+          for attempt in $(seq 60); do
+            loaded=$(curl -sf http://localhost:3000/api/prometheus/prometheus/api/v1/rules |
+              jq '[.data.groups[].rules[] | select(.type == "alerting")] | length') &&
+              [ "$loaded" = "$expected" ] && break
+            sleep 2
+          done
+          echo "alert rules: $expected in platform-alerts.yaml, ${loaded:-none} loaded"
+          [ "$loaded" = "$expected" ]
+          for uid in $(jq -r .uid deploy/observability/dashboards/*.json); do
+            curl -sf "http://localhost:3000/api/dashboards/uid/$uid" > /dev/null ||
+              { echo "::error::dashboard $uid is not provisioned"; exit 1; }
+            echo "dashboard $uid provisioned"
+          done
 
       - name: Show state on failure
         if: failure()

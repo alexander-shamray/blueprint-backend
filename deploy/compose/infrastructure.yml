@@ -133,7 +133,22 @@ services:
 
   grafana:
     image: grafana/otel-lgtm:0.30.1
+    # The bundled Prometheus takes no rule-file flag or variable, so its own
+    # config gains the rule_files key at start instead of being copied here;
+    # the guard keeps a restart from appending it twice. Only the loaded file
+    # is named, because awaiting-signal.yaml's rules cannot fire (§13.6).
+    command:
+      - bash
+      - -c
+      - >-
+        grep -q '^rule_files:' prometheus.yaml
+        || echo 'rule_files: [ /etc/prometheus/rules/platform-alerts.yaml ]' >> prometheus.yaml;
+        exec ./run-all.sh
     ports: [ "127.0.0.1:3000:3000" ]
+    volumes:
+      - ../observability/alerts/platform-alerts.yaml:/etc/prometheus/rules/platform-alerts.yaml:ro
+      - ../observability/dashboards:/etc/platform/dashboards:ro
+      - ./grafana/dashboards.yaml:/otel-lgtm/grafana/conf/provisioning/dashboards/platform.yaml:ro
 
 volumes:
   sql-data:

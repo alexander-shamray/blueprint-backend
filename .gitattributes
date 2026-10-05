@@ -70,6 +70,12 @@ deploy/compose/carrier-simulator/** text eol=lf
 # so its bytes are fixed here rather than by each checkout's autocrlf.
 deploy/compose/redis/** text eol=lf
 
+# deploy/compose/grafana/ joins on redis/'s argument: Grafana reads its
+# provider file from a bind mount on a Linux daemon, so its bytes are fixed
+# here rather than by each checkout's autocrlf. What it mounts from
+# deploy/observability/ is covered by that tree's own line below.
+deploy/compose/grafana/** text eol=lf
+
 # The secret scan's allow-list joins on the canary tree's argument and on
 # nothing stronger, which is worth saying because the stronger one looks
 # available and is false. Its entries are keyed on a SHA-256 of the matched
