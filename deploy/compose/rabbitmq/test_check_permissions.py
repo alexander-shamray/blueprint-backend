@@ -355,6 +355,25 @@ class AHostsMessagingIsReadToo(unittest.TestCase):
         # A host has no Infrastructure project (§10.1), so only its own project's root is the selector.
         self.assertNotIn("Edge", self.found_over("Edge.Api/Orders/Messaging"))
 
+    def test_two_messaging_directories_keying_to_one_account_are_refused(self):
+        with tempfile.TemporaryDirectory() as directory:
+            hosts = Path(directory) / "Edge"
+            (hosts / "Edge.Api" / "Messaging").mkdir(parents=True)
+            (hosts / "Edge.Admin" / "Messaging").mkdir(parents=True)
+            original, original_failures = gate.HOSTS, gate.failures
+            gate.HOSTS, gate.failures = hosts, []
+            try:
+                found = gate.messaging_dirs()
+                refused = list(gate.failures)
+            finally:
+                gate.HOSTS, gate.failures = original, original_failures
+
+        self.assertIn("Edge", found)
+        self.assertEqual(1, len(refused), refused)
+        self.assertIn("Edge: two Messaging directories key to one account", refused[0])
+        self.assertIn("Edge.Admin/Messaging", refused[0])
+        self.assertIn("Edge.Api/Messaging", refused[0])
+
     def test_the_services_are_still_read_beside_a_host(self):
         self.assertIn("Catalog", self.found_over("Edge.Api/Messaging"))
 
