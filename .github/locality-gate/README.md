@@ -36,8 +36,8 @@ Catalog change that also edits Ordering is inside Class A's set and outside
 its own row, and only the second check sees it. A `+`-joined class is the
 union of its members' sets.
 
-**Every path the diff leaves in the tree, against the ignore rules**, because
-a path git ignores can only arrive force-added, and an ignored file is one
+**Every path the diff leaves in the tree, against the ignore rules read
+case-folded** as a Windows checkout reads them, because an ignored file is one
 each checkout keeps for itself. A worktree has none of its own at the fork,
 so a tracked copy is what it finds; `docs/harness-boundaries.md` names the
 MCP approval files as the case. A deliberate change un-ignores the path in
