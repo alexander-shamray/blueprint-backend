@@ -167,21 +167,21 @@ there reports `codebase-index` pending approval while every plugin server
 connects; one that enters the worktree mid-session keeps the main checkout's
 approval. The same keys in the tracked `.claude/settings.json` were measured
 to leave the server pending, so of the project's two settings files only the
-local one carries them.
-`git-worktree-fork.sh` writes the worktree a `settings.local.json` holding
-one key, `enabledMcpjsonServers`, naming the servers the main checkout
-approves and does not disable, with an `enableAllProjectMcpServers` expanded to the servers
-`.mcp.json` defines at the fork, and nothing else. The rest of that file is
-the main checkout's own `permissions` rows, and copying it would widen every
-worktree by them; the approve-all itself would approve servers defined after
-the fork. `.mcp.json` is gitignored and not copied: the
-session finds the main checkout's by walking up, because the helper forks
-only under `.claude/worktrees/` and the worktree has none of its own. Two
-residuals stand. The helper writes a file the session's `Edit` is denied, and
-what it writes is one key read from a file the session is denied too. And the
-approval names servers rather than definitions, so a `.mcp.json` that reaches
-a worktree through git, force-added past the ignore, is found before the main
-checkout's and approved under the same name without a prompt.
+local one carries them. `git-worktree-fork.sh` writes the worktree a
+`settings.local.json` holding one key, `enabledMcpjsonServers`, naming the
+servers the main checkout approves and does not disable, with an
+`enableAllProjectMcpServers` expanded to the servers `.mcp.json` defines at
+the fork, and nothing else. The rest of that file is the main checkout's own
+`permissions` rows, and copying it would widen every worktree by them; the
+approve-all itself would approve servers defined after the fork. `.mcp.json`
+is gitignored and not copied: the session finds the main checkout's by
+walking up, because the helper forks only under `.claude/worktrees/` and the
+worktree has none of its own. Two residuals stand. The helper writes a file
+the session's `Edit` is denied, and what it writes is one key read from a
+file the session is denied too. And the approval names servers rather than
+definitions, so a `.mcp.json` that reaches a worktree through git,
+force-added past the ignore, is found before the main checkout's and
+approved under the same name without a prompt.
 
 **`SessionStart` runs the same script, for the moves no tool call makes.** A
 merge, a switch or a pull made outside the session rewrites the tree with no
