@@ -228,12 +228,10 @@ class ChoosingTheCheckout(Base):
         self.assertEqual([original], self.worker_roots())
 
     def test_an_unindexed_checkout_is_left_alone(self):
-        """Unindexed is not stale. Building an index per throwaway worktree
-        is a cost this hook was never asked for.
-
-        `CLAUDE_PROJECT_DIR` names an indexed checkout here because every event
-        Claude Code sends carries one: without it the assertion passes on a hook
-        that falls through and refreshes the tree that did not change."""
+        """Unindexed is not stale. `CLAUDE_PROJECT_DIR` names an indexed
+        checkout because every event Claude Code sends carries one: without it
+        the assertion passes on a hook that falls through and refreshes the
+        tree that did not change."""
         bare = self.checkout("fresh", indexed=False)
         indexed = self.checkout("main")
 
