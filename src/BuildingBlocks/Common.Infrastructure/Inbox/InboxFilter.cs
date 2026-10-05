@@ -45,6 +45,9 @@ public sealed class InboxFilter<T>(
             // Dropped, but counted and logged: the MessageId goes on the log because it is unbounded.
             metrics.Suppressed(typeof(T).Name, endpoint);
             Suppressed(log, typeof(T).Name, messageId, endpoint, null);
+
+            // Marked consumed, or MassTransit parks an ordinary redelivery in <queue>_skipped, which pages (§13.6).
+            await context.NotifyConsumed(TimeSpan.Zero, "inbox");
             return;
         }
 

@@ -73,7 +73,7 @@ public static class Replay
                 await output.WriteLineAsync($"Reset: the order rows and {Queue}'s inbox rows are deleted.");
             }
 
-            // A copy the inbox would drop is dropped before the queue, where it would land in _skipped, which pages.
+            // A copy the inbox would drop is not sent, so the report says how much of the window was already applied.
             HashSet<Guid> handled = reset ? [] : await ProjectionReset.HandledAsync(settings.Bff, settings.Broker, ct);
             ReplayReport report = new();
 

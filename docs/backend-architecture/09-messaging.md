@@ -1627,6 +1627,11 @@ public async Task Send(ConsumeContext<T> context, IPipe<ConsumeContext<T>> next)
         // and never on the counter, because it is unbounded (§13.3).
         metrics.Suppressed(typeof(T).Name, endpoint);
         Suppressed(log, typeof(T).Name, messageId, endpoint, null);
+
+        // Marked consumed: a delivery no consumer ran is parked in
+        // <queue>_skipped, which pages on a missing binding (§13.6), not
+        // on an ordinary redelivery.
+        await context.NotifyConsumed(TimeSpan.Zero, "inbox");
         return;
     }
 
