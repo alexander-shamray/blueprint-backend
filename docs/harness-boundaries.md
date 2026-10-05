@@ -172,10 +172,13 @@ local one carries them.
 main checkout's `enabledMcpjsonServers` and nothing else, because the rest of
 that file is the main checkout's own `permissions` rows, and copying it would
 widen every worktree by them. `.mcp.json` is gitignored and not copied: the
-session finds the main checkout's by walking up, which holds because the
-helper forks only under `.claude/worktrees/`. The residual is that the helper
-writes a file the session's `Edit` is denied, and what it writes is one key
-read from a file the session is denied too.
+session finds the main checkout's by walking up, because the helper forks
+only under `.claude/worktrees/` and the worktree has none of its own. Two
+residuals stand. The helper writes a file the session's `Edit` is denied, and
+what it writes is one key read from a file the session is denied too. And the
+approval names servers rather than definitions, so a `.mcp.json` that reaches
+a worktree through git, force-added past the ignore, is found before the main
+checkout's and approved under the same name without a prompt.
 
 **`SessionStart` runs the same script, for the moves no tool call makes.** A
 merge, a switch or a pull made outside the session rewrites the tree with no
