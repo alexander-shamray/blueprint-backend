@@ -42,7 +42,7 @@ public abstract class ServiceFixture<TFactory, TEntryPoint, TDbContext> : IAsync
     private readonly bool _schedules;
 
     private readonly MsSqlContainer _sql = new MsSqlBuilder()
-        .WithImage("mcr.microsoft.com/mssql/server:2022-latest")
+        .WithImage(ComposeImage.Of("sql"))
         .Build();
 
     /// <summary>§8.1's two servers, so a coordination key written to the evicting one is caught (§12.4).</summary>
@@ -68,12 +68,12 @@ public abstract class ServiceFixture<TFactory, TEntryPoint, TDbContext> : IAsync
             return;
 
         _redisCache = new RedisBuilder()
-            .WithImage("redis:7-alpine")
+            .WithImage(ComposeImage.Of("redis-cache"))
             .WithCommand("--maxmemory-policy", "allkeys-lru")
             .Build();
 
         _redisCoordination = new RedisBuilder()
-            .WithImage("redis:7-alpine")
+            .WithImage(ComposeImage.Of("redis-coordination"))
             .WithCommand("--maxmemory-policy", "noeviction")
             .Build();
     }

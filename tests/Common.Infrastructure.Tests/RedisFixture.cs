@@ -11,12 +11,12 @@ namespace Common.Infrastructure.Tests;
 public sealed class RedisFixture : IAsyncLifetime
 {
     private readonly RedisContainer _cache = new RedisBuilder()
-        .WithImage("redis:7-alpine")
+        .WithImage(ComposeImage.Of("redis-cache"))
         .WithCommand("--maxmemory-policy", "allkeys-lru")
         .Build();
 
     private readonly RedisContainer _coordination = new RedisBuilder()
-        .WithImage("redis:7-alpine")
+        .WithImage(ComposeImage.Of("redis-coordination"))
         .WithCommand("--maxmemory-policy", "noeviction")
         .Build();
 
