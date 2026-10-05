@@ -8,7 +8,7 @@ using Xunit;
 
 namespace Payments.Api.Tests;
 
-/// <summary><see cref="ProviderKillSwitch"/> at the pinned MassTransit, on an endpoint shaped as Payments' are.</summary>
+/// <summary><see cref="ProviderKillSwitch"/> at the pinned MassTransit, on an endpoint shaped as Payments'.</summary>
 public sealed class ProviderKillSwitchTests
 {
     private const string Queue = "kill-switch-probe";
