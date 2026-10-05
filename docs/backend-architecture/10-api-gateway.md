@@ -594,8 +594,8 @@ used.
 The gateway assigns a correlation ID to every request that lacks one — and to
 every request carrying one it will not adopt, which is the same act for a
 different reason — and it propagates through every service, log line and
-trace, and onto the Local-lane messages a request stages; an integration event
-carries its business correlation instead ([§9.1](09-messaging.md)). This is what makes a production incident diagnosable.
+trace. A message carries a correlation of its own instead
+([§9.1](09-messaging.md), [§9.4](09-messaging.md)). This is what makes a production incident diagnosable.
 
 It ships in `Common.Web` as one extension, called by both the gateway and every
 service (§4.2), above everything that logs — a log line written before it has no
