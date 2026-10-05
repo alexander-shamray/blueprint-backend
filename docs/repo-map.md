@@ -545,6 +545,13 @@ file also holds what the scaffold wrote — restoring it returns the
 commit. `git add -p` the intentional hunks and commit them, then run the
 `git checkout` against what is left.
 
+**Start only when those paths hold nothing uncommitted, because the cleanup
+cannot tell whose an edit is.** In a worktree shared by agents working
+disjoint paths (`docs/change-locality.md` §4), another agent's uncommitted
+edit under `deploy/compose/` or the allow-list is reverted with the render.
+`git status --short` over the cleanup's paths, before the render, must print
+nothing; anything it lists waits to be committed by whoever made it.
+
 **A rendered service carries credential-shaped literals, and the scaffold
 writes their allow-list entries itself.** §15.1's secret scan reads the
 working tree, so a render with no `.github/secret-scan/allowed/`
