@@ -547,6 +547,12 @@ class IgnoredPaths(unittest.TestCase):
         git(self.root, "add", "-f", "docs/local.json")
         self.assertEqual(ignored_paths(["docs/local.json"], self.root), {"docs/local.json"})
 
+    def test_a_path_differing_only_in_case_is_reported_on_a_case_sensitive_checkout(self) -> None:
+        # CI's runner matches case-sensitively; the Windows checkouts that
+        # read `.mcp.json` would open `.MCP.json` as that file.
+        git(self.root, "config", "core.ignorecase", "false")
+        self.assertEqual(ignored_paths([".Claude/Settings.Local.json"], self.root), {".Claude/Settings.Local.json"})
+
     def test_a_path_un_ignored_in_the_same_tree_passes(self) -> None:
         (self.root / ".gitignore").write_text(".claude/settings.local.json\n", encoding="utf-8")
         self.assertEqual(ignored_paths(["docs/local.json"], self.root), set())
@@ -590,7 +596,8 @@ class TheShippedIgnoreRules(unittest.TestCase):
         tracked = subprocess.run(["git", "-C", str(ROOT), "ls-files"], capture_output=True,
                                  encoding="utf-8", check=True).stdout.splitlines()
         self.assertGreater(len(tracked), 100, "ls-files found almost nothing")
-        listed = subprocess.run(["git", "-C", str(ROOT), "ls-files", "-ci", "--exclude-standard"],
+        listed = subprocess.run(["git", "-C", str(ROOT), "-c", "core.ignorecase=true",
+                                 "ls-files", "-ci", "--exclude-standard"],
                                 capture_output=True, encoding="utf-8", check=True).stdout.splitlines()
         self.assertEqual(listed, [])
 
