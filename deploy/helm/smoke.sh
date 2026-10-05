@@ -619,6 +619,53 @@ refuses_chart ordering 'ordering: a broker peer of every address fails the rende
 refuses_chart gateway 'gateway: an Ingress with no controller peer stated fails the render' \
     'networkPolicy.ingressController.from is required' --set networkPolicy.ingressController.from=null
 
+# A policy's port is matched at the destination pod, after a Service has
+# translated it, so the port an address dials is right only where no Service
+# maps it: a peer's stated port wins, and the address's is the fallback.
+egress_ports() {
+    # egress_ports <policy> <ERE> -> the ports of every egress rule whose peer matches
+    want="$2" awk '/^  egress:/ { e = 1 } e && /^    - to:/ { hit = 0 }
+        e && $0 ~ ENVIRON["want"] { hit = 1 }
+        e && hit && /- port: / { print $3 }' "$1" | tr '\n' ' ' | sed 's/ *$//'
+}
+peer_pattern() {
+    case "$1" in
+        telemetry) echo 'kubernetes.io/metadata.name: observability$' ;;
+        *) echo "cidr: $(cidr_of "$1")$" ;;
+    esac
+}
+render_policy() {
+    # render_policy <chart> <file> <helm args...> -> that render's NetworkPolicy in <file>
+    local chart="$1" file="$2"
+    shift 2
+    "$HELM" template "$chart" "$CHARTS_DIR/$chart" $NETPOL_OVERLAY --set-string "image.tag=$TAG" \
+        $(overlay_for "$chart") "$@" >"$OUT/port.yaml"
+    policy_of "$OUT/port.yaml" >"$file"
+}
+while read -r chart peer derived; do
+    render_policy "$chart" "$OUT/port-derived.yaml"
+    check "$chart reaches $peer on the port its address dials when no port is stated" \
+        test "$(egress_ports "$OUT/port-derived.yaml" "$(peer_pattern "$peer")")" = "$derived"
+    render_policy "$chart" "$OUT/port-stated.yaml" --set "networkPolicy.$peer.port=18443"
+    check "$chart reaches $peer on the pod port networkPolicy.$peer.port states" \
+        test "$(egress_ports "$OUT/port-stated.yaml" "$(peer_pattern "$peer")")" = 18443
+done <<'EOF'
+ordering telemetry 4317
+ordering identity 443
+notifications identity 443
+notifications mail 587
+payments paymentProvider 443
+shipping carrier 443
+EOF
+# The admin API is the identity provider's too, so its stated port covers both.
+render_policy notifications "$OUT/port-admin.yaml" --set-string 'contactSource.baseUrl=https://id.example.invalid:8443/'
+check 'notifications reaches the admin API on its own address port when no port is stated' \
+    test "$(egress_ports "$OUT/port-admin.yaml" "$(peer_pattern identity)")" = '443 8443'
+render_policy notifications "$OUT/port-admin.yaml" --set-string 'contactSource.baseUrl=https://id.example.invalid:8443/' \
+    --set networkPolicy.identity.port=18443
+check 'notifications reaches the identity provider and its admin API on the one stated pod port' \
+    test "$(egress_ports "$OUT/port-admin.yaml" "$(peer_pattern identity)")" = 18443
+
 # --------------------------------------------------------------------------
 section 'paymentProvider is a capability, and its address is required'
 # --------------------------------------------------------------------------
