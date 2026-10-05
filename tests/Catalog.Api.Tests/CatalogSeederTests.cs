@@ -11,6 +11,8 @@ using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Shouldly;
 using Xunit;
 
@@ -123,6 +125,28 @@ public class CatalogSeederTests(ServiceFixture fixture)
         (await OutboxAsync(database)).ShouldBeEmpty();
     }
 
+    [Fact]
+    public async Task A_seed_that_fails_after_the_schema_migrated_logs_the_seed_failure_and_not_a_migration_one()
+    {
+        string database = await MigrateAsync([]);
+
+        // A database that does not exist, so the seed throws once the runner's own schema is current.
+        string absent = new SqlConnectionStringBuilder(fixture.ConnectionString)
+        {
+            InitialCatalog = $"CatalogSeedAbsent{Guid.CreateVersion7():N}"
+        }.ConnectionString;
+        RunnerLog log = new();
+
+        await using CatalogDbContext db = Open(database);
+        await using CatalogDbContext elsewhere = Open(absent);
+        MigrationRunner runner = new(db, log, new CatalogSeeder(elsewhere, NullLogger<CatalogSeeder>.Instance));
+
+        int exitCode = await runner.RunAsync(TestContext.Current.CancellationToken);
+
+        exitCode.ShouldBe(1);
+        log.Errors.ShouldBe(["Catalog schema migrated, but the seed failed. The job exits non-zero."]);
+    }
+
     /// <summary>A fresh database on the collection's server, migrated once with <paramref name="settings"/>.</summary>
     private async Task<string> MigrateAsync(string[] settings)
     {
@@ -178,5 +202,27 @@ public class CatalogSeederTests(ServiceFixture fixture)
         OutboxMessage[] outbox = await OutboxAsync(database);
 
         return [.. outbox.Select(row => row.Id).Order()];
+    }
+
+    /// <summary>The runner's <c>Error</c> sentences, the lines an operator reads first.</summary>
+    private sealed class RunnerLog : ILogger<MigrationRunner>
+    {
+        public List<string> Errors { get; } = [];
+
+        public IDisposable? BeginScope<TState>(TState state)
+            where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter)
+        {
+            if (logLevel == LogLevel.Error)
+                Errors.Add(formatter(state, exception));
+        }
     }
 }

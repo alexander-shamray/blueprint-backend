@@ -43,7 +43,13 @@ public sealed class MigrationRunner(
             new EventId(5, nameof(NotSeeding)),
             "Not seeding: Seed:Enabled is not true, or the environment is not Development.");
 
-    /// <returns>0 once every pending migration has applied; 1 if the run threw.</returns>
+    private static readonly Action<ILogger, Exception?> SeedFailed =
+        LoggerMessage.Define(
+            LogLevel.Error,
+            new EventId(6, nameof(SeedFailed)),
+            "Inventory schema migrated, but the seed failed. The job exits non-zero.");
+
+    /// <returns>0 once every pending migration has applied and any seed has run; 1 if either threw.</returns>
     public async Task<int> RunAsync(CancellationToken ct)
     {
         try
@@ -60,19 +66,30 @@ public sealed class MigrationRunner(
             await db.Database.MigrateAsync(ct);
 
             Applied(logger, null);
-
-            // Said either way, since a gate closed in silence reads exactly like a seeder that is broken (§14.3).
-            if (seeder is null)
-                NotSeeding(logger, null);
-            else
-                await seeder.SeedAsync(ct);
-
-            return 0;
         }
         catch (Exception ex)
         {
             // Broad: every failure is the same outcome to the Job, and an escaped one loses the operator's sentence.
             Failed(logger, ex);
+            return 1;
+        }
+
+        // Said either way, since a gate closed in silence reads exactly like a seeder that is broken (§14.3).
+        if (seeder is null)
+        {
+            NotSeeding(logger, null);
+            return 0;
+        }
+
+        try
+        {
+            await seeder.SeedAsync(ct);
+            return 0;
+        }
+        catch (Exception ex)
+        {
+            // Not Failed: the schema is whole by now, and that sentence would send the operator to it.
+            SeedFailed(logger, ex);
             return 1;
         }
     }
