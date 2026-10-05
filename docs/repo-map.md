@@ -91,10 +91,9 @@ docs/personal-data-incident.md
                              opening on the reporting clock. Outside
                              docs/runbooks/ because no alert can point at
                              it, as ADR-053 places it
-docs/runbooks/               NOT one per alert: §13.8's ownership split makes
-                             error rate two rules over one procedure, and
-                             that one sharer is declared, with its reason, in
-                             check.py's SHARED_RUNBOOKS. Plus a README that is
+docs/runbooks/               NOT one per alert: a procedure two alerts share
+                             is declared, with its reason, in check.py's
+                             SHARED_RUNBOOKS. Plus a README that is
                              EXCLUDED from the pairing by name — one declared
                              exception, so a second non-runbook file has to
                              be argued for. check.py's check 9 reads §13.6's

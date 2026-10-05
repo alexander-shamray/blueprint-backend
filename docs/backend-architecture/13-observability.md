@@ -2357,9 +2357,9 @@ fires.
 **The pairing is a gate, not a convention.** `deploy/observability/check.py`
 fails the build on an alert whose `runbook_url` names a file that is not there,
 on a runbook no alert points at, and on a runbook claimed by two alerts that
-its `SHARED_RUNBOOKS` does not declare — §13.8's error-rate pair is the one
-declared sharer, with its reason beside it, so a second is argued for in that
-file rather than added. Both directions were observed red before the gate was
+its `SHARED_RUNBOOKS` does not declare — each declared sharer carries its
+reason beside it there, so another is argued for in that file rather than
+added. Both directions were observed red before the gate was
 trusted, which is this repository's rule for any gate: the failure it exists to
 catch has to have been seen.
 
