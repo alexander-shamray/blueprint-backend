@@ -3019,10 +3019,9 @@ pricing
         options.CircuitBreaker.MinimumThroughput = PricingHop.CircuitBreakerMinimumThroughput;
         options.CircuitBreaker.BreakDuration = PricingHop.CircuitBreakerBreakDuration;
 
-        // SamplingDuration is left at its default, and the default is
-        // load-bearing: a sampling window shorter than the break duration
-        // forgets every failure while the circuit is open, so the breaker
-        // closes onto a fresh window and reopens on the first error it sees.
+        // SamplingDuration keeps its default, and owes the break duration
+        // nothing: a breaker that closes starts a fresh window, so no failure
+        // sampled before the break survives it, however the two compare.
     });
 
 // Registered AFTER resilience, so it sits inside it (§11.5).
@@ -3117,9 +3116,8 @@ TimeSpan backoff = options.Retry.MaxDelay.Value * options.Retry.MaxRetryAttempts
 
 The same file asserts the outbound total strictly below
 `ServiceOptions.OperationTimeout` — an ordering has no ties — that the
-attempt timeout sits inside the band the table names, that
-`TotalRequestTimeout` is not at its default, and that the breaker's sampling
-window outlives its break duration.
+attempt timeout sits inside the band the table names, and that
+`TotalRequestTimeout` is not at its default.
 
 ### What the `.proto` cannot say
 

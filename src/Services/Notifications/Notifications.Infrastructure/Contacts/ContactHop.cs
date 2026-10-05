@@ -31,7 +31,6 @@ public static class ContactHop
 
     public static readonly TimeSpan CircuitBreakerSamplingDuration = TimeSpan.FromSeconds(60);
 
-    /// <summary>Shorter than the window, so the breaker keeps its failures while open.</summary>
     public static readonly TimeSpan CircuitBreakerBreakDuration = TimeSpan.FromSeconds(30);
 
     /// <summary>A user representation is a few fields and attributes, so a larger answer is refused unread.</summary>
