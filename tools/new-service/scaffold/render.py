@@ -455,6 +455,14 @@ ENVIRONMENT_KEY = re.compile(r"^      ([A-Za-z0-9_]+):(?:\s|$)")
 LOOPBACK = "127.0.0.1"
 HOST_IP = r"\d+\.\d+\.\d+\.\d+"
 
+# The template api's dependencies on the hosts that consume its seed (§14.3).
+TEMPLATE_START_ORDER = (
+    "      # §14.3's seed is published once, and a fanout publish with no queue bound\n"
+    "      # is dropped, so the hosts that consume it are ready first.\n"
+    "      ordering-api: { condition: service_healthy }\n"
+    "      web-bff: { condition: service_healthy }\n"
+)
+
 
 def classify(repo_root: Path, labels: tuple[str, ...]) -> list[str]:
     """The template files to copy, and a refusal if any is unclassified.
@@ -1069,6 +1077,11 @@ def render_service_compose(repo_root: Path, names: Names, port: int | None) -> s
             f"{COMPOSE_DIR}/{COMPOSE_TEMPLATE_UNIT} has no `services:` key to render from"
         )
     block = names.rename(text[text.index(marker) + 1:])
+
+    # §14.3's start order is the template's own: a rendered service seeds
+    # nothing those hosts consume, so it waits on none of them.
+    require_once(block, TEMPLATE_START_ORDER, f"{COMPOSE_DIR}/{COMPOSE_TEMPLATE_UNIT}")
+    block = block.replace(TEMPLATE_START_ORDER, "")
 
     # The loopback prefix is REQUIRED of the template rather than copied from
     # it. Reading the prefix off Catalog would make the scaffold agree with

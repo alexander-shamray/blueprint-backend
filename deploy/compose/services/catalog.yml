@@ -49,6 +49,14 @@ services:
       ConnectionStrings__RedisCache: "redis-cache:6379,user=catalog-svc,password=local-dev-catalog"
       ConnectionStrings__RedisCoordination: "redis-coordination:6379,user=catalog-svc,password=local-dev-catalog"
     ports: [ "127.0.0.1:5102:8080" ]
+    # §13.5's readiness, asked by the host itself through HealthProbe, because
+    # the image has no shell or HTTP client; the timeout outlasts the probe's.
+    healthcheck:
+      test: [ "CMD", "dotnet", "Catalog.Api.dll", "--probe" ]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
     depends_on:
       catalog-migrator: { condition: service_completed_successfully }
       rabbitmq: { condition: service_healthy }
@@ -59,3 +67,7 @@ services:
       # Redis still booting and its first command would fail on §8.5's claim.
       redis-cache: { condition: service_healthy }
       redis-coordination: { condition: service_healthy }
+      # §14.3's seed is published once, and a fanout publish with no queue bound
+      # is dropped, so the hosts that consume it are ready first.
+      ordering-api: { condition: service_healthy }
+      web-bff: { condition: service_healthy }
