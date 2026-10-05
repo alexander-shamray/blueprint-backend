@@ -168,6 +168,22 @@ spawn is the same detached one, so a session start waits for nothing. What is
 left to a query's stale report is the tree that moves mid-session, and that is
 the one a person is present for.
 
+**`UserPromptSubmit` runs `.claude/hooks/index-query-hint.py`, because keeping
+the index current never got it read.** The skill's `description` says to
+query it, and from the transcripts no session here did after the day the
+skill was tuned. A prompt that reads as a locate, explain, references, impact
+or named-symbol question gets one line of `additionalContext`: load the
+skill, the route-table row for that question, and the session-tag rule.
+Every other prompt gets nothing, and so does every slash command but `/ship`
+and `/branch`, whose arguments are read as the task they carry. **It asks for
+the skill and not only the command** because the skill's `allowed-tools` is
+the only grant for the `cbx` wrapper, and it holds only while the skill is
+loaded. It reads only the decoded `prompt` string, never the payload's paths,
+writes nothing, spawns nothing and leaves with 0 whatever happened: exit 2
+under this event blocks the prompt and erases it. `test_index_query_hint.py`
+holds every command it emits to a row of the route table and a prefix the
+skill approves.
+
 **A hook command needs no shell, and that is a constraint rather than a
 preference.** An env-var prefix — `VAR=1 cmd` — is POSIX syntax that `cmd`
 and PowerShell do not run, and a bare `bash` is whatever `PATH` resolves
