@@ -1401,6 +1401,44 @@ Going through `ILogger` also means the test exercises message templates, which
 is where the attribute keys come from — so the `{Token}` naming advice above is
 verified by this test rather than merely stated near it.
 
+### How long a log and a trace are kept
+
+**A log and a trace each have a lifetime, and it is a value the deployment
+states.** The template above sends a customer's id rather than a name or a
+mailbox, and so do the services' own lines, but an identifier is pseudonymous
+and not anonymous:
+[ADR-035](adr/ADR-035-an-integration-event-carries-identifiers-not-personal-data.md)
+already calls it personal data, and a span's attributes carry the same ids.
+[§11.7](11-identity-authorization.md)'s erasure deletes or anonymises what each
+service owns and reaches no log store, so the lifetime is the only thing that
+ever removes those ids from it. That is why the lifetime is bounded. It is not
+shorter than the deployment's incident investigations need, because an
+incident is read from these records after it is noticed, and a personal-data
+incident's statutory clock
+([ADR-053](adr/ADR-053-a-jurisdiction-is-a-value-the-deployment-is-given.md))
+runs from when it is discovered, not from when it happened.
+
+**It is set in the log and trace stores' own retention configuration, by
+whoever runs them.** This repository deploys neither —
+[§15.3](15-cicd-deployment.md)'s charts render this platform's workloads and
+no stateful store, and §13.8 says the same of Prometheus and Grafana — so the
+statement is a requirement on the deployment, like the recovery §15.3 demands
+of every store it does not run: a deployment that cannot name its log lifetime
+and its trace lifetime is not ready for customer traffic. ADR-053's rule 3
+gives each jurisdiction its own log store, so each has its own lifetime.
+
+**It is not a member of a service's jurisdiction options**, though ADR-053 is
+where the jurisdiction's windows live. Those classes are bound by a host that
+applies each window — its own retention purge reads it — and no host deletes a
+log or a span; the store does. A member no code applies would pass validation
+at start and prove nothing about the store. Notifications'
+`Jurisdiction:LogRetention` is a different thing: the window its
+`NotificationLog` rows are kept as evidence, which its own purge applies.
+
+**Locally there is no lifetime to choose.** §14.1's `grafana` container holds
+the logs and traces it ingests on no named volume, so they last as long as the
+container does.
+
 ## 13.5 Health checks
 
 Three distinct endpoints, because Kubernetes asks three distinct questions.

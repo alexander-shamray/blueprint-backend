@@ -1593,6 +1593,10 @@ Rules for each service's consumer:
 - **Report completion.** The privacy service tracks which services have
   responded and escalates on timeout. Silence is not success.
 
+**The log store is answered by a lifetime, not by a delete**: no consumer
+reaches it, and the ids it holds leave it when
+[§13.4](13-observability.md)'s lifetime for logs and traces runs out.
+
 > **The Privacy service is part of the extension, not of the baseline.** It
 > appears in no bounded-context table ([§3.2](03-bounded-contexts.md)), no solution tree (§4.1) and no PR
 > ([Appendix C](appendix-c-delivery-plan.md)), and enabling erasure means adding it — a context owning the
