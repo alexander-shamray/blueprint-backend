@@ -340,6 +340,21 @@ class SeedingAWorktree(Base):
         self.assertFalse(leftover.exists())
         self.assertEqual("main", self.origin(worktree / CACHE / "index.sqlite"))
 
+    def test_a_source_gone_before_the_copy_is_not_recreated(self):
+        """It can vanish between the look and the copy, and opening it then
+        must not leave an empty index in the main checkout."""
+        main = self.main()
+        worktree = self.linked(main)
+        source = main / CACHE / "index.sqlite"
+        (worktree / CACHE).mkdir(parents=True)
+        self.patch(mock.patch.object(self.mod, "seed_source", lambda _root: source))
+        source.unlink()
+
+        self.mod.seed(worktree)
+
+        self.assertFalse(source.exists())
+        self.assertFalse((worktree / CACHE / "index.sqlite").exists())
+
     def test_a_main_checkout_with_no_index_seeds_nothing(self):
         """And builds nothing: `update` refuses a cache with no index, and a
         full build is the cost this exists to avoid."""
