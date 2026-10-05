@@ -17,7 +17,7 @@ public enum UnreachableChoice
 
 /// <summary>ADR-017's written exception for one outbound client a consumer reaches.</summary>
 /// <remarks>
-/// <see cref="GrantedBy"/> cites its owner, an ADR or a section; the two behaviours split unreachable from "answered
+/// <see cref="GrantedBy"/> names the ADR that grants it (§9.7); the two behaviours split unreachable from "answered
 /// no" as §8.1's table does.
 /// </remarks>
 public sealed record ConsumerCallException(
@@ -110,7 +110,7 @@ public static partial class ConsumerCallRule
                 offenders.Add($"{Name(exception.Client)} is declared and no consumer reaches it, so it grants nothing");
 
             if (!CitesAnOwner().IsMatch(exception.GrantedBy))
-                offenders.Add($"{Name(exception.Client)} is granted by '{exception.GrantedBy}', which cites no owner");
+                offenders.Add($"{Name(exception.Client)} is granted by '{exception.GrantedBy}', which names no ADR");
 
             if (string.IsNullOrWhiteSpace(exception.WhenUnreachable) ||
                 string.IsNullOrWhiteSpace(exception.WhenAnsweredNo))
@@ -122,7 +122,7 @@ public static partial class ConsumerCallRule
         return offenders;
     }
 
-    [GeneratedRegex(@"ADR-\d{3}|§\d+(\.\d+)*")]
+    [GeneratedRegex(@"ADR-\d{3}")]
     private static partial Regex CitesAnOwner();
 
     // The host's own assemblies and the building blocks; a framework type is not descended into.
