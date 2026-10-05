@@ -835,7 +835,8 @@ names and Catalog's stock levels fill through the platform's own delivery
 ([§9.4](09-messaging.md)) and the seeded state is one the system could have
 reached. Inventory is seeded directly rather than from Catalog's event,
 because stock reaches it by the admin path ([§10.2](10-api-gateway.md)'s
-`inventory:admin` route) and from no event ([§3.2](03-bounded-contexts.md)). Both write SQL through the migration's own
+`inventory-admin` route) and from no event
+([§3.2](03-bounded-contexts.md)). Both write SQL through the migration's own
 `DbContext`, since [§4.2](04-solution-structure.md) keeps the migrator off
 Application and Domain; each skips an id that already has a row, so a second
 run changes nothing; and the ids are stable, owned by
