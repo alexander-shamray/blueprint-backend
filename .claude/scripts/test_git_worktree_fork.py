@@ -117,7 +117,8 @@ class ForkShape(unittest.TestCase):
         self.local_settings(root, "{not json")
         result = self.fork(f"{root}/checkout", ".claude/worktrees/probe")
         self.assertEqual(0, result.returncode, result.stderr)
-        self.assertIn("MCP servers stay unapproved", result.stderr)
+        self.assertIn("could not copy the MCP approval", result.stderr)
+        self.assertIn("JSONDecodeError", result.stderr)
         self.assertNotEqual(0, self.probe_settings(root).returncode)
 
     def test_any_other_path_is_refused(self):

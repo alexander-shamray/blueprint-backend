@@ -62,7 +62,7 @@ command -v py >/dev/null 2>&1 && python="py -3.12"
 # `permissions` rows are the main checkout's own grants.
 settings=.claude/settings.local.json
 if [ -f "$settings" ] && [ ! -e "$path/$settings" ]; then
-  if ! $python - "$settings" "$path/$settings" 2>/dev/null <<'PY'; then
+  if ! $python - "$settings" "$path/$settings" <<'PY'; then
 import json, os, sys
 servers = json.load(open(sys.argv[1], encoding="utf-8")).get("enabledMcpjsonServers")
 if isinstance(servers, list) and servers and all(isinstance(s, str) for s in servers):
@@ -70,7 +70,7 @@ if isinstance(servers, list) and servers and all(isinstance(s, str) for s in ser
     with open(sys.argv[2], "w", encoding="utf-8") as out:
         json.dump({"enabledMcpjsonServers": servers}, out)
 PY
-    echo "warning: $settings is unreadable; the worktree's MCP servers stay unapproved" >&2
+    echo "warning: could not copy the MCP approval from $settings; the worktree's MCP servers stay unapproved" >&2
   fi
 fi
 # Seed the new worktree's code index now: /branch enters it mid-session, where
