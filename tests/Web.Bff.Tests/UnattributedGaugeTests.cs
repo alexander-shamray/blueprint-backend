@@ -1,4 +1,8 @@
+using System.Diagnostics;
 using System.Diagnostics.Metrics;
+using System.Net;
+using System.Net.Sockets;
+using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Shouldly;
@@ -37,6 +41,24 @@ public sealed class UnattributedGaugeTests(BffServiceFixture fixture) : IAsyncLi
         await fixture.DeliverAsync(OrderEvents.Placed(order, Guid.CreateVersion7(), At));
 
         ReadGauge(DateTimeOffset.UtcNow.AddMinutes(10)).ShouldBe(0, "an Ordering event attributed the row");
+    }
+
+    [Fact]
+    public async Task A_server_that_never_answers_costs_the_read_its_bound_rather_than_the_drivers_default()
+    {
+        // Accepts and never answers, so the open waits out its Connect Timeout; the string sets none.
+        using TcpListener silent = new(IPAddress.Loopback, 0);
+        silent.Start();
+        Task<Socket> held = silent.AcceptSocketAsync(TestContext.Current.CancellationToken).AsTask();
+        string unanswered = $"Server=tcp:127.0.0.1,{((IPEndPoint)silent.LocalEndpoint).Port};Encrypt=False";
+        using ProjectionStats stats = new(new SqlConnectionFactory(unanswered), TimeProvider.System);
+
+        Stopwatch elapsed = Stopwatch.StartNew();
+        Should.Throw<SqlException>(() => stats.UnattributedAgeSeconds());
+        elapsed.Stop();
+
+        elapsed.Elapsed.ShouldBeLessThan(TimeSpan.FromSeconds(10), "SqlClient's default open is fifteen seconds");
+        (await held).Dispose();
     }
 
     /// <summary>One reading over this suite's own stats reader and clock.</summary>
