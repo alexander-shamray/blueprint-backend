@@ -74,6 +74,20 @@ public class GrantCheckedTokenCacheTests
     }
 
     [Fact]
+    public async Task A_token_client_disposed_at_shutdown_is_not_a_refused_credential()
+    {
+        using ServiceProvider services = Metrics();
+        using OutboundCount counted = OutboundCounter.Refused(services);
+
+        // An InvalidOperationException by inheritance, which CachingTokenClient throws once disposed.
+        await Should.ThrowAsync<ObjectDisposedException>(() =>
+            Cache(services, new FixedTokenCache(new ObjectDisposedException("CachingTokenClient")))
+                .GetAsync("commerce-api", TestContext.Current.CancellationToken));
+
+        counted.Value.ShouldBe(0, "a read in flight at shutdown is not the deployment's to fix");
+    }
+
+    [Fact]
     public async Task A_token_that_is_not_a_jwt_is_a_refusal_rather_than_an_outage()
     {
         using ServiceProvider services = Metrics();
