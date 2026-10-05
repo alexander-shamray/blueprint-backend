@@ -25,6 +25,7 @@ rather than added.
 | [`skipped-queue.md`](skipped-queue.md) | `SkippedQueueDepth` | yes |
 | [`queue-backlog.md`](queue-backlog.md) | `QueueBacklogGrowing`, `DeliveryLagHigh` | yes |
 | [`unattributed-order.md`](unattributed-order.md) | `UnattributedOrders` | yes |
+| [`address-refused.md`](address-refused.md) | `AddressReadRefused` | yes |
 | [`migration-failure.md`](migration-failure.md) | `MigrationJobFailed` | yes |
 | [`business-volume.md`](business-volume.md) | `BusinessVolumeDrop` | yes |
 | [`stuck-saga.md`](stuck-saga.md) | `StuckSaga` | **no — signal owed** |
