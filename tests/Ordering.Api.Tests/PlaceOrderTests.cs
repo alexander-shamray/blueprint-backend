@@ -1,11 +1,9 @@
-using System.Data;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Common.Application;
 using Common.Contracts.Ordering.V1;
 using Common.Infrastructure.Outbox;
-using Microsoft.Data.SqlClient;
 using Ordering.Application;
 using Ordering.Application.Orders;
 using Ordering.Application.Orders.PlaceOrder;
@@ -301,7 +299,6 @@ public sealed class PlaceOrderTests(ServiceFixture fixture) : IAsyncLifetime
     private static async Task<Guid> IdOfAsync(HttpResponseMessage response) =>
         await response.Content.ReadFromJsonAsync<Guid>(TestContext.Current.CancellationToken);
 
-    // The amount at the column's own facets: EF types a bare decimal as decimal(18,2) and would round a third place.
     private Task SeedPriceAsync(Guid product, decimal amount, string currency, bool available = true) =>
         fixture.ExecuteAsync(
             """
@@ -310,11 +307,6 @@ public sealed class PlaceOrderTests(ServiceFixture fixture) : IAsyncLifetime
             """,
             product,
             currency,
-            new SqlParameter("@amount", SqlDbType.Decimal)
-            {
-                Precision = OrderAmounts.Precision,
-                Scale = OrderAmounts.Scale,
-                Value = amount
-            },
+            amount,
             available);
 }
