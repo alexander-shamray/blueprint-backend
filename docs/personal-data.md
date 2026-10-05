@@ -49,13 +49,12 @@ that carries it.
 | `notifications.NotificationLog` | Notifications | The customer's id and the message's parameters — the order, an amount, a tracking number, a cancellation reason — and never the mailbox or the body (ADR-053 rule 4) | `NotificationsJurisdictionOptions.LogRetention` after the row ends; a `Pending` row until `DeliveryOptions.GiveUpAge` | Anonymise the ended row (ADR-053 rule 4); delete the waiting one (ADR-052) | Notifications' database |
 | `notifications.OrderRecords` | Notifications | The customer's id per order | `NotificationsJurisdictionOptions.OrderRetention` once no pending notice names its order | None decided: §11.7 draws no step for it | Notifications' database |
 | `bff.Orders` | The BFF | The customer's id, as the buyer an order is shown to, and a tracking number ([ADR-051](backend-architecture/adr/ADR-051-the-buyers-order-read-is-a-projection-in-the-bff.md)) | No window | None decided: §11.7 draws no step for the BFF, and ADR-051's rebuild re-reads what the publishers' outboxes still hold | The BFF's database |
+| Each service's `IdempotencyMarkers`, and the coordination Redis's claim keys | Every service with a keyed command | The authenticated caller's id, as the key's first segment (`IdempotencyBehavior`): a customer's for Ordering's `PlaceOrder`, a staff user's for Catalog's | `RetentionPolicy.IdempotencyWindow` | Lifetime only | Each service's database; the coordination Redis |
 
-**Checked and holding none**: Catalog's and Inventory's tables, every
+**Checked and holding none**: Catalog's and Inventory's other tables, every
 service's inbox — §9.5's `InboxMessage` keeps no payload, under
-`RetentionPolicy.InboxWindow` — the idempotency markers and claims, which key
-a command by its id under `RetentionPolicy.IdempotencyWindow`, and Redis, whose
-coordination keys hold claims and locks and whose cache no read fills
-([§8.2](backend-architecture/08-caching-redis.md)).
+`RetentionPolicy.InboxWindow` — Redis's locks, and its cache, which no read
+fills ([§8.2](backend-architecture/08-caching-redis.md)).
 Shipping's `Shipments` holds an order id and a tracking number, which identify
 a parcel and nobody until joined to the order. Ordering's
 `OrderFulfilmentStates` keeps a `CustomerId` column only for §7.4's expand and
