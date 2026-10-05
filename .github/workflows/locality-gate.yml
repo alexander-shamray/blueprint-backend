@@ -118,8 +118,8 @@ jobs:
       # whatever the right-hand side exited with.
 
       # `status` travels with each entry so a removal leaves nothing behind to
-      # judge, and the gate runs in this checkout, whose .gitignore says which
-      # of the paths left behind could only have arrived force-added.
+      # judge, and the gate runs in this checkout, whose ignore rules, read
+      # case-folded as a Windows checkout reads them, say which paths to refuse.
       - name: Every changed path is inside the declared class and touch set, and none is ignored
         shell: bash
         env:

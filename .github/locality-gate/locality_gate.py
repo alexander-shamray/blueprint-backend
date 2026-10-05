@@ -350,10 +350,10 @@ def ignored_paths(paths: list[str], root: Path) -> set[str]:
 
 
 def check_ignored(payload: dict, root: Path) -> list[str]:
-    """Every path the diff leaves in the tree that the checkout's ignore rules exclude; empty when there is none."""
+    """Every path the diff leaves in the tree that the ignore rules match case-folded; empty when there is none."""
     excluded = ignored_paths(arriving(payload["files"]), root)
     return [
-        f"`{path}` is a path this checkout's ignore rules exclude, so it can only arrive force-added; "
+        f"`{path}` matches this checkout's ignore rules read case-folded, as a Windows checkout reads them; "
         f"leave it out, or un-ignore it in .gitignore in the same pull request"
         for path in sorted(excluded)
     ]
