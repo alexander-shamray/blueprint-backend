@@ -8,7 +8,9 @@ the edit landed in, exactly one refresh owns it, or none of them run.
 
 import importlib.util
 import json
+import os
 import shutil
+import sqlite3
 import subprocess
 import sys
 import tempfile
@@ -234,8 +236,162 @@ class ChoosingTheCheckout(Base):
         self.assertEqual([], self.spawned)
 
     def test_a_body_that_is_not_an_event_is_silent(self):
+        """From outside any checkout, because the working directory is the
+        last fallback and this suite's own may be an indexed one."""
+        self.patch(mock.patch.object(self.mod.os, "getcwd", lambda: str(self.tmp)))
+
         self.assertEqual(0, self.run_hook("<html>not json</html>"))
 
+        self.assertEqual([], self.spawned)
+
+    def test_with_nothing_named_the_working_directory_decides(self):
+        """How `git-worktree-fork.sh` names the worktree it has just made: it
+        runs the hook there with no event and no `CLAUDE_PROJECT_DIR`."""
+        here = self.checkout("worktree")
+        self.patch(mock.patch.object(self.mod.os, "getcwd", lambda: str(here)))
+
+        self.assertEqual(0, self.run_hook(""))
+
+        self.assertEqual([here], self.worker_roots())
+
+
+class SeedingAWorktree(Base):
+    """A linked worktree with no index takes its main checkout's, never a
+    build. The checkouts are laid out as git lays them out: a `.git`
+    directory in the main checkout, and a `gitdir:` file in the worktree whose
+    git dir's `commondir` leads back to it."""
+
+    def main(self, indexed=True):
+        root = self.checkout("main", indexed=False)
+        if indexed:
+            (root / CACHE).mkdir(parents=True)
+            self.database(root / CACHE / "index.sqlite", "main")
+        return root
+
+    def linked(self, main, name="probe"):
+        git_dir = main / ".git" / "worktrees" / name
+        git_dir.mkdir(parents=True)
+        (git_dir / "commondir").write_text("../..\n", encoding="utf-8")
+        root = main / ".claude" / "worktrees" / name
+        root.mkdir(parents=True)
+        (root / ".git").write_text(f"gitdir: {git_dir}\n", encoding="utf-8")
+        return root
+
+    @staticmethod
+    def database(path, marker):
+        with sqlite3.connect(str(path)) as connection:
+            connection.execute("create table origin (name text)")
+            connection.execute("insert into origin values (?)", (marker,))
+        connection.close()
+
+    @staticmethod
+    def origin(path):
+        connection = sqlite3.connect(str(path))
+        try:
+            return connection.execute("select name from origin").fetchone()[0]
+        finally:
+            connection.close()
+
+    def test_a_worktree_with_no_index_is_seeded_and_then_updated(self):
+        worktree = self.linked(self.main())
+
+        self.run_event({"cwd": str(worktree)})
+        self.assertEqual([worktree], self.worker_roots())
+        self.mod.work(worktree)
+
+        self.assertEqual("main", self.origin(worktree / CACHE / "index.sqlite"))
+        self.assertEqual(1, len(self.ran), "the seed was never updated")
+        self.assertEqual(str(worktree), self.ran[0][1]["cwd"])
+
+    def test_only_the_index_crosses(self):
+        """The main checkout's memory and configuration are its own state,
+        and a seed in flight is renamed in rather than left beside it."""
+        main = self.main()
+        (main / CACHE / "memory.sqlite").write_text("", encoding="utf-8")
+        (main / CACHE / "config.json").write_text("{}", encoding="utf-8")
+        worktree = self.linked(main)
+        self.run_event({"cwd": str(worktree)})
+
+        self.mod.work(worktree)
+
+        names = {path.name for path in (worktree / CACHE).iterdir()}
+        self.assertEqual({"index.sqlite", "refresh.lock"}, names)
+
+    def test_a_wal_left_by_an_earlier_seed_is_not_replayed(self):
+        main = self.main()
+        worktree = self.linked(main)
+        (worktree / CACHE).mkdir(parents=True)
+        leftover = worktree / CACHE / "index.sqlite-wal"
+        leftover.write_bytes(b"not this seed's")
+
+        self.mod.seed(worktree)
+
+        self.assertFalse(leftover.exists())
+        self.assertEqual("main", self.origin(worktree / CACHE / "index.sqlite"))
+
+    def test_a_main_checkout_with_no_index_seeds_nothing(self):
+        """And builds nothing: `update` refuses a cache with no index, and a
+        full build is the cost this exists to avoid."""
+        worktree = self.linked(self.main(indexed=False))
+
+        self.assertEqual(0, self.run_event({"cwd": str(worktree)}))
+
+        self.assertEqual([], self.spawned)
+        self.assertFalse((worktree / CACHE).exists())
+
+    def test_a_worktree_index_is_left_as_it_is(self):
+        worktree = self.linked(self.main())
+        (worktree / CACHE).mkdir(parents=True)
+        self.database(worktree / CACHE / "index.sqlite", "worktree")
+        self.run_event({"cwd": str(worktree)})
+
+        self.mod.work(worktree)
+
+        self.assertEqual("worktree", self.origin(worktree / CACHE / "index.sqlite"))
+        self.assertEqual(1, len(self.ran))
+
+    def test_the_main_checkout_is_never_seeded(self):
+        """Its `.git` is a directory, so it is nobody's worktree."""
+        main = self.main(indexed=False)
+
+        self.assertIsNone(self.mod.main_checkout(main))
+        self.assertEqual(0, self.run_event({"cwd": str(main)}))
+        self.assertEqual([], self.spawned)
+
+    def test_a_gitdir_with_no_commondir_is_not_a_worktree(self):
+        """A submodule's `.git` is a `gitdir:` file too, with no main
+        checkout behind it."""
+        main = self.main()
+        worktree = self.linked(main)
+        (main / ".git" / "worktrees" / "probe" / "commondir").unlink()
+
+        self.assertIsNone(self.mod.main_checkout(worktree))
+        self.assertEqual(0, self.run_event({"cwd": str(worktree)}))
+        self.assertEqual([], self.spawned)
+
+    def test_a_bare_repository_has_no_index_to_give(self):
+        main = self.main()
+        worktree = self.linked(main)
+        bare = self.tmp / "bare.git"
+        (main / ".git").rename(bare)
+        (worktree / ".git").write_text(
+            f"gitdir: {bare / 'worktrees' / 'probe'}\n", encoding="utf-8")
+
+        self.assertIsNone(self.mod.main_checkout(worktree))
+
+    def test_a_link_at_the_main_index_is_not_followed(self):
+        main = self.main(indexed=False)
+        (main / CACHE).mkdir(parents=True)
+        elsewhere = self.tmp / "elsewhere.sqlite"
+        self.database(elsewhere, "elsewhere")
+        try:
+            os.symlink(elsewhere, main / CACHE / "index.sqlite")
+        except (OSError, NotImplementedError) as refused:
+            self.skipTest(f"no symbolic link here: {refused}")
+        worktree = self.linked(main)
+
+        self.assertIsNone(self.mod.seed_source(worktree))
+        self.assertEqual(0, self.run_event({"cwd": str(worktree)}))
         self.assertEqual([], self.spawned)
 
 

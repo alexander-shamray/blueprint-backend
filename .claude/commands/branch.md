@@ -86,7 +86,9 @@ because one word is already unambiguous; take the second where it is not.
 **A worktree carries committed files and nothing else.** Anything untracked
 that a build needs would have to be copied across — today nothing is, and a
 fresh worktree restores, builds and tests as it stands. Say so if that ever
-stops being true rather than copying quietly.
+stops being true rather than copying quietly. The one untracked file that does
+cross is the code index, which `git-worktree-fork.sh` has the worktree's own
+refresh hook seed from the main checkout's: a query aid, not a build input.
 
 `.claude/` is tracked, so it comes with it: the commands, the helper scripts
 the review loops invoke by name, and `settings.json` with its allow and deny
@@ -300,10 +302,11 @@ not content.
    ```
 
    **The helper is the whole command, and it takes two arguments because
-   everything else about it is fixed.** It runs
-   `git worktree add --no-track -b <branch> <path> origin/main` and nothing
-   else — a `Bash(git worktree add:*)` grant would also buy `-B`, which does
-   not create a branch but **resets** an existing one, the operation
+   everything else about it is fixed.** Its one git command is
+   `git worktree add --no-track -b <branch> <path> origin/main`, after which
+   it starts the new worktree's index refresh — a `Bash(git worktree add:*)`
+   grant would also buy `-B`, which does not create a branch but **resets**
+   an existing one, the operation
    `.claude/settings.json` denies as `git branch --force` and `-M`. It refuses
    a branch that already exists, which is what makes the missing `-B` harmless
    rather than merely unavailable.

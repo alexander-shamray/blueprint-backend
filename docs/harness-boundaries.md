@@ -130,8 +130,24 @@ not make one wait, and an index that cannot refresh is not a reason to fail
 the edit that provoked it. The exit status is the one thing it does keep, and
 a request whose update failed goes back rather than counting as served:
 contention is what fails here, the streams that would have said so are gone,
-and the loser may be the run carrying the newest edit. A checkout with no
-index is left alone, because unindexed is not stale.
+and the loser may be the run carrying the newest edit.
+
+**A linked worktree with no index is seeded from its main checkout's, and
+nothing is ever built.** `.claude/cache/` is ignored, so every `/branch`
+worktree starts without one, and the first query there used to run a full
+`index` inside the agent's turn: 230 s here, where copying the main
+checkout's `index.sqlite` took 0.4 s and the `update` after it 5 s. The
+worker seeds under the refresh lock before it updates, through SQLite's
+backup rather than a file copy, because the main checkout's index may be
+mid-`update` and a copied file can tear. Only `index.sqlite` crosses — the
+main checkout's memory and configuration are its own state — and only from a
+regular file at the main checkout's own index path. The worktree is told
+from the files git writes, a `gitdir:` pointer whose `commondir` leads to a
+`.git` directory, so a submodule and a bare repository are not worktrees. A
+main checkout with no index leaves the worktree with none, and any other
+checkout with no index is left alone, because unindexed is not stale.
+`git-worktree-fork.sh` runs the new worktree's own hook once, because
+`/branch` enters it mid-session, where no `SessionStart` fires.
 
 **`SessionStart` runs the same script, for the moves no edit makes.** A merge,
 a switch or a pull rewrites the tree with no tool event behind it, so a session

@@ -13,15 +13,18 @@ from __future__ import annotations
 
 import json
 import os
+import sqlite3
 import subprocess
 import sys
 import time
 from pathlib import Path
 
 # Where the CLI keeps a checkout's index. A checkout without one is not
-# stale, it is unindexed, and building one per throwaway worktree is a cost
-# nobody asked this hook for — so it is left alone rather than initialised.
+# stale, it is unindexed, and a full build is minutes inside an agent's turn,
+# so the hook never builds one: a linked worktree is seeded from its main
+# checkout's instead, and anything else without an index is left alone.
 CACHE = Path(".claude") / "cache" / "codebase-index"
+INDEX = CACHE / "index.sqlite"
 
 # `codebase-index update` does not serialise: overlapping runs against one
 # checkout leave a single winner and `database is locked` for the rest, and
@@ -111,22 +114,91 @@ def edited(event: dict) -> Path | None:
     return None
 
 
-def target(event: dict) -> Path | None:
-    """The indexed checkout to refresh: the one holding the file that changed.
-
-    The edited path decides, because after `/branch` the session's directory
-    and the checkout an edit is admitted against can be different trees.
-    `cwd` answers when the event names no file and `CLAUDE_PROJECT_DIR` when
-    it names neither — each in turn, and none of them as a second chance
-    after an unindexed tree, which would refresh the one that did not change.
-    """
-    named = edited(event) or event.get("cwd") or os.environ.get("CLAUDE_PROJECT_DIR")
-    if not named:
+def main_checkout(root: Path) -> Path | None:
+    """The main checkout `root` is a linked worktree of, or None, read from
+    the files git writes because this runs on every call: a `gitdir:` file
+    whose `commondir` names a `.git` directory. A submodule has no
+    `commondir`, and a bare repository's is not named `.git`."""
+    try:
+        pointer = (root / ".git").read_text(encoding="utf-8").strip()
+        if not pointer.startswith("gitdir:"):
+            return None
+        git_dir = root / pointer[len("gitdir:"):].strip()
+        common = (git_dir / (git_dir / "commondir").read_text(encoding="utf-8").strip()).resolve()
+        if common.name != ".git" or common.parent == root.resolve():
+            return None
+    except (OSError, UnicodeDecodeError, ValueError):
         return None
+    return common.parent
+
+
+def seed_source(root: Path) -> Path | None:
+    """The index a linked worktree without one is seeded from, or None: only
+    a regular file at the main checkout's own index path, so a link planted
+    there cannot point the copy at anything else."""
+    if (root / INDEX).exists():
+        return None
+    main = main_checkout(root)
+    if main is None:
+        return None
+    source = main / INDEX
+    if source.is_symlink() or not source.is_file():
+        return None
+    return source
+
+
+def target(event: dict) -> Path | None:
+    """The indexed or seedable checkout holding the file that changed, else
+    the one `cwd` names, which follows a Bash call into a worktree, then
+    `CLAUDE_PROJECT_DIR`, then the working directory `git-worktree-fork.sh`
+    runs it in — each in turn, never as a second chance after an unindexed
+    tree, which would refresh the one that did not change."""
+    named = (edited(event) or event.get("cwd")
+             or os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd())
     root = checkout_root(Path(str(named)))
-    if root is None or not (root / CACHE).is_dir():
+    if root is None:
+        return None
+    if (root / CACHE).is_dir():
+        return root
+    if seed_source(root) is None:
+        return None
+    try:
+        (root / CACHE).mkdir(parents=True, exist_ok=True)
+    except OSError:
         return None
     return root
+
+
+def seed(root: Path) -> None:
+    """Give a linked worktree with no index its main checkout's, through
+    SQLite's backup because a copied file can tear mid-`update`. Renamed in so
+    `update` never opens a partial file, after any WAL an earlier seed left;
+    only `index.sqlite` crosses, as the rest of that cache is its own state."""
+    source = seed_source(root)
+    if source is None:
+        return
+    index = root / INDEX
+    partial = index.with_name(f"{index.name}.seed.{os.getpid()}")
+    try:
+        for leftover in ("-wal", "-shm"):
+            index.with_name(index.name + leftover).unlink(missing_ok=True)
+        reading = sqlite3.connect(str(source))
+        try:
+            writing = sqlite3.connect(str(partial))
+            try:
+                reading.backup(writing)
+            finally:
+                writing.close()
+        finally:
+            reading.close()
+        os.replace(partial, index)
+    except (OSError, sqlite3.Error):
+        pass
+    finally:
+        try:
+            partial.unlink(missing_ok=True)
+        except OSError:
+            pass
 
 
 def request(root: Path) -> None:
@@ -236,6 +308,7 @@ def work(root: Path) -> int:
         with handle:
             if not grab(handle):
                 return 0
+            seed(root)
             if not drain(root):
                 return 0
         # The lock is gone by here, and that is the point. A request made
