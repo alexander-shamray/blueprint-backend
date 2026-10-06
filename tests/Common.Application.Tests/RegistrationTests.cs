@@ -40,15 +40,20 @@ public class RegistrationTests
         using ServiceProvider provider = TestContainer.Build();
         using IServiceScope scope = provider.CreateScope();
 
-        scope.ServiceProvider.GetService<ICommandHandler<Ping, string>>()
+        scope.ServiceProvider
+            .GetService<ICommandHandler<Ping, string>>()
             .ShouldNotBeNull("ICommandHandler<,> — §6.2");
-        scope.ServiceProvider.GetService<IQueryHandler<Ask, string>>()
+        scope.ServiceProvider
+            .GetService<IQueryHandler<Ask, string>>()
             .ShouldNotBeNull("IQueryHandler<,> — §6.5");
-        scope.ServiceProvider.GetService<IProjectionHandler<ScannedEvent>>()
+        scope.ServiceProvider
+            .GetService<IProjectionHandler<ScannedEvent>>()
             .ShouldNotBeNull("IProjectionHandler<> — §7.5, the local outbox lane");
-        scope.ServiceProvider.GetService<IIntegrationEventHandler<ScannedEvent>>()
+        scope.ServiceProvider
+            .GetService<IIntegrationEventHandler<ScannedEvent>>()
             .ShouldNotBeNull("IIntegrationEventHandler<> — §9.4, another service's events");
-        scope.ServiceProvider.GetService<ICommandMessageMapper<ScannedMessage, ScannedCommand>>()
+        scope.ServiceProvider
+            .GetService<ICommandMessageMapper<ScannedMessage, ScannedCommand>>()
             .ShouldNotBeNull("ICommandMessageMapper<,> — §9.4, wire contract to command");
     }
 

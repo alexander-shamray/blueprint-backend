@@ -79,7 +79,8 @@ public sealed class DeliveryOptionsTests
 
         Should.NotThrow(() => provider.GetRequiredService<IStartupValidator>().Validate());
 
-        provider.GetRequiredService<IOptions<DeliveryOptions>>().Value.GiveUpAge
+        provider
+            .GetRequiredService<IOptions<DeliveryOptions>>().Value.GiveUpAge
             .ShouldBe(TimeSpan.Parse(NotificationsWorkerFactory.InventedGiveUpAge, CultureInfo.InvariantCulture));
     }
 

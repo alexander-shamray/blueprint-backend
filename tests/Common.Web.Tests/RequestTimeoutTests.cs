@@ -108,7 +108,8 @@ public partial class RequestTimeoutTests
         using IHost host = builder.Build();
 
         // §15.3: the drain waits for in-flight requests up to ShutdownTimeout, so a deadline past it is cut short.
-        host.Services.GetRequiredService<IOptions<HostOptions>>().Value.ShutdownTimeout
+        host.Services
+            .GetRequiredService<IOptions<HostOptions>>().Value.ShutdownTimeout
             .ShouldBeGreaterThan(DefaultPolicy(host).Timeout!.Value);
     }
 
@@ -158,7 +159,8 @@ public partial class RequestTimeoutTests
     private static partial Regex GracePeriod();
 
     private static RequestTimeoutPolicy DefaultPolicy(IHost host) =>
-        host.Services.GetRequiredService<IOptions<RequestTimeoutOptions>>().Value.DefaultPolicy
+        host.Services
+            .GetRequiredService<IOptions<RequestTimeoutOptions>>().Value.DefaultPolicy
             .ShouldNotBeNull("no default policy means no request meets a deadline");
 
     /// <summary>The hosts' order: the exception handler above, which would answer a timed-out request 499.</summary>
@@ -192,7 +194,8 @@ public partial class RequestTimeoutTests
                                 return Results.Ok();
                             });
 
-                        endpoints.MapGet(
+                        endpoints
+                            .MapGet(
                                 "/long",
                                 async (CancellationToken ct) =>
                                 {

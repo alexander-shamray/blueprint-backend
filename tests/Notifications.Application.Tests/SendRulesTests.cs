@@ -74,7 +74,8 @@ public class SendRulesTests
         SendRules
             .AwaitsOrderRecord(TemplateKeys.PaymentDeclined, Placed())
             .ShouldBeTrue("every decline has a cancellation, published before or after it (§9.6)");
-        SendRules.AwaitsOrderRecord(
+        SendRules
+            .AwaitsOrderRecord(
                 TemplateKeys.PaymentDeclined,
                 Cancelled(CancelReasons.PaymentDeclined, CancelOrigins.Workflow))
             .ShouldBeFalse();
