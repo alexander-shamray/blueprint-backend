@@ -4,6 +4,7 @@ nothing; the cases run it as `settings.json` does, a process over stdin,
 beside a transcript and a temporary directory written for the case, and read
 what it printed."""
 
+import importlib.util
 import json
 import os
 import re
@@ -15,6 +16,7 @@ import tempfile
 import unittest
 import uuid
 from pathlib import Path
+from unittest import mock
 
 SCRIPTS = Path(__file__).resolve().parent
 CLAUDE = SCRIPTS.parent
@@ -382,6 +384,20 @@ class WhenItAsks(Scratch):
             self.assertEqual("", reason(session.before(*given)))
         self.assertEqual("", reason(session.before(*grep_call(), agent_id="a1", agent_type="Explore")))
         self.assertTrue(reason(session.before(*grep_call())))
+
+    def test_a_spent_ask_reads_no_transcript(self):
+        """Every search after the ask would otherwise scan the whole
+        transcript before the call it precedes could run."""
+        session = Session(self.scratch)
+        self.assertTrue(reason(session.before(*grep_call())))
+        spec = importlib.util.spec_from_file_location("index_search_hint", HINT)
+        hook = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(hook)
+        event = json.loads(session.event(*grep_call()))
+        with (mock.patch.object(hook.tempfile, "tempdir", str(session.temp)),
+              mock.patch.object(hook, "calls", side_effect=AssertionError("read the transcript")) as read):
+            self.assertIsNone(hook.answer(event))
+        read.assert_not_called()
 
     def test_a_lookup_does_not_spend_the_ask_either(self):
         lookup = (("mcp__codebase-index__find_refs", {"symbol": "X"}),)
