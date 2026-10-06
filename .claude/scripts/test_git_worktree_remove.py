@@ -38,12 +38,14 @@ printf '%s\\n' "$root"
 (cd "$root" && pwd -W 2>/dev/null || pwd)
 """
 
-# Holds a lock the way refresh-index.py's worker does, says so through a
-# marker file, and lets go after the given number of seconds.
+# A refresh-index.py worker in miniature: it starts after a delay, takes the
+# lock, says so through a marker file, takes the outstanding request, and lets
+# go after the given number of seconds.
 HOLDER = """
-import sys, time
-lock, seconds, ready = sys.argv[1], float(sys.argv[2]), sys.argv[3]
-handle = open(lock, "a+b")
+import os, sys, time
+cache, delay, seconds, ready = sys.argv[1], float(sys.argv[2]), float(sys.argv[3]), sys.argv[4]
+time.sleep(delay)
+handle = open(os.path.join(cache, "refresh.lock"), "a+b")
 if sys.platform == "win32":
     import msvcrt
     handle.seek(0)
@@ -52,6 +54,10 @@ else:
     import fcntl
     fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
 open(ready, "w").close()
+try:
+    os.remove(os.path.join(cache, "refresh.pending"))
+except FileNotFoundError:
+    pass
 time.sleep(seconds)
 """
 
@@ -74,14 +80,23 @@ class RemoveShape(unittest.TestCase):
         listed = run_bash('git -C "$C" worktree list --porcelain', C=f"{root}/checkout")
         return "feat/probe" in listed.stdout
 
-    def hold(self, native, seconds):
+    def cache(self, native):
         cache = native / "checkout" / ".claude" / "worktrees" / "probe" / ".claude" / "cache" / "codebase-index"
-        cache.mkdir(parents=True)
+        cache.mkdir(parents=True, exist_ok=True)
+        return cache
+
+    def request(self, native):
+        """What the hook leaves before it starts a worker."""
+        (self.cache(native) / "refresh.pending").write_text("", encoding="utf-8")
+
+    def hold(self, native, seconds, delay=0.0, wait=True):
         ready = native / "ready"
-        holder = subprocess.Popen([sys.executable, "-c", HOLDER, str(cache / "refresh.lock"), str(seconds),
-                                   str(ready)])
+        holder = subprocess.Popen([sys.executable, "-c", HOLDER, str(self.cache(native)), str(delay),
+                                   str(seconds), str(ready)])
         self.addCleanup(holder.wait)
         self.addCleanup(holder.kill)
+        if not wait:
+            return
         for _ in range(300):
             if ready.exists():
                 return
@@ -151,6 +166,31 @@ class RemoveShape(unittest.TestCase):
         self.assertGreaterEqual(time.monotonic() - started, 2)
         self.assertFalse(self.present(root))
         self.assertFalse(self.registered(root))
+
+    def test_a_worker_started_but_not_yet_locked_is_waited_for(self):
+        """The hook leaves its request and then starts the worker, so a free
+        lock beside a request is a worker on its way, not an idle tree."""
+        root, native = self.fixture()
+        self.request(native)
+        self.hold(native, 3, delay=1, wait=False)
+        started = time.monotonic()
+        result = self.remove(f"{root}/checkout")
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertTrue((native / "ready").exists(), "the tree went before the worker reached its lock")
+        self.assertGreaterEqual(time.monotonic() - started, 3)
+        self.assertFalse(self.present(root))
+
+    def test_a_request_nobody_takes_is_dropped_after_the_grace(self):
+        """A failed refresh puts its request back and exits, so no worker
+        will ever take it, and waiting the whole bound would refuse for ever."""
+        root, native = self.fixture()
+        self.request(native)
+        started = time.monotonic()
+        result = self.remove(f"{root}/checkout")
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertGreaterEqual(time.monotonic() - started, 2)
+        self.assertLess(time.monotonic() - started, 25)
+        self.assertFalse(self.present(root))
 
     def test_a_refresh_past_the_bound_removes_nothing(self):
         root, native = self.fixture()

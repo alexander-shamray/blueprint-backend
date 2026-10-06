@@ -28,32 +28,54 @@ common_there=$(git -C "$path" rev-parse --path-format=absolute --git-common-dir)
 # included, and Windows will not delete a file held open: a remove meanwhile
 # deletes part of the tree and fails. So the lock is taken first, with the
 # hook's own primitive, and one still held at the bound removes nothing.
-lock="$path/.claude/cache/codebase-index/refresh.lock"
-if [ -f "$lock" ]; then
+cache="$path/.claude/cache/codebase-index"
+if [ -f "$cache/refresh.lock" ] || [ -f "$cache/refresh.pending" ]; then
   python=python3
   command -v py >/dev/null 2>&1 && python="py -3.12"
-  if ! $python -I - "$lock" <<'PY'; then
-import sys, time
-bound = 30
-handle = open(sys.argv[1], "a+b")
+  if ! $python -I - "$cache" <<'PY'; then
+import os, sys, time
+lock, pending = (os.path.join(sys.argv[1], name) for name in ("refresh.lock", "refresh.pending"))
+bound, grace = 30, 2
 if sys.platform == "win32":
     import msvcrt
-    def grab():
+    def grab(handle):
         handle.seek(0)
         msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+    def release(handle):
+        handle.seek(0)
+        msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
 else:
     import fcntl
-    def grab():
+    def grab(handle):
         fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-deadline = time.monotonic() + bound
+    def release(handle):
+        fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+start, unclaimed = time.monotonic(), None
 while True:
-    try:
-        grab()
-        sys.exit(0)
-    except OSError:
-        if time.monotonic() >= deadline:
-            sys.exit(f"a code-index refresh still holds the worktree after {bound} s")
-        time.sleep(0.2)
+    now = time.monotonic()
+    with open(lock, "a+b") as handle:
+        try:
+            grab(handle)
+        except OSError:
+            unclaimed = None
+        else:
+            try:
+                if not os.path.exists(pending):
+                    sys.exit(0)
+                # A request with the lock free is a worker on its way to the
+                # lock, or one a failed refresh put back that nobody will take.
+                unclaimed = now if unclaimed is None else unclaimed
+                if now - unclaimed >= grace:
+                    try:
+                        os.remove(pending)
+                    except FileNotFoundError:
+                        pass
+                    sys.exit(0)
+            finally:
+                release(handle)
+    if now - start >= bound:
+        sys.exit(f"a code-index refresh still holds the worktree after {bound} s")
+    time.sleep(0.2)
 PY
     echo "nothing removed: $path; run this again once the refresh ends" >&2
     exit 5
