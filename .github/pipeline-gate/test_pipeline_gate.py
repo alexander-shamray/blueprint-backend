@@ -342,7 +342,7 @@ class ShardTests(Fixture):
         self.assertEqual(pipeline_gate.check_shards(), [])
 
     def test_the_folded_value_is_read_from_the_next_line(self) -> None:
-        """The parser's subject: a `>-` read as the value would pass as a term-less shard."""
+        """The parser's subject: the value is the line after `>-`, not the indicator itself."""
         shards = pipeline_gate.read_shards(WORKFLOW + SHARDS)
 
         self.assertEqual(
