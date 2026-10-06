@@ -102,20 +102,32 @@ def bodies_end(text: str, start: int, waiting: list[tuple[str, str]]) -> int:
 def cleaned(text: str, escape: str) -> str:
     """`text` without what is data and not command: heredoc bodies, and
     comments, an unquoted `#` starting a word, to the end of its line. A
-    `<<` or a `#` inside quotes is text, so one scan reads the quotes for
-    both; the split cannot drop a comment without the newline after it."""
-    kept, quote, waiting, index = [], "", [], 0
+    `<<` or a `#` inside quotes is text, and inside a `$(…)` within double
+    quotes is command again, so one scan keeps a stack of both for both;
+    the split cannot drop a comment without the newline after it."""
+    kept, frames, waiting, index = [], [], [], 0
     while index < len(text):
         char = text[index]
+        quote = frames[-1] if frames and frames[-1] in "'\"" else ""
         if escape and char == escape and quote != "'" and index + 1 < len(text):
             kept.append(text[index:index + 2])
             index += 2
             continue
         opener = None if quote else HEREDOC.match(text, index)
+        if quote == '"' and text.startswith("$(", index):
+            frames.append("(")
+            kept.append("$(")
+            index += 2
+            continue
         if quote:
-            quote = "" if char == quote else quote
+            if char == quote:
+                frames.pop()
         elif char in "'\"":
-            quote = char
+            frames.append(char)
+        elif char == "(" and frames:
+            frames.append("(")
+        elif char == ")" and frames:
+            frames.pop()
         elif opener:
             waiting.append((opener.group(1), opener.group(3)))
             kept.append(opener.group(0))
