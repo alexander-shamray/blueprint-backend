@@ -272,7 +272,7 @@ first, which on Windows may be Git Bash or the WSL launcher: different
 programs, with different filesystems. Either way the failure lands in the
 redirect and reports nothing. So each hook here is `py -3.12` and its
 arguments, with no env-var prefix and no bare `bash`, as the `PreToolUse`
-guards beside it are. The two index hooks are
+guards beside it are. The index hooks are
 started through `runpy` from `-c` rather than as a file argument, because
 Python exits 2 on a file it cannot open, as when a worktree is emptied under
 a session still running in it: under `UserPromptSubmit` that erases every
