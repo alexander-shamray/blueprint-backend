@@ -250,13 +250,13 @@ which only one call can create, so a parallel batch is refused once and a
 session whose file cannot be made is never refused, since the rerun would be
 refused too. A lookup made by any route — an MCP tool or the CLI, through
 either shell — lets every search through, and the hook reads that from the
-session's transcript, parsing the lines that record a call, and a result
-only when it answers a lookup, and stopping at the first lookup that ran: on
-a 62 MB transcript the whole read took 0.1 s. A call a guard refused, or a
-tool's error, asked the index nothing and is not a lookup; a shell command
-naming the CLI that exited non-zero counts as one, though a chain can fail
-before the CLI runs. A subagent is never refused: its profile may hold
-neither the MCP tools nor a shell.
+session's transcript, parsing a call's line only when it names the index
+and a result's only when it answers a lookup, and stopping at the first
+lookup that ran: on a 62 MB transcript the whole read took 0.1 s. A call a
+guard refused, or a tool's error, asked the index nothing and is not a
+lookup; a shell command naming the CLI that exited non-zero counts as one,
+though a chain can fail before the CLI runs. A subagent is never refused:
+its profile may hold neither the MCP tools nor a shell.
 
 **It names one route, the one that answers from this tree.** The MCP server
 starts with `--root .` in the directory the session started in, and
