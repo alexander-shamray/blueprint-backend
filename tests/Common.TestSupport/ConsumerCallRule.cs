@@ -46,6 +46,13 @@ public static partial class ConsumerCallRule
         "Grpc.Net.ClientFactory.GrpcClientFactory"
     ];
 
+    // Clients a type constructs for itself, which no registration or constructor shows.
+    private static readonly string[] ConstructedClientNames =
+    [
+        "MailKit.MailService",
+        "System.Net.Mail.SmtpClient"
+    ];
+
     /// <summary>The consumers and saga state machines the host's composition registers.</summary>
     public static IReadOnlyList<Type> Consumers(IEnumerable<ServiceDescriptor> composition, Assembly host)
     {
@@ -62,7 +69,7 @@ public static partial class ConsumerCallRule
         ];
     }
 
-    /// <summary>The outbound HTTP and gRPC clients registered, and the host's types that take one.</summary>
+    /// <summary>The outbound HTTP and gRPC clients registered, and the host's types that take or build one.</summary>
     public static IReadOnlyList<Type> Clients(IEnumerable<ServiceDescriptor> composition, Assembly host)
     {
         Func<Type, bool> platform = Platform(host);
@@ -73,13 +80,14 @@ public static partial class ConsumerCallRule
             .. descriptors
                 .Where(IsClientRegistration)
                 .Select(descriptor => descriptor.ServiceType)
-                .Concat(descriptors.Select(ImplementationOf).OfType<Type>().Where(t => platform(t) && TakesAClient(t)))
+                .Concat(descriptors.Select(ImplementationOf).OfType<Type>().Where(t => platform(t) && HoldsAClient(t)))
                 .Distinct()
                 .OrderBy(Name, StringComparer.Ordinal)
         ];
     }
 
-    /// <summary>Every consumer reaching an undeclared client, and every declaration nothing reaches or cites.</summary>
+    /// <summary>Every consumer reaching an undeclared client or an untyped factory, and every declaration nothing
+    /// reaches or cites.</summary>
     public static IReadOnlyList<string> Offenders(
         IEnumerable<ServiceDescriptor> composition,
         Assembly host,
@@ -103,6 +111,13 @@ public static partial class ConsumerCallRule
                 }
             }
         }
+
+        offenders.AddRange(
+            graph.Opaque
+                .OrderBy(Name, StringComparer.Ordinal)
+                .Select(service =>
+                    $"{Name(service)} is built by a factory returning object, which a consumer reaches and the walk " +
+                    "cannot see into: register it with its type"));
 
         foreach (ConsumerCallException exception in exceptions)
         {
@@ -141,6 +156,28 @@ public static partial class ConsumerCallRule
         FactoryOf(descriptor)?.Method.DeclaringType?.Assembly.GetName().Name is { } factory &&
         ClientFactoryAssemblies.Contains(factory) &&
         !ClientFactoryAssemblies.Contains(descriptor.ServiceType.Assembly.GetName().Name);
+
+    private static bool HoldsAClient(Type type) => TakesAClient(type) || BuildsAClient(type);
+
+    // Fields and locals, the state machines' hoisted ones included, so an async method's client is seen.
+    private static bool BuildsAClient(Type type)
+    {
+        const BindingFlags All = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance |
+            BindingFlags.Static | BindingFlags.DeclaredOnly;
+
+        IEnumerable<Type> locals = type
+            .GetMethods(All)
+            .Concat<MethodBase>(type.GetConstructors(All))
+            .SelectMany(method => method.GetMethodBody()?.LocalVariables ?? [])
+            .Select(local => local.LocalType);
+
+        return type.GetFields(All).Select(field => field.FieldType).Concat(locals).Any(IsConstructedClient) ||
+            type.GetNestedTypes(All).Any(BuildsAClient);
+    }
+
+    private static bool IsConstructedClient(Type type) =>
+        ConstructedClientNames.Contains(type.FullName) ||
+        BaseTypes(type).Any(b => ConstructedClientNames.Contains(b.FullName));
 
     private static bool TakesAClient(Type type) =>
         type
@@ -186,6 +223,9 @@ public static partial class ConsumerCallRule
 
         public IReadOnlyList<ServiceDescriptor> Descriptors { get; } = descriptors;
 
+        /// <summary>The host's services a walk met built by a factory whose declared return is object.</summary>
+        public HashSet<Type> Opaque { get; } = [];
+
         // Breadth first, so the path named for each client is a shortest one.
         public IEnumerable<(Type Client, string Path)> ClientsReachedFrom(Type consumer)
         {
@@ -194,7 +234,7 @@ public static partial class ConsumerCallRule
 
             while (pending.TryDequeue(out Type? node))
             {
-                if (node != consumer && (_clientServices.Contains(node) || TakesAClient(node)))
+                if (node != consumer && (_clientServices.Contains(node) || HoldsAClient(node)))
                 {
                     yield return (node, PathTo(node, parents));
                     continue;
@@ -267,6 +307,9 @@ public static partial class ConsumerCallRule
 
             // A factory is opaque; its declared return type is the best the descriptor says about what it builds.
             Type? returned = FactoryOf(descriptor)?.Method.ReturnType;
+            if (returned == typeof(object) && platform(requested))
+                Opaque.Add(requested);
+
             if (returned is null || returned == typeof(object) || depth > 4)
                 return [];
 
