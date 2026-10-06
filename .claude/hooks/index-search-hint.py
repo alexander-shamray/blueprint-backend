@@ -348,7 +348,7 @@ def names(pattern: str) -> list[str]:
     word boundaries, a call form and a wrapping group dropped. A lowercase
     word is text, and text, a message or a pattern is grep's to list whole."""
     text = re.sub(r"\\b|\\<|\\>", "", pattern).strip()
-    text = re.sub(r"^\\?\((.*)\\?\)$", r"\1", text)
+    text = re.sub(r"^\\?\((.*?)\\?\)$", r"\1", text)
     found = []
     for part in re.split(r"\\?\|", text):
         part = re.sub(r"\s*(?:\\\(|\()$", "", part.strip())

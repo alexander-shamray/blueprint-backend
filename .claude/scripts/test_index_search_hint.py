@@ -36,6 +36,7 @@ SEARCHES = (
     "rg TimeSpan src",
     'grep -rE "Claim|Release" src',
     'rg "(ClaimAsync|ReleaseAsync)" src',
+    'grep -rn "\\(ClaimAsync\\|ReleaseAsync\\)" src',
     'grep -rn "Undeclared\\|Reached" src',
     "LC_ALL=C grep -r Money .",
     "cd src && grep -rn PlaceOrderHandler .",
