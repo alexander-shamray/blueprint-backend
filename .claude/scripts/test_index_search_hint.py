@@ -229,11 +229,13 @@ class WhenItSpeaks(Scratch):
         self.assertTrue(context(session.after(*grep_call())))
 
     def test_a_transcript_line_it_cannot_parse_is_skipped(self):
-        session = Session(self.scratch, earlier=[grep_call()])
+        """A live transcript's last line can be half written; read as a
+        failure, it would silence the hint for the rest of the session."""
+        session = Session(self.scratch)
         with session.path.open("a", encoding="utf-8") as handle:
             handle.write('{"tool_use": broken\n')
 
-        self.assertEqual("", context(session.after(*grep_call())))
+        self.assertTrue(context(session.after(*grep_call())))
 
 
 class TheWorktreeClause(Scratch):
