@@ -108,6 +108,21 @@ public static partial class RetentionMapRule
         ];
     }
 
+    /// <summary>Each prefix that no assembly <paramref name="host"/> reaches starts with, so a scan under it reads
+    /// nothing.</summary>
+    public static IReadOnlyList<string> Unreached(Assembly host, params string[] prefixes)
+    {
+        ArgumentNullException.ThrowIfNull(host);
+
+        IReadOnlyList<Assembly> reached = Reached(host, prefixes);
+
+        return
+        [
+            .. prefixes.Where(prefix =>
+                !reached.Any(assembly => assembly.GetName().Name!.StartsWith(prefix, StringComparison.Ordinal)))
+        ];
+    }
+
     // The closure, as a test assembly's own references keep only the assemblies its code names.
     private static IReadOnlyList<Assembly> Reached(Assembly host, string[] prefixes)
     {
