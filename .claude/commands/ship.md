@@ -1,7 +1,7 @@
 ---
 description: Start from a clean main, fork a worktree where one can be forked, branch, commit, push and open a PR, loop the external reviews — Grok until two consecutive clean passes, Copilot until one — then merge the PR and tear the workspace down. Decides for itself rather than stopping to ask
 argument-hint: "[what the change does] — omit and each step derives its own"
-allowed-tools: Read, Grep, Glob, Write, Skill, Agent(review-grok-triager), EnterWorktree, ExitWorktree, Bash(git status:*), Bash(git diff:*), Bash(git branch --list:*), Bash(git branch --show-current), Bash(git branch -a), Bash(git log:*), Bash(git fetch origin:*), Bash(bash .claude/scripts/git-branch-create.sh:*), Bash(bash .claude/scripts/git-worktree-fork.sh:*), Bash(bash .claude/scripts/git-switch-existing.sh:*), Bash(bash .claude/scripts/git-rebase-onto-main.sh:*), Bash(git rev-parse:*), Bash(git worktree list:*), Bash(ls:*), Bash(git add:*), Bash(git commit:*), Bash(bash .claude/scripts/git-unstage.sh:*), Bash(git push -u origin:*), Bash(git push origin:*), Bash(wc:*), Bash(gh pr create:*), Bash(bash .claude/scripts/pr-state.sh:*), Bash(bash .claude/scripts/pr-for-branch.sh:*), Bash(gh pr checks:*), Bash(bash .claude/scripts/gh-pr-merge.sh:*), Bash(git pull --ff-only), Bash(git merge-base --is-ancestor:*), Bash(git worktree remove:*), Bash(git worktree prune:*), Bash(rm -f suggestions.md), Bash(bash .claude/scripts/grok-ledger.sh:*), Bash(bash .claude/scripts/copilot-request.sh:*), Bash(bash .claude/scripts/copilot-request-count.sh:*), Bash(bash .claude/scripts/pr-review-comments.sh:*), Bash(bash .claude/scripts/pr-review-bodies.sh:*), Bash(bash .claude/scripts/pr-issue-comments.sh:*), Bash(bash .claude/scripts/pr-review-threads.sh:*), Bash(bash .claude/scripts/grok-review.sh:*), Bash(sleep:*), Bash(bash .claude/scripts/pr-locality.sh:*)
+allowed-tools: Read, Grep, Glob, Write, Skill, Agent(review-grok-triager), EnterWorktree, ExitWorktree, Bash(git status:*), Bash(git diff:*), Bash(git branch --list:*), Bash(git branch --show-current), Bash(git branch -a), Bash(git log:*), Bash(git fetch origin:*), Bash(bash .claude/scripts/git-branch-create.sh:*), Bash(bash .claude/scripts/git-worktree-fork.sh:*), Bash(bash .claude/scripts/git-switch-existing.sh:*), Bash(bash .claude/scripts/git-rebase-onto-main.sh:*), Bash(git rev-parse:*), Bash(git worktree list:*), Bash(ls:*), Bash(git add:*), Bash(git commit:*), Bash(bash .claude/scripts/git-unstage.sh:*), Bash(git push -u origin:*), Bash(git push origin:*), Bash(wc:*), Bash(gh pr create:*), Bash(bash .claude/scripts/pr-state.sh:*), Bash(bash .claude/scripts/pr-for-branch.sh:*), Bash(gh pr checks:*), Bash(bash .claude/scripts/gh-pr-merge.sh:*), Bash(git pull --ff-only), Bash(git merge-base --is-ancestor:*), Bash(bash .claude/scripts/git-worktree-remove.sh:*), Bash(git worktree prune:*), Bash(rm -f suggestions.md), Bash(bash .claude/scripts/grok-ledger.sh:*), Bash(bash .claude/scripts/copilot-request.sh:*), Bash(bash .claude/scripts/copilot-request-count.sh:*), Bash(bash .claude/scripts/pr-review-comments.sh:*), Bash(bash .claude/scripts/pr-review-bodies.sh:*), Bash(bash .claude/scripts/pr-issue-comments.sh:*), Bash(bash .claude/scripts/pr-review-threads.sh:*), Bash(bash .claude/scripts/grok-review.sh:*), Bash(sleep:*), Bash(bash .claude/scripts/pr-locality.sh:*)
 ---
 
 Take the working tree from wherever it is to a merged PR. Description:
@@ -116,11 +116,11 @@ this step from stranding the branch it was meant to tidy up around.
 **The merged row is the case where the two could collide, which is why it ends
 the run at step 0.** A session standing in a worktree whose PR is already
 merged is finished by step 0's first row *and* would be "this run's" by step
-7's. Both tearing it down means the second `git worktree remove` runs against a
-path that is no longer a worktree, exits non-zero, and stops the chain on a
-helper failure with no defect behind it. So that row is step 0 and nothing
-after: there is no merge left to perform, and the teardown has already
-happened.
+7's. Both tearing it down means the second `git-worktree-remove.sh` runs
+against a path that is no longer a worktree, exits non-zero, and stops the
+chain on a helper failure with no defect behind it. So that row is step 0 and
+nothing after: there is no merge left to perform, and the teardown has
+already happened.
 
 **The workspace is part of that state**, and it is read the way `/branch`
 step 0 reads it: `git rev-parse --git-dir --git-common-dir` differing, with no
@@ -646,7 +646,7 @@ is one round and step 7 cannot buy it a second.
    second time:
 
    ```bash
-   git worktree remove .claude/worktrees/<slug>
+   bash .claude/scripts/git-worktree-remove.sh .claude/worktrees/<slug>
    ```
 
    **One definition, read at both sites, and it is the predicate above rather
@@ -656,48 +656,26 @@ is one round and step 7 cannot buy it a second.
    site the tip is `git rev-parse <branch>` rather than `HEAD`, because the
    session is not in that worktree, and the tree half is git's refusal below.
 
-   Without `-f` that command **refuses a worktree holding uncommitted or
-   untracked files**, which is the guard rather than an inconvenience — the
-   same refusal `/security-sweep`'s teardown uses. A worktree it declines to
-   remove is left where it is and named in the report; do not reach for `-f`,
-   which is the one spelling that discards somebody's work.
+   The helper runs `git worktree remove` without `-f`, so it **refuses a
+   worktree holding uncommitted or untracked files**, which is the guard
+   rather than an inconvenience — the same refusal `/security-sweep`'s
+   teardown uses. A worktree it declines to remove is left where it is and
+   named in the report.
 
-   > **A grant in this file is wider than the operation it buys, and that is
-   > a known residual rather than an oversight.**
-   > `docs/harness-boundaries.md` keeps the inventory; this callout keeps the
-   > argument for `git worktree remove`, and states no total of its own.
-   >
-   > An **allow** rule cannot exclude a *trailing* flag — true of the allow
-   > side only: a deny takes `*` at any position. So
-   > `Bash(git worktree remove:*)` admits the `-f` this file forbids.
-   >
-   > Every comparable case in this repository is fixed by a helper that spells
-   > its own flags. Step 7's merge is one: `gh-pr-merge.sh` replaced a raw
-   > `gh pr merge --rebase` grant whose prefix admitted a trailing `--admin`,
-   > and it takes a number and an oid and nothing else. The two worktree
-   > helpers that exist (`git-worktree-detach.sh`, `git-worktree-drop.sh`)
-   > bind the path to `secsweep-` plus six characters directly under the temp
-   > root, and therefore refuse a PR worktree by design — the detach helper by
-   > *creating* the only path it hands to git, which is stronger than checking
-   > one a caller supplied. A helper is owed here too; until someone with the
-   > `Edit(.claude/scripts/**)` deny lifted writes it, the rule is carried by
-   > this file, like the `[` placement rule in `docs/style-guide.md`.
-   >
-   > **The deny is why it cannot simply be written in passing, and it is the
-   > same control that makes a helper worth having.** A session that could
-   > add a helper under `.claude/scripts/` could also edit the one it is about
-   > to invoke, which would make every fixed endpoint in this chain a fiction.
-   > So a helper arrives as the repo owner's change to a reviewed file, with
-   > the raw grant withdrawn beside it, and the debt is theirs to pay,
-   > deliberately.
-   >
-   > **What stands in the meantime is visibility, not prevention, and calling
-   > it anything else would be the overclaim.** Step 7 reports the **literal**
-   > merge and `git worktree remove` invocations it ran, flags included. That
-   > is the same substitute this chain accepts for the human gate it does
-   > without — a decision taken here is written where the person who would
-   > have been asked can find it — applied to the command that can discard
-   > work rather than merely take a judgement.
+   **It waits for the code index first, because Windows will not delete a
+   file held open.** A refresh started by the last call made in the worktree
+   holds its lock and its index while it runs, and a remove in that window
+   deletes part of the tree and fails. So the helper takes the refresh lock,
+   waiting up to the bound it declares, and one still held there removes
+   nothing and exits non-zero: a helper failure that leaves the worktree whole.
+
+   > **The removal is a helper rather than a grant because a grant is wider
+   > than the operation it buys.** An **allow** rule cannot exclude a
+   > *trailing* flag, so `Bash(git worktree remove:*)` admitted the `-f` this
+   > file forbids. `git-worktree-remove.sh` takes one `.claude/worktrees/<name>`
+   > path, run from the main checkout, and spells the command itself, as
+   > `gh-pr-merge.sh` spells the merge; the raw grant is withdrawn.
+   > `docs/harness-boundaries.md` keeps the inventory.
 
    Deleting the merged **branch** is not part of this. `git branch -d` is
    denied in `.claude/settings.json`, deliberately, and a merged branch costs
@@ -1588,8 +1566,8 @@ is one round and step 7 cannot buy it a second.
    rule rather than complied with it.
 
    `suggestions.md` is already gone — removed above the gates, which also
-   keeps `git worktree remove` from refusing an untracked file on the forked
-   path and keeps the in-place path from carrying it onto `main`.
+   keeps `git-worktree-remove.sh` from refusing an untracked file on the
+   forked path and keeps the in-place path from carrying it onto `main`.
 
    Now put the workspace back the way step 0 wants to find it. **The order is
    the instruction**, and three of the seven lines depend on which outcome
@@ -1601,7 +1579,7 @@ is one round and step 7 cannot buy it a second.
    bash .claude/scripts/git-switch-existing.sh main     # 3. in-place runs only
    git pull --ff-only                                   # 4. main, now containing the merge
    git merge-base --is-ancestor <merge-oid> HEAD        # 5. and it really does contain it
-   git worktree remove .claude/worktrees/<slug>         # 6. forked runs only
+   bash .claude/scripts/git-worktree-remove.sh .claude/worktrees/<slug>  # 6. forked runs only
    git worktree prune                                   # 7.
    ```
 
@@ -1685,14 +1663,12 @@ interruption, so a run that took decisions and lists none of them has not
 reported — it has hidden. A run that took none says so in one line.
 
 **Then the merge and the workspace.** Whether the PR merged and its merge oid,
-the literal `gh-pr-merge.sh` and `git worktree remove` lines that ran, flags
-and all, because the second grant admits a flag this file forbids and a report
-is the only place the forbidding is checkable; or which of the two gates stopped
-it; that `main` was pulled, the HEAD it is now at, and that that HEAD contains
-the merge oid — containment rather than equality, because a PR merging in
-between leaves `main` at a later descendant and nothing is wrong; the worktree
-removed, or the one left behind and why git refused it; and the merged branch
-still sitting in `git branch`.
+the literal `gh-pr-merge.sh` and `git-worktree-remove.sh` lines that ran; or
+which of the two gates stopped it; that `main` was pulled, the HEAD it is now
+at, and that that HEAD contains the merge oid — containment rather than
+equality, because a PR merging in between leaves `main` at a later descendant
+and nothing is wrong; the worktree removed, or the one left behind and why the
+helper refused it; and the merged branch still sitting in `git branch`.
 
 A step skipped on an assumption gets its assumption restated here rather than
 left in the middle of the run, and a check that did not run is named. The whole
