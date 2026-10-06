@@ -52,7 +52,7 @@ SHELLS = {"Bash": "\\", "PowerShell": ""}
 POWERSHELLS = {"pwsh", "powershell"}
 PYTHONS = {"py", "python", "python3"}
 INTERPRETERS = {
-    "bash": set(), "sh": set(),
+    "bash": {"-o", "-O", "+o", "+O"}, "sh": {"-o", "+o"},
     **dict.fromkeys(POWERSHELLS, {"-executionpolicy", "-ep", "-workingdirectory", "-wd"}),
     **dict.fromkeys(PYTHONS, {"-X", "-W"}),
 }
@@ -291,7 +291,9 @@ def runs_cli(argv: list[str], depth: int = 0) -> bool:
         rest = argv[1:]
         while rest and rest[0].startswith("-"):
             option = rest[0].lower() if program in POWERSHELLS else rest[0]
-            if option in ("-c", "-command"):
+            # bash and sh cluster short options, so `-lc` hands over a command as `-c` does.
+            clustered = program not in POWERSHELLS | PYTHONS and re.match(r"^-[A-Za-z]*c[A-Za-z]*$", option)
+            if option in ("-c", "-command") or clustered:
                 escape = "" if program in POWERSHELLS else "\\"
                 return (program not in PYTHONS and depth < 2 and len(rest) > 1 and any(
                     runs_cli(inner, depth + 1) for inner, _piped, _after in segments(rest[1], escape)))
