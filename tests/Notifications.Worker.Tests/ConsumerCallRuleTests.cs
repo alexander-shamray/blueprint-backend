@@ -76,6 +76,27 @@ public class ConsumerCallRuleTests(ConsumerCallRuleTests.ComposedFactory factory
         public Task Consume(ConsumeContext<Probe> context) => Task.CompletedTask;
     }
 
+    public sealed class SelfMailing : IConsumer<Probe>
+    {
+        public Task Consume(ConsumeContext<Probe> context)
+        {
+            using MailKit.Net.Smtp.SmtpClient client = new();
+
+            return Task.CompletedTask;
+        }
+    }
+
+    [Fact]
+    public void A_consumer_building_its_own_smtp_client_is_caught()
+    {
+        IServiceCollection services = new ServiceCollection();
+        services.AddScoped<SelfMailing>();
+
+        ConsumerCallRule.Offenders(services, typeof(ConsumerCallRuleTests).Assembly, [])
+            .ShouldHaveSingleItem()
+            .ShouldContain("SelfMailing reaches SelfMailing (SelfMailing holds one itself)");
+    }
+
     [Fact]
     public void A_consumer_reaching_the_smtp_channel_is_caught()
     {
