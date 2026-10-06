@@ -26,9 +26,24 @@ public sealed class NotificationLogSchemaTests(ServiceFixture fixture) : IAsyncL
         // ADR-053 rule 4: the record holds no mailbox and no body, so the list is exact rather than a superset.
         columns.ShouldBe(
             [
-                "Attempts", "CompletedAt", "CorrelationId", "CreatedAt", "CustomerId", "EventId", "Languages",
-                "LockedUntil", "NextAttemptAt", "NotificationId", "OrderId", "Parameters", "Reason", "RowVersion",
-                "SendStartedAt", "Status", "TemplateKey", "TemplateVersion"
+                "Attempts",
+                "CompletedAt",
+                "CorrelationId",
+                "CreatedAt",
+                "CustomerId",
+                "EventId",
+                "Languages",
+                "LockedUntil",
+                "NextAttemptAt",
+                "NotificationId",
+                "OrderId",
+                "Parameters",
+                "Reason",
+                "RowVersion",
+                "SendStartedAt",
+                "Status",
+                "TemplateKey",
+                "TemplateVersion"
             ],
             ignoreOrder: true);
     }

@@ -134,20 +134,24 @@ public sealed class InboxFilterTests(ServiceFixture fixture) : IAsyncLifetime
 
             x.UsingInMemory((context, cfg) =>
             {
-                cfg.ReceiveEndpoint(FirstEndpoint, e =>
-                {
-                    e.UseConsumeFilter(typeof(InboxFilter<>), context);
-                    e.ConfigureConsumer<TConsumer>(context);
-                });
+                cfg.ReceiveEndpoint(
+                    FirstEndpoint,
+                    e =>
+                    {
+                        e.UseConsumeFilter(typeof(InboxFilter<>), context);
+                        e.ConfigureConsumer<TConsumer>(context);
+                    });
 
                 if (!withSecondEndpoint)
                     return;
 
-                cfg.ReceiveEndpoint(SecondEndpoint, e =>
-                {
-                    e.UseConsumeFilter(typeof(InboxFilter<>), context);
-                    e.ConfigureConsumer<SecondConsumer>(context);
-                });
+                cfg.ReceiveEndpoint(
+                    SecondEndpoint,
+                    e =>
+                    {
+                        e.UseConsumeFilter(typeof(InboxFilter<>), context);
+                        e.ConfigureConsumer<SecondConsumer>(context);
+                    });
             });
         });
 

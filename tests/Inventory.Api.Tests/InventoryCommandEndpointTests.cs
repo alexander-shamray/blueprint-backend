@@ -97,8 +97,9 @@ public sealed class InventoryCommandEndpointTests(ServiceFixture fixture) : IAsy
         (await Available(a)).ShouldBe(5, "the second reserve took no lines");
         (await fixture.OutboxAsync())
             .Where(r => r.MessageType.Contains("StockReservationFailed", StringComparison.Ordinal))
-            .ShouldAllBe(r => r.Payload.Contains(b.ToString(), StringComparison.Ordinal)
-                && !r.Payload.Contains(a.ToString(), StringComparison.Ordinal),
+            .ShouldAllBe(
+                r => r.Payload.Contains(b.ToString(), StringComparison.Ordinal)
+                    && !r.Payload.Contains(a.ToString(), StringComparison.Ordinal),
                 "both answers name the line that was short, and neither names the one that was not");
     }
 
@@ -210,7 +211,9 @@ public sealed class InventoryCommandEndpointTests(ServiceFixture fixture) : IAsy
 
         (await fixture.ScalarAsync<int>(
                 "SELECT Value = COUNT(*) FROM inventory.Reservations WHERE OrderId = {0}", order))
-            .ShouldBe(0, "nothing was written for this order, and the sentinel behind it on the same " +
+            .ShouldBe(
+                0,
+                "nothing was written for this order, and the sentinel behind it on the same " +
                 "queue was consumed");
     }
 
@@ -231,7 +234,9 @@ public sealed class InventoryCommandEndpointTests(ServiceFixture fixture) : IAsy
 
         (await fixture.ScalarAsync<int>(
                 "SELECT Value = COUNT(*) FROM inventory.Reservations WHERE OrderId = {0}", order))
-            .ShouldBe(0, "nothing was written for this order, and the sentinel behind it on the same " +
+            .ShouldBe(
+                0,
+                "nothing was written for this order, and the sentinel behind it on the same " +
                 "queue was consumed");
     }
 

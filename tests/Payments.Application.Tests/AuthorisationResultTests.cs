@@ -29,7 +29,9 @@ public class AuthorisationResultTests
         typeof(AuthorisationResult).Assembly.GetTypes()
             .Where(t => t.IsSubclassOf(typeof(AuthorisationResult)))
             .Select(t => t.Name)
-            .ShouldBe(["Authorised", "Declined"], ignoreOrder: true,
+            .ShouldBe(
+                ["Authorised", "Declined"],
+                ignoreOrder: true,
                 "a transient fault is an exception, so it can never reach the saga as a decline");
     }
 }

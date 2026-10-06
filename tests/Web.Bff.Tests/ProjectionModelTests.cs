@@ -30,7 +30,8 @@ public sealed class ProjectionModelTests
 
         string[] required = [.. orders.GetProperties().Where(p => !p.IsNullable).Select(p => p.Name)];
 
-        required.ShouldBe([nameof(OrderRow.OrderId), nameof(OrderRow.FirstSeenAt), nameof(OrderRow.AsOf)],
+        required.ShouldBe(
+            [nameof(OrderRow.OrderId), nameof(OrderRow.FirstSeenAt), nameof(OrderRow.AsOf)],
             ignoreOrder: true);
     }
 
@@ -56,8 +57,12 @@ public sealed class ProjectionModelTests
 
         orders.GetCheckConstraints().Select(c => c.ModelName).ShouldBe(
             [
-                "CK_Orders_Authorisation", "CK_Orders_CancelOutcome", "CK_Orders_Cancellation",
-                "CK_Orders_PaymentCurrency", "CK_Orders_Refund", "CK_Orders_Total"
+                "CK_Orders_Authorisation",
+                "CK_Orders_CancelOutcome",
+                "CK_Orders_Cancellation",
+                "CK_Orders_PaymentCurrency",
+                "CK_Orders_Refund",
+                "CK_Orders_Total"
             ],
             ignoreOrder: true);
     }

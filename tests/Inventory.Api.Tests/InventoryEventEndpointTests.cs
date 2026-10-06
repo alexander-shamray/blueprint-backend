@@ -224,7 +224,9 @@ public sealed class InventoryEventEndpointTests(ServiceFixture fixture) : IAsync
             () => fixture.ScalarAsync<int>(
                 "SELECT Value = COUNT(*) FROM inventory.InboxMessages " +
                     "WHERE Endpoint = {0} AND MessageId IN ({1}, {2})",
-                MessagingRegistration.EventsQueue, cancellation.MessageId, despatch.MessageId),
+                MessagingRegistration.EventsQueue,
+                cancellation.MessageId,
+                despatch.MessageId),
             expected: 2,
             because: "both deliveries are consumed; the loser blocked on the winner's row lock and then " +
                 "read its commit");

@@ -153,12 +153,17 @@ public sealed class FulfilmentWorker(IServiceScopeFactory scopes, ILogger<Fulfil
             CancellationResult cancellation =
                 await carrier.CancelAsync(new CancellationRequest(id, work.CarrierReference!), ct);
 
-            CommitOutcome answered = await CommitAsync(sp, id, (shipment, now) => cancellation switch
-            {
-                CancellationResult.Cancelled => shipment.CarrierCancelled(now),
-                CancellationResult.TooLate => shipment.CarrierRefusedCancellation(now),
-                _ => throw new InvalidOperationException($"Unknown cancellation answer {cancellation.GetType().Name}.")
-            }, ct);
+            CommitOutcome answered = await CommitAsync(
+                sp,
+                id,
+                (shipment, now) => cancellation switch
+                {
+                    CancellationResult.Cancelled => shipment.CarrierCancelled(now),
+                    CancellationResult.TooLate => shipment.CarrierRefusedCancellation(now),
+                    _ => throw new InvalidOperationException(
+                        $"Unknown cancellation answer {cancellation.GetType().Name}.")
+                },
+                ct);
 
             return answered.Moved;
         }

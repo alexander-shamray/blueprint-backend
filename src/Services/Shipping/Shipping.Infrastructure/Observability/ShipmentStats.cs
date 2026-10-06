@@ -53,17 +53,19 @@ internal sealed class ShipmentStats(IDbConnectionFactory connections) : IShipmen
     private readonly MemoryCache _cache = new(new MemoryCacheOptions());
 
     public int WaitingCount(string state) =>
-        _cache.GetOrCreate(state, entry =>
-        {
-            entry.AbsoluteExpirationRelativeToNow = CacheFor;
-            using IDbConnection connection = connections.Create();
+        _cache.GetOrCreate(
+            state,
+            entry =>
+            {
+                entry.AbsoluteExpirationRelativeToNow = CacheFor;
+                using IDbConnection connection = connections.Create();
 
-            return connection.ExecuteScalar<int>(
-                new CommandDefinition(
-                    WaitingSql,
-                    new { Status = state },
-                    commandTimeout: CommandTimeoutSeconds));
-        });
+                return connection.ExecuteScalar<int>(
+                    new CommandDefinition(
+                        WaitingSql,
+                        new { Status = state },
+                        commandTimeout: CommandTimeoutSeconds));
+            });
 
     public double FulfilmentOverdueSeconds() => OverdueSeconds(FulfilmentOverdueSql);
 
@@ -71,16 +73,18 @@ internal sealed class ShipmentStats(IDbConnectionFactory connections) : IShipmen
 
     // Keyed by the statement, which no state's name equals; floored, as host-stamped instants meet the engine's clock.
     private double OverdueSeconds(string sql) =>
-        _cache.GetOrCreate(sql, entry =>
-        {
-            entry.AbsoluteExpirationRelativeToNow = CacheFor;
-            using IDbConnection connection = connections.Create();
+        _cache.GetOrCreate(
+            sql,
+            entry =>
+            {
+                entry.AbsoluteExpirationRelativeToNow = CacheFor;
+                using IDbConnection connection = connections.Create();
 
-            return Math.Max(
-                0,
-                connection.ExecuteScalar<double?>(
-                    new CommandDefinition(sql, commandTimeout: CommandTimeoutSeconds)) ?? 0);
-        });
+                return Math.Max(
+                    0,
+                    connection.ExecuteScalar<double?>(
+                        new CommandDefinition(sql, commandTimeout: CommandTimeoutSeconds)) ?? 0);
+            });
 
     public void Dispose() => _cache.Dispose();
 }

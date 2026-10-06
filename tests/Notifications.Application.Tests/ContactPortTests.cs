@@ -13,7 +13,9 @@ public class ContactPortTests
         typeof(ContactLookup).GetNestedTypes()
             .Where(t => t.IsSubclassOf(typeof(ContactLookup)))
             .Select(t => t.Name)
-            .ShouldBe(["Found", "NoSuchCustomer"], ignoreOrder: true,
+            .ShouldBe(
+                ["Found", "NoSuchCustomer"],
+                ignoreOrder: true,
                 "a fault is an exception, so an owner that is down can never reach a row as an absence");
     }
 

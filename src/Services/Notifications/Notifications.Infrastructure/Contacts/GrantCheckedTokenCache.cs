@@ -21,11 +21,15 @@ public sealed partial class GrantCheckedTokenCache(
     private static readonly string[] Grant = ["query-groups", "query-users", "view-users"];
 
     // CA1848 (ADR-019); the messages name neither the token nor the roles (§13.4).
-    [LoggerMessage(EventId = 1, Level = LogLevel.Error,
+    [LoggerMessage(
+        EventId = 1,
+        Level = LogLevel.Error,
         Message = "The token this host was issued does not carry exactly its grant on realm-management (ADR-052).")]
     private static partial void GrantIsWrong(ILogger logger);
 
-    [LoggerMessage(EventId = 2, Level = LogLevel.Error,
+    [LoggerMessage(
+        EventId = 2,
+        Level = LogLevel.Error,
         Message = "The token this host was issued is not a JWT, so its grant cannot be read (ADR-052).")]
     private static partial void TokenIsUnreadable(ILogger logger);
 

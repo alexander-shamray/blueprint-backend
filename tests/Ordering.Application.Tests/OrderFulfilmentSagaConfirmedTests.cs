@@ -41,9 +41,7 @@ public class OrderFulfilmentSagaConfirmedTests
 
             await Publish(harness, SagaContracts.ShipmentDispatched(orderId, "TRACK-9"));
 
-            (await Sent<MarkOrderShipped>(harness, m =>
-                m.OrderId == orderId &&
-                m.TrackingNumber == "TRACK-9"))
+            (await Sent<MarkOrderShipped>(harness, m => m.OrderId == orderId && m.TrackingNumber == "TRACK-9"))
                 .ShouldBeTrue();
 
             // SetCompletedWhenFinalized deletes the instance, which is why §9.6's diagram has no Shipped state.
@@ -82,9 +80,9 @@ public class OrderFulfilmentSagaConfirmedTests
 
             await Publish(harness, new DespatchExpired(orderId));
 
-            (await Sent<FlagOrderForReview>(harness, m =>
-                m.OrderId == orderId &&
-                m.Reason == ReviewReasons.NotDespatched))
+            (await Sent<FlagOrderForReview>(
+                harness,
+                m => m.OrderId == orderId && m.Reason == ReviewReasons.NotDespatched))
                 .ShouldBeTrue();
 
             // Not cancelled: the customer has paid and the parcel may yet leave.
@@ -115,9 +113,9 @@ public class OrderFulfilmentSagaConfirmedTests
                 SagaContracts.OrderCancelled(orderId, Customer, CancelReasons.CustomerRequest));
 
             // The Confirmed code, not Compensating's, since the runbook selects its procedure on it.
-            (await Sent<FlagOrderForReview>(harness, m =>
-                m.OrderId == orderId &&
-                m.Reason == ReviewReasons.CancelledAfterConfirmation))
+            (await Sent<FlagOrderForReview>(
+                harness,
+                m => m.OrderId == orderId && m.Reason == ReviewReasons.CancelledAfterConfirmation))
                 .ShouldBeTrue();
 
             // Not a compensation: the reservation is being picked.
@@ -218,14 +216,12 @@ public class OrderFulfilmentSagaConfirmedTests
             await Publish(harness, SagaContracts.StockReleased(orderId));
             await Publish(harness, SagaContracts.ShipmentDispatched(orderId, "TRK-9"));
 
-            (await Sent<MarkOrderShipped>(harness, m =>
-                m.OrderId == orderId &&
-                m.TrackingNumber == "TRK-9"))
+            (await Sent<MarkOrderShipped>(harness, m => m.OrderId == orderId && m.TrackingNumber == "TRK-9"))
                 .ShouldBeTrue();
 
-            (await Sent<FlagOrderForReview>(harness, m =>
-                m.OrderId == orderId &&
-                m.Reason == ReviewReasons.CancelledAfterConfirmation))
+            (await Sent<FlagOrderForReview>(
+                harness,
+                m => m.OrderId == orderId && m.Reason == ReviewReasons.CancelledAfterConfirmation))
                 .ShouldBeTrue();
 
             ISagaStateMachineTestHarness<OrderFulfilmentSaga, OrderFulfilmentState> saga =

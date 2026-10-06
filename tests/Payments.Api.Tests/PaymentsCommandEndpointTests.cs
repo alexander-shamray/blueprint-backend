@@ -113,7 +113,8 @@ public sealed class PaymentsCommandEndpointTests(ServiceFixture fixture) : IAsyn
             because: "a mismatch is excluded from retry and faults straight to the error queue §13.6 pages on");
         (await StatusAsync(order)).ShouldBeNull();
         ProviderCalls().ShouldBe(0);
-        (await fixture.InboxAsync()).ShouldNotContain(m => m.Endpoint == MessagingRegistration.CommandsQueue,
+        (await fixture.InboxAsync()).ShouldNotContain(
+            m => m.Endpoint == MessagingRegistration.CommandsQueue,
             "a fault is not consumed, so no inbox row is written");
     }
 
@@ -142,7 +143,8 @@ public sealed class PaymentsCommandEndpointTests(ServiceFixture fixture) : IAsyn
         fault.Fired.ShouldBeTrue("the first unit reached its commit with the intent and the outbox row staged");
         (await StatusAsync(order)).ShouldBe("Authorised");
         (await StagedAsync("PaymentAuthorised")).ShouldBe(1, "the rolled-back unit's outbox row went with it");
-        fixture.Provider.LogEntries.Count(e => e.RequestMessage!.Path == "/v1/authorisations").ShouldBe(2,
+        fixture.Provider.LogEntries.Count(e => e.RequestMessage!.Path == "/v1/authorisations").ShouldBe(
+            2,
             "the retry replayed the provider call under the same key");
         fixture.Provider.LogEntries.Select(e => e.RequestMessage!.Headers!["Idempotency-Key"].Single()).Distinct()
             .ShouldHaveSingleItem();

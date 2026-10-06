@@ -163,7 +163,8 @@ public sealed class ReservationEndpointsTests(ServiceFixture fixture) : IAsyncLi
             client.PostAsync(
                 $"/v1/inventory/reservations/{order}/release", null, TestContext.Current.CancellationToken));
 
-        responses.ShouldAllBe(r => r.StatusCode == HttpStatusCode.NoContent,
+        responses.ShouldAllBe(
+            r => r.StatusCode == HttpStatusCode.NoContent,
             "the second creator waited on the first's key-range lock and found the tombstone");
         (await fixture.ScalarAsync<int>(
                 "SELECT Value = COUNT(*) FROM inventory.Reservations WHERE OrderId = {0}", order))

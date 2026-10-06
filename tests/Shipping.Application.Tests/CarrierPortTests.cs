@@ -26,7 +26,9 @@ public class CarrierPortTests
         typeof(BookingResult).GetNestedTypes()
             .Where(t => t.IsSubclassOf(typeof(BookingResult)))
             .Select(t => t.Name)
-            .ShouldBe(["Booked", "Refused"], ignoreOrder: true,
+            .ShouldBe(
+                ["Booked", "Refused"],
+                ignoreOrder: true,
                 "a transient fault is an exception, so an outage can never reach the row as a refusal");
     }
 
@@ -36,7 +38,9 @@ public class CarrierPortTests
         typeof(CancellationResult).GetNestedTypes()
             .Where(t => t.IsSubclassOf(typeof(CancellationResult)))
             .Select(t => t.Name)
-            .ShouldBe(["Cancelled", "TooLate"], ignoreOrder: true,
+            .ShouldBe(
+                ["Cancelled", "TooLate"],
+                ignoreOrder: true,
                 "section 6: the carrier either voids the shipment or says the parcel has gone");
     }
 

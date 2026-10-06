@@ -122,7 +122,9 @@ public sealed class InventoryEventEndpointTests(ServiceFixture fixture) : IAsync
         (await fixture.ScalarAsync<int>(
             "SELECT Value = QuantityAvailable FROM catalog.StockLevels WHERE ProductId = {0}",
             product))
-            .ShouldBe(7, "the redelivery's level never reached the projection: the filter suppressed it " +
+            .ShouldBe(
+                7,
+                "the redelivery's level never reached the projection: the filter suppressed it " +
                 "before the second row could apply");
     }
 

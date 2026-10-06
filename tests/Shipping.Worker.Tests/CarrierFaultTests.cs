@@ -71,7 +71,8 @@ public sealed class CarrierFaultTests : IDisposable
             Carrier().BookAsync(Booking("SIM-SLOW"), TestContext.Current.CancellationToken));
 
         (DateTimeOffset.UtcNow - started).ShouldBeLessThan(CarrierHop.TotalRequestTimeout + TimeSpan.FromSeconds(2));
-        counted.Value.ShouldBe(CarrierHop.MaxRetryAttempts + 1,
+        counted.Value.ShouldBe(
+            CarrierHop.MaxRetryAttempts + 1,
             "each attempt timeout is the carrier's, counted once, by OnTimeout");
     }
 
@@ -103,7 +104,8 @@ public sealed class CarrierFaultTests : IDisposable
         await Should.ThrowAsync<CarrierUnavailableException>(() =>
             Carrier().GetEventsAsync("crr_x", TestContext.Current.CancellationToken));
 
-        Calls("/v1/shipments/crr_x/events").ShouldBe(CarrierHop.MaxRetryAttempts + 1,
+        Calls("/v1/shipments/crr_x/events").ShouldBe(
+            CarrierHop.MaxRetryAttempts + 1,
             "an oversize body is an attempt the pipeline retries, not an answer the adapter refuses");
     }
 

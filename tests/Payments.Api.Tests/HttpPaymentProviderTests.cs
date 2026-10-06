@@ -399,7 +399,8 @@ public sealed class HttpPaymentProviderTests : IClassFixture<HttpPaymentProvider
         TimeSpan worst = ProviderHop.AttemptTimeout * (ProviderHop.MaxRetryAttempts + 1)
                          + ProviderHop.MaxRetryDelay * ProviderHop.MaxRetryAttempts;
 
-        worst.ShouldBeLessThan(ProviderHop.TotalRequestTimeout,
+        worst.ShouldBeLessThan(
+            ProviderHop.TotalRequestTimeout,
             "the Web.Bff's PricingHop argument: a total that cancels the last retry makes the retry count a fiction");
     }
 
@@ -563,7 +564,9 @@ public sealed class HttpPaymentProviderTests : IClassFixture<HttpPaymentProvider
             UnreachableSql, UnreachableRabbit, _server.Urls[0] + "/", providerApiKey: " ");
 
         Should.Throw<InvalidOperationException>(() => factory.Services)
-            .Message.ShouldContain("PaymentProvider:ApiKey", Case.Sensitive,
+            .Message.ShouldContain(
+                "PaymentProvider:ApiKey",
+                Case.Sensitive,
                 "§15.4 marks the key required; a host must not call a provider unauthenticated");
     }
 

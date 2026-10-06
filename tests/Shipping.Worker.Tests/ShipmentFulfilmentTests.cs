@@ -51,7 +51,9 @@ public sealed class ShipmentFulfilmentTests(ServiceFixture fixture) : IAsyncLife
         (await _steps.ReferenceAsync(order)).ShouldBe("crr_SIM-OK");
         (await _steps.LockedUntilAsync(order)).ShouldBeNull(
             "the pass that claimed the row released it through Shipment.ReleaseClaim");
-        BookingBody().ShouldContain("ә ғ қ ң ө ұ ү һ і", Case.Sensitive,
+        BookingBody().ShouldContain(
+            "ә ғ қ ң ө ұ ү һ і",
+            Case.Sensitive,
             "nvarchar end to end: a Cyrillic code page anywhere in the path would answer question marks");
         BookingBody().ShouldContain("пәтер 12");
         BookingBody().ShouldContain("Алматы");

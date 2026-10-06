@@ -39,11 +39,13 @@ public class OrderFulfilmentSagaInitiallyTests
 
             await Publish(harness, SagaContracts.OrderPlaced(orderId, Customer));
 
-            (await Sent<ReserveStock>(harness, m =>
-                m.OrderId == orderId &&
-                m.Lines.Count == 1 &&
-                m.Lines[0].ProductId == SagaContracts.Product &&
-                m.Lines[0].Quantity == 2))
+            (await Sent<ReserveStock>(
+                harness,
+                m =>
+                    m.OrderId == orderId &&
+                    m.Lines.Count == 1 &&
+                    m.Lines[0].ProductId == SagaContracts.Product &&
+                    m.Lines[0].Quantity == 2))
                 .ShouldBeTrue();
         }
     }

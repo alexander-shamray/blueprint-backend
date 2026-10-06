@@ -38,9 +38,7 @@ public class OrderFulfilmentSagaAwaitingPaymentTests
             await Publish(harness, SagaContracts.StockReleased(orderId));
 
             // The reason, not just the send, since a transition that never set it sends null.
-            (await Sent<CancelOrder>(harness, m =>
-                m.OrderId == orderId &&
-                m.Reason == CancelReasons.PaymentDeclined))
+            (await Sent<CancelOrder>(harness, m => m.OrderId == orderId && m.Reason == CancelReasons.PaymentDeclined))
                 .ShouldBeTrue();
         }
     }
@@ -64,9 +62,7 @@ public class OrderFulfilmentSagaAwaitingPaymentTests
 
             await Publish(harness, SagaContracts.StockReleased(orderId));
 
-            (await Sent<CancelOrder>(harness, m =>
-                m.OrderId == orderId &&
-                m.Reason == CancelReasons.PaymentTimeout))
+            (await Sent<CancelOrder>(harness, m => m.OrderId == orderId && m.Reason == CancelReasons.PaymentTimeout))
                 .ShouldBeTrue();
         }
     }
@@ -146,17 +142,14 @@ public class OrderFulfilmentSagaAwaitingPaymentTests
             await Publish(harness, SagaContracts.StockReserved(orderId));
 
             // Currency travels with the amount (§9.6).
-            (await Sent<AuthorisePayment>(harness, m =>
-                m.OrderId == orderId &&
-                m.Amount == SagaContracts.Total &&
-                m.Currency == SagaContracts.Currency))
+            (await Sent<AuthorisePayment>(
+                harness,
+                m => m.OrderId == orderId && m.Amount == SagaContracts.Total && m.Currency == SagaContracts.Currency))
                 .ShouldBeTrue();
 
             await Publish(harness, SagaContracts.PaymentAuthorised(orderId, "psp-ref-1"));
 
-            (await Sent<ConfirmOrder>(harness, m =>
-                m.OrderId == orderId &&
-                m.PaymentReference == "psp-ref-1"))
+            (await Sent<ConfirmOrder>(harness, m => m.OrderId == orderId && m.PaymentReference == "psp-ref-1"))
                 .ShouldBeTrue();
 
             ISagaStateMachineTestHarness<OrderFulfilmentSaga, OrderFulfilmentState> saga =
@@ -193,9 +186,7 @@ public class OrderFulfilmentSagaAwaitingPaymentTests
 
             await Publish(harness, SagaContracts.StockReleased(orderId));
 
-            (await Sent<CancelOrder>(harness, m =>
-                m.OrderId == orderId &&
-                m.Reason == CancelReasons.CustomerRequest))
+            (await Sent<CancelOrder>(harness, m => m.OrderId == orderId && m.Reason == CancelReasons.CustomerRequest))
                 .ShouldBeTrue();
 
             harness.Sent
@@ -227,9 +218,7 @@ public class OrderFulfilmentSagaAwaitingPaymentTests
 
             await Publish(harness, SagaContracts.StockReleased(orderId));
 
-            (await Sent<CancelOrder>(harness, m =>
-                m.OrderId == orderId &&
-                m.Reason == CancelReasons.OutOfStock))
+            (await Sent<CancelOrder>(harness, m => m.OrderId == orderId && m.Reason == CancelReasons.OutOfStock))
                 .ShouldBeTrue();
         }
     }
@@ -248,9 +237,9 @@ public class OrderFulfilmentSagaAwaitingPaymentTests
             await Publish(harness, SagaContracts.StockReleased(orderId));
             await Publish(harness, SagaContracts.PaymentAuthorised(orderId, "auth-late"));
 
-            (await Sent<FlagOrderForReview>(harness, m =>
-                m.OrderId == orderId &&
-                m.Reason == ReviewReasons.PaymentAuthorisedDuringCompensation))
+            (await Sent<FlagOrderForReview>(
+                harness,
+                m => m.OrderId == orderId && m.Reason == ReviewReasons.PaymentAuthorisedDuringCompensation))
                 .ShouldBeTrue();
 
             (await NotYetSent<ConfirmOrder>(harness, m => m.OrderId == orderId)).ShouldBeFalse();

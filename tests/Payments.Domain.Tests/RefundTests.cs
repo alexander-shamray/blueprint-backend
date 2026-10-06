@@ -34,7 +34,8 @@ public class RefundTests
     {
         PaymentIntent intent = PaymentIntent.Decline(OrderId.New(), 42.10m, "EUR", "card_declined", Now);
 
-        Should.Throw<DomainException>(() => Refund.Voided(intent, Now),
+        Should.Throw<DomainException>(
+            () => Refund.Voided(intent, Now),
             "ADR-047: PaymentRefunded means money moved back");
     }
 }

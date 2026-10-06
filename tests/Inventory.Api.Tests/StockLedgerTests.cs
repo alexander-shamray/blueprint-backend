@@ -35,7 +35,9 @@ public sealed class StockLedgerTests(ServiceFixture fixture) : IAsyncLifetime
         fixture.ExecuteAsync(
             "INSERT INTO inventory.StockItems (ProductId, Available, Reserved, UpdatedAt) " +
             "VALUES ({0}, {1}, {2}, SYSDATETIMEOFFSET())",
-            product, available, reserved);
+            product,
+            available,
+            reserved);
 
     private Task<int> Available(Guid product) =>
         fixture.ScalarAsync<int>("SELECT Value = Available FROM inventory.StockItems WHERE ProductId = {0}", product);
@@ -56,7 +58,8 @@ public sealed class StockLedgerTests(ServiceFixture fixture) : IAsyncLifetime
         outcome.Unavailable.ShouldBeEmpty();
         outcome.Levels.Select(l => (l.ProductId, l.Available))
             .ShouldBe([(new ProductId(a), 3), (new ProductId(b), 0)], ignoreOrder: true);
-        outcome.Levels.ShouldAllBe(l => l.UpdatedAt > DateTimeOffset.UtcNow.AddMinutes(-1),
+        outcome.Levels.ShouldAllBe(
+            l => l.UpdatedAt > DateTimeOffset.UtcNow.AddMinutes(-1),
             "the instant is the statement's, stamped under the row lock");
         // Version-7 ids are not creation-ordered under Guid.CompareTo, so the ledger's own comparer is asserted.
         outcome.Levels.Select(l => l.ProductId.Value)
@@ -81,7 +84,8 @@ public sealed class StockLedgerTests(ServiceFixture fixture) : IAsyncLifetime
         LedgerOutcome outcome = await InTransaction(l =>
             l.TryTakeAsync([new(new ProductId(a), 1)], TestContext.Current.CancellationToken));
 
-        outcome.Levels.ShouldHaveSingleItem().UpdatedAt.ShouldBe(future.AddTicks(1),
+        outcome.Levels.ShouldHaveSingleItem().UpdatedAt.ShouldBe(
+            future.AddTicks(1),
             "per-product monotonic: a clock behind the row's stamp does not move the stamp backwards");
         (await Available(a)).ShouldBe(4);
     }

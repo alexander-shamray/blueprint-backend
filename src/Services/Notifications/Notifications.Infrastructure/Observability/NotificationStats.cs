@@ -54,33 +54,37 @@ internal sealed class NotificationStats(IDbConnectionFactory connections) : INot
     private readonly MemoryCache _cache = new(new MemoryCacheOptions());
 
     public IReadOnlyDictionary<string, int> WaitingByStep() =>
-        _cache.GetOrCreate(nameof(WaitingByStep), entry =>
-        {
-            entry.AbsoluteExpirationRelativeToNow = CacheFor;
-            using IDbConnection connection = connections.Create();
-
-            Dictionary<string, int> waiting = WaitingSteps.All.ToDictionary(s => s, _ => 0, StringComparer.Ordinal);
-            foreach (WaitingRow row in connection.Query<WaitingRow>(
-                         new CommandDefinition(WaitingSql, commandTimeout: CommandTimeoutSeconds)))
+        _cache.GetOrCreate(
+            nameof(WaitingByStep),
+            entry =>
             {
-                waiting[row.Step] = row.Waiting;
-            }
+                entry.AbsoluteExpirationRelativeToNow = CacheFor;
+                using IDbConnection connection = connections.Create();
 
-            return waiting;
-        })!;
+                Dictionary<string, int> waiting = WaitingSteps.All.ToDictionary(s => s, _ => 0, StringComparer.Ordinal);
+                foreach (WaitingRow row in connection.Query<WaitingRow>(
+                             new CommandDefinition(WaitingSql, commandTimeout: CommandTimeoutSeconds)))
+                {
+                    waiting[row.Step] = row.Waiting;
+                }
+
+                return waiting;
+            })!;
 
     // Floored, as host-stamped instants meet the engine's clock, and less the grace a healthy pass needs.
     public double OverdueSeconds() =>
-        _cache.GetOrCreate(nameof(OverdueSeconds), entry =>
-        {
-            entry.AbsoluteExpirationRelativeToNow = CacheFor;
-            using IDbConnection connection = connections.Create();
+        _cache.GetOrCreate(
+            nameof(OverdueSeconds),
+            entry =>
+            {
+                entry.AbsoluteExpirationRelativeToNow = CacheFor;
+                using IDbConnection connection = connections.Create();
 
-            double? waited = connection.ExecuteScalar<double?>(
-                new CommandDefinition(OverdueSql, commandTimeout: CommandTimeoutSeconds));
+                double? waited = connection.ExecuteScalar<double?>(
+                    new CommandDefinition(OverdueSql, commandTimeout: CommandTimeoutSeconds));
 
-            return Math.Max(0, (waited ?? 0) - OverdueGrace.TotalSeconds);
-        });
+                return Math.Max(0, (waited ?? 0) - OverdueGrace.TotalSeconds);
+            });
 
     public void Dispose() => _cache.Dispose();
 
