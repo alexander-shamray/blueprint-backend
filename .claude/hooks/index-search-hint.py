@@ -42,8 +42,9 @@ ASKING = ("search", "explain", "architecture", "symbol", "refs", "impact",
 UPKEEP = {"healthcheck", "index_stats"}
 CLIS = {"cbx", "cbx.ps1", "codebase-index", "codebase_index"}
 
-# The tools that run a command line, and the escape character each one's
-# shell reads: PowerShell's is the backtick, so a backslash is a path.
+# The tools that run a command line, and the escape character the split
+# reads for each: none for PowerShell, whose backslash is a path and whose
+# backtick only joins a continued line here.
 SHELLS = {"Bash": "\\", "PowerShell": ""}
 
 # The programs that run the script or module they are handed, and their
@@ -92,7 +93,7 @@ def unheredoc(command: str) -> str:
 def tokens(command: str, escape: str) -> list[str]:
     """The words and operators of `command`, a newline outside quotes being
     an operator; a line at a time when the whole will not split."""
-    text = unheredoc(command.replace("\\\n", " ") if escape else command)
+    text = unheredoc(command.replace("\\\n", " ") if escape else re.sub(r"`\r?\n", " ", command))
     try:
         lexer = shlex.shlex(text, posix=True, punctuation_chars="|&;<>()\n")
         lexer.whitespace, lexer.commenters, lexer.escape = " \t\r", "", escape
