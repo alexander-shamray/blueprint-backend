@@ -11,7 +11,8 @@ public class ReleaseStockValidatorTests
     [Fact]
     public void An_empty_order_id_is_refused()
     {
-        _validator.TestValidate(new ReleaseStockCommand(Guid.Empty, CommandOrigin.User))
+        _validator
+            .TestValidate(new ReleaseStockCommand(Guid.Empty, CommandOrigin.User))
             .ShouldHaveValidationErrorFor(c => c.OrderId);
     }
 }

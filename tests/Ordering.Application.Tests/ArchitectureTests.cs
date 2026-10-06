@@ -73,7 +73,8 @@ public class ArchitectureTests
             Types
                 .InAssembly(assembly)
                 .ShouldNot().HaveDependencyOn("MassTransit")
-                .GetResult().IsSuccessful.ShouldBeTrue(assembly.GetName().Name);
+                .GetResult().IsSuccessful
+                .ShouldBeTrue(assembly.GetName().Name);
         }
     }
 }

@@ -27,7 +27,8 @@ public sealed partial class MailpitImageTests
     {
         string[] mappings =
         [
-            .. PortsLine().Matches(Unit())
+            .. PortsLine()
+                .Matches(Unit())
                 .SelectMany(m => m.Groups["ports"].Value.Split(','))
                 .Select(p => p.Trim().Trim('"'))
                 .Where(p => p.EndsWith($":{port}", StringComparison.Ordinal))

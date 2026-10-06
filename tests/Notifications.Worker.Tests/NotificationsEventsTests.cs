@@ -28,7 +28,8 @@ public sealed class NotificationsEventsTests(ServiceFixture fixture) : IAsyncLif
     {
         string path = Path.Combine(RepositoryRoot.Locate(), "deploy", "compose", "rabbitmq", "definitions.json");
         using JsonDocument definitions = JsonDocument.Parse(File.ReadAllText(path));
-        JsonElement grant = definitions.RootElement.GetProperty("permissions")
+        JsonElement grant = definitions.RootElement
+            .GetProperty("permissions")
             .EnumerateArray()
             .Single(p => p.GetProperty("user").GetString() == user && p.GetProperty("vhost").GetString() == "/");
 
@@ -42,7 +43,8 @@ public sealed class NotificationsEventsTests(ServiceFixture fixture) : IAsyncLif
     public async Task The_narrow_account_binds_every_event_in_the_consumes_column_to_the_queue()
     {
         // Healthy first, since an endpoint declares its bindings as it starts, and a refused bind never starts (§13.5).
-        BusHealthStatus health = await fixture.Factory.Services.GetRequiredService<IBusControl>()
+        BusHealthStatus health = await fixture.Factory.Services
+            .GetRequiredService<IBusControl>()
             .WaitForHealthStatus(BusHealthStatus.Healthy, ServiceFixture.StepDeadline);
         health.ShouldBe(BusHealthStatus.Healthy, "a refused exchange.bind closes the channel and the endpoint with it");
 
@@ -93,7 +95,8 @@ public sealed class NotificationsEventsTests(ServiceFixture fixture) : IAsyncLif
 
         owed.Select(n => n.TemplateKey).ShouldBe(TemplateKeys.Placeholders.Keys, ignoreOrder: true);
         owed.ShouldAllBe(n => n.Status == NotificationStatus.Pending && n.CustomerId == null);
-        ParametersFormat.Read(owed.Single(n => n.TemplateKey == TemplateKeys.PaymentDeclined).Parameters)
+        ParametersFormat
+            .Read(owed.Single(n => n.TemplateKey == TemplateKeys.PaymentDeclined).Parameters)
             .ShouldBe(new NotificationParameters { OrderId = order, OccurredAt = At });
     }
 

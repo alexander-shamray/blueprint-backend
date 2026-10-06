@@ -55,7 +55,8 @@ public sealed class SmtpMailChannelTests(MailpitFixture fixture) : IAsyncLifetim
         arrived.From.Address.ShouldBe("no-reply@commerce.test");
 
         IReadOnlyDictionary<string, string[]> headers = await fixture.Plain.HeadersAsync(arrived.Id, ct);
-        headers["Content-Type"].ShouldHaveSingleItem()
+        headers["Content-Type"]
+            .ShouldHaveSingleItem()
             .ShouldBe("text/plain; charset=utf-8", StringCompareShould.IgnoreCase);
         headers["Content-Language"].ShouldHaveSingleItem().ShouldBe("kk, ru");
     }
@@ -72,7 +73,8 @@ public sealed class SmtpMailChannelTests(MailpitFixture fixture) : IAsyncLifetim
             fixture.Plain,
             from: "Дүкен <no-reply@commerce.test>");
 
-        MailResult result = await host.Services.GetRequiredService<IMailChannel>()
+        MailResult result = await host.Services
+            .GetRequiredService<IMailChannel>()
             .SendAsync(Mail(subject: subject, body: body, languages: ["kk"]), ct);
 
         result.ShouldBe(new MailResult.Accepted());

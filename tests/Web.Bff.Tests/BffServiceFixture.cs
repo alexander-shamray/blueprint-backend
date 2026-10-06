@@ -42,7 +42,8 @@ public sealed class BffServiceFixture()
             CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
         bounded.CancelAfter(StepDeadline);
 
-        ISendEndpoint endpoint = await Factory.Services.GetRequiredService<IBus>()
+        ISendEndpoint endpoint = await Factory.Services
+            .GetRequiredService<IBus>()
             .GetSendEndpoint(new Uri($"queue:{MessagingRegistration.EventsQueue}"));
 
         await endpoint.Send(

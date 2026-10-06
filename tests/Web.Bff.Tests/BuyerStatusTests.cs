@@ -42,7 +42,10 @@ public sealed class BuyerStatusTests
             CancelledAt: Step(1),
             CancelOutcome: Step(1) is null ? null : BuyerStatuses.Cancelled);
 
-        string? expected = Enumerable.Range(0, 5).Where(bit => Step(bit) is not null).Select(bit => Rank[bit])
+        string? expected = Enumerable
+            .Range(0, 5)
+            .Where(bit => Step(bit) is not null)
+            .Select(bit => Rank[bit])
             .FirstOrDefault();
 
         BuyerStatus.Of(steps).ShouldBe(expected);
@@ -59,7 +62,8 @@ public sealed class BuyerStatusTests
 
     [Fact]
     public void Delivery_outranks_a_cancellation() =>
-        BuyerStatus.Of(new OrderSteps(At, At, At, At.AddDays(1), At, BuyerStatuses.Declined))
+        BuyerStatus
+            .Of(new OrderSteps(At, At, At, At.AddDays(1), At, BuyerStatuses.Declined))
             .ShouldBe(BuyerStatuses.Delivered);
 
     [Fact]

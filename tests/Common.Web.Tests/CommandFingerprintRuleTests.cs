@@ -314,7 +314,8 @@ public class CommandFingerprintRuleTests
         // CommandFingerprint's options, restated.
         JsonSerializerOptions options = new() { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingDefault };
 
-        JsonSerializer.Serialize(new InheritsAnIgnoredNote(Guid.NewGuid()) { Note = "n" }, options)
+        JsonSerializer
+            .Serialize(new InheritsAnIgnoredNote(Guid.NewGuid()) { Note = "n" }, options)
             .ShouldNotContain("Note");
         CommandFingerprintRule
             .Offenders(typeof(InheritsAnIgnoredNote))

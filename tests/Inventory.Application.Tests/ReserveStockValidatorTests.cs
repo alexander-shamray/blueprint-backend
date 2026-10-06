@@ -14,7 +14,8 @@ public class ReserveStockValidatorTests
     [Fact]
     public void No_lines_is_refused()
     {
-        _validator.TestValidate(new ReserveStockCommand(Guid.CreateVersion7(), []))
+        _validator
+            .TestValidate(new ReserveStockCommand(Guid.CreateVersion7(), []))
             .ShouldHaveValidationErrorFor(c => c.Lines);
     }
 
@@ -22,14 +23,16 @@ public class ReserveStockValidatorTests
     public void A_repeated_product_is_refused()
     {
         ProductId product = ProductId.New();
-        _validator.TestValidate(new ReserveStockCommand(Guid.CreateVersion7(), [new(product, 1), new(product, 2)]))
+        _validator
+            .TestValidate(new ReserveStockCommand(Guid.CreateVersion7(), [new(product, 1), new(product, 2)]))
             .ShouldHaveValidationErrorFor(c => c.Lines);
     }
 
     [Fact]
     public void A_zero_quantity_is_refused()
     {
-        _validator.TestValidate(new ReserveStockCommand(Guid.CreateVersion7(), [new(ProductId.New(), 0)]))
+        _validator
+            .TestValidate(new ReserveStockCommand(Guid.CreateVersion7(), [new(ProductId.New(), 0)]))
             .ShouldHaveValidationErrorFor("Lines[0].Quantity");
     }
 
@@ -39,7 +42,8 @@ public class ReserveStockValidatorTests
         ReservationLine[] lines =
             [.. Enumerable.Range(0, OrderLimits.MaxLines + 1).Select(_ => new ReservationLine(ProductId.New(), 1))];
 
-        _validator.TestValidate(new ReserveStockCommand(Guid.CreateVersion7(), lines))
+        _validator
+            .TestValidate(new ReserveStockCommand(Guid.CreateVersion7(), lines))
             .ShouldHaveValidationErrorFor(c => c.Lines);
     }
 

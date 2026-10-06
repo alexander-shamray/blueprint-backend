@@ -24,7 +24,8 @@ public sealed class PlaceOrderValidator : AbstractValidator<PlaceOrderCommand>
             item.RuleFor(i => i.ProductId).NotEmpty();
 
             // GreaterThanOrEqualTo, since MinQuantity is the smallest quantity a line may carry (ADR-045).
-            item.RuleFor(i => i.Quantity)
+            item
+                .RuleFor(i => i.Quantity)
                 .GreaterThanOrEqualTo(OrderLimits.MinQuantity)
                 .LessThanOrEqualTo(OrderLimits.MaxQuantity);
         });

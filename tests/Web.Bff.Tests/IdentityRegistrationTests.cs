@@ -15,7 +15,8 @@ public sealed class IdentityRegistrationTests
         using BffFactory factory = new();
 
         // Common.Infrastructure may not name Common.Web, so the key's name travels as a value.
-        factory.Services.GetRequiredService<AuthorityKeyName>()
+        factory.Services
+            .GetRequiredService<AuthorityKeyName>()
             .Name.ShouldBe(AuthenticationExtensions.AuthorityKey);
     }
 }

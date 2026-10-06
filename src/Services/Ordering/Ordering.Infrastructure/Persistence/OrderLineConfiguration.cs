@@ -29,7 +29,8 @@ internal sealed class OrderLineConfiguration : IEntityTypeConfiguration<OrderLin
             l => l.UnitPrice,
             price =>
             {
-                price.Property(m => m.Amount)
+                price
+                    .Property(m => m.Amount)
                     .HasColumnName("UnitPriceAmount")
                     .HasPrecision(OrderAmounts.Precision, OrderAmounts.Scale);
                 price.Property(m => m.Currency).HasColumnName("UnitPriceCurrency").HasMaxLength(3);

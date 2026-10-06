@@ -193,7 +193,8 @@ public sealed class InventoryCommandEndpointTests(ServiceFixture fixture) : IAsy
         var order = Guid.CreateVersion7();
         StockLine[] lines =
         [
-            .. Enumerable.Range(0, lineCount)
+            .. Enumerable
+                .Range(0, lineCount)
                 .Select(_ => new StockLine(emptyProduct ? Guid.Empty : Guid.CreateVersion7(), quantity))
         ];
 

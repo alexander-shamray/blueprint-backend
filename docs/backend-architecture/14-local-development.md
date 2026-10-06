@@ -697,11 +697,14 @@ var bffMigrator = builder
     .WaitFor(sql);
 
 var ordering = WithPlatformIdentity(
-    builder.AddProject<Projects.Ordering_Api>("ordering-api")
-        .WithReference(orderingDb).WaitFor(orderingDb)
+    builder
+        .AddProject<Projects.Ordering_Api>("ordering-api")
+        .WithReference(orderingDb)
+        .WaitFor(orderingDb)
         .WithReference(cache)          // → ConnectionStrings:RedisCache
         .WithReference(coordination)   // → ConnectionStrings:RedisCoordination
-        .WithReference(mq).WaitFor(mq)
+        .WithReference(mq)
+        .WaitFor(mq)
         // Gate on the migrator completing, not merely starting — the Compose
         // equivalent is service_completed_successfully (§14.1).
         .WaitForCompletion(orderingMigrator)
@@ -733,8 +736,10 @@ var ordering = WithPlatformIdentity(
 // delivers seeded events only through §14.1's start order, and Catalog here
 // waits on neither Ordering nor the BFF, so a seeded event would go unheard.
 var catalog = WithPlatformIdentity(
-    builder.AddProject<Projects.Catalog_Api>("catalog-api")
-        .WithReference(catalogDb).WaitFor(catalogDb)
+    builder
+        .AddProject<Projects.Catalog_Api>("catalog-api")
+        .WithReference(catalogDb)
+        .WaitFor(catalogDb)
         .WithReference(cache)
         .WithReference(coordination)
         .WithReference(mq)
@@ -748,7 +753,8 @@ var catalog = WithPlatformIdentity(
 // No callerClientId: YARP forwards the caller's token rather than minting one
 // of its own, so there is no "gateway" Keycloak client and no gateway secret.
 WithPlatformIdentity(
-    builder.AddProject<Projects.Gateway_Api>("gateway")
+    builder
+        .AddProject<Projects.Gateway_Api>("gateway")
         .WithReference(ordering)
         .WithReference(catalog)
         // The same edge shape Compose declares (§14.1), for the same reason:
@@ -776,9 +782,12 @@ WithPlatformIdentity(
 // which other hosts do (ADR-052), and this sample runs none of them. For a host
 // added that calls a peer, ADR-017's hop budget is the first check.
 WithPlatformIdentity(
-    builder.AddProject<Projects.Web_Bff>("web-bff")
-        .WithReference(bffDb).WaitFor(bffDb)
-        .WithReference(mq).WaitFor(mq)
+    builder
+        .AddProject<Projects.Web_Bff>("web-bff")
+        .WithReference(bffDb)
+        .WaitFor(bffDb)
+        .WithReference(mq)
+        .WaitFor(mq)
         .WaitForCompletion(bffMigrator)
         .WithReference(catalog)
         .WithHttpHealthCheck("/health/ready"),

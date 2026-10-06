@@ -28,7 +28,8 @@ public sealed class SentCommitFaults : SaveChangesInterceptor
     {
         // Only the completion qualifies; the intent and the customer's assignment move a notice too.
         bool completing = eventData.Context is not null &&
-            eventData.Context.ChangeTracker.Entries<Notification>()
+            eventData.Context.ChangeTracker
+                .Entries<Notification>()
                 .Any(e => e.State == EntityState.Modified && e.Entity.Status == NotificationStatus.Sent);
 
         if (!completing)

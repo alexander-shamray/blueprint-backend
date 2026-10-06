@@ -53,7 +53,9 @@ public sealed class GrpcPathTests(GatewayFactory factory) : IClassFixture<Gatewa
 
         (string Cluster, string Address)[] destinations =
         [
-            .. configuration.GetSection("ReverseProxy:Clusters").GetChildren()
+            .. configuration
+                .GetSection("ReverseProxy:Clusters")
+                .GetChildren()
                 .SelectMany(cluster => cluster
                     .GetSection("Destinations")
                     .GetChildren()

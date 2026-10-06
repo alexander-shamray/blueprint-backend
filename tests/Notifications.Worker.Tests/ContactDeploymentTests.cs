@@ -18,7 +18,9 @@ public sealed class ContactDeploymentTests
         JsonDocument.Parse(File("deploy", "compose", "keycloak", "realm-export.json")).RootElement;
 
     private static JsonElement Client() =>
-        Realm().GetProperty("clients").EnumerateArray()
+        Realm()
+            .GetProperty("clients")
+            .EnumerateArray()
             .Single(c => c.GetProperty("clientId").GetString() == KeycloakFixture.ContactClient);
 
     [Fact]
@@ -45,7 +47,9 @@ public sealed class ContactDeploymentTests
         // Keycloak refuses a scope the client does not hold with invalid_scope, at the first read.
         string[] held =
         [
-            .. Client().GetProperty("defaultClientScopes").EnumerateArray()
+            .. Client()
+                .GetProperty("defaultClientScopes")
+                .EnumerateArray()
                 .Concat(Client().GetProperty("optionalClientScopes").EnumerateArray())
                 .Select(s => s.GetString()!)
         ];

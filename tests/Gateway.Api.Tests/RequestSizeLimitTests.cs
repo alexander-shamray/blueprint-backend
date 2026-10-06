@@ -42,7 +42,8 @@ public sealed class RequestSizeLimitTests(StubDestination stub) : IClassFixture<
         body.RootElement.GetProperty("status").GetInt32().ShouldBe(413);
         body.RootElement.GetProperty("instance").GetString().ShouldBe($"POST {Route}");
         body.RootElement.GetProperty("correlationId").GetString().ShouldNotBeNullOrWhiteSpace();
-        body.RootElement.TryGetProperty("code", out _)
+        body.RootElement
+            .TryGetProperty("code", out _)
             .ShouldBeFalse("the forwarder answered the exception, so no exception handler wrote this problem");
     }
 

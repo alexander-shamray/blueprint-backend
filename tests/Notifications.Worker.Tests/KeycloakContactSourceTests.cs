@@ -21,7 +21,8 @@ public sealed class KeycloakContactSourceTests(KeycloakFixture keycloak)
     {
         await using AsyncServiceScope scope = host.Services.CreateAsyncScope();
 
-        return await scope.ServiceProvider.GetRequiredService<IContactSource>()
+        return await scope.ServiceProvider
+            .GetRequiredService<IContactSource>()
             .GetAsync(customer, TestContext.Current.CancellationToken);
     }
 
@@ -125,8 +126,13 @@ public sealed class KeycloakContactSourceTests(KeycloakFixture keycloak)
 
         string[] roles =
         [
-            .. payload.RootElement.GetProperty("resource_access").GetProperty("realm-management")
-                .GetProperty("roles").EnumerateArray().Select(r => r.GetString()).OfType<string>()
+            .. payload.RootElement
+                .GetProperty("resource_access")
+                .GetProperty("realm-management")
+                .GetProperty("roles")
+                .EnumerateArray()
+                .Select(r => r.GetString())
+                .OfType<string>()
         ];
 
         // Exactly the three, which is the pinned Keycloak expanding view-users's composite into the token.

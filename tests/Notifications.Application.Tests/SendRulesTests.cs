@@ -71,7 +71,8 @@ public class SendRulesTests
     public void A_decline_waits_for_its_order_record_and_then_for_its_cancellation()
     {
         SendRules.AwaitsOrderRecord(TemplateKeys.PaymentDeclined, null).ShouldBeTrue();
-        SendRules.AwaitsOrderRecord(TemplateKeys.PaymentDeclined, Placed())
+        SendRules
+            .AwaitsOrderRecord(TemplateKeys.PaymentDeclined, Placed())
             .ShouldBeTrue("every decline has a cancellation, published before or after it (§9.6)");
         SendRules.AwaitsOrderRecord(
                 TemplateKeys.PaymentDeclined,
@@ -96,7 +97,8 @@ public class SendRulesTests
     [MemberData(nameof(EveryKeyButTheDecline))]
     public void Nothing_but_a_decline_is_ever_suppressed(string key)
     {
-        SendRules.Suppresses(key, Cancelled(CancelReasons.CustomerRequest, CancelOrigins.User))
+        SendRules
+            .Suppresses(key, Cancelled(CancelReasons.CustomerRequest, CancelOrigins.User))
             .ShouldBeFalse("the cancellation itself, and every other notice, goes to the customer who cancelled");
     }
 

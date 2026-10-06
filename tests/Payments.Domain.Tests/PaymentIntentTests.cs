@@ -20,7 +20,8 @@ public class PaymentIntentTests
 
         intent.Status.ShouldBe(PaymentIntentStatus.Authorised);
         intent.Reference.ShouldBe("psp_1");
-        intent.DomainEvents.ShouldHaveSingleItem()
+        intent.DomainEvents
+            .ShouldHaveSingleItem()
             .ShouldBe(new PaymentAuthorisedDomainEvent(order, "psp_1", 42.10m, "EUR", Now));
     }
 
@@ -33,7 +34,8 @@ public class PaymentIntentTests
 
         intent.Status.ShouldBe(PaymentIntentStatus.Declined);
         intent.Reference.ShouldBeNull();
-        intent.DomainEvents.ShouldHaveSingleItem()
+        intent.DomainEvents
+            .ShouldHaveSingleItem()
             .ShouldBe(new PaymentDeclinedDomainEvent(order, "card_declined", Now));
     }
 

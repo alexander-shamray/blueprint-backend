@@ -143,7 +143,8 @@ public class SensitiveDataRedactorTests
                 null,
                 (_, _) => "connecting with password= from sql"));
 
-        record.Attributes!.Single(a => a.Key == "{OriginalFormat}").Value
+        record.Attributes!
+            .Single(a => a.Key == "{OriginalFormat}").Value
             .ShouldBe("connecting with password= from {Host}");
         record.FormattedMessage.ShouldBe("connecting with password= from sql");
     }

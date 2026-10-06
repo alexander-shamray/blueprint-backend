@@ -35,7 +35,8 @@ internal sealed partial class BadHttpRequestExceptionHandler(
             Extensions = { ["code"] = "request.unreadable" }
         };
 
-        Type? body = httpContext.Features.Get<IExceptionHandlerFeature>()?.Endpoint?.Metadata
+        Type? body = httpContext.Features
+            .Get<IExceptionHandlerFeature>()?.Endpoint?.Metadata
             .GetMetadata<IAcceptsMetadata>()?.RequestType;
 
         if (refused.InnerException is JsonException { Path: { } path } && body is not null &&

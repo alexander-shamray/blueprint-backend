@@ -32,7 +32,8 @@ public class PaymentsIntegrationEventMapperTests
 
         PaymentAuthorised contract = Mapper()
             .Map([new PaymentAuthorisedDomainEvent(order, "psp_1", 42.10m, "EUR", Raised)])
-            .ShouldHaveSingleItem().ShouldBeOfType<PaymentAuthorised>();
+            .ShouldHaveSingleItem()
+            .ShouldBeOfType<PaymentAuthorised>();
 
         contract.OrderId.ShouldBe(order.Value);
         contract.CorrelationId.ShouldBe(order.Value, "§9.6's saga correlates on the order");
@@ -50,7 +51,8 @@ public class PaymentsIntegrationEventMapperTests
 
         PaymentDeclined contract = Mapper()
             .Map([new PaymentDeclinedDomainEvent(order, "order_cancelled", Raised)])
-            .ShouldHaveSingleItem().ShouldBeOfType<PaymentDeclined>();
+            .ShouldHaveSingleItem()
+            .ShouldBeOfType<PaymentDeclined>();
 
         contract.OrderId.ShouldBe(order.Value);
         contract.CorrelationId.ShouldBe(order.Value);
@@ -64,7 +66,8 @@ public class PaymentsIntegrationEventMapperTests
 
         PaymentRefunded contract = Mapper()
             .Map([new PaymentRefundedDomainEvent(order, "psp_1", 42.10m, "EUR", Raised)])
-            .ShouldHaveSingleItem().ShouldBeOfType<PaymentRefunded>();
+            .ShouldHaveSingleItem()
+            .ShouldBeOfType<PaymentRefunded>();
 
         contract.OrderId.ShouldBe(order.Value);
         contract.CorrelationId.ShouldBe(order.Value);
@@ -98,7 +101,8 @@ public class PaymentsIntegrationEventMapperTests
     {
         // §9.3's allow-list read from the other side: absence from the registry
         // is what keeps a domain event off the bus, and it is not an error.
-        Mapper().Map([new UnpublishedDomainEvent(Raised)])
+        Mapper()
+            .Map([new UnpublishedDomainEvent(Raised)])
             .ShouldBeEmpty("an unregistered domain event is local-only, and that is not an error");
     }
 

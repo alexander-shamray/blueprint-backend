@@ -39,7 +39,9 @@ public sealed class ProjectionModelTests
     public void The_reads_index_seeks_owned_rows_newest_first()
     {
         using BffDbContext db = Context();
-        IIndex owned = db.GetService<IDesignTimeModel>().Model.FindEntityType(typeof(OrderRow))!
+        IIndex owned = db
+            .GetService<IDesignTimeModel>().Model
+            .FindEntityType(typeof(OrderRow))!
             .GetIndexes()
             .Single(i => i.GetDatabaseName() == "IX_Orders_Owned");
 
@@ -74,7 +76,9 @@ public sealed class ProjectionModelTests
         IEntityType orders = db.GetService<IDesignTimeModel>().Model.FindEntityType(typeof(OrderRow))!;
 
         orders.FindProperty(nameof(OrderRow.Currency))!.GetMaxLength().ShouldBe(ProjectionLimits.CurrencyLength);
-        orders.FindProperty(nameof(OrderRow.PaymentCurrency))!.GetMaxLength()
+        orders
+            .FindProperty(nameof(OrderRow.PaymentCurrency))!
+            .GetMaxLength()
             .ShouldBe(ProjectionLimits.CurrencyLength);
     }
 

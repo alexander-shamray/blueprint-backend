@@ -25,7 +25,8 @@ public class RefundTests
         refund.Amount.ShouldBe(42.10m);
         refund.Currency.ShouldBe("EUR");
         refund.VoidedAt.ShouldBe(Now);
-        refund.DomainEvents.ShouldHaveSingleItem()
+        refund.DomainEvents
+            .ShouldHaveSingleItem()
             .ShouldBe(new PaymentRefundedDomainEvent(order, "psp_1", 42.10m, "EUR", Now));
     }
 

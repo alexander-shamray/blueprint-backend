@@ -21,7 +21,8 @@ internal sealed class DeliveryAddressRowConfiguration : IEntityTypeConfiguration
         builder.Property(r => r.PostalCode).HasMaxLength(AddressLimits.MaxPostalCodeLength).IsRequired();
 
         // char(2), not nvarchar(2): two ASCII letters by contract.
-        builder.Property(r => r.Country)
+        builder
+            .Property(r => r.Country)
             .HasMaxLength(AddressLimits.CountryLength)
             .IsFixedLength()
             .IsUnicode(false)

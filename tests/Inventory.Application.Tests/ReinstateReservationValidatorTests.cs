@@ -11,14 +11,16 @@ public class ReinstateReservationValidatorTests
     [Fact]
     public void An_empty_command_id_is_refused()
     {
-        _validator.TestValidate(new ReinstateReservationCommand(Guid.Empty, Guid.CreateVersion7()))
+        _validator
+            .TestValidate(new ReinstateReservationCommand(Guid.Empty, Guid.CreateVersion7()))
             .ShouldHaveValidationErrorFor(c => c.CommandId);
     }
 
     [Fact]
     public void A_command_id_is_all_the_validator_asks_for()
     {
-        _validator.TestValidate(new ReinstateReservationCommand(Guid.CreateVersion7(), Guid.Empty))
+        _validator
+            .TestValidate(new ReinstateReservationCommand(Guid.CreateVersion7(), Guid.Empty))
             .ShouldNotHaveAnyValidationErrors();
     }
 }

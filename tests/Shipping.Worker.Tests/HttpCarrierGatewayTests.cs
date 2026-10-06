@@ -98,7 +98,8 @@ public sealed class HttpCarrierGatewayTests : IClassFixture<HttpCarrierGatewayTe
             ignoreOrder: true);
         root.GetProperty("shipmentId").GetGuid().ShouldBe(shipment.Value);
         root.GetProperty("address").GetProperty("line1").GetString().ShouldBe("1 Abay Avenue");
-        call.RequestMessage.Headers!["Authorization"].Single()
+        call.RequestMessage.Headers!["Authorization"]
+            .Single()
             .ShouldBe($"Bearer {ShippingWorkerFactory.LocalCarrierApiKey}");
     }
 
@@ -203,7 +204,8 @@ public sealed class HttpCarrierGatewayTests : IClassFixture<HttpCarrierGatewayTe
     {
         string body =
             "{\"events\":[{\"id\":\"e1\",\"status\":\"teleported\",\"occurredAt\":\"2026-01-02T09:00:00Z\"}]}";
-        _server.Given(Request.Create().WithPath("/v1/shipments/crr_x/events").UsingGet())
+        _server
+            .Given(Request.Create().WithPath("/v1/shipments/crr_x/events").UsingGet())
             .AtPriority(0)
             .RespondWith(Response.Create().WithStatusCode(200).WithBody(body));
 
@@ -228,7 +230,8 @@ public sealed class HttpCarrierGatewayTests : IClassFixture<HttpCarrierGatewayTe
     [Fact]
     public async Task A_carrier_that_has_not_heard_of_the_booking_answers_an_empty_page()
     {
-        _server.Given(Request.Create().WithPath("/v1/shipments/crr_new/events").UsingGet())
+        _server
+            .Given(Request.Create().WithPath("/v1/shipments/crr_new/events").UsingGet())
             .AtPriority(0)
             .RespondWith(Response.Create().WithStatusCode(404));
 
@@ -247,7 +250,8 @@ public sealed class HttpCarrierGatewayTests : IClassFixture<HttpCarrierGatewayTe
     [InlineData(200, "{\"status\":\"booked\",\"reference\":\"crr_x\",\"trackingNumber\":\"t\"}")]
     public async Task A_booking_body_that_contradicts_its_status_is_unavailable_never_an_answer(int status, string body)
     {
-        _server.Given(Request.Create().WithPath("/v1/shipments").UsingPost())
+        _server
+            .Given(Request.Create().WithPath("/v1/shipments").UsingPost())
             .AtPriority(0)
             .RespondWith(Response.Create().WithStatusCode(status).WithBody(body));
 
@@ -265,7 +269,8 @@ public sealed class HttpCarrierGatewayTests : IClassFixture<HttpCarrierGatewayTe
         string body,
         bool throws)
     {
-        _server.Given(Request.Create().WithPath("/v1/shipments/*/cancel").UsingPost())
+        _server
+            .Given(Request.Create().WithPath("/v1/shipments/*/cancel").UsingPost())
             .AtPriority(0)
             .RespondWith(Response.Create().WithStatusCode(status).WithBody(body));
 
@@ -285,7 +290,8 @@ public sealed class HttpCarrierGatewayTests : IClassFixture<HttpCarrierGatewayTe
     {
         string reference = new('r', length);
         string body = $"{{\"status\":\"booked\",\"reference\":\"{reference}\",\"trackingNumber\":\"t\"}}";
-        _server.Given(Request.Create().WithPath("/v1/shipments").UsingPost())
+        _server
+            .Given(Request.Create().WithPath("/v1/shipments").UsingPost())
             .AtPriority(0)
             .RespondWith(Response.Create().WithStatusCode(201).WithBody(body));
 
@@ -306,7 +312,8 @@ public sealed class HttpCarrierGatewayTests : IClassFixture<HttpCarrierGatewayTe
         // Kept, it would be spliced into the cancel and events paths, where a
         // dot segment is resolved away and the call reaches another endpoint.
         string body = $"{{\"status\":\"booked\",\"reference\":\"{reference}\",\"trackingNumber\":\"t\"}}";
-        _server.Given(Request.Create().WithPath("/v1/shipments").UsingPost())
+        _server
+            .Given(Request.Create().WithPath("/v1/shipments").UsingPost())
             .AtPriority(0)
             .RespondWith(Response.Create().WithStatusCode(201).WithBody(body));
 
@@ -323,7 +330,8 @@ public sealed class HttpCarrierGatewayTests : IClassFixture<HttpCarrierGatewayTe
     {
         string tracking = new('t', length);
         string body = $"{{\"status\":\"booked\",\"reference\":\"crr_x\",\"trackingNumber\":\"{tracking}\"}}";
-        _server.Given(Request.Create().WithPath("/v1/shipments").UsingPost())
+        _server
+            .Given(Request.Create().WithPath("/v1/shipments").UsingPost())
             .AtPriority(0)
             .RespondWith(Response.Create().WithStatusCode(201).WithBody(body));
 
@@ -342,7 +350,8 @@ public sealed class HttpCarrierGatewayTests : IClassFixture<HttpCarrierGatewayTe
     public async Task A_refusal_code_longer_than_the_column_is_refused_before_it_is_recorded(int length, bool accepted)
     {
         string code = new('c', length);
-        _server.Given(Request.Create().WithPath("/v1/shipments").UsingPost())
+        _server
+            .Given(Request.Create().WithPath("/v1/shipments").UsingPost())
             .AtPriority(0)
             .RespondWith(
                 Response.Create().WithStatusCode(422).WithBody($"{{\"status\":\"refused\",\"code\":\"{code}\"}}"));
@@ -359,7 +368,8 @@ public sealed class HttpCarrierGatewayTests : IClassFixture<HttpCarrierGatewayTe
     [Fact]
     public async Task A_body_in_a_charset_nobody_can_decode_is_unavailable_and_counted()
     {
-        _server.Given(Request.Create().WithPath("/v1/shipments").UsingPost())
+        _server
+            .Given(Request.Create().WithPath("/v1/shipments").UsingPost())
             .AtPriority(0)
             .RespondWith(
                 Response
@@ -381,7 +391,8 @@ public sealed class HttpCarrierGatewayTests : IClassFixture<HttpCarrierGatewayTe
         string id = new('e', CarrierLimits.MaxCarrierEventIdLength + 1);
         string page =
             $"{{\"events\":[{{\"id\":\"{id}\",\"status\":\"collected\",\"occurredAt\":\"2026-01-02T09:00:00Z\"}}]}}";
-        _server.Given(Request.Create().WithPath("/v1/shipments/crr_x/events").UsingGet())
+        _server
+            .Given(Request.Create().WithPath("/v1/shipments/crr_x/events").UsingGet())
             .AtPriority(0)
             .RespondWith(Response.Create().WithStatusCode(200).WithBody(page));
 
@@ -396,7 +407,8 @@ public sealed class HttpCarrierGatewayTests : IClassFixture<HttpCarrierGatewayTe
             ",",
             Enumerable.Range(0, CarrierHop.MaxEventsPerPage + 1).Select(i =>
                 $"{{\"id\":\"e{i}\",\"status\":\"in_transit\",\"occurredAt\":\"2026-01-02T09:00:00Z\"}}"));
-        _server.Given(Request.Create().WithPath("/v1/shipments/crr_x/events").UsingGet())
+        _server
+            .Given(Request.Create().WithPath("/v1/shipments/crr_x/events").UsingGet())
             .AtPriority(0)
             .RespondWith(Response.Create().WithStatusCode(200).WithBody($"{{\"events\":[{events}]}}"));
 
@@ -430,7 +442,8 @@ public sealed class HttpCarrierGatewayTests : IClassFixture<HttpCarrierGatewayTe
             production.Services.GetRequiredService<ICarrierGateway>().ShouldNotBeNull();
         else
         {
-            Should.Throw<InvalidOperationException>(() => production.Services)
+            Should
+                .Throw<InvalidOperationException>(() => production.Services)
                 .Message.ShouldContain("plain HTTP outside Development");
         }
     }
@@ -442,7 +455,8 @@ public sealed class HttpCarrierGatewayTests : IClassFixture<HttpCarrierGatewayTe
     {
         using ShippingWorkerFactory factory = new(Unreachable.Sql, Unreachable.Rabbit, address);
 
-        Should.Throw<InvalidOperationException>(() => factory.Services)
+        Should
+            .Throw<InvalidOperationException>(() => factory.Services)
             .Message.ShouldBe(
                 $"{CarrierRegistration.BaseUrlKey} carries a query or fragment, " +
                 "which no request to the carrier would keep.");
@@ -453,7 +467,8 @@ public sealed class HttpCarrierGatewayTests : IClassFixture<HttpCarrierGatewayTe
     {
         using ShippingWorkerFactory factory = new(Unreachable.Sql, Unreachable.Rabbit, carrierBaseUrl: "");
 
-        Should.Throw<InvalidOperationException>(() => factory.Services)
+        Should
+            .Throw<InvalidOperationException>(() => factory.Services)
             .Message.ShouldContain(CarrierRegistration.BaseUrlKey);
     }
 
@@ -466,7 +481,8 @@ public sealed class HttpCarrierGatewayTests : IClassFixture<HttpCarrierGatewayTe
             "https://carrier.example/",
             carrierApiKey: " ");
 
-        Should.Throw<InvalidOperationException>(() => factory.Services)
+        Should
+            .Throw<InvalidOperationException>(() => factory.Services)
             .Message.ShouldContain(
                 CarrierRegistration.ApiKeyKey,
                 Case.Sensitive,

@@ -10,7 +10,8 @@ public class ContactPortTests
     [Fact]
     public void A_lookup_is_found_or_no_such_customer_and_nothing_else()
     {
-        typeof(ContactLookup).GetNestedTypes()
+        typeof(ContactLookup)
+            .GetNestedTypes()
             .Where(t => t.IsSubclassOf(typeof(ContactLookup)))
             .Select(t => t.Name)
             .ShouldBe(

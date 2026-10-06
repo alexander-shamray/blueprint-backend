@@ -195,7 +195,8 @@ public class OrderTests
         Order order = OrderBuilder.Placed();
 
         OrderPlacedDomainEvent placed = order.DomainEvents
-            .OfType<OrderPlacedDomainEvent>().ShouldHaveSingleItem();
+            .OfType<OrderPlacedDomainEvent>()
+            .ShouldHaveSingleItem();
         placed.OrderId.ShouldBe(order.Id);
         placed.Total.ShouldBe(order.Total);
     }
@@ -541,7 +542,8 @@ public sealed class ServiceFixture : IAsyncLifetime
         using IServiceScope scope = Factory.Services.CreateScope();
         return await scope.ServiceProvider
             .GetRequiredService<OrderingDbContext>()
-            .OutboxMessages.AsNoTracking().ToListAsync();
+            .OutboxMessages.AsNoTracking()
+            .ToListAsync();
     }
 
     public async Task StageOutboxAsync(params OutboxMessage[] rows)

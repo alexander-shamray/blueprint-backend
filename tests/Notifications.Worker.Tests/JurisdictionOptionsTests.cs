@@ -103,7 +103,8 @@ public sealed class JurisdictionOptionsTests
         values.Remove("Jurisdiction:Languages:1");
         using ServiceProvider provider = Validating(values);
 
-        Should.Throw<OptionsValidationException>(() => provider.GetRequiredService<IStartupValidator>().Validate())
+        Should
+            .Throw<OptionsValidationException>(() => provider.GetRequiredService<IStartupValidator>().Validate())
             .Message.ShouldContain("Languages");
     }
 

@@ -70,7 +70,8 @@ public sealed class SendWorkerTests(ServiceFixture fixture) : IAsyncLifetime
 
         MailpitMessage message = await fixture.Relay.SingleAsync(Ct);
         (await fixture.Relay.HeadersAsync(message.Id, Ct))["X-Correlation-Id"]
-            .ShouldHaveSingleItem().ShouldBe(correlation.ToString("D"));
+            .ShouldHaveSingleItem()
+            .ShouldBe(correlation.ToString("D"));
     }
 
     [Fact]
@@ -90,7 +91,8 @@ public sealed class SendWorkerTests(ServiceFixture fixture) : IAsyncLifetime
 
         MailpitMessage message = await fixture.Relay.SingleAsync(Ct);
         (await fixture.Relay.HeadersAsync(message.Id, Ct))["X-Correlation-Id"]
-            .ShouldHaveSingleItem().ShouldBe(order.ToString("D"));
+            .ShouldHaveSingleItem()
+            .ShouldBe(order.ToString("D"));
     }
 
     [Fact]
@@ -111,7 +113,8 @@ public sealed class SendWorkerTests(ServiceFixture fixture) : IAsyncLifetime
         MailpitMessage message = await fixture.Relay.SingleAsync(Ct);
         message.Subject.ShouldContain(TemplateRenderer.SubjectSeparator);
         (await fixture.Relay.HeadersAsync(message.Id, Ct))["Content-Language"]
-            .ShouldHaveSingleItem().ShouldBe("kk, en");
+            .ShouldHaveSingleItem()
+            .ShouldBe("kk, en");
     }
 
     [Fact]
@@ -421,11 +424,15 @@ public sealed class SendWorkerTests(ServiceFixture fixture) : IAsyncLifetime
         (await fixture.RunSendPassAsync()).ShouldBe(new SendPass(1, 1));
 
         IReadOnlyList<MailpitSummary> delivered = await fixture.Relay.WaitForAsync(2, Ct);
-        delivered.Select(m => m.MessageId.Trim('<', '>')).Distinct().ShouldHaveSingleItem()
+        delivered
+            .Select(m => m.MessageId.Trim('<', '>'))
+            .Distinct()
+            .ShouldHaveSingleItem()
             .ShouldBe($"{owed.EventId:N}.{TemplateKeys.OrderConfirmed}@commerce.test");
         delivered.Select(m => m.Subject).Distinct().ShouldHaveSingleItem("a resend renders the stamped text");
         (await Task.WhenAll(delivered.Select(m => fixture.Relay.HeadersAsync(m.Id, Ct))))
-            .Select(h => h["Content-Language"].Single()).Distinct()
+            .Select(h => h["Content-Language"].Single())
+            .Distinct()
             .ShouldHaveSingleItem("a resend keeps the stamped language")
             .ShouldBe("en");
 

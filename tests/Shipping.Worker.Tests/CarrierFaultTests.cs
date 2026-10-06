@@ -62,7 +62,8 @@ public sealed class CarrierFaultTests : IDisposable
     public async Task A_timeout_a_throttle_or_a_server_fault_is_retried_then_thrown_as_unavailable(int status)
     {
         // Stubbed, since the simulator scripts one of the three and a branch dropping another would stay green.
-        Server.Given(Request.Create().WithPath("/v1/shipments").UsingPost())
+        Server
+            .Given(Request.Create().WithPath("/v1/shipments").UsingPost())
             .AtPriority(0)
             .RespondWith(Response.Create().WithStatusCode(status));
 
@@ -119,7 +120,8 @@ public sealed class CarrierFaultTests : IDisposable
     public async Task An_answer_larger_than_the_bound_is_refused_before_it_is_read_and_the_attempt_is_retried()
     {
         // CarrierAnswerBuffer reads the body inside the attempt, so an oversize body fails the attempt and is retried.
-        Server.Given(Request.Create().WithPath("/v1/shipments/crr_x/events").UsingGet())
+        Server
+            .Given(Request.Create().WithPath("/v1/shipments/crr_x/events").UsingGet())
             .AtPriority(0)
             .RespondWith(
                 Response

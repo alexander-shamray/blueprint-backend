@@ -923,7 +923,8 @@ public sealed class PlaceOrderValidator : AbstractValidator<PlaceOrderCommand>
         RuleForEach(x => x.Items).ChildRules(item =>
         {
             item.RuleFor(i => i.ProductId).NotEmpty();
-            item.RuleFor(i => i.Quantity)
+            item
+                .RuleFor(i => i.Quantity)
                 .GreaterThanOrEqualTo(OrderLimits.MinQuantity)
                 .LessThanOrEqualTo(OrderLimits.MaxQuantity);
         });

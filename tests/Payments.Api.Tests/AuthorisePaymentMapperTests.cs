@@ -36,7 +36,8 @@ public sealed class AuthorisePaymentMapperTests
         // Ordering's Money keeps the currency's exponent (ADR-067), so three places for KWD is an ordinary total.
         Guid order = Guid.CreateVersion7();
 
-        new AuthorisePaymentMapper().Map(new AuthorisePayment(order, amount, currency))
+        new AuthorisePaymentMapper()
+            .Map(new AuthorisePayment(order, amount, currency))
             .ShouldBe(new AuthorisePaymentCommand(order, amount, currency));
     }
 
@@ -45,7 +46,8 @@ public sealed class AuthorisePaymentMapperTests
     {
         Guid order = Guid.CreateVersion7();
 
-        new AuthorisePaymentMapper().Map(new AuthorisePayment(order, 0m, "EUR"))
+        new AuthorisePaymentMapper()
+            .Map(new AuthorisePayment(order, 0m, "EUR"))
             .ShouldBe(
                 new AuthorisePaymentCommand(order, 0m, "EUR"),
                 "Money.Zero is a valid total in Catalog and Ordering, and the saga forwards it");
@@ -63,7 +65,8 @@ public sealed class AuthorisePaymentMapperTests
     {
         Guid order = Guid.CreateVersion7();
 
-        new AuthorisePaymentMapper().Map(new AuthorisePayment(order, 42.10m, "EUR"))
+        new AuthorisePaymentMapper()
+            .Map(new AuthorisePayment(order, 42.10m, "EUR"))
             .ShouldBe(new AuthorisePaymentCommand(order, 42.10m, "EUR"));
     }
 }

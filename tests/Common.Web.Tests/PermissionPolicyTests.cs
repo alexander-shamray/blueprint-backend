@@ -16,10 +16,12 @@ public class PermissionPolicyTests
     {
         ServiceCollection services = new();
 
-        services.AddAuthorizationBuilder()
+        services
+            .AddAuthorizationBuilder()
             .AddPolicy(Permission, policy => policy.RequirePermission(Permission));
 
-        return services.BuildServiceProvider()
+        return services
+            .BuildServiceProvider()
             .GetRequiredService<IAuthorizationPolicyProvider>()
             .GetPolicyAsync(Permission)
             .GetAwaiter()
@@ -32,7 +34,8 @@ public class PermissionPolicyTests
         services.AddLogging();
         services.AddAuthorization();
 
-        return services.BuildServiceProvider()
+        return services
+            .BuildServiceProvider()
             .GetRequiredService<IAuthorizationService>()
             .AuthorizeAsync(user, resource: null, Policy());
     }

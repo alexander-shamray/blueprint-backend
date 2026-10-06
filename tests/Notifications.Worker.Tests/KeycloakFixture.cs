@@ -207,7 +207,8 @@ public sealed class KeycloakFixture : IAsyncLifetime
         JsonNode profile = (await current.Content.ReadFromJsonAsync<JsonNode>(TestContext.Current.CancellationToken))!;
         profile["unmanagedAttributePolicy"] = "ADMIN_EDIT";
 
-        JsonObject email = profile["attributes"]!.AsArray()
+        JsonObject email = profile["attributes"]!
+            .AsArray()
             .Single(a => (string?)a!["name"] == "email")!
             .AsObject();
         email["validations"]?.AsObject().Remove("email");

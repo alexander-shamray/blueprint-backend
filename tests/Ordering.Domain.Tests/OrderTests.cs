@@ -40,7 +40,8 @@ public class OrderTests
         order.PlacedAt.ShouldBe(Now);
         order.Total.ShouldBe(Money.Of(20m, "EUR"));
 
-        OrderPlacedDomainEvent placed = order.DomainEvents.ShouldHaveSingleItem()
+        OrderPlacedDomainEvent placed = order.DomainEvents
+            .ShouldHaveSingleItem()
             .ShouldBeOfType<OrderPlacedDomainEvent>();
         placed.OrderId.ShouldBe(order.Id);
         placed.CustomerId.ShouldBe(customer);
@@ -201,7 +202,9 @@ public class OrderTests
         order.Cancel(CancellationReason.CustomerRequest, CancellationOrigin.User, Now.AddMinutes(1));
 
         order.Status.ShouldBe(OrderStatus.Cancelled);
-        order.DomainEvents.OfType<OrderCancelledDomainEvent>().ShouldHaveSingleItem()
+        order.DomainEvents
+            .OfType<OrderCancelledDomainEvent>()
+            .ShouldHaveSingleItem()
             .Reason.ShouldBe(CancellationReason.OutOfStock, "the first cancellation is the one that happened");
     }
 

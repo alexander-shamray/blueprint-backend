@@ -200,7 +200,8 @@ public sealed class CompressedResponseTests(StubDestination stub) : IClassFixtur
             await Get($"{CompressibleRoute}&{StubDestination.VaryQuery}=Cache-Control", ct);
 
         response.StatusCode.ShouldBe(HttpStatusCode.OK);
-        response.Headers.Vary.Count(v => string.Equals(v, "Cache-Control", StringComparison.OrdinalIgnoreCase))
+        response.Headers.Vary
+            .Count(v => string.Equals(v, "Cache-Control", StringComparison.OrdinalIgnoreCase))
             .ShouldBe(1);
     }
 

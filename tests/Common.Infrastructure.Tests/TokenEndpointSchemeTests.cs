@@ -84,7 +84,8 @@ public sealed class TokenEndpointSchemeTests
         await using ServiceProvider services = Client(provider);
 
         // The control, without which the refusal above could mean the TLS stub never worked.
-        string token = await services.GetRequiredService<ITokenCache>()
+        string token = await services
+            .GetRequiredService<ITokenCache>()
             .GetAsync(Scope, TestContext.Current.CancellationToken);
 
         token.ShouldNotBeNullOrWhiteSpace();

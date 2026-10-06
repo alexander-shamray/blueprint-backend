@@ -375,7 +375,8 @@ public void Application_and_domain_do_not_reference_masstransit()
         Types
             .InAssembly(assembly)
             .ShouldNot().HaveDependencyOn("MassTransit")
-            .GetResult().IsSuccessful.ShouldBeTrue(assembly.GetName().Name);
+            .GetResult().IsSuccessful
+            .ShouldBeTrue(assembly.GetName().Name);
     }
 }
 ```

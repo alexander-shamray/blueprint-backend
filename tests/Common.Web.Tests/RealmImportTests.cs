@@ -37,7 +37,9 @@ public class RealmImportTests
     [Fact]
     public void Every_part_of_the_token_path_speaks_openid_connect()
     {
-        JsonElement tokenClient = Root.GetProperty("clients").EnumerateArray()
+        JsonElement tokenClient = Root
+            .GetProperty("clients")
+            .EnumerateArray()
             .Single(c => c.GetProperty("clientId").GetString() == TokenClient);
 
         tokenClient.GetProperty("protocol").GetString().ShouldBe(Protocol);
@@ -66,9 +68,15 @@ public class RealmImportTests
         JsonElement mapper = MappersOf(CommerceApiScope).Single(
             m => m.GetProperty("protocolMapper").GetString() == "oidc-audience-mapper");
 
-        mapper.GetProperty("config").GetProperty("included.client.audience").GetString()
+        mapper
+            .GetProperty("config")
+            .GetProperty("included.client.audience")
+            .GetString()
             .ShouldBe(Audience);
-        mapper.GetProperty("config").GetProperty("access.token.claim").GetString()
+        mapper
+            .GetProperty("config")
+            .GetProperty("access.token.claim")
+            .GetString()
             .ShouldBe("true", "an audience on the id token alone is invisible to a bearer check");
     }
 
@@ -82,7 +90,9 @@ public class RealmImportTests
         JsonElement config = mapper.GetProperty("config");
         config.GetProperty("claim.name").GetString().ShouldBe(PermissionClaim.Type);
         config.GetProperty("access.token.claim").GetString().ShouldBe("true");
-        config.GetProperty("multivalued").GetString()
+        config
+            .GetProperty("multivalued")
+            .GetString()
             .ShouldBe("true", "a single-valued claim silently keeps one permission and drops the rest");
 
         // Client roles, since a realm-role mapper also emits Keycloak's own roles here (§11.5).
@@ -106,10 +116,14 @@ public class RealmImportTests
         }
 
         // Not vacuous: named rather than counted, since Keycloak's built-in clients hold scopes too.
-        JsonElement tokenClient = Root.GetProperty("clients").EnumerateArray()
+        JsonElement tokenClient = Root
+            .GetProperty("clients")
+            .EnumerateArray()
             .Single(c => c.GetProperty("clientId").GetString() == TokenClient);
 
-        tokenClient.GetProperty("defaultClientScopes").EnumerateArray()
+        tokenClient
+            .GetProperty("defaultClientScopes")
+            .EnumerateArray()
             .Select(s => s.GetString())
             .ShouldContain(
                 Audience,
@@ -121,14 +135,22 @@ public class RealmImportTests
     public void The_documented_login_can_actually_be_performed()
     {
         // The compose README's recipe is a password grant against web-app.
-        JsonElement tokenClient = Root.GetProperty("clients").EnumerateArray()
+        JsonElement tokenClient = Root
+            .GetProperty("clients")
+            .EnumerateArray()
             .Single(c => c.GetProperty("clientId").GetString() == TokenClient);
 
-        tokenClient.GetProperty("enabled").GetBoolean()
+        tokenClient
+            .GetProperty("enabled")
+            .GetBoolean()
             .ShouldBeTrue($"a disabled '{TokenClient}' satisfies both flags below and issues nothing");
-        tokenClient.GetProperty("directAccessGrantsEnabled").GetBoolean()
+        tokenClient
+            .GetProperty("directAccessGrantsEnabled")
+            .GetBoolean()
             .ShouldBeTrue($"the README obtains a token by password grant against '{TokenClient}'");
-        tokenClient.GetProperty("publicClient").GetBoolean()
+        tokenClient
+            .GetProperty("publicClient")
+            .GetBoolean()
             .ShouldBeTrue($"the README's grant sends no secret, and none is committed for '{TokenClient}'");
     }
 
@@ -197,7 +219,8 @@ public class RealmImportTests
 
         string[] Permissions(string username) =>
         [
-            .. users.EnumerateArray()
+            .. users
+                .EnumerateArray()
                 .Single(u => u.GetProperty("username").GetString() == username)
                 .GetProperty("clientRoles")
                 .GetProperty(Audience)
@@ -211,28 +234,39 @@ public class RealmImportTests
             ["catalog:write", "orders:write", "orders:cancel", "inventory:admin", "payments:admin"],
             ignoreOrder: true);
 
-        JsonElement browser = users.EnumerateArray()
+        JsonElement browser = users
+            .EnumerateArray()
             .Single(u => u.GetProperty("username").GetString() == "browser");
 
-        browser.TryGetProperty("clientRoles", out JsonElement granted)
+        browser
+            .TryGetProperty("clientRoles", out JsonElement granted)
             .ShouldBeFalse("'browser' exists to prove a refusal, so it must hold no client role at all");
 
         // Pinned, because §14.1's development defaults are documented ones.
         foreach (string username in (string[])["demo", "browser"])
         {
-            JsonElement user = users.EnumerateArray()
+            JsonElement user = users
+                .EnumerateArray()
                 .Single(u => u.GetProperty("username").GetString() == username);
 
-            user.GetProperty("enabled").GetBoolean()
+            user
+                .GetProperty("enabled")
+                .GetBoolean()
                 .ShouldBeTrue($"'{username}' is one of §11.5's two documented logins");
 
-            JsonElement password = user.GetProperty("credentials").EnumerateArray()
+            JsonElement password = user
+                .GetProperty("credentials")
+                .EnumerateArray()
                 .Single(c => c.GetProperty("type").GetString() == "password");
 
-            password.GetProperty("value").GetString()
+            password
+                .GetProperty("value")
+                .GetString()
                 .ShouldBe(username, $"the compose README documents '{username}' as its own password");
 
-            password.GetProperty("temporary").GetBoolean()
+            password
+                .GetProperty("temporary")
+                .GetBoolean()
                 .ShouldBeFalse($"a temporary credential makes '{username}' unusable by the README's password grant");
         }
     }
@@ -245,7 +279,11 @@ public class RealmImportTests
 
         (string Name, string Description)[] roles =
         [
-            .. Root.GetProperty("roles").GetProperty("client").GetProperty(Audience).EnumerateArray()
+            .. Root
+                .GetProperty("roles")
+                .GetProperty("client")
+                .GetProperty(Audience)
+                .EnumerateArray()
                 .Select(r => (
                     Name: r.GetProperty("name").GetString()!,
                     Description: r.TryGetProperty("description", out JsonElement d) ? d.GetString()! : ""))
@@ -268,7 +306,11 @@ public class RealmImportTests
         // A route's permission (§10.2) obeys an endpoint's rule (§11.4): grantable, not granted.
         string[] roles =
         [
-            .. Root.GetProperty("roles").GetProperty("client").GetProperty(Audience).EnumerateArray()
+            .. Root
+                .GetProperty("roles")
+                .GetProperty("client")
+                .GetProperty(Audience)
+                .EnumerateArray()
                 .Select(r => r.GetProperty("name").GetString())
                 .OfType<string>()
         ];
@@ -305,9 +347,12 @@ public class RealmImportTests
         // Declared is not assigned.
         string[] assigned =
         [
-            .. Root.GetProperty("clients").EnumerateArray()
+            .. Root
+                .GetProperty("clients")
+                .EnumerateArray()
                 .Single(c => c.GetProperty("clientId").GetString() == TokenClient)
-                .GetProperty("defaultClientScopes").EnumerateArray()
+                .GetProperty("defaultClientScopes")
+                .EnumerateArray()
                 .Select(s => s.GetString())
                 .OfType<string>()
         ];
@@ -326,7 +371,10 @@ public class RealmImportTests
         JsonElement subject = MappersOf(basic).Single(
             m => m.GetProperty("protocolMapper").GetString() == "oidc-sub-mapper");
 
-        subject.GetProperty("config").GetProperty("access.token.claim").GetString()
+        subject
+            .GetProperty("config")
+            .GetProperty("access.token.claim")
+            .GetString()
             .ShouldBe("true", "a `sub` on the id token alone is invisible to a bearer check");
     }
 
@@ -386,7 +434,9 @@ public class RealmImportTests
         // Not vacuous: every credentialed client is in the realm.
         string[] present =
         [
-            .. Root.GetProperty("clients").EnumerateArray()
+            .. Root
+                .GetProperty("clients")
+                .EnumerateArray()
                 .Select(c => c.GetProperty("clientId").GetString()!)
         ];
 
@@ -398,14 +448,20 @@ public class RealmImportTests
     public void The_worker_service_account_holds_exactly_the_role_its_grant_names()
     {
         // The mapper reads a service account's roles from its own user, exported with serviceAccountClientId.
-        JsonElement account = Root.GetProperty("users").EnumerateArray()
+        JsonElement account = Root
+            .GetProperty("users")
+            .EnumerateArray()
             .Single(u => u.TryGetProperty("serviceAccountClientId", out JsonElement client) &&
                 client.GetString() == WorkerCredentialClient);
 
         string[] granted =
         [
-            .. account.GetProperty("clientRoles").GetProperty(Audience).EnumerateArray()
-                .Select(r => r.GetString()).OfType<string>()
+            .. account
+                .GetProperty("clientRoles")
+                .GetProperty(Audience)
+                .EnumerateArray()
+                .Select(r => r.GetString())
+                .OfType<string>()
         ];
 
         // Exactly, since ADR-052 sizes this credential by what it reads when stolen.
@@ -422,7 +478,9 @@ public class RealmImportTests
     [Fact]
     public void The_contact_service_account_holds_exactly_view_users_on_realm_management()
     {
-        JsonElement account = Root.GetProperty("users").EnumerateArray()
+        JsonElement account = Root
+            .GetProperty("users")
+            .EnumerateArray()
             .Single(u => u.TryGetProperty("serviceAccountClientId", out JsonElement client) &&
                 client.GetString() == ContactCredentialClient);
 
@@ -432,8 +490,12 @@ public class RealmImportTests
 
         string[] granted =
         [
-            .. account.GetProperty("clientRoles").GetProperty(RealmManagement).EnumerateArray()
-                .Select(r => r.GetString()).OfType<string>()
+            .. account
+                .GetProperty("clientRoles")
+                .GetProperty(RealmManagement)
+                .EnumerateArray()
+                .Select(r => r.GetString())
+                .OfType<string>()
         ];
 
         granted.ShouldBe(["view-users"]);
@@ -445,23 +507,33 @@ public class RealmImportTests
     public void View_users_composes_exactly_the_two_query_roles_and_neither_composes_further()
     {
         // The pinned Keycloak's own composition, exported with the realm: the worker's check reads the expanded set.
-        JsonElement[] management = [.. Root.GetProperty("roles").GetProperty("client").GetProperty(RealmManagement)
+        JsonElement[] management = [.. Root
+            .GetProperty("roles")
+            .GetProperty("client")
+            .GetProperty(RealmManagement)
             .EnumerateArray()];
 
         JsonElement viewUsers = management.Single(r => r.GetProperty("name").GetString() == "view-users");
 
         string[] composed =
         [
-            .. viewUsers.GetProperty("composites").GetProperty("client").GetProperty(RealmManagement).EnumerateArray()
-                .Select(r => r.GetString()).OfType<string>()
+            .. viewUsers
+                .GetProperty("composites")
+                .GetProperty("client")
+                .GetProperty(RealmManagement)
+                .EnumerateArray()
+                .Select(r => r.GetString())
+                .OfType<string>()
         ];
 
         composed.ShouldBe(["query-groups", "query-users"], ignoreOrder: true);
 
         foreach (string role in composed)
         {
-            management.Single(r => r.GetProperty("name").GetString() == role)
-                .GetProperty("composite").GetBoolean()
+            management
+                .Single(r => r.GetProperty("name").GetString() == role)
+                .GetProperty("composite")
+                .GetBoolean()
                 .ShouldBeFalse($"'{role}' composing further would widen the grant past the three roles ADR-052 names");
         }
     }
@@ -470,7 +542,9 @@ public class RealmImportTests
     public void The_resource_client_can_mint_no_token_of_its_own()
     {
         // Keycloak generates this client a secret on import, harmless only while it has no flow (§11.5).
-        JsonElement resource = Root.GetProperty("clients").EnumerateArray()
+        JsonElement resource = Root
+            .GetProperty("clients")
+            .EnumerateArray()
             .Single(c => c.GetProperty("clientId").GetString() == Audience);
 
         foreach (string flow in (string[])

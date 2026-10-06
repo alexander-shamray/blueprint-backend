@@ -198,7 +198,9 @@ public sealed class HttpPaymentProviderTests : IClassFixture<HttpPaymentProvider
             TestContext.Current.CancellationToken);
 
         using JsonDocument sent = JsonDocument.Parse(_server.LogEntries.ShouldHaveSingleItem().RequestMessage!.Body!);
-        sent.RootElement.EnumerateObject().Select(p => p.Name)
+        sent.RootElement
+            .EnumerateObject()
+            .Select(p => p.Name)
             .ShouldBe(["amountMinor", "currency", "payerId"], ignoreOrder: true);
         sent.RootElement.GetProperty("amountMinor").GetInt64().ShouldBe(4210);
         sent.RootElement.GetProperty("currency").GetString().ShouldBe("EUR");
@@ -258,7 +260,8 @@ public sealed class HttpPaymentProviderTests : IClassFixture<HttpPaymentProvider
         // caps it at ProviderHop.MaxRetryDelay; honoured, one long header
         // spends the total before the retries the budget test counts on.
         using ProviderHost own = OwnHost();
-        own.Server.Given(Request.Create().WithPath("/v1/authorisations").UsingPost())
+        own.Server
+            .Given(Request.Create().WithPath("/v1/authorisations").UsingPost())
             .AtPriority(0)
             .RespondWith(Response.Create().WithStatusCode(503).WithHeader("Retry-After", "60"));
 
@@ -280,7 +283,9 @@ public sealed class HttpPaymentProviderTests : IClassFixture<HttpPaymentProvider
         using UnavailableCount counted = CountUnavailable(factory);
 
         await Should.ThrowAsync<PaymentProviderUnavailableException>(() =>
-            factory.Services.CreateScope().ServiceProvider.GetRequiredService<IPaymentProvider>()
+            factory.Services
+                .CreateScope().ServiceProvider
+                .GetRequiredService<IPaymentProvider>()
                 .AuthoriseAsync(Authorisation(42.10m), TestContext.Current.CancellationToken));
 
         counted.Value.ShouldBe(ProviderHop.MaxRetryAttempts + 1, "one per refused attempt, not one per call");
@@ -293,7 +298,8 @@ public sealed class HttpPaymentProviderTests : IClassFixture<HttpPaymentProvider
         // read inside each attempt, it is a transport fault like any other.
         string padding = new('x', ProviderHop.MaxAnswerBytes);
         using ProviderHost own = OwnHost();
-        own.Server.Given(Request.Create().WithPath("/v1/authorisations").UsingPost())
+        own.Server
+            .Given(Request.Create().WithPath("/v1/authorisations").UsingPost())
             .AtPriority(0)
             .RespondWith(
                 Response
@@ -316,7 +322,8 @@ public sealed class HttpPaymentProviderTests : IClassFixture<HttpPaymentProvider
     {
         // Stubbed, since the simulator scripts neither status the translation table names.
         using ProviderHost own = OwnHost();
-        own.Server.Given(Request.Create().WithPath("/v1/authorisations").UsingPost())
+        own.Server
+            .Given(Request.Create().WithPath("/v1/authorisations").UsingPost())
             .AtPriority(0)
             .RespondWith(Response.Create().WithStatusCode(status));
 
@@ -435,7 +442,8 @@ public sealed class HttpPaymentProviderTests : IClassFixture<HttpPaymentProvider
     public async Task A_409_is_a_mismatch_and_is_not_retried()
     {
         // Stubbed here: a stateless simulator cannot know a key was used before.
-        _server.Given(Request.Create().WithPath("/v1/authorisations").UsingPost())
+        _server
+            .Given(Request.Create().WithPath("/v1/authorisations").UsingPost())
             .AtPriority(0)
             .RespondWith(Response.Create().WithStatusCode(409));
 
@@ -451,7 +459,8 @@ public sealed class HttpPaymentProviderTests : IClassFixture<HttpPaymentProvider
     [InlineData(200, "not json")]
     public async Task A_void_answered_with_anything_but_200_voided_is_not_a_void(int status, string body)
     {
-        _server.Given(Request.Create().WithPath("/v1/authorisations/*/void").UsingPost())
+        _server
+            .Given(Request.Create().WithPath("/v1/authorisations/*/void").UsingPost())
             .AtPriority(0)
             .RespondWith(Response.Create().WithStatusCode(status).WithBody(body));
         using UnavailableCount counted = CountUnavailable();
@@ -467,10 +476,12 @@ public sealed class HttpPaymentProviderTests : IClassFixture<HttpPaymentProvider
     [InlineData(308)]
     public async Task A_redirect_is_not_followed_and_is_unavailable(int status)
     {
-        _server.Given(Request.Create().WithPath("/v1/authorisations").UsingPost())
+        _server
+            .Given(Request.Create().WithPath("/v1/authorisations").UsingPost())
             .AtPriority(0)
             .RespondWith(Response.Create().WithStatusCode(status).WithHeader("Location", "/elsewhere"));
-        _server.Given(Request.Create().WithPath("/elsewhere").UsingPost())
+        _server
+            .Given(Request.Create().WithPath("/elsewhere").UsingPost())
             .AtPriority(0)
             .RespondWith(
                 Response
@@ -492,7 +503,8 @@ public sealed class HttpPaymentProviderTests : IClassFixture<HttpPaymentProvider
     {
         // A 401 is a wrong key: not retried, and not a verdict either, so it is
         // exactly the failing provider the counter exists to show first.
-        _server.Given(Request.Create().WithPath("/v1/authorisations").UsingPost())
+        _server
+            .Given(Request.Create().WithPath("/v1/authorisations").UsingPost())
             .AtPriority(0)
             .RespondWith(Response.Create().WithStatusCode(status));
         using UnavailableCount counted = CountUnavailable();
@@ -520,7 +532,8 @@ public sealed class HttpPaymentProviderTests : IClassFixture<HttpPaymentProvider
     public async Task A_base_url_with_a_path_and_no_trailing_slash_keeps_its_path()
     {
         using PaymentsApiFactory factory = new(UnreachableSql, UnreachableRabbit, _server.Urls[0] + "/psp");
-        _server.Given(Request.Create().WithPath("/psp/v1/authorisations").UsingPost())
+        _server
+            .Given(Request.Create().WithPath("/psp/v1/authorisations").UsingPost())
             .AtPriority(0)
             .RespondWith(
                 Response
@@ -528,7 +541,8 @@ public sealed class HttpPaymentProviderTests : IClassFixture<HttpPaymentProvider
                     .WithStatusCode(201)
                     .WithBody("{\"status\":\"approved\",\"reference\":\"psp_p\"}"));
 
-        AuthorisationResult result = await factory.Services.CreateScope().ServiceProvider
+        AuthorisationResult result = await factory.Services
+            .CreateScope().ServiceProvider
             .GetRequiredService<IPaymentProvider>()
             .AuthoriseAsync(Authorisation(42.10m), TestContext.Current.CancellationToken);
 
@@ -550,7 +564,8 @@ public sealed class HttpPaymentProviderTests : IClassFixture<HttpPaymentProvider
         }
         else
         {
-            Should.Throw<InvalidOperationException>(() => production.Services)
+            Should
+                .Throw<InvalidOperationException>(() => production.Services)
                 .Message.ShouldContain("plain HTTP outside Development");
         }
     }
@@ -560,7 +575,8 @@ public sealed class HttpPaymentProviderTests : IClassFixture<HttpPaymentProvider
     {
         using PaymentsApiFactory factory = new(UnreachableSql, UnreachableRabbit, providerBaseUrl: "");
 
-        Should.Throw<InvalidOperationException>(() => factory.Services)
+        Should
+            .Throw<InvalidOperationException>(() => factory.Services)
             .Message.ShouldContain("PaymentProvider:BaseUrl");
     }
 
@@ -599,7 +615,8 @@ public sealed class HttpPaymentProviderTests : IClassFixture<HttpPaymentProvider
             _server.Urls[0] + "/",
             providerApiKey: " ");
 
-        Should.Throw<InvalidOperationException>(() => factory.Services)
+        Should
+            .Throw<InvalidOperationException>(() => factory.Services)
             .Message.ShouldContain(
                 "PaymentProvider:ApiKey",
                 Case.Sensitive,
@@ -616,7 +633,8 @@ public sealed class HttpPaymentProviderTests : IClassFixture<HttpPaymentProvider
     [InlineData(402, "{\"status\":\"declined\",\"code\":\" \"}")]
     public async Task A_body_that_contradicts_its_status_is_unavailable_never_a_verdict(int status, string body)
     {
-        _server.Given(Request.Create().WithPath("/v1/authorisations").UsingPost())
+        _server
+            .Given(Request.Create().WithPath("/v1/authorisations").UsingPost())
             .AtPriority(0)
             .RespondWith(Response.Create().WithStatusCode(status).WithBody(body));
         using UnavailableCount counted = CountUnavailable();
@@ -633,7 +651,8 @@ public sealed class HttpPaymentProviderTests : IClassFixture<HttpPaymentProvider
     public async Task A_reference_longer_than_the_column_is_refused_before_it_is_recorded(int length, bool accepted)
     {
         string reference = new('r', length);
-        _server.Given(Request.Create().WithPath("/v1/authorisations").UsingPost())
+        _server
+            .Given(Request.Create().WithPath("/v1/authorisations").UsingPost())
             .AtPriority(0)
             .RespondWith(
                 Response
@@ -656,7 +675,8 @@ public sealed class HttpPaymentProviderTests : IClassFixture<HttpPaymentProvider
     public async Task A_decline_code_longer_than_the_column_is_refused_before_it_is_recorded(int length, bool accepted)
     {
         string code = new('c', length);
-        _server.Given(Request.Create().WithPath("/v1/authorisations").UsingPost())
+        _server
+            .Given(Request.Create().WithPath("/v1/authorisations").UsingPost())
             .AtPriority(0)
             .RespondWith(
                 Response

@@ -19,7 +19,9 @@ public class InventoryIntegrationEventMapperTests
     {
         ServiceCollection services = new();
         services.AddInventoryApplication();
-        return services.BuildServiceProvider().CreateScope().ServiceProvider
+        return services
+            .BuildServiceProvider()
+            .CreateScope().ServiceProvider
             .GetRequiredService<IIntegrationEventMapper>();
     }
 

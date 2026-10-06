@@ -146,7 +146,9 @@ public sealed class PaymentsCommandEndpointTests(ServiceFixture fixture) : IAsyn
         fixture.Provider.LogEntries.Count(e => e.RequestMessage!.Path == "/v1/authorisations").ShouldBe(
             2,
             "the retry replayed the provider call under the same key");
-        fixture.Provider.LogEntries.Select(e => e.RequestMessage!.Headers!["Idempotency-Key"].Single()).Distinct()
+        fixture.Provider.LogEntries
+            .Select(e => e.RequestMessage!.Headers!["Idempotency-Key"].Single())
+            .Distinct()
             .ShouldHaveSingleItem();
     }
 

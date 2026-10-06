@@ -64,7 +64,9 @@ public class AuthorizationPolicyTests(HostSmokeTests.UnreachableInfrastructureFa
         foreach (Endpoint endpoint in Endpoints.Where(e => names.Contains(Name(e))))
         {
             endpoint.Metadata.GetMetadata<IAllowAnonymous>().ShouldBeNull(Name(endpoint));
-            endpoint.Metadata.GetOrderedMetadata<IAuthorizeData>().Select(a => a.Policy)
+            endpoint.Metadata
+                .GetOrderedMetadata<IAuthorizeData>()
+                .Select(a => a.Policy)
                 .ShouldContain(InventoryPermissions.Admin);
         }
 

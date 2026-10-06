@@ -49,7 +49,8 @@ public sealed class UnreservedDespatchProjectionTests(ServiceFixture fixture) : 
 
         await fixture.ProcessOutboxBatchAsync();
 
-        Interlocked.Read(ref observed)
+        Interlocked
+            .Read(ref observed)
             .ShouldBe(1, "§13.3: a counter is a claim against the row, fired once per fact");
         (await fixture.ScalarAsync<int>(
             "SELECT Value = CAST(UnreservedCounted AS int) FROM inventory.Reservations WHERE OrderId = {0}",

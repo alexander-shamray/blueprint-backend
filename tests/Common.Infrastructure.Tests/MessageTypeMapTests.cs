@@ -49,7 +49,8 @@ public class MessageTypeMapTests
     [Fact]
     public void A_value_type_domain_event_is_in_the_map()
     {
-        Map().NameOf(typeof(SampleValueTypeDomainEvent))
+        Map()
+            .NameOf(typeof(SampleValueTypeDomainEvent))
             .ShouldBe("Common.Infrastructure.Tests.SampleValueTypeDomainEvent");
     }
 

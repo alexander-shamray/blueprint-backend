@@ -56,13 +56,15 @@ public sealed class StockLedgerTests(ServiceFixture fixture) : IAsyncLifetime
                 TestContext.Current.CancellationToken));
 
         outcome.Unavailable.ShouldBeEmpty();
-        outcome.Levels.Select(l => (l.ProductId, l.Available))
+        outcome.Levels
+            .Select(l => (l.ProductId, l.Available))
             .ShouldBe([(new ProductId(a), 3), (new ProductId(b), 0)], ignoreOrder: true);
         outcome.Levels.ShouldAllBe(
             l => l.UpdatedAt > DateTimeOffset.UtcNow.AddMinutes(-1),
             "the instant is the statement's, stamped under the row lock");
         // Version-7 ids are not creation-ordered under Guid.CompareTo, so the ledger's own comparer is asserted.
-        outcome.Levels.Select(l => l.ProductId.Value)
+        outcome.Levels
+            .Select(l => l.ProductId.Value)
             .ShouldBe(
                 outcome.Levels.Select(l => l.ProductId.Value).OrderBy(g => g),
                 "in ProductId order, whatever order the lines came in");

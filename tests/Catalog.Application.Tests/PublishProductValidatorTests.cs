@@ -47,9 +47,11 @@ public class PublishProductValidatorTests
     public void An_amount_under_storages_bound_once_rounded_to_its_currency_is_valid()
     {
         // A three-place currency keeps a fils that two places would round up past decimal(19,4)'s capacity.
-        Validator.Validate(Valid() with { Amount = 999_999_999_999_999.999m, Currency = "KWD" })
+        Validator
+            .Validate(Valid() with { Amount = 999_999_999_999_999.999m, Currency = "KWD" })
             .IsValid.ShouldBeTrue();
-        Validator.Validate(Valid() with { Amount = 999_999_999_999_998.5m, Currency = "JPY" })
+        Validator
+            .Validate(Valid() with { Amount = 999_999_999_999_998.5m, Currency = "JPY" })
             .IsValid.ShouldBeTrue();
     }
 

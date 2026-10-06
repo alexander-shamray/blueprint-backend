@@ -283,13 +283,15 @@ public sealed class ContactSourceTests : IClassFixture<ContactSourceTests.Keyclo
     public async Task A_redirect_is_not_followed_so_the_token_goes_nowhere_else()
     {
         Guid customer = Guid.CreateVersion7();
-        _keycloak.Given(Request.Create().WithPath(PathOf(customer)).UsingGet())
+        _keycloak
+            .Given(Request.Create().WithPath(PathOf(customer)).UsingGet())
             .RespondWith(
                 Response
                     .Create()
                     .WithStatusCode(302)
                     .WithHeader("Location", _keycloak.Urls[0] + "/elsewhere"));
-        _keycloak.Given(Request.Create().WithPath("/elsewhere").UsingGet())
+        _keycloak
+            .Given(Request.Create().WithPath("/elsewhere").UsingGet())
             .RespondWith(Response.Create().WithStatusCode(200).WithBody(User().ToJsonString()));
 
         await Should.ThrowAsync<HttpRequestException>(() => ReadAsync(customer));
@@ -340,7 +342,8 @@ public sealed class ContactSourceTests : IClassFixture<ContactSourceTests.Keyclo
     {
         using PatientFactory prefixed = new(_keycloak.Urls[0] + "/auth");
         Guid customer = Guid.CreateVersion7();
-        _keycloak.Given(Request.Create().WithPath("/auth" + PathOf(customer)).UsingGet())
+        _keycloak
+            .Given(Request.Create().WithPath("/auth" + PathOf(customer)).UsingGet())
             .RespondWith(Response.Create().WithStatusCode(200).WithBody(User().ToJsonString()));
 
         (await ReadAsync(prefixed, customer)).ShouldBeOfType<ContactLookup.Found>();
@@ -376,7 +379,8 @@ public sealed class ContactSourceTests : IClassFixture<ContactSourceTests.Keyclo
         Exception refusal = Refusal(() => _factory.WithWebHostBuilder(b =>
             b.UseSetting($"{ServiceIdentityOptions.SectionName}:ClientSecret", "")));
 
-        refusal.ShouldBeOfType<OptionsValidationException>()
+        refusal
+            .ShouldBeOfType<OptionsValidationException>()
             .Message.ShouldContain(nameof(ServiceIdentityOptions.ClientSecret));
     }
 
