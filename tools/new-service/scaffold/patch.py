@@ -737,43 +737,6 @@ WORKER_PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
     # suite's own unknown-path test says so — so the two tests that name the
     # document leave, and the suite's summary stops describing it. The
     # authenticated factory stays: the unknown-path test is its other user.
-    "tests/Catalog.Api.Tests/RequestExampleRuleTests.cs": (
-        ("using System.Net;\nusing System.Text.Json;\n", ""),
-        (
-            "/// <summary>Each body this host binds has an example its validator passes, and the document carries "
-            "it.</summary>\n",
-            "/// <summary>Each body this host binds has an example its validator passes.</summary>\n",
-        ),
-        (
-            "\n"
-            "    [Fact]\n"
-            "    public async Task The_served_document_carries_an_example_on_every_request_body()\n"
-            "    {\n"
-            "        using JsonDocument document = await DocumentAsync();\n"
-            "\n"
-            "        // Counted against the endpoint table, so a document that lost its bodies is not read as clean.\n"
-            "        RequestExampleRule.Bodies(document).Count.ShouldBe(RequestExampleRule.Bodied(Endpoints).Count);\n"
-            "        RequestExampleRule.Unexampled(document).ShouldBeEmpty();\n"
-            "    }\n",
-            "",
-        ),
-        (
-            "\n"
-            "    private static async Task<JsonDocument> DocumentAsync()\n"
-            "    {\n"
-            "        using HostSmokeTests.AuthenticatedUnreachableFactory authenticated = new();\n"
-            "        using HttpClient client = authenticated.CreateClient();\n"
-            "        using HttpRequestMessage request = new(HttpMethod.Get, \"/openapi/v1.json\");\n"
-            "        request.Headers.Add(TestAuthHandler.UserHeader, Guid.CreateVersion7().ToString());\n"
-            "\n"
-            "        HttpResponseMessage response = await client.SendAsync(request, TestContext.Current.CancellationToken);\n"
-            "        response.StatusCode.ShouldBe(HttpStatusCode.OK);\n"
-            "\n"
-            "        return JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));\n"
-            "    }\n",
-            "",
-        ),
-    ),
     "tests/Catalog.Api.Tests/HostSmokeTests.cs": (
         (
             "/// <summary>The host builds under <c>ValidateOnBuild</c> and serves its probes (§13.5) and OpenAPI "
@@ -809,6 +772,46 @@ WORKER_PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
             "\n"
             "        response.StatusCode.ShouldBe(HttpStatusCode.OK);\n"
             "        response.Content.Headers.ContentType!.MediaType.ShouldBe(\"application/json\");\n"
+            "    }\n",
+            "",
+        ),
+    ),
+    # The example suite's document half asks for the document as the smoke
+    # suite does, so it leaves with it; its endpoint half has nothing a
+    # worker lacks, and stays.
+    "tests/Catalog.Api.Tests/RequestExampleRuleTests.cs": (
+        ("using System.Net;\nusing System.Text.Json;\n", ""),
+        (
+            "/// <summary>Each body this host binds has an example its validator passes, and the document carries "
+            "it.</summary>\n",
+            "/// <summary>Each body this host binds has an example its validator passes.</summary>\n",
+        ),
+        (
+            "\n"
+            "    [Fact]\n"
+            "    public async Task The_served_document_carries_an_example_on_every_request_body()\n"
+            "    {\n"
+            "        using JsonDocument document = await DocumentAsync();\n"
+            "\n"
+            "        // Counted against the endpoint table, so a document that lost its bodies is not read as clean.\n"
+            "        RequestExampleRule.Bodies(document).Count.ShouldBe(RequestExampleRule.Bodied(Endpoints).Count);\n"
+            "        RequestExampleRule.Unexampled(document).ShouldBeEmpty();\n"
+            "    }\n",
+            "",
+        ),
+        (
+            "\n"
+            "    private static async Task<JsonDocument> DocumentAsync()\n"
+            "    {\n"
+            "        using HostSmokeTests.AuthenticatedUnreachableFactory authenticated = new();\n"
+            "        using HttpClient client = authenticated.CreateClient();\n"
+            "        using HttpRequestMessage request = new(HttpMethod.Get, \"/openapi/v1.json\");\n"
+            "        request.Headers.Add(TestAuthHandler.UserHeader, Guid.CreateVersion7().ToString());\n"
+            "\n"
+            "        HttpResponseMessage response = await client.SendAsync(request, TestContext.Current.CancellationToken);\n"
+            "        response.StatusCode.ShouldBe(HttpStatusCode.OK);\n"
+            "\n"
+            "        return JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));\n"
             "    }\n",
             "",
         ),
