@@ -122,3 +122,11 @@ deploy/keycloak/** text eol=lf
 # directory is one thing and the map's bytes do not depend on who checked it
 # out.
 .github/locality-gate/** text eol=lf
+
+# deploy/compose/otel/, keycloak/ and psp-simulator/ join on redis/'s
+# argument: the collector, Keycloak and WireMock read these from bind mounts on
+# a Linux daemon, so their bytes are fixed here rather than by each checkout's
+# autocrlf, whether or not a given parser would tolerate a CR.
+deploy/compose/otel/** text eol=lf
+deploy/compose/keycloak/** text eol=lf
+deploy/compose/psp-simulator/** text eol=lf
