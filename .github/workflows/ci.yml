@@ -788,10 +788,11 @@ jobs:
           .
 
       # ADR-071: an SBOM from the built image, as SPDX JSON in a workflow
-      # artefact until a registry exists to attach it to.
+      # artefact until a registry exists to attach it to. A third party's
+      # action reads the image, so it is pinned to a commit and not a tag.
       - name: SBOM for ${{ matrix.image }}
         if: ${{ needs.changes.outputs[matrix.filter] == 'true' }}
-        uses: anchore/sbom-action@v0
+        uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
         with:
           image: ${{ matrix.image }}:${{ github.sha }}
           format: spdx-json
