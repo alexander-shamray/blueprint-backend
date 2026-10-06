@@ -72,16 +72,16 @@ jobs:
       - name: Start and wait for healthy
         run: docker compose -f deploy/compose/docker-compose.yml up -d --wait --quiet-pull
 
-      # The grafana service declares no healthcheck, so --wait proved only that
-      # it started. A rule file its Prometheus stopped reading would start
-      # green, so the loaded count is held to the file's, and each dashboard's
-      # uid is read from its own JSON rather than written here.
+      # --wait proved the grafana service's components are up, not what they
+      # loaded. A rule file its Prometheus stopped reading would start green,
+      # so the loaded count is held to the file's, polled briefly for the first
+      # evaluation, and each dashboard's uid is read from its own JSON.
       - name: The local Grafana loaded the platform rules and dashboards
         run: |
           expected=$(grep -cE '^\s*- alert:' deploy/observability/alerts/platform-alerts.yaml)
           [ "$expected" -gt 0 ] || { echo "::error::no alert rule counted in the file"; exit 1; }
           loaded=
-          for attempt in $(seq 60); do
+          for attempt in $(seq 15); do
             loaded=$(curl -sf http://localhost:3000/api/prometheus/prometheus/api/v1/rules |
               jq '[.data.groups[].rules[] | select(.type == "alerting")] | length') &&
               [ "$loaded" = "$expected" ] && break
