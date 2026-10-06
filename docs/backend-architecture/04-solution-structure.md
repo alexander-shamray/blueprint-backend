@@ -837,7 +837,8 @@ builder.Services.AddOrderingInfrastructure(builder.Configuration);  // above
 builder.Services
     .AddAuthorizationBuilder()
     .AddPolicy(OrderingPermissions.Write, p => p.RequirePermission(OrderingPermissions.Write))
-    .AddPolicy(OrderingPermissions.Cancel, p => p.RequirePermission(OrderingPermissions.Cancel));
+    .AddPolicy(OrderingPermissions.Cancel, p => p.RequirePermission(OrderingPermissions.Cancel))
+    .AddPolicy(OrderingPermissions.DeliveryAddress, p => p.RequirePermission(OrderingPermissions.DeliveryAddress));
 
 WebApplication app = builder.Build();
 

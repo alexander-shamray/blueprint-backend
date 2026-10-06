@@ -604,11 +604,11 @@ Both images carry the **same tag**, which is what lets `values.yaml` hold one
 (§7.4). A migrator built from a different commit than the API it precedes is
 the exact failure the migration hook exists to prevent.
 
-**What is built is inventoried, and what is pushed is signed.** The job that
-pushes signs each digest keyless and attaches its SBOM and provenance, and the
-rollout verifies the signature before Helm runs
+**What is built is inventoried, and what is pushed is to be signed.** Once a
+registry exists, the job that pushes signs each digest keyless and attaches its
+SBOM and provenance, and the rollout verifies the signature before Helm runs
 ([ADR-071](adr/ADR-071-every-image-carries-an-sbom-and-signing-waits-on-a-registry.md));
-until a registry exists, the build stops at the SBOM.
+until then nothing is signed or verified, and the build stops at the SBOM.
 
 ## 15.3 Deployment
 
