@@ -31,6 +31,16 @@ ROUTES = (
      f'{CBX} search "X" --limit 3 --session <tag> --json'),
 )
 
+# The MCP tool asking each route's question; `index-search-hint.py` keeps the
+# same map, and `test_index_query_hint.py` holds the two equal.
+TOOLS = {
+    "search": "search_code",
+    "explain": "explain_code",
+    "symbol": "find_symbol",
+    "refs": "find_refs",
+    "impact": "impact_of",
+}
+
 # The two commands whose arguments are a task rather than an option.
 TASKS = re.compile(r"^/(?:ship|branch)(?=\s|$)")
 
@@ -50,10 +60,12 @@ def hint(prompt: str) -> str | None:
     text = question(prompt)
     for kind, pattern, command in ROUTES:
         if re.search(pattern, text):
+            tool = "mcp__codebase-index__" + TOOLS[command.split()[2]]
             return (
-                f"This reads as a {kind} question, so load the codebase-index "
-                "skill and query the index before any Grep or Read of the tree, "
-                f"starting with `{command}`. Pick one session tag for this "
+                f"This reads as a {kind} question, so query the code index "
+                f"before any Grep or Read of the tree: the MCP tool `{tool}`, "
+                "deferred, so load it with ToolSearch first, or the "
+                f"codebase-index skill and `{command}`. Pick one session tag for this "
                 "conversation and pass it to every search and explain; start a "
                 "new one after a clear or compaction, and never hand it to a "
                 "subagent. Read only the recommended line ranges, and treat an "

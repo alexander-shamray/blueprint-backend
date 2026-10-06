@@ -108,6 +108,16 @@
             "statusMessage": "refreshing the code index"
           }
         ]
+      },
+      {
+        "matcher": "Grep|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "py -3.12 -P -c \"import os, runpy; runpy.run_path(os.environ['CLAUDE_PROJECT_DIR'] + '/.claude/hooks/index-search-hint.py', run_name='__main__')\"",
+            "timeout": 5
+          }
+        ]
       }
     ],
     "SessionStart": [
