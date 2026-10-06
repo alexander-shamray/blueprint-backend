@@ -61,7 +61,8 @@ command -v py >/dev/null 2>&1 && python="py -3.12"
 # expanded to the servers defined now; never the file, whose `permissions` rows
 # are the main checkout's own grants. Definitions are found by walking up.
 settings=.claude/settings.local.json
-if [ -f "$settings" ] && [ ! -e "$path/$settings" ]; then
+# -L as well as -e, because -e follows a link and a dangling one reads absent.
+if [ -f "$settings" ] && [ ! -L "$path/$settings" ] && [ ! -e "$path/$settings" ]; then
   # -I keeps a checkout-root json.py off the import path, as the hooks' -P does.
   if ! $python -I - "$settings" "$path/$settings" .mcp.json <<'PY'; then
 import json, os, sys
