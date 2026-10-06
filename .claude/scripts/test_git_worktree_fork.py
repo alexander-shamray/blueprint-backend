@@ -31,9 +31,11 @@ if [ "$HOOK" = yes ]; then
   git -C "$root/origin" -c user.name=t -c user.email=t@t commit -q -m hook
 fi
 git clone -q "$root/origin" "$root/checkout"
-# Committed after the clone, so only origin/main carries the dangling link.
+# Committed after the clone, so only origin/main carries the dangling link. Its
+# target is the native spelling, which a Windows link resolves where bash does.
 if [ "$LINK" = yes ]; then
-  blob=$(printf %s "$root/outside.json" | git -C "$root/origin" hash-object -w --stdin)
+  native=$(cd "$root" && { pwd -W 2>/dev/null || pwd; })
+  blob=$(printf %s "$native/outside.json" | git -C "$root/origin" hash-object -w --stdin)
   git -C "$root/origin" update-index --add --cacheinfo "120000,$blob,.claude/settings.local.json"
   git -C "$root/origin" -c user.name=t -c user.email=t@t commit -q -m link
   git -C "$root/checkout" fetch -q origin
