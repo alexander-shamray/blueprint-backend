@@ -51,6 +51,7 @@ SEARCHES = (
     "(cd docs && grep -rn Saga .); grep -rn Retry src",
     "grep -rn Retry \\\n  src",
     "git status --short\ngrep -rn Retry src",
+    "grep -rn MAX_RETRIES src",
 )
 
 # Each searches the tree for text, which grep lists whole and the index does not.
@@ -59,6 +60,8 @@ TEXT = (
     "grep -rn health/ready src 2>/dev/null | head -5",
     'grep -rn "connection refused" src',
     "grep -rn timeout src",
+    "grep -rn TODO src",
+    'grep -rn "appsettings.json" src',
     "rg 'Claim.*Async' src",
 )
 
