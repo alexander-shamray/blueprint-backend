@@ -134,7 +134,8 @@ here, the streams that would have said so are gone, and the loser may be the
 run carrying the newest edit. The worker runs from the checkout's parent and
 only the CLI inside it, because Windows will not delete a live process's
 working directory and `/ship` removes a worktree moments after its last call.
-The lock and the CLI's own run still hold files there while they last (#516).
+The lock and the CLI's own run still hold files there while they last, which
+is why `/ship`'s `git-worktree-remove.sh` takes the lock before it removes.
 
 **Both shell tools are in the matcher, `Bash` and `PowerShell`, because
 agents write through them more than through any edit tool** — a commit, a
@@ -671,15 +672,17 @@ Ordinals are kept even where an entry is closed, so a cross-reference to "the
 fourth" still lands, and each entry says its own state. Read the entries; do
 not count them here.
 
-Two are `/ship`'s, and one of them is closed:
-`Bash(git worktree remove:*)` admits the `-f` that discards work, and
+Two are `/ship`'s, and both are closed:
+`Bash(git worktree remove:*)` admitted the `-f` that discards work, and
 `Bash(gh pr merge --rebase:*)` admitted a trailing `--admin` that merges past
-failing checks. The second is withdrawn: `gh-pr-merge.sh` takes a number and a
+failing checks. Both are withdrawn. `gh-pr-merge.sh` takes a number and a
 head oid, spells `--rebase --match-head-commit` itself, and refuses a pull
 request that is not the checked-out branch's own, from this repository, into
-`main`. A helper is still owed for the first; until someone with the
-`Edit(.claude/scripts/**)` deny lifted writes it, `/ship` carries it by
-reporting its literal invocations, flags and all.
+`main`. `git-worktree-remove.sh` takes one `.claude/worktrees/<name>` path,
+run from the main checkout, refuses a directory that is not a linked worktree
+of this repository, and spells `git worktree remove` with no flag; it first
+waits, to a bound it declares, for the worktree's code-index refresh lock,
+because Windows will not delete a file a running refresh holds (#516).
 
 **Two more sat in the sweep command files rather than in this paragraph, and
 both are now closed — which is worth recording because they were closed the
