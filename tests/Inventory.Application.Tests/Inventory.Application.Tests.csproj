@@ -25,6 +25,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Services\Inventory\Inventory.Application\Inventory.Application.csproj" />
+    <!-- CommandFingerprintRule's selection of an idempotent command, the one every gate over them reads. -->
+    <ProjectReference Include="..\Common.TestSupport\Common.TestSupport.csproj" />
     <!-- No Inventory.TestSupport and no Docker: the Dapper queries run against a real database in Inventory.Api.Tests.
          Inventory.Infrastructure is referenced so §9.4's payload contract meets the real registration. -->
     <ProjectReference Include="..\..\src\Services\Inventory\Inventory.Infrastructure\Inventory.Infrastructure.csproj" />

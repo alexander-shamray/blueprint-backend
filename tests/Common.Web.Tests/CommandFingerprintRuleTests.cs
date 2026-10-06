@@ -407,6 +407,15 @@ public class CommandFingerprintRuleTests
     }
 
     [Fact]
+    public void A_struct_command_is_selected_as_a_class_one_is()
+    {
+        Type[] selected = [.. CommandFingerprintRule.IdempotentCommands(typeof(CommandFingerprintRuleTests).Assembly)];
+
+        selected.ShouldContain(typeof(StructWithAHashSet));
+        selected.ShouldContain(typeof(Positional));
+    }
+
+    [Fact]
     public void A_bad_member_one_level_down_is_named_with_its_path()
     {
         CommandFingerprintRule

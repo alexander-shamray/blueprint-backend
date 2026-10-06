@@ -25,6 +25,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Services\Ordering\Ordering.Application\Ordering.Application.csproj" />
+    <!-- CommandFingerprintRule's selection of an idempotent command, the one every gate over them reads. -->
+    <ProjectReference Include="..\Common.TestSupport\Common.TestSupport.csproj" />
     <!-- No Ordering.TestSupport: Ordering's handler tests live in Ordering.Api.Tests, because ICurrentUser is
          HttpContextCurrentUser (§12.4). Ordering.Infrastructure is referenced for AddOrderingInfrastructure. -->
     <ProjectReference Include="..\..\src\Services\Ordering\Ordering.Infrastructure\Ordering.Infrastructure.csproj" />

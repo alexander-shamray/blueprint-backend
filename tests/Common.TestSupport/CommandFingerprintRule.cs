@@ -65,9 +65,9 @@ public static class CommandFingerprintRule
                 .GetValue(null)!)
     ];
 
-    /// <summary>An assembly's idempotent commands, as <see cref="WriteEndpointRule"/> selects them too.</summary>
+    /// <summary>An assembly's idempotent commands: the one selection every gate over them reads.</summary>
     /// <remarks>A struct as well as a class: the pipeline's generic TCommand fingerprints either (ADR-057).</remarks>
-    internal static IEnumerable<Type> IdempotentCommands(Assembly application) =>
+    public static IEnumerable<Type> IdempotentCommands(Assembly application) =>
         application
             .GetTypes()
             .Where(typeof(IIdempotentCommand).IsAssignableFrom)
