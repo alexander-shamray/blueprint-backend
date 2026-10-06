@@ -457,6 +457,7 @@ class OneRoute(Scratch):
         self.assertIn('cbx refs "MapPut" --json', text)
         self.assertIn('cbx symbol "MapPost" --json', text)
         self.assertIn("codebase-index skill", text)
+        self.assertIn("from the worktree's root", text)
         self.assertNotIn("mcp__", text)
 
     def test_a_submodule_is_not_a_worktree(self):
