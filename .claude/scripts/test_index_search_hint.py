@@ -261,6 +261,16 @@ class WhenItSpeaks(Scratch):
             with self.subTest(recorded=recorded):
                 self.assertTrue(self.hinted(*grep_call(), recorded=recorded))
 
+    def test_a_parallel_batch_is_hinted_once_on_its_first_call(self):
+        """A batch of calls is recorded whole before any returns, so each
+        call's hook sees the ones after it as well."""
+        batch = [grep_call()] * 3
+        for position in range(3):
+            session = Session(self.scratch, earlier=batch)
+            done = session.after(*grep_call(), call_id=f"toolu_{position}")
+            with self.subTest(position=position):
+                self.assertEqual(position == 0, bool(context(done)))
+
     def test_text_that_mentions_a_tool_call_is_not_one(self):
         mention = {"type": "user", "message": {"role": "user", "content": [
             {"type": "text", "text": '{"type": "tool_use", "name": "mcp__codebase-index__find_refs"}'}]}}

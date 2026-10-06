@@ -287,12 +287,15 @@ def answer(event: dict) -> str | None:
     transcript = event.get("transcript_path")
     if pattern is None or not isinstance(transcript, str) or not transcript:
         return None
-    current = event.get("tool_use_id")
+    # Only the searches before this call count: a batch of parallel calls is
+    # recorded whole before any of them returns.
+    current, before = event.get("tool_use_id"), True
     searches = 1
     for call_id, called, called_with, called_in in calls(Path(transcript)):
         if lookup(called, called_with):
             return None
-        if call_id != current and search(called, called_with, called_in or cwd) is not None:
+        before = before and call_id != current
+        if before and search(called, called_with, called_in or cwd) is not None:
             searches += 1
     if (searches - 1) % EVERY:
         return None
