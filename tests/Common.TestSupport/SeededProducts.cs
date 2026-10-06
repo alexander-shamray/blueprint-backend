@@ -38,7 +38,8 @@ public static partial class SeededProducts
     }
 
     [GeneratedRegex(
-        @"^\| `(?<id>[0-9a-f-]{36})` \| (?<name>[^|]+?) \| (?<amount>\d+\.\d+) (?<currency>[A-Z]{3}) \| (?<onHand>\d+) \|$")]
+        @"^\| `(?<id>[0-9a-f-]{36})` \| (?<name>[^|]+?) \| " +
+        @"(?<amount>\d+\.\d+) (?<currency>[A-Z]{3}) \| (?<onHand>\d+) \|$")]
     private static partial Regex Row();
 }
 
