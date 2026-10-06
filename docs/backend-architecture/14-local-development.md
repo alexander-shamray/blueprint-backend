@@ -46,12 +46,13 @@ as any one file's contents:
 
 ```yaml
 # the model: deploy/compose/docker-compose.yml, infrastructure.yml
-# and services/*.yml, as one document
+# and services/*.yml, as one document; each image's tag is elided,
+# because infrastructure.yml pins it and a copy here would go stale
 name: commerce
 
 services:
   sql:
-    image: mcr.microsoft.com/mssql/server:2022-CU26-ubuntu-22.04
+    image: mcr.microsoft.com/mssql/server:…
     environment:
       ACCEPT_EULA: "Y"
       MSSQL_SA_PASSWORD: "${SQL_PASSWORD:-Local_Dev_Pa55w0rd!}"
@@ -72,7 +73,7 @@ services:
 
   # Two Redis instances, because eviction policy cannot be shared — §8.1.
   redis-cache:
-    image: redis:7-alpine
+    image: redis:…
     # §8.1's per-service ACL users, as the configuration file both instances
     # read: each service's user reaches its own prefix only, and the default
     # user may PING and nothing else.
@@ -83,7 +84,7 @@ services:
       test: ["CMD", "redis-cli", "ping"]
 
   redis-coordination:
-    image: redis:7-alpine
+    image: redis:…
     # noeviction: locks and idempotency keys must never be evicted. The
     # {service}:denylist: namespace §8.1 reserves beside them has no writer
     # (ADR-033). Appendonly so a restart does not silently release held locks.
@@ -118,7 +119,7 @@ services:
       retries: 5
 
   keycloak:
-    image: quay.io/keycloak/keycloak:26.0
+    image: quay.io/keycloak/keycloak:…
     command: start-dev --import-realm
     environment:
       KC_BOOTSTRAP_ADMIN_USERNAME: admin
@@ -151,13 +152,13 @@ services:
       start_period: 20s
 
   otel-collector:
-    image: otel/opentelemetry-collector-contrib:0.158.0
+    image: otel/opentelemetry-collector-contrib:…
     command: [ "--config=/etc/otel/config.yaml" ]
     volumes: [ ./otel/config.yaml:/etc/otel/config.yaml:ro ]
     ports: [ "127.0.0.1:4317:4317", "127.0.0.1:4318:4318" ]
 
   grafana:
-    image: grafana/otel-lgtm:0.30.1
+    image: grafana/otel-lgtm:…
     # The bundled Prometheus takes no rule-file flag or variable, so its own
     # config gains the rule_files key at start instead of being copied here;
     # the guard keeps a restart from appending it twice. Only the loaded file
