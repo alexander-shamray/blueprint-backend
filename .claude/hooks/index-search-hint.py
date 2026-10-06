@@ -254,7 +254,7 @@ def shell_search(command: str, cwd: str, escape: str = "\\") -> str | None:
         else:
             continue
         pattern, paths, filters, recursive = None, [], [], False
-        index = 0
+        stdin, index = False, 0
         while index < len(argv):
             word = argv[index]
             if word in VALUED and index + 1 < len(argv):
@@ -274,11 +274,16 @@ def shell_search(command: str, cwd: str, escape: str = "\\") -> str | None:
             elif not word.startswith("-") or word == "-":
                 if pattern is None:
                     pattern = word
+                elif word == "-":
+                    stdin = True
                 else:
                     paths.append(word)
             index += 1
         if program == "rg" and paths:
             tree = True
+        # A `-` operand with no path reads standard input, as a pipe does.
+        if stdin and not paths:
+            tree = recursive = False
         if (tree or recursive) and pattern and not prose_only(shown(paths, base, cwd), filters) \
                 and not files_only(paths, base) and not elsewhere(paths, base, cwd):
             return pattern
