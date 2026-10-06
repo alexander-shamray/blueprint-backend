@@ -40,6 +40,9 @@ SEARCHES = {
     "cd src && grep -rn PlaceOrderHandler .": "find_refs",
     "/usr/bin/grep -rn Saga src": "find_refs",
     "rg -g '!*.md' OutboxRelay src": "find_refs",
+    "git grep -n OutboxRelay -- ':!*.md'": "find_refs",
+    "git grep -n OutboxRelay -- ':^docs'": "find_refs",
+    "git grep -n OutboxRelay -- ':(exclude)*.md'": "find_refs",
     "grep -r -e 'Retry(' src": "find_refs",
 }
 

@@ -50,6 +50,8 @@ VALUED = {"-e", "-f", "-A", "-B", "-C", "-m", "-g", "-t", "-T", "-M",
 # not one the index answers, as the skill says.
 PROSE = re.compile(r"(?:^|[\\/])docs(?:[\\/]|$)|\.md$|^md$|^\*\.md$|^markdown$")
 
+EXCLUDES = ("!", ":!", ":^", ":(exclude)")
+
 IDENTIFIER = re.compile(r"^[^\W\d]\w*(?:\.[^\W\d]\w*)*$")
 
 
@@ -82,9 +84,10 @@ def segments(command: str):
 
 def prose_only(paths: list[str], filters: list[str]) -> bool:
     """True when the search reads only prose: its file filters, where it
-    names any, or else the paths it names; a `!` filter excludes."""
+    names any, or else the paths it names; an rg `!` glob or a git exclude
+    pathspec leaves prose out rather than reading it."""
     named = filters or paths
-    return bool(named) and all(not item.startswith("!") and PROSE.search(item.strip("'\"")) for item in named)
+    return bool(named) and all(not item.startswith(EXCLUDES) and PROSE.search(item.strip("'\"")) for item in named)
 
 
 def located(cwd: str, path: str) -> Path:
