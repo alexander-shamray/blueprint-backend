@@ -15,6 +15,9 @@ public sealed class ServiceFixture()
     /// <summary>The provider, serving the simulator's mappings (§14.1); a test counts charges by its log.</summary>
     public WireMockServer Provider { get; private set; } = null!;
 
+    /// <summary>The broker as <c>payments-svc</c> reaches it, for a test whose bus is its own (ADR-036).</summary>
+    public string BrokerAddress => BrokerConnectionString;
+
     /// <summary>The host's record of the order, observed.</summary>
     public ObservedOrderStore Orders => Factory.Orders;
 
