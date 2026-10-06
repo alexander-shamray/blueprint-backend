@@ -120,7 +120,7 @@ The `cbx` wrapper is the other half — whitelist and
 `CBX_NO_SKILL_AUTO_UPDATE=1` — and is not a substitute for the hook.
 
 **`PostToolUse` runs `.claude/hooks/refresh-index.py` after every edit and
-every Bash call**, over the checkout the **edited path** belongs to, resolved
+every shell call**, over the checkout the **edited path** belongs to, resolved
 before it is walked. `cwd` answers when the event names no file,
 `CLAUDE_PROJECT_DIR` when it names neither, and the working directory last,
 and they differ exactly when it matters: an edit is admitted against the
@@ -133,11 +133,12 @@ failed goes back rather than counting as served: contention is what fails
 here, the streams that would have said so are gone, and the loser may be the
 run carrying the newest edit.
 
-**Bash is in the matcher because agents write through it more than through
-any edit tool** — a commit, a pull, a rebase, a formatter, an edit script —
-and each left the index describing the tree it replaced while it reported
-itself fresh. A Bash call names no file, so its `cwd` decides, and that field
-follows the shell into a worktree. It is not gated on the command, which would
+**Both shell tools are in the matcher, `Bash` and `PowerShell`, because
+agents write through them more than through any edit tool** — a commit, a
+pull, a rebase, a formatter, an edit script — and each left the index
+describing the tree it replaced while it reported itself fresh. A shell call
+names no file, so its `cwd` decides, and that field follows the shell into a
+worktree. It is not gated on the command, which would
 miss every helper and script: a call that wrote nothing costs one `update`
 that changes nothing, measured at about a second on this corpus, detached and
 behind the lock's coalescing. A commit changes no file, and that same `update`
