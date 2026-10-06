@@ -48,16 +48,17 @@ public sealed class NotificationsEventsTests(ServiceFixture fixture) : IAsyncLif
 
         string[] bound = await fixture.BindingsAsync(MessagingRegistration.EventsQueue);
 
-        foreach (string exchange in new[]
-                 {
-                     "Common.Contracts.Ordering.V1:OrderPlaced",
-                     "Common.Contracts.Ordering.V1:OrderConfirmed",
-                     "Common.Contracts.Ordering.V1:OrderCancelled",
-                     "Common.Contracts.Payments.V1:PaymentDeclined",
-                     "Common.Contracts.Payments.V1:PaymentRefunded",
-                     "Common.Contracts.Shipping.V1:ShipmentDispatched",
-                     "Common.Contracts.Shipping.V1:ShipmentDelivered"
-                 })
+        string[] exchanges =
+        [
+            "Common.Contracts.Ordering.V1:OrderPlaced",
+            "Common.Contracts.Ordering.V1:OrderConfirmed",
+            "Common.Contracts.Ordering.V1:OrderCancelled",
+            "Common.Contracts.Payments.V1:PaymentDeclined",
+            "Common.Contracts.Payments.V1:PaymentRefunded",
+            "Common.Contracts.Shipping.V1:ShipmentDispatched",
+            "Common.Contracts.Shipping.V1:ShipmentDelivered"
+        ];
+        foreach (string exchange in exchanges)
         {
             bound.ShouldContain(exchange, $"{exchange} is in §3.2's Consumes column and is not bound");
         }

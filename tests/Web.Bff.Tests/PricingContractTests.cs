@@ -106,7 +106,9 @@ public sealed class PricingContractTests : IAsyncLifetime
     private static (Guid ProductId, int Quantity)[] Basket(
         PricingInteraction interaction,
         IReadOnlyDictionary<string, Guid> published) =>
-        [.. PricingContract
+    [
+        .. PricingContract
             .RequestedIds(interaction, published)
-            .Select(id => (id, 1))];
+            .Select(id => (id, 1))
+    ];
 }

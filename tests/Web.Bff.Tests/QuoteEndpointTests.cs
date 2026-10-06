@@ -262,9 +262,11 @@ public sealed class QuoteEndpointTests : IAsyncLifetime
         using HttpClient client = Caller();
 
         (Guid ProductId, int Quantity)[] lines =
-            [.. Enumerable
+        [
+            .. Enumerable
                 .Range(0, OrderLimits.MaxLines + 1)
-                .Select(_ => (Guid.CreateVersion7(), 1))];
+                .Select(_ => (Guid.CreateVersion7(), 1))
+        ];
 
         HttpResponseMessage response = await client.PostQuote("GBP", TestContext.Current.CancellationToken, lines);
 
@@ -276,7 +278,8 @@ public sealed class QuoteEndpointTests : IAsyncLifetime
     public async Task A_quote_at_the_line_ceiling_is_priced_in_one_hop()
     {
         (Guid ProductId, int Quantity)[] lines =
-            [.. Enumerable
+        [
+            .. Enumerable
                 .Range(0, OrderLimits.MaxLines)
                 .Select(i =>
                 {
@@ -284,7 +287,8 @@ public sealed class QuoteEndpointTests : IAsyncLifetime
                     _catalog.Prices[id] = ($"Product {i}", 1.00m, "GBP");
 
                     return (id, 1);
-                })];
+                })
+        ];
 
         using HttpClient client = Caller();
 

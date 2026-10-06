@@ -121,9 +121,7 @@ public sealed class RedactingScopeProvider(IExternalScopeProvider inner, bool ow
 
         foreach (KeyValuePair<string, object?> pair in pairs)
         {
-            scrubbed.Add(IsSensitive(pair)
-                ? new KeyValuePair<string, object?>(pair.Key, Redacted)
-                : pair);
+            scrubbed.Add(IsSensitive(pair) ? new KeyValuePair<string, object?>(pair.Key, Redacted) : pair);
         }
 
         return new RedactedScope(scrubbed);
