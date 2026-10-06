@@ -262,8 +262,8 @@ notifications:
 bash deploy/helm/smoke.sh          # HELM=/path/to/helm if it is not on PATH
 ```
 
-**Seventy-two deliberate defects have been run through it and seventy-one
-turned a green run red** — a renamed Service, a CPU limit, a grace period back at the
+**Every deliberate defect run through it but one turned a green run red**, and
+`smoke.sh`'s own refusal cases keep many of them — a renamed Service, a CPU limit, a grace period back at the
 Kubernetes default, a dropped hook annotation, a connection string moved into a
 ConfigMap, a second chart growing client credentials, an `envFrom` naming a
 ConfigMap nothing renders, a rollout checksum that missed the gateway's own, a
@@ -281,8 +281,8 @@ for a registry and illegal for Kubernetes, in six spellings, a tag that overruns
 the name it derives, an image reference missing its registry, a canary whose
 pods the stable Service would never select.
 
-**The tally is this branch's and it grows**; what does not grow is the count of
-defects that got past the gate, which is one. That is the number worth reading,
+**The list grows**; what does not grow is the count of defects that got past
+the gate, which is one. That is the number worth reading,
 and it is why the sentence below has its own paragraph.
 
 The one is the reason this paragraph exists. "The gateway renders no
