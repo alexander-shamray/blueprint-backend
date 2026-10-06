@@ -58,6 +58,7 @@ SEARCHES = (
     "# don't touch docs\ngrep -rn ClaimAsync src\n# that's it",
     "echo 'see # this' && grep -rn ClaimAsync src",
     'gh pr comment 1 --body "pipe it via cat <<EOF"\ngrep -rn ClaimAsync src',
+    "git commit -m \"$(cat <<'EOF'\nbody\nEOF\n)\" && grep -rn ClaimAsync src",
     "# feed it with cat <<EOF\ngrep -rn ClaimAsync src",
     "cat <<'A' <<'B'\nA body\nA\nB body\nB\ngrep -rn ClaimAsync src",
 )
@@ -108,6 +109,10 @@ NOT_SEARCHES = (
     "git commit -F - <<'EOF'\ngrep -rn Foo src\nEOF",
     "cat <<-EOF > notes.txt\n\tgrep -rn Foo src\n\tEOF",
     "cat <<'A' <<'B'\nA body\nA\ngrep -rn Foo src\nB",
+    "git commit -m \"$(cat <<'EOF'\nsee \"won't\"\ngrep -rn Foo src\nEOF\n)\"",
+    "echo \"$(date)\" && cat <<'EOF'\ngrep -rn Foo src\nEOF",
+    "gh issue comment 12 --body \"$(cat <<'EOF'\nChecked the \"won't fix\" label.\ngrep -rn ClaimAsync src\nEOF\n)\"",
+    "gh pr create --body \"$(cat <<'EOF'\nsee \"a # b\"\nrg ClaimAsync src\nEOF\n)\"",
     'gh pr create --body "Steps:\ngrep -rn Foo src\n"',
     "git status --short",
     "dotnet build Platform.slnx",
