@@ -73,9 +73,9 @@ csharp_new_line_before_members_in_anonymous_types = true
 
 # No setting expresses the remaining wrapping rules docs/style-guide.md
 # carries, and `dotnet format` neither introduces nor undoes them, so nothing
-# has to be pinned; the closest enforcement is
-# dotnet_style_operator_placement_when_wrapping in [*.cs], which governs
-# binary operators only.
+# has to be pinned; the closest is
+# dotnet_style_operator_placement_when_wrapping in [*.cs], which declares
+# binary operators' placement and enforces nothing.
 
 # There is deliberately no [*.sql] section: §7.4 ships hand-written DDL inside
 # a migration's `migrationBuilder.Sql("""…""")` and nothing else, so every
@@ -145,7 +145,8 @@ dotnet_diagnostic.IDE0055.severity = warning
 # Trailing, not leading. A wrapped condition reads as a sequence of lines each
 # announcing "and there is more"; the alternative buries that signal at the
 # start of the next line, where it also collides with the four-space body
-# indent.
+# indent. No severity, and IDE0055 never moves an operator, so the sieve in
+# docs/style-guide.md's Wrapping section is what checks it.
 dotnet_style_operator_placement_when_wrapping = end_of_line
 dotnet_style_coalesce_expression = true:suggestion
 dotnet_style_null_propagation = true:suggestion
