@@ -670,6 +670,10 @@ class Refreshing(Base):
         """An unpinned newer package rewrites the tracked skill when it runs,
         and this calls the CLI rather than the wrapper that would stop it."""
         root = self.checkout("main")
+        # A session sets it in every command's environment, which would let
+        # this pass with the hook's own setting gone.
+        self.patch(mock.patch.dict(self.mod.os.environ))
+        self.mod.os.environ.pop("CBX_NO_SKILL_AUTO_UPDATE", None)
 
         self.mod.refresh(root)
 
