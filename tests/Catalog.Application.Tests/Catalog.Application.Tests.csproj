@@ -27,6 +27,8 @@
     <ProjectReference Include="..\..\tests\Catalog.TestSupport\Catalog.TestSupport.csproj" />
     <!-- CatalogDbContext by name; §4.2's gate binds Catalog.Application, not its tests. -->
     <ProjectReference Include="..\..\src\Services\Catalog\Catalog.Infrastructure\Catalog.Infrastructure.csproj" />
+    <!-- CommandFingerprintRule's selection of an idempotent command, the one every gate over them reads. -->
+    <ProjectReference Include="..\Common.TestSupport\Common.TestSupport.csproj" />
   </ItemGroup>
 
 </Project>
