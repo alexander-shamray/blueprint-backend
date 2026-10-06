@@ -95,10 +95,35 @@ def unheredoc(command: str) -> str:
     return "\n".join(kept)
 
 
+def uncommented(text: str, escape: str) -> str:
+    """`text` without its comments: an unquoted `#` starting a word, to the
+    end of its line. The split cannot drop them itself without also dropping
+    the newline that ends the command before the next line's."""
+    kept, quote, index = [], "", 0
+    while index < len(text):
+        char = text[index]
+        if escape and char == escape and quote != "'" and index + 1 < len(text):
+            kept.append(text[index:index + 2])
+            index += 2
+            continue
+        if quote:
+            quote = "" if char == quote else quote
+        elif char in "'\"":
+            quote = char
+        elif char == "#" and (not kept or kept[-1][-1] in " \t\n;|&()"):
+            end = text.find("\n", index)
+            index = len(text) if end < 0 else end
+            continue
+        kept.append(char)
+        index += 1
+    return "".join(kept)
+
+
 def tokens(command: str, escape: str) -> list[str]:
     """The words and operators of `command`, a newline outside quotes being
     an operator; a line at a time when the whole will not split."""
     text = unheredoc(command.replace("\\\n", " ") if escape else re.sub(r"`\r?\n", " ", command))
+    text = uncommented(text, escape)
     try:
         lexer = shlex.shlex(text, posix=True, punctuation_chars="|&;<>()\n")
         lexer.whitespace, lexer.commenters, lexer.escape = " \t\r", "", escape
