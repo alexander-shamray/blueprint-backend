@@ -14,11 +14,8 @@ using Microsoft.Extensions.Options;
 namespace Common.TestSupport;
 
 /// <summary>Each body a host's endpoint binds has an example that holds, and its document carries it.</summary>
-/// <remarks>
-/// Holds means <see cref="RequestExampleMetadata"/> carries the bound type, it survives the host's serialiser, every
-/// validator of that type passes it, and the endpoint sent it answers no 4xx (<see cref="RefusedAsync"/>), since an
-/// example a tool sends and the endpoint refuses is worse than none.
-/// </remarks>
+/// <remarks>Holds: of the bound type, through the host's serialiser, past its validators, and no 4xx from its endpoint
+/// (<see cref="RefusedAsync"/>), since an example the endpoint refuses is worse than none.</remarks>
 public static class RequestExampleRule
 {
     private static readonly string[] Verbs = ["get", "put", "post", "delete", "options", "head", "patch", "trace"];
@@ -69,10 +66,8 @@ public static class RequestExampleRule
     }
 
     /// <summary>Each bodied endpoint that answers its own example with a 4xx, sent as a caller sends it.</summary>
-    /// <remarks>
-    /// Whoever refuses: a validator of the command the endpoint builds, a parse in its handler, its route or policy.
-    /// A 5xx, or no answer within <paramref name="budget"/>, is unreachable infrastructure past all of those.
-    /// </remarks>
+    /// <remarks>Whoever refuses: a validator of the built command, a handler's parse, the route or policy. A 5xx or no
+    /// answer within <paramref name="budget"/> is past them all, as validation runs before idempotency (§6.3).</remarks>
     public static async Task<IReadOnlyList<string>> RefusedAsync(
         IEnumerable<Endpoint> endpoints,
         HttpClient client,
