@@ -23,18 +23,10 @@ services:
       ASPNETCORE_ENVIRONMENT: Development
       # Runtime identity (DML only) — never the migrator connection.
       ConnectionStrings__Ordering: "${ORDERING_CONNECTION:-Server=sql;Database=Ordering;User Id=sa;Password=${SQL_PASSWORD:-Local_Dev_Pa55w0rd!};TrustServerCertificate=True}"
-      # The bus (§9), read by AddMassTransitMessaging — which throws without
-      # it, so this line is what lets the host start. A plain value, no ${…}
-      # variable: this is §14.1's local default, not a secret with a production
-      # shape, and .env.example's contract covers variables, not constants.
-      #
-      # `ordering-svc` rather than the `guest` this carried until #44. That account
-      # was tagged `administrator` and the base image ships
-      # `loopback_users.guest = false`, so ONE principal reachable from any
-      # container could publish onto `ordering-commands` and have the message
-      # mapped as system-initiated (§9.4). The broker now enforces per-service
-      # write permissions; deploy/compose/rabbitmq/Dockerfile carries which
-      # ones and why.
+      # The bus (§9). AddMassTransitMessaging throws without it, so this line is
+      # what lets the host start. A plain value, §14.1's local default rather
+      # than a secret, under this service's own account rather than `guest`,
+      # which is tagged administrator and reachable from any container (ADR-036).
       ConnectionStrings__RabbitMq: "amqp://ordering-svc:local-dev-ordering@rabbitmq:5672"
       # The authority, to validate inbound tokens (§11.2). Read eagerly by
       # AddJwtAuthentication, which throws naming the key — so this line is
@@ -43,10 +35,10 @@ services:
       # requires them only of a host that does.
       Identity__Authority: "http://keycloak:8080/realms/commerce"
       OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4317"
-      # §8.1's two connections — see services/catalog.yml's api block for the
-      # whole argument, which is the same one twice. §8.5's IdempotencyBehavior is
-      # the code that finally reads a key here: PlaceOrderCommand claims one
-      # on the coordination instance before the order exists.
+      # §8.1's two connections, both read eagerly by AddRedisConnections (§8.2),
+      # so an absent key is a host that will not start; PlaceOrderCommand claims
+      # §8.5's key on the coordination one before the order exists. 6379 on
+      # both: each container listens on Redis's own port.
       ConnectionStrings__RedisCache: "redis-cache:6379,user=ordering-svc,password=local-dev-ordering"
       ConnectionStrings__RedisCoordination: "redis-coordination:6379,user=ordering-svc,password=local-dev-ordering"
     ports: [ "127.0.0.1:5101:8080" ]
