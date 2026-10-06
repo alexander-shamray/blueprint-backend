@@ -592,7 +592,7 @@ jobs:
     needs: [licence-gate, pipeline-gate]
     runs-on: ubuntu-latest
     strategy:
-      # The stage gate wants every shard's results, so one red shard stops none.
+      # Each shard's failures are its own to report, so one red shard cancels none.
       fail-fast: false
       matrix:
         include:
