@@ -465,8 +465,8 @@ class OneRoute(Scratch):
 class WhatItCannotRead(Scratch):
     def test_input_it_cannot_read_goes_through(self):
         for payload in (b"", b"<html>", b"\xff\xfe\x00", b"[1, 2]",
-                        b'{"tool_name": "Grep", "tool_input": {"pattern": "X"}, "session_id": "s"}',
-                        json.dumps({"tool_name": "Grep", "tool_input": {"pattern": "X"}, "session_id": "s",
+                        b'{"tool_name": "Grep", "tool_input": {"pattern": "ClaimAsync"}, "session_id": "s1"}',
+                        json.dumps({"tool_name": "Grep", "tool_input": {"pattern": "ClaimAsync"}, "session_id": "s2",
                                     "transcript_path": str(self.scratch / "absent.jsonl")}).encode(),
                         b'{"tool_name": "Grep", "tool_input": "X", "transcript_path": "t", "session_id": "s"}'):
             with self.subTest(payload=payload):
