@@ -126,20 +126,38 @@ def elsewhere(paths: list[str], base: str, cwd: str) -> bool:
         return False
 
 
+def shown(paths: list[str], base: str, cwd: str) -> list[str]:
+    """The paths a search reads, `.` when it names none, each as it stands
+    in the checkout `cwd` sits in, so prose reads the same from any directory."""
+    root = checkout(cwd)
+    named = []
+    for path in paths or ["."]:
+        try:
+            found = located(base, path).resolve()
+            named.append(found.relative_to(root).as_posix() if root and found.is_relative_to(root) else path)
+        except (OSError, ValueError):
+            named.append(path)
+    return named
+
+
 def shell_search(command: str, cwd: str) -> str | None:
     """The pattern of a tree-wide grep, rg or git grep in `command`, or None.
     A grep with no recursion reads one file or a pipe, which the index does
     not replace, and neither does an rg filtering a pipe."""
+    shell = cwd
     for argv, piped in segments(command):
         while argv and re.match(r"^[A-Za-z_]\w*=", argv[0]):
             argv = argv[1:]
         if not argv:
             continue
         program = argv[0].replace("\\", "/").rsplit("/", 1)[-1].removesuffix(".exe")
-        base = cwd
+        if program == "cd":
+            shell = str(located(shell, argv[1] if len(argv) > 1 else "~"))
+            continue
+        base = shell
         if program == "git" and "grep" in argv[1:4]:
             if argv[1] == "-C" and argv[2] != "grep":
-                base = str(located(cwd, argv[2]))
+                base = str(located(shell, argv[2]))
             argv, tree = argv[argv.index("grep") + 1:], True
         elif program == "rg" and "--files" not in argv:
             argv, tree = argv[1:], not piped
@@ -171,7 +189,7 @@ def shell_search(command: str, cwd: str) -> str | None:
             index += 1
         if program == "rg" and paths:
             tree = True
-        if (tree or recursive) and pattern and not prose_only(paths, filters) \
+        if (tree or recursive) and pattern and not prose_only(shown(paths, base, cwd), filters) \
                 and not files_only(paths, base) and not elsewhere(paths, base, cwd):
             return pattern
     return None

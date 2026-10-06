@@ -207,6 +207,22 @@ class WhatCountsAsASearch(Scratch):
             with self.subTest(name=name, given=given):
                 self.assertEqual(hinted, bool(self.hinted(name, given, cwd=repo)))
 
+    def test_a_cd_before_the_search_moves_where_its_paths_are_read(self):
+        repo = self.scratch / "repo"
+        (repo / ".git").mkdir(parents=True)
+        (repo / "src").mkdir()
+        (repo / "src" / "Money.cs").write_text("class Money {}", encoding="utf-8")
+        (repo / "docs").mkdir()
+        (self.scratch / "other").mkdir()
+        for command, hinted in (("cd ../other && grep -rn OutboxRelay .", False),
+                                ("cd src && grep -rn Amount Money.cs", False),
+                                ("cd docs && grep -rn Saga .", False),
+                                ("cd src; rg Amount", True),
+                                ("cd src && git -C .. grep Amount", True),
+                                ("cd src && grep -rn Amount .", True)):
+            with self.subTest(command=command):
+                self.assertEqual(hinted, bool(self.hinted(*bash_call(command), cwd=repo)))
+
     def test_an_earlier_call_is_read_in_the_directory_it_ran_in(self):
         """A one-file grep made before the session moved is not a search, so
         it does not shift the count."""
