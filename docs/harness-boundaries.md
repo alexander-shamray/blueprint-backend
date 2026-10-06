@@ -285,8 +285,10 @@ it (#563). The hook knows both ends: `CLAUDE_PROJECT_DIR` is the directory
 the session started in, which is the one `--root .` resolved against, and
 the event's `cwd` follows the session into a worktree. When the two lie in
 different checkouts the call is refused, and the reason names the `cbx`
-command asking the same question, with the call's arguments quoted for the
-shell, to run alone from the session's checkout. `healthcheck` is never
+command to run alone from the session's checkout: the whole line, arguments
+quoted for the shell, where it can carry every argument the call holds, and
+otherwise the subcommand alone, since a line that dropped an option such as
+a depth or a limit would answer another question. `healthcheck` is never
 refused, since its `root` is how a session sees which tree the server reads,
 and a session started in a worktree is let through, since its server reads
 that worktree. `test_index_mcp_root.py` holds the wiring, the map from tool

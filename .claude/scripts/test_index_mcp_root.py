@@ -179,6 +179,23 @@ class WhatItNames(Checkouts):
                 self.assertEqual(["bash .claude/skills/codebase-index/scripts/cbx refs"], commands(text))
                 self.assertIn("with the call's arguments", text)
 
+    def test_a_call_holding_an_argument_the_line_drops_gets_the_bare_form(self):
+        """A line without the option would ask another question and be named
+        as the same one."""
+        for tool, given, sub in (
+                ("impact_of", {"target": "Order", "direction": "down", "depth": 3}, "impact"),
+                ("search_code", {"query": "relay", "limit": 5}, "search"),
+                ("impact_of_diff", {"base": "origin/main"}, "diff-impact"),
+                ("verify_evidence", {"refs": ["src/a.cs:1-4"]}, "verify"),
+                ("find_refs", {"symbol": "Order", "kind": "writers"}, "refs"),
+                ("find_symbol", {"name": "Order", "kind": "class"}, "symbol"),
+                ("explain_code", {"query": "saga", "session": "a\nb"}, "explain")):
+            with self.subTest(tool=tool):
+                text = self.ask(tool, given)
+
+                self.assertEqual([f"bash .claude/skills/codebase-index/scripts/cbx {sub}"], commands(text))
+                self.assertIn("with the call's arguments", text)
+
     def test_every_subcommand_is_one_the_wrapper_admits(self):
         admitted = re.search(r'^ALLOWED="([^"]*)"', CBX.read_text(encoding="utf-8"), re.M).group(1).split()
         for sub, _, _ in load("index_mcp_root", HOOK).COMMANDS.values():
