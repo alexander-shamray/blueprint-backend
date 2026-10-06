@@ -92,9 +92,11 @@ blanking strings as well would find nothing at all — and a `//` inside a strin
 is not a comment, which the gate's own probe asserts in both directions.
 
 **What it does not do.** It reaches no Prometheus, no Grafana and no cluster,
-and it does **not** check that a rules file is syntactically valid to
-Prometheus — `promtool` would be the tool for that, and adding it is a decision
-no chapter has taken. It does not evaluate C# preprocessor conditionals either:
+and it does **not** check that a rules file is valid to Prometheus. The Compose
+smoke does, for `platform-alerts.yaml` alone:
+[`compose.yml`](../../.github/workflows/compose.yml) loads it into the image's
+Prometheus and fails unless the loaded alerting-rule count is the file's. It
+does not evaluate C# preprocessor conditionals either:
 a `Create` call inside `#if false` would still count as published, because
 excluding one means implementing defined symbols, `#elif` and nesting — a
 compiler rather than a scanner. `src/` contains no `#if` today. Named here as
