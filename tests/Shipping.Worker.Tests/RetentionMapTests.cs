@@ -37,10 +37,18 @@ public class RetentionMapTests
     [Fact]
     public void The_rule_above_is_looking_at_this_hosts_windows()
     {
-        // The floor: an offender list is as green over a declared set that holds nothing, or a map never read.
+        // The floor: an offender list is as green over a declared set that holds nothing, a map never read, or a
+        // prefix naming no assembly this host reaches.
         RetentionMapRule.Members(Declared).ShouldNotBeEmpty();
         RetentionMapRule.Offenders(Declared, Excluded, map: string.Empty).ShouldNotBeEmpty();
         RetentionMapRule.Undeclared(Host, [], Prefixes).ShouldNotBeEmpty();
+        RetentionMapRule.Unreached(Host, Prefixes).ShouldBeEmpty();
+    }
+
+    [Fact]
+    public void A_prefix_naming_no_assembly_this_host_reaches_is_reported()
+    {
+        RetentionMapRule.Unreached(Host, [.. Prefixes, "Shiping."]).ShouldBe(["Shiping."]);
     }
 
     [Fact]
