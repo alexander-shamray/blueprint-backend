@@ -11,7 +11,7 @@ namespace Payments.Api.Tests;
 [Collection(nameof(IntegrationCollection))]
 public sealed class ProviderKillSwitchBrokerTests(ServiceFixture fixture)
 {
-    /// <summary>Under <c>payments-svc</c>'s prefix, the only names that account may declare (ADR-036).</summary>
+    /// <summary>Under the <c>payments-</c> prefix ADR-036 grants <c>payments-svc</c> for its own queues.</summary>
     private const string Queue = "payments-kill-switch-probe";
 
     /// <summary>Enough to activate the switch, every one faulting.</summary>
