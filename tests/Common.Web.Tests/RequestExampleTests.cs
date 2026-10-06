@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using Common.TestSupport;
 using FluentValidation;
@@ -188,7 +189,19 @@ public class RequestExampleTests
                 .WithName("Waits");
         });
 
-        IReadOnlyList<string> refused = await RefusedAsync(host, TimeSpan.FromSeconds(0.5));
+        // A decimal-comma culture, so the sentence is shown to be the same wherever the suite runs.
+        CultureInfo culture = CultureInfo.CurrentCulture;
+        CultureInfo.CurrentCulture = new CultureInfo("de-DE");
+        IReadOnlyList<string> refused;
+
+        try
+        {
+            refused = await RefusedAsync(host, TimeSpan.FromSeconds(0.5));
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = culture;
+        }
 
         // A wait in front of the validators looks like one behind them, so only the probe tells them apart.
         refused.ShouldBe(["Hangs gives its own example no answer within 0.5s and never reaches a validator"]);

@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Common.Web;
@@ -118,7 +119,9 @@ public static class RequestExampleRule
             }
             catch (OperationCanceledException) when (!ct.IsCancellationRequested)
             {
-                answer = $"gives its own example no answer within {budget.TotalSeconds}s";
+                answer = string.Create(
+                    CultureInfo.InvariantCulture,
+                    $"gives its own example no answer within {budget.TotalSeconds}s");
             }
 
             if (arrivals.Count == before)
