@@ -31,7 +31,7 @@ SEARCHES = {
     "grep -R HealthProbe .": "find_refs",
     "grep --recursive -n GiveUpAge src tests": "find_refs",
     "git grep -n 'Order.Place'": "find_refs",
-    "git -C ../other grep OutboxRelay": "find_refs",
+    "git -C .claude grep OutboxRelay": "find_refs",
     "rg TimeSpan src": "find_refs",
     "rg 'class \\w+Options'": "search_code",
     'grep -rE "Claim|Release" src': "search_code",
@@ -189,6 +189,23 @@ class WhatCountsAsASearch(Scratch):
         self.assertEqual("", self.hinted(*grep_call(path=".claude/settings.json")))
         self.assertEqual("", self.hinted(*grep_call(path=str(SETTINGS))))
         self.assertTrue(self.hinted(*grep_call(path=".claude")))
+
+    def test_a_search_outside_the_checkout_is_not_a_search_of_its_index(self):
+        repo, other = self.scratch / "repo", self.scratch / "other"
+        (repo / ".git").mkdir(parents=True)
+        (repo / "src").mkdir()
+        other.mkdir()
+        for name, given, hinted in (
+                (*grep_call(path=str(other)), False),
+                (*grep_call(path="../other"), False),
+                (*grep_call(path="src"), True),
+                (*grep_call(), True),
+                (*bash_call("git -C ../other grep OutboxRelay"), False),
+                (*bash_call("grep -rn OutboxRelay ../other"), False),
+                (*bash_call("git -C src grep OutboxRelay"), True),
+                (*bash_call("grep -rn OutboxRelay src"), True)):
+            with self.subTest(name=name, given=given):
+                self.assertEqual(hinted, bool(self.hinted(name, given, cwd=repo)))
 
     def test_an_earlier_call_is_read_in_the_directory_it_ran_in(self):
         """A one-file grep made before the session moved is not a search, so

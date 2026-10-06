@@ -106,6 +106,26 @@ def files_only(paths: list[str], cwd: str) -> bool:
         return False
 
 
+def checkout(cwd: str) -> Path | None:
+    """The checkout `cwd` sits in, by the `.git` at or above it."""
+    try:
+        start = Path(cwd or ".").resolve()
+        return next((place for place in (start, *start.parents) if (place / ".git").exists()), None)
+    except OSError:
+        return None
+
+
+def elsewhere(paths: list[str], base: str, cwd: str) -> bool:
+    """True when the search reads outside the checkout `cwd` sits in, whose
+    index is the only one a hint can name."""
+    root = checkout(cwd)
+    try:
+        return root is not None and any(
+            not located(base, path).resolve().is_relative_to(root) for path in paths or ["."])
+    except (OSError, ValueError):
+        return False
+
+
 def shell_search(command: str, cwd: str) -> str | None:
     """The pattern of a tree-wide grep, rg or git grep in `command`, or None.
     A grep with no recursion reads one file or a pipe, which the index does
@@ -116,7 +136,10 @@ def shell_search(command: str, cwd: str) -> str | None:
         if not argv:
             continue
         program = argv[0].replace("\\", "/").rsplit("/", 1)[-1].removesuffix(".exe")
+        base = cwd
         if program == "git" and "grep" in argv[1:4]:
+            if argv[1] == "-C" and argv[2] != "grep":
+                base = str(located(cwd, argv[2]))
             argv, tree = argv[argv.index("grep") + 1:], True
         elif program == "rg" and "--files" not in argv:
             argv, tree = argv[1:], not piped
@@ -148,7 +171,8 @@ def shell_search(command: str, cwd: str) -> str | None:
             index += 1
         if program == "rg" and paths:
             tree = True
-        if (tree or recursive) and pattern and not prose_only(paths, filters) and not files_only(paths, cwd):
+        if (tree or recursive) and pattern and not prose_only(paths, filters) \
+                and not files_only(paths, base) and not elsewhere(paths, base, cwd):
             return pattern
     return None
 
@@ -161,7 +185,9 @@ def search(name: str, given: dict, cwd: str) -> str | None:
             return None
         paths = [given["path"]] if isinstance(given.get("path"), str) else []
         filters = [given[key] for key in ("glob", "type") if isinstance(given.get(key), str)]
-        return None if prose_only(paths, filters) or files_only(paths, cwd) else pattern
+        if prose_only(paths, filters) or files_only(paths, cwd) or elsewhere(paths, cwd, cwd):
+            return None
+        return pattern
     if name == "Bash" and isinstance(given.get("command"), str):
         return shell_search(given["command"], cwd)
     return None
