@@ -38,8 +38,8 @@ services:
       ConnectionStrings__Notifications: "${NOTIFICATIONS_CONNECTION:-Server=sql;Database=Notifications;User Id=sa;Password=${SQL_PASSWORD:-Local_Dev_Pa55w0rd!};TrustServerCertificate=True}"
       # The bus (§9). AddMassTransitMessaging throws without it, so this line is
       # what lets the host start. A plain value, §14.1's local default rather
-      # than a secret, under this service's own account rather than `guest`,
-      # which is tagged administrator and reachable from any container (ADR-036).
+      # than a secret, under this service's own account rather than the base
+      # image's administrator `guest`, which 20-commerce.conf removes (ADR-036).
       ConnectionStrings__RabbitMq: "amqp://notifications-svc:local-dev-notifications@rabbitmq:5672"
       # The authority, to validate inbound tokens (§11.2). Read eagerly by
       # AddJwtAuthentication, which throws naming the key — so this line is
