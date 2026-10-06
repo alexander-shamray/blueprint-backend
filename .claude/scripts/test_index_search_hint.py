@@ -65,6 +65,9 @@ TEXT = (
     "grep -rn timeout src",
     "grep -rn TODO src",
     'grep -rn "appsettings.json" src',
+    'rg "CLAUDE.md" .',
+    "grep -rn Directory.Packages.props .",
+    "rg Program.cs src",
     "rg 'Claim.*Async' src",
 )
 

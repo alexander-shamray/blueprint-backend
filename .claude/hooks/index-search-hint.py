@@ -353,15 +353,16 @@ def in_worktree(cwd: str) -> bool:
 def names(pattern: str) -> list[str]:
     """The symbols a search pattern names: one, or an alternation of them,
     word boundaries, a call form and a wrapping group dropped. A name in one
-    case with no underscore, `timeout`, `TODO` or `settings.json`, is text,
-    and text, a message or a pattern is grep's to list whole."""
+    case with no underscore, `timeout` or `TODO`, or a file name, `CLAUDE.md`,
+    is text, and text, a message or a pattern is grep's to list whole."""
     text = re.sub(r"\\b|\\<|\\>", "", pattern).strip()
     text = re.sub(r"^\\?\((.*?)\\?\)$", r"\1", text)
     found = []
     for part in re.split(r"\\?\|", text):
         part = re.sub(r"\s*(?:\\\(|\()$", "", part.strip())
         mixed = part != part.lower() and part != part.upper()
-        if not (IDENTIFIER.match(part) and ("_" in part or mixed)):
+        extension = "." in part and part.rsplit(".", 1)[1].islower()
+        if not (IDENTIFIER.match(part) and ("_" in part or mixed)) or extension:
             return []
         if part not in found:
             found.append(part)
