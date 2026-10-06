@@ -448,8 +448,8 @@ jobs:
               - 'deploy/**'
               - '!deploy/compose/**'
 
-  # What IDE0055 cannot read — the byte-order mark, the line endings and the
-  # final newline — over every C# file but generated code; docs/style-guide.md
+  # What IDE0055 cannot read — the byte-order mark and the final newline —
+  # over every C# file but generated code; docs/style-guide.md
   # owns which rules those are. `--folder` reads the files without loading the
   # solution, so this needs no restore and no build to wait for.
   format:
