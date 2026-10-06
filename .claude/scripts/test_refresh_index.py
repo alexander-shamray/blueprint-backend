@@ -161,6 +161,14 @@ class ChoosingTheCheckout(Base):
 
         self.assertEqual([edited], self.worker_roots())
 
+    def test_the_worker_holds_no_directory_of_the_checkout(self):
+        root = self.checkout("worktree")
+        self.run_event({"cwd": str(root)})
+
+        self.assertEqual([root], self.worker_roots())
+        working = Path(self.spawned[0][1]["cwd"]).resolve()
+        self.assertEqual(root.resolve().parent, working)
+
     def test_the_edited_file_decides_over_the_session_directory(self):
         """`guard-edit-target` admits an edit against the session's tree or
         the one it forked from, so an absolute edit into the original while

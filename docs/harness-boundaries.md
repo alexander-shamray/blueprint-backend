@@ -131,7 +131,10 @@ an index that cannot refresh is not a reason to fail the call that provoked
 it. The exit status is the one thing it does keep, and a request whose update
 failed goes back rather than counting as served: contention is what fails
 here, the streams that would have said so are gone, and the loser may be the
-run carrying the newest edit.
+run carrying the newest edit. The worker runs from the checkout's parent and
+only the CLI inside it, because Windows will not delete a live process's
+working directory and `/ship` removes a worktree moments after its last call.
+The lock and the CLI's own run still hold files there while they last (#516).
 
 **Both shell tools are in the matcher, `Bash` and `PowerShell`, because
 agents write through them more than through any edit tool** — a commit, a

@@ -343,10 +343,14 @@ def main() -> int:
     if busy(root):
         return 0
 
+    # The worker stands outside the checkout, because Windows will not delete
+    # a directory that is a live process's working directory, and `/ship`
+    # removes a worktree moments after its last call; the CLI still runs in it.
+    root = root.absolute()
     try:
         subprocess.Popen(
             [sys.executable, "-P", str(Path(__file__).resolve()), "--worker", str(root)],
-            cwd=str(root),
+            cwd=str(root.parent),
             stdin=subprocess.DEVNULL,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
