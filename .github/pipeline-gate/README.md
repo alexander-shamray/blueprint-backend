@@ -2,13 +2,14 @@
 
 **The claim: [§15.1](../../docs/backend-architecture/15-cicd-deployment.md)'s
 staged pipeline is not quietly doing other than it appears to.** Each of its
-three subcommands is an inventory, and each fails on the ways the pipeline
+four subcommands is an inventory, and each fails on the ways the pipeline
 can go green while running something other than what it shows.
 
 | Subcommand | Refuses | Reads |
 |---|---|---|
 | `filters` | an immediate child of `src/` or `src/Services/` that no path filter matches — one CI would never rebuild — and a `ci.yml` in which the text `some-with-excludes` appears nowhere, the quantifier without which the `deploy` filter's exclusions are never evaluated and a compose-only change deploys. That is a text search, not a read of the paths-filter step, so the token surviving elsewhere in the file passes it | those two directories' children, and `ci.yml`'s path filters and its text |
 | `images` | a Dockerfile under `src/` no matrix entry builds, and an entry whose Dockerfile is missing or whose filter is undefined, not exported by the `changes` job, or does not match that Dockerfile's path; and an `images` job `if:` that does not test exactly the filters the matrix builds under | the Dockerfiles, and in `ci.yml` the image matrix, the path filters, the `changes` job's outputs and the `images` job's `if:` |
+| `shards` | an integration shard that does not exclude every shard above it, which runs those tests twice; one that excludes a namespace no shard above it selects, which runs those tests nowhere; a last shard that selects anything rather than being the remainder; any shard but the last selecting other than one namespace; and a term that is not a `FullyQualifiedName` one. `stages` reads the shards as the one directory they land in, so this is the check that can see them | in `ci.yml`, the `integration` job's matrix |
 | `stages` | a test project in `Platform.slnx` that ran in no stage, a test that ran in two, an empty stage, a stage under its floor, a stage whose results directory was never passed, and a directory naming no stage it knows | `Platform.slnx` and the TRX files in the three stage result directories |
 
 `stages` counts tests rather than trusting an exit code, because `dotnet
@@ -24,7 +25,7 @@ an order-of-magnitude miss, not a count.
 
 ## How it runs
 
-Its suite and `filters` and `images` run in the fast job of
+Its suite and `filters`, `images` and `shards` run in the fast job of
 [`ci.yml`](../workflows/ci.yml); `stages` runs after the three test stages.
 The suite is negative cases with their positive controls, because a gate
 only ever observed green is one nobody has established is looking at
