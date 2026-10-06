@@ -507,11 +507,14 @@ public class RealmImportTests
     public void View_users_composes_exactly_the_two_query_roles_and_neither_composes_further()
     {
         // The pinned Keycloak's own composition, exported with the realm: the worker's check reads the expanded set.
-        JsonElement[] management = [.. Root
-            .GetProperty("roles")
-            .GetProperty("client")
-            .GetProperty(RealmManagement)
-            .EnumerateArray()];
+        JsonElement[] management =
+        [
+            .. Root
+                .GetProperty("roles")
+                .GetProperty("client")
+                .GetProperty(RealmManagement)
+                .EnumerateArray()
+        ];
 
         JsonElement viewUsers = management.Single(r => r.GetProperty("name").GetString() == "view-users");
 
