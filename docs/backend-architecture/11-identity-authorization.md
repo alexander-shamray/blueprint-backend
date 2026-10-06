@@ -1287,14 +1287,14 @@ otherwise identical is a claim check on the same one.
 
 **`orders:admin` is a claim, and the admin command's endpoint policy is a
 separate thing that happens to require it.** The two are easy to collapse
-because this chapter's policy names read like claim names — `orders:read`,
-`orders:write`, `orders:cancel` — but a policy is a registered rule and a claim
-is what the token carries, and only the second is what `HasPermission` reads.
-Nothing forbids registering a fourth policy that requires the `orders:admin`
-claim when the admin command lands; what the paragraph above rules out is
-treating the claim as though a policy of that name already existed, because
-none of the three registered in §4.2 is it, and a policy nobody registered
-resolves to nothing.
+because this chapter's policy names read like claim names — the
+`OrderingPermissions` constants above — but a policy is a registered rule and a
+claim is what the token carries, and only the second is what `HasPermission`
+reads. Nothing forbids registering another policy that requires the
+`orders:admin` claim when the admin command lands; what the paragraph above
+rules out is treating the claim as though a policy of that name already
+existed, because none of those registered in §4.2 is it, and a policy nobody
+registered resolves to nothing.
 
 ## 11.5 Service-to-service authentication
 

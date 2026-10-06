@@ -9,9 +9,10 @@ goes stale.
 NuGet package identities, and the licence gate PR-01 ships
 (`.github/licence-gate/`) matches them against `Directory.Packages.props` — a
 pin with no identity here fails the build before anything compiles
-([§15.1](15-cicd-deployment.md)). The props file, not the transcription of it in
-[§4.4](04-solution-structure.md): the gate checks that the two agree, but it is
-the file CI restores that decides what a licence obligation is.
+([§15.1](15-cicd-deployment.md)). The props file is the one it reads:
+[§4.4](04-solution-structure.md) prints no pins, and the gate refuses one
+printed in any chapter, so it is the file CI restores that decides what a
+licence obligation is.
 
 **A register cannot disagree with a pin it never sees**, so what else the gate
 reads to find a package restored past the props file — and where that reach
