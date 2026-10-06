@@ -130,13 +130,14 @@ works and not that this checkout passes it; a gate without one is only run.
 Most gate runs are the workflow step verbatim; these are the ones a step
 does not show whole.
 
-**The stage gate needs three `dotnet test` runs first**, which is
-[§15.1](backend-architecture/15-cicd-deployment.md)'s `UT → IT` with the
-architecture gates split off in front, for the instrumentation reason under
-*Coverage* below. Three invocations rather than two, as separate steps in one
-job rather than separate jobs: a job boundary would mean shipping the build
-output between runners to keep `--no-build` honest, and the coverage figure
-is the union of the last two, which wants one place to be merged.
+**The stage gate needs three `dotnet test` runs first**, which are
+[§15.1](backend-architecture/15-cicd-deployment.md)'s unit and integration
+stages with the architecture gates split off in front, for the
+instrumentation reason under *Coverage* below. CI runs the integration stage
+as shards, each a job with its own build so that `--no-build` reads it, and
+hands every stage's results to one last job, which runs this gate and the
+coverage report over them; `ci.yml`'s `integration` job argues why the
+shards' filters partition the stage. Run here, the stage is one invocation:
 
 ```bash
 dotnet test Platform.slnx --filter "FullyQualifiedName~ArchitectureTests" \

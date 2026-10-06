@@ -8,8 +8,9 @@ graph LR
     SEC --> K{What changed?}
     K -->|source| B[Build + analyse]
     B --> UT[Unit tests]
-    UT --> IT[Integration tests<br/>Testcontainers]
-    IT --> IMG[Build + sign images<br/>api + migrator, same tag]
+    B --> IT[Integration tests<br/>Testcontainers]
+    UT --> IMG[Build + sign images<br/>api + migrator, same tag]
+    IT --> IMG
     IMG --> DEV[Deploy: dev]
     K -->|charts only| TAG[Resolve running tag]
     TAG --> DEV

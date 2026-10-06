@@ -1167,8 +1167,8 @@ Respawn between tests keeps them isolated at a fraction of the cost.
 > container and forgets the collection fails loudly in the fast half, which is
 > the direction this has to fail in.
 >
-> **CI runs the halves separately since PR-25**, as §15.1's `UT → IT`, with
-> §4.2's architecture gates ahead of both for the instrumentation reason
+> **CI runs the halves separately since PR-25**, as §15.1's two test nodes,
+> with §4.2's architecture gates ahead of both for the instrumentation reason
 > `docs/testing.md` gives. The category shipped a release ahead of the stage
 > that depends on it, which is what let the stage be written against a filter
 > already known to select what it claims.
