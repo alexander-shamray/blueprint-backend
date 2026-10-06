@@ -333,7 +333,11 @@ file and a reviewer are the only things that do.
   "List" means anything comma-separated inside brackets — parameters,
   arguments, collection expressions, initialisers, tuple members. The budget is
   **120 columns** (`max_line_length`); within it the list stays on one line,
-  past it every element gets its own.
+  past it every element gets its own. **A single continuation line is not one
+  line**: `SendAsync(` ending its line with `command, ct);` alone below it puts
+  two elements on a line that is neither the call's nor their own, so it joins
+  back up when the call fits and splits when it does not. One element alone
+  below its `(` is the outermost-bracket break further down, not this.
 - **`[` and `{` each take a line of their own**, at the column of the construct
   they open, and their closers do too. **`(` is the single exception**: it ends
   the line it opens, and `)` trails the last element — `);`, not a line of its
@@ -406,12 +410,17 @@ file and a reviewer are the only things that do.
   `WriteAsJsonAsync(new ProblemDetails { … }, ct)` is the same shape with an
   object initialiser in the lambda's place.
 
-  **Two greps narrow this down and neither closes it.** The arrow —
+  **Three greps narrow this down and none closes it.** The arrow —
   `\(.+,\s*\w+\s*=>\s*$` — catches a lambda hanging off a call with a leading
   argument. The closer — `^\s*[]})],\s*\S` — catches a bracket closing at the
-  head of a line with an element still after it. **Neither sees the plain
-  one**: a continuation line carrying two ordinary arguments has no arrow and
-  no leading bracket. Treat them as a sieve, not a proof.
+  head of a line with an element still after it. Neither sees the plain one, a
+  continuation line carrying two ordinary arguments, so the third is
+  multiline (`rg -U`): a `(` ending its line, then a comma after a first
+  element whose strings and brackets it steps over —
+  `` \(\r?\n +(?:[^(){}\[\]<>"$\n/,]|\$"(?:[^"\n{]|\{[^}\n]*\})*"|"[^"\n]*"|\([^()\n]*\)|\{[^{}\n]*\}|\[[^\[\]\n]*\]|<[^<>\n]*>)+, +[^ /] ``.
+  It found 198 of the 205 sites one pass rewrapped, and nothing else; the
+  rest open with a nested bracket it does not step over. Treat all three as a
+  sieve, not a proof.
 
   **Write the closer for the tool you are running it in.** Ripgrep reads `\]`
   as an escaped bracket and builds the class `}` `]` `)`; POSIX `grep` treats a
