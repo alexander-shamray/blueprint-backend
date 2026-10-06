@@ -48,11 +48,22 @@ time.sleep(delay)
 handle = open(os.path.join(cache, "refresh.lock"), "a+b")
 if sys.platform == "win32":
     import msvcrt
-    handle.seek(0)
-    msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+    def grab():
+        handle.seek(0)
+        msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
 else:
     import fcntl
-    fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    def grab():
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+# Retried, because the helper's own poll holds the lock for an instant.
+for _ in range(100):
+    try:
+        grab()
+        break
+    except OSError:
+        time.sleep(0.01)
+else:
+    sys.exit("the lock never came free")
 open(ready, "w").close()
 try:
     os.remove(os.path.join(cache, "refresh.pending"))
