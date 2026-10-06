@@ -226,14 +226,18 @@ public static partial class ConsumerCallRule
         /// <summary>The host's services a walk met built by a factory whose declared return is object.</summary>
         public HashSet<Type> Opaque { get; } = [];
 
-        // Breadth first, so the path named for each client is a shortest one; a consumer holding one is its own.
+        // Breadth first, so the path named for each client is a shortest one. A consumer's own client that no
+        // registration shows is reported as the consumer's, and a registered one is left to the walk, under its type.
         public IEnumerable<(Type Client, string Path)> ClientsReachedFrom(Type consumer)
         {
-            if (HoldsAClient(consumer))
-            {
+            bool unregistered = BuildsAClient(consumer) || consumer
+                .GetConstructors()
+                .SelectMany(constructor => constructor.GetParameters())
+                .Any(parameter => IsClientParameter(parameter.ParameterType) &&
+                    !_clientServices.Contains(parameter.ParameterType));
+
+            if (unregistered)
                 yield return (consumer, $"{Name(consumer)} holds one itself");
-                yield break;
-            }
 
             Dictionary<Type, Type?> parents = new() { [consumer] = null };
             Queue<Type> pending = new([consumer]);
