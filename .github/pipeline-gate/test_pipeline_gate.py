@@ -382,6 +382,24 @@ class ShardTests(Fixture):
 
         self.assertTrue(any("'Category=Slow'" in problem for problem in problems), problems)
 
+    def test_an_entry_the_parser_skips_is_caught(self) -> None:
+        """Each shape below drops out of `read_shards`, leaving a clean cascade of the rest."""
+        overlapping = (
+            "FullyQualifiedName~Inventory.&FullyQualifiedName!~Payments.&FullyQualifiedName!~Ordering."
+        )
+        for entry in (
+            f"          - shard: inventory  # slowest\n            selects: {overlapping}\n",
+            f"          - selects: {overlapping}\n            shard: inventory\n",
+            f"          - {{shard: inventory, selects: '{overlapping}'}}\n",
+            "          - shard: inventory\n",
+        ):
+            with self.subTest(entry=entry):
+                self.write(WORKFLOW + SHARDS.replace("          - shard: rest", entry + "          - shard: rest"))
+
+                problems = pipeline_gate.check_shards()
+
+                self.assertTrue(any("the parser read 3 entries" in problem for problem in problems), problems)
+
     def test_an_unparsed_matrix_fails_rather_than_passing_empty(self) -> None:
         self.write(WORKFLOW)
 
