@@ -67,7 +67,8 @@ class UpstreamServer(socketserver.ThreadingTCPServer):
 
 
 def serve(server):
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    # A short poll, because each case's cleanup waits one out per server.
+    thread = threading.Thread(target=server.serve_forever, kwargs={"poll_interval": 0.05}, daemon=True)
     thread.start()
     return thread
 
@@ -101,10 +102,12 @@ class ProxyCase(unittest.TestCase):
         for p in patches:
             p.start()
             self.addCleanup(p.stop)
-        self.addCleanup(self.server.shutdown)
+        # Cleanups run last in first out, so each close is registered before its
+        # shutdown: a socket closed under a running select raises in its thread.
         self.addCleanup(self.server.server_close)
-        self.addCleanup(self.upstream.shutdown)
+        self.addCleanup(self.server.shutdown)
         self.addCleanup(self.upstream.server_close)
+        self.addCleanup(self.upstream.shutdown)
 
     def connect(self, request):
         sock = socket.create_connection(("127.0.0.1", self.proxy_port), timeout=5)
