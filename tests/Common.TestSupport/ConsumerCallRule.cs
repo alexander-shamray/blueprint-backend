@@ -211,7 +211,7 @@ public static partial class ConsumerCallRule
     private static string Name(Type type) =>
         type.IsGenericType
             ? $"{type.Name[..type.Name.IndexOf('`', StringComparison.Ordinal)]}<" +
-              $"{string.Join(", ", type.GetGenericArguments().Select(Name))}>"
+                $"{string.Join(", ", type.GetGenericArguments().Select(Name))}>"
             : type.Name;
 
     private sealed class Graph(IReadOnlyList<ServiceDescriptor> descriptors, Func<Type, bool> platform)

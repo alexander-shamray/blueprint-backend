@@ -250,13 +250,15 @@ public class MessagingRegistrationTests
 
     /// <summary>The consumer types registered, by what they implement, since the service type is the class.</summary>
     private static Type[] ConsumerTypes(IServiceCollection services) =>
-        [.. services
+    [
+        .. services
             .Select(d => d.ImplementationType ?? d.ServiceType)
             .Where(t =>
                 Array.Exists(
                     t.GetInterfaces(),
                     i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IConsumer<>)))
-            .Distinct()];
+            .Distinct()
+    ];
 
     [Fact]
     public void Usage_telemetry_is_disabled_by_the_production_registration_alone()

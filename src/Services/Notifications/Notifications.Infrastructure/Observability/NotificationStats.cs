@@ -62,8 +62,8 @@ internal sealed class NotificationStats(IDbConnectionFactory connections) : INot
                 using IDbConnection connection = connections.Create();
 
                 Dictionary<string, int> waiting = WaitingSteps.All.ToDictionary(s => s, _ => 0, StringComparer.Ordinal);
-                foreach (WaitingRow row in connection.Query<WaitingRow>(
-                             new CommandDefinition(WaitingSql, commandTimeout: CommandTimeoutSeconds)))
+                CommandDefinition query = new(WaitingSql, commandTimeout: CommandTimeoutSeconds);
+                foreach (WaitingRow row in connection.Query<WaitingRow>(query))
                 {
                     waiting[row.Step] = row.Waiting;
                 }

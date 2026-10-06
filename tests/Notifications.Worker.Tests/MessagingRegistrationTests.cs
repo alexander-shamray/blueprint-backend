@@ -114,16 +114,17 @@ public class MessagingRegistrationTests
 
         services.AddMassTransitMessaging(Configuration());
 
-        foreach (Type consumer in new[]
-                 {
-                     typeof(IntegrationEventConsumer<OrderPlaced>),
-                     typeof(IntegrationEventConsumer<OrderConfirmed>),
-                     typeof(IntegrationEventConsumer<OrderCancelled>),
-                     typeof(IntegrationEventConsumer<PaymentDeclined>),
-                     typeof(IntegrationEventConsumer<PaymentRefunded>),
-                     typeof(IntegrationEventConsumer<ShipmentDispatched>),
-                     typeof(IntegrationEventConsumer<ShipmentDelivered>)
-                 })
+        Type[] consumers =
+        [
+            typeof(IntegrationEventConsumer<OrderPlaced>),
+            typeof(IntegrationEventConsumer<OrderConfirmed>),
+            typeof(IntegrationEventConsumer<OrderCancelled>),
+            typeof(IntegrationEventConsumer<PaymentDeclined>),
+            typeof(IntegrationEventConsumer<PaymentRefunded>),
+            typeof(IntegrationEventConsumer<ShipmentDispatched>),
+            typeof(IntegrationEventConsumer<ShipmentDelivered>)
+        ];
+        foreach (Type consumer in consumers)
         {
             services.ShouldContain(
                 d => d.ImplementationType == consumer || d.ServiceType == consumer,
