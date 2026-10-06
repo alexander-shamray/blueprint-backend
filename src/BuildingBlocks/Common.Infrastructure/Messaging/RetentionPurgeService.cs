@@ -167,11 +167,14 @@ public sealed class RetentionPurgeService : BackgroundService
 
         for (int batch = 0; batch < _policy.MaxBatchesPerPass; batch++)
         {
-            MarkerCandidate[] candidates = [.. await connection.QueryAsync<MarkerCandidate>(
-                new CommandDefinition(
-                    markers.CandidateSql,
-                    new { _policy.BatchSize, WindowSeconds = windowSeconds },
-                    cancellationToken: ct))];
+            MarkerCandidate[] candidates =
+            [
+                .. await connection.QueryAsync<MarkerCandidate>(
+                    new CommandDefinition(
+                        markers.CandidateSql,
+                        new { _policy.BatchSize, WindowSeconds = windowSeconds },
+                        cancellationToken: ct))
+            ];
 
             if (candidates.Length == 0)
                 break;
