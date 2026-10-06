@@ -5,6 +5,7 @@ safety boundary is asserted here with stubbed executables.
 """
 
 import importlib.util
+import json
 import os
 import re
 import shutil
@@ -162,6 +163,12 @@ class CbxWrapper(unittest.TestCase):
             "export CBX_NO_SKILL_AUTO_UPDATE=1", self.uncommented(CBX))
         self.assertIn(
             '$env:CBX_NO_SKILL_AUTO_UPDATE = "1"', self.uncommented(CBX_PS1))
+
+    def test_the_session_disables_it_for_a_cli_run_without_the_wrapper(self):
+        """A bare `codebase-index` run rewrites the tracked skill, wrappers
+        included, unless its environment says not to."""
+        settings = json.loads((SCRIPTS.parent / "settings.json").read_text(encoding="utf-8"))
+        self.assertEqual("1", settings["env"]["CBX_NO_SKILL_AUTO_UPDATE"])
 
     def test_python_fallbacks_keep_the_checkout_off_sys_path(self):
         bash = self.uncommented(CBX)
