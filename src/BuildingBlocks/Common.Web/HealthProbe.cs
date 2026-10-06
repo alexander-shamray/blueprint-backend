@@ -47,8 +47,8 @@ public static class HealthProbe
     }
 
     /// <summary>The port Kestrel serves HTTP/1.1 on, or null when the configuration names none.</summary>
-    /// <remarks>Any declared endpoint replaces HTTP_PORTS, and an Http2-only one refuses the probe's HTTP/1.1.
-    /// </remarks>
+    /// <remarks>Any declared endpoint replaces HTTP_PORTS, and an Http2-only one, §9.7's gRPC hop, refuses the
+    /// probe's HTTP/1.1.</remarks>
     public static int? PortOf(IConfiguration configuration)
     {
         ArgumentNullException.ThrowIfNull(configuration);

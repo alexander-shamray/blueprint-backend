@@ -7,11 +7,10 @@ name: Compose
 # is smoke-tested here rather than in the solution build.
 
 # The model's application blocks carry build: stanzas, so `up` compiles the
-# solution inside Docker — what the timeout below is sized for. Proving a
-# Dockerfile against a source change is not this smoke's job: ci.yml's image
-# matrix does that, on the pull request that made the change. A host's
-# healthcheck is: the probe, the endpoints it asks and the files that bind each
-# host's port are filtered in, and the rest of src/ is not.
+# solution inside Docker — what the timeout below is sized for. ci.yml's image
+# matrix proves a Dockerfile against a source change; this smoke filters in only
+# what a host's healthcheck reads: the probe, the endpoints it asks and the
+# files that bind each host's port.
 on:
   pull_request:
     paths:
