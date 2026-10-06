@@ -1652,6 +1652,7 @@ class RendersAWorker(unittest.TestCase):
         self.assertIn("app.MapCommonHealthEndpoints();", program)
         self.assertNotIn("MapOpenApi", program)
         self.assertNotIn("AddOpenApi", program)
+        self.assertNotIn("AddCommonOpenApi", program)
         # Kestrel stays bound (§15.3), so the host is still a WebApplication
         # and the middleware §11.2 requires is still on it.
         self.assertIn("WebApplication.CreateBuilder", program)
