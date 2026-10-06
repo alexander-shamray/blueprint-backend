@@ -45,8 +45,7 @@ public sealed class TrackingFaultTests : IAsyncLifetime
         // Repointed at a reference this host answers 503 on, which is what a carrier that is down looks like to a poll.
         Shipment shipment = await _fixture.BookedAsync("SIM-TRANSIT");
         await _fixture.SetCarrierReferenceAsync(shipment.Id, "crr_down");
-        using IDisposable down = ServiceFixture.CarrierAnswers(
-            _carrier, "/v1/shipments/crr_down/events", 503);
+        using IDisposable down = ServiceFixture.CarrierAnswers(_carrier, "/v1/shipments/crr_down/events", 503);
 
         // From the engine's clock and before the pass, since FailSql stamps NextPollAt from SYSDATETIMEOFFSET().
         DateTimeOffset before = await _fixture.DatabaseNowAsync();

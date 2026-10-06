@@ -39,11 +39,13 @@ public sealed class PublishProductHandlerTests(ServiceFixture fixture) : IAsyncL
 
         // The handler never calls SaveChanges, so a committed row is the transaction behaviour's half (§6.3).
         string name = await fixture.ScalarAsync<string>(
-            "SELECT Value = Name FROM catalog.Products WHERE Id = {0}", result.Value);
+            "SELECT Value = Name FROM catalog.Products WHERE Id = {0}",
+            result.Value);
         name.ShouldBe("Walnut desk");
 
         string currency = await fixture.ScalarAsync<string>(
-            "SELECT Value = PriceCurrency FROM catalog.Products WHERE Id = {0}", result.Value);
+            "SELECT Value = PriceCurrency FROM catalog.Products WHERE Id = {0}",
+            result.Value);
         currency.ShouldBe("EUR", "Money.Of normalises the code on the way in");
     }
 

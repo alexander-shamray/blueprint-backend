@@ -56,8 +56,7 @@ public class CursorTests
     public void Decode_returns_null_for_ticks_past_the_calendar()
     {
         // These ticks parse, so only the range guard stands between them and a constructor throw.
-        string payload = string.Create(
-            CultureInfo.InvariantCulture, $"{DateTime.MaxValue.Ticks + 1}:{Guid.Empty:N}");
+        string payload = string.Create(CultureInfo.InvariantCulture, $"{DateTime.MaxValue.Ticks + 1}:{Guid.Empty:N}");
         string cursor = Base64Url.EncodeToString(Encoding.UTF8.GetBytes(payload));
 
         Cursor.Decode(cursor).ShouldBeNull();

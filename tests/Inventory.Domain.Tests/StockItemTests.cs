@@ -57,7 +57,8 @@ public class StockItemTests
         item.SetOnHand(2, Now);
 
         item.UpdatedAt.ShouldBe(
-            Now.AddHours(1).AddTicks(1), "a clock behind the row moves the stamp one tick, never back");
+            Now.AddHours(1).AddTicks(1),
+            "a clock behind the row moves the stamp one tick, never back");
         item.DomainEvents.ShouldHaveSingleItem().ShouldBeOfType<StockLevelChangedDomainEvent>()
             .OccurredAt.ShouldBe(item.UpdatedAt);
     }

@@ -161,8 +161,7 @@ public sealed class OutboxDispatcher : BackgroundService
             {
                 // One bad message does not affect the rest; the token, not the type, as above.
                 await connection.ExecuteAsync(
-                    new CommandDefinition(
-                        _failSql, new { message.Id, Error = ex.ToString() }, cancellationToken: ct));
+                    new CommandDefinition(_failSql, new { message.Id, Error = ex.ToString() }, cancellationToken: ct));
 
                 DeliveryFailed(_log, message.MessageId, message.Lane, message.Attempts + 1, MaxAttempts, ex);
             }

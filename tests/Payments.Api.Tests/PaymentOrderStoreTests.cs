@@ -171,7 +171,12 @@ public sealed class PaymentOrderStoreTests(ServiceFixture fixture) : IAsyncLifet
 
         await RaceConcurrentFirstWritesAsync(
             (store, order) => store.RecordPlacedAsync(
-                order, customer, 25.50m, "EUR", Placed, TestContext.Current.CancellationToken),
+                order,
+                customer,
+                25.50m,
+                "EUR",
+                Placed,
+                TestContext.Current.CancellationToken),
             (store, order) => store.RecordCancelledAsync(order, Cancelled, TestContext.Current.CancellationToken),
             async order =>
             {
@@ -191,9 +196,19 @@ public sealed class PaymentOrderStoreTests(ServiceFixture fixture) : IAsyncLifet
 
         await RaceConcurrentFirstWritesAsync(
             (store, order) => store.RecordPlacedAsync(
-                order, customer, 25.50m, "EUR", Placed, TestContext.Current.CancellationToken),
+                order,
+                customer,
+                25.50m,
+                "EUR",
+                Placed,
+                TestContext.Current.CancellationToken),
             (store, order) => store.RecordPlacedAsync(
-                order, customer, 25.50m, "EUR", Placed, TestContext.Current.CancellationToken),
+                order,
+                customer,
+                25.50m,
+                "EUR",
+                Placed,
+                TestContext.Current.CancellationToken),
             async order =>
             {
                 (await fixture.ScalarAsync<int>(

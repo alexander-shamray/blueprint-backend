@@ -50,8 +50,7 @@ public sealed class QuoteEndpointTests : IAsyncLifetime
     {
         using HttpClient client = Caller();
 
-        QuoteResponse? quote = await client.Quote(
-            "GBP", TestContext.Current.CancellationToken, (Chair, 2), (Desk, 1));
+        QuoteResponse? quote = await client.Quote("GBP", TestContext.Current.CancellationToken, (Chair, 2), (Desk, 1));
 
         quote.ShouldNotBeNull();
         quote.Currency.ShouldBe("GBP");
@@ -74,7 +73,10 @@ public sealed class QuoteEndpointTests : IAsyncLifetime
         using HttpClient client = Caller();
 
         QuoteResponse? quote = await client.Quote(
-            "GBP", TestContext.Current.CancellationToken, (Chair, 3), (Unknown, 2));
+            "GBP",
+            TestContext.Current.CancellationToken,
+            (Chair, 3),
+            (Unknown, 2));
 
         // The last assertion matters, as a dropped line leaves the total right.
         quote.ShouldNotBeNull();
@@ -87,8 +89,7 @@ public sealed class QuoteEndpointTests : IAsyncLifetime
     {
         using HttpClient client = Caller();
 
-        QuoteResponse? quote = await client.Quote(
-            "USD", TestContext.Current.CancellationToken, (Chair, 2), (Desk, 1));
+        QuoteResponse? quote = await client.Quote("USD", TestContext.Current.CancellationToken, (Chair, 2), (Desk, 1));
 
         // Catalog filters rather than converts (pricing.proto), so this is an answer, not an error.
         quote.ShouldNotBeNull();
@@ -102,8 +103,7 @@ public sealed class QuoteEndpointTests : IAsyncLifetime
     {
         using HttpClient client = Caller();
 
-        QuoteResponse? quote = await client.Quote(
-            "GBP", TestContext.Current.CancellationToken, (Chair, 2), (Chair, 1));
+        QuoteResponse? quote = await client.Quote("GBP", TestContext.Current.CancellationToken, (Chair, 2), (Chair, 1));
 
         // Merged and summed, as placing the order merges a repeated product (ADR-045).
         quote.ShouldNotBeNull();
@@ -137,8 +137,7 @@ public sealed class QuoteEndpointTests : IAsyncLifetime
     {
         using HttpClient client = Caller();
 
-        HttpResponseMessage response = await client.PostQuote(
-            "GBP", TestContext.Current.CancellationToken);
+        HttpResponseMessage response = await client.PostQuote("GBP", TestContext.Current.CancellationToken);
 
         await ShouldBeRefusedWithoutAHop(response);
     }
@@ -149,7 +148,8 @@ public sealed class QuoteEndpointTests : IAsyncLifetime
         using HttpClient client = Caller();
 
         HttpResponseMessage response = await client.PostQuote(
-            new QuoteRequest("GBP", null!), TestContext.Current.CancellationToken);
+            new QuoteRequest("GBP", null!),
+            TestContext.Current.CancellationToken);
 
         await ShouldBeRefusedWithoutAHop(response);
     }
@@ -161,7 +161,8 @@ public sealed class QuoteEndpointTests : IAsyncLifetime
 
         // Apart from the null list, as the two fail in different rules.
         HttpResponseMessage response = await client.PostQuote(
-            new QuoteRequest("GBP", [null!]), TestContext.Current.CancellationToken);
+            new QuoteRequest("GBP", [null!]),
+            TestContext.Current.CancellationToken);
 
         await ShouldBeRefusedWithoutAHop(response);
     }
@@ -177,7 +178,9 @@ public sealed class QuoteEndpointTests : IAsyncLifetime
         using HttpClient client = Caller();
 
         HttpResponseMessage response = await client.PostQuote(
-            currency, TestContext.Current.CancellationToken, (Chair, 1));
+            currency,
+            TestContext.Current.CancellationToken,
+            (Chair, 1));
 
         await ShouldBeRefusedWithoutAHop(response);
     }
@@ -188,8 +191,7 @@ public sealed class QuoteEndpointTests : IAsyncLifetime
     {
         using HttpClient client = Caller();
 
-        HttpResponseMessage response = await client.PostQuote(
-            "GBP", TestContext.Current.CancellationToken, (Chair, 0));
+        HttpResponseMessage response = await client.PostQuote("GBP", TestContext.Current.CancellationToken, (Chair, 0));
 
         await ShouldBeRefusedWithoutAHop(response);
     }
@@ -200,7 +202,9 @@ public sealed class QuoteEndpointTests : IAsyncLifetime
         using HttpClient client = Caller();
 
         HttpResponseMessage response = await client.PostQuote(
-            "GBP", TestContext.Current.CancellationToken, (Chair, OrderLimits.MaxQuantity + 1));
+            "GBP",
+            TestContext.Current.CancellationToken,
+            (Chair, OrderLimits.MaxQuantity + 1));
 
         // Ordering's bound, so the cart never prices an order PlaceOrderValidator refuses.
         await ShouldBeRefusedWithoutAHop(response);
@@ -213,7 +217,9 @@ public sealed class QuoteEndpointTests : IAsyncLifetime
 
         // The boundary from below, where an off-by-one the rejection test cannot see would show.
         QuoteResponse? quote = await client.Quote(
-            "GBP", TestContext.Current.CancellationToken, (Chair, OrderLimits.MaxQuantity));
+            "GBP",
+            TestContext.Current.CancellationToken,
+            (Chair, OrderLimits.MaxQuantity));
 
         quote.ShouldNotBeNull();
         quote.Total.ShouldBe(49.99m * OrderLimits.MaxQuantity);
@@ -260,8 +266,7 @@ public sealed class QuoteEndpointTests : IAsyncLifetime
                 .Range(0, OrderLimits.MaxLines + 1)
                 .Select(_ => (Guid.CreateVersion7(), 1))];
 
-        HttpResponseMessage response = await client.PostQuote(
-            "GBP", TestContext.Current.CancellationToken, lines);
+        HttpResponseMessage response = await client.PostQuote("GBP", TestContext.Current.CancellationToken, lines);
 
         // The order's own bound, before the hop; GetPricesValidator's is a separate one (ADR-045).
         await ShouldBeRefusedWithoutAHop(response);

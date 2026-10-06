@@ -50,7 +50,11 @@ public sealed class SupersededBookingTests
         RecordingCarrier carrier = new();
 
         bool moved = await PassAsync(
-            carrier, new LostAcknowledgementUnitOfWork(), new RecordingLogger(), pending, committed);
+            carrier,
+            new LostAcknowledgementUnitOfWork(),
+            new RecordingLogger(),
+            pending,
+            committed);
 
         carrier.Cancels.ShouldBeEmpty("a cancel here would withdraw the booking the row now holds");
         moved.ShouldBeTrue("the row holds this pass's booking");
@@ -99,7 +103,12 @@ public sealed class SupersededBookingTests
         RecordingLogger log = new();
 
         bool moved = await PassAsync(
-            new NoStoredAddress(), carrier, new ConflictOnceUnitOfWork(), log, pending, voided);
+            new NoStoredAddress(),
+            carrier,
+            new ConflictOnceUnitOfWork(),
+            log,
+            pending,
+            voided);
 
         moved.ShouldBeFalse();
         log.Entries.ShouldBeEmpty();
@@ -141,8 +150,7 @@ public sealed class SupersededBookingTests
     [Fact]
     public async Task A_booking_whose_commit_fails_is_logged_with_its_carrier_reference_and_rethrown()
     {
-        Shipment pending = Shipment.For(
-            new ShipmentId(Guid.CreateVersion7()), new OrderId(Guid.CreateVersion7()), Now);
+        Shipment pending = Shipment.For(new ShipmentId(Guid.CreateVersion7()), new OrderId(Guid.CreateVersion7()), Now);
         RecordingCarrier carrier = new();
         RecordingLogger log = new();
 
@@ -164,7 +172,9 @@ public sealed class SupersededBookingTests
     private static Shipment Voided()
     {
         Shipment shipment = Shipment.For(
-            new ShipmentId(Guid.CreateVersion7()), new OrderId(Guid.CreateVersion7()), Now);
+            new ShipmentId(Guid.CreateVersion7()),
+            new OrderId(Guid.CreateVersion7()),
+            Now);
         shipment.Cancel(Now).ShouldBeTrue();
 
         return shipment;
@@ -203,7 +213,12 @@ public sealed class SupersededBookingTests
 
         Shipment first = loads[0];
         FulfilmentWork work = new(
-            first.Id.Value, first.OrderId.Value, nameof(ShipmentStatus.Pending), null, first.CreatedAt, null);
+            first.Id.Value,
+            first.OrderId.Value,
+            nameof(ShipmentStatus.Pending),
+            null,
+            first.CreatedAt,
+            null);
 
         return await worker.FulfilAsync(provider, work, TestContext.Current.CancellationToken);
     }

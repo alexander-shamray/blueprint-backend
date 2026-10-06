@@ -262,7 +262,8 @@ public class DatabaseSmokeTests(ServiceFixture fixture)
         attempts.ShouldBe(2);
 
         string note = await fixture.ScalarAsync<string>(
-            "SELECT Value = Note FROM ordering.TransactionProbe WHERE Id = {0}", id);
+            "SELECT Value = Note FROM ordering.TransactionProbe WHERE Id = {0}",
+            id);
         note.ShouldBe(
             "committed+once",
             "attempt 2 must read committed state, not attempt 1's mutation out of the identity map");

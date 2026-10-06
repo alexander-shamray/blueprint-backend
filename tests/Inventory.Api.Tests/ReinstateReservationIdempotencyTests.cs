@@ -118,7 +118,9 @@ public sealed class ReinstateReservationIdempotencyTests(ServiceFixture fixture)
         var tombstoned = Guid.CreateVersion7();
         var refused = Guid.CreateVersion7();
         await client.PostAsync(
-            $"/v1/inventory/reservations/{tombstoned}/release", null, TestContext.Current.CancellationToken);
+            $"/v1/inventory/reservations/{tombstoned}/release",
+            null,
+            TestContext.Current.CancellationToken);
 
         (await ReservationTestSupport.ReinstateAsync(client, tombstoned, refused))
             .StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
@@ -135,7 +137,9 @@ public sealed class ReinstateReservationIdempotencyTests(ServiceFixture fixture)
         (await ReservationTestSupport.ReinstateAsync(client, order, commandId))
             .StatusCode.ShouldBe(HttpStatusCode.NoContent);
         (await client.PostAsync(
-                $"/v1/inventory/reservations/{order}/release", null, TestContext.Current.CancellationToken))
+                $"/v1/inventory/reservations/{order}/release",
+                null,
+                TestContext.Current.CancellationToken))
             .StatusCode.ShouldBe(HttpStatusCode.NoContent);
 
         HttpResponseMessage repeat = await ReservationTestSupport.ReinstateAsync(client, order, commandId);

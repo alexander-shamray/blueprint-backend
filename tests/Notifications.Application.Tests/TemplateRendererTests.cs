@@ -100,7 +100,10 @@ public class TemplateRendererTests
         first.Languages.ShouldBe(["en"]);
 
         RenderedMessage again = renderer.Render(
-            TemplateKeys.OrderPlaced, Everything, first.TemplateVersion, first.Languages);
+            TemplateKeys.OrderPlaced,
+            Everything,
+            first.TemplateVersion,
+            first.Languages);
 
         again.Subject.ShouldBe(first.Subject);
         again.Body.ShouldBe(first.Body);

@@ -32,7 +32,8 @@ internal sealed class GrpcDeliveryAddressSource(
             metrics.Refused();
 
             throw new AddressSourceRefusedException(
-                $"Ordering refused this host's token with {e.StatusCode} (ADR-052).", e);
+                $"Ordering refused this host's token with {e.StatusCode} (ADR-052).",
+                e);
         }
         catch (RpcException e) when (e.Status.DebugException is AddressSourceRefusedException refused)
         {

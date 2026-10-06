@@ -39,7 +39,8 @@ public class AuthorisePaymentHandlerTests
         _provider.Answer = new AuthorisationResult.Authorised("psp_1");
 
         Result result = await Handler().HandleAsync(
-            new AuthorisePaymentCommand(order.Value, 42.10m, "EUR"), TestContext.Current.CancellationToken);
+            new AuthorisePaymentCommand(order.Value, 42.10m, "EUR"),
+            TestContext.Current.CancellationToken);
 
         result.IsSuccess.ShouldBeTrue();
         _provider.Requests.ShouldHaveSingleItem().ShouldBe(new AuthorisationRequest(order, Payer, 42.10m, "EUR"));
@@ -54,7 +55,8 @@ public class AuthorisePaymentHandlerTests
         _provider.Answer = new AuthorisationResult.Declined("card_declined");
 
         await Handler().HandleAsync(
-            new AuthorisePaymentCommand(order.Value, 42.10m, "EUR"), TestContext.Current.CancellationToken);
+            new AuthorisePaymentCommand(order.Value, 42.10m, "EUR"),
+            TestContext.Current.CancellationToken);
 
         PaymentIntent intent = _intents.Added.ShouldHaveSingleItem();
         intent.Status.ShouldBe(PaymentIntentStatus.Declined);
@@ -68,7 +70,8 @@ public class AuthorisePaymentHandlerTests
 
         await Should.ThrowAsync<PaymentOrderNotYetKnownException>(() =>
             Handler().HandleAsync(
-                new AuthorisePaymentCommand(Guid.CreateVersion7(), 1m, "EUR"), TestContext.Current.CancellationToken));
+                new AuthorisePaymentCommand(Guid.CreateVersion7(), 1m, "EUR"),
+                TestContext.Current.CancellationToken));
         _provider.Requests.ShouldBeEmpty();
         _intents.Added.ShouldBeEmpty();
     }
@@ -80,7 +83,8 @@ public class AuthorisePaymentHandlerTests
         _orders.Record = new PaymentOrderRecord(order, null, null, null, null, Now.AddMinutes(-2));
 
         await Handler().HandleAsync(
-            new AuthorisePaymentCommand(order.Value, 42.10m, "EUR"), TestContext.Current.CancellationToken);
+            new AuthorisePaymentCommand(order.Value, 42.10m, "EUR"),
+            TestContext.Current.CancellationToken);
 
         _provider.Requests.ShouldBeEmpty("ADR-049: a cancelled order is never charged");
         PaymentIntent intent = _intents.Added.ShouldHaveSingleItem();
@@ -95,7 +99,8 @@ public class AuthorisePaymentHandlerTests
         _orders.Record = Placed(order, cancelledAt: Now.AddSeconds(-5));
 
         await Handler().HandleAsync(
-            new AuthorisePaymentCommand(order.Value, 42.10m, "EUR"), TestContext.Current.CancellationToken);
+            new AuthorisePaymentCommand(order.Value, 42.10m, "EUR"),
+            TestContext.Current.CancellationToken);
 
         _provider.Requests.ShouldBeEmpty();
         _intents.Added.ShouldHaveSingleItem().DeclineReason.ShouldBe(DeclineReasons.OrderCancelled);
@@ -109,7 +114,8 @@ public class AuthorisePaymentHandlerTests
 
         await Should.ThrowAsync<PaymentMismatchException>(() =>
             Handler().HandleAsync(
-                new AuthorisePaymentCommand(order.Value, 99.99m, "USD"), TestContext.Current.CancellationToken));
+                new AuthorisePaymentCommand(order.Value, 99.99m, "USD"),
+                TestContext.Current.CancellationToken));
         _intents.Added.ShouldBeEmpty(
             "no customer-facing decline is published for a command that disagrees with the order");
     }
@@ -124,7 +130,8 @@ public class AuthorisePaymentHandlerTests
 
         await Should.ThrowAsync<PaymentMismatchException>(() =>
             Handler().HandleAsync(
-                new AuthorisePaymentCommand(order.Value, amount, currency), TestContext.Current.CancellationToken));
+                new AuthorisePaymentCommand(order.Value, amount, currency),
+                TestContext.Current.CancellationToken));
         _provider.Requests.ShouldBeEmpty();
         _intents.Added.ShouldBeEmpty();
     }
@@ -138,7 +145,8 @@ public class AuthorisePaymentHandlerTests
 
         await Should.ThrowAsync<PaymentMismatchException>(() =>
             Handler().HandleAsync(
-                new AuthorisePaymentCommand(order.Value, 99.99m, "EUR"), TestContext.Current.CancellationToken));
+                new AuthorisePaymentCommand(order.Value, 99.99m, "EUR"),
+                TestContext.Current.CancellationToken));
         _provider.Requests.ShouldBeEmpty();
     }
 
@@ -152,7 +160,8 @@ public class AuthorisePaymentHandlerTests
         _intents.Seed(existing);
 
         Result result = await Handler().HandleAsync(
-            new AuthorisePaymentCommand(order.Value, 42.10m, "EUR"), TestContext.Current.CancellationToken);
+            new AuthorisePaymentCommand(order.Value, 42.10m, "EUR"),
+            TestContext.Current.CancellationToken);
 
         result.IsSuccess.ShouldBeTrue();
         _provider.Requests.ShouldBeEmpty();
@@ -168,7 +177,8 @@ public class AuthorisePaymentHandlerTests
 
         await Should.ThrowAsync<PaymentOrderNotYetKnownException>(() =>
             Handler().HandleAsync(
-                new AuthorisePaymentCommand(Guid.CreateVersion7(), 1m, "EUR"), TestContext.Current.CancellationToken));
+                new AuthorisePaymentCommand(Guid.CreateVersion7(), 1m, "EUR"),
+                TestContext.Current.CancellationToken));
         _orders.LockCalls.ShouldBe(1);
         _intents.GetCallsBeforeLock.ShouldBe(0);
     }

@@ -131,15 +131,27 @@ public sealed class NotificationsRetentionService : BackgroundService
 
         // Validated at start (ADR-053), so each window is present here.
         int notifications = await PurgeWindowAsync(
-            connection, EndedNotices, DeleteNotices, now - _windows.LogRetention!.Value, ct);
+            connection,
+            EndedNotices,
+            DeleteNotices,
+            now - _windows.LogRetention!.Value,
+            ct);
         Purged(_log, notifications, "the notification log", null);
 
         int orders = await PurgeWindowAsync(
-            connection, ExpiredOrders, DeleteOrders, now - _windows.OrderRetention!.Value, ct);
+            connection,
+            ExpiredOrders,
+            DeleteOrders,
+            now - _windows.OrderRetention!.Value,
+            ct);
         Purged(_log, orders, "order records", null);
 
         int contacts = await PurgeWindowAsync(
-            connection, ExpiredContacts, DeleteContacts, now - _windows.ContactRetention!.Value, ct);
+            connection,
+            ExpiredContacts,
+            DeleteContacts,
+            now - _windows.ContactRetention!.Value,
+            ct);
         Purged(_log, contacts, "contact records", null);
 
         return (notifications, contacts, orders);

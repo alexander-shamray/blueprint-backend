@@ -118,7 +118,8 @@ public sealed class ContactStoreTests(ServiceFixture fixture) : IAsyncLifetime
 
     private Task<int> CountAsync(Guid customer) =>
         fixture.ScalarAsync<int>(
-            "SELECT Value = COUNT(*) FROM notifications.ContactRecords WHERE CustomerId = {0}", customer);
+            "SELECT Value = COUNT(*) FROM notifications.ContactRecords WHERE CustomerId = {0}",
+            customer);
 
     private async Task SaveAsync(Guid customer, ContactLookup.Found contact, DateTimeOffset fetchedAt)
     {

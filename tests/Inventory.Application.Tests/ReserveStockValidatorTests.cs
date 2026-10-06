@@ -47,7 +47,8 @@ public class ReserveStockValidatorTests
     public void A_quantity_past_the_contract_ceiling_is_refused()
     {
         _validator.TestValidate(new ReserveStockCommand(
-                Guid.CreateVersion7(), [new(ProductId.New(), OrderLimits.MaxQuantity + 1)]))
+                Guid.CreateVersion7(),
+                [new(ProductId.New(), OrderLimits.MaxQuantity + 1)]))
             .ShouldHaveValidationErrorFor("Lines[0].Quantity");
     }
 }

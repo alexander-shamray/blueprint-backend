@@ -40,7 +40,8 @@ public class ShuffledTrackingFeedTests
 
             // Despatch before delivery whatever the arrival order, since Notifications consumes both (§3.2).
             shipment.DomainEvents.Select(e => e.GetType()).ShouldBe(
-                [typeof(ShipmentDispatchedDomainEvent), typeof(ShipmentDeliveredDomainEvent)], arrival);
+                [typeof(ShipmentDispatchedDomainEvent), typeof(ShipmentDeliveredDomainEvent)],
+                arrival);
         }
 
         // Four events have twenty-four orders; a generator that yielded fewer

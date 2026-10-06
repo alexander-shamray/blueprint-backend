@@ -120,7 +120,9 @@ public class ShipmentConsumerTests
 
     // Pinned whole rather than sampled, so a parameter slipped into the template, an address among them, fails here.
     private static void AssertSupersededLogged(
-        CapturingLogger<VoidShipmentHandler> log, ShipmentId shipment, Guid order)
+        CapturingLogger<VoidShipmentHandler> log,
+        ShipmentId shipment,
+        Guid order)
     {
         (LogLevel Level, EventId EventId, string Message) entry = log.Entries.ShouldHaveSingleItem();
         entry.Level.ShouldBe(LogLevel.Information);
@@ -209,7 +211,10 @@ public class ShipmentConsumerTests
         public bool IsEnabled(LogLevel logLevel) => true;
 
         public void Log<TState>(
-            LogLevel logLevel, EventId eventId, TState state, Exception? exception,
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
             Func<TState, Exception?, string> formatter) =>
             Entries.Add((logLevel, eventId, formatter(state, exception)));
     }

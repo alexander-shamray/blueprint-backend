@@ -241,7 +241,10 @@ public sealed class SendWorker(
         if (SendRules.HasGivenUp(work.CreatedAt, clock.GetUtcNow(), giveUpAge))
         {
             bool ended = await CommitAsync(
-                sp, work, (n, now) => n.MarkUndeliverable(NotificationReasons.GaveUp, now), ct);
+                sp,
+                work,
+                (n, now) => n.MarkUndeliverable(NotificationReasons.GaveUp, now),
+                ct);
 
             if (ended)
                 GaveUp(log, work.NotificationId, work.OrderId, giveUpAge, null);
@@ -285,7 +288,10 @@ public sealed class SendWorker(
         if (await ContactAsync(sp, work, customer, reads, ct) is not ContactLookup.Found contact)
         {
             bool unknown = await CommitAsync(
-                sp, work, (n, now) => n.MarkUndeliverable(NotificationReasons.NoSuchCustomer, now), ct);
+                sp,
+                work,
+                (n, now) => n.MarkUndeliverable(NotificationReasons.NoSuchCustomer, now),
+                ct);
 
             if (unknown)
                 NoSuchCustomer(log, work.NotificationId, work.OrderId, customer, null);
@@ -303,7 +309,10 @@ public sealed class SendWorker(
 
             // The intent, committed before the send, so a crash after the relay's accept leaves a row that says so.
             bool started = await CommitAsync(
-                sp, work, (n, now) => n.StartSend(message.TemplateVersion, message.LanguageList, now), ct);
+                sp,
+                work,
+                (n, now) => n.StartSend(message.TemplateVersion, message.LanguageList, now),
+                ct);
 
             if (!started)
             {
@@ -315,7 +324,10 @@ public sealed class SendWorker(
         {
             // A send that may have reached the relay: the stamped text again, under the same Message-ID, and counted.
             message = renderer.Render(
-                work.TemplateKey, parameters, work.TemplateVersion!.Value, work.Languages!.Split(','));
+                work.TemplateKey,
+                parameters,
+                work.TemplateVersion!.Value,
+                work.Languages!.Split(','));
             sp.GetRequiredService<NotificationMetrics>().Resent();
             Resending(log, work.NotificationId, work.OrderId, null);
         }

@@ -27,7 +27,8 @@ public sealed class ReservationEndpointsTests(ServiceFixture fixture) : IAsyncLi
 
         using HttpClient client = Admin();
         ReservationDto? dto = await client.GetFromJsonAsync<ReservationDto>(
-            $"/v1/inventory/reservations/{order}", TestContext.Current.CancellationToken);
+            $"/v1/inventory/reservations/{order}",
+            TestContext.Current.CancellationToken);
 
         dto.ShouldNotBeNull();
         dto.Status.ShouldBe("Reserved");
@@ -40,7 +41,8 @@ public sealed class ReservationEndpointsTests(ServiceFixture fixture) : IAsyncLi
         using HttpClient client = Admin();
 
         HttpResponseMessage get = await client.GetAsync(
-            $"/v1/inventory/reservations/{Guid.CreateVersion7()}", TestContext.Current.CancellationToken);
+            $"/v1/inventory/reservations/{Guid.CreateVersion7()}",
+            TestContext.Current.CancellationToken);
 
         get.StatusCode.ShouldBe(HttpStatusCode.NotFound);
         get.Content.Headers.ContentType?.MediaType.ShouldBe("application/problem+json");
@@ -59,7 +61,9 @@ public sealed class ReservationEndpointsTests(ServiceFixture fixture) : IAsyncLi
 
         using HttpClient client = Admin();
         HttpResponseMessage response = await client.PostAsync(
-            $"/v1/inventory/reservations/{order}/release", null, TestContext.Current.CancellationToken);
+            $"/v1/inventory/reservations/{order}/release",
+            null,
+            TestContext.Current.CancellationToken);
 
         response.StatusCode.ShouldBe(HttpStatusCode.NoContent);
         (await Available(product)).ShouldBe(3);
@@ -73,11 +77,14 @@ public sealed class ReservationEndpointsTests(ServiceFixture fixture) : IAsyncLi
     {
         using HttpClient client = Admin();
         HttpResponseMessage response = await client.PostAsync(
-            $"/v1/inventory/reservations/{Guid.Empty}/release", null, TestContext.Current.CancellationToken);
+            $"/v1/inventory/reservations/{Guid.Empty}/release",
+            null,
+            TestContext.Current.CancellationToken);
 
         response.StatusCode.ShouldBe(HttpStatusCode.BadRequest);
         (await fixture.ScalarAsync<int>(
-                "SELECT Value = COUNT(*) FROM inventory.Reservations WHERE OrderId = {0}", Guid.Empty))
+                "SELECT Value = COUNT(*) FROM inventory.Reservations WHERE OrderId = {0}",
+                Guid.Empty))
             .ShouldBe(0, "no tombstone for an identity no order can have");
     }
 
@@ -88,7 +95,9 @@ public sealed class ReservationEndpointsTests(ServiceFixture fixture) : IAsyncLi
 
         using HttpClient client = Admin();
         HttpResponseMessage response = await client.PostAsync(
-            $"/v1/inventory/reservations/{order}/release", null, TestContext.Current.CancellationToken);
+            $"/v1/inventory/reservations/{order}/release",
+            null,
+            TestContext.Current.CancellationToken);
 
         response.StatusCode.ShouldBe(HttpStatusCode.NoContent);
         (await StatusAsync(order)).ShouldBe("Released");
@@ -129,7 +138,9 @@ public sealed class ReservationEndpointsTests(ServiceFixture fixture) : IAsyncLi
         using HttpClient client = Admin();
         var order = Guid.CreateVersion7();
         await client.PostAsync(
-            $"/v1/inventory/reservations/{order}/release", null, TestContext.Current.CancellationToken);
+            $"/v1/inventory/reservations/{order}/release",
+            null,
+            TestContext.Current.CancellationToken);
         HttpResponseMessage tombstone = await ReinstateAsync(client, order);
         tombstone.StatusCode.ShouldBe(HttpStatusCode.UnprocessableEntity);
         (await tombstone.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))
@@ -159,15 +170,20 @@ public sealed class ReservationEndpointsTests(ServiceFixture fixture) : IAsyncLi
 
         HttpResponseMessage[] responses = await Task.WhenAll(
             client.PostAsync(
-                $"/v1/inventory/reservations/{order}/release", null, TestContext.Current.CancellationToken),
+                $"/v1/inventory/reservations/{order}/release",
+                null,
+                TestContext.Current.CancellationToken),
             client.PostAsync(
-                $"/v1/inventory/reservations/{order}/release", null, TestContext.Current.CancellationToken));
+                $"/v1/inventory/reservations/{order}/release",
+                null,
+                TestContext.Current.CancellationToken));
 
         responses.ShouldAllBe(
             r => r.StatusCode == HttpStatusCode.NoContent,
             "the second creator waited on the first's key-range lock and found the tombstone");
         (await fixture.ScalarAsync<int>(
-                "SELECT Value = COUNT(*) FROM inventory.Reservations WHERE OrderId = {0}", order))
+                "SELECT Value = COUNT(*) FROM inventory.Reservations WHERE OrderId = {0}",
+                order))
             .ShouldBe(1);
         (await fixture.OutboxAsync())
             .Count(r => r.MessageType.Contains("StockReleased", StringComparison.Ordinal))
@@ -189,7 +205,9 @@ public sealed class ReservationEndpointsTests(ServiceFixture fixture) : IAsyncLi
         HttpResponseMessage[] responses = await Task.WhenAll(
             ReinstateAsync(client, order),
             client.PostAsync(
-                $"/v1/inventory/reservations/{order}/release", null, TestContext.Current.CancellationToken));
+                $"/v1/inventory/reservations/{order}/release",
+                null,
+                TestContext.Current.CancellationToken));
 
         responses.ShouldAllBe(r => r.StatusCode == HttpStatusCode.NoContent);
         string status = await StatusAsync(order);
@@ -209,10 +227,14 @@ public sealed class ReservationEndpointsTests(ServiceFixture fixture) : IAsyncLi
         (await client.GetAsync($"/v1/inventory/reservations/{order}", TestContext.Current.CancellationToken))
             .StatusCode.ShouldBe(HttpStatusCode.Forbidden);
         (await client.PostAsync(
-                $"/v1/inventory/reservations/{order}/release", null, TestContext.Current.CancellationToken))
+                $"/v1/inventory/reservations/{order}/release",
+                null,
+                TestContext.Current.CancellationToken))
             .StatusCode.ShouldBe(HttpStatusCode.Forbidden);
         (await client.PostAsync(
-                $"/v1/inventory/reservations/{order}/reinstate", null, TestContext.Current.CancellationToken))
+                $"/v1/inventory/reservations/{order}/reinstate",
+                null,
+                TestContext.Current.CancellationToken))
             .StatusCode.ShouldBe(HttpStatusCode.Forbidden);
     }
 

@@ -264,7 +264,8 @@ internal static class OrderBuilder
             Enumerable
                 .Range(0, lines)
                 .Select(_ => (ProductId.New(), 1, Money.Of(10m, currency))),
-            currency, DefaultNow);
+            currency,
+            DefaultNow);
 
     public static Order AwaitingPayment()
     {
@@ -792,8 +793,7 @@ public class PlaceOrderHandlerTests(ServiceFixture fixture) : IAsyncLifetime
     /// the suite rather than on the fixture: it is one INSERT over
     /// ExecuteAsync, and the fixture carries what more than one suite needs.
     /// </summary>
-    private Task SeedPriceAsync(
-        Guid product, decimal amount, string currency, bool available = true) =>
+    private Task SeedPriceAsync(Guid product, decimal amount, string currency, bool available = true) =>
         fixture.ExecuteAsync(
             """
             INSERT INTO ordering.ProductPrices (ProductId, Currency, Amount, IsAvailable, UpdatedAt)

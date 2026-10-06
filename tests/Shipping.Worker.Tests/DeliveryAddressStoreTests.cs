@@ -49,14 +49,17 @@ public sealed class DeliveryAddressStoreTests(ServiceFixture fixture) : IAsyncLi
         await SaveAsync(order, laterCustomer, later, laterInstant);
 
         (await fixture.ScalarAsync<int>(
-            "SELECT Value = COUNT(*) FROM shipping.DeliveryAddresses WHERE OrderId = {0}", order.Value))
+            "SELECT Value = COUNT(*) FROM shipping.DeliveryAddresses WHERE OrderId = {0}",
+            order.Value))
             .ShouldBe(1);
         (await ReadAsync(order)).ShouldBe(later);
         (await fixture.ScalarAsync<Guid>(
-            "SELECT Value = CustomerId FROM shipping.DeliveryAddresses WHERE OrderId = {0}", order.Value))
+            "SELECT Value = CustomerId FROM shipping.DeliveryAddresses WHERE OrderId = {0}",
+            order.Value))
             .ShouldBe(laterCustomer);
         (await fixture.ScalarAsync<DateTimeOffset>(
-            "SELECT Value = FetchedAt FROM shipping.DeliveryAddresses WHERE OrderId = {0}", order.Value))
+            "SELECT Value = FetchedAt FROM shipping.DeliveryAddresses WHERE OrderId = {0}",
+            order.Value))
             .ShouldBe(laterInstant);
     }
 

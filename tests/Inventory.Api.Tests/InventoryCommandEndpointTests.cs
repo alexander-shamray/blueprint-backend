@@ -210,7 +210,8 @@ public sealed class InventoryCommandEndpointTests(ServiceFixture fixture) : IAsy
         await EventuallyStatus(sentinelOrder, "Reserved");
 
         (await fixture.ScalarAsync<int>(
-                "SELECT Value = COUNT(*) FROM inventory.Reservations WHERE OrderId = {0}", order))
+                "SELECT Value = COUNT(*) FROM inventory.Reservations WHERE OrderId = {0}",
+                order))
             .ShouldBe(
                 0,
                 "nothing was written for this order, and the sentinel behind it on the same " +
@@ -233,7 +234,8 @@ public sealed class InventoryCommandEndpointTests(ServiceFixture fixture) : IAsy
         await EventuallyStatus(sentinelOrder, "Reserved");
 
         (await fixture.ScalarAsync<int>(
-                "SELECT Value = COUNT(*) FROM inventory.Reservations WHERE OrderId = {0}", order))
+                "SELECT Value = COUNT(*) FROM inventory.Reservations WHERE OrderId = {0}",
+                order))
             .ShouldBe(
                 0,
                 "nothing was written for this order, and the sentinel behind it on the same " +

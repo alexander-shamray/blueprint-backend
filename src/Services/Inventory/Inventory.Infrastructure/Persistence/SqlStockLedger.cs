@@ -53,7 +53,9 @@ internal sealed class SqlStockLedger(InventoryDbContext db) : IStockLedger
         (DbConnection connection, DbTransaction transaction) = Current();
 
         await connection.ExecuteAsync(new CommandDefinition(
-            $"SAVE TRANSACTION {Savepoint};", transaction: transaction, cancellationToken: ct));
+            $"SAVE TRANSACTION {Savepoint};",
+            transaction: transaction,
+            cancellationToken: ct));
 
         List<ReservedLevel> levels = [];
         List<ProductId> unavailable = [];
@@ -76,7 +78,9 @@ internal sealed class SqlStockLedger(InventoryDbContext db) : IStockLedger
             return new LedgerOutcome(levels, unavailable);
 
         await connection.ExecuteAsync(new CommandDefinition(
-            $"ROLLBACK TRANSACTION {Savepoint};", transaction: transaction, cancellationToken: ct));
+            $"ROLLBACK TRANSACTION {Savepoint};",
+            transaction: transaction,
+            cancellationToken: ct));
 
         return new LedgerOutcome([], unavailable);
     }

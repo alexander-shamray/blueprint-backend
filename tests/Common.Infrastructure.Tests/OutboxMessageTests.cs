@@ -120,7 +120,11 @@ public class OutboxMessageTests
         {
             Should
                 .Throw<InvalidOperationException>(() => OutboxMessage.Stage(
-                    message, lane, Guid.CreateVersion7(), Types, Json))
+                    message,
+                    lane,
+                    Guid.CreateVersion7(),
+                    Types,
+                    Json))
                 .Message.ShouldContain("different things");
         }
     }
@@ -153,7 +157,11 @@ public class OutboxMessageTests
 
         Should
             .Throw<InvalidOperationException>(() => OutboxMessage.Stage(
-                message, OutboxLane.Local, Guid.CreateVersion7(), Types, Json))
+                message,
+                OutboxLane.Local,
+                Guid.CreateVersion7(),
+                Types,
+                Json))
             .Message.ShouldContain("Local lane");
     }
 

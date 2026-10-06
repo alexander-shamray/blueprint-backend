@@ -72,7 +72,11 @@ public sealed class OrderJourneyTests(ServiceFixture fixture) : IAsyncLifetime
 
         await fixture.DeliverAsync(OrderEvents.Placed(order, customer, At));
         await fixture.DeliverAsync(OrderEvents.Cancelled(
-            order, customer, At.AddMinutes(5), CancelReasons.CustomerRequest, CancelOrigins.User));
+            order,
+            customer,
+            At.AddMinutes(5),
+            CancelReasons.CustomerRequest,
+            CancelOrigins.User));
 
         await fixture.SendUntilSettledAsync();
 

@@ -67,7 +67,8 @@ internal sealed class HttpPaymentProvider(HttpClient http, ProviderMetrics metri
     public async Task VoidAsync(VoidRequest request, CancellationToken ct)
     {
         using HttpRequestMessage message = new(
-            HttpMethod.Post, $"v1/authorisations/{Uri.EscapeDataString(request.Reference)}/void");
+            HttpMethod.Post,
+            $"v1/authorisations/{Uri.EscapeDataString(request.Reference)}/void");
         message.Headers.Add(KeyHeader, request.IdempotencyKey);
 
         using HttpResponseMessage response = await SendAsync(message, ct);

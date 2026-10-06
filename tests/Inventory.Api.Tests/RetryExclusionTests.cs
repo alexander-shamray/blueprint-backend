@@ -76,8 +76,7 @@ public sealed class RetryExclusionTests(ServiceFixture fixture) : IAsyncLifetime
             "so the interval below would be timing a delivery nothing has looked at");
 
         // Past the ladder's first wait by a jitter margin; a message still on the ladder has not faulted by then.
-        await Task.Delay(
-            RetryPolicy.MinInterval + TimeSpan.FromSeconds(2), TestContext.Current.CancellationToken);
+        await Task.Delay(RetryPolicy.MinInterval + TimeSpan.FromSeconds(2), TestContext.Current.CancellationToken);
 
         observer.FaultsFor(messageId).ShouldBe(
             1,

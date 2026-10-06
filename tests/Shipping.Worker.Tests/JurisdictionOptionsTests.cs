@@ -118,8 +118,10 @@ public sealed class JurisdictionOptionsTests
             provider.GetRequiredService<IOptions<ShippingJurisdictionOptions>>().Value;
 
         bound.AddressRetention.ShouldBe(TimeSpan.Parse(
-            ShippingWorkerFactory.InventedAddressRetention, System.Globalization.CultureInfo.InvariantCulture));
+            ShippingWorkerFactory.InventedAddressRetention,
+            System.Globalization.CultureInfo.InvariantCulture));
         bound.TrackingRetention.ShouldBe(TimeSpan.Parse(
-            ShippingWorkerFactory.InventedTrackingRetention, System.Globalization.CultureInfo.InvariantCulture));
+            ShippingWorkerFactory.InventedTrackingRetention,
+            System.Globalization.CultureInfo.InvariantCulture));
     }
 }

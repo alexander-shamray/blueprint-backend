@@ -166,7 +166,8 @@ public sealed class OrderProjectionTests(BffServiceFixture fixture) : IAsyncLife
 
         await projection.HandleAsync(OrderEvents.Placed(order, _customer, At), TestContext.Current.CancellationToken);
         await projection.HandleAsync(
-            OrderEvents.Confirmed(order, _customer, At.AddMinutes(1)), TestContext.Current.CancellationToken);
+            OrderEvents.Confirmed(order, _customer, At.AddMinutes(1)),
+            TestContext.Current.CancellationToken);
 
         log.Warnings.ShouldBeEmpty("the customer agreed both times");
 

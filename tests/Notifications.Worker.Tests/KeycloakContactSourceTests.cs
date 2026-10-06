@@ -116,7 +116,9 @@ public sealed class KeycloakContactSourceTests(KeycloakFixture keycloak)
     public async Task The_token_issued_to_the_contact_reader_carries_exactly_the_grant_and_no_service_audience()
     {
         string token = await keycloak.TokenAsync(
-            KeycloakFixture.ContactClient, KeycloakFixture.ContactSecret, NotificationsWorkerFactory.ContactScope);
+            KeycloakFixture.ContactClient,
+            KeycloakFixture.ContactSecret,
+            NotificationsWorkerFactory.ContactScope);
 
         JwtSecurityToken jwt = new JwtSecurityTokenHandler().ReadJwtToken(token);
         using JsonDocument payload = JsonDocument.Parse(Base64Url.DecodeFromChars(jwt.RawPayload));

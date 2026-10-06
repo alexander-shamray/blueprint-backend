@@ -78,7 +78,10 @@ internal sealed class SqlPaymentOrderStore(PaymentsDbContext db) : IPaymentOrder
         (DbConnection connection, DbTransaction transaction) = Current();
 
         await connection.ExecuteAsync(new CommandDefinition(
-            CancelledSql, new { OrderId = id.Value, CancelledAt = cancelledAt }, transaction, cancellationToken: ct));
+            CancelledSql,
+            new { OrderId = id.Value, CancelledAt = cancelledAt },
+            transaction,
+            cancellationToken: ct));
     }
 
     public async Task<PaymentOrderRecord?> LockAsync(OrderId id, CancellationToken ct)
@@ -86,7 +89,10 @@ internal sealed class SqlPaymentOrderStore(PaymentsDbContext db) : IPaymentOrder
         (DbConnection connection, DbTransaction transaction) = Current();
 
         Row? row = await connection.QuerySingleOrDefaultAsync<Row>(new CommandDefinition(
-            LockSql, new { OrderId = id.Value }, transaction, cancellationToken: ct));
+            LockSql,
+            new { OrderId = id.Value },
+            transaction,
+            cancellationToken: ct));
 
         return row is null
             ? null

@@ -31,7 +31,8 @@ public sealed class PaymentEndpointsTests(ServiceFixture fixture) : IAsyncLifeti
         using HttpClient client = Admin();
 
         PaymentView? view = await client.GetFromJsonAsync<PaymentView>(
-            $"/v1/payments/{order}", TestContext.Current.CancellationToken);
+            $"/v1/payments/{order}",
+            TestContext.Current.CancellationToken);
 
         view.ShouldNotBeNull();
         view.OrderId.ShouldBe(order);
@@ -61,7 +62,8 @@ public sealed class PaymentEndpointsTests(ServiceFixture fixture) : IAsyncLifeti
         using HttpClient client = Admin();
 
         PaymentView? view = await client.GetFromJsonAsync<PaymentView>(
-            $"/v1/payments/{order}", TestContext.Current.CancellationToken);
+            $"/v1/payments/{order}",
+            TestContext.Current.CancellationToken);
 
         view!.Intent.ShouldBeNull();
         view.Refund.ShouldBeNull();
@@ -77,7 +79,8 @@ public sealed class PaymentEndpointsTests(ServiceFixture fixture) : IAsyncLifeti
         using HttpClient client = Admin();
 
         PaymentView? view = await client.GetFromJsonAsync<PaymentView>(
-            $"/v1/payments/{order}", TestContext.Current.CancellationToken);
+            $"/v1/payments/{order}",
+            TestContext.Current.CancellationToken);
 
         view!.Intent!.Status.ShouldBe("Declined");
         view.Intent.DeclineReason.ShouldBe(DeclineReasons.OrderCancelled);
@@ -106,7 +109,8 @@ public sealed class PaymentEndpointsTests(ServiceFixture fixture) : IAsyncLifeti
         using HttpClient client = Admin();
 
         HttpResponseMessage response = await client.GetAsync(
-            $"/v1/payments/{Guid.CreateVersion7()}", TestContext.Current.CancellationToken);
+            $"/v1/payments/{Guid.CreateVersion7()}",
+            TestContext.Current.CancellationToken);
 
         response.StatusCode.ShouldBe(HttpStatusCode.NotFound);
     }
@@ -119,7 +123,8 @@ public sealed class PaymentEndpointsTests(ServiceFixture fixture) : IAsyncLifeti
         client.DefaultRequestHeaders.Add(TestAuthHandler.UserHeader, Guid.CreateVersion7().ToString());
 
         HttpResponseMessage response = await client.GetAsync(
-            $"/v1/payments/{Guid.CreateVersion7()}", TestContext.Current.CancellationToken);
+            $"/v1/payments/{Guid.CreateVersion7()}",
+            TestContext.Current.CancellationToken);
 
         response.StatusCode.ShouldBe(HttpStatusCode.Forbidden);
     }
