@@ -44,6 +44,7 @@ printf '%s\\n' "$root"
 HOLDER = """
 import os, sys, time
 cache, delay, seconds, ready = sys.argv[1], float(sys.argv[2]), float(sys.argv[3]), sys.argv[4]
+put_back = sys.argv[5:] == ["put-back"]
 time.sleep(delay)
 handle = open(os.path.join(cache, "refresh.lock"), "a+b")
 if sys.platform == "win32":
@@ -70,6 +71,8 @@ try:
 except FileNotFoundError:
     pass
 time.sleep(seconds)
+if put_back:
+    open(os.path.join(cache, "refresh.pending"), "w").close()
 """
 
 
@@ -100,10 +103,10 @@ class RemoveShape(unittest.TestCase):
         """What the hook leaves before it starts a worker."""
         (self.cache(native) / "refresh.pending").write_text("", encoding="utf-8")
 
-    def hold(self, native, seconds, delay=0.0, wait=True):
+    def hold(self, native, seconds, delay=0.0, wait=True, put_back=False):
         ready = native / "ready"
         holder = subprocess.Popen([sys.executable, "-c", HOLDER, str(self.cache(native)), str(delay),
-                                   str(seconds), str(ready)])
+                                   str(seconds), str(ready), *(["put-back"] if put_back else [])])
         self.addCleanup(holder.wait)
         self.addCleanup(holder.kill)
         if not wait:
@@ -201,6 +204,15 @@ class RemoveShape(unittest.TestCase):
         self.assertEqual(0, result.returncode, result.stderr)
         self.assertGreaterEqual(time.monotonic() - started, 2)
         self.assertLess(time.monotonic() - started, 25)
+        self.assertFalse(self.present(root))
+
+    def test_a_request_put_back_near_the_bound_still_gets_its_grace(self):
+        """A refresh that fails late puts its request back and exits, which
+        leaves nothing holding the tree, so the bound must not report one."""
+        root, native = self.fixture()
+        self.hold(native, 29.3, put_back=True)
+        result = self.remove(f"{root}/checkout")
+        self.assertEqual(0, result.returncode, result.stderr)
         self.assertFalse(self.present(root))
 
     def test_a_refresh_past_the_bound_removes_nothing(self):

@@ -73,7 +73,9 @@ while True:
                     sys.exit(0)
             finally:
                 release(handle)
-    if now - start >= bound:
+    # A grace already begun runs out first, so the message is never said of a
+    # tree that nothing holds.
+    if now - start >= bound and unclaimed is None:
         sys.exit(f"a code-index refresh still holds the worktree after {bound} s")
     time.sleep(0.2)
 PY
