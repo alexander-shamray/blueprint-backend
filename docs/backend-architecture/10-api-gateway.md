@@ -128,6 +128,19 @@ the subset a resource would need.
           { "RequestHeader": "X-Forwarded-Prefix", "Set": "/api" }
         ]
       },
+      // Catalog's write side, a route of its own so the public GET above
+      // cannot become a public publish by widening one line. The endpoint
+      // still requires catalog:write (§11.4); this is the edge's coarser check.
+      "catalog-write": {
+        "ClusterId": "catalog",
+        "Match": { "Path": "/api/v1/catalog/{**catch-all}", "Methods": [ "POST" ] },
+        "AuthorizationPolicy": "authenticated",
+        "RateLimiterPolicy": "authenticated",
+        "Transforms": [
+          { "PathRemovePrefix": "/api" },
+          { "RequestHeader": "X-Forwarded-Prefix", "Set": "/api" }
+        ]
+      },
       "ordering": {
         "ClusterId": "ordering",
         "Match": { "Path": "/api/v1/orders/{**catch-all}" },

@@ -131,7 +131,8 @@ A monorepo makes cross-cutting changes and contract updates atomic and reviewabl
 │   │                                   the PromQL as JSON, the weight arithmetic
 │   │                                   and the promote/rollback verdict as tested
 │   │                                   Python. It reaches no cluster (ADR-022)
-│   └── k8s/                            Raw manifests where Helm is overkill
+│   └── keycloak/                       §11's realm obligations, checked over
+│                                       any realm
 │
 ├── docs/
 │   ├── backend-architecture/           This document, one file per chapter;
@@ -221,7 +222,7 @@ Api ──────────► Application ──────────
 | Project | May reference | Must never reference |
 |---|---|---|
 | `*.Domain` | `Common.Domain` and nothing else | EF Core, ASP.NET, Redis, MassTransit, `System.Text.Json` |
-| `*.Application` | its own Domain, `Common.Application`, `Common.Contracts`; `Dapper`, for §6.5's query handlers alone ([ADR-005](adr/ADR-005-ef-core-for-writes-dapper-for-reads.md)) | EF Core, ASP.NET, any other concrete infrastructure |
+| `*.Application` | its own Domain, `Common.Application`, `Common.Contracts`; `FluentValidation`, for its commands' validators; `Dapper`, for §6.5's query handlers alone ([ADR-005](adr/ADR-005-ef-core-for-writes-dapper-for-reads.md)) | EF Core, ASP.NET, any other concrete infrastructure |
 | `*.Infrastructure` | Domain, Application, any package | another service's projects |
 | `*.Migrator` | Infrastructure, for the `DbContext` it migrates | another service's projects; anything it does not need to apply a migration |
 | `*.Api` | Application, Infrastructure (**composition root only**) | another service's projects |
@@ -739,24 +740,6 @@ public static IServiceCollection AddOrderingInfrastructure(
     // over the broker. Outbound identity belongs to a host calling out under a
     // grant of its own (§9.7, §11.5), and Ordering is not one.
 
-    // Registered by type, not by factory: the generic overload records an
-    // ImplementationType, and the integration-test fixture matches on it to
-    // locate and remove this exact descriptor (§12.4). MassTransit registers
-    // its bus as a hosted service too, so the fixture cannot simply call
-    // RemoveAll<IHostedService>() — and a factory registration here would
-    // leave ImplementationType null, so the removal it does make would match
-    // nothing and the dispatcher would drain rows underneath the assertions
-    // about them.
-    services.AddHostedService<OutboxDispatcher>();
-
-    // §9.4's, §9.5's and §8.5's retention, in the one hosted service §9.5
-    // asks for.
-    // Registered last, so it is the first stopped: hosted services stop in
-    // reverse, and a deploy that interrupts a purge loses nothing an hour will
-    // not redo — where the dispatcher stopping first is what keeps the
-    // transport up while it drains.
-    services.AddHostedService<RetentionPurgeService>();
-
     // Outbox metrics (§13.6) read the database, so they belong here.
     // OrderMetrics does not — it is an Application type (§13.3) and is
     // registered by AddOrderingApplication above. OutboxStats gets its OWN
@@ -796,6 +779,18 @@ public static IServiceCollection AddOrderingInfrastructure(
     // missing one, so this line is what a half-configured deployment stops.
     services.AddRedisConnections(configuration);
     services.AddMassTransitMessaging(configuration);                     // §9
+
+    // After the bus: hosted services stop in reverse, so the dispatcher stops
+    // while the transport it drains into is still up. Registered by type, not
+    // by factory: the generic overload records an ImplementationType, and the
+    // integration-test fixture removes this exact descriptor by it (§12.4),
+    // since MassTransit's bus is a hosted service too.
+    services.AddHostedService<OutboxDispatcher>();
+
+    // §9.4's, §9.5's and §8.5's retention, in the one hosted service §9.5
+    // asks for. Registered last, so it is the first stopped: a deploy that
+    // interrupts a purge loses nothing an hour will not redo.
+    services.AddHostedService<RetentionPurgeService>();
 
     // Readiness checks live here, not in Common.Web — they need connection
     // strings, which the shared host package does not have (§13.5).

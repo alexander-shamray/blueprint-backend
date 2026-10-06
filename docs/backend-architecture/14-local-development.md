@@ -21,6 +21,9 @@ include:
   - services/ordering.yml
   - services/web-bff.yml
   - services/inventory.yml
+  - services/payments.yml
+  - services/shipping.yml
+  - services/notifications.yml
 ```
 
 **`include` is what raises the floor, and it is the one prerequisite this
