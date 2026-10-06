@@ -162,8 +162,8 @@ file and a reviewer are the only things that do.
 ### Layout and naming
 
 - Four-space indent, spaces not tabs. CRLF line endings. Newline at end of file.
-  UTF-8 with no byte-order mark. Enforced in C# source, for every project
-  `Platform.slnx` lists, by CI's `dotnet format --verify-no-changes`, which
+  UTF-8 with no byte-order mark. Enforced in every C# file in the checkout
+  by CI's `dotnet format whitespace --folder --verify-no-changes`, which
   skips generated code; *review-carried* everywhere else.
 - Pascal case for types, properties, methods and events; `I` prefix on
   interfaces; namespace matches folder.
