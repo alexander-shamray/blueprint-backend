@@ -100,6 +100,8 @@ public sealed class FulfilmentWorker(IServiceScopeFactory scopes, ILogger<Fulfil
         await using AsyncServiceScope claimScope = scopes.CreateAsyncScope();
         FulfilmentClaims claims = claimScope.ServiceProvider.GetRequiredService<FulfilmentClaims>();
 
+        // On the stop's token, as the rows are: a stop between the lease's commit and its read holds the batch for
+        // LeaseSeconds, the cost a stop already puts on every row it cuts short, and nothing is lost.
         IReadOnlyList<FulfilmentWork> claimed = await claims.ClaimAsync(ct);
 
         int moved = 0;
