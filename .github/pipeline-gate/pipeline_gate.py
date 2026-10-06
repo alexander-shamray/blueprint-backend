@@ -1,15 +1,7 @@
 #!/usr/bin/env python3
 """The pipeline asserting things about itself, one subcommand per way §15.1's
-staged pipeline can be quietly wrong. `filters`: every deployable under `src/`
-has a path filter, because one nothing filters is one CI never rebuilds.
-`images`: every Dockerfile is built by a matrix entry reading a defined
-filter, and every build has an SBOM. `stages`: each stage's test count, not
-its exit code, because `dotnet test` exits zero on an empty filter (§12.1),
-and every project in `Platform.slnx` runs in exactly one stage. Stdlib only
-(licence gate's terms).
-
-    py -3.12 .github/pipeline-gate/pipeline_gate.py filters
-    py -3.12 .github/pipeline-gate/pipeline_gate.py stages TestResults/architecture TestResults/unit TestResults/integration
+staged pipeline can be quietly wrong; the README beside it owns what each
+refuses. Stdlib only, on the licence gate's terms.
 """
 
 from __future__ import annotations
@@ -317,10 +309,8 @@ SBOM_ACTION = "anchore/sbom-action@"
 def read_job_steps(workflow_text: str, job: str) -> list[dict[str, str]]:
     """One job's steps, in order, as {key: value} over the keys a step holds.
 
-    A step opens at a six-space `- `; its own keys sit at eight spaces and
-    `with:`'s at ten, both kept, so `image` is the SBOM step's input. A key's
-    value runs on over deeper lines, which is what reads a folded `run: >`
-    whole, and a comment is skipped.
+    Its own keys and `with:`'s are both kept, so `image` is the SBOM step's
+    input, and a value runs on over deeper lines to read a folded `run: >`.
     """
     lines = workflow_text.splitlines()
     for index, line in enumerate(lines):
@@ -358,10 +348,8 @@ def read_job_steps(workflow_text: str, job: str) -> list[dict[str, str]]:
 def check_sboms(workflow_text: str) -> list[str]:
     """Every image the `images` job builds has an SBOM made from it (ADR-071).
 
-    Per build step rather than per Dockerfile, because the matrix is what
-    reaches the Dockerfiles and the inventory above already holds it to them:
-    an SBOM step reading the reference a build tags, under the same `if:` and
-    after it, covers every leg that build covers.
+    Per build step, because the inventory above holds the matrix to the
+    Dockerfiles, so one read of the reference a build tags covers every leg.
     """
     steps = read_job_steps(workflow_text, "images")
     builds = [(index, step) for index, step in enumerate(steps) if "docker build" in step.get("run", "")]
