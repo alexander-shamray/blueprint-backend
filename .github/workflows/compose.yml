@@ -2,9 +2,9 @@ name: Compose
 
 # A separate workflow rather than a job in ci.yml because path filtering is
 # per-workflow: the smoke pulls every image the model names, so it runs only
-# when the model, a file it mounts from deploy/observability/, or this one
-# changes. The filter also carries §14.1's pinned image tags, so a bumped pin
-# is smoke-tested here rather than in the solution build.
+# when the model, a file it mounts from deploy/observability/, a file a host's
+# healthcheck reads, or this one changes, so a bumped §14.1 image pin is
+# smoke-tested here rather than in the solution build.
 
 # The model's application blocks carry build: stanzas, so `up` compiles the
 # solution inside Docker — what the timeout below is sized for. ci.yml's image
