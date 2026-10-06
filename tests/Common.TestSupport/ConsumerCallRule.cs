@@ -69,7 +69,7 @@ public static partial class ConsumerCallRule
         ];
     }
 
-    /// <summary>The outbound HTTP and gRPC clients registered, and the host's types that take or build one.</summary>
+    /// <summary>The outbound clients registered, and the host's types that take or build one.</summary>
     public static IReadOnlyList<Type> Clients(IEnumerable<ServiceDescriptor> composition, Assembly host)
     {
         Func<Type, bool> platform = Platform(host);
