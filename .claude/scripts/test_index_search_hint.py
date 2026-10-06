@@ -259,6 +259,8 @@ class WhatCountsAsASearch(Scratch):
     def test_a_powershell_search_is_a_search(self):
         self.assertTrue(self.refused("PowerShell", {"command": "rg OutboxRelay src"}))
         self.assertEqual("", self.refused("PowerShell", {"command": "rg OutboxRelay docs"}))
+        self.assertEqual("", self.refused("PowerShell", {"command": "rg OutboxRelay `\r\n  docs"}))
+        self.assertTrue(self.refused("PowerShell", {"command": "rg OutboxRelay `\n  src"}))
 
     def test_the_grep_tool_aimed_at_one_file_is_not_a_search(self):
         self.assertEqual("", self.refused(*grep_call(path=".claude/settings.json")))
