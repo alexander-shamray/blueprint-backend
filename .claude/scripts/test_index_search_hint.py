@@ -368,6 +368,19 @@ class WhenItAsks(Scratch):
             with self.subTest(command=command):
                 self.assertTrue(self.refused(*grep_call(), earlier=[bash_call(command)]))
 
+    def test_a_lookup_that_was_refused_or_failed_asked_nothing(self):
+        """A guard refuses `cbx … | head` as two commands, and an MCP tool
+        called before it is loaded errors: neither reached the index."""
+        for earlier, failed in (
+                (bash_call("bash .claude/skills/codebase-index/scripts/cbx refs X --json | head -20"), True),
+                (("mcp__codebase-index__find_refs", {"symbol": "X"}), True),
+                (("mcp__codebase-index__find_refs", {"symbol": "X"}), False)):
+            result = {"type": "user", "message": {"role": "user", "content": [
+                {"type": "tool_result", "tool_use_id": "toolu_0", "is_error": failed, "content": "refused"}]}}
+            session = Session(self.scratch, earlier=[earlier], lines=[result])
+            with self.subTest(earlier=earlier, failed=failed):
+                self.assertEqual(failed, bool(reason(session.before(*grep_call()))))
+
     def test_reading_the_index_without_asking_it_is_not_a_lookup(self):
         for earlier in ((("mcp__codebase-index__healthcheck", {}),),
                         (("mcp__codebase-index__index_stats", {}),),
