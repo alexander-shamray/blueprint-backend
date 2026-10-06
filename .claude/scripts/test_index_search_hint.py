@@ -57,6 +57,9 @@ SEARCHES = (
     "rg OutboxRelay src > found.txt",
     "# don't touch docs\ngrep -rn ClaimAsync src\n# that's it",
     "echo 'see # this' && grep -rn ClaimAsync src",
+    'gh pr comment 1 --body "pipe it via cat <<EOF"\ngrep -rn ClaimAsync src',
+    "# feed it with cat <<EOF\ngrep -rn ClaimAsync src",
+    "cat <<'A' <<'B'\nA body\nA\nB body\nB\ngrep -rn ClaimAsync src",
 )
 
 # Each searches the tree for text, which grep lists whole and the index does not.
@@ -104,6 +107,7 @@ NOT_SEARCHES = (
     "echo grep -r Foo .",
     "git commit -F - <<'EOF'\ngrep -rn Foo src\nEOF",
     "cat <<-EOF > notes.txt\n\tgrep -rn Foo src\n\tEOF",
+    "cat <<'A' <<'B'\nA body\nA\ngrep -rn Foo src\nB",
     'gh pr create --body "Steps:\ngrep -rn Foo src\n"',
     "git status --short",
     "dotnet build Platform.slnx",

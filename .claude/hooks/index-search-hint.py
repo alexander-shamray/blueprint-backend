@@ -84,38 +84,50 @@ FILTERS = {"-g", "--glob", "--iglob", "-t", "--type", "--include"}
 IDENTIFIER = re.compile(r"^[^\W\d]\w*(?:\.[^\W\d]\w*)*$")
 
 
-def unheredoc(command: str) -> str:
-    """`command` without its heredoc bodies, which are data, not commands."""
-    kept, waiting = [], []
-    for line in command.splitlines():
-        if waiting:
-            dash, tag = waiting[0]
+def bodies_end(text: str, start: int, waiting: list[tuple[str, str]]) -> int:
+    """Where `text` resumes after the heredoc bodies `waiting` opened, read
+    from `start`, each ending at a line holding only its tag."""
+    index = start
+    for dash, tag in waiting:
+        while index < len(text):
+            end = text.find("\n", index)
+            end = len(text) if end < 0 else end
+            line = text[index:end].rstrip("\r")
+            index = end + 1
             if (line.lstrip("\t") if dash else line) == tag:
-                waiting.pop(0)
-            continue
-        kept.append(line)
-        waiting = [(found.group(1), found.group(3)) for found in HEREDOC.finditer(line)]
-    return "\n".join(kept)
+                break
+    return min(index, len(text))
 
 
-def uncommented(text: str, escape: str) -> str:
-    """`text` without its comments: an unquoted `#` starting a word, to the
-    end of its line. The split cannot drop them itself without also dropping
-    the newline that ends the command before the next line's."""
-    kept, quote, index = [], "", 0
+def cleaned(text: str, escape: str) -> str:
+    """`text` without what is data and not command: heredoc bodies, and
+    comments, an unquoted `#` starting a word, to the end of its line. A
+    `<<` or a `#` inside quotes is text, so one scan reads the quotes for
+    both; the split cannot drop a comment without the newline after it."""
+    kept, quote, waiting, index = [], "", [], 0
     while index < len(text):
         char = text[index]
         if escape and char == escape and quote != "'" and index + 1 < len(text):
             kept.append(text[index:index + 2])
             index += 2
             continue
+        opener = None if quote else HEREDOC.match(text, index)
         if quote:
             quote = "" if char == quote else quote
         elif char in "'\"":
             quote = char
+        elif opener:
+            waiting.append((opener.group(1), opener.group(3)))
+            kept.append(opener.group(0))
+            index = opener.end()
+            continue
         elif char == "#" and (not kept or kept[-1][-1] in " \t\n;|&()"):
             end = text.find("\n", index)
             index = len(text) if end < 0 else end
+            continue
+        elif char == "\n" and waiting:
+            kept.append(char)
+            index, waiting = bodies_end(text, index + 1, waiting), []
             continue
         kept.append(char)
         index += 1
@@ -125,8 +137,7 @@ def uncommented(text: str, escape: str) -> str:
 def tokens(command: str, escape: str) -> list[str]:
     """The words and operators of `command`, a newline outside quotes being
     an operator; a line at a time when the whole will not split."""
-    text = unheredoc(command.replace("\\\n", " ") if escape else re.sub(r"`\r?\n", " ", command))
-    text = uncommented(text, escape)
+    text = cleaned(command.replace("\\\n", " ") if escape else re.sub(r"`\r?\n", " ", command), escape)
     try:
         lexer = shlex.shlex(text, posix=True, punctuation_chars="|&;<>()\n")
         lexer.whitespace, lexer.commenters, lexer.escape = " \t\r", "", escape
