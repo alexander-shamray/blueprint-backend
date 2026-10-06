@@ -382,7 +382,7 @@ def ran(result: dict) -> bool:
 def looked(transcript: Path) -> bool:
     """True when the transcript records a lookup that was not refused: one
     whose result shows it ran, or that has no result yet. It stops at the
-    first lookup answered and parses a result line only when the line names
+    first lookup that ran and parses a result line only when the line names
     a lookup still waiting: a long session's transcript runs to tens of
     megabytes, and this runs before the agent's call does."""
     waiting: set[str] = set()

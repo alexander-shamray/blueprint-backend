@@ -251,7 +251,7 @@ session whose file cannot be made is never refused, since the rerun would be
 refused too. A lookup made by any route — an MCP tool or the CLI, through
 either shell — lets every search through, and the hook reads that from the
 session's transcript, parsing the lines that record a call, and a result
-only when it answers a lookup, and stopping at the first lookup answered: on
+only when it answers a lookup, and stopping at the first lookup that ran: on
 a 62 MB transcript the whole read took 0.1 s. A call a guard refused, or a
 tool's error, asked the index nothing and is not a lookup; a shell command
 naming the CLI that exited non-zero counts as one, though a chain can fail
