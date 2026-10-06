@@ -13,8 +13,8 @@ namespace Common.TestSupport;
 
 /// <summary>Each body a host's endpoint binds has an example that holds, and its document carries it.</summary>
 /// <remarks>
-/// Holds means it is the bound type, it survives the host's serialiser and every validator of that type passes it,
-/// since an example a tool sends and the endpoint refuses is worse than none.
+/// Holds means <see cref="RequestExampleMetadata"/> carries the bound type, it survives the host's serialiser and
+/// every validator of that type passes it, since an example a tool sends and the endpoint refuses is worse than none.
 /// </remarks>
 public static class RequestExampleRule
 {

@@ -19,7 +19,7 @@ public static class RequestExampleExtensions
         services.AddOpenApi(options => options.AddOperationTransformer<RequestExampleTransformer>());
 
     /// <summary>Declares <paramref name="example"/> as the body a caller of this endpoint might send.</summary>
-    /// <remarks>Typed as the body it stands for, so a host's suite can read it back and validate it.</remarks>
+    /// <remarks>Typed as the body, in <see cref="RequestExampleMetadata"/>, so a suite can validate it.</remarks>
     public static RouteHandlerBuilder WithRequestExample<T>(this RouteHandlerBuilder builder, T example)
         where T : notnull =>
         builder.WithMetadata(new RequestExampleMetadata(example));
