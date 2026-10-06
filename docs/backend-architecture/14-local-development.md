@@ -720,6 +720,10 @@ var ordering = WithPlatformIdentity(
 // And note what WithReference cannot do here: the BFF's hop address is the
 // literal http://catalog-api:8081 (§9.7, §15.4), so a reference does not
 // re-point it. Aspire runs the BFF against whatever answers on that name.
+//
+// No seed runs under this sample, whose migrators set no Seed__Enabled: §14.3
+// delivers seeded events only through §14.1's start order, and Catalog here
+// waits on neither Ordering nor the BFF, so a seeded event would go unheard.
 var catalog = WithPlatformIdentity(
     builder.AddProject<Projects.Catalog_Api>("catalog-api")
         .WithReference(catalogDb).WaitFor(catalogDb)
