@@ -74,6 +74,9 @@ public sealed class TrackingWorker(
         await using AsyncServiceScope claimScope = scopes.CreateAsyncScope();
 
         TrackingClaims claims = claimScope.ServiceProvider.GetRequiredService<TrackingClaims>();
+
+        // On the stop's token, as the rows are: a stop between the lease's commit and its read holds the batch for
+        // LeaseSeconds, the cost a stop already puts on every row it cuts short, and nothing is lost.
         IReadOnlyList<TrackingWork> claimed = await claims.ClaimAsync(ct);
 
         // Every row at once, so a pass lasts one hop and the lease bounds it; WhenAll, so one row's fault
