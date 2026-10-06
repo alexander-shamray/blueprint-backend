@@ -152,10 +152,11 @@ public sealed class OrderReaderTests(BffServiceFixture fixture) : IAsyncLifetime
         OrderDetail detail = (await Reader.FindAsync(_buyer, order, Ct)).Value;
 
         detail.Status.ShouldBe(BuyerStatuses.Dispatched);
-        detail.Payment.ShouldBe(new PaymentFacts(
-            At.AddSeconds(5),
-            new Money(OrderEvents.Total, OrderEvents.Currency),
-            RefundedAmount: null));
+        detail.Payment.ShouldBe(
+            new PaymentFacts(
+                At.AddSeconds(5),
+                new Money(OrderEvents.Total, OrderEvents.Currency),
+                RefundedAmount: null));
         detail.Shipment.ShouldBe(new ShipmentFacts(OrderEvents.TrackingNumber, At.AddDays(1), DeliveredAt: null));
         detail.AsOf.ShouldBe((await fixture.OrderAsync(order))!.AsOf);
     }

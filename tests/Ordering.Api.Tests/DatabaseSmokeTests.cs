@@ -276,18 +276,19 @@ public class DatabaseSmokeTests(ServiceFixture fixture)
     private ServiceProvider BuildFaultInjectingProvider()
     {
         ServiceCollection services = new();
-        services.AddOrderingInfrastructure(new ConfigurationBuilder()
-            .AddInMemoryCollection(
-                new Dictionary<string, string?>
-                {
-                    ["ConnectionStrings:Ordering"] = fixture.ConnectionString,
-                    // AddMassTransitMessaging throws without it; unreachable (§12.4), since no bus starts here.
-                    ["ConnectionStrings:RabbitMq"] = "amqp://guest:guest@ordering-rabbit.invalid:5672",
-                    // Both read eagerly by AddRedisConnections; unreachable on the same convention.
-                    ["ConnectionStrings:RedisCache"] = "ordering-redis.invalid:6379",
-                    ["ConnectionStrings:RedisCoordination"] = "ordering-redis.invalid:6380"
-                })
-            .Build());
+        services.AddOrderingInfrastructure(
+            new ConfigurationBuilder()
+                .AddInMemoryCollection(
+                    new Dictionary<string, string?>
+                    {
+                        ["ConnectionStrings:Ordering"] = fixture.ConnectionString,
+                        // AddMassTransitMessaging throws without it; unreachable (§12.4), since no bus starts here.
+                        ["ConnectionStrings:RabbitMq"] = "amqp://guest:guest@ordering-rabbit.invalid:5672",
+                        // Both read eagerly by AddRedisConnections; unreachable on the same convention.
+                        ["ConnectionStrings:RedisCache"] = "ordering-redis.invalid:6379",
+                        ["ConnectionStrings:RedisCoordination"] = "ordering-redis.invalid:6380"
+                    })
+                .Build());
 
         ServiceDescriptor options =
             services.Single(d => d.ServiceType == typeof(DbContextOptions<OrderingDbContext>));

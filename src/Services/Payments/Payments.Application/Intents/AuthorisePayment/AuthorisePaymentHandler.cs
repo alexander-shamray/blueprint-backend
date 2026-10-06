@@ -55,12 +55,13 @@ public sealed class AuthorisePaymentHandler(
 
         if (record is { IsCancelled: true })
         {
-            intents.Add(PaymentIntent.Decline(
-                order,
-                command.Amount,
-                command.Currency,
-                DeclineReasons.OrderCancelled,
-                clock.GetUtcNow()));
+            intents.Add(
+                PaymentIntent.Decline(
+                    order,
+                    command.Amount,
+                    command.Currency,
+                    DeclineReasons.OrderCancelled,
+                    clock.GetUtcNow()));
             return Result.Success();
         }
 

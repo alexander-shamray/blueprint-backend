@@ -95,21 +95,18 @@ public static class CheckoutEndpoints
                         // Keyed by the id the reply named, never by position: Catalog may answer in any order.
                         int quantity = quantities[pricedProduct];
 
-                        lines.Add(new QuoteLine(
-                            pricedProduct,
-                            price.Name,
-                            amount,
-                            quantity,
-                            amount * quantity));
+                        lines.Add(
+                            new QuoteLine(pricedProduct, price.Name, amount, quantity, amount * quantity));
                     }
 
                     HashSet<Guid> priced = [.. lines.Select(line => line.ProductId)];
 
-                    return Results.Ok(new QuoteResponse(
-                        request.Currency,
-                        lines,
-                        lines.Sum(line => line.LineTotal),
-                        [.. requested.Where(id => !priced.Contains(id))]));
+                    return Results.Ok(
+                        new QuoteResponse(
+                            request.Currency,
+                            lines,
+                            lines.Sum(line => line.LineTotal),
+                            [.. requested.Where(id => !priced.Contains(id))]));
                 })
             // Prices a basket and writes nothing (§9.7).
             .RetrySafe(RetrySafety.ReadOnly)

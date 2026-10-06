@@ -88,16 +88,15 @@ public class PaymentsApiFactory(
                 // Decorated rather than replaced, so every call still reaches the real statements and their locks.
                 ServiceDescriptor store = services.Single(d => d.ServiceType == typeof(IPaymentOrderStore));
                 services.Remove(store);
-                services.AddScoped<IPaymentOrderStore>(sp => Orders.Wrap(
-                    (IPaymentOrderStore)ActivatorUtilities.CreateInstance(sp, store.ImplementationType!)));
+                services.AddScoped<IPaymentOrderStore>(sp =>
+                    Orders.Wrap((IPaymentOrderStore)ActivatorUtilities.CreateInstance(sp, store.ImplementationType!)));
 
                 // Decorated on the same terms, so the simulator's journal counts every charge and void.
                 ServiceDescriptor provider = services.Single(d => d.ServiceType == typeof(IPaymentProvider));
                 services.Remove(provider);
                 services.AddSingleton(ProviderGates);
-                services.AddTransient<IPaymentProvider>(sp => new PausingPaymentProvider(
-                    (IPaymentProvider)provider.ImplementationFactory!(sp),
-                    ProviderGates));
+                services.AddTransient<IPaymentProvider>(sp =>
+                    new PausingPaymentProvider((IPaymentProvider)provider.ImplementationFactory!(sp), ProviderGates));
             });
 
     /// <summary>Swaps the JWT scheme for <see cref="TestAuthHandler"/> (§12.4); a host may override it.</summary>

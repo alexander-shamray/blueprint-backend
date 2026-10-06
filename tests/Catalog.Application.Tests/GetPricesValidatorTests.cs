@@ -11,9 +11,8 @@ public class GetPricesValidatorTests
     private static readonly GetPricesValidator Validator = new();
 
     private static ValidationResult Validate(int productCount, string currency) =>
-        Validator.Validate(new GetPricesQuery(
-            [.. Enumerable.Range(0, productCount).Select(_ => Guid.CreateVersion7())],
-            currency));
+        Validator.Validate(
+            new GetPricesQuery([.. Enumerable.Range(0, productCount).Select(_ => Guid.CreateVersion7())], currency));
 
     [Fact]
     public void An_empty_id_list_is_valid()

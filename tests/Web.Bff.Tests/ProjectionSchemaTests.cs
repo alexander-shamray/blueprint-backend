@@ -35,12 +35,13 @@ public sealed class ProjectionSchemaTests(BffServiceFixture fixture) : IAsyncLif
     [Fact]
     public async Task A_cancellation_without_its_member_is_refused()
     {
-        SqlException refused = await Should.ThrowAsync<SqlException>(() => fixture.ExecuteAsync(
-            """
-            INSERT INTO bff.Orders (OrderId, CancelledAt, FirstSeenAt, AsOf)
-            VALUES ({0}, SYSDATETIMEOFFSET(), SYSDATETIMEOFFSET(), SYSDATETIMEOFFSET());
-            """,
-            Guid.CreateVersion7()));
+        SqlException refused = await Should.ThrowAsync<SqlException>(() =>
+            fixture.ExecuteAsync(
+                """
+                INSERT INTO bff.Orders (OrderId, CancelledAt, FirstSeenAt, AsOf)
+                VALUES ({0}, SYSDATETIMEOFFSET(), SYSDATETIMEOFFSET(), SYSDATETIMEOFFSET());
+                """,
+                Guid.CreateVersion7()));
 
         refused.Number.ShouldBe(ConstraintViolation);
         refused.Message.ShouldContain("CK_Orders_Cancellation");
@@ -49,12 +50,13 @@ public sealed class ProjectionSchemaTests(BffServiceFixture fixture) : IAsyncLif
     [Fact]
     public async Task A_member_outside_the_three_is_refused()
     {
-        SqlException refused = await Should.ThrowAsync<SqlException>(() => fixture.ExecuteAsync(
-            """
-            INSERT INTO bff.Orders (OrderId, CancelledAt, CancelOutcome, FirstSeenAt, AsOf)
-            VALUES ({0}, SYSDATETIMEOFFSET(), N'refunded', SYSDATETIMEOFFSET(), SYSDATETIMEOFFSET());
-            """,
-            Guid.CreateVersion7()));
+        SqlException refused = await Should.ThrowAsync<SqlException>(() =>
+            fixture.ExecuteAsync(
+                """
+                INSERT INTO bff.Orders (OrderId, CancelledAt, CancelOutcome, FirstSeenAt, AsOf)
+                VALUES ({0}, SYSDATETIMEOFFSET(), N'refunded', SYSDATETIMEOFFSET(), SYSDATETIMEOFFSET());
+                """,
+                Guid.CreateVersion7()));
 
         refused.Number.ShouldBe(ConstraintViolation);
         refused.Message.ShouldContain("CK_Orders_CancelOutcome");
@@ -63,12 +65,13 @@ public sealed class ProjectionSchemaTests(BffServiceFixture fixture) : IAsyncLif
     [Fact]
     public async Task An_amount_without_its_payment_currency_is_refused()
     {
-        SqlException refused = await Should.ThrowAsync<SqlException>(() => fixture.ExecuteAsync(
-            """
-            INSERT INTO bff.Orders (OrderId, AuthorisedAt, AuthorisedAmount, FirstSeenAt, AsOf)
-            VALUES ({0}, SYSDATETIMEOFFSET(), 59.97, SYSDATETIMEOFFSET(), SYSDATETIMEOFFSET());
-            """,
-            Guid.CreateVersion7()));
+        SqlException refused = await Should.ThrowAsync<SqlException>(() =>
+            fixture.ExecuteAsync(
+                """
+                INSERT INTO bff.Orders (OrderId, AuthorisedAt, AuthorisedAmount, FirstSeenAt, AsOf)
+                VALUES ({0}, SYSDATETIMEOFFSET(), 59.97, SYSDATETIMEOFFSET(), SYSDATETIMEOFFSET());
+                """,
+                Guid.CreateVersion7()));
 
         refused.Number.ShouldBe(ConstraintViolation);
         refused.Message.ShouldContain("CK_Orders_PaymentCurrency");
@@ -77,12 +80,13 @@ public sealed class ProjectionSchemaTests(BffServiceFixture fixture) : IAsyncLif
     [Fact]
     public async Task A_payment_currency_with_no_amount_to_label_is_refused()
     {
-        SqlException refused = await Should.ThrowAsync<SqlException>(() => fixture.ExecuteAsync(
-            """
-            INSERT INTO bff.Orders (OrderId, PaymentCurrency, FirstSeenAt, AsOf)
-            VALUES ({0}, N'GBP', SYSDATETIMEOFFSET(), SYSDATETIMEOFFSET());
-            """,
-            Guid.CreateVersion7()));
+        SqlException refused = await Should.ThrowAsync<SqlException>(() =>
+            fixture.ExecuteAsync(
+                """
+                INSERT INTO bff.Orders (OrderId, PaymentCurrency, FirstSeenAt, AsOf)
+                VALUES ({0}, N'GBP', SYSDATETIMEOFFSET(), SYSDATETIMEOFFSET());
+                """,
+                Guid.CreateVersion7()));
 
         refused.Number.ShouldBe(ConstraintViolation);
         refused.Message.ShouldContain("CK_Orders_PaymentCurrency");
@@ -98,10 +102,11 @@ public sealed class ProjectionSchemaTests(BffServiceFixture fixture) : IAsyncLif
         string constraint)
     {
         // Each row sets one half of one pair and satisfies every other constraint, so only the named one can refuse.
-        SqlException refused = await Should.ThrowAsync<SqlException>(() => fixture.ExecuteAsync(
-            $"INSERT INTO bff.Orders (OrderId, {columns}, FirstSeenAt, AsOf) " +
-            $"VALUES ({{0}}, {values}, SYSDATETIMEOFFSET(), SYSDATETIMEOFFSET());",
-            Guid.CreateVersion7()));
+        SqlException refused = await Should.ThrowAsync<SqlException>(() =>
+            fixture.ExecuteAsync(
+                $"INSERT INTO bff.Orders (OrderId, {columns}, FirstSeenAt, AsOf) " +
+                $"VALUES ({{0}}, {values}, SYSDATETIMEOFFSET(), SYSDATETIMEOFFSET());",
+                Guid.CreateVersion7()));
 
         refused.Number.ShouldBe(ConstraintViolation);
         refused.Message.ShouldContain(constraint);

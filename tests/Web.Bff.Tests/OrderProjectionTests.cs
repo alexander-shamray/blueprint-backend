@@ -206,11 +206,12 @@ public sealed class OrderProjectionTests(BffServiceFixture fixture) : IAsyncLife
         Guid order = Guid.CreateVersion7();
 
         await ApplyAsync(OrderEvents.Placed(order, _customer, At));
-        await ApplyAsync(OrderEvents.Confirmed(
-            order,
-            _customer,
-            At.AddMinutes(1),
-            [new ConfirmedLine(Guid.CreateVersion7(), 1, 1m), new ConfirmedLine(Guid.CreateVersion7(), 2, 2m)]));
+        await ApplyAsync(
+            OrderEvents.Confirmed(
+                order,
+                _customer,
+                At.AddMinutes(1),
+                [new ConfirmedLine(Guid.CreateVersion7(), 1, 1m), new ConfirmedLine(Guid.CreateVersion7(), 2, 2m)]));
 
         ProjectedLine line = (await fixture.LinesAsync(order)).ShouldHaveSingleItem();
         line.ProductId.ShouldBe(OrderEvents.Lamp);
@@ -262,11 +263,12 @@ public sealed class OrderProjectionTests(BffServiceFixture fixture) : IAsyncLife
     [Fact]
     public async Task The_schema_refuses_a_member_the_map_never_produces()
     {
-        Exception refused = await Should.ThrowAsync<Exception>(() => fixture.ExecuteAsync(
-            "INSERT INTO bff.Orders (OrderId, CancelledAt, CancelOutcome, FirstSeenAt, AsOf) " +
-            "VALUES ({0}, SYSDATETIMEOFFSET(), {1}, SYSDATETIMEOFFSET(), SYSDATETIMEOFFSET());",
-            Guid.CreateVersion7(),
-            "refunded"));
+        Exception refused = await Should.ThrowAsync<Exception>(() =>
+            fixture.ExecuteAsync(
+                "INSERT INTO bff.Orders (OrderId, CancelledAt, CancelOutcome, FirstSeenAt, AsOf) " +
+                "VALUES ({0}, SYSDATETIMEOFFSET(), {1}, SYSDATETIMEOFFSET(), SYSDATETIMEOFFSET());",
+                Guid.CreateVersion7(),
+                "refunded"));
 
         refused.Message.ShouldContain("CK_Orders_CancelOutcome");
     }
@@ -402,12 +404,13 @@ public sealed class OrderProjectionTests(BffServiceFixture fixture) : IAsyncLife
         {
             "Placed" => ApplyAsync(OrderEvents.Placed(order, _customer, At)),
             "Confirmed" => ApplyAsync(OrderEvents.Confirmed(order, _customer, At.AddMinutes(1))),
-            "Cancelled" => ApplyAsync(OrderEvents.Cancelled(
-                order,
-                _customer,
-                At.AddMinutes(2),
-                CancelReasons.PaymentDeclined,
-                CancelOrigins.Workflow)),
+            "Cancelled" => ApplyAsync(
+                OrderEvents.Cancelled(
+                    order,
+                    _customer,
+                    At.AddMinutes(2),
+                    CancelReasons.PaymentDeclined,
+                    CancelOrigins.Workflow)),
             "Authorised" => ApplyAsync(OrderEvents.Authorised(order, At.AddMinutes(3))),
             "Refunded" => ApplyAsync(OrderEvents.Refunded(order, At.AddMinutes(4))),
             "Dispatched" => ApplyAsync(OrderEvents.Dispatched(order, At.AddMinutes(5))),

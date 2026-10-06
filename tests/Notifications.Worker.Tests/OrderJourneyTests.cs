@@ -71,12 +71,13 @@ public sealed class OrderJourneyTests(ServiceFixture fixture) : IAsyncLifetime
         fixture.ContactAnswers(customer, Mailbox, "en");
 
         await fixture.DeliverAsync(OrderEvents.Placed(order, customer, At));
-        await fixture.DeliverAsync(OrderEvents.Cancelled(
-            order,
-            customer,
-            At.AddMinutes(5),
-            CancelReasons.CustomerRequest,
-            CancelOrigins.User));
+        await fixture.DeliverAsync(
+            OrderEvents.Cancelled(
+                order,
+                customer,
+                At.AddMinutes(5),
+                CancelReasons.CustomerRequest,
+                CancelOrigins.User));
 
         await fixture.SendUntilSettledAsync();
 

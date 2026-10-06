@@ -284,9 +284,11 @@ public sealed class ContactSourceTests : IClassFixture<ContactSourceTests.Keyclo
     {
         Guid customer = Guid.CreateVersion7();
         _keycloak.Given(Request.Create().WithPath(PathOf(customer)).UsingGet())
-            .RespondWith(Response.Create()
-                .WithStatusCode(302)
-                .WithHeader("Location", _keycloak.Urls[0] + "/elsewhere"));
+            .RespondWith(
+                Response
+                    .Create()
+                    .WithStatusCode(302)
+                    .WithHeader("Location", _keycloak.Urls[0] + "/elsewhere"));
         _keycloak.Given(Request.Create().WithPath("/elsewhere").UsingGet())
             .RespondWith(Response.Create().WithStatusCode(200).WithBody(User().ToJsonString()));
 

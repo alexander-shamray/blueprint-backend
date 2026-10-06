@@ -391,9 +391,10 @@ public class CommandFingerprintRuleTests
     {
         CommandFingerprintRule
             .Offenders(typeof(CommandFingerprintRuleTests).Assembly)
-            .ShouldContain(offender => offender.StartsWith(
-                "StructWithAHashSet.Ids is declared as HashSet<Guid>, a collection",
-                StringComparison.Ordinal));
+            .ShouldContain(offender =>
+                offender.StartsWith(
+                    "StructWithAHashSet.Ids is declared as HashSet<Guid>, a collection",
+                    StringComparison.Ordinal));
     }
 
     [Fact]

@@ -117,10 +117,11 @@ public class NotificationsWorkerFactory(
             .ConfigureAppConfiguration(configuration =>
                 configuration.AddInMemoryCollection(
                     (languages ?? InventedLanguages)
-                        .Select((language, index) => new KeyValuePair<string, string?>(
-                            $"{NotificationsJurisdictionOptions.SectionName}:Languages:" +
-                            index.ToString(CultureInfo.InvariantCulture),
-                            language))))
+                        .Select((language, index) =>
+                            new KeyValuePair<string, string?>(
+                                $"{NotificationsJurisdictionOptions.SectionName}:Languages:" +
+                                index.ToString(CultureInfo.InvariantCulture),
+                                language))))
             .ConfigureLogging(logging => logging.AddProvider(CapturedLogs))
             .ConfigureServices(services =>
             {

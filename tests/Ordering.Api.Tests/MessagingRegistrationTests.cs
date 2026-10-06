@@ -252,9 +252,10 @@ public class MessagingRegistrationTests
     private static Type[] ConsumerTypes(IServiceCollection services) =>
         [.. services
             .Select(d => d.ImplementationType ?? d.ServiceType)
-            .Where(t => Array.Exists(
-                t.GetInterfaces(),
-                i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IConsumer<>)))
+            .Where(t =>
+                Array.Exists(
+                    t.GetInterfaces(),
+                    i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IConsumer<>)))
             .Distinct()];
 
     [Fact]

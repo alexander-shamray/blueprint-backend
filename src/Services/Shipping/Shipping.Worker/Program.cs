@@ -28,10 +28,11 @@ builder.Services.AddTransient<ClientCredentialsHandler>();
 builder.Services.AddSingleton<CachingTokenClient>();
 
 // ADR-052: this host holds itself to its grant, because the realm gate cannot read a service account's roles.
-builder.Services.AddSingleton<ITokenCache>(sp => new GrantCheckedTokenCache(
-    sp.GetRequiredService<CachingTokenClient>(),
-    sp.GetRequiredService<AddressMetrics>(),
-    sp.GetRequiredService<ILogger<GrantCheckedTokenCache>>()));
+builder.Services.AddSingleton<ITokenCache>(sp =>
+    new GrantCheckedTokenCache(
+        sp.GetRequiredService<CachingTokenClient>(),
+        sp.GetRequiredService<AddressMetrics>(),
+        sp.GetRequiredService<ILogger<GrantCheckedTokenCache>>()));
 
 // Validated at start: IOptions<T> always resolves, so ValidateOnBuild cannot see a forgotten binding (§15.4).
 builder.Services

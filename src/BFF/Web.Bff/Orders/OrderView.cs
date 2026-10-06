@@ -32,12 +32,13 @@ public static class OrderView
             IsCancellable(status),
             TotalOf(row),
             [
-                .. Priced(row, lines).Select(l => new OrderLineDetail(
-                    l.ProductId,
-                    l.ProductName,
-                    LineTotal(l, row),
-                    l.Quantity,
-                    new Money(l.UnitPrice, row.Currency!)))
+                .. Priced(row, lines).Select(l =>
+                    new OrderLineDetail(
+                        l.ProductId,
+                        l.ProductName,
+                        LineTotal(l, row),
+                        l.Quantity,
+                        new Money(l.UnitPrice, row.Currency!)))
             ],
             row.AsOf,
             PaymentOf(row),
@@ -49,17 +50,18 @@ public static class OrderView
         status is BuyerStatuses.Placed or BuyerStatuses.Confirmed;
 
     private static string StatusOf(OrderReadRow row) =>
-        BuyerStatus.Of(new OrderSteps(
+        BuyerStatus.Of(
+            new OrderSteps(
                 row.PlacedAt,
                 row.ConfirmedAt,
                 row.DispatchedAt,
                 row.DeliveredAt,
                 row.CancelledAt,
                 row.CancelOutcome)) ??
-            throw new InvalidOperationException(
-                $"Order {row.OrderId} is owned and has no step. Only the three Ordering events set a " +
-                "customer, and each sets its own step in the same statement (ADR-051), so this row " +
-                "was written by something other than the projection's handlers.");
+        throw new InvalidOperationException(
+            $"Order {row.OrderId} is owned and has no step. Only the three Ordering events set a " +
+            "customer, and each sets its own step in the same statement (ADR-051), so this row " +
+            "was written by something other than the projection's handlers.");
 
     private static OrderTimeline TimelineOf(OrderReadRow row) =>
         new(row.PlacedAt, row.ConfirmedAt, row.DispatchedAt, row.DeliveredAt, row.CancelledAt);

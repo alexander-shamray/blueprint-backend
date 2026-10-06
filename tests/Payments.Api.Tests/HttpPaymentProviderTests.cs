@@ -284,8 +284,11 @@ public sealed class HttpPaymentProviderTests : IClassFixture<HttpPaymentProvider
         using ProviderHost own = OwnHost();
         own.Server.Given(Request.Create().WithPath("/v1/authorisations").UsingPost())
             .AtPriority(0)
-            .RespondWith(Response.Create().WithStatusCode(201)
-                .WithBody($"{{\"status\":\"approved\",\"reference\":\"psp_x\",\"padding\":\"{padding}\"}}"));
+            .RespondWith(
+                Response
+                    .Create()
+                    .WithStatusCode(201)
+                    .WithBody($"{{\"status\":\"approved\",\"reference\":\"psp_x\",\"padding\":\"{padding}\"}}"));
         using UnavailableCount counted = CountUnavailable(own.Factory);
 
         await Should.ThrowAsync<PaymentProviderUnavailableException>(() =>
@@ -447,8 +450,11 @@ public sealed class HttpPaymentProviderTests : IClassFixture<HttpPaymentProvider
             .RespondWith(Response.Create().WithStatusCode(status).WithHeader("Location", "/elsewhere"));
         _server.Given(Request.Create().WithPath("/elsewhere").UsingPost())
             .AtPriority(0)
-            .RespondWith(Response.Create().WithStatusCode(201)
-                .WithBody("{\"status\":\"approved\",\"reference\":\"psp_elsewhere\"}"));
+            .RespondWith(
+                Response
+                    .Create()
+                    .WithStatusCode(201)
+                    .WithBody("{\"status\":\"approved\",\"reference\":\"psp_elsewhere\"}"));
 
         await Should.ThrowAsync<PaymentProviderUnavailableException>(() =>
             Provider().AuthoriseAsync(Authorisation(42.10m), TestContext.Current.CancellationToken));
@@ -494,8 +500,11 @@ public sealed class HttpPaymentProviderTests : IClassFixture<HttpPaymentProvider
         using PaymentsApiFactory factory = new(UnreachableSql, UnreachableRabbit, _server.Urls[0] + "/psp");
         _server.Given(Request.Create().WithPath("/psp/v1/authorisations").UsingPost())
             .AtPriority(0)
-            .RespondWith(Response.Create().WithStatusCode(201)
-                .WithBody("{\"status\":\"approved\",\"reference\":\"psp_p\"}"));
+            .RespondWith(
+                Response
+                    .Create()
+                    .WithStatusCode(201)
+                    .WithBody("{\"status\":\"approved\",\"reference\":\"psp_p\"}"));
 
         AuthorisationResult result = await factory.Services.CreateScope().ServiceProvider
             .GetRequiredService<IPaymentProvider>()
@@ -604,8 +613,11 @@ public sealed class HttpPaymentProviderTests : IClassFixture<HttpPaymentProvider
         string reference = new('r', length);
         _server.Given(Request.Create().WithPath("/v1/authorisations").UsingPost())
             .AtPriority(0)
-            .RespondWith(Response.Create().WithStatusCode(201)
-                .WithBody($"{{\"status\":\"approved\",\"reference\":\"{reference}\"}}"));
+            .RespondWith(
+                Response
+                    .Create()
+                    .WithStatusCode(201)
+                    .WithBody($"{{\"status\":\"approved\",\"reference\":\"{reference}\"}}"));
 
         Func<Task<AuthorisationResult>> call = () =>
             Provider().AuthoriseAsync(Authorisation(42.10m), TestContext.Current.CancellationToken);
@@ -624,8 +636,11 @@ public sealed class HttpPaymentProviderTests : IClassFixture<HttpPaymentProvider
         string code = new('c', length);
         _server.Given(Request.Create().WithPath("/v1/authorisations").UsingPost())
             .AtPriority(0)
-            .RespondWith(Response.Create().WithStatusCode(402)
-                .WithBody($"{{\"status\":\"declined\",\"code\":\"{code}\"}}"));
+            .RespondWith(
+                Response
+                    .Create()
+                    .WithStatusCode(402)
+                    .WithBody($"{{\"status\":\"declined\",\"code\":\"{code}\"}}"));
 
         Func<Task<AuthorisationResult>> call = () =>
             Provider().AuthoriseAsync(Authorisation(42.10m), TestContext.Current.CancellationToken);

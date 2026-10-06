@@ -78,13 +78,14 @@ public sealed class BffOrderEventsTests(BffServiceFixture fixture) : IAsyncLifet
         ProjectedOrder row = (await fixture.OrderAsync(order)).ShouldNotBeNull();
         row.CustomerId.ShouldBe(customer);
         row.TrackingNumber.ShouldBe(OrderEvents.TrackingNumber);
-        BuyerStatus.Of(new OrderSteps(
-            row.PlacedAt,
-            row.ConfirmedAt,
-            row.DispatchedAt,
-            row.DeliveredAt,
-            row.CancelledAt,
-            row.CancelOutcome)).ShouldBe(BuyerStatuses.Delivered);
+        BuyerStatus.Of(
+            new OrderSteps(
+                row.PlacedAt,
+                row.ConfirmedAt,
+                row.DispatchedAt,
+                row.DeliveredAt,
+                row.CancelledAt,
+                row.CancelOutcome)).ShouldBe(BuyerStatuses.Delivered);
 
         (await fixture.LinesAsync(order)).ShouldHaveSingleItem().ProductId.ShouldBe(OrderEvents.Lamp);
         (await fixture.ScalarAsync<string>(
@@ -99,12 +100,13 @@ public sealed class BffOrderEventsTests(BffServiceFixture fixture) : IAsyncLifet
         Guid customer = Guid.CreateVersion7();
 
         await fixture.DeliverAsync(OrderEvents.Refunded(order, At.AddMinutes(3)));
-        await fixture.DeliverAsync(OrderEvents.Cancelled(
-            order,
-            customer,
-            At.AddMinutes(2),
-            CancelReasons.PaymentDeclined,
-            CancelOrigins.Workflow));
+        await fixture.DeliverAsync(
+            OrderEvents.Cancelled(
+                order,
+                customer,
+                At.AddMinutes(2),
+                CancelReasons.PaymentDeclined,
+                CancelOrigins.Workflow));
         await fixture.DeliverAsync(OrderEvents.Placed(order, customer, At));
 
         ProjectedOrder row = (await fixture.OrderAsync(order)).ShouldNotBeNull();

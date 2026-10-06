@@ -224,18 +224,19 @@ public class MetricsRegistrationTests
     {
         ServiceCollection services = new();
         services.AddOrderingApplication();
-        services.AddOrderingInfrastructure(new ConfigurationBuilder()
-            .AddInMemoryCollection(
-                new Dictionary<string, string?>
-                {
-                    ["ConnectionStrings:Ordering"] =
-                        "Server=ordering-sql.invalid;Database=Ordering;User Id=sa;Password=not-a-real-password",
-                    ["ConnectionStrings:RabbitMq"] = "amqp://guest:guest@ordering-rabbit.invalid:5672",
-                    // Both read eagerly by AddRedisConnections; unreachable on the same convention.
-                    ["ConnectionStrings:RedisCache"] = "ordering-redis.invalid:6379",
-                    ["ConnectionStrings:RedisCoordination"] = "ordering-redis.invalid:6380"
-                })
-            .Build());
+        services.AddOrderingInfrastructure(
+            new ConfigurationBuilder()
+                .AddInMemoryCollection(
+                    new Dictionary<string, string?>
+                    {
+                        ["ConnectionStrings:Ordering"] =
+                            "Server=ordering-sql.invalid;Database=Ordering;User Id=sa;Password=not-a-real-password",
+                        ["ConnectionStrings:RabbitMq"] = "amqp://guest:guest@ordering-rabbit.invalid:5672",
+                        // Both read eagerly by AddRedisConnections; unreachable on the same convention.
+                        ["ConnectionStrings:RedisCache"] = "ordering-redis.invalid:6379",
+                        ["ConnectionStrings:RedisCoordination"] = "ordering-redis.invalid:6380"
+                    })
+                .Build());
 
         return services;
     }

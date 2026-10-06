@@ -115,16 +115,17 @@ public sealed class OutboxStatsTests(ServiceFixture fixture) : IAsyncLifetime
     private IOutboxStats NewStats()
     {
         ServiceProvider provider = new ServiceCollection()
-            .AddPaymentsInfrastructure(new ConfigurationBuilder()
-                .AddInMemoryCollection(
-                    new Dictionary<string, string?>
-                    {
-                        ["ConnectionStrings:Payments"] = fixture.ConnectionString,
-                        // AddMassTransitMessaging throws without it; unreachable (§12.4), since no bus starts here.
-                        ["ConnectionStrings:RabbitMq"] = "amqp://guest:guest@payments-rabbit.invalid:5672",
-                        ["PaymentProvider:BaseUrl"] = "https://payments-provider.invalid"
-                    })
-                .Build())
+            .AddPaymentsInfrastructure(
+                new ConfigurationBuilder()
+                    .AddInMemoryCollection(
+                        new Dictionary<string, string?>
+                        {
+                            ["ConnectionStrings:Payments"] = fixture.ConnectionString,
+                            // AddMassTransitMessaging throws without it; unreachable (§12.4), since no bus starts here.
+                            ["ConnectionStrings:RabbitMq"] = "amqp://guest:guest@payments-rabbit.invalid:5672",
+                            ["PaymentProvider:BaseUrl"] = "https://payments-provider.invalid"
+                        })
+                    .Build())
             .BuildServiceProvider();
 
         _providers.Add(provider);

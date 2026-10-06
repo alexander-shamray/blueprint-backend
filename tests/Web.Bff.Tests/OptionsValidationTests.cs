@@ -38,11 +38,14 @@ public class OptionsValidationTests
     public void Each_credential_is_required_and_named_in_the_failure(string member)
     {
         ServiceCollection services = new();
-        services.AddSingleton<IConfiguration>(new ConfigurationBuilder()
-            .AddInMemoryCollection(Members.Select(name => new KeyValuePair<string, string?>(
-                $"{ServiceIdentityOptions.SectionName}:{name}",
-                string.Equals(name, member, StringComparison.Ordinal) ? "" : "supplied")))
-            .Build());
+        services.AddSingleton<IConfiguration>(
+            new ConfigurationBuilder()
+                .AddInMemoryCollection(
+                    Members.Select(name =>
+                        new KeyValuePair<string, string?>(
+                            $"{ServiceIdentityOptions.SectionName}:{name}",
+                            string.Equals(name, member, StringComparison.Ordinal) ? "" : "supplied")))
+                .Build());
 
         services
             .AddOptions<ServiceIdentityOptions>()
@@ -76,9 +79,10 @@ public class OptionsValidationTests
             new(AuthenticationExtensions.AuthorityKey, UnreachableAuthority),
             new("ConnectionStrings:Bff", UnreachableDatabase),
             new("ConnectionStrings:RabbitMq", UnreachableBroker),
-            .. Members.Select(name => new KeyValuePair<string, string?>(
-                $"{ServiceIdentityOptions.SectionName}:{name}",
-                string.Equals(name, member, StringComparison.Ordinal) ? "" : "supplied"))
+            .. Members.Select(name =>
+                new KeyValuePair<string, string?>(
+                    $"{ServiceIdentityOptions.SectionName}:{name}",
+                    string.Equals(name, member, StringComparison.Ordinal) ? "" : "supplied"))
         ];
     }
 }

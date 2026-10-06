@@ -84,9 +84,10 @@ public sealed class MailPipelineParkTests : IDisposable
     {
         for (int send = 0; send < sends; send++)
         {
-            await Should.ThrowAsync<Exception>(async () => await pipeline.Pipeline.ExecuteAsync<int>(
-                _ => throw new MailUnavailableException("Staged.", MailFault.Rejected, 550),
-                TestContext.Current.CancellationToken));
+            await Should.ThrowAsync<Exception>(async () =>
+                await pipeline.Pipeline.ExecuteAsync<int>(
+                    _ => throw new MailUnavailableException("Staged.", MailFault.Rejected, 550),
+                    TestContext.Current.CancellationToken));
         }
     }
 

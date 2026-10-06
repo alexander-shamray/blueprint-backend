@@ -201,10 +201,11 @@ public sealed class HttpCarrierGatewayTests : IClassFixture<HttpCarrierGatewayTe
     [Fact]
     public async Task A_status_nobody_agreed_is_unrecognised_and_moves_nothing()
     {
+        string body =
+            "{\"events\":[{\"id\":\"e1\",\"status\":\"teleported\",\"occurredAt\":\"2026-01-02T09:00:00Z\"}]}";
         _server.Given(Request.Create().WithPath("/v1/shipments/crr_x/events").UsingGet())
             .AtPriority(0)
-            .RespondWith(Response.Create().WithStatusCode(200).WithBody(
-                "{\"events\":[{\"id\":\"e1\",\"status\":\"teleported\",\"occurredAt\":\"2026-01-02T09:00:00Z\"}]}"));
+            .RespondWith(Response.Create().WithStatusCode(200).WithBody(body));
 
         IReadOnlyList<CarrierEvent> page = await Carrier()
             .GetEventsAsync("crr_x", TestContext.Current.CancellationToken);
@@ -283,10 +284,10 @@ public sealed class HttpCarrierGatewayTests : IClassFixture<HttpCarrierGatewayTe
     public async Task A_reference_longer_than_the_column_is_refused_before_it_is_recorded(int length, bool accepted)
     {
         string reference = new('r', length);
+        string body = $"{{\"status\":\"booked\",\"reference\":\"{reference}\",\"trackingNumber\":\"t\"}}";
         _server.Given(Request.Create().WithPath("/v1/shipments").UsingPost())
             .AtPriority(0)
-            .RespondWith(Response.Create().WithStatusCode(201).WithBody(
-                $"{{\"status\":\"booked\",\"reference\":\"{reference}\",\"trackingNumber\":\"t\"}}"));
+            .RespondWith(Response.Create().WithStatusCode(201).WithBody(body));
 
         Func<Task<BookingResult>> call = () => Carrier()
             .BookAsync(Booking("050000"), TestContext.Current.CancellationToken);
@@ -304,10 +305,10 @@ public sealed class HttpCarrierGatewayTests : IClassFixture<HttpCarrierGatewayTe
     {
         // Kept, it would be spliced into the cancel and events paths, where a
         // dot segment is resolved away and the call reaches another endpoint.
+        string body = $"{{\"status\":\"booked\",\"reference\":\"{reference}\",\"trackingNumber\":\"t\"}}";
         _server.Given(Request.Create().WithPath("/v1/shipments").UsingPost())
             .AtPriority(0)
-            .RespondWith(Response.Create().WithStatusCode(201).WithBody(
-                $"{{\"status\":\"booked\",\"reference\":\"{reference}\",\"trackingNumber\":\"t\"}}"));
+            .RespondWith(Response.Create().WithStatusCode(201).WithBody(body));
 
         await Should.ThrowAsync<CarrierUnavailableException>(() =>
             Carrier().BookAsync(Booking("050000"), TestContext.Current.CancellationToken));
@@ -321,10 +322,10 @@ public sealed class HttpCarrierGatewayTests : IClassFixture<HttpCarrierGatewayTe
         bool accepted)
     {
         string tracking = new('t', length);
+        string body = $"{{\"status\":\"booked\",\"reference\":\"crr_x\",\"trackingNumber\":\"{tracking}\"}}";
         _server.Given(Request.Create().WithPath("/v1/shipments").UsingPost())
             .AtPriority(0)
-            .RespondWith(Response.Create().WithStatusCode(201).WithBody(
-                $"{{\"status\":\"booked\",\"reference\":\"crr_x\",\"trackingNumber\":\"{tracking}\"}}"));
+            .RespondWith(Response.Create().WithStatusCode(201).WithBody(body));
 
         Func<Task<BookingResult>> call = () => Carrier()
             .BookAsync(Booking("050000"), TestContext.Current.CancellationToken);
@@ -343,8 +344,8 @@ public sealed class HttpCarrierGatewayTests : IClassFixture<HttpCarrierGatewayTe
         string code = new('c', length);
         _server.Given(Request.Create().WithPath("/v1/shipments").UsingPost())
             .AtPriority(0)
-            .RespondWith(Response.Create().WithStatusCode(422).WithBody(
-                $"{{\"status\":\"refused\",\"code\":\"{code}\"}}"));
+            .RespondWith(
+                Response.Create().WithStatusCode(422).WithBody($"{{\"status\":\"refused\",\"code\":\"{code}\"}}"));
 
         Func<Task<BookingResult>> call = () => Carrier()
             .BookAsync(Booking("050000"), TestContext.Current.CancellationToken);
@@ -360,9 +361,12 @@ public sealed class HttpCarrierGatewayTests : IClassFixture<HttpCarrierGatewayTe
     {
         _server.Given(Request.Create().WithPath("/v1/shipments").UsingPost())
             .AtPriority(0)
-            .RespondWith(Response.Create().WithStatusCode(201)
-                .WithHeader("Content-Type", "application/json; charset=bogus")
-                .WithBody("{\"status\":\"booked\",\"reference\":\"crr_x\",\"trackingNumber\":\"t\"}"));
+            .RespondWith(
+                Response
+                    .Create()
+                    .WithStatusCode(201)
+                    .WithHeader("Content-Type", "application/json; charset=bogus")
+                    .WithBody("{\"status\":\"booked\",\"reference\":\"crr_x\",\"trackingNumber\":\"t\"}"));
         using OutboundCount counted = OutboundCounter.Unavailable(_factory.Services);
 
         await Should.ThrowAsync<CarrierUnavailableException>(() =>

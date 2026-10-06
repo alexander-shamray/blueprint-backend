@@ -89,9 +89,8 @@ public static class DependencyInjection
                 ConnectTimeout = OutboxStats.ConnectTimeoutSeconds
             }.ConnectionString;
 
-        services.AddSingleton<IOutboxStats>(sp => new OutboxStats(
-            new SqlConnectionFactory(metricsConnectionString),
-            sp.GetRequiredService<OutboxTable>()));
+        services.AddSingleton<IOutboxStats>(sp =>
+            new OutboxStats(new SqlConnectionFactory(metricsConnectionString), sp.GetRequiredService<OutboxTable>()));
         services.AddSingleton<OutboxMetrics>();
 
         // §13.6's shipment gauges, on the same bounded connection for OutboxStats' reason. Through a factory, so

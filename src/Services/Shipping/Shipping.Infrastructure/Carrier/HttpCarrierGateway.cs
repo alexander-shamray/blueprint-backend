@@ -30,9 +30,10 @@ internal sealed class HttpCarrierGateway(HttpClient http, CarrierMetrics metrics
         DeliveryAddress address = request.Address;
         using HttpRequestMessage message = new(HttpMethod.Post, "v1/shipments")
         {
-            Content = JsonContent.Create(new BookBody(
-                request.ShipmentId.Value,
-                new AddressBody(address.Line1, address.Line2, address.City, address.PostalCode, address.Country)))
+            Content = JsonContent.Create(
+                new BookBody(
+                    request.ShipmentId.Value,
+                    new AddressBody(address.Line1, address.Line2, address.City, address.PostalCode, address.Country)))
         };
         message.Headers.Add(KeyHeader, request.IdempotencyKey);
 

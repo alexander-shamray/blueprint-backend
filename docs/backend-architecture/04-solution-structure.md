@@ -768,9 +768,8 @@ public static IServiceCollection AddOrderingInfrastructure(
             ConnectTimeout = OutboxStats.ConnectTimeoutSeconds
         }.ConnectionString;
 
-    services.AddSingleton<IOutboxStats>(sp => new OutboxStats(
-        new SqlConnectionFactory(metricsConnectionString),
-        sp.GetRequiredService<OutboxTable>()));
+    services.AddSingleton<IOutboxStats>(sp =>
+        new OutboxStats(new SqlConnectionFactory(metricsConnectionString), sp.GetRequiredService<OutboxTable>()));
     services.AddSingleton<OutboxMetrics>();
 
     // The two delivery lags, the rejection counter and the inbox suppression
