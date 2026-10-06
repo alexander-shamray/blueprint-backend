@@ -254,17 +254,17 @@ public class RealmImportTests
                 .GetBoolean()
                 .ShouldBeTrue($"'{username}' is one of §11.5's two documented logins");
 
-            JsonElement password = user
+            JsonElement credential = user
                 .GetProperty("credentials")
                 .EnumerateArray()
                 .Single(c => c.GetProperty("type").GetString() == "password");
 
-            password
+            credential
                 .GetProperty("value")
                 .GetString()
                 .ShouldBe(username, $"the compose README documents '{username}' as its own password");
 
-            password
+            credential
                 .GetProperty("temporary")
                 .GetBoolean()
                 .ShouldBeFalse($"a temporary credential makes '{username}' unusable by the README's password grant");
