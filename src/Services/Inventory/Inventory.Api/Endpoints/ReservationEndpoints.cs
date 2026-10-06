@@ -60,6 +60,7 @@ public static class ReservationEndpoints
                 })
             // Built from the route and the body, so no parameter names the command (§8.5).
             .Idempotent<ReinstateReservationCommand>()
+            .WithRequestExample(new ReinstateReservationRequest(Guid.Parse("0199b0c4-7a10-7b42-9d6e-3f5a7b8c9d0e")))
             .WithName("ReinstateReservation");
     }
 }

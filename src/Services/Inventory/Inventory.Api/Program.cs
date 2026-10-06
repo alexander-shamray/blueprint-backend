@@ -20,7 +20,7 @@ builder.Services.AddInventoryApplication();       // §6.2
 builder.Services.AddInventoryInfrastructure(builder.Configuration);   // §4.2, §7.1
 
 // Appendix C's OpenAPI deliverable: document only, no UI.
-builder.Services.AddOpenApi();
+builder.Services.AddCommonOpenApi();
 
 // RequirePermission, so the claim type is PermissionClaim.Type's alone (§11.4).
 builder.Services

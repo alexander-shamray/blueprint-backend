@@ -21,7 +21,7 @@ builder.Services.AddCatalogApplication();       // §6.2
 builder.Services.AddCatalogInfrastructure(builder.Configuration);   // §4.2, §7.1
 
 // Appendix C's OpenAPI deliverable: document only, no UI.
-builder.Services.AddOpenApi();
+builder.Services.AddCommonOpenApi();
 
 // §9.7's server half. The interceptor is what keeps a malformed request from
 // arriving at the caller as Unknown, which the BFF would report as its own

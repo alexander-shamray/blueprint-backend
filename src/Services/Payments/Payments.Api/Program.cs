@@ -24,7 +24,7 @@ builder.Services.AddPaymentsInfrastructure(builder.Configuration);   // §4.2, �
 builder.Services.AddPaymentProvider(builder.Configuration, builder.Environment);
 
 // Appendix C's OpenAPI deliverable: document only, no UI.
-builder.Services.AddOpenApi();
+builder.Services.AddCommonOpenApi();
 
 // RequirePermission, so the claim type is PermissionClaim.Type's alone (§11.4).
 builder.Services
