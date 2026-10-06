@@ -239,10 +239,10 @@ form the agent cannot read past, so it is spent once, on the search the index
 answers better. A symbol is an identifier that mixes cases or carries an
 underscore and does not end in a lowercase extension; **anything else is
 text and is never refused**: a word in one case, `timeout` or `TODO`, a file
-name, `CLAUDE.md` or `settings.json`, a message, a regular expression or a
-phrase is a search for every occurrence, which grep lists completely and a
-ranked top three does not, and so is a search confined to `docs/` or to
-Markdown, of one file, or of a pipe.
+name with an extension, `CLAUDE.md` or `settings.json`, a message, a regular
+expression or a phrase is a search for every occurrence, which grep lists
+completely and a ranked top three does not, and so is a search confined to
+`docs/` or to Markdown, of one file, or of a pipe.
 
 **Once is a file, and the transcript says the rest.** The refusal is recorded
 by creating a file named after the session under the temporary directory,
