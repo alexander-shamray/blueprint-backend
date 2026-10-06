@@ -79,6 +79,8 @@ NOT_SEARCHES = (
     "git log --oneline | grep Fix",
     "cat build.log | rg Error",
     "rg Error < build.log",
+    "git diff | rg ClaimAsync -",
+    "grep -r ClaimAsync -",
     "rg ClaimAsync <<< \"$text\"",
     "grep -rn Saga docs/backend-architecture",
     "grep -rn Saga docs 2>/dev/null",
