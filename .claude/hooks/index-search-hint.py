@@ -81,9 +81,9 @@ def segments(command: str):
 
 def prose_only(paths: list[str], filters: list[str]) -> bool:
     """True when the search reads only prose: its file filters, where it
-    names any, or else the paths it names."""
+    names any, or else the paths it names; a `!` filter excludes."""
     named = filters or paths
-    return bool(named) and all(PROSE.search(item.strip("'\"")) for item in named)
+    return bool(named) and all(not item.startswith("!") and PROSE.search(item.strip("'\"")) for item in named)
 
 
 def shell_search(command: str) -> str | None:
