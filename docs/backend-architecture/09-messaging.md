@@ -3171,7 +3171,7 @@ has the mechanism, which is a linked file rather than Pact.
 
 | Failure | Handling |
 |---|---|
-| Transient (network, deadlock, timeout) | Retry with exponential backoff and jitter, 3–5 attempts |
+| Transient (network, deadlock, timeout) | Retry with exponential backoff and jitter, `RetryPolicy.RetryLimit` retries per service (below) |
 | Persistent (bad data, bug) | Move to the error queue after retries; alert |
 | Poison message | Never redeliver indefinitely; cap attempts and quarantine |
 | Consumer down | Messages queue in the broker; monitor queue depth |
