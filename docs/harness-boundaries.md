@@ -232,8 +232,8 @@ chapter owns a rule is a grep question, as the skill says, and so is a grep
 of one file or a pipe. **The transcript is its state**: it reads the
 session's own record of tool calls rather than keeping a file, so it writes
 nothing, and a lookup made by any route — an MCP tool or the CLI — silences
-it. It parses only the lines that record a tool call and runs only after a
-search, which on a 62 MB transcript took 0.2 s.
+it. It reads the transcript only after a search, and parses only the lines
+that record a tool call, which on a 62 MB transcript took 0.2 s.
 
 **In a `/branch` worktree it names the CLI as the form to trust.** The MCP
 server starts with `--root .` in the directory the session started in, and
