@@ -55,6 +55,8 @@ NOT_SEARCHES = (
     "grep -r --include=*.md outbox .",
     "grep -r --include '*.md' outbox .",
     "rg --files src/Services",
+    "rg ClaimAsync .claude/settings.json",
+    "grep -rn ClaimAsync .claude/settings.json .claude/hooks/index-search-hint.py",
     "echo grep -r Foo .",
     "git status --short",
     "dotnet build Platform.slnx",
@@ -182,6 +184,21 @@ class WhatCountsAsASearch(Scratch):
                       {"type": "md"}, {"path": "C:\\repo\\docs"}):
             with self.subTest(extra=extra):
                 self.assertEqual("", self.hinted(*grep_call(**extra)))
+
+    def test_the_grep_tool_aimed_at_one_file_is_not_a_search(self):
+        self.assertEqual("", self.hinted(*grep_call(path=".claude/settings.json")))
+        self.assertEqual("", self.hinted(*grep_call(path=str(SETTINGS))))
+        self.assertTrue(self.hinted(*grep_call(path=".claude")))
+
+    def test_an_earlier_call_is_read_in_the_directory_it_ran_in(self):
+        """A one-file grep made before the session moved is not a search, so
+        it does not shift the count."""
+        earlier = {"type": "assistant", "cwd": str(CLAUDE), "message": {"content": [
+            {"type": "tool_use", "id": "toolu_old", "name": "Grep",
+             "input": {"pattern": "X", "path": "settings.json"}}]}}
+        session = Session(self.scratch, lines=[earlier])
+
+        self.assertTrue(context(session.after(*grep_call())))
 
     def test_an_identifier_names_refs_and_symbol_and_anything_else_search(self):
         self.assertEqual(["find_refs", "find_symbol"], tools(self.hinted(*grep_call("\\bOrder.Place\\b"))))
