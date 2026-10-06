@@ -218,34 +218,51 @@ paragraph on hook commands below says. `test_index_query_hint.py` holds
 every command it emits to a row of the route table and a prefix the skill
 approves.
 
-**`PostToolUse` runs `.claude/hooks/index-search-hint.py` after `Grep` and
-both shell tools, because the prompt is not where the code questions are.** A task
-prompt — `/ship` and an issue — asks none of them; they come up inside the
-turn, where a prompt hook never runs, and from the transcripts not one of the
-sessions here that searched code in the week to 2026-10-06 made a lookup. A
-call that searched the tree — the Grep tool, or a recursive `grep`, an `rg`
-or a `git grep` — in a session that has asked the index nothing gets one line
-naming the tool for it: `find_refs` and `find_symbol` for an identifier,
-`search_code` otherwise, with the ToolSearch spelling that loads them and the
-`cbx` form. It says so on the first such search and on every fifth after it.
-A search confined to `docs/` or to Markdown is left alone, because which
-chapter owns a rule is a grep question, as the skill says, and so is a grep
-of one file or a pipe. **The transcript is its state**: it reads the
-session's own record of tool calls rather than keeping a file, so it writes
-nothing, and a lookup made by any route — an MCP tool or the CLI — silences
-it. It reads the transcript only after a search, and parses only the lines
-that mention a tool call, which on a 62 MB transcript took 0.2 s.
+**`PreToolUse` runs `.claude/hooks/index-search-hint.py` before `Grep` and
+both shell tools, because the prompt is not where the code questions are.**
+A task prompt — `/ship` and an issue — asks none of them; they come up inside
+the turn, where a prompt hook never runs, and from the transcripts not one of
+the sessions here that searched code in the week to 2026-10-06 made a lookup.
+A session's first search of the tree for a named symbol — the Grep tool, or a
+recursive `grep`, an `rg` or a `git grep` whose pattern is an identifier or
+an alternation of them — is refused once, while the session has asked the
+index nothing, and the reason is the lookup that answers it: `find_refs` for
+what uses each name and `find_symbol` for where it is defined. The rerun goes
+through, and so does every later search.
 
-**In a `/branch` worktree it names the CLI as the form to trust.** The MCP
-server starts with `--root .` in the directory the session started in, and
+**It asks before the search because a hint after it changed nothing.** The
+first version spoke after the call, on the first search and every fifth, and
+in the first `/ship` session that ran it the agent read both hints and
+grepped on, ending with no lookup (#564): by then the grep had answered, and
+asking the index meant redoing a search that had worked. A refusal is the one
+form the agent cannot read past, so it is spent once, on the search the index
+answers better. **Text is never refused**: a lowercase word, a message, a
+regular expression or a phrase is a search for every occurrence, which grep
+lists completely and a ranked top three does not, and so is a search confined
+to `docs/` or to Markdown, of one file, or of a pipe.
+
+**Once is a file, and the transcript says the rest.** The refusal is recorded
+by creating a file named after the session under the temporary directory,
+which only one call can create, so a parallel batch is refused once and a
+session whose file cannot be made is never refused, since the rerun would be
+refused too. A lookup made by any route — an MCP tool or the CLI, through
+either shell — lets every search through, and the hook reads that from the
+session's transcript, parsing only the lines that mention a tool call, which
+on a 62 MB transcript took 0.2 s. A subagent is never refused: its profile
+may hold neither the MCP tools nor a shell.
+
+**It names one route, the one that answers from this tree.** The MCP server
+starts with `--root .` in the directory the session started in, and
 `EnterWorktree` does not restart it, so after the move its answers describe
-the main checkout's index and not the branch's edits; `cbx`, run from the
-worktree, reads the worktree's own seeded index. A server that follows the
-session is not something `.mcp.json` can say, so the hint carries the
-difference instead. `test_index_search_hint.py` holds the wiring, which
-calls count, when it speaks, and the commands it emits to prefixes the skill
-approves; `test_index_query_hint.py` holds the two hooks to one map from
-question to tool.
+the main checkout's index and not the branch's edits (#563); `cbx`, run from
+the worktree, reads the worktree's own seeded index. So in a `/branch`
+worktree the reason names the skill and the CLI alone, and elsewhere the MCP
+tools alone, with the ToolSearch spelling that loads them. A server that
+follows the session is not something `.mcp.json` can say.
+`test_index_search_hint.py` holds the wiring, what is refused and when, and
+the commands it emits to prefixes the skill approves;
+`test_index_query_hint.py` holds the two hooks to one map from question to
+tool.
 
 **`MCP_TIMEOUT` is raised in `.claude/settings.json`'s `env`.** The plugin
 servers started through `npx` — `playwright` and `chrome-devtools` — failed
