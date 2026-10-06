@@ -35,7 +35,8 @@ internal sealed class ReservationConfiguration : IEntityTypeConfiguration<Reserv
             .HasConversion(
                 ids => JsonSerializer.Serialize(ids.Select(id => id.Value), (JsonSerializerOptions?)null),
                 json => JsonSerializer.Deserialize<List<Guid>>(json, (JsonSerializerOptions?)null)!
-                    .Select(value => new ProductId(value)).ToList())
+                    .Select(value => new ProductId(value))
+                    .ToList())
             .HasColumnType("nvarchar(max)");
 
         // EF snapshots a mutable list by reference without a comparer, so an

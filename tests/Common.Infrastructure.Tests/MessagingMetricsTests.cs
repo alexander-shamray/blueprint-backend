@@ -42,7 +42,8 @@ public class MessagingMetricsTests
         string message = $"Probe{Guid.NewGuid():N}";
         List<MetricSnapshot> exported = [];
 
-        using MeterProvider provider = Sdk.CreateMeterProviderBuilder()
+        using MeterProvider provider = Sdk
+            .CreateMeterProviderBuilder()
             .AddMeter("Commerce.Messaging")
             .AddInMemoryExporter(exported)
             .Build();

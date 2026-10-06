@@ -83,7 +83,8 @@ public static class Replay
                 Publisher publisher = settings.Publishers[i].Publisher;
                 string[] names = [.. ReplayedEvents.PublishedBy(publisher).Select(types.NameOf)];
 
-                await foreach (OutboxRow row in OutboxRows.ReadAsync(sources[i], publisher, names, cutoffs[i])
+                await foreach (OutboxRow row in OutboxRows
+                    .ReadAsync(sources[i], publisher, names, cutoffs[i])
                     .WithCancellation(ct))
                 {
                     if (handled.Contains(row.MessageId))

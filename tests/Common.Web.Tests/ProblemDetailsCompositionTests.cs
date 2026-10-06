@@ -35,7 +35,9 @@ public class ProblemDetailsCompositionTests
         using JsonDocument body = await FailingRequestAsync();
 
         body.RootElement.GetProperty("code").GetString().ShouldBe("test.already_shipped");
-        body.RootElement.GetProperty("detail").GetString()
+        body.RootElement
+            .GetProperty("detail")
+            .GetString()
             .ShouldBe("A shipped order cannot be cancelled.");
     }
 
@@ -55,7 +57,9 @@ public class ProblemDetailsCompositionTests
 
         using JsonDocument body = await FailingRequestAsync();
 
-        body.RootElement.GetProperty("correlationId").GetString()
+        body.RootElement
+            .GetProperty("correlationId")
+            .GetString()
             .ShouldBe(activity.TraceId.ToString());
         body.RootElement.GetProperty("traceId").GetString().ShouldBe(activity.Id);
     }

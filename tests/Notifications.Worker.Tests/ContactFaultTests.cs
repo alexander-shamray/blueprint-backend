@@ -64,11 +64,15 @@ public sealed class ContactFaultTests : IAsyncLifetime
     [Fact]
     public async Task A_fault_that_clears_is_retried_and_each_attempt_asks_for_a_token_again()
     {
-        _keycloak.Given(Request.Create().WithPath(Path).UsingGet())
-            .InScenario("flaky").WillSetStateTo("recovered")
+        _keycloak
+            .Given(Request.Create().WithPath(Path).UsingGet())
+            .InScenario("flaky")
+            .WillSetStateTo("recovered")
             .RespondWith(Response.Create().WithStatusCode(503));
-        _keycloak.Given(Request.Create().WithPath(Path).UsingGet())
-            .InScenario("flaky").WhenStateIs("recovered")
+        _keycloak
+            .Given(Request.Create().WithPath(Path).UsingGet())
+            .InScenario("flaky")
+            .WhenStateIs("recovered")
             .RespondWith(
                 Response
                     .Create()
@@ -81,14 +85,18 @@ public sealed class ContactFaultTests : IAsyncLifetime
         Calls.ShouldBe(2);
 
         // The credential handler inside the pipeline runs once per attempt (§11.5).
-        _keycloak.LogEntries.Select(e => e.RequestMessage!.Headers!["Authorization"][0])
-            .Distinct().Count().ShouldBe(2);
+        _keycloak.LogEntries
+            .Select(e => e.RequestMessage!.Headers!["Authorization"][0])
+            .Distinct()
+            .Count()
+            .ShouldBe(2);
     }
 
     [Fact]
     public async Task An_answer_larger_than_the_bound_is_an_attempt_the_pipeline_retries_and_then_a_fault()
     {
-        _keycloak.Given(Request.Create().WithPath(Path).UsingGet())
+        _keycloak
+            .Given(Request.Create().WithPath(Path).UsingGet())
             .RespondWith(
                 Response
                     .Create()
@@ -104,7 +112,8 @@ public sealed class ContactFaultTests : IAsyncLifetime
     [Fact]
     public async Task A_stalled_owner_is_given_up_on_within_the_total_budget()
     {
-        _keycloak.Given(Request.Create().WithPath(Path).UsingGet())
+        _keycloak
+            .Given(Request.Create().WithPath(Path).UsingGet())
             .RespondWith(Response.Create().WithStatusCode(200).WithBody(User).WithDelay(TimeSpan.FromSeconds(10)));
         using OutboundCount counted = OutboundCounter.ContactRefused(_factory.Services);
         long started = Stopwatch.GetTimestamp();

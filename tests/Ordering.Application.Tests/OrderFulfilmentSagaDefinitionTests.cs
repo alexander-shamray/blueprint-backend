@@ -76,7 +76,8 @@ public class OrderFulfilmentSagaDefinitionTests
                 "Compensating or not; an event in neither list is one nobody decided about (§9.6).");
 
         // .AnyReceived is MassTransit's own, accepted in every state, so it says nothing about a branch.
-        saga.NextEvents(saga.Compensating)
+        saga
+            .NextEvents(saga.Compensating)
             .Select(e => e.Name)
             .Where(n => !n.EndsWith(".AnyReceived", StringComparison.Ordinal))
             .OrderBy(n => n, StringComparer.Ordinal)
@@ -185,7 +186,8 @@ public class OrderFulfilmentSagaDefinitionTests
     ];
 
     private static void Accepts(OrderFulfilmentSaga saga, State state, string[] expected) =>
-        saga.NextEvents(state)
+        saga
+            .NextEvents(state)
             .Select(e => e.Name)
             .Where(n => !n.EndsWith(".AnyReceived", StringComparison.Ordinal))
             .OrderBy(n => n, StringComparer.Ordinal)

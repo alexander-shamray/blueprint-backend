@@ -55,7 +55,8 @@ public class BadHttpRequestExceptionHandlerTests
         using JsonDocument body = await BodyOfAsync(new BadHttpRequestException("Failed to read the body."));
 
         body.RootElement.GetProperty("code").GetString().ShouldBe("request.unreadable");
-        body.RootElement.TryGetProperty("errors", out _)
+        body.RootElement
+            .TryGetProperty("errors", out _)
             .ShouldBeFalse("errors is what marks a validation refusal, and this request never reached a validator");
     }
 

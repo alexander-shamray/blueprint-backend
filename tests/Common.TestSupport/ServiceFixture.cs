@@ -335,7 +335,8 @@ public abstract class ServiceFixture<TFactory, TEntryPoint, TDbContext> : IAsync
         await using AsyncServiceScope scope = Factory.Services.CreateAsyncScope();
         TDbContext db = scope.ServiceProvider.GetRequiredService<TDbContext>();
 
-        return await db.Set<OutboxMessage>()
+        return await db
+            .Set<OutboxMessage>()
             .AsNoTracking()
             .ToListAsync(TestContext.Current.CancellationToken);
     }
@@ -374,7 +375,8 @@ public abstract class ServiceFixture<TFactory, TEntryPoint, TDbContext> : IAsync
         await using AsyncServiceScope scope = Factory.Services.CreateAsyncScope();
         TDbContext db = scope.ServiceProvider.GetRequiredService<TDbContext>();
 
-        return await db.Set<InboxMessage>()
+        return await db
+            .Set<InboxMessage>()
             .AsNoTracking()
             .ToListAsync(TestContext.Current.CancellationToken);
     }
@@ -385,7 +387,8 @@ public abstract class ServiceFixture<TFactory, TEntryPoint, TDbContext> : IAsync
         await using AsyncServiceScope scope = Factory.Services.CreateAsyncScope();
         TDbContext db = scope.ServiceProvider.GetRequiredService<TDbContext>();
 
-        return await db.Set<InboxMessage>()
+        return await db
+            .Set<InboxMessage>()
             .AsNoTracking()
             .Where(m => m.MessageId == messageId)
             .ToListAsync(TestContext.Current.CancellationToken);
@@ -397,7 +400,8 @@ public abstract class ServiceFixture<TFactory, TEntryPoint, TDbContext> : IAsync
         await using AsyncServiceScope scope = Factory.Services.CreateAsyncScope();
         TDbContext db = scope.ServiceProvider.GetRequiredService<TDbContext>();
 
-        return await db.Set<IdempotencyMarker>()
+        return await db
+            .Set<IdempotencyMarker>()
             .AsNoTracking()
             .ToListAsync(TestContext.Current.CancellationToken);
     }

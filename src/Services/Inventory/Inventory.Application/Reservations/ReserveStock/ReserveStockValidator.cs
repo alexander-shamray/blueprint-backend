@@ -18,7 +18,8 @@ public sealed class ReserveStockValidator : AbstractValidator<ReserveStockComman
             .WithMessage("A product appears at most once.");
         RuleForEach(c => c.Lines).ChildRules(line =>
         {
-            line.RuleFor(l => l.Quantity)
+            line
+                .RuleFor(l => l.Quantity)
                 .GreaterThanOrEqualTo(OrderLimits.MinQuantity)
                 .LessThanOrEqualTo(OrderLimits.MaxQuantity);
         });

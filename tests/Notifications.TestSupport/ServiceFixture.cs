@@ -70,7 +70,8 @@ public sealed class ServiceFixture()
             CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
         bounded.CancelAfter(StepDeadline);
 
-        ISendEndpoint endpoint = await Factory.Services.GetRequiredService<IBus>()
+        ISendEndpoint endpoint = await Factory.Services
+            .GetRequiredService<IBus>()
             .GetSendEndpoint(new Uri($"queue:{MessagingRegistration.EventsQueue}"));
 
         await endpoint.Send(
@@ -235,7 +236,8 @@ public sealed class ServiceFixture()
         if (locale is not null)
             user["attributes"] = new JsonObject { ["locale"] = new JsonArray(locale) };
 
-        IResponseBuilder response = Response.Create()
+        IResponseBuilder response = Response
+            .Create()
             .WithStatusCode(200)
             .WithHeader("Content-Type", "application/json")
             .WithBody(user.ToJsonString());
@@ -324,7 +326,8 @@ public sealed class ServiceFixture()
     {
         await using AsyncServiceScope scope = Factory.Services.CreateAsyncScope();
 
-        return await scope.ServiceProvider.GetRequiredService<IContactStore>()
+        return await scope.ServiceProvider
+            .GetRequiredService<IContactStore>()
             .GetAsync(customer, TestContext.Current.CancellationToken);
     }
 

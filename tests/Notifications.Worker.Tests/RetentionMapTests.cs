@@ -44,7 +44,8 @@ public class RetentionMapTests
         string map = string.Join(' ', RetentionMapRule.Members(Declared).Select(member => $"`{member}`"));
 
         RetentionMapRule.Offenders(Declared, Excluded, map).ShouldBeEmpty();
-        RetentionMapRule.Offenders(Declared, Excluded, $"{map} `DeliveryOptions.Renamed` `Elsewhere.Renamed`")
+        RetentionMapRule
+            .Offenders(Declared, Excluded, $"{map} `DeliveryOptions.Renamed` `Elsewhere.Renamed`")
             .ShouldHaveSingleItem()
             .ShouldContain("names DeliveryOptions.Renamed");
     }

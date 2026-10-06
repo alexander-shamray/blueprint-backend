@@ -19,7 +19,8 @@ public sealed class ContactSourceRegistrationTests
     [InlineData("ftp://keycloak.example/")]
     public void A_base_address_that_is_not_an_absolute_http_one_is_refused_by_key(string? configured)
     {
-        Should.Throw<InvalidOperationException>(() => Register(configured, Environments.Development))
+        Should
+            .Throw<InvalidOperationException>(() => Register(configured, Environments.Development))
             .Message.ShouldContain(ContactRegistration.BaseUrlKey);
     }
 
@@ -28,7 +29,8 @@ public sealed class ContactSourceRegistrationTests
     [InlineData("https://keycloak.example/#admin")]
     public void A_base_address_with_a_query_or_fragment_is_refused(string configured)
     {
-        Should.Throw<InvalidOperationException>(() => Register(configured, Environments.Production))
+        Should
+            .Throw<InvalidOperationException>(() => Register(configured, Environments.Production))
             .Message.ShouldContain("query or fragment");
     }
 
@@ -45,7 +47,8 @@ public sealed class ContactSourceRegistrationTests
     [Fact]
     public void Plain_http_outside_development_is_refused()
     {
-        Should.Throw<InvalidOperationException>(() => Register("http://keycloak.example/", Environments.Production))
+        Should
+            .Throw<InvalidOperationException>(() => Register("http://keycloak.example/", Environments.Production))
             .Message.ShouldContain("plain HTTP outside Development");
     }
 
@@ -78,7 +81,8 @@ public sealed class ContactSourceRegistrationTests
         using NotificationsWorkerFactory factory = new(Unreachable.Sql, Unreachable.Rabbit, contactSourceBaseUrl: "");
 
         // Refused while Program registers, before a host exists to race its own disposal.
-        Should.Throw<InvalidOperationException>(() => factory.Services)
+        Should
+            .Throw<InvalidOperationException>(() => factory.Services)
             .Message.ShouldContain(ContactRegistration.BaseUrlKey);
     }
 

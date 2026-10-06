@@ -129,7 +129,8 @@ public sealed class FulfilmentFaultTests : IAsyncLifetime
     }
 
     private Task<int> PassAsync() =>
-        _host.Services.GetRequiredService<FulfilmentWorker>()
+        _host.Services
+            .GetRequiredService<FulfilmentWorker>()
             .RunOnceAsync(TestContext.Current.CancellationToken);
 
     // The postal code is the only part a case varies, and it is what the simulator scripts.

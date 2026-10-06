@@ -40,7 +40,8 @@ internal sealed class QuoteRequestValidator : AbstractValidator<QuoteRequest>
             .ChildRules(line =>
         {
             line.RuleFor(l => l.ProductId).NotEmpty();
-            line.RuleFor(l => l.Quantity)
+            line
+                .RuleFor(l => l.Quantity)
                 .GreaterThanOrEqualTo(OrderLimits.MinQuantity)
                 .LessThanOrEqualTo(OrderLimits.MaxQuantity);
         });

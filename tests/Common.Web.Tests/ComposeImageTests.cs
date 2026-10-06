@@ -38,7 +38,8 @@ public class ComposeImageTests
     [InlineData("broker")]
     [InlineData("data")]
     public void A_service_with_no_image_of_its_own_is_refused_not_given_its_neighbours(string service) =>
-        Should.Throw<InvalidOperationException>(() => ComposeImage.Of(service, Baseline))
+        Should
+            .Throw<InvalidOperationException>(() => ComposeImage.Of(service, Baseline))
             .Message.ShouldContain(service);
 
     [Theory]
@@ -51,14 +52,16 @@ public class ComposeImageTests
 
     [Fact]
     public void A_build_context_reads_the_one_image_its_dockerfile_starts_from() =>
-        ComposeImage.BaseOf(["# FROM in a comment is no stage", "", "from broker:4.1-alpine", "RUN true"])
+        ComposeImage
+            .BaseOf(["# FROM in a comment is no stage", "", "from broker:4.1-alpine", "RUN true"])
             .ShouldBe("broker:4.1-alpine");
 
     [Theory]
     [InlineData("RUN true")]
     [InlineData("FROM builder:1 AS build", "FROM broker:4.1-alpine")]
     public void A_dockerfile_with_no_single_base_is_refused_not_guessed_at(params string[] dockerfile) =>
-        Should.Throw<InvalidOperationException>(() => ComposeImage.BaseOf(dockerfile))
+        Should
+            .Throw<InvalidOperationException>(() => ComposeImage.BaseOf(dockerfile))
             .Message.ShouldContain("base images");
 
     [Fact]

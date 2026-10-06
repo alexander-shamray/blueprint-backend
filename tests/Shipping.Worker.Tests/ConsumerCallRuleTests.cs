@@ -90,7 +90,8 @@ public class ConsumerCallRuleTests(ConsumerCallRuleTests.ComposedFactory factory
     [Fact]
     public void A_consumer_taking_a_registered_client_is_reported_under_the_clients_type()
     {
-        ConsumerCallRule.Offenders(AddressingComposition(), typeof(ConsumerCallRuleTests).Assembly, [])
+        ConsumerCallRule
+            .Offenders(AddressingComposition(), typeof(ConsumerCallRuleTests).Assembly, [])
             .ShouldHaveSingleItem()
             .ShouldContain("> reaches DeliveryAddressesClient (Addressing<DeliveryAddressesClient> -> ");
     }
@@ -105,7 +106,8 @@ public class ConsumerCallRuleTests(ConsumerCallRuleTests.ComposedFactory factory
             WhenAnsweredNo: "the message faults",
             UnreachableChoice.Correctness);
 
-        ConsumerCallRule.Offenders(AddressingComposition(), typeof(ConsumerCallRuleTests).Assembly, [granted])
+        ConsumerCallRule
+            .Offenders(AddressingComposition(), typeof(ConsumerCallRuleTests).Assembly, [granted])
             .ShouldBeEmpty();
     }
 

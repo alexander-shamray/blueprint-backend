@@ -21,7 +21,8 @@ public class JwtAuthenticationTests
         builder.AddCommonWebDefaults();
 
         // Get, not CurrentValue: ValidAudience is post-configured per named scheme.
-        return builder.Build().Services
+        return builder
+            .Build().Services
             .GetRequiredService<IOptionsMonitor<JwtBearerOptions>>()
             .Get(JwtBearerDefaults.AuthenticationScheme);
     }

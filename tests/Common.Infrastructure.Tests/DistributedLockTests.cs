@@ -74,7 +74,8 @@ public sealed class DistributedLockTests
     public async Task A_failed_release_puts_the_handle_back_for_retry()
     {
         _database.StringSetAsync(default, default, null, When.Always).ReturnsForAnyArgs(true);
-        _database.ScriptEvaluateAsync(Arg.Any<string>(), Arg.Any<RedisKey[]>(), Arg.Any<RedisValue[]>())
+        _database
+            .ScriptEvaluateAsync(Arg.Any<string>(), Arg.Any<RedisKey[]>(), Arg.Any<RedisValue[]>())
             .Returns(
                 _ => throw new RedisConnectionException(ConnectionFailureType.SocketFailure, "down"),
                 _ => Task.FromResult(RedisResult.Create((RedisValue)1)));
@@ -99,7 +100,8 @@ public sealed class DistributedLockTests
     {
         _database.StringSetAsync(default, default, null, When.Always).ReturnsForAnyArgs(true);
         TaskCompletionSource<RedisResult> inFlight = new();
-        _database.ScriptEvaluateAsync(Arg.Any<string>(), Arg.Any<RedisKey[]>(), Arg.Any<RedisValue[]>())
+        _database
+            .ScriptEvaluateAsync(Arg.Any<string>(), Arg.Any<RedisKey[]>(), Arg.Any<RedisValue[]>())
             .Returns(inFlight.Task);
 
         IDistributedLock held = (await Factory().TryAcquireAsync(

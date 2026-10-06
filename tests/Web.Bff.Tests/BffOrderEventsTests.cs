@@ -26,7 +26,8 @@ public sealed class BffOrderEventsTests(BffServiceFixture fixture) : IAsyncLifet
     {
         using JsonDocument definitions = JsonDocument.Parse(
             File.ReadAllText(RepositoryFile.Locate("deploy/compose/rabbitmq/definitions.json")));
-        JsonElement grant = definitions.RootElement.GetProperty("permissions")
+        JsonElement grant = definitions.RootElement
+            .GetProperty("permissions")
             .EnumerateArray()
             .Single(p => p.GetProperty("user").GetString() == user && p.GetProperty("vhost").GetString() == "/");
 
@@ -40,7 +41,8 @@ public sealed class BffOrderEventsTests(BffServiceFixture fixture) : IAsyncLifet
     public async Task The_narrow_account_binds_every_event_in_the_bff_row_to_the_queue()
     {
         // Healthy first, since an endpoint declares its bindings as it starts, and a refused bind never starts.
-        BusHealthStatus health = await fixture.Factory.Services.GetRequiredService<IBusControl>()
+        BusHealthStatus health = await fixture.Factory.Services
+            .GetRequiredService<IBusControl>()
             .WaitForHealthStatus(BusHealthStatus.Healthy, BffServiceFixture.StepDeadline);
         health.ShouldBe(BusHealthStatus.Healthy, "a refused exchange.bind closes the channel and the endpoint with it");
 

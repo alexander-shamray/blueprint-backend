@@ -84,7 +84,8 @@ public sealed class MadeUpDeploymentTests(ServiceFixture fixture) : IAsyncLifeti
         {
             summary.Subject.Split(TemplateRenderer.SubjectSeparator).Length.ShouldBe(2, summary.MessageId);
             (await fixture.Relay.HeadersAsync(summary.Id, ct))["Content-Language"]
-                .ShouldHaveSingleItem().ShouldBe("kk, en", summary.MessageId);
+                .ShouldHaveSingleItem()
+                .ShouldBe("kk, en", summary.MessageId);
 
             string[] bodies = (await fixture.Relay.MessageAsync(summary.Id, ct)).Text
                 .ReplaceLineEndings("\n")

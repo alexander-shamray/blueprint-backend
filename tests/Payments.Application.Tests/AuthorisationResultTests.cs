@@ -26,7 +26,8 @@ public class AuthorisationResultTests
         // Every type in the assembly, public or not: a record's copy
         // constructor is protected, so a nested type is not the only one
         // that could derive, and GetNestedTypes() alone reads public ones.
-        typeof(AuthorisationResult).Assembly.GetTypes()
+        typeof(AuthorisationResult).Assembly
+            .GetTypes()
             .Where(t => t.IsSubclassOf(typeof(AuthorisationResult)))
             .Select(t => t.Name)
             .ShouldBe(

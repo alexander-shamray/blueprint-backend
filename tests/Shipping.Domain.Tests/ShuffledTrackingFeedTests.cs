@@ -35,7 +35,8 @@ public class ShuffledTrackingFeedTests
             string arrival = string.Join(",", order.Select(e => e.Item1));
 
             shipment.Status.ShouldBe(ShipmentStatus.Delivered, arrival);
-            shipment.TrackingEvents.Select(e => e.CarrierEventId)
+            shipment.TrackingEvents
+                .Select(e => e.CarrierEventId)
                 .ShouldBe(["e1", "e2", "e3", "e4"], ignoreOrder: true, customMessage: arrival);
 
             // Despatch before delivery whatever the arrival order, since Notifications consumes both (§3.2).

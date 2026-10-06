@@ -147,7 +147,8 @@ public class ShipmentTests
         shipment.Record("e1", TrackingStatus.Collected, Now.AddHours(1), Now.AddHours(2)).ShouldBeTrue();
 
         shipment.Status.ShouldBe(ShipmentStatus.Dispatched);
-        shipment.DomainEvents.ShouldHaveSingleItem()
+        shipment.DomainEvents
+            .ShouldHaveSingleItem()
             .ShouldBe(new ShipmentDispatchedDomainEvent(shipment.Id, shipment.OrderId, "TRK1", Now.AddHours(2)));
     }
 

@@ -30,7 +30,8 @@ public sealed class ShipmentFulfilmentTests(ServiceFixture fixture) : IAsyncLife
     {
         // Provable only against a real broker, as the harness replaces the UsingRabbitMq callback; healthy first, since
         // an endpoint declares its bindings as it starts (§13.5).
-        BusHealthStatus health = await fixture.Factory.Services.GetRequiredService<IBusControl>()
+        BusHealthStatus health = await fixture.Factory.Services
+            .GetRequiredService<IBusControl>()
             .WaitForHealthStatus(BusHealthStatus.Healthy, FulfilmentSteps.Deadline);
         health.ShouldBe(BusHealthStatus.Healthy);
 

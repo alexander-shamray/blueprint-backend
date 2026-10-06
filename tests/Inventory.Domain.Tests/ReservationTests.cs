@@ -28,7 +28,8 @@ public class ReservationTests
         reservation.Status.ShouldBe(ReservationStatus.Reserved);
         reservation.Lines.Count.ShouldBe(2);
         reservation.DomainEvents.OfType<StockReservedDomainEvent>().ShouldHaveSingleItem().OrderId.ShouldBe(order);
-        reservation.DomainEvents.OfType<StockLevelChangedDomainEvent>()
+        reservation.DomainEvents
+            .OfType<StockLevelChangedDomainEvent>()
             .Select(e => (e.ProductId, e.Available, e.OccurredAt))
             .ShouldBe(
                 [(A, 8, Now), (B, 0, Now.AddTicks(1))],
@@ -41,7 +42,9 @@ public class ReservationTests
         Reservation reservation = Reservation.Fail(OrderId.New(), Lines(), [B], Now);
 
         reservation.Status.ShouldBe(ReservationStatus.Failed);
-        reservation.DomainEvents.ShouldHaveSingleItem().ShouldBeOfType<StockReservationFailedDomainEvent>()
+        reservation.DomainEvents
+            .ShouldHaveSingleItem()
+            .ShouldBeOfType<StockReservationFailedDomainEvent>()
             .UnavailableProductIds.ShouldBe([B]);
     }
 

@@ -116,7 +116,8 @@ public sealed class MailFaultTests(MailpitFixture fixture) : IAsyncLifetime
         using OutboundCount counted = OutboundCounter.Unavailable(refusing.Services);
 
         MailUnavailableException thrown = await Should.ThrowAsync<MailUnavailableException>(() =>
-            refusing.Services.GetRequiredService<IMailChannel>()
+            refusing.Services
+                .GetRequiredService<IMailChannel>()
                 .SendAsync(Mail(), TestContext.Current.CancellationToken));
 
         thrown.Cause.ShouldBe(MailFault.Transient);
@@ -131,7 +132,8 @@ public sealed class MailFaultTests(MailpitFixture fixture) : IAsyncLifetime
         using NotificationsWorkerFactory unresolved = new(Unreachable.Sql, Unreachable.Rabbit);
 
         MailUnavailableException thrown = await Should.ThrowAsync<MailUnavailableException>(() =>
-            unresolved.Services.GetRequiredService<IMailChannel>()
+            unresolved.Services
+                .GetRequiredService<IMailChannel>()
                 .SendAsync(Mail(), TestContext.Current.CancellationToken));
 
         thrown.Cause.ShouldBe(MailFault.Transient);

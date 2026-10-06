@@ -1468,7 +1468,8 @@ public async Task Bff_client_credentials_token_is_accepted_by_a_service()
     // section is about, and reading it through the same type a service reads it
     // with is what keeps the assertion about the token rather than about an
     // extension method written beside it.
-    new JwtSecurityTokenHandler().ReadJwtToken(token).Audiences
+    new JwtSecurityTokenHandler()
+        .ReadJwtToken(token).Audiences
         .ShouldContain("commerce-api");
 
     (await ServiceValidatingTheRealm().GetAsync("/protected", token)).StatusCode

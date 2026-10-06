@@ -124,7 +124,8 @@ public partial class RequestTimeoutTests
 
         string[] charts =
         [
-            .. Directory.GetDirectories(Path.Combine(RepositoryRoot(), "deploy", "helm"))
+            .. Directory
+                .GetDirectories(Path.Combine(RepositoryRoot(), "deploy", "helm"))
                 .Where(chart => File.Exists(Path.Combine(chart, "templates", "deployment.yaml")))
         ];
 
@@ -136,7 +137,8 @@ public partial class RequestTimeoutTests
             Match grace = GracePeriod().Match(File.ReadAllText(Path.Combine(chart, "values.yaml")));
 
             grace.Success.ShouldBeTrue($"{chart} names no terminationGracePeriodSeconds");
-            TimeSpan.FromSeconds(int.Parse(grace.Groups["seconds"].Value, CultureInfo.InvariantCulture))
+            TimeSpan
+                .FromSeconds(int.Parse(grace.Groups["seconds"].Value, CultureInfo.InvariantCulture))
                 .ShouldBeGreaterThan(drain, $"{chart}'s grace period");
         }
     }

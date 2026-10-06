@@ -17,7 +17,8 @@ public sealed class MailOptionsTests
     [Fact]
     public void Outside_development_plain_submission_is_refused_at_registration()
     {
-        Should.Throw<InvalidOperationException>(() => Bound(Environments.Production, Relay(security: "None")))
+        Should
+            .Throw<InvalidOperationException>(() => Bound(Environments.Production, Relay(security: "None")))
             .Message.ShouldContain($"{MailOptions.SecurityKey} is None outside Development");
     }
 
@@ -63,7 +64,8 @@ public sealed class MailOptionsTests
         using WebApplicationFactory<Program> production =
             factory.WithWebHostBuilder(b => b.UseEnvironment("Production"));
 
-        Should.Throw<InvalidOperationException>(() => production.Services)
+        Should
+            .Throw<InvalidOperationException>(() => production.Services)
             .Message.ShouldContain("is None outside Development");
     }
 
@@ -86,7 +88,8 @@ public sealed class MailOptionsTests
             Environments.Development,
             Relay(security: "None", userName: userName, relayPassword: password));
 
-        Should.Throw<OptionsValidationException>(() => provider.GetRequiredService<IStartupValidator>().Validate())
+        Should
+            .Throw<OptionsValidationException>(() => provider.GetRequiredService<IStartupValidator>().Validate())
             .Message.ShouldContain("are set together or not at all");
     }
 
@@ -102,7 +105,8 @@ public sealed class MailOptionsTests
     {
         using ServiceProvider provider = Bound(Environments.Production, Relay(from: from));
 
-        Should.Throw<OptionsValidationException>(() => provider.GetRequiredService<IStartupValidator>().Validate())
+        Should
+            .Throw<OptionsValidationException>(() => provider.GetRequiredService<IStartupValidator>().Validate())
             .Message.ShouldContain("From");
     }
 
@@ -114,7 +118,8 @@ public sealed class MailOptionsTests
     {
         using ServiceProvider provider = Bound(Environments.Production, Relay(host: host));
 
-        Should.Throw<OptionsValidationException>(() => provider.GetRequiredService<IStartupValidator>().Validate())
+        Should
+            .Throw<OptionsValidationException>(() => provider.GetRequiredService<IStartupValidator>().Validate())
             .Message.ShouldContain("Host");
     }
 
@@ -126,7 +131,8 @@ public sealed class MailOptionsTests
     {
         using ServiceProvider provider = Bound(Environments.Production, Relay(port: port));
 
-        Should.Throw<OptionsValidationException>(() => provider.GetRequiredService<IStartupValidator>().Validate())
+        Should
+            .Throw<OptionsValidationException>(() => provider.GetRequiredService<IStartupValidator>().Validate())
             .Message.ShouldContain("Port");
     }
 

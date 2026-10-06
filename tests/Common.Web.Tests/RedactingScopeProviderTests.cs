@@ -196,7 +196,8 @@ public class RedactingScopeProviderTests
         await host.StartAsync(TestContext.Current.CancellationToken);
         await host.StopAsync(TestContext.Current.CancellationToken);
 
-        host.Services.GetRequiredService<IExternalScopeProvider>()
+        host.Services
+            .GetRequiredService<IExternalScopeProvider>()
             .ShouldBeOfType<RedactingScopeProvider>();
     }
 
@@ -319,7 +320,8 @@ public class RedactingScopeProviderTests
 
         using ServiceProvider root = services.BuildServiceProvider();
 
-        using IDisposable _ = root.GetRequiredService<IExternalScopeProvider>()
+        using IDisposable _ = root
+            .GetRequiredService<IExternalScopeProvider>()
             .Push(new Dictionary<string, object?> { ["RequestType"] = "PlaceOrderCommand" });
 
         inner.Pushed.ShouldHaveSingleItem();

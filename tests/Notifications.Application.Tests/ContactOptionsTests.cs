@@ -51,7 +51,8 @@ public class ContactOptionsTests
     [MemberData(nameof(OutOfRange))]
     public void A_freshness_out_of_range_is_refused(TimeSpan freshness)
     {
-        Should.Throw<ArgumentOutOfRangeException>(() => new ContactOptions(freshness, TimeSpan.FromDays(3650)))
+        Should
+            .Throw<ArgumentOutOfRangeException>(() => new ContactOptions(freshness, TimeSpan.FromDays(3650)))
             .ParamName.ShouldBe("Freshness");
     }
 
@@ -59,7 +60,8 @@ public class ContactOptionsTests
     [MemberData(nameof(OutOfRange))]
     public void A_ceiling_out_of_range_is_refused(TimeSpan staleCeiling)
     {
-        Should.Throw<ArgumentOutOfRangeException>(() => new ContactOptions(TimeSpan.FromSeconds(1), staleCeiling))
+        Should
+            .Throw<ArgumentOutOfRangeException>(() => new ContactOptions(TimeSpan.FromSeconds(1), staleCeiling))
             .ParamName.ShouldBe("StaleCeiling");
     }
 }

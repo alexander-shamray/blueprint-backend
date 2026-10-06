@@ -217,7 +217,8 @@ public class MessagingRegistrationTests
         using IServiceScope scope = provider.CreateScope();
         IModel model = scope.ServiceProvider.GetRequiredService<OrderingDbContext>().Model;
 
-        IEntityType message = model.GetEntityTypes()
+        IEntityType message = model
+            .GetEntityTypes()
             .Single(t => t.ClrType.FullName == "MassTransit.EntityFrameworkCoreIntegration.OutboxMessage");
 
         foreach (string column in (string[])["Body", "Headers", "Properties", "MessageType"])

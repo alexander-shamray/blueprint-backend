@@ -9,7 +9,8 @@ public class MailPortTests
     [Fact]
     public void A_send_is_accepted_or_refused_and_nothing_else()
     {
-        typeof(MailResult).GetNestedTypes()
+        typeof(MailResult)
+            .GetNestedTypes()
             .Where(t => t.IsSubclassOf(typeof(MailResult)))
             .Select(t => t.Name)
             .ShouldBe(
@@ -27,7 +28,8 @@ public class MailPortTests
     [Fact]
     public void A_fault_is_one_of_five_and_the_names_are_the_counters_vocabulary()
     {
-        Enum.GetNames<MailFault>()
+        Enum
+            .GetNames<MailFault>()
             .ShouldBe(["Transient", "Unconfirmed", "Tls", "Credential", "Rejected"], ignoreOrder: true);
     }
 

@@ -97,7 +97,8 @@ public sealed class CommandMappersTests
         ReserveStockMapper mapper = new();
         StockLine[] wire =
         [
-            .. Enumerable.Range(0, OrderLimits.MaxLines + 1)
+            .. Enumerable
+                .Range(0, OrderLimits.MaxLines + 1)
                 .Select(_ => new StockLine(Guid.CreateVersion7(), 1))
         ];
 

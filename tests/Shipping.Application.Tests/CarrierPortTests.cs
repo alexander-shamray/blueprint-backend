@@ -23,7 +23,8 @@ public class CarrierPortTests
     [Fact]
     public void A_booking_is_booked_or_refused_and_nothing_else()
     {
-        typeof(BookingResult).GetNestedTypes()
+        typeof(BookingResult)
+            .GetNestedTypes()
             .Where(t => t.IsSubclassOf(typeof(BookingResult)))
             .Select(t => t.Name)
             .ShouldBe(
@@ -35,7 +36,8 @@ public class CarrierPortTests
     [Fact]
     public void A_cancellation_is_cancelled_or_too_late_and_nothing_else()
     {
-        typeof(CancellationResult).GetNestedTypes()
+        typeof(CancellationResult)
+            .GetNestedTypes()
             .Where(t => t.IsSubclassOf(typeof(CancellationResult)))
             .Select(t => t.Name)
             .ShouldBe(
@@ -48,7 +50,8 @@ public class CarrierPortTests
     public void A_carrier_event_carries_no_link_of_the_carriers()
     {
         // No URL is stored, checked on the shape: a field is the one way a link could be kept.
-        typeof(CarrierEvent).GetProperties()
+        typeof(CarrierEvent)
+            .GetProperties()
             .Select(p => p.Name)
             .ShouldBe(["CarrierEventId", "Status", "OccurredAt"], ignoreOrder: true);
     }

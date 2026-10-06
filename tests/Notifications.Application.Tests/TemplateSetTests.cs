@@ -46,7 +46,8 @@ public class TemplateSetTests
     [Fact]
     public void The_assembly_holds_twenty_four_resources_under_the_folder_none_split_into_a_satellite()
     {
-        int resources = typeof(TemplateSet).Assembly.GetManifestResourceNames()
+        int resources = typeof(TemplateSet).Assembly
+            .GetManifestResourceNames()
             .Count(name => name.StartsWith(TemplateSet.Folder, StringComparison.Ordinal));
 
         resources.ShouldBe(24, "twenty-one templates and three maps, none split into a satellite");
@@ -111,7 +112,8 @@ public class TemplateSetTests
             Minimal(),
             new TemplateFile("Templates/order-placed.v1.en.txt", "Subject: Order {OrderId}\n\nOrder {OrderId}.\n"));
 
-        Should.Throw<TemplateSetException>(() => TemplateSet.Parse(files))
+        Should
+            .Throw<TemplateSetException>(() => TemplateSet.Parse(files))
             .Refusals.ShouldHaveSingleItem()
             .ShouldBe(
                 "Templates/order-placed.v1.en.txt: its subject names a placeholder, and a subject may name none.");
@@ -129,8 +131,10 @@ public class TemplateSetTests
             Minimal(),
             new TemplateFile("Templates/order-placed.v1.en.txt", $"Subject: Placed\n\n{body}\n"));
 
-        Should.Throw<TemplateSetException>(() => TemplateSet.Parse(files))
-            .Refusals.ShouldHaveSingleItem().ShouldStartWith("Templates/order-placed.v1.en.txt: the brace at offset");
+        Should
+            .Throw<TemplateSetException>(() => TemplateSet.Parse(files))
+            .Refusals.ShouldHaveSingleItem()
+            .ShouldStartWith("Templates/order-placed.v1.en.txt: the brace at offset");
     }
 
     [Theory]
@@ -141,7 +145,8 @@ public class TemplateSetTests
     {
         List<TemplateFile> files = With(Minimal(), new TemplateFile("Templates/order-placed.v1.en.txt", text));
 
-        Should.Throw<TemplateSetException>(() => TemplateSet.Parse(files))
+        Should
+            .Throw<TemplateSetException>(() => TemplateSet.Parse(files))
             .Refusals.ShouldHaveSingleItem()
             .ShouldBe("Templates/order-placed.v1.en.txt: its first line is not 'Subject: ' and a subject.");
     }
@@ -156,8 +161,10 @@ public class TemplateSetTests
     {
         List<TemplateFile> files = [.. Minimal(), new TemplateFile(name, "Subject: Placed\n\nOrder {OrderId}.\n")];
 
-        Should.Throw<TemplateSetException>(() => TemplateSet.Parse(files))
-            .Refusals.ShouldHaveSingleItem().ShouldStartWith($"{name}: not Templates/");
+        Should
+            .Throw<TemplateSetException>(() => TemplateSet.Parse(files))
+            .Refusals.ShouldHaveSingleItem()
+            .ShouldStartWith($"{name}: not Templates/");
     }
 
     [Theory]
@@ -167,8 +174,10 @@ public class TemplateSetTests
     {
         List<TemplateFile> files = [.. Minimal(), new TemplateFile(name, "Subject: Shipped\n\nOrder {OrderId}.\n")];
 
-        Should.Throw<TemplateSetException>(() => TemplateSet.Parse(files))
-            .Refusals.ShouldHaveSingleItem().ShouldBe($"{name}: names no template key that takes this file.");
+        Should
+            .Throw<TemplateSetException>(() => TemplateSet.Parse(files))
+            .Refusals.ShouldHaveSingleItem()
+            .ShouldBe($"{name}: names no template key that takes this file.");
     }
 
     [Fact]
@@ -177,7 +186,8 @@ public class TemplateSetTests
         List<TemplateFile> files = Minimal();
         files.RemoveAll(f => f.Name == "Templates/shipment-delivered.v1.en.txt");
 
-        Should.Throw<TemplateSetException>(() => TemplateSet.Parse(files))
+        Should
+            .Throw<TemplateSetException>(() => TemplateSet.Parse(files))
             .Refusals.ShouldHaveSingleItem()
             .ShouldBe("Templates/shipment-delivered: no template is shipped for this key at any version.");
     }

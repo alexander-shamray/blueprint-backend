@@ -48,7 +48,8 @@ public class ContractTests
         IsContract(typeof(Common.Contracts.UnversionedProbe)).ShouldBeTrue(
             "a contract with no version namespace must reach the checks, not slip past them");
 
-        Regex.IsMatch(typeof(Common.Contracts.UnversionedProbe).Namespace!, VersionedNamespace)
+        Regex
+            .IsMatch(typeof(Common.Contracts.UnversionedProbe).Namespace!, VersionedNamespace)
             .ShouldBeFalse("and it must then fail the rule it breaks");
     }
 

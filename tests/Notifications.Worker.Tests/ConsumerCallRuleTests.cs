@@ -92,7 +92,8 @@ public class ConsumerCallRuleTests(ConsumerCallRuleTests.ComposedFactory factory
         IServiceCollection services = new ServiceCollection();
         services.AddScoped<SelfMailing>();
 
-        ConsumerCallRule.Offenders(services, typeof(ConsumerCallRuleTests).Assembly, [])
+        ConsumerCallRule
+            .Offenders(services, typeof(ConsumerCallRuleTests).Assembly, [])
             .ShouldHaveSingleItem()
             .ShouldContain("SelfMailing reaches SelfMailing (SelfMailing holds one itself)");
     }
@@ -104,7 +105,8 @@ public class ConsumerCallRuleTests(ConsumerCallRuleTests.ComposedFactory factory
         services.AddScoped<Mailing>();
         services.Add(factory.Composition.Single(d => d.ServiceType == typeof(IMailChannel)));
 
-        ConsumerCallRule.Offenders(services, typeof(ConsumerCallRuleTests).Assembly, [])
+        ConsumerCallRule
+            .Offenders(services, typeof(ConsumerCallRuleTests).Assembly, [])
             .ShouldHaveSingleItem()
             .ShouldContain("Mailing reaches SmtpMailChannel");
     }
@@ -116,7 +118,8 @@ public class ConsumerCallRuleTests(ConsumerCallRuleTests.ComposedFactory factory
         services.AddScoped<Hidden>();
         services.AddScoped(typeof(IOpaque), _ => new Concealed());
 
-        ConsumerCallRule.Offenders(services, typeof(ConsumerCallRuleTests).Assembly, [])
+        ConsumerCallRule
+            .Offenders(services, typeof(ConsumerCallRuleTests).Assembly, [])
             .ShouldHaveSingleItem()
             .ShouldContain("IOpaque is built by a factory returning object");
     }

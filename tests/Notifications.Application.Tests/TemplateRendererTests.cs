@@ -213,9 +213,11 @@ public class TemplateRendererTests
     [Fact]
     public void An_empty_or_repeated_language_set_is_refused()
     {
-        TemplateRenderer.Refusals(TemplateSet.Embedded, [], "UTC")
+        TemplateRenderer
+            .Refusals(TemplateSet.Embedded, [], "UTC")
             .ShouldBe(["The language set is empty; ADR-053 makes it a set of at least one."]);
-        TemplateRenderer.Refusals(TemplateSet.Embedded, ["en", "en"], "UTC")
+        TemplateRenderer
+            .Refusals(TemplateSet.Embedded, ["en", "en"], "UTC")
             .ShouldBe(["The language set names 'en' twice."]);
     }
 
@@ -248,7 +250,8 @@ public class TemplateRendererTests
     [InlineData("")]
     public void A_zone_that_is_not_an_iana_id_this_runtime_knows_is_refused(string zone)
     {
-        TemplateRenderer.Refusals(TemplateSet.Embedded, ["en"], zone)
+        TemplateRenderer
+            .Refusals(TemplateSet.Embedded, ["en"], zone)
             .ShouldBe([$"'{zone}' is not an IANA time zone this runtime knows."]);
     }
 
@@ -275,7 +278,8 @@ public class TemplateRendererTests
                     TemplateKeys.CancellationCodes.Append(TemplateSet.OtherReason).Select(c => $"{c}: Why.\n")))
         ];
 
-        RenderedMessage message = TemplateRenderer.Create(TemplateSet.Parse(files), ["en"], "UTC")
+        RenderedMessage message = TemplateRenderer
+            .Create(TemplateSet.Parse(files), ["en"], "UTC")
             .Render(TemplateKeys.OrderPlaced, Everything, "en");
 
         message.TemplateVersion.ShouldBe(2);

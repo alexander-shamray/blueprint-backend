@@ -30,7 +30,8 @@ public class OutboxSerialisationTests
             object? read = JsonSerializer.Deserialize(json, type, options);
 
             // Through the payload, because a record compares its list members by reference.
-            JsonSerializer.Serialize(read, type, options)
+            JsonSerializer
+                .Serialize(read, type, options)
                 .ShouldBe(json, $"{type.Name} cannot survive the Local lane");
         }
     }

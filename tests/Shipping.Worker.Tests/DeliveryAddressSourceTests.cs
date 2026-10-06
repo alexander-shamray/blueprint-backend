@@ -313,7 +313,8 @@ public sealed class DeliveryAddressSourceTests : IClassFixture<DeliveryAddressSo
             Unreachable.Rabbit,
             addressSourceBaseUrl: configured);
 
-        Should.Throw<InvalidOperationException>(() => factory.Services)
+        Should
+            .Throw<InvalidOperationException>(() => factory.Services)
             .Message.ShouldContain(AddressRegistration.BaseUrlKey);
     }
 
@@ -327,7 +328,8 @@ public sealed class DeliveryAddressSourceTests : IClassFixture<DeliveryAddressSo
             Unreachable.Rabbit,
             addressSourceBaseUrl: configured);
 
-        Should.Throw<InvalidOperationException>(() => factory.Services)
+        Should
+            .Throw<InvalidOperationException>(() => factory.Services)
             .Message.ShouldBe(
                 $"{AddressRegistration.BaseUrlKey} carries a query or fragment, " +
                 "which no request to Ordering would keep.");

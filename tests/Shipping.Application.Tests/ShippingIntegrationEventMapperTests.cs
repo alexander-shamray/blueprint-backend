@@ -33,7 +33,8 @@ public class ShippingIntegrationEventMapperTests
 
         ShipmentDispatched contract = Mapper()
             .Map([new ShipmentDispatchedDomainEvent(ShipmentId.New(), order, "TRK1", Raised)])
-            .ShouldHaveSingleItem().ShouldBeOfType<ShipmentDispatched>();
+            .ShouldHaveSingleItem()
+            .ShouldBeOfType<ShipmentDispatched>();
 
         contract.OrderId.ShouldBe(order.Value);
         contract.CorrelationId.ShouldBe(order.Value, "§9.6's saga correlates on the order");
@@ -49,7 +50,8 @@ public class ShippingIntegrationEventMapperTests
 
         ShipmentDelivered contract = Mapper()
             .Map([new ShipmentDeliveredDomainEvent(ShipmentId.New(), order, "TRK1", Raised)])
-            .ShouldHaveSingleItem().ShouldBeOfType<ShipmentDelivered>();
+            .ShouldHaveSingleItem()
+            .ShouldBeOfType<ShipmentDelivered>();
 
         contract.OrderId.ShouldBe(order.Value);
         contract.CorrelationId.ShouldBe(order.Value);
@@ -102,7 +104,8 @@ public class ShippingIntegrationEventMapperTests
     [Fact]
     public void An_unregistered_domain_event_reaches_no_contract()
     {
-        Mapper().Map([new UnpublishedDomainEvent(Raised)])
+        Mapper()
+            .Map([new UnpublishedDomainEvent(Raised)])
             .ShouldBeEmpty("an unregistered domain event is local-only, and that is not an error");
     }
 

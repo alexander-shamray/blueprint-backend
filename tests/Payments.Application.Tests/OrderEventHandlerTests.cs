@@ -46,7 +46,8 @@ public class OrderEventHandlerTests
             },
             TestContext.Current.CancellationToken);
 
-        dispatcher.Sent.ShouldHaveSingleItem()
+        dispatcher.Sent
+            .ShouldHaveSingleItem()
             .ShouldBe(new RecordOrderPlacedCommand(order, customer, 42.10m, "EUR", Occurred));
     }
 

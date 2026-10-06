@@ -69,7 +69,8 @@ public sealed class SendFaultTests(ServiceFixture fixture) : IAsyncLifetime
         await OwedAsync(Guid.CreateVersion7());
 
         (await PassAsync(host)).ShouldBe(new SendPass(2, 0));
-        host.Services.GetRequiredService<MailPipeline>().IsOpen
+        host.Services
+            .GetRequiredService<MailPipeline>().IsOpen
             .ShouldBeTrue("two sends of two attempts each reach MailHop's throughput, every one failed");
 
         // Healthy again, so a send that left the process now would be delivered.

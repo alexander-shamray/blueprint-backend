@@ -17,7 +17,8 @@ public sealed partial class SimulatorImageTests
     {
         string root = SimulatorMappings.RepositoryRoot();
 
-        string? pin = XDocument.Load(Path.Combine(root, "Directory.Packages.props"))
+        string? pin = XDocument
+            .Load(Path.Combine(root, "Directory.Packages.props"))
             .Descendants("PackageVersion")
             .SingleOrDefault(e => (string?)e.Attribute("Include") == "WireMock.Net")
             ?.Attribute("Version")?.Value;

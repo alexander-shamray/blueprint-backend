@@ -117,7 +117,9 @@ public sealed class VoidOnCancellationTests(ServiceFixture fixture) : IAsyncLife
         fixture.Provider.LogEntries
             .Where(e => e.RequestMessage!.Path.EndsWith("/void", StringComparison.Ordinal))
             .Select(e => e.RequestMessage!.Headers!["Idempotency-Key"].Single())
-            .Distinct().ShouldHaveSingleItem().ShouldBe($"void:{order}");
+            .Distinct()
+            .ShouldHaveSingleItem()
+            .ShouldBe($"void:{order}");
     }
 
     [Fact]
@@ -126,7 +128,8 @@ public sealed class VoidOnCancellationTests(ServiceFixture fixture) : IAsyncLife
         Guid order = Guid.CreateVersion7();
         await PublishAsync(Placed(order, 42.10m));
         await SendAsync(new AuthorisePayment(order, 42.10m, "EUR"));
-        fixture.Provider.Given(Request.Create().WithPath("/v1/authorisations/*/void").UsingPost())
+        fixture.Provider
+            .Given(Request.Create().WithPath("/v1/authorisations/*/void").UsingPost())
             .AtPriority(0)
             .RespondWith(Response.Create().WithStatusCode(409));
 

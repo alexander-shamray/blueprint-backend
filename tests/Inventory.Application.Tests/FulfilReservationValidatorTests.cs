@@ -11,14 +11,16 @@ public class FulfilReservationValidatorTests
     [Fact]
     public void An_empty_order_id_is_refused()
     {
-        _validator.TestValidate(new FulfilReservationCommand(Guid.Empty))
+        _validator
+            .TestValidate(new FulfilReservationCommand(Guid.Empty))
             .ShouldHaveValidationErrorFor(c => c.OrderId);
     }
 
     [Fact]
     public void A_real_order_id_is_accepted()
     {
-        _validator.TestValidate(new FulfilReservationCommand(Guid.CreateVersion7()))
+        _validator
+            .TestValidate(new FulfilReservationCommand(Guid.CreateVersion7()))
             .ShouldNotHaveAnyValidationErrors();
     }
 }

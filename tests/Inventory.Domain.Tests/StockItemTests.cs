@@ -20,7 +20,8 @@ public class StockItemTests
 
         item.Available.ShouldBe(10);
         item.Reserved.ShouldBe(0);
-        StockLevelChangedDomainEvent raised = item.DomainEvents.ShouldHaveSingleItem()
+        StockLevelChangedDomainEvent raised = item.DomainEvents
+            .ShouldHaveSingleItem()
             .ShouldBeOfType<StockLevelChangedDomainEvent>();
         raised.ProductId.ShouldBe(product);
         raised.Available.ShouldBe(10);
@@ -36,7 +37,9 @@ public class StockItemTests
 
         item.Available.ShouldBe(6, "on hand minus reserved is what can still be promised");
         item.Reserved.ShouldBe(4);
-        item.DomainEvents.ShouldHaveSingleItem().ShouldBeOfType<StockLevelChangedDomainEvent>()
+        item.DomainEvents
+            .ShouldHaveSingleItem()
+            .ShouldBeOfType<StockLevelChangedDomainEvent>()
             .Available.ShouldBe(6);
     }
 
@@ -59,7 +62,9 @@ public class StockItemTests
         item.UpdatedAt.ShouldBe(
             Now.AddHours(1).AddTicks(1),
             "a clock behind the row moves the stamp one tick, never back");
-        item.DomainEvents.ShouldHaveSingleItem().ShouldBeOfType<StockLevelChangedDomainEvent>()
+        item.DomainEvents
+            .ShouldHaveSingleItem()
+            .ShouldBeOfType<StockLevelChangedDomainEvent>()
             .OccurredAt.ShouldBe(item.UpdatedAt);
     }
 

@@ -125,7 +125,8 @@ public sealed class ContactStoreTests(ServiceFixture fixture) : IAsyncLifetime
     {
         await using AsyncServiceScope scope = fixture.Factory.Services.CreateAsyncScope();
 
-        await scope.ServiceProvider.GetRequiredService<IContactStore>()
+        await scope.ServiceProvider
+            .GetRequiredService<IContactStore>()
             .SaveAsync(customer, contact, fetchedAt, TestContext.Current.CancellationToken);
     }
 
@@ -133,7 +134,8 @@ public sealed class ContactStoreTests(ServiceFixture fixture) : IAsyncLifetime
     {
         await using AsyncServiceScope scope = fixture.Factory.Services.CreateAsyncScope();
 
-        return await scope.ServiceProvider.GetRequiredService<IContactStore>()
+        return await scope.ServiceProvider
+            .GetRequiredService<IContactStore>()
             .GetAsync(customer, TestContext.Current.CancellationToken);
     }
 
@@ -141,7 +143,8 @@ public sealed class ContactStoreTests(ServiceFixture fixture) : IAsyncLifetime
     {
         await using AsyncServiceScope scope = fixture.Factory.Services.CreateAsyncScope();
 
-        await scope.ServiceProvider.GetRequiredService<IContactStore>()
+        await scope.ServiceProvider
+            .GetRequiredService<IContactStore>()
             .DeleteAsync(customer, TestContext.Current.CancellationToken);
     }
 }

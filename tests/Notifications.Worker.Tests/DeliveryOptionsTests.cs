@@ -35,7 +35,8 @@ public sealed class DeliveryOptionsTests
     {
         using ServiceProvider provider = Bound(value, new RetentionPolicy());
 
-        Should.Throw<OptionsValidationException>(() => provider.GetRequiredService<IStartupValidator>().Validate())
+        Should
+            .Throw<OptionsValidationException>(() => provider.GetRequiredService<IStartupValidator>().Validate())
             .Message.ShouldContain(nameof(DeliveryOptions.GiveUpAge));
     }
 

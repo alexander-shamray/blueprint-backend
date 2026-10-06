@@ -143,7 +143,8 @@ public class IntegrationEventConsumerTests
             .FirstOrDefault();
 
         received.ShouldNotBeNull();
-        received.Exception.ShouldBeOfType<InvalidOperationException>()
+        received.Exception
+            .ShouldBeOfType<InvalidOperationException>()
             .Message.ShouldContain("No IIntegrationEventHandler<UnhandledEvent> is registered");
     }
 

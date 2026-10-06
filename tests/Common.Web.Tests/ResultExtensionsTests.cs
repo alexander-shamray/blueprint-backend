@@ -37,7 +37,8 @@ public class ResultExtensionsTests
         // Code goes in an extension member, leaving RFC 9457's title as the status phrase.
         IResult result = Result.Failure(ErrorOf(ErrorType.Rule)).ToHttpResult();
 
-        result.ShouldBeOfType<ProblemHttpResult>()
+        result
+            .ShouldBeOfType<ProblemHttpResult>()
             .ProblemDetails.Extensions["code"].ShouldBe("test.rule");
     }
 
@@ -47,7 +48,8 @@ public class ResultExtensionsTests
         // Description may vary, unlike the code, which is a metric dimension (§9.8).
         IResult result = Result.Failure(ErrorOf(ErrorType.Rule)).ToHttpResult();
 
-        result.ShouldBeOfType<ProblemHttpResult>()
+        result
+            .ShouldBeOfType<ProblemHttpResult>()
             .ProblemDetails.Detail.ShouldBe("A description written for a person.");
     }
 

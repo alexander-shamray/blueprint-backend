@@ -32,7 +32,8 @@ public class OutboxSerialisationTests
             object? read = JsonSerializer.Deserialize(json, type, options);
 
             // Compared by re-serialising, which catches a member dropped on write or on read alike.
-            JsonSerializer.Serialize(read, type, options)
+            JsonSerializer
+                .Serialize(read, type, options)
                 .ShouldBe(json, $"{type.Name} cannot survive the Local lane");
         }
     }
