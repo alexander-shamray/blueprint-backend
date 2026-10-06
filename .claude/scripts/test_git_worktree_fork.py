@@ -31,6 +31,13 @@ if [ "$HOOK" = yes ]; then
   git -C "$root/origin" -c user.name=t -c user.email=t@t commit -q -m hook
 fi
 git clone -q "$root/origin" "$root/checkout"
+# Committed after the clone, so only origin/main carries the dangling link.
+if [ "$LINK" = yes ]; then
+  blob=$(printf %s "$root/outside.json" | git -C "$root/origin" hash-object -w --stdin)
+  git -C "$root/origin" update-index --add --cacheinfo "120000,$blob,.claude/settings.local.json"
+  git -C "$root/origin" -c user.name=t -c user.email=t@t commit -q -m link
+  git -C "$root/checkout" fetch -q origin
+fi
 if [ "$IGNORE" = yes ]; then printf '.claude/worktrees/\\n' > "$root/checkout/.gitignore"; fi
 mkdir -p "$root/checkout/src"
 printf '%s\\n' "$root"
@@ -40,8 +47,8 @@ printf '%s\\n' "$root"
 class ForkShape(unittest.TestCase):
     """The helper forks `.claude/worktrees/<name>` from the main checkout only."""
 
-    def fixture(self, ignore="yes", hook="no"):
-        made = run_bash(FIXTURE, IGNORE=ignore, HOOK=hook)
+    def fixture(self, ignore="yes", hook="no", link="no"):
+        made = run_bash(FIXTURE, IGNORE=ignore, HOOK=hook, LINK=link)
         self.assertEqual(0, made.returncode, made.stderr)
         root = made.stdout.strip()
         self.addCleanup(lambda: run_bash('rm -rf "$TARGET"', TARGET=root))
@@ -108,6 +115,18 @@ class ForkShape(unittest.TestCase):
         self.assertEqual(0, copied.returncode, copied.stderr)
         self.assertEqual({"enabledMcpjsonServers": ["codebase-index"]},
                          json.loads(copied.stdout))
+
+    def test_the_approval_is_not_written_through_a_link_the_branch_carries(self):
+        root = self.fixture(link="yes")
+        self.local_settings(root, json.dumps({"enabledMcpjsonServers": ["codebase-index"]}))
+        result = self.fork(f"{root}/checkout", ".claude/worktrees/probe")
+        self.assertEqual(0, result.returncode, result.stderr)
+        linked = run_bash('[ -L "$W/.claude/settings.local.json" ]',
+                          W=f"{root}/checkout/.claude/worktrees/probe")
+        if linked.returncode != 0:
+            self.skipTest("git checked the link out as a file: no symbolic links here")
+        self.assertNotEqual(0, run_bash('[ -e "$R/outside.json" ]', R=root).returncode,
+                            "the approval was written through the link")
 
     def test_a_checkout_approving_nothing_gives_the_worktree_no_settings(self):
         root = self.fixture()
