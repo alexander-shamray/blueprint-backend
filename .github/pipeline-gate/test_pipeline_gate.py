@@ -401,6 +401,18 @@ class ShardTests(Fixture):
 
                 self.assertTrue(any("the parser read 3 entries" in problem for problem in problems), problems)
 
+    def test_a_comment_at_job_indent_does_not_end_the_matrix(self) -> None:
+        """Read as the next job, the comment would hide the entry after it from both readers."""
+        self.write(
+            WORKFLOW + SHARDS
+            + "  # the slowest last\n"
+            + "          - shard: inventory\n            selects: FullyQualifiedName~Inventory.\n"
+        )
+
+        problems = pipeline_gate.check_shards()
+
+        self.assertTrue(any("the last shard, inventory" in problem for problem in problems), problems)
+
     def test_an_unparsed_matrix_fails_rather_than_passing_empty(self) -> None:
         self.write(WORKFLOW)
 

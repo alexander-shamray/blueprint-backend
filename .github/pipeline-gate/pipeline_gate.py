@@ -451,7 +451,7 @@ def _integration_job(workflow_text: str) -> list[str]:
 
     body: list[str] = []
     for line in lines[index + 1:]:
-        if re.match(r"^\s{2}\S", line):          # the next job
+        if re.match(r"^\s{2}[^\s#]", line):      # the next job; a comment is not one
             break
         body.append(line)
     return body
