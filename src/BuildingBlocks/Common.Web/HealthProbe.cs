@@ -6,8 +6,8 @@ using Microsoft.Extensions.Configuration;
 namespace Common.Web;
 
 /// <summary>A host's own readiness probe, for a container image that has no shell or HTTP client (§14.1).</summary>
-/// <remarks>The port is read as Kestrel binds it, so a declared endpoint outranks the image's ASPNETCORE_HTTP_PORTS,
-/// and the path is the one <see cref="HealthCheckExtensions.MapCommonHealthEndpoints"/> maps (§13.5).</remarks>
+/// <remarks>The port is a declared Kestrel endpoint's, which outranks the image's ASPNETCORE_HTTP_PORTS, else that
+/// variable's; the path is the one <see cref="HealthCheckExtensions.MapCommonHealthEndpoints"/> maps (§13.5).</remarks>
 public static class HealthProbe
 {
     /// <summary>The argument that makes a host probe itself instead of starting.</summary>
@@ -46,7 +46,7 @@ public static class HealthProbe
         }
     }
 
-    /// <summary>The port Kestrel serves HTTP/1.1 on, or null when the configuration names none.</summary>
+    /// <summary>The first HTTP/1.1 endpoint's port when any is declared, else HTTP_PORTS' first; null if none.</summary>
     /// <remarks>Any declared endpoint replaces HTTP_PORTS, and an Http2-only one, §9.7's gRPC hop, refuses the
     /// probe's HTTP/1.1.</remarks>
     public static int? PortOf(IConfiguration configuration)
@@ -68,7 +68,7 @@ public static class HealthProbe
         return int.TryParse(first, NumberStyles.None, CultureInfo.InvariantCulture, out int port) ? port : null;
     }
 
-    // The sources a container host's Kestrel reads in the host's order; the probe runs before any host is built.
+    // The JSON and environment sources, layered as a container host layers them; no host is built to ask.
     private static IConfiguration HostConfiguration()
     {
         string environment = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT")
