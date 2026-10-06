@@ -368,15 +368,20 @@ def names(pattern: str) -> list[str]:
     return found
 
 
-def first(session: object) -> bool:
-    """True for the first call of `session` to ask, by a file only one call
-    can create, so a parallel batch is refused once."""
+def record(session: object) -> Path | None:
+    """The file recording `session`'s refusal, or None for an id that
+    cannot name one."""
     if not isinstance(session, str) or not SESSION.match(session):
-        return False
-    folder = Path(tempfile.gettempdir()) / ASKED
+        return None
+    return Path(tempfile.gettempdir()) / ASKED / session
+
+
+def first(asked: Path) -> bool:
+    """True for the one call that creates `asked`, so a parallel batch is
+    refused once."""
     try:
-        folder.mkdir(exist_ok=True)
-        os.close(os.open(folder / session, os.O_CREAT | os.O_EXCL | os.O_WRONLY))
+        asked.parent.mkdir(exist_ok=True)
+        os.close(os.open(asked, os.O_CREAT | os.O_EXCL | os.O_WRONLY))
     except OSError:
         return False
     return True
@@ -408,12 +413,13 @@ def answer(event: dict) -> str | None:
     cwd = event.get("cwd") if isinstance(event.get("cwd"), str) else ""
     pattern = search(name, given, cwd)
     found = names(pattern) if pattern else []
-    transcript = event.get("transcript_path")
-    if not found or not isinstance(transcript, str) or not transcript:
+    transcript, asked = event.get("transcript_path"), record(event.get("session_id"))
+    # A spent ask is read before the transcript, so it costs every later search no scan.
+    if not found or not isinstance(transcript, str) or not transcript or asked is None or asked.exists():
         return None
     if any(lookup(called, called_with) for called, called_with in calls(Path(transcript))):
         return None
-    if not first(event.get("session_id")):
+    if not first(asked):
         return None
     return ask(found[:NAMES], bool(cwd) and in_worktree(cwd))
 
