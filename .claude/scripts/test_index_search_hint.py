@@ -341,6 +341,9 @@ class WhenItAsks(Scratch):
                                    ' refs X --json"'),),
                         (bash_call("bash -c 'bash .claude/skills/codebase-index/scripts/cbx refs X --json'"),),
                         (bash_call("bash -x .claude/skills/codebase-index/scripts/cbx refs X --json"),),
+                        (bash_call("bash -lc 'bash .claude/skills/codebase-index/scripts/cbx refs X --json'"),),
+                        (bash_call("bash -o pipefail -c "
+                                   "'bash .claude/skills/codebase-index/scripts/cbx refs X --json'"),),
                         (bash_call("git status\nbash .claude/skills/codebase-index/scripts/cbx refs X --json"),),
                         (bash_call("CBX_NO_SKILL_AUTO_UPDATE=1 bash "
                                    ".claude/skills/codebase-index/scripts/cbx refs X --json"),),
