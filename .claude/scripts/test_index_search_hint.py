@@ -262,6 +262,13 @@ class WhenItSpeaks(Scratch):
             with self.subTest(earlier=earlier):
                 self.assertEqual("", self.hinted(*grep_call(), earlier=earlier))
 
+    def test_a_command_that_only_names_the_cli_is_not_a_lookup(self):
+        for command in ('git log -p | grep "cbx refs"',
+                        'git commit -m "say cbx search first"',
+                        "echo codebase-index search"):
+            with self.subTest(command=command):
+                self.assertTrue(self.hinted(*grep_call(), earlier=[bash_call(command)]))
+
     def test_reading_the_index_without_asking_it_is_not_a_lookup(self):
         for earlier in ((("mcp__codebase-index__healthcheck", {}),),
                         (("mcp__codebase-index__index_stats", {}),),
