@@ -476,8 +476,8 @@ jobs:
         with:
           global-json-file: global.json
 
-      # The reporters at the end of this job are stdlib Python, so they take
-      # the same pin every other Python job here does. The runner ships a
+      # The output gate below is stdlib Python, so it takes the same pin
+      # every other Python job here does. The runner ships a
       # Python, and relying on it would make this the one job whose interpreter
       # nobody chose.
       - uses: actions/setup-python@v5
