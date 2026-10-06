@@ -1,3 +1,4 @@
+using System.Reflection;
 using Common.TestSupport;
 using Shouldly;
 using Xunit;
@@ -8,6 +9,10 @@ namespace Web.Bff.Tests;
 public class RetentionMapTests
 {
     private static readonly Type[] Declared = [.. RetentionMapRule.BuildingBlocks];
+
+    private static readonly Assembly Host = typeof(RetentionMapTests).Assembly;
+
+    private static readonly string[] Prefixes = ["Web.Bff", "Common."];
 
     private static readonly NotRetention[] Excluded = [.. RetentionMapRule.BuildingBlocksNotRetention];
 
@@ -23,5 +28,12 @@ public class RetentionMapTests
         // The floor: an offender list is as green over a declared set that holds nothing, or a map never read.
         RetentionMapRule.Members(Declared).ShouldNotBeEmpty();
         RetentionMapRule.Offenders(Declared, Excluded, map: string.Empty).ShouldNotBeEmpty();
+        RetentionMapRule.Undeclared(Host, [], Prefixes).ShouldNotBeEmpty();
+    }
+
+    [Fact]
+    public void Every_type_this_host_holds_that_bears_a_window_by_name_is_declared()
+    {
+        RetentionMapRule.Undeclared(Host, Declared, Prefixes).ShouldBeEmpty();
     }
 }
