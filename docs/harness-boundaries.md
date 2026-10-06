@@ -201,18 +201,50 @@ a person is present for.
 the index current never got it read.** The skill's `description` says to
 query it, and from the transcripts no session here did after the day the
 skill was tuned. A prompt that reads as a locate, explain, references, impact
-or named-symbol question gets one line of `additionalContext`: load the
-skill, the route-table row for that question, and the session-tag rule.
-Every other prompt gets nothing, and so does every slash command but `/ship`
-and `/branch`, whose arguments are read as the task they carry. **It asks for
-the skill and not only the command** because the skill's `allowed-tools` is
-the only grant for the `cbx` wrapper, and it holds only while the skill is
-loaded. It reads only the decoded `prompt` string, never the payload's paths,
-writes nothing, spawns nothing and leaves with 0 whatever happened: exit 2
-under this event blocks the prompt and erases it, which is also why it is
-started the way the paragraph on hook commands below says.
-`test_index_query_hint.py` holds every command it emits to a row of the route
-table and a prefix the skill approves.
+or named-symbol question gets one line of `additionalContext`: the MCP tool
+that asks it, or the skill and the route-table row for that question, and
+the session-tag rule. Every other prompt gets nothing, and so does every
+slash command but `/ship` and `/branch`, whose arguments are read as the task
+they carry. **It names the skill and not only the command** because the
+skill's `allowed-tools` is the only grant for the `cbx` wrapper, and it holds
+only while the skill is loaded; **it names the tool's full name** because
+Claude Code lists an MCP tool by name only, and a session must load it with
+ToolSearch before the first call, while Grep is always loaded. It reads only
+the decoded `prompt` string, never the payload's paths, writes nothing,
+spawns nothing and leaves with 0 whatever happened: exit 2 under this event
+blocks the prompt and erases it, which is also why it is started the way the
+paragraph on hook commands below says. `test_index_query_hint.py` holds
+every command it emits to a row of the route table and a prefix the skill
+approves.
+
+**`PostToolUse` runs `.claude/hooks/index-search-hint.py` after `Grep` and
+`Bash`, because the prompt is not where the code questions are.** A task
+prompt — `/ship` and an issue — asks none of them; they come up inside the
+turn, where a prompt hook never runs, and from the transcripts not one of the
+sessions here that searched code in the week to 2026-10-06 made a lookup. A
+call that searched the tree — the Grep tool, or a recursive `grep`, an `rg`
+or a `git grep` — in a session that has asked the index nothing gets one line
+naming the tool for it: `find_refs` and `find_symbol` for an identifier,
+`search_code` otherwise, with the ToolSearch spelling that loads them and the
+`cbx` form. It says so on the first such search and on every fifth after it.
+A search confined to `docs/` or to Markdown is left alone, because which
+chapter owns a rule is a grep question, as the skill says, and so is a grep
+of one file or a pipe. **The transcript is its state**: it reads the
+session's own record of tool calls rather than keeping a file, so it writes
+nothing, and a lookup made by any route — an MCP tool or the CLI — silences
+it. It parses only the lines that record a tool call and runs only after a
+search, which on a 62 MB transcript took 0.2 s.
+
+**In a `/branch` worktree it names the CLI as the form to trust.** The MCP
+server starts with `--root .` in the directory the session started in, and
+`EnterWorktree` does not restart it, so after the move its answers describe
+the main checkout's index and not the branch's edits; `cbx`, run from the
+worktree, reads the worktree's own seeded index. A server that follows the
+session is not something `.mcp.json` can say, so the hint carries the
+difference instead. `test_index_search_hint.py` holds the wiring, which
+calls count, when it speaks, and the commands it emits to prefixes the skill
+approves; `test_index_query_hint.py` holds the two hooks to one map from
+question to tool.
 
 **`MCP_TIMEOUT` is raised in `.claude/settings.json`'s `env`.** The plugin
 servers started through `npx` — `playwright` and `chrome-devtools` — failed

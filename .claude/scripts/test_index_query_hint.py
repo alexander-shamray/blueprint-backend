@@ -17,6 +17,7 @@ from pathlib import Path
 SCRIPTS = Path(__file__).resolve().parent
 CLAUDE = SCRIPTS.parent
 HINT = CLAUDE / "hooks" / "index-query-hint.py"
+SEARCH_HINT = CLAUDE / "hooks" / "index-search-hint.py"
 SETTINGS = CLAUDE / "settings.json"
 SKILL = CLAUDE / "skills" / "codebase-index" / "SKILL.md"
 EVENT = "UserPromptSubmit"
@@ -81,8 +82,15 @@ def context(done) -> str:
 
 
 def emitted(text: str) -> str:
-    """The command inside the hint's backticks."""
-    found = re.search(r"`([^`]+)`", text)
+    """The `cbx` command inside the hint's backticks."""
+    found = re.search(r"`(bash [^`]+)`", text)
+    assert found, text
+    return found.group(1)
+
+
+def tool(text: str) -> str:
+    """The MCP tool inside the hint's backticks."""
+    found = re.search(r"`mcp__codebase-index__(\w+)`", text)
     assert found, text
     return found.group(1)
 
@@ -133,6 +141,18 @@ class TheHint(unittest.TestCase):
                 self.assertEqual(0, done.returncode, done.stderr)
                 command = emitted(context(done))
                 self.assertEqual(subcommand, command.split()[2], command)
+
+    def test_each_kind_of_question_names_the_mcp_tool_asking_it(self):
+        expected = {"impact": "impact_of", "refs": "find_refs", "explain": "explain_code",
+                    "symbol": "find_symbol", "search": "search_code"}
+        for prompt, subcommand in CASES.items():
+            with self.subTest(prompt=prompt):
+                self.assertEqual(expected[subcommand], tool(context(ask(prompt))))
+
+    def test_it_names_the_same_tool_as_the_search_hint(self):
+        """Two hooks, one question each way: a session told `find_refs` by one
+        and something else by the other would load the wrong tool."""
+        self.assertEqual(_module(SEARCH_HINT).TOOLS, _module().TOOLS)
 
     def test_every_route_is_reached_by_a_case(self):
         reached = {emitted(context(ask(prompt))) for prompt in CASES}
@@ -225,10 +245,10 @@ class TheSkillAgrees(unittest.TestCase):
                 self.assertIn(f"Bash({prefix}:*)", front)
 
 
-def _module():
+def _module(path: Path = HINT):
     import importlib.util
 
-    spec = importlib.util.spec_from_file_location("index_query_hint", HINT)
+    spec = importlib.util.spec_from_file_location(path.stem.replace("-", "_"), path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
