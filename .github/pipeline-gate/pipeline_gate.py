@@ -464,8 +464,8 @@ def count_shard_keys(workflow_text: str) -> tuple[int, int]:
     the cascade was never checked over, and only a second count can see it.
     """
     body = _integration_job(workflow_text)
-    shards = sum(1 for line in body if re.search(r"(?:^|[\s{,])shard\s*:", line))
-    selects = sum(1 for line in body if re.search(r"(?:^|[\s{,])selects\s*:", line))
+    shards = sum(1 for line in body if re.search(r"""(?:^|[\s{,])["']?shard["']?\s*:""", line))
+    selects = sum(1 for line in body if re.search(r"""(?:^|[\s{,])["']?selects["']?\s*:""", line))
     return shards, selects
 
 

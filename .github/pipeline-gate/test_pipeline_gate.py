@@ -391,6 +391,7 @@ class ShardTests(Fixture):
             f"          - shard: inventory  # slowest\n            selects: {overlapping}\n",
             f"          - selects: {overlapping}\n            shard: inventory\n",
             f"          - {{shard: inventory, selects: '{overlapping}'}}\n",
+            f"          - \"shard\": inventory\n            'selects': {overlapping}\n",
             "          - shard: inventory\n",
         ):
             with self.subTest(entry=entry):
