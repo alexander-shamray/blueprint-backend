@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import subprocess
 import sys
@@ -332,13 +333,15 @@ def ignored_paths(paths: list[str], root: Path) -> set[str]:
     """Which of `paths` the ignore rules of the tree holding `root` exclude, asked of git.
 
     `--no-index` because a force-added file is tracked, which git otherwise never reports as ignored,
-    and case-folded because the Windows checkouts that read these files fold `.MCP.json` to `.mcp.json`."""
+    case-folded because the Windows checkouts that read these files fold `.MCP.json` to `.mcp.json`, and with
+    no user excludes file, which is the developer's and not the tree's."""
     if not paths:
         return set()
     try:
         top = subprocess.run(["git", "-C", str(root), "rev-parse", "--show-toplevel"],
                              capture_output=True, encoding="utf-8", check=True).stdout.strip()
-        result = subprocess.run(["git", "-c", "core.ignorecase=true", "check-ignore", "--no-index", "--stdin", "-z"],
+        result = subprocess.run(["git", "-c", "core.ignorecase=true", "-c", f"core.excludesFile={os.devnull}",
+                                 "check-ignore", "--no-index", "--stdin", "-z"],
                                 cwd=top,
                                 input="\0".join(paths) + "\0", capture_output=True, encoding="utf-8")
     except (OSError, subprocess.CalledProcessError) as error:
