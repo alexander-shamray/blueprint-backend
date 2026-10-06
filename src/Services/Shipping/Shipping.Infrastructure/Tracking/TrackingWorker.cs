@@ -125,8 +125,8 @@ public sealed class TrackingWorker(
             .GetEventsAsync(work.CarrierReference, ct);
 
         DateTimeOffset nextPollAt =
-            scope.ServiceProvider.GetRequiredService<TimeProvider>().GetUtcNow()
-            + CarrierHop.TrackingPollInterval;
+            scope.ServiceProvider.GetRequiredService<TimeProvider>().GetUtcNow() +
+            CarrierHop.TrackingPollInterval;
 
         // The command releases the claim through Shipment.PollApplied, in the commit that applied the page.
         Result result = await dispatcher.SendAsync(

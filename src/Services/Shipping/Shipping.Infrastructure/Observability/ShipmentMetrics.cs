@@ -14,16 +14,16 @@ public sealed class ShipmentMetrics
         LoggerMessage.Define(
             LogLevel.Error,
             new EventId(1, nameof(GaugeReadFailed)),
-            "Waiting-shipment gauge read failed. PerState runs once per collection, so this "
-            + "collection omits every state rather than reporting some — absent rather than "
-            + "wrong, see ShipmentMetrics.");
+            "Waiting-shipment gauge read failed. PerState runs once per collection, so this " +
+            "collection omits every state rather than reporting some — absent rather than " +
+            "wrong, see ShipmentMetrics.");
 
     private static readonly Action<ILogger, Exception?> OverdueReadFailed =
         LoggerMessage.Define(
             LogLevel.Error,
             new EventId(2, nameof(OverdueReadFailed)),
-            "Overdue-shipment gauge read failed. This collection omits both passes rather than "
-            + "reporting one, see ShipmentMetrics.");
+            "Overdue-shipment gauge read failed. This collection omits both passes rather than " +
+            "reporting one, see ShipmentMetrics.");
 
     public ShipmentMetrics(IMeterFactory factory, IShipmentStats stats, ILogger<ShipmentMetrics> logger)
     {

@@ -73,8 +73,8 @@ public sealed class ServiceFixture()
         if (anchor < 0)
         {
             throw new InvalidOperationException(
-                $"shipping-svc's write grant has no '{contracts}' alternation to add Ordering's exchanges to: "
-                + granted);
+                $"shipping-svc's write grant has no '{contracts}' alternation to add Ordering's exchanges to: " +
+                granted);
         }
 
         return granted.Insert(anchor + contracts.Length, "\\.Ordering\\.V1:|");
@@ -179,8 +179,8 @@ public sealed class ServiceFixture()
 
         return await scope.ServiceProvider
             .GetRequiredService<IShipmentRepository>()
-            .GetByOrderAsync(new OrderId(order), TestContext.Current.CancellationToken)
-            ?? throw new InvalidOperationException($"Order {order} was booked and its shipment is now absent.");
+            .GetByOrderAsync(new OrderId(order), TestContext.Current.CancellationToken) ??
+            throw new InvalidOperationException($"Order {order} was booked and its shipment is now absent.");
     }
 
     /// <summary>Waits for the engine's clock to reach <c>NextAttemptAt</c>, which the host's clock stamped.</summary>

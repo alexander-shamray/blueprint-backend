@@ -83,12 +83,12 @@ public sealed partial class GrantCheckedTokenCache(
         {
             using JsonDocument payload = JsonDocument.Parse(Base64Url.DecodeFromChars(jwt.RawPayload));
 
-            return payload.RootElement.TryGetProperty("resource_access", out JsonElement access)
-                   && access.ValueKind == JsonValueKind.Object
-                   && access.TryGetProperty(RealmManagement, out JsonElement client)
-                   && client.ValueKind == JsonValueKind.Object
-                   && client.TryGetProperty("roles", out JsonElement roles)
-                   && roles.ValueKind == JsonValueKind.Array
+            return payload.RootElement.TryGetProperty("resource_access", out JsonElement access) &&
+                access.ValueKind == JsonValueKind.Object &&
+                access.TryGetProperty(RealmManagement, out JsonElement client) &&
+                client.ValueKind == JsonValueKind.Object &&
+                client.TryGetProperty("roles", out JsonElement roles) &&
+                roles.ValueKind == JsonValueKind.Array
                 ? [.. roles.EnumerateArray().Select(r => r.ValueKind == JsonValueKind.String ? r.GetString()! : "")]
                 : [];
         }

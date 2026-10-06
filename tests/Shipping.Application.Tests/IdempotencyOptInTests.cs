@@ -98,9 +98,9 @@ public class IdempotencyOptInTests
 
         // With fewer than two idempotent commands the distinctness check cannot fail.
         names.ShouldBeEmpty(
-            "This service opts no command into idempotency yet, so the check below is "
-            + "vacuous. The day it does, this test fails — replace it with the ShouldNotBeEmpty "
-            + "form, which is what keeps a vacuous gate from quietly becoming a permanent one.");
+            "This service opts no command into idempotency yet, so the check below is " +
+            "vacuous. The day it does, this test fails — replace it with the ShouldNotBeEmpty " +
+            "form, which is what keeps a vacuous gate from quietly becoming a permanent one.");
 
         names.Distinct(StringComparer.Ordinal).Count().ShouldBe(
             names.Length,

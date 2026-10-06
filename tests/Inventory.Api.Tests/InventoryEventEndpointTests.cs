@@ -36,8 +36,8 @@ public sealed class InventoryEventEndpointTests(ServiceFixture fixture) : IAsync
         await EventuallyStatus(order, "Released");
         (await Available(product)).ShouldBe(3);
         (await fixture.OutboxAsync())
-            .Count(r => r.MessageType.Contains("StockReleased", StringComparison.Ordinal)
-                && r.Lane == OutboxLane.Broker)
+            .Count(r => r.MessageType.Contains("StockReleased", StringComparison.Ordinal) &&
+                r.Lane == OutboxLane.Broker)
             .ShouldBe(1);
     }
 
@@ -50,8 +50,8 @@ public sealed class InventoryEventEndpointTests(ServiceFixture fixture) : IAsync
 
         await EventuallyStatus(order, "Released");
         (await fixture.OutboxAsync())
-            .Count(r => r.MessageType.Contains("StockReleased", StringComparison.Ordinal)
-                && r.Lane == OutboxLane.Broker)
+            .Count(r => r.MessageType.Contains("StockReleased", StringComparison.Ordinal) &&
+                r.Lane == OutboxLane.Broker)
             .ShouldBe(1);
     }
 
@@ -91,8 +91,8 @@ public sealed class InventoryEventEndpointTests(ServiceFixture fixture) : IAsync
 
         await Eventually(
             async () => (await fixture.OutboxAsync())
-                .Count(r => r.MessageType.Contains("StockReleased", StringComparison.Ordinal)
-                    && r.Lane == OutboxLane.Broker),
+                .Count(r => r.MessageType.Contains("StockReleased", StringComparison.Ordinal) &&
+                    r.Lane == OutboxLane.Broker),
             expected: 1,
             because: "ADR-024's first guarantee holds after despatch too");
         (await StatusAsync(order)).ShouldBe("Fulfilled");
@@ -121,8 +121,8 @@ public sealed class InventoryEventEndpointTests(ServiceFixture fixture) : IAsync
             because: "the open case is recorded as state, not logged and forgotten");
         (await Available(product)).ShouldBe(3, "ADR-029's gap is left open, visibly");
         (await fixture.OutboxAsync()).ShouldContain(
-            r => r.MessageType.Contains("DespatchedUnreservedDomainEvent", StringComparison.Ordinal)
-                && r.Lane == OutboxLane.Local);
+            r => r.MessageType.Contains("DespatchedUnreservedDomainEvent", StringComparison.Ordinal) &&
+                r.Lane == OutboxLane.Local);
 
         HttpResponseMessage reinstate =
             await ReservationTestSupport.ReinstateAsync(Admin(), order, Guid.CreateVersion7());
@@ -165,8 +165,8 @@ public sealed class InventoryEventEndpointTests(ServiceFixture fixture) : IAsync
                 order))
             .ShouldBe(1, "a tombstone never held stock, so despatch records nothing on it");
         (await fixture.OutboxAsync()).ShouldNotContain(
-            r => r.MessageType.Contains("DespatchedUnreservedDomainEvent", StringComparison.Ordinal)
-                && r.Lane == OutboxLane.Local);
+            r => r.MessageType.Contains("DespatchedUnreservedDomainEvent", StringComparison.Ordinal) &&
+                r.Lane == OutboxLane.Local);
     }
 
     [Fact]
@@ -243,8 +243,8 @@ public sealed class InventoryEventEndpointTests(ServiceFixture fixture) : IAsync
             ("Released", 3, 0),
             ("Fulfilled", 1, 0));
         (await fixture.OutboxAsync())
-            .Count(r => r.MessageType.Contains("StockReleased", StringComparison.Ordinal)
-                && r.Lane == OutboxLane.Broker)
+            .Count(r => r.MessageType.Contains("StockReleased", StringComparison.Ordinal) &&
+                r.Lane == OutboxLane.Broker)
             .ShouldBe(1, "whichever won, the cancellation published the postcondition exactly once");
     }
 

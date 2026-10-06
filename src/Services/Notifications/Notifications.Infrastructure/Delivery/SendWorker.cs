@@ -480,8 +480,8 @@ public sealed class SendWorker(
             async inner =>
             {
                 Notification notification =
-                    await sp.GetRequiredService<INotificationRepository>().GetAsync(work.NotificationId, inner)
-                    ?? throw new InvalidOperationException(
+                    await sp.GetRequiredService<INotificationRepository>().GetAsync(work.NotificationId, inner) ??
+                    throw new InvalidOperationException(
                         $"Notification {work.NotificationId} was claimed and is now absent.");
 
                 bool moved = move(notification, sp.GetRequiredService<TimeProvider>().GetUtcNow());

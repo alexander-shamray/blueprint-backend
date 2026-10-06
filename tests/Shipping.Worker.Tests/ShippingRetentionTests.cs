@@ -109,8 +109,8 @@ public sealed class ShippingRetentionTests(ServiceFixture fixture) : IAsyncLifet
             line => line.Contains("Shipping retention deleted", StringComparison.Ordinal),
             "the pass's own line must be in the capture, or the absence below proves nothing");
         fixture.CapturedLogs.Everything.ShouldNotContain(
-            line => line.Contains("Абай", StringComparison.Ordinal)
-                || line.Contains("Алматы", StringComparison.Ordinal));
+            line => line.Contains("Абай", StringComparison.Ordinal) ||
+                line.Contains("Алматы", StringComparison.Ordinal));
     }
 
     [Fact]

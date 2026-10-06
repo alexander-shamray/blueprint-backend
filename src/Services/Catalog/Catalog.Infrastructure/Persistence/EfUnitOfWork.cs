@@ -54,7 +54,7 @@ internal sealed class EfUnitOfWork(CatalogDbContext db) : IUnitOfWork
     public int ModifiedAggregateCount => db.ChangeTracker
         .Entries()
         .Count(e => e.Entity is IAggregateRoot &&
-                    e.State is EntityState.Added or EntityState.Modified or EntityState.Deleted);
+            e.State is EntityState.Added or EntityState.Modified or EntityState.Deleted);
 
     // The transaction's own connection and transaction, explicitly passed —
     // this is what makes a raw write part of the command rather than beside it.

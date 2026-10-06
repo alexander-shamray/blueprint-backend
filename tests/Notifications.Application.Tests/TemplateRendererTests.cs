@@ -225,8 +225,8 @@ public class TemplateRendererTests
         string[] languages = ["en", "kk", "ru", "de", "fr", "es", "it", "pt", "nl", "pl", "tr", "uk"];
 
         TemplateRenderer.Refusals(TemplateSet.Embedded, languages, "UTC").ShouldContain(
-            $"The language set joins to 35 characters, past the {NotificationLimits.MaxLanguagesLength} "
-            + "a notification's Languages column holds.");
+            $"The language set joins to 35 characters, past the {NotificationLimits.MaxLanguagesLength} " +
+            "a notification's Languages column holds.");
         TemplateRenderer.Refusals(TemplateSet.Embedded, languages[..11], "UTC").ShouldAllBe(
             refusal => !refusal.StartsWith("The language set joins", StringComparison.Ordinal));
     }

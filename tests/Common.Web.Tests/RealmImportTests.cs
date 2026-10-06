@@ -400,7 +400,7 @@ public class RealmImportTests
         // The mapper reads a service account's roles from its own user, exported with serviceAccountClientId.
         JsonElement account = Root.GetProperty("users").EnumerateArray()
             .Single(u => u.TryGetProperty("serviceAccountClientId", out JsonElement client) &&
-                         client.GetString() == WorkerCredentialClient);
+                client.GetString() == WorkerCredentialClient);
 
         string[] granted =
         [
@@ -424,7 +424,7 @@ public class RealmImportTests
     {
         JsonElement account = Root.GetProperty("users").EnumerateArray()
             .Single(u => u.TryGetProperty("serviceAccountClientId", out JsonElement client) &&
-                         client.GetString() == ContactCredentialClient);
+                client.GetString() == ContactCredentialClient);
 
         // One client and one role on it, since ADR-052 sizes this credential by what it reads when stolen.
         string[] clients = [.. account.GetProperty("clientRoles").EnumerateObject().Select(c => c.Name)];

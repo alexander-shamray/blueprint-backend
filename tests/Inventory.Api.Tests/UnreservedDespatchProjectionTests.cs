@@ -37,8 +37,8 @@ public sealed class UnreservedDespatchProjectionTests(ServiceFixture fixture) : 
         {
             InstrumentPublished = (instrument, l) =>
             {
-                if (instrument.Meter.Name == "Inventory.Reservations"
-                    && instrument.Name == "inventory.fulfilment.unreserved")
+                if (instrument.Meter.Name == "Inventory.Reservations" &&
+                    instrument.Name == "inventory.fulfilment.unreserved")
                 {
                     l.EnableMeasurementEvents(instrument);
                 }

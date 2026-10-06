@@ -54,8 +54,8 @@ internal sealed class HttpPaymentProvider(HttpClient http, ProviderMetrics metri
                 : throw Unavailable("The provider declined with a body that is not a decline.");
         }
 
-        return answer is { Status: "approved", Reference: { } reference }
-               && Recordable(reference, PaymentLimits.MaxReferenceLength)
+        return answer is { Status: "approved", Reference: { } reference } &&
+            Recordable(reference, PaymentLimits.MaxReferenceLength)
             ? new AuthorisationResult.Authorised(reference)
             : throw Unavailable("The provider approved with a body that is not an approval.");
     }
@@ -107,8 +107,8 @@ internal sealed class HttpPaymentProvider(HttpClient http, ProviderMetrics metri
             response = await http.SendAsync(message, ct);
         }
         // ExecutionRejectedException is the pipeline's own refusal: a timeout, an open circuit, the limiter.
-        catch (Exception e) when (e is HttpRequestException or ExecutionRejectedException
-                                      || (e is OperationCanceledException && !ct.IsCancellationRequested))
+        catch (Exception e) when (e is HttpRequestException or ExecutionRejectedException ||
+            (e is OperationCanceledException && !ct.IsCancellationRequested))
         {
             throw new PaymentProviderUnavailableException("The provider did not answer within the budget.", e);
         }
@@ -132,6 +132,6 @@ internal sealed class HttpPaymentProvider(HttpClient http, ProviderMetrics metri
 
     // PaymentAmounts', so this and the mapper's refusal cannot disagree.
     private static long ToMinor(decimal amount, string currency) =>
-        PaymentAmounts.ToMinorUnits(amount, currency)
-        ?? throw new PaymentMismatchException($"An amount of {amount} {currency} is no whole number of minor units.");
+        PaymentAmounts.ToMinorUnits(amount, currency) ??
+        throw new PaymentMismatchException($"An amount of {amount} {currency} is no whole number of minor units.");
 }

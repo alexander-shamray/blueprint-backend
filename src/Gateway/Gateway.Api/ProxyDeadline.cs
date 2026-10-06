@@ -10,8 +10,8 @@ internal static class ProxyDeadline
     {
         await next();
 
-        if (context.Features.Get<IHttpRequestTimeoutFeature>() is { RequestTimeoutToken.IsCancellationRequested: true }
-            && !context.Response.HasStarted)
+        IHttpRequestTimeoutFeature? timeout = context.Features.Get<IHttpRequestTimeoutFeature>();
+        if (timeout is { RequestTimeoutToken.IsCancellationRequested: true } && !context.Response.HasStarted)
         {
             throw new OperationCanceledException(context.RequestAborted);
         }

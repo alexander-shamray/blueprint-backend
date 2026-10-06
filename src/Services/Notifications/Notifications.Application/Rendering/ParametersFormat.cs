@@ -73,8 +73,8 @@ public static class ParametersFormat
                 CancelReason = StringOrNull(root, CancelReasonMember),
             };
         }
-        catch (Exception e) when (e is JsonException or KeyNotFoundException or FormatException
-                                      or InvalidOperationException)
+        catch (Exception e) when (e is JsonException or KeyNotFoundException or FormatException or
+            InvalidOperationException)
         {
             // Not chained: the reader's message can quote the stored text, and none may reach a log.
             throw new UnreadableParametersException($"The stored parameters are not version {Version}'s shape.");

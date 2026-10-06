@@ -98,8 +98,8 @@ public sealed class InventoryCommandEndpointTests(ServiceFixture fixture) : IAsy
         (await fixture.OutboxAsync())
             .Where(r => r.MessageType.Contains("StockReservationFailed", StringComparison.Ordinal))
             .ShouldAllBe(
-                r => r.Payload.Contains(b.ToString(), StringComparison.Ordinal)
-                    && !r.Payload.Contains(a.ToString(), StringComparison.Ordinal),
+                r => r.Payload.Contains(b.ToString(), StringComparison.Ordinal) &&
+                    !r.Payload.Contains(a.ToString(), StringComparison.Ordinal),
                 "both answers name the line that was short, and neither names the one that was not");
     }
 

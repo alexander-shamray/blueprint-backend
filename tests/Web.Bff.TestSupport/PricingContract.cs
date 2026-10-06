@@ -89,8 +89,8 @@ public static class PricingContract
 
     /// <summary>The interaction with this description, which keeps each theory's name readable (§12.8).</summary>
     public static PricingInteraction Named(string description) =>
-        Interactions.SingleOrDefault(i => i.Description == description)
-        ?? throw new PricingContractException(
+        Interactions.SingleOrDefault(i => i.Description == description) ??
+        throw new PricingContractException(
             $"No interaction is described as '{description}'.");
 
     /// <summary>A canonical id no product will have, as Catalog mints only version-7 ids.</summary>
@@ -227,8 +227,8 @@ public static class PricingContract
 
     /// <summary>The product this interaction publishes under <paramref name="alias"/>.</summary>
     public static ContractProduct Product(PricingInteraction interaction, string alias) =>
-        interaction.Given.SingleOrDefault(p => p.Alias == alias)
-        ?? throw new PricingContractException(
+        interaction.Given.SingleOrDefault(p => p.Alias == alias) ??
+        throw new PricingContractException(
             $"'{interaction.Description}' names no product '{alias}'.");
 }
 

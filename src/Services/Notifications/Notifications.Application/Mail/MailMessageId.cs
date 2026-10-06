@@ -25,9 +25,9 @@ public sealed record MailMessageId
     public string LocalPart => $"{EventId:N}.{TemplateKey}";
 
     private static bool IsKebabCase(string key) =>
-        key.Length > 0
-        && key[0] != '-'
-        && key[^1] != '-'
-        && !key.Contains("--", StringComparison.Ordinal)
-        && key.All(c => c is (>= 'a' and <= 'z') or (>= '0' and <= '9') or '-');
+        key.Length > 0 &&
+        key[0] != '-' &&
+        key[^1] != '-' &&
+        !key.Contains("--", StringComparison.Ordinal) &&
+        key.All(c => c is (>= 'a' and <= 'z') or (>= '0' and <= '9') or '-');
 }

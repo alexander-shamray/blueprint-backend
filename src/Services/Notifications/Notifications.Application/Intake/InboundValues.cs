@@ -57,6 +57,6 @@ public static class InboundValues
     // Format holds the bidirectional marks, overrides and isolates as well as the zero-width characters: each changes
     // what a customer reads, or what they copy, without being seen.
     private static bool IsInvisibleOrBroken(UnicodeCategory category) =>
-        category is UnicodeCategory.Control or UnicodeCategory.Format or UnicodeCategory.LineSeparator
-            or UnicodeCategory.ParagraphSeparator or UnicodeCategory.Surrogate;
+        category is UnicodeCategory.Control or UnicodeCategory.Format or UnicodeCategory.LineSeparator or
+            UnicodeCategory.ParagraphSeparator or UnicodeCategory.Surrogate;
 }

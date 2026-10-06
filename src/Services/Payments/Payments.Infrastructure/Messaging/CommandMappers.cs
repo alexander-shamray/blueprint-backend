@@ -26,8 +26,8 @@ public sealed class AuthorisePaymentMapper : ICommandMessageMapper<AuthorisePaym
         }
 
         // Here, since the cancelled-order path records the amount without converting it to minor units.
-        if (message.Amount >= PaymentAmounts.Ceiling
-            || PaymentAmounts.ToMinorUnits(message.Amount, message.Currency) is null)
+        if (message.Amount >= PaymentAmounts.Ceiling ||
+            PaymentAmounts.ToMinorUnits(message.Amount, message.Currency) is null)
         {
             throw new ContractMappingException(
                 $"An amount beyond what Payments can record or send on {nameof(AuthorisePayment)}.");

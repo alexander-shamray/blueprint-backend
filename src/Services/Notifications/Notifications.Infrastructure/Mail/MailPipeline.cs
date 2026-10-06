@@ -87,8 +87,8 @@ internal sealed class MailPipeline
 
     /// <summary>Open until its break passes; then a pass claims, and its first send is the probe (§9.7).</summary>
     public bool IsOpen =>
-        (_state.CircuitState is CircuitState.Open or CircuitState.Isolated)
-        && (ParkedUntil is not { } until || _clock.GetUtcNow() < until);
+        (_state.CircuitState is CircuitState.Open or CircuitState.Isolated) &&
+        (ParkedUntil is not { } until || _clock.GetUtcNow() < until);
 
     private ValueTask Unpark()
     {

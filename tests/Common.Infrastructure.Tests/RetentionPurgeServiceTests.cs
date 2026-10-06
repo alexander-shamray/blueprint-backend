@@ -50,8 +50,8 @@ public class RetentionPurgeServiceTests
 
         await provider.GetRequiredService<RetentionPurgeService>().PurgeAsync(CancellationToken.None);
 
-        statements.ShouldContain(sql => sql.Contains("[probe].", StringComparison.Ordinal)
-            && sql.Contains("ProcessedAt", StringComparison.Ordinal));
+        statements.ShouldContain(sql => sql.Contains("[probe].", StringComparison.Ordinal) &&
+            sql.Contains("ProcessedAt", StringComparison.Ordinal));
     }
 
     [Fact]

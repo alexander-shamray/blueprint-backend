@@ -97,13 +97,13 @@ internal sealed class KeycloakContactSource(HttpClient http, ContactMetrics metr
 
     // Dropped, never refused, when it is not one tag of the shape: an absent locale is an answer (ADR-052).
     private static string? Locale(JsonElement user) =>
-        user.TryGetProperty("attributes", out JsonElement attributes)
-        && attributes.ValueKind == JsonValueKind.Object
-        && attributes.TryGetProperty("locale", out JsonElement locale)
-        && locale.ValueKind == JsonValueKind.Array
-        && locale.GetArrayLength() == 1
-        && locale[0].ValueKind == JsonValueKind.String
-        && LanguageTag.IsOne(locale[0].GetString())
+        user.TryGetProperty("attributes", out JsonElement attributes) &&
+        attributes.ValueKind == JsonValueKind.Object &&
+        attributes.TryGetProperty("locale", out JsonElement locale) &&
+        locale.ValueKind == JsonValueKind.Array &&
+        locale.GetArrayLength() == 1 &&
+        locale[0].ValueKind == JsonValueKind.String &&
+        LanguageTag.IsOne(locale[0].GetString())
             ? locale[0].GetString()
             : null;
 
@@ -115,10 +115,10 @@ internal sealed class KeycloakContactSource(HttpClient http, ContactMetrics metr
             await using Stream body = await response.Content.ReadAsStreamAsync(ct);
             using JsonDocument answer = await JsonDocument.ParseAsync(body, cancellationToken: ct);
 
-            return answer.RootElement.ValueKind == JsonValueKind.Object
-                && answer.RootElement.TryGetProperty("error", out JsonElement error)
-                && error.ValueKind == JsonValueKind.String
-                && error.ValueEquals(UserNotFound);
+            return answer.RootElement.ValueKind == JsonValueKind.Object &&
+                answer.RootElement.TryGetProperty("error", out JsonElement error) &&
+                error.ValueKind == JsonValueKind.String &&
+                error.ValueEquals(UserNotFound);
         }
         catch (JsonException)
         {

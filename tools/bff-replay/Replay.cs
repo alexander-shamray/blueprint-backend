@@ -144,8 +144,8 @@ public static class Replay
             await bus.StartAsync(answered.Token);
         }
         catch (Exception exception) when (
-            exception is RabbitMqConnectionException
-            || (exception is OperationCanceledException && !ct.IsCancellationRequested))
+            exception is RabbitMqConnectionException ||
+            (exception is OperationCanceledException && !ct.IsCancellationRequested))
         {
             // The type is named and the inner exception is not carried: a fault's text can print the address, and
             // the address holds the account's credential.

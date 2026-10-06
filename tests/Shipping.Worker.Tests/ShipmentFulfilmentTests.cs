@@ -352,8 +352,8 @@ public sealed class ShipmentFulfilmentTests(ServiceFixture fixture) : IAsyncLife
         return await unitOfWork.ExecuteAsync(
             async ct =>
             {
-                Shipment shipment = await shipments.GetByOrderAsync(new OrderId(order), ct)
-                    ?? throw new InvalidOperationException("The shipment the test confirmed is absent.");
+                Shipment shipment = await shipments.GetByOrderAsync(new OrderId(order), ct) ??
+                    throw new InvalidOperationException("The shipment the test confirmed is absent.");
 
                 DateTimeOffset now = DateTimeOffset.UtcNow;
                 bool moved = shipment.Record("evt-collected", TrackingStatus.Collected, now, now);

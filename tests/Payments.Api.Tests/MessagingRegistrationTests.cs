@@ -134,8 +134,8 @@ public class MessagingRegistrationTests
         services.AddMassTransitMessaging(Configuration());
 
         services.ShouldContain(
-            d => d.ImplementationType == typeof(CommandConsumer<AuthorisePayment, AuthorisePaymentCommand>)
-                 || d.ServiceType == typeof(CommandConsumer<AuthorisePayment, AuthorisePaymentCommand>),
+            d => d.ImplementationType == typeof(CommandConsumer<AuthorisePayment, AuthorisePaymentCommand>) ||
+                d.ServiceType == typeof(CommandConsumer<AuthorisePayment, AuthorisePaymentCommand>),
             "AuthorisePayment is §3.2's Accepts column and has no AddConsumer");
     }
 

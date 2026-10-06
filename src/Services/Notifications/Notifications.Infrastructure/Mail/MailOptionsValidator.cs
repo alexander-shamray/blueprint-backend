@@ -36,10 +36,10 @@ internal sealed class MailOptionsValidator : IValidateOptions<MailOptions>
     // A display name is allowed; a second address, a group or a line break is not, nor a domain
     // IdnMapping cannot encode, because SmtpMailChannel mints the Message-ID on its ASCII form.
     private static bool OneMailbox(string text) =>
-        !text.Any(char.IsControl)
-        && MailboxAddress.TryParse(text, out MailboxAddress? parsed)
-        && parsed is { Domain.Length: > 0 }
-        && Encodes(parsed.Domain);
+        !text.Any(char.IsControl) &&
+        MailboxAddress.TryParse(text, out MailboxAddress? parsed) &&
+        parsed is { Domain.Length: > 0 } &&
+        Encodes(parsed.Domain);
 
     private static bool Encodes(string domain)
     {
