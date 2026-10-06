@@ -496,20 +496,24 @@ file and a reviewer are the only things that do.
   ```
 
   The argument moves to the next line **whole**; break it further only if it
-  still does not fit. This composes with the lambda rule rather than competing:
-  a call whose last argument is a lambda breaks at its **own** parenthesis,
-  which puts the lambda on a line of its own, and never after the `=>`.
+  still does not fit. **The moved form stands even where the whole statement
+  would fit on one line**, as the example marked right does: joining it is a
+  choice, not a fix, and neither form is a finding against the other. This
+  composes with the lambda rule rather than competing: a call whose last
+  argument is a lambda breaks at its **own** parenthesis, which puts the lambda
+  on a line of its own, and never after the `=>`.
 
   **Dapper's `ExecuteAsync(new CommandDefinition(` is no exception**, however
   often it appears: `CommandDefinition` moves to the next line and its own
-  list breaks below it. A call whose **only** argument is a lambda keeps
-  `x =>` on its line, as `.AddCors(o =>` above does, and the body takes the
-  next. A chain inside an argument is that argument, so
-  `AddX(new ConfigurationBuilder()` with `.Build()` three lines down moves
-  `new ConfigurationBuilder()` to its own line, and the chain rule then
-  applies to it. Three shapes are not this rule: an `if (`, `while (` or
-  `when (` header, a parenthesised `(await …(` group, and a lambda whose body
-  is a tuple, which is a container like `{`.
+  list breaks below it. A call whose **only** argument is a lambda whose body
+  is itself a call keeps `x =>` on its line, as `.AddCors(o =>` above does, and
+  the body takes the next; a body that is not a call, such as a condition,
+  starts after the `=>` and wraps as the operator rule below says. A chain
+  inside an argument is that argument, so `AddX(new ConfigurationBuilder()`
+  with `.Build()` three lines down moves `new ConfigurationBuilder()` to its
+  own line, and the chain rule then applies to it. Three shapes are not this
+  rule: an `if (`, `while (` or `when (` header, a parenthesised `(await …(`
+  group, and a lambda whose body is a tuple, which is a container like `{`.
 
   **The sieve is a bracket count, not a grep.** A line ending in `(` while a
   `(` opened earlier on the same line is still open is a candidate, with
@@ -550,8 +554,9 @@ file and a reviewer are the only things that do.
   expression that opens its own line — an expression body, a wrapped
   initialiser, a lambda body — keeps its operands in that line's column, as the
   `if` header keeps them after `if (`. One that opens mid-line, after `return`,
-  `=` or `when (`, continues four past the statement, never under its first
-  operand. A concatenated string argument keeps its pieces in one column.
+  `=`, `when (` or a lambda's `=>`, continues four past the line it opens on,
+  never under its first operand. A concatenated string argument keeps its
+  pieces in one column.
 
   **Nothing enforces it.** The setting carries no severity, and IDE0055 reports
   only what the formatter would change, which never includes moving an
