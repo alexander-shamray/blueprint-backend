@@ -1,3 +1,4 @@
+using System.Text.Json.Nodes;
 using Microsoft.Extensions.DependencyInjection;
 using Shipping.Application.Carrier;
 using Shipping.Domain.Shipments;
@@ -32,6 +33,16 @@ public sealed class CarrierFaultTests : IDisposable
     private static BookingRequest Booking(string postalCode) =>
         new(ShipmentId.New(), new DeliveryAddress("1 Abay Avenue", null, "Almaty", postalCode, "KZ"));
 
+    private static string StallMapping() => Path.Combine(SimulatorMappings.Directory(), "book-stalled.json");
+
+    /// <summary>The simulator's stall cut to just past one attempt, since a stopping server waits out every delay.</summary>
+    private void ShortenTheStall()
+    {
+        JsonNode stall = JsonNode.Parse(File.ReadAllText(StallMapping()))!;
+        stall["Response"]!["Delay"] = (int)(CarrierHop.AttemptTimeout + TimeSpan.FromSeconds(1)).TotalMilliseconds;
+        Server.WithMapping(stall.ToJsonString());
+    }
+
     [Fact]
     public async Task A_503_is_retried_in_the_client_then_thrown_as_unavailable_and_counted_per_attempt()
     {
@@ -64,6 +75,7 @@ public sealed class CarrierFaultTests : IDisposable
     [Fact]
     public async Task A_stalled_carrier_is_unavailable_within_the_total_budget_and_its_timeouts_count()
     {
+        ShortenTheStall();
         using OutboundCount counted = OutboundCounter.Unavailable(_host.Factory.Services);
         DateTimeOffset started = DateTimeOffset.UtcNow;
 
@@ -77,8 +89,19 @@ public sealed class CarrierFaultTests : IDisposable
     }
 
     [Fact]
+    public void The_simulators_own_stall_outlasts_the_total_budget()
+    {
+        JsonNode stall = JsonNode.Parse(File.ReadAllText(StallMapping()))!;
+
+        TimeSpan.FromMilliseconds((int)stall["Response"]!["Delay"]!).ShouldBeGreaterThan(
+            CarrierHop.TotalRequestTimeout,
+            "the tests shorten it, so only this keeps the file's stall one the adapter gives up on under Compose");
+    }
+
+    [Fact]
     public async Task A_cancellation_during_an_attempt_is_the_callers_and_is_not_counted()
     {
+        ShortenTheStall();
         using OutboundCount counted = OutboundCounter.Unavailable(_host.Factory.Services);
         using CancellationTokenSource cancelled = CancellationTokenSource.CreateLinkedTokenSource(
             TestContext.Current.CancellationToken);
