@@ -146,7 +146,7 @@ public sealed class SendWorker(
     {
         using PeriodicTimer timer = new(MailHop.SendTick);
 
-        // A stop ends the loop and a claim in flight, never the rows under way: theirs fires DrainBudget after it.
+        // A stop ends the loop and starts no claim, never a claim or rows under way: theirs fires DrainBudget after it.
         using CancellationTokenSource drain = new();
         using CancellationTokenRegistration stopping = stoppingToken.Register(() => drain.CancelAfter(DrainBudget));
 
@@ -167,7 +167,8 @@ public sealed class SendWorker(
     /// <summary>One claim-and-send pass, public so tests drive it rather than race a timer (§12.4).</summary>
     public Task<SendPass> RunOnceAsync(CancellationToken ct) => RunOnceAsync(ct, ct);
 
-    // The claim on the stop's token, so a stop leases and starts no row; the rows on the drain's (§15.3).
+    // A stop before the claim leases nothing; the claim itself runs on the drain's token, because a read cancelled
+    // after its lease commits strands the rows until the lease lapses (§15.3).
     private async Task<SendPass> RunOnceAsync(CancellationToken claim, CancellationToken rows)
     {
         await using AsyncServiceScope claimScope = scopes.CreateAsyncScope();
@@ -182,7 +183,8 @@ public sealed class SendWorker(
         }
 
         SendClaims claims = claimScope.ServiceProvider.GetRequiredService<SendClaims>();
-        IReadOnlyList<SendWork> claimed = await claims.ClaimAsync(claim);
+        claim.ThrowIfCancellationRequested();
+        IReadOnlyList<SendWork> claimed = await claims.ClaimAsync(rows);
 
         // Every row at once, so a pass lasts one row's calls and the lease bounds it; WhenAll, so one row's fault
         // leaves the others to finish.
