@@ -515,7 +515,22 @@ class OneRoute(Scratch):
         self.assertIn('cbx symbol "MapPost" --json', text)
         self.assertIn("codebase-index skill", text)
         self.assertIn("from the worktree's root", text)
+        self.assertIn("each alone on its line", text)
+        self.assertIn("`--kind callers`", text)
         self.assertNotIn("mcp__", text)
+
+    def test_the_commands_it_names_pass_the_index_guard(self):
+        _main, tree = self.worktree()
+        text = self.refused(*bash_call('grep -rnE "MapPost|MapPut" .'), cwd=tree)
+        spec = importlib.util.spec_from_file_location("guard_index_argv", CLAUDE / "hooks" / "guard-index-argv.py")
+        guard = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(guard)
+        commands = re.findall(r"`(bash \.claude/skills/codebase-index/scripts/cbx [^`]*)`", text)
+
+        self.assertEqual(3, len(commands), text)
+        for command in commands:
+            with self.subTest(command=command):
+                self.assertIsNone(guard.offence(command, guard._git_guard()))
 
     def test_a_submodule_is_not_a_worktree(self):
         module = self.scratch / "module"

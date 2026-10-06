@@ -263,9 +263,10 @@ starts with `--root .` in the directory the session started in, and
 `EnterWorktree` does not restart it, so after the move its answers describe
 the main checkout's index and not the branch's edits (#563); `cbx`, run from
 the worktree, reads the worktree's own seeded index. So in a `/branch`
-worktree the reason names the skill and the CLI alone, and elsewhere the MCP
-tools alone, with the ToolSearch spelling that loads them. A server that
-follows the session is not something `.mcp.json` can say.
+worktree the reason names the skill and the CLI alone, each command alone on
+its line because `guard-index-argv.py` refuses a shared one, and elsewhere
+the MCP tools alone, with the ToolSearch spelling that loads them. A server
+that follows the session is not something `.mcp.json` can say.
 `test_index_search_hint.py` holds the wiring, what is refused and when, and
 the commands it emits to prefixes the skill approves;
 `test_index_query_hint.py` holds the two hooks to one map from question to
