@@ -57,20 +57,28 @@ def carried(value: object) -> bool:
 
 
 def command(tool: str, given: dict) -> str:
-    """The `cbx` line asking what the call asked, or its bare form where an
-    argument cannot be carried."""
+    """The `cbx` line asking what the call asked, or its bare form where the
+    call holds an argument the line does not carry, since a line dropping one
+    would answer another question."""
     sub, positional, tagged = COMMANDS[tool]
+    bare = f"`{CBX} {sub}` with the call's arguments and `--json`"
+    kind = given.get("kind")
+    known = {*positional, *(("session",) if tagged else ()), *(("kind",) if sub == "refs" else ())}
+    if any(value is not None and key not in known for key, value in given.items()) or (
+            kind is not None and kind not in ("callers", "all")):
+        return bare
     words = [CBX, sub]
     for key in positional:
         value = given.get(key)
         if not carried(value):
-            return f"`{CBX} {sub}` with the call's arguments and `--json`"
+            return bare
         words.append(shlex.quote(value))
-    kind = given.get("kind")
-    if sub == "refs" and kind in ("callers", "all"):
+    if kind is not None:
         words += ["--kind", kind]
     session = given.get("session")
-    if tagged and carried(session):
+    if session is not None:
+        if not carried(session):
+            return bare
         words += ["--session", shlex.quote(session)]
     return "`" + " ".join(words + ["--json"]) + "`"
 
