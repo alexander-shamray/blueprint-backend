@@ -1086,7 +1086,10 @@ if (corsEnabled)
     // interpolated into a string. The guard that rejects a password must not
     // be the thing that publishes one.
     if (malformed.Length > 0)
-        throw new InvalidOperationException($"'Cors:Origins' is not an origin at index {string.Join(", ", malformed)}.");
+    {
+        throw new InvalidOperationException(
+            $"'Cors:Origins' is not an origin at index {string.Join(", ", malformed)}.");
+    }
 
     builder.Services
         .AddCors(o =>

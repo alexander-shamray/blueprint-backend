@@ -46,7 +46,7 @@ public static class HealthProbe
         }
     }
 
-    /// <summary>The first HTTP/1.1 endpoint's port when any is declared, else HTTP_PORTS' first; null if none.</summary>
+    /// <summary>The first HTTP/1.1 endpoint's port if any is declared, else HTTP_PORTS' first; null if none.</summary>
     /// <remarks>Any declared endpoint replaces HTTP_PORTS, and an Http2-only one, §9.7's gRPC hop, refuses the
     /// probe's HTTP/1.1.</remarks>
     public static int? PortOf(IConfiguration configuration)

@@ -78,7 +78,8 @@ public static partial class RetentionMapRule
         offenders.AddRange(
             MapName()
                 .Matches(map)
-                .Where(name => names.Contains(name.Groups["type"].Value) && !members.Contains(name.Groups["name"].Value))
+                .Where(name =>
+                    names.Contains(name.Groups["type"].Value) && !members.Contains(name.Groups["name"].Value))
                 .Select(name => name.Groups["name"].Value)
                 .Distinct()
                 .Order()
