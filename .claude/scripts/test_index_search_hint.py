@@ -20,7 +20,7 @@ HINT = CLAUDE / "hooks" / "index-search-hint.py"
 SETTINGS = CLAUDE / "settings.json"
 SKILL = CLAUDE / "skills" / "codebase-index" / "SKILL.md"
 EVENT = "PostToolUse"
-MATCHER = "Grep|Bash"
+MATCHER = "Grep|Bash|PowerShell"
 COMMAND = ("py -3.12 -P -c \"import os, runpy; runpy.run_path(os.environ['CLAUDE_PROJECT_DIR']"
            " + '/.claude/hooks/index-search-hint.py', run_name='__main__')\"")
 EVERY = 5
@@ -43,7 +43,12 @@ SEARCHES = {
     "git grep -n OutboxRelay -- ':!*.md'": "find_refs",
     "git grep -n OutboxRelay -- ':^docs'": "find_refs",
     "git grep -n OutboxRelay -- ':(exclude)*.md'": "find_refs",
+    "cd src && git grep -n OutboxRelay -- ':!*.md'": "find_refs",
+    "git -C src grep -n OutboxRelay -- ':(exclude)*.md'": "find_refs",
     "grep -r -e 'Retry(' src": "find_refs",
+    "(cd docs && grep -rn Saga .); grep -rn Retry src": "find_refs",
+    "grep -rn Retry \\\n  src": "find_refs",
+    "git status --short\ngrep -rn Retry src": "find_refs",
 }
 
 # Each reads one file, a pipe or prose, which the index does not replace.
@@ -53,6 +58,7 @@ NOT_SEARCHES = (
     "cat build.log | rg error",
     "grep -rn Saga docs/backend-architecture",
     "grep -rn Saga docs 2>/dev/null",
+    "grep -rn Saga \\\n  docs",
     "rg -g '*.md' outbox",
     "rg --type md outbox",
     "rg --type=md outbox",
@@ -66,6 +72,9 @@ NOT_SEARCHES = (
     "rg ClaimAsync .claude/settings.json",
     "grep -rn ClaimAsync .claude/settings.json .claude/hooks/index-search-hint.py",
     "echo grep -r Foo .",
+    "git commit -F - <<'EOF'\ngrep -rn Foo src\nEOF",
+    "cat <<-EOF > notes.txt\n\tgrep -rn Foo src\n\tEOF",
+    'gh pr create --body "Steps:\ngrep -rn Foo src\n"',
     "git status --short",
     "dotnet build Platform.slnx",
 )
@@ -193,6 +202,25 @@ class WhatCountsAsASearch(Scratch):
             with self.subTest(extra=extra):
                 self.assertEqual("", self.hinted(*grep_call(**extra)))
 
+    def test_the_grep_tool_reads_prose_where_its_path_lands_in_the_checkout(self):
+        """A checkout cloned under a directory named `docs` is still code, and
+        a Grep from inside `docs/` reads prose, as `grep -r` from there does."""
+        repo = self.scratch / "Docs" / "repo"
+        (repo / ".git").mkdir(parents=True)
+        (repo / "src").mkdir()
+        (repo / "docs").mkdir()
+        for given, cwd, hinted in ((grep_call(path=str(repo / "src")), repo, True),
+                                   (grep_call(), repo, True),
+                                   (grep_call(), repo / "docs", False),
+                                   (bash_call("grep -rn ClaimAsync ."), repo / "docs", False)):
+            with self.subTest(given=given, cwd=cwd):
+                self.assertEqual(hinted, bool(self.hinted(*given, cwd=cwd)))
+
+    def test_a_powershell_search_is_a_search(self):
+        self.assertEqual(["find_refs", "find_symbol"],
+                         tools(self.hinted("PowerShell", {"command": "rg OutboxRelay src"})))
+        self.assertEqual("", self.hinted("PowerShell", {"command": "rg OutboxRelay docs"}))
+
     def test_the_grep_tool_aimed_at_one_file_is_not_a_search(self):
         self.assertEqual("", self.hinted(*grep_call(path=".claude/settings.json")))
         self.assertEqual("", self.hinted(*grep_call(path=str(SETTINGS))))
@@ -263,14 +291,25 @@ class WhenItSpeaks(Scratch):
                         (bash_call('bash .claude/skills/codebase-index/scripts/cbx refs "X" --json'),),
                         (bash_call("codebase-index search outbox --json"),),
                         (("mcp__codebase-index__verify_evidence", {}),),
-                        (bash_call("bash .claude/skills/codebase-index/scripts/cbx verify --session t --json"),)):
+                        (bash_call("bash .claude/skills/codebase-index/scripts/cbx verify --session t --json"),),
+                        (bash_call("pwsh -NoProfile -ExecutionPolicy Bypass -File "
+                                   ".claude/skills/codebase-index/scripts/cbx.ps1 search outbox --json"),),
+                        (bash_call("py -3.12 -P -m codebase_index refs X --json"),),
+                        (bash_call("git status\nbash .claude/skills/codebase-index/scripts/cbx refs X --json"),),
+                        (bash_call("CBX_NO_SKILL_AUTO_UPDATE=1 bash "
+                                   ".claude/skills/codebase-index/scripts/cbx refs X --json"),),
+                        (("PowerShell", {"command": "& C:\\repo\\.claude\\skills\\codebase-index\\scripts\\cbx.ps1"
+                                                    " refs X --json"}),)):
             with self.subTest(earlier=earlier):
                 self.assertEqual("", self.hinted(*grep_call(), earlier=earlier))
 
     def test_a_command_that_only_names_the_cli_is_not_a_lookup(self):
         for command in ('git log -p | grep "cbx refs"',
                         'git commit -m "say cbx search first"',
-                        "echo codebase-index search"):
+                        "echo codebase-index search",
+                        'py -3.12 -c "import codebase_index" search',
+                        "git commit -F - <<'EOF'\nbash .claude/skills/codebase-index/scripts/cbx refs X --json\nEOF",
+                        'gh pr create --body "Run:\nbash .claude/skills/codebase-index/scripts/cbx refs X\n"'):
             with self.subTest(command=command):
                 self.assertTrue(self.hinted(*grep_call(), earlier=[bash_call(command)]))
 
