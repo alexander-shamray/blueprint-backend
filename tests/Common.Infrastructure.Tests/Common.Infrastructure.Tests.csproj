@@ -29,6 +29,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\BuildingBlocks\Common.Infrastructure\Common.Infrastructure.csproj" />
+    <!-- ComposeImage, so the Redis fixture reads §14.1's images with the one reader every suite uses. -->
+    <ProjectReference Include="..\Common.TestSupport\Common.TestSupport.csproj" />
   </ItemGroup>
 
 </Project>

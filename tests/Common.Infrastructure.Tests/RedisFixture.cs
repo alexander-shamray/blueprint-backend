@@ -1,4 +1,5 @@
 using Common.Infrastructure.Redis;
+using Common.TestSupport;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
