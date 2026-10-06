@@ -31,7 +31,7 @@ EVERY = 5
 # The subcommands and tools that answer a question; stats, health and upkeep
 # read the index without asking it anything.
 ASKING = ("search", "explain", "architecture", "symbol", "refs", "impact",
-          "diff-impact", "path", "describe")
+          "diff-impact", "path", "describe", "verify")
 UPKEEP = {"healthcheck", "index_stats"}
 CLI_LOOKUP = re.compile(
     r"\b(?:cbx(?:\.ps1)?|codebase[-_]index)[\"']?\s+(?:" + "|".join(map(re.escape, ASKING)) + r")\b")
