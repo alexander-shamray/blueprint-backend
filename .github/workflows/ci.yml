@@ -523,11 +523,11 @@ jobs:
             exit 1
           fi
 
-      # Three stages (§15.1's UT to IT). The whole solution is built once and
-      # the stages select from it. Per service, the filter above decides what
-      # to image and what to deploy; it deliberately does not decide what to
-      # build or test, because §4.2's architecture gates read the whole
-      # dependency graph and §12.9's coverage figure is over the whole run.
+      # Two of §15.1's three stages select from this build; the integration
+      # stage is sharded into jobs of its own below. The path filter above
+      # decides what to image and deploy, never what to test, because §4.2's
+      # gates read the whole dependency graph and §12.9's coverage figure is
+      # over the whole run.
 
       # The first seam is instrumentation rather than category. §4.2's
       # architecture gates read GetReferencedAssemblies on the Domain
@@ -541,12 +541,9 @@ jobs:
       # architecture rule everywhere and in every service the scaffold renders.
 
       # The second seam is the category (§12.4, docs/testing.md): the fast half
-      # starts no container — proved with `docker events`, not inferred — and
-      # the slow half needs a daemon for the projects that carry integration
-      # collections. Separate steps rather than separate jobs, because a job
-      # boundary means shipping the build output between runners to keep
-      # `--no-build` honest, and because the coverage figure is the union of
-      # the two (§12.9) and wants one place to be merged.
+      # starts no container, proved with `docker events`, and the slow half
+      # needs a daemon. Each integration shard builds for itself rather than
+      # receiving this job's output, so its `--no-build` reads its own build.
 
       # The filters are exhaustive and disjoint by construction, so the
       # counts sum to the whole suite, and the stage gate below is what turns
@@ -576,26 +573,98 @@ jobs:
           --logger trx
           --results-directory ./TestResults/unit
 
+      - name: Hand the two stages to the stage gate
+        uses: actions/upload-artifact@v4
+        with:
+          name: stages-build
+          path: TestResults
+          if-no-files-found: error
+
+  # The integration stage, one shard per runner. The filters are a cascade:
+  # each shard excludes every shard above it and `rest` excludes them all, so
+  # the shards are disjoint and exhaustive whatever a namespace contains, and
+  # a project no shard names runs in `rest`. The key is not `filter`, which
+  # `pipeline-gate images` reads as an image's.
+  integration:
+    needs: [licence-gate, pipeline-gate]
+    runs-on: ubuntu-latest
+    strategy:
+      # The stage gate wants every shard's results, so one red shard stops none.
+      fail-fast: false
+      matrix:
+        include:
+          - shard: payments
+            selects: FullyQualifiedName~Payments.
+          - shard: ordering
+            selects: FullyQualifiedName~Ordering.&FullyQualifiedName!~Payments.
+          - shard: notifications
+            selects: >-
+              FullyQualifiedName~Notifications.&FullyQualifiedName!~Payments.&FullyQualifiedName!~Ordering.
+          - shard: shipping
+            selects: >-
+              FullyQualifiedName~Shipping.&FullyQualifiedName!~Payments.&FullyQualifiedName!~Ordering.&FullyQualifiedName!~Notifications.
+          - shard: rest
+            selects: >-
+              FullyQualifiedName!~Payments.&FullyQualifiedName!~Ordering.&FullyQualifiedName!~Notifications.&FullyQualifiedName!~Shipping.
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - run: dotnet restore Platform.slnx
+
+      - run: dotnet build Platform.slnx --no-restore -c Release
+
       # ADR-010 already made real infrastructure non-optional, and a category
       # is not a skip: selected out, a test is not reported as passing;
       # selected in, it needs the daemon exactly as before. The runner has one.
-      - name: Integration stage
+      - name: Integration stage, ${{ matrix.shard }}
         run: >
           dotnet test Platform.slnx --no-build -c Release
-          --filter "Category=Integration"
+          --filter "Category=Integration&${{ matrix.selects }}"
           --collect:"Code Coverage"
           --settings coverage.runsettings
           --logger trx
           --results-directory ./TestResults/integration
 
-      # The quality gate exists because every filtered step above is a new way
-      # to select nothing: `dotnet test` exits zero on a filter that matches no
-      # test (§12.1), so each of them can be green and empty.
-      # This asserts a floor on each stage, that every test project in
-      # Platform.slnx ran in one of them, and that none ran in two.
-      #
-      # Not `if: always()`. After a failed stage there is nothing to count, and
-      # a second red step would say the gate broke when the suite did.
+      - name: Hand the shard to the stage gate
+        uses: actions/upload-artifact@v4
+        with:
+          name: stages-integration-${{ matrix.shard }}
+          path: TestResults/integration
+          if-no-files-found: error
+
+  # Every stage's results in one place, the only place both readers below can
+  # judge the run whole. Not `if: always()`: after a failed stage there is
+  # nothing to count, and a second red job would say the gate broke when the
+  # suite did.
+  stage-gate:
+    needs: [build, integration]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: stages-build
+          path: TestResults
+
+      # One directory per shard under integration/, and both readers walk it.
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: stages-integration-*
+          path: TestResults/integration
+
+      # `dotnet test` exits zero on a filter that matches no test (§12.1), so
+      # every filtered stage can be green and empty. This asserts a floor on
+      # each, that every test project in Platform.slnx ran in one of them, and
+      # that none ran in two.
       - name: Every stage ran, ran enough, and ran once
         run: >
           python .github/pipeline-gate/pipeline_gate.py stages
@@ -617,19 +686,17 @@ jobs:
           python .github/coverage/domain_coverage.py
           ./TestResults/unit ./TestResults/integration
 
-  # §15.1's per-service image build, and the gap it closes is named in
-  # compose.yml: that smoke is filtered to deploy/compose/**, so a Dockerfile
-  # broken by a source change surfaces on the next compose pull request rather
-  # than on the offending one. Here it surfaces on the offending one, after
-  # `build`, because an image of code that does not compile is a slow way to
-  # learn it does not compile.
+  # §15.1's per-service image build, closing the gap compose.yml names: that
+  # smoke is filtered to deploy/compose/**, so a Dockerfile a source change
+  # broke would surface on the next compose pull request. Here it surfaces on
+  # the offending one, after the test stages, in the order §15.1 draws.
 
   # Built and not pushed. §15.1's node reads "Build + sign images", and signing
   # needs a registry and a key this repository has neither of, so what runs is
   # the half that can run. `pipeline-gate images` asserts every Dockerfile
   # under src/ appears below.
   images:
-    needs: [changes, build]
+    needs: [changes, stage-gate]
     if: ${{ needs.changes.outputs.catalog == 'true' || needs.changes.outputs.ordering == 'true' || needs.changes.outputs.gateway == 'true' || needs.changes.outputs.bff == 'true' || needs.changes.outputs.inventory == 'true' || needs.changes.outputs.payments == 'true' || needs.changes.outputs.shipping == 'true' || needs.changes.outputs.notifications == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
