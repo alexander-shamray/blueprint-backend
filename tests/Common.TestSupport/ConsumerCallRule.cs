@@ -226,9 +226,15 @@ public static partial class ConsumerCallRule
         /// <summary>The host's services a walk met built by a factory whose declared return is object.</summary>
         public HashSet<Type> Opaque { get; } = [];
 
-        // Breadth first, so the path named for each client is a shortest one.
+        // Breadth first, so the path named for each client is a shortest one; a consumer holding one is its own.
         public IEnumerable<(Type Client, string Path)> ClientsReachedFrom(Type consumer)
         {
+            if (HoldsAClient(consumer))
+            {
+                yield return (consumer, $"{Name(consumer)} holds one itself");
+                yield break;
+            }
+
             Dictionary<Type, Type?> parents = new() { [consumer] = null };
             Queue<Type> pending = new([consumer]);
 
