@@ -2,6 +2,7 @@ using System.Diagnostics.Metrics;
 using System.Net;
 using System.Net.Sockets;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Common.Contracts.Payments.V1;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -87,6 +88,16 @@ public sealed class HttpPaymentProviderTests : IClassFixture<HttpPaymentProvider
         ProviderHost own = new();
         own.Server.ReadStaticMappings(SimulatorMappings.Directory());
         return own;
+    }
+
+    private static string StallMapping() => Path.Combine(SimulatorMappings.Directory(), "authorise-stalled.json");
+
+    /// <summary>The simulator's stall cut to just past one attempt, since a stopping server waits out every delay.</summary>
+    private static void ShortenTheStall(WireMockServer server)
+    {
+        JsonNode stall = JsonNode.Parse(File.ReadAllText(StallMapping()))!;
+        stall["Response"]!["Delay"] = (int)(ProviderHop.AttemptTimeout + TimeSpan.FromSeconds(1)).TotalMilliseconds;
+        server.WithMapping(stall.ToJsonString());
     }
 
     /// <summary>A host whose provider times out no attempt, since a timed-out attempt is retried and counted.</summary>
@@ -383,6 +394,7 @@ public sealed class HttpPaymentProviderTests : IClassFixture<HttpPaymentProvider
     public async Task A_stalled_provider_is_unavailable_within_the_total_budget_and_its_timeouts_count()
     {
         using ProviderHost own = OwnHost();
+        ShortenTheStall(own.Server);
         using UnavailableCount counted = CountUnavailable(own.Factory);
         DateTimeOffset started = DateTimeOffset.UtcNow;
 
@@ -393,6 +405,16 @@ public sealed class HttpPaymentProviderTests : IClassFixture<HttpPaymentProvider
         counted.Value.ShouldBe(
             ProviderHop.MaxRetryAttempts + 1,
             "every attempt timed out, each the provider's, counted by OnTimeout");
+    }
+
+    [Fact]
+    public void The_simulators_own_stall_outlasts_the_total_budget()
+    {
+        JsonNode stall = JsonNode.Parse(File.ReadAllText(StallMapping()))!;
+
+        TimeSpan.FromMilliseconds((int)stall["Response"]!["Delay"]!).ShouldBeGreaterThan(
+            ProviderHop.TotalRequestTimeout,
+            "the tests shorten it, so only this keeps the file's stall one the adapter gives up on under Compose");
     }
 
     [Fact]
@@ -653,6 +675,7 @@ public sealed class HttpPaymentProviderTests : IClassFixture<HttpPaymentProvider
     public async Task A_cancellation_during_an_attempt_is_the_callers_and_is_not_counted()
     {
         using ProviderHost own = OwnHost();
+        ShortenTheStall(own.Server);
         using UnavailableCount counted = CountUnavailable(own.Factory);
         using CancellationTokenSource cancelled = CancellationTokenSource.CreateLinkedTokenSource(
             TestContext.Current.CancellationToken);
