@@ -515,7 +515,8 @@ file and a reviewer are the only things that do.
   list breaks below it. A call whose **only** argument is a lambda whose body
   is itself a call keeps `x =>` on its line, as `.AddCors(o =>` above does, and
   the body takes the next; a body that is not a call, such as a condition,
-  starts after the `=>` and wraps as the operator rule below says. A chain
+  may start after the `=>` or on the next line, and wraps as the operator rule
+  below says either way. A chain
   inside an argument is that argument, so `AddX(new ConfigurationBuilder()`
   with `.Build()` three lines down moves `new ConfigurationBuilder()` to its
   own line, and the chain rule then applies to it. Three shapes are not this
