@@ -54,8 +54,8 @@ public sealed class RouteConfigurationTests(GatewayFactory factory) : IClassFixt
         string[] unprobed =
         [
             .. clusters
-                .Where(c => c.Model.Config.HealthCheck?.Active is not { Enabled: true, Path: "/health/ready" }
-                    || c.Model.Config.LoadBalancingPolicy != "PowerOfTwoChoices")
+                .Where(c => c.Model.Config.HealthCheck?.Active is not { Enabled: true, Path: "/health/ready" } ||
+                    c.Model.Config.LoadBalancingPolicy != "PowerOfTwoChoices")
                 .Select(c => c.ClusterId)
                 .Order(StringComparer.Ordinal)
         ];

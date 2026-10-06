@@ -146,8 +146,8 @@ public abstract class ServiceFixture<TFactory, TEntryPoint, TDbContext> : IAsync
         if (result.ExitCode != 0)
         {
             throw new InvalidOperationException(
-                $"Could not widen {user}'s broker permissions for the harness "
-                + $"(exit {result.ExitCode}). stdout: {result.Stdout} stderr: {result.Stderr}");
+                $"Could not widen {user}'s broker permissions for the harness " +
+                $"(exit {result.ExitCode}). stdout: {result.Stdout} stderr: {result.Stderr}");
         }
 
         // The build context's copy, the text the broker imported.

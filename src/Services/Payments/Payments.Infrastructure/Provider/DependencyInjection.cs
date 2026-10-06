@@ -26,8 +26,8 @@ public static class DependencyInjection
             throw new InvalidOperationException($"{BaseUrlKey} is not configured. Payments cannot reach a provider.");
 
         // No message echoes the configured value, since an address can carry user information.
-        if (!Uri.TryCreate(configured, UriKind.Absolute, out Uri? parsed)
-            || (parsed.Scheme != Uri.UriSchemeHttps && parsed.Scheme != Uri.UriSchemeHttp))
+        if (!Uri.TryCreate(configured, UriKind.Absolute, out Uri? parsed) ||
+            (parsed.Scheme != Uri.UriSchemeHttps && parsed.Scheme != Uri.UriSchemeHttp))
         {
             throw new InvalidOperationException($"{BaseUrlKey} is not an absolute HTTP(S) address.");
         }

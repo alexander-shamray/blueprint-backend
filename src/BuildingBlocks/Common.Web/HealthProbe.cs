@@ -71,9 +71,9 @@ public static class HealthProbe
     // The JSON and environment sources, layered as a container host layers them; no host is built to ask.
     private static IConfiguration HostConfiguration()
     {
-        string environment = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT")
-            ?? Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT")
-            ?? "Production";
+        string environment = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ??
+            Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT") ??
+            "Production";
 
         return new ConfigurationBuilder()
             .AddEnvironmentVariables("ASPNETCORE_")

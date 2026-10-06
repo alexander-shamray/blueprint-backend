@@ -103,10 +103,10 @@ public sealed class Mailpit : IAsyncDisposable
             if (messages.Count == 1)
             {
                 return await Api.GetFromJsonAsync<MailpitMessage>(
-                           $"message/{Uri.EscapeDataString(messages[0].Id)}",
-                           Json,
-                           ct)
-                       ?? throw new InvalidOperationException("Mailpit answered a message read with no body.");
+                    $"message/{Uri.EscapeDataString(messages[0].Id)}",
+                    Json,
+                    ct) ??
+                    throw new InvalidOperationException("Mailpit answered a message read with no body.");
             }
 
             await Task.Delay(TimeSpan.FromMilliseconds(100), ct);
@@ -140,8 +140,8 @@ public sealed class Mailpit : IAsyncDisposable
 
     /// <summary>One message, read whole.</summary>
     public async Task<MailpitMessage> MessageAsync(string id, CancellationToken ct) =>
-        await Api.GetFromJsonAsync<MailpitMessage>($"message/{Uri.EscapeDataString(id)}", Json, ct)
-        ?? throw new InvalidOperationException("Mailpit answered a message read with no body.");
+        await Api.GetFromJsonAsync<MailpitMessage>($"message/{Uri.EscapeDataString(id)}", Json, ct) ??
+        throw new InvalidOperationException("Mailpit answered a message read with no body.");
 
     /// <summary>A message's headers as the relay received them, by name in any case.</summary>
     public async Task<IReadOnlyDictionary<string, string[]>> HeadersAsync(string id, CancellationToken ct)
@@ -150,8 +150,8 @@ public sealed class Mailpit : IAsyncDisposable
             await Api.GetFromJsonAsync<Dictionary<string, string[]>>(
                 $"message/{Uri.EscapeDataString(id)}/headers",
                 Json,
-                ct)
-            ?? throw new InvalidOperationException("Mailpit answered a header read with no body.");
+                ct) ??
+            throw new InvalidOperationException("Mailpit answered a header read with no body.");
 
         return new Dictionary<string, string[]>(headers, StringComparer.OrdinalIgnoreCase);
     }

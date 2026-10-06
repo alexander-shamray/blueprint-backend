@@ -15,11 +15,11 @@ public sealed class SetOnHandHandler(IStockItemRepository items, TimeProvider cl
         // the commit, serialises admin writes and ledger statements on the row.
         DateTimeOffset now = clock.GetUtcNow();
         await items.EnsureAsync(product, now, ct);
-        StockItem item = await items.GetAsync(product, ct)
-            ?? throw new InvalidOperationException($"StockItems has no row for {product} after EnsureAsync.");
+        StockItem item = await items.GetAsync(product, ct) ??
+            throw new InvalidOperationException($"StockItems has no row for {product} after EnsureAsync.");
 
-        int onHand = command.OnHand
-            ?? throw new InvalidOperationException(
+        int onHand = command.OnHand ??
+            throw new InvalidOperationException(
                 "SetOnHandCommand reached the handler with no count; the validator refuses that (§6.4).");
 
         try

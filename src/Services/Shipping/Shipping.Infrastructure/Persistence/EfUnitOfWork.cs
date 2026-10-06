@@ -50,7 +50,7 @@ internal sealed class EfUnitOfWork(ShippingDbContext db) : IUnitOfWork
     public int ModifiedAggregateCount => db.ChangeTracker
         .Entries()
         .Count(e => e.Entity is IAggregateRoot &&
-                    e.State is EntityState.Added or EntityState.Modified or EntityState.Deleted);
+            e.State is EntityState.Added or EntityState.Modified or EntityState.Deleted);
 
     // The transaction's own connection and transaction, so a raw write is part of the command.
     public Task ExecuteRawAsync(string sql, object parameters, CancellationToken ct)

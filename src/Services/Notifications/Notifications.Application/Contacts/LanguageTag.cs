@@ -17,8 +17,8 @@ public static class LanguageTag
 
         string[] subtags = value.Split('-');
 
-        return subtags[0].Length is 2 or 3
-            && subtags[0].All(char.IsAsciiLetter)
-            && subtags.Skip(1).All(s => s.Length is >= 1 and <= 8 && s.All(char.IsAsciiLetterOrDigit));
+        return subtags[0].Length is 2 or 3 &&
+            subtags[0].All(char.IsAsciiLetter) &&
+            subtags.Skip(1).All(s => s.Length is >= 1 and <= 8 && s.All(char.IsAsciiLetterOrDigit));
     }
 }

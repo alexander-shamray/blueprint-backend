@@ -17,8 +17,8 @@ internal static class ConfiguredBaseUrl
         if (string.IsNullOrWhiteSpace(configured))
             throw new InvalidOperationException($"{key} is not configured. {whenMissing}");
 
-        if (!Uri.TryCreate(configured, UriKind.Absolute, out Uri? parsed)
-            || (parsed.Scheme != Uri.UriSchemeHttps && parsed.Scheme != Uri.UriSchemeHttp))
+        if (!Uri.TryCreate(configured, UriKind.Absolute, out Uri? parsed) ||
+            (parsed.Scheme != Uri.UriSchemeHttps && parsed.Scheme != Uri.UriSchemeHttp))
         {
             throw new InvalidOperationException($"{key} is not an absolute HTTP(S) address.");
         }

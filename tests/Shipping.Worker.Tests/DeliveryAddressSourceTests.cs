@@ -364,8 +364,8 @@ public sealed class DeliveryAddressSourceTests : IClassFixture<DeliveryAddressSo
         options.Retry.MaxDelay.ShouldBe(AddressHop.MaxRetryDelay, "jitter makes the nominal delay no bound");
         options.TotalRequestTimeout.Timeout.ShouldBe(AddressHop.TotalRequestTimeout);
 
-        TimeSpan worst = options.AttemptTimeout.Timeout * (options.Retry.MaxRetryAttempts + 1)
-                         + options.Retry.MaxDelay!.Value * options.Retry.MaxRetryAttempts;
+        TimeSpan worst = options.AttemptTimeout.Timeout * (options.Retry.MaxRetryAttempts + 1) +
+            options.Retry.MaxDelay!.Value * options.Retry.MaxRetryAttempts;
 
         worst.ShouldBeLessThan(
             options.TotalRequestTimeout.Timeout,

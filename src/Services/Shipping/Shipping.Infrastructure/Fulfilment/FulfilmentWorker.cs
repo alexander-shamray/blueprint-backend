@@ -317,8 +317,8 @@ public sealed class FulfilmentWorker(IServiceScopeFactory scopes, ILogger<Fulfil
         return await unitOfWork.ExecuteAsync(
             async inner =>
             {
-                Shipment shipment = await sp.GetRequiredService<IShipmentRepository>().GetAsync(id, inner)
-                    ?? throw new InvalidOperationException($"Shipment {id.Value} was claimed and is now absent.");
+                Shipment shipment = await sp.GetRequiredService<IShipmentRepository>().GetAsync(id, inner) ??
+                    throw new InvalidOperationException($"Shipment {id.Value} was claimed and is now absent.");
 
                 bool moved = move(shipment, sp.GetRequiredService<TimeProvider>().GetUtcNow());
 

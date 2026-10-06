@@ -398,8 +398,8 @@ public sealed class HttpPaymentProviderTests : IClassFixture<HttpPaymentProvider
     [Fact]
     public void Every_attempt_and_every_bounded_delay_fit_inside_the_total()
     {
-        TimeSpan worst = ProviderHop.AttemptTimeout * (ProviderHop.MaxRetryAttempts + 1)
-                         + ProviderHop.MaxRetryDelay * ProviderHop.MaxRetryAttempts;
+        TimeSpan worst = ProviderHop.AttemptTimeout * (ProviderHop.MaxRetryAttempts + 1) +
+            ProviderHop.MaxRetryDelay * ProviderHop.MaxRetryAttempts;
 
         worst.ShouldBeLessThan(
             ProviderHop.TotalRequestTimeout,

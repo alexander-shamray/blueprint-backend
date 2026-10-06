@@ -78,8 +78,8 @@ public sealed class TemplateRenderer
         if (joined > NotificationLimits.MaxLanguagesLength)
         {
             refusals.Add(
-                $"The language set joins to {joined} characters, past the {NotificationLimits.MaxLanguagesLength} "
-                + "a notification's Languages column holds.");
+                $"The language set joins to {joined} characters, past the {NotificationLimits.MaxLanguagesLength} " +
+                "a notification's Languages column holds.");
         }
 
         foreach (string language in languages.Distinct(StringComparer.Ordinal))

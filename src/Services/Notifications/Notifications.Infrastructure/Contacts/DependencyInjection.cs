@@ -77,8 +77,8 @@ public static class DependencyInjection
                 $"{BaseUrlKey} is not configured. Notifications cannot read a contact.");
         }
 
-        if (!Uri.TryCreate(configured, UriKind.Absolute, out Uri? parsed)
-            || (parsed.Scheme != Uri.UriSchemeHttps && parsed.Scheme != Uri.UriSchemeHttp))
+        if (!Uri.TryCreate(configured, UriKind.Absolute, out Uri? parsed) ||
+            (parsed.Scheme != Uri.UriSchemeHttps && parsed.Scheme != Uri.UriSchemeHttp))
         {
             throw new InvalidOperationException($"{BaseUrlKey} is not an absolute HTTP(S) address.");
         }
@@ -117,8 +117,8 @@ public static class DependencyInjection
                 $"{RealmKey} is not configured. Notifications cannot name the realm whose users it reads.");
         }
 
-        bool segment = realm is not ("." or "..")
-            && realm.All(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_' or '.');
+        bool segment = realm is not ("." or "..") &&
+            realm.All(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_' or '.');
 
         return segment
             ? realm

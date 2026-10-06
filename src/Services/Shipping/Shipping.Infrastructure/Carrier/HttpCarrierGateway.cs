@@ -52,10 +52,10 @@ internal sealed class HttpCarrierGateway(HttpClient http, CarrierMetrics metrics
         }
 
         // The reference is a later path segment, and EscapeDataString leaves a dot segment to resolve away.
-        return answer is { Status: "booked", Reference: { } reference, TrackingNumber: { } tracking }
-               && Recordable(reference, CarrierLimits.MaxReferenceLength)
-               && reference is not ("." or "..")
-               && Recordable(tracking, CarrierLimits.MaxTrackingNumberLength)
+        return answer is { Status: "booked", Reference: { } reference, TrackingNumber: { } tracking } &&
+            Recordable(reference, CarrierLimits.MaxReferenceLength) &&
+            reference is not ("." or "..") &&
+            Recordable(tracking, CarrierLimits.MaxTrackingNumberLength)
             ? new BookingResult.Booked(reference, tracking)
             : throw Unavailable("The carrier booked with a body that is not a booking.");
     }
@@ -117,8 +117,8 @@ internal sealed class HttpCarrierGateway(HttpClient http, CarrierMetrics metrics
 
     private CarrierEvent Translate(EventAnswer answer, DateTimeOffset ceiling)
     {
-        if (answer is not { Id: { } id, Status: { } status, OccurredAt: { } occurredAt }
-            || !Recordable(id, CarrierLimits.MaxCarrierEventIdLength))
+        if (answer is not { Id: { } id, Status: { } status, OccurredAt: { } occurredAt } ||
+            !Recordable(id, CarrierLimits.MaxCarrierEventIdLength))
         {
             throw Unavailable("The carrier sent an event this adapter cannot key.");
         }
@@ -173,8 +173,8 @@ internal sealed class HttpCarrierGateway(HttpClient http, CarrierMetrics metrics
             response = await http.SendAsync(message, ct);
         }
         // ExecutionRejectedException is the pipeline's own refusal: a timeout, an open circuit, the limiter.
-        catch (Exception e) when (e is HttpRequestException or ExecutionRejectedException
-                                      || (e is OperationCanceledException && !ct.IsCancellationRequested))
+        catch (Exception e) when (e is HttpRequestException or ExecutionRejectedException ||
+            (e is OperationCanceledException && !ct.IsCancellationRequested))
         {
             throw new CarrierUnavailableException("The carrier did not answer within the budget.", e);
         }
