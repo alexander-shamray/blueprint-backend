@@ -41,15 +41,18 @@ REDIRECTS = set("<>")
 
 # The options of grep, rg and git grep that consume the next word.
 VALUED = {"-e", "-f", "-A", "-B", "-C", "-m", "-g", "-t", "-T", "-M",
-          "--glob", "--type", "--type-not", "--max-count", "--max-depth",
+          "--glob", "--iglob", "--type", "--type-not", "--max-count", "--max-depth",
           "--include", "--exclude", "--exclude-dir",
           "--regexp", "--file", "--context", "--before-context", "--after-context"}
 
 # The prose half of the tree is a grep question: which chapter owns a rule is
 # not one the index answers, as the skill says.
-PROSE = re.compile(r"(?:^|[\\/])docs(?:[\\/]|$)|\.md$|^md$|^\*\.md$|^markdown$")
+PROSE = re.compile(r"(?:^|[\\/])docs(?:[\\/]|$)|\.md$|^md$|^\*\.md$|^markdown$", re.IGNORECASE)
 
 EXCLUDES = ("!", ":!", ":^", ":(exclude)")
+
+# The options naming which files a search reads, in any of the three tools.
+FILTERS = {"-g", "--glob", "--iglob", "-t", "--type", "--include"}
 
 IDENTIFIER = re.compile(r"^[^\W\d]\w*(?:\.[^\W\d]\w*)*$")
 
@@ -175,12 +178,14 @@ def shell_search(command: str, cwd: str) -> str | None:
                 value = argv[index + 1]
                 if word in ("-e", "--regexp") and pattern is None:
                     pattern = value
-                elif word in ("-g", "--glob", "-t", "--type", "--include"):
+                elif word in FILTERS:
                     filters.append(value)
                 index += 2
                 continue
-            if word.startswith("--include=") or word.startswith("--glob="):
+            if word.split("=", 1)[0] in FILTERS and "=" in word:
                 filters.append(word.split("=", 1)[1])
+            elif program == "rg" and re.match(r"^-[gt][^-]", word):
+                filters.append(word[2:])
             elif word in ("--recursive", "--dereference-recursive") or re.match(r"^-[A-Za-z]*[rR]", word):
                 recursive = True
             elif not word.startswith("-") or word == "-":
