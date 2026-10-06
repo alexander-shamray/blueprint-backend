@@ -231,7 +231,7 @@ product listing does not:
 curl -X POST http://localhost:5101/v1/orders \
     -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
     -d '{"commandId":"'"$(uuidgen)"'",
-         "items":[{"productId":"00000000-0000-0000-0000-000000000001","quantity":1}],
+         "items":[{"productId":"5eed0000-0000-0000-0000-000000000003","quantity":1}],
          "shippingAddress":{"line1":"1 Test Street","city":"Almaty","postalCode":"050000","country":"KZ"},
          "currency":"EUR"}'
 ```
@@ -245,32 +245,17 @@ what makes a retried order one order. A fresh one per *intent* — reusing it is
 how a retry is recognised, so `uuidgen` belongs on the line that means "place
 this order", not on the retry.
 
-**The product id above is a placeholder and the call will answer 422 for it**
-(`order.products_unavailable`): §6.6's projection fills `ordering.ProductPrices`
-from Catalog's `PriceChanged`, so the id has to be one the publish call above
-actually returned, and the event has to have been consumed. That is the
-broker path working end to end — and, since ADR-036, Ordering consuming an
-event Catalog published under a different account than its own.
+**The product id is a seeded one**, from the table above, so the order is
+placed once Ordering has consumed that product's events: §6.6's projection
+fills `ordering.ProductPrices` from Catalog's events, and an id no Catalog
+event names answers 422 `order.products_unavailable`. That is the broker path
+working end to end, with Ordering consuming an event Catalog published under
+its own account (ADR-036).
 
-**No cancel call here, deliberately, because there is no id to cancel with.**
-The obvious next line — capture the response and interpolate it into
-`/v1/orders/$ORDER/cancel` — is wrong twice over: this call answers with a
-problem document, and a call that succeeds answers `Results.Ok(guid)`, whose
-body is a JSON *string* with the quotes still on it, which `{id:guid}` cannot
-bind. A reader who wants the id then needs `| jq -r .`, and a README that says
-so before it can produce one is documenting a shell trick rather than the
-service.
-
-**This call answers 422 `order.products_unavailable`, and it will keep doing
-so.** That is not a gap waiting on a pull request: prices come from a local
-projection of Catalog's events (§6.4), and `00000000-…-0001` is an id no
-Catalog event names. The projection that fills `ordering.ProductPrices` has
-existed since PR-20 — a product it has never heard of has no row, no price and
-no order, which is §6.6's standing consequence rather than a broken example.
-Making this `curl` succeed means publishing a Catalog product and ordering
-*that* id, which is two more steps than a README block earns; the reachable
-proofs here stay the 401, the 403 as `browser`, and the 404 an order you do not
-own returns.
+**No cancel call here.** A placed order answers `Results.Ok(guid)`, whose body
+is a JSON *string* with the quotes still on it, which `{id:guid}` cannot bind,
+so interpolating it into `/v1/orders/$ORDER/cancel` needs `| jq -r .` — a
+shell trick rather than the service.
 
 Override connection strings with `<SERVICE>_CONNECTION` /
 `<SERVICE>_MIGRATOR_CONNECTION` — one pair per service, every one commented out
