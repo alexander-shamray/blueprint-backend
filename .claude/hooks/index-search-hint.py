@@ -34,8 +34,7 @@ EVERY = 5
 ASKING = ("search", "explain", "architecture", "symbol", "refs", "impact",
           "diff-impact", "path", "describe", "verify")
 UPKEEP = {"healthcheck", "index_stats"}
-CLI_LOOKUP = re.compile(
-    r"\b(?:cbx(?:\.ps1)?|codebase[-_]index)[\"']?\s+(?:" + "|".join(map(re.escape, ASKING)) + r")\b")
+CLIS = {"cbx", "cbx.ps1", "codebase-index"}
 
 SEPARATORS = set("|&;()")
 REDIRECTS = set("<>")
@@ -153,7 +152,7 @@ def shell_search(command: str, cwd: str) -> str | None:
             argv = argv[1:]
         if not argv:
             continue
-        program = argv[0].replace("\\", "/").rsplit("/", 1)[-1].removesuffix(".exe")
+        program = executable(argv[0])
         if program == "cd":
             shell = str(located(shell, argv[1] if len(argv) > 1 else "~"))
             continue
@@ -214,10 +213,23 @@ def search(name: str, given: dict, cwd: str) -> str | None:
     return None
 
 
+def executable(word: str) -> str:
+    return word.replace("\\", "/").rsplit("/", 1)[-1].removesuffix(".exe")
+
+
 def lookup(name: str, given: dict) -> bool:
+    """True when the call asked the index: an MCP tool, or a command that
+    runs the CLI, never one that merely names it."""
     if name.startswith(MCP):
         return name[len(MCP):] not in UPKEEP
-    return name == "Bash" and isinstance(given.get("command"), str) and bool(CLI_LOOKUP.search(given["command"]))
+    if name != "Bash" or not isinstance(given.get("command"), str):
+        return False
+    for argv, _piped in segments(given["command"]):
+        if argv and executable(argv[0]) in ("bash", "sh", "pwsh", "powershell"):
+            argv = argv[1:]
+        if len(argv) > 1 and executable(argv[0]) in CLIS and argv[1] in ASKING:
+            return True
+    return False
 
 
 def calls(transcript: Path):
