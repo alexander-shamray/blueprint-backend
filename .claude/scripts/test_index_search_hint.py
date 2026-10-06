@@ -39,6 +39,7 @@ SEARCHES = {
     "LC_ALL=C grep -r Money .": "find_refs",
     "cd src && grep -rn PlaceOrderHandler .": "find_refs",
     "/usr/bin/grep -rn Saga src": "find_refs",
+    "rg -g '!*.md' OutboxRelay src": "find_refs",
     "grep -r -e 'Retry(' src": "find_refs",
 }
 
@@ -176,6 +177,7 @@ class WhatCountsAsASearch(Scratch):
     def test_the_grep_tool_is_a_search_unless_it_reads_prose(self):
         self.assertTrue(self.hinted(*grep_call()))
         self.assertTrue(self.hinted(*grep_call(path="src/Services")))
+        self.assertTrue(self.hinted(*grep_call(glob="!*.md")))
         for extra in ({"path": "docs/backend-architecture"}, {"glob": "*.md"},
                       {"type": "md"}, {"path": "C:\\repo\\docs"}):
             with self.subTest(extra=extra):
