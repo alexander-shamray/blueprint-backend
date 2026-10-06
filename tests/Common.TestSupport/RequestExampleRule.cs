@@ -1,3 +1,4 @@
+using System.Net.Http.Json;
 using System.Text.Json;
 using Common.Web;
 using FluentValidation;
@@ -6,6 +7,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Json;
 using Microsoft.AspNetCore.Http.Metadata;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.AspNetCore.Routing.Patterns;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
@@ -13,8 +15,9 @@ namespace Common.TestSupport;
 
 /// <summary>Each body a host's endpoint binds has an example that holds, and its document carries it.</summary>
 /// <remarks>
-/// Holds means <see cref="RequestExampleMetadata"/> carries the bound type, it survives the host's serialiser and
-/// every validator of that type passes it, since an example a tool sends and the endpoint refuses is worse than none.
+/// Holds means <see cref="RequestExampleMetadata"/> carries the bound type, it survives the host's serialiser, every
+/// validator of that type passes it, and the endpoint sent it answers no 4xx (<see cref="RefusedAsync"/>), since an
+/// example a tool sends and the endpoint refuses is worse than none.
 /// </remarks>
 public static class RequestExampleRule
 {
@@ -35,9 +38,7 @@ public static class RequestExampleRule
 
         foreach (Endpoint endpoint in Bodied(endpoints))
         {
-            string name = endpoint.Metadata.GetMetadata<IEndpointNameMetadata>()?.EndpointName ??
-                endpoint.DisplayName ??
-                "an unnamed endpoint";
+            string name = NameOf(endpoint);
             Type body = BodyOf(endpoint)!;
             object? example = endpoint.Metadata.GetMetadata<RequestExampleMetadata>()?.Example;
 
@@ -62,6 +63,53 @@ public static class RequestExampleRule
                     .SelectMany(validator => validator.Validate(new ValidationContext<object>(read)).Errors)
                     .Select((ValidationFailure failure) =>
                         $"{name}'s example fails its validator at {failure.PropertyName}: {failure.ErrorMessage}"));
+        }
+
+        return offenders;
+    }
+
+    /// <summary>Each bodied endpoint that answers its own example with a 4xx, sent as a caller sends it.</summary>
+    /// <remarks>
+    /// Whoever refuses: a validator of the command the endpoint builds, a parse in its handler, its route or policy.
+    /// A 5xx, or no answer within <paramref name="budget"/>, is unreachable infrastructure past all of those.
+    /// </remarks>
+    public static async Task<IReadOnlyList<string>> RefusedAsync(
+        IEnumerable<Endpoint> endpoints,
+        HttpClient client,
+        Action<HttpRequestMessage> authenticate,
+        TimeSpan budget,
+        CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(client);
+        ArgumentNullException.ThrowIfNull(authenticate);
+
+        List<string> offenders = [];
+
+        foreach (RouteEndpoint endpoint in Bodied(endpoints).OfType<RouteEndpoint>())
+        {
+            if (endpoint.Metadata.GetMetadata<RequestExampleMetadata>()?.Example is not { } example)
+                continue;
+
+            using HttpRequestMessage request = new(
+                new HttpMethod(endpoint.Metadata.GetMetadata<IHttpMethodMetadata>()!.HttpMethods[0]),
+                new Uri(PathOf(endpoint.RoutePattern), UriKind.Relative));
+            request.Content = JsonContent.Create(example, example.GetType());
+            authenticate(request);
+
+            using CancellationTokenSource deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            deadline.CancelAfter(budget);
+
+            try
+            {
+                using HttpResponseMessage response = await client.SendAsync(request, deadline.Token);
+
+                if ((int)response.StatusCode is >= 400 and < 500)
+                    offenders.Add($"{NameOf(endpoint)} refuses its own example with {(int)response.StatusCode}");
+            }
+            catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+            {
+                // Past every refusal and waiting on infrastructure the host cannot reach.
+            }
         }
 
         return offenders;
@@ -95,6 +143,21 @@ public static class RequestExampleRule
             }
         }
     }
+
+    private static string NameOf(Endpoint endpoint) =>
+        endpoint.Metadata.GetMetadata<IEndpointNameMetadata>()?.EndpointName ?? endpoint.DisplayName ?? "unnamed";
+
+    private static string PathOf(RoutePattern pattern) =>
+        "/" + string.Join("/", pattern.PathSegments.Select(segment => string.Concat(segment.Parts.Select(TextOf))));
+
+    // A parameter takes one GUID, the only type a bodied route here constrains one to; another is the route's 404.
+    private static string TextOf(RoutePatternPart part) =>
+        part switch
+        {
+            RoutePatternLiteralPart literal => literal.Content,
+            RoutePatternSeparatorPart separator => separator.Content,
+            _ => "0199b0c4-0000-7000-8000-000000000001"
+        };
 
     // The body a minimal API binds, which is what puts a request body in the operation.
     private static Type? BodyOf(Endpoint endpoint) =>

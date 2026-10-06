@@ -40,6 +40,26 @@ public class RequestExampleRuleTests(HostSmokeTests.UnreachableInfrastructureFac
         RequestExampleRule.Unexampled(document).ShouldBeEmpty();
     }
 
+    [Fact]
+    public async Task No_endpoint_refuses_its_own_example()
+    {
+        using HostSmokeTests.AuthenticatedUnreachableFactory authenticated = new();
+        using HttpClient client = authenticated.CreateClient();
+
+        IReadOnlyList<string> refused = await RequestExampleRule.RefusedAsync(
+            authenticated.Services.GetRequiredService<EndpointDataSource>().Endpoints,
+            client,
+            request =>
+            {
+                request.Headers.Add(TestAuthHandler.UserHeader, Guid.CreateVersion7().ToString());
+                request.Headers.Add(TestAuthHandler.PermissionsHeader, $"{OrderingPermissions.Write} {OrderingPermissions.Cancel}");
+            },
+            TimeSpan.FromSeconds(5),
+            TestContext.Current.CancellationToken);
+
+        refused.ShouldBeEmpty();
+    }
+
     private static async Task<JsonDocument> DocumentAsync()
     {
         using HostSmokeTests.AuthenticatedUnreachableFactory authenticated = new();
