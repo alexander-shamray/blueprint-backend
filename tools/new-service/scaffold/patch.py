@@ -967,7 +967,8 @@ PURE_CONSUMER_PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
             "            Types\n"
             "                .InAssembly(assembly)\n"
             "                .ShouldNot().HaveDependencyOn(\"MassTransit\")\n"
-            "                .GetResult().IsSuccessful.ShouldBeTrue(assembly.GetName().Name);\n"
+            "                .GetResult().IsSuccessful\n"
+            "                .ShouldBeTrue(assembly.GetName().Name);\n"
             "        }\n"
             "    }\n",
             "    public void Application_does_not_reference_masstransit()\n"
@@ -976,7 +977,8 @@ PURE_CONSUMER_PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
             "        Types\n"
             "            .InAssembly(typeof(DependencyInjection).Assembly)\n"
             "            .ShouldNot().HaveDependencyOn(\"MassTransit\")\n"
-            "            .GetResult().IsSuccessful.ShouldBeTrue();\n"
+            "            .GetResult().IsSuccessful\n"
+            "            .ShouldBeTrue();\n"
             "    }\n",
         ),
     ),
