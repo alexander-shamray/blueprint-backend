@@ -445,6 +445,22 @@ jobs:
               - 'deploy/**'
               - '!deploy/compose/**'
 
+  # What IDE0055 cannot read — the byte-order mark, the line endings and the
+  # final newline — over every C# file but generated code; docs/style-guide.md
+  # owns which rules those are. `--folder` reads the files without loading the
+  # solution, so this needs no restore and no build to wait for.
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: The source matches .editorconfig
+        run: dotnet format whitespace --folder --verify-no-changes
+
   build:
     needs: [licence-gate, pipeline-gate]
     runs-on: ubuntu-latest
@@ -506,13 +522,6 @@ jobs:
             echo "$wrote"
             exit 1
           fi
-
-      # This reads what IDE0055 cannot — the byte-order mark and the final
-      # newline — over every project Platform.slnx lists; docs/style-guide.md
-      # owns which rules those are. After the byte-identical check, which no
-      # formatter run may precede.
-      - name: The source matches .editorconfig
-        run: dotnet format Platform.slnx --verify-no-changes --no-restore
 
       # Three stages (§15.1's UT to IT). The whole solution is built once and
       # the stages select from it. Per service, the filter above decides what
