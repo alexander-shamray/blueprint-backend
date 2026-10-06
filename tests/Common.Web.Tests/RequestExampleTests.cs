@@ -125,6 +125,33 @@ public class RequestExampleTests
         RequestExampleRule.Offenders(Endpoints(host), host.Services).ShouldBeEmpty();
     }
 
+    [Fact]
+    public async Task An_endpoint_answering_its_own_example_with_a_4xx_is_named_and_a_5xx_is_not()
+    {
+        using IHost host = await StartAsync(endpoints =>
+        {
+            endpoints
+                .MapPost("/refused", (Restock _) => Results.BadRequest())
+                .WithRequestExample(Valid)
+                .WithName("Refused");
+            endpoints
+                .MapPost("/unreachable/{id:guid}", (Guid id, Restock restock) => Results.StatusCode(503))
+                .WithRequestExample(Valid)
+                .WithName("Unreachable");
+        });
+        using HttpClient client = host.GetTestClient();
+
+        IReadOnlyList<string> refused = await RequestExampleRule.RefusedAsync(
+            Endpoints(host),
+            client,
+            _ => { },
+            TimeSpan.FromSeconds(5),
+            TestContext.Current.CancellationToken);
+
+        // The second route takes a parameter, so this also shows the path is filled rather than left to 404.
+        refused.ShouldBe(["Refused refuses its own example with 400"]);
+    }
+
     private static IEnumerable<Endpoint> Endpoints(IHost host) =>
         host.Services.GetRequiredService<EndpointDataSource>().Endpoints;
 

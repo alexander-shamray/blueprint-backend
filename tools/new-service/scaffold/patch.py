@@ -634,6 +634,8 @@ PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
             '            "which is what keeps a vacuous gate from quietly becoming '
             'a permanent one.");\n',
         ),
+        # CatalogPermissions is the slice's, and a rendered host binds no body to send anyway.
+        ("                request.Headers.Add(TestAuthHandler.PermissionsHeader, CatalogPermissions.Write);\n", ""),
     ),
     # ADR-017's floor is the template's consumer, which a rendered host does
     # not inherit, so it is inverted on the same argument: the test fails the
@@ -736,7 +738,7 @@ WORKER_PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
     # document leave, and the suite's summary stops describing it. The
     # authenticated factory stays: the unknown-path test is its other user.
     "tests/Catalog.Api.Tests/RequestExampleRuleTests.cs": (
-        ("using System.Net;\nusing System.Text.Json;\nusing Catalog.TestSupport;\n", ""),
+        ("using System.Net;\nusing System.Text.Json;\n", ""),
         (
             "/// <summary>Each body this host binds has an example its validator passes, and the document carries "
             "it.</summary>\n",
@@ -752,7 +754,10 @@ WORKER_PATCHES: dict[str, tuple[tuple[str, str], ...]] = {
             "        // Counted against the endpoint table, so a document that lost its bodies is not read as clean.\n"
             "        RequestExampleRule.Bodies(document).Count.ShouldBe(RequestExampleRule.Bodied(Endpoints).Count);\n"
             "        RequestExampleRule.Unexampled(document).ShouldBeEmpty();\n"
-            "    }\n"
+            "    }\n",
+            "",
+        ),
+        (
             "\n"
             "    private static async Task<JsonDocument> DocumentAsync()\n"
             "    {\n"
