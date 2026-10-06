@@ -12,8 +12,7 @@ public sealed record NotRetention(Type Type, string Member, string Reason);
 /// <summary>docs/personal-data.md over the code: every retention member of a declared type is named there.</summary>
 /// <remarks>
 /// A member is every public <see cref="TimeSpan"/> a declared type holds, so a new one is mapped or excluded with a
-/// reason rather than missed for its name. A type is in the check once a host declares it, and <see cref="Undeclared"/>
-/// finds the ones a host holds by name and has not.
+/// reason; <see cref="Undeclared"/> finds a type a host holds by name and has not declared.
 /// </remarks>
 public static partial class RetentionMapRule
 {

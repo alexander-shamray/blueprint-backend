@@ -137,8 +137,6 @@ services:
     # config gains the rule_files key at start instead of being copied here;
     # the guard keeps a restart from appending it twice. Only the loaded file
     # is named, because awaiting-signal.yaml's rules cannot fire (§13.6).
-    # run-all.sh touches /tmp/ready once every component is up; the start
-    # removes it, so a restarted container is not read healthy from the last.
     command:
       - bash
       - -c
@@ -147,6 +145,8 @@ services:
         grep -q '^rule_files:' prometheus.yaml
         || echo 'rule_files: [ /etc/prometheus/rules/platform-alerts.yaml ]' >> prometheus.yaml;
         exec ./run-all.sh
+    # run-all.sh touches /tmp/ready once every component is up; the command
+    # removes it first, so a restart is not read healthy from the last run.
     healthcheck:
       test: ["CMD-SHELL", "test -f /tmp/ready"]
       interval: 5s
