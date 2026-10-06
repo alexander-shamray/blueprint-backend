@@ -1,7 +1,10 @@
 using Notifications.TestSupport;
 using Common.TestSupport;
+using MassTransit;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
+using Notifications.Application.Mail;
+using Notifications.Infrastructure.Mail;
 using Shouldly;
 using Xunit;
 
@@ -50,7 +53,51 @@ public class ConsumerCallRuleTests(ConsumerCallRuleTests.ComposedFactory factory
 
         // Named, so a client this host gains is seen here before a consumer can reach it.
         Names(ConsumerCallRule.Clients(factory.Composition, Host)).ShouldBe(
-            ["CachingTokenClient", "HttpClient", "IContactSource"]);
+            ["CachingTokenClient", "HttpClient", "IContactSource", "SmtpMailChannel"]);
+    }
+
+    public sealed record Probe;
+
+    public sealed class Mailing(IMailChannel mail) : IConsumer<Probe>
+    {
+        public IMailChannel Mail { get; } = mail;
+
+        public Task Consume(ConsumeContext<Probe> context) => Task.CompletedTask;
+    }
+
+    public interface IOpaque;
+
+    public sealed class Concealed : IOpaque;
+
+    public sealed class Hidden(IOpaque opaque) : IConsumer<Probe>
+    {
+        public IOpaque Opaque { get; } = opaque;
+
+        public Task Consume(ConsumeContext<Probe> context) => Task.CompletedTask;
+    }
+
+    [Fact]
+    public void A_consumer_reaching_the_smtp_channel_is_caught()
+    {
+        IServiceCollection services = new ServiceCollection();
+        services.AddScoped<Mailing>();
+        services.Add(factory.Composition.Single(d => d.ServiceType == typeof(IMailChannel)));
+
+        ConsumerCallRule.Offenders(services, typeof(ConsumerCallRuleTests).Assembly, [])
+            .ShouldHaveSingleItem()
+            .ShouldContain("Mailing reaches SmtpMailChannel");
+    }
+
+    [Fact]
+    public void A_consumer_reaching_an_untyped_factory_is_refused_rather_than_passed()
+    {
+        IServiceCollection services = new ServiceCollection();
+        services.AddScoped<Hidden>();
+        services.AddScoped(typeof(IOpaque), _ => new Concealed());
+
+        ConsumerCallRule.Offenders(services, typeof(ConsumerCallRuleTests).Assembly, [])
+            .ShouldHaveSingleItem()
+            .ShouldContain("IOpaque is built by a factory returning object");
     }
 
     private static string[] Names(IEnumerable<Type> types) => [.. types.Select(type => type.Name)];
