@@ -42,6 +42,7 @@ REDIRECTS = set("<>")
 # The options of grep, rg and git grep that consume the next word.
 VALUED = {"-e", "-f", "-A", "-B", "-C", "-m", "-g", "-t", "-T", "-M",
           "--glob", "--type", "--type-not", "--max-count", "--max-depth",
+          "--include", "--exclude", "--exclude-dir",
           "--regexp", "--file", "--context", "--before-context", "--after-context"}
 
 # The prose half of the tree is a grep question: which chapter owns a rule is
@@ -97,7 +98,7 @@ def shell_search(command: str) -> str | None:
         program = argv[0].replace("\\", "/").rsplit("/", 1)[-1].removesuffix(".exe")
         if program == "git" and "grep" in argv[1:4]:
             argv, tree = argv[argv.index("grep") + 1:], True
-        elif program == "rg":
+        elif program == "rg" and "--files" not in argv:
             argv, tree = argv[1:], not piped
         elif program in ("grep", "egrep", "fgrep"):
             argv, tree = argv[1:], False
@@ -111,7 +112,7 @@ def shell_search(command: str) -> str | None:
                 value = argv[index + 1]
                 if word in ("-e", "--regexp") and pattern is None:
                     pattern = value
-                elif word in ("-g", "--glob", "-t", "--type"):
+                elif word in ("-g", "--glob", "-t", "--type", "--include"):
                     filters.append(value)
                 index += 2
                 continue

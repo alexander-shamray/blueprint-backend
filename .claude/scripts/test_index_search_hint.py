@@ -52,6 +52,8 @@ NOT_SEARCHES = (
     "rg -g '*.md' outbox",
     "rg --type md outbox",
     "grep -r --include=*.md outbox .",
+    "grep -r --include '*.md' outbox .",
+    "rg --files src/Services",
     "echo grep -r Foo .",
     "git status --short",
     "dotnet build Platform.slnx",
