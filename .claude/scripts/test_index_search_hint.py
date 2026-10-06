@@ -199,7 +199,9 @@ class WhenItSpeaks(Scratch):
         for earlier in ((("mcp__codebase-index__find_refs", {"symbol": "X"}),),
                         (("mcp__codebase-index__search_code", {"query": "x"}),),
                         (bash_call('bash .claude/skills/codebase-index/scripts/cbx refs "X" --json'),),
-                        (bash_call("codebase-index search outbox --json"),)):
+                        (bash_call("codebase-index search outbox --json"),),
+                        (("mcp__codebase-index__verify_evidence", {}),),
+                        (bash_call("bash .claude/skills/codebase-index/scripts/cbx verify --session t --json"),)):
             with self.subTest(earlier=earlier):
                 self.assertEqual("", self.hinted(*grep_call(), earlier=earlier))
 
