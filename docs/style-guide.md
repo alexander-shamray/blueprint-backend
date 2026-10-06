@@ -499,6 +499,23 @@ file and a reviewer are the only things that do.
   still does not fit. This composes with the lambda rule rather than competing:
   a call whose last argument is a lambda breaks at its **own** parenthesis,
   which puts the lambda on a line of its own, and never after the `=>`.
+
+  **Dapper's `ExecuteAsync(new CommandDefinition(` is no exception**, however
+  often it appears: `CommandDefinition` moves to the next line and its own
+  list breaks below it. A call whose **only** argument is a lambda keeps
+  `x =>` on its line, as `.AddCors(o =>` above does, and the body takes the
+  next. A chain inside an argument is that argument, so
+  `AddX(new ConfigurationBuilder()` with `.Build()` three lines down moves
+  `new ConfigurationBuilder()` to its own line, and the chain rule then
+  applies to it. Three shapes are not this rule: an `if (`, `while (` or
+  `when (` header, a parenthesised `(await …(` group, and a lambda whose body
+  is a tuple, which is a container like `{`.
+
+  **The sieve is a bracket count, not a grep.** A line ending in `(` while a
+  `(` opened earlier on the same line is still open is a candidate, with
+  strings and comments blanked first; so is a line leaving a `(` open
+  mid-line above one that opens with `.`. Read each hit against the three
+  shapes above.
 - **A multi-line condition takes trailing operators, four-space continuations,
   and braces on its body.** The braces are what make four safe: without them
   the last `&&` line and the body sit in the same column.
