@@ -55,6 +55,8 @@ SEARCHES = (
     "git status --short\ngrep -rn Retry src",
     "grep -rn MAX_RETRIES src",
     "rg OutboxRelay src > found.txt",
+    "# don't touch docs\ngrep -rn ClaimAsync src\n# that's it",
+    "echo 'see # this' && grep -rn ClaimAsync src",
 )
 
 # Each searches the tree for text, which grep lists whole and the index does not.
@@ -84,6 +86,7 @@ NOT_SEARCHES = (
     "git grep -n OutboxRelay -- docs ':!docs/superpowers'",
     "rg -g '!*.cs' OutboxRelay docs",
     "grep -rn --include=*.cs OutboxRelay docs",
+    "grep -rn ClaimAsync docs  # chapters only",
     "rg -g '*.md' Outbox",
     "rg --type md Outbox",
     "rg --type=md Outbox",
